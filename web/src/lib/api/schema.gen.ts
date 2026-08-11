@@ -361,6 +361,37 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What happened, across both records that keep it
+         * @description The platform keeps two append-only trails and they are not the same
+         *     kind of thing. The run ledger is hash-chained: every step seals the one
+         *     before it, so an altered step can be detected. The administrative trail
+         *     records what people changed about the rules agents run under, and it is
+         *     append-only by grant — nobody holds UPDATE — but it is not chained.
+         *
+         *     Every entry says which record it came from and carries a seal only
+         *     where one exists. A screen that merged them and called the result
+         *     verified would claim a guarantee half its rows do not have.
+         *
+         *     Scoped like every other read. An audit trail that showed an area
+         *     somebody cannot otherwise see would be a way around every other check.
+         */
+        get: operations["listAudit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/tools": {
         parameters: {
             query?: never;
@@ -660,6 +691,39 @@ export interface components {
             updatedBy?: string;
             /** Format: date-time */
             updatedAt?: string;
+        };
+        AuditEntry: {
+            /** Format: date-time */
+            at: string;
+            /**
+             * @description Which record this came from, and therefore what can be proved about
+             *     it. Ledger entries are hash-chained; administrative ones are
+             *     append-only but not chained.
+             * @enum {string}
+             */
+            source: "ledger" | "admin";
+            /**
+             * @description A person for an administrative change or a human decision; the
+             *     agent for a Gate decision, because the Gate decides about an
+             *     agent's proposal rather than on anybody's behalf.
+             */
+            actor: string;
+            /** @description Past tense, namespaced — tool.classified, gate.blocked, approval.granted. */
+            verb: string;
+            target: string;
+            scope?: components["schemas"]["Scope"];
+            detail?: {
+                [key: string]: unknown;
+            };
+            runId?: string;
+            /** Format: int64 */
+            seq?: number;
+            /**
+             * @description Seals this entry to the one before it. Present only on ledger
+             *     entries; an administrative entry has nothing to show here and says
+             *     so by omission rather than by an empty promise.
+             */
+            hash?: string;
         };
         AdminEvent: {
             /** Format: date-time */
@@ -1478,6 +1542,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CostRollup"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listAudit: {
+        parameters: {
+            query?: {
+                /** @description Company scope. A single value until multi-company (PRD 3.1). */
+                company?: components["parameters"]["Company"];
+                area?: components["parameters"]["Area"];
+                since?: string;
+                until?: string;
+                /** @description One person or agent. */
+                actor?: string;
+                /** @description Narrow to one record. Both when absent. */
+                source?: "ledger" | "admin";
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The trail, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["AuditEntry"][];
+                    };
                 };
             };
             401: components["responses"]["Unauthorized"];

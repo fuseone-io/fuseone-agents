@@ -537,6 +537,57 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /audit:
+    get:
+      tags: [audit]
+      operationId: listAudit
+      summary: What happened, across both records that keep it
+      description: |
+        The platform keeps two append-only trails and they are not the same
+        kind of thing. The run ledger is hash-chained: every step seals the one
+        before it, so an altered step can be detected. The administrative trail
+        records what people changed about the rules agents run under, and it is
+        append-only by grant — nobody holds UPDATE — but it is not chained.
+
+        Every entry says which record it came from and carries a seal only
+        where one exists. A screen that merged them and called the result
+        verified would claim a guarantee half its rows do not have.
+
+        Scoped like every other read. An audit trail that showed an area
+        somebody cannot otherwise see would be a way around every other check.
+      parameters:
+        - $ref: '#/components/parameters/Company'
+        - $ref: '#/components/parameters/Area'
+        - name: since
+          in: query
+          schema: { type: string, format: date-time }
+        - name: until
+          in: query
+          schema: { type: string, format: date-time }
+        - name: actor
+          in: query
+          description: One person or agent.
+          schema: { type: string }
+        - name: source
+          in: query
+          description: Narrow to one record. Both when absent.
+          schema: { type: string, enum: [ledger, admin] }
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: The trail, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/AuditEntry' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /admin/tools:
     get:
       tags: [admin]
@@ -1049,6 +1100,39 @@ components:
         enabled: { type: boolean }
         updatedBy: { type: string }
         updatedAt: { type: string, format: date-time }
+
+    AuditEntry:
+      type: object
+      required: [at, source, actor, verb, target]
+      properties:
+        at: { type: string, format: date-time }
+        source:
+          type: string
+          enum: [ledger, admin]
+          description: |
+            Which record this came from, and therefore what can be proved about
+            it. Ledger entries are hash-chained; administrative ones are
+            append-only but not chained.
+        actor:
+          type: string
+          description: |
+            A person for an administrative change or a human decision; the
+            agent for a Gate decision, because the Gate decides about an
+            agent's proposal rather than on anybody's behalf.
+        verb:
+          type: string
+          description: Past tense, namespaced — tool.classified, gate.blocked, approval.granted.
+        target: { type: string }
+        scope: { $ref: '#/components/schemas/Scope' }
+        detail: { type: object, additionalProperties: true }
+        runId: { type: string }
+        seq: { type: integer, format: int64 }
+        hash:
+          type: string
+          description: |
+            Seals this entry to the one before it. Present only on ledger
+            entries; an administrative entry has nothing to show here and says
+            so by omission rather than by an empty promise.
 
     AdminEvent:
       type: object

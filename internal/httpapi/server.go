@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fuseone/agents/internal/audit"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
@@ -55,6 +56,7 @@ type Server struct {
 	ceilings     Ceilings
 	content      Content
 	webhooks     trigger.Webhooks
+	audit        audit.Reader
 	// clock is injectable so a run's opening instant is a fact of the request
 	// rather than of whichever machine happened to serve it.
 	clock Clock

@@ -26,6 +26,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/fuseone/agents/internal/audit"
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
@@ -148,7 +149,8 @@ func serve(args []string) error {
 			// can show that an approval is pending but not what it is for,
 			// which is the one thing the approver needs.
 			WithContent(ledger.NewContent(identity.pool)).
-			WithWebhooks(trigger.NewPostgresWebhooks(identity.pool))
+			WithWebhooks(trigger.NewPostgresWebhooks(identity.pool)).
+			WithAudit(audit.NewPostgres(identity.pool))
 	}
 
 	apiHandler := openapi.HandlerWithOptions(

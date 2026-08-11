@@ -72,7 +72,7 @@ jobs:
 
       # -p 1: these suites share one database and truncate the same tables.
       - name: contract suites against a real database
-        run: go test ./internal/ledger/ ./internal/e2e/ ./internal/admin/ ./internal/spec/ ./internal/auth/ ./internal/trigger/ -count=1 -race -p 1
+        run: go test ./internal/ledger/ ./internal/e2e/ ./internal/admin/ ./internal/spec/ ./internal/auth/ ./internal/trigger/ ./internal/audit/ -count=1 -race -p 1
 
   web:
     name: console

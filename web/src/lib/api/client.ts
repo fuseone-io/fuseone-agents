@@ -61,6 +61,7 @@ export type RecordedDecision = components["schemas"]["RecordedDecision"];
 export type Verdict = components["schemas"]["Verdict"];
 export type Tool = components["schemas"]["Tool"];
 export type Webhook = components["schemas"]["Webhook"];
+export type AuditEntry = components["schemas"]["AuditEntry"];
 export type Problem = components["schemas"]["Problem"];
 
 /**
