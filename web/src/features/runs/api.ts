@@ -9,6 +9,7 @@ export const runKeys = {
   detail: (runId: string) => [...runKeys.all, "detail", runId] as const,
   steps: (runId: string) => [...runKeys.all, "steps", runId] as const,
   verify: (runId: string) => [...runKeys.all, "verify", runId] as const,
+  content: (runId: string, seq: number) => [...runKeys.all, "content", runId, seq] as const,
 };
 
 export interface RunFilters {
@@ -47,6 +48,27 @@ export function useRunSteps(runId: string) {
       unwrap(
         await api.GET("/runs/{runId}/steps", {
           params: { path: { runId }, query: { limit: 200 } },
+        }),
+      ),
+  });
+}
+
+/**
+ * The content a step references — proposed arguments, a tool's answer.
+ *
+ * A separate request from the trail on purpose: the trail is read constantly
+ * and by many people, and what sits behind it routinely carries personal data.
+ * It is fetched when somebody opens the step that needs it, which is why this
+ * takes an `enabled` rather than being called for every row.
+ */
+export function useStepContent(runId: string, seq: number | undefined, enabled = true) {
+  return useQuery({
+    queryKey: runKeys.content(runId, seq ?? 0),
+    enabled: enabled && seq !== undefined,
+    queryFn: async () =>
+      unwrap(
+        await api.GET("/runs/{runId}/steps/{seq}/content", {
+          params: { path: { runId, seq: seq as number } },
         }),
       ),
   });

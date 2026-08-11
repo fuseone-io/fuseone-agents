@@ -1,17 +1,21 @@
 import { useParams } from "react-router-dom";
-import { PageHeader } from "@/components/shared/page-header";
-import { Panel } from "@/components/shared/panel";
-import { Mono } from "@/components/shared/mono";
-import { StateDot } from "@/components/shared/state-dot";
 import { ErrorState, LoadingRows } from "@/components/shared/states";
-import { stateOfPhase } from "@/lib/agent-state";
-import { PHASE_LABELS } from "@/features/runs/phase-badge";
-import { StepRow } from "@/features/runs/step-row";
-import { ApprovalPanel } from "@/features/runs/approval-panel";
+import { PendingDecision } from "@/features/runs/pending-decision";
+import { RunIdentity } from "@/features/runs/run-identity";
+import { RunKpis } from "@/features/runs/run-kpis";
+import { RunSideRail } from "@/features/runs/run-side-rail";
+import { TrailPanel } from "@/features/runs/trail-panel";
 import { useRun, useRunSteps } from "@/features/runs/api";
-import { VerifyButton } from "@/features/runs/verify-button";
-import { formatCost, formatDuration, formatInstant, formatTokens } from "@/lib/format";
+import type { Step } from "@/lib/api/client";
 
+/**
+ * One run, end to end.
+ *
+ * Reading order is the order the questions arrive: which run is this, does it
+ * need me right now, how is it going, and then what happened. The decision
+ * card sits above the trail because somebody who has to answer it should not
+ * have to scroll past eighteen events to find the question.
+ */
 export function RunDetailPage() {
   const { runId = "" } = useParams();
   const run = useRun(runId);
@@ -24,55 +28,38 @@ export function RunDetailPage() {
 
   const { data } = run;
   const items = steps.data?.items ?? [];
+  const pending = data.pendingApproval;
 
   return (
-    <>
-      <PageHeader title={data.agentId} description={data.scope.area}>
-        <VerifyButton runId={runId} />
-      </PageHeader>
+    <div className="flex w-full min-w-0 flex-col gap-5">
+      <RunIdentity run={data} trigger={triggerOf(items)} />
 
-      {data.pendingApproval && <ApprovalPanel runId={runId} approval={data.pendingApproval} />}
+      {pending && (
+        <PendingDecision
+          runId={runId}
+          approval={pending}
+          step={items.find((step) => step.seq === pending.atSeq)}
+        />
+      )}
 
-      <Panel
-        title={
-          <span className="flex items-center gap-2">
-            <StateDot state={stateOfPhase(data.phase)} />
-            {PHASE_LABELS[data.phase]}
-          </span>
-        }
-        action={
-          // Everything the platform produced, in one mono line: the design's
-          // "id · N steps · cost".
-          <Mono dim>
-            {data.runId} · {data.seq} passos · {formatCost(data.cost)} ·{" "}
-            {formatDuration(data.startedAt, data.endedAt)}
-          </Mono>
-        }
-      >
-        <dl className="grid gap-3 sm:grid-cols-4">
-          <Stat label="Início" value={formatInstant(data.startedAt)} />
-          <Stat label="Tokens" value={formatTokens((data.cost.inputTokens ?? 0) + (data.cost.outputTokens ?? 0))} />
-          <Stat label="Versão" value={data.versionId.slice(0, 9)} />
-          <Stat label="Em nome de" value={data.onBehalfOf ?? "—"} />
-        </dl>
-      </Panel>
+      <RunKpis run={data} steps={items.length} />
 
-      <Panel title="Trilha" action={<span className="text-xs text-muted-foreground">append-only</span>}>
-        <ol className="flex flex-col">
-          {items.map((step, i) => (
-            <StepRow key={step.seq} step={step} last={i === items.length - 1} />
-          ))}
-        </ol>
-      </Panel>
-    </>
+      <div className="grid gap-5 lg:grid-cols-[1fr_300px] lg:items-start">
+        <TrailPanel
+          runId={runId}
+          steps={items}
+          liveSeq={data.endedAt ? undefined : items[items.length - 1]?.seq}
+        />
+        <RunSideRail run={data} steps={items} />
+      </div>
+    </div>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="text-2xs uppercase tracking-label text-muted-foreground">{label}</dt>
-      <dd className="mt-0.5 font-mono text-sm tabular-nums">{value}</dd>
-    </div>
-  );
+/** What started the run, read off the first step rather than the run summary:
+ *  the ledger is the record, and the projection is derived from it. */
+function triggerOf(steps: Step[]): string | undefined {
+  const started = steps.find((step) => step.kind === "run_started");
+  const trigger = (started?.payload as Record<string, unknown> | undefined)?.trigger;
+  return typeof trigger === "string" ? trigger : undefined;
 }
