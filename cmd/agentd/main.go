@@ -782,6 +782,8 @@ func bootstrapCmd(args []string) error {
 	fs := flag.NewFlagSet("bootstrap", flag.ContinueOnError)
 	dsn := fs.String("dsn", os.Getenv("DATABASE_URL"), "PostgreSQL connection string")
 	reissue := fs.Bool("reissue", false, "replace the existing setup token")
+	reopen := fs.String("reopen", "",
+		"reopen a claimed installation so another administrator can be created; the value is the reason, and it is recorded")
 	supplied := fs.String("token", "", "use this token instead of a generated one, for provisioning")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -798,12 +800,30 @@ func bootstrapCmd(args []string) error {
 	defer pool.Close()
 
 	boot := auth.NewBootstrap(pool, auth.NewPostgres(pool))
+
+	// Reopening is the way back into an installation whose only administrator
+	// can no longer reach it: a lost session, a departed colleague, an
+	// identity provider that broke. Configuring a provider needs Curator and
+	// the only Curator is unreachable, so without this the installation is
+	// lost for good — on-premise, with nobody to call.
+	if *reopen != "" {
+		secret, err := boot.Reopen(ctx, 24*time.Hour, *reopen)
+		if err != nil {
+			return err
+		}
+		slog.Warn("installation reopened; the setup screen accepts this token once",
+			"reason", *reopen)
+		fmt.Println(secret)
+		return nil
+	}
+
 	pending, err := boot.Pending(ctx)
 	if err != nil {
 		return err
 	}
 	if !pending {
-		return auth.ErrBootstrapClosed
+		return fmt.Errorf("%w — pass --reopen with a reason to let another administrator be created",
+			auth.ErrBootstrapClosed)
 	}
 	if !*reissue {
 		fmt.Println("setup is still pending; pass --reissue to mint a replacement token")

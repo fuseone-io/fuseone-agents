@@ -63,12 +63,16 @@ func (a *AuthRoutes) providers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if a.bootstrap != nil {
-		pending, err := a.bootstrap.Pending(r.Context())
+		// Whether a token can be claimed, not whether an administrator is
+		// missing. An installation reopened after a lockout has both an
+		// administrator and a live token, and it has to show the setup form
+		// or the operator holding that token has nowhere to type it.
+		open, err := a.bootstrap.Open(r.Context())
 		if err != nil {
 			writeProblemJSON(w, http.StatusInternalServerError, "Could not read setup state", err.Error())
 			return
 		}
-		out.BootstrapPending = pending
+		out.BootstrapPending = open
 	}
 
 	writeJSON(w, http.StatusOK, out)
