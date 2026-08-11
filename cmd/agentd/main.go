@@ -307,7 +307,15 @@ func workerCmd(args []string) error {
 
 	// Everything except the planner, which is resolved per run from the
 	// agent's own definition.
-	content := engine.NewMemoryContent()
+	// Durable when there is a database, because a run that already called a
+	// tool cannot be resumed by any other process without its earlier content
+	// — including this same worker after a restart (PRD NF-02, DE-15).
+	var content engine.ContentStore = engine.NewMemoryContent()
+	if pool, err := contentPool(ctx, *dsn); err != nil {
+		return err
+	} else if pool != nil {
+		content = ledger.NewContent(pool)
+	}
 	catalog := tools.NewCatalog(content)
 
 	// Everything the worker talks to comes from the administration area rather
@@ -443,6 +451,20 @@ func refreshRulings(ctx context.Context, catalog *tools.Catalog, curator *admin.
 			}
 		}
 	}
+}
+
+// contentPool opens the connection the durable claim check needs, or reports
+// that there is none.
+func contentPool(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
+	if dsn == "" {
+		slog.Warn("no --dsn given; step content is held in memory and a restart loses runs in flight")
+		return nil, nil
+	}
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		return nil, fmt.Errorf("connect for step content: %w", err)
+	}
+	return pool, nil
 }
 
 // spendReader is the part of a ledger the ceilings need.
