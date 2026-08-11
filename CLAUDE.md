@@ -1,14 +1,19 @@
 # FuseOne Agents — Core Engineering Guidelines
 
 Governed AI-agent platform, installed in the customer's environment.
-Functional reference: [docs/PRD-001-fuseone-agents.html](docs/PRD-001-fuseone-agents.html).
+Functional reference: [docs/PRD-001-fuseone-agents.md](docs/PRD-001-fuseone-agents.md).
 
 **Scope of this file: the Go core** — `cmd/`, `internal/`, `migrations/`.
 Frontend rules are in [web/CLAUDE.md](web/CLAUDE.md) and win inside `web/`.
 
-**Language policy:** all code, comments, identifiers, commit messages and
-engineering docs are in English. User-facing strings go through i18n
-(pt-BR and en-US). Product documents in `docs/` are pt-BR.
+**Language policy:** everything written down is in English — code, comments,
+identifiers, commit messages and the documents in `docs/`. The repository is
+public, and a document only half its readers can read is a document that does
+not get reviewed. User-facing strings are the exception: they go through i18n,
+pt-BR and en-US in parity.
+
+Documents in `docs/` are Markdown, not HTML: GitHub renders them, they diff
+line by line in review, and nobody has to generate a PDF to read one.
 
 ## Layout
 

@@ -14,7 +14,7 @@ all reads over the same record — not four systems that have to agree. No effec
 reaches the outside world without passing a deterministic Gate, and the Gate's
 ruling is written down before the effect happens.
 
-Functional reference: [docs/PRD-001-fuseone-agents.html](docs/PRD-001-fuseone-agents.html).
+Functional reference: [docs/PRD-001-fuseone-agents.md](docs/PRD-001-fuseone-agents.md).
 
 ## Running it locally
 
