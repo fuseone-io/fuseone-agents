@@ -10,6 +10,7 @@ import {
 import { formatMicros, formatTokens } from "@/lib/format";
 import { CostKpis } from "@/features/cost/cost-kpis";
 import { CostDrivers } from "@/features/cost/cost-drivers";
+import { CostCaps } from "@/features/cost/cost-caps";
 import { useCostRollup, useCostWindow } from "@/features/cost/api";
 
 const HEAD = "h-[30px] bg-muted text-2xs uppercase tracking-label text-muted-foreground";
@@ -19,6 +20,7 @@ export function CostPage() {
   const window = useCostWindow(30);
   const daily = useCostRollup(window.from, window.to, "day");
   const byAgent = useCostRollup(window.from, window.to, "agent");
+  const byArea = useCostRollup(window.from, window.to, "area");
 
   const error = daily.error ?? byAgent.error;
   const isLoading = daily.isLoading || byAgent.isLoading;
@@ -61,6 +63,8 @@ export function CostPage() {
               <CostDrivers total={daily.data?.total} />
             </Panel>
           </div>
+
+          <CostCaps byArea={byArea.data} />
 
           <Panel title="Por agente" action={<span className="text-xs text-muted-foreground">no período</span>} flush>
             <Table>

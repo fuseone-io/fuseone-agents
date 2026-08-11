@@ -3,6 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToolsPanel } from "@/features/admin/tools-panel";
 import { IntegrationsPanel } from "@/features/admin/integrations-panel";
 import { EventsPanel } from "@/features/admin/events-panel";
+import { BudgetsPanel } from "@/features/admin/budgets-panel";
 
 /**
  * Everything an operator configures lives here, and every change made here is
@@ -21,6 +22,7 @@ export function AdminPage() {
         <TabsList>
           <TabsTrigger value="tools">Ferramentas</TabsTrigger>
           <TabsTrigger value="integrations">Integrações</TabsTrigger>
+          <TabsTrigger value="budgets">Tetos</TabsTrigger>
           <TabsTrigger value="events">Trilha</TabsTrigger>
         </TabsList>
 
@@ -29,6 +31,9 @@ export function AdminPage() {
         </TabsContent>
         <TabsContent value="integrations" className="mt-4">
           <IntegrationsPanel />
+        </TabsContent>
+        <TabsContent value="budgets" className="mt-4">
+          <BudgetsPanel />
         </TabsContent>
         <TabsContent value="events" className="mt-4">
           <EventsPanel />

@@ -7,12 +7,14 @@ export type Effect = components["schemas"]["Effect"];
 export type MCPServer = components["schemas"]["MCPServer"];
 export type ModelProvider = components["schemas"]["ModelProvider"];
 export type AdminEvent = components["schemas"]["AdminEvent"];
+export type ScopeBudget = components["schemas"]["ScopeBudget"];
 
 export const adminKeys = {
   all: ["admin"] as const,
   tools: () => [...adminKeys.all, "tools"] as const,
   integrations: () => [...adminKeys.all, "integrations"] as const,
   events: (target?: string) => [...adminKeys.all, "events", target ?? ""] as const,
+  budgets: () => [...adminKeys.all, "budgets"] as const,
 };
 
 export function useTools() {
@@ -115,6 +117,54 @@ export function useDeleteProvider() {
   return useMutation({
     mutationFn: async (name: string) =>
       unwrap(await api.DELETE("/admin/integrations/providers/{name}", { params: { path: { name } } })),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: adminKeys.all }),
+  });
+}
+
+export function useBudgets() {
+  return useQuery({
+    queryKey: adminKeys.budgets(),
+    queryFn: async () => unwrap(await api.GET("/admin/budgets")),
+  });
+}
+
+/**
+ * The scope is a path segment with three shapes: `installation`, a company, or
+ * `company/area`. Encoding it as one string keeps the hierarchy visible in the
+ * URL, which is where an operator reading an audit trail will see it.
+ */
+export function usePutBudget() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      scope: string;
+      period: "daily" | "monthly";
+      micros?: number;
+      steps?: number;
+      toolCalls?: number;
+      enabled: boolean;
+    }) =>
+      unwrap(
+        await api.PUT("/admin/budgets/{scope}", {
+          params: { path: { scope: input.scope } },
+          body: {
+            period: input.period,
+            micros: input.micros,
+            steps: input.steps,
+            toolCalls: input.toolCalls,
+            enabled: input.enabled,
+          },
+        }),
+      ),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: adminKeys.all }),
+  });
+}
+
+export function useDeleteBudget() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (scope: string) =>
+      unwrap(await api.DELETE("/admin/budgets/{scope}", { params: { path: { scope } } })),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: adminKeys.all }),
   });
 }
