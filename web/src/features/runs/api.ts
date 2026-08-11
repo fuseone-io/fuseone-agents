@@ -16,6 +16,8 @@ export interface RunFilters {
   agentId?: string;
   /** ISO instant; only runs started at or after it. */
   since?: string;
+  /** Matches the run or agent identifier, applied by the server. */
+  q?: string;
 }
 
 export function useRuns(filters: RunFilters = {}) {

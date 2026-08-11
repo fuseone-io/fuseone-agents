@@ -730,3 +730,67 @@ func requireDatabase(t *testing.T, dsn string) {
 		t.Fatal("REQUIRE_DATABASE is set but TEST_DATABASE_URL is empty")
 	}
 }
+
+func TestSearchContract(t *testing.T) {
+	base := time.Date(2026, 8, 11, 12, 0, 0, 0, time.UTC)
+
+	seed := func(t *testing.T, s Store) {
+		t.Helper()
+		mustAppend(t, s, startedAt("run-triage-8801", base))
+
+		other := startedAt("run-leads-4410", base)
+		other.AgentID = "lead-qualifier"
+		mustAppend(t, s, other)
+	}
+
+	run(t, "a search matches the run identifier", func(t *testing.T, s Store) {
+		seed(t, s)
+
+		page, err := s.ListRuns(context.Background(), domain.RunFilter{Search: "8801"}, "", 50)
+		if err != nil {
+			t.Fatalf("ListRuns: %v", err)
+		}
+		if len(page) != 1 || page[0].RunID != "run-triage-8801" {
+			t.Errorf("ListRuns = %v, want the run whose id matched", kindsOfPage(page))
+		}
+	})
+
+	run(t, "a search matches the agent identifier", func(t *testing.T, s Store) {
+		seed(t, s)
+
+		page, err := s.ListRuns(context.Background(), domain.RunFilter{Search: "lead"}, "", 50)
+		if err != nil {
+			t.Fatalf("ListRuns: %v", err)
+		}
+		if len(page) != 1 || page[0].AgentID != "lead-qualifier" {
+			t.Errorf("ListRuns = %v, want the run whose agent matched", kindsOfPage(page))
+		}
+	})
+
+	run(t, "case does not decide whether something is found", func(t *testing.T, s Store) {
+		seed(t, s)
+
+		// Somebody typing a run id from a ticket should not have to match the
+		// casing the platform happened to generate.
+		page, err := s.ListRuns(context.Background(), domain.RunFilter{Search: "TRIAGE"}, "", 50)
+		if err != nil {
+			t.Fatalf("ListRuns: %v", err)
+		}
+		if len(page) != 1 {
+			t.Errorf("ListRuns = %v, want a case-insensitive match", kindsOfPage(page))
+		}
+	})
+
+	run(t, "a search that looks like SQL is a search", func(t *testing.T, s Store) {
+		seed(t, s)
+
+		page, err := s.ListRuns(context.Background(),
+			domain.RunFilter{Search: "' or 1=1 --"}, "", 50)
+		if err != nil {
+			t.Fatalf("ListRuns: %v", err)
+		}
+		if len(page) != 0 {
+			t.Errorf("ListRuns = %v, want nothing; the pattern is a bound parameter", kindsOfPage(page))
+		}
+	})
+}

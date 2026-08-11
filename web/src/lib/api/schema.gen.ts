@@ -671,6 +671,8 @@ export interface operations {
                 phase?: components["schemas"]["Phase"];
                 /** @description Only runs started at or after this instant. */
                 since?: string;
+                /** @description Matches the run identifier or the agent identifier. Applied where the whole set is, so a page of results is the whole answer rather than whatever happened to be loaded. */
+                q?: string;
                 /** @description Opaque cursor from the previous page. */
                 cursor?: components["parameters"]["Cursor"];
                 limit?: components["parameters"]["Limit"];

@@ -1,13 +1,8 @@
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Toolbar } from "@/components/shared/toolbar";
+import { FilterSelect, type FilterOption } from "@/components/shared/filter-select";
 import type { Phase } from "@/lib/api/client";
 
-const PHASES: { value: Phase | "all"; label: string }[] = [
+const PHASES: FilterOption[] = [
   { value: "all", label: "Todas as situações" },
   { value: "running", label: "Em execução" },
   { value: "awaiting_approval", label: "Aguardando aprovação" },
@@ -16,57 +11,51 @@ const PHASES: { value: Phase | "all"; label: string }[] = [
   { value: "finished", label: "Concluída" },
 ];
 
-const PERIODS: { value: string; label: string; days: number | null }[] = [
-  { value: "1", label: "Últimas 24 horas", days: 1 },
-  { value: "7", label: "Últimos 7 dias", days: 7 },
-  { value: "30", label: "Últimos 30 dias", days: 30 },
-  { value: "all", label: "Todo o período", days: null },
+const PERIODS: FilterOption[] = [
+  { value: "1", label: "Últimas 24 horas" },
+  { value: "7", label: "Últimos 7 dias" },
+  { value: "30", label: "Últimos 30 dias" },
+  { value: "all", label: "Todo o período" },
 ];
 
+const DAYS: Record<string, number | null> = { "1": 1, "7": 7, "30": 30, all: null };
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MINUTE_MS = 60 * 1000;
 
-/** Both filters are applied by the server, so a page of results is the whole
- *  answer rather than whatever happened to be loaded. */
+/** Every filter here is applied by the server, so a page of results is the
+ *  whole answer rather than whatever happened to be loaded. */
 export function RunsFilters({
+  search,
   phase,
   period,
+  onSearch,
   onPhase,
   onPeriod,
 }: {
+  search: string;
   phase: Phase | "all";
   period: string;
+  onSearch: (value: string) => void;
   onPhase: (value: Phase | "all") => void;
   onPeriod: (value: string) => void;
 }) {
   return (
-    <div className="flex shrink-0 items-center gap-2">
-      <Select value={phase} onValueChange={(v) => onPhase(v as Phase | "all")}>
-        <SelectTrigger className="w-[220px]" aria-label="Filtrar por situação">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {PHASES.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              {option.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      <Select value={period} onValueChange={onPeriod}>
-        <SelectTrigger className="w-[180px]" aria-label="Filtrar por período">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {PERIODS.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              {option.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
+    <Toolbar placeholder="Buscar por execução ou agente" value={search} onChange={onSearch}>
+      <FilterSelect
+        label="Filtrar por situação"
+        value={phase}
+        options={PHASES}
+        onChange={(v) => onPhase(v as Phase | "all")}
+        width={220}
+      />
+      <FilterSelect
+        label="Filtrar por período"
+        value={period}
+        options={PERIODS}
+        onChange={onPeriod}
+        width={180}
+      />
+    </Toolbar>
   );
 }
 
@@ -79,7 +68,7 @@ export function RunsFilters({
  * the API in a loop that never settles.
  */
 export function sinceFor(period: string, now = Date.now()): string | undefined {
-  const days = PERIODS.find((p) => p.value === period)?.days;
+  const days = DAYS[period];
   if (days == null) return undefined;
 
   const bucket = Math.floor(now / MINUTE_MS) * MINUTE_MS;

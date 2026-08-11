@@ -3,6 +3,7 @@ package ledger
 import (
 	"context"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/fuseone/agents/internal/domain"
@@ -52,8 +53,17 @@ func matches(first domain.Step, f domain.RunFilter) bool {
 		return false
 	case !f.Since.IsZero() && first.At.Before(f.Since):
 		return false
+	case f.Search != "" && !matchesSearch(first, f.Search):
+		return false
 	}
 	return true
+}
+
+// matchesSearch mirrors the SQL side's ILIKE over the same two identifiers.
+func matchesSearch(first domain.Step, q string) bool {
+	q = strings.ToLower(q)
+	return strings.Contains(strings.ToLower(string(first.RunID)), q) ||
+		strings.Contains(strings.ToLower(string(first.AgentID)), q)
 }
 
 // span returns when a run opened and closed. A run still in flight has no

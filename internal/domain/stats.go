@@ -11,6 +11,12 @@ type RunFilter struct {
 	// figure that changes while you read it.
 	Since time.Time
 	Until time.Time
+
+	// Search matches the run or agent identifier. It is a filter like any
+	// other rather than something applied to a page: a search that only looked
+	// at the rows already loaded would answer differently depending on how
+	// many the caller asked for.
+	Search string
 }
 
 // RunStats answers a question about many runs at once.

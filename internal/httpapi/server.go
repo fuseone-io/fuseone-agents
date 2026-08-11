@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
@@ -81,8 +82,12 @@ func (s *Server) ListRuns(ctx context.Context, req openapi.ListRunsRequestObject
 		phase = string(*req.Params.Phase)
 	}
 
-	summaries, err := s.store.ListRuns(ctx, runFilter(req.Params.Company, req.Params.Area,
-		req.Params.AgentId, req.Params.Since, nil), phase, limitOf(req.Params.Limit))
+	filter := runFilter(req.Params.Company, req.Params.Area, req.Params.AgentId, req.Params.Since, nil)
+	if req.Params.Q != nil {
+		filter.Search = strings.TrimSpace(*req.Params.Q)
+	}
+
+	summaries, err := s.store.ListRuns(ctx, filter, phase, limitOf(req.Params.Limit))
 	if err != nil {
 		return nil, fmt.Errorf("list runs: %w", err)
 	}

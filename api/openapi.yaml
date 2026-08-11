@@ -89,6 +89,13 @@ paths:
           in: query
           description: Only runs started at or after this instant.
           schema: { type: string, format: date-time }
+        - name: q
+          in: query
+          description: >
+            Matches the run identifier or the agent identifier. Applied where
+            the whole set is, so a page of results is the whole answer rather
+            than whatever happened to be loaded.
+          schema: { type: string }
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Limit'
       responses:

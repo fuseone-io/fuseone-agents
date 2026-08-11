@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { Activity } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { Panel } from "@/components/shared/panel";
@@ -10,8 +10,10 @@ import { useRunStats, useRuns } from "@/features/runs/api";
 import type { Phase } from "@/lib/api/client";
 
 export function RunsPage() {
+  const [search, setSearch] = useState("");
   const [phase, setPhase] = useState<Phase | "all">("all");
   const [period, setPeriod] = useState("7");
+  const query = useDeferredValue(search.trim());
 
   // Recomputed only when the period changes. sinceFor is stable within a
   // minute anyway; this keeps the query key from churning at all.
@@ -20,6 +22,7 @@ export function RunsPage() {
   const { data, isLoading, error, refetch } = useRuns({
     phase: phase === "all" ? undefined : phase,
     since,
+    q: query || undefined,
   });
 
   // Deliberately not narrowed by phase: the row exists to say how the whole
@@ -38,7 +41,14 @@ export function RunsPage() {
 
       <RunsKpis stats={stats.data} isLoading={stats.isLoading} />
 
-      <RunsFilters phase={phase} period={period} onPhase={setPhase} onPeriod={setPeriod} />
+      <RunsFilters
+        search={search}
+        phase={phase}
+        period={period}
+        onSearch={setSearch}
+        onPhase={setPhase}
+        onPeriod={setPeriod}
+      />
 
       <Panel
         title="Execuções"
@@ -49,7 +59,12 @@ export function RunsPage() {
         }
         flush
       >
-        <Body isLoading={isLoading} error={error} onRetry={() => void refetch()} count={runs.length}>
+        <Body
+          isLoading={isLoading}
+          error={error}
+          onRetry={() => void refetch()}
+          empty={runs.length === 0 ? <Nothing query={query} /> : undefined}
+        >
           <RunsTable runs={runs} />
         </Body>
       </Panel>
@@ -62,28 +77,33 @@ function Body({
   isLoading,
   error,
   onRetry,
-  count,
+  empty,
   children,
 }: {
   isLoading: boolean;
   error: unknown;
   onRetry: () => void;
-  count: number;
+  empty?: React.ReactNode;
   children: React.ReactNode;
 }) {
   if (isLoading) return <div className="p-4"><LoadingRows /></div>;
   if (error) return <div className="p-4"><ErrorState error={error} onRetry={onRetry} /></div>;
-
-  if (count === 0) {
-    return (
-      <div className="p-4">
-        <EmptyState
-          icon={<Activity className="size-6" />}
-          title="Nenhuma execução no período"
-          hint="Execuções aparecem aqui assim que um agente é disparado por agendamento, webhook ou evento. Amplie o período ou remova o filtro de situação."
-        />
-      </div>
-    );
-  }
+  if (empty) return <div className="p-4">{empty}</div>;
   return <>{children}</>;
+}
+
+/** An empty result says which of the two things happened: nothing matched the
+ *  search, or nothing ran in the period. They call for different actions. */
+function Nothing({ query }: { query: string }) {
+  return (
+    <EmptyState
+      icon={<Activity className="size-6" />}
+      title={query ? "Nada encontrado" : "Nenhuma execução no período"}
+      hint={
+        query
+          ? `Nenhuma execução ou agente com "${query}". A busca respeita o período e a situação selecionados.`
+          : "Execuções aparecem aqui assim que um agente é disparado por agendamento, webhook ou evento. Amplie o período ou remova o filtro de situação."
+      }
+    />
+  );
 }

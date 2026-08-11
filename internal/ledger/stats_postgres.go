@@ -85,6 +85,13 @@ func runFilterSQL(f domain.RunFilter) (string, []any) {
 	if !f.Since.IsZero() {
 		add("started_at >= $%d", f.Since.UTC())
 	}
+	if f.Search != "" {
+		// One bound parameter used twice: the pattern is built here rather
+		// than interpolated, so a search string cannot become SQL.
+		args = append(args, "%"+f.Search+"%")
+		clauses = append(clauses,
+			fmt.Sprintf("(run_id ilike $%d or agent_id ilike $%d)", len(args), len(args)))
+	}
 
 	if len(clauses) == 0 {
 		return "", nil
