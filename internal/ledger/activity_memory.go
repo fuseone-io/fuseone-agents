@@ -68,3 +68,27 @@ func newer(s domain.RunSummary, best time.Time, bestID domain.RunID) bool {
 	}
 	return s.StartedAt.Equal(best) && s.RunID > bestID
 }
+
+// SpentSince derives the same total the SQL side sums.
+func (m *Memory) SpentSince(ctx context.Context, scope domain.Scope, since time.Time) (domain.Consumption, error) {
+	if err := ctx.Err(); err != nil {
+		return domain.Consumption{}, err
+	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	filter := domain.RunFilter{Scope: scope, Since: since}
+	var out domain.Consumption
+	for _, steps := range m.runs {
+		if len(steps) == 0 || !matches(steps[0], filter) {
+			continue
+		}
+		summary := summarise(steps)
+		out.Micros += summary.Cost.Micros
+		out.Tokens += summary.Cost.TotalTokens()
+		out.ToolCalls += summary.ToolCalls
+		out.Steps += summary.Seq
+	}
+	return out, nil
+}

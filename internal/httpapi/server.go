@@ -46,6 +46,7 @@ type Server struct {
 	tools        Tools
 	integrations Integrations
 	agents       Agents
+	ceilings     Ceilings
 }
 
 func NewServer(store Store, version string) *Server {
@@ -63,6 +64,12 @@ func (s *Server) WithAdministration(curator Curator, tools Tools, integrations I
 // WithAgents wires the registry of published versions.
 func (s *Server) WithAgents(agents Agents) *Server {
 	s.agents = agents
+	return s
+}
+
+// WithCeilings wires the budgets configured per scope.
+func (s *Server) WithCeilings(ceilings Ceilings) *Server {
+	s.ceilings = ceilings
 	return s
 }
 

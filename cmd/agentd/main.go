@@ -138,9 +138,11 @@ func serve(args []string) error {
 			slog.Warn("no master key; credentials cannot be stored from the console until one is set",
 				"variable", vault.KeyEnv)
 		}
-		integrations := admin.NewIntegrations(identity.pool, settings.NewStore(identity.pool, v))
+		store := settings.NewStore(identity.pool, v)
+		integrations := admin.NewIntegrations(identity.pool, store)
 		api = api.WithAdministration(curator, curator, integrations).
-			WithAgents(spec.NewRegistry(identity.pool))
+			WithAgents(spec.NewRegistry(identity.pool)).
+			WithCeilings(admin.NewBudgets(identity.pool, store))
 	}
 
 	apiHandler := openapi.HandlerWithOptions(
@@ -316,6 +318,7 @@ func workerCmd(args []string) error {
 		curator      *admin.Curator
 		integrations *admin.Integrations
 		registry     *spec.Registry
+		budgets      *admin.Budgets
 	)
 	if *dsn != "" {
 		pool, err := pgxpool.New(ctx, *dsn)
@@ -328,9 +331,11 @@ func workerCmd(args []string) error {
 		if err != nil {
 			return err
 		}
+		store := settings.NewStore(pool, v)
 		curator = admin.NewCurator(pool)
-		integrations = admin.NewIntegrations(pool, settings.NewStore(pool, v))
+		integrations = admin.NewIntegrations(pool, store)
 		registry = spec.NewRegistry(pool)
+		budgets = admin.NewBudgets(pool, store)
 
 		configured, err := integrations.MCPServers(ctx)
 		if err != nil {
@@ -389,6 +394,12 @@ func workerCmd(args []string) error {
 		Owner: *owner, Concurrency: *concurrency, Lease: *lease,
 	}, queue, deps, specs, engine.SystemClock{}, slog.Default())
 
+	if budgets != nil {
+		if spender, ok := store.(spendReader); ok {
+			w = w.WithCeilings(ceilings{Budgets: budgets, spend: spender})
+		}
+	}
+
 	slog.Info("worker started", "owner", *owner, "concurrency", *concurrency)
 	err = w.Run(ctx)
 	if errors.Is(err, context.Canceled) {
@@ -432,6 +443,25 @@ func refreshRulings(ctx context.Context, catalog *tools.Catalog, curator *admin.
 			}
 		}
 	}
+}
+
+// spendReader is the part of a ledger the ceilings need.
+type spendReader interface {
+	SpentSince(ctx context.Context, scope domain.Scope, since time.Time) (domain.Consumption, error)
+}
+
+// ceilings joins what somebody configured with what has been spent.
+//
+// The two live apart on purpose — a ceiling is administration, spend is the
+// ledger — and this is the one place they meet, which is the worker deciding
+// how much room a run has left.
+type ceilings struct {
+	*admin.Budgets
+	spend spendReader
+}
+
+func (c ceilings) SpentSince(ctx context.Context, scope domain.Scope, since time.Time) (domain.Consumption, error) {
+	return c.spend.SpentSince(ctx, scope, since)
 }
 
 // mcpServers collects --mcp flags.

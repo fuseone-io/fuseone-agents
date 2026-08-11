@@ -35,6 +35,7 @@ type Store interface {
 	ListRuns(ctx context.Context, filter domain.RunFilter, phase string, limit int) ([]domain.RunSummary, error)
 	CostRollup(ctx context.Context, filter domain.RunFilter, groupBy string) ([]domain.CostBucket, error)
 	AgentActivity(ctx context.Context, filter domain.RunFilter) ([]domain.AgentActivity, error)
+	SpentSince(ctx context.Context, scope domain.Scope, since time.Time) (domain.Consumption, error)
 }
 
 type factory struct {
@@ -972,6 +973,89 @@ func TestScopesContract(t *testing.T) {
 		}
 		if len(buckets) != 1 || buckets[0].Key != "cx" {
 			t.Errorf("CostRollup = %v, want only cx", buckets)
+		}
+	})
+}
+
+func TestSpentSinceContract(t *testing.T) {
+	base := time.Date(2026, 8, 11, 12, 0, 0, 0, time.UTC)
+
+	run(t, "only the window counts, because a ceiling covers a period", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		old := startedAt("run-old", base.Add(-48*time.Hour))
+		mustAppend(t, s, old)
+		priced := step("run-old", domain.StepPlanned)
+		priced.At = base.Add(-48 * time.Hour)
+		priced.Cost = domain.Cost{Micros: 90_000}
+		mustAppend(t, s, priced)
+
+		mustAppend(t, s, startedAt("run-now", base))
+		recent := step("run-now", domain.StepPlanned)
+		recent.At = base
+		recent.Cost = domain.Cost{Micros: 10_000}
+		mustAppend(t, s, recent)
+
+		spent, err := s.SpentSince(ctx, domain.Scope{Company: "acme", Area: "cx"}, base.Add(-time.Hour))
+		if err != nil {
+			t.Fatalf("SpentSince: %v", err)
+		}
+		// A monthly ceiling that counted last month's spend would cut off the
+		// first run of every month.
+		if spent.Micros != 10_000 {
+			t.Errorf("Micros = %d, want only what was spent inside the window", spent.Micros)
+		}
+	})
+
+	run(t, "only the scope counts", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		mustAppend(t, s, startedAt("run-cx", base))
+		mine := step("run-cx", domain.StepPlanned)
+		mine.At = base
+		mine.Cost = domain.Cost{Micros: 5_000}
+		mustAppend(t, s, mine)
+
+		elsewhere := startedAt("run-mkt", base)
+		elsewhere.Scope = domain.Scope{Company: "acme", Area: "marketing"}
+		mustAppend(t, s, elsewhere)
+		theirs := step("run-mkt", domain.StepPlanned)
+		theirs.At = base
+		theirs.Scope = elsewhere.Scope
+		theirs.Cost = domain.Cost{Micros: 70_000}
+		mustAppend(t, s, theirs)
+
+		spent, err := s.SpentSince(ctx, domain.Scope{Company: "acme", Area: "cx"}, base.Add(-time.Hour))
+		if err != nil {
+			t.Fatalf("SpentSince: %v", err)
+		}
+		if spent.Micros != 5_000 {
+			t.Errorf("Micros = %d, want only this area's spend", spent.Micros)
+		}
+	})
+
+	run(t, "a company-wide question sums its areas", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		for _, area := range []domain.AreaID{"cx", "marketing"} {
+			id := domain.RunID("run-" + area)
+			opened := startedAt(id, base)
+			opened.Scope = domain.Scope{Company: "acme", Area: area}
+			mustAppend(t, s, opened)
+
+			priced := step(id, domain.StepPlanned)
+			priced.At = base
+			priced.Scope = opened.Scope
+			priced.Cost = domain.Cost{Micros: 20_000}
+			mustAppend(t, s, priced)
+		}
+
+		spent, err := s.SpentSince(ctx, domain.Scope{Company: "acme"}, base.Add(-time.Hour))
+		if err != nil {
+			t.Fatalf("SpentSince: %v", err)
+		}
+		if spent.Micros != 40_000 {
+			t.Errorf("Micros = %d, want both areas of the company", spent.Micros)
 		}
 	})
 }

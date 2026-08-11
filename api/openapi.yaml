@@ -450,6 +450,81 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /admin/budgets:
+    get:
+      tags: [admin]
+      operationId: listBudgets
+      summary: The ceilings configured per scope
+      description: >
+        A scope ceiling is a limit over a window, distinct from the per-run
+        ceiling in an agent's specification. Both are enforced by the same
+        check; a run is bounded by whichever binds first.
+      responses:
+        '200':
+          description: Configured ceilings.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ScopeBudget' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/budgets/{scope}:
+    put:
+      tags: [admin]
+      operationId: putBudget
+      summary: Set a scope's ceiling
+      description: >
+        Ceilings inherit downwards and never widen: an area cannot raise what
+        its company allows. Reaching one pauses the run resumably rather than
+        ending it, so raising the ceiling continues from the same step.
+      parameters:
+        - name: scope
+          in: path
+          required: true
+          description: '`installation`, a company id, or `company/area`.'
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [period]
+              properties:
+                period:
+                  type: string
+                  enum: [daily, monthly]
+                micros: { type: integer, format: int64 }
+                tokens: { type: integer, format: int64 }
+                toolCalls: { type: integer, format: int64 }
+                steps: { type: integer, format: int64 }
+                wallClockMs: { type: integer, format: int64 }
+                enabled: { type: boolean, default: true }
+      responses:
+        '204': { description: The ceiling is set. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    delete:
+      tags: [admin]
+      operationId: deleteBudget
+      summary: Remove a scope's ceiling
+      parameters:
+        - name: scope
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: The ceiling is removed. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /admin/events:
     get:
       tags: [admin]
@@ -688,6 +763,26 @@ components:
         hasKey:
           type: boolean
           description: Whether a credential is stored. The credential itself never leaves the vault through this API.
+        updatedBy: { type: string }
+        updatedAt: { type: string, format: date-time }
+
+    ScopeBudget:
+      type: object
+      required: [scopeKind, period, enabled]
+      properties:
+        scopeKind:
+          type: string
+          enum: [installation, company, area]
+        scope: { $ref: '#/components/schemas/Scope' }
+        period:
+          type: string
+          enum: [daily, monthly]
+        micros: { type: integer, format: int64 }
+        tokens: { type: integer, format: int64 }
+        toolCalls: { type: integer, format: int64 }
+        steps: { type: integer, format: int64 }
+        wallClockMs: { type: integer, format: int64 }
+        enabled: { type: boolean }
         updatedBy: { type: string }
         updatedAt: { type: string, format: date-time }
 

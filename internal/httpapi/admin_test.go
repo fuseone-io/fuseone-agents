@@ -474,3 +474,80 @@ func TestListApprovals_showsOnlyTheQueuesTheCallerMayActOn(t *testing.T) {
 		t.Errorf("items = %v, want nothing outside the caller's scope", page.Items)
 	}
 }
+
+// fakeCeilings stands in for the configured scope budgets.
+type fakeCeilings struct {
+	configured []domain.ScopeBudget
+	put        domain.ScopeBudget
+	putBy      domain.UserID
+}
+
+func (f *fakeCeilings) List(context.Context) ([]domain.ScopeBudget, error) {
+	return f.configured, nil
+}
+func (f *fakeCeilings) Put(_ context.Context, by domain.UserID, b domain.ScopeBudget) error {
+	f.put, f.putBy = b, by
+	return nil
+}
+func (f *fakeCeilings) Delete(context.Context, domain.UserID, domain.Scope) error { return nil }
+
+func TestPutBudget_readsTheThreeScopeShapes(t *testing.T) {
+	t.Parallel()
+
+	for raw, want := range map[string]domain.Scope{
+		"installation": {},
+		"acme":         {Company: "acme"},
+		"acme/cx":      {Company: "acme", Area: "cx"},
+	} {
+		ceilings := &fakeCeilings{}
+		_, err := NewServer(ledger.NewMemory(), "test").WithCeilings(ceilings).
+			PutBudget(as(domain.RoleCurator), openapi.PutBudgetRequestObject{
+				Scope: raw,
+				Body:  &openapi.PutBudgetJSONRequestBody{Period: "monthly", Micros: ptr(int64(500))},
+			})
+		if err != nil {
+			t.Fatalf("PutBudget(%q): %v", raw, err)
+		}
+		if ceilings.put.Scope != want {
+			t.Errorf("scope for %q = %v, want %v", raw, ceilings.put.Scope, want)
+		}
+	}
+}
+
+func TestPutBudget_anAreaWithNoCompanyIsNotAScope(t *testing.T) {
+	t.Parallel()
+
+	resp, err := NewServer(ledger.NewMemory(), "test").WithCeilings(&fakeCeilings{}).
+		PutBudget(as(domain.RoleCurator), openapi.PutBudgetRequestObject{
+			Scope: "/cx",
+			Body:  &openapi.PutBudgetJSONRequestBody{Period: "monthly"},
+		})
+	if err != nil {
+		t.Fatalf("PutBudget: %v", err)
+	}
+	if _, bad := resp.(openapi.PutBudget400ApplicationProblemPlusJSONResponse); !bad {
+		t.Fatalf("response = %T, want 400", resp)
+	}
+}
+
+func TestPutBudget_withoutThePermission_isRefused(t *testing.T) {
+	t.Parallel()
+
+	// Raising a ceiling is how an expensive month happens; it is the Curator's
+	// act, not an approver's.
+	ceilings := &fakeCeilings{}
+	resp, err := NewServer(ledger.NewMemory(), "test").WithCeilings(ceilings).
+		PutBudget(as(domain.RoleApprover), openapi.PutBudgetRequestObject{
+			Scope: "acme/cx",
+			Body:  &openapi.PutBudgetJSONRequestBody{Period: "monthly", Micros: ptr(int64(1))},
+		})
+	if err != nil {
+		t.Fatalf("PutBudget: %v", err)
+	}
+	if _, refused := resp.(openapi.PutBudget403ApplicationProblemPlusJSONResponse); !refused {
+		t.Fatalf("response = %T, want 403", resp)
+	}
+	if ceilings.put.Period != "" {
+		t.Error("a refused request still reached the store")
+	}
+}

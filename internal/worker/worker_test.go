@@ -18,6 +18,10 @@ import (
 type flakyPlanner struct {
 	failures int
 	calls    int
+	// proposal, when set, is what the planner asks for instead of finishing.
+	// A run that finishes on its first turn never reaches the Gate, which is
+	// where a ceiling is enforced.
+	proposal *engine.Proposal
 }
 
 func (p *flakyPlanner) Plan(context.Context, engine.PlanInput) (engine.Proposal, error) {
@@ -25,7 +29,20 @@ func (p *flakyPlanner) Plan(context.Context, engine.PlanInput) (engine.Proposal,
 	if p.calls <= p.failures {
 		return engine.Proposal{}, errors.New("model unreachable")
 	}
+	if p.proposal != nil {
+		return *p.proposal, nil
+	}
 	return engine.Proposal{Done: true, Outcome: "completed"}, nil
+}
+
+// wantsATool is a planner that proposes a call, so the Gate has something to
+// rule on.
+func wantsATool() *flakyPlanner {
+	return &flakyPlanner{proposal: &engine.Proposal{
+		Tool:     "crm.lookup",
+		Args:     []byte(`{}`),
+		Estimate: domain.Consumption{Micros: 5_000},
+	}}
 }
 
 type noTools struct{}
@@ -278,5 +295,83 @@ func TestTurn_resolutionCarriesNoPlanner_runIsParkedRatherThanCrashed(t *testing
 	// planner, so the backoff ladder would only delay someone noticing.
 	if _, err := store.Claim(context.Background(), "other", time.Minute); !errors.Is(err, domain.ErrNoClaimableRun) {
 		t.Error("a run whose spec has no planner is still being retried")
+	}
+}
+
+// staticCeilings stands in for the configured scope budgets.
+type staticCeilings struct {
+	ceiling domain.Budget
+	period  domain.Period
+	spent   domain.Consumption
+}
+
+func (c staticCeilings) Resolve(context.Context, domain.Scope) (domain.Budget, domain.Period, error) {
+	return c.ceiling, c.period, nil
+}
+
+func (c staticCeilings) SpentSince(context.Context, domain.Scope, time.Time) (domain.Consumption, error) {
+	return c.spent, nil
+}
+
+func TestTurn_scopeCeilingAlreadySpent_parksTheRunResumably(t *testing.T) {
+	t.Parallel()
+
+	// The agent's own ceiling is generous; its area has spent its month. The
+	// run must stop, and stop resumably — raising the ceiling resumes from the
+	// exact step rather than repeating an effect (PRD FO-04).
+	s := newSetup(t, Config{MaxAttempts: 5}, wantsATool(), nil)
+	s.worker.WithCeilings(staticCeilings{
+		ceiling: domain.Budget{Micros: 100_000},
+		period:  domain.PeriodMonthly,
+		spent:   domain.Consumption{Micros: 100_000},
+	})
+	openRun(t, s.store)
+
+	ctx := context.Background()
+	if _, err := s.worker.turn(ctx, slog.New(slog.DiscardHandler)); err != nil {
+		t.Fatalf("turn: %v", err)
+	}
+
+	if got := phaseOf(t, s.store); got != engine.PhaseParked {
+		t.Errorf("phase = %v, want the run parked at its area's ceiling", got)
+	}
+}
+
+func TestTurn_scopeCeilingWithHeadroom_letsTheRunProceed(t *testing.T) {
+	t.Parallel()
+
+	s := newSetup(t, Config{MaxAttempts: 5}, wantsATool(), nil)
+	s.worker.WithCeilings(staticCeilings{
+		ceiling: domain.Budget{Micros: 1_000_000},
+		period:  domain.PeriodMonthly,
+		spent:   domain.Consumption{Micros: 10_000},
+	})
+	openRun(t, s.store)
+
+	ctx := context.Background()
+	if _, err := s.worker.turn(ctx, slog.New(slog.DiscardHandler)); err != nil {
+		t.Fatalf("turn: %v", err)
+	}
+
+	if got := phaseOf(t, s.store); got == engine.PhaseParked {
+		t.Error("a run parked while its area still had budget")
+	}
+}
+
+func TestTurn_noCeilingConfigured_usesTheAgentsOwn(t *testing.T) {
+	t.Parallel()
+
+	// An installation that configured nothing runs on the ceilings in each
+	// agent's specification, exactly as before scope budgets existed.
+	s := newSetup(t, Config{MaxAttempts: 5}, wantsATool(), nil)
+	s.worker.WithCeilings(staticCeilings{})
+	openRun(t, s.store)
+
+	ctx := context.Background()
+	if _, err := s.worker.turn(ctx, slog.New(slog.DiscardHandler)); err != nil {
+		t.Fatalf("turn: %v", err)
+	}
+	if got := phaseOf(t, s.store); got == engine.PhaseParked {
+		t.Error("a run parked with no ceiling configured anywhere")
 	}
 }

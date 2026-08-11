@@ -36,6 +36,15 @@ type Queue interface {
 // the provider and the system prompt are all part of the agent's definition —
 // a worker pool serves many agents, and each turn must run under the version
 // the run was pinned to.
+// Ceilings is what a scope may spend, declared here by the consumer.
+//
+// Optional: an installation that has configured none runs on the ceilings in
+// each agent's specification alone.
+type Ceilings interface {
+	Resolve(ctx context.Context, scope domain.Scope) (domain.Budget, domain.Period, error)
+	SpentSince(ctx context.Context, scope domain.Scope, since time.Time) (domain.Consumption, error)
+}
+
 type Specs interface {
 	Resolve(ctx context.Context, agent domain.AgentID, version domain.VersionID) (Resolution, error)
 }
@@ -104,6 +113,15 @@ type Worker struct {
 	specs Specs
 	clock engine.Clock
 	log   *slog.Logger
+
+	// ceilings is optional; nil means the only budget is the agent's own.
+	ceilings Ceilings
+}
+
+// WithCeilings wires the scope budgets a run is narrowed by.
+func (w *Worker) WithCeilings(c Ceilings) *Worker {
+	w.ceilings = c
+	return w
 }
 
 func New(cfg Config, queue Queue, deps engine.Deps, specs Specs, clock engine.Clock, log *slog.Logger) *Worker {
@@ -180,7 +198,17 @@ func (w *Worker) turn(ctx context.Context, log *slog.Logger) (bool, error) {
 		return true, w.release(ctx, claim, domain.ClaimOutcome{Err: err, Parked: true})
 	}
 
+	// The agent's own ceiling is per run; the scope's is over a window. They
+	// combine by narrowing, so whichever binds first stops the run — and it
+	// parks resumably either way, which is what makes raising a ceiling resume
+	// from the exact step rather than repeat an effect (PRD FO-02, FO-04).
+	budget, err := w.scopedBudget(ctx, claim.Scope, resolved.Start.Budget)
+	if err != nil {
+		return true, w.release(ctx, claim, domain.ClaimOutcome{Err: err, Parked: true})
+	}
+
 	start := resolved.Start
+	start.Budget = budget
 	start.RunID = claim.RunID
 	start.Scope = claim.Scope
 	start.AgentID = claim.AgentID
@@ -204,6 +232,33 @@ func (w *Worker) turn(ctx context.Context, log *slog.Logger) (bool, error) {
 }
 
 // failure decides whether to back off or give up, per the supervision policy.
+// scopedBudget narrows a run's ceiling by what its scope has left.
+//
+// Read per claim rather than cached: a ceiling raised because a run parked has
+// to take effect on the next attempt, which is the whole point of parking
+// resumably rather than failing.
+func (w *Worker) scopedBudget(ctx context.Context, scope domain.Scope, agent domain.Budget) (domain.Budget, error) {
+	if w.ceilings == nil {
+		return agent, nil
+	}
+
+	ceiling, period, err := w.ceilings.Resolve(ctx, scope)
+	if err != nil {
+		// Refusing to run is the safe failure: proceeding would spend against
+		// a ceiling nobody could read.
+		return domain.Budget{}, fmt.Errorf("resolve budget for %s: %w", scope, err)
+	}
+	if period == "" {
+		return agent, nil
+	}
+
+	spent, err := w.ceilings.SpentSince(ctx, scope, period.Since(w.clock.Now()))
+	if err != nil {
+		return domain.Budget{}, fmt.Errorf("read spend for %s: %w", scope, err)
+	}
+	return agent.Narrow(domain.Headroom(ceiling, spent)), nil
+}
+
 func (w *Worker) failure(claim domain.Claim, err error) domain.ClaimOutcome {
 	attempts := claim.Attempts + 1
 	if attempts >= w.cfg.MaxAttempts {

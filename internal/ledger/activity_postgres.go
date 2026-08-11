@@ -3,6 +3,7 @@ package ledger
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/fuseone/agents/internal/domain"
 )
@@ -43,4 +44,27 @@ func (p *Postgres) AgentActivity(ctx context.Context, filter domain.RunFilter) (
 		out = append(out, a)
 	}
 	return out, rows.Err()
+}
+
+// SpentSince is what a scope consumed in the window a ceiling covers.
+//
+// Summed in the database, and deliberately not derived from CostRollup: that
+// answers "how was the money divided", this answers "how much is left", and
+// tying them would make a ceiling depend on how somebody chose to group a
+// report.
+func (p *Postgres) SpentSince(ctx context.Context, scope domain.Scope, since time.Time) (domain.Consumption, error) {
+	where, args := runFilterSQL(domain.RunFilter{Scope: scope, Since: since})
+
+	var c domain.Consumption
+	err := p.pool.QueryRow(ctx, `
+		select coalesce(sum(cost_micros), 0),
+		       coalesce(sum(total_tokens), 0),
+		       coalesce(sum(tool_calls), 0),
+		       coalesce(sum(last_seq), 0)
+		from runs `+where, args...,
+	).Scan(&c.Micros, &c.Tokens, &c.ToolCalls, &c.Steps)
+	if err != nil {
+		return domain.Consumption{}, fmt.Errorf("spend since: %w", err)
+	}
+	return c, nil
 }
