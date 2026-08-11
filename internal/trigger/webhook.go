@@ -54,6 +54,13 @@ var ErrNoHook = errors.New("trigger: no webhook at that path")
 // ErrNotArmed means the path exists but nobody has generated its secret.
 var ErrNotArmed = errors.New("trigger: the webhook has no secret yet")
 
+// ErrPathTaken means another agent already answers on that path.
+//
+// Refused rather than transferred: the sender configured against it holds a
+// secret, and moving the path would point that secret at a different agent
+// without anybody having to be told.
+var ErrPathTaken = errors.New("trigger: another agent already owns that path")
+
 // NewSecret returns a secret and its hash. The secret is returned once and
 // never stored: what is kept cannot be turned back into what the caller sends.
 func NewSecret() (secret string, hash []byte, err error) {

@@ -544,6 +544,15 @@ func syncWebhooks(ctx context.Context, pool *pgxpool.Pool, specDir *string) erro
 		}
 		scope := domain.Scope{Area: domain.AreaID(published.Area)}
 		if err := hooks.Sync(ctx, agent, scope, webhookPathsOf(published)); err != nil {
+			// A path two agents both declare is a configuration error, and one
+			// of them keeps it. Loud but not fatal: refusing to start would
+			// take the whole installation down over one file, and the path
+			// that already works keeps working.
+			if errors.Is(err, trigger.ErrPathTaken) {
+				slog.Error("webhook path already belongs to another agent; this one will not fire",
+					"agent", agent, "err", err)
+				continue
+			}
 			return fmt.Errorf("sync webhooks for %s: %w", agent, err)
 		}
 	}

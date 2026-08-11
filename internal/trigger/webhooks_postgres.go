@@ -110,14 +110,23 @@ func (p *PostgresWebhooks) Sync(
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	for _, path := range paths {
-		if _, err := tx.Exec(ctx, `
+		// Claimed, never taken. A path already answering for somebody else has
+		// a sender holding its secret, and quietly repointing that path would
+		// aim an existing key at a different agent.
+		var owner string
+		if err := tx.QueryRow(ctx, `
 			insert into webhook_triggers (path, agent_id, company_id, area_id)
 			values ($1, $2, $3, $4)
 			on conflict (path) do update set
-				agent_id = excluded.agent_id,
 				company_id = excluded.company_id,
-				area_id = excluded.area_id`,
-			path, string(agent), string(scope.Company), string(scope.Area)); err != nil {
+				area_id = excluded.area_id
+			where webhook_triggers.agent_id = excluded.agent_id
+			returning agent_id`,
+			path, string(agent), string(scope.Company), string(scope.Area),
+		).Scan(&owner); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return fmt.Errorf("%w: %q belongs to another agent", ErrPathTaken, path)
+			}
 			return fmt.Errorf("trigger: sync hook %q: %w", path, err)
 		}
 	}

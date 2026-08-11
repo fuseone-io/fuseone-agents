@@ -140,3 +140,50 @@ func TestRotate_pathNobodyDeclared_isRefused(t *testing.T) {
 		t.Errorf("Rotate on an undeclared path = %v, want ErrNoHook", err)
 	}
 }
+
+func TestSync_pathAnotherAgentAlreadyOwns_isRefusedRatherThanTransferred(t *testing.T) {
+	hooks := webhooksFor(t)
+
+	if err := hooks.Sync(t.Context(), "triage", cx, []string{"crm/ticket"}); err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	secret, err := hooks.Rotate(t.Context(), "crm/ticket", "usr_ana", time.Now())
+	if err != nil {
+		t.Fatalf("Rotate: %v", err)
+	}
+
+	// Another agent declares the same path. Taking it would hand its sender's
+	// existing secret to a different agent — the ERP configured to file
+	// tickets would start triggering whatever this one does, using the key it
+	// already has.
+	err = hooks.Sync(t.Context(), "billing", cx, []string{"crm/ticket"})
+	if err == nil {
+		t.Fatal("a second agent took a path that was already owned")
+	}
+	if !errors.Is(err, trigger.ErrPathTaken) {
+		t.Errorf("error = %v, want ErrPathTaken", err)
+	}
+
+	hook, err := hooks.Find(t.Context(), "crm/ticket")
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if hook.Agent != "triage" {
+		t.Errorf("the path now belongs to %q, want triage", hook.Agent)
+	}
+	if ok, _ := hooks.Verify(t.Context(), "crm/ticket", secret); !ok {
+		t.Error("the original secret stopped working")
+	}
+}
+
+func TestSync_agentKeepingItsOwnPath_isNotAConflict(t *testing.T) {
+	hooks := webhooksFor(t)
+
+	if err := hooks.Sync(t.Context(), "triage", cx, []string{"crm/ticket"}); err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	// Republishing must not look like a collision with itself.
+	if err := hooks.Sync(t.Context(), "triage", cx, []string{"crm/ticket"}); err != nil {
+		t.Fatalf("Sync again: %v", err)
+	}
+}
