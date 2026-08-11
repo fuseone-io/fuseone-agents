@@ -107,3 +107,47 @@ func TestGetStepContent_stepThatReferencesNothing_readsAsAbsent(t *testing.T) {
 		t.Fatalf("response = %T, want 404", resp)
 	}
 }
+
+// A run waiting on a person has to say when it stopped and what it wants to
+// do. Both were missing from the run's own projection while the inbox had
+// them, so the detail screen showed an approval requested in the year one, for
+// a call with no effect.
+
+func TestGetRun_awaitingApproval_saysWhenItStoppedAndWhatItWillDo(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := ledger.NewMemory()
+
+	asked := time.Date(2026, 8, 11, 14, 24, 59, 0, time.UTC)
+	for _, step := range []domain.Step{
+		{RunID: "run-cx", Kind: domain.StepRunStarted, Scope: domain.Scope{Company: "acme", Area: "cx"},
+			AgentID: "triage", VersionID: "v1", At: asked.Add(-time.Minute)},
+		{RunID: "run-cx", Kind: domain.StepApprovalRequested, Scope: domain.Scope{Company: "acme", Area: "cx"},
+			AgentID: "triage", VersionID: "v1", At: asked,
+			Payload: mustPayload(t, domain.ApprovalRequestedPayload{
+				Tool: "crm.reply", Rule: "taint", Effect: domain.EffectWrite,
+			})},
+	} {
+		if _, err := store.Append(ctx, step); err != nil {
+			t.Fatalf("seed %s: %v", step.Kind, err)
+		}
+	}
+
+	resp, err := NewServer(store, "test").
+		GetRun(inArea("cx", domain.RoleApprover), openapi.GetRunRequestObject{RunId: "run-cx"})
+	if err != nil {
+		t.Fatalf("GetRun: %v", err)
+	}
+	run := resp.(openapi.GetRun200JSONResponse)
+
+	pending := run.PendingApproval
+	if pending == nil {
+		t.Fatal("the run does not report the approval it is waiting on")
+	}
+	if !pending.RequestedAt.Equal(asked) {
+		t.Errorf("requestedAt = %s, want %s", pending.RequestedAt, asked)
+	}
+	if pending.Effect == nil || *pending.Effect != "write" {
+		t.Errorf("effect = %v, want write — an approver decides on what it does to the world", pending.Effect)
+	}
+}

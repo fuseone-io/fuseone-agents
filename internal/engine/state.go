@@ -7,6 +7,8 @@
 package engine
 
 import (
+	"time"
+
 	"context"
 	"encoding/json"
 	"fmt"
@@ -50,6 +52,10 @@ type PendingApproval struct {
 	Rule   string
 	Reason string
 	AtSeq  int64
+	// Effect and At are what an approver decides on: what the call does to the
+	// world, and how long it has been waiting for them.
+	Effect domain.Effect
+	At     time.Time
 }
 
 // State is the run reconstructed from its ledger. Every field is derived; none
@@ -169,7 +175,10 @@ func (s *State) applyKind(step domain.Step) error {
 		if err := decode(step, &p); err != nil {
 			return err
 		}
-		s.PendingApproval = &PendingApproval{Tool: p.Tool, Rule: p.Rule, Reason: p.Reason, AtSeq: step.Seq}
+		s.PendingApproval = &PendingApproval{
+			Tool: p.Tool, Rule: p.Rule, Reason: p.Reason,
+			AtSeq: step.Seq, Effect: p.Effect, At: step.At,
+		}
 		s.Phase = PhaseAwaitingApproval
 
 	case domain.StepApprovalDecided:

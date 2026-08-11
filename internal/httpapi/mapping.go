@@ -52,6 +52,10 @@ func toPendingApproval(runID domain.RunID, s engine.State) openapi.PendingApprov
 		Rule:    ptr(s.PendingApproval.Rule),
 		Reason:  ptr(s.PendingApproval.Reason),
 		AtSeq:   s.PendingApproval.AtSeq,
+		// The moment the run stopped, not the moment it was read. An approval
+		// screen counts how long somebody has been waiting on this person.
+		RequestedAt: s.PendingApproval.At,
+		Effect:      ptr(openapi.Effect(s.PendingApproval.Effect.String())),
 	}
 }
 
