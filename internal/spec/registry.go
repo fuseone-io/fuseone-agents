@@ -106,6 +106,64 @@ func (r *Registry) List(ctx context.Context, scope domain.Scope, allVersions boo
 	return out, rows.Err()
 }
 
+// Versions returns every published version of one agent, newest first.
+//
+// The whole history rather than the latest: publishing a new version never
+// touches a run already in flight, so the older ones stay the only correct
+// explanation of the runs pinned to them.
+func (r *Registry) Versions(ctx context.Context, agent domain.AgentID) ([]domain.AgentSummary, error) {
+	rows, err := r.pool.Query(ctx, `
+		select agent_id, version_id, company_id, area_id, name,
+		       provider, model, effort, tools, budget, triggers,
+		       published_by, published_at, false
+		from agent_specs
+		where agent_id = $1
+		order by published_at desc`, string(agent))
+	if err != nil {
+		return nil, fmt.Errorf("spec: versions of %s: %w", agent, err)
+	}
+	defer rows.Close()
+
+	var out []domain.AgentSummary
+	for rows.Next() {
+		summary, err := scanAgent(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, summary)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// Newest first, so the first row is the one a reader gets by default.
+	for i := range out {
+		out[i].Latest = i == 0
+	}
+	return out, nil
+}
+
+// Instructions returns one version's body and where it came from.
+//
+// Separate from the listing because the text is only ever wanted one version
+// at a time, and a page of twenty agents carrying twenty bodies of prose is a
+// page nobody can load twice.
+func (r *Registry) Instructions(
+	ctx context.Context, agent domain.AgentID, version domain.VersionID,
+) (text, source string, err error) {
+	err = r.pool.QueryRow(ctx, `
+		select instructions, source from agent_specs
+		where agent_id = $1 and version_id = $2`,
+		string(agent), string(version)).Scan(&text, &source)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", "", fmt.Errorf("%w: %s@%s", ErrNotPublished, agent, version)
+	}
+	if err != nil {
+		return "", "", fmt.Errorf("spec: read instructions %s@%s: %w", agent, version, err)
+	}
+	return text, source, nil
+}
+
 // Get returns one published version, exactly as it was published.
 func (r *Registry) Get(ctx context.Context, agent domain.AgentID, version domain.VersionID) (Spec, error) {
 	var (

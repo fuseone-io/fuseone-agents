@@ -144,6 +144,38 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /agents/{agentId}:
+    get:
+      tags: [agents]
+      operationId: getAgent
+      summary: One published agent, as it was published
+      description: |
+        The latest version by default, or the exact one asked for. Publishing a
+        new version never affects a run already in flight, so an auditor
+        opening a run's version reads that version — not whatever is newest
+        now.
+
+        This is the only place the definition's text is returned. The list
+        deliberately omits it: a page of twenty agents would carry twenty
+        bodies of prose nobody asked to read.
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: version
+          in: query
+          description: A specific version. Defaults to the newest published.
+          schema: { type: string }
+      responses:
+        '200':
+          description: The agent.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /runs/throughput:
     get:
       tags: [runs]
@@ -950,6 +982,34 @@ components:
         costMicros: { type: integer, format: int64 }
         lastPhase: { $ref: '#/components/schemas/Phase' }
         lastRunAt: { type: string, format: date-time }
+
+    AgentDetail:
+      type: object
+      required: [agent, versions]
+      properties:
+        agent: { $ref: '#/components/schemas/Agent' }
+        instructions:
+          type: string
+          description: |
+            The definition's body, exactly as published. Read-only: a
+            specification is changed by publishing a new version, never by
+            editing one that runs already reference.
+        source:
+          type: string
+          description: Where the definition came from — a path, a repository.
+        versions:
+          type: array
+          description: Every published version, newest first.
+          items: { $ref: '#/components/schemas/AgentVersion' }
+
+    AgentVersion:
+      type: object
+      required: [versionId, publishedAt, latest]
+      properties:
+        versionId: { type: string }
+        publishedBy: { type: string }
+        publishedAt: { type: string, format: date-time }
+        latest: { type: boolean }
 
     AgentTrigger:
       type: object

@@ -3,6 +3,7 @@ package spec_test
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -186,5 +187,56 @@ func TestPublishedVersion_cannotBeChangedInPlace(t *testing.T) {
 	if _, err := pool.Exec(ctx,
 		`update agent_specs set instructions = 'rewritten' where agent_id = 'triage'`); err == nil {
 		t.Fatal("a published version was rewritten in place")
+	}
+}
+
+// The history is what makes a run explainable years later: the version it was
+// pinned to still reads exactly as it did when it ran.
+
+func withBody(body string) string {
+	return strings.Replace(definition, "Read the ticket and classify it.", body, 1)
+}
+
+func TestVersions_afterRepublishing_readsNewestFirstAndMarksOnlyOneLatest(t *testing.T) {
+	r := openRegistry(t)
+	ctx := context.Background()
+
+	for _, body := range []string{"Classifique o chamado.", "Classifique e responda o chamado."} {
+		if err := r.Publish(ctx, published(t, withBody(body)), "usr_ana", "acme"); err != nil {
+			t.Fatalf("Publish: %v", err)
+		}
+	}
+
+	versions, err := r.Versions(ctx, "triage")
+	if err != nil {
+		t.Fatalf("Versions: %v", err)
+	}
+	if len(versions) != 2 {
+		t.Fatalf("versions = %d, want both", len(versions))
+	}
+	if !versions[0].Latest || versions[1].Latest {
+		t.Error("exactly the newest version must be marked latest")
+	}
+}
+
+func TestInstructions_readsTheTextThatVersionWasPublishedWith(t *testing.T) {
+	r := openRegistry(t)
+	ctx := context.Background()
+
+	first := published(t, withBody("Classifique o chamado."))
+	for _, s := range []spec.Spec{first, published(t, withBody("Não faça nada."))} {
+		if err := r.Publish(ctx, s, "usr_ana", "acme"); err != nil {
+			t.Fatalf("Publish: %v", err)
+		}
+	}
+
+	// A run pinned to the first version is explained by the first version,
+	// never by whatever was published over it since.
+	text, _, err := r.Instructions(ctx, "triage", first.Version)
+	if err != nil {
+		t.Fatalf("Instructions: %v", err)
+	}
+	if text != "Classifique o chamado." {
+		t.Errorf("instructions = %q, want the text that version carried", text)
 	}
 }

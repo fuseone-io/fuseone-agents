@@ -215,6 +215,20 @@ func (f *fakeAgents) List(_ context.Context, _ domain.Scope, all bool) ([]domain
 	return f.published, nil
 }
 
+func (f *fakeAgents) Versions(_ context.Context, agent domain.AgentID) ([]domain.AgentSummary, error) {
+	var out []domain.AgentSummary
+	for _, a := range f.published {
+		if a.ID == agent {
+			out = append(out, a)
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeAgents) Instructions(context.Context, domain.AgentID, domain.VersionID) (string, string, error) {
+	return "", "", nil
+}
+
 func TestListAgents_askingForAnotherAreaIsRefused(t *testing.T) {
 	t.Parallel()
 

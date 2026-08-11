@@ -11,8 +11,101 @@ import (
 )
 
 // Agents is the registry of published versions, declared here by the consumer.
+//
+// Instructions is separate from the listing because the text is only ever
+// wanted one version at a time: a page of twenty agents would otherwise carry
+// twenty bodies of prose nobody asked to read.
 type Agents interface {
 	List(ctx context.Context, scope domain.Scope, allVersions bool) ([]domain.AgentSummary, error)
+	Versions(ctx context.Context, agent domain.AgentID) ([]domain.AgentSummary, error)
+	Instructions(ctx context.Context, agent domain.AgentID, version domain.VersionID) (text, source string, err error)
+}
+
+// GetAgent reads one published version, exactly as it was published.
+//
+// Every failure answers 404 — no such agent, no such version, an area the
+// caller cannot see. Distinguishing them would confirm that an agent exists
+// in an area somebody has no business knowing about.
+func (s *Server) GetAgent(ctx context.Context, req openapi.GetAgentRequestObject) (openapi.GetAgentResponseObject, error) {
+	absent := openapi.GetAgent404ApplicationProblemPlusJSONResponse{
+		NotFoundApplicationProblemPlusJSONResponse: notFound(req.AgentId),
+	}
+	if s.agents == nil {
+		return absent, nil
+	}
+
+	versions, err := s.agents.Versions(ctx, domain.AgentID(req.AgentId))
+	if err != nil {
+		return nil, fmt.Errorf("agent versions: %w", err)
+	}
+	if len(versions) == 0 {
+		return absent, nil
+	}
+	if !readable(versions[0].Scope, auth.VisibleScopes(ctx, domain.PermAgentRead)) {
+		return absent, nil
+	}
+
+	// The newest unless one is named. A run pinned to an older version is
+	// explained by that version, never by whatever was published since.
+	wanted := versions[0]
+	if req.Params.Version != nil && *req.Params.Version != "" {
+		found := false
+		for _, v := range versions {
+			if string(v.VersionID) == *req.Params.Version {
+				wanted, found = v, true
+				break
+			}
+		}
+		if !found {
+			return absent, nil
+		}
+	}
+
+	text, source, err := s.agents.Instructions(ctx, wanted.ID, wanted.VersionID)
+	if err != nil {
+		return nil, fmt.Errorf("agent instructions: %w", err)
+	}
+
+	out := openapi.AgentDetail{
+		Agent:    agentFrom(wanted),
+		Versions: make([]openapi.AgentVersion, 0, len(versions)),
+	}
+	if text != "" {
+		out.Instructions = ptr(text)
+	}
+	if source != "" {
+		out.Source = ptr(source)
+	}
+	for _, v := range versions {
+		version := openapi.AgentVersion{
+			VersionId: string(v.VersionID), PublishedAt: v.PublishedAt, Latest: v.Latest,
+		}
+		if v.PublishedBy != "" {
+			version.PublishedBy = ptr(string(v.PublishedBy))
+		}
+		out.Versions = append(out.Versions, version)
+	}
+
+	if activity, err := s.activityOf(ctx, wanted); err != nil {
+		return nil, err
+	} else if activity != nil {
+		out.Agent.Activity = activity
+	}
+	return openapi.GetAgent200JSONResponse(out), nil
+}
+
+// activityOf reads how the agent has been doing, or nil when it never ran.
+func (s *Server) activityOf(ctx context.Context, a domain.AgentSummary) (*openapi.AgentActivity, error) {
+	seen, err := s.store.AgentActivity(ctx, domain.RunFilter{Scope: a.Scope, AgentID: a.ID})
+	if err != nil {
+		return nil, fmt.Errorf("agent activity: %w", err)
+	}
+	for _, activity := range seen {
+		if activity.AgentID == a.ID {
+			return ptr(activityFrom(activity)), nil
+		}
+	}
+	return nil, nil
 }
 
 func (s *Server) ListAgents(ctx context.Context, req openapi.ListAgentsRequestObject) (openapi.ListAgentsResponseObject, error) {
