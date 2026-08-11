@@ -10,7 +10,7 @@ tools:
   - kb.search
   - crm.reply
 triggers:
-  - { type: cron, schedule: "*/2 * * * *" }
+  - { type: cron, schedule: "*/15 * * * *" }
 budget:
   micros: 500000
   tool_calls: 20
