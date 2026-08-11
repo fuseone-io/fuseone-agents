@@ -23,10 +23,13 @@ type Store interface {
 	Read(ctx context.Context, runID domain.RunID, fromSeq int64) ([]domain.Step, error)
 	Append(ctx context.Context, s domain.Step) (domain.Step, error)
 	Runs(ctx context.Context) ([]domain.RunID, error)
-	// Stats answers a question about many runs at once. It is separate from
-	// Runs because counting by reading every run does not survive an
-	// installation's second year.
+	// Stats, ListRuns and CostRollup answer questions about many runs at once.
+	// They are separate from Runs and Read because answering them by folding
+	// every run in the ledger does not survive an installation's second year —
+	// and an append-only record is guaranteed to have one.
 	Stats(ctx context.Context, filter domain.RunFilter) (domain.RunStats, error)
+	ListRuns(ctx context.Context, filter domain.RunFilter, phase string, limit int) ([]domain.RunSummary, error)
+	CostRollup(ctx context.Context, filter domain.RunFilter, groupBy string) ([]domain.CostBucket, error)
 }
 
 // Server implements openapi.StrictServerInterface.
@@ -60,27 +63,26 @@ func (s *Server) Health(context.Context, openapi.HealthRequestObject) (openapi.H
 	return openapi.Health200JSONResponse{Status: openapi.Ok, Version: s.version}, nil
 }
 
+// ListRuns reads a page from the projection.
+//
+// It used to read every run and fold it until enough matched the filter, which
+// made a single page view cost the whole ledger. The projection exists for
+// exactly this.
 func (s *Server) ListRuns(ctx context.Context, req openapi.ListRunsRequestObject) (openapi.ListRunsResponseObject, error) {
-	ids, err := s.store.Runs(ctx)
+	var phase string
+	if req.Params.Phase != nil {
+		phase = string(*req.Params.Phase)
+	}
+
+	summaries, err := s.store.ListRuns(ctx, runFilter(req.Params.Company, req.Params.Area,
+		req.Params.AgentId, req.Params.Since, nil), phase, limitOf(req.Params.Limit))
 	if err != nil {
 		return nil, fmt.Errorf("list runs: %w", err)
 	}
 
-	limit := limitOf(req.Params.Limit)
-	items := make([]openapi.Run, 0, min(limit, len(ids)))
-
-	for _, id := range ids {
-		if len(items) == limit {
-			break
-		}
-		run, _, err := s.project(ctx, id)
-		if err != nil {
-			return nil, err
-		}
-		if !matchesFilters(run, req.Params) {
-			continue
-		}
-		items = append(items, run)
+	items := make([]openapi.Run, 0, len(summaries))
+	for _, summary := range summaries {
+		items = append(items, runFromSummary(summary))
 	}
 	return openapi.ListRuns200JSONResponse{Items: items}, nil
 }
@@ -163,32 +165,6 @@ func (s *Server) project(ctx context.Context, id domain.RunID) (openapi.Run, eng
 	return toRun(id, state, steps), state, nil
 }
 
-func matchesFilters(r openapi.Run, p openapi.ListRunsParams) bool {
-	switch {
-	case p.Company != nil && r.Scope.Company != *p.Company:
-		return false
-	case p.Area != nil && r.Scope.Area != *p.Area:
-		return false
-	case p.AgentId != nil && r.AgentId != *p.AgentId:
-		return false
-	case p.Phase != nil && r.Phase != *p.Phase:
-		return false
-	case p.Since != nil && r.StartedAt.Before(*p.Since):
-		return false
-	}
-	return true
-}
-
-func inScope(sc domain.Scope, company, area *string) bool {
-	if company != nil && string(sc.Company) != *company {
-		return false
-	}
-	if area != nil && string(sc.Area) != *area {
-		return false
-	}
-	return true
-}
-
 func firstBrokenSeq(steps []domain.Step) int64 {
 	var prev *domain.Step
 	for i := range steps {
@@ -205,14 +181,6 @@ func limitOf(v *int) int {
 		return defaultLimit
 	}
 	return *v
-}
-
-func deref[T any](p *T) T {
-	var zero T
-	if p == nil {
-		return zero
-	}
-	return *p
 }
 
 func isNotFound(err error) bool {

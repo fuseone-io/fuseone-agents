@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -61,4 +62,62 @@ func scanSteps(rows pgx.Rows) ([]domain.Step, error) {
 		out = append(out, s)
 	}
 	return out, rows.Err()
+}
+
+// rowScanner is what both pgx.Rows and pgx.Row satisfy for a single row.
+type rowScanner interface{ Scan(dest ...any) error }
+
+func scanRunSummary(row rowScanner) (domain.RunSummary, error) {
+	var (
+		s                        domain.RunSummary
+		runID, company, area     string
+		agent, version, onBehalf string
+		labels                   []string
+		pendingTool, pendingRule *string
+		pendingReason            *string
+		pendingAtSeq             *int64
+		endedAt                  *time.Time
+	)
+
+	if err := row.Scan(&runID, &company, &area, &agent, &version, &onBehalf,
+		&s.Phase, &s.Seq,
+		&s.Cost.Micros, &s.Cost.InputTokens, &s.Cost.OutputTokens,
+		&s.Cost.CacheReadTokens, &s.Cost.CacheWriteTokens,
+		&s.ReservedMicros, &s.ToolCalls, &labels,
+		&pendingTool, &pendingRule, &pendingReason, &pendingAtSeq,
+		&s.StartedAt, &endedAt, &s.UpdatedAt); err != nil {
+		return domain.RunSummary{}, err
+	}
+
+	s.RunID = domain.RunID(runID)
+	s.Scope = domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)}
+	s.AgentID = domain.AgentID(agent)
+	s.VersionID = domain.VersionID(version)
+	s.OnBehalfOf = domain.UserID(onBehalf)
+	s.Labels = domain.NewLabels(labels...)
+
+	if endedAt != nil {
+		s.EndedAt = *endedAt
+	}
+	if pendingTool != nil {
+		s.PendingApproval = &domain.PendingApprovalSummary{
+			Tool: domain.ToolID(*pendingTool), AtSeq: derefInt64(pendingAtSeq),
+			Rule: derefString(pendingRule), Reason: derefString(pendingReason),
+		}
+	}
+	return s, nil
+}
+
+func derefString(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return *v
+}
+
+func derefInt64(v *int64) int64 {
+	if v == nil {
+		return 0
+	}
+	return *v
 }

@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
-	"time"
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
@@ -120,22 +119,6 @@ func groupByString(g *openapi.GetCostRollupParamsGroupBy) string {
 		return string(openapi.GetCostRollupParamsGroupByAgent)
 	}
 	return string(*g)
-}
-
-// bucketKey picks the dimension a run rolls up under. The run is always the
-// accounting unit; these are only ways of grouping the same rows, which is why
-// totals reconcile whatever the grouping (PRD FO-07).
-func bucketKey(first domain.Step, g *openapi.GetCostRollupParamsGroupBy) string {
-	switch openapi.GetCostRollupParamsGroupBy(groupByString(g)) {
-	case openapi.GetCostRollupParamsGroupByCompany:
-		return string(first.Scope.Company)
-	case openapi.GetCostRollupParamsGroupByArea:
-		return string(first.Scope.Area)
-	case openapi.GetCostRollupParamsGroupByDay:
-		return first.At.Format(time.DateOnly)
-	default:
-		return string(first.AgentID)
-	}
 }
 
 func ptr[T any](v T) *T { return &v }

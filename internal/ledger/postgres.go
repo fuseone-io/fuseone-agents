@@ -172,9 +172,11 @@ func upsertRun(ctx context.Context, tx pgx.Tx, s domain.Step) error {
 			run_id, company_id, area_id, agent_id, version_id, on_behalf_of,
 			phase, last_seq, cost_micros, total_tokens, reserved_micros, tool_calls,
 			labels, pending_tool, pending_rule, pending_reason, pending_at_seq,
-			started_at, ended_at, updated_at
+			started_at, ended_at, updated_at,
+			input_tokens, output_tokens, cache_read_tokens, cache_write_tokens
 		) values (
-			$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$18
+			$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$18,
+			$22,$23,$24,$25
 		)
 		on conflict (run_id) do update set
 			agent_id        = case when runs.agent_id = '' then excluded.agent_id else runs.agent_id end,
@@ -184,6 +186,10 @@ func upsertRun(ctx context.Context, tx pgx.Tx, s domain.Step) error {
 			last_seq        = excluded.last_seq,
 			cost_micros     = runs.cost_micros + excluded.cost_micros,
 			total_tokens    = runs.total_tokens + excluded.total_tokens,
+			input_tokens       = runs.input_tokens + excluded.input_tokens,
+			output_tokens      = runs.output_tokens + excluded.output_tokens,
+			cache_read_tokens  = runs.cache_read_tokens + excluded.cache_read_tokens,
+			cache_write_tokens = runs.cache_write_tokens + excluded.cache_write_tokens,
 			reserved_micros = runs.reserved_micros + $21,
 			tool_calls      = runs.tool_calls + excluded.tool_calls,
 			labels          = (
@@ -204,6 +210,7 @@ func upsertRun(ctx context.Context, tx pgx.Tx, s domain.Step) error {
 		pendingTool(s), pendingRule(s), pendingReason(s), pendingAtSeq(s),
 		s.At, endedAt,
 		phase, reservationDelta(s),
+		s.Cost.InputTokens, s.Cost.OutputTokens, s.Cost.CacheReadTokens, s.Cost.CacheWriteTokens,
 	)
 	if err != nil {
 		return fmt.Errorf("upsert run projection: %w", err)

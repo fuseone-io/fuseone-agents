@@ -32,6 +32,8 @@ type Store interface {
 	Claim(ctx context.Context, owner string, lease time.Duration) (domain.Claim, error)
 	Release(ctx context.Context, runID domain.RunID, outcome domain.ClaimOutcome) error
 	Stats(ctx context.Context, filter domain.RunFilter) (domain.RunStats, error)
+	ListRuns(ctx context.Context, filter domain.RunFilter, phase string, limit int) ([]domain.RunSummary, error)
+	CostRollup(ctx context.Context, filter domain.RunFilter, groupBy string) ([]domain.CostBucket, error)
 }
 
 type factory struct {
@@ -51,6 +53,7 @@ func implementations(t *testing.T) []factory {
 	if dsn == "" {
 		// Skipped rather than silently absent: a suite that quietly halves
 		// itself on a laptop is how divergence gets to production.
+		requireDatabase(t, dsn)
 		t.Log("TEST_DATABASE_URL is unset; skipping the Postgres implementation")
 		return impls
 	}
@@ -568,5 +571,162 @@ func mustAppend(t *testing.T, s Store, st domain.Step) {
 	t.Helper()
 	if _, err := s.Append(context.Background(), st); err != nil {
 		t.Fatalf("Append(%s): %v", st.Kind, err)
+	}
+}
+
+// --- listing and rollup ----------------------------------------------------
+
+func TestListContract(t *testing.T) {
+	base := time.Date(2026, 8, 11, 12, 0, 0, 0, time.UTC)
+
+	run(t, "a page carries what a list shows, without folding the ledger", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		opened := startedAt("run-1", base)
+		mustAppend(t, s, opened)
+
+		priced := step("run-1", domain.StepPlanned)
+		priced.At = base.Add(time.Second)
+		priced.Cost = domain.Cost{InputTokens: 1200, OutputTokens: 90, CacheReadTokens: 400, Micros: 9_000}
+		mustAppend(t, s, priced)
+		mustAppend(t, s, finishedAt("run-1", base.Add(2*time.Minute)))
+
+		page, err := s.ListRuns(ctx, domain.RunFilter{}, "", 50)
+		if err != nil {
+			t.Fatalf("ListRuns: %v", err)
+		}
+		if len(page) != 1 {
+			t.Fatalf("ListRuns = %d runs, want 1", len(page))
+		}
+
+		got := page[0]
+		if got.AgentID != opened.AgentID || got.Scope != opened.Scope {
+			t.Errorf("identity = %s in %s, want %s in %s", got.AgentID, got.Scope, opened.AgentID, opened.Scope)
+		}
+		if got.Phase != "finished" || got.EndedAt.IsZero() {
+			t.Errorf("phase = %q ended = %v, want a finished run with an end", got.Phase, got.EndedAt)
+		}
+		// The breakdown is the point: a total alone bills a run without
+		// explaining it, and a cache read costs a fraction of an input token.
+		if got.Cost.CacheReadTokens != 400 || got.Cost.InputTokens != 1200 || got.Cost.Micros != 9_000 {
+			t.Errorf("cost = %+v, want the breakdown the steps carried", got.Cost)
+		}
+	})
+
+	run(t, "the newest run comes first", func(t *testing.T, s Store) {
+		mustAppend(t, s, startedAt("run-old", base.Add(-time.Hour)))
+		mustAppend(t, s, startedAt("run-new", base))
+
+		page, err := s.ListRuns(context.Background(), domain.RunFilter{}, "", 50)
+		if err != nil {
+			t.Fatalf("ListRuns: %v", err)
+		}
+		if len(page) != 2 || page[0].RunID != "run-new" {
+			t.Errorf("ListRuns = %v, want run-new first", kindsOfPage(page))
+		}
+	})
+
+	run(t, "the filter is applied where the whole set is, not on the page", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		mustAppend(t, s, startedAt("run-open", base))
+		mustAppend(t, s, startedAt("run-done", base))
+		mustAppend(t, s, finishedAt("run-done", base.Add(time.Minute)))
+
+		// A phase filter that ran after the page was cut would return one run
+		// or none depending on how many rows the caller happened to ask for.
+		page, err := s.ListRuns(ctx, domain.RunFilter{}, "finished", 1)
+		if err != nil {
+			t.Fatalf("ListRuns: %v", err)
+		}
+		if len(page) != 1 || page[0].RunID != "run-done" {
+			t.Errorf("ListRuns = %v, want only the finished run", kindsOfPage(page))
+		}
+	})
+
+	run(t, "a run waiting on a person carries what it is waiting for", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		mustAppend(t, s, startedAt("run-1", base))
+		asked := step("run-1", domain.StepApprovalRequested)
+		asked.At = base.Add(time.Second)
+		asked.Payload = []byte(`{"tool":"crm.note","rule":"taint","reason":"untrusted argument"}`)
+		mustAppend(t, s, asked)
+
+		page, err := s.ListRuns(ctx, domain.RunFilter{}, "awaiting_approval", 50)
+		if err != nil {
+			t.Fatalf("ListRuns: %v", err)
+		}
+		if len(page) != 1 || page[0].PendingApproval == nil {
+			t.Fatalf("ListRuns = %v, want the suspended action denormalised", page)
+		}
+		if page[0].PendingApproval.Tool != "crm.note" {
+			t.Errorf("pending tool = %q, want crm.note", page[0].PendingApproval.Tool)
+		}
+	})
+
+	run(t, "cost sums by the dimension asked for", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		for _, id := range []domain.RunID{"run-a", "run-b"} {
+			mustAppend(t, s, startedAt(id, base))
+			priced := step(id, domain.StepPlanned)
+			priced.At = base.Add(time.Second)
+			priced.Cost = domain.Cost{InputTokens: 100, Micros: 5_000}
+			mustAppend(t, s, priced)
+		}
+
+		buckets, err := s.CostRollup(ctx, domain.RunFilter{Until: base.Add(time.Hour)}, "agent")
+		if err != nil {
+			t.Fatalf("CostRollup: %v", err)
+		}
+		if len(buckets) != 1 {
+			t.Fatalf("CostRollup = %v, want one bucket; both runs share an agent", buckets)
+		}
+		if buckets[0].Runs != 2 || buckets[0].Cost.Micros != 10_000 {
+			t.Errorf("bucket = %+v, want 2 runs totalling 10000 micros", buckets[0])
+		}
+		if buckets[0].Cost.InputTokens != 200 {
+			t.Errorf("inputTokens = %d, want the breakdown summed too", buckets[0].Cost.InputTokens)
+		}
+	})
+
+	run(t, "a rollup without an upper bound is refused", func(t *testing.T, s Store) {
+		// A total that moves while somebody reads it is not a total. The bound
+		// is what makes two people comparing the same figure see the same one.
+		if _, err := s.CostRollup(context.Background(), domain.RunFilter{}, "agent"); err == nil {
+			t.Error("CostRollup accepted a window with no end")
+		}
+	})
+
+	run(t, "an unknown grouping is refused rather than guessed", func(t *testing.T, s Store) {
+		// The dimension names a column, and a column name cannot be a bound
+		// parameter — so the set is closed rather than whatever arrives.
+		_, err := s.CostRollup(context.Background(),
+			domain.RunFilter{Until: base}, "agent_id; drop table runs")
+		if err == nil {
+			t.Error("CostRollup accepted an arbitrary grouping")
+		}
+	})
+}
+
+func kindsOfPage(page []domain.RunSummary) []domain.RunID {
+	out := make([]domain.RunID, len(page))
+	for i, r := range page {
+		out[i] = r.RunID
+	}
+	return out
+}
+
+// requireDatabase turns the skip into a failure where a skip would be a lie.
+//
+// These suites are the only place the in-memory ledger is checked against the
+// real one, and they skip silently when TEST_DATABASE_URL is unset. That is
+// right on a laptop and wrong in CI, where a mistyped variable would quietly
+// halve the suite for as long as nobody noticed.
+func requireDatabase(t *testing.T, dsn string) {
+	t.Helper()
+	if dsn == "" && os.Getenv("REQUIRE_DATABASE") != "" {
+		t.Fatal("REQUIRE_DATABASE is set but TEST_DATABASE_URL is empty")
 	}
 }

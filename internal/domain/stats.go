@@ -6,8 +6,11 @@ import "time"
 type RunFilter struct {
 	Scope   Scope
 	AgentID AgentID
-	// Since bounds the window; the zero time means no bound.
+	// Since and Until bound the window; a zero time means no bound on that
+	// side. Cost asks for both because a rollup without an upper bound is a
+	// figure that changes while you read it.
 	Since time.Time
+	Until time.Time
 }
 
 // RunStats answers a question about many runs at once.
