@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
@@ -100,15 +101,18 @@ func (s *Server) DecideApproval(ctx context.Context, req openapi.DecideApprovalR
 				state.PendingApproval.AtSeq, req.Body.AtSeq))), nil
 	}
 
-	last := steps[len(steps)-1]
 	if _, err := s.store.Append(ctx, domain.Step{
 		RunID: runID, Scope: state.Scope,
 		AgentID: state.AgentID, VersionID: state.VersionID, OnBehalfOf: state.OnBehalfOf,
 		Kind: domain.StepApprovalDecided,
-		At:   last.At,
+		At:   decidedAt(steps, clockOr(s.clock).Now()),
 		Payload: mustJSON(domain.ApprovalDecidedPayload{
 			Approved: req.Body.Approved,
-			Note:     valueOr(req.Body.Note),
+			// Who decided. Its absence made every entry in the audit trail
+			// read "—" in the column the whole product exists to fill: an
+			// action was authorised and the record could not say by whom.
+			By:   callerOf(ctx),
+			Note: valueOr(req.Body.Note),
 		}),
 	}); err != nil {
 		return nil, fmt.Errorf("record decision: %w", err)
@@ -140,4 +144,22 @@ func (s *Server) toolEffects(ctx context.Context) map[domain.ToolID]domain.Effec
 		out[e.ID] = e.Effect
 	}
 	return out
+}
+
+// decidedAt stamps the decision with the moment it was made, never earlier
+// than the step it answers.
+//
+// This used to copy the previous step's time, which made every decision look
+// instantaneous and erased how long a person took — the figure the human queue
+// is measured by. The floor is kept because two machines have two clocks, and
+// a step stamped before the one it seals would put the trail out of order for
+// a reason nobody could diagnose.
+func decidedAt(steps []domain.Step, now time.Time) time.Time {
+	if len(steps) == 0 {
+		return now
+	}
+	if last := steps[len(steps)-1].At; now.Before(last) {
+		return last
+	}
+	return now
 }
