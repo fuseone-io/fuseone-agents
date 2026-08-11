@@ -49,10 +49,10 @@ export function ApprovalPanel({
   return (
     <section
       aria-labelledby="approval-heading"
-      className="rounded-lg border border-amber-600/40 bg-amber-50/60 p-4 dark:bg-amber-950/20"
+      className="rounded-xl border border-warning/40 bg-warning-surface p-4"
     >
       <div className="flex items-center gap-2">
-        <Hand className="size-4 text-amber-700 dark:text-amber-400" aria-hidden />
+        <Hand className="size-4 text-warning" aria-hidden />
         <h2 id="approval-heading" className="font-medium">
           Aguardando sua decisão
         </h2>

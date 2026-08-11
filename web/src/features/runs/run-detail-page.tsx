@@ -1,13 +1,16 @@
 import { useParams } from "react-router-dom";
-import { ShieldCheck } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { PageHeader } from "@/components/shared/page-header";
+import { Panel } from "@/components/shared/panel";
+import { Mono } from "@/components/shared/mono";
+import { StateDot } from "@/components/shared/state-dot";
 import { ErrorState, LoadingRows } from "@/components/shared/states";
-import { PhaseBadge } from "./phase-badge";
-import { StepRow } from "./step-row";
-import { ApprovalPanel } from "./approval-panel";
-import { useRun, useRunSteps, useVerifyRun } from "./api";
-import { formatCost, formatInstant, formatTokens } from "@/lib/format";
+import { stateOfPhase } from "@/lib/agent-state";
+import { PHASE_LABELS } from "@/features/runs/phase-badge";
+import { StepRow } from "@/features/runs/step-row";
+import { ApprovalPanel } from "@/features/runs/approval-panel";
+import { useRun, useRunSteps } from "@/features/runs/api";
+import { VerifyButton } from "@/features/runs/verify-button";
+import { formatCost, formatDuration, formatInstant, formatTokens } from "@/lib/format";
 
 export function RunDetailPage() {
   const { runId = "" } = useParams();
@@ -20,88 +23,56 @@ export function RunDetailPage() {
   if (!run.data) return null;
 
   const { data } = run;
+  const items = steps.data?.items ?? [];
 
   return (
-    <div className="flex flex-col gap-4">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">{data.agentId}</h1>
-          <p className="font-mono text-xs text-muted-foreground">{data.runId}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <PhaseBadge phase={data.phase} />
-          <VerifyButton runId={runId} />
-        </div>
-      </header>
+    <>
+      <PageHeader title={data.agentId} description={data.scope.area}>
+        <VerifyButton runId={runId} />
+      </PageHeader>
 
-      {data.pendingApproval && (
-        <ApprovalPanel runId={runId} approval={data.pendingApproval} />
-      )}
+      {data.pendingApproval && <ApprovalPanel runId={runId} approval={data.pendingApproval} />}
 
-      <dl className="grid gap-3 sm:grid-cols-4">
-        <Stat label="Custo" value={formatCost(data.cost)} />
-        <Stat label="Tokens" value={formatTokens(data.cost.inputTokens)} />
-        <Stat label="Passos" value={String(data.seq)} />
-        <Stat label="Início" value={formatInstant(data.startedAt)} />
-      </dl>
+      <Panel
+        title={
+          <span className="flex items-center gap-2">
+            <StateDot state={stateOfPhase(data.phase)} />
+            {PHASE_LABELS[data.phase]}
+          </span>
+        }
+        action={
+          // Everything the platform produced, in one mono line: the design's
+          // "id · N steps · cost".
+          <Mono dim>
+            {data.runId} · {data.seq} passos · {formatCost(data.cost)} ·{" "}
+            {formatDuration(data.startedAt, data.endedAt)}
+          </Mono>
+        }
+      >
+        <dl className="grid gap-3 sm:grid-cols-4">
+          <Stat label="Início" value={formatInstant(data.startedAt)} />
+          <Stat label="Tokens" value={formatTokens((data.cost.inputTokens ?? 0) + (data.cost.outputTokens ?? 0))} />
+          <Stat label="Versão" value={data.versionId.slice(0, 9)} />
+          <Stat label="Em nome de" value={data.onBehalfOf ?? "—"} />
+        </dl>
+      </Panel>
 
-      <section aria-labelledby="trail-heading">
-        <h2 id="trail-heading" className="mb-2 text-sm font-medium">
-          Trilha
-        </h2>
-        <ul className="rounded-lg border">
-          {(steps.data?.items ?? []).map((step) => (
-            <StepRow key={step.seq} step={step} />
+      <Panel title="Trilha" action={<span className="text-xs text-muted-foreground">append-only</span>}>
+        <ol className="flex flex-col">
+          {items.map((step, i) => (
+            <StepRow key={step.seq} step={step} last={i === items.length - 1} />
           ))}
-        </ul>
-      </section>
-    </div>
+        </ol>
+      </Panel>
+    </>
   );
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <Card>
-      <CardContent className="px-4 py-3">
-        <dt className="text-xs text-muted-foreground">{label}</dt>
-        <dd className="mt-0.5 font-medium tabular-nums">{value}</dd>
-      </CardContent>
-    </Card>
-  );
-}
-
-/**
- * Verification walks every step, so it runs on request rather than on page
- * load. The result is stated in words, not only in colour.
- */
-function VerifyButton({ runId }: { runId: string }) {
-  const verify = useVerifyRun(runId);
-
-  return (
-    <div className="flex items-center gap-2">
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => verify.mutate()}
-        disabled={verify.isPending}
-      >
-        <ShieldCheck className="size-4" />
-        Verificar trilha
-      </Button>
-      {verify.data && (
-        <span
-          role="status"
-          className={
-            verify.data.valid
-              ? "text-sm text-emerald-700 dark:text-emerald-400"
-              : "text-sm text-destructive"
-          }
-        >
-          {verify.data.valid
-            ? `Íntegra — ${verify.data.stepsChecked} passos`
-            : `Rompida no passo ${verify.data.brokenAtSeq}`}
-        </span>
-      )}
+    <div>
+      <dt className="text-2xs uppercase tracking-label text-muted-foreground">{label}</dt>
+      <dd className="mt-0.5 font-mono text-sm tabular-nums">{value}</dd>
     </div>
   );
 }
