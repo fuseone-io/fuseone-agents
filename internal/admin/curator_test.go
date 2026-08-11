@@ -17,6 +17,9 @@ func openPool(t *testing.T) *pgxpool.Pool {
 
 	dsn := os.Getenv("TEST_DATABASE_URL")
 	if dsn == "" {
+		if os.Getenv("REQUIRE_DATABASE") != "" {
+			t.Fatal("REQUIRE_DATABASE is set but TEST_DATABASE_URL is empty")
+		}
 		// Skipped rather than silently absent: the whole point of these
 		// assertions is that a ruling survives the process that made it.
 		t.Skip("TEST_DATABASE_URL is unset; skipping the Curator suite")

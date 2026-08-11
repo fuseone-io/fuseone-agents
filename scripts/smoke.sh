@@ -16,9 +16,17 @@ PID=$!
 trap 'kill "$PID" 2>/dev/null || true' EXIT
 
 for _ in $(seq 1 50); do
-	curl -sf -o /dev/null "${BASE}/healthz" && break
+	curl -sf -o /dev/null "${BASE}/api/v1/healthz" && break
 	sleep 0.2
 done
+# A server that never came up would otherwise fail every check below with a
+# connection error, which reads as seven broken behaviours rather than one
+# process that did not start.
+if ! curl -sf -o /dev/null "${BASE}/api/v1/healthz"; then
+	echo "the server did not become ready; last lines of its log:"
+	tail -5 /tmp/agentd-smoke.log
+	exit 1
+fi
 
 failures=0
 check() { # check <description> <expected status> <path>

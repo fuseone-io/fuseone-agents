@@ -38,6 +38,9 @@ func eachLedger(t *testing.T, name string, fn func(t *testing.T, store Store)) {
 
 	dsn := os.Getenv("TEST_DATABASE_URL")
 	if dsn == "" {
+		if os.Getenv("REQUIRE_DATABASE") != "" {
+			t.Fatal("REQUIRE_DATABASE is set but TEST_DATABASE_URL is empty")
+		}
 		t.Log("TEST_DATABASE_URL is unset; skipping the Postgres run")
 		return
 	}

@@ -40,7 +40,7 @@ check-pg: db
 ## smoke: prove the shipping artefact serves what it should and nothing else.
 ## The unit suites cannot see this: it is a property of the binary, not the code.
 smoke: build
-	@./scripts/smoke.sh
+	@BIN=$(BIN) ./scripts/smoke.sh
 
 ## dev: the whole platform locally — database, api, worker, console, and
 ## stand-ins for the model provider and the MCP server. Ctrl-C stops it all.

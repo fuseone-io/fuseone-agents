@@ -1,0 +1,131 @@
+# Everything `make check`, `make check-pg` and `make smoke` do, on every push.
+#
+# The point of the postgres job is that it cannot silently skip: the contract
+# suites are the only place the in-memory ledger is checked against the real
+# one, and they skip when TEST_DATABASE_URL is unset. REQUIRE_DATABASE turns
+# that skip into a failure, so a mistyped variable fails loudly instead of
+# quietly halving the suite for as long as nobody notices.
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    name: go
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: formatting
+        run: |
+          unformatted=$(gofmt -l . | grep -v '^web/node_modules' || true)
+          if [ -n "$unformatted" ]; then
+            echo "gofmt would change:"; echo "$unformatted"; exit 1
+          fi
+
+      - name: vet
+        run: go vet $(go list ./... | grep -v '/node_modules/')
+
+      # The generated server is committed so this check can exist: it proves
+      # the code and api/openapi.yaml still describe the same API.
+      - name: generated code matches the contract
+        run: make verify-generate
+
+      - name: test
+        run: go test $(go list ./... | grep -v '/node_modules/') -count=1 -race
+
+  postgres:
+    name: postgres
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: agents
+          POSTGRES_PASSWORD: agents
+          POSTGRES_DB: agents_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U agents"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgres://agents:agents@127.0.0.1:5432/agents_test
+      REQUIRE_DATABASE: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # -p 1: these suites share one database and truncate the same tables.
+      - name: contract suites against a real database
+        run: go test ./internal/ledger/ ./internal/e2e/ ./internal/admin/ -count=1 -race -p 1
+
+  web:
+    name: console
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run test
+      - run: npm run build
+
+  artifact:
+    name: artifact
+    runs-on: ubuntu-latest
+    needs: [go, web]
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: agents
+          POSTGRES_PASSWORD: agents
+          POSTGRES_DB: agents
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U agents"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # What the binary serves, and what it refuses to — a property of the
+      # artefact rather than of the code, which no unit suite can see.
+      - name: smoke
+        env:
+          TEST_DSN: postgres://agents:agents@127.0.0.1:5432/agents
+          FUSEONE_MASTER_KEY: ZGV2ZWxvcG1lbnQtb25seS1rZXktZG8tbm90LXVzZSE=
+        run: make smoke
