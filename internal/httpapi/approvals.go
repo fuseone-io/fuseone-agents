@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
@@ -29,9 +30,14 @@ func (s *Server) ListApprovals(ctx context.Context, req openapi.ListApprovalsReq
 	// seeing one action's classification is not seeing the catalogue.
 	effects := s.toolEffects(ctx)
 
+	// The inbox shows what the caller may act on. Reading somebody else's
+	// queue tells them which actions an agent proposed in an area they have
+	// no part in (PRD NF-06).
+	visible := auth.VisibleScopes(ctx, domain.PermApprovalAct)
+
 	page := openapi.ApprovalPage{Items: []openapi.PendingApproval{}}
 	for _, run := range waiting {
-		if run.PendingApproval == nil {
+		if run.PendingApproval == nil || !readable(run.Scope, visible) {
 			continue
 		}
 		item := openapi.PendingApproval{
@@ -70,6 +76,15 @@ func (s *Server) DecideApproval(ctx context.Context, req openapi.DecideApprovalR
 	state, err := engine.Fold(steps)
 	if err != nil {
 		return nil, err
+	}
+
+	// Deciding is the whole point of the approval gate, and it was reachable
+	// by any authenticated caller. The check is against the run's own scope:
+	// an approver in cx does not decide for marketing.
+	if err := auth.Require(ctx, domain.PermApprovalAct, state.Scope); err != nil {
+		return openapi.DecideApproval403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermApprovalAct, state.Scope),
+		}, nil
 	}
 
 	// atSeq is required by the contract so a stale tab cannot answer an

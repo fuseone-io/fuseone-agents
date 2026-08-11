@@ -433,3 +433,44 @@ func seedPendingApproval(t *testing.T, store *ledger.Memory, tool string) {
 		t.Fatalf("seed: %v", err)
 	}
 }
+
+func TestDecideApproval_withoutThePermission_isRefused(t *testing.T) {
+	t.Parallel()
+
+	// Deciding was reachable by any authenticated caller. A curator writes the
+	// rules; approving exceptions to them is a different grant, and that
+	// separation is the whole reason the roles are separate.
+	store := ledger.NewMemory()
+	seedPendingApproval(t, store, "crm.note")
+
+	resp, err := NewServer(store, "test").DecideApproval(as(domain.RoleCurator),
+		openapi.DecideApprovalRequestObject{
+			RunId: "run-1",
+			Body:  &openapi.DecideApprovalJSONRequestBody{Approved: true, AtSeq: 2},
+		})
+	if err != nil {
+		t.Fatalf("DecideApproval: %v", err)
+	}
+	if _, refused := resp.(openapi.DecideApproval403ApplicationProblemPlusJSONResponse); !refused {
+		t.Fatalf("response = %T, want 403", resp)
+	}
+}
+
+func TestListApprovals_showsOnlyTheQueuesTheCallerMayActOn(t *testing.T) {
+	t.Parallel()
+
+	// Reading somebody else's queue tells you which actions an agent proposed
+	// in an area you have no part in (PRD NF-06).
+	store := ledger.NewMemory()
+	seedPendingApproval(t, store, "crm.note")
+
+	resp, err := NewServer(store, "test").ListApprovals(inArea("marketing", domain.RoleApprover),
+		openapi.ListApprovalsRequestObject{})
+	if err != nil {
+		t.Fatalf("ListApprovals: %v", err)
+	}
+	page := resp.(openapi.ListApprovals200JSONResponse)
+	if len(page.Items) != 0 {
+		t.Errorf("items = %v, want nothing outside the caller's scope", page.Items)
+	}
+}

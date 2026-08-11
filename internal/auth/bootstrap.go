@@ -195,12 +195,28 @@ func (b *Bootstrap) Claim(ctx context.Context, secret, display, userAgent, ip st
 		return Token{}, domain.Principal{}, fmt.Errorf("auth: create principal: %w", err)
 	}
 
-	if _, err := tx.Exec(ctx, `
-		insert into role_grants (principal_id, company_id, area_id, role, granted_by)
-		values ($1, $2, $3, 'curator', 'bootstrap')
-		on conflict do nothing`,
-		principalID, string(bootstrapGrant.Company), string(bootstrapGrant.Area)); err != nil {
-		return Token{}, domain.Principal{}, fmt.Errorf("auth: grant curator: %w", err)
+	// Every role, deliberately.
+	//
+	// The four roles exist to separate duties — the Curator writes the rules
+	// and the Approver decides on exceptions to them — and that separation is
+	// only meaningful once there is more than one person. Until then it is a
+	// deadlock: an installation whose sole administrator cannot approve
+	// anything has an approval queue nobody can empty, which is the same shape
+	// as the deadlock the setup token exists to break.
+	//
+	// Narrowing this is the first thing an operator should do after
+	// configuring an identity provider, and the trail records that it started
+	// here.
+	for _, role := range []domain.Role{
+		domain.RoleCurator, domain.RoleApprover, domain.RoleAuthor, domain.RoleAuditor,
+	} {
+		if _, err := tx.Exec(ctx, `
+			insert into role_grants (principal_id, company_id, area_id, role, granted_by)
+			values ($1, $2, $3, $4, 'bootstrap')
+			on conflict do nothing`,
+			principalID, string(bootstrapGrant.Company), string(bootstrapGrant.Area), string(role)); err != nil {
+			return Token{}, domain.Principal{}, fmt.Errorf("auth: grant %s: %w", role, err)
+		}
 	}
 
 	// Burn the token in the same transaction that grants the role: a partial
@@ -231,7 +247,12 @@ func (b *Bootstrap) Claim(ctx context.Context, secret, display, userAgent, ip st
 		Subject: principalID,
 		Display: display,
 		Kind:    domain.PrincipalUser,
-		Grants:  []domain.Grant{{Scope: bootstrapGrant, Role: domain.RoleCurator}},
+		Grants: []domain.Grant{
+			{Scope: bootstrapGrant, Role: domain.RoleCurator},
+			{Scope: bootstrapGrant, Role: domain.RoleApprover},
+			{Scope: bootstrapGrant, Role: domain.RoleAuthor},
+			{Scope: bootstrapGrant, Role: domain.RoleAuditor},
+		},
 	}, nil
 }
 

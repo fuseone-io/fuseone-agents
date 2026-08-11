@@ -227,6 +227,8 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Run' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409':
           description: The run has no pending approval, or it already expired.
