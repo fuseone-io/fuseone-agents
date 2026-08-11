@@ -61,6 +61,11 @@ export function AgentCapabilities({ agent }: { agent: Agent }) {
       )}
 
       <h2 className="mt-1 text-2xs uppercase tracking-label text-muted-foreground">
+        O que inicia
+      </h2>
+      <Triggers agent={agent} />
+
+      <h2 className="mt-1 text-2xs uppercase tracking-label text-muted-foreground">
         Teto por execução
       </h2>
       <dl className="flex flex-col gap-1.5">
@@ -70,6 +75,33 @@ export function AgentCapabilities({ agent }: { agent: Agent }) {
         <Limit label="Passos" value={budgetOf(agent.budget.steps, String)} />
       </dl>
     </section>
+  );
+}
+
+/**
+ * What starts a run of this agent.
+ *
+ * An agent nothing triggers only ever runs when somebody presses the button,
+ * which is worth saying plainly rather than leaving as an empty row.
+ */
+function Triggers({ agent }: { agent: Agent }) {
+  const triggers = agent.triggers ?? [];
+  if (triggers.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        Nada. Este agente só executa quando alguém o dispara aqui.
+      </p>
+    );
+  }
+  return (
+    <ul className="flex flex-col gap-1.5">
+      {triggers.map((trigger, i) => (
+        <li key={`${trigger.type}-${i}`} className="flex items-baseline justify-between gap-3">
+          <span className="text-xs text-muted-foreground">{trigger.type}</span>
+          <Mono>{trigger.schedule ?? trigger.path ?? trigger.event ?? "—"}</Mono>
+        </li>
+      ))}
+    </ul>
   );
 }
 

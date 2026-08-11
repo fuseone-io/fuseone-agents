@@ -8,6 +8,7 @@ import (
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
+	"github.com/fuseone/agents/internal/trigger"
 )
 
 // StartRun opens a run and returns. A worker picks it up.
@@ -42,55 +43,57 @@ func (s *Server) StartRun(ctx context.Context, req openapi.StartRunRequestObject
 		}, nil
 	}
 
-	// The key answers first. A caller retrying after a timeout is doing the
-	// right thing, and it must reach the run it already started.
-	key := req.Params.IdempotencyKey
-	if existing, err := s.store.RunByIdemKey(ctx, key); err == nil {
-		run, _, err := s.project(ctx, existing)
-		if err != nil {
-			return nil, fmt.Errorf("project %s: %w", existing, err)
-		}
-		return openapi.StartRun200JSONResponse(run), nil
-	}
-
-	runID := domain.RunID(fmt.Sprintf("run_%s_%d", published.ID, s.now().UnixMilli()))
-
-	inputRef, err := s.storeInput(ctx, runID, req.Body)
+	// The same opener the scheduler uses. Two paths that both "just append
+	// run_started" drift, and the way they drift is that one of them forgets
+	// the idempotency key and opens a run on every retry.
+	opened, err := s.opener().Open(ctx, trigger.Request{
+		Agent:   published.ID,
+		IdemKey: req.Params.IdempotencyKey,
+		Trigger: "manual",
+		By:      callerOf(ctx),
+		Input:   inputOf(req.Body),
+	})
 	if err != nil {
-		return nil, err
-	}
-
-	step := domain.Step{
-		RunID:      runID,
-		Kind:       domain.StepRunStarted,
-		Scope:      published.Scope,
-		AgentID:    published.ID,
-		VersionID:  published.VersionID,
-		OnBehalfOf: callerOf(ctx),
-		IdemKey:    key,
-		At:         s.now(),
-		Payload:    mustJSON(domain.RunStartedPayload{Trigger: "manual", InputRef: inputRef}),
-	}
-	if _, err := s.store.Append(ctx, step); err != nil {
-		// Two requests with the same key raced, and this one lost. Asked
-		// rather than pattern-matched on the error: whatever went wrong, if
-		// the key now names a run then that run is the answer both callers
-		// wanted, and if it does not the failure was real.
-		if existing, lookupErr := s.store.RunByIdemKey(ctx, key); lookupErr == nil {
-			run, _, projectErr := s.project(ctx, existing)
-			if projectErr != nil {
-				return nil, fmt.Errorf("project %s: %w", existing, projectErr)
-			}
-			return openapi.StartRun200JSONResponse(run), nil
-		}
 		return nil, fmt.Errorf("open run: %w", err)
 	}
 
-	run, _, err := s.project(ctx, runID)
+	run, _, err := s.project(ctx, opened.RunID)
 	if err != nil {
-		return nil, fmt.Errorf("project %s: %w", runID, err)
+		return nil, fmt.Errorf("project %s: %w", opened.RunID, err)
 	}
-	return openapi.StartRun201JSONResponse(run), nil
+	if opened.Created {
+		return openapi.StartRun201JSONResponse(run), nil
+	}
+	// Not an error: a caller retrying after a timeout is doing the right thing,
+	// and it must reach the run it already started.
+	return openapi.StartRun200JSONResponse(run), nil
+}
+
+// opener builds the shared run opener over this server's ports.
+func (s *Server) opener() *trigger.Opener {
+	opener := trigger.NewOpener(s.store, s.agents, clockOr(s.clock))
+	if s.content != nil {
+		opener = opener.WithContent(s.content)
+	}
+	return opener
+}
+
+func clockOr(clock Clock) trigger.Clock {
+	if clock != nil {
+		return clock
+	}
+	return systemClock{}
+}
+
+type systemClock struct{}
+
+func (systemClock) Now() time.Time { return time.Now() }
+
+func inputOf(body *openapi.StartRunJSONRequestBody) []byte {
+	if body == nil || body.Input == nil {
+		return nil
+	}
+	return []byte(*body.Input)
 }
 
 // callerOf is who asked. A run opened from the console is opened on somebody's
@@ -100,31 +103,4 @@ func callerOf(ctx context.Context) domain.UserID {
 		return domain.UserID(principal.ID)
 	}
 	return ""
-}
-
-// storeInput puts what the run is about in the content store.
-//
-// Never in the ledger: a ticket, a message or a payload routinely carries
-// personal data, and the ledger is kept for years and read by people who have
-// no business seeing it (AU-04).
-func (s *Server) storeInput(
-	ctx context.Context, runID domain.RunID, body *openapi.StartRunJSONRequestBody,
-) (string, error) {
-	if body == nil || body.Input == nil || *body.Input == "" || s.content == nil {
-		return "", nil
-	}
-	ref, err := s.content.Put(ctx, runID, domain.FirstSeq, []byte(*body.Input))
-	if err != nil {
-		return "", fmt.Errorf("store run input: %w", err)
-	}
-	return ref, nil
-}
-
-// now is injectable so a run's opening instant is a fact of the request rather
-// than of whichever machine served it.
-func (s *Server) now() time.Time {
-	if s.clock != nil {
-		return s.clock.Now()
-	}
-	return time.Now()
 }

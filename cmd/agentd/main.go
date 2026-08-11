@@ -36,6 +36,7 @@ import (
 	"github.com/fuseone/agents/internal/model"
 	"github.com/fuseone/agents/internal/spec"
 	"github.com/fuseone/agents/internal/tools"
+	"github.com/fuseone/agents/internal/trigger"
 	"github.com/fuseone/agents/internal/web"
 	"github.com/fuseone/agents/internal/worker"
 )
@@ -331,6 +332,10 @@ func workerCmd(args []string) error {
 		integrations *admin.Integrations
 		registry     *spec.Registry
 		budgets      *admin.Budgets
+		// configPool outlives the block that opens it: the scheduler needs it
+		// after the configuration is read, and opening a second pool for the
+		// same database to avoid saying so would be worse.
+		configPool *pgxpool.Pool
 	)
 	if *dsn != "" {
 		pool, err := pgxpool.New(ctx, *dsn)
@@ -338,6 +343,7 @@ func workerCmd(args []string) error {
 			return fmt.Errorf("connect for configuration: %w", err)
 		}
 		defer pool.Close()
+		configPool = pool
 
 		v, err := openVault()
 		if err != nil {
@@ -400,6 +406,13 @@ func workerCmd(args []string) error {
 			return err
 		}
 		slog.Info("agent versions published", "count", published, "dir", *specDir)
+
+		// What each version declares becomes what the scheduler watches. A
+		// schedule withdrawn by a new version stops firing; one that is still
+		// declared keeps the moment it was already waiting for.
+		if err := syncSchedules(ctx, configPool, specDir); err != nil {
+			return err
+		}
 	}
 
 	w := worker.New(worker.Config{
@@ -410,6 +423,20 @@ func workerCmd(args []string) error {
 		if spender, ok := store.(spendReader); ok {
 			w = w.WithCeilings(ceilings{Budgets: budgets, spend: spender})
 		}
+	}
+
+	// The scheduler is a goroutine with an owner: it stops when the worker's
+	// context does. Every worker runs one — they do not coordinate, because
+	// the run's idempotency key is derived from the due moment and the ledger
+	// accepts exactly one of them.
+	if configPool != nil && registry != nil {
+		scheduler := trigger.NewScheduler(
+			trigger.NewPostgres(configPool),
+			trigger.NewOpener(store, registry, engine.SystemClock{}).
+				WithContent(ledger.NewContent(configPool)),
+			engine.SystemClock{}, slog.Default(),
+		)
+		go runScheduler(ctx, scheduler)
 	}
 
 	slog.Info("worker started", "owner", *owner, "concurrency", *concurrency)
@@ -435,6 +462,63 @@ func syncRulings(ctx context.Context, catalog *tools.Catalog, curator *admin.Cur
 	}
 	slog.Info("tool classifications applied", "count", applied)
 	return nil
+}
+
+// schedulerTick is how often the scheduler looks for due moments. A minute,
+// because the finest schedule this platform accepts is a minute — anything
+// finer is a queue, and this is not one.
+const schedulerTick = time.Minute
+
+// runScheduler ticks until the worker's context ends. Owned by ctx, like every
+// other goroutine here: nothing outlives the process that started it.
+func runScheduler(ctx context.Context, scheduler *trigger.Scheduler) {
+	ticker := time.NewTicker(schedulerTick)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if _, err := scheduler.Tick(ctx); err != nil && !errors.Is(err, context.Canceled) {
+				slog.Error("scheduler tick failed", "err", err)
+			}
+		}
+	}
+}
+
+// syncSchedules reconciles the trigger table with what the newest published
+// version of each agent declares.
+func syncSchedules(ctx context.Context, pool *pgxpool.Pool, specDir *string) error {
+	loaded := spec.NewStore()
+	if _, err := loaded.LoadDir(ctx, os.DirFS("."), *specDir); err != nil {
+		return fmt.Errorf("sync schedules: load %s: %w", *specDir, err)
+	}
+
+	schedules := trigger.NewPostgres(pool)
+	now := time.Now()
+	for _, agent := range loaded.Agents() {
+		versions := loaded.Versions(agent)
+		published, err := loaded.Get(agent, versions[len(versions)-1])
+		if err != nil {
+			return fmt.Errorf("sync schedules: %w", err)
+		}
+		if err := schedules.Sync(ctx, agent, cronSchedulesOf(published), now); err != nil {
+			return fmt.Errorf("sync schedules for %s: %w", agent, err)
+		}
+	}
+	return nil
+}
+
+// cronSchedulesOf picks the schedules out of a specification's triggers.
+func cronSchedulesOf(s spec.Spec) []string {
+	out := []string{}
+	for _, t := range s.Triggers {
+		if t.Type == "cron" && t.Schedule != "" {
+			out = append(out, t.Schedule)
+		}
+	}
+	return out
 }
 
 // refreshRulings keeps a running worker current. Owned by ctx: it stops when
