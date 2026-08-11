@@ -88,6 +88,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{agentId}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open a run of this agent
+         * @description Opens a run pinned to the newest published version and returns
+         *     immediately. A worker picks it up; nothing is executed inside this
+         *     request, because a tool call can take minutes and a human approval can
+         *     take hours.
+         *
+         *     The idempotency key is required, not optional. A double-clicked button,
+         *     a retried request after a timeout, a scheduler firing twice in the same
+         *     minute — each of those is a duplicated run with real effects against
+         *     real systems. Repeating a key returns the run it already opened rather
+         *     than opening another, so a caller that never saw the first answer can
+         *     safely ask again.
+         */
+        post: operations["startRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runs/throughput": {
         parameters: {
             query?: never;
@@ -1028,6 +1058,60 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    startRun: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Unique per intention, not per attempt. The same key always names
+                 *     the same run.
+                 */
+                "Idempotency-Key": string;
+            };
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /**
+                     * @description What the run is about — a ticket, a message, a payload. It
+                     *     is stored outside the ledger like any other content,
+                     *     because it routinely carries personal data.
+                     */
+                    input?: string;
+                };
+            };
+        };
+        responses: {
+            /**
+             * @description This key already opened a run, and here it is. Not an error: a
+             *     caller retrying after a timeout is doing the right thing.
+             */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"];
+                };
+            };
+            /** @description The run was opened. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };
     };

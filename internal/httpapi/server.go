@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
@@ -31,6 +32,8 @@ type Store interface {
 	Stats(ctx context.Context, filter domain.RunFilter) (domain.RunStats, error)
 	Throughput(ctx context.Context, filter domain.RunFilter) ([]domain.ThroughputBucket, error)
 	Decisions(ctx context.Context, filter domain.RunFilter, limit int) ([]domain.RecordedDecision, error)
+	// RunByIdemKey answers what a caller retrying a start already started.
+	RunByIdemKey(ctx context.Context, key string) (domain.RunID, error)
 	ListRuns(ctx context.Context, filter domain.RunFilter, phase string, limit int) ([]domain.RunSummary, error)
 	CostRollup(ctx context.Context, filter domain.RunFilter, groupBy string) ([]domain.CostBucket, error)
 	AgentActivity(ctx context.Context, filter domain.RunFilter) ([]domain.AgentActivity, error)
@@ -50,6 +53,21 @@ type Server struct {
 	agents       Agents
 	ceilings     Ceilings
 	content      Content
+	// clock is injectable so a run's opening instant is a fact of the request
+	// rather than of whichever machine happened to serve it.
+	clock Clock
+}
+
+// Clock is the time the API stamps its one write with.
+type Clock interface {
+	Now() time.Time
+}
+
+// WithClock replaces the wall clock, which is what makes the opening instant
+// assertable in a test.
+func (s *Server) WithClock(clock Clock) *Server {
+	s.clock = clock
+	return s
 }
 
 func NewServer(store Store, version string) *Server {

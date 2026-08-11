@@ -1,9 +1,9 @@
-import { Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Mono } from "@/components/shared/mono";
 import { StateDot } from "@/components/shared/state-dot";
 import { stateOfAgent } from "@/lib/agent-state";
+import { RunNowDialog } from "@/features/agents/run-now-dialog";
 import { formatInstant } from "@/lib/format";
 import type { Agent, AgentVersion, Phase } from "@/lib/api/client";
 
@@ -50,13 +50,15 @@ export function AgentIdentity({
       </div>
 
       <div className="ml-auto flex shrink-0 items-center gap-2">
-        {/* Nothing can start a run from the console yet: runs begin at the
-            command line, and a button that pretended otherwise would be the
-            worst kind of lie in a governance tool. */}
-        <Button variant="outline" size="sm" disabled className="h-8">
-          <Play className="size-4" aria-hidden />
-          Executar
-        </Button>
+        {/* An older version is read, never re-run: what would open is the
+            newest, which is not the version being looked at. */}
+        {agent.latest ? (
+          <RunNowDialog agentId={agent.agentId} agentName={agent.name} />
+        ) : (
+          <Button variant="outline" size="sm" disabled className="h-8">
+            Somente leitura
+          </Button>
+        )}
       </div>
     </div>
   );

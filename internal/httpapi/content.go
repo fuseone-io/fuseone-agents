@@ -9,13 +9,15 @@ import (
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 )
 
-// Content resolves the references the ledger records instead of bytes.
+// Content holds what the ledger records a reference to instead of the bytes.
 //
-// Declared here, by the consumer: the API only ever reads. Writing is the
-// worker's business, and an interface that offered Put here would eventually
-// be used.
+// Declared here, by the consumer. The API reads content constantly and writes
+// exactly one thing: the input a run is opened with, which originates at this
+// edge and nowhere else. Everything a run produces afterwards is written by
+// the worker that produced it.
 type Content interface {
 	Get(ctx context.Context, ref string) ([]byte, error)
+	Put(ctx context.Context, runID domain.RunID, seq int64, data []byte) (string, error)
 }
 
 // WithContent wires the store the trail's references point into.

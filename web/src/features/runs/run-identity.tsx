@@ -1,10 +1,11 @@
-import { Check, Copy, RotateCcw } from "lucide-react";
+import { Check, Copy } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Mono } from "@/components/shared/mono";
 import { StateDot } from "@/components/shared/state-dot";
+import { RunNowDialog } from "@/features/agents/run-now-dialog";
 import { VerifyButton } from "@/features/runs/verify-button";
 import { PHASE_LABELS } from "@/features/runs/phase-badge";
 import { stateOfPhase } from "@/lib/agent-state";
@@ -43,10 +44,10 @@ export function RunIdentity({ run, trigger }: { run: Run; trigger?: string }) {
       </div>
 
       <div className="ml-auto flex shrink-0 items-center gap-2">
-        <Button variant="outline" size="sm" disabled className="h-8">
-          <RotateCcw className="size-4" aria-hidden />
-          Reexecutar
-        </Button>
+        {/* A new run of the same agent, on the version published now — not a
+            replay. Replaying would re-execute effects that already happened
+            against systems that already changed. */}
+        <RunNowDialog agentId={run.agentId} agentName={run.agentId} />
         <VerifyButton runId={run.runId} />
       </div>
     </div>

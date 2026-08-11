@@ -2,9 +2,12 @@ package ledger
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/fuseone/agents/internal/domain"
 )
@@ -158,6 +161,27 @@ func (p *Postgres) Decisions(ctx context.Context, filter domain.RunFilter, limit
 		out = append(out, d)
 	}
 	return out, rows.Err()
+}
+
+// RunByIdemKey finds the run a key already opened.
+//
+// The unique index on idem_key is what makes the key a promise rather than a
+// hope: a second attempt cannot land, and this is how the caller that made it
+// discovers which run holds the first.
+func (p *Postgres) RunByIdemKey(ctx context.Context, key string) (domain.RunID, error) {
+	if key == "" {
+		return "", ErrNotFound
+	}
+	var runID domain.RunID
+	err := p.pool.QueryRow(ctx,
+		`select run_id from run_steps where idem_key = $1`, key).Scan(&runID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("run by idempotency key: %w", err)
+	}
+	return runID, nil
 }
 
 // runFilterSQL builds the shared predicate against the runs projection.

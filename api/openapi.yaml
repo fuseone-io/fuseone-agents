@@ -176,6 +176,64 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /agents/{agentId}/runs:
+    post:
+      tags: [agents]
+      operationId: startRun
+      summary: Open a run of this agent
+      description: |
+        Opens a run pinned to the newest published version and returns
+        immediately. A worker picks it up; nothing is executed inside this
+        request, because a tool call can take minutes and a human approval can
+        take hours.
+
+        The idempotency key is required, not optional. A double-clicked button,
+        a retried request after a timeout, a scheduler firing twice in the same
+        minute — each of those is a duplicated run with real effects against
+        real systems. Repeating a key returns the run it already opened rather
+        than opening another, so a caller that never saw the first answer can
+        safely ask again.
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: |
+            Unique per intention, not per attempt. The same key always names
+            the same run.
+          schema: { type: string, minLength: 8, maxLength: 128 }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                input:
+                  type: string
+                  description: |
+                    What the run is about — a ticket, a message, a payload. It
+                    is stored outside the ledger like any other content,
+                    because it routinely carries personal data.
+      responses:
+        '201':
+          description: The run was opened.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Run' }
+        '200':
+          description: |
+            This key already opened a run, and here it is. Not an error: a
+            caller retrying after a timeout is doing the right thing.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Run' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /runs/throughput:
     get:
       tags: [runs]

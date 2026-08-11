@@ -38,6 +38,7 @@ type Store interface {
 	AgentActivity(ctx context.Context, filter domain.RunFilter) ([]domain.AgentActivity, error)
 	Throughput(ctx context.Context, filter domain.RunFilter) ([]domain.ThroughputBucket, error)
 	Decisions(ctx context.Context, filter domain.RunFilter, limit int) ([]domain.RecordedDecision, error)
+	RunByIdemKey(ctx context.Context, key string) (domain.RunID, error)
 	SpentSince(ctx context.Context, scope domain.Scope, since time.Time) (domain.Consumption, error)
 }
 
@@ -1352,6 +1353,55 @@ func TestDecisionsContract(t *testing.T) {
 		}
 		if len(got) != 3 {
 			t.Errorf("decisions = %d, want 3", len(got))
+		}
+	})
+}
+
+// A caller that retries after a timeout has to reach the run it already
+// started, not open a second one. The ledger already refuses the duplicate
+// key; this is how the caller finds out which run holds it.
+
+func TestRunByIdemKeyContract(t *testing.T) {
+	base := time.Date(2026, 8, 11, 9, 0, 0, 0, time.UTC)
+
+	run(t, "finds the run a key opened", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		opened := startedAt("run-1", base)
+		opened.IdemKey = "trigger-abc"
+		mustAppend(t, s, opened)
+
+		got, err := s.RunByIdemKey(ctx, "trigger-abc")
+		if err != nil {
+			t.Fatalf("RunByIdemKey: %v", err)
+		}
+		if got != "run-1" {
+			t.Errorf("run = %q, want run-1", got)
+		}
+	})
+
+	run(t, "reports a key nobody used as absent rather than as an empty run", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		// An empty run id would be indistinguishable from a run whose id is
+		// empty, and the caller would open a second run believing the first
+		// never landed.
+		if _, err := s.RunByIdemKey(ctx, "never-seen"); err == nil {
+			t.Fatal("an unused key resolved to a run")
+		}
+	})
+
+	run(t, "refuses to open a second run under a key already used", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		first := startedAt("run-1", base)
+		first.IdemKey = "trigger-abc"
+		mustAppend(t, s, first)
+
+		second := startedAt("run-2", base)
+		second.IdemKey = "trigger-abc"
+		if _, err := s.Append(ctx, second); err == nil {
+			t.Fatal("the same key opened two runs, which is two real effects")
 		}
 	})
 }

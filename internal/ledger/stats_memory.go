@@ -146,6 +146,28 @@ func decisionOf(step domain.Step) domain.RecordedDecision {
 	}
 }
 
+// RunByIdemKey finds the run a key already opened.
+func (m *Memory) RunByIdemKey(ctx context.Context, key string) (domain.RunID, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	if key == "" {
+		return "", ErrNotFound
+	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	for _, steps := range m.runs {
+		for _, step := range steps {
+			if step.IdemKey == key {
+				return step.RunID, nil
+			}
+		}
+	}
+	return "", ErrNotFound
+}
+
 func matches(first domain.Step, f domain.RunFilter) bool {
 	switch {
 	case f.Scope.Company != "" && first.Scope.Company != f.Scope.Company:
