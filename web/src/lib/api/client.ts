@@ -62,6 +62,9 @@ export type Verdict = components["schemas"]["Verdict"];
 export type Tool = components["schemas"]["Tool"];
 export type Webhook = components["schemas"]["Webhook"];
 export type AuditEntry = components["schemas"]["AuditEntry"];
+export type IntegrationHealth = components["schemas"]["IntegrationHealth"];
+export type MCPServer = components["schemas"]["MCPServer"];
+export type ModelProvider = components["schemas"]["ModelProvider"];
 export type Problem = components["schemas"]["Problem"];
 
 /**

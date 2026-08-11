@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
+	"strings"
 
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
@@ -170,6 +172,14 @@ type Integrations interface {
 	DeleteProvider(ctx context.Context, by domain.UserID, scope domain.Scope, name string) error
 }
 
+func healthFrom(seen domain.IntegrationHealth) openapi.IntegrationHealth {
+	return openapi.IntegrationHealth{
+		Reachable: seen.Reachable, ToolCount: seen.ToolCount,
+		Detail: ptr(seen.Detail), ObservedAt: seen.ObservedAt,
+		ObservedBy: ptr(seen.ObservedBy),
+	}
+}
+
 func (s *Server) ListIntegrations(ctx context.Context, _ openapi.ListIntegrationsRequestObject) (openapi.ListIntegrationsResponseObject, error) {
 	if resp := s.refuse(ctx, domain.PermToolRead); resp != nil {
 		return openapi.ListIntegrations403ApplicationProblemPlusJSONResponse{
@@ -189,12 +199,49 @@ func (s *Server) ListIntegrations(ctx context.Context, _ openapi.ListIntegration
 	if err != nil {
 		return nil, fmt.Errorf("list MCP servers: %w", err)
 	}
+
+	// What was observed, beside what was configured. A server can be enabled,
+	// correct and unreachable, and only one of those three is somebody's
+	// opinion.
+	observed := map[string]domain.IntegrationHealth{}
+	if s.health != nil {
+		if observed, err = s.health.All(ctx); err != nil {
+			return nil, fmt.Errorf("read integration health: %w", err)
+		}
+	}
+
+	configured := map[string]bool{}
 	for _, srv := range servers {
-		body.McpServers = append(body.McpServers, openapi.MCPServer{
+		configured[srv.Name] = true
+		server := openapi.MCPServer{
 			Name: srv.Name, Command: srv.Command, Args: &srv.Args, Enabled: srv.Enabled,
+			Managed:   ptr(true),
 			UpdatedBy: ptr(srv.UpdatedBy), UpdatedAt: ptr(srv.UpdatedAt),
+		}
+		// Absent when no worker has tried yet, which is a different thing from
+		// a server that failed — and the screen has to be able to say so.
+		if seen, tried := observed[srv.Name]; tried {
+			server.Health = ptr(healthFrom(seen))
+		}
+		body.McpServers = append(body.McpServers, server)
+	}
+
+	// A server the platform is connected to but nobody configured here — passed
+	// to the process by flag or environment. It belongs on this screen: the
+	// question the screen answers is what the installation talks to, and
+	// listing only what the console wrote would answer a different one.
+	for name, seen := range observed {
+		if configured[name] {
+			continue
+		}
+		body.McpServers = append(body.McpServers, openapi.MCPServer{
+			Name: name, Enabled: true, Managed: ptr(false),
+			Health: ptr(healthFrom(seen)),
 		})
 	}
+	slices.SortFunc(body.McpServers, func(a, b openapi.MCPServer) int {
+		return strings.Compare(a.Name, b.Name)
+	})
 
 	providers, err := s.integrations.Providers(ctx)
 	if err != nil {

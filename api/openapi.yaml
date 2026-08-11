@@ -1062,8 +1062,43 @@ components:
           type: array
           items: { type: string }
         enabled: { type: boolean }
+        managed:
+          type: boolean
+          description: |
+            Whether this server is configured from the console. False for one
+            passed to the process by flag or environment: the platform is
+            connected to it and cannot change it here, and hiding it would make
+            this screen disagree with what the installation actually talks to.
         updatedBy: { type: string }
         updatedAt: { type: string, format: date-time }
+        health:
+          allOf: [{ $ref: '#/components/schemas/IntegrationHealth' }]
+          nullable: true
+          description: |
+            What the platform observed the last time it tried to reach this
+            server. Absent when no worker has tried yet, which is a different
+            thing from a server that failed.
+
+    IntegrationHealth:
+      type: object
+      required: [reachable, toolCount, observedAt]
+      properties:
+        reachable: { type: boolean }
+        toolCount:
+          type: integer
+          description: |
+            How many tools it offered. Zero on an unreachable server and also
+            on a reachable one that offers nothing, which is why reachable is
+            separate rather than inferred from this.
+        detail:
+          type: string
+          description: Why it failed, when it did. Shown as-is — the reader is who fixes the server.
+        observedAt: { type: string, format: date-time }
+        observedBy:
+          type: string
+          description: |
+            Which worker saw this. Several connect to the same servers and can
+            disagree — one pod on a network that reaches it, one not.
 
     ModelProvider:
       type: object

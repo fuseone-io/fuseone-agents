@@ -48,3 +48,24 @@ type ModelProvider struct {
 	UpdatedBy string
 	UpdatedAt time.Time
 }
+
+// IntegrationHealth is what the platform observed about a connected system the
+// last time it tried to reach it.
+//
+// Observation, not configuration. A server can be enabled, correct and
+// unreachable, and only one of those three is somebody's opinion.
+type IntegrationHealth struct {
+	Name      string
+	Reachable bool
+	// ToolCount is how many tools it offered. Zero on an unreachable server,
+	// and also on a reachable one that offers nothing — which is why Reachable
+	// is a separate field rather than inferred from this.
+	ToolCount int
+	// Detail is why it failed, when it did. Developer-facing and shown as-is:
+	// the person reading it is the one who has to fix the server.
+	Detail     string
+	ObservedAt time.Time
+	// ObservedBy is which worker saw this. Several connect to the same servers
+	// and can disagree — one pod on a network that reaches it, one not.
+	ObservedBy string
+}

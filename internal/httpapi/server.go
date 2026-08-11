@@ -57,6 +57,7 @@ type Server struct {
 	content      Content
 	webhooks     trigger.Webhooks
 	audit        audit.Reader
+	health       Health
 	// clock is injectable so a run's opening instant is a fact of the request
 	// rather than of whichever machine happened to serve it.
 	clock Clock
@@ -95,6 +96,19 @@ func (s *Server) WithAgents(agents Agents) *Server {
 // WithCeilings wires the budgets configured per scope.
 func (s *Server) WithCeilings(ceilings Ceilings) *Server {
 	s.ceilings = ceilings
+	return s
+}
+
+// Health is what the platform observed about the systems it connects to,
+// declared here by the consumer. The API only reads: observing is the worker's
+// act, because it is the one that connects.
+type Health interface {
+	All(ctx context.Context) (map[string]domain.IntegrationHealth, error)
+}
+
+// WithHealth wires the observations beside the configuration.
+func (s *Server) WithHealth(health Health) *Server {
+	s.health = health
 	return s
 }
 

@@ -141,6 +141,24 @@ func (c *Catalog) Entries() []domain.ToolEntry {
 	return out
 }
 
+// CountFrom reports how many tools one server offered.
+//
+// A reachable server offering nothing is a real and confusing state — usually
+// a server that started but has not finished registering — so the count is
+// reported separately from whether it answered.
+func (c *Catalog) CountFrom(server string) int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	count := 0
+	for _, e := range c.entries {
+		if e.Server == server {
+			count++
+		}
+	}
+	return count
+}
+
 // Classifier is where rulings come from, declared here by the consumer so the
 // administration that records them and the catalogue that enforces them never
 // import each other.

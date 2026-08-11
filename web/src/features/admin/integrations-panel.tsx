@@ -1,24 +1,24 @@
 import { useState } from "react";
 import { Plug, Plus, Server } from "lucide-react";
-import { toast } from "sonner";
-import { Panel } from "@/components/shared/panel";
-import { Mono } from "@/components/shared/mono";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/shared/states";
 import { ServerForm } from "@/features/admin/server-form";
 import { ProviderForm } from "@/features/admin/provider-form";
-import { RemoveButton } from "@/features/admin/remove-button";
-import {
-  useDeleteMCPServer,
-  useDeleteProvider,
-  useIntegrations,
-  type MCPServer,
-  type ModelProvider,
-} from "@/features/admin/api";
+import { ServerCard } from "@/features/admin/server-card";
+import { ProviderCard } from "@/features/admin/provider-card";
+import { useIntegrations, type MCPServer, type ModelProvider } from "@/features/admin/api";
 
-type Editing = { kind: "server"; value: MCPServer | null } | { kind: "provider"; value: ModelProvider | null };
+type Editing =
+  | { kind: "server"; value: MCPServer | null }
+  | { kind: "provider"; value: ModelProvider | null };
 
+/**
+ * What the platform is connected to, and whether any of it is answering.
+ *
+ * Cards rather than rows because the state of a connection is the point, and a
+ * table makes every system look equally fine until somebody reads the column
+ * on the right.
+ */
 export function IntegrationsPanel() {
   const { data, isLoading, error, refetch } = useIntegrations();
   const [editing, setEditing] = useState<Editing | null>(null);
@@ -30,58 +30,50 @@ export function IntegrationsPanel() {
   const providers = data?.providers ?? [];
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      <Panel
+    <div className="flex flex-col gap-6">
+      <Section
         title="Servidores de ferramentas"
-        action={
-          <Button size="sm" onClick={() => setEditing({ kind: "server", value: null })}>
-            <Plus className="size-4" />
-            Novo
-          </Button>
+        onAdd={() => setEditing({ kind: "server", value: null })}
+        empty={
+          servers.length === 0 && (
+            <EmptyState
+              icon={<Server className="size-6" />}
+              title="Nenhum servidor configurado"
+              hint="Um servidor MCP é o que dá ferramentas aos agentes. Enquanto não houver um, os agentes só conseguem raciocinar."
+            />
+          )
         }
       >
-        {servers.length === 0 ? (
-          <EmptyState
-            icon={<Server className="size-6" />}
-            title="Nenhum servidor configurado"
-            hint="Um servidor MCP é o que dá ferramentas aos agentes. Enquanto não houver um, os agentes só conseguem raciocinar."
+        {servers.map((server) => (
+          <ServerCard
+            key={server.name}
+            server={server}
+            onEdit={() => setEditing({ kind: "server", value: server })}
           />
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {servers.map((server) => (
-              <ServerRow key={server.name} server={server} onEdit={() => setEditing({ kind: "server", value: server })} />
-            ))}
-          </ul>
-        )}
-      </Panel>
+        ))}
+      </Section>
 
-      <Panel
+      <Section
         title="Provedores de modelo"
-        action={
-          <Button size="sm" onClick={() => setEditing({ kind: "provider", value: null })}>
-            <Plus className="size-4" />
-            Novo
-          </Button>
+        onAdd={() => setEditing({ kind: "provider", value: null })}
+        empty={
+          providers.length === 0 && (
+            <EmptyState
+              icon={<Plug className="size-6" />}
+              title="Nenhum provedor configurado"
+              hint="Sem provedor, nenhuma execução avança: o agente não tem com o que planejar."
+            />
+          )
         }
       >
-        {providers.length === 0 ? (
-          <EmptyState
-            icon={<Plug className="size-6" />}
-            title="Nenhum provedor configurado"
-            hint="Sem provedor, nenhuma execução avança: o agente não tem com o que planejar."
+        {providers.map((provider) => (
+          <ProviderCard
+            key={provider.name}
+            provider={provider}
+            onEdit={() => setEditing({ kind: "provider", value: provider })}
           />
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {providers.map((provider) => (
-              <ProviderRow
-                key={provider.name}
-                provider={provider}
-                onEdit={() => setEditing({ kind: "provider", value: provider })}
-              />
-            ))}
-          </ul>
-        )}
-      </Panel>
+        ))}
+      </Section>
 
       {editing?.kind === "server" && (
         <ServerForm server={editing.value} onClose={() => setEditing(null)} />
@@ -93,70 +85,32 @@ export function IntegrationsPanel() {
   );
 }
 
-function ServerRow({ server, onEdit }: { server: MCPServer; onEdit: () => void }) {
-  const remove = useDeleteMCPServer();
-
+function Section({
+  title,
+  onAdd,
+  empty,
+  children,
+}: {
+  title: string;
+  onAdd: () => void;
+  empty: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
-    <li className="flex items-center gap-2 rounded-lg border p-3">
-      <button
-        type="button"
-        onClick={onEdit}
-        className="min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:underline"
-      >
-        <div className="font-medium">{server.name}</div>
-        <Mono dim>{[server.command, ...(server.args ?? [])].join(" ")}</Mono>
-      </button>
-      <EnabledBadge enabled={server.enabled} />
-      <RemoveButton
-        title={`Remover ${server.name}?`}
-        description="Os agentes perdem as ferramentas deste servidor no próximo restart do worker. Fica registrado na trilha."
-        onConfirm={() =>
-          remove.mutate(server.name, {
-            onSuccess: () => toast.success(`${server.name} removido`),
-            onError: (e) => toast.error(e instanceof Error ? e.message : "Não foi possível remover"),
-          })
-        }
-      />
-    </li>
-  );
-}
+    <section className="flex flex-col gap-2.5">
+      <div className="flex items-center gap-2">
+        <h2 className="text-sm font-medium">{title}</h2>
+        <Button size="sm" variant="outline" className="ml-auto h-7" onClick={onAdd}>
+          <Plus className="size-4" aria-hidden />
+          Novo
+        </Button>
+      </div>
 
-function ProviderRow({ provider, onEdit }: { provider: ModelProvider; onEdit: () => void }) {
-  const remove = useDeleteProvider();
-
-  return (
-    <li className="flex items-center gap-2 rounded-lg border p-3">
-      <button
-        type="button"
-        onClick={onEdit}
-        className="min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:underline"
-      >
-        <div className="font-medium">{provider.name}</div>
-        <Mono dim>{provider.baseUrl}</Mono>
-      </button>
-      {/* Whether a credential exists, never what it is. */}
-      <Badge variant="secondary" className="font-normal">
-        {provider.hasKey ? "com credencial" : "sem credencial"}
-      </Badge>
-      <EnabledBadge enabled={provider.enabled} />
-      <RemoveButton
-        title={`Remover ${provider.name}?`}
-        description="Agentes que apontam para este provedor param de avançar. A credencial guardada é apagada junto."
-        onConfirm={() =>
-          remove.mutate(provider.name, {
-            onSuccess: () => toast.success(`${provider.name} removido`),
-            onError: (e) => toast.error(e instanceof Error ? e.message : "Não foi possível remover"),
-          })
-        }
-      />
-    </li>
-  );
-}
-
-function EnabledBadge({ enabled }: { enabled: boolean }) {
-  return (
-    <Badge variant="outline" className={enabled ? "text-success" : "text-muted-foreground"}>
-      {enabled ? "ativo" : "desativado"}
-    </Badge>
+      {empty || (
+        <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]">
+          {children}
+        </div>
+      )}
+    </section>
   );
 }

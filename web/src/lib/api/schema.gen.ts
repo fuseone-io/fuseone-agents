@@ -655,9 +655,40 @@ export interface components {
             command: string;
             args?: string[];
             enabled: boolean;
+            /**
+             * @description Whether this server is configured from the console. False for one
+             *     passed to the process by flag or environment: the platform is
+             *     connected to it and cannot change it here, and hiding it would make
+             *     this screen disagree with what the installation actually talks to.
+             */
+            managed?: boolean;
             updatedBy?: string;
             /** Format: date-time */
             updatedAt?: string;
+            /**
+             * @description What the platform observed the last time it tried to reach this
+             *     server. Absent when no worker has tried yet, which is a different
+             *     thing from a server that failed.
+             */
+            health?: components["schemas"]["IntegrationHealth"] | null;
+        };
+        IntegrationHealth: {
+            reachable: boolean;
+            /**
+             * @description How many tools it offered. Zero on an unreachable server and also
+             *     on a reachable one that offers nothing, which is why reachable is
+             *     separate rather than inferred from this.
+             */
+            toolCount: number;
+            /** @description Why it failed, when it did. Shown as-is — the reader is who fixes the server. */
+            detail?: string;
+            /** Format: date-time */
+            observedAt: string;
+            /**
+             * @description Which worker saw this. Several connect to the same servers and can
+             *     disagree — one pod on a network that reaches it, one not.
+             */
+            observedBy?: string;
         };
         ModelProvider: {
             name: string;

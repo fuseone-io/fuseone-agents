@@ -150,7 +150,8 @@ func serve(args []string) error {
 			// which is the one thing the approver needs.
 			WithContent(ledger.NewContent(identity.pool)).
 			WithWebhooks(trigger.NewPostgresWebhooks(identity.pool)).
-			WithAudit(audit.NewPostgres(identity.pool))
+			WithAudit(audit.NewPostgres(identity.pool)).
+			WithHealth(admin.NewHealth(identity.pool))
 	}
 
 	apiHandler := openapi.HandlerWithOptions(
@@ -382,7 +383,7 @@ func workerCmd(args []string) error {
 		}
 	}
 
-	if err := servers.connect(ctx, catalog); err != nil {
+	if err := servers.connect(ctx, catalog, healthOf(configPool)); err != nil {
 		return err
 	}
 
@@ -658,10 +659,15 @@ func (m *mcpServers) Set(v string) error {
 // connect starts each server and imports its tools.
 //
 // Every tool arrives classified read-only whatever the server says about
-// itself. Promoting one is the Curator's separate act, and it has no
-// persistent home yet — which means a worker restarted right now forgets every
-// classification, and only read-only agents survive it.
-func (m mcpServers) connect(ctx context.Context, catalog *tools.Catalog) error {
+// itself. Promoting one is the Curator's separate act.
+//
+// A server that will not answer does not stop the worker. It used to: the
+// first failure returned, and one broken integration meant nothing on the
+// installation ran — including every agent that never touches it. Now the
+// failure is recorded and the worker starts; agents needing that server get a
+// clean capability refusal, which is a diagnosable outcome, and the console
+// says which server is down and why.
+func (m mcpServers) connect(ctx context.Context, catalog *tools.Catalog, health healthRecorder) error {
 	for _, entry := range m {
 		name, command, _ := strings.Cut(entry, "=")
 
@@ -672,14 +678,62 @@ func (m mcpServers) connect(ctx context.Context, catalog *tools.Catalog) error {
 		client := mcp.NewClient(&mcp.Implementation{Name: "fuseone-agents", Version: version}, nil)
 		session, err := client.Connect(ctx, &mcp.CommandTransport{Command: cmd}, nil)
 		if err != nil {
-			return fmt.Errorf("connect MCP server %s (%s): %w", name, command, err)
+			slog.Error("mcp server did not answer; its tools are unavailable",
+				"server", name, "command", fields[0], "err", err)
+			observe(ctx, health, name, false, 0, err.Error())
+			continue
 		}
 		if err := catalog.AddServer(ctx, name, session); err != nil {
-			return fmt.Errorf("import tools from %s: %w", name, err)
+			slog.Error("mcp server answered but its tools could not be imported",
+				"server", name, "err", err)
+			observe(ctx, health, name, false, 0, err.Error())
+			continue
 		}
 		slog.Info("mcp server connected", "server", name, "command", fields[0])
+		observe(ctx, health, name, true, catalog.CountFrom(name), "")
 	}
 	return nil
+}
+
+// healthOf returns where observations are written, or nil when this worker has
+// no database to write them to.
+func healthOf(pool *pgxpool.Pool) healthRecorder {
+	if pool == nil {
+		return nil
+	}
+	return admin.NewHealth(pool)
+}
+
+// healthRecorder is what remembers an observation. Optional: a worker running
+// without a database still connects, it just has nowhere to write down what it
+// saw.
+type healthRecorder interface {
+	Record(ctx context.Context, obs domain.IntegrationHealth) error
+}
+
+// observe records an attempt, and never fails the caller over it. Losing the
+// note is worse than nothing; failing the connection because the note could not
+// be written would be absurd.
+func observe(ctx context.Context, health healthRecorder, name string, ok bool, tools int, detail string) {
+	if health == nil {
+		return
+	}
+	if err := health.Record(ctx, domain.IntegrationHealth{
+		Name: name, Reachable: ok, ToolCount: tools, Detail: detail,
+		ObservedAt: time.Now(), ObservedBy: hostname(),
+	}); err != nil {
+		slog.Warn("could not record what an integration answered", "server", name, "err", err)
+	}
+}
+
+// hostname names which worker made an observation. Several connect to the same
+// servers and can disagree — one pod on a network that reaches it, one not.
+func hostname() string {
+	name, err := os.Hostname()
+	if err != nil {
+		return "unknown"
+	}
+	return name
 }
 
 // publishSpecs records every definition on disk as a published version.
