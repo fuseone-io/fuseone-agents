@@ -54,6 +54,12 @@ export type PendingApproval = components["schemas"]["PendingApproval"];
 export type CostRollup = components["schemas"]["CostRollup"];
 export type RunStats = components["schemas"]["RunStats"];
 export type Cost = components["schemas"]["Cost"];
+export type Agent = components["schemas"]["Agent"];
+export type AgentVersion = components["schemas"]["AgentVersion"];
+export type ThroughputBucket = components["schemas"]["ThroughputBucket"];
+export type RecordedDecision = components["schemas"]["RecordedDecision"];
+export type Verdict = components["schemas"]["Verdict"];
+export type Tool = components["schemas"]["Tool"];
 export type Problem = components["schemas"]["Problem"];
 
 /**
