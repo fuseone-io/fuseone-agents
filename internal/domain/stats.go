@@ -44,6 +44,10 @@ type RunStats struct {
 	// mean: one run that parked overnight would drag an average somewhere no
 	// individual run ever was.
 	MedianDurationMS int64
+	// P95DurationMS is the slow tail, over the same runs as the median. On its
+	// own a median says nothing about the runs people actually complain about,
+	// and the two together are what say whether a change helped.
+	P95DurationMS int64
 	// Ended is how many runs the median was computed over. Without it the
 	// median is a number with no stated basis.
 	Ended int64
@@ -51,3 +55,16 @@ type RunStats struct {
 
 // Count returns the tally for a phase, or zero.
 func (s RunStats) Count(phase string) int64 { return s.ByPhase[phase] }
+
+// ThroughputBucket is one interval of a run count, split by what became of the
+// runs that started in it.
+//
+// Runs are bucketed by when they started, and counted under the phase they are
+// in now. That is the honest reading of "how is today going": a run that
+// started at nine and is still waiting belongs to nine o'clock and to the
+// waiting column, not to whenever it eventually ends.
+type ThroughputBucket struct {
+	At      time.Time
+	ByPhase map[string]int64
+	Total   int64
+}

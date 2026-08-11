@@ -127,6 +127,13 @@ paths:
           in: query
           description: Only runs started at or after this instant.
           schema: { type: string, format: date-time }
+        - name: until
+          in: query
+          description: |
+            Only runs started before this instant. Needed to close a window:
+            a figure compared against another — yesterday against today — is
+            wrong if the earlier window has no upper bound.
+          schema: { type: string, format: date-time }
       responses:
         '200':
           description: Aggregates over the matching runs.
@@ -134,6 +141,40 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/RunStats' }
         '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /runs/throughput:
+    get:
+      tags: [runs]
+      operationId: getThroughput
+      summary: Runs per hour, split by what became of them
+      description: |
+        Runs are bucketed by the hour they started and counted under the phase
+        they are in now. That is the honest reading of "how is today going": a
+        run that started at nine and is still waiting belongs to nine o'clock
+        and to the waiting column, not to whenever it eventually ends.
+
+        Hours with no runs are absent rather than zero. The caller chose the
+        period and knows which hours it covers.
+      parameters:
+        - $ref: '#/components/parameters/Company'
+        - $ref: '#/components/parameters/Area'
+        - name: agentId
+          in: query
+          schema: { type: string }
+        - name: since
+          in: query
+          schema: { type: string, format: date-time }
+        - name: until
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: The buckets, oldest first.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Throughput' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
@@ -918,6 +959,35 @@ components:
           format: int64
           nullable: true
           description: Median wall-clock duration of runs that ended. Absent when none have.
+        p95DurationMs:
+          type: integer
+          format: int64
+          nullable: true
+          description: |
+            The slow tail, over the same runs as the median. On its own a
+            median says nothing about the runs people complain about.
+
+    Throughput:
+      type: object
+      required: [buckets]
+      properties:
+        buckets:
+          type: array
+          items: { $ref: '#/components/schemas/ThroughputBucket' }
+
+    ThroughputBucket:
+      type: object
+      required: [at, total, byPhase]
+      properties:
+        at:
+          type: string
+          format: date-time
+          description: The start of the hour, in UTC.
+        total: { type: integer, format: int64 }
+        byPhase:
+          type: object
+          description: Runs per phase within the hour. A phase with none is absent.
+          additionalProperties: { type: integer, format: int64 }
 
     RunPage:
       type: object

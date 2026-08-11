@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"context"
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -39,7 +40,44 @@ func (m *Memory) Stats(ctx context.Context, filter domain.RunFilter) (domain.Run
 	}
 
 	out.Ended = int64(len(durations))
-	out.MedianDurationMS = median(durations)
+	out.MedianDurationMS = percentileDisc(durations, 0.5)
+	out.P95DurationMS = percentileDisc(durations, 0.95)
+	return out, nil
+}
+
+// Throughput buckets runs by the hour they started, mirroring the SQL side's
+// date_trunc. Phase comes from the same projection the tallies use, so an hour
+// here and a total there cannot disagree.
+func (m *Memory) Throughput(ctx context.Context, filter domain.RunFilter) ([]domain.ThroughputBucket, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	byHour := map[time.Time]*domain.ThroughputBucket{}
+	for _, steps := range m.runs {
+		if len(steps) == 0 || !matches(steps[0], filter) {
+			continue
+		}
+		at := steps[0].At.UTC().Truncate(time.Hour)
+		bucket, ok := byHour[at]
+		if !ok {
+			bucket = &domain.ThroughputBucket{At: at, ByPhase: map[string]int64{}}
+			byHour[at] = bucket
+		}
+		bucket.ByPhase[phaseOf(steps)]++
+		bucket.Total++
+	}
+
+	out := make([]domain.ThroughputBucket, 0, len(byHour))
+	for _, bucket := range byHour {
+		out = append(out, *bucket)
+	}
+	// Map iteration is unordered and a chart drawn from it would reshuffle
+	// between renders.
+	slices.SortFunc(out, func(a, b domain.ThroughputBucket) int { return a.At.Compare(b.At) })
 	return out, nil
 }
 
@@ -52,6 +90,8 @@ func matches(first domain.Step, f domain.RunFilter) bool {
 	case f.AgentID != "" && first.AgentID != f.AgentID:
 		return false
 	case !f.Since.IsZero() && first.At.Before(f.Since):
+		return false
+	case !f.Until.IsZero() && !first.At.Before(f.Until):
 		return false
 	case f.Search != "" && !matchesSearch(first, f.Search):
 		return false
@@ -93,18 +133,19 @@ func span(steps []domain.Step) (started, ended time.Time, ok bool) {
 	return started, ended, !started.IsZero() && !ended.IsZero()
 }
 
-// median takes the lower of the two middle values on an even count, which is
-// what percentile_cont does not do — so the SQL side interpolates and this one
-// must match it.
-func median(values []int64) int64 {
+// percentileDisc mirrors Postgres percentile_disc: it returns a value some run
+// actually had, never an interpolation between two runs that never existed.
+//
+// This used to average the two middle values on an even count while the SQL
+// side took the lower one, so the same runs produced different medians
+// depending on which store answered — the exact divergence the contract suite
+// exists to catch, and it did not, because every fixture had an odd count.
+func percentileDisc(values []int64, p float64) int64 {
 	if len(values) == 0 {
 		return 0
 	}
 	slices.Sort(values)
 
-	mid := len(values) / 2
-	if len(values)%2 == 1 {
-		return values[mid]
-	}
-	return (values[mid-1] + values[mid]) / 2
+	i := int(math.Ceil(p*float64(len(values)))) - 1
+	return values[min(max(i, 0), len(values)-1)]
 }

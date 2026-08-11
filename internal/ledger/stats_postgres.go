@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/fuseone/agents/internal/domain"
 )
@@ -40,25 +41,76 @@ func (p *Postgres) Stats(ctx context.Context, filter domain.RunFilter) (domain.R
 		return domain.RunStats{}, err
 	}
 
-	// percentile_disc, not percentile_cont: the median has to be a duration
+	// percentile_disc, not percentile_cont: a reported duration has to be one
 	// some run actually had, and it has to agree with the in-memory ledger,
 	// which cannot interpolate between two runs that never existed.
-	var median *float64
+	var median, p95 *float64
 	err = p.pool.QueryRow(ctx, `
 		select count(*),
 		       percentile_disc(0.5) within group (
 		           order by extract(epoch from (ended_at - started_at)) * 1000
+		       ),
+		       percentile_disc(0.95) within group (
+		           order by extract(epoch from (ended_at - started_at)) * 1000
 		       )
 		from runs `+whereAnd(where, "ended_at is not null"), args...,
-	).Scan(&out.Ended, &median)
+	).Scan(&out.Ended, &median, &p95)
 	if err != nil {
-		return domain.RunStats{}, fmt.Errorf("stats median: %w", err)
+		return domain.RunStats{}, fmt.Errorf("stats durations: %w", err)
 	}
 	if median != nil {
 		out.MedianDurationMS = int64(*median)
 	}
+	if p95 != nil {
+		out.P95DurationMS = int64(*p95)
+	}
 
 	return out, nil
+}
+
+// Throughput buckets runs by the hour they started.
+//
+// date_trunc in the database rather than in Go: the alternative is reading
+// every run in the window into the process to group it, which is the shape
+// this projection exists to avoid.
+func (p *Postgres) Throughput(ctx context.Context, filter domain.RunFilter) ([]domain.ThroughputBucket, error) {
+	where, args := runFilterSQL(filter)
+
+	rows, err := p.pool.Query(ctx, `
+		select date_trunc('hour', started_at) as bucket, phase, count(*)
+		from runs `+where+`
+		group by bucket, phase
+		order by bucket`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("throughput: %w", err)
+	}
+	defer rows.Close()
+
+	var out []domain.ThroughputBucket
+	for rows.Next() {
+		var at time.Time
+		var phase string
+		var count int64
+		if err := rows.Scan(&at, &phase, &count); err != nil {
+			return nil, err
+		}
+		out = appendBucket(out, at.UTC(), phase, count)
+	}
+	return out, rows.Err()
+}
+
+// appendBucket folds one (hour, phase) tally into the ordered result.
+//
+// The query returns a row per phase per hour; the caller wants one bucket per
+// hour. Ordered by bucket, so only the last one can still be open.
+func appendBucket(out []domain.ThroughputBucket, at time.Time, phase string, count int64) []domain.ThroughputBucket {
+	if len(out) == 0 || !out[len(out)-1].At.Equal(at) {
+		out = append(out, domain.ThroughputBucket{At: at, ByPhase: map[string]int64{}})
+	}
+	b := &out[len(out)-1]
+	b.ByPhase[phase] += count
+	b.Total += count
+	return out
 }
 
 // runFilterSQL builds the shared predicate. Every argument is bound, never
@@ -99,6 +151,12 @@ func runFilterSQL(f domain.RunFilter) (string, []any) {
 	}
 	if !f.Since.IsZero() {
 		add("started_at >= $%d", f.Since.UTC())
+	}
+	// Every figure that compares one window against another needs both ends.
+	// Carrying Until and applying only Since made "yesterday" mean "yesterday
+	// onwards", which includes the today it was being compared to.
+	if !f.Until.IsZero() {
+		add("started_at < $%d", f.Until.UTC())
 	}
 	if f.Search != "" {
 		// One bound parameter used twice: the pattern is built here rather

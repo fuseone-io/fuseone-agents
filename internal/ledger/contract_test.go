@@ -35,6 +35,7 @@ type Store interface {
 	ListRuns(ctx context.Context, filter domain.RunFilter, phase string, limit int) ([]domain.RunSummary, error)
 	CostRollup(ctx context.Context, filter domain.RunFilter, groupBy string) ([]domain.CostBucket, error)
 	AgentActivity(ctx context.Context, filter domain.RunFilter) ([]domain.AgentActivity, error)
+	Throughput(ctx context.Context, filter domain.RunFilter) ([]domain.ThroughputBucket, error)
 	SpentSince(ctx context.Context, scope domain.Scope, since time.Time) (domain.Consumption, error)
 }
 
@@ -549,6 +550,71 @@ func TestStatsContract(t *testing.T) {
 		}
 	})
 
+	run(t, "an even number of runs gives the same median in both stores", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		// Every fixture had an odd count, so nobody noticed that one store
+		// averaged the two middle values and the other took the lower one.
+		// The same runs gave different medians depending on who answered.
+		for i, minutes := range []int{1, 2, 3, 4} {
+			id := domain.RunID(fmt.Sprintf("run-%d", i))
+			mustAppend(t, s, startedAt(id, base))
+			mustAppend(t, s, finishedAt(id, base.Add(time.Duration(minutes)*time.Minute)))
+		}
+
+		got, err := s.Stats(ctx, domain.RunFilter{})
+		if err != nil {
+			t.Fatalf("Stats: %v", err)
+		}
+		// A duration some run actually had, never the average of two.
+		if want := int64(2 * 60 * 1000); got.MedianDurationMS != want {
+			t.Errorf("MedianDurationMS = %d, want %d", got.MedianDurationMS, want)
+		}
+	})
+
+	run(t, "an until bound excludes runs that started after it", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		// The filter carried Until and only the list honoured it, so every
+		// figure meant to compare one window against another — yesterday
+		// against today — silently counted both.
+		mustAppend(t, s, startedAt("run-yesterday", base.Add(-24*time.Hour)))
+		mustAppend(t, s, startedAt("run-today", base))
+
+		got, err := s.Stats(ctx, domain.RunFilter{
+			Since: base.Add(-36 * time.Hour),
+			Until: base.Add(-12 * time.Hour),
+		})
+		if err != nil {
+			t.Fatalf("Stats: %v", err)
+		}
+		if got.Total != 1 {
+			t.Errorf("Total = %d, want only the run inside the window", got.Total)
+		}
+	})
+
+	run(t, "the slow tail is reported next to the median, over the same runs", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		// A median alone says nothing about the runs people complain about.
+		for i, minutes := range []int{1, 1, 1, 1, 1, 1, 1, 1, 1, 40} {
+			id := domain.RunID(fmt.Sprintf("run-%d", i))
+			mustAppend(t, s, startedAt(id, base))
+			mustAppend(t, s, finishedAt(id, base.Add(time.Duration(minutes)*time.Minute)))
+		}
+
+		got, err := s.Stats(ctx, domain.RunFilter{})
+		if err != nil {
+			t.Fatalf("Stats: %v", err)
+		}
+		if got.MedianDurationMS != 60_000 {
+			t.Errorf("MedianDurationMS = %d, want 60000", got.MedianDurationMS)
+		}
+		if want := int64(40 * 60 * 1000); got.P95DurationMS != want {
+			t.Errorf("P95DurationMS = %d, want %d — the slow run is the point", got.P95DurationMS, want)
+		}
+	})
+
 	run(t, "a scope bound counts only that area", func(t *testing.T, s Store) {
 		ctx := context.Background()
 
@@ -1056,6 +1122,91 @@ func TestSpentSinceContract(t *testing.T) {
 		}
 		if spent.Micros != 40_000 {
 			t.Errorf("Micros = %d, want both areas of the company", spent.Micros)
+		}
+	})
+}
+
+// Throughput answers what the overview asks: how the day is going, hour by
+// hour, split by what became of each run. Aggregated in the store for the same
+// reason the tallies are — reading every run into the process to bucket it
+// makes the console's cost grow with the installation's history.
+
+func TestThroughputContract(t *testing.T) {
+	base := time.Date(2026, 8, 11, 9, 30, 0, 0, time.UTC)
+
+	run(t, "buckets runs by the hour they started", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		mustAppend(t, s, startedAt("run-a", base))
+		mustAppend(t, s, startedAt("run-b", base.Add(20*time.Minute)))
+		mustAppend(t, s, startedAt("run-c", base.Add(90*time.Minute)))
+
+		got, err := s.Throughput(ctx, domain.RunFilter{Since: base.Add(-time.Hour)})
+		if err != nil {
+			t.Fatalf("Throughput: %v", err)
+		}
+		if len(got) != 2 {
+			t.Fatalf("buckets = %d, want 2 (got %+v)", len(got), got)
+		}
+		if !got[0].At.Equal(base.Truncate(time.Hour)) {
+			t.Errorf("first bucket at %s, want the hour %s falls in", got[0].At, base)
+		}
+		if got[0].Total != 2 || got[1].Total != 1 {
+			t.Errorf("totals = %d, %d; want 2, 1", got[0].Total, got[1].Total)
+		}
+	})
+
+	run(t, "splits each hour by what became of the run", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		mustAppend(t, s, startedAt("run-done", base))
+		mustAppend(t, s, finishedAt("run-done", base.Add(time.Minute)))
+		mustAppend(t, s, startedAt("run-open", base.Add(5*time.Minute)))
+
+		got, err := s.Throughput(ctx, domain.RunFilter{Since: base.Add(-time.Hour)})
+		if err != nil {
+			t.Fatalf("Throughput: %v", err)
+		}
+		if len(got) != 1 {
+			t.Fatalf("buckets = %d, want 1", len(got))
+		}
+		if got[0].ByPhase["finished"] != 1 || got[0].ByPhase["running"] != 1 {
+			t.Errorf("byPhase = %v, want one finished and one running", got[0].ByPhase)
+		}
+	})
+
+	run(t, "returns the hours in order, oldest first", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		// Written newest first on purpose: a chart that trusted insertion
+		// order would draw the day backwards.
+		mustAppend(t, s, startedAt("run-late", base.Add(3*time.Hour)))
+		mustAppend(t, s, startedAt("run-early", base))
+
+		got, err := s.Throughput(ctx, domain.RunFilter{Since: base.Add(-time.Hour)})
+		if err != nil {
+			t.Fatalf("Throughput: %v", err)
+		}
+		if len(got) != 2 || !got[0].At.Before(got[1].At) {
+			t.Fatalf("buckets = %+v, want oldest first", got)
+		}
+	})
+
+	run(t, "honours the scope, like every other tally", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		mine := startedAt("run-cx", base)
+		theirs := startedAt("run-mkt", base)
+		theirs.Scope = domain.Scope{Company: "acme", Area: "marketing"}
+		mustAppend(t, s, mine)
+		mustAppend(t, s, theirs)
+
+		got, err := s.Throughput(ctx, domain.RunFilter{Scope: domain.Scope{Company: "acme", Area: "cx"}})
+		if err != nil {
+			t.Fatalf("Throughput: %v", err)
+		}
+		if len(got) != 1 || got[0].Total != 1 {
+			t.Errorf("buckets = %+v, want only the run in cx", got)
 		}
 	})
 }

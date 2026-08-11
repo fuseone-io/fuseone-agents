@@ -29,6 +29,7 @@ type Store interface {
 	// every run in the ledger does not survive an installation's second year —
 	// and an append-only record is guaranteed to have one.
 	Stats(ctx context.Context, filter domain.RunFilter) (domain.RunStats, error)
+	Throughput(ctx context.Context, filter domain.RunFilter) ([]domain.ThroughputBucket, error)
 	ListRuns(ctx context.Context, filter domain.RunFilter, phase string, limit int) ([]domain.RunSummary, error)
 	CostRollup(ctx context.Context, filter domain.RunFilter, groupBy string) ([]domain.CostBucket, error)
 	AgentActivity(ctx context.Context, filter domain.RunFilter) ([]domain.AgentActivity, error)

@@ -35,11 +35,47 @@ func (s *Server) GetRunStats(ctx context.Context, req openapi.GetRunStatsRequest
 	// Absent rather than zero when nothing has ended: a median of "0ms" reads
 	// as a measurement, and there is nothing to measure yet.
 	if stats.Ended > 0 {
-		median := stats.MedianDurationMS
-		body.MedianDurationMs = &median
+		median, p95 := stats.MedianDurationMS, stats.P95DurationMS
+		body.MedianDurationMs, body.P95DurationMs = &median, &p95
 	}
 
 	return openapi.GetRunStats200JSONResponse(body), nil
+}
+
+// GetThroughput answers with runs per hour, split by what became of them.
+//
+// Same aggregation, same scoping, different shape: the overview asks how the
+// day went rather than how it ended, and a single tally cannot say that.
+func (s *Server) GetThroughput(
+	ctx context.Context, req openapi.GetThroughputRequestObject,
+) (openapi.GetThroughputResponseObject, error) {
+	filter, allowed := narrow(ctx, throughputFilterFrom(req.Params), domain.PermRunRead)
+	if !allowed {
+		return openapi.GetThroughput403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermRunRead,
+				scopeParams(req.Params.Company, req.Params.Area)),
+		}, nil
+	}
+
+	buckets, err := s.store.Throughput(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("throughput: %w", err)
+	}
+
+	out := openapi.Throughput{Buckets: make([]openapi.ThroughputBucket, 0, len(buckets))}
+	for _, b := range buckets {
+		out.Buckets = append(out.Buckets, openapi.ThroughputBucket{
+			At: b.At, Total: b.Total, ByPhase: b.ByPhase,
+		})
+	}
+	return openapi.GetThroughput200JSONResponse(out), nil
+}
+
+func throughputFilterFrom(p openapi.GetThroughputParams) domain.RunFilter {
+	return runFilterFrom(openapi.GetRunStatsParams{
+		Company: p.Company, Area: p.Area, AgentId: p.AgentId,
+		Since: p.Since, Until: p.Until,
+	})
 }
 
 func runFilterFrom(p openapi.GetRunStatsParams) domain.RunFilter {
@@ -55,6 +91,9 @@ func runFilterFrom(p openapi.GetRunStatsParams) domain.RunFilter {
 	}
 	if p.Since != nil {
 		f.Since = *p.Since
+	}
+	if p.Until != nil {
+		f.Until = *p.Until
 	}
 	return f
 }
