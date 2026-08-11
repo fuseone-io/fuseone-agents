@@ -61,6 +61,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/runs/throughput": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Runs per hour, split by what became of them
+         * @description Runs are bucketed by the hour they started and counted under the phase
+         *     they are in now. That is the honest reading of "how is today going": a
+         *     run that started at nine and is still waiting belongs to nine o'clock
+         *     and to the waiting column, not to whenever it eventually ends.
+         *
+         *     Hours with no runs are absent rather than zero. The caller chose the
+         *     period and knows which hours it covers.
+         */
+        get: operations["getThroughput"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What the Gate has decided, most recent first
+         * @description Every effect passes the Gate, and this is that record read across runs
+         *     rather than down one. It is how somebody sees whether the
+         *     installation's rules are doing anything: a feed of nothing but
+         *     "allowed" says the policy is not engaging, and a run of escalations on
+         *     one rule says it is engaging too much.
+         *
+         *     Each entry names the rule, never a category. "Denied by policy" tells
+         *     a reader nothing about what to change.
+         */
+        get: operations["listDecisions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runs/{runId}": {
         parameters: {
             query?: never;
@@ -593,6 +646,44 @@ export interface components {
              * @description Median wall-clock duration of runs that ended. Absent when none have.
              */
             medianDurationMs?: number | null;
+            /**
+             * Format: int64
+             * @description The slow tail, over the same runs as the median. On its own a
+             *     median says nothing about the runs people complain about.
+             */
+            p95DurationMs?: number | null;
+        };
+        DecisionPage: {
+            items: components["schemas"]["RecordedDecision"][];
+        };
+        RecordedDecision: {
+            runId: string;
+            /** Format: int64 */
+            seq: number;
+            /** Format: date-time */
+            at: string;
+            scope?: components["schemas"]["Scope"];
+            agentId?: string;
+            tool?: string;
+            verdict: components["schemas"]["Verdict"];
+            /** @description The rule that applied. The feed names it rather than a category. */
+            rule?: string;
+        };
+        Throughput: {
+            buckets: components["schemas"]["ThroughputBucket"][];
+        };
+        ThroughputBucket: {
+            /**
+             * Format: date-time
+             * @description The start of the hour, in UTC.
+             */
+            at: string;
+            /** Format: int64 */
+            total: number;
+            /** @description Runs per phase within the hour. A phase with none is absent. */
+            byPhase: {
+                [key: string]: number;
+            };
         };
         RunPage: {
             items: components["schemas"]["Run"][];
@@ -825,6 +916,12 @@ export interface operations {
                 agentId?: string;
                 /** @description Only runs started at or after this instant. */
                 since?: string;
+                /**
+                 * @description Only runs started before this instant. Needed to close a window:
+                 *     a figure compared against another — yesterday against today — is
+                 *     wrong if the earlier window has no upper bound.
+                 */
+                until?: string;
             };
             header?: never;
             path?: never;
@@ -842,6 +939,65 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getThroughput: {
+        parameters: {
+            query?: {
+                /** @description Company scope. A single value until multi-company (PRD 3.1). */
+                company?: components["parameters"]["Company"];
+                area?: components["parameters"]["Area"];
+                agentId?: string;
+                since?: string;
+                until?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The buckets, oldest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Throughput"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listDecisions: {
+        parameters: {
+            query?: {
+                /** @description Company scope. A single value until multi-company (PRD 3.1). */
+                company?: components["parameters"]["Company"];
+                area?: components["parameters"]["Area"];
+                agentId?: string;
+                /** @description Only decisions taken at or after this instant. */
+                since?: string;
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The decisions. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionPage"];
+                };
+            };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
         };

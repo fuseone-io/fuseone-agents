@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/shared/theme-provider";
 import { AppShell } from "@/components/layout/app-shell";
 import { SessionGate } from "@/features/session/session-gate";
+import { OverviewPage } from "@/features/overview/overview-page";
 import { AgentsPage } from "@/features/agents/agents-page";
 import { RunsPage } from "@/features/runs/runs-page";
 import { RunDetailPage } from "@/features/runs/run-detail-page";
@@ -34,7 +35,8 @@ createRoot(document.getElementById("root")!).render(
           <SessionGate>
             <AppShell>
               <Routes>
-                <Route path="/" element={<Navigate to="/runs" replace />} />
+                <Route path="/" element={<Navigate to="/overview" replace />} />
+                <Route path="/overview" element={<OverviewPage />} />
                 <Route path="/agents" element={<AgentsPage />} />
               <Route path="/runs" element={<RunsPage />} />
                 <Route path="/runs/:runId" element={<RunDetailPage />} />

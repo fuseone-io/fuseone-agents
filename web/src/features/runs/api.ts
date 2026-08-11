@@ -17,6 +17,9 @@ export interface RunFilters {
   agentId?: string;
   /** ISO instant; only runs started at or after it. */
   since?: string;
+  /** ISO instant; only runs started before it. Needed to close a window that
+   *  is being compared against another one. */
+  until?: string;
   /** Matches the run or agent identifier, applied by the server. */
   q?: string;
 }
@@ -121,7 +124,13 @@ export function useRunStats(filters: RunFilters = {}) {
     queryFn: async () =>
       unwrap(
         await api.GET("/runs/stats", {
-          params: { query: { agentId: filters.agentId, since: filters.since } },
+          params: {
+            query: {
+              agentId: filters.agentId,
+              since: filters.since,
+              until: filters.until,
+            },
+          },
         }),
       ),
   });
