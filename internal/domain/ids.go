@@ -33,10 +33,22 @@ func (s Scope) String() string {
 	return string(s.Company) + "/" + string(s.Area)
 }
 
-// Contains reports whether s covers other. An area covers only itself; the
-// company comparison is what enforces the boundary between legal entities.
+// Contains reports whether a grant in this scope reaches another.
+//
+// A scope with no area is the whole company, which is what makes the hierarchy
+// in PRD §3.1 real for grants and not only for budgets: installation → company
+// → area, inheriting downwards and never widening. Without it the first
+// administrator of an installation — granted where no areas exist yet — could
+// govern nothing, and every area created afterwards would be invisible to
+// them until somebody granted each one by hand.
+//
+// It only ever widens downwards. An area never reaches its siblings, and never
+// reaches the company above it.
 func (s Scope) Contains(other Scope) bool {
-	return s.Company == other.Company && s.Area == other.Area
+	if s.Company != other.Company {
+		return false
+	}
+	return s.Area == "" || s.Area == other.Area
 }
 
 // ParseScope reads the "company/area" form.

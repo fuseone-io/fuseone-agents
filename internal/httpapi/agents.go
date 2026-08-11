@@ -59,10 +59,14 @@ func (s *Server) ListAgents(ctx context.Context, req openapi.ListAgentsRequestOb
 	return openapi.ListAgents200JSONResponse{Items: items}, nil
 }
 
-// readable reports whether a scope is among those the caller may read.
+// readable reports whether any scope the caller holds reaches this one.
+//
+// Contains, not equality: a company-wide grant reaches its areas, which is the
+// whole point of the hierarchy — and comparing exactly made a curator granted
+// across a company see nothing inside it.
 func readable(scope domain.Scope, visible []domain.Scope) bool {
 	for _, v := range visible {
-		if v == scope {
+		if v.Contains(scope) {
 			return true
 		}
 	}

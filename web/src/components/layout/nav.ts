@@ -1,4 +1,4 @@
-import { Activity, Hand, Settings2, Wallet } from "lucide-react";
+import { Activity, Bot, Hand, Settings2, Wallet } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export interface NavItem {
@@ -29,6 +29,7 @@ export const NAV: NavGroup[] = [
   {
     label: "Operar",
     items: [
+      { to: "/agents", label: "Agentes", icon: Bot, permission: "agent:read" },
       { to: "/runs", label: "Execuções", icon: Activity, permission: "run:read" },
       { to: "/approvals", label: "Fila humana", icon: Hand, permission: "approval:act" },
     ],
@@ -43,6 +44,7 @@ export const NAV: NavGroup[] = [
 ];
 
 export const PAGE_TITLES: Record<string, string> = {
+  agents: "Agentes",
   runs: "Execuções",
   approvals: "Fila humana",
   cost: "Custo e limites",

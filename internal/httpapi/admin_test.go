@@ -326,3 +326,30 @@ func TestListAgents_historyIsAskedForExplicitly(t *testing.T) {
 		t.Error("the default asked for every version")
 	}
 }
+
+func TestListAgents_companyWideGrantSeesItsAreas(t *testing.T) {
+	t.Parallel()
+
+	// Comparing scopes exactly instead of by containment made the first
+	// administrator of an installation — granted across the company — see
+	// nothing inside it.
+	agents := &fakeAgents{published: []domain.AgentSummary{
+		{ID: "triage", Scope: domain.Scope{Company: "acme", Area: "cx"}},
+		{ID: "leads", Scope: domain.Scope{Company: "other", Area: "cx"}},
+	}}
+
+	caller := auth.WithPrincipal(context.Background(), domain.Principal{
+		ID: "usr_ana", Kind: domain.PrincipalUser,
+		Grants: []domain.Grant{{Scope: domain.Scope{Company: "acme"}, Role: domain.RoleCurator}},
+	})
+
+	resp, err := NewServer(ledger.NewMemory(), "test").WithAgents(agents).
+		ListAgents(caller, openapi.ListAgentsRequestObject{})
+	if err != nil {
+		t.Fatalf("ListAgents: %v", err)
+	}
+	body := resp.(openapi.ListAgents200JSONResponse)
+	if len(body.Items) != 1 || body.Items[0].AgentId != "triage" {
+		t.Fatalf("items = %v, want the agent inside the granted company and nothing else", body.Items)
+	}
+}

@@ -27,6 +27,15 @@ var (
 // an ordinary scope afterwards — nothing about it stays privileged.
 var BootstrapScope = domain.Scope{Company: "default", Area: "platform"}
 
+// bootstrapGrant is company-wide, deliberately.
+//
+// Granting the first administrator only the platform area would leave them
+// unable to see anything in the areas they are about to create — the grant
+// would be made before its subject existed. A company scope reaches its areas
+// (PRD §3.1) and stops at the company, so this is not a superuser: a second
+// company in phase 2 is invisible to it.
+var bootstrapGrant = domain.Scope{Company: BootstrapScope.Company}
+
 // Bootstrap handles the first run.
 //
 // A new installation is a deadlock: configuring an identity provider needs the
@@ -190,7 +199,7 @@ func (b *Bootstrap) Claim(ctx context.Context, secret, display, userAgent, ip st
 		insert into role_grants (principal_id, company_id, area_id, role, granted_by)
 		values ($1, $2, $3, 'curator', 'bootstrap')
 		on conflict do nothing`,
-		principalID, string(BootstrapScope.Company), string(BootstrapScope.Area)); err != nil {
+		principalID, string(bootstrapGrant.Company), string(bootstrapGrant.Area)); err != nil {
 		return Token{}, domain.Principal{}, fmt.Errorf("auth: grant curator: %w", err)
 	}
 
@@ -222,7 +231,7 @@ func (b *Bootstrap) Claim(ctx context.Context, secret, display, userAgent, ip st
 		Subject: principalID,
 		Display: display,
 		Kind:    domain.PrincipalUser,
-		Grants:  []domain.Grant{{Scope: BootstrapScope, Role: domain.RoleCurator}},
+		Grants:  []domain.Grant{{Scope: bootstrapGrant, Role: domain.RoleCurator}},
 	}, nil
 }
 

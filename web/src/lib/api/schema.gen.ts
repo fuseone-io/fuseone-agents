@@ -4,6 +4,26 @@
  */
 
 export interface paths {
+    "/agents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Published agents
+         * @description One row per agent, its newest published version, unless every version is asked for. A version is immutable: the identifier is the digest of the definition's content, so the text a run was pinned to can always be read back.
+         */
+        get: operations["listAgents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runs": {
         parameters: {
             query?: never;
@@ -407,6 +427,45 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        Agent: {
+            agentId: string;
+            /** @description The digest of the definition's content. Publishing new text is a new version; the old one stays readable. */
+            versionId: string;
+            scope: components["schemas"]["Scope"];
+            name: string;
+            provider: string;
+            model: string;
+            effort?: string;
+            /** @description The capability pack resolved to concrete tools. What is not here cannot be invoked. */
+            tools: string[];
+            budget: components["schemas"]["Budget"];
+            triggers?: components["schemas"]["AgentTrigger"][];
+            publishedBy?: string;
+            /** Format: date-time */
+            publishedAt: string;
+            /** @description Whether this is the newest published version of the agent. */
+            latest: boolean;
+        };
+        AgentTrigger: {
+            /** @enum {string} */
+            type: "cron" | "webhook" | "event";
+            schedule?: string;
+            path?: string;
+            event?: string;
+        };
+        /** @description The ceilings a run is checked against. Every dimension is enforced at the Gate. */
+        Budget: {
+            /** Format: int64 */
+            micros?: number;
+            /** Format: int64 */
+            tokens?: number;
+            /** Format: int64 */
+            toolCalls?: number;
+            /** Format: int64 */
+            steps?: number;
+            /** Format: int64 */
+            wallClockMs?: number;
+        };
         RunStats: {
             /**
              * Format: int64
@@ -572,6 +631,36 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listAgents: {
+        parameters: {
+            query?: {
+                /** @description Company scope. A single value until multi-company (PRD 3.1). */
+                company?: components["parameters"]["Company"];
+                area?: components["parameters"]["Area"];
+                /** @description Return the publication history instead of the newest version of each agent. */
+                allVersions?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Published agents. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Agent"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
     listRuns: {
         parameters: {
             query?: {
