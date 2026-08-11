@@ -64,13 +64,24 @@ var checkOrder = []check{
 	{RuleIdempotency, checkIdempotency},
 }
 
-// Gate evaluates requests against a fixed, versioned rule set.
+// Gate evaluates requests against the seven checks and the authored policies.
 type Gate struct {
 	policyHash string
+	policies   []domain.Policy
 }
 
 func New() *Gate {
 	return &Gate{policyHash: builtinPolicyHash()}
+}
+
+// WithPolicies gives the Gate the set in force and the hash that names it.
+//
+// A snapshot, never a database: the Gate is on the path of every effect and
+// must not depend on a query succeeding to decide whether something is
+// allowed. Whoever holds it refreshes it; a stale set decides consistently
+// and the hash on the step says which set that was.
+func (g *Gate) WithPolicies(p Policies) *Gate {
+	return &Gate{policyHash: p.Hash, policies: p.Set}
 }
 
 // Evaluate runs every check in order and returns the most restrictive ruling.
@@ -85,8 +96,16 @@ func (g *Gate) Evaluate(_ context.Context, r Request) (domain.Decision, error) {
 		PolicyHash: g.policyHash,
 	}
 
+	// Run once, before the loop, because two checks need the answer: the
+	// policy check itself, and the ladder it may excuse.
+	authored := evaluatePolicies(g.policies, inputFrom(r))
+	worst.Monitored = monitoredFrom(authored)
+
 	for _, c := range checkOrder {
 		got := c.eval(r)
+		if c.rule == RulePolicy {
+			got = mergePolicy(got, authored)
+		}
 		if got.verdict == domain.VerdictAllow {
 			continue
 		}
@@ -95,6 +114,12 @@ func (g *Gate) Evaluate(_ context.Context, r Request) (domain.Decision, error) {
 			Rule:       c.rule,
 			Reason:     got.reason,
 			PolicyHash: g.policyHash,
+			Monitored:  worst.Monitored,
+		}
+		if c.rule == RulePolicy {
+			// Which policy, not just "policy". Without it the trail cannot
+			// tell two rules apart and nobody can count what either did.
+			d.PolicyCode = authored.code
 		}
 		if got.verdict == domain.VerdictBlock {
 			return d, nil
@@ -113,9 +138,40 @@ func (g *Gate) Evaluate(_ context.Context, r Request) (domain.Decision, error) {
 			Rule:       RuleApproval,
 			Reason:     "approved by a human for this run",
 			PolicyHash: g.policyHash,
+			Monitored:  worst.Monitored,
 		}, nil
 	}
 	return worst, nil
+}
+
+// mergePolicy decides what the policy check says once the authored set has
+// been read.
+//
+// The ladder is the floor. An authored policy that matched and said allow is
+// the one thing that lowers it — that is what an exception is, and somebody's
+// name is on it. Everything else can only tighten.
+func mergePolicy(ladder result, authored policyResult) result {
+	if authored.verdict > domain.VerdictAllow {
+		return result{verdict: authored.verdict, reason: authored.reason}
+	}
+	if authored.allowed {
+		return pass()
+	}
+	return ladder
+}
+
+// monitoredFrom carries the watching policies onto the decision.
+func monitoredFrom(authored policyResult) []domain.MonitoredPolicy {
+	if len(authored.monitors) == 0 {
+		return nil
+	}
+	out := make([]domain.MonitoredPolicy, 0, len(authored.monitors))
+	for _, m := range authored.monitors {
+		out = append(out, domain.MonitoredPolicy{
+			Code: m.Code, Verdict: m.Verdict, Reason: m.Reason,
+		})
+	}
+	return out
 }
 
 // builtinPolicyHash pins the rule set that produced a decision. Changing any

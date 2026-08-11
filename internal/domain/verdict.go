@@ -68,4 +68,20 @@ type Decision struct {
 	// Reason is the business-language explanation shown in the trail. It is
 	// rendered through i18n; store a message key, not a localised sentence.
 	Reason string
+	// PolicyCode names which authored policy produced this, when one did.
+	// Without it the trail records "policy" and nobody can tell two rules
+	// apart or count what either did.
+	PolicyCode string
+	// Monitored are policies that matched while watching rather than
+	// enforcing. Recorded so the trail can say a decision was observed and not
+	// obeyed — otherwise a screen shows a rule denying things beside a run
+	// that carried on, and somebody spends an afternoon on it.
+	Monitored []MonitoredPolicy
+}
+
+// MonitoredPolicy is what a watching rule would have done.
+type MonitoredPolicy struct {
+	Code    string  `json:"code"`
+	Verdict Verdict `json:"verdict"`
+	Reason  string  `json:"reason,omitempty"`
 }

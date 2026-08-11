@@ -547,3 +547,43 @@ func TestAdvance_approvalRequested_recordsWhatTheApproverIsDeciding(t *testing.T
 		t.Errorf("stored args = %q, want %q", stored, args)
 	}
 }
+
+// What a rule did has to reach the trail, or the policy screen cannot count a
+// single thing and a monitored rule looks like a bug.
+
+func TestAdvance_policyDecision_recordsWhichRuleAndWhatWasOnlyWatching(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t, Proposal{Tool: "crm.note", Args: []byte(`{"text":"hi"}`)})
+	h.runner.deps.Gate = gate.New().WithPolicies(gate.Policies{
+		Hash: "pol_test",
+		Set: []domain.Policy{
+			{
+				Code: "POL-114", Resource: "crm.*", Reach: domain.ReachInstallation,
+				Effect: domain.PolicyDeny, Mode: domain.PolicyEnforce, Enabled: true,
+				Reason: "escritas em crm passam por revisão",
+			},
+			{
+				Code: "POL-900", Resource: "*", Reach: domain.ReachInstallation,
+				Effect: domain.PolicyEscalate, Mode: domain.PolicyMonitor, Enabled: true,
+			},
+		},
+	})
+
+	if _, err := h.runner.Advance(ctx, h.start(t, generousBudget())); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+
+	var decided domain.GateDecidedPayload
+	if err := h.payloadOf(t, domain.StepGateDecided, &decided); err != nil {
+		t.Fatalf("no gate_decided step: %v", err)
+	}
+
+	if decided.PolicyCode != "POL-114" {
+		t.Errorf("policy_code = %q, want the rule that fired", decided.PolicyCode)
+	}
+	if len(decided.Monitored) != 1 || decided.Monitored[0].Code != "POL-900" {
+		t.Errorf("monitored = %+v, want the watching rule recorded", decided.Monitored)
+	}
+}

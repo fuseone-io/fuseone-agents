@@ -112,6 +112,7 @@ func (r *Runner) act(ctx context.Context, state State, start Start, p Proposal) 
 		Payload: mustJSON(domain.GateDecidedPayload{
 			Tool: p.Tool, Effect: effect, Verdict: decision.Verdict,
 			Rule: decision.Rule, Reason: decision.Reason,
+			PolicyCode: decision.PolicyCode, Monitored: decision.Monitored,
 		}),
 	})
 	if err != nil {

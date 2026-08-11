@@ -30,6 +30,14 @@ type GateDecidedPayload struct {
 	Rule    string  `json:"rule,omitempty"`
 	// Reason is a message key resolved through i18n, never a localised string.
 	Reason string `json:"reason,omitempty"`
+	// PolicyCode names which authored rule produced this. Without it every
+	// policy decision records "policy" and nobody can count what one rule did
+	// or tell two of them apart.
+	PolicyCode string `json:"policy_code,omitempty"`
+	// Monitored are rules that matched while watching. They changed nothing,
+	// and the trail says so — otherwise a screen shows a rule denying things
+	// beside a run that carried on, and somebody spends an afternoon on it.
+	Monitored []MonitoredPolicy `json:"monitored,omitempty"`
 }
 
 type BudgetReservedPayload struct {
