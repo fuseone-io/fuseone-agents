@@ -680,8 +680,22 @@ export interface components {
             at: string;
             /** Format: int64 */
             total: number;
+            /**
+             * Format: int64
+             * @description What the hour cost, read off the same rows as the count.
+             */
+            micros: number;
             /** @description Runs per phase within the hour. A phase with none is absent. */
             byPhase: {
+                [key: string]: number;
+            };
+            /**
+             * @description The same hour split by who ran. Travels with the phase split rather
+             *     than in its own request: every screen that wants one wants the
+             *     other, and two queries over the same rows can disagree if a run
+             *     finishes between them.
+             */
+            byAgent: {
                 [key: string]: number;
             };
         };

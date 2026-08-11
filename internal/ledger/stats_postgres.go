@@ -77,9 +77,10 @@ func (p *Postgres) Throughput(ctx context.Context, filter domain.RunFilter) ([]d
 	where, args := runFilterSQL(filter)
 
 	rows, err := p.pool.Query(ctx, `
-		select date_trunc('hour', started_at) as bucket, phase, count(*)
+		select date_trunc('hour', started_at) as bucket, phase, agent_id,
+		       count(*), coalesce(sum(cost_micros), 0)
 		from runs `+where+`
-		group by bucket, phase
+		group by bucket, phase, agent_id
 		order by bucket`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("throughput: %w", err)
@@ -89,27 +90,33 @@ func (p *Postgres) Throughput(ctx context.Context, filter domain.RunFilter) ([]d
 	var out []domain.ThroughputBucket
 	for rows.Next() {
 		var at time.Time
-		var phase string
-		var count int64
-		if err := rows.Scan(&at, &phase, &count); err != nil {
+		var phase, agent string
+		var count, micros int64
+		if err := rows.Scan(&at, &phase, &agent, &count, &micros); err != nil {
 			return nil, err
 		}
-		out = appendBucket(out, at.UTC(), phase, count)
+		out = appendBucket(out, at.UTC(), phase, agent, count, micros)
 	}
 	return out, rows.Err()
 }
 
-// appendBucket folds one (hour, phase) tally into the ordered result.
+// appendBucket folds one (hour, phase, agent) tally into the ordered result.
 //
-// The query returns a row per phase per hour; the caller wants one bucket per
-// hour. Ordered by bucket, so only the last one can still be open.
-func appendBucket(out []domain.ThroughputBucket, at time.Time, phase string, count int64) []domain.ThroughputBucket {
+// The query returns a row per phase per agent per hour; the caller wants one
+// bucket per hour. Ordered by bucket, so only the last one can still be open.
+func appendBucket(
+	out []domain.ThroughputBucket, at time.Time, phase, agent string, count, micros int64,
+) []domain.ThroughputBucket {
 	if len(out) == 0 || !out[len(out)-1].At.Equal(at) {
-		out = append(out, domain.ThroughputBucket{At: at, ByPhase: map[string]int64{}})
+		out = append(out, domain.ThroughputBucket{
+			At: at, ByPhase: map[string]int64{}, ByAgent: map[string]int64{},
+		})
 	}
 	b := &out[len(out)-1]
 	b.ByPhase[phase] += count
+	b.ByAgent[agent] += count
 	b.Total += count
+	b.Micros += micros
 	return out
 }
 

@@ -65,7 +65,8 @@ func (s *Server) GetThroughput(
 	out := openapi.Throughput{Buckets: make([]openapi.ThroughputBucket, 0, len(buckets))}
 	for _, b := range buckets {
 		out.Buckets = append(out.Buckets, openapi.ThroughputBucket{
-			At: b.At, Total: b.Total, ByPhase: b.ByPhase,
+			At: b.At, Total: b.Total, Micros: b.Micros,
+			ByPhase: b.ByPhase, ByAgent: b.ByAgent,
 		})
 	}
 	return openapi.GetThroughput200JSONResponse(out), nil

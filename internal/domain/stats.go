@@ -66,7 +66,15 @@ func (s RunStats) Count(phase string) int64 { return s.ByPhase[phase] }
 type ThroughputBucket struct {
 	At      time.Time
 	ByPhase map[string]int64
+	// ByAgent is the same hour split by who ran. It travels with the phase
+	// split rather than in its own request because every screen that wants one
+	// wants the other, and two queries over the same rows can disagree if a
+	// run finishes between them.
+	ByAgent map[string]int64
 	Total   int64
+	// Micros is what the hour cost, so a spend figure and a run count are read
+	// off the same rows.
+	Micros int64
 }
 
 // RecordedDecision is a Gate decision as the ledger kept it — the verdict

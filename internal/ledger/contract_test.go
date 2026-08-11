@@ -1203,6 +1203,29 @@ func TestThroughputContract(t *testing.T) {
 		}
 	})
 
+	run(t, "reports what each hour cost and who ran in it", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		// One request, one set of rows. A spend figure and a run count fetched
+		// separately can disagree when a run finishes between the two.
+		mustAppend(t, s, startedAt("run-a", base))
+		mustAppend(t, s, finishedAt("run-a", base.Add(time.Minute)))
+
+		got, err := s.Throughput(ctx, domain.RunFilter{})
+		if err != nil {
+			t.Fatalf("Throughput: %v", err)
+		}
+		if len(got) != 1 {
+			t.Fatalf("buckets = %d, want 1", len(got))
+		}
+		if got[0].ByAgent["triage"] != 1 {
+			t.Errorf("byAgent = %v, want one run for triage", got[0].ByAgent)
+		}
+		if got[0].Micros != 0 {
+			t.Errorf("micros = %d, want 0 — nothing was spent", got[0].Micros)
+		}
+	})
+
 	run(t, "honours the scope, like every other tally", func(t *testing.T, s Store) {
 		ctx := context.Background()
 

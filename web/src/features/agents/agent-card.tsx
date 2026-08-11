@@ -3,6 +3,7 @@ import { Mono } from "@/components/shared/mono";
 import { StateDot } from "@/components/shared/state-dot";
 import { stateOfAgent } from "@/lib/agent-state";
 import { formatMicros, formatRelative } from "@/lib/format";
+import { successRate } from "@/features/agents/activity";
 import type { Agent } from "@/features/agents/api";
 
 /**
@@ -76,16 +77,6 @@ function Figure({ label, value }: { label: string; value: string }) {
       <dd className="font-mono tabular-nums">{value}</dd>
     </div>
   );
-}
-
-/**
- * A share only where there is something to take a share of. "0%" on an agent
- * that never ran is a measurement of nothing.
- */
-function successRate(agent: Agent): string {
-  const activity = agent.activity;
-  if (!activity || activity.runs === 0) return "—";
-  return `${Math.round((activity.finished / activity.runs) * 100)}%`;
 }
 
 /** What the state dot means, in words. */

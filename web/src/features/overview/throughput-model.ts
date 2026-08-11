@@ -18,6 +18,7 @@ export interface Column {
   at: string;
   byState: Record<AgentState, number>;
   total: number;
+  micros: number;
 }
 
 export function columnsFor(buckets: ThroughputBucket[], since: string, hours = 24): Column[] {
@@ -51,6 +52,7 @@ function columnOf(at: Date, bucket: ThroughputBucket | undefined): Column {
     at: at.toISOString(),
     byState,
     total: bucket?.total ?? 0,
+    micros: bucket?.micros ?? 0,
   };
 }
 

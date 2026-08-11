@@ -1034,16 +1034,28 @@ components:
 
     ThroughputBucket:
       type: object
-      required: [at, total, byPhase]
+      required: [at, total, byPhase, byAgent, micros]
       properties:
         at:
           type: string
           format: date-time
           description: The start of the hour, in UTC.
         total: { type: integer, format: int64 }
+        micros:
+          type: integer
+          format: int64
+          description: What the hour cost, read off the same rows as the count.
         byPhase:
           type: object
           description: Runs per phase within the hour. A phase with none is absent.
+          additionalProperties: { type: integer, format: int64 }
+        byAgent:
+          type: object
+          description: |
+            The same hour split by who ran. Travels with the phase split rather
+            than in its own request: every screen that wants one wants the
+            other, and two queries over the same rows can disagree if a run
+            finishes between them.
           additionalProperties: { type: integer, format: int64 }
 
     RunPage:

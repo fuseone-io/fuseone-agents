@@ -65,11 +65,15 @@ func (m *Memory) Throughput(ctx context.Context, filter domain.RunFilter) ([]dom
 		at := steps[0].At.UTC().Truncate(time.Hour)
 		bucket, ok := byHour[at]
 		if !ok {
-			bucket = &domain.ThroughputBucket{At: at, ByPhase: map[string]int64{}}
+			bucket = &domain.ThroughputBucket{
+				At: at, ByPhase: map[string]int64{}, ByAgent: map[string]int64{},
+			}
 			byHour[at] = bucket
 		}
 		bucket.ByPhase[phaseOf(steps)]++
+		bucket.ByAgent[string(steps[0].AgentID)]++
 		bucket.Total++
+		bucket.Micros += summarise(steps).Cost.Micros
 	}
 
 	out := make([]domain.ThroughputBucket, 0, len(byHour))

@@ -73,6 +73,11 @@ function Row({ decision }: { decision: RecordedDecision }) {
         </Mono>
         <span className={cn("text-xs font-medium", verdict.className)}>{verdict.verb}</span>
         <Mono className="truncate">{decision.tool}</Mono>
+        {/* Whose agent it was. Without it the feed says something was blocked
+            and leaves the reader to find out for whom. */}
+        <span className="shrink-0 truncate text-xs text-muted-foreground">
+          {decision.agentId}
+        </span>
         {/* The rule, never a category: "recusado por política" tells a reader
             nothing about what to change. */}
         {decision.rule && decision.rule !== "passed" && (

@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { StateDot } from "@/components/shared/state-dot";
+import { STATE_DOT } from "@/lib/agent-state";
+import { cn } from "@/lib/utils";
 import { ceilingOf, columnsFor, SEGMENTS } from "@/features/overview/throughput-model";
 import { ThroughputChart } from "@/features/overview/throughput-chart";
 import { useThroughput } from "@/features/overview/api";
@@ -33,7 +34,7 @@ export function ThroughputPanel({ since }: { since: string }) {
         <div className="ml-auto flex items-center gap-3">
           {SEGMENTS.map((state) => (
             <span key={state} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <StateDot state={state} />
+              <span aria-hidden className={cn("size-[7px] rounded-[2px]", STATE_DOT[state])} />
               {LEGEND[state]}
             </span>
           ))}
