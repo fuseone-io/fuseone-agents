@@ -122,6 +122,11 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
+      # `make smoke` builds the console into the binary, so this job needs the
+      # console's dependencies as much as the console job does.
+      - run: npm ci
+        working-directory: web
+
       # What the binary serves, and what it refuses to — a property of the
       # artefact rather than of the code, which no unit suite can see.
       - name: smoke

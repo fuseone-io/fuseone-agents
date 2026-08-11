@@ -17,7 +17,8 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": false,
-    "baseUrl": ".",
+    // Relative to this file, so no baseUrl is needed — TypeScript 6 removed
+    // that option, and CI caught it before we upgraded into it.
     "paths": { "@/*": ["./src/*"] }
   },
   "include": ["src"]
