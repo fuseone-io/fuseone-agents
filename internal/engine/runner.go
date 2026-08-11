@@ -120,10 +120,16 @@ func (r *Runner) act(ctx context.Context, state State, start Start, p Proposal) 
 
 	switch {
 	case decision.Verdict == domain.VerdictRequireApproval:
+		argsRef, err := r.store(ctx, start.RunID, state.Seq+1, p.Args)
+		if err != nil {
+			return Status{}, err
+		}
 		state, err = r.append(ctx, state, start, domain.Step{
 			Kind: domain.StepApprovalRequested,
 			Payload: mustJSON(domain.ApprovalRequestedPayload{
 				Tool: p.Tool, Rule: decision.Rule, Reason: decision.Reason,
+				Effect: effect, ArgsRef: argsRef, ArgsDigest: digest(p.Args),
+				Estimate: p.Estimate, Labels: state.Labels,
 			}),
 		})
 		return status(state), err
@@ -174,6 +180,11 @@ func (r *Runner) invoke(
 		return Status{}, err
 	}
 
+	argsRef, err := r.store(ctx, start.RunID, state.Seq+1, p.Args)
+	if err != nil {
+		return Status{}, err
+	}
+
 	// The idempotency key is recorded with the call, before the effect leaves
 	// the process. A crash after this append means the resume sees the key and
 	// refuses to call again (PRD DE-16).
@@ -181,7 +192,7 @@ func (r *Runner) invoke(
 		Kind:    domain.StepToolCalled,
 		IdemKey: idemKey,
 		Payload: mustJSON(domain.ToolCalledPayload{
-			Tool: p.Tool, Effect: effect, ArgsDigest: digest(p.Args),
+			Tool: p.Tool, Effect: effect, ArgsRef: argsRef, ArgsDigest: digest(p.Args),
 		}),
 	}); err != nil {
 		return Status{}, err
@@ -216,6 +227,22 @@ func (r *Runner) invoke(
 		}),
 	})
 	return status(state), err
+}
+
+// store puts the proposed arguments in the content store and returns the
+// reference the ledger records instead of the bytes.
+//
+// The sequence is the one the step about to be appended will take, so a
+// reference points at the step it belongs to and retention can work per run.
+func (r *Runner) store(ctx context.Context, runID domain.RunID, seq int64, args []byte) (string, error) {
+	if len(args) == 0 || r.deps.Content == nil {
+		return "", nil
+	}
+	ref, err := r.deps.Content.Put(ctx, runID, seq, args)
+	if err != nil {
+		return "", fmt.Errorf("engine: store arguments: %w", err)
+	}
+	return ref, nil
 }
 
 func (r *Runner) plan(ctx context.Context, state State, start Start) (Proposal, error) {

@@ -176,6 +176,34 @@ paths:
               schema: { $ref: '#/components/schemas/StepPage' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /runs/{runId}/steps/{seq}/content:
+    get:
+      tags: [runs]
+      operationId: getStepContent
+      summary: Read the content a step references
+      description: |
+        Resolves the reference a step carries — the proposed tool arguments, a
+        tool result, the run's input — and returns the bytes.
+
+        This is deliberately a second request. The trail is read constantly and
+        by many people; the content behind it routinely carries personal data,
+        so it is fetched only when someone opens the step that needs it. The
+        digest lets the caller prove the bytes are the ones the chain sealed.
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+        - name: seq
+          in: path
+          required: true
+          description: The step's sequence number.
+          schema: { type: integer, format: int64, minimum: 1 }
+      responses:
+        '200':
+          description: The referenced content.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StepContent' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /runs/{runId}/verify:
     post:
       tags: [runs]
@@ -922,6 +950,21 @@ components:
         hash:
           type: string
           description: Hex-encoded SHA-256 sealing this step to the previous one.
+
+    StepContent:
+      type: object
+      required: [seq, digest, content]
+      properties:
+        seq: { type: integer, format: int64 }
+        digest:
+          type: string
+          description: |
+            Hex-encoded SHA-256 of the content, as recorded in the step. A
+            caller that hashes the body and gets a different value is not
+            looking at what the chain sealed.
+        content:
+          type: string
+          description: The bytes, as text. JSON arguments arrive as a JSON string.
 
     StepPage:
       type: object

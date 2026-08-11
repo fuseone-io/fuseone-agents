@@ -142,7 +142,11 @@ func serve(args []string) error {
 		integrations := admin.NewIntegrations(identity.pool, store)
 		api = api.WithAdministration(curator, curator, integrations).
 			WithAgents(spec.NewRegistry(identity.pool)).
-			WithCeilings(admin.NewBudgets(identity.pool, store))
+			WithCeilings(admin.NewBudgets(identity.pool, store)).
+			// The same store the worker writes into. Without it the console
+			// can show that an approval is pending but not what it is for,
+			// which is the one thing the approver needs.
+			WithContent(ledger.NewContent(identity.pool))
 	}
 
 	apiHandler := openapi.HandlerWithOptions(

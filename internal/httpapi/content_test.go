@@ -1,0 +1,109 @@
+package httpapi
+
+import (
+	"context"
+	"encoding/json"
+	"testing"
+	"time"
+
+	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/engine"
+	"github.com/fuseone/agents/internal/httpapi/openapi"
+	"github.com/fuseone/agents/internal/ledger"
+)
+
+// The console asks for a step's content when somebody opens the step — an
+// approval it has to show the arguments for, a result someone is checking.
+// The trail itself never carries them: it is read constantly, by many people,
+// and the content behind it routinely carries personal data (AU-04).
+
+func runWithArguments(t *testing.T) (*ledger.Memory, *engine.MemoryContent, string) {
+	t.Helper()
+	ctx := context.Background()
+	store, content := ledger.NewMemory(), engine.NewMemoryContent()
+
+	args := []byte(`{"email":"cliente@exemplo.com.br"}`)
+	ref, err := content.Put(ctx, "run-cx", 2, args)
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	for _, step := range []domain.Step{
+		{RunID: "run-cx", Kind: domain.StepRunStarted, Scope: domain.Scope{Company: "acme", Area: "cx"},
+			AgentID: "triage", VersionID: "v1", At: time.Date(2026, 8, 11, 12, 0, 0, 0, time.UTC)},
+		{RunID: "run-cx", Kind: domain.StepApprovalRequested, Scope: domain.Scope{Company: "acme", Area: "cx"},
+			AgentID: "triage", VersionID: "v1", At: time.Date(2026, 8, 11, 12, 0, 1, 0, time.UTC),
+			Payload: mustPayload(t, domain.ApprovalRequestedPayload{
+				Tool: "crm.note", Rule: "policy", ArgsRef: ref, ArgsDigest: "abc123",
+			})},
+	} {
+		if _, err := store.Append(ctx, step); err != nil {
+			t.Fatalf("seed %s: %v", step.Kind, err)
+		}
+	}
+	return store, content, string(args)
+}
+
+func mustPayload(t *testing.T, v any) []byte {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	return b
+}
+
+func TestGetStepContent_pendingApproval_returnsTheProposedArguments(t *testing.T) {
+	t.Parallel()
+
+	store, content, args := runWithArguments(t)
+	resp, err := NewServer(store, "test").WithContent(content).
+		GetStepContent(inArea("cx", domain.RoleAuthor),
+			openapi.GetStepContentRequestObject{RunId: "run-cx", Seq: 2})
+	if err != nil {
+		t.Fatalf("GetStepContent: %v", err)
+	}
+
+	got, ok := resp.(openapi.GetStepContent200JSONResponse)
+	if !ok {
+		t.Fatalf("response = %T, want the content", resp)
+	}
+	if got.Content != args {
+		t.Errorf("content = %q, want %q", got.Content, args)
+	}
+	if got.Digest != "abc123" {
+		t.Errorf("digest = %q, want the one the chain sealed", got.Digest)
+	}
+}
+
+func TestGetStepContent_inAnotherArea_readsAsAbsent(t *testing.T) {
+	t.Parallel()
+
+	store, content, _ := runWithArguments(t)
+	resp, err := NewServer(store, "test").WithContent(content).
+		GetStepContent(inArea("marketing", domain.RoleAuthor),
+			openapi.GetStepContentRequestObject{RunId: "run-cx", Seq: 2})
+	if err != nil {
+		t.Fatalf("GetStepContent: %v", err)
+	}
+	if _, absent := resp.(openapi.GetStepContent404ApplicationProblemPlusJSONResponse); !absent {
+		t.Fatalf("response = %T, want 404", resp)
+	}
+}
+
+func TestGetStepContent_stepThatReferencesNothing_readsAsAbsent(t *testing.T) {
+	t.Parallel()
+
+	// Not an empty body: a caller that cannot tell "no content here" from
+	// "content that is empty" will render an approval with blank arguments.
+	store, content, _ := runWithArguments(t)
+	resp, err := NewServer(store, "test").WithContent(content).
+		GetStepContent(inArea("cx", domain.RoleAuthor),
+			openapi.GetStepContentRequestObject{RunId: "run-cx", Seq: 1})
+	if err != nil {
+		t.Fatalf("GetStepContent: %v", err)
+	}
+	if _, absent := resp.(openapi.GetStepContent404ApplicationProblemPlusJSONResponse); !absent {
+		t.Fatalf("response = %T, want 404", resp)
+	}
+}

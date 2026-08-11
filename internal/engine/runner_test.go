@@ -2,7 +2,9 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
 	"testing"
 	"time"
@@ -39,18 +41,27 @@ func (p *scriptedPlanner) Plan(context.Context, PlanInput) (Proposal, error) {
 
 // countingTools records every invocation so a test can prove an effect
 // happened exactly once.
+//
+// It stores its result the way a real adapter does — the reference it returns
+// resolves — because a fake that hands back a dangling reference lets a
+// transcript bug pass here and fail in production.
 type countingTools struct {
 	invocations []domain.ToolID
-	result      ToolResult
+	content     ContentStore
+	body        []byte
 	err         error
 }
 
-func (c *countingTools) Invoke(_ context.Context, call Call) (ToolResult, error) {
+func (c *countingTools) Invoke(ctx context.Context, call Call) (ToolResult, error) {
 	c.invocations = append(c.invocations, call.Tool)
 	if c.err != nil {
 		return ToolResult{}, c.err
 	}
-	return c.result, nil
+	ref, err := c.content.Put(ctx, call.RunID, call.Seq, c.body)
+	if err != nil {
+		return ToolResult{}, err
+	}
+	return ToolResult{ResultRef: ref}, nil
 }
 
 type staticCatalog map[domain.ToolID]domain.Effect
@@ -71,6 +82,21 @@ type harness struct {
 	ledger  *ledger.Memory
 	planner *scriptedPlanner
 	tools   *countingTools
+	content *MemoryContent
+}
+
+// payloadOf decodes the payload of the first step of a kind.
+func (h *harness) payloadOf(t *testing.T, kind domain.StepKind, into any) error {
+	t.Helper()
+	steps, err := h.ledger.Read(context.Background(), "run-1", domain.FirstSeq)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	i := slices.IndexFunc(steps, func(s domain.Step) bool { return s.Kind == kind })
+	if i < 0 {
+		return fmt.Errorf("no %s step in %v", kind, h.kinds(t))
+	}
+	return json.Unmarshal(steps[i].Payload, into)
 }
 
 func newHarness(t *testing.T, proposals ...Proposal) *harness {
@@ -78,11 +104,13 @@ func newHarness(t *testing.T, proposals ...Proposal) *harness {
 
 	l := ledger.NewMemory()
 	planner := &scriptedPlanner{proposals: proposals}
-	tools := &countingTools{result: ToolResult{ResultRef: "s3://result/1"}}
+	content := NewMemoryContent()
+	tools := &countingTools{content: content, body: []byte(`{"ok":true}`)}
 
-	h := &harness{ledger: l, planner: planner, tools: tools}
+	h := &harness{ledger: l, planner: planner, tools: tools, content: content}
 	h.runner = NewRunner(Deps{
 		Ledger:  l,
+		Content: content,
 		Gate:    gate.New(),
 		Planner: planner,
 		Tools:   tools,
@@ -444,5 +472,78 @@ func TestAdvance_blockThenProgress_doesNotCountTowardsParking(t *testing.T) {
 
 	if last.Phase == PhaseParked {
 		t.Errorf("the run parked despite an allowed call between refusals; steps: %v", h.kinds(t))
+	}
+}
+
+// The proposed arguments are the thing being decided. Two readers need them
+// and neither can get them from the ledger: the model, replaying its own call
+// on the next turn, and the human being asked to approve it. Holding only a
+// digest makes the first replay an empty call and the second a blind decision.
+
+func TestAdvance_toolCalled_storesArgumentsSoTheCallReplaysWithThem(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	args := []byte(`{"id":"42"}`)
+	h := newHarness(t, Proposal{Tool: "crm.lookup", Args: args})
+
+	if _, err := h.runner.Advance(ctx, h.start(t, generousBudget())); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+
+	steps, err := h.ledger.Read(ctx, "run-1", domain.FirstSeq)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	turns, err := BuildTranscript(ctx, h.content, steps)
+	if err != nil {
+		t.Fatalf("BuildTranscript: %v", err)
+	}
+
+	i := slices.IndexFunc(turns, func(turn Turn) bool { return turn.Kind == TurnToolUse })
+	if i < 0 {
+		t.Fatal("the transcript has no tool call to replay")
+	}
+	if string(turns[i].Args) != string(args) {
+		t.Errorf("replayed args = %q, want %q", turns[i].Args, args)
+	}
+}
+
+func TestAdvance_approvalRequested_recordsWhatTheApproverIsDeciding(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	args := []byte(`{"text":"refunded per ticket 4471"}`)
+	h := newHarness(t, Proposal{
+		Tool:     "crm.note",
+		Args:     args,
+		Estimate: domain.Consumption{Micros: 12_000, Tokens: 900},
+	})
+
+	if _, err := h.runner.Advance(ctx, h.start(t, generousBudget())); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+
+	var asked domain.ApprovalRequestedPayload
+	if err := h.payloadOf(t, domain.StepApprovalRequested, &asked); err != nil {
+		t.Fatalf("no approval_requested step: %v", err)
+	}
+
+	if asked.Effect != domain.EffectWrite {
+		t.Errorf("effect = %q, want write — the approver has to know it writes", asked.Effect)
+	}
+	if asked.Estimate.Micros != 12_000 {
+		t.Errorf("estimate = %d micros, want 12000", asked.Estimate.Micros)
+	}
+	if asked.ArgsDigest == "" {
+		t.Error("no args digest: the decision cannot be tied to the arguments it was made about")
+	}
+
+	stored, err := h.content.Get(ctx, asked.ArgsRef)
+	if err != nil {
+		t.Fatalf("the approver cannot see the proposed arguments: %v", err)
+	}
+	if string(stored) != string(args) {
+		t.Errorf("stored args = %q, want %q", stored, args)
 	}
 }

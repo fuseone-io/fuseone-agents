@@ -58,11 +58,11 @@ type Budget struct {
 
 // Consumption is what a run has already spent or reserved.
 type Consumption struct {
-	Micros      int64
-	Tokens      int64
-	ToolCalls   int64
-	Steps       int64
-	WallClockMS int64
+	Micros      int64 `json:"micros,omitempty"`
+	Tokens      int64 `json:"tokens,omitempty"`
+	ToolCalls   int64 `json:"tool_calls,omitempty"`
+	Steps       int64 `json:"steps,omitempty"`
+	WallClockMS int64 `json:"wall_clock_ms,omitempty"`
 }
 
 // Exceeds reports which ceiling was breached, or an empty string when the

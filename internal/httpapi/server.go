@@ -47,6 +47,7 @@ type Server struct {
 	integrations Integrations
 	agents       Agents
 	ceilings     Ceilings
+	content      Content
 }
 
 func NewServer(store Store, version string) *Server {

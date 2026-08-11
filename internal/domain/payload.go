@@ -67,6 +67,23 @@ type ApprovalRequestedPayload struct {
 	Rule      string    `json:"rule,omitempty"`
 	Reason    string    `json:"reason,omitempty"`
 	ExpiresAt time.Time `json:"expires_at,omitzero"`
+
+	// What the approver is actually deciding about. Asking someone to
+	// authorise a call without showing its arguments, its effect and what it
+	// will cost is asking them to sign a blank page — and the record of the
+	// decision would not say what was decided either.
+	//
+	// The arguments themselves stay in the content store: they carry whatever
+	// the case carries, including personal data, and the ledger is kept for
+	// years and read by people who have no business seeing it (AU-04).
+	Effect     Effect      `json:"effect,omitempty"`
+	ArgsRef    string      `json:"args_ref,omitempty"`
+	ArgsDigest string      `json:"args_digest,omitempty"`
+	Estimate   Consumption `json:"estimate,omitzero"`
+	// Labels are the taint the arguments carry. The approver needs to know
+	// that a field came from an untrusted source, which is usually the whole
+	// reason the call was escalated (SE-06).
+	Labels Labels `json:"labels,omitempty"`
 }
 
 type ApprovalDecidedPayload struct {
