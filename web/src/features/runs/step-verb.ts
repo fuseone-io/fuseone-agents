@@ -32,16 +32,35 @@ const VERDICTS: Record<string, { verb: string; tone: Tone }> = {
   block: { verb: "bloqueou", tone: "bad" },
 };
 
-// The wire encodes verdict as the domain's integer; map it back for display.
+// The wire encodes verdict and effect as the domain's integers; map them back
+// for display. Switching on the number would break silently the day a value is
+// inserted in the middle of either list.
 const VERDICT_BY_CODE = ["unknown", "allow", "constrain", "require_approval", "block"];
+const EFFECT_BY_CODE = ["unknown", "read", "write", "destructive", "financial"];
+
+/** A step's effect, by name, whatever form the payload carries it in. */
+export function effectOf(step: Step): string | undefined {
+  const raw = (step.payload as Record<string, unknown> | undefined)?.effect;
+  const name = typeof raw === "number" ? EFFECT_BY_CODE[raw] : raw;
+  return typeof name === "string" ? name : undefined;
+}
+
+/**
+ * The gate's verdict, by name.
+ *
+ * The wire carries the domain's integer; a screen that switched on the number
+ * would break silently the day a verdict is inserted in the middle.
+ */
+export function verdictOf(step: Step): string | undefined {
+  if (step.kind !== "gate_decided") return undefined;
+  const raw = (step.payload as Record<string, unknown> | undefined)?.verdict;
+  const name = typeof raw === "number" ? VERDICT_BY_CODE[raw] : raw;
+  return typeof name === "string" ? name : undefined;
+}
 
 export function verbOf(step: Step): { verb: string; tone: Tone } {
-  if (step.kind === "gate_decided") {
-    const payload = (step.payload ?? {}) as Record<string, unknown>;
-    const raw = payload.verdict;
-    const name = typeof raw === "number" ? VERDICT_BY_CODE[raw] : raw;
-    if (typeof name === "string" && VERDICTS[name]) return VERDICTS[name];
-  }
+  const verdict = verdictOf(step);
+  if (verdict && VERDICTS[verdict]) return VERDICTS[verdict];
   return VERBS[step.kind];
 }
 

@@ -46,6 +46,23 @@ export function formatInstant(iso: string): string {
   return dateTime.format(new Date(iso));
 }
 
+const timeOnly = new Intl.DateTimeFormat("pt-BR", {
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+});
+
+/**
+ * The time alone, for a sequence that happens within one day.
+ *
+ * A trail repeats its stamp on every row; printing the date fifteen times
+ * makes the column read as noise and hides the thing it is there for, which is
+ * how far apart two steps were.
+ */
+export function formatTime(iso: string): string {
+  return timeOnly.format(new Date(iso));
+}
+
 const relative = new Intl.RelativeTimeFormat("pt-BR", { numeric: "auto" });
 
 const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
