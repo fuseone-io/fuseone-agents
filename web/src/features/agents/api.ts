@@ -4,6 +4,7 @@ import type { components } from "@/lib/api/schema.gen";
 
 export type Agent = components["schemas"]["Agent"];
 export type AgentTrigger = components["schemas"]["AgentTrigger"];
+export type AgentActivity = components["schemas"]["AgentActivity"];
 
 export const agentKeys = {
   all: ["agents"] as const,

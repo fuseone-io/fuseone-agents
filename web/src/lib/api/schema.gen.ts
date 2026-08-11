@@ -445,6 +445,25 @@ export interface components {
             publishedAt: string;
             /** @description Whether this is the newest published version of the agent. */
             latest: boolean;
+            /** @description Absent when the agent has never run, which is a different thing from having run and finished. */
+            activity?: components["schemas"]["AgentActivity"] | null;
+        };
+        /** @description How the agent has been doing, aggregated from its runs. An agent has no state of its own to report — there is no autonomy stage yet — so what an operator sees is a fact about its runs. */
+        AgentActivity: {
+            /** Format: int64 */
+            runs: number;
+            /** Format: int64 */
+            finished: number;
+            /**
+             * Format: int64
+             * @description Runs stopped for a person — awaiting approval or parked.
+             */
+            waiting: number;
+            /** Format: int64 */
+            costMicros: number;
+            lastPhase?: components["schemas"]["Phase"];
+            /** Format: date-time */
+            lastRunAt?: string;
         };
         AgentTrigger: {
             /** @enum {string} */

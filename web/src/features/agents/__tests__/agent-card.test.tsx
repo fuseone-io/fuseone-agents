@@ -45,3 +45,41 @@ describe("an agent card", () => {
     expect(screen.getByText("versão antiga")).toBeInTheDocument();
   });
 });
+
+describe("an agent's activity", () => {
+  it("says it never ran, rather than showing a zero that looks measured", () => {
+    render(<AgentCard agent={agent()} />);
+
+    expect(screen.getByText("Nunca executou")).toBeInTheDocument();
+    // Not "0%": zero is a measurement, and there is nothing to measure.
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+  });
+
+  it("states the share of concluded runs once there are runs", () => {
+    render(
+      <AgentCard
+        agent={agent({
+          activity: {
+            runs: 4, finished: 3, waiting: 0, costMicros: 20_000,
+            lastPhase: "finished", lastRunAt: "2026-08-11T12:00:00Z",
+          },
+        })}
+      />,
+    );
+    expect(screen.getByText("75%")).toBeInTheDocument();
+  });
+
+  it("surfaces runs waiting on a person, which is what the dot is warning about", () => {
+    render(
+      <AgentCard
+        agent={agent({
+          activity: {
+            runs: 3, finished: 1, waiting: 2, costMicros: 0,
+            lastPhase: "awaiting_approval", lastRunAt: "2026-08-11T12:00:00Z",
+          },
+        })}
+      />,
+    );
+    expect(screen.getByText(/2 esperando pessoa/)).toBeInTheDocument();
+  });
+});

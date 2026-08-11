@@ -52,3 +52,13 @@ export const STATE_SURFACE: Record<AgentState, string> = {
   blocked: "bg-danger-surface",
   done: "bg-success-surface",
 };
+
+/**
+ * The state an agent reads as, from the phase of its most recent run.
+ *
+ * Never having run is `draft` — a different thing from having run and
+ * finished, which is why the activity is absent rather than zeroed.
+ */
+export function stateOfAgent(lastPhase: Phase | undefined): AgentState {
+  return lastPhase ? stateOfPhase(lastPhase) : "draft";
+}

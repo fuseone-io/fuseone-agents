@@ -37,3 +37,33 @@ type AgentTrigger struct {
 	Path     string `json:"path,omitempty"`
 	Event    string `json:"event,omitempty"`
 }
+
+// AgentActivity is how an agent has been doing, aggregated from its runs.
+//
+// An agent has no state of its own to report — the platform has no autonomy
+// stage yet, and inventing one would put a field on the screen that nothing
+// maintains. What an operator actually wants to know is whether it is running,
+// stuck, or has never run, and that is a fact about its runs.
+type AgentActivity struct {
+	AgentID AgentID
+
+	Runs     int64
+	Finished int64
+	// Waiting counts runs stopped for a person: awaiting approval or parked.
+	Waiting    int64
+	CostMicros int64
+
+	// LastPhase is the phase of the most recent run. Empty when the agent has
+	// never run, which is a different thing from having run and finished.
+	LastPhase string
+	LastRunAt time.Time
+}
+
+// SuccessRate is finished over total, or -1 when nothing has run. Not zero:
+// zero is a measurement, and there is nothing to measure.
+func (a AgentActivity) SuccessRate() float64 {
+	if a.Runs == 0 {
+		return -1
+	}
+	return float64(a.Finished) / float64(a.Runs)
+}

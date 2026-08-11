@@ -34,6 +34,7 @@ type Store interface {
 	Stats(ctx context.Context, filter domain.RunFilter) (domain.RunStats, error)
 	ListRuns(ctx context.Context, filter domain.RunFilter, phase string, limit int) ([]domain.RunSummary, error)
 	CostRollup(ctx context.Context, filter domain.RunFilter, groupBy string) ([]domain.CostBucket, error)
+	AgentActivity(ctx context.Context, filter domain.RunFilter) ([]domain.AgentActivity, error)
 }
 
 type factory struct {
@@ -791,6 +792,97 @@ func TestSearchContract(t *testing.T) {
 		}
 		if len(page) != 0 {
 			t.Errorf("ListRuns = %v, want nothing; the pattern is a bound parameter", kindsOfPage(page))
+		}
+	})
+}
+
+func TestAgentActivityContract(t *testing.T) {
+	base := time.Date(2026, 8, 11, 12, 0, 0, 0, time.UTC)
+
+	run(t, "an agent that never ran is absent rather than reported as idle", func(t *testing.T, s Store) {
+		activity, err := s.AgentActivity(context.Background(), domain.RunFilter{})
+		if err != nil {
+			t.Fatalf("AgentActivity: %v", err)
+		}
+		if len(activity) != 0 {
+			t.Errorf("AgentActivity = %v, want nothing; no runs exist", activity)
+		}
+	})
+
+	run(t, "runs are counted, and the ones waiting on a person separately", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		mustAppend(t, s, startedAt("run-a", base))
+		mustAppend(t, s, finishedAt("run-a", base.Add(time.Minute)))
+		mustAppend(t, s, startedAt("run-b", base))
+		mustAppend(t, s, step("run-b", domain.StepParked))
+		mustAppend(t, s, startedAt("run-c", base))
+
+		activity, err := s.AgentActivity(ctx, domain.RunFilter{})
+		if err != nil {
+			t.Fatalf("AgentActivity: %v", err)
+		}
+		if len(activity) != 1 {
+			t.Fatalf("AgentActivity = %d agents, want 1", len(activity))
+		}
+
+		got := activity[0]
+		if got.Runs != 3 || got.Finished != 1 || got.Waiting != 1 {
+			t.Errorf("activity = %+v, want 3 runs, 1 finished, 1 waiting", got)
+		}
+	})
+
+	run(t, "the phase shown is the most recent run's", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		mustAppend(t, s, startedAt("run-old", base.Add(-time.Hour)))
+		mustAppend(t, s, finishedAt("run-old", base.Add(-time.Hour).Add(time.Minute)))
+		mustAppend(t, s, startedAt("run-new", base))
+
+		activity, err := s.AgentActivity(ctx, domain.RunFilter{})
+		if err != nil {
+			t.Fatalf("AgentActivity: %v", err)
+		}
+		// An agent whose last run is still going reads as running, even though
+		// most of its history finished.
+		if activity[0].LastPhase != "running" {
+			t.Errorf("lastPhase = %q, want the newest run's phase", activity[0].LastPhase)
+		}
+	})
+
+	run(t, "cost is summed per agent", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		mustAppend(t, s, startedAt("run-a", base))
+		priced := step("run-a", domain.StepPlanned)
+		priced.At = base.Add(time.Second)
+		priced.Cost = domain.Cost{Micros: 7_500}
+		mustAppend(t, s, priced)
+
+		activity, err := s.AgentActivity(ctx, domain.RunFilter{})
+		if err != nil {
+			t.Fatalf("AgentActivity: %v", err)
+		}
+		if activity[0].CostMicros != 7_500 {
+			t.Errorf("cost = %d, want 7500 micros", activity[0].CostMicros)
+		}
+	})
+
+	run(t, "a scope bound counts only that area's runs", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		mustAppend(t, s, startedAt("run-cx", base))
+		elsewhere := startedAt("run-mkt", base)
+		elsewhere.Scope = domain.Scope{Company: "acme", Area: "marketing"}
+		elsewhere.AgentID = "lead-qualifier"
+		mustAppend(t, s, elsewhere)
+
+		activity, err := s.AgentActivity(ctx, domain.RunFilter{Scope: domain.Scope{Company: "acme", Area: "cx"}})
+		if err != nil {
+			t.Fatalf("AgentActivity: %v", err)
+		}
+		if len(activity) != 1 || activity[0].AgentID != "triage" {
+			t.Errorf("AgentActivity = %v, want only the agent running in cx", activity)
 		}
 	})
 }

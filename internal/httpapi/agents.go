@@ -44,6 +44,16 @@ func (s *Server) ListAgents(ctx context.Context, req openapi.ListAgentsRequestOb
 		return nil, fmt.Errorf("list agents: %w", err)
 	}
 
+	// One grouped read for every agent on the page rather than one per agent.
+	activity, err := s.store.AgentActivity(ctx, domain.RunFilter{Scope: scope})
+	if err != nil {
+		return nil, fmt.Errorf("agent activity: %w", err)
+	}
+	byAgent := make(map[domain.AgentID]domain.AgentActivity, len(activity))
+	for _, a := range activity {
+		byAgent[a.AgentID] = a
+	}
+
 	// An unscoped list is narrowed to what the caller may see rather than
 	// refused: asking "which agents are there" should answer with theirs, not
 	// with a permission error naming a scope they never mentioned (NF-06).
@@ -54,7 +64,11 @@ func (s *Server) ListAgents(ctx context.Context, req openapi.ListAgentsRequestOb
 		if !readable(a.Scope, visible) {
 			continue
 		}
-		items = append(items, agentFrom(a))
+		agent := agentFrom(a)
+		if seen, ran := byAgent[a.ID]; ran {
+			agent.Activity = ptr(activityFrom(seen))
+		}
+		items = append(items, agent)
 	}
 	return openapi.ListAgents200JSONResponse{Items: items}, nil
 }
@@ -119,4 +133,17 @@ func agentFrom(a domain.AgentSummary) openapi.Agent {
 		agent.Triggers = &triggers
 	}
 	return agent
+}
+
+func activityFrom(a domain.AgentActivity) openapi.AgentActivity {
+	out := openapi.AgentActivity{
+		Runs: a.Runs, Finished: a.Finished, Waiting: a.Waiting, CostMicros: a.CostMicros,
+	}
+	if a.LastPhase != "" {
+		out.LastPhase = ptr(openapi.Phase(a.LastPhase))
+	}
+	if !a.LastRunAt.IsZero() {
+		out.LastRunAt = ptr(a.LastRunAt)
+	}
+	return out
 }

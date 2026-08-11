@@ -31,6 +31,7 @@ type Store interface {
 	Stats(ctx context.Context, filter domain.RunFilter) (domain.RunStats, error)
 	ListRuns(ctx context.Context, filter domain.RunFilter, phase string, limit int) ([]domain.RunSummary, error)
 	CostRollup(ctx context.Context, filter domain.RunFilter, groupBy string) ([]domain.CostBucket, error)
+	AgentActivity(ctx context.Context, filter domain.RunFilter) ([]domain.AgentActivity, error)
 }
 
 // Server implements openapi.StrictServerInterface.

@@ -1,6 +1,8 @@
 import { Badge } from "@/components/ui/badge";
 import { Mono } from "@/components/shared/mono";
-import { formatMicros } from "@/lib/format";
+import { StateDot } from "@/components/shared/state-dot";
+import { stateOfAgent } from "@/lib/agent-state";
+import { formatMicros, formatRelative } from "@/lib/format";
 import type { Agent } from "@/features/agents/api";
 
 /**
@@ -14,6 +16,9 @@ export function AgentCard({ agent }: { agent: Agent }) {
   return (
     <article className="flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-sm">
       <header className="flex items-start gap-2">
+        {/* The dot repeats what the footer says in words: an agent's state is
+            a fact about its runs, never colour on its own. */}
+        <StateDot state={stateOfAgent(agent.activity?.lastPhase)} className="mt-[7px]" />
         <div className="min-w-0 flex-1">
           <h3 className="truncate font-medium">{agent.name}</h3>
           <div className="truncate text-xs text-muted-foreground">
@@ -40,16 +45,25 @@ export function AgentCard({ agent }: { agent: Agent }) {
       </div>
 
       <dl className="grid grid-cols-3 gap-2 border-t border-border-subtle pt-3 text-xs">
+        <Figure label="Execuções" value={agent.activity ? String(agent.activity.runs) : "—"} />
+        <Figure label="Concluídas" value={successRate(agent)} />
+        <Figure label="Custo" value={agent.activity?.costMicros ? formatMicros(agent.activity.costMicros) : "—"} />
+      </dl>
+
+      <dl className="grid grid-cols-3 gap-2 text-xs">
         <Figure label="Teto" value={agent.budget.micros ? formatMicros(agent.budget.micros) : "—"} />
         <Figure label="Passos" value={agent.budget.steps ? String(agent.budget.steps) : "—"} />
         <Figure label="Gatilhos" value={triggerSummary(agent)} />
       </dl>
 
-      <footer className="text-2xs text-muted-foreground">
-        <Mono dim>
-          {agent.provider}/{agent.model}
-        </Mono>{" "}
-        · <Mono dim>{agent.versionId.slice(0, 9)}</Mono>
+      <footer className="flex flex-col gap-1 border-t border-border-subtle pt-3 text-2xs text-muted-foreground">
+        <span>{activitySummary(agent)}</span>
+        <span>
+          <Mono dim>
+            {agent.provider}/{agent.model}
+          </Mono>{" "}
+          · <Mono dim>{agent.versionId.slice(0, 9)}</Mono>
+        </span>
       </footer>
     </article>
   );
@@ -62,6 +76,26 @@ function Figure({ label, value }: { label: string; value: string }) {
       <dd className="font-mono tabular-nums">{value}</dd>
     </div>
   );
+}
+
+/**
+ * A share only where there is something to take a share of. "0%" on an agent
+ * that never ran is a measurement of nothing.
+ */
+function successRate(agent: Agent): string {
+  const activity = agent.activity;
+  if (!activity || activity.runs === 0) return "—";
+  return `${Math.round((activity.finished / activity.runs) * 100)}%`;
+}
+
+/** What the state dot means, in words. */
+function activitySummary(agent: Agent): string {
+  const activity = agent.activity;
+  if (!activity || !activity.lastRunAt) return "Nunca executou";
+  if (activity.waiting > 0) {
+    return `${activity.waiting} esperando pessoa · última execução ${formatRelative(activity.lastRunAt)}`;
+  }
+  return `Última execução ${formatRelative(activity.lastRunAt)}`;
 }
 
 /** Says how a run starts, because an agent nothing triggers never runs. */
