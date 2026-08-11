@@ -23,6 +23,12 @@ func (s *Server) ListApprovals(ctx context.Context, req openapi.ListApprovalsReq
 		return nil, fmt.Errorf("list approvals: %w", err)
 	}
 
+	// What the action does is part of the ask: an approver deciding on a
+	// refund needs to know it is a refund. The effect is read here rather than
+	// by the caller, who holds approval:act and deliberately not tool:read —
+	// seeing one action's classification is not seeing the catalogue.
+	effects := s.toolEffects(ctx)
+
 	page := openapi.ApprovalPage{Items: []openapi.PendingApproval{}}
 	for _, run := range waiting {
 		if run.PendingApproval == nil {
@@ -40,6 +46,9 @@ func (s *Server) ListApprovals(ctx context.Context, req openapi.ListApprovalsReq
 			// the moment it stopped to ask, and reading the step back to learn
 			// it would undo the point of this query.
 			RequestedAt: run.UpdatedAt,
+		}
+		if effect, known := effects[run.PendingApproval.Tool]; known {
+			item.Effect = ptr(openapi.Effect(effect.String()))
 		}
 		page.Items = append(page.Items, item)
 	}
@@ -95,4 +104,25 @@ func (s *Server) DecideApproval(ctx context.Context, req openapi.DecideApprovalR
 		return nil, err
 	}
 	return openapi.DecideApproval200JSONResponse(run), nil
+}
+
+// toolEffects reads the published catalogue, or nothing when this installation
+// has no administration store. An unknown effect leaves the field absent
+// rather than guessing "read", which would understate what is being asked for.
+func (s *Server) toolEffects(ctx context.Context) map[domain.ToolID]domain.Effect {
+	if s.tools == nil {
+		return nil
+	}
+	entries, err := s.tools.Tools(ctx)
+	if err != nil {
+		// A catalogue that cannot be read must not stop an approver from
+		// seeing their queue; the ask is still legible without the effect.
+		return nil
+	}
+
+	out := make(map[domain.ToolID]domain.Effect, len(entries))
+	for _, e := range entries {
+		out[e.ID] = e.Effect
+	}
+	return out
 }

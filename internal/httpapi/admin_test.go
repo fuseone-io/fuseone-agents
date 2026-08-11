@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
@@ -351,5 +352,84 @@ func TestListAgents_companyWideGrantSeesItsAreas(t *testing.T) {
 	body := resp.(openapi.ListAgents200JSONResponse)
 	if len(body.Items) != 1 || body.Items[0].AgentId != "triage" {
 		t.Fatalf("items = %v, want the agent inside the granted company and nothing else", body.Items)
+	}
+}
+
+// fakeTools stands in for the published catalogue.
+type fakeTools struct {
+	entries []domain.ToolEntry
+	err     error
+}
+
+func (f *fakeTools) Tools(context.Context) ([]domain.ToolEntry, error) { return f.entries, f.err }
+
+func TestListApprovals_saysWhatTheActionDoes(t *testing.T) {
+	t.Parallel()
+
+	store := ledger.NewMemory()
+	seedPendingApproval(t, store, "crm.refund")
+
+	tools := &fakeTools{entries: []domain.ToolEntry{
+		{ID: "crm.refund", Effect: domain.EffectFinancial},
+	}}
+	server := NewServer(store, "test").WithAdministration(nil, tools, nil)
+
+	resp, err := server.ListApprovals(as(domain.RoleApprover), openapi.ListApprovalsRequestObject{})
+	if err != nil {
+		t.Fatalf("ListApprovals: %v", err)
+	}
+	page := resp.(openapi.ListApprovals200JSONResponse)
+	if len(page.Items) != 1 {
+		t.Fatalf("items = %d, want 1", len(page.Items))
+	}
+	// Deciding on a refund without being told it is a refund is deciding
+	// blind, and the approver deliberately does not hold tool:read.
+	if page.Items[0].Effect == nil || *page.Items[0].Effect != "financial" {
+		t.Errorf("effect = %v, want financial", page.Items[0].Effect)
+	}
+}
+
+func TestListApprovals_unreadableCatalogueStillShowsTheQueue(t *testing.T) {
+	t.Parallel()
+
+	store := ledger.NewMemory()
+	seedPendingApproval(t, store, "crm.note")
+
+	server := NewServer(store, "test").
+		WithAdministration(nil, &fakeTools{err: errors.New("catalogue unavailable")}, nil)
+
+	resp, err := server.ListApprovals(as(domain.RoleApprover), openapi.ListApprovalsRequestObject{})
+	if err != nil {
+		t.Fatalf("ListApprovals: %v", err)
+	}
+	page := resp.(openapi.ListApprovals200JSONResponse)
+	if len(page.Items) != 1 {
+		t.Fatalf("items = %d, want the queue anyway", len(page.Items))
+	}
+	// Absent rather than guessed: calling an unknown effect "read" would
+	// understate what is being asked for.
+	if page.Items[0].Effect != nil {
+		t.Errorf("effect = %v, want absent when the catalogue could not be read", page.Items[0].Effect)
+	}
+}
+
+func seedPendingApproval(t *testing.T, store *ledger.Memory, tool string) {
+	t.Helper()
+	ctx := context.Background()
+
+	base := domain.Step{
+		RunID: "run-1", Scope: adminScope, AgentID: "triage", VersionID: "v1",
+		At: time.Date(2026, 8, 11, 12, 0, 0, 0, time.UTC),
+	}
+	base.Kind = domain.StepRunStarted
+	if _, err := store.Append(ctx, base); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	asked := base
+	asked.Kind = domain.StepApprovalRequested
+	asked.Payload = []byte(`{"tool":"` + tool + `","rule":"taint","reason":"untrusted argument"}`)
+	if _, err := store.Append(ctx, asked); err != nil {
+		t.Fatalf("seed: %v", err)
 	}
 }
