@@ -234,6 +234,77 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /agents/{agentId}/webhooks:
+    get:
+      tags: [agents]
+      operationId: listWebhooks
+      summary: The webhook paths this agent declares
+      description: |
+        A declared path cannot fire until somebody generates its secret. This
+        reports which are armed and which are still closed, so an operator can
+        see that a webhook exists and does nothing.
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The declared paths.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Webhook' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /agents/{agentId}/webhooks/{path}/secret:
+    post:
+      tags: [agents]
+      operationId: rotateWebhookSecret
+      summary: Generate this webhook's secret
+      description: |
+        Returns the secret once and stores only its hash — what is kept cannot
+        be turned back into what a caller sends. There is no way to read it
+        again; rotating produces a new one and retires the old.
+
+        This is also how a webhook is first opened. A declared path with no
+        secret refuses everything, which is the safe state for a door with an
+        agent behind it.
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: path
+          in: path
+          required: true
+          description: The declared path, without a leading slash.
+          schema: { type: string }
+      responses:
+        '200':
+          description: The new secret, returned once.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [secret, url]
+                properties:
+                  secret:
+                    type: string
+                    description: Shown once. Configure the sender with it now.
+                  url:
+                    type: string
+                    description: Where the sender posts.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /runs/throughput:
     get:
       tags: [runs]
@@ -1068,6 +1139,20 @@ components:
         publishedBy: { type: string }
         publishedAt: { type: string, format: date-time }
         latest: { type: boolean }
+
+    Webhook:
+      type: object
+      required: [path, armed]
+      properties:
+        path: { type: string }
+        armed:
+          type: boolean
+          description: |
+            Whether a secret exists. A declared path without one refuses
+            everything, which is the safe state for a door with an agent
+            behind it.
+        rotatedBy: { type: string }
+        rotatedAt: { type: string, format: date-time, nullable: true }
 
     AgentTrigger:
       type: object

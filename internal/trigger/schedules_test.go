@@ -15,7 +15,7 @@ import (
 // idempotency key's job — but a schedule that never becomes due, or one that
 // keeps firing after its version stopped declaring it, fails just as loudly.
 
-func schedulesFor(t *testing.T) *trigger.Postgres {
+func schedulesFor(t *testing.T) *trigger.PostgresSchedules {
 	t.Helper()
 	dsn := os.Getenv("TEST_DATABASE_URL")
 	if dsn == "" {
@@ -36,7 +36,7 @@ func schedulesFor(t *testing.T) *trigger.Postgres {
 	if _, err := pool.Exec(t.Context(), `truncate trigger_schedules`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
-	return trigger.NewPostgres(pool)
+	return trigger.NewPostgresSchedules(pool)
 }
 
 func TestSync_declaredSchedule_becomesDueAtItsNextMoment(t *testing.T) {

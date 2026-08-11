@@ -118,6 +118,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{agentId}/webhooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The webhook paths this agent declares
+         * @description A declared path cannot fire until somebody generates its secret. This
+         *     reports which are armed and which are still closed, so an operator can
+         *     see that a webhook exists and does nothing.
+         */
+        get: operations["listWebhooks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agentId}/webhooks/{path}/secret": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate this webhook's secret
+         * @description Returns the secret once and stores only its hash — what is kept cannot
+         *     be turned back into what a caller sends. There is no way to read it
+         *     again; rotating produces a new one and retires the old.
+         *
+         *     This is also how a webhook is first opened. A declared path with no
+         *     secret refuses everything, which is the safe state for a door with an
+         *     agent behind it.
+         */
+        post: operations["rotateWebhookSecret"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runs/throughput": {
         parameters: {
             query?: never;
@@ -683,6 +731,18 @@ export interface components {
             publishedAt: string;
             latest: boolean;
         };
+        Webhook: {
+            path: string;
+            /**
+             * @description Whether a secret exists. A declared path without one refuses
+             *     everything, which is the safe state for a door with an agent
+             *     behind it.
+             */
+            armed: boolean;
+            rotatedBy?: string;
+            /** Format: date-time */
+            rotatedAt?: string | null;
+        };
         AgentTrigger: {
             /** @enum {string} */
             type: "cron" | "webhook" | "event";
@@ -1108,6 +1168,64 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Run"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listWebhooks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The declared paths. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Webhook"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    rotateWebhookSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+                /** @description The declared path, without a leading slash. */
+                path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The new secret, returned once. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description Shown once. Configure the sender with it now. */
+                        secret: string;
+                        /** @description Where the sender posts. */
+                        url: string;
+                    };
                 };
             };
             401: components["responses"]["Unauthorized"];

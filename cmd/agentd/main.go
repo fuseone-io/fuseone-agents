@@ -147,7 +147,8 @@ func serve(args []string) error {
 			// The same store the worker writes into. Without it the console
 			// can show that an approval is pending but not what it is for,
 			// which is the one thing the approver needs.
-			WithContent(ledger.NewContent(identity.pool))
+			WithContent(ledger.NewContent(identity.pool)).
+			WithWebhooks(trigger.NewPostgresWebhooks(identity.pool))
 	}
 
 	apiHandler := openapi.HandlerWithOptions(
@@ -179,6 +180,17 @@ func serve(args []string) error {
 		// caller could not learn by connecting.
 		root.Handle("GET /api/v1/healthz", apiProblems(apiHandler))
 		identity.routes.Mount(root)
+
+		// Webhooks are outside the session middleware on purpose: the caller
+		// is an ERP or a CRM, not a person with a browser. They are
+		// authenticated by a secret an operator generated, and a path with no
+		// secret answers exactly like a path that does not exist.
+		httpapi.NewHooks(
+			trigger.NewPostgresWebhooks(identity.pool),
+			trigger.NewOpener(store, spec.NewRegistry(identity.pool), engine.SystemClock{}).
+				WithContent(ledger.NewContent(identity.pool)),
+			slog.Default(),
+		).Mount(root)
 	} else {
 		slog.Warn("running without authentication; every caller has full access")
 		root.Handle("/api/", apiProblems(apiHandler))
@@ -413,6 +425,9 @@ func workerCmd(args []string) error {
 		if err := syncSchedules(ctx, configPool, specDir); err != nil {
 			return err
 		}
+		if err := syncWebhooks(ctx, configPool, specDir); err != nil {
+			return err
+		}
 	}
 
 	w := worker.New(worker.Config{
@@ -431,7 +446,7 @@ func workerCmd(args []string) error {
 	// accepts exactly one of them.
 	if configPool != nil && registry != nil {
 		scheduler := trigger.NewScheduler(
-			trigger.NewPostgres(configPool),
+			trigger.NewPostgresSchedules(configPool),
 			trigger.NewOpener(store, registry, engine.SystemClock{}).
 				WithContent(ledger.NewContent(configPool)),
 			engine.SystemClock{}, slog.Default(),
@@ -495,7 +510,7 @@ func syncSchedules(ctx context.Context, pool *pgxpool.Pool, specDir *string) err
 		return fmt.Errorf("sync schedules: load %s: %w", *specDir, err)
 	}
 
-	schedules := trigger.NewPostgres(pool)
+	schedules := trigger.NewPostgresSchedules(pool)
 	now := time.Now()
 	for _, agent := range loaded.Agents() {
 		versions := loaded.Versions(agent)
@@ -508,6 +523,42 @@ func syncSchedules(ctx context.Context, pool *pgxpool.Pool, specDir *string) err
 		}
 	}
 	return nil
+}
+
+// syncWebhooks reconciles the declared paths with what each agent's newest
+// version says. Secrets are untouched: publishing a new version must not break
+// every sender configured against a path, because editing a prompt is not a
+// security event.
+func syncWebhooks(ctx context.Context, pool *pgxpool.Pool, specDir *string) error {
+	loaded := spec.NewStore()
+	if _, err := loaded.LoadDir(ctx, os.DirFS("."), *specDir); err != nil {
+		return fmt.Errorf("sync webhooks: load %s: %w", *specDir, err)
+	}
+
+	hooks := trigger.NewPostgresWebhooks(pool)
+	for _, agent := range loaded.Agents() {
+		versions := loaded.Versions(agent)
+		published, err := loaded.Get(agent, versions[len(versions)-1])
+		if err != nil {
+			return fmt.Errorf("sync webhooks: %w", err)
+		}
+		scope := domain.Scope{Area: domain.AreaID(published.Area)}
+		if err := hooks.Sync(ctx, agent, scope, webhookPathsOf(published)); err != nil {
+			return fmt.Errorf("sync webhooks for %s: %w", agent, err)
+		}
+	}
+	return nil
+}
+
+// webhookPathsOf picks the paths out of a specification's triggers.
+func webhookPathsOf(s spec.Spec) []string {
+	out := []string{}
+	for _, t := range s.Triggers {
+		if t.Type == "webhook" && t.Path != "" {
+			out = append(out, strings.TrimPrefix(t.Path, "/"))
+		}
+	}
+	return out
 }
 
 // cronSchedulesOf picks the schedules out of a specification's triggers.

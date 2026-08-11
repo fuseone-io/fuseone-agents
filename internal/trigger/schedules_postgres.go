@@ -10,16 +10,18 @@ import (
 	"github.com/fuseone/agents/internal/domain"
 )
 
-// Postgres keeps when each schedule next comes due.
+// PostgresSchedules keeps when each schedule next comes due.
 //
 // It is not a lock and does not pretend to be one: two workers reading the
 // same due row both open the same run, because the key is derived from the
 // moment rather than from whoever got here first.
-type Postgres struct{ pool *pgxpool.Pool }
+type PostgresSchedules struct{ pool *pgxpool.Pool }
 
-func NewPostgres(pool *pgxpool.Pool) *Postgres { return &Postgres{pool: pool} }
+func NewPostgresSchedules(pool *pgxpool.Pool) *PostgresSchedules {
+	return &PostgresSchedules{pool: pool}
+}
 
-func (p *Postgres) Due(ctx context.Context, at time.Time) ([]Due, error) {
+func (p *PostgresSchedules) Due(ctx context.Context, at time.Time) ([]Due, error) {
 	rows, err := p.pool.Query(ctx, `
 		select agent_id, schedule, next_fire_at
 		from trigger_schedules
@@ -42,7 +44,7 @@ func (p *Postgres) Due(ctx context.Context, at time.Time) ([]Due, error) {
 	return out, rows.Err()
 }
 
-func (p *Postgres) Advance(
+func (p *PostgresSchedules) Advance(
 	ctx context.Context, agent domain.AgentID, schedule string, next time.Time,
 ) error {
 	_, err := p.pool.Exec(ctx, `
@@ -62,7 +64,7 @@ func (p *Postgres) Advance(
 // every publish would let an agent published every few minutes never reach a
 // moment at all. One that is gone is deleted, because a version that no longer
 // declares a schedule must stop firing it.
-func (p *Postgres) Sync(
+func (p *PostgresSchedules) Sync(
 	ctx context.Context, agent domain.AgentID, schedules []string, from time.Time,
 ) error {
 	tx, err := p.pool.Begin(ctx)

@@ -11,6 +11,7 @@ tools:
   - crm.reply
 triggers:
   - { type: cron, schedule: "*/15 * * * *" }
+  - { type: webhook, path: "crm/ticket" }
 budget:
   micros: 500000
   tool_calls: 20
