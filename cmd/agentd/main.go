@@ -30,11 +30,11 @@ import (
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
-	"github.com/fuseone/agents/internal/gate"
 	"github.com/fuseone/agents/internal/httpapi"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/model"
+	"github.com/fuseone/agents/internal/policy"
 	"github.com/fuseone/agents/internal/spec"
 	"github.com/fuseone/agents/internal/tools"
 	"github.com/fuseone/agents/internal/trigger"
@@ -397,9 +397,20 @@ func workerCmd(args []string) error {
 		go refreshRulings(ctx, catalog, curator)
 	}
 
+	// The set in force, refreshed on a timer. The Gate itself never queries:
+	// it is on the path of every effect, and a decision must not wait on a
+	// database to find out whether something is allowed.
+	enforcer := policy.NewEnforcer(policySource(configPool), slog.Default())
+	if configPool != nil {
+		if err := enforcer.Refresh(ctx); err != nil {
+			return fmt.Errorf("read the policy set: %w", err)
+		}
+		go enforcer.Watch(ctx, policyRefresh)
+	}
+
 	deps := engine.Deps{
 		Ledger:  store,
-		Gate:    gate.New(),
+		Gate:    enforcer,
 		Tools:   catalog,
 		Catalog: catalog,
 		Content: content,
@@ -464,6 +475,28 @@ func workerCmd(args []string) error {
 		return nil
 	}
 	return err
+}
+
+// policyRefresh bounds how long an authored policy takes to reach a running
+// worker. Short enough that turning a rule on is a live control rather than a
+// deploy; long enough that a pool of workers is not a load generator.
+const policyRefresh = 30 * time.Second
+
+// policySource is where the set comes from, or a source of nothing when this
+// worker has no database. An installation running on the in-memory ledger
+// decides under the built-in ladder, which is the safe default rather than an
+// absence of rules.
+func policySource(pool *pgxpool.Pool) policy.Source {
+	if pool == nil {
+		return emptyPolicies{}
+	}
+	return policy.NewStore(pool)
+}
+
+type emptyPolicies struct{}
+
+func (emptyPolicies) Active(context.Context) (policy.Set, error) {
+	return policy.Set{Hash: "builtin", Policies: nil}, nil
 }
 
 // rulingRefresh bounds how long a classification change takes to reach a
