@@ -588,6 +588,83 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /policies:
+    get:
+      tags: [policies]
+      operationId: listPolicies
+      summary: The rules in force
+      description: |
+        Every authored policy, with how many times each one decided something
+        in the period. Readable by anybody a policy constrains — an author who
+        cannot see the rule that stopped their agent cannot act on it — and
+        writable only with policy:write, because a rule somebody constrained
+        can edit is that person's rule rather than the organisation's.
+      parameters:
+        - name: since
+          in: query
+          description: Count decisions from this instant. Defaults to seven days ago.
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: The policies, and the hash naming the set.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PolicyPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /policies/{code}:
+    put:
+      tags: [policies]
+      operationId: putPolicy
+      summary: Write a policy
+      description: |
+        Creating and editing are the same call: the code is the identity, set
+        once and never changed, because it appears in the trail and in the
+        message somebody denied reads.
+
+        Every write takes a snapshot of the whole set in the same transaction,
+        so the hash recorded on decisions from this moment names rules that can
+        be fetched back.
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PolicyInput' }
+      responses:
+        '200':
+          description: The policy as stored, and the new set hash.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PolicyWritten' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+    delete:
+      tags: [policies]
+      operationId: deletePolicy
+      summary: Remove a policy
+      description: |
+        The rule stops being evaluated. Decisions it already made keep pointing
+        at the snapshot that held it, so removing a policy never rewrites what
+        it did.
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: Removed. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /admin/tools:
     get:
       tags: [admin]
@@ -1168,6 +1245,100 @@ components:
             Seals this entry to the one before it. Present only on ledger
             entries; an administrative entry has nothing to show here and says
             so by omission rather than by an empty promise.
+
+    PolicyPage:
+      type: object
+      required: [items, policyHash]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Policy' }
+        policyHash:
+          type: string
+          description: Names the set as a whole. Every decision records it.
+
+    PolicyWritten:
+      type: object
+      required: [policy, policyHash]
+      properties:
+        policy: { $ref: '#/components/schemas/Policy' }
+        policyHash: { type: string }
+
+    PolicyInput:
+      type: object
+      required: [name, effect, mode]
+      properties:
+        name: { type: string }
+        owner: { type: string }
+        reason:
+          type: string
+          description: |
+            The sentence shown in the trail and to whoever is denied. The
+            difference between "blocked by POL-114" and knowing what to do.
+        resource:
+          type: string
+          description: A glob over the tool id — `crm.*`, `crm.reply`, `*`.
+        effects:
+          type: array
+          description: Which effects it covers. Empty means any.
+          items: { $ref: '#/components/schemas/Effect' }
+        reach:
+          type: string
+          enum: [installation, scopes, agents]
+        scopes:
+          type: array
+          items: { $ref: '#/components/schemas/Scope' }
+        agents:
+          type: array
+          items: { type: string }
+        conditions:
+          type: array
+          description: Every clause must hold. There is no "or".
+          items: { $ref: '#/components/schemas/PolicyCondition' }
+        effect:
+          type: string
+          enum: [allow, escalate, deny]
+        mode:
+          type: string
+          enum: [monitor, enforce]
+          description: |
+            A monitored policy is evaluated and recorded and changes no
+            verdict, so an operator can read what it would have done before it
+            does it.
+        enabled: { type: boolean }
+
+    PolicyCondition:
+      type: object
+      required: [field, op, value]
+      properties:
+        field:
+          type: string
+          description: tool.id, tool.effect, data.taint, agent.id, scope.area, or args.<path>.
+        op:
+          type: string
+          enum: [eq, ne, gt, lt, contains, in]
+        value: { type: string }
+
+    Policy:
+      allOf:
+        - $ref: '#/components/schemas/PolicyInput'
+        - type: object
+          required: [code, sentence]
+          properties:
+            code:
+              type: string
+              description: Set once and never changed — it appears in the trail and in what a denied person reads.
+            sentence:
+              type: string
+              description: |
+                The rule as one line, generated from the same fields the Gate
+                evaluates. The builder is never the only representation.
+            hits:
+              type: integer
+              format: int64
+              description: How many decisions this rule produced in the period.
+            updatedBy: { type: string }
+            updatedAt: { type: string, format: date-time }
 
     AdminEvent:
       type: object

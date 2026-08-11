@@ -138,7 +138,8 @@ func (p *Postgres) Decisions(ctx context.Context, filter domain.RunFilter, limit
 
 	rows, err := p.pool.Query(ctx, `
 		select run_id, seq, at, company_id, area_id, agent_id,
-		       payload->>'tool', coalesce((payload->>'verdict')::int, 0), coalesce(payload->>'rule', '')
+		       payload->>'tool', coalesce((payload->>'verdict')::int, 0),
+		       coalesce(payload->>'rule', ''), coalesce(payload->>'policy_code', '')
 		from run_steps `+where+`
 		order by at desc, seq desc
 		limit $`+fmt.Sprint(len(args)), args...)
@@ -152,7 +153,8 @@ func (p *Postgres) Decisions(ctx context.Context, filter domain.RunFilter, limit
 		var d domain.RecordedDecision
 		var company, area, agent, tool string
 		var verdict int
-		if err := rows.Scan(&d.RunID, &d.Seq, &d.At, &company, &area, &agent, &tool, &verdict, &d.Rule); err != nil {
+		if err := rows.Scan(&d.RunID, &d.Seq, &d.At, &company, &area, &agent,
+			&tool, &verdict, &d.Rule, &d.PolicyCode); err != nil {
 			return nil, err
 		}
 		d.Scope = domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)}

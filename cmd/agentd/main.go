@@ -151,7 +151,8 @@ func serve(args []string) error {
 			WithContent(ledger.NewContent(identity.pool)).
 			WithWebhooks(trigger.NewPostgresWebhooks(identity.pool)).
 			WithAudit(audit.NewPostgres(identity.pool)).
-			WithHealth(admin.NewHealth(identity.pool))
+			WithHealth(admin.NewHealth(identity.pool)).
+			WithPolicies(policy.NewStore(identity.pool))
 	}
 
 	apiHandler := openapi.HandlerWithOptions(

@@ -58,6 +58,7 @@ type Server struct {
 	webhooks     trigger.Webhooks
 	audit        audit.Reader
 	health       Health
+	policies     Policies
 	// clock is injectable so a run's opening instant is a fact of the request
 	// rather than of whichever machine happened to serve it.
 	clock Clock

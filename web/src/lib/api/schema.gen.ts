@@ -392,6 +392,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The rules in force
+         * @description Every authored policy, with how many times each one decided something
+         *     in the period. Readable by anybody a policy constrains — an author who
+         *     cannot see the rule that stopped their agent cannot act on it — and
+         *     writable only with policy:write, because a rule somebody constrained
+         *     can edit is that person's rule rather than the organisation's.
+         */
+        get: operations["listPolicies"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/policies/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Write a policy
+         * @description Creating and editing are the same call: the code is the identity, set
+         *     once and never changed, because it appears in the trail and in the
+         *     message somebody denied reads.
+         *
+         *     Every write takes a snapshot of the whole set in the same transaction,
+         *     so the hash recorded on decisions from this moment names rules that can
+         *     be fetched back.
+         */
+        put: operations["putPolicy"];
+        post?: never;
+        /**
+         * Remove a policy
+         * @description The rule stops being evaluated. Decisions it already made keep pointing
+         *     at the snapshot that held it, so removing a policy never rewrites what
+         *     it did.
+         */
+        delete: operations["deletePolicy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/tools": {
         parameters: {
             query?: never;
@@ -755,6 +811,68 @@ export interface components {
              *     so by omission rather than by an empty promise.
              */
             hash?: string;
+        };
+        PolicyPage: {
+            items: components["schemas"]["Policy"][];
+            /** @description Names the set as a whole. Every decision records it. */
+            policyHash: string;
+        };
+        PolicyWritten: {
+            policy: components["schemas"]["Policy"];
+            policyHash: string;
+        };
+        PolicyInput: {
+            name: string;
+            owner?: string;
+            /**
+             * @description The sentence shown in the trail and to whoever is denied. The
+             *     difference between "blocked by POL-114" and knowing what to do.
+             */
+            reason?: string;
+            /** @description A glob over the tool id — `crm.*`, `crm.reply`, `*`. */
+            resource?: string;
+            /** @description Which effects it covers. Empty means any. */
+            effects?: components["schemas"]["Effect"][];
+            /** @enum {string} */
+            reach?: "installation" | "scopes" | "agents";
+            scopes?: components["schemas"]["Scope"][];
+            agents?: string[];
+            /** @description Every clause must hold. There is no "or". */
+            conditions?: components["schemas"]["PolicyCondition"][];
+            /** @enum {string} */
+            effect: "allow" | "escalate" | "deny";
+            /**
+             * @description A monitored policy is evaluated and recorded and changes no
+             *     verdict, so an operator can read what it would have done before it
+             *     does it.
+             * @enum {string}
+             */
+            mode: "monitor" | "enforce";
+            enabled?: boolean;
+        };
+        PolicyCondition: {
+            /** @description tool.id, tool.effect, data.taint, agent.id, scope.area, or args.<path>. */
+            field: string;
+            /** @enum {string} */
+            op: "eq" | "ne" | "gt" | "lt" | "contains" | "in";
+            value: string;
+        };
+        Policy: components["schemas"]["PolicyInput"] & {
+            /** @description Set once and never changed — it appears in the trail and in what a denied person reads. */
+            code: string;
+            /**
+             * @description The rule as one line, generated from the same fields the Gate
+             *     evaluates. The builder is never the only representation.
+             */
+            sentence: string;
+            /**
+             * Format: int64
+             * @description How many decisions this rule produced in the period.
+             */
+            hits?: number;
+            updatedBy?: string;
+            /** Format: date-time */
+            updatedAt?: string;
         };
         AdminEvent: {
             /** Format: date-time */
@@ -1612,6 +1730,83 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    listPolicies: {
+        parameters: {
+            query?: {
+                /** @description Count decisions from this instant. Defaults to seven days ago. */
+                since?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The policies, and the hash naming the set. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyPage"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    putPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyInput"];
+            };
+        };
+        responses: {
+            /** @description The policy as stored, and the new set hash. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyWritten"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    deletePolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     listTools: {

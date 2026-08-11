@@ -67,6 +67,11 @@ const (
 	PermPackWrite     Permission = "pack:write"
 	PermProviderWrite Permission = "provider:write"
 	PermBudgetWrite   Permission = "budget:write"
+	// PermPolicyRead is separate from writing because a policy constrains
+	// people who must not be able to change it. An author needs to read the
+	// rule that stopped their agent; letting them edit it would make the rule
+	// theirs rather than the organisation's.
+	PermPolicyRead    Permission = "policy:read"
 	PermPolicyWrite   Permission = "policy:write"
 	PermIdentityWrite Permission = "identity:write"
 	PermScopeWrite    Permission = "scope:write"
@@ -80,24 +85,28 @@ var grants = map[Role][]Permission{
 	RoleAuthor: {
 		PermRunRead, PermRunTrigger, PermRunCancel,
 		PermAgentRead, PermAgentPublish,
+		// Reads the rules that constrain their agents, and changes none.
+		PermPolicyRead,
 		PermCostRead, PermToolRead,
 	},
 	RoleApprover: {
-		PermRunRead, PermApprovalAct, PermAgentRead, PermCostRead,
+		// Reads policies because deciding an escalation means knowing which
+		// rule raised it and what it was written to prevent.
+		PermRunRead, PermApprovalAct, PermAgentRead, PermCostRead, PermPolicyRead,
 	},
 	RoleCurator: {
 		PermRunRead, PermRunTrigger, PermRunCancel,
 		PermAgentRead, PermAgentPublish,
 		PermCostRead, PermAuditRead,
 		PermToolRead, PermToolClassify, PermPackWrite,
-		PermProviderWrite, PermBudgetWrite, PermPolicyWrite,
+		PermProviderWrite, PermBudgetWrite, PermPolicyRead, PermPolicyWrite,
 		PermIdentityWrite, PermScopeWrite,
 	},
 	RoleAuditor: {
 		// Reads everything within scope and changes nothing. An auditor who
 		// can alter what they audit is not an auditor.
 		PermRunRead, PermAgentRead, PermCostRead,
-		PermAuditRead, PermAuditExport, PermToolRead,
+		PermAuditRead, PermAuditExport, PermToolRead, PermPolicyRead,
 	},
 }
 

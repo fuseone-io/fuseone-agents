@@ -93,4 +93,8 @@ type RecordedDecision struct {
 	Tool    ToolID
 	Verdict Verdict
 	Rule    string
+	// PolicyCode names the authored rule that produced this, when one did.
+	// Counting what a policy actually decided reads the trail rather than a
+	// counter, because a counter drifts and the trail is what happened.
+	PolicyCode string
 }
