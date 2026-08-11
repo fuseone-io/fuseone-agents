@@ -82,6 +82,21 @@ func runFilterSQL(f domain.RunFilter) (string, []any) {
 	if f.AgentID != "" {
 		add("agent_id = $%d", string(f.AgentID))
 	}
+	if len(f.Scopes) > 0 {
+		var any []string
+		for _, scope := range f.Scopes {
+			args = append(args, string(scope.Company))
+			company := fmt.Sprintf("company_id = $%d", len(args))
+			if scope.Area == "" {
+				// A grant with no area covers the whole company.
+				any = append(any, company)
+				continue
+			}
+			args = append(args, string(scope.Area))
+			any = append(any, fmt.Sprintf("(%s and area_id = $%d)", company, len(args)))
+		}
+		clauses = append(clauses, "("+strings.Join(any, " or ")+")")
+	}
 	if !f.Since.IsZero() {
 		add("started_at >= $%d", f.Since.UTC())
 	}

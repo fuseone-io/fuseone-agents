@@ -88,6 +88,14 @@ func (s *Server) ListRuns(ctx context.Context, req openapi.ListRunsRequestObject
 		filter.Search = strings.TrimSpace(*req.Params.Q)
 	}
 
+	// Every read of a run is scoped. This endpoint predates authentication and
+	// was answering with every run in the installation to anybody with a
+	// session (PRD NF-06).
+	filter, allowed := narrow(ctx, filter, domain.PermRunRead)
+	if !allowed {
+		return forbiddenListRuns(domain.PermRunRead, scopeParams(req.Params.Company, req.Params.Area)), nil
+	}
+
 	summaries, err := s.store.ListRuns(ctx, filter, phase, limitOf(req.Params.Limit))
 	if err != nil {
 		return nil, fmt.Errorf("list runs: %w", err)
@@ -101,7 +109,7 @@ func (s *Server) ListRuns(ctx context.Context, req openapi.ListRunsRequestObject
 }
 
 func (s *Server) GetRun(ctx context.Context, req openapi.GetRunRequestObject) (openapi.GetRunResponseObject, error) {
-	run, _, err := s.project(ctx, domain.RunID(req.RunId))
+	run, state, err := s.project(ctx, domain.RunID(req.RunId))
 	if err != nil {
 		if isNotFound(err) {
 			return openapi.GetRun404ApplicationProblemPlusJSONResponse{
@@ -110,6 +118,13 @@ func (s *Server) GetRun(ctx context.Context, req openapi.GetRunRequestObject) (o
 		}
 		return nil, err
 	}
+	// Not found rather than forbidden: telling somebody a run exists in an
+	// area they cannot see is itself information about that area.
+	if !mayRead(ctx, domain.PermRunRead, state.Scope) {
+		return openapi.GetRun404ApplicationProblemPlusJSONResponse{
+			NotFoundApplicationProblemPlusJSONResponse: notFound(req.RunId),
+		}, nil
+	}
 	return openapi.GetRun200JSONResponse(run), nil
 }
 
@@ -117,6 +132,14 @@ func (s *Server) ListRunSteps(ctx context.Context, req openapi.ListRunStepsReque
 	from := int64(domain.FirstSeq)
 	if req.Params.FromSeq != nil {
 		from = *req.Params.FromSeq
+	}
+
+	// The trail carries tool names, rules, reasons and labels. Reading another
+	// area's is reading what its agents were asked to do.
+	if !s.readableRun(ctx, domain.RunID(req.RunId)) {
+		return openapi.ListRunSteps404ApplicationProblemPlusJSONResponse{
+			NotFoundApplicationProblemPlusJSONResponse: notFound(req.RunId),
+		}, nil
 	}
 
 	steps, err := s.store.Read(ctx, domain.RunID(req.RunId), from)
@@ -150,6 +173,11 @@ func (s *Server) VerifyRun(ctx context.Context, req openapi.VerifyRunRequestObje
 			}, nil
 		}
 		return nil, fmt.Errorf("read steps: %w", err)
+	}
+	if len(steps) == 0 || !mayRead(ctx, domain.PermRunRead, steps[0].Scope) {
+		return openapi.VerifyRun404ApplicationProblemPlusJSONResponse{
+			NotFoundApplicationProblemPlusJSONResponse: notFound(req.RunId),
+		}, nil
 	}
 
 	result := openapi.VerifyResult{Valid: true, StepsChecked: int64(len(steps))}
@@ -202,3 +230,16 @@ func isNotFound(err error) bool {
 }
 
 var errNotFound = errors.New("not found")
+
+// readableRun reports whether the caller may read a run at all.
+//
+// A run that does not exist and a run in somebody else's area answer the same
+// way on purpose: confirming that a run exists is information about the area
+// it belongs to.
+func (s *Server) readableRun(ctx context.Context, runID domain.RunID) bool {
+	steps, err := s.store.Read(ctx, runID, domain.FirstSeq)
+	if err != nil || len(steps) == 0 {
+		return false
+	}
+	return mayRead(ctx, domain.PermRunRead, steps[0].Scope)
+}

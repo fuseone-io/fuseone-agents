@@ -886,3 +886,92 @@ func TestAgentActivityContract(t *testing.T) {
 		}
 	})
 }
+
+func TestScopesContract(t *testing.T) {
+	base := time.Date(2026, 8, 11, 12, 0, 0, 0, time.UTC)
+
+	seed := func(t *testing.T, s Store) {
+		t.Helper()
+		mustAppend(t, s, startedAt("run-cx", base))
+
+		marketing := startedAt("run-mkt", base)
+		marketing.Scope = domain.Scope{Company: "acme", Area: "marketing"}
+		mustAppend(t, s, marketing)
+
+		other := startedAt("run-other", base)
+		other.Scope = domain.Scope{Company: "outra", Area: "cx"}
+		mustAppend(t, s, other)
+	}
+
+	run(t, "a listing narrowed to one area shows only it", func(t *testing.T, s Store) {
+		seed(t, s)
+
+		page, err := s.ListRuns(context.Background(), domain.RunFilter{
+			Scopes: []domain.Scope{{Company: "acme", Area: "cx"}},
+		}, "", 50)
+		if err != nil {
+			t.Fatalf("ListRuns: %v", err)
+		}
+		if len(page) != 1 || page[0].RunID != "run-cx" {
+			t.Errorf("ListRuns = %v, want only the run in cx", kindsOfPage(page))
+		}
+	})
+
+	run(t, "several scopes are matched as any of them", func(t *testing.T, s Store) {
+		seed(t, s)
+
+		// Somebody holding a permission in two areas sees both, and nothing
+		// else — which is why this is a filter and not a post-read discard.
+		page, err := s.ListRuns(context.Background(), domain.RunFilter{
+			Scopes: []domain.Scope{
+				{Company: "acme", Area: "cx"},
+				{Company: "acme", Area: "marketing"},
+			},
+		}, "", 50)
+		if err != nil {
+			t.Fatalf("ListRuns: %v", err)
+		}
+		if len(page) != 2 {
+			t.Errorf("ListRuns = %v, want both granted areas", kindsOfPage(page))
+		}
+	})
+
+	run(t, "a company-wide scope covers its areas and stops at the company", func(t *testing.T, s Store) {
+		seed(t, s)
+
+		page, err := s.ListRuns(context.Background(), domain.RunFilter{
+			Scopes: []domain.Scope{{Company: "acme"}},
+		}, "", 50)
+		if err != nil {
+			t.Fatalf("ListRuns: %v", err)
+		}
+		if len(page) != 2 {
+			t.Errorf("ListRuns = %v, want both areas of acme and nothing from outra", kindsOfPage(page))
+		}
+	})
+
+	run(t, "cost and stats narrow the same way", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		seed(t, s)
+		only := domain.RunFilter{
+			Scopes: []domain.Scope{{Company: "acme", Area: "cx"}},
+			Until:  base.Add(time.Hour),
+		}
+
+		stats, err := s.Stats(ctx, only)
+		if err != nil {
+			t.Fatalf("Stats: %v", err)
+		}
+		if stats.Total != 1 {
+			t.Errorf("Stats.Total = %d, want only the granted area", stats.Total)
+		}
+
+		buckets, err := s.CostRollup(ctx, only, "area")
+		if err != nil {
+			t.Fatalf("CostRollup: %v", err)
+		}
+		if len(buckets) != 1 || buckets[0].Key != "cx" {
+			t.Errorf("CostRollup = %v, want only cx", buckets)
+		}
+	})
+}

@@ -6,6 +6,15 @@ import "time"
 type RunFilter struct {
 	Scope   Scope
 	AgentID AgentID
+
+	// Scopes narrows to any of several, which is what a caller who holds a
+	// permission in more than one area needs. It is how a listing is filtered
+	// at the query rather than read whole and discarded — the difference
+	// between showing somebody their areas and showing them everyone's
+	// (PRD NF-06).
+	//
+	// A scope with no area covers its whole company, matching Scope.Contains.
+	Scopes []Scope
 	// Since and Until bound the window; a zero time means no bound on that
 	// side. Cost asks for both because a rollup without an upper bound is a
 	// figure that changes while you read it.

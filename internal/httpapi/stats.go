@@ -14,7 +14,15 @@ import (
 // Deriving them from a page would make "97% concluded" mean "97% of the fifty
 // runs that happened to load", which is not what any reader would take it for.
 func (s *Server) GetRunStats(ctx context.Context, req openapi.GetRunStatsRequestObject) (openapi.GetRunStatsResponseObject, error) {
-	stats, err := s.store.Stats(ctx, runFilterFrom(req.Params))
+	filter, allowed := narrow(ctx, runFilterFrom(req.Params), domain.PermRunRead)
+	if !allowed {
+		return openapi.GetRunStats403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermRunRead,
+				scopeParams(req.Params.Company, req.Params.Area)),
+		}, nil
+	}
+
+	stats, err := s.store.Stats(ctx, filter)
 	if err != nil {
 		return nil, fmt.Errorf("run stats: %w", err)
 	}

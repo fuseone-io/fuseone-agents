@@ -55,8 +55,20 @@ func matches(first domain.Step, f domain.RunFilter) bool {
 		return false
 	case f.Search != "" && !matchesSearch(first, f.Search):
 		return false
+	case len(f.Scopes) > 0 && !withinAny(first.Scope, f.Scopes):
+		return false
 	}
 	return true
+}
+
+// withinAny reports whether any of the caller's scopes reaches this run's.
+func withinAny(scope domain.Scope, allowed []domain.Scope) bool {
+	for _, a := range allowed {
+		if a.Contains(scope) {
+			return true
+		}
+	}
+	return false
 }
 
 // matchesSearch mirrors the SQL side's ILIKE over the same two identifiers.

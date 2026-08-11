@@ -106,6 +106,7 @@ paths:
               schema: { $ref: '#/components/schemas/RunPage' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
 
   /runs/stats:
     get:
@@ -134,6 +135,7 @@ paths:
               schema: { $ref: '#/components/schemas/RunStats' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
 
   /runs/{runId}:
     get:
@@ -268,6 +270,8 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/CostRollup' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
 
   /admin/tools:
     get:
