@@ -1,0 +1,33 @@
+# Build output
+bin/
+coverage.out
+
+# The console's build, and the copy embedded into the Go package. Both are
+# produced by `make web`; committing them would put a compiled artefact in
+# every diff that touches the frontend.
+web/dist/
+internal/web/dist/
+
+# Dependencies
+node_modules/
+
+# Local development state: the pidfile `make stop` reads.
+.dev/
+
+# Never. Credentials come from the environment and the vault.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Tooling scratch
+.playwright-mcp/
+*.log
+.DS_Store
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+
+# Local tool state, not the project's
+.claude/settings.local.json

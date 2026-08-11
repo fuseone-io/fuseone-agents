@@ -1,0 +1,3 @@
+# Build output copied here by `make web` so go:embed can reach it.
+*
+!.gitignore

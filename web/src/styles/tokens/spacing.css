@@ -1,0 +1,43 @@
+/* Spacing, radii and density.
+   Source: design_handoff_fuseone_console/tokens/spacing.css.
+
+   The --space-* ladder is kept for raw CSS. Components use Tailwind's own
+   numeric scale, which is the same 4px base and produces the same values
+   (p-2 = 8px, p-4 = 16px, p-6 = 24px), so there is no second numbering system
+   to reconcile in markup. */
+:root {
+  --space-0: 0px;
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 8px;
+  --space-4: 12px;
+  --space-5: 16px;
+  --space-6: 20px;
+  --space-7: 24px;
+  --space-8: 32px;
+  --space-9: 40px;
+  --space-10: 48px;
+  --space-11: 64px;
+  --space-12: 80px;
+
+  --border-width: 1px;
+  --border-width-strong: 2px;
+
+  /* Density — the console ships compact; docs and marketing use comfortable */
+  --row-height-compact: 32px;
+  --row-height-default: 40px;
+  --row-height-comfy: 52px;
+  --control-height-sm: 28px;
+  --control-height-md: 36px;
+  --control-height-lg: 44px;
+
+  --container-narrow: 720px;
+  --container-content: 1040px;
+  --container-wide: 1440px;
+  --inspector-width: 360px;
+
+  /* --sidebar-width and --sidebar-width-icon live in shadcn.css: the sidebar
+     primitive reads them by those names. The handoff's spacing.css also
+     carried a --sidebar-width-collapsed of 56px, which contradicts both its
+     own shadcn.css and its README; 48px is the value used. */
+}

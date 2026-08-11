@@ -1,0 +1,55 @@
+/* Elevation — soft and layered: a wide, very low-alpha ambient shadow plus a
+   tight contact shadow. Borders stay hairline; the shadow does the lifting.
+   Source: design_handoff_fuseone_console/tokens/elevation.css.
+
+   Named --elevation-* rather than the handoff's --shadow-*: theme.css maps
+   Tailwind's own --shadow-* namespace onto these, and a variable cannot be
+   defined in terms of itself. Tailwind re-exports --shadow-xs..lg as aliases,
+   so the handoff names still resolve in raw CSS. */
+:root {
+  --elevation-none: none;
+  --elevation-xs:
+    0 1px 2px rgb(11 20 22 / 0.04),
+    0 1px 1px rgb(11 20 22 / 0.03);
+  --elevation-sm:
+    0 1px 2px rgb(11 20 22 / 0.04),
+    0 4px 10px -2px rgb(11 20 22 / 0.05),
+    0 12px 24px -8px rgb(11 20 22 / 0.04);
+  --elevation-md:
+    0 1px 2px rgb(11 20 22 / 0.04),
+    0 8px 20px -4px rgb(11 20 22 / 0.07),
+    0 24px 48px -12px rgb(11 20 22 / 0.07);
+  --elevation-lg:
+    0 1px 3px rgb(11 20 22 / 0.05),
+    0 16px 32px -8px rgb(11 20 22 / 0.1),
+    0 40px 72px -16px rgb(11 20 22 / 0.12);
+  --elevation-focus: 0 0 0 3px rgb(14 145 153 / 0.26);
+  --elevation-inset-top: inset 0 1px 0 rgb(255 255 255 / 0.7);
+
+  --overlay-scrim: rgb(11 20 22 / 0.44);
+  --overlay-blur: saturate(160%) blur(14px);
+}
+
+/* Dark theme gains an inset top highlight rather than a heavier shadow: on a
+   dark ground a bigger shadow reads as a smudge, a lit top edge reads as
+   lifted. */
+[data-theme="dark"],
+.dark {
+  --elevation-xs:
+    0 1px 2px rgb(0 0 0 / 0.32),
+    inset 0 1px 0 rgb(255 255 255 / 0.03);
+  --elevation-sm:
+    0 1px 2px rgb(0 0 0 / 0.34),
+    0 6px 16px -4px rgb(0 0 0 / 0.4),
+    inset 0 1px 0 rgb(255 255 255 / 0.03);
+  --elevation-md:
+    0 2px 4px rgb(0 0 0 / 0.36),
+    0 12px 28px -6px rgb(0 0 0 / 0.5),
+    inset 0 1px 0 rgb(255 255 255 / 0.04);
+  --elevation-lg:
+    0 4px 8px rgb(0 0 0 / 0.4),
+    0 28px 56px -12px rgb(0 0 0 / 0.62),
+    inset 0 1px 0 rgb(255 255 255 / 0.05);
+  --elevation-inset-top: inset 0 1px 0 rgb(255 255 255 / 0.05);
+  --overlay-scrim: rgb(0 0 0 / 0.62);
+}

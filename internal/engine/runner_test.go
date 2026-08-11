@@ -1,0 +1,448 @@
+package engine
+
+import (
+	"context"
+	"errors"
+	"slices"
+	"testing"
+	"time"
+
+	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/gate"
+	"github.com/fuseone/agents/internal/ledger"
+)
+
+// Both ledger implementations must satisfy the port this package declares.
+// The assertion lives here, with the consumer: an implementation that imported
+// engine to prove it complies would create a cycle the moment engine's tests
+// used it.
+var (
+	_ Ledger = (*ledger.Memory)(nil)
+	_ Ledger = (*ledger.Postgres)(nil)
+)
+
+// --- fakes -----------------------------------------------------------------
+
+// scriptedPlanner returns one proposal per call, then reports the run done.
+type scriptedPlanner struct {
+	proposals []Proposal
+	calls     int
+}
+
+func (p *scriptedPlanner) Plan(context.Context, PlanInput) (Proposal, error) {
+	p.calls++
+	if p.calls > len(p.proposals) {
+		return Proposal{Done: true, Outcome: "completed"}, nil
+	}
+	return p.proposals[p.calls-1], nil
+}
+
+// countingTools records every invocation so a test can prove an effect
+// happened exactly once.
+type countingTools struct {
+	invocations []domain.ToolID
+	result      ToolResult
+	err         error
+}
+
+func (c *countingTools) Invoke(_ context.Context, call Call) (ToolResult, error) {
+	c.invocations = append(c.invocations, call.Tool)
+	if c.err != nil {
+		return ToolResult{}, c.err
+	}
+	return c.result, nil
+}
+
+type staticCatalog map[domain.ToolID]domain.Effect
+
+func (s staticCatalog) Effect(id domain.ToolID) (domain.Effect, bool) {
+	e, ok := s[id]
+	return e, ok
+}
+
+type fixedClock struct{ t time.Time }
+
+func (f fixedClock) Now() time.Time { return f.t }
+
+// --- harness ---------------------------------------------------------------
+
+type harness struct {
+	runner  *Runner
+	ledger  *ledger.Memory
+	planner *scriptedPlanner
+	tools   *countingTools
+}
+
+func newHarness(t *testing.T, proposals ...Proposal) *harness {
+	t.Helper()
+
+	l := ledger.NewMemory()
+	planner := &scriptedPlanner{proposals: proposals}
+	tools := &countingTools{result: ToolResult{ResultRef: "s3://result/1"}}
+
+	h := &harness{ledger: l, planner: planner, tools: tools}
+	h.runner = NewRunner(Deps{
+		Ledger:  l,
+		Gate:    gate.New(),
+		Planner: planner,
+		Tools:   tools,
+		Catalog: staticCatalog{
+			"crm.lookup": domain.EffectRead,
+			"crm.note":   domain.EffectWrite,
+			"crm.refund": domain.EffectFinancial,
+		},
+		Clock: fixedClock{t: time.Date(2026, 8, 10, 12, 0, 0, 0, time.UTC)},
+	})
+	return h
+}
+
+func (h *harness) start(t *testing.T, b domain.Budget) Start {
+	t.Helper()
+	return Start{
+		RunID:      "run-1",
+		Scope:      domain.Scope{Company: "acme", Area: "cx"},
+		AgentID:    "triage",
+		VersionID:  "v3",
+		OnBehalfOf: "ana",
+		Pack:       gate.NewPack("crm.lookup", "crm.note", "crm.refund"),
+		Budget:     b,
+		Trigger:    "cron",
+	}
+}
+
+func (h *harness) kinds(t *testing.T) []domain.StepKind {
+	t.Helper()
+	steps, err := h.ledger.Read(context.Background(), "run-1", domain.FirstSeq)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	out := make([]domain.StepKind, len(steps))
+	for i, s := range steps {
+		out[i] = s.Kind
+	}
+	return out
+}
+
+func generousBudget() domain.Budget {
+	return domain.Budget{Micros: 1_000_000, ToolCalls: 20, Steps: 50}
+}
+
+// --- tests -----------------------------------------------------------------
+
+func TestAdvance_readTool_recordsFullGatedCycle(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t, Proposal{Tool: "crm.lookup", Args: []byte(`{"id":"42"}`)})
+
+	if _, err := h.runner.Advance(ctx, h.start(t, generousBudget())); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+
+	want := []domain.StepKind{
+		domain.StepRunStarted,
+		domain.StepPlanned,
+		domain.StepGateDecided,
+		domain.StepBudgetReserved,
+		domain.StepToolCalled,
+		domain.StepToolReturned,
+		domain.StepBudgetReconciled,
+	}
+	got := h.kinds(t)
+	if len(got) != len(want) {
+		t.Fatalf("ledger = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("step %d = %s, want %s", i, got[i], want[i])
+		}
+	}
+	if err := h.ledger.Verify(ctx, "run-1"); err != nil {
+		t.Errorf("Verify: %v", err)
+	}
+}
+
+func TestAdvance_writeTool_suspendsAwaitingApprovalWithoutInvoking(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t, Proposal{Tool: "crm.note", Args: []byte(`{"text":"hi"}`)})
+
+	st, err := h.runner.Advance(ctx, h.start(t, generousBudget()))
+	if err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+
+	if st.Phase != PhaseAwaitingApproval {
+		t.Errorf("Phase = %v, want %v", st.Phase, PhaseAwaitingApproval)
+	}
+	if len(h.tools.invocations) != 0 {
+		t.Errorf("tool was invoked %v while awaiting approval", h.tools.invocations)
+	}
+}
+
+func TestAdvance_blockedTool_recordsDecisionAndCausesNoEffect(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t, Proposal{Tool: "crm.refund", Args: []byte(`{"amount":500}`)})
+
+	if _, err := h.runner.Advance(ctx, h.start(t, generousBudget())); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+
+	if len(h.tools.invocations) != 0 {
+		t.Errorf("a blocked tool was invoked: %v", h.tools.invocations)
+	}
+	steps, _ := h.ledger.Read(ctx, "run-1", domain.FirstSeq)
+	last := steps[len(steps)-1]
+	if last.Kind != domain.StepGateDecided {
+		t.Fatalf("last step = %s, want %s", last.Kind, domain.StepGateDecided)
+	}
+	// The block is in the trail with the rule that caused it, so the operator
+	// sees which rule to change rather than "denied by policy" (PRD AU-10).
+	if last.PolicyHash == "" {
+		t.Error("gate decision recorded without a policy hash")
+	}
+}
+
+func TestAdvance_unknownTool_blockedBeforeReachingTheCatalog(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t, Proposal{Tool: "payments.transfer", Args: []byte(`{}`)})
+
+	if _, err := h.runner.Advance(ctx, h.start(t, generousBudget())); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+	if len(h.tools.invocations) != 0 {
+		t.Errorf("a tool outside the pack was invoked: %v", h.tools.invocations)
+	}
+}
+
+func TestAdvance_budgetTooSmallForTheCall_parksResumably(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t, Proposal{
+		Tool:     "crm.lookup",
+		Args:     []byte(`{}`),
+		Estimate: domain.Consumption{Micros: 900_000},
+	})
+
+	st, err := h.runner.Advance(ctx, h.start(t, domain.Budget{Micros: 10_000, Steps: 50}))
+	if err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+
+	if st.Phase != PhaseParked {
+		t.Errorf("Phase = %v, want %v", st.Phase, PhaseParked)
+	}
+	if len(h.tools.invocations) != 0 {
+		t.Errorf("tool invoked despite an exhausted budget: %v", h.tools.invocations)
+	}
+	// Parked, not finished: raising the ceiling must resume the same run.
+	if st.Done {
+		t.Error("Done = true for a parked run, which must stay resumable")
+	}
+}
+
+// The most expensive bug this architecture can have. A worker dies after the
+// tool call is recorded but before the result comes back; the run is picked up
+// again and must not bill the customer twice (PRD DE-16, NF-02).
+func TestResume_crashedAfterToolCall_doesNotInvokeTheToolAgain(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t, Proposal{Tool: "crm.lookup", Args: []byte(`{"id":"42"}`)})
+	start := h.start(t, generousBudget())
+
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("first Advance: %v", err)
+	}
+	if len(h.tools.invocations) != 1 {
+		t.Fatalf("invocations = %d after first pass, want 1", len(h.tools.invocations))
+	}
+
+	// A second worker picks the run up and replays the same proposal.
+	h.planner.calls = 0
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("resumed Advance: %v", err)
+	}
+
+	if len(h.tools.invocations) != 1 {
+		t.Errorf("invocations = %d after resume, want 1 — the effect was duplicated",
+			len(h.tools.invocations))
+	}
+}
+
+// A worker that dies between recording the call and receiving the result
+// leaves an orphan: the effect may or may not have landed, and nothing in the
+// process knows which. The loop must close it out honestly instead of guessing.
+func TestAdvance_resumedWithOrphanedToolCall_closesItAndReleasesBudget(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t, Proposal{Tool: "crm.lookup", Args: []byte(`{}`)})
+	start := h.start(t, generousBudget())
+
+	// Hand-build the ledger of a run that crashed mid-call.
+	for _, s := range []domain.Step{
+		{Kind: domain.StepRunStarted},
+		{Kind: domain.StepBudgetReserved,
+			Payload: mustJSON(domain.BudgetReservedPayload{Micros: 30_000})},
+		{Kind: domain.StepToolCalled, IdemKey: "already-done",
+			Payload: mustJSON(domain.ToolCalledPayload{Tool: "crm.lookup"})},
+	} {
+		s.RunID, s.Scope = start.RunID, start.Scope
+		s.At = time.Date(2026, 8, 10, 12, 0, 0, 0, time.UTC)
+		if _, err := h.ledger.Append(ctx, s); err != nil {
+			t.Fatalf("seed Append(%s): %v", s.Kind, err)
+		}
+	}
+
+	st, err := h.runner.Advance(ctx, start)
+	if err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+
+	// The orphan is closed and the run is runnable again, but the loop did not
+	// re-invoke: it has no idea whether the first call took effect.
+	if st.Phase != PhaseRunning {
+		t.Errorf("Phase = %v, want %v", st.Phase, PhaseRunning)
+	}
+	if len(h.tools.invocations) != 0 {
+		t.Errorf("tool invoked while recovering an orphaned call: %v", h.tools.invocations)
+	}
+
+	steps, _ := h.ledger.Read(ctx, "run-1", domain.FirstSeq)
+	state, err := Fold(steps)
+	if err != nil {
+		t.Fatalf("Fold: %v", err)
+	}
+	if state.Reserved.Micros != 0 {
+		t.Errorf("Reserved.Micros = %d, want 0 — the reservation leaked", state.Reserved.Micros)
+	}
+	// The recorded idempotency key survives the recovery, so a re-plan that
+	// proposes the same call still cannot repeat the effect.
+	if !state.AlreadyExecuted("already-done") {
+		t.Error("recovery lost the idempotency key of the orphaned call")
+	}
+}
+
+func TestAdvance_plannerReportsDone_finishesRun(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t) // no proposals: the planner reports done immediately
+
+	st, err := h.runner.Advance(ctx, h.start(t, generousBudget()))
+	if err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+
+	if st.Phase != PhaseFinished || !st.Done {
+		t.Errorf("Phase = %v, Done = %v, want finished/true", st.Phase, st.Done)
+	}
+}
+
+func TestAdvance_toolFails_recordsFailureAndReleasesTheReservation(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t, Proposal{Tool: "crm.lookup", Args: []byte(`{}`)})
+	h.tools.err = errors.New("connection refused")
+
+	if _, err := h.runner.Advance(ctx, h.start(t, generousBudget())); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+
+	steps, _ := h.ledger.Read(ctx, "run-1", domain.FirstSeq)
+	state, err := Fold(steps)
+	if err != nil {
+		t.Fatalf("Fold: %v", err)
+	}
+	// A reservation left outstanding after a failure would leak budget for the
+	// rest of the run and eventually park it for no reason.
+	if state.Reserved.Micros != 0 {
+		t.Errorf("Reserved.Micros = %d after a failed call, want 0", state.Reserved.Micros)
+	}
+}
+
+func TestAdvance_finishedRun_isNotAdvancedFurther(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t)
+	start := h.start(t, generousBudget())
+
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("first Advance: %v", err)
+	}
+	before := len(h.kinds(t))
+
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("second Advance: %v", err)
+	}
+
+	if after := len(h.kinds(t)); after != before {
+		t.Errorf("a finished run gained %d steps on a second Advance", after-before)
+	}
+}
+
+func TestAdvance_planKeepsProposingABlockedCall_parksInsteadOfLooping(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	// A block is fed back so the model can choose differently. When it does
+	// not, every further turn is a paid model call that cannot succeed: the
+	// pack, the taint and the policy are all fixed for the run's version.
+	refused := Proposal{Tool: "payments.transfer", Args: []byte(`{}`)}
+	h := newHarness(t, slices.Repeat([]Proposal{refused}, maxConsecutiveBlocks+2)...)
+	start := h.start(t, generousBudget())
+
+	var last Status
+	for range maxConsecutiveBlocks + 1 {
+		var err error
+		if last, err = h.runner.Advance(ctx, start); err != nil {
+			t.Fatalf("Advance: %v", err)
+		}
+	}
+
+	if last.Phase != PhaseParked {
+		t.Fatalf("Phase = %v after %d refused proposals, want parked",
+			last.Phase, maxConsecutiveBlocks+1)
+	}
+	if len(h.tools.invocations) != 0 {
+		t.Errorf("a refused tool was invoked: %v", h.tools.invocations)
+	}
+}
+
+func TestAdvance_blockThenProgress_doesNotCountTowardsParking(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	// One refusal followed by a call the Gate allows is the feedback loop
+	// working. Counting it towards the no-progress ceiling would park agents
+	// that recovered exactly as intended.
+	refused := Proposal{Tool: "payments.transfer", Args: []byte(`{}`)}
+	allowed := Proposal{Tool: "crm.lookup", Args: []byte(`{}`)}
+
+	h := newHarness(t, append(
+		slices.Repeat([]Proposal{refused}, maxConsecutiveBlocks-1),
+		allowed, refused,
+	)...)
+	start := h.start(t, generousBudget())
+
+	var last Status
+	for range maxConsecutiveBlocks + 1 {
+		var err error
+		if last, err = h.runner.Advance(ctx, start); err != nil {
+			t.Fatalf("Advance: %v", err)
+		}
+	}
+
+	if last.Phase == PhaseParked {
+		t.Errorf("the run parked despite an allowed call between refusals; steps: %v", h.kinds(t))
+	}
+}

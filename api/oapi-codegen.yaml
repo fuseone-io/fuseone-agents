@@ -1,0 +1,22 @@
+# Server generation config.
+#
+# strict-server gives typed request and response values per operation, so an
+# unhandled status or a wrong body shape is a compile error rather than a
+# runtime surprise. std-http-server targets net/http, keeping the dependency
+# surface at zero web frameworks.
+package: openapi
+output: ../internal/httpapi/openapi/server.gen.go
+
+generate:
+  models: true
+  strict-server: true
+  std-http-server: true
+  embedded-spec: true
+
+output-options:
+  # nullable-type stays off: it would render nullable fields as
+  # nullable.Nullable[T] instead of *T, which buys an explicit "present but
+  # null" distinction this API never needs and costs a wrapper at every
+  # assignment.
+  nullable-type: false
+  skip-prune: false

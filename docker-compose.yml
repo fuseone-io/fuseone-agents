@@ -1,0 +1,28 @@
+# Development stack. Production is one binary plus a Postgres the customer
+# already operates (PRD DE-01); this file exists so a contributor gets a
+# database in one command, not to describe a deployment.
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: agents
+      POSTGRES_PASSWORD: agents
+      POSTGRES_DB: agents
+    ports: ["5433:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agents"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    volumes:
+      # Persistent so a `make dev` restart does not throw away the installation
+      # you just claimed: the setup token is single use, and re-claiming after
+      # every restart makes the first-run flow something to work around rather
+      # than something to test. `make reset` throws it away deliberately.
+      #
+      # Postgres 18 expects the mount at /var/lib/postgresql, not the data
+      # subdirectory it used through 17.
+      - pgdata:/var/lib/postgresql
+
+volumes:
+  pgdata:

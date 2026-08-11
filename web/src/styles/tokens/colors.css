@@ -1,0 +1,130 @@
+/* Fuseone Agents — colour tokens.
+   Source: design_handoff_fuseone_console/tokens/colors.css. This file is the
+   source of truth for colour; nothing else in the app declares a hex value.
+
+   Two dark selectors on purpose: the design system specifies data-theme, and
+   shadcn's primitives ship dark: variants keyed on the .dark class. Honouring
+   both means neither convention has to bend. */
+:root {
+  /* Brand — Fuse Aqua. The only saturated hue allowed to carry an action. */
+  --fuse-50: #e6f7f7;
+  --fuse-100: #c2ecec;
+  --fuse-200: #8fdcdc;
+  --fuse-300: #56c7c8;
+  --fuse-400: #22aeb3;
+  --fuse-500: #0e9199;
+  --fuse-600: #0a757f;
+  --fuse-700: #085c66;
+  --fuse-800: #07444c;
+  --fuse-900: #062f35;
+
+  /* Neutrals — cool slate, tuned to the aqua. Carries ~95% of every screen. */
+  --gray-0: #ffffff;
+  --gray-25: #f8fafa;
+  --gray-50: #f1f5f5;
+  --gray-100: #e6eded;
+  --gray-200: #d3dede;
+  --gray-300: #b4c3c4;
+  --gray-400: #8a9b9d;
+  --gray-500: #647476;
+  --gray-600: #475659;
+  --gray-700: #2f3d40;
+  --gray-800: #1d2a2d;
+  --gray-900: #131f21;
+  --gray-950: #0b1416;
+
+  /* Semantic hues */
+  --green-50: #e8f7f0;
+  --green-500: #1fa971;
+  --green-700: #14764f;
+  --amber-50: #fef6e0;
+  --amber-500: #f5b301;
+  --amber-700: #a87a00;
+  --red-50: #fdecee;
+  --red-500: #d92d3f;
+  --red-700: #961e2c;
+  --blue-50: #e8f0fe;
+  --blue-500: #2c6fe8;
+  --blue-700: #1b4ca8;
+
+  /* ---- Semantic aliases: LIGHT (default) ---- */
+  --surface-page: var(--gray-25);
+  --surface-card: var(--gray-0);
+  --surface-sunken: var(--gray-50);
+  --surface-raised: var(--gray-0);
+  --surface-inverse: var(--gray-900);
+  --surface-hover: var(--gray-50);
+  --surface-active: var(--gray-100);
+  --surface-accent: var(--fuse-50);
+
+  --text-primary: var(--gray-900);
+  --text-secondary: var(--gray-600);
+  --text-tertiary: var(--gray-500);
+  --text-disabled: var(--gray-400);
+  --text-inverse: var(--gray-0);
+  --text-accent: var(--fuse-700);
+  --text-on-accent: #ffffff;
+
+  --border-subtle: #eff3f3;
+  --border-default: #e3eaea;
+  --border-strong: #cbd6d7;
+  --border-accent: var(--fuse-500);
+
+  --action-primary: var(--fuse-500);
+  --action-primary-hover: var(--fuse-600);
+  --action-primary-press: var(--fuse-700);
+  --focus-ring: var(--fuse-400);
+
+  --status-success: var(--green-500);
+  --status-warning: var(--amber-500);
+  --status-danger: var(--red-500);
+  --status-info: var(--blue-500);
+  --status-success-surface: var(--green-50);
+  --status-warning-surface: var(--amber-50);
+  --status-danger-surface: var(--red-50);
+  --status-info-surface: var(--blue-50);
+
+  /* Agent run states — run logs, traces, agent cards. Never used alone: the
+     design system requires a dot *and* a label, so colour is redundant
+     reinforcement rather than the message. */
+  --agent-draft: var(--gray-400);
+  --agent-running: var(--blue-500);
+  --agent-waiting: var(--amber-500);
+  --agent-blocked: var(--red-500);
+  --agent-done: var(--green-500);
+}
+
+[data-theme="dark"],
+.dark {
+  --surface-page: var(--gray-950);
+  --surface-card: var(--gray-900);
+  --surface-sunken: #070f10;
+  --surface-raised: var(--gray-800);
+  --surface-inverse: var(--gray-50);
+  --surface-hover: #182427;
+  --surface-active: var(--gray-800);
+  --surface-accent: rgb(14 145 153 / 0.16);
+
+  --text-primary: var(--gray-50);
+  --text-secondary: var(--gray-300);
+  --text-tertiary: var(--gray-400);
+  --text-disabled: var(--gray-600);
+  --text-inverse: var(--gray-950);
+  --text-accent: var(--fuse-400);
+  --text-on-accent: #04191b;
+
+  --border-subtle: #172123;
+  --border-default: #1f2c2e;
+  --border-strong: #334447;
+  --border-accent: var(--fuse-500);
+
+  --action-primary: var(--fuse-500);
+  --action-primary-hover: var(--fuse-400);
+  --action-primary-press: var(--fuse-600);
+  --focus-ring: var(--fuse-400);
+
+  --status-success-surface: rgb(31 169 113 / 0.14);
+  --status-warning-surface: rgb(245 179 1 / 0.14);
+  --status-danger-surface: rgb(217 45 63 / 0.14);
+  --status-info-surface: rgb(44 111 232 / 0.14);
+}

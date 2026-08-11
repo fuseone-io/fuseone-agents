@@ -1,0 +1,85 @@
+/* shadcn/ui variable contract, mapped onto the Fuseone palette.
+   Source: design_handoff_fuseone_console/tokens/shadcn.css.
+
+   Primitives under components/ui keep referring to --background, --primary,
+   --sidebar-* and adopt the brand with no per-component override. Never paste
+   shadcn's stock values over this file. */
+:root {
+  /* Kept from the handoff. Tailwind's radius scale (see theme.css) supersedes
+     shadcn's derived --radius-* calculations, so this only serves any
+     primitive that reads --radius directly. */
+  --radius: 0.625rem;
+
+  --background: var(--gray-25);
+  --foreground: var(--gray-900);
+  --card: var(--gray-0);
+  --card-foreground: var(--gray-900);
+  --popover: var(--gray-0);
+  --popover-foreground: var(--gray-900);
+
+  --primary: var(--fuse-500);
+  --primary-foreground: #ffffff;
+  --secondary: var(--gray-100);
+  --secondary-foreground: var(--gray-800);
+  --muted: var(--gray-50);
+  --muted-foreground: var(--gray-500);
+  --accent: var(--gray-100);
+  --accent-foreground: var(--gray-900);
+  --destructive: var(--red-500);
+  --destructive-foreground: #ffffff;
+
+  --border: var(--border-default);
+  --input: var(--border-default);
+  --ring: var(--fuse-400);
+
+  --chart-1: var(--fuse-500);
+  --chart-2: var(--blue-500);
+  --chart-3: var(--green-500);
+  --chart-4: var(--amber-500);
+  --chart-5: var(--gray-400);
+
+  /* sidebar-07: icon-collapsible sidebar + inset content */
+  --sidebar: var(--gray-50);
+  --sidebar-foreground: var(--gray-800);
+  --sidebar-primary: var(--fuse-500);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--gray-100);
+  --sidebar-accent-foreground: var(--gray-900);
+  --sidebar-border: var(--gray-200);
+  --sidebar-ring: var(--fuse-400);
+  --sidebar-width: 248px;
+  --sidebar-width-icon: 48px;
+}
+
+[data-theme="dark"],
+.dark {
+  --background: var(--gray-950);
+  --foreground: var(--gray-50);
+  --card: var(--gray-900);
+  --card-foreground: var(--gray-50);
+  --popover: var(--gray-800);
+  --popover-foreground: var(--gray-50);
+
+  --primary: var(--fuse-500);
+  --primary-foreground: #04191b;
+  --secondary: var(--gray-800);
+  --secondary-foreground: var(--gray-50);
+  --muted: #182427;
+  --muted-foreground: var(--gray-400);
+  --accent: var(--gray-800);
+  --accent-foreground: var(--gray-50);
+  --destructive: var(--red-500);
+
+  --border: var(--border-default);
+  --input: var(--border-default);
+  --ring: var(--fuse-400);
+
+  --sidebar: var(--gray-900);
+  --sidebar-foreground: var(--gray-300);
+  --sidebar-accent: var(--gray-800);
+  --sidebar-accent-foreground: var(--gray-50);
+  /* Handoff ships #2E2A27 here, a warm brown that is the one value in the
+     bundle off the cool-slate temperature the palette is built on. Read as a
+     typo and corrected to the neutral at the same lightness. */
+  --sidebar-border: var(--gray-700);
+}

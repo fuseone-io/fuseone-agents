@@ -1,0 +1,17 @@
+/* Typography roles.
+   Source: design_handoff_fuseone_console/tokens/typography.css.
+
+   The numeric scale itself lives in theme.css, inside Tailwind's --text-*
+   namespace, so `text-sm` and `var(--text-sm)` can never disagree. What stays
+   here are the composed roles: shorthands for the rare place a token is
+   applied in raw CSS rather than through a utility. */
+:root {
+  --type-page-title: var(--font-weight-medium) var(--text-2xl) / var(--text-2xl--line-height) var(--font-sans);
+  --type-section: var(--font-weight-medium) var(--text-xl) / var(--text-xl--line-height) var(--font-sans);
+  --type-body: var(--font-weight-normal) var(--text-base) / var(--text-base--line-height) var(--font-sans);
+  --type-body-sm: var(--font-weight-normal) var(--text-sm) / var(--text-sm--line-height) var(--font-sans);
+  --type-label: var(--font-weight-medium) var(--text-sm) / var(--text-sm--line-height) var(--font-sans);
+  --type-caption: var(--font-weight-normal) var(--text-xs) / var(--text-xs--line-height) var(--font-sans);
+  --type-code: var(--font-weight-normal) var(--text-sm) / var(--text-sm--line-height) var(--font-mono);
+  --type-data: var(--font-weight-medium) var(--text-sm) / var(--text-sm--line-height) var(--font-mono);
+}

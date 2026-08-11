@@ -1,0 +1,356 @@
+package tools_test
+
+import (
+	"context"
+	"errors"
+	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/engine"
+	"github.com/fuseone/agents/internal/tools"
+)
+
+// fakeServer stands in for a connected MCP server.
+type fakeServer struct {
+	list   []*mcp.Tool
+	result *mcp.CallToolResult
+	err    error
+	calls  []string
+	closed bool
+}
+
+func (f *fakeServer) ListTools(context.Context, *mcp.ListToolsParams) (*mcp.ListToolsResult, error) {
+	return &mcp.ListToolsResult{Tools: f.list}, nil
+}
+
+func (f *fakeServer) CallTool(_ context.Context, p *mcp.CallToolParams) (*mcp.CallToolResult, error) {
+	f.calls = append(f.calls, p.Name)
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.result, nil
+}
+
+func (f *fakeServer) Close() error { f.closed = true; return nil }
+
+func text(s string) *mcp.CallToolResult {
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: s}}}
+}
+
+func catalogWith(t *testing.T, srv *fakeServer) (*tools.Catalog, *engine.MemoryContent) {
+	t.Helper()
+
+	content := engine.NewMemoryContent()
+	c := tools.NewCatalog(content)
+	if err := c.AddServer(context.Background(), "crm", srv); err != nil {
+		t.Fatalf("AddServer: %v", err)
+	}
+	return c, content
+}
+
+func lookupServer() *fakeServer {
+	return &fakeServer{
+		list: []*mcp.Tool{{
+			Name:        "lookup",
+			Description: "Look a customer up by email.",
+			InputSchema: map[string]any{
+				"type":       "object",
+				"properties": map[string]any{"email": map[string]any{"type": "string"}},
+			},
+		}},
+		result: text("Cliente encontrado: ACME Ltda"),
+	}
+}
+
+func TestAddServer_importedTool_arrivesReadOnlyAndUntrusted(t *testing.T) {
+	t.Parallel()
+
+	c, _ := catalogWith(t, lookupServer())
+
+	effect, ok := c.Effect("crm.lookup")
+	if !ok {
+		t.Fatal("the imported tool is not in the catalogue")
+	}
+	// A server must not be able to grant itself write access by describing a
+	// tool as one. Everything arrives read-only and the Curator widens it.
+	if effect != domain.EffectRead {
+		t.Errorf("Effect = %v, want read on import", effect)
+	}
+}
+
+func TestEffect_unknownTool_reportsUnknownSoTheGateBlocks(t *testing.T) {
+	t.Parallel()
+
+	c, _ := catalogWith(t, lookupServer())
+
+	// The Gate's first check is capability, and its second is classification.
+	// A tool nobody classified must never resolve to a usable effect.
+	if _, ok := c.Effect("crm.refund"); ok {
+		t.Error("an unregistered tool resolved to an effect")
+	}
+}
+
+func TestAddServer_toolsAreNamespacedByServer(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	content := engine.NewMemoryContent()
+	c := tools.NewCatalog(content)
+
+	// Two servers both offering "lookup" must not collapse into one
+	// capability — a pack granting one would silently grant the other.
+	if err := c.AddServer(ctx, "crm", lookupServer()); err != nil {
+		t.Fatalf("AddServer(crm): %v", err)
+	}
+	if err := c.AddServer(ctx, "erp", lookupServer()); err != nil {
+		t.Fatalf("AddServer(erp): %v", err)
+	}
+
+	if _, ok := c.Effect("crm.lookup"); !ok {
+		t.Error("crm.lookup missing")
+	}
+	if _, ok := c.Effect("erp.lookup"); !ok {
+		t.Error("erp.lookup missing")
+	}
+}
+
+func TestClassify_curatorWidensEffect(t *testing.T) {
+	t.Parallel()
+
+	c, _ := catalogWith(t, lookupServer())
+
+	if err := c.Classify("crm.lookup", domain.EffectWrite, true); err != nil {
+		t.Fatalf("Classify: %v", err)
+	}
+	if effect, _ := c.Effect("crm.lookup"); effect != domain.EffectWrite {
+		t.Errorf("Effect = %v, want write after the Curator classified it", effect)
+	}
+}
+
+func TestClassify_unknownTool_isRejected(t *testing.T) {
+	t.Parallel()
+
+	c, _ := catalogWith(t, lookupServer())
+
+	if err := c.Classify("crm.nope", domain.EffectWrite, false); !errors.Is(err, tools.ErrUnknownTool) {
+		t.Errorf("Classify = %v, want %v", err, tools.ErrUnknownTool)
+	}
+}
+
+func TestInvoke_untrustedServer_taintsTheResult(t *testing.T) {
+	t.Parallel()
+
+	c, _ := catalogWith(t, lookupServer())
+
+	res, err := c.Invoke(context.Background(), engine.Call{
+		RunID: "run-1", Seq: 5, Tool: "crm.lookup", Args: []byte(`{"email":"a@b.com"}`),
+	})
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+
+	// This label is what makes taint propagate through the run. Without it,
+	// content the platform never vouched for reads as trusted downstream.
+	if !res.Labels.Has(domain.LabelUntrusted) {
+		t.Errorf("Labels = %v, want the untrusted label", res.Labels)
+	}
+}
+
+func TestInvoke_vouchedServer_returnsUntaintedResults(t *testing.T) {
+	t.Parallel()
+
+	c, _ := catalogWith(t, lookupServer())
+	if err := c.Classify("crm.lookup", domain.EffectRead, false); err != nil {
+		t.Fatalf("Classify: %v", err)
+	}
+
+	res, err := c.Invoke(context.Background(), engine.Call{
+		RunID: "run-1", Seq: 5, Tool: "crm.lookup",
+	})
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	if res.Labels.Has(domain.LabelUntrusted) {
+		t.Error("a server the Curator vouched for still returns tainted output")
+	}
+}
+
+func TestInvoke_result_goesToContentStoreNotTheLedger(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	c, content := catalogWith(t, lookupServer())
+
+	res, err := c.Invoke(ctx, engine.Call{RunID: "run-1", Seq: 5, Tool: "crm.lookup"})
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+
+	// Tool output routinely carries personal data. The ledger records a
+	// reference so retention stays honourable (PRD AU-04).
+	if res.ResultRef == "" {
+		t.Fatal("no content reference returned")
+	}
+	stored, err := content.Get(ctx, res.ResultRef)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if string(stored) != "Cliente encontrado: ACME Ltda" {
+		t.Errorf("stored = %q, want the tool's output", stored)
+	}
+}
+
+func TestInvoke_toolReportsFailure_isSurfacedNotSwallowed(t *testing.T) {
+	t.Parallel()
+
+	srv := lookupServer()
+	srv.result = &mcp.CallToolResult{
+		IsError: true,
+		Content: []mcp.Content{&mcp.TextContent{Text: "customer not found"}},
+	}
+	c, _ := catalogWith(t, srv)
+
+	res, err := c.Invoke(context.Background(), engine.Call{RunID: "run-1", Seq: 5, Tool: "crm.lookup"})
+	if err != nil {
+		t.Fatalf("Invoke returned a transport error for a tool-level failure: %v", err)
+	}
+	// A tool that reports failure is a result, not a transport error — the
+	// model needs to see it to choose a different approach.
+	if !res.Failed {
+		t.Error("Failed = false for a tool that reported an error")
+	}
+}
+
+func TestInvoke_unknownTool_neverReachesAServer(t *testing.T) {
+	t.Parallel()
+
+	srv := lookupServer()
+	c, _ := catalogWith(t, srv)
+
+	_, err := c.Invoke(context.Background(), engine.Call{RunID: "run-1", Tool: "crm.refund"})
+	if !errors.Is(err, tools.ErrUnknownTool) {
+		t.Errorf("Invoke = %v, want %v", err, tools.ErrUnknownTool)
+	}
+	if len(srv.calls) != 0 {
+		t.Errorf("an unregistered tool reached the server: %v", srv.calls)
+	}
+}
+
+func TestInvoke_malformedArguments_areRejectedBeforeTheCall(t *testing.T) {
+	t.Parallel()
+
+	srv := lookupServer()
+	c, _ := catalogWith(t, srv)
+
+	_, err := c.Invoke(context.Background(), engine.Call{
+		RunID: "run-1", Tool: "crm.lookup", Args: []byte(`{not json`),
+	})
+	if err == nil {
+		t.Fatal("malformed arguments were accepted")
+	}
+	if len(srv.calls) != 0 {
+		t.Error("a malformed call still reached the server")
+	}
+}
+
+func TestSchema_describesTheToolToTheModel(t *testing.T) {
+	t.Parallel()
+
+	c, _ := catalogWith(t, lookupServer())
+
+	name, desc, schema, ok := c.Schema("crm.lookup")
+	if !ok {
+		t.Fatal("no schema for a registered tool")
+	}
+	// The namespaced id is what the model calls, so a proposal maps back to
+	// exactly one catalogue entry.
+	if name != "crm.lookup" {
+		t.Errorf("name = %q, want the namespaced id", name)
+	}
+	if desc == "" {
+		t.Error("no description; the model has nothing to decide from")
+	}
+	if _, has := schema["email"]; !has {
+		t.Errorf("schema = %v, want the tool's own parameters", schema)
+	}
+}
+
+func TestClose_shutsEverySessionDown(t *testing.T) {
+	t.Parallel()
+
+	srv := lookupServer()
+	c, _ := catalogWith(t, srv)
+
+	if err := c.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if !srv.closed {
+		t.Error("the session was left open")
+	}
+}
+
+// staticRulings stands in for the administration's record of what tools do.
+type staticRulings []domain.ToolClassification
+
+func (s staticRulings) List(context.Context, domain.Scope) ([]domain.ToolClassification, error) {
+	return s, nil
+}
+
+func TestSync_appliesARecordedRuling_soAPromotionOutlivesTheProcess(t *testing.T) {
+	t.Parallel()
+
+	c, _ := catalogWith(t, noteServer())
+
+	// Imported read-only, as every tool is, whatever its server claims.
+	if effect, _ := c.Effect("crm.note"); effect != domain.EffectRead {
+		t.Fatalf("imported effect = %v, want read", effect)
+	}
+
+	applied, err := c.Sync(t.Context(), staticRulings{
+		{Tool: "crm.note", Effect: domain.EffectWrite, Untrusted: false},
+	}, domain.Scope{})
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	if applied != 1 {
+		t.Fatalf("applied = %d, want 1", applied)
+	}
+	if effect, _ := c.Effect("crm.note"); effect != domain.EffectWrite {
+		t.Errorf("effect after sync = %v, want write", effect)
+	}
+}
+
+func TestSync_rulingForAToolThisCatalogueLacks_isIgnoredNotFatal(t *testing.T) {
+	t.Parallel()
+
+	c, _ := catalogWith(t, noteServer())
+
+	// Servers come and go. A stale ruling for an absent tool must not stop
+	// every current ruling from being applied.
+	applied, err := c.Sync(t.Context(), staticRulings{
+		{Tool: "gone.tool", Effect: domain.EffectWrite},
+		{Tool: "crm.note", Effect: domain.EffectWrite},
+	}, domain.Scope{})
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	if applied != 1 {
+		t.Errorf("applied = %d, want only the tool this catalogue carries", applied)
+	}
+}
+
+func noteServer() *fakeServer {
+	return &fakeServer{
+		list: []*mcp.Tool{{
+			Name:        "note",
+			Description: "Record an internal note.",
+			InputSchema: map[string]any{
+				"type":       "object",
+				"properties": map[string]any{"text": map[string]any{"type": "string"}},
+			},
+		}},
+		result: text("ok"),
+	}
+}

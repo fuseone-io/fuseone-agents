@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+/* Geist is self-hosted, not pulled from Google Fonts. The console is installed
+   inside the customer's network and has to render identically with no egress;
+   a webfont CDN would also leak every page view to a third party. */
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
+@import "./styles/tokens/colors.css";
+@import "./styles/tokens/typography.css";
+@import "./styles/tokens/spacing.css";
+@import "./styles/tokens/elevation.css";
+@import "./styles/tokens/motion.css";
+@import "./styles/tokens/shadcn.css";
+@import "./styles/theme.css";
+
+/* The design system specifies data-theme; shadcn primitives ship dark:
+   variants keyed on .dark. Both drive the same tokens. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, .dark, .dark *));
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    color-scheme: light;
+  }
+
+  html:where([data-theme="dark"], .dark) {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    line-height: var(--text-base--line-height);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Anything the platform produced rather than a person wrote reads in mono
+     with fixed-width digits: run ids, costs, latencies, hashes. Aligning the
+     columns is the point — a cost table you can scan is a cost table people
+     actually check. */
+  code,
+  kbd,
+  pre,
+  samp {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Every duration token already collapses to 0 under reduced motion, but a
+   utility like `duration-200` writes a literal. This closes that gap for the
+   whole app rather than depending on each component remembering. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}

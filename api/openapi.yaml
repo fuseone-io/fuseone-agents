@@ -1,0 +1,802 @@
+openapi: 3.0.3
+
+# OpenAPI 3.0.3 rather than 3.1: every generator in the toolchain supports it
+# fully today. Revisit when kin-openapi's 3.1 support is complete.
+#
+# This file is the contract, not a description of the code. The Go server
+# interface and the TypeScript client are both generated from it, and CI fails
+# when the committed generated code no longer matches. Change the API here
+# first, always.
+
+info:
+  title: FuseOne Agents API
+  version: 0.1.0
+  description: |
+    Control API for the FuseOne Agents platform.
+
+    This is the product's API, not a frontend backend. The Console, the CLI,
+    CI pipelines and customer integrations are all first-class clients, so
+    treat every change as a public contract change.
+
+    All money is an integer in millionths of the installation's currency.
+    All timestamps are RFC 3339 in UTC.
+  license:
+    name: Proprietary
+
+servers:
+  - url: /api/v1
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: runs
+    description: Agent executions and their ledger trail
+  - name: approvals
+    description: Actions suspended awaiting a human decision
+  - name: cost
+    description: Consumption rolled up across the scope hierarchy
+  - name: system
+
+paths:
+  /runs:
+    get:
+      tags: [runs]
+      operationId: listRuns
+      summary: List runs
+      parameters:
+        - $ref: '#/components/parameters/Company'
+        - $ref: '#/components/parameters/Area'
+        - name: agentId
+          in: query
+          schema: { type: string }
+        - name: phase
+          in: query
+          schema: { $ref: '#/components/schemas/Phase' }
+        - name: since
+          in: query
+          description: Only runs started at or after this instant.
+          schema: { type: string, format: date-time }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: A page of runs, newest first.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RunPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /runs/stats:
+    get:
+      tags: [runs]
+      operationId: getRunStats
+      summary: Aggregate counts over runs
+      description: >
+        Counts every run that matches, not just the page a list would return.
+        The console shows these figures as facts, so they are computed where
+        the whole set is — never derived from a page.
+      parameters:
+        - $ref: '#/components/parameters/Company'
+        - $ref: '#/components/parameters/Area'
+        - name: agentId
+          in: query
+          schema: { type: string }
+        - name: since
+          in: query
+          description: Only runs started at or after this instant.
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Aggregates over the matching runs.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RunStats' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /runs/{runId}:
+    get:
+      tags: [runs]
+      operationId: getRun
+      summary: Get one run
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+      responses:
+        '200':
+          description: The run.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Run' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /runs/{runId}/steps:
+    get:
+      tags: [runs]
+      operationId: listRunSteps
+      summary: Read the run's ledger trail
+      description: |
+        Returns the run's steps in order. This is the audit trail: every entry
+        is immutable and sealed into a hash chain, so the same request always
+        returns the same bytes for the same range.
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+        - name: fromSeq
+          in: query
+          description: First sequence number to return. Defaults to 1.
+          schema: { type: integer, format: int64, minimum: 1 }
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: A page of steps.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StepPage' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /runs/{runId}/verify:
+    post:
+      tags: [runs]
+      operationId: verifyRun
+      summary: Verify the run's hash chain
+      description: |
+        Walks the chain and reports whether every link is intact. Used by the
+        signed export and by the tamper alarm.
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+      responses:
+        '200':
+          description: Verification result.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VerifyResult' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /approvals:
+    get:
+      tags: [approvals]
+      operationId: listApprovals
+      summary: The approval inbox
+      parameters:
+        - $ref: '#/components/parameters/Company'
+        - $ref: '#/components/parameters/Area'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Pending approvals, oldest first.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApprovalPage' }
+
+  /runs/{runId}/approvals:
+    post:
+      tags: [approvals]
+      operationId: decideApproval
+      summary: Approve or reject a suspended action
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ApprovalDecision' }
+      responses:
+        '200':
+          description: The decision was recorded and the run resumed or ended.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Run' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: The run has no pending approval, or it already expired.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /cost:
+    get:
+      tags: [cost]
+      operationId: getCostRollup
+      summary: Consumption rolled up over a period
+      description: |
+        The run is the accounting unit; company, area and agent are dimensions
+        derived from it. Totals always reconcile because they are projections
+        of the same ledger rows.
+      parameters:
+        - $ref: '#/components/parameters/Company'
+        - $ref: '#/components/parameters/Area'
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: groupBy
+          in: query
+          schema:
+            type: string
+            enum: [company, area, agent, day]
+            default: agent
+      responses:
+        '200':
+          description: The rollup.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CostRollup' }
+
+  /admin/tools:
+    get:
+      tags: [admin]
+      operationId: listTools
+      summary: Every tool the platform knows, and what it is classified as
+      description: >
+        Tools arrive from their servers classified read-only whatever the
+        server claims about itself. Promoting one is a separate, recorded act.
+      responses:
+        '200':
+          description: The tool catalogue.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Tool' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/tools/{toolId}/classification:
+    put:
+      tags: [admin]
+      operationId: classifyTool
+      summary: Record what a tool does to the world
+      description: >
+        The single point where write access enters the platform. The ruling is
+        durable and attributed; the previous one is not amended, it is
+        superseded, and both stay in the administrative trail.
+      parameters:
+        - name: toolId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [effect]
+              properties:
+                effect: { $ref: '#/components/schemas/Effect' }
+                untrusted:
+                  type: boolean
+                  description: Whether results carry data the platform did not author. Reading one taints the run.
+                reason: { type: string }
+      responses:
+        '204': { description: The ruling is recorded. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/integrations:
+    get:
+      tags: [admin]
+      operationId: listIntegrations
+      summary: Everything the platform is configured to talk to
+      description: >
+        Tool servers and model providers. Credentials are never returned; a
+        provider only reports whether one is stored.
+      responses:
+        '200':
+          description: The configured integrations.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [mcpServers, providers]
+                properties:
+                  mcpServers:
+                    type: array
+                    items: { $ref: '#/components/schemas/MCPServer' }
+                  providers:
+                    type: array
+                    items: { $ref: '#/components/schemas/ModelProvider' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/integrations/mcp-servers/{name}:
+    put:
+      tags: [admin]
+      operationId: putMCPServer
+      summary: Configure a tool server
+      description: >
+        Adding a server changes what agents can do, so it is recorded like any
+        other administrative change. The tools it offers still arrive
+        classified read-only; promoting one stays a separate act.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: Namespaces the tools this server offers.
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [command]
+              properties:
+                command: { type: string }
+                args:
+                  type: array
+                  items: { type: string }
+                enabled: { type: boolean, default: true }
+      responses:
+        '204': { description: The server is configured. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    delete:
+      tags: [admin]
+      operationId: deleteMCPServer
+      summary: Remove a tool server
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: The server is removed. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/integrations/providers/{name}:
+    put:
+      tags: [admin]
+      operationId: putModelProvider
+      summary: Configure a model provider
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, baseUrl]
+              properties:
+                kind:
+                  type: string
+                  enum: [anthropic, openai_compatible]
+                baseUrl: { type: string }
+                apiKey:
+                  type: string
+                  description: >
+                    Sealed in the vault on arrival and never returned. Omit it
+                    to keep the stored credential — changing a base URL should
+                    not require re-entering a key.
+                enabled: { type: boolean, default: true }
+      responses:
+        '204': { description: The provider is configured. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    delete:
+      tags: [admin]
+      operationId: deleteModelProvider
+      summary: Remove a model provider
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: The provider is removed. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/events:
+    get:
+      tags: [admin]
+      operationId: listAdminEvents
+      summary: What operators changed about the platform
+      description: >
+        The run ledger records what agents did; this records what people did to
+        the rules agents run under. Append-only.
+      parameters:
+        - name: target
+          in: query
+          description: Read the trail backwards from one object.
+          schema: { type: string }
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Administrative events, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/AdminEvent' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /healthz:
+    get:
+      tags: [system]
+      operationId: health
+      summary: Liveness probe
+      security: []
+      responses:
+        '200':
+          description: The process is alive.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        A token minted by the platform after the user authenticates against the
+        installation's identity provider. For agent-initiated calls the token
+        carries an actor claim, so the trail records the agent acting on behalf
+        of a human rather than the human alone.
+
+  parameters:
+    RunId:
+      name: runId
+      in: path
+      required: true
+      schema: { type: string }
+    Company:
+      name: company
+      in: query
+      description: Company scope. A single value until multi-company (PRD 3.1).
+      schema: { type: string }
+    Area:
+      name: area
+      in: query
+      schema: { type: string }
+    Cursor:
+      name: cursor
+      in: query
+      description: Opaque cursor from the previous page.
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+
+  responses:
+    BadRequest:
+      description: The request is malformed.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unauthorized:
+      description: Missing or invalid credentials.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Forbidden:
+      description: Authenticated, but the caller does not hold the permission in this scope.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: No such resource, or it is outside the caller's scope.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+    Problem:
+      type: object
+      description: RFC 9457 problem detail.
+      required: [title, status]
+      properties:
+        type: { type: string, default: about:blank }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+
+    Phase:
+      type: string
+      enum: [unstarted, running, awaiting_approval, awaiting_tool, parked, finished]
+
+    Verdict:
+      type: string
+      enum: [allow, constrain, require_approval, block]
+
+    Effect:
+      type: string
+      description: >
+        What a tool does to the world. The domain's `unknown` is deliberately
+        absent: it is the zero value that makes an unclassified tool fail
+        closed, never something a caller may assert.
+      enum: [read, write, destructive, financial]
+
+    StepKind:
+      type: string
+      enum:
+        - run_started
+        - planned
+        - gate_decided
+        - budget_reserved
+        - tool_called
+        - tool_returned
+        - budget_reconciled
+        - approval_requested
+        - approval_decided
+        - compensated
+        - failed
+        - parked
+        - run_finished
+
+    Scope:
+      type: object
+      required: [company, area]
+      properties:
+        company: { type: string }
+        area: { type: string }
+
+    Cost:
+      type: object
+      description: |
+        Cache tokens are reported separately from input tokens: a cache read
+        costs a fraction of the price, and without the split an expensive agent
+        cannot be diagnosed.
+      required: [micros]
+      properties:
+        micros: { type: integer, format: int64 }
+        inputTokens: { type: integer, format: int64 }
+        outputTokens: { type: integer, format: int64 }
+        cacheReadTokens: { type: integer, format: int64 }
+        cacheWriteTokens: { type: integer, format: int64 }
+
+    Run:
+      type: object
+      required: [runId, scope, agentId, versionId, phase, seq, startedAt, cost]
+      properties:
+        runId: { type: string }
+        scope: { $ref: '#/components/schemas/Scope' }
+        agentId: { type: string }
+        versionId:
+          type: string
+          description: The specification version the run is pinned to. Publishing a new version never affects a run already in flight.
+        onBehalfOf: { type: string }
+        phase: { $ref: '#/components/schemas/Phase' }
+        seq:
+          type: integer
+          format: int64
+          description: Sequence number of the last recorded step.
+        startedAt: { type: string, format: date-time }
+        endedAt: { type: string, format: date-time, nullable: true }
+        cost: { $ref: '#/components/schemas/Cost' }
+        reservedMicros:
+          type: integer
+          format: int64
+          description: Outstanding reservations not yet reconciled.
+        labels:
+          type: array
+          description: Accumulated data-flow labels of the run context.
+          items: { type: string }
+        pendingApproval:
+          allOf: [{ $ref: '#/components/schemas/PendingApproval' }]
+          nullable: true
+
+    Tool:
+      type: object
+      required: [toolId, server, effect, untrusted]
+      properties:
+        toolId:
+          type: string
+          description: Namespaced by server, because two servers naming a tool "search" must not collide into one capability.
+        server: { type: string }
+        description: { type: string }
+        effect: { $ref: '#/components/schemas/Effect' }
+        untrusted: { type: boolean }
+
+    MCPServer:
+      type: object
+      required: [name, command, enabled]
+      properties:
+        name:
+          type: string
+          description: Namespaces the tools it offers, so two servers naming a tool "search" do not collide.
+        command: { type: string }
+        args:
+          type: array
+          items: { type: string }
+        enabled: { type: boolean }
+        updatedBy: { type: string }
+        updatedAt: { type: string, format: date-time }
+
+    ModelProvider:
+      type: object
+      required: [name, kind, baseUrl, enabled, hasKey]
+      properties:
+        name: { type: string }
+        kind:
+          type: string
+          enum: [anthropic, openai_compatible]
+        baseUrl: { type: string }
+        enabled: { type: boolean }
+        hasKey:
+          type: boolean
+          description: Whether a credential is stored. The credential itself never leaves the vault through this API.
+        updatedBy: { type: string }
+        updatedAt: { type: string, format: date-time }
+
+    AdminEvent:
+      type: object
+      required: [at, principalId, action, target]
+      properties:
+        at: { type: string, format: date-time }
+        principalId: { type: string }
+        scope: { $ref: '#/components/schemas/Scope' }
+        action:
+          type: string
+          description: Past tense, namespaced by what it touched — tool.classified, provider.created.
+        target: { type: string }
+        detail: { type: object, additionalProperties: true }
+
+    RunStats:
+      type: object
+      required: [total, byPhase, ended]
+      properties:
+        total:
+          type: integer
+          format: int64
+          description: Runs matching the filter, not runs returned.
+        byPhase:
+          type: object
+          description: Runs per phase. A phase with no runs is absent, so "none" is distinguishable from "not measured".
+          additionalProperties: { type: integer, format: int64 }
+        ended:
+          type: integer
+          format: int64
+          description: How many runs the median was computed over.
+        medianDurationMs:
+          type: integer
+          format: int64
+          nullable: true
+          description: Median wall-clock duration of runs that ended. Absent when none have.
+
+    RunPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Run' }
+        nextCursor: { type: string, nullable: true }
+
+    Step:
+      type: object
+      required: [seq, kind, at, hash]
+      properties:
+        seq: { type: integer, format: int64 }
+        kind: { $ref: '#/components/schemas/StepKind' }
+        at: { type: string, format: date-time }
+        cost: { $ref: '#/components/schemas/Cost' }
+        labels:
+          type: array
+          items: { type: string }
+        policyHash: { type: string }
+        payload:
+          type: object
+          additionalProperties: true
+          description: |
+            Kind-specific detail. Bulky content is not inlined: payloads carry
+            a reference into object storage plus a digest, because arguments
+            and results routinely contain personal data.
+        hash:
+          type: string
+          description: Hex-encoded SHA-256 sealing this step to the previous one.
+
+    StepPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Step' }
+        nextSeq: { type: integer, format: int64, nullable: true }
+
+    VerifyResult:
+      type: object
+      required: [valid, stepsChecked]
+      properties:
+        valid: { type: boolean }
+        stepsChecked: { type: integer, format: int64 }
+        brokenAtSeq:
+          type: integer
+          format: int64
+          nullable: true
+          description: The first step whose link failed, when valid is false.
+
+    PendingApproval:
+      type: object
+      required: [runId, tool, requestedAt, atSeq]
+      properties:
+        runId: { type: string }
+        scope: { $ref: '#/components/schemas/Scope' }
+        agentId: { type: string }
+        tool: { type: string }
+        effect: { $ref: '#/components/schemas/Effect' }
+        rule:
+          type: string
+          description: The rule that required approval. The trail never says "denied by policy" — it names the rule.
+        reason: { type: string }
+        requestedAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time, nullable: true }
+        atSeq: { type: integer, format: int64 }
+
+    ApprovalPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/PendingApproval' }
+        nextCursor: { type: string, nullable: true }
+
+    ApprovalDecision:
+      type: object
+      required: [approved, atSeq]
+      properties:
+        approved: { type: boolean }
+        atSeq:
+          type: integer
+          format: int64
+          description: |
+            Sequence number of the approval_requested step being answered.
+            Required so a stale browser tab cannot approve an action that a
+            later step already superseded.
+        note: { type: string }
+
+    CostBucket:
+      type: object
+      required: [key, cost, runs]
+      properties:
+        key: { type: string }
+        cost: { $ref: '#/components/schemas/Cost' }
+        runs: { type: integer, format: int64 }
+
+    CostRollup:
+      type: object
+      required: [from, to, groupBy, total, buckets]
+      properties:
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        groupBy: { type: string }
+        total: { $ref: '#/components/schemas/Cost' }
+        buckets:
+          type: array
+          items: { $ref: '#/components/schemas/CostBucket' }
+
+    Health:
+      type: object
+      required: [status, version]
+      properties:
+        status: { type: string, enum: [ok, degraded] }
+        version: { type: string }

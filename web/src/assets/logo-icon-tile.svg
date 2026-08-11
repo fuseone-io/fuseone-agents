@@ -1,0 +1,19 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0E9199"></stop><stop offset="1" stop-color="#07444C"></stop>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#tile)"></rect>
+  <g transform="translate(8 8)">
+    <g transform="translate(0 5)">
+      <rect x="8" y="13" width="4.5" height="10" rx="2.25" fill="#0A757F" stroke="#C2ECEC" stroke-width="2.4"></rect>
+      <rect x="35.5" y="13" width="4.5" height="10" rx="2.25" fill="#0A757F" stroke="#C2ECEC" stroke-width="2.4"></rect>
+      <rect x="11.5" y="8" width="25" height="24" rx="10" fill="#07444C" stroke="#C2ECEC" stroke-width="2.4"></rect>
+      <path d="M24 8V5.6" stroke="#C2ECEC" stroke-width="2.4" stroke-linecap="round"></path>
+      <circle cx="24" cy="3.6" r="2.6" fill="#8FDCDC" stroke="#C2ECEC" stroke-width="2.4"></circle>
+      <rect x="17.8" y="16.6" width="3.6" height="6.4" rx="1.8" fill="#C2ECEC"></rect>
+      <rect x="26.6" y="16.6" width="3.6" height="6.4" rx="1.8" fill="#C2ECEC"></rect>
+    </g>
+  </g>
+</svg>

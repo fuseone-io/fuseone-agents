@@ -1,0 +1,28 @@
+/* Motion.
+   Source: design_handoff_fuseone_console/tokens/motion.css.
+   No spring, no overshoot, no scale-in-from-0.9. */
+:root {
+  --duration-instant: 80ms; /* hover, press, checkbox */
+  --duration-fast: 140ms; /* tooltips, dropdowns, tab change */
+  --duration-base: 200ms; /* panels, dialogs, side sheets */
+  --duration-slow: 320ms;
+  --duration-stream: 600ms; /* token streaming, run-log ticks */
+
+  --transition-control:
+    color var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+  --transition-surface:
+    box-shadow var(--duration-base) var(--ease-out),
+    transform var(--duration-base) var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-instant: 0ms;
+    --duration-fast: 0ms;
+    --duration-base: 0ms;
+    --duration-slow: 0ms;
+    --duration-stream: 0ms;
+  }
+}
