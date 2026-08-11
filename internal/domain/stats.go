@@ -68,3 +68,21 @@ type ThroughputBucket struct {
 	ByPhase map[string]int64
 	Total   int64
 }
+
+// RecordedDecision is a Gate decision as the ledger kept it — the verdict
+// together with the run, agent and moment it applied to.
+//
+// Distinct from domain.Decision, which is what the Gate returns before
+// anything is written: that one carries the arguments a constraint rewrote and
+// the policy hash, and this one carries where it landed. A feed of these is a
+// reader watching whether the installation's rules are doing anything.
+type RecordedDecision struct {
+	RunID   RunID
+	Seq     int64
+	At      time.Time
+	Scope   Scope
+	AgentID AgentID
+	Tool    ToolID
+	Verdict Verdict
+	Rule    string
+}

@@ -113,9 +113,55 @@ func appendBucket(out []domain.ThroughputBucket, at time.Time, phase string, cou
 	return out
 }
 
-// runFilterSQL builds the shared predicate. Every argument is bound, never
-// interpolated: a filter comes from a query string.
+// Decisions reads the most recent Gate decisions across every matching run.
+//
+// Straight from the steps rather than from the runs projection: a decision is
+// a step, and the projection holds one row per run. The index on (kind, at) is
+// what keeps this from walking the whole ledger.
+func (p *Postgres) Decisions(ctx context.Context, filter domain.RunFilter, limit int) ([]domain.RecordedDecision, error) {
+	// The steps table times its rows with `at`; the runs projection uses
+	// started_at. Same filter, different column, so it is named rather than
+	// assumed.
+	where, args := runFilterOn(filter, "at")
+	where = whereAnd(where, "kind = 'gate_decided'")
+	args = append(args, limit)
+
+	rows, err := p.pool.Query(ctx, `
+		select run_id, seq, at, company_id, area_id, agent_id,
+		       payload->>'tool', coalesce((payload->>'verdict')::int, 0), coalesce(payload->>'rule', '')
+		from run_steps `+where+`
+		order by at desc, seq desc
+		limit $`+fmt.Sprint(len(args)), args...)
+	if err != nil {
+		return nil, fmt.Errorf("decisions: %w", err)
+	}
+	defer rows.Close()
+
+	var out []domain.RecordedDecision
+	for rows.Next() {
+		var d domain.RecordedDecision
+		var company, area, agent, tool string
+		var verdict int
+		if err := rows.Scan(&d.RunID, &d.Seq, &d.At, &company, &area, &agent, &tool, &verdict, &d.Rule); err != nil {
+			return nil, err
+		}
+		d.Scope = domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)}
+		d.AgentID, d.Tool, d.Verdict = domain.AgentID(agent), domain.ToolID(tool), domain.Verdict(verdict)
+		d.At = d.At.UTC()
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+
+// runFilterSQL builds the shared predicate against the runs projection.
 func runFilterSQL(f domain.RunFilter) (string, []any) {
+	return runFilterOn(f, "started_at")
+}
+
+// runFilterOn builds the predicate against whichever column carries the time.
+// Every argument is bound, never interpolated: a filter comes from a query
+// string. The column is a literal chosen here, never a caller's input.
+func runFilterOn(f domain.RunFilter, timeColumn string) (string, []any) {
 	var (
 		clauses []string
 		args    []any
@@ -150,13 +196,13 @@ func runFilterSQL(f domain.RunFilter) (string, []any) {
 		clauses = append(clauses, "("+strings.Join(any, " or ")+")")
 	}
 	if !f.Since.IsZero() {
-		add("started_at >= $%d", f.Since.UTC())
+		add(timeColumn+" >= $%d", f.Since.UTC())
 	}
 	// Every figure that compares one window against another needs both ends.
 	// Carrying Until and applying only Since made "yesterday" mean "yesterday
 	// onwards", which includes the today it was being compared to.
 	if !f.Until.IsZero() {
-		add("started_at < $%d", f.Until.UTC())
+		add(timeColumn+" < $%d", f.Until.UTC())
 	}
 	if f.Search != "" {
 		// One bound parameter used twice: the pattern is built here rather

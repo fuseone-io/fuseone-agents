@@ -97,3 +97,47 @@ func runFilterFrom(p openapi.GetRunStatsParams) domain.RunFilter {
 	}
 	return f
 }
+
+// ListDecisions answers with what the Gate decided across runs.
+//
+// Read across the ledger rather than down one run: it is how somebody sees
+// whether the installation's rules are engaging at all. Scoped like every
+// other read, because a decision names a tool and an agent, and that is
+// information about the area they belong to.
+func (s *Server) ListDecisions(
+	ctx context.Context, req openapi.ListDecisionsRequestObject,
+) (openapi.ListDecisionsResponseObject, error) {
+	filter, allowed := narrow(ctx, decisionFilterFrom(req.Params), domain.PermRunRead)
+	if !allowed {
+		return openapi.ListDecisions403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermRunRead,
+				scopeParams(req.Params.Company, req.Params.Area)),
+		}, nil
+	}
+
+	decisions, err := s.store.Decisions(ctx, filter, limitOf(req.Params.Limit))
+	if err != nil {
+		return nil, fmt.Errorf("decisions: %w", err)
+	}
+
+	page := openapi.DecisionPage{Items: make([]openapi.RecordedDecision, 0, len(decisions))}
+	for _, d := range decisions {
+		page.Items = append(page.Items, openapi.RecordedDecision{
+			RunId:   string(d.RunID),
+			Seq:     d.Seq,
+			At:      d.At,
+			Scope:   &openapi.Scope{Company: string(d.Scope.Company), Area: string(d.Scope.Area)},
+			AgentId: ptr(string(d.AgentID)),
+			Tool:    ptr(string(d.Tool)),
+			Verdict: openapi.Verdict(d.Verdict.String()),
+			Rule:    ptr(d.Rule),
+		})
+	}
+	return openapi.ListDecisions200JSONResponse(page), nil
+}
+
+func decisionFilterFrom(p openapi.ListDecisionsParams) domain.RunFilter {
+	return runFilterFrom(openapi.GetRunStatsParams{
+		Company: p.Company, Area: p.Area, AgentId: p.AgentId, Since: p.Since,
+	})
+}

@@ -178,6 +178,40 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /decisions:
+    get:
+      tags: [runs]
+      operationId: listDecisions
+      summary: What the Gate has decided, most recent first
+      description: |
+        Every effect passes the Gate, and this is that record read across runs
+        rather than down one. It is how somebody sees whether the
+        installation's rules are doing anything: a feed of nothing but
+        "allowed" says the policy is not engaging, and a run of escalations on
+        one rule says it is engaging too much.
+
+        Each entry names the rule, never a category. "Denied by policy" tells
+        a reader nothing about what to change.
+      parameters:
+        - $ref: '#/components/parameters/Company'
+        - $ref: '#/components/parameters/Area'
+        - name: agentId
+          in: query
+          schema: { type: string }
+        - name: since
+          in: query
+          description: Only decisions taken at or after this instant.
+          schema: { type: string, format: date-time }
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: The decisions.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DecisionPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /runs/{runId}:
     get:
       tags: [runs]
@@ -966,6 +1000,29 @@ components:
           description: |
             The slow tail, over the same runs as the median. On its own a
             median says nothing about the runs people complain about.
+
+    DecisionPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/RecordedDecision' }
+
+    RecordedDecision:
+      type: object
+      required: [runId, seq, at, verdict]
+      properties:
+        runId: { type: string }
+        seq: { type: integer, format: int64 }
+        at: { type: string, format: date-time }
+        scope: { $ref: '#/components/schemas/Scope' }
+        agentId: { type: string }
+        tool: { type: string }
+        verdict: { $ref: '#/components/schemas/Verdict' }
+        rule:
+          type: string
+          description: The rule that applied. The feed names it rather than a category.
 
     Throughput:
       type: object

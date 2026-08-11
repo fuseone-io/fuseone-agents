@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"context"
+	"encoding/json"
 	"math"
 	"slices"
 	"strings"
@@ -79,6 +80,66 @@ func (m *Memory) Throughput(ctx context.Context, filter domain.RunFilter) ([]dom
 	// between renders.
 	slices.SortFunc(out, func(a, b domain.ThroughputBucket) int { return a.At.Compare(b.At) })
 	return out, nil
+}
+
+// Decisions reads the most recent Gate decisions across every matching run.
+//
+// The filter is applied to the run's opening step, like every other tally, so
+// a decision is visible exactly when the run it belongs to is. The time bounds
+// are the exception: they apply to the decision itself, because a feed of
+// "what the Gate decided in the last hour" is not "what runs started then".
+func (m *Memory) Decisions(ctx context.Context, filter domain.RunFilter, limit int) ([]domain.RecordedDecision, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	scoped := filter
+	scoped.Since, scoped.Until = time.Time{}, time.Time{}
+
+	var out []domain.RecordedDecision
+	for _, steps := range m.runs {
+		if len(steps) == 0 || !matches(steps[0], scoped) {
+			continue
+		}
+		for _, step := range steps {
+			if step.Kind != domain.StepGateDecided {
+				continue
+			}
+			if !filter.Since.IsZero() && step.At.Before(filter.Since) {
+				continue
+			}
+			if !filter.Until.IsZero() && !step.At.Before(filter.Until) {
+				continue
+			}
+			out = append(out, decisionOf(step))
+		}
+	}
+
+	// Newest first, and the sequence breaks the tie: two decisions in the same
+	// run can share an instant, and a feed that reordered them between renders
+	// would be unreadable.
+	slices.SortFunc(out, func(a, b domain.RecordedDecision) int {
+		if c := b.At.Compare(a.At); c != 0 {
+			return c
+		}
+		return int(b.Seq - a.Seq)
+	})
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
+func decisionOf(step domain.Step) domain.RecordedDecision {
+	var p domain.GateDecidedPayload
+	_ = json.Unmarshal(step.Payload, &p)
+	return domain.RecordedDecision{
+		RunID: step.RunID, Seq: step.Seq, At: step.At.UTC(), Scope: step.Scope,
+		AgentID: step.AgentID, Tool: p.Tool, Verdict: p.Verdict, Rule: p.Rule,
+	}
 }
 
 func matches(first domain.Step, f domain.RunFilter) bool {

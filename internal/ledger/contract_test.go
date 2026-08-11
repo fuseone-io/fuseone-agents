@@ -2,6 +2,7 @@ package ledger_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -36,6 +37,7 @@ type Store interface {
 	CostRollup(ctx context.Context, filter domain.RunFilter, groupBy string) ([]domain.CostBucket, error)
 	AgentActivity(ctx context.Context, filter domain.RunFilter) ([]domain.AgentActivity, error)
 	Throughput(ctx context.Context, filter domain.RunFilter) ([]domain.ThroughputBucket, error)
+	Decisions(ctx context.Context, filter domain.RunFilter, limit int) ([]domain.RecordedDecision, error)
 	SpentSince(ctx context.Context, scope domain.Scope, since time.Time) (domain.Consumption, error)
 }
 
@@ -635,6 +637,15 @@ func TestStatsContract(t *testing.T) {
 	})
 }
 
+func mustJSON(t *testing.T, v any) []byte {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	return b
+}
+
 func mustAppend(t *testing.T, s Store, st domain.Step) {
 	t.Helper()
 	if _, err := s.Append(context.Background(), st); err != nil {
@@ -1207,6 +1218,117 @@ func TestThroughputContract(t *testing.T) {
 		}
 		if len(got) != 1 || got[0].Total != 1 {
 			t.Errorf("buckets = %+v, want only the run in cx", got)
+		}
+	})
+}
+
+// The feed of what the Gate decided is the console watching whether the
+// installation's rules are doing anything at all.
+
+func TestDecisionsContract(t *testing.T) {
+	base := time.Date(2026, 8, 11, 9, 0, 0, 0, time.UTC)
+
+	decided := func(id domain.RunID, seq int64, at time.Time, tool string, v domain.Verdict, rule string) domain.Step {
+		st := step(id, domain.StepGateDecided)
+		st.At = at
+		st.Payload = mustJSON(t, domain.GateDecidedPayload{
+			Tool: domain.ToolID(tool), Verdict: v, Rule: rule,
+		})
+		_ = seq
+		return st
+	}
+
+	run(t, "reports the verdict, the rule and the run it belongs to", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		mustAppend(t, s, startedAt("run-1", base))
+		mustAppend(t, s, decided("run-1", 2, base.Add(time.Second), "crm.reply", domain.VerdictRequireApproval, "taint"))
+
+		got, err := s.Decisions(ctx, domain.RunFilter{}, 10)
+		if err != nil {
+			t.Fatalf("Decisions: %v", err)
+		}
+		if len(got) != 1 {
+			t.Fatalf("decisions = %d, want 1", len(got))
+		}
+		// Never "denied by policy": the feed names the rule, or the reader
+		// cannot tell what to change.
+		if got[0].Rule != "taint" || got[0].Verdict != domain.VerdictRequireApproval {
+			t.Errorf("decision = %+v, want the taint escalation", got[0])
+		}
+		if got[0].RunID != "run-1" || got[0].Tool != "crm.reply" {
+			t.Errorf("decision = %+v, want it to name its run and tool", got[0])
+		}
+	})
+
+	run(t, "reads newest first, so the feed opens on what just happened", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		mustAppend(t, s, startedAt("run-1", base))
+		mustAppend(t, s, decided("run-1", 2, base.Add(time.Second), "crm.lookup", domain.VerdictAllow, "passed"))
+		mustAppend(t, s, decided("run-1", 3, base.Add(2*time.Second), "crm.reply", domain.VerdictBlock, "capability"))
+
+		got, err := s.Decisions(ctx, domain.RunFilter{}, 10)
+		if err != nil {
+			t.Fatalf("Decisions: %v", err)
+		}
+		if len(got) != 2 || got[0].Tool != "crm.reply" {
+			t.Fatalf("decisions = %+v, want the newest first", got)
+		}
+	})
+
+	run(t, "counts only steps that are decisions", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		mustAppend(t, s, startedAt("run-1", base))
+		mustAppend(t, s, decided("run-1", 2, base.Add(time.Second), "crm.lookup", domain.VerdictAllow, "passed"))
+
+		got, err := s.Decisions(ctx, domain.RunFilter{}, 10)
+		if err != nil {
+			t.Fatalf("Decisions: %v", err)
+		}
+		if len(got) != 1 {
+			t.Errorf("decisions = %d, want only the gate step", len(got))
+		}
+	})
+
+	run(t, "shows only areas the filter reaches", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		mustAppend(t, s, startedAt("run-cx", base))
+		mustAppend(t, s, decided("run-cx", 2, base.Add(time.Second), "crm.lookup", domain.VerdictAllow, "passed"))
+
+		theirs := startedAt("run-mkt", base)
+		theirs.Scope = domain.Scope{Company: "acme", Area: "marketing"}
+		mustAppend(t, s, theirs)
+		their := decided("run-mkt", 2, base.Add(time.Second), "crm.lookup", domain.VerdictAllow, "passed")
+		their.Scope = domain.Scope{Company: "acme", Area: "marketing"}
+		mustAppend(t, s, their)
+
+		got, err := s.Decisions(ctx, domain.RunFilter{Scope: domain.Scope{Company: "acme", Area: "cx"}}, 10)
+		if err != nil {
+			t.Fatalf("Decisions: %v", err)
+		}
+		if len(got) != 1 || got[0].RunID != "run-cx" {
+			t.Errorf("decisions = %+v, want only the run in cx", got)
+		}
+	})
+
+	run(t, "honours the limit, because a feed is not a page", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		mustAppend(t, s, startedAt("run-1", base))
+		for i := range 5 {
+			mustAppend(t, s, decided("run-1", int64(2+i),
+				base.Add(time.Duration(i)*time.Second), "crm.lookup", domain.VerdictAllow, "passed"))
+		}
+
+		got, err := s.Decisions(ctx, domain.RunFilter{}, 3)
+		if err != nil {
+			t.Fatalf("Decisions: %v", err)
+		}
+		if len(got) != 3 {
+			t.Errorf("decisions = %d, want 3", len(got))
 		}
 	})
 }
