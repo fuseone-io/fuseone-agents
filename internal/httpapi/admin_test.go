@@ -53,6 +53,14 @@ func serverWith(t *testing.T, admin *fakeAdmin) *Server {
 	return NewServer(ledger.NewMemory(), "test").WithAdministration(nil, nil, admin)
 }
 
+// inArea returns a caller holding a role in one area of acme.
+func inArea(area string, role domain.Role) context.Context {
+	return auth.WithPrincipal(context.Background(), domain.Principal{
+		ID: "usr_ana", Kind: domain.PrincipalUser,
+		Grants: []domain.Grant{{Scope: domain.Scope{Company: "acme", Area: domain.AreaID(area)}, Role: role}},
+	})
+}
+
 // as returns a context carrying a caller with the given role in the scope the
 // administration area is authorised in.
 func as(role domain.Role) context.Context {
@@ -192,5 +200,129 @@ func TestPutMCPServer_storeRefuses_readsBackAsABadRequestNotAServerError(t *test
 	}
 	if _, bad := resp.(openapi.PutMCPServer400ApplicationProblemPlusJSONResponse); !bad {
 		t.Fatalf("response = %T, want 400", resp)
+	}
+}
+
+// fakeAgents stands in for the registry of published versions.
+type fakeAgents struct {
+	published []domain.AgentSummary
+	allAsked  bool
+}
+
+func (f *fakeAgents) List(_ context.Context, _ domain.Scope, all bool) ([]domain.AgentSummary, error) {
+	f.allAsked = all
+	return f.published, nil
+}
+
+func TestListAgents_askingForAnotherAreaIsRefused(t *testing.T) {
+	t.Parallel()
+
+	// An author granted in cx must not read marketing by naming it. Hiding it
+	// from the navigation is a courtesy; this is the control (PRD NF-06).
+	server := NewServer(ledger.NewMemory(), "test").WithAgents(&fakeAgents{})
+	resp, err := server.ListAgents(inArea("cx", domain.RoleAuthor), openapi.ListAgentsRequestObject{
+		Params: openapi.ListAgentsParams{Company: ptr("acme"), Area: ptr("marketing")},
+	})
+	if err != nil {
+		t.Fatalf("ListAgents: %v", err)
+	}
+	if _, refused := resp.(openapi.ListAgents403ApplicationProblemPlusJSONResponse); !refused {
+		t.Fatalf("response = %T, want 403", resp)
+	}
+}
+
+func TestListAgents_ownAreaIsNotRefusedForLackingAnAdministrativeGrant(t *testing.T) {
+	t.Parallel()
+
+	// Checking every read against the installation's administrative scope
+	// would refuse an author their own area, which is the scope they actually
+	// hold.
+	agents := &fakeAgents{published: []domain.AgentSummary{{
+		ID: "triage", Scope: domain.Scope{Company: "acme", Area: "cx"},
+	}}}
+	resp, err := NewServer(ledger.NewMemory(), "test").WithAgents(agents).
+		ListAgents(inArea("cx", domain.RoleAuthor), openapi.ListAgentsRequestObject{
+			Params: openapi.ListAgentsParams{Company: ptr("acme"), Area: ptr("cx")},
+		})
+	if err != nil {
+		t.Fatalf("ListAgents: %v", err)
+	}
+	body, ok := resp.(openapi.ListAgents200JSONResponse)
+	if !ok {
+		t.Fatalf("response = %T, want 200", resp)
+	}
+	if len(body.Items) != 1 {
+		t.Errorf("items = %d, want the agent in the caller's own area", len(body.Items))
+	}
+}
+
+func TestListAgents_unscopedListShowsOnlyWhatTheCallerMaySee(t *testing.T) {
+	t.Parallel()
+
+	// An unscoped question is answered with the caller's own scopes rather
+	// than refused with a permission error naming a scope they never mentioned.
+	agents := &fakeAgents{published: []domain.AgentSummary{
+		{ID: "triage", Scope: domain.Scope{Company: "acme", Area: "cx"}},
+		{ID: "leads", Scope: domain.Scope{Company: "acme", Area: "marketing"}},
+	}}
+	resp, err := NewServer(ledger.NewMemory(), "test").WithAgents(agents).
+		ListAgents(inArea("cx", domain.RoleAuthor), openapi.ListAgentsRequestObject{})
+	if err != nil {
+		t.Fatalf("ListAgents: %v", err)
+	}
+	body := resp.(openapi.ListAgents200JSONResponse)
+	if len(body.Items) != 1 || body.Items[0].AgentId != "triage" {
+		t.Errorf("items = %v, want only the caller's area", body.Items)
+	}
+}
+
+func TestListAgents_rendersTheCapabilityPackAndTheCeilings(t *testing.T) {
+	t.Parallel()
+
+	agents := &fakeAgents{published: []domain.AgentSummary{{
+		ID: "triage", VersionID: "v1", Name: "Ticket triage",
+		Scope:  adminScope,
+		Tools:  []domain.ToolID{"crm.lookup"},
+		Budget: domain.Budget{Micros: 500_000, Steps: 60},
+		Latest: true,
+	}}}
+
+	resp, err := NewServer(ledger.NewMemory(), "test").WithAgents(agents).
+		ListAgents(as(domain.RoleAuthor), openapi.ListAgentsRequestObject{})
+	if err != nil {
+		t.Fatalf("ListAgents: %v", err)
+	}
+	body, ok := resp.(openapi.ListAgents200JSONResponse)
+	if !ok {
+		t.Fatalf("response = %T, want 200", resp)
+	}
+	if len(body.Items) != 1 {
+		t.Fatalf("items = %d, want 1", len(body.Items))
+	}
+
+	// The pack is the whole security story: what is not listed cannot be
+	// invoked, so a screen that omits it hides the answer to "what can this
+	// agent do".
+	got := body.Items[0]
+	if len(got.Tools) != 1 || got.Tools[0] != "crm.lookup" {
+		t.Errorf("tools = %v, want the capability pack", got.Tools)
+	}
+	if got.Budget.Steps == nil || *got.Budget.Steps != 60 {
+		t.Errorf("budget.steps = %v, want the ceiling as published", got.Budget.Steps)
+	}
+}
+
+func TestListAgents_historyIsAskedForExplicitly(t *testing.T) {
+	t.Parallel()
+
+	// One row per agent by default: a list of every version an agent ever had
+	// answers a question nobody opened the screen to ask.
+	agents := &fakeAgents{}
+	if _, err := NewServer(ledger.NewMemory(), "test").WithAgents(agents).
+		ListAgents(as(domain.RoleAuthor), openapi.ListAgentsRequestObject{}); err != nil {
+		t.Fatalf("ListAgents: %v", err)
+	}
+	if agents.allAsked {
+		t.Error("the default asked for every version")
 	}
 }

@@ -39,6 +39,38 @@ tags:
   - name: system
 
 paths:
+  /agents:
+    get:
+      tags: [agents]
+      operationId: listAgents
+      summary: Published agents
+      description: >
+        One row per agent, its newest published version, unless every version
+        is asked for. A version is immutable: the identifier is the digest of
+        the definition's content, so the text a run was pinned to can always be
+        read back.
+      parameters:
+        - $ref: '#/components/parameters/Company'
+        - $ref: '#/components/parameters/Area'
+        - name: allVersions
+          in: query
+          description: Return the publication history instead of the newest version of each agent.
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Published agents.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Agent' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /runs:
     get:
       tags: [runs]
@@ -658,6 +690,54 @@ components:
           description: Past tense, namespaced by what it touched — tool.classified, provider.created.
         target: { type: string }
         detail: { type: object, additionalProperties: true }
+
+    Agent:
+      type: object
+      required: [agentId, versionId, scope, name, provider, model, tools, budget, publishedAt, latest]
+      properties:
+        agentId: { type: string }
+        versionId:
+          type: string
+          description: The digest of the definition's content. Publishing new text is a new version; the old one stays readable.
+        scope: { $ref: '#/components/schemas/Scope' }
+        name: { type: string }
+        provider: { type: string }
+        model: { type: string }
+        effort: { type: string }
+        tools:
+          type: array
+          description: The capability pack resolved to concrete tools. What is not here cannot be invoked.
+          items: { type: string }
+        budget: { $ref: '#/components/schemas/Budget' }
+        triggers:
+          type: array
+          items: { $ref: '#/components/schemas/AgentTrigger' }
+        publishedBy: { type: string }
+        publishedAt: { type: string, format: date-time }
+        latest:
+          type: boolean
+          description: Whether this is the newest published version of the agent.
+
+    AgentTrigger:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [cron, webhook, event]
+        schedule: { type: string }
+        path: { type: string }
+        event: { type: string }
+
+    Budget:
+      type: object
+      description: The ceilings a run is checked against. Every dimension is enforced at the Gate.
+      properties:
+        micros: { type: integer, format: int64 }
+        tokens: { type: integer, format: int64 }
+        toolCalls: { type: integer, format: int64 }
+        steps: { type: integer, format: int64 }
+        wallClockMs: { type: integer, format: int64 }
 
     RunStats:
       type: object

@@ -139,7 +139,8 @@ func serve(args []string) error {
 				"variable", vault.KeyEnv)
 		}
 		integrations := admin.NewIntegrations(identity.pool, settings.NewStore(identity.pool, v))
-		api = api.WithAdministration(curator, curator, integrations)
+		api = api.WithAdministration(curator, curator, integrations).
+			WithAgents(spec.NewRegistry(identity.pool))
 	}
 
 	apiHandler := openapi.HandlerWithOptions(
@@ -314,6 +315,7 @@ func workerCmd(args []string) error {
 	var (
 		curator      *admin.Curator
 		integrations *admin.Integrations
+		registry     *spec.Registry
 	)
 	if *dsn != "" {
 		pool, err := pgxpool.New(ctx, *dsn)
@@ -328,6 +330,7 @@ func workerCmd(args []string) error {
 		}
 		curator = admin.NewCurator(pool)
 		integrations = admin.NewIntegrations(pool, settings.NewStore(pool, v))
+		registry = spec.NewRegistry(pool)
 
 		configured, err := integrations.MCPServers(ctx)
 		if err != nil {
@@ -368,6 +371,18 @@ func workerCmd(args []string) error {
 	specs, err := loadSpecs(ctx, *specDir, catalog, integrations)
 	if err != nil {
 		return err
+	}
+
+	// What this worker loaded becomes what the installation has published, so
+	// the API can answer "which agents exist" without reading somebody's disk.
+	// Publishing the same version twice is a no-op: the version is the digest
+	// of the content.
+	if registry != nil {
+		published, err := publishSpecs(ctx, registry, *specDir)
+		if err != nil {
+			return err
+		}
+		slog.Info("agent versions published", "count", published, "dir", *specDir)
 	}
 
 	w := worker.New(worker.Config{
@@ -463,6 +478,35 @@ func (m mcpServers) connect(ctx context.Context, catalog *tools.Catalog) error {
 		slog.Info("mcp server connected", "server", name, "command", fields[0])
 	}
 	return nil
+}
+
+// publishSpecs records every definition on disk as a published version.
+//
+// The worker is where definitions are read today; the Studio will write them
+// directly later (PRD DE-07). Either way the registry is what the rest of the
+// installation reads, so the two never disagree about what is published.
+func publishSpecs(ctx context.Context, registry *spec.Registry, dir string) (int, error) {
+	store := spec.NewStore()
+	if _, err := store.LoadDir(ctx, os.DirFS("."), dir); err != nil {
+		return 0, fmt.Errorf("load agent definitions from %s: %w", dir, err)
+	}
+
+	published := 0
+	for _, agent := range store.Agents() {
+		for _, version := range store.Versions(agent) {
+			s, err := store.Get(agent, version)
+			if err != nil {
+				return published, err
+			}
+			// The company is the installation's single one until phase 2
+			// (PRD §3.1); the area comes from the definition itself.
+			if err := registry.Publish(ctx, s, "worker", auth.BootstrapScope.Company); err != nil {
+				return published, err
+			}
+			published++
+		}
+	}
+	return published, nil
 }
 
 // loadSpecs publishes the agent definitions on disk and wires the resolver to

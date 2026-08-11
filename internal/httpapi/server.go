@@ -43,6 +43,7 @@ type Server struct {
 	curator      Curator
 	tools        Tools
 	integrations Integrations
+	agents       Agents
 }
 
 func NewServer(store Store, version string) *Server {
@@ -54,6 +55,12 @@ func NewServer(store Store, version string) *Server {
 // operator can configure anything from it.
 func (s *Server) WithAdministration(curator Curator, tools Tools, integrations Integrations) *Server {
 	s.curator, s.tools, s.integrations = curator, tools, integrations
+	return s
+}
+
+// WithAgents wires the registry of published versions.
+func (s *Server) WithAgents(agents Agents) *Server {
+	s.agents = agents
 	return s
 }
 

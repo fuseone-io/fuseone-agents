@@ -145,12 +145,18 @@ func (s *Server) ListAdminEvents(ctx context.Context, req openapi.ListAdminEvent
 // operator guessing which grant to ask for.
 func (s *Server) refuse(ctx context.Context, perm domain.Permission) *openapi.ForbiddenApplicationProblemPlusJSONResponse {
 	if err := auth.Require(ctx, perm, adminScope); err != nil {
-		body := openapi.ForbiddenApplicationProblemPlusJSONResponse(problem(
-			http.StatusForbidden, "Sem permissão",
-			fmt.Sprintf("esta ação exige %s em %s", perm, adminScope)))
+		body := forbidden(perm, adminScope)
 		return &body
 	}
 	return nil
+}
+
+// forbidden names the permission and the scope that were missing. "Forbidden"
+// alone leaves an operator guessing which grant to ask somebody for.
+func forbidden(perm domain.Permission, scope domain.Scope) openapi.ForbiddenApplicationProblemPlusJSONResponse {
+	return openapi.ForbiddenApplicationProblemPlusJSONResponse(problem(
+		http.StatusForbidden, "Sem permissão",
+		fmt.Sprintf("esta ação exige %s em %s", perm, scope)))
 }
 
 // Integrations is what the platform is configured to talk to, declared here by
