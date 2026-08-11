@@ -93,13 +93,48 @@ func (s *Store) Delete(ctx context.Context, code string) (Set, error) {
 	return s.snapshot(ctx, tx)
 }
 
-// Active reads what is in force now, with the hash that names it.
+// Active reads what is in force now, with the hash that names it — and takes
+// a snapshot if that hash has none.
+//
+// A read that writes, deliberately. Put always snapshots, but anything else
+// that touches the table — a migration, a support script, somebody with psql —
+// leaves a set whose hash names nothing. The Gate would then seal every
+// decision to a name an auditor cannot fetch, which is the single promise this
+// package exists to keep, and it would fail silently until somebody went
+// looking years later.
 func (s *Store) Active(ctx context.Context) (Set, error) {
 	policies, err := readAll(ctx, s.pool)
 	if err != nil {
 		return Set{}, err
 	}
-	return Set{Hash: HashOf(policies), Policies: policies}, nil
+	hash := HashOf(policies)
+
+	var exists bool
+	if err := s.pool.QueryRow(ctx,
+		`select exists(select 1 from policy_snapshots where policy_hash = $1)`, hash,
+	).Scan(&exists); err != nil {
+		return Set{}, fmt.Errorf("policy: check snapshot %s: %w", hash, err)
+	}
+	if !exists {
+		encoded, err := json.Marshal(policies)
+		if err != nil {
+			return Set{}, fmt.Errorf("policy: encode snapshot: %w", err)
+		}
+		if _, err := s.pool.Exec(ctx, `
+			insert into policy_snapshots (policy_hash, policies) values ($1, $2)
+			on conflict (policy_hash) do nothing`, hash, encoded); err != nil {
+			return Set{}, fmt.Errorf("policy: take snapshot: %w", err)
+		}
+	}
+	return Set{Hash: hash, Policies: policies}, nil
+}
+
+// Exec runs a statement against the policy tables. It exists for tests that
+// have to simulate a write which bypassed Put, which is the case Active
+// defends against.
+func (s *Store) Exec(ctx context.Context, sql string, args ...any) (int64, error) {
+	tag, err := s.pool.Exec(ctx, sql, args...)
+	return tag.RowsAffected(), err
 }
 
 // Snapshot reads what was in force under a hash.

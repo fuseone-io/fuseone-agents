@@ -239,3 +239,29 @@ func TestPut_roundTripsEveryFieldTheGateReads(t *testing.T) {
 		t.Errorf("sentence changed in storage:\n  %s\n  %s", got.Sentence(), written.Sentence())
 	}
 }
+
+func TestActive_hashWithNoSnapshotBehindIt_takesOne(t *testing.T) {
+	store := storeFor(t)
+
+	if _, err := store.Put(t.Context(), rule("POL-114", nil), "usr_ana"); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	// Anything that touches the table without going through Put — a
+	// migration, a support script, somebody with psql — leaves a set whose
+	// hash names no snapshot. The Gate would then seal every decision to a
+	// name an auditor cannot fetch, which is the one promise this package
+	// exists to keep.
+	if _, err := store.Exec(t.Context(),
+		`update policies set mode = 'enforce' where code = 'POL-114'`); err != nil {
+		t.Fatalf("raw update: %v", err)
+	}
+
+	set, err := store.Active(t.Context())
+	if err != nil {
+		t.Fatalf("Active: %v", err)
+	}
+	if _, err := store.Snapshot(t.Context(), set.Hash); err != nil {
+		t.Errorf("the hash Active reported has no snapshot behind it: %v", err)
+	}
+}
