@@ -10,10 +10,11 @@ import (
 
 // serveMCP runs a small CRM over stdio.
 //
-// Every tool here is a read. Writes are deliberately absent: a tool imported
-// from a server is read-only until the Curator promotes it, that promotion has
-// no persistent home yet, and a development stack that quietly granted write
-// access would teach the wrong thing about how the platform behaves.
+// One tool writes. A stack where every tool is a read never reaches an
+// approval, so the platform's central behaviour — a run stopping to ask a
+// person, and that person seeing what it will do — could not be exercised
+// locally at all. It arrives unclassified like any imported tool and only
+// becomes a write once the Curator says so, which is the point.
 func serveMCP(args []string) error {
 	fs := flag.NewFlagSet("mcp", flag.ContinueOnError)
 	if err := fs.Parse(args); err != nil {
@@ -31,6 +32,11 @@ func serveMCP(args []string) error {
 		Name:        "search",
 		Description: "Search the knowledge base for articles matching a query",
 	}, search)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "reply",
+		Description: "Send a reply to the customer on the support ticket",
+	}, sendReply)
 
 	return server.Run(context.Background(), &mcp.StdioTransport{})
 }
@@ -69,4 +75,22 @@ func search(_ context.Context, _ *mcp.CallToolRequest, in searchIn) (*mcp.CallTo
 		"KB-118: emitir segunda via de boleto",
 		"KB-204: prazos de compensação",
 	}}, nil
+}
+
+type sendReplyIn struct {
+	Account string `json:"account" jsonschema:"the account the reply belongs to"`
+	Subject string `json:"subject" jsonschema:"the subject line"`
+	Body    string `json:"body" jsonschema:"what to say to the customer"`
+}
+
+type sendReplyOut struct {
+	MessageID string `json:"message_id"`
+	SentTo    string `json:"sent_to"`
+}
+
+func sendReply(_ context.Context, _ *mcp.CallToolRequest, in sendReplyIn) (*mcp.CallToolResult, sendReplyOut, error) {
+	if in.Body == "" {
+		return nil, sendReplyOut{}, fmt.Errorf("body is required")
+	}
+	return nil, sendReplyOut{MessageID: "msg_9f21", SentTo: in.Account}, nil
 }

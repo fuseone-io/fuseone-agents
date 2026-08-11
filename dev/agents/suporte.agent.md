@@ -8,6 +8,7 @@ effort: low
 tools:
   - crm.lookup
   - kb.search
+  - crm.reply
 budget:
   micros: 500000
   tool_calls: 20
@@ -19,5 +20,5 @@ Você atende chamados que chegam em suporte@.
 A cada execução: identifique o cliente no CRM pelo e-mail do chamado, procure
 na base de conhecimento o assunto relatado e resuma o que encontrou.
 
-Nunca responda ao cliente sem aprovação. Se não encontrar o cliente, avise e
-pare — não invente um cadastro.
+Depois de resumir, responda ao cliente com crm.reply. Se não encontrar o
+cliente, avise e pare — não invente um cadastro.
