@@ -6,6 +6,7 @@ import { AgentKpis } from "@/features/agents/agent-kpis";
 import { AgentDefinition } from "@/features/agents/agent-definition";
 import { AgentCapabilities } from "@/features/agents/agent-capabilities";
 import { AgentVersions } from "@/features/agents/agent-versions";
+import { WebhooksPanel } from "@/features/agents/webhooks-panel";
 import { AgentRuns } from "@/features/agents/agent-runs";
 
 /**
@@ -40,6 +41,7 @@ export function AgentDetailPage() {
         <AgentDefinition instructions={instructions} source={source} />
         <div className="flex flex-col gap-4">
           <AgentCapabilities agent={published} />
+          <WebhooksPanel agentId={agentId} />
           <AgentVersions agentId={agentId} versions={versions} current={published.versionId} />
         </div>
       </div>
