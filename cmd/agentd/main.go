@@ -127,9 +127,16 @@ func serve(args []string) error {
 		// their trail live. An installation on the in-memory ledger serves
 		// runs and answers the admin endpoints empty.
 		curator := admin.NewCurator(identity.pool)
+
+		// The vault is optional here and required in the worker. This process
+		// reports that a credential exists; it never opens one. Refusing to
+		// boot without the key would stop an installation that has not
+		// configured a provider yet from starting at all — and configuring one
+		// is what the administration area is for.
 		v, err := openVault()
 		if err != nil {
-			return err
+			slog.Warn("no master key; credentials cannot be stored from the console until one is set",
+				"variable", vault.KeyEnv)
 		}
 		integrations := admin.NewIntegrations(identity.pool, settings.NewStore(identity.pool, v))
 		api = api.WithAdministration(curator, curator, integrations)
