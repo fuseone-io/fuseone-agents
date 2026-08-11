@@ -100,6 +100,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/runs/{runId}/steps/{seq}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the content a step references
+         * @description Resolves the reference a step carries — the proposed tool arguments, a
+         *     tool result, the run's input — and returns the bytes.
+         *
+         *     This is deliberately a second request. The trail is read constantly and
+         *     by many people; the content behind it routinely carries personal data,
+         *     so it is fetched only when someone opens the step that needs it. The
+         *     digest lets the caller prove the bytes are the ones the chain sealed.
+         */
+        get: operations["getStepContent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runs/{runId}/verify": {
         parameters: {
             query?: never;
@@ -592,6 +618,18 @@ export interface components {
             /** @description Hex-encoded SHA-256 sealing this step to the previous one. */
             hash: string;
         };
+        StepContent: {
+            /** Format: int64 */
+            seq: number;
+            /**
+             * @description Hex-encoded SHA-256 of the content, as recorded in the step. A
+             *     caller that hashes the body and gets a different value is not
+             *     looking at what the chain sealed.
+             */
+            digest: string;
+            /** @description The bytes, as text. JSON arguments arrive as a JSON string. */
+            content: string;
+        };
         StepPage: {
             items: components["schemas"]["Step"][];
             /** Format: int64 */
@@ -853,6 +891,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StepPage"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getStepContent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: components["parameters"]["RunId"];
+                /** @description The step's sequence number. */
+                seq: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The referenced content. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StepContent"];
                 };
             };
             404: components["responses"]["NotFound"];
