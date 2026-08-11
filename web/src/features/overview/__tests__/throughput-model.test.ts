@@ -6,7 +6,13 @@ const SINCE = "2026-08-11T00:00:00.000Z";
 
 function bucket(hour: number, byPhase: Record<string, number>): ThroughputBucket {
   const at = new Date(Date.parse(SINCE) + hour * 3_600_000).toISOString();
-  return { at, byPhase, total: Object.values(byPhase).reduce((a, b) => a + b, 0) };
+  return {
+    at,
+    byPhase,
+    byAgent: {},
+    micros: 0,
+    total: Object.values(byPhase).reduce((a, b) => a + b, 0),
+  };
 }
 
 describe("the throughput columns", () => {
@@ -16,8 +22,8 @@ describe("the throughput columns", () => {
     const columns = columnsFor([bucket(9, { finished: 3 })], SINCE);
 
     expect(columns).toHaveLength(24);
-    expect(columns[0].total).toBe(0);
-    expect(columns[9].total).toBe(3);
+    expect(columns[0]?.total).toBe(0);
+    expect(columns[9]?.total).toBe(3);
   });
 
   it("folds a run still going in with the ones waiting", () => {
@@ -25,15 +31,15 @@ describe("the throughput columns", () => {
     // whether to act does not need the interpreter's phase.
     const columns = columnsFor([bucket(1, { running: 2, awaiting_approval: 1 })], SINCE);
 
-    expect(columns[1].byState.waiting).toBe(3);
-    expect(columns[1].byState.running).toBe(0);
+    expect(columns[1]?.byState.waiting).toBe(3);
+    expect(columns[1]?.byState.running).toBe(0);
   });
 
   it("counts a parked run as blocked, which is what a reader would act on", () => {
     const columns = columnsFor([bucket(2, { parked: 1, finished: 4 })], SINCE);
 
-    expect(columns[2].byState.blocked).toBe(1);
-    expect(columns[2].byState.done).toBe(4);
+    expect(columns[2]?.byState.blocked).toBe(1);
+    expect(columns[2]?.byState.done).toBe(4);
   });
 });
 

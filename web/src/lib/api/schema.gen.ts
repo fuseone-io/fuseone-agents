@@ -61,6 +61,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{agentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One published agent, as it was published
+         * @description The latest version by default, or the exact one asked for. Publishing a
+         *     new version never affects a run already in flight, so an auditor
+         *     opening a run's version reads that version — not whatever is newest
+         *     now.
+         *
+         *     This is the only place the definition's text is returned. The list
+         *     deliberately omits it: a page of twenty agents would carry twenty
+         *     bodies of prose nobody asked to read.
+         */
+        get: operations["getAgent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runs/throughput": {
         parameters: {
             query?: never;
@@ -606,6 +633,26 @@ export interface components {
             /** Format: date-time */
             lastRunAt?: string;
         };
+        AgentDetail: {
+            agent: components["schemas"]["Agent"];
+            /**
+             * @description The definition's body, exactly as published. Read-only: a
+             *     specification is changed by publishing a new version, never by
+             *     editing one that runs already reference.
+             */
+            instructions?: string;
+            /** @description Where the definition came from — a path, a repository. */
+            source?: string;
+            /** @description Every published version, newest first. */
+            versions: components["schemas"]["AgentVersion"][];
+        };
+        AgentVersion: {
+            versionId: string;
+            publishedBy?: string;
+            /** Format: date-time */
+            publishedAt: string;
+            latest: boolean;
+        };
         AgentTrigger: {
             /** @enum {string} */
             type: "cron" | "webhook" | "event";
@@ -955,6 +1002,33 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    getAgent: {
+        parameters: {
+            query?: {
+                /** @description A specific version. Defaults to the newest published. */
+                version?: string;
+            };
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The agent. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     getThroughput: {

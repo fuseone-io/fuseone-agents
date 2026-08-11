@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SEGMENTS, type Column } from "@/features/overview/throughput-model";
-import { STATE_DOT } from "@/lib/agent-state";
+import { STATE_DOT, type AgentState } from "@/lib/agent-state";
 import { formatCost } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 const PLOT = 180;
 const AXIS = 20;
 const GRIDLINES = 4;
-const LABEL: Record<(typeof SEGMENTS)[number], string> = {
+const LABEL: Partial<Record<AgentState, string>> = {
   done: "concluídas",
   waiting: "em curso",
   blocked: "paradas",

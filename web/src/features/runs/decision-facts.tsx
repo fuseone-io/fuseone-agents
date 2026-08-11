@@ -4,8 +4,10 @@ import { effectOf } from "@/features/runs/step-verb";
 import { formatMicros } from "@/lib/format";
 import type { PendingApproval, Step } from "@/lib/api/client";
 
+const UNCLASSIFIED = { label: "baixo", className: "text-muted-foreground" };
+
 const EFFECT_RISK: Record<string, { label: string; className: string }> = {
-  read: { label: "baixo", className: "text-muted-foreground" },
+  read: UNCLASSIFIED,
   write: { label: "médio", className: "text-warning" },
   financial: { label: "alto", className: "text-danger" },
   irreversible: { label: "alto", className: "text-danger" },
@@ -30,7 +32,7 @@ export function DecisionFacts({
   // domain's integer. Reading the raw payload put "2" on screen where the
   // approver needed the word.
   const effect = approval.effect ?? (step && effectOf(step)) ?? "read";
-  const risk = EFFECT_RISK[effect] ?? EFFECT_RISK.read;
+  const risk = EFFECT_RISK[effect] ?? UNCLASSIFIED;
   const micros = payload.estimate?.micros;
 
   return (

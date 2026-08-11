@@ -7,7 +7,9 @@ import { ThemeProvider } from "@/components/shared/theme-provider";
 import { AppShell } from "@/components/layout/app-shell";
 import { SessionGate } from "@/features/session/session-gate";
 import { OverviewPage } from "@/features/overview/overview-page";
+import { NotFoundPage } from "@/components/shared/not-found";
 import { AgentsPage } from "@/features/agents/agents-page";
+import { AgentDetailPage } from "@/features/agents/agent-detail-page";
 import { RunsPage } from "@/features/runs/runs-page";
 import { RunDetailPage } from "@/features/runs/run-detail-page";
 import { ApprovalsPage } from "@/features/approvals/approvals-page";
@@ -38,11 +40,13 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="/" element={<Navigate to="/overview" replace />} />
                 <Route path="/overview" element={<OverviewPage />} />
                 <Route path="/agents" element={<AgentsPage />} />
+                <Route path="/agents/:agentId" element={<AgentDetailPage />} />
               <Route path="/runs" element={<RunsPage />} />
                 <Route path="/runs/:runId" element={<RunDetailPage />} />
                 <Route path="/approvals" element={<ApprovalsPage />} />
                 <Route path="/cost" element={<CostPage />} />
               <Route path="/admin" element={<AdminPage />} />
+                <Route path="*" element={<NotFoundPage />} />
               </Routes>
             </AppShell>
           </SessionGate>

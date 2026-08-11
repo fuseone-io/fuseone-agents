@@ -1,12 +1,12 @@
 import { useMemo } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { STATE_DOT } from "@/lib/agent-state";
+import { STATE_DOT, type AgentState } from "@/lib/agent-state";
 import { cn } from "@/lib/utils";
 import { ceilingOf, columnsFor, SEGMENTS } from "@/features/overview/throughput-model";
 import { ThroughputChart } from "@/features/overview/throughput-chart";
 import { useThroughput } from "@/features/overview/api";
 
-const LEGEND: Record<(typeof SEGMENTS)[number], string> = {
+const LEGEND: Partial<Record<AgentState, string>> = {
   done: "concluídas",
   waiting: "em curso",
   blocked: "paradas",

@@ -1,0 +1,63 @@
+import { Play } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { Mono } from "@/components/shared/mono";
+import { StateDot } from "@/components/shared/state-dot";
+import { stateOfAgent } from "@/lib/agent-state";
+import { formatInstant } from "@/lib/format";
+import type { Agent, AgentVersion, Phase } from "@/lib/api/client";
+
+/**
+ * Which agent this is, and which version of it you are reading.
+ *
+ * The version is stated rather than implied: a reader who arrived from a run
+ * is looking at the text that run executed, which may not be the newest.
+ */
+export function AgentIdentity({
+  agent,
+  versions,
+}: {
+  agent: Agent;
+  versions: AgentVersion[];
+}) {
+  const superseded = !agent.latest && versions.length > 1;
+
+  return (
+    <div className="flex flex-wrap items-start gap-4">
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <div className="flex items-center gap-2.5">
+          <h1 className="text-2xl font-medium tracking-display">{agent.name}</h1>
+          <span className="inline-flex h-6 items-center gap-1.5 rounded-pill bg-muted px-2.5 text-xs font-medium">
+            <StateDot state={stateOfAgent(agent.activity?.lastPhase as Phase | undefined)} />
+            {agent.scope.area || "sem área"}
+          </span>
+          {superseded && (
+            <span className="inline-flex h-6 items-center rounded-pill bg-warning-surface px-2.5 text-xs font-medium text-warning">
+              versão antiga
+            </span>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <Mono dim>{agent.agentId}</Mono>
+          <Separator orientation="vertical" className="!h-3" />
+          <span>
+            versão <Mono dim>{agent.versionId.slice(0, 9)}</Mono> · {agent.provider}/{agent.model}
+            {agent.publishedBy ? ` · publicada por ${agent.publishedBy}` : ""} em{" "}
+            {formatInstant(agent.publishedAt)}
+          </span>
+        </div>
+      </div>
+
+      <div className="ml-auto flex shrink-0 items-center gap-2">
+        {/* Nothing can start a run from the console yet: runs begin at the
+            command line, and a button that pretended otherwise would be the
+            worst kind of lie in a governance tool. */}
+        <Button variant="outline" size="sm" disabled className="h-8">
+          <Play className="size-4" aria-hidden />
+          Executar
+        </Button>
+      </div>
+    </div>
+  );
+}

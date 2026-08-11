@@ -17,7 +17,13 @@ import type { Step } from "@/lib/api/client";
 export function TrailFold({ steps, last }: { steps: Step[]; last: boolean }) {
   const [open, setOpen] = useState(false);
   const first = steps[0];
-  const final = steps[steps.length - 1];
+  const final = steps.at(-1);
+
+  // A fold is only built from a run of steps, so this cannot happen — but the
+  // alternative to saying so is reading past the end of an array to render a
+  // row that describes nothing.
+  if (!first || !final) return null;
+
   const elapsed = Date.parse(final.at) - Date.parse(first.at);
 
   return (

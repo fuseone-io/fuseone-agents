@@ -40,6 +40,6 @@ describe("what a run touched", () => {
       step("approval_requested", { tool: "kb.search" }),
     ]);
 
-    expect(tools[0].escalated).toBe(true);
+    expect(tools[0]?.escalated).toBe(true);
   });
 });

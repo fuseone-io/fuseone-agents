@@ -75,9 +75,9 @@ export function TrailPanel({
               {group.entries.map((entry) =>
                 entry.kind === "fold" ? (
                   <TrailFold
-                    key={`fold-${entry.steps[0].seq}`}
+                    key={`fold-${entry.steps[0]?.seq}`}
                     steps={entry.steps}
-                    last={entry.steps[entry.steps.length - 1].seq === lastSeq}
+                    last={entry.steps.at(-1)?.seq === lastSeq}
                   />
                 ) : (
                   <TrailEvent

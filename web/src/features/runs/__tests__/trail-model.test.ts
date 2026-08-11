@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { buildTrail, type TrailGroup } from "@/features/runs/trail-model";
 import type { Step, StepKind } from "@/lib/api/client";
 
@@ -34,9 +34,9 @@ describe("the trail's phases", () => {
   it("separates what started the run from what it then did", () => {
     const groups = buildTrail([step("run_started"), ...routineCycle()], { filter: "all" });
 
-    expect(groups[0].phase).toBe("input");
-    expect(groups[0].entries).toHaveLength(2); // run_started, planned
-    expect(groups[1].phase).toBe("execution");
+    expect(groups[0]?.phase).toBe("input");
+    expect(groups[0]?.entries).toHaveLength(2); // run_started, planned
+    expect(groups[1]?.phase).toBe("execution");
   });
 
   it("opens a human phase at the escalation, not at the approval itself", () => {
@@ -78,7 +78,7 @@ describe("folding routine steps", () => {
 
     const folds = entriesOf(groups).filter((e) => e.kind === "fold");
     expect(folds).toHaveLength(1);
-    expect(folds[0].kind === "fold" && folds[0].steps.length).toBe(11);
+    expect(folds[0]?.kind === "fold" && folds[0].steps.length).toBe(11);
   });
 
   it("never folds an escalation or the approval it asked for", () => {
