@@ -1,6 +1,7 @@
 # NT-002 · What is left, and in what order
 
-**Status** Proposal · **Date** 2026-08-11
+**Status** Proposal · **Date** 2026-08-11 · **Revised** 2026-08-11, after the
+handoff added `Agente.dc.html` and `Politica.dc.html`
 **References** [PRD-001](PRD-001-fuseone-agents.md) · design handoff (`design_handoff_fuseone_console`)
 **Outcome** An order for the four remaining fronts, and the decisions each needs first
 
@@ -23,10 +24,10 @@ estimate anybody here can check.
 | Triggers — manual, cron, webhook | Delivered. Event is declared and unimplemented |
 | Overview, Runs, Run trail, Human queue, Agents, Agent detail, Cost, Audit trail | Delivered |
 | Administration — tools, MCP servers, model providers, budgets | Delivered |
-| **Policies** | Enforced in code, not authorable, not visible |
+| **Policies** | Enforced in code, not authorable, not visible. Next |
 | **Agent authoring** | Only by dropping a file in a directory |
 | **Generated diagram** | Nothing, and nothing to draw yet |
-| **Integrations screen** | Forms exist; the handoff's screen does not |
+| Integrations | Delivered, with health beside configuration |
 | i18n | Deferred to last, by decision |
 
 ---
@@ -65,18 +66,31 @@ Three consequences, in increasing order of seriousness:
 The third is why this is not a screen. It is a promise in the PRD that the
 current design cannot keep.
 
-### The decision that has to come first
+### The decision, now made
 
-**What is a rule?**
+The handoff's policy screen settles it: **a decision table**. Rows of
+`quando / e` over field, operator and value, a resource glob, action chips, and
+a reach — org, teams or named agents. Not an expression language.
 
-| Option | For | Against |
-|---|---|---|
-| **Decision table** — conditions over tool, effect, labels and scope → verdict | Readable by a non-programmer; renders almost directly into the handoff's table; auditable row by row; the hash covers a set of rows that can be stored and re-read | Deliberately limited. Some rules will not fit and will have to be refused or built in |
-| **Expression language** (CEL, Rego) | Expresses anything | Hands the customer exactly the "think like a programmer" the PRD rejects as its reason for not being a flow builder (N5). A policy nobody in the business can read is a policy nobody in the business owns |
+It adds two things this note did not propose, both of which change the build:
 
-**Recommendation: the decision table.** It fits the screen, it is auditable
-line by line, and it makes the policy hash mean something — a versioned set of
-rows that can be fetched and replayed.
+- **Monitor before enforce.** A `Monitorar` / `Impor` control, offered as a
+  real button on creation (`Criar em modo monitorar`) rather than a checkbox.
+  A policy in monitor mode is evaluated and recorded and changes no verdict.
+  That has to exist in the Gate, not only on the screen: it means a rule can
+  produce a decision the run does not obey, which the trail must be able to
+  express without an auditor reading it as a bug.
+- **Simulation against the last 500 runs**, with the count of would-be
+  denials, before saving. "A policy is never saved blind." This needs replay:
+  evaluating a draft rule against recorded decisions — which is the same
+  machinery the PRD's Auditor needs to re-evaluate old decisions under a new
+  policy, and the reason the policy hash has to name something retrievable.
+
+One more requirement falls out of the screen: **the compiled restatement**.
+The builder is never the only representation; the operator always reads the
+sentence the engine will evaluate. So the rule model needs a rendering to
+prose that is generated from the same structure the Gate evaluates, or the two
+will drift and the screen will lie.
 
 ### Size
 
@@ -97,9 +111,17 @@ change one from the console.
 
 ### What the handoff has
 
-**Nothing.** The Agents screen has an "Import" and a "New agent" button; no
-screen behind either. This is worth stating plainly, because it was on the
-list as though a design existed.
+`Agente.dc.html`, added after this note was first written. One screen, two
+modes. Four form sections — identity, model and instructions, tools,
+governance — a sticky action bar, and a side rail that differs by mode: a
+pre-flight checklist when creating, an unsaved-diff card when editing.
+
+Two of its decisions resolve the tension below, and resolve it well:
+
+- **A new agent is created paused.** Authoring never starts something.
+- **The primary button names the version**: `Salvar e publicar v1.5.0`, never
+  `Salvar`. Editing is authoring the next version, and the button says so
+  rather than leaving somebody to discover it.
 
 ### What the PRD asks for
 
@@ -119,22 +141,28 @@ explanation of the runs that used them. So "editing an agent" can only mean
 The console has to make that obvious or people will expect a save button and
 get a new version they did not ask for.
 
-### The decision that has to come first
+### The decision, now made
 
-**How much of the Studio is in scope now?** Three honest steps:
+The handoff picks the form, not the interview. That is a smaller scope than
+the PRD's Studio (FU-01 – FU-06) and a coherent one: the interview can produce
+the same fields later and land on this screen for review.
 
-1. A form over the fields that already exist — name, model, tools, ceilings,
-   triggers — publishing a new version. Small, useful, and not what the PRD
-   describes.
-2. The interview producing the same fields plus instructions, with a narrative
-   read-back before publishing. Closer to the PRD, and needs a model call.
-3. The full Studio with simulation and regression cases. Its own project.
+What the screen adds beyond today's specification:
+
+- **A per-tool approval rule** — `Nunca` / `Dado não confiável` / `Sempre` —
+  which is policy attached to a tool inside an agent, a thing the model does
+  not have.
+- **Attached policies**, with inherited ones locked and marked
+  `herdada da organização`.
+- **A tool blocked by policy** rendered visible but unavailable, with the
+  policy code in its subtitle.
+
+All three reference policies. Which reorders this note.
 
 ### Size
 
-Step 1 is comparable to the administration forms already built. Step 2 is
-comparable to a screen plus a new model-backed endpoint. Step 3 is not
-estimable yet.
+Comparable to the administration forms already built, plus the diff view and
+the pre-flight checklist. Small next to policies — and it depends on them.
 
 ---
 
@@ -176,9 +204,9 @@ This is the only front where the decision is worth more than the work.
 
 ---
 
-## 4. Integrations
+## 4. Integrations — delivered
 
-### What exists
+### What existed
 
 MCP servers and model providers are configurable from Administration, with
 forms, credential storage in the vault, and an administrative trail. The
@@ -213,34 +241,45 @@ against caps.
 
 ## Recommended order
 
-1. **Integrations** — smallest, closes a screen the handoff already designs,
-   and the health reading is genuinely missing operationally: today nothing
-   says whether an MCP server is answering.
-2. **Policies** — largest, and the one blocking a PRD promise rather than a
-   screen. Needs the rule-model decision before any code.
-3. **Agent authoring, step 1** — a form publishing a new version. Makes the
-   platform usable without filesystem access, which is what currently stops
-   anybody but an engineer from creating an agent.
-4. **The diagram** — after the graph question is answered, and possibly never
-   in the handoff's form.
+1. ~~**Integrations**~~ — delivered. The screen reports what the platform
+   observed rather than only what was configured, and a server that will not
+   answer no longer stops the worker from starting.
+2. **Policies** — now unblocked, and it comes before agent authoring because
+   the agent screen references policies in three places: the per-tool approval
+   rule, the attached-policies list, and tools rendered unavailable with a
+   policy code. Building the agent screen first means building those three
+   inert and returning to them.
+3. **Agent create / edit** — the form, publishing a new version, created
+   paused.
+4. **The diagram** — still waiting on the graph question, which the new
+   handoff does not touch.
 
 Then i18n, by prior decision.
 
-### Why not policies first
+### Order within policies
 
-It is the most valuable and the least ready. Starting it before the rule model
-is settled means building storage and evaluation twice. Integrations buys a
-finished screen and an operational gap closed while that decision is made.
+The screen implies more than a table of rules, and the parts are separable:
+
+1. The rule model, versioned storage, and a `policy_hash` that names something
+   retrievable — which is what makes the PRD's replay promise keepable.
+2. Evaluation inside the Gate, at the existing fourth position, without
+   loosening the seven-check order.
+3. Monitor mode: evaluated, recorded, obeyed by nothing.
+4. The compiled restatement, generated from the same structure the Gate reads.
+5. The screen.
+6. Simulation against recorded runs — last, and the piece that also serves the
+   Auditor's re-evaluation.
 
 ---
 
 ## Open decisions, collected
 
-| # | Decision | Blocks |
-|---|---|---|
-| 1 | Decision table or expression language for rules | Policies, entirely |
-| 2 | How much of the Studio is in scope | Agent authoring |
-| 3 | Does the specification gain a graph | The diagram, and FU-17's wording |
-| 4 | Health reading or scheduled syncs | Integrations, partly |
+| # | Decision | Blocks | State |
+|---|---|---|---|
+| 1 | Decision table or expression language for rules | Policies | **Settled** — decision table, by the handoff |
+| 2 | How much of the Studio is in scope | Agent authoring | **Settled** — the form, by the handoff |
+| 3 | Does the specification gain a graph | The diagram, and FU-17's wording | Open |
+| 4 | Health reading or scheduled syncs | Integrations | **Settled** — health reading, delivered |
 
-Nothing here is blocked on code. All four are product decisions.
+One decision left, and it is the one where the answer is worth more than the
+work.
