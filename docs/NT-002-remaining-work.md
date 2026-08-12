@@ -380,12 +380,29 @@ Gate depends on and is not an integration engine: no field mapping, no
 transformation, no per-vendor semantics. It is a way of minting a tool without
 writing one.
 
-What was surveyed while deciding: Tessera Labs, the closest adjacent product,
-uses pre-built per-system connectors (SAP, S/4HANA, Salesforce, Workday,
-Oracle) and does not mention MCP. That is consistent with what they sell —
-an integrator's engagement, where the connectors are the product — and not
-evidence about a governance platform installed at the customer, where each
-connector would be maintenance for ever.
+**What the closest adjacent product does.** Tessera (tesseraagent.ai) presents
+named systems rather than a protocol: Salesforce, SAP, and an "API interna" of
+twelve REST routes, each with a state — connected, syncing, queued. MCP is not
+mentioned anywhere public.
+
+Two things are worth taking from it, and one thing is worth not taking.
+
+- **The internal REST API is a first-class tile.** A customer's own service,
+  with no MCP server and nobody to write one, is treated as a normal case
+  rather than an edge. That is the same gap identified above, and it is
+  evidence the gap is real rather than theoretical.
+- **The states are sync states.** "Syncing" and "queued" against an ERP
+  describe data movement, not a tool being called. That is the other side of
+  the line drawn above — they appear to be an agent platform *and* an
+  integration engine, which is a larger product than this one has chosen to be.
+- **What not to take: the screen is not the architecture.** A tile reading
+  "Salesforce · connected" looks identical whether it fronts a bespoke
+  connector or an MCP server named after what it fronts — which is exactly the
+  cheap option §4 above already recommends. Marketing pages do not distinguish
+  the two, and this one does not.
+
+So it is evidence for the declared HTTP tool being the first thing to reach for
+when the need arrives, and not evidence for a per-system catalogue.
 
 **N4 needs rewriting rather than amending**, because its stated reason is void.
 The conclusion survives on the new reasoning above.
