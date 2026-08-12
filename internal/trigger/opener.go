@@ -12,6 +12,8 @@ package trigger
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -142,7 +144,7 @@ func (o *Opener) Open(ctx context.Context, req Request) (Result, error) {
 	}
 	published := versions[0]
 
-	runID := domain.RunID(fmt.Sprintf("run_%s_%d", published.ID, o.clock.Now().UnixMilli()))
+	runID := newRunID(published.ID, o.clock.Now(), req.IdemKey)
 
 	inputRef, err := o.store(ctx, runID, req.Input)
 	if err != nil {
@@ -186,4 +188,17 @@ func (o *Opener) store(ctx context.Context, runID domain.RunID, input []byte) (s
 		return "", fmt.Errorf("trigger: store input: %w", err)
 	}
 	return ref, nil
+}
+
+// newRunID names a run after the intention that opened it.
+//
+// The key is folded in because a timestamp is not unique: two webhooks in the
+// same millisecond derive the same id, and the second run_started is appended
+// as the next step of the first run rather than rejected — two intentions
+// silently become one run. Derived rather than random, so the id can be
+// recomputed from the intention by anybody auditing it.
+func newRunID(agent domain.AgentID, at time.Time, key string) domain.RunID {
+	sum := sha256.Sum256([]byte(key))
+	return domain.RunID(fmt.Sprintf(
+		"run_%s_%d_%s", agent, at.UnixMilli(), hex.EncodeToString(sum[:4])))
 }

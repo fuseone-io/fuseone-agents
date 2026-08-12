@@ -194,3 +194,28 @@ func (p paused) IsPaused(_ context.Context, agent domain.AgentID) (bool, error) 
 	stopped, known := p[agent]
 	return !known || stopped, nil
 }
+
+func TestOpen_twoIntentionsAtTheSameInstant_openSeparateRuns(t *testing.T) {
+	t.Parallel()
+	opener, _ := openerFor(t)
+
+	first, err := opener.Open(t.Context(), trigger.Request{
+		Agent: "triage", IdemKey: "intent-1", Trigger: "webhook",
+	})
+	if err != nil {
+		t.Fatalf("first: %v", err)
+	}
+	second, err := opener.Open(t.Context(), trigger.Request{
+		Agent: "triage", IdemKey: "intent-2", Trigger: "webhook",
+	})
+	if err != nil {
+		t.Fatalf("second: %v", err)
+	}
+
+	// Two webhooks arriving in the same millisecond are two intentions. An id
+	// derived from the clock alone gives them one run, and the second loses a
+	// sequence conflict on a step it had every right to append.
+	if second.RunID == first.RunID {
+		t.Fatalf("both intentions opened %q", first.RunID)
+	}
+}
