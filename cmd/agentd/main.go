@@ -28,6 +28,7 @@ import (
 
 	"github.com/fuseone/agents/internal/audit"
 	"github.com/fuseone/agents/internal/auth"
+	"github.com/fuseone/agents/internal/authoring"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/httpapi"
@@ -155,6 +156,7 @@ func serve(args []string) error {
 			WithHealth(admin.NewHealth(identity.pool)).
 			WithPolicies(policy.NewStore(identity.pool)).
 			WithAreas(scope.NewStore(identity.pool)).
+			WithAuthoring(authoring.NewStore(store)).
 			WithPauses(spec.NewState(identity.pool)).
 			WithPublisher(spec.NewPublisher(identity.pool, engine.SystemClock{}))
 	}

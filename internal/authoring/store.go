@@ -1,0 +1,128 @@
+// Package authoring holds the choice of model the interview uses.
+//
+// An agent's provider is a capability the installation grants: it decides what
+// agents may reach, and it carries policy and per-run cost. The authoring
+// model is a tool of the platform — it never touches a customer system, and it
+// only produces text a person approves. Different decisions, taken by
+// different people, so the choice lives here rather than beside the agents'.
+//
+// The connection does not. Integrações stays the single owner of endpoints and
+// credentials, and this is a pointer into it: a second credential store would
+// be a second place to leak from, to rotate, and to audit.
+package authoring
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+
+	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/settings"
+)
+
+// KindAuthoring is the settings kind this package owns.
+const KindAuthoring settings.Kind = "authoring"
+
+// name is the single row: an installation has one authoring assistant.
+const name = "assistant"
+
+// ErrNoProvider means the choice named a provider nobody connected.
+var ErrNoProvider = errors.New("authoring: no provider connected under that name")
+
+// Choice is which connected provider writes the drafts.
+type Choice struct {
+	Provider string `json:"provider"`
+	Model    string `json:"model"`
+	Effort   string `json:"effort,omitempty"`
+
+	// Enabled reports whether an installation has an authoring assistant at
+	// all. False is a supported state, not a broken one: an air-gapped install
+	// with no strong model still publishes agents through the form, and the
+	// interview is the good path rather than the only one.
+	Enabled bool `json:"-"`
+}
+
+type Store struct{ settings *settings.Store }
+
+func NewStore(s *settings.Store) *Store { return &Store{settings: s} }
+
+// Current answers with the choice in force, or a disabled one.
+func (s *Store) Current(ctx context.Context) (Choice, error) {
+	got, err := s.settings.Get(ctx, settings.ScopeInstallation, domain.Scope{}, KindAuthoring, name)
+	if errors.Is(err, settings.ErrNotFound) {
+		return Choice{}, nil
+	}
+	if err != nil {
+		return Choice{}, fmt.Errorf("authoring: read: %w", err)
+	}
+
+	var choice Choice
+	if err := json.Unmarshal(got.Value, &choice); err != nil {
+		return Choice{}, fmt.Errorf("authoring: decode: %w", err)
+	}
+	choice.Enabled = got.Enabled
+	return choice, nil
+}
+
+// Choose points the assistant at a connected provider.
+//
+// It refuses a name Integrações does not know, which is what keeps this a
+// pointer. Without the check the two could drift apart silently, and the
+// failure would surface as an authoring call to an endpoint that does not
+// exist — at the moment somebody is halfway through describing a process.
+func (s *Store) Choose(ctx context.Context, choice Choice, by domain.UserID) error {
+	if choice.Provider == "" || choice.Model == "" {
+		return errors.New("authoring: the assistant needs a provider and a model")
+	}
+
+	connected, err := s.settings.List(ctx, settings.KindModelProvider)
+	if err != nil {
+		return fmt.Errorf("authoring: read providers: %w", err)
+	}
+	if !has(connected, choice.Provider) {
+		return fmt.Errorf("%w: %s", ErrNoProvider, choice.Provider)
+	}
+
+	value, err := json.Marshal(choice)
+	if err != nil {
+		return fmt.Errorf("authoring: encode: %w", err)
+	}
+	return s.settings.Put(ctx, settings.Setting{
+		ScopeKind: settings.ScopeInstallation,
+		Kind:      KindAuthoring,
+		Name:      name,
+		Value:     value,
+		Enabled:   true,
+		UpdatedBy: string(by),
+	})
+}
+
+// Disable turns the assistant off without forgetting which provider it used.
+func (s *Store) Disable(ctx context.Context, by domain.UserID) error {
+	current, err := s.Current(ctx)
+	if err != nil {
+		return err
+	}
+	value, err := json.Marshal(current)
+	if err != nil {
+		return fmt.Errorf("authoring: encode: %w", err)
+	}
+	return s.settings.Put(ctx, settings.Setting{
+		ScopeKind: settings.ScopeInstallation,
+		Kind:      KindAuthoring,
+		Name:      name,
+		Value:     value,
+		Enabled:   false,
+		UpdatedBy: string(by),
+	})
+}
+
+func has(connected []settings.Setting, name string) bool {
+	for _, s := range connected {
+		if s.Name == name && s.Enabled {
+			return true
+		}
+	}
+	return false
+}

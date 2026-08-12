@@ -1022,6 +1022,52 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /admin/authoring:
+    get:
+      tags: [admin]
+      operationId: getAuthoring
+      summary: The model the interview uses
+      description: |
+        Which connected provider writes the drafts when somebody authors an
+        agent by answering questions instead of filling a form.
+
+        A choice, not a second registry: the connection itself — endpoint,
+        credential, health — stays in `/admin/integrations`, and this points
+        into it. Two credential stores would be two places to leak from, two to
+        rotate and two to audit, and an installation with one account would
+        configure it twice.
+
+        Disabled is a supported state. An installation with no strong model
+        still publishes agents through the form; the interview is the good
+        path rather than the only one.
+      responses:
+        '200':
+          description: The choice in force, or a disabled one.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthoringChoice' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    put:
+      tags: [admin]
+      operationId: setAuthoring
+      summary: Point the interview at a provider
+      description: |
+        Refuses a provider `/admin/integrations` does not know. Without that
+        check the two drift apart silently, and the failure surfaces as a call
+        to an endpoint that does not exist — at the moment somebody is halfway
+        through describing a process.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AuthoringChoice' }
+      responses:
+        '204': { description: The choice is recorded. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /admin/scopes:
     get:
       tags: [admin]
@@ -1388,6 +1434,21 @@ components:
           description: Whether a credential is stored. The credential itself never leaves the vault through this API.
         updatedBy: { type: string }
         updatedAt: { type: string, format: date-time }
+
+    AuthoringChoice:
+      type: object
+      required: [provider, model, enabled]
+      properties:
+        provider:
+          type: string
+          description: The name of a provider registered under /admin/integrations.
+        model: { type: string }
+        effort: { type: string }
+        enabled:
+          type: boolean
+          description: |
+            False means the installation has no authoring assistant, which is a
+            supported state rather than a broken one.
 
     RegisteredScope:
       type: object
