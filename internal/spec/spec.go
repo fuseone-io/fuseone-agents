@@ -46,6 +46,11 @@ type Spec struct {
 
 	Triggers []Trigger
 
+	// Steps narrow what is reachable as a run advances. Absent means one
+	// envelope holding the whole pack, which is how every agent behaved
+	// before steps existed.
+	Steps []Step
+
 	// Instructions is the file body: what the agent is for, in the author's
 	// own words.
 	Instructions string
@@ -72,6 +77,7 @@ type frontmatter struct {
 	Effort   string    `yaml:"effort"`
 	Tools    []string  `yaml:"tools"`
 	Triggers []Trigger `yaml:"triggers"`
+	Steps    []Step    `yaml:"steps,omitempty"`
 	Budget   struct {
 		Micros      int64 `yaml:"micros"`
 		Tokens      int64 `yaml:"tokens"`
@@ -102,6 +108,7 @@ func Parse(source string, data []byte) (Spec, error) {
 		Model:        fm.Model,
 		Effort:       fm.Effort,
 		Triggers:     fm.Triggers,
+		Steps:        fm.Steps,
 		Instructions: strings.TrimSpace(string(body)),
 		Source:       source,
 		Budget: domain.Budget{
