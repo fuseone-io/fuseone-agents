@@ -54,11 +54,22 @@ const KEPT: Record<TrailFilter, (step: Step) => boolean> = {
     step.kind === "approval_decided",
 };
 
+/**
+ * The steps a filter leaves standing.
+ *
+ * Shared with the diagram so the two views of one run cannot disagree: a
+ * reader who narrows to policy and sees eighteen nodes beside three rows would
+ * be right to distrust both.
+ */
+export function keptSteps(steps: Step[], filter: TrailFilter): Step[] {
+  return steps.filter(KEPT[filter]);
+}
+
 export function buildTrail(steps: Step[], opts: { filter: TrailFilter }): TrailGroup[] {
   const groups: TrailGroup[] = [];
 
   let decided = false;
-  for (const step of steps.filter(KEPT[opts.filter])) {
+  for (const step of keptSteps(steps, opts.filter)) {
     const phase = phaseOf(step, decided);
     if (phase !== "input") decided = true;
 

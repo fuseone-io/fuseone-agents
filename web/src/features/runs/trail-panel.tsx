@@ -1,27 +1,19 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Mono } from "@/components/shared/mono";
-import { TrailEvent } from "@/features/runs/trail-event";
-import { TrailFold } from "@/features/runs/trail-fold";
+import { RunDiagram } from "@/features/runs/run-diagram";
 import { TrailFilters } from "@/features/runs/trail-filters";
-import { buildTrail, type TrailFilter, type TrailPhase } from "@/features/runs/trail-model";
-import { formatTime } from "@/lib/format";
+import { TrailList } from "@/features/runs/trail-list";
+import { TrailViewToggle, type TrailView } from "@/features/runs/trail-view";
+import { buildTrail, keptSteps, type TrailFilter } from "@/features/runs/trail-model";
 import type { Step } from "@/lib/api/client";
 
-const PHASE_LABEL: Record<TrailPhase, string> = {
-  input: "Entrada",
-  execution: "Execução",
-  human: "Decisão humana",
-  end: "Encerramento",
-};
-
 /**
- * The run, as a sequence a person can read.
+ * The run, read either way.
  *
- * Grouped by phase and folded where nothing needed a person, so the eye lands
- * on the decisions. The filters narrow rather than reorder: the trail is the
- * audit record, and a view that reordered it would not be one.
+ * The list is the audit record and the diagram is the same steps under the
+ * same filter — neither summarises the other. The filters narrow rather than
+ * reorder: a view that reordered the trail would not be an audit record.
  */
 export function TrailPanel({
   runId,
@@ -33,9 +25,20 @@ export function TrailPanel({
   liveSeq?: number;
 }) {
   const [filter, setFilter] = useState<TrailFilter>("all");
+  const [view, setView] = useState<TrailView>("list");
   const [showHashes, setShowHashes] = useState(true);
 
+  const openStep = (seq: number) => {
+    setView("list");
+    // After the list has rendered. A fold may hold the step, in which case the
+    // panel still lands on the right stretch of the run.
+    requestAnimationFrame(() =>
+      document.getElementById(`step-${seq}`)?.scrollIntoView({ block: "center" }),
+    );
+  };
+
   const groups = useMemo(() => buildTrail(steps, { filter }), [steps, filter]);
+  const drawn = useMemo(() => keptSteps(steps, filter), [steps, filter]);
   const lastSeq = steps[steps.length - 1]?.seq;
 
   return (
@@ -44,56 +47,43 @@ export function TrailPanel({
         <h2 className="text-sm font-medium">Trilha</h2>
         <span className="text-xs text-muted-foreground">{steps.length} eventos</span>
         <div className="ml-auto flex items-center gap-1.5">
-          <TrailFilters value={filter} onChange={setFilter} />
+          <TrailViewToggle value={view} onChange={setView} />
           <Separator orientation="vertical" className="mx-0.5 !h-4" />
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-[26px] px-2.5 text-xs font-normal text-muted-foreground"
-            aria-pressed={showHashes}
-            onClick={() => setShowHashes((on) => !on)}
-          >
-            {showHashes ? "Ocultar selos" : "Mostrar selos"}
-          </Button>
+          <TrailFilters value={filter} onChange={setFilter} />
+          {/* Only where there are seals to show. The diagram draws acts, not
+              records, and a toggle that changed nothing would be a dead
+              control on a screen about trustworthiness. */}
+          {view === "list" && (
+            <>
+              <Separator orientation="vertical" className="mx-0.5 !h-4" />
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-[26px] px-2.5 text-xs font-normal text-muted-foreground"
+                aria-pressed={showHashes}
+                onClick={() => setShowHashes((on) => !on)}
+              >
+                {showHashes ? "Ocultar selos" : "Mostrar selos"}
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
-      <div className="px-4 pb-4">
-        {groups.map((group) => (
-          <div key={`${group.phase}-${group.at}`}>
-            <div className="flex items-center gap-2.5 py-2 pt-3.5">
-              <span className="text-2xs uppercase tracking-label text-muted-foreground">
-                {PHASE_LABEL[group.phase]}
-              </span>
-              <span aria-hidden className="h-px flex-1 bg-border-subtle" />
-              <Mono dim className="text-2xs">
-                {formatTime(group.at)}
-              </Mono>
-            </div>
-
-            <ol className="flex flex-col">
-              {group.entries.map((entry) =>
-                entry.kind === "fold" ? (
-                  <TrailFold
-                    key={`fold-${entry.steps[0]?.seq}`}
-                    steps={entry.steps}
-                    last={entry.steps.at(-1)?.seq === lastSeq}
-                  />
-                ) : (
-                  <TrailEvent
-                    key={entry.step.seq}
-                    runId={runId}
-                    step={entry.step}
-                    live={entry.step.seq === liveSeq}
-                    last={entry.step.seq === lastSeq}
-                    showHashes={showHashes}
-                  />
-                ),
-              )}
-            </ol>
-          </div>
-        ))}
-      </div>
+      {view === "list" ? (
+        <TrailList
+          runId={runId}
+          groups={groups}
+          lastSeq={lastSeq}
+          liveSeq={liveSeq}
+          showHashes={showHashes}
+        />
+      ) : (
+        // Clicking a node opens the record it stands for. The diagram is where
+        // somebody notices which step to look at; leaving them to find it
+        // again by eye in the list would waste the noticing.
+        <RunDiagram steps={drawn} onSelect={openStep} />
+      )}
     </section>
   );
 }

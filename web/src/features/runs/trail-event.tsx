@@ -62,7 +62,7 @@ export function TrailEvent({
   );
 
   return (
-    <li className="grid grid-cols-[26px_1fr_auto] gap-x-3">
+    <li id={`step-${step.seq}`} className="grid grid-cols-[26px_1fr_auto] gap-x-3">
       <div className="flex flex-col items-center">
         <span
           className={cn(
