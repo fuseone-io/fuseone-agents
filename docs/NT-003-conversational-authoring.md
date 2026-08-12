@@ -249,3 +249,53 @@ language by the author, and something has to judge it against the run so far.
 The candidates are the interpreter asking the model, or a declared condition
 over the ledger. That is a separate decision and it blocks stage 4, not this
 one.
+
+
+---
+
+## 9. What the first real interview showed
+
+Run against a connected Anthropic provider, from four prose answers about a
+support process. Twelve seconds, and it returned four steps:
+
+| # | Step | Reaches |
+|---|---|---|
+| 1 | Identificar cliente pelo e-mail do chamado no CRM | `crm.lookup` |
+| 2 | Procurar o assunto na base de conhecimento | `kb.search` |
+| 3 | Resumir o que foi encontrado | *nothing* |
+| 4 | Responder ao cliente após revisão | `crm.reply` |
+
+That is the table §8 arrived at by hand, reached independently from a
+description in Portuguese — including the step that reaches nothing. The shape
+survived contact twice, by two routes.
+
+Two defects the call exposed, both real.
+
+**The ceiling does not bind.** The call came back with `micros: 0`, because
+`PricePerMTok` is never set by anything: the platform counts tokens and refuses
+to guess at money, and no screen supplies a price list. So the daily ceiling
+somebody configures is decoration — the spend leaves the installation, the
+trail records nothing, and nothing decrements. This is a bigger gap than a
+per-model dropdown: it is what makes a run's cost a number, what makes an
+agent's ceiling mean money, and what lets the read-back carry the estimate
+FU-08 shows in its own example.
+
+**The exception does not land.** `stops_when` came back empty on every step
+across two prompt attempts, so an author's "if I cannot find the customer, I
+say so and stop" is lost. FU-04 is answered per step precisely so a correction
+can be anchored where it happened, and losing it there costs stage 4 its
+anchor.
+
+Prompt tuning was tried twice against the live endpoint and moved nothing. That
+is also the wrong loop — twelve seconds and real money per guess. Two
+structural answers are more likely to hold than a better sentence: asking the
+exception as its own question per step, or extracting it in a second pass whose
+only job is that field.
+
+### Order for the next session
+
+1. **Price list per model.** Turns the ceiling into a ceiling and cost into a
+   figure. Needs a settings kind, a store, an endpoint, a screen, and wiring
+   into both `Config` paths — the planner's and the completer's.
+2. **The exception per step**, structurally rather than by rewording.
+3. Stage 3 of the PRD, simulation over real cases, which still waits on D1.
