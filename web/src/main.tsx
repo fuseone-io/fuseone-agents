@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/components/shared/theme-provider";
 import { AppShell } from "@/components/layout/app-shell";
 import { SessionGate } from "@/features/session/session-gate";
 import { OverviewPage } from "@/features/overview/overview-page";
+import { PoliciesPage } from "@/features/policies/policies-page";
 import { AuditPage } from "@/features/audit/audit-page";
 import { NotFoundPage } from "@/components/shared/not-found";
 import { AgentsPage } from "@/features/agents/agents-page";
@@ -46,7 +47,8 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="/runs/:runId" element={<RunDetailPage />} />
                 <Route path="/approvals" element={<ApprovalsPage />} />
                 <Route path="/cost" element={<CostPage />} />
-              <Route path="/audit" element={<AuditPage />} />
+              <Route path="/policies" element={<PoliciesPage />} />
+                <Route path="/audit" element={<AuditPage />} />
                 <Route path="/admin" element={<AdminPage />} />
                 <Route path="*" element={<NotFoundPage />} />
               </Routes>

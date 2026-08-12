@@ -1,4 +1,4 @@
-import { Activity, Bot, Hand, LayoutDashboard, ScrollText, Settings2, Wallet } from "lucide-react";
+import { Activity, Bot, Hand, LayoutDashboard, Scale, ScrollText, Settings2, Wallet } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export interface NavItem {
@@ -38,6 +38,7 @@ export const NAV: NavGroup[] = [
   {
     label: "Governar",
     items: [
+      { to: "/policies", label: "Políticas", icon: Scale, permission: "policy:read" },
       { to: "/audit", label: "Trilha de auditoria", icon: ScrollText, permission: "audit:read" },
       { to: "/cost", label: "Custo e limites", icon: Wallet, permission: "cost:read" },
       { to: "/admin", label: "Administração", icon: Settings2, permission: "tool:read" },
@@ -50,6 +51,7 @@ export const PAGE_TITLES: Record<string, string> = {
   agents: "Agentes",
   runs: "Execuções",
   approvals: "Fila humana",
+  policies: "Políticas",
   audit: "Trilha de auditoria",
   cost: "Custo e limites",
   admin: "Administração",
