@@ -25,11 +25,11 @@ export interface ToolRule {
 function ladder(effect: string): ToolRule {
   switch (effect) {
     case "read":
-      return { kind: "allowed", label: "segue" };
+      return { kind: "allowed", label: "agents.ruleAllowed" };
     case "write":
-      return { kind: "asks", label: "pede aprovação" };
+      return { kind: "asks", label: "agents.ruleAsks" };
     default:
-      return { kind: "blocked", label: "negado" };
+      return { kind: "blocked", label: "agents.ruleBlocked" };
   }
 }
 
@@ -59,14 +59,14 @@ export function ruleFor(
 
   for (const policy of unconditional) {
     if (policy.effect === "deny") {
-      return { kind: "blocked", label: "negado", because: policy.code };
+      return { kind: "blocked", label: "agents.ruleBlocked", because: policy.code };
     }
   }
   for (const policy of unconditional) {
     if (policy.effect === "escalate") {
       return {
         kind: "asks",
-        label: "pede aprovação",
+        label: "agents.ruleAsks",
         because: policy.code,
       };
     }
@@ -74,7 +74,7 @@ export function ruleFor(
   // An explicit allow is the one thing that lowers the built-in floor.
   for (const policy of unconditional) {
     if (policy.effect === "allow") {
-      return { kind: "allowed", label: "segue", because: policy.code };
+      return { kind: "allowed", label: "agents.ruleAllowed", because: policy.code };
     }
   }
 

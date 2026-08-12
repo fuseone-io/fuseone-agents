@@ -91,22 +91,22 @@ export function changesBetween(
     if (left !== right) changes.push({ field, from: left, to: right });
   };
 
-  compare("nome", before.name, after.name);
-  compare("área", before.area, after.area);
+  compare("agents.fieldName", before.name, after.name);
+  compare("agents.fieldArea", before.area, after.area);
   compare(
-    "modelo",
+    "agents.fieldModel",
     `${before.provider}/${before.model}`,
     `${after.provider}/${after.model}`,
   );
-  compare("esforço", before.effort, after.effort);
+  compare("agents.fieldEffort", before.effort, after.effort);
   compare(
-    "instruções",
+    "agents.fieldInstructions",
     summarise(before.instructions),
     summarise(after.instructions),
   );
-  compare("ferramentas", before.tools, after.tools);
-  compare("teto", before.budget, after.budget);
-  compare("gatilhos", before.triggers, after.triggers);
+  compare("agents.fieldTools", before.tools, after.tools);
+  compare("agents.fieldBudget", before.budget, after.budget);
+  compare("agents.fieldTriggers", before.triggers, after.triggers);
   return changes;
 }
 

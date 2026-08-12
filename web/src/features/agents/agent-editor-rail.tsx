@@ -112,8 +112,8 @@ function Diff({ changes }: { changes: Change[] }) {
       ) : (
         <ul className="flex flex-col gap-1.5">
           {changes.map((change) => (
-            <li key={change.field} className="text-xs">
-              <span className="text-warning">~</span> {change.field}{" "}
+            <li key={t(change.field)} className="text-xs">
+              <span className="text-warning">~</span> {t(change.field)}{" "}
               <Mono dim className="text-2xs">
                 {change.from} → {change.to}
               </Mono>

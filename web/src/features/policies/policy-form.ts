@@ -73,15 +73,15 @@ export function changesBetween(
     if (left !== right) changes.push({ field, from: left, to: right });
   };
 
-  compare("nome", before.name, after.name);
-  compare("dono", before.owner, after.owner);
-  compare("motivo", before.reason, after.reason);
-  compare("recurso", before.resource, after.resource);
+  compare("policies.fieldName", before.name, after.name);
+  compare("policies.fieldOwner", before.owner, after.owner);
+  compare("policies.fieldReason", before.reason, after.reason);
+  compare("policies.fieldResource", before.resource, after.resource);
   compare("efeitos cobertos", before.effects, after.effects);
   compare("alcance", before.reach, after.reach);
-  compare("condições", before.conditions, after.conditions);
-  compare("efeito", before.effect, after.effect);
-  compare("aplicação", before.mode, after.mode);
+  compare("policies.fieldConditions", before.conditions, after.conditions);
+  compare("policies.fieldEffect", before.effect, after.effect);
+  compare("policies.fieldEnforcement", before.mode, after.mode);
   compare("ligada", before.enabled, after.enabled);
   return changes;
 }

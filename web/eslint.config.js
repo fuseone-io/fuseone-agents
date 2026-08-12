@@ -25,11 +25,8 @@ export default tseslint.config(
       // A literal in JSX is a bug: it ships in one language to everyone.
       // Whoever adds one is reading their own locale and cannot see the
       // failure, so the rule has to be the thing that notices.
-      // A warning while the migration runs, an error the moment it lands.
-      // Leaving it at error today would make `make console` red for the whole
-      // sweep, and a red check nobody can act on is a check nobody reads.
       "i18next/no-literal-string": [
-        "warn",
+        "error",
         { mode: "jsx-text-only", "should-validate-template": true },
       ],
     },

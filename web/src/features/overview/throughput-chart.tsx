@@ -199,12 +199,13 @@ function Bar({
           {/* An hour range in 24h notation, and a figure. It reads the same
               in both languages the console ships, and routing digits through
               the catalogue would invite somebody to translate them. */}
-          {/* eslint-disable-next-line i18next/no-literal-string */}
+          {/* eslint-disable i18next/no-literal-string */}
           <p className="font-mono text-2xs tabular-nums">
             {String(column.hour).padStart(2, "0")}:00 –{" "}
             {String(column.hour + 1).padStart(2, "0")}:00
             {column.micros > 0 && ` · ${formatCost({ micros: column.micros })}`}
           </p>
+          {/* eslint-enable i18next/no-literal-string */}
           {SEGMENTS.map((state) => (
             <p key={state} className="flex items-center gap-2 text-2xs">
               <span

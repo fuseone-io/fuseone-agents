@@ -52,8 +52,8 @@ describe("what is about to change", () => {
 
     const changes = changesBetween(before, after);
     expect(changes).toEqual([
-      { field: "recurso", from: "crm.reply", to: "crm.*" },
-      { field: "aplicação", from: "monitor", to: "enforce" },
+      { field: "policies.fieldResource", from: "crm.reply", to: "crm.*" },
+      { field: "policies.fieldEnforcement", from: "monitor", to: "enforce" },
     ]);
   });
 

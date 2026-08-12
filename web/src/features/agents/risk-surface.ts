@@ -10,7 +10,7 @@ import type { Tool } from "@/lib/api/client";
  */
 export function riskSurface(tools: string[], catalogue: Tool[]): string[] {
   if (tools.length === 0) {
-    return ["Nada. Sem ferramentas, este agente só consegue raciocinar."];
+    return ["agents.riskNothing"];
   }
 
   const effects = new Map(catalogue.map((t) => [t.toolId, t.effect]));
