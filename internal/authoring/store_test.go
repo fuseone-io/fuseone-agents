@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/authoring"
+	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/settings"
 	"github.com/fuseone/agents/internal/vault"
@@ -169,5 +170,50 @@ func TestChoose_theCeilingSurvivesBeingSwitchedOffAndOn(t *testing.T) {
 	// would then be unbounded until somebody noticed.
 	if choice.DailyMicros != 2_000_000 {
 		t.Errorf("got %+v", choice)
+	}
+}
+
+func TestSpentToday_addsUpWhatTheAssistantCost(t *testing.T) {
+	store, _ := storeFor(t)
+	ctx := t.Context()
+
+	for _, micros := range []int64{1_200, 800} {
+		if err := store.RecordSpend(ctx, domain.Cost{Micros: micros}, "usr_a"); err != nil {
+			t.Fatalf("record: %v", err)
+		}
+	}
+
+	// The trail is where this belongs: authoring is the only spend outside a
+	// run, so the append-only record is the only place it can be counted from
+	// without inventing a second ledger for it.
+	got, err := store.SpentToday(ctx)
+	if err != nil {
+		t.Fatalf("spent: %v", err)
+	}
+	if got != 2_000 {
+		t.Errorf("got %d micros, want 2000", got)
+	}
+}
+
+func TestSpentToday_yesterdaysSpend_doesNotCountAgainstToday(t *testing.T) {
+	store, _ := storeFor(t)
+	ctx := t.Context()
+
+	if err := store.RecordSpend(ctx, domain.Cost{Micros: 5_000}, "usr_a"); err != nil {
+		t.Fatalf("record: %v", err)
+	}
+	if _, err := poolOf(t).Exec(ctx,
+		`update admin_events set at = now() - interval '2 days' where action = 'authoring.spent'`); err != nil {
+		t.Fatalf("age it: %v", err)
+	}
+
+	// A daily ceiling that counted every day since the installation started
+	// would stop the assistant for good after one busy afternoon.
+	got, err := store.SpentToday(ctx)
+	if err != nil {
+		t.Fatalf("spent: %v", err)
+	}
+	if got != 0 {
+		t.Errorf("got %d micros, want nothing", got)
 	}
 }

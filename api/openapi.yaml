@@ -144,6 +144,46 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /agents/interview:
+    post:
+      tags: [agents]
+      operationId: interviewAgent
+      summary: Turn answers into a draft
+      description: |
+        The interview's prose answers, translated into specification fields by
+        the model Administração points at.
+
+        The model translates and never grants: what comes back is read against
+        the tool catalogue, and a name that is not in it is dropped however
+        confidently it was proposed. Without that, describing a process
+        persuasively would be a way to widen an agent's reach.
+
+        The daily ceiling is checked before the request leaves. What the call
+        cost is appended to the administrative trail whether or not the answer
+        was usable — the money left the installation either way.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InterviewAnswers' }
+      responses:
+        '200':
+          description: The half of a draft the model produced.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InterviewDraft' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: |
+            The assistant is switched off, or its daily ceiling is reached.
+            Both are configuration rather than failure, and the form remains
+            the way to publish an agent without it.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
   /agents/{agentId}:
     get:
       tags: [agents]
@@ -1454,6 +1494,39 @@ components:
           description: Whether a credential is stored. The credential itself never leaves the vault through this API.
         updatedBy: { type: string }
         updatedAt: { type: string, format: date-time }
+
+    InterviewAnswers:
+      type: object
+      properties:
+        mustKnow: { type: string }
+        steps: { type: string }
+        goesWrong: { type: string }
+        notDecide: { type: string }
+
+    InterviewDraft:
+      type: object
+      required: [tools, steps]
+      properties:
+        tools:
+          type: array
+          items: { type: string }
+        steps:
+          type: array
+          items: { $ref: '#/components/schemas/AgentStep' }
+        micros:
+          type: integer
+          format: int64
+          description: What this call cost, appended to the trail as well.
+
+    AgentStep:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        reaches:
+          type: array
+          items: { type: string }
+        stopsWhen: { type: string }
 
     AuthoringChoice:
       type: object

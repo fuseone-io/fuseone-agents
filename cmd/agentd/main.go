@@ -157,6 +157,7 @@ func serve(args []string) error {
 			WithPolicies(policy.NewStore(identity.pool)).
 			WithAreas(scope.NewStore(identity.pool)).
 			WithAuthoring(authoring.NewStore(identity.pool, store)).
+			WithAssistants(assistants(ctx, integrations), authoring.NewStore(identity.pool, store)).
 			WithPauses(spec.NewState(identity.pool)).
 			WithPublisher(spec.NewPublisher(identity.pool, engine.SystemClock{}))
 	}
@@ -1190,4 +1191,20 @@ func writeProblem(w http.ResponseWriter, status int, title, detail string) {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(status)
 	fmt.Fprintf(w, `{"title":%q,"status":%d,"detail":%q}`, title, status, detail)
+}
+
+// assistants builds the provider registry the authoring assistant reaches
+// through. Configured the same way the worker's is, so an authoring call
+// cannot drift onto a different credential than a run would use.
+//
+// The serve process holds no vault, so a provider whose credential is sealed
+// cannot be opened here. That is reported when the call is attempted rather
+// than at boot: an installation with no assistant configured must still start.
+func assistants(ctx context.Context, integrations *admin.Integrations) *model.Registry {
+	providers := model.NewRegistry(nil)
+	if err := registerConfigured(ctx, providers, integrations); err != nil {
+		slog.Warn("could not read configured providers for the authoring assistant", "err", err)
+	}
+	registerFromEnv(providers)
+	return providers
 }

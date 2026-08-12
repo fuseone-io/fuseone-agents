@@ -167,3 +167,42 @@ func has(connected []settings.Setting, name string) bool {
 	}
 	return false
 }
+
+// RecordSpend appends what an authoring call cost.
+//
+// The trail rather than a table of its own: authoring is the only spend that
+// happens outside a run, so the append-only record an operator already reads
+// is the one place it can be counted from without inventing a second ledger
+// for a single figure.
+func (s *Store) RecordSpend(ctx context.Context, cost domain.Cost, by domain.UserID) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("authoring: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if err := admin.Record(ctx, tx, admin.Event{
+		Principal: by, Action: "authoring.spent", Target: name,
+		Detail: map[string]int64{"micros": cost.Micros},
+	}); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+// SpentToday is what authoring has cost since midnight.
+//
+// Bounded to the day because a ceiling that counted every day since the
+// installation started would stop the assistant for good after one busy
+// afternoon, which is a different product decision than the one anybody made.
+func (s *Store) SpentToday(ctx context.Context) (int64, error) {
+	var micros int64
+	err := s.pool.QueryRow(ctx, `
+        select coalesce(sum((detail->>'micros')::bigint), 0)
+        from admin_events
+        where action = 'authoring.spent' and at >= date_trunc('day', now())`).Scan(&micros)
+	if err != nil {
+		return 0, fmt.Errorf("authoring: read spend: %w", err)
+	}
+	return micros, nil
+}
