@@ -4,9 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Mono } from "@/components/shared/mono";
 import { TraceStep } from "@/features/overview/trace-step";
-import { PendingDecision } from "@/features/runs/pending-decision";
+import { TraceActions } from "@/features/overview/trace-actions";
+import { TraceDecision } from "@/features/overview/trace-decision";
 import { useRun, useRunSteps } from "@/features/runs/api";
 import { formatCost, formatDuration } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 /**
  * One run's trail, docked beside the overview.
@@ -25,8 +27,11 @@ export function TracePanel({ runId, onClose }: { runId: string; onClose: () => v
   const pending = run.data?.pendingApproval;
 
   return (
-    <aside className="flex w-full flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-sm lg:sticky lg:top-0 lg:w-[340px] lg:shrink-0">
-      <header className="flex items-start gap-2">
+    // A column, not a card that grows: the steps scroll and the decision stays
+    // pinned. A run with forty steps must not push its own Approve button off
+    // the screen.
+    <aside className="flex max-h-[calc(100vh-100px)] w-full flex-col rounded-xl border border-border bg-card shadow-sm lg:sticky lg:top-0 lg:w-[340px] lg:shrink-0">
+      <header className="flex items-start gap-2 border-b border-border p-4">
         <div className="min-w-0 flex-1">
           <Link to={`/runs/${runId}`} className="text-sm font-medium hover:underline">
             {run.data?.agentId ?? runId}
@@ -47,24 +52,29 @@ export function TracePanel({ runId, onClose }: { runId: string; onClose: () => v
       </header>
 
       {run.isLoading || steps.isLoading ? (
-        <Skeleton className="h-40 rounded-lg" />
+        <div className="p-4">
+          <Skeleton className="h-40 rounded-lg" />
+        </div>
       ) : (
         <>
-          {/* Answerable here. Noticing something and acting on it should not
-              be two different sittings. */}
-          {pending && (
-            <PendingDecision
-              runId={runId}
-              approval={pending}
-              step={items.find((s) => s.seq === pending.atSeq)}
-            />
-          )}
+          <div className="min-h-0 flex-1 overflow-auto p-4">
+            {pending && <TraceDecision runId={runId} approval={pending} />}
 
-          <ol className="flex flex-col">
-            {items.map((step, i) => (
-              <TraceStep key={step.seq} step={step} last={i === items.length - 1} />
-            ))}
-          </ol>
+            <ol className={cn("flex flex-col", pending && "mt-3")}>
+              {items.map((step, i) => (
+                <TraceStep key={step.seq} step={step} last={i === items.length - 1} />
+              ))}
+            </ol>
+          </div>
+
+          {/* Pinned. Answerable here, because noticing something and acting on
+              it should not be two different sittings — and an action that
+              scrolls away is one nobody reaches. */}
+          {pending && (
+            <div className="border-t border-border p-3">
+              <TraceActions runId={runId} approval={pending} />
+            </div>
+          )}
         </>
       )}
     </aside>

@@ -35,41 +35,39 @@ export function OverviewPage() {
   const selected = chosen ?? (dismissed ? undefined : suggested);
 
   return (
-    <>
-      <PageHeader
-        icon={PAGE_ICONS.overview}
-        title="Visão geral"
-        description="Como o dia está indo: quanto rodou, o que o Portão decidiu e quanto custou."
-      />
+    // The trace is a column beside the whole page, not beside the last block
+    // on it. Docking it to the bottom half put a run's trail level with the
+    // policy feed and left its actions below the fold — a panel somebody has
+    // to scroll to in order to approve something is one they will not use.
+    <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row lg:items-start">
+      <div className="flex min-w-0 flex-1 flex-col gap-4">
+        <PageHeader
+          icon={PAGE_ICONS.overview}
+          title="Visão geral"
+          description="Como o dia está indo: quanto rodou, o que o Portão decidiu e quanto custou."
+        />
 
-      <KpiRow windows={windows} />
+        <KpiRow windows={windows} />
 
-      <div className="grid gap-4 lg:grid-cols-[2fr_1fr] lg:items-start">
-        <ThroughputPanel since={since} />
-        <BudgetDonut windows={windows.current} />
-      </div>
-
-      <AgentFleet since={since} />
-
-      {/* The trace docks beside the feed and the table rather than replacing
-          them: somebody opening a run should not lose the page they were
-          reading it from. */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-        <div className="flex min-w-0 flex-1 flex-col gap-4">
-          <DecisionsFeed since={since} />
-          <RecentRuns since={since} selected={selected} onSelect={setChosen} />
+        <div className="grid gap-4 lg:grid-cols-[2fr_1fr] lg:items-start">
+          <ThroughputPanel since={since} />
+          <BudgetDonut windows={windows.current} />
         </div>
 
-        {selected && (
-          <TracePanel
-            runId={selected}
-            onClose={() => {
-              setChosen(undefined);
-              setDismissed(true);
-            }}
-          />
-        )}
+        <AgentFleet since={since} />
+        <DecisionsFeed since={since} />
+        <RecentRuns since={since} selected={selected} onSelect={setChosen} />
       </div>
-    </>
+
+      {selected && (
+        <TracePanel
+          runId={selected}
+          onClose={() => {
+            setChosen(undefined);
+            setDismissed(true);
+          }}
+        />
+      )}
+    </div>
   );
 }
