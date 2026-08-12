@@ -18,6 +18,7 @@ import { AgentsPage } from "@/features/agents/agents-page";
 import { AgentDetailPage } from "@/features/agents/agent-detail-page";
 import { InterviewPage } from "@/features/agents/interview-page";
 import { AgentEditorPage } from "@/features/agents/agent-editor-page";
+import { SimulationPage } from "@/features/agents/simulation-page";
 import { RunsPage } from "@/features/runs/runs-page";
 import { RunDetailPage } from "@/features/runs/run-detail-page";
 import { ApprovalsPage } from "@/features/approvals/approvals-page";
@@ -55,6 +56,10 @@ createRoot(document.getElementById("root")!).render(
                 <Route
                   path="/agents/:agentId/edit"
                   element={<AgentEditorPage />}
+                />
+                <Route
+                  path="/agents/:agentId/simulate"
+                  element={<SimulationPage />}
                 />
                 <Route path="/runs" element={<RunsPage />} />
                 <Route path="/runs/:runId" element={<RunDetailPage />} />

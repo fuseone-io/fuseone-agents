@@ -1,5 +1,5 @@
 import { Trans, useTranslation } from "react-i18next";
-import { Pencil } from "lucide-react";
+import { FlaskConical, Pencil } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -75,6 +75,15 @@ export function AgentIdentity({
               <Link to={`/agents/${agent.agentId}/edit`}>
                 <Pencil className="size-4" aria-hidden />
                 {t("agents.edit")}
+              </Link>
+            </Button>
+            {/* Beside running it, not buried: simulating is how an agent
+                earns its way out of Draft, and running it for real is the
+                thing somebody does instead when they cannot find this. */}
+            <Button variant="outline" size="sm" asChild className="h-8">
+              <Link to={`/agents/${agent.agentId}/simulate`}>
+                <FlaskConical className="size-4" aria-hidden />
+                {t("agents.simulate")}
               </Link>
             </Button>
             <RunNowDialog agentId={agent.agentId} agentName={agent.name} />

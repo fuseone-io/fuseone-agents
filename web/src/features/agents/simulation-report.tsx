@@ -1,0 +1,56 @@
+import { useTranslation } from "react-i18next";
+import {
+  EmptyState,
+  ErrorState,
+  LoadingRows,
+} from "@/components/shared/states";
+import { SimulationSummary } from "@/features/agents/simulation-summary";
+import { CaseRow } from "@/features/agents/simulation-case";
+import type { useSimulation } from "@/features/agents/simulation-api";
+
+/**
+ * The four states a report can be in, and the rows once it has them.
+ *
+ * A partial report is not a partial answer: the cases that have settled are
+ * complete rows and the rest say they have not, because the whole thing is a
+ * fold of runs still being advanced.
+ */
+export function SimulationReportView({
+  agentId,
+  report,
+}: {
+  agentId: string;
+  report: ReturnType<typeof useSimulation>;
+}) {
+  const { t } = useTranslation();
+
+  if (report.isLoading) return <LoadingRows rows={6} />;
+  if (report.error) {
+    return (
+      <ErrorState error={report.error} onRetry={() => void report.refetch()} />
+    );
+  }
+  if (!report.data) return null;
+
+  if (report.data.cases.length === 0) {
+    return (
+      <EmptyState
+        title={t("simulation.emptyTitle")}
+        hint={t("simulation.emptyBody", { agent: agentId })}
+      />
+    );
+  }
+
+  return (
+    <>
+      <SimulationSummary report={report.data} />
+      <ul className="flex flex-col gap-2">
+        {report.data.cases.map((entry, i) => (
+          <li key={entry.runId ?? i}>
+            <CaseRow index={i + 1} entry={entry} />
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
