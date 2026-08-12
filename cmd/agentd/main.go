@@ -397,6 +397,9 @@ func workerCmd(args []string) error {
 	// disconnect what it did not connect.
 	health := healthOf(configPool)
 	reconcile := newReconciler(catalog, integrations, health)
+	if curator != nil {
+		reconcile = reconcile.publishingTo(curator)
+	}
 	for _, entry := range servers {
 		name, command, _ := strings.Cut(entry, "=")
 		if err := connectServer(ctx, catalog, domain.MCPServer{

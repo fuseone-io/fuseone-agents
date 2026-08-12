@@ -119,11 +119,19 @@ type Servers interface {
 	MCPToken(ctx context.Context, name string) (string, error)
 }
 
+// Publisher records what the installation now offers, so the administration
+// area shows the tools of a server that connected after start-up. Optional: a
+// worker with no database still connects, it just has nowhere to publish to.
+type Publisher interface {
+	Publish(ctx context.Context, entries []domain.ToolEntry) error
+}
+
 // reconciler keeps the connected servers matching the configured ones.
 type reconciler struct {
-	catalog *tools.Catalog
-	servers Servers
-	health  healthRecorder
+	catalog   *tools.Catalog
+	servers   Servers
+	health    healthRecorder
+	publisher Publisher
 	// connected maps a server name to the fingerprint of what was connected
 	// under it, so a changed address is noticed rather than assumed stable.
 	connected map[string]string
@@ -134,6 +142,12 @@ func newReconciler(catalog *tools.Catalog, servers Servers, health healthRecorde
 		catalog: catalog, servers: servers, health: health,
 		connected: make(map[string]string),
 	}
+}
+
+// publishingTo wires where the catalogue is published after it changes.
+func (r *reconciler) publishingTo(p Publisher) *reconciler {
+	r.publisher = p
+	return r
 }
 
 // hold marks a server as connected by something other than the reconciler —
@@ -171,11 +185,23 @@ func (r *reconciler) reconcile(ctx context.Context) {
 		delete(r.connected, name)
 	}
 
+	changed := false
 	for name, server := range wanted {
 		if _, already := r.connected[name]; already {
 			continue
 		}
 		r.connect(ctx, server)
+		changed = true
+	}
+
+	// Published after the pass rather than only at start-up. Without this a
+	// server that connected later offered its tools to every agent and
+	// appeared on no screen, so the one place an operator goes to classify a
+	// new tool would not list it.
+	if changed && r.publisher != nil {
+		if err := r.publisher.Publish(ctx, r.catalog.Entries()); err != nil {
+			slog.Error("could not publish the tool catalogue", "err", err)
+		}
 	}
 }
 
