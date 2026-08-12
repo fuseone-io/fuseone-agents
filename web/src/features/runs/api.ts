@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap, type Phase } from "@/lib/api/client";
+import { useScopeFilter } from "@/features/scope/use-scope-filter";
 
 // Query keys are centralised per feature so an invalidation cannot miss a
 // cache entry because two call sites spelled the key differently.
 export const runKeys = {
   all: ["runs"] as const,
-  list: (filters: RunFilters) => [...runKeys.all, "list", filters] as const,
+  list: (scope: string, filters: RunFilters) =>
+    [...runKeys.all, "list", scope, filters] as const,
   detail: (runId: string) => [...runKeys.all, "detail", runId] as const,
   steps: (runId: string) => [...runKeys.all, "steps", runId] as const,
   verify: (runId: string) => [...runKeys.all, "verify", runId] as const,
@@ -25,12 +27,13 @@ export interface RunFilters {
 }
 
 export function useRuns(filters: RunFilters = {}) {
+  const scope = useScopeFilter();
   return useQuery({
-    queryKey: runKeys.list(filters),
+    queryKey: runKeys.list(scope.key, filters),
     queryFn: async () =>
       unwrap(
         await api.GET("/runs", {
-          params: { query: { ...filters, limit: 50 } },
+          params: { query: { ...scope.params, ...filters, limit: 50 } },
         }),
       ),
   });
@@ -119,13 +122,15 @@ export function useDecideApproval(runId: string) {
  * table happened to ask for.
  */
 export function useRunStats(filters: RunFilters = {}) {
+  const scope = useScopeFilter();
   return useQuery({
-    queryKey: [...runKeys.all, "stats", filters] as const,
+    queryKey: [...runKeys.all, "stats", scope.key, filters] as const,
     queryFn: async () =>
       unwrap(
         await api.GET("/runs/stats", {
           params: {
             query: {
+              ...scope.params,
               agentId: filters.agentId,
               since: filters.since,
               until: filters.until,

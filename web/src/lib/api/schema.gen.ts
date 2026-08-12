@@ -672,6 +672,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/scopes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The areas that exist
+         * @description An area is where work is filed: an agent belongs to one, a ceiling
+         *     governs one, a policy can reach a set of them, and a grant is held in
+         *     one. Before this list existed an area was whatever text somebody typed
+         *     into an agent, so `financeiro` and `Financeiro` were two areas that
+         *     never meet — a ceiling on one governs no agent under the other, and
+         *     nothing reports it.
+         *
+         *     Answers only with the areas inside the scopes the caller reaches, so
+         *     the list doubles as what a context switcher may offer.
+         */
+        get: operations["listScopes"];
+        put?: never;
+        /**
+         * Register an area
+         * @description The typed name is folded to a canonical id — lowercased, accents
+         *     removed, spaces hyphenated — and the reply carries it, because the
+         *     caller cannot know beforehand what "Risco de Crédito" becomes.
+         *     Registering a name that folds onto an existing area relabels it rather
+         *     than creating a second one.
+         *
+         *     Behind scope:write, held only by the Curator: an area is where
+         *     authority is granted, so anybody who could create one could create a
+         *     place to hold authority nobody meant to give.
+         */
+        post: operations["registerScope"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/scopes/{scope}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Withdraw an area
+         * @description Withdraws the area from the list offered for new work. It does not
+         *     touch the agents, ceilings or policies already filed under it: those
+         *     rows keep naming it and keep meaning what they meant. Withdrawing an
+         *     area and rewriting history are different acts, and only the first is
+         *     available here.
+         */
+        delete: operations["deleteScope"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/events": {
         parameters: {
             query?: never;
@@ -841,6 +905,16 @@ export interface components {
             updatedBy?: string;
             /** Format: date-time */
             updatedAt?: string;
+        };
+        RegisteredScope: {
+            company: string;
+            /** @description The canonical id. Lowercase, no accents, hyphenated. */
+            area: string;
+            /** @description How it is shown. Empty means show the id. */
+            label?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            createdBy?: string;
         };
         ScopeBudget: {
             /** @enum {string} */
@@ -2317,6 +2391,87 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    listScopes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The areas, ordered by company then id. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["RegisteredScope"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    registerScope: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    company: string;
+                    /** @description As a person types it. Folded to an id server-side. */
+                    name: string;
+                    /** @description How it is shown. Defaults to the typed name. */
+                    label?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The area, with the id it was folded to. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegisteredScope"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    deleteScope: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description `company/area`. */
+                scope: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The area is withdrawn. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     listAdminEvents: {

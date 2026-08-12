@@ -15,13 +15,12 @@ import { NAV, type NavItem } from "@/components/layout/nav";
 import { UserMenu } from "@/components/layout/user-menu";
 import { useApprovals } from "@/features/approvals/api";
 import { useMe } from "@/features/session/api";
-import { LogoLockup, LogoMark } from "@/components/shared/logo";
+import { ScopeSwitcher } from "@/features/scope/scope-switcher";
 
 export function AppSidebar() {
   const { pathname } = useLocation();
   const { data: me } = useMe();
   const allowed = permissionFilter(me?.can);
-  const scope = scopeOf(me?.grants);
 
   // The one rule between the two grounds is the design system's sidebar
   // border, a step stronger than the hairline used everywhere else.
@@ -30,22 +29,11 @@ export function AppSidebar() {
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" className="h-[46px] gap-[9px]" asChild>
-              <Link to="/runs">
-                {/* The mark sits in a box the width of the collapsed button, so
-                    collapsing leaves the icon centred with nothing beside it.
-                    A narrower box left a dozen pixels for the name to leak
-                    through. The wrapper also keeps the mark out of reach of the
-                    primitive's [&>svg]:size-4, which would shrink it to 16. */}
-                <span className="flex size-8 shrink-0 items-center justify-center">
-                  <LogoMark size={26} />
-                </span>
-                <div className="grid flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
-                  <LogoLockup className="text-base text-sidebar-accent-foreground" />
-                  {scope && <span className="truncate text-xs text-muted-foreground">{scope}</span>}
-                </div>
-              </Link>
-            </SidebarMenuButton>
+            {/* The header used to be a link home carrying the company as a
+                label. A label is the wrong shape for it: the company is one of
+                several contexts a person may hold, and the one thing they
+                could not do was change it. */}
+            <ScopeSwitcher />
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
@@ -107,8 +95,3 @@ function permissionFilter(can: string[] | undefined) {
 
 // An installation with no identity configured has no scope to name, and an em
 // dash there reads as a value that failed to load.
-function scopeOf(grants: { company: string }[] | undefined): string {
-  const companies = [...new Set(grants?.map((g) => g.company) ?? [])];
-  if (companies.length > 1) return `${companies.length} empresas`;
-  return companies[0] ?? "";
-}

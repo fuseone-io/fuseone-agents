@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { api, unwrap } from "@/lib/api/client";
+import { useScopeFilter } from "@/features/scope/use-scope-filter";
 
 /**
  * The overview's reads.
@@ -10,23 +11,27 @@ import { api, unwrap } from "@/lib/api/client";
  */
 export const overviewKeys = {
   all: ["overview"] as const,
-  throughput: (since: string) => [...overviewKeys.all, "throughput", since] as const,
-  decisions: (since: string) => [...overviewKeys.all, "decisions", since] as const,
+  throughput: (scope: string, since: string) =>
+    [...overviewKeys.all, "throughput", scope, since] as const,
+  decisions: (scope: string, since: string) =>
+    [...overviewKeys.all, "decisions", scope, since] as const,
 };
 
 export function useThroughput(since: string) {
+  const scope = useScopeFilter();
   return useQuery({
-    queryKey: overviewKeys.throughput(since),
+    queryKey: overviewKeys.throughput(scope.key, since),
     queryFn: async () =>
-      unwrap(await api.GET("/runs/throughput", { params: { query: { since } } })),
+      unwrap(await api.GET("/runs/throughput", { params: { query: { ...scope.params, since } } })),
   });
 }
 
 export function useDecisions(since: string, limit = 12) {
+  const scope = useScopeFilter();
   return useQuery({
-    queryKey: overviewKeys.decisions(since),
+    queryKey: overviewKeys.decisions(scope.key, since),
     queryFn: async () =>
-      unwrap(await api.GET("/decisions", { params: { query: { since, limit } } })),
+      unwrap(await api.GET("/decisions", { params: { query: { ...scope.params, since, limit } } })),
     // The Gate keeps deciding while somebody watches the feed. Short enough
     // to feel live, long enough not to be a load generator on a shared API.
     refetchInterval: 15_000,
