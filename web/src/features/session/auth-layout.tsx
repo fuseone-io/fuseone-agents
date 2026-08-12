@@ -25,7 +25,9 @@ export function AuthLayout({
             <span className="mt-0.5">{icon}</span>
             <div>
               <h1 className="text-xl font-medium tracking-tight">{title}</h1>
-              <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {description}
+              </p>
             </div>
           </div>
         </div>

@@ -34,7 +34,10 @@ export function DecisionCard({
       )}
     >
       <div className="flex items-center gap-2">
-        <span aria-hidden className={cn("size-[7px] shrink-0 rounded-pill", RISK_DOT[risk])} />
+        <span
+          aria-hidden
+          className={cn("size-[7px] shrink-0 rounded-pill", RISK_DOT[risk])}
+        />
         <span className="min-w-0 flex-1 truncate font-medium">
           {item.agentId ?? item.runId} quer usar <Mono>{item.tool}</Mono>
         </span>
@@ -52,11 +55,17 @@ export function DecisionCard({
           Risco {RISK_LABEL[risk].toLowerCase()}
         </Badge>
         {item.scope?.area && (
-          <Badge variant="outline" className="font-normal text-muted-foreground">
+          <Badge
+            variant="outline"
+            className="font-normal text-muted-foreground"
+          >
             {item.scope.area}
           </Badge>
         )}
-        <Badge variant="outline" className="font-mono text-2xs font-normal text-muted-foreground">
+        <Badge
+          variant="outline"
+          className="font-mono text-2xs font-normal text-muted-foreground"
+        >
           {item.runId}
         </Badge>
       </div>

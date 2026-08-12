@@ -5,10 +5,21 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage,
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
 } from "@/components/ui/form";
 import { useRegisterScope } from "@/features/scope/api";
 import { useMe } from "@/features/session/api";
@@ -49,7 +60,9 @@ export function AreaForm({ onClose }: { onClose: () => void }) {
       });
       onClose();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível declarar");
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível declarar",
+      );
     }
   }
 
@@ -66,7 +79,10 @@ export function AreaForm({ onClose }: { onClose: () => void }) {
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(submit)} className="flex flex-col gap-4">
+          <form
+            onSubmit={form.handleSubmit(submit)}
+            className="flex flex-col gap-4"
+          >
             <FormField
               control={form.control}
               name="company"

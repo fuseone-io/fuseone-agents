@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,6 +47,7 @@ export function ConditionBuilder({
   conditions: PolicyCondition[];
   onChange: (conditions: PolicyCondition[]) => void;
 }) {
+  const { t } = useTranslation();
   const update = (index: number, patch: Partial<PolicyCondition>) =>
     onChange(conditions.map((c, i) => (i === index ? { ...c, ...patch } : c)));
 
@@ -53,8 +55,7 @@ export function ConditionBuilder({
     <div className="flex flex-col gap-2">
       {conditions.length === 0 && (
         <p className="text-xs text-muted-foreground">
-          Sem condição, a regra vale para tudo que o escopo cobre. É assim que
-          se escreve “negar toda escrita em crm”.
+          {t("policies.noCondition")}
         </p>
       )}
 
@@ -77,7 +78,9 @@ export function ConditionBuilder({
             label="Operador"
             value={condition.op}
             options={OPERATORS}
-            onChange={(op) => update(index, { op: op as PolicyCondition["op"] })}
+            onChange={(op) =>
+              update(index, { op: op as PolicyCondition["op"] })
+            }
           />
 
           <div>
@@ -108,10 +111,12 @@ export function ConditionBuilder({
         variant="outline"
         size="sm"
         className="h-8 self-start"
-        onClick={() => onChange([...conditions, { field: "tool.id", op: "eq", value: "" }])}
+        onClick={() =>
+          onChange([...conditions, { field: "tool.id", op: "eq", value: "" }])
+        }
       >
         <Plus className="size-4" aria-hidden />
-        Adicionar condição
+        {t("policies.addCondition")}
       </Button>
     </div>
   );
@@ -130,12 +135,19 @@ function Field({
 }) {
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="!h-[34px] w-full font-mono text-xs" aria-label={label}>
+      <SelectTrigger
+        className="!h-[34px] w-full font-mono text-xs"
+        aria-label={label}
+      >
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
         {options.map((option) => (
-          <SelectItem key={option.value} value={option.value} className="font-mono text-xs">
+          <SelectItem
+            key={option.value}
+            value={option.value}
+            className="font-mono text-xs"
+          >
             {option.label}
           </SelectItem>
         ))}

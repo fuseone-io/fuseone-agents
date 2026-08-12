@@ -56,7 +56,11 @@ export function ScopeSwitcher() {
         </SidebarMenuButton>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent align="start" side={isMobile ? "bottom" : "right"} className="w-[248px]">
+      <DropdownMenuContent
+        align="start"
+        side={isMobile ? "bottom" : "right"}
+        className="w-[248px]"
+      >
         <DropdownMenuLabel className="text-2xs uppercase tracking-label text-muted-foreground">
           {t("scope.label")}
         </DropdownMenuLabel>
@@ -86,5 +90,7 @@ function currentLabel(
 ): string {
   if (company === "") return t("scope.everything");
   if (area === "") return company;
-  return areas.find((a) => a.company === company && a.area === area)?.label || area;
+  return (
+    areas.find((a) => a.company === company && a.area === area)?.label || area
+  );
 }

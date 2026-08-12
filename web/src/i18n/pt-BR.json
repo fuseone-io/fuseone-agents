@@ -41,6 +41,21 @@
     "whatStarts": "O que inicia",
     "withoutTools": "Sem ferramentas"
   },
+  "approvals": {
+    "approve": "Aprovar",
+    "context": "Contexto",
+    "deny": "Negar",
+    "note": "Observação",
+    "seeWholeRun": "Ver a execução inteira"
+  },
+  "audit": {
+    "about": "Sobre",
+    "detail": "Detalhe",
+    "seal": "Selo",
+    "what": "O quê",
+    "when": "Quando",
+    "who": "Quem"
+  },
   "common": {
     "cancel": "Cancelar",
     "close": "Fechar",
@@ -51,6 +66,15 @@
     "remove": "Remover",
     "retry": "Tentar de novo",
     "save": "Salvar"
+  },
+  "cost": {
+    "agent": "Agente",
+    "average": "Médio",
+    "cost": "Custo",
+    "inPeriod": "no período",
+    "noTokens": "Nenhum token contabilizado no período.",
+    "runs": "Execuções",
+    "tokens": "Tokens"
   },
   "language": {
     "change": "Mudar idioma"
@@ -96,6 +120,23 @@
     "throughput": "Vazão · hoje",
     "throughputUnreadable": "Não foi possível ler a vazão de hoje.",
     "wantsToRun": "Quer executar"
+  },
+  "policies": {
+    "addCondition": "Adicionar condição",
+    "code": "Código",
+    "decisions": "Decisões",
+    "effect": "Efeito",
+    "effectWhenMatched": "Efeito quando a regra bate",
+    "effectsCovered": "Efeitos cobertos",
+    "enforcement": "Aplicação",
+    "monitoring": "Monitorando, a regra é avaliada e registrada e não muda nada. É como se lê o que ela faria antes de ela fazer.",
+    "newPolicy": "Nova política",
+    "noCondition": "Sem condição, a regra vale para tudo que o escopo cobre. É assim que se escreve “negar toda escrita em crm”.",
+    "noneSelectedCoversAll": "Nenhum selecionado cobre todos.",
+    "owner": "Dono",
+    "rule": "Regra",
+    "ruleEvaluated": "A regra que vai ser avaliada",
+    "state": "Estado"
   },
   "runs": {
     "approve": "Aprovar",
@@ -149,6 +190,13 @@
     "label": "Contexto",
     "noAreas": "Nenhuma área declarada",
     "wholeCompany": "Toda a {{company}}"
+  },
+  "session": {
+    "finishSetup": "Concluir configuração",
+    "recordedAsClaimant": "Fica registrado como quem reivindicou a instalação.",
+    "setupToken": "Token de configuração",
+    "tokenInLog": "O token foi impresso no log do servidor ao iniciar, e vale por 24 horas.",
+    "yourName": "Seu nome"
   },
   "shell": {
     "breadcrumb": "Trilha de navegação",

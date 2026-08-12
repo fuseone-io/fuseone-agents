@@ -13,7 +13,13 @@ type CostRollup = components["schemas"]["CostRollup"];
  * FO-02 is unbuilt) — so it reports the cache share instead, which is real,
  * actionable, and the lever the platform is responsible for (FO-09).
  */
-export function CostKpis({ daily, isLoading }: { daily?: CostRollup; isLoading: boolean }) {
+export function CostKpis({
+  daily,
+  isLoading,
+}: {
+  daily?: CostRollup;
+  isLoading: boolean;
+}) {
   if (isLoading || !daily) {
     return (
       <div className="flex shrink-0 gap-3">
@@ -31,7 +37,8 @@ export function CostKpis({ daily, isLoading }: { daily?: CostRollup; isLoading: 
 
   const input = total.inputTokens ?? 0;
   const cached = total.cacheReadTokens ?? 0;
-  const cacheShare = input + cached === 0 ? null : Math.round((cached / (input + cached)) * 100);
+  const cacheShare =
+    input + cached === 0 ? null : Math.round((cached / (input + cached)) * 100);
 
   return (
     <div className="flex shrink-0 gap-3">
@@ -43,7 +50,11 @@ export function CostKpis({ daily, isLoading }: { daily?: CostRollup; isLoading: 
       <KpiCard
         label="Hoje"
         value={today ? formatMicros(today.cost.micros) : "—"}
-        delta={today ? `${today.runs} ${today.runs === 1 ? "execução" : "execuções"}` : "nada hoje"}
+        delta={
+          today
+            ? `${today.runs} ${today.runs === 1 ? "execução" : "execuções"}`
+            : "nada hoje"
+        }
       />
       <KpiCard
         label="Custo médio"

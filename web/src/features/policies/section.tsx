@@ -34,7 +34,10 @@ export function Labelled({
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <Label htmlFor={htmlFor} className="text-2xs uppercase tracking-label text-muted-foreground">
+      <Label
+        htmlFor={htmlFor}
+        className="text-2xs uppercase tracking-label text-muted-foreground"
+      >
         {label}
       </Label>
       {children}

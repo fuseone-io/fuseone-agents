@@ -11,12 +11,17 @@ import {
 } from "@/components/ui/table";
 import { Panel } from "@/components/shared/panel";
 import { Mono } from "@/components/shared/mono";
-import { EmptyState, ErrorState, LoadingRows } from "@/components/shared/states";
+import {
+  EmptyState,
+  ErrorState,
+  LoadingRows,
+} from "@/components/shared/states";
 import { EffectBadge } from "@/features/admin/effect-badge";
 import { ClassifyDialog } from "@/features/admin/classify-dialog";
 import { useTools, type Tool } from "@/features/admin/api";
 
-const HEAD = "h-[30px] bg-muted text-2xs uppercase tracking-label text-muted-foreground";
+const HEAD =
+  "h-[30px] bg-muted text-2xs uppercase tracking-label text-muted-foreground";
 
 export function ToolsPanel() {
   const { data, isLoading, error, refetch } = useTools();
@@ -24,7 +29,15 @@ export function ToolsPanel() {
   const tools = data?.items ?? [];
 
   return (
-    <Panel title="Ferramentas" action={<span className="text-xs text-muted-foreground">chegam como leitura</span>} flush>
+    <Panel
+      title="Ferramentas"
+      action={
+        <span className="text-xs text-muted-foreground">
+          chegam como leitura
+        </span>
+      }
+      flush
+    >
       {isLoading ? (
         <div className="p-4">
           <LoadingRows />
@@ -58,10 +71,14 @@ export function ToolsPanel() {
                 <TableCell>
                   <Mono>{tool.toolId}</Mono>
                   {tool.description && (
-                    <div className="truncate text-xs text-muted-foreground">{tool.description}</div>
+                    <div className="truncate text-xs text-muted-foreground">
+                      {tool.description}
+                    </div>
                   )}
                 </TableCell>
-                <TableCell className="text-muted-foreground">{tool.server}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  {tool.server}
+                </TableCell>
                 <TableCell>
                   <EffectBadge effect={tool.effect} />
                 </TableCell>
@@ -69,7 +86,11 @@ export function ToolsPanel() {
                   {tool.untrusted ? "sim" : "não"}
                 </TableCell>
                 <TableCell className="text-right">
-                  <Button variant="outline" size="sm" onClick={() => setClassifying(tool)}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setClassifying(tool)}
+                  >
                     Classificar
                   </Button>
                 </TableCell>

@@ -28,10 +28,9 @@ describe("an agent card", () => {
     // somebody reading it will want next.
     renderCard(<AgentCard agent={agent()} />);
 
-    expect(screen.getByRole("link", { name: /Triagem de chamados/ })).toHaveAttribute(
-      "href",
-      "/agents/triage",
-    );
+    expect(
+      screen.getByRole("link", { name: /Triagem de chamados/ }),
+    ).toHaveAttribute("href", "/agents/triage");
   });
 
   it("opens the exact version it is showing, not whatever is newest", () => {
@@ -39,14 +38,15 @@ describe("an agent card", () => {
     // latest would show a reader text the card was not about.
     renderCard(<AgentCard agent={agent({ latest: false, versionId: "v1" })} />);
 
-    expect(screen.getByRole("link", { name: /Triagem de chamados/ })).toHaveAttribute(
-      "href",
-      "/agents/triage?version=v1",
-    );
+    expect(
+      screen.getByRole("link", { name: /Triagem de chamados/ }),
+    ).toHaveAttribute("href", "/agents/triage?version=v1");
   });
 
   it("shows the capability pack, because what is not there cannot be invoked", () => {
-    renderCard(<AgentCard agent={agent({ tools: ["crm.lookup", "kb.search"] })} />);
+    renderCard(
+      <AgentCard agent={agent({ tools: ["crm.lookup", "kb.search"] })} />,
+    );
 
     expect(screen.getByText("crm.lookup")).toBeInTheDocument();
     expect(screen.getByText("kb.search")).toBeInTheDocument();
@@ -58,7 +58,13 @@ describe("an agent card", () => {
   });
 
   it("says how a run starts, because an agent nothing triggers never runs", () => {
-    renderCard(<AgentCard agent={agent({ triggers: [{ type: "cron", schedule: "*/15 * * * *" }] })} />);
+    renderCard(
+      <AgentCard
+        agent={agent({
+          triggers: [{ type: "cron", schedule: "*/15 * * * *" }],
+        })}
+      />,
+    );
     expect(screen.getByText("cron")).toBeInTheDocument();
   });
 
@@ -87,8 +93,12 @@ describe("an agent's activity", () => {
       <AgentCard
         agent={agent({
           activity: {
-            runs: 4, finished: 3, waiting: 0, costMicros: 20_000,
-            lastPhase: "finished", lastRunAt: "2026-08-11T12:00:00Z",
+            runs: 4,
+            finished: 3,
+            waiting: 0,
+            costMicros: 20_000,
+            lastPhase: "finished",
+            lastRunAt: "2026-08-11T12:00:00Z",
           },
         })}
       />,
@@ -101,8 +111,12 @@ describe("an agent's activity", () => {
       <AgentCard
         agent={agent({
           activity: {
-            runs: 3, finished: 1, waiting: 2, costMicros: 0,
-            lastPhase: "awaiting_approval", lastRunAt: "2026-08-11T12:00:00Z",
+            runs: 3,
+            finished: 1,
+            waiting: 2,
+            costMicros: 0,
+            lastPhase: "awaiting_approval",
+            lastRunAt: "2026-08-11T12:00:00Z",
           },
         })}
       />,

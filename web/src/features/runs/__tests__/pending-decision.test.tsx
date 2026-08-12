@@ -54,7 +54,10 @@ function stubEndpoints() {
       if (url.includes("/content")) {
         return json({ seq: 10, digest: "d1", content: ARGS });
       }
-      const body = input instanceof Request ? await input.clone().text() : String(init?.body);
+      const body =
+        input instanceof Request
+          ? await input.clone().text()
+          : String(init?.body);
       sent.push(JSON.parse(body));
       return json({ runId: "run-1", phase: "running" });
     }),
@@ -141,9 +144,14 @@ describe("the pending decision", () => {
   it("says the arguments are gone rather than showing an empty block", async () => {
     // Retention deletes the content while the step stays in the chain. Blank
     // arguments would read as "this call sends nothing".
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 404 })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("", { status: 404 })),
+    );
     renderCard();
 
-    expect(await screen.findByText(/não estão mais disponíveis/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/não estão mais disponíveis/i),
+    ).toBeInTheDocument();
   });
 });

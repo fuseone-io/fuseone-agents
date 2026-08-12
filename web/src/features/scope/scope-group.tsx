@@ -38,7 +38,9 @@ export function ScopeGroup({
       {/* Silence here would read as "this company has no areas" when it may
           only mean nobody has declared one yet. */}
       {areas.length === 0 && (
-        <p className="px-2 py-1.5 pl-8 text-xs text-muted-foreground">{t("scope.noAreas")}</p>
+        <p className="px-2 py-1.5 pl-8 text-xs text-muted-foreground">
+          {t("scope.noAreas")}
+        </p>
       )}
     </>
   );

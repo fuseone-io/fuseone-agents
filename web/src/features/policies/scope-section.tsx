@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Section, Labelled } from "@/features/policies/section";
 import { cn } from "@/lib/utils";
@@ -13,10 +14,14 @@ export function ScopeSection({
   draft: PolicyInput;
   patch: (over: Partial<PolicyInput>) => void;
 }) {
+  const { t } = useTranslation();
   const covered = draft.effects ?? [];
 
   return (
-    <Section title="Escopo" hint="O que a regra alcança antes de qualquer condição.">
+    <Section
+      title="Escopo"
+      hint="O que a regra alcança antes de qualquer condição."
+    >
       <Labelled label="Ferramenta" htmlFor="resource">
         <Input
           id="resource"
@@ -29,7 +34,7 @@ export function ScopeSection({
 
       <fieldset className="flex flex-col gap-1.5">
         <legend className="text-2xs uppercase tracking-label text-muted-foreground">
-          Efeitos cobertos
+          {t("policies.effectsCovered")}
         </legend>
         <div className="flex flex-wrap gap-1.5">
           {COVERED.map((effect) => {
@@ -41,12 +46,16 @@ export function ScopeSection({
                 aria-pressed={on}
                 onClick={() =>
                   patch({
-                    effects: on ? covered.filter((e) => e !== effect) : [...covered, effect],
+                    effects: on
+                      ? covered.filter((e) => e !== effect)
+                      : [...covered, effect],
                   })
                 }
                 className={cn(
                   "h-7 rounded-pill border px-2.5 font-mono text-2xs",
-                  on ? "border-primary bg-surface-accent text-text-accent" : "border-border",
+                  on
+                    ? "border-primary bg-surface-accent text-text-accent"
+                    : "border-border",
                 )}
               >
                 {effect}
@@ -55,7 +64,7 @@ export function ScopeSection({
           })}
         </div>
         <p className="text-xs text-muted-foreground">
-          Nenhum selecionado cobre todos.
+          {t("policies.noneSelectedCoversAll")}
         </p>
       </fieldset>
     </Section>

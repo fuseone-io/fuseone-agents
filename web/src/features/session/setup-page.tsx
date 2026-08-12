@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -29,6 +30,7 @@ const schema = z.object({
  * provider. The setup token breaks it exactly once, and this screen is where.
  */
 export function SetupPage({ onClaimed }: { onClaimed: () => void }) {
+  const { t } = useTranslation();
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
     defaultValues: { token: "", display: "" },
@@ -44,7 +46,9 @@ export function SetupPage({ onClaimed }: { onClaimed: () => void }) {
 
     if (!response.ok) {
       const problem = await response.json().catch(() => undefined);
-      form.setError("token", { message: problem?.detail ?? "Não foi possível concluir a configuração." });
+      form.setError("token", {
+        message: problem?.detail ?? "Não foi possível concluir a configuração.",
+      });
       return;
     }
     onClaimed();
@@ -57,21 +61,27 @@ export function SetupPage({ onClaimed }: { onClaimed: () => void }) {
       description="Esta é a única vez que isto acontece. Depois o acesso passa pelo provedor de identidade que você configurar."
     >
       <Alert>
-        <AlertDescription>
-          O token foi impresso no log do servidor ao iniciar, e vale por 24 horas.
-        </AlertDescription>
+        <AlertDescription>{t("session.tokenInLog")}</AlertDescription>
       </Alert>
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(submit)} className="flex flex-col gap-4">
+        <form
+          onSubmit={form.handleSubmit(submit)}
+          className="flex flex-col gap-4"
+        >
           <FormField
             control={form.control}
             name="token"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Token de configuração</FormLabel>
+                <FormLabel>{t("session.setupToken")}</FormLabel>
                 <FormControl>
-                  <Input {...field} autoComplete="off" spellCheck={false} className="font-mono" />
+                  <Input
+                    {...field}
+                    autoComplete="off"
+                    spellCheck={false}
+                    className="font-mono"
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -83,12 +93,12 @@ export function SetupPage({ onClaimed }: { onClaimed: () => void }) {
             name="display"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Seu nome</FormLabel>
+                <FormLabel>{t("session.yourName")}</FormLabel>
                 <FormControl>
                   <Input {...field} autoComplete="name" />
                 </FormControl>
                 <FormDescription>
-                  Fica registrado como quem reivindicou a instalação.
+                  {t("session.recordedAsClaimant")}
                 </FormDescription>
                 <FormMessage />
               </FormItem>
@@ -96,7 +106,7 @@ export function SetupPage({ onClaimed }: { onClaimed: () => void }) {
           />
 
           <Button type="submit" disabled={form.formState.isSubmitting}>
-            Concluir configuração
+            {t("session.finishSetup")}
           </Button>
         </form>
       </Form>

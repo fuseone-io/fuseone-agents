@@ -2,7 +2,11 @@ import { useState } from "react";
 import { CheckCheck } from "lucide-react";
 import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
-import { EmptyState, ErrorState, LoadingRows } from "@/components/shared/states";
+import {
+  EmptyState,
+  ErrorState,
+  LoadingRows,
+} from "@/components/shared/states";
 import { DecisionCard } from "@/features/approvals/decision-card";
 import { DecisionPanel } from "@/features/approvals/decision-panel";
 import { useApprovals } from "@/features/approvals/api";

@@ -28,8 +28,15 @@ export function SignInPage({ providers }: { providers: IdentityProvider[] }) {
       ) : (
         <div className="flex flex-col gap-2">
           {providers.map((provider) => (
-            <Button key={provider.id} asChild variant="outline" className="justify-start">
-              <a href={`/auth/start/${provider.id}?returnTo=${encodeURIComponent(returnTo)}`}>
+            <Button
+              key={provider.id}
+              asChild
+              variant="outline"
+              className="justify-start"
+            >
+              <a
+                href={`/auth/start/${provider.id}?returnTo=${encodeURIComponent(returnTo)}`}
+              >
                 Entrar com {provider.display || provider.id}
               </a>
             </Button>

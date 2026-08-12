@@ -4,10 +4,18 @@ import { toast } from "sonner";
 import { Panel } from "@/components/shared/panel";
 import { Mono } from "@/components/shared/mono";
 import { Button } from "@/components/ui/button";
-import { EmptyState, ErrorState, LoadingRows } from "@/components/shared/states";
+import {
+  EmptyState,
+  ErrorState,
+  LoadingRows,
+} from "@/components/shared/states";
 import { RemoveButton } from "@/components/shared/remove-button";
 import { AreaForm } from "@/features/admin/area-form";
-import { useDeleteScope, useScopes, type RegisteredScope } from "@/features/scope/api";
+import {
+  useDeleteScope,
+  useScopes,
+  type RegisteredScope,
+} from "@/features/scope/api";
 
 /**
  * The areas work is filed under.
@@ -76,7 +84,10 @@ function AreaRow({ area }: { area: RegisteredScope }) {
         onConfirm={() =>
           remove.mutate(`${area.company}/${area.area}`, {
             onSuccess: () => toast.success("Área retirada"),
-            onError: (e) => toast.error(e instanceof Error ? e.message : "Não foi possível retirar"),
+            onError: (e) =>
+              toast.error(
+                e instanceof Error ? e.message : "Não foi possível retirar",
+              ),
           })
         }
       />

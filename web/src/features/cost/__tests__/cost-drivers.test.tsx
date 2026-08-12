@@ -8,7 +8,14 @@ describe("cost drivers", () => {
     // A cache read costs a fraction of an input token: a total alone bills an
     // agent without explaining it.
     render(
-      <CostDrivers total={{ micros: 100, inputTokens: 600, outputTokens: 200, cacheReadTokens: 200 }} />,
+      <CostDrivers
+        total={{
+          micros: 100,
+          inputTokens: 600,
+          outputTokens: 200,
+          cacheReadTokens: 200,
+        }}
+      />,
     );
 
     expect(screen.getByText("Entrada")).toBeInTheDocument();
@@ -34,10 +41,14 @@ describe("the spend chart", () => {
       />,
     );
 
-    expect(screen.getByRole("img", { name: "Gasto por dia" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("img", { name: "Gasto por dia" }),
+    ).toBeInTheDocument();
     // The caption carries every value as text; the per-bar titles are the
     // pointer tooltip and are not announced, since the aria-label wins.
-    const caption = screen.getByText(/2026-08-10: R\$ 0,12, 2026-08-11: R\$ 0,30/);
+    const caption = screen.getByText(
+      /2026-08-10: R\$ 0,12, 2026-08-11: R\$ 0,30/,
+    );
     expect(caption.tagName.toLowerCase()).toBe("figcaption");
   });
 });

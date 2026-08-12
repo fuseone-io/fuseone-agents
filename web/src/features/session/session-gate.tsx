@@ -26,7 +26,10 @@ export function SessionGate({ children }: { children: ReactNode }) {
   if (options.error) {
     return (
       <div className="p-10">
-        <ErrorState error={options.error} onRetry={() => void options.refetch()} />
+        <ErrorState
+          error={options.error}
+          onRetry={() => void options.refetch()}
+        />
       </div>
     );
   }

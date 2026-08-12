@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -18,20 +19,35 @@ import type { PendingApproval } from "@/lib/api/client";
  * action does, how long it has waited — because a decision made by opening
  * three screens is a decision made by guessing on two of them.
  */
-export function DecisionPanel({ item, onDecided }: { item: PendingApproval; onDecided: () => void }) {
+export function DecisionPanel({
+  item,
+  onDecided,
+}: {
+  item: PendingApproval;
+  onDecided: () => void;
+}) {
+  const { t } = useTranslation();
   const [note, setNote] = useState("");
   const decide = useDecideApproval(item.runId);
 
   async function submit(approved: boolean) {
     try {
-      await decide.mutateAsync({ approved, atSeq: item.atSeq, note: note.trim() || undefined });
+      await decide.mutateAsync({
+        approved,
+        atSeq: item.atSeq,
+        note: note.trim() || undefined,
+      });
       toast.success(approved ? "Ação aprovada" : "Ação negada", {
         description: `${item.tool} · ${item.runId}`,
       });
       setNote("");
       onDecided();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível registrar a decisão");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível registrar a decisão",
+      );
     }
   }
 
@@ -42,7 +58,8 @@ export function DecisionPanel({ item, onDecided }: { item: PendingApproval; onDe
           <Mono>{item.tool}</Mono>
         </h2>
         <p className="text-xs text-muted-foreground">
-          Pedido {formatRelative(item.requestedAt)} · {formatInstant(item.requestedAt)}
+          Pedido {formatRelative(item.requestedAt)} ·{" "}
+          {formatInstant(item.requestedAt)}
         </p>
       </header>
 
@@ -59,7 +76,9 @@ export function DecisionPanel({ item, onDecided }: { item: PendingApproval; onDe
       </dl>
 
       <div>
-        <h3 className="text-2xs uppercase tracking-label text-muted-foreground">Contexto</h3>
+        <h3 className="text-2xs uppercase tracking-label text-muted-foreground">
+          {t("approvals.context")}
+        </h3>
         <p className="mt-1 text-sm text-text-secondary">
           {explainRule(item.rule) || item.reason || "Sem detalhe registrado."}
         </p>
@@ -67,12 +86,12 @@ export function DecisionPanel({ item, onDecided }: { item: PendingApproval; onDe
           to={`/runs/${item.runId}`}
           className="mt-2 inline-block text-sm text-text-accent underline-offset-4 hover:underline"
         >
-          Ver a execução inteira
+          {t("approvals.seeWholeRun")}
         </Link>
       </div>
 
       <div className="flex flex-col gap-2">
-        <Label htmlFor="note">Observação</Label>
+        <Label htmlFor="note">{t("approvals.note")}</Label>
         <Input
           id="note"
           value={note}
@@ -88,21 +107,39 @@ export function DecisionPanel({ item, onDecided }: { item: PendingApproval; onDe
           disabled={decide.isPending}
           onClick={() => void submit(false)}
         >
-          Negar
+          {t("approvals.deny")}
         </Button>
-        <Button className="flex-1" disabled={decide.isPending} onClick={() => void submit(true)}>
-          Aprovar
+        <Button
+          className="flex-1"
+          disabled={decide.isPending}
+          onClick={() => void submit(true)}
+        >
+          {t("approvals.approve")}
         </Button>
       </footer>
     </aside>
   );
 }
 
-function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function Row({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
   return (
     <div className="flex items-baseline gap-3">
       <dt className="w-20 shrink-0 text-xs text-muted-foreground">{label}</dt>
-      <dd className={mono ? "min-w-0 flex-1 truncate font-mono text-xs" : "min-w-0 flex-1 truncate"}>
+      <dd
+        className={
+          mono
+            ? "min-w-0 flex-1 truncate font-mono text-xs"
+            : "min-w-0 flex-1 truncate"
+        }
+      >
         {value}
       </dd>
     </div>

@@ -24,7 +24,9 @@ export function PolicySideRail({
   return (
     <aside className="flex flex-col gap-3 lg:sticky lg:top-0">
       <Card title="A regra">
-        <Mono className="block break-words text-xs">{draftSentence(draft)}</Mono>
+        <Mono className="block break-words text-xs">
+          {draftSentence(draft)}
+        </Mono>
         <p className="text-xs text-muted-foreground">
           {draft.mode === "monitor"
             ? "Vai ser avaliada em todo passo que o escopo cobre, registrada na trilha, e não vai mudar nenhuma decisão."
@@ -40,9 +42,9 @@ export function PolicySideRail({
             que vence permitir.
           </p>
           <p className="text-xs text-muted-foreground">
-            A única exceção é um <span className="text-foreground">permitir</span> que
-            casou: é a única coisa que afrouxa o padrão embutido, e é o que
-            uma exceção é.
+            A única exceção é um{" "}
+            <span className="text-foreground">permitir</span> que casou: é a
+            única coisa que afrouxa o padrão embutido, e é o que uma exceção é.
           </p>
         </Card>
       ) : (
@@ -69,10 +71,18 @@ export function PolicySideRail({
   );
 }
 
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
+function Card({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4 shadow-sm">
-      <h2 className="text-2xs uppercase tracking-label text-muted-foreground">{title}</h2>
+      <h2 className="text-2xs uppercase tracking-label text-muted-foreground">
+        {title}
+      </h2>
       {children}
     </section>
   );

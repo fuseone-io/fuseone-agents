@@ -24,7 +24,11 @@ import { useClassifyTool, type Effect, type Tool } from "@/features/admin/api";
 const EFFECTS: { value: Effect; label: string; hint: string }[] = [
   { value: "read", label: "Leitura", hint: "Consulta dados. Não muda nada." },
   { value: "write", label: "Escrita", hint: "Altera algo, e é reversível." },
-  { value: "destructive", label: "Destrutivo", hint: "Apaga ou substitui de forma difícil de desfazer." },
+  {
+    value: "destructive",
+    label: "Destrutivo",
+    hint: "Apaga ou substitui de forma difícil de desfazer.",
+  },
   { value: "financial", label: "Financeiro", hint: "Move dinheiro." },
 ];
 
@@ -34,7 +38,13 @@ const EFFECTS: { value: Effect; label: string; hint: string }[] = [
  * It is a dialog rather than an inline control on purpose: promoting a tool is
  * a decision somebody signs, and the reason is recorded next to it.
  */
-export function ClassifyDialog({ tool, onClose }: { tool: Tool | null; onClose: () => void }) {
+export function ClassifyDialog({
+  tool,
+  onClose,
+}: {
+  tool: Tool | null;
+  onClose: () => void;
+}) {
   const [effect, setEffect] = useState<Effect>("read");
   const [untrusted, setUntrusted] = useState(true);
   const [reason, setReason] = useState("");
@@ -45,11 +55,18 @@ export function ClassifyDialog({ tool, onClose }: { tool: Tool | null; onClose: 
   async function submit() {
     if (!tool) return;
     try {
-      await classify.mutateAsync({ toolId: tool.toolId, effect, untrusted, reason });
+      await classify.mutateAsync({
+        toolId: tool.toolId,
+        effect,
+        untrusted,
+        reason,
+      });
       toast.success(`${tool.toolId} classificada como ${effect}`);
       onClose();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível registrar");
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível registrar",
+      );
     }
   }
 
@@ -57,17 +74,24 @@ export function ClassifyDialog({ tool, onClose }: { tool: Tool | null; onClose: 
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle className="font-mono text-base">{tool.toolId}</DialogTitle>
+          <DialogTitle className="font-mono text-base">
+            {tool.toolId}
+          </DialogTitle>
           <DialogDescription>
-            Fica registrado com seu nome na trilha administrativa. Corrigir depois
-            cria um novo registro; nenhum registro é apagado.
+            Fica registrado com seu nome na trilha administrativa. Corrigir
+            depois cria um novo registro; nenhum registro é apagado.
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
-            <Label htmlFor="effect">O que esta ferramenta faz com o mundo</Label>
-            <Select value={effect} onValueChange={(v) => setEffect(v as Effect)}>
+            <Label htmlFor="effect">
+              O que esta ferramenta faz com o mundo
+            </Label>
+            <Select
+              value={effect}
+              onValueChange={(v) => setEffect(v as Effect)}
+            >
               <SelectTrigger id="effect">
                 <SelectValue />
               </SelectTrigger>
@@ -85,10 +109,15 @@ export function ClassifyDialog({ tool, onClose }: { tool: Tool | null; onClose: 
             <div>
               <Label htmlFor="untrusted">Traz dado de fora</Label>
               <p className="mt-1 text-xs text-muted-foreground">
-                Ler marca a execução. Uma escrita depois disso para para uma pessoa decidir.
+                Ler marca a execução. Uma escrita depois disso para para uma
+                pessoa decidir.
               </p>
             </div>
-            <Switch id="untrusted" checked={untrusted} onCheckedChange={setUntrusted} />
+            <Switch
+              id="untrusted"
+              checked={untrusted}
+              onCheckedChange={setUntrusted}
+            />
           </div>
 
           <div className="flex flex-col gap-2">

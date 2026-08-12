@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { IntegrationCard } from "@/features/integrations/integration-card";
 
-const base = { name: "crm", kind: "servidor MCP", description: "bin/devstack mcp" };
+const base = {
+  name: "crm",
+  kind: "servidor MCP",
+  description: "bin/devstack mcp",
+};
 
 describe("a connected system's card", () => {
   it("separates a server switched off from one that is not answering", () => {
@@ -15,7 +19,11 @@ describe("a connected system's card", () => {
       <IntegrationCard
         {...base}
         enabled
-        health={{ reachable: false, toolCount: 0, observedAt: "2026-08-11T12:00:00Z" }}
+        health={{
+          reachable: false,
+          toolCount: 0,
+          observedAt: "2026-08-11T12:00:00Z",
+        }}
       />,
     );
     expect(screen.getByText("não responde")).toBeInTheDocument();
@@ -27,7 +35,9 @@ describe("a connected system's card", () => {
     render(<IntegrationCard {...base} enabled />);
 
     expect(screen.getByText("sem contato")).toBeInTheDocument();
-    expect(screen.getByText(/Nenhum worker tentou conectar/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Nenhum worker tentou conectar/i),
+    ).toBeInTheDocument();
   });
 
   it("shows why a server failed, in the words the server used", () => {
@@ -51,9 +61,13 @@ describe("a connected system's card", () => {
   it("does not report contact for something nothing connects to", () => {
     // A model provider is reached when a run needs it, never on a schedule.
     // "No contact" there would be a false alarm rather than a finding.
-    render(<IntegrationCard {...base} kind="openai" enabled observes={false} />);
+    render(
+      <IntegrationCard {...base} kind="openai" enabled observes={false} />,
+    );
 
-    expect(screen.queryByText(/Nenhum worker tentou conectar/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Nenhum worker tentou conectar/i),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("configurado")).toBeInTheDocument();
   });
 });

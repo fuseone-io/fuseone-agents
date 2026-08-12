@@ -62,7 +62,9 @@ describe("the webhooks panel", () => {
     const user = userEvent.setup();
     renderPanel();
 
-    await user.click(await screen.findByRole("button", { name: "Gerar chave" }));
+    await user.click(
+      await screen.findByRole("button", { name: "Gerar chave" }),
+    );
 
     expect(await screen.findByText(SECRET)).toBeInTheDocument();
     // Reading a 43-character secret off a screen is how the wrong one ends up
@@ -90,7 +92,9 @@ describe("the webhooks panel", () => {
     renderPanel();
 
     await user.click(await screen.findByRole("button", { name: "Rotacionar" }));
-    await waitFor(() => expect(screen.getByRole("alertdialog")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole("alertdialog")).toBeInTheDocument(),
+    );
 
     expect(rotations).toHaveLength(0);
   });

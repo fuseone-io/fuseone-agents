@@ -18,7 +18,9 @@ export function SimulationCard({ draft }: { draft: PolicyInput }) {
 
   return (
     <section className="flex flex-col gap-2.5 rounded-xl border border-border bg-card p-4 shadow-sm">
-      <h2 className="text-2xs uppercase tracking-label text-muted-foreground">Simulação</h2>
+      <h2 className="text-2xs uppercase tracking-label text-muted-foreground">
+        Simulação
+      </h2>
 
       {!result ? (
         <p className="text-xs text-muted-foreground">
@@ -36,7 +38,11 @@ export function SimulationCard({ draft }: { draft: PolicyInput }) {
         disabled={simulate.isPending}
         onClick={() => simulate.mutate(draft)}
       >
-        {simulate.isPending ? "Rodando…" : result ? "Rodar de novo" : "Rodar contra o histórico"}
+        {simulate.isPending
+          ? "Rodando…"
+          : result
+            ? "Rodar de novo"
+            : "Rodar contra o histórico"}
       </Button>
     </section>
   );
@@ -76,8 +82,8 @@ function Result({ result }: { result: Simulation }) {
       {result.unknown > 0 && (
         <p className="text-xs text-warning">
           <Mono>{result.unknown}</Mono> decisões não puderam ser respondidas:
-          esta regra lê argumentos, e chamadas recusadas nunca guardaram
-          nenhum. O número acima é um piso, não um total.
+          esta regra lê argumentos, e chamadas recusadas nunca guardaram nenhum.
+          O número acima é um piso, não um total.
         </p>
       )}
 
@@ -99,7 +105,15 @@ function Result({ result }: { result: Simulation }) {
   );
 }
 
-function Tile({ label, value, alarming }: { label: string; value: number; alarming?: boolean }) {
+function Tile({
+  label,
+  value,
+  alarming,
+}: {
+  label: string;
+  value: number;
+  alarming?: boolean;
+}) {
   return (
     <div
       className={cn(

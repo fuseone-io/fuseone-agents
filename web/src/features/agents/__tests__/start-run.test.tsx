@@ -30,7 +30,9 @@ function stubFailing() {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: Request | RequestInfo | URL) => {
-      keys.push(input instanceof Request ? input.headers.get("Idempotency-Key") : null);
+      keys.push(
+        input instanceof Request ? input.headers.get("Idempotency-Key") : null,
+      );
       return new Response("{}", { status: 500 });
     }),
   );

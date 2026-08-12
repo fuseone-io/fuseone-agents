@@ -16,7 +16,9 @@ function serve(routes: Record<string, { status: number; body?: unknown }>) {
 }
 
 function renderGate() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   render(
     <QueryClientProvider client={client}>
       <SessionGate>
@@ -31,30 +33,43 @@ afterEach(() => vi.unstubAllGlobals());
 describe("what a visitor sees before there is a session", () => {
   it("offers setup while nobody has claimed the installation", async () => {
     serve({
-      "/auth/providers": { status: 200, body: { providers: [], bootstrapPending: true, authRequired: true } },
+      "/auth/providers": {
+        status: 200,
+        body: { providers: [], bootstrapPending: true, authRequired: true },
+      },
       "/api/v1/me": { status: 401 },
     });
     renderGate();
 
-    expect(await screen.findByText(/Configurar esta instalação/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Configurar esta instalação/),
+    ).toBeInTheDocument();
   });
 
   it("asks the signed-out visitor to sign in once the installation is claimed", async () => {
     serve({
-      "/auth/providers": { status: 200, body: { providers: [], bootstrapPending: false, authRequired: true } },
+      "/auth/providers": {
+        status: 200,
+        body: { providers: [], bootstrapPending: false, authRequired: true },
+      },
       "/api/v1/me": { status: 401 },
     });
     renderGate();
 
     // Not a spinner forever: an installation with no identity provider still
     // has to say what is wrong, or nobody can tell it apart from a hung page.
-    expect(await screen.findByText(/Nenhum provedor de identidade/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Nenhum provedor de identidade/),
+    ).toBeInTheDocument();
   });
 
   it("renders the console when the server has no identity to sign in to", async () => {
     // A lock on an open door stops nobody and leaves the console unreachable.
     serve({
-      "/auth/providers": { status: 200, body: { providers: [], bootstrapPending: false, authRequired: false } },
+      "/auth/providers": {
+        status: 200,
+        body: { providers: [], bootstrapPending: false, authRequired: false },
+      },
       "/api/v1/me": { status: 404 },
     });
     renderGate();
@@ -64,10 +79,19 @@ describe("what a visitor sees before there is a session", () => {
 
   it("shows the console to a signed-in caller", async () => {
     serve({
-      "/auth/providers": { status: 200, body: { providers: [], bootstrapPending: false, authRequired: true } },
+      "/auth/providers": {
+        status: 200,
+        body: { providers: [], bootstrapPending: false, authRequired: true },
+      },
       "/api/v1/me": {
         status: 200,
-        body: { id: "usr_1", display: "Marina", kind: "user", grants: [], can: [] },
+        body: {
+          id: "usr_1",
+          display: "Marina",
+          kind: "user",
+          grants: [],
+          can: [],
+        },
       },
     });
     renderGate();

@@ -4,8 +4,15 @@ import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
 import { Panel } from "@/components/shared/panel";
 import { Toolbar } from "@/components/shared/toolbar";
-import { FilterSelect, type FilterOption } from "@/components/shared/filter-select";
-import { EmptyState, ErrorState, LoadingRows } from "@/components/shared/states";
+import {
+  FilterSelect,
+  type FilterOption,
+} from "@/components/shared/filter-select";
+import {
+  EmptyState,
+  ErrorState,
+  LoadingRows,
+} from "@/components/shared/states";
 import { AuditTable } from "@/features/audit/audit-table";
 import { IntegrityBanner } from "@/features/audit/integrity-banner";
 import { useAudit } from "@/features/audit/api";
@@ -56,7 +63,11 @@ export function AuditPage() {
 
       {!isLoading && !error && <IntegrityBanner entries={entries} />}
 
-      <Toolbar placeholder="Quem agiu — pessoa ou agente" value={actor} onChange={setActor}>
+      <Toolbar
+        placeholder="Quem agiu — pessoa ou agente"
+        value={actor}
+        onChange={setActor}
+      >
         <FilterSelect
           label="Registro"
           value={source}
@@ -75,7 +86,9 @@ export function AuditPage() {
 
       <Panel
         title="Trilha"
-        action={<span className="text-xs text-muted-foreground">append-only</span>}
+        action={
+          <span className="text-xs text-muted-foreground">append-only</span>
+        }
         flush
       >
         {isLoading ? (

@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Gauge } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Panel } from "@/components/shared/panel";
@@ -17,6 +18,7 @@ type CostRollup = components["schemas"]["CostRollup"];
  * pauses every run in the scope until somebody raises it.
  */
 export function CostCaps({ byArea }: { byArea?: CostRollup }) {
+  const { t } = useTranslation();
   const { data } = useBudgets();
   const budgets = (data?.items ?? []).filter((b) => b.enabled && b.micros);
 
@@ -32,15 +34,23 @@ export function CostCaps({ byArea }: { byArea?: CostRollup }) {
     );
   }
 
-  const spentByArea = new Map((byArea?.buckets ?? []).map((b) => [b.key, b.cost.micros]));
-  const total = (byArea?.buckets ?? []).reduce((sum, b) => sum + b.cost.micros, 0);
+  const spentByArea = new Map(
+    (byArea?.buckets ?? []).map((b) => [b.key, b.cost.micros]),
+  );
+  const total = (byArea?.buckets ?? []).reduce(
+    (sum, b) => sum + b.cost.micros,
+    0,
+  );
 
   return (
     <Panel
       title="Tetos"
       action={
-        <Link to="/admin" className="text-xs text-text-accent underline-offset-4 hover:underline">
-          Configurar
+        <Link
+          to="/admin"
+          className="text-xs text-text-accent underline-offset-4 hover:underline"
+        >
+          {t("overview.configure")}
         </Link>
       }
     >
@@ -49,9 +59,12 @@ export function CostCaps({ byArea }: { byArea?: CostRollup }) {
           const path = scopePath(budget);
           // An area ceiling is measured against that area; anything wider is
           // measured against everything the window covers.
-          const spent = budget.scope?.area ? (spentByArea.get(budget.scope.area) ?? 0) : total;
+          const spent = budget.scope?.area
+            ? (spentByArea.get(budget.scope.area) ?? 0)
+            : total;
           const cap = budget.micros ?? 0;
-          const share = cap === 0 ? 0 : Math.min(Math.round((spent / cap) * 100), 100);
+          const share =
+            cap === 0 ? 0 : Math.min(Math.round((spent / cap) * 100), 100);
           const near = share >= 75;
 
           return (
@@ -64,7 +77,11 @@ export function CostCaps({ byArea }: { byArea?: CostRollup }) {
               </div>
               <div className="h-1.5 overflow-hidden rounded-pill bg-muted">
                 <div
-                  className={near ? "h-full rounded-pill bg-warning" : "h-full rounded-pill bg-primary"}
+                  className={
+                    near
+                      ? "h-full rounded-pill bg-warning"
+                      : "h-full rounded-pill bg-primary"
+                  }
                   style={{ width: `${share}%` }}
                 />
               </div>

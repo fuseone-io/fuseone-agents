@@ -5,11 +5,19 @@ import { Panel } from "@/components/shared/panel";
 import { Mono } from "@/components/shared/mono";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { EmptyState, ErrorState, LoadingRows } from "@/components/shared/states";
+import {
+  EmptyState,
+  ErrorState,
+  LoadingRows,
+} from "@/components/shared/states";
 import { RemoveButton } from "@/components/shared/remove-button";
 import { BudgetForm } from "@/features/admin/budget-form";
 import { scopeLabel, scopePath } from "@/features/admin/budget-scope";
-import { useBudgets, useDeleteBudget, type ScopeBudget } from "@/features/admin/api";
+import {
+  useBudgets,
+  useDeleteBudget,
+  type ScopeBudget,
+} from "@/features/admin/api";
 import { formatMicros } from "@/lib/format";
 
 const PERIOD: Record<string, string> = { daily: "por dia", monthly: "por mês" };
@@ -42,7 +50,11 @@ export function BudgetsPanel() {
       ) : (
         <ul className="flex flex-col gap-2">
           {budgets.map((budget) => (
-            <BudgetRow key={scopePath(budget)} budget={budget} onEdit={() => setEditing(budget)} />
+            <BudgetRow
+              key={scopePath(budget)}
+              budget={budget}
+              onEdit={() => setEditing(budget)}
+            />
           ))}
         </ul>
       )}
@@ -54,7 +66,13 @@ export function BudgetsPanel() {
   );
 }
 
-function BudgetRow({ budget, onEdit }: { budget: ScopeBudget; onEdit: () => void }) {
+function BudgetRow({
+  budget,
+  onEdit,
+}: {
+  budget: ScopeBudget;
+  onEdit: () => void;
+}) {
   const remove = useDeleteBudget();
 
   return (
@@ -67,10 +85,14 @@ function BudgetRow({ budget, onEdit }: { budget: ScopeBudget; onEdit: () => void
         <div className="font-medium">{scopeLabel(budget)}</div>
         <Mono dim>
           {budget.micros ? formatMicros(budget.micros) : "sem teto de valor"}
-          {budget.steps ? ` · ${budget.steps} passos` : ""} · {PERIOD[budget.period]}
+          {budget.steps ? ` · ${budget.steps} passos` : ""} ·{" "}
+          {PERIOD[budget.period]}
         </Mono>
       </button>
-      <Badge variant="outline" className={budget.enabled ? "text-success" : "text-muted-foreground"}>
+      <Badge
+        variant="outline"
+        className={budget.enabled ? "text-success" : "text-muted-foreground"}
+      >
         {budget.enabled ? "ativo" : "desativado"}
       </Badge>
       <RemoveButton
@@ -79,7 +101,10 @@ function BudgetRow({ budget, onEdit }: { budget: ScopeBudget; onEdit: () => void
         onConfirm={() =>
           remove.mutate(scopePath(budget), {
             onSuccess: () => toast.success("Teto removido"),
-            onError: (e) => toast.error(e instanceof Error ? e.message : "Não foi possível remover"),
+            onError: (e) =>
+              toast.error(
+                e instanceof Error ? e.message : "Não foi possível remover",
+              ),
           })
         }
       />

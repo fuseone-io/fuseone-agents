@@ -22,7 +22,13 @@ describe("a decision card", () => {
   });
 
   it("states the risk in words, so colour is not carrying it alone", () => {
-    render(<DecisionCard item={item({ effect: "financial" })} selected={false} onSelect={() => {}} />);
+    render(
+      <DecisionCard
+        item={item({ effect: "financial" })}
+        selected={false}
+        onSelect={() => {}}
+      />,
+    );
     expect(screen.getByText("Risco alto")).toBeInTheDocument();
   });
 });

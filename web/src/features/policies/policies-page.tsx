@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Plus, Scale } from "lucide-react";
@@ -6,7 +7,11 @@ import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
 import { Panel } from "@/components/shared/panel";
 import { Mono } from "@/components/shared/mono";
-import { EmptyState, ErrorState, LoadingRows } from "@/components/shared/states";
+import {
+  EmptyState,
+  ErrorState,
+  LoadingRows,
+} from "@/components/shared/states";
 import { PoliciesTable } from "@/features/policies/policies-table";
 import { tallyOf } from "@/features/policies/policy-tally";
 import { usePolicies } from "@/features/policies/api";
@@ -20,6 +25,7 @@ import { sinceFor } from "@/features/runs/runs-filters";
  * the only one that stops anything.
  */
 export function PoliciesPage() {
+  const { t } = useTranslation();
   const [period] = useState("7");
   const since = useMemo(() => sinceFor(period), [period]);
   const { data, isLoading, error, refetch } = usePolicies(since);
@@ -37,20 +43,32 @@ export function PoliciesPage() {
         <Button size="sm" asChild>
           <Link to="/policies/new">
             <Plus className="size-4" aria-hidden />
-            Nova política
+            {t("policies.newPolicy")}
           </Link>
         </Button>
       </PageHeader>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Figure label="Impondo" value={String(tally.enforcing)} note="param alguma coisa" />
+        <Figure
+          label="Impondo"
+          value={String(tally.enforcing)}
+          note="param alguma coisa"
+        />
         <Figure
           label="Monitorando"
           value={String(tally.monitoring)}
           note="avaliadas, não obedecidas"
         />
-        <Figure label="Negações" value={String(tally.denied)} note="nos últimos 7 dias" />
-        <Figure label="Escalações" value={String(tally.escalated)} note="nos últimos 7 dias" />
+        <Figure
+          label="Negações"
+          value={String(tally.denied)}
+          note="nos últimos 7 dias"
+        />
+        <Figure
+          label="Escalações"
+          value={String(tally.escalated)}
+          note="nos últimos 7 dias"
+        />
       </div>
 
       <Panel
@@ -91,11 +109,23 @@ export function PoliciesPage() {
   );
 }
 
-function Figure({ label, value, note }: { label: string; value: string; note: string }) {
+function Figure({
+  label,
+  value,
+  note,
+}: {
+  label: string;
+  value: string;
+  note: string;
+}) {
   return (
     <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-      <div className="text-2xs uppercase tracking-label text-muted-foreground">{label}</div>
-      <div className="mt-1.5 font-mono text-[22px]/7 font-medium tabular-nums">{value}</div>
+      <div className="text-2xs uppercase tracking-label text-muted-foreground">
+        {label}
+      </div>
+      <div className="mt-1.5 font-mono text-[22px]/7 font-medium tabular-nums">
+        {value}
+      </div>
       <div className="mt-0.5 text-xs text-muted-foreground">{note}</div>
     </div>
   );

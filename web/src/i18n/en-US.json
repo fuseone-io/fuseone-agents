@@ -41,6 +41,21 @@
     "whatStarts": "What starts it",
     "withoutTools": "No tools"
   },
+  "approvals": {
+    "approve": "Approve",
+    "context": "Context",
+    "deny": "Deny",
+    "note": "Note",
+    "seeWholeRun": "See the whole run"
+  },
+  "audit": {
+    "about": "About",
+    "detail": "Detail",
+    "seal": "Seal",
+    "what": "What",
+    "when": "When",
+    "who": "Who"
+  },
   "common": {
     "cancel": "Cancel",
     "close": "Close",
@@ -51,6 +66,15 @@
     "remove": "Remove",
     "retry": "Try again",
     "save": "Save"
+  },
+  "cost": {
+    "agent": "Agent",
+    "average": "Average",
+    "cost": "Cost",
+    "inPeriod": "in the period",
+    "noTokens": "No token accounted for in the period.",
+    "runs": "Runs",
+    "tokens": "Tokens"
   },
   "language": {
     "change": "Change language"
@@ -96,6 +120,23 @@
     "throughput": "Throughput · today",
     "throughputUnreadable": "Could not read today's throughput.",
     "wantsToRun": "Wants to run"
+  },
+  "policies": {
+    "addCondition": "Add a condition",
+    "code": "Code",
+    "decisions": "Decisions",
+    "effect": "Effect",
+    "effectWhenMatched": "Effect when the rule matches",
+    "effectsCovered": "Effects covered",
+    "enforcement": "Enforcement",
+    "monitoring": "Monitoring, the rule is evaluated and recorded and stops nothing.",
+    "newPolicy": "New policy",
+    "noCondition": "With no condition the rule covers everything its scope reaches.",
+    "noneSelectedCoversAll": "None selected covers all of them.",
+    "owner": "Owner",
+    "rule": "Rule",
+    "ruleEvaluated": "The rule that will be evaluated",
+    "state": "State"
   },
   "runs": {
     "approve": "Approve",
@@ -149,6 +190,13 @@
     "label": "Context",
     "noAreas": "No area declared",
     "wholeCompany": "All of {{company}}"
+  },
+  "session": {
+    "finishSetup": "Finish setup",
+    "recordedAsClaimant": "Recorded as whoever claimed the installation.",
+    "setupToken": "Setup token",
+    "tokenInLog": "The token was printed to the server log at startup, and is good for 24 hours.",
+    "yourName": "Your name"
   },
   "shell": {
     "breadcrumb": "Breadcrumb",

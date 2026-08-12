@@ -16,10 +16,17 @@ export function ScopeChoice({
   onChoose: () => void;
 }) {
   return (
-    <DropdownMenuItem onSelect={onChoose} className={cn("gap-2", indented && "pl-8")}>
-      {!indented && <Layers className="size-3.5 shrink-0 opacity-60" aria-hidden />}
+    <DropdownMenuItem
+      onSelect={onChoose}
+      className={cn("gap-2", indented && "pl-8")}
+    >
+      {!indented && (
+        <Layers className="size-3.5 shrink-0 opacity-60" aria-hidden />
+      )}
       <span className="truncate">{label}</span>
-      {chosen && <Check className="ml-auto size-4 shrink-0 text-primary" aria-hidden />}
+      {chosen && (
+        <Check className="ml-auto size-4 shrink-0 text-primary" aria-hidden />
+      )}
     </DropdownMenuItem>
   );
 }

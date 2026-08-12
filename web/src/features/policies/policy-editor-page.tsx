@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,7 @@ import { useCode } from "@/features/policies/use-code";
  * code is the identity, and everything else is what the rule says this time.
  */
 export function PolicyEditorPage() {
+  const { t } = useTranslation();
   const { code: routeCode } = useParams();
   const creating = routeCode === undefined || routeCode === "new";
   const navigate = useNavigate();
@@ -33,7 +35,11 @@ export function PolicyEditorPage() {
   if (isLoading) return <LoadingRows rows={6} />;
   if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
   if (!creating && !loaded) {
-    return <ErrorState error={new Error(`Nenhuma política com o código ${routeCode}`)} />;
+    return (
+      <ErrorState
+        error={new Error(`Nenhuma política com o código ${routeCode}`)}
+      />
+    );
   }
 
   const submit = () => {
@@ -67,7 +73,13 @@ export function PolicyEditorPage() {
 
       <div className="grid gap-5 lg:grid-cols-[1fr_316px] lg:items-start">
         <div className="flex flex-col gap-4">
-          <IdentitySection draft={draft} patch={patch} code={code} editable={creating} onCode={setCode} />
+          <IdentitySection
+            draft={draft}
+            patch={patch}
+            code={code}
+            editable={creating}
+            onCode={setCode}
+          />
           <ScopeSection draft={draft} patch={patch} />
           <ConditionSection draft={draft} patch={patch} />
           <EffectSection draft={draft} patch={patch} />
@@ -82,15 +94,21 @@ export function PolicyEditorPage() {
       <div className="sticky bottom-0 -mx-6 -mb-6 flex items-center gap-2 border-t border-border bg-card px-6 py-3 shadow-md">
         {changes.length > 0 && (
           <span className="text-xs text-warning">
-            {changes.length} {changes.length === 1 ? "alteração" : "alterações"} sem gravar
+            {changes.length} {changes.length === 1 ? "alteração" : "alterações"}{" "}
+            sem gravar
           </span>
         )}
         <div className="ml-auto flex items-center gap-2">
           <Button variant="outline" onClick={() => navigate("/policies")}>
-            Cancelar
+            {t("common.cancel")}
           </Button>
-          <Button onClick={submit} disabled={save.isPending || !draft.name || !code}>
-            {draft.mode === "monitor" ? "Gravar em modo monitorar" : "Gravar e impor"}
+          <Button
+            onClick={submit}
+            disabled={save.isPending || !draft.name || !code}
+          >
+            {draft.mode === "monitor"
+              ? "Gravar em modo monitorar"
+              : "Gravar e impor"}
           </Button>
         </div>
       </div>

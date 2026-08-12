@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Mono } from "@/components/shared/mono";
 import { ConditionBuilder } from "@/features/policies/condition-builder";
 import { draftSentence } from "@/features/policies/policy-sentence";
@@ -12,6 +13,7 @@ export function ConditionSection({
   draft: PolicyInput;
   patch: (over: Partial<PolicyInput>) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <Section title="Condição" hint="Todas precisam ser verdadeiras.">
       <ConditionBuilder
@@ -23,9 +25,11 @@ export function ConditionSection({
           engine will evaluate, not just the rows they clicked together. */}
       <div className="rounded-lg border border-border bg-muted p-3">
         <span className="text-2xs uppercase tracking-label text-muted-foreground">
-          A regra que vai ser avaliada
+          {t("policies.ruleEvaluated")}
         </span>
-        <Mono className="mt-1 block break-words text-xs">{draftSentence(draft)}</Mono>
+        <Mono className="mt-1 block break-words text-xs">
+          {draftSentence(draft)}
+        </Mono>
       </div>
     </Section>
   );

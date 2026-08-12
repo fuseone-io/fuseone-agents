@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import {
   Table,
@@ -22,16 +23,29 @@ import type { AuditEntry } from "@/lib/api/client";
  * reads as a fact rather than as a missing value.
  */
 export function AuditTable({ entries }: { entries: AuditEntry[] }) {
+  const { t } = useTranslation();
   return (
     <Table>
       <TableHeader>
         <TableRow className="border-border-subtle hover:bg-transparent">
-          <TableHead className="text-2xs uppercase tracking-label">Quando</TableHead>
-          <TableHead className="text-2xs uppercase tracking-label">Quem</TableHead>
-          <TableHead className="text-2xs uppercase tracking-label">O quê</TableHead>
-          <TableHead className="text-2xs uppercase tracking-label">Sobre</TableHead>
-          <TableHead className="text-2xs uppercase tracking-label">Detalhe</TableHead>
-          <TableHead className="text-right text-2xs uppercase tracking-label">Selo</TableHead>
+          <TableHead className="text-2xs uppercase tracking-label">
+            {t("audit.when")}
+          </TableHead>
+          <TableHead className="text-2xs uppercase tracking-label">
+            {t("audit.who")}
+          </TableHead>
+          <TableHead className="text-2xs uppercase tracking-label">
+            {t("audit.what")}
+          </TableHead>
+          <TableHead className="text-2xs uppercase tracking-label">
+            {t("audit.about")}
+          </TableHead>
+          <TableHead className="text-2xs uppercase tracking-label">
+            {t("audit.detail")}
+          </TableHead>
+          <TableHead className="text-right text-2xs uppercase tracking-label">
+            {t("audit.seal")}
+          </TableHead>
         </TableRow>
       </TableHeader>
 
@@ -48,7 +62,12 @@ export function AuditTable({ entries }: { entries: AuditEntry[] }) {
               <Mono>{entry.actor || "—"}</Mono>
             </TableCell>
             <TableCell>
-              <span className={cn("text-xs font-medium", verbOf(entry.verb).className)}>
+              <span
+                className={cn(
+                  "text-xs font-medium",
+                  verbOf(entry.verb).className,
+                )}
+              >
                 {verbOf(entry.verb).label}
               </span>
             </TableCell>
@@ -77,7 +96,11 @@ function Seal({ entry }: { entry: AuditEntry }) {
     return <span className="text-2xs text-muted-foreground">—</span>;
   }
   if (!entry.runId) {
-    return <Mono dim className="text-2xs">{shortHash(entry.hash)}</Mono>;
+    return (
+      <Mono dim className="text-2xs">
+        {shortHash(entry.hash)}
+      </Mono>
+    );
   }
   return (
     <Link to={`/runs/${entry.runId}`} className="hover:underline">

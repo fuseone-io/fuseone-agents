@@ -18,7 +18,10 @@ export function IdentitySection({
   onCode: (code: string) => void;
 }) {
   return (
-    <Section title="Identidade" hint="O código aparece na trilha e na mensagem de quem for negado.">
+    <Section
+      title="Identidade"
+      hint="O código aparece na trilha e na mensagem de quem for negado."
+    >
       <div className="grid gap-3 sm:grid-cols-[140px_1fr_200px]">
         <Labelled label="Código" htmlFor="code">
           {/* Set once. It is in the trail and in support conversations, and a
@@ -33,10 +36,18 @@ export function IdentitySection({
           />
         </Labelled>
         <Labelled label="Nome" htmlFor="name">
-          <Input id="name" value={draft.name} onChange={(e) => patch({ name: e.target.value })} />
+          <Input
+            id="name"
+            value={draft.name}
+            onChange={(e) => patch({ name: e.target.value })}
+          />
         </Labelled>
         <Labelled label="Dono" htmlFor="owner">
-          <Input id="owner" value={draft.owner ?? ""} onChange={(e) => patch({ owner: e.target.value })} />
+          <Input
+            id="owner"
+            value={draft.owner ?? ""}
+            onChange={(e) => patch({ owner: e.target.value })}
+          />
         </Labelled>
       </div>
 

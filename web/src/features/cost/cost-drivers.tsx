@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { formatTokens } from "@/lib/format";
 import type { components } from "@/lib/api/schema.gen";
 
@@ -11,6 +12,7 @@ type Cost = components["schemas"]["Cost"];
  * without explaining it. This is the screen where that split earns its keep.
  */
 export function CostDrivers({ total }: { total?: Cost }) {
+  const { t } = useTranslation();
   if (!total) return null;
 
   const drivers = [
@@ -23,9 +25,7 @@ export function CostDrivers({ total }: { total?: Cost }) {
   const sum = drivers.reduce((acc, d) => acc + d.value, 0);
   if (sum === 0) {
     return (
-      <p className="text-sm text-muted-foreground">
-        Nenhum token contabilizado no período.
-      </p>
+      <p className="text-sm text-muted-foreground">{t("cost.noTokens")}</p>
     );
   }
 
@@ -42,7 +42,10 @@ export function CostDrivers({ total }: { total?: Cost }) {
               </span>
             </div>
             <div className="h-1.5 overflow-hidden rounded-pill bg-muted">
-              <div className="h-full rounded-pill bg-primary" style={{ width: `${share}%` }} />
+              <div
+                className="h-full rounded-pill bg-primary"
+                style={{ width: `${share}%` }}
+              />
             </div>
           </li>
         );

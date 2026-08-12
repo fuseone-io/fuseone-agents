@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import {
   Table,
@@ -19,16 +20,29 @@ import type { Policy } from "@/lib/api/client";
  * the row — the code, the owner, the count — is how you find it again.
  */
 export function PoliciesTable({ policies }: { policies: Policy[] }) {
+  const { t } = useTranslation();
   return (
     <Table>
       <TableHeader>
         <TableRow className="border-border-subtle hover:bg-transparent">
-          <TableHead className="text-2xs uppercase tracking-label">Código</TableHead>
-          <TableHead className="text-2xs uppercase tracking-label">Regra</TableHead>
-          <TableHead className="text-2xs uppercase tracking-label">Efeito</TableHead>
-          <TableHead className="text-2xs uppercase tracking-label">Estado</TableHead>
-          <TableHead className="text-2xs uppercase tracking-label">Dono</TableHead>
-          <TableHead className="text-right text-2xs uppercase tracking-label">Decisões</TableHead>
+          <TableHead className="text-2xs uppercase tracking-label">
+            {t("policies.code")}
+          </TableHead>
+          <TableHead className="text-2xs uppercase tracking-label">
+            {t("policies.rule")}
+          </TableHead>
+          <TableHead className="text-2xs uppercase tracking-label">
+            {t("policies.effect")}
+          </TableHead>
+          <TableHead className="text-2xs uppercase tracking-label">
+            {t("policies.state")}
+          </TableHead>
+          <TableHead className="text-2xs uppercase tracking-label">
+            {t("policies.owner")}
+          </TableHead>
+          <TableHead className="text-right text-2xs uppercase tracking-label">
+            {t("policies.decisions")}
+          </TableHead>
         </TableRow>
       </TableHeader>
 
@@ -42,8 +56,13 @@ export function PoliciesTable({ policies }: { policies: Policy[] }) {
             </TableCell>
 
             <TableCell className="max-w-[420px]">
-              <Link to={`/policies/${policy.code}`} className="block hover:underline">
-                <div className="truncate text-sm font-medium">{policy.name}</div>
+              <Link
+                to={`/policies/${policy.code}`}
+                className="block hover:underline"
+              >
+                <div className="truncate text-sm font-medium">
+                  {policy.name}
+                </div>
                 {/* Generated from the fields the Gate reads, so this row
                     cannot describe a rule the engine does not run. */}
                 <Mono dim className="block truncate text-2xs">

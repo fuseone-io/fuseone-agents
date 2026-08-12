@@ -1,7 +1,11 @@
 import { ScrollText } from "lucide-react";
 import { Panel } from "@/components/shared/panel";
 import { Mono } from "@/components/shared/mono";
-import { EmptyState, ErrorState, LoadingRows } from "@/components/shared/states";
+import {
+  EmptyState,
+  ErrorState,
+  LoadingRows,
+} from "@/components/shared/states";
 import { formatInstant } from "@/lib/format";
 import { useAdminEvents } from "@/features/admin/api";
 
@@ -16,7 +20,12 @@ export function EventsPanel() {
   const events = data?.items ?? [];
 
   return (
-    <Panel title="Trilha administrativa" action={<span className="text-xs text-muted-foreground">append-only</span>}>
+    <Panel
+      title="Trilha administrativa"
+      action={
+        <span className="text-xs text-muted-foreground">append-only</span>
+      }
+    >
       {isLoading ? (
         <LoadingRows rows={4} />
       ) : error ? (
@@ -30,10 +39,15 @@ export function EventsPanel() {
       ) : (
         <ul className="flex flex-col">
           {events.map((event, i) => (
-            <li key={i} className="flex items-baseline gap-3 border-b py-2 last:border-b-0">
+            <li
+              key={i}
+              className="flex items-baseline gap-3 border-b py-2 last:border-b-0"
+            >
               <Mono dim>{formatInstant(event.at)}</Mono>
               <Mono>{event.action}</Mono>
-              <span className="min-w-0 flex-1 truncate text-sm">{event.target}</span>
+              <span className="min-w-0 flex-1 truncate text-sm">
+                {event.target}
+              </span>
               <Mono dim>{event.principalId}</Mono>
             </li>
           ))}
