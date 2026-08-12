@@ -117,7 +117,7 @@ func (a *AuthRoutes) callback(w http.ResponseWriter, r *http.Request) {
 	// Grants are replaced, not merged: somebody removed from a group loses the
 	// access on their next sign-in rather than keeping it for ever.
 	grants := provider.GrantsFor(identity.Groups)
-	if err := a.dir.ReplaceGrants(r.Context(), principalID, grants, "oidc:"+providerID); err != nil {
+	if err := a.dir.ReplaceAssertedGrants(r.Context(), principalID, providerID, grants); err != nil {
 		writeProblemJSON(w, http.StatusInternalServerError, "Could not apply access", err.Error())
 		return
 	}

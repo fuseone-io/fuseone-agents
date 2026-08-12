@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 )
 
 // Role is what a principal may do within a scope.
@@ -130,6 +131,32 @@ func (r Role) Permissions() []Permission {
 type Grant struct {
 	Scope Scope
 	Role  Role
+}
+
+// HeldGrant is a grant plus where it came from.
+//
+// The difference decides what a screen may offer. A grant an identity provider
+// asserts is re-derived on every sign-in, so revoking it in the console would
+// last until its holder signs in again — a button that undoes itself is worse
+// than no button, and the group is the thing to change.
+type HeldGrant struct {
+	Grant
+	Asserted bool
+	By       string
+}
+
+// Person is somebody the installation knows about, as an operator sees them.
+type Person struct {
+	ID      string
+	Kind    PrincipalKind
+	Display string
+	Email   string
+	// Provider is the identity provider that vouched for them, empty for a
+	// service account or the administrator who claimed the installation.
+	Provider string
+	Grants   []HeldGrant
+	LastSeen time.Time
+	Disabled bool
 }
 
 // Principal is whoever is acting — a person, a service account, or an agent.

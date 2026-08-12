@@ -201,28 +201,6 @@ func (p *Postgres) UpsertPrincipal(ctx context.Context, provider, subject, displ
 // grant on their next sign-in. Merging would make group membership grant
 // access permanently and revoke nothing, which is the failure people discover
 // during an audit rather than a review.
-func (p *Postgres) ReplaceGrants(ctx context.Context, principalID string, grants []domain.Grant, by string) error {
-	tx, err := p.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("auth: begin: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	if _, err := tx.Exec(ctx, `delete from role_grants where principal_id = $1`, principalID); err != nil {
-		return fmt.Errorf("auth: clear grants: %w", err)
-	}
-	for _, g := range grants {
-		if _, err := tx.Exec(ctx, `
-			insert into role_grants (principal_id, company_id, area_id, role, granted_by)
-			values ($1, $2, $3, $4, $5)
-			on conflict do nothing`,
-			principalID, string(g.Scope.Company), string(g.Scope.Area), string(g.Role), by); err != nil {
-			return fmt.Errorf("auth: write grant: %w", err)
-		}
-	}
-	return tx.Commit(ctx)
-}
-
 // CreateSession issues a browser session and returns the secret to set.
 func (p *Postgres) CreateSession(ctx context.Context, principalID, userAgent, ip string, now time.Time) (Token, Session, error) {
 	token, err := NewToken()
