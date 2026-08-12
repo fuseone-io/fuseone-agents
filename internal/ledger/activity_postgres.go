@@ -14,6 +14,7 @@ import (
 // screen listing twenty agents should cost one round trip, not twenty.
 func (p *Postgres) AgentActivity(ctx context.Context, filter domain.RunFilter) ([]domain.AgentActivity, error) {
 	where, args := runFilterSQL(filter)
+	where = whereAnd(where, realRuns)
 
 	rows, err := p.pool.Query(ctx, `
 		select agent_id,
@@ -54,6 +55,7 @@ func (p *Postgres) AgentActivity(ctx context.Context, filter domain.RunFilter) (
 // report.
 func (p *Postgres) SpentSince(ctx context.Context, scope domain.Scope, since time.Time) (domain.Consumption, error) {
 	where, args := runFilterSQL(domain.RunFilter{Scope: scope, Since: since})
+	where = whereAnd(where, realRuns)
 
 	var c domain.Consumption
 	err := p.pool.QueryRow(ctx, `

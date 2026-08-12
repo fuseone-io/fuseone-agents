@@ -270,7 +270,7 @@ func (p *Postgres) Head(ctx context.Context, runID domain.RunID) (domain.Step, e
 
 // Runs answers from the projection: one indexed scan, no folding.
 func (p *Postgres) Runs(ctx context.Context) ([]domain.RunID, error) {
-	rows, err := p.pool.Query(ctx, `select run_id from runs order by started_at desc, run_id`)
+	rows, err := p.pool.Query(ctx, `select run_id from runs where not simulated order by started_at desc, run_id`)
 	if err != nil {
 		return nil, fmt.Errorf("list runs: %w", err)
 	}

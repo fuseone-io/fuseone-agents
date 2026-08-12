@@ -21,6 +21,7 @@ import (
 // to accumulate.
 func (p *Postgres) Stats(ctx context.Context, filter domain.RunFilter) (domain.RunStats, error) {
 	where, args := runFilterSQL(filter)
+	where = whereAnd(where, realRuns)
 
 	out := domain.RunStats{ByPhase: map[string]int64{}}
 
@@ -78,6 +79,7 @@ func (p *Postgres) Stats(ctx context.Context, filter domain.RunFilter) (domain.R
 // this projection exists to avoid.
 func (p *Postgres) Throughput(ctx context.Context, filter domain.RunFilter) ([]domain.ThroughputBucket, error) {
 	where, args := runFilterSQL(filter)
+	where = whereAnd(where, realRuns)
 
 	rows, err := p.pool.Query(ctx, `
 		select date_trunc('hour', started_at) as bucket, phase, agent_id,
@@ -133,7 +135,7 @@ func (p *Postgres) Decisions(ctx context.Context, filter domain.RunFilter, limit
 	// started_at. Same filter, different column, so it is named rather than
 	// assumed.
 	where, args := runFilterOn(filter, "at")
-	where = whereAnd(where, "kind = 'gate_decided'")
+	where = whereAnd(whereAnd(where, "kind = 'gate_decided'"), realSteps)
 	args = append(args, limit)
 
 	rows, err := p.pool.Query(ctx, `
@@ -260,3 +262,20 @@ func whereAnd(where, clause string) string {
 	}
 	return where + " and " + clause
 }
+
+/*
+Excluding simulated runs.
+
+A simulation is a real run in the ledger — that is what lets the trail, the
+diagram and the verifier read it unchanged, instead of a second ledger kept in
+step with the first. The price is that every projection has to say it does not
+want them, and counting one as production is a wrong number somebody acts on.
+
+Two forms because two tables. The projection carries the column; the steps do
+not, and copying it there would be a second copy of the same fact to keep
+correct.
+*/
+const (
+	realRuns  = "not simulated"
+	realSteps = "not exists (select 1 from runs r where r.run_id = run_steps.run_id and r.simulated)"
+)

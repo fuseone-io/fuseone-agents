@@ -23,6 +23,7 @@ const runColumns = `
 // cost grow with the installation's history.
 func (p *Postgres) ListRuns(ctx context.Context, filter domain.RunFilter, phase string, limit int) ([]domain.RunSummary, error) {
 	where, args := runFilterSQL(filter)
+	where = whereAnd(where, realRuns)
 	if phase != "" {
 		args = append(args, phase)
 		where = whereAnd(where, fmt.Sprintf("phase = $%d", len(args)))
@@ -57,6 +58,7 @@ func (p *Postgres) CostRollup(ctx context.Context, filter domain.RunFilter, grou
 	}
 
 	where, args := runFilterSQL(filter)
+	where = whereAnd(where, realRuns)
 	if filter.Until.IsZero() {
 		return nil, fmt.Errorf("ledger: a cost rollup needs an upper bound")
 	}

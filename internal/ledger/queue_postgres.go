@@ -50,6 +50,11 @@ func (p *Postgres) Claim(ctx context.Context, owner string, lease time.Duration)
 		select run_id, company_id, area_id, agent_id, version_id, on_behalf_of, attempts
 		from runs
 		where phase in `+claimablePhases+`
+		  -- A worker must never claim a simulated run. It would execute the
+		  -- dry run's proposals with the real tool layer, against real
+		  -- systems, on the strength of a case somebody uploaded to find out
+		  -- what would happen.
+		  and not simulated
 		  and next_attempt_at <= now()
 		  and (leased_until is null or leased_until <= now())
 		order by next_attempt_at
