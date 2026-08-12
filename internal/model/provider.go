@@ -30,6 +30,13 @@ type Provider struct {
 	Name    string
 	Kind    Kind
 	BaseURL string
+
+	// Models the platform knows this provider serves. Suggestions, never a
+	// closed set: a list shipped in a binary ages between releases, and one
+	// that blocked a model released last week would be worse than no list.
+	// Filled only where it is known — guessing a name produces a 404 at the
+	// first run rather than an error anybody can act on.
+	Models  []string
 	APIKey  string
 	Headers map[string]string
 
@@ -55,6 +62,7 @@ var Presets = map[string]Provider{
 	"anthropic": {
 		Name: "anthropic", Kind: KindAnthropic,
 		SupportsReasoningEffort: true, ReportsCachedTokens: true,
+		Models: []string{"claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5"},
 	},
 	"openai": {
 		Name: "openai", Kind: KindOpenAICompatible,

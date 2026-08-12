@@ -34,7 +34,8 @@ import { useIntegrations } from "@/features/integrations/api";
 export function AuthoringPanel() {
   const { t } = useTranslation();
   const { data, isLoading, error, refetch } = useAuthoring();
-  const providers = useIntegrations().data?.providers ?? [];
+  const integrations = useIntegrations().data;
+  const providers = integrations?.providers ?? [];
   const save = useSetAuthoring();
 
   const [draft, setDraft] = useState<{
@@ -47,6 +48,13 @@ export function AuthoringPanel() {
     model: data?.model ?? "",
     dailyMicros: data?.dailyMicros ?? 0,
   };
+
+  // The models the platform knows this provider serves. Suggestions beside a
+  // free field, never instead of it: a list shipped in a binary ages, and one
+  // that refused a model released last week would be worse than no list.
+  const known =
+    integrations?.presets?.find((preset) => preset.name === current.provider)
+      ?.models ?? [];
 
   const submit = (enabled: boolean) =>
     save.mutate(
@@ -110,15 +118,38 @@ export function AuthoringPanel() {
             </Labelled>
 
             <Labelled label={t("admin.model")} htmlFor="authoring-model">
-              <Input
-                id="authoring-model"
-                value={current.model}
-                onChange={(e) =>
-                  setDraft({ ...current, model: e.target.value })
-                }
-                className="font-mono"
-                placeholder="claude-opus-5"
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="authoring-model"
+                  value={current.model}
+                  onChange={(e) =>
+                    setDraft({ ...current, model: e.target.value })
+                  }
+                  autoComplete="off"
+                  className="font-mono"
+                  placeholder="claude-opus-5"
+                />
+                {known.length > 0 && (
+                  <Select
+                    onValueChange={(model) => setDraft({ ...current, model })}
+                  >
+                    <SelectTrigger className="w-[130px] shrink-0">
+                      <SelectValue placeholder={t("integrations.known")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {known.map((model) => (
+                        <SelectItem
+                          key={model}
+                          value={model}
+                          className="font-mono"
+                        >
+                          {model}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
             </Labelled>
 
             {/* Required, not optional. This is the only place the platform

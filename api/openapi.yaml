@@ -1433,6 +1433,14 @@ components:
             Empty where the client already knows the address, and where the
             model is self-hosted and only the installation knows it.
         supportsEffort: { type: boolean }
+        models:
+          type: array
+          description: |
+            Models the platform knows this provider serves. Suggestions rather
+            than a closed set: a list shipped in a binary ages between
+            releases, and one that refused a model released last week would be
+            worse than no list at all.
+          items: { type: string }
 
     MCPServer:
       type: object

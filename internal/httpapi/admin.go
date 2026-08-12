@@ -280,6 +280,7 @@ func knownProviders() []openapi.ModelPreset {
 			Kind:           openapi.ModelPresetKind(p.Kind),
 			BaseUrl:        ptr(p.BaseURL),
 			SupportsEffort: ptr(p.SupportsReasoningEffort),
+			Models:         &p.Models,
 		})
 	}
 	return out

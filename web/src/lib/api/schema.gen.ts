@@ -931,6 +931,13 @@ export interface components {
              */
             baseUrl?: string;
             supportsEffort?: boolean;
+            /**
+             * @description Models the platform knows this provider serves. Suggestions rather
+             *     than a closed set: a list shipped in a binary ages between
+             *     releases, and one that refused a model released last week would be
+             *     worse than no list at all.
+             */
+            models?: string[];
         };
         MCPServer: {
             /** @description Namespaces the tools it offers, so two servers naming a tool "search" do not collide. */
