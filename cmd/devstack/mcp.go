@@ -4,6 +4,9 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/http"
+	"os"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -17,6 +20,12 @@ import (
 // becomes a write once the Curator says so, which is the point.
 func serveMCP(args []string) error {
 	fs := flag.NewFlagSet("mcp", flag.ContinueOnError)
+	// Over HTTP when an address is given, so the development stack can
+	// exercise the remote transport as well as the local one. A stack that
+	// could only speak stdio would leave the path most installations will
+	// actually use tested nowhere but in production.
+	addr := fs.String("addr", "", "serve over HTTP at this address instead of stdio")
+	token := fs.String("token", "", "require this bearer token, when serving over HTTP")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -38,7 +47,38 @@ func serveMCP(args []string) error {
 		Description: "Send a reply to the customer on the support ticket",
 	}, sendReply)
 
-	return server.Run(context.Background(), &mcp.StdioTransport{})
+	if *addr == "" {
+		return server.Run(context.Background(), &mcp.StdioTransport{})
+	}
+
+	handler := mcp.NewStreamableHTTPHandler(
+		func(*http.Request) *mcp.Server { return server }, nil)
+	fmt.Fprintf(os.Stderr, "devstack mcp listening on %s\n", *addr)
+
+	srv := &http.Server{
+		Addr:              *addr,
+		Handler:           requireToken(*token, handler),
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	return srv.ListenAndServe()
+}
+
+// requireToken refuses a request without the bearer the operator configured.
+//
+// Present so the remote path is exercised with a credential rather than
+// without one: a transport that silently dropped the token would pass every
+// test written against a server that does not ask for it.
+func requireToken(want string, next http.Handler) http.Handler {
+	if want == "" {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer "+want {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 type lookupIn struct {
