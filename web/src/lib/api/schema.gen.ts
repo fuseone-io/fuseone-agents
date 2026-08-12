@@ -740,6 +740,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/prices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What this installation pays per model
+         * @description Nothing ships rates. They vary by contract, and a table baked into the
+         *     binary would misreport what a customer with a negotiated discount pays
+         *     — worse than reporting nothing, because a wrong figure is one somebody
+         *     acts on. A model with no rate has its runs recorded in tokens and no
+         *     money.
+         */
+        get: operations["listPrices"];
+        /**
+         * Set a model's rate
+         * @description The four rates stay separate: a cache read costs a fraction of an
+         *     input token, and collapsing them is what makes an agent's cost
+         *     impossible to diagnose (PRD FO-08).
+         *
+         *     Takes effect for runs started after the workers reload. What is already
+         *     in the ledger keeps the money it was recorded with — a past entry is
+         *     not re-priced because a table changed today.
+         */
+        put: operations["putPrice"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/prices/{provider}/{model}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Withdraw a model's rate */
+        delete: operations["deletePrice"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/scopes": {
         parameters: {
             query?: never;
@@ -920,6 +971,22 @@ export interface components {
             description?: string;
             effect: components["schemas"]["Effect"];
             untrusted: boolean;
+        };
+        /**
+         * @description Micros per million tokens. Cache reads and cache writes are their own
+         *     rates because a cache read costs a fraction of an input token.
+         */
+        ModelPrice: {
+            provider: string;
+            model: string;
+            /** Format: int64 */
+            inputMicros?: number;
+            /** Format: int64 */
+            outputMicros?: number;
+            /** Format: int64 */
+            cacheReadMicros?: number;
+            /** Format: int64 */
+            cacheWriteMicros?: number;
         };
         ModelPreset: {
             name: string;
@@ -2612,6 +2679,78 @@ export interface operations {
                 content?: never;
             };
             400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listPrices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rates configured. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ModelPrice"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    putPrice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelPrice"];
+            };
+        };
+        responses: {
+            /** @description The rate is set. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    deletePrice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider: string;
+                model: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rate is withdrawn. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
         };

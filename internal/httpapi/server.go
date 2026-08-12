@@ -63,6 +63,7 @@ type Server struct {
 	authoring    Authoring
 	assistants   Assistants
 	spend        Spend
+	rates        Rates
 	pauses       trigger.Pauses
 	publisher    Publisher
 	// clock is injectable so a run's opening instant is a fact of the request

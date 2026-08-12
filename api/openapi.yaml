@@ -1120,6 +1120,73 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /admin/prices:
+    get:
+      tags: [admin]
+      operationId: listPrices
+      summary: What this installation pays per model
+      description: |
+        Nothing ships rates. They vary by contract, and a table baked into the
+        binary would misreport what a customer with a negotiated discount pays
+        — worse than reporting nothing, because a wrong figure is one somebody
+        acts on. A model with no rate has its runs recorded in tokens and no
+        money.
+      responses:
+        '200':
+          description: The rates configured.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ModelPrice' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    put:
+      tags: [admin]
+      operationId: putPrice
+      summary: Set a model's rate
+      description: |
+        The four rates stay separate: a cache read costs a fraction of an
+        input token, and collapsing them is what makes an agent's cost
+        impossible to diagnose (PRD FO-08).
+
+        Takes effect for runs started after the workers reload. What is already
+        in the ledger keeps the money it was recorded with — a past entry is
+        not re-priced because a table changed today.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ModelPrice' }
+      responses:
+        '204': { description: The rate is set. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/prices/{provider}/{model}:
+    delete:
+      tags: [admin]
+      operationId: deletePrice
+      summary: Withdraw a model's rate
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema: { type: string }
+        - name: model
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: The rate is withdrawn. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /admin/scopes:
     get:
       tags: [admin]
@@ -1420,6 +1487,20 @@ components:
         description: { type: string }
         effect: { $ref: '#/components/schemas/Effect' }
         untrusted: { type: boolean }
+
+    ModelPrice:
+      type: object
+      required: [provider, model]
+      description: |
+        Micros per million tokens. Cache reads and cache writes are their own
+        rates because a cache read costs a fraction of an input token.
+      properties:
+        provider: { type: string }
+        model: { type: string }
+        inputMicros: { type: integer, format: int64 }
+        outputMicros: { type: integer, format: int64 }
+        cacheReadMicros: { type: integer, format: int64 }
+        cacheWriteMicros: { type: integer, format: int64 }
 
     ModelPreset:
       type: object

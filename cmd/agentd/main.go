@@ -156,6 +156,7 @@ func serve(args []string) error {
 			WithHealth(admin.NewHealth(identity.pool)).
 			WithPolicies(policy.NewStore(identity.pool)).
 			WithAreas(scope.NewStore(identity.pool)).
+			WithRates(integrations).
 			WithAuthoring(authoring.NewStore(identity.pool, store)).
 			WithAssistants(assistants(ctx, integrations), authoring.NewStore(identity.pool, store)).
 			WithPauses(spec.NewState(identity.pool)).

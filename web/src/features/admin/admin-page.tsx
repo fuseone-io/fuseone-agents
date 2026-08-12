@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToolsPanel } from "@/features/admin/tools-panel";
 import { EventsPanel } from "@/features/admin/events-panel";
 import { AuthoringPanel } from "@/features/admin/authoring-panel";
+import { PricesPanel } from "@/features/admin/prices-panel";
 import { AreasPanel } from "@/features/admin/areas-panel";
 import { BudgetsPanel } from "@/features/admin/budgets-panel";
 
@@ -28,6 +29,7 @@ export function AdminPage() {
           <TabsTrigger value="tools">{t("admin.tools")}</TabsTrigger>
           <TabsTrigger value="authoring">{t("admin.authoring")}</TabsTrigger>
           <TabsTrigger value="areas">{t("admin.areas")}</TabsTrigger>
+          <TabsTrigger value="prices">{t("admin.prices")}</TabsTrigger>
           <TabsTrigger value="budgets">{t("admin.budgets")}</TabsTrigger>
           <TabsTrigger value="events">{t("admin.trail")}</TabsTrigger>
         </TabsList>
@@ -40,6 +42,9 @@ export function AdminPage() {
         </TabsContent>
         <TabsContent value="areas" className="mt-4">
           <AreasPanel />
+        </TabsContent>
+        <TabsContent value="prices" className="mt-4">
+          <PricesPanel />
         </TabsContent>
         <TabsContent value="budgets" className="mt-4">
           <BudgetsPanel />

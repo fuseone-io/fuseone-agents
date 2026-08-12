@@ -19,6 +19,7 @@ export function useSetAuthoring() {
   return useMutation({
     mutationFn: async (choice: AuthoringChoice) =>
       unwrap(await api.PUT("/admin/authoring", { body: choice })),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: authoringKeys.all }),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({ queryKey: authoringKeys.all }),
   });
 }
