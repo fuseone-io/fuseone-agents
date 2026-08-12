@@ -176,6 +176,77 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /agents/{agentId}/versions:
+    put:
+      tags: [agents]
+      operationId: publishAgent
+      summary: Publish a new version of an agent
+      description: |
+        Creating and editing are the same call, because editing an agent is
+        authoring its next version: runs are pinned to versions, and the older
+        ones stay the only correct explanation of the runs that used them.
+
+        The definition is rendered back to the file format and published from
+        that, so a version stays the digest of its bytes — the same definition
+        typed here and written in an editor produce the same version, and
+        publishing identical text twice is a no-op rather than a second version
+        of the same words.
+
+        An agent nobody has decided about is recorded as paused. Authoring
+        never starts anything.
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AgentDefinition' }
+      responses:
+        '200':
+          description: The published version.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentPublished' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /agents/{agentId}/paused:
+    put:
+      tags: [agents]
+      operationId: setAgentPaused
+      summary: Start or stop an agent
+      description: |
+        Not part of the definition and not versioned: a specification is what
+        somebody wrote and never changes, while whether it may start changes on
+        an afternoon when something is wrong. Versioning it would put a version
+        between a run and the text that actually ran.
+
+        Every way a run can start obeys this — the schedule, a webhook, the
+        button, and the command line.
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [paused]
+              properties:
+                paused: { type: boolean }
+      responses:
+        '204': { description: Recorded. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /agents/{agentId}/runs:
     post:
       tags: [agents]
@@ -1468,6 +1539,48 @@ components:
         costMicros: { type: integer, format: int64 }
         lastPhase: { $ref: '#/components/schemas/Phase' }
         lastRunAt: { type: string, format: date-time }
+
+    AgentDefinition:
+      type: object
+      required: [name, area, provider, model, instructions]
+      properties:
+        name: { type: string }
+        area: { type: string }
+        provider: { type: string }
+        model: { type: string }
+        effort: { type: string }
+        instructions:
+          type: string
+          description: What the agent is for, in the author's own words.
+        tools:
+          type: array
+          description: The capability pack. What is not here cannot be invoked.
+          items: { type: string }
+        budget: { $ref: '#/components/schemas/Budget' }
+        triggers:
+          type: array
+          items: { $ref: '#/components/schemas/AgentTrigger' }
+
+    AgentPublished:
+      type: object
+      required: [agentId, versionId, created, paused]
+      properties:
+        agentId: { type: string }
+        versionId: { type: string }
+        created:
+          type: boolean
+          description: |
+            False when this exact definition was already published. The version
+            is the digest of its bytes, so republishing identical text returns
+            the version it already had.
+        paused:
+          type: boolean
+          description: Whether the agent is allowed to start. A new one never is.
+        definition:
+          type: string
+          description: |
+            The definition as a file, exactly as published. An installation
+            that keeps its agents in git commits this.
 
     AgentDetail:
       type: object

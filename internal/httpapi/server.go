@@ -60,6 +60,7 @@ type Server struct {
 	health       Health
 	policies     Policies
 	pauses       trigger.Pauses
+	publisher    Publisher
 	// clock is injectable so a run's opening instant is a fact of the request
 	// rather than of whichever machine happened to serve it.
 	clock Clock

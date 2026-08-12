@@ -153,7 +153,8 @@ func serve(args []string) error {
 			WithAudit(audit.NewPostgres(identity.pool)).
 			WithHealth(admin.NewHealth(identity.pool)).
 			WithPolicies(policy.NewStore(identity.pool)).
-			WithPauses(spec.NewState(identity.pool))
+			WithPauses(spec.NewState(identity.pool)).
+			WithPublisher(spec.NewPublisher(identity.pool, engine.SystemClock{}))
 	}
 
 	apiHandler := openapi.HandlerWithOptions(
