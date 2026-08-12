@@ -6,6 +6,7 @@ import { ToolsPanel } from "@/features/admin/tools-panel";
 import { EventsPanel } from "@/features/admin/events-panel";
 import { AuthoringPanel } from "@/features/admin/authoring-panel";
 import { PricesPanel } from "@/features/admin/prices-panel";
+import { IdentityPanel } from "@/features/admin/identity-panel";
 import { AreasPanel } from "@/features/admin/areas-panel";
 import { BudgetsPanel } from "@/features/admin/budgets-panel";
 
@@ -29,6 +30,7 @@ export function AdminPage() {
           <TabsTrigger value="tools">{t("admin.tools")}</TabsTrigger>
           <TabsTrigger value="authoring">{t("admin.authoring")}</TabsTrigger>
           <TabsTrigger value="areas">{t("admin.areas")}</TabsTrigger>
+          <TabsTrigger value="identity">{t("admin.identity")}</TabsTrigger>
           <TabsTrigger value="prices">{t("admin.prices")}</TabsTrigger>
           <TabsTrigger value="budgets">{t("admin.budgets")}</TabsTrigger>
           <TabsTrigger value="events">{t("admin.trail")}</TabsTrigger>
@@ -39,6 +41,9 @@ export function AdminPage() {
         </TabsContent>
         <TabsContent value="authoring" className="mt-4">
           <AuthoringPanel />
+        </TabsContent>
+        <TabsContent value="identity" className="mt-4">
+          <IdentityPanel />
         </TabsContent>
         <TabsContent value="areas" className="mt-4">
           <AreasPanel />

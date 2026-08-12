@@ -686,6 +686,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/identity-providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How people sign in, and what signing in grants them
+         * @description Authenticating and being allowed to do something are separate. A
+         *     provider proves who somebody is; its group mappings decide what that
+         *     makes them, and a provider with no mapping grants nothing however
+         *     successfully somebody signs in — which is the correct default.
+         *
+         *     Client secrets are never returned. The listing says one is stored.
+         */
+        get: operations["listIdentityProviders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/identity-providers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Configure a way of signing in
+         * @description The issuer is discovered as this is saved, so a wrong address is an
+         *     error the operator sees now rather than a sign-in that fails later for
+         *     somebody else.
+         *
+         *     An omitted client secret keeps the stored one. Fixing a group mapping
+         *     must not demand re-entering a credential nobody has to hand — the
+         *     alternative is a mapping left wrong because correcting it cost too
+         *     much.
+         */
+        put: operations["putIdentityProvider"];
+        post?: never;
+        /**
+         * Remove a way of signing in
+         * @description It stops accepting sign-ins immediately. Sessions already issued are
+         *     unaffected: revoking those is a separate act, because removing a
+         *     misconfigured provider should not sign out the person fixing it.
+         */
+        delete: operations["deleteIdentityProvider"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/integrations/mcp-servers/{name}": {
         parameters: {
             query?: never;
@@ -1058,6 +1116,40 @@ export interface components {
             cases: components["schemas"]["SimulationCase"][];
             /** @description Whether any case has yet to settle. Derived from the runs rather than tracked beside them: the runs are the queue, so a simulation is still going exactly when one of its runs is. */
             running: boolean;
+        };
+        /** @description One group asserted by the provider, and the scoped grant it produces. There is no installation-wide role: a mapping always names a company and an area. */
+        GroupMapping: {
+            group: string;
+            company: string;
+            area: string;
+            /** @enum {string} */
+            role: "author" | "approver" | "curator" | "auditor";
+        };
+        IdentityProvider: {
+            id: string;
+            display: string;
+            issuer: string;
+            clientId?: string;
+            /** @description That a client secret is stored, never what it is. */
+            hasSecret: boolean;
+            /** @description Which claim carries group membership. Providers differ — Keycloak and Okta commonly use `groups`, Entra ID `roles`. */
+            groupsClaim?: string;
+            mappings?: components["schemas"]["GroupMapping"][];
+            enabled: boolean;
+            updatedBy?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        IdentityProviderInput: {
+            display: string;
+            issuer: string;
+            clientId: string;
+            /** @description Omit to keep the stored one. */
+            clientSecret?: string;
+            groupsClaim?: string;
+            mappings?: components["schemas"]["GroupMapping"][];
+            /** @default true */
+            enabled: boolean;
         };
         Run: {
             runId: string;
@@ -2634,6 +2726,90 @@ export interface operations {
                         providers: components["schemas"]["ModelProvider"][];
                     };
                 };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listIdentityProviders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The configured providers. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["IdentityProvider"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    putIdentityProvider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IdentityProviderInput"];
+            };
+        };
+        responses: {
+            /** @description Stored */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description The provider could not be discovered, or is missing something it
+             *     cannot work without.
+             */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    deleteIdentityProvider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];

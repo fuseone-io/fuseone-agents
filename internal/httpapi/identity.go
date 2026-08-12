@@ -83,11 +83,16 @@ func (s *Server) PutIdentityProvider(
 	}
 
 	if err := s.register(ctx, provider, secret); err != nil {
-		// Stored but not live. Reported rather than swallowed: the operator
-		// would otherwise see a saved provider that nobody can sign in with,
-		// and no reason on the screen.
+		// Kept rather than discarded: an installation is routinely configured
+		// before its identity provider is reachable from this network, and
+		// throwing away everything somebody typed because a host was down for
+		// a minute is not a kindness. Start-up discovers it again.
+		//
+		// The message says both halves. "Could not be reached" alone would
+		// read as nothing having been saved, beside a row that just appeared.
 		return openapi.PutIdentityProvider400ApplicationProblemPlusJSONResponse(
-			problem(http.StatusBadRequest, "Identity provider could not be reached", err.Error())), nil
+			problem(http.StatusBadRequest, "Saved, but nobody can sign in with it yet",
+				err.Error())), nil
 	}
 	return openapi.PutIdentityProvider204Response{}, nil
 }
