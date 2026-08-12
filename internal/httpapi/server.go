@@ -71,7 +71,11 @@ type Server struct {
 	// cases is where an uploaded simulation set is filed. Optional, like the
 	// rest of the authoring area.
 	cases Cases
-	publisher   Publisher
+	// identity and signIn administer how people sign in: the stored
+	// configuration and the live registry the sign-in routes read from.
+	identity  Identity
+	signIn    SignIn
+	publisher Publisher
 	// clock is injectable so a run's opening instant is a fact of the request
 	// rather than of whichever machine happened to serve it.
 	clock Clock

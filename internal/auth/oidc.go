@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -50,9 +51,21 @@ type OIDCProvider struct {
 
 // OIDC runs the browser sign-in flow.
 type OIDC struct {
+	// mu guards providers. The administration area writes this map while
+	// sign-in requests read it: configuring a provider is no longer something
+	// that only happens before the server starts serving.
+	mu        sync.RWMutex
 	providers map[string]*OIDCProvider
 	baseURL   string
 	secure    bool
+}
+
+// lookup returns a configured provider by id.
+func (o *OIDC) lookup(id string) (*OIDCProvider, bool) {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+	p, ok := o.providers[id]
+	return p, ok
 }
 
 func NewOIDC(baseURL string, secure bool) *OIDC {
@@ -86,11 +99,27 @@ func (o *OIDC) Add(ctx context.Context, p *OIDCProvider) error {
 		p.GroupsClaim = "groups"
 	}
 
+	o.mu.Lock()
+	defer o.mu.Unlock()
 	o.providers[p.ID] = p
 	return nil
 }
 
+// Remove takes a provider out of the live registry.
+//
+// The sign-in routes read from here rather than from the database, so a
+// provider deleted in the administration area has to leave this map too — or
+// it keeps accepting sign-ins for a configuration nobody can see any more.
+func (o *OIDC) Remove(id string) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	delete(o.providers, id)
+}
+
 func (o *OIDC) Providers() []*OIDCProvider {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+
 	out := make([]*OIDCProvider, 0, len(o.providers))
 	for _, p := range o.providers {
 		out = append(out, p)
@@ -112,7 +141,7 @@ const flowCookie = "fuseone_oidc_flow"
 // matters because the code travels through the user's browser where an
 // intercepting app could otherwise replay it.
 func (o *OIDC) Start(w http.ResponseWriter, r *http.Request, providerID, returnTo string) error {
-	p, ok := o.providers[providerID]
+	p, ok := o.lookup(providerID)
 	if !ok {
 		return fmt.Errorf("%w: %s", ErrNoProvider, providerID)
 	}
@@ -160,7 +189,7 @@ type Identity struct {
 
 // Complete verifies the callback and returns the asserted identity.
 func (o *OIDC) Complete(ctx context.Context, w http.ResponseWriter, r *http.Request, providerID string) (Identity, error) {
-	p, ok := o.providers[providerID]
+	p, ok := o.lookup(providerID)
 	if !ok {
 		return Identity{}, fmt.Errorf("%w: %s", ErrNoProvider, providerID)
 	}

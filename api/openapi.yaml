@@ -999,6 +999,86 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /admin/identity-providers:
+    get:
+      tags: [admin]
+      operationId: listIdentityProviders
+      summary: How people sign in, and what signing in grants them
+      description: |
+        Authenticating and being allowed to do something are separate. A
+        provider proves who somebody is; its group mappings decide what that
+        makes them, and a provider with no mapping grants nothing however
+        successfully somebody signs in — which is the correct default.
+
+        Client secrets are never returned. The listing says one is stored.
+      responses:
+        '200':
+          description: The configured providers.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/IdentityProvider' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/identity-providers/{id}:
+    put:
+      tags: [admin]
+      operationId: putIdentityProvider
+      summary: Configure a way of signing in
+      description: |
+        The issuer is discovered as this is saved, so a wrong address is an
+        error the operator sees now rather than a sign-in that fails later for
+        somebody else.
+
+        An omitted client secret keeps the stored one. Fixing a group mapping
+        must not demand re-entering a credential nobody has to hand — the
+        alternative is a mapping left wrong because correcting it cost too
+        much.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/IdentityProviderInput' }
+      responses:
+        '204': { description: Stored, discovered and live. }
+        '400':
+          description: |
+            The provider could not be discovered, or is missing something it
+            cannot work without.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    delete:
+      tags: [admin]
+      operationId: deleteIdentityProvider
+      summary: Remove a way of signing in
+      description: |
+        It stops accepting sign-ins immediately. Sessions already issued are
+        unaffected: revoking those is a separate act, because removing a
+        misconfigured provider should not sign out the person fixing it.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: Removed. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /admin/integrations/mcp-servers/{name}:
     put:
       tags: [admin]
@@ -1643,6 +1723,60 @@ components:
             Whether any case has yet to settle. Derived from the runs rather
             than tracked beside them: the runs are the queue, so a simulation
             is still going exactly when one of its runs is.
+
+    GroupMapping:
+      type: object
+      description: >
+        One group asserted by the provider, and the scoped grant it produces.
+        There is no installation-wide role: a mapping always names a company
+        and an area.
+      required: [group, company, area, role]
+      properties:
+        group: { type: string }
+        company: { type: string }
+        area: { type: string }
+        role:
+          type: string
+          enum: [author, approver, curator, auditor]
+
+    IdentityProvider:
+      type: object
+      required: [id, display, issuer, enabled, hasSecret]
+      properties:
+        id: { type: string }
+        display: { type: string }
+        issuer: { type: string }
+        clientId: { type: string }
+        hasSecret:
+          type: boolean
+          description: That a client secret is stored, never what it is.
+        groupsClaim:
+          type: string
+          description: >
+            Which claim carries group membership. Providers differ — Keycloak
+            and Okta commonly use `groups`, Entra ID `roles`.
+        mappings:
+          type: array
+          items: { $ref: '#/components/schemas/GroupMapping' }
+        enabled: { type: boolean }
+        updatedBy: { type: string }
+        updatedAt: { type: string, format: date-time }
+
+    IdentityProviderInput:
+      type: object
+      required: [display, issuer, clientId]
+      properties:
+        display: { type: string }
+        issuer: { type: string }
+        clientId: { type: string }
+        clientSecret:
+          type: string
+          description: Omit to keep the stored one.
+        groupsClaim: { type: string }
+        mappings:
+          type: array
+          items: { $ref: '#/components/schemas/GroupMapping' }
+        enabled: { type: boolean, default: true }
 
     Run:
       type: object

@@ -166,6 +166,13 @@ func serve(args []string) error {
 			WithAssistants(assistants(ctx, integrations), authoring.NewStore(identity.pool, store)).
 			WithPauses(spec.NewState(identity.pool)).
 			WithPublisher(spec.NewPublisher(identity.pool, engine.SystemClock{}))
+
+		// Who may sign in, and what signing in grants. Saving registers the
+		// provider straight away, so a configuration never needs a restart to
+		// take effect — and start-up loads what is already stored.
+		identityStore := admin.NewIdentity(identity.pool, store)
+		api = api.WithIdentity(identityStore, identity.oidc)
+		registerProviders(ctx, identityStore, identity.oidc)
 	}
 
 	apiHandler := openapi.HandlerWithOptions(
@@ -1070,6 +1077,9 @@ func defaultOwner() string {
 
 // identity bundles what it takes to authenticate a caller.
 type identity struct {
+	// oidc is the live registry the sign-in routes read from and the
+	// administration area writes to.
+	oidc   *auth.OIDC
 	auth   *auth.Authenticator
 	routes *httpapi.AuthRoutes
 	// pool is shared with the administration area: rulings, their trail and
@@ -1118,7 +1128,41 @@ func openIdentity(ctx context.Context, dsn, baseURL string) (*identity, error) {
 		auth:   auth.NewAuthenticator(dir, secure, nil),
 		routes: httpapi.NewAuthRoutes(oidc, dir, boot, secure),
 		pool:   pool,
+		oidc:   oidc,
 	}, nil
+}
+
+// registerProviders puts the configured identity providers into the live
+// registry at start-up.
+//
+// One that cannot be discovered is logged and skipped rather than fatal: a
+// provider whose issuer is down must not stop the console from serving, or the
+// only way to fix a broken sign-in would be to fix the thing that broke first.
+func registerProviders(ctx context.Context, store *admin.Identity, live *auth.OIDC) {
+	providers, err := store.IdentityProviders(ctx)
+	if err != nil {
+		slog.Error("could not read the identity providers", "err", err)
+		return
+	}
+	for _, p := range providers {
+		if !p.Enabled {
+			continue
+		}
+		secret, err := store.IdentitySecret(ctx, p.ID)
+		if err != nil {
+			slog.Error("identity provider has no readable secret", "provider", p.ID, "err", err)
+			continue
+		}
+		if err := live.Add(ctx, &auth.OIDCProvider{
+			ID: p.ID, Display: p.Display, Issuer: p.Issuer, ClientID: p.ClientID,
+			ClientSecret: secret, GroupsClaim: p.GroupsClaim, Mappings: p.Mappings,
+		}); err != nil {
+			slog.Error("identity provider did not answer; nobody can sign in with it",
+				"provider", p.ID, "issuer", p.Issuer, "err", err)
+			continue
+		}
+		slog.Info("identity provider configured", "provider", p.ID, "mappings", len(p.Mappings))
+	}
 }
 
 // bootstrapCmd reissues the first-run token for an operator who lost it.
