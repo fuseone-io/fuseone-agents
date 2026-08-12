@@ -2,6 +2,7 @@ package admin_test
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -152,4 +153,31 @@ func TestDeleteMCPServer_isRecorded(t *testing.T) {
 
 func contains(haystack, needle string) bool {
 	return strings.Contains(haystack, needle)
+}
+
+func TestPutProvider_anthropicWithoutABaseURL_isAccepted(t *testing.T) {
+	i := newIntegrations(t)
+
+	err := i.PutProvider(t.Context(), "usr_a", domain.Scope{},
+		domain.ModelProvider{Name: "anthropic", Kind: "anthropic"}, "sk-test")
+
+	// Its client already knows the address, so demanding one asks for a value
+	// nobody has — and refusing without it made the reference provider
+	// impossible to configure at all.
+	if err != nil {
+		t.Fatalf("put: %v", err)
+	}
+}
+
+func TestPutProvider_openAICompatibleWithoutABaseURL_isRefused(t *testing.T) {
+	i := newIntegrations(t)
+
+	err := i.PutProvider(t.Context(), "usr_a", domain.Scope{},
+		domain.ModelProvider{Name: "vllm", Kind: "openai_compatible"}, "")
+
+	// Here the address genuinely has to come from somewhere: only the
+	// installation knows where its own model is listening.
+	if !errors.Is(err, admin.ErrNoBaseURL) {
+		t.Fatalf("got %v, want ErrNoBaseURL", err)
+	}
 }

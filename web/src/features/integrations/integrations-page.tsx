@@ -3,6 +3,7 @@ import { useState } from "react";
 import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
 import { Plug, Server } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ConnectMenu } from "@/features/integrations/connect-menu";
 import { IntegrationsSection } from "@/features/integrations/integrations-section";
 import {
@@ -58,64 +59,85 @@ export function IntegrationsPage() {
       ) : error ? (
         <ErrorState error={error} onRetry={() => void refetch()} />
       ) : (
-        <div className="flex flex-col gap-6">
-          <IntegrationsSection
-            title={t("integrations.servers")}
-            onAdd={() => setEditing({ kind: "server", value: null })}
-            empty={
-              servers.length === 0 && (
-                <EmptyState
-                  icon={<Server className="size-6" />}
-                  title={t("integrations.noServer")}
-                  hint={t("integrations.noServerHint")}
-                />
-              )
-            }
-          >
-            {servers.map((server) => (
-              <ServerCard
-                key={server.name}
-                server={server}
-                onEdit={() => setEditing({ kind: "server", value: server })}
-              />
-            ))}
-          </IntegrationsSection>
+        // Two tabs rather than two stacked sections: connecting a tool server
+        // and connecting a model are different jobs, done by the same person
+        // on different days. The cost is that the page no longer answers
+        // "what are we connected to" in one glance, so each tab says how many
+        // it holds without being opened.
+        <Tabs defaultValue="servers">
+          <TabsList>
+            <TabsTrigger value="servers">
+              {t("integrations.servers")}
+              <span className="ml-1.5 font-mono text-2xs tabular-nums opacity-60">
+                {servers.length}
+              </span>
+            </TabsTrigger>
+            <TabsTrigger value="providers">
+              {t("integrations.providers")}
+              <span className="ml-1.5 font-mono text-2xs tabular-nums opacity-60">
+                {providers.length}
+              </span>
+            </TabsTrigger>
+          </TabsList>
 
-          <IntegrationsSection
-            title={t("integrations.providers")}
-            onAdd={() => setEditing({ kind: "provider", value: null })}
-            empty={
-              providers.length === 0 && (
-                <EmptyState
-                  icon={<Plug className="size-6" />}
-                  title={t("integrations.noProvider")}
-                  hint={t("integrations.noProviderHint")}
+          <TabsContent value="servers" className="mt-4">
+            <IntegrationsSection
+              title={t("integrations.servers")}
+              onAdd={() => setEditing({ kind: "server", value: null })}
+              empty={
+                servers.length === 0 && (
+                  <EmptyState
+                    icon={<Server className="size-6" />}
+                    title={t("integrations.noServer")}
+                    hint={t("integrations.noServerHint")}
+                  />
+                )
+              }
+            >
+              {servers.map((server) => (
+                <ServerCard
+                  key={server.name}
+                  server={server}
+                  onEdit={() => setEditing({ kind: "server", value: server })}
                 />
-              )
-            }
-          >
-            {providers.map((provider) => (
-              <ProviderCard
-                key={provider.name}
-                provider={provider}
-                onEdit={() => setEditing({ kind: "provider", value: provider })}
-              />
-            ))}
-          </IntegrationsSection>
+              ))}
+            </IntegrationsSection>
+          </TabsContent>
 
-          {editing?.kind === "server" && (
-            <ServerForm
-              server={editing.value}
-              onClose={() => setEditing(null)}
-            />
-          )}
-          {editing?.kind === "provider" && (
-            <ProviderForm
-              provider={editing.value}
-              onClose={() => setEditing(null)}
-            />
-          )}
-        </div>
+          <TabsContent value="providers" className="mt-4">
+            <IntegrationsSection
+              title={t("integrations.providers")}
+              onAdd={() => setEditing({ kind: "provider", value: null })}
+              empty={
+                providers.length === 0 && (
+                  <EmptyState
+                    icon={<Plug className="size-6" />}
+                    title={t("integrations.noProvider")}
+                    hint={t("integrations.noProviderHint")}
+                  />
+                )
+              }
+            >
+              {providers.map((p) => (
+                <ProviderCard
+                  key={p.name}
+                  provider={p}
+                  onEdit={() => setEditing({ kind: "provider", value: p })}
+                />
+              ))}
+            </IntegrationsSection>
+          </TabsContent>
+        </Tabs>
+      )}
+
+      {editing?.kind === "server" && (
+        <ServerForm server={editing.value} onClose={() => setEditing(null)} />
+      )}
+      {editing?.kind === "provider" && (
+        <ProviderForm
+          provider={editing.value}
+          onClose={() => setEditing(null)}
+        />
       )}
     </>
   );

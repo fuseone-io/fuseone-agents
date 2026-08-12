@@ -121,7 +121,11 @@ func (i *Integrations) PutProvider(ctx context.Context, by domain.UserID, scope 
 	switch {
 	case strings.TrimSpace(provider.Name) == "":
 		return ErrNoName
-	case strings.TrimSpace(provider.BaseURL) == "":
+	// Required only where the client cannot already know it. Anthropic's does;
+	// an OpenAI-compatible endpoint, including a self-hosted one, is known
+	// only to the installation. Demanding it from everybody asked for a value
+	// nobody has and made the reference provider impossible to configure.
+	case provider.Kind != "anthropic" && strings.TrimSpace(provider.BaseURL) == "":
 		return ErrNoBaseURL
 	}
 

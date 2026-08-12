@@ -2425,7 +2425,12 @@ export interface operations {
                 "application/json": {
                     /** @enum {string} */
                     kind: "anthropic" | "openai_compatible";
-                    baseUrl: string;
+                    /**
+                     * @description Required for openai_compatible and refused as empty there,
+                     *     because only the installation knows where its endpoint is.
+                     *     Omitted for anthropic, whose client already knows one.
+                     */
+                    baseUrl?: string;
                     /** @description Sealed in the vault on arrival and never returned. Omit it to keep the stored credential — changing a base URL should not require re-entering a key. */
                     apiKey?: string;
                     /** @default true */

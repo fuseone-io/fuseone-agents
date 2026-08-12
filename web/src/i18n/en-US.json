@@ -300,6 +300,7 @@
     "editProvider": "Edit the provider",
     "editServer": "Edit the server",
     "enabled": "Enabled",
+    "known": "known",
     "mcpExplains": "An MCP server is what gives agents their tools. Everything it offers arrives as a read until somebody classifies it.",
     "mcpServer": "MCP server",
     "modelProvider": "Model provider",

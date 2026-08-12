@@ -127,20 +127,40 @@ export function ProviderForm({
                 <FormItem>
                   <FormLabel>{t("admin.name")}</FormLabel>
                   <FormControl>
-                    <Input
-                      {...field}
-                      list="known-providers"
-                      disabled={!!provider}
-                      onChange={(e) => applyPreset(e.target.value)}
-                      className="font-mono"
-                      placeholder="openai"
-                    />
+                    <div className="flex gap-2">
+                      <Input
+                        {...field}
+                        disabled={!!provider}
+                        // Off, or the browser offers whatever was typed into
+                        // any similarly named field before — and a list mixing
+                        // "deepseek" with somebody's old form entry reads as
+                        // the platform suggesting providers that do not exist.
+                        autoComplete="off"
+                        className="font-mono"
+                        placeholder="openai"
+                      />
+                      {!provider && (
+                        <Select onValueChange={applyPreset}>
+                          <SelectTrigger className="w-[150px] shrink-0">
+                            <SelectValue
+                              placeholder={t("integrations.known")}
+                            />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {presets.map((preset) => (
+                              <SelectItem
+                                key={preset.name}
+                                value={preset.name}
+                                className="font-mono"
+                              >
+                                {preset.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
                   </FormControl>
-                  <datalist id="known-providers">
-                    {presets.map((preset) => (
-                      <option key={preset.name} value={preset.name} />
-                    ))}
-                  </datalist>
                   <FormDescription>
                     {t("integrations.referencedBySpecs")}
                   </FormDescription>

@@ -962,12 +962,17 @@ paths:
           application/json:
             schema:
               type: object
-              required: [kind, baseUrl]
+              required: [kind]
               properties:
                 kind:
                   type: string
                   enum: [anthropic, openai_compatible]
-                baseUrl: { type: string }
+                baseUrl:
+                  type: string
+                  description: |
+                    Required for openai_compatible and refused as empty there,
+                    because only the installation knows where its endpoint is.
+                    Omitted for anthropic, whose client already knows one.
                 apiKey:
                   type: string
                   description: >
