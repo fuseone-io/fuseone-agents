@@ -22,7 +22,7 @@ import {
 import { formatMicros } from "@/lib/format";
 
 const PERIOD: Record<string, string> = {
-  daily: "por dia",
+  daily: "admin.perDay",
   monthly: "admin.perMonth",
 };
 
@@ -34,7 +34,7 @@ export function BudgetsPanel() {
 
   return (
     <Panel
-      title="Tetos"
+      title={t("admin.budgets")}
       action={
         <Button size="sm" onClick={() => setEditing(null)}>
           <Plus className="size-4" />
@@ -49,7 +49,7 @@ export function BudgetsPanel() {
       ) : budgets.length === 0 ? (
         <EmptyState
           icon={<Gauge className="size-6" />}
-          title="Nenhum teto configurado"
+          title={t("admin.noCeiling")}
           hint={t("admin.noCeilingHint")}
         />
       ) : (
@@ -90,7 +90,9 @@ function BudgetRow({
       >
         <div className="font-medium">{scopeLabel(budget)}</div>
         <Mono dim>
-          {budget.micros ? formatMicros(budget.micros) : "sem teto de valor"}
+          {budget.micros
+            ? formatMicros(budget.micros)
+            : t("admin.noAmountCeiling")}
           {budget.steps ? ` · ${budget.steps} passos` : ""} ·{" "}
           {PERIOD[budget.period]}
         </Mono>
@@ -106,7 +108,7 @@ function BudgetRow({
         description={t("admin.removeCeiling")}
         onConfirm={() =>
           remove.mutate(scopePath(budget), {
-            onSuccess: () => toast.success("Teto removido"),
+            onSuccess: () => toast.success(t("admin.ceilingRemoved")),
             onError: (e) =>
               toast.error(
                 e instanceof Error ? e.message : t("common.removeFailed"),

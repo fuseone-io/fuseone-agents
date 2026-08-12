@@ -53,7 +53,9 @@ export function DecisionCard({
       {/* The trail never says "denied by policy": it names the rule and
           explains it, so the approver knows what they are deciding about. */}
       <p className="text-sm text-text-secondary">
-        {t(explainRule(item.rule)) || item.reason || t("approvals.awaitingHuman")}
+        {t(explainRule(item.rule)) ||
+          item.reason ||
+          t("approvals.awaitingHuman")}
       </p>
 
       <div className="flex flex-wrap items-center gap-1.5">

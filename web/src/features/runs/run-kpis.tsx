@@ -18,10 +18,10 @@ export function RunKpis({ run, steps }: { run: Run; steps: number }) {
 
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      <Kpi label="Custo" value={formatCost(run.cost)}>
+      <Kpi label={t("runs.kpiCost")} value={formatCost(run.cost)}>
         {reserved > 0
           ? `${formatCost({ micros: reserved })} ainda reservados`
-          : "nada reservado em aberto"}
+          : t("runs.nothingReserved")}
       </Kpi>
 
       <Kpi label={t("runs.kpiTokens")} value={formatTokens(input + output)}>
@@ -31,7 +31,7 @@ export function RunKpis({ run, steps }: { run: Run; steps: number }) {
         })}
       </Kpi>
 
-      <Kpi label="Passos" value={String(steps)}>
+      <Kpi label={t("runs.columnSteps")} value={String(steps)}>
         <span className="text-muted-foreground">
           {t("runs.lastSealed", { seq: run.seq })}
         </span>

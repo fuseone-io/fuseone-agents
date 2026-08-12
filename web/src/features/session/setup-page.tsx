@@ -18,7 +18,7 @@ import {
 import { AuthLayout } from "@/features/session/auth-layout";
 
 const schema = z.object({
-  token: z.string().min(1, "Cole o token que o servidor imprimiu ao iniciar."),
+  token: z.string().min(1, "session.pasteToken"),
   display: z.string().min(1, "session.sayWhoYouAre"),
 });
 

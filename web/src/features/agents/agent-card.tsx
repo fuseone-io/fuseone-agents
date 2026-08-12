@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Mono } from "@/components/shared/mono";
@@ -71,7 +72,7 @@ export function AgentCard({ agent }: { agent: Agent }) {
         />
         <Figure label={t("runs.finishedPlural")} value={successRate(agent)} />
         <Figure
-          label="Custo"
+          label={t("runs.kpiCost")}
           value={
             agent.activity?.costMicros
               ? formatMicros(agent.activity.costMicros)
@@ -82,18 +83,18 @@ export function AgentCard({ agent }: { agent: Agent }) {
 
       <dl className="grid grid-cols-3 gap-2 text-xs">
         <Figure
-          label="Teto"
+          label={t("agents.ceiling")}
           value={agent.budget.micros ? formatMicros(agent.budget.micros) : "—"}
         />
         <Figure
-          label="Passos"
+          label={t("runs.columnSteps")}
           value={agent.budget.steps ? String(agent.budget.steps) : "—"}
         />
         <Figure label="Gatilhos" value={triggerSummary(agent)} />
       </dl>
 
       <footer className="flex flex-col gap-1 border-t border-border-subtle pt-3 text-2xs text-muted-foreground">
-        <span>{activitySummary(agent)}</span>
+        <span>{activitySummary(agent, t)}</span>
         <span>
           <Mono dim>
             {agent.provider}/{agent.model}
@@ -126,14 +127,18 @@ function Figure({ label, value }: { label: string; value: string }) {
   );
 }
 
-/** What the state dot means, in words. */
-function activitySummary(agent: Agent): string {
+/** What the state dot means, in words.
+ *
+ *  Takes `t` rather than returning a key: the sentence changes shape with the
+ *  numbers in it, so which key applies is a decision this function makes. */
+function activitySummary(agent: Agent, t: TFunction): string {
   const activity = agent.activity;
-  if (!activity || !activity.lastRunAt) return "Nunca executou";
+  if (!activity || !activity.lastRunAt) return t("agents.neverRanShort");
+  const when = formatRelative(activity.lastRunAt);
   if (activity.waiting > 0) {
-    return `${activity.waiting} esperando pessoa · última execução ${formatRelative(activity.lastRunAt)}`;
+    return t("agents.waitingAndLastRun", { count: activity.waiting, when });
   }
-  return `Última execução ${formatRelative(activity.lastRunAt)}`;
+  return t("agents.lastRun", { when });
 }
 
 /** Says how a run starts, because an agent nothing triggers never runs. */

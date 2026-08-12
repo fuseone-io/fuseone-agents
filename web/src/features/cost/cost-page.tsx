@@ -43,7 +43,7 @@ export function CostPage() {
     <>
       <PageHeader
         icon={PAGE_ICONS.cost}
-        title="Custo e limites"
+        title={t("nav.cost")}
         description={t("cost.subtitle")}
       />
 
@@ -77,7 +77,7 @@ export function CostPage() {
             </Panel>
 
             <Panel
-              title="De onde vem o custo"
+              title={t("cost.whereFrom")}
               className="min-w-[260px] flex-[1_1_280px]"
             >
               <CostDrivers total={daily.data?.total} />
@@ -87,7 +87,7 @@ export function CostPage() {
           <CostCaps byArea={byArea.data} />
 
           <Panel
-            title="Por agente"
+            title={t("cost.byAgent")}
             action={
               <span className="text-xs text-muted-foreground">
                 {t("cost.inPeriod")}

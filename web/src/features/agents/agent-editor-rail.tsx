@@ -55,13 +55,13 @@ function Checklist({ draft }: { draft: AgentDefinition }) {
     },
     {
       done: draft.provider !== "" && draft.model !== "",
-      label: "Provedor e modelo",
+      label: t("agents.providerAndModel"),
     },
     { done: draft.instructions.trim() !== "", label: t("agents.instructions") },
-    { done: (draft.tools ?? []).length > 0, label: "Ao menos uma ferramenta" },
+    { done: (draft.tools ?? []).length > 0, label: t("agents.atLeastOneTool") },
     {
       done: (draft.budget?.micros ?? 0) > 0 || (draft.budget?.steps ?? 0) > 0,
-      label: "Um teto de custo ou de passos",
+      label: t("agents.aCostOrStepCeiling"),
     },
   ];
 

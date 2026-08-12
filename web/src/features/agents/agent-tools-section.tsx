@@ -41,7 +41,7 @@ export function AgentToolsSection({
     );
 
   return (
-    <Section title="Ferramentas" hint={t("agents.notHereNotInvokable")}>
+    <Section title={t("admin.tools")} hint={t("agents.notHereNotInvokable")}>
       {catalogue.length === 0 ? (
         <p className="text-xs text-muted-foreground">
           {t("agents.emptyCatalogue")}

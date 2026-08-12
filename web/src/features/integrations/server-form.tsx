@@ -28,9 +28,9 @@ import { usePutMCPServer, type MCPServer } from "@/features/integrations/api";
 const schema = z.object({
   name: z
     .string()
-    .min(1, "Dê um nome ao servidor.")
+    .min(1, "integrations.nameServer")
     .regex(/^[a-z0-9][a-z0-9_-]*$/, "integrations.nameCharset"),
-  command: z.string().min(1, "Diga o que executar."),
+  command: z.string().min(1, "agents.sayWhatToRun"),
   args: z.string(),
   enabled: z.boolean(),
 });
@@ -65,8 +65,7 @@ export function ServerForm({
       toast.success(`${values.name} configurado`, {
         // Servers are connected when a worker starts, so saying it is live
         // would be a promise the platform does not keep yet.
-        description:
-          "As ferramentas aparecem quando um worker reiniciar e conectar.",
+        description: t("integrations.toolsAppearHint"),
       });
       onClose();
     } catch (error) {
@@ -81,7 +80,9 @@ export function ServerForm({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
-            {server ? "Editar servidor" : "Novo servidor de ferramentas"}
+            {server
+              ? t("integrations.editServer")
+              : t("integrations.newServer")}
           </DialogTitle>
           <DialogDescription>{t("integrations.mcpExplains")}</DialogDescription>
         </DialogHeader>

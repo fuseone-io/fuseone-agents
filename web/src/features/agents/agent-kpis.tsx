@@ -33,12 +33,12 @@ export function AgentKpis({ agent }: { agent: Agent }) {
         note={`${formatCost({ micros: activity?.costMicros ?? 0 })} no total`}
       />
       <Kpi
-        label="Esperando pessoas"
+        label={t("agents.waitingPeople")}
         value={String(activity?.waiting ?? 0)}
         note={
           activity?.lastRunAt
             ? `última execução ${formatRelative(activity.lastRunAt)}`
-            : "nunca executou"
+            : t("agents.neverRanLower")
         }
       />
     </div>

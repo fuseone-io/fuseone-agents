@@ -47,7 +47,7 @@ export function AgentsPage() {
     <>
       <PageHeader
         icon={PAGE_ICONS.agents}
-        title="Agentes"
+        title={t("nav.agents")}
         description={t("agents.subtitle")}
       >
         <Button size="sm" asChild>
@@ -102,7 +102,9 @@ export function AgentsPage() {
         <EmptyState
           icon={<Bot className="size-6" />}
           title={
-            agents.length === 0 ? "Nenhum agente publicado" : "Nada encontrado"
+            agents.length === 0
+              ? t("agents.nonePublished")
+              : t("common.nothingFound")
           }
           hint={
             agents.length === 0 ? t("agents.emptyHint") : t("agents.noMatch")
@@ -128,10 +130,10 @@ export function AgentsPage() {
 const STATES: FilterOption[] = [
   { value: "all", label: "agents.allStates" },
   { value: "running", label: "runs.phaseRunning" },
-  { value: "waiting", label: "Esperando pessoa" },
+  { value: "waiting", label: "runs.waitingPerson" },
   { value: "blocked", label: "Estacionado" },
   { value: "done", label: "agents.lastFinished" },
-  { value: "draft", label: "Nunca executou" },
+  { value: "draft", label: "agents.neverRanShort" },
 ];
 
 function matcher(search: string, area: string, state: AgentState | "all") {

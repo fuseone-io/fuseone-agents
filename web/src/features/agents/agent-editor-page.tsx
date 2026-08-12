@@ -21,7 +21,7 @@ import { usePolicies } from "@/features/policies/api";
  *
  * Two modes, one screen, because they are one act: the identifier is the
  * agent, and everything else is what it says this time. The primary button
- * names the version it will write, because "Salvar" would hide that editing
+ * names the version it will write, because t("common.save") would hide that editing
  * an agent creates something a run will be pinned to.
  */
 export function AgentEditorPage() {
@@ -54,7 +54,7 @@ export function AgentEditorPage() {
           toast.success(
             result.created
               ? `Versão ${result.versionId.slice(0, 9)} publicada`
-              : "Nada mudou",
+              : t("agents.noChange"),
             {
               description: result.created
                 ? result.paused
@@ -80,7 +80,9 @@ export function AgentEditorPage() {
     <>
       <PageHeader
         icon={PAGE_ICONS.agents}
-        title={creating ? "Novo agente" : `Editar ${draft.name || routeId}`}
+        title={
+          creating ? t("agents.newAgent") : `Editar ${draft.name || routeId}`
+        }
         description={t("agents.publishWritesVersion")}
       />
 
@@ -121,7 +123,7 @@ export function AgentEditorPage() {
             {t("common.cancel")}
           </Button>
           <Button onClick={submit} disabled={publish.isPending || !ready}>
-            {creating ? "Criar agente pausado" : t("agents.publishVersion")}
+            {creating ? t("agents.createPaused") : t("agents.publishVersion")}
           </Button>
         </div>
       </div>

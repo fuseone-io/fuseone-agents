@@ -145,8 +145,6 @@ describe("the risk surface", () => {
   });
 
   it("says plainly when an agent can touch nothing", () => {
-    expect(riskSurface([], catalogue).join(" ")).toMatch(
-      "agents.riskNothing",
-    );
+    expect(riskSurface([], catalogue).join(" ")).toMatch("agents.riskNothing");
   });
 });

@@ -66,9 +66,11 @@ export function RunsKpis({
         }
       />
       <KpiCard
-        label="Esperando pessoa"
+        label={t("runs.waitingPerson")}
         value={waiting.toLocaleString("pt-BR")}
-        delta={waiting === 0 ? "nada na fila" : t("runs.approvalOrParked")}
+        delta={
+          waiting === 0 ? t("runs.nothingQueued") : t("runs.approvalOrParked")
+        }
         trend={waiting > 0 ? "down" : "flat"}
       />
     </div>

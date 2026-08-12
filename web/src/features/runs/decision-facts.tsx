@@ -37,16 +37,16 @@ export function DecisionFacts({
 
   return (
     <dl className="flex flex-col gap-2.5">
-      <Fact label="Regra">
+      <Fact label={"policies.rule"}>
         <span className="text-sm">{approval.rule ?? "—"}</span>
       </Fact>
-      <Fact label="Efeito">
+      <Fact label={"policies.effect"}>
         <Mono>{effect}</Mono>
       </Fact>
       <Fact label="Risco">
         <span className={`text-sm ${risk.className}`}>{risk.label}</span>
       </Fact>
-      <Fact label="Custo estimado">
+      <Fact label={"runs.estimatedCost"}>
         {/* No estimate is not zero cost. Printing R$ 0,00 would be a claim the
             platform cannot make about a call it has not run. */}
         <Mono>{micros === undefined ? "—" : formatMicros(micros)}</Mono>

@@ -28,7 +28,7 @@ export function AgentBudgetSection({
       hint={t("agents.zeroIsNoCeiling")}
     >
       <div className="grid gap-3 sm:grid-cols-4">
-        <Labelled label="Custo (micros)" htmlFor="budget-micros">
+        <Labelled label={t("agents.costMicros")} htmlFor="budget-micros">
           <Input
             id="budget-micros"
             type="number"
@@ -40,7 +40,7 @@ export function AgentBudgetSection({
             {formatMicros(budget.micros ?? 0)}
           </span>
         </Labelled>
-        <Labelled label="Passos" htmlFor="budget-steps">
+        <Labelled label={t("runs.columnSteps")} htmlFor="budget-steps">
           <Input
             id="budget-steps"
             type="number"
@@ -58,7 +58,7 @@ export function AgentBudgetSection({
             className="font-mono"
           />
         </Labelled>
-        <Labelled label="Tokens" htmlFor="budget-tokens">
+        <Labelled label={t("runs.kpiTokens")} htmlFor="budget-tokens">
           <Input
             id="budget-tokens"
             type="number"

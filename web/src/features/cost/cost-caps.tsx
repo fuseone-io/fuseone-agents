@@ -24,10 +24,10 @@ export function CostCaps({ byArea }: { byArea?: CostRollup }) {
 
   if (budgets.length === 0) {
     return (
-      <Panel title="Tetos">
+      <Panel title={t("admin.budgets")}>
         <EmptyState
           icon={<Gauge className="size-6" />}
-          title="Nenhum teto configurado"
+          title={t("admin.noCeiling")}
           hint={t("cost.noCapsHint")}
         />
       </Panel>
@@ -44,7 +44,7 @@ export function CostCaps({ byArea }: { byArea?: CostRollup }) {
 
   return (
     <Panel
-      title="Tetos"
+      title={t("admin.budgets")}
       action={
         <Link
           to="/admin"

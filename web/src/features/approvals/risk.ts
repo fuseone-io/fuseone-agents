@@ -27,7 +27,7 @@ export function riskOf(effect: Effect | undefined): Risk {
 
 export const RISK_LABEL: Record<Risk, string> = {
   high: "Alto",
-  medium: "Médio",
+  medium: "cost.average",
   low: "Baixo",
   unknown: "Não classificado",
 };

@@ -17,7 +17,7 @@ export function SignInPage({ providers }: { providers: IdentityProvider[] }) {
   return (
     <AuthLayout
       icon={<LogIn className="size-5 text-primary" />}
-      title="Entrar"
+      title={t("session.signIn")}
       description={t("session.useOrgAccount")}
     >
       {providers.length === 0 ? (

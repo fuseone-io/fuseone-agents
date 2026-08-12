@@ -37,7 +37,7 @@ export function DecisionPanel({
         atSeq: item.atSeq,
         note: note.trim() || undefined,
       });
-      toast.success(approved ? "Ação aprovada" : "Ação negada", {
+      toast.success(approved ? t("runs.actionApproved") : "Ação negada", {
         description: `${item.tool} · ${item.runId}`,
       });
       setNote("");
@@ -64,14 +64,14 @@ export function DecisionPanel({
       </header>
 
       <dl className="flex flex-col gap-2 border-y border-border-subtle py-3 text-sm">
-        <Row label="Agente" value={item.agentId ?? "—"} />
-        <Row label="Área" value={item.scope?.area ?? "—"} />
+        <Row label={t("cost.agent")} value={item.agentId ?? "—"} />
+        <Row label={t("admin.area")} value={item.scope?.area ?? "—"} />
         <Row label="Risco" value={RISK_LABEL[riskOf(item.effect)]} />
         <Row
-          label="Efeito"
+          label={t("policies.effect")}
           value={item.effect ? EFFECT_LABEL[item.effect] : "não classificado"}
         />
-        <Row label="Regra" value={item.rule ?? "—"} mono />
+        <Row label={t("policies.rule")} value={item.rule ?? "—"} mono />
         <Row label="Passo" value={`#${item.atSeq}`} mono />
       </dl>
 
@@ -80,7 +80,7 @@ export function DecisionPanel({
           {t("approvals.context")}
         </h3>
         <p className="mt-1 text-sm text-text-secondary">
-          {explainRule(item.rule) || item.reason || "Sem detalhe registrado."}
+          {explainRule(item.rule) || item.reason || t("approvals.noDetail")}
         </p>
         <Link
           to={`/runs/${item.runId}`}

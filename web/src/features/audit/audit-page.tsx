@@ -59,14 +59,14 @@ export function AuditPage() {
     <>
       <PageHeader
         icon={PAGE_ICONS.audit}
-        title="Trilha de auditoria"
+        title={t("nav.audit")}
         description={t("audit.subtitle")}
       />
 
       {!isLoading && !error && <IntegrityBanner entries={entries} />}
 
       <Toolbar
-        placeholder="Quem agiu — pessoa ou agente"
+        placeholder={t("audit.whoActed")}
         value={actor}
         onChange={setActor}
       >
@@ -87,7 +87,7 @@ export function AuditPage() {
       </Toolbar>
 
       <Panel
-        title="Trilha"
+        title={t("runs.trail")}
         action={
           <span className="text-xs text-muted-foreground">
             {t("admin.appendOnly")}

@@ -56,14 +56,14 @@ export function KpiRow({ windows }: { windows: Windows }) {
         // number, and the honest answer is that yesterday had none.
         note={
           runsDelta === undefined
-            ? "nada ontem para comparar"
+            ? t("overview.nothingYesterday")
             : `vs ${before?.total ?? 0} ontem`
         }
         trend={columns.map((c) => c.total)}
       />
 
       <OverviewKpi
-        label="Gasto hoje"
+        label={t("overview.spentToday")}
         value={formatCost({ micros: spent })}
         note={`sobre ${runs} execuções`}
         trend={cumulative(columns.map((c) => c.micros))}

@@ -75,18 +75,21 @@ export function AgentCapabilities({ agent }: { agent: Agent }) {
       </h2>
       <dl className="flex flex-col gap-1.5">
         <Limit
-          label="Custo"
+          label={t("runs.kpiCost")}
           value={budgetOf(agent.budget.micros, formatMicros)}
         />
         <Limit
-          label="Tokens"
+          label={t("runs.kpiTokens")}
           value={budgetOf(agent.budget.tokens, formatTokens)}
         />
         <Limit
           label="Chamadas"
           value={budgetOf(agent.budget.toolCalls, String)}
         />
-        <Limit label="Passos" value={budgetOf(agent.budget.steps, String)} />
+        <Limit
+          label={t("runs.columnSteps")}
+          value={budgetOf(agent.budget.steps, String)}
+        />
       </dl>
     </section>
   );
@@ -128,7 +131,7 @@ function budgetOf(
   value: number | undefined,
   format: (n: number) => string,
 ): string {
-  return value && value > 0 ? format(value) : "sem teto";
+  return value && value > 0 ? format(value) : "agents.noCeiling";
 }
 
 function Limit({ label, value }: { label: string; value: string }) {

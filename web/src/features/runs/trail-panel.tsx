@@ -73,7 +73,7 @@ export function TrailPanel({
                 aria-pressed={showHashes}
                 onClick={() => setShowHashes((on) => !on)}
               >
-                {showHashes ? "Ocultar selos" : "Mostrar selos"}
+                {showHashes ? t("runs.hideSeals") : t("runs.showSeals")}
               </Button>
             </>
           )}

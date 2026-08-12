@@ -21,7 +21,7 @@ export function RunSideRail({ run, steps }: { run: Run; steps: Step[] }) {
   return (
     <aside className="flex flex-col gap-3 lg:sticky lg:top-0">
       <Card title="Resumo">
-        <Row label="Agente">
+        <Row label={t("cost.agent")}>
           <Link
             to={`/agents/${run.agentId}`}
             className="text-sm text-primary hover:underline"
@@ -32,15 +32,15 @@ export function RunSideRail({ run, steps }: { run: Run; steps: Step[] }) {
         <Row label={t("runs.version")}>
           <Mono>{run.versionId.slice(0, 9)}</Mono>
         </Row>
-        <Row label="Área">
+        <Row label={t("admin.area")}>
           <span className="text-sm">{run.scope.area || "—"}</span>
         </Row>
-        <Row label="Em nome de">
+        <Row label={t("runs.onBehalfOfLabel")}>
           <span className="text-sm">{run.onBehalfOf ?? "—"}</span>
         </Row>
       </Card>
 
-      <Card title="Ferramentas usadas">
+      <Card title={t("runs.toolsUsed")}>
         {tools.length === 0 ? (
           <p className="text-xs text-muted-foreground">
             {t("runs.noToolsCalled")}

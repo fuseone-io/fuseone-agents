@@ -32,7 +32,7 @@ export function AgentAreaField({
   const known = declared.some((s) => s.area === area);
 
   return (
-    <Labelled label="Área" htmlFor="agent-area">
+    <Labelled label={t("admin.area")} htmlFor="agent-area">
       <Select value={area || undefined} onValueChange={onChange}>
         <SelectTrigger id="agent-area" className="w-full font-mono">
           <SelectValue placeholder="Escolha" />

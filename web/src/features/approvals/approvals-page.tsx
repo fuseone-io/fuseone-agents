@@ -28,7 +28,7 @@ export function ApprovalsPage() {
     <>
       <PageHeader
         icon={PAGE_ICONS.approvals}
-        title="Fila humana"
+        title={t("nav.approvals")}
         description={t("approvals.subtitle")}
       />
 

@@ -17,12 +17,12 @@ const TITLES: Record<StepKind, string> = {
   planned: "runs.storyProposed",
   gate_decided: "runs.storyGateDecided",
   budget_reserved: "Orçamento reservado",
-  tool_called: "Ferramenta chamada",
-  tool_returned: "Ferramenta respondeu",
+  tool_called: "runs.storyToolCalled",
+  tool_returned: "runs.storyToolReturned",
   budget_reconciled: "Orçamento reconciliado",
   approval_requested: "runs.storyAwaitingHuman",
   approval_decided: "runs.storyHumanDecided",
-  compensated: "Efeito revertido",
+  compensated: "runs.nodeCompensated",
   failed: "runs.storyFailed",
   parked: "runs.storyParked",
   run_finished: "runs.storyFinished",
@@ -42,8 +42,7 @@ const VERDICT_CHIP: Record<string, { text: string; className: string }> = {
 };
 
 const PARKED: Record<string, string> = {
-  budget_exhausted:
-    "o teto de custo foi atingido; elevar o limite retoma daqui",
+  budget_exhausted: "runs.ceilingHit",
   no_progress: "runs.storyInsisted",
 };
 

@@ -34,7 +34,7 @@ import { usePutBudget, type ScopeBudget } from "@/features/admin/api";
 import { scopePath } from "@/features/admin/budget-scope";
 
 const schema = z.object({
-  scope: z.string().min(1, "Diga a que este teto se aplica."),
+  scope: z.string().min(1, "admin.sayScope"),
   period: z.enum(["daily", "monthly"]),
   // Entered in currency, stored in micros — the platform never keeps money in
   // a float.
@@ -79,7 +79,7 @@ export function BudgetForm({
         steps: values.steps ? Number(values.steps) : undefined,
         enabled: values.enabled,
       });
-      toast.success("Teto definido", {
+      toast.success(t("admin.ceilingSet"), {
         description: t("admin.ceilingApplies"),
       });
       onClose();
@@ -94,7 +94,9 @@ export function BudgetForm({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{budget ? "Editar teto" : "Novo teto"}</DialogTitle>
+          <DialogTitle>
+            {budget ? t("admin.editCeiling") : t("admin.newCeiling")}
+          </DialogTitle>
           <DialogDescription>{t("admin.ceilingsInherit")}</DialogDescription>
         </DialogHeader>
 

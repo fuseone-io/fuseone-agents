@@ -18,8 +18,8 @@ export function ScopeSection({
   const covered = draft.effects ?? [];
 
   return (
-    <Section title="Escopo" hint={t("policies.scopeReach")}>
-      <Labelled label="Ferramenta" htmlFor="resource">
+    <Section title={t("policies.scope")} hint={t("policies.scopeReach")}>
+      <Labelled label={t("admin.tool")} htmlFor="resource">
         <Input
           id="resource"
           value={draft.resource ?? ""}

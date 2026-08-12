@@ -27,7 +27,7 @@ export function TrailFilters({
   return (
     <div
       role="radiogroup"
-      aria-label="Filtrar a trilha"
+      aria-label={t("runs.filterTrail")}
       className="flex items-center gap-1.5"
     >
       {OPTIONS.map((option) => (

@@ -54,7 +54,7 @@ export function PendingDecision({
       { approved, atSeq: approval.atSeq },
       {
         onSuccess: () =>
-          toast.success(approved ? "Ação aprovada" : "Ação recusada"),
+          toast.success(approved ? t("runs.actionApproved") : "Ação recusada"),
         onError: (error) =>
           toast.error(t("runs.decisionFailed"), {
             description: error instanceof Error ? error.message : undefined,
@@ -121,7 +121,7 @@ export function PendingDecision({
           <DecisionFacts approval={approval} step={step} />
           <div className="mt-auto flex gap-2 pt-2">
             <ConfirmAction
-              label="Aprovar"
+              label={t("runs.approve")}
               title={t("runs.approveThis")}
               description={`A ferramenta ${approval.tool} será executada e o efeito ficará registrado na trilha em seu nome.`}
               disabled={decide.isPending}

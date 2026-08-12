@@ -36,7 +36,7 @@ import {
 } from "@/features/integrations/api";
 
 const schema = z.object({
-  name: z.string().min(1, "Dê um nome ao provedor."),
+  name: z.string().min(1, "integrations.nameProvider"),
   kind: z.enum(["anthropic", "openai_compatible"]),
   baseUrl: z.string().url("Precisa ser uma URL completa."),
   apiKey: z.string(),
@@ -82,7 +82,9 @@ export function ProviderForm({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
-            {provider ? "Editar provedor" : "Novo provedor de modelo"}
+            {provider
+              ? t("integrations.editProvider")
+              : t("integrations.newProvider")}
           </DialogTitle>
           <DialogDescription>
             {t("integrations.credentialSealed")}

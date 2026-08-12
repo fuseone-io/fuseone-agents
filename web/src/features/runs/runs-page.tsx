@@ -117,7 +117,7 @@ function Nothing({ query }: { query: string }) {
   return (
     <EmptyState
       icon={<Activity className="size-6" />}
-      title={query ? "Nada encontrado" : t("runs.noneInPeriod")}
+      title={query ? t("common.nothingFound") : t("runs.noneInPeriod")}
       hint={query ? t("runs.noMatchFor", { query }) : t("runs.emptyHint")}
     />
   );

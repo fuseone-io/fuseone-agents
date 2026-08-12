@@ -148,7 +148,7 @@ function describe(
         tone: "escalate",
       };
     case "compensated":
-      return { kind: "fault", title: "Efeito revertido", tone: "escalate" };
+      return { kind: "fault", title: "runs.nodeCompensated", tone: "escalate" };
     case "failed":
       return {
         kind: "fault",
@@ -159,12 +159,12 @@ function describe(
     case "parked":
       return {
         kind: "fault",
-        title: "Estacionada",
+        title: "runs.phaseParked",
         detail: text("reason"),
         tone: "escalate",
       };
     default:
-      return { kind: "seal", title: "Selada na trilha", tone: "allow" };
+      return { kind: "seal", title: "runs.nodeSealed", tone: "allow" };
   }
 }
 
@@ -182,7 +182,7 @@ const GATE_TITLE: Record<string, string> = {
   block: "runs.nodeBlocked",
 };
 
-/** The rule, never only the verdict: "runs.nodeRefused" tells a reader
+/** The rule, never only the verdict: "blocked by policy" tells a reader
  *  nothing about what to change. */
 function gate(
   step: Step,

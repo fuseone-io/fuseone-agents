@@ -42,7 +42,7 @@ export function SimulationCard({ draft }: { draft: PolicyInput }) {
         {simulate.isPending
           ? "Rodando…"
           : result
-            ? "Rodar de novo"
+            ? t("policies.runAgain")
             : t("policies.runAgainstHistory")}
       </Button>
     </section>

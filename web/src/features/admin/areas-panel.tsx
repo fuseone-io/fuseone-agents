@@ -34,7 +34,7 @@ export function AreasPanel() {
 
   return (
     <Panel
-      title="Áreas"
+      title={t("admin.areas")}
       action={
         <Button size="sm" onClick={() => setAdding(true)}>
           <Plus className="size-4" />
@@ -86,7 +86,7 @@ function AreaRow({ area }: { area: RegisteredScope }) {
         description={t("admin.withdrawArea")}
         onConfirm={() =>
           remove.mutate(`${area.company}/${area.area}`, {
-            onSuccess: () => toast.success("Área retirada"),
+            onSuccess: () => toast.success(t("admin.areaWithdrawn")),
             onError: (e) =>
               toast.error(
                 e instanceof Error ? e.message : t("admin.withdrawFailed"),

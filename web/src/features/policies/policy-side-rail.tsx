@@ -25,7 +25,7 @@ export function PolicySideRail({
   const { t } = useTranslation();
   return (
     <aside className="flex flex-col gap-3 lg:sticky lg:top-0">
-      <Card title="A regra">
+      <Card title={t("policies.theRule")}>
         <Mono className="block break-words text-xs">
           {draftSentence(draft)}
         </Mono>

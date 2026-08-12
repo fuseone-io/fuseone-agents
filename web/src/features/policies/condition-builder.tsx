@@ -16,10 +16,10 @@ import type { PolicyCondition } from "@/lib/api/client";
  *  renderable in a sentence the author checks by eye. */
 const FIELDS = [
   { value: "tool.id", label: "ferramenta" },
-  { value: "tool.effect", label: "efeito da ferramenta" },
+  { value: "tool.effect", label: "policies.toolEffect" },
   { value: "data.taint", label: "policies.dataLabel" },
-  { value: "agent.id", label: "agente" },
-  { value: "scope.area", label: "área" },
+  { value: "agent.id", label: "policies.fieldAgent" },
+  { value: "scope.area", label: "policies.fieldAreaScope" },
   { value: "args.rows", label: "args.rows" },
 ];
 

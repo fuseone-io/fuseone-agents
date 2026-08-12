@@ -50,9 +50,13 @@ export function CostKpis({
         delta={t("runs.runCount", { count: runs })}
       />
       <KpiCard
-        label="Hoje"
+        label={t("cost.today")}
         value={today ? formatMicros(today.cost.micros) : "—"}
-        delta={today ? t("runs.runCount", { count: today.runs }) : "nada hoje"}
+        delta={
+          today
+            ? t("runs.runCount", { count: today.runs })
+            : t("overview.nothingToday")
+        }
       />
       <KpiCard
         label={t("cost.averageCost")}
@@ -64,11 +68,7 @@ export function CostKpis({
       <KpiCard
         label="Leitura de cache"
         value={cacheShare === null ? "—" : `${cacheShare}%`}
-        delta={
-          cacheShare === null
-            ? "sem tokens contabilizados"
-            : t("cost.cacheShare")
-        }
+        delta={cacheShare === null ? t("cost.noTokens2") : t("cost.cacheShare")}
         trend={cacheShare !== null && cacheShare >= 50 ? "up" : "flat"}
       />
     </div>

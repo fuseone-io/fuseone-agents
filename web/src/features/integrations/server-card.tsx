@@ -22,7 +22,7 @@ export function ServerCard({
   return (
     <IntegrationCard
       name={server.name}
-      kind="servidor MCP"
+      kind={t("integrations.mcpServer")}
       description={
         server.managed === false
           ? "configurado fora do console, por flag ou ambiente"

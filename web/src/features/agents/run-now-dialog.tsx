@@ -89,7 +89,7 @@ export function RunNowDialog({
             {t("common.cancel")}
           </Button>
           <Button onClick={submit} disabled={start.isPending}>
-            {start.isPending ? "Abrindo…" : "Executar"}
+            {start.isPending ? "Abrindo…" : t("agents.run")}
           </Button>
         </DialogFooter>
       </DialogContent>

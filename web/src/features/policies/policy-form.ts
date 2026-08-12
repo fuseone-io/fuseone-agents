@@ -77,7 +77,7 @@ export function changesBetween(
   compare("policies.fieldOwner", before.owner, after.owner);
   compare("policies.fieldReason", before.reason, after.reason);
   compare("policies.fieldResource", before.resource, after.resource);
-  compare("efeitos cobertos", before.effects, after.effects);
+  compare("policies.coveredEffects", before.effects, after.effects);
   compare("alcance", before.reach, after.reach);
   compare("policies.fieldConditions", before.conditions, after.conditions);
   compare("policies.fieldEffect", before.effect, after.effect);

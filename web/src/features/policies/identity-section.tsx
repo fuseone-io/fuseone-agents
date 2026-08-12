@@ -22,7 +22,7 @@ export function IdentitySection({
   return (
     <Section title="Identidade" hint={t("policies.codeAppears")}>
       <div className="grid gap-3 sm:grid-cols-[140px_1fr_200px]">
-        <Labelled label="Código" htmlFor="code">
+        <Labelled label={t("policies.code")} htmlFor="code">
           {/* Set once. It is in the trail and in support conversations, and a
               code that moved would orphan every one of them. */}
           <Input
@@ -34,14 +34,14 @@ export function IdentitySection({
             className="font-mono"
           />
         </Labelled>
-        <Labelled label="Nome" htmlFor="name">
+        <Labelled label={t("admin.name")} htmlFor="name">
           <Input
             id="name"
             value={draft.name}
             onChange={(e) => patch({ name: e.target.value })}
           />
         </Labelled>
-        <Labelled label="Dono" htmlFor="owner">
+        <Labelled label={t("policies.owner")} htmlFor="owner">
           <Input
             id="owner"
             value={draft.owner ?? ""}

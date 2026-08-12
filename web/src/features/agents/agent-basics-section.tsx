@@ -36,7 +36,7 @@ export function AgentBasicsSection({
             placeholder="suporte"
           />
         </Labelled>
-        <Labelled label="Nome" htmlFor="agent-name">
+        <Labelled label={t("admin.name")} htmlFor="agent-name">
           <Input
             id="agent-name"
             value={draft.name}
@@ -51,7 +51,7 @@ export function AgentBasicsSection({
       </div>
 
       <div className="grid gap-3 sm:grid-cols-[1fr_1fr_140px]">
-        <Labelled label="Provedor" htmlFor="agent-provider">
+        <Labelled label={t("agents.provider")} htmlFor="agent-provider">
           <Input
             id="agent-provider"
             value={draft.provider}

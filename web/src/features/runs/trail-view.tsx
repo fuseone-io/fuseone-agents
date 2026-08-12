@@ -6,7 +6,7 @@ export type TrailView = "list" | "diagram";
 
 const OPTIONS: { value: TrailView; label: string }[] = [
   { value: "list", label: "Lista" },
-  { value: "diagram", label: "Diagrama" },
+  { value: "diagram", label: "runs.diagram" },
 ];
 
 /**
@@ -27,7 +27,7 @@ export function TrailViewToggle({
   return (
     <div
       role="radiogroup"
-      aria-label="Como ler a trilha"
+      aria-label={t("runs.howToRead")}
       className="flex items-center gap-1.5"
     >
       {OPTIONS.map((option) => (

@@ -19,24 +19,27 @@ export const VERBS: Record<string, { label: string; className: string }> = {
     className: "text-muted-foreground",
   },
   "provider.created": {
-    label: "configurou provedor",
+    label: "audit.setProvider",
     className: "text-muted-foreground",
   },
   "provider.deleted": {
-    label: "removeu provedor",
+    label: "audit.removedProvider",
     className: "text-muted-foreground",
   },
   "server.created": {
-    label: "configurou servidor",
+    label: "audit.setServer",
     className: "text-muted-foreground",
   },
   "server.deleted": {
-    label: "removeu servidor",
+    label: "audit.removedServer",
     className: "text-muted-foreground",
   },
-  "budget.set": { label: "definiu teto", className: "text-muted-foreground" },
+  "budget.set": {
+    label: "audit.setCeiling",
+    className: "text-muted-foreground",
+  },
   "budget.cleared": {
-    label: "removeu teto",
+    label: "audit.removedCeiling",
     className: "text-muted-foreground",
   },
   bootstrap_reopened: {

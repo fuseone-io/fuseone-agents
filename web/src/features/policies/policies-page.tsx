@@ -72,7 +72,7 @@ export function PoliciesPage() {
       </div>
 
       <Panel
-        title="Regras"
+        title={t("policies.rules")}
         action={
           data?.policyHash ? (
             // The set as a whole has a name, and every decision records it.

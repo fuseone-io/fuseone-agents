@@ -60,13 +60,13 @@ export function IntegrationsPage() {
       ) : (
         <div className="flex flex-col gap-6">
           <IntegrationsSection
-            title="Servidores de ferramentas"
+            title={t("integrations.servers")}
             onAdd={() => setEditing({ kind: "server", value: null })}
             empty={
               servers.length === 0 && (
                 <EmptyState
                   icon={<Server className="size-6" />}
-                  title="Nenhum servidor configurado"
+                  title={t("integrations.noServer")}
                   hint={t("integrations.noServerHint")}
                 />
               )
@@ -82,13 +82,13 @@ export function IntegrationsPage() {
           </IntegrationsSection>
 
           <IntegrationsSection
-            title="Provedores de modelo"
+            title={t("integrations.providers")}
             onAdd={() => setEditing({ kind: "provider", value: null })}
             empty={
               providers.length === 0 && (
                 <EmptyState
                   icon={<Plug className="size-6" />}
-                  title="Nenhum provedor configurado"
+                  title={t("integrations.noProvider")}
                   hint={t("integrations.noProviderHint")}
                 />
               )

@@ -50,7 +50,7 @@ export function PolicyEditorPage() {
           toast.success(creating ? `${code} criada` : `${code} salva`, {
             description:
               draft.mode === "monitor"
-                ? "Em modo monitorar: avaliada, registrada, sem mudar nada."
+                ? t("policies.monitorMode")
                 : t("policies.enforcingNextStep"),
           });
           navigate("/policies");
@@ -90,7 +90,7 @@ export function PolicyEditorPage() {
 
       {/* The commit never leaves the screen, and its label names the
           consequence: a rule that will watch and a rule that will stop things
-          are different acts and must not share a button that says "Salvar". */}
+          are different acts and must not share a button that says t("common.save"). */}
       <div className="sticky bottom-0 -mx-6 -mb-6 flex items-center gap-2 border-t border-border bg-card px-6 py-3 shadow-md">
         {changes.length > 0 && (
           <span className="text-xs text-warning">
@@ -106,8 +106,8 @@ export function PolicyEditorPage() {
             disabled={save.isPending || !draft.name || !code}
           >
             {draft.mode === "monitor"
-              ? "Gravar em modo monitorar"
-              : "Gravar e impor"}
+              ? t("policies.saveMonitoring")
+              : t("policies.saveAndEnforce")}
           </Button>
         </div>
       </div>

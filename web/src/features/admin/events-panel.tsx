@@ -23,7 +23,7 @@ export function EventsPanel() {
 
   return (
     <Panel
-      title="Trilha administrativa"
+      title={t("admin.adminTrail")}
       action={
         <span className="text-xs text-muted-foreground">
           {t("admin.appendOnly")}
@@ -37,7 +37,7 @@ export function EventsPanel() {
       ) : events.length === 0 ? (
         <EmptyState
           icon={<ScrollText className="size-6" />}
-          title="Nada mudou ainda"
+          title={t("policies.nothingChangedYetTitle")}
           hint={t("admin.eventsHint")}
         />
       ) : (

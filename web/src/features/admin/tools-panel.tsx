@@ -32,7 +32,7 @@ export function ToolsPanel() {
 
   return (
     <Panel
-      title="Ferramentas"
+      title={t("admin.tools")}
       action={
         <span className="text-xs text-muted-foreground">
           {t("admin.arriveAsRead")}
@@ -52,8 +52,8 @@ export function ToolsPanel() {
         <div className="p-4">
           <EmptyState
             icon={<Wrench className="size-6" />}
-            title="Nenhuma ferramenta descoberta"
-            hint="Ferramentas aparecem aqui quando um worker conecta em um servidor MCP configurado abaixo e publica o que encontrou."
+            title={t("admin.noToolsFound")}
+            hint={t("admin.toolsEmptyHint")}
           />
         </div>
       ) : (
