@@ -843,6 +843,13 @@ paths:
                 type: object
                 required: [mcpServers, providers]
                 properties:
+                  presets:
+                    type: array
+                    description: |
+                      The providers the platform already knows how to reach.
+                      Choosing one fills in its endpoint, so an operator supplies
+                      an address only when it is a proxy or a self-hosted model.
+                    items: { $ref: '#/components/schemas/ModelPreset' }
                   mcpServers:
                     type: array
                     items: { $ref: '#/components/schemas/MCPServer' }
@@ -1368,6 +1375,19 @@ components:
         description: { type: string }
         effect: { $ref: '#/components/schemas/Effect' }
         untrusted: { type: boolean }
+
+    ModelPreset:
+      type: object
+      required: [name, kind]
+      properties:
+        name: { type: string }
+        kind: { type: string, enum: [anthropic, openai_compatible] }
+        baseUrl:
+          type: string
+          description: |
+            Empty where the client already knows the address, and where the
+            model is self-hosted and only the installation knows it.
+        supportsEffort: { type: boolean }
 
     MCPServer:
       type: object

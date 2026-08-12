@@ -12,6 +12,7 @@ import (
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
+	"github.com/fuseone/agents/internal/model"
 )
 
 // Curator is the administration this server delegates rulings to, declared
@@ -187,9 +188,15 @@ func (s *Server) ListIntegrations(ctx context.Context, _ openapi.ListIntegration
 		}, nil
 	}
 
+	// The shapes the platform already knows how to reach, so the console can
+	// fill in an endpoint instead of asking for one. An operator should have to
+	// supply an address only when it is a proxy or a self-hosted model — the
+	// two cases where the installation knows something the platform cannot.
+	presets := knownProviders()
 	body := openapi.ListIntegrations200JSONResponse{
 		McpServers: []openapi.MCPServer{},
 		Providers:  []openapi.ModelProvider{},
+		Presets:    &presets,
 	}
 	if s.integrations == nil {
 		return body, nil
@@ -257,4 +264,23 @@ func (s *Server) ListIntegrations(ctx context.Context, _ openapi.ListIntegration
 		})
 	}
 	return body, nil
+}
+
+// knownProviders exposes the model package's preset table.
+func knownProviders() []openapi.ModelPreset {
+	names := model.PresetNames()
+	out := make([]openapi.ModelPreset, 0, len(names))
+	for _, name := range names {
+		p, ok := model.Preset(name)
+		if !ok {
+			continue
+		}
+		out = append(out, openapi.ModelPreset{
+			Name:           p.Name,
+			Kind:           openapi.ModelPresetKind(p.Kind),
+			BaseUrl:        ptr(p.BaseURL),
+			SupportsEffort: ptr(p.SupportsReasoningEffort),
+		})
+	}
+	return out
 }

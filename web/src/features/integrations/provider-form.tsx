@@ -31,6 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  useIntegrations,
   usePutProvider,
   type ModelProvider,
 } from "@/features/integrations/api";
@@ -52,6 +53,7 @@ export function ProviderForm({
 }) {
   const { t } = useTranslation();
   const put = usePutProvider();
+  const presets = useIntegrations().data?.presets ?? [];
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -64,6 +66,18 @@ export function ProviderForm({
       enabled: provider?.enabled ?? true,
     },
   });
+
+  // Choosing a provider the platform already knows fills in its protocol and
+  // its endpoint. An operator should have to type an address only for a proxy
+  // or a self-hosted model — the two cases where the installation knows
+  // something the platform cannot.
+  const applyPreset = (name: string) => {
+    form.setValue("name", name);
+    const preset = presets.find((p) => p.name === name);
+    if (!preset) return;
+    form.setValue("kind", preset.kind as "anthropic" | "openai_compatible");
+    form.setValue("baseUrl", preset.baseUrl ?? "");
+  };
 
   async function submit(values: z.infer<typeof schema>) {
     try {
@@ -105,11 +119,18 @@ export function ProviderForm({
                   <FormControl>
                     <Input
                       {...field}
+                      list="known-providers"
                       disabled={!!provider}
+                      onChange={(e) => applyPreset(e.target.value)}
                       className="font-mono"
                       placeholder="openai"
                     />
                   </FormControl>
+                  <datalist id="known-providers">
+                    {presets.map((preset) => (
+                      <option key={preset.name} value={preset.name} />
+                    ))}
+                  </datalist>
                   <FormDescription>
                     {t("integrations.referencedBySpecs")}
                   </FormDescription>

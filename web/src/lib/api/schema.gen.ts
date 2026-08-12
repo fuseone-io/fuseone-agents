@@ -891,6 +891,17 @@ export interface components {
             effect: components["schemas"]["Effect"];
             untrusted: boolean;
         };
+        ModelPreset: {
+            name: string;
+            /** @enum {string} */
+            kind: "anthropic" | "openai_compatible";
+            /**
+             * @description Empty where the client already knows the address, and where the
+             *     model is self-hosted and only the installation knows it.
+             */
+            baseUrl?: string;
+            supportsEffort?: boolean;
+        };
         MCPServer: {
             /** @description Namespaces the tools it offers, so two servers naming a tool "search" do not collide. */
             name: string;
@@ -2232,6 +2243,12 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
+                        /**
+                         * @description The providers the platform already knows how to reach.
+                         *     Choosing one fills in its endpoint, so an operator supplies
+                         *     an address only when it is a proxy or a self-hosted model.
+                         */
+                        presets?: components["schemas"]["ModelPreset"][];
                         mcpServers: components["schemas"]["MCPServer"][];
                         providers: components["schemas"]["ModelProvider"][];
                     };
