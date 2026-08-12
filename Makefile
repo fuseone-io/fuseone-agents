@@ -35,7 +35,7 @@ check-pg: db
 	@# -p 1: both suites truncate the same tables, and go test runs packages
 	@# concurrently by default. Serialising them is the honest fix while they
 	@# share one database; a schema per suite would be the next step.
-	TEST_DATABASE_URL=$(TEST_DSN) $(GO) test ./internal/ledger/ ./internal/e2e/ ./internal/admin/ ./internal/spec/ ./internal/auth/ ./internal/trigger/ ./internal/audit/ ./internal/policy/ -count=1 -race -p 1
+	TEST_DATABASE_URL=$(TEST_DSN) $(GO) test ./internal/ledger/ ./internal/e2e/ ./internal/admin/ ./internal/spec/ ./internal/auth/ ./internal/trigger/ ./internal/audit/ ./internal/policy/ ./internal/scope/ -count=1 -race -p 1
 
 ## smoke: prove the shipping artefact serves what it should and nothing else.
 ## The unit suites cannot see this: it is a property of the binary, not the code.
