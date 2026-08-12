@@ -686,6 +686,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/people": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Everybody the installation knows about
+         * @description With what each one holds, and where each grant came from. A grant an
+         *     identity provider asserts is re-derived on every sign-in, so it is
+         *     marked: revoking one here would last until its holder signs in again,
+         *     and the group is the thing to change.
+         *
+         *     Somebody with no grant at all is listed rather than hidden. They can
+         *     sign in and do nothing, which is exactly who an operator opens this
+         *     screen looking for.
+         */
+        get: operations["listPeople"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/people/{principalId}/grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * What this person may do, granted directly
+         * @description Replaces the grants an operator set by hand and leaves every asserted
+         *     one alone. The two writers are separate on purpose: an identity
+         *     provider re-derives its own on every sign-in, and a console that
+         *     overwrote them would hand back access somebody lost by leaving a team.
+         */
+        put: operations["setGrants"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/identity-providers": {
         parameters: {
             query?: never;
@@ -1150,6 +1200,35 @@ export interface components {
             mappings?: components["schemas"]["GroupMapping"][];
             /** @default true */
             enabled: boolean;
+        };
+        GrantInput: {
+            company: string;
+            area: string;
+            /** @enum {string} */
+            role: "author" | "approver" | "curator" | "auditor";
+        };
+        HeldGrant: {
+            company: string;
+            area: string;
+            /** @enum {string} */
+            role: "author" | "approver" | "curator" | "auditor";
+            /** @description That an identity provider produced this on sign-in. It cannot be revoked here — it is re-derived the next time its holder signs in, so the group is what to change. */
+            asserted: boolean;
+            /** @description Who granted it, or which provider asserted it. */
+            by?: string;
+        };
+        Person: {
+            id: string;
+            /** @enum {string} */
+            kind: "user" | "service" | "agent";
+            display: string;
+            email?: string;
+            /** @description Which identity provider vouched for them, if any. */
+            provider?: string;
+            grants?: components["schemas"]["HeldGrant"][];
+            /** Format: date-time */
+            lastSeen?: string;
+            disabled: boolean;
         };
         Run: {
             runId: string;
@@ -2729,6 +2808,59 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    listPeople: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The people. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Person"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    setGrants: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                principalId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    grants: components["schemas"]["GrantInput"][];
+                };
+            };
+        };
+        responses: {
+            /** @description Stored. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     listIdentityProviders: {

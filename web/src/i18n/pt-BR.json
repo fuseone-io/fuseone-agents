@@ -55,6 +55,7 @@
     "noPricesHint": "Sem tarifa, todo custo do console lê zero: a plataforma conta tokens e se recusa a chutar dinheiro. Teto de execução, teto de área e o limite do assistente de autoria ficam todos sem efeito.",
     "noProviderForAuthoring": "Nenhum provedor conectado",
     "noToolsFound": "Nenhuma ferramenta descoberta",
+    "people": "Pessoas",
     "perDay": "por dia",
     "perMonth": "por mês",
     "prices": "Preços",
@@ -481,6 +482,29 @@
     "throughputUnreadable": "Não foi possível ler a vazão de hoje.",
     "wantsToRun": "Quer executar",
     "wantsToRunTool": "Quer executar <tool>{{tool}}</tool>{{why}}"
+  },
+  "people": {
+    "title": "Pessoas",
+    "manage": "Gerenciar",
+    "editing": "Acesso de {{name}}",
+    "noAccess": "sem acesso",
+    "disabled": "desativado",
+    "asserted": "do provedor",
+    "assertedHint": "Vem do provedor de identidade e é recalculado a cada entrada. Para tirar, mude o grupo lá.",
+    "assertedHere": "O que {{provider}} concede. Recalculado a cada entrada — para mudar, mude o grupo no provedor.",
+    "grantedHere": "Concedido aqui, diretamente. Sobrevive às entradas seguintes.",
+    "addGrant": "Adicionar acesso",
+    "removeGrant": "Remover este acesso",
+    "saved": "Acesso de {{name}} atualizado",
+    "saveFailed": "Não foi possível salvar o acesso",
+    "lastSeen": "visto {{when}}",
+    "emptyTitle": "Ninguém além de você",
+    "emptyHint": "As pessoas aparecem aqui depois de entrarem pela primeira vez por um provedor de identidade.",
+    "kind": {
+      "service": "conta de serviço",
+      "agent": "agente",
+      "user": "pessoa"
+    }
   },
   "policies": {
     "addCondition": "Adicionar condição",

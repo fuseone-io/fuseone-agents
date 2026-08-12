@@ -55,6 +55,7 @@
     "noPricesHint": "With no rate every cost in the console reads zero: the platform counts tokens and refuses to guess at money. Run ceilings, area ceilings and the authoring assistant's bound are all without effect.",
     "noProviderForAuthoring": "No provider connected",
     "noToolsFound": "No tool discovered",
+    "people": "People",
     "perDay": "per day",
     "perMonth": "per month",
     "prices": "Prices",
@@ -481,6 +482,29 @@
     "throughputUnreadable": "Could not read today's throughput.",
     "wantsToRun": "Wants to run",
     "wantsToRunTool": "Wants to run <tool>{{tool}}</tool>{{why}}"
+  },
+  "people": {
+    "title": "People",
+    "manage": "Manage",
+    "editing": "{{name}}'s access",
+    "noAccess": "no access",
+    "disabled": "disabled",
+    "asserted": "from provider",
+    "assertedHint": "Comes from the identity provider and is re-derived on every sign-in. To take it away, change the group there.",
+    "assertedHere": "What {{provider}} grants. Re-derived on every sign-in — to change it, change the group at the provider.",
+    "grantedHere": "Granted here, directly. It survives the next sign-in.",
+    "addGrant": "Add access",
+    "removeGrant": "Remove this access",
+    "saved": "{{name}}'s access updated",
+    "saveFailed": "Could not save the access",
+    "lastSeen": "seen {{when}}",
+    "emptyTitle": "Nobody but you",
+    "emptyHint": "People appear here after they sign in for the first time through an identity provider.",
+    "kind": {
+      "service": "service account",
+      "agent": "agent",
+      "user": "person"
+    }
   },
   "policies": {
     "addCondition": "Add a condition",
