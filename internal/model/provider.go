@@ -36,7 +36,15 @@ type Provider struct {
 	// that blocked a model released last week would be worse than no list.
 	// Filled only where it is known — guessing a name produces a 404 at the
 	// first run rather than an error anybody can act on.
-	Models  []string
+	Models []string
+
+	// Prices are what this installation pays per model, in micros per million
+	// tokens. The installation's own: rates vary by contract, and a table
+	// shipped in a binary would quietly misreport what a customer with a
+	// negotiated discount actually pays. Absent means the ledger records
+	// tokens and no money, which is honest rather than a guess.
+	Prices map[string]Prices
+
 	APIKey  string
 	Headers map[string]string
 
@@ -160,6 +168,7 @@ func (r *Registry) Names() []string {
 
 // Planner builds the planner an agent runs on.
 func (r *Registry) Planner(providerName string, cfg Config, tools ToolSchemas) (engine.Planner, error) {
+	cfg = r.withPrice(providerName, cfg)
 	r.mu.RLock()
 	p, ok := r.providers[providerName]
 	r.mu.RUnlock()

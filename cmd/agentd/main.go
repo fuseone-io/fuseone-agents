@@ -870,6 +870,27 @@ func registerConfigured(ctx context.Context, registry *model.Registry, integrati
 		return fmt.Errorf("read configured providers: %w", err)
 	}
 
+	// The installation's own rates, attached to the provider they belong to.
+	// Read once here rather than at each call: a run and an authoring call
+	// build their clients through different paths, and a price fetched per
+	// call is a price one of those paths forgets.
+	rates, err := integrations.Prices(ctx)
+	if err != nil {
+		return fmt.Errorf("read configured prices: %w", err)
+	}
+	priced := map[string]map[string]model.Prices{}
+	for _, r := range rates {
+		if priced[r.Provider] == nil {
+			priced[r.Provider] = map[string]model.Prices{}
+		}
+		priced[r.Provider][r.Model] = model.Prices{
+			InputMicros:      r.InputMicros,
+			OutputMicros:     r.OutputMicros,
+			CacheReadMicros:  r.CacheReadMicros,
+			CacheWriteMicros: r.CacheWriteMicros,
+		}
+	}
+
 	for _, p := range configured {
 		if !p.Enabled {
 			continue
@@ -891,10 +912,12 @@ func registerConfigured(ctx context.Context, registry *model.Registry, integrati
 			}
 			provider.APIKey = key
 		}
+		provider.Prices = priced[p.Name]
 		if err := registry.Register(provider); err != nil {
 			return err
 		}
-		slog.Info("provider configured", "provider", p.Name, "source", "administration")
+		slog.Info("provider configured", "provider", p.Name,
+			"source", "administration", "priced_models", len(provider.Prices))
 	}
 	return nil
 }

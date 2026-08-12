@@ -17,7 +17,7 @@ func newIntegrations(t *testing.T) *admin.Integrations {
 
 	pool := openPool(t)
 	if _, err := pool.Exec(context.Background(),
-		`delete from settings where kind in ('mcp_server', 'model_provider')`); err != nil {
+		`delete from settings where kind in ('mcp_server', 'model_provider', 'model_price')`); err != nil {
 		t.Fatalf("clean: %v", err)
 	}
 
