@@ -135,7 +135,7 @@ func TestPutModelProvider_withoutAKey_passesNoneSoTheStoredOneSurvives(t *testin
 	admin := &fakeAdmin{}
 	_, err := serverWith(t, admin).PutModelProvider(as(domain.RoleCurator), openapi.PutModelProviderRequestObject{
 		Name: "openai",
-		Body: &openapi.PutModelProviderJSONRequestBody{Kind: "openai_compatible", BaseUrl: "https://a.example"},
+		Body: &openapi.PutModelProviderJSONRequestBody{Kind: "openai_compatible", BaseUrl: ptr("https://a.example")},
 	})
 	if err != nil {
 		t.Fatalf("PutModelProvider: %v", err)
