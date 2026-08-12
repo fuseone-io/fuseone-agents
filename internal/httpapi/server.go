@@ -73,8 +73,10 @@ type Server struct {
 	cases Cases
 	// identity and signIn administer how people sign in: the stored
 	// configuration and the live registry the sign-in routes read from.
-	identity  Identity
-	signIn    SignIn
+	identity Identity
+	signIn   SignIn
+	// people is the directory of who exists and what each one holds.
+	people    People
 	publisher Publisher
 	// clock is injectable so a run's opening instant is a fact of the request
 	// rather than of whichever machine happened to serve it.

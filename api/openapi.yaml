@@ -999,6 +999,67 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /admin/people:
+    get:
+      tags: [admin]
+      operationId: listPeople
+      summary: Everybody the installation knows about
+      description: |
+        With what each one holds, and where each grant came from. A grant an
+        identity provider asserts is re-derived on every sign-in, so it is
+        marked: revoking one here would last until its holder signs in again,
+        and the group is the thing to change.
+
+        Somebody with no grant at all is listed rather than hidden. They can
+        sign in and do nothing, which is exactly who an operator opens this
+        screen looking for.
+      responses:
+        '200':
+          description: The people.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Person' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/people/{principalId}/grants:
+    put:
+      tags: [admin]
+      operationId: setGrants
+      summary: What this person may do, granted directly
+      description: |
+        Replaces the grants an operator set by hand and leaves every asserted
+        one alone. The two writers are separate on purpose: an identity
+        provider re-derives its own on every sign-in, and a console that
+        overwrote them would hand back access somebody lost by leaving a team.
+      parameters:
+        - name: principalId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [grants]
+              properties:
+                grants:
+                  type: array
+                  items: { $ref: '#/components/schemas/GrantInput' }
+      responses:
+        '204': { description: Stored. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /admin/identity-providers:
     get:
       tags: [admin]
@@ -1777,6 +1838,54 @@ components:
           type: array
           items: { $ref: '#/components/schemas/GroupMapping' }
         enabled: { type: boolean, default: true }
+
+    GrantInput:
+      type: object
+      required: [company, area, role]
+      properties:
+        company: { type: string }
+        area: { type: string }
+        role:
+          type: string
+          enum: [author, approver, curator, auditor]
+
+    HeldGrant:
+      type: object
+      required: [company, area, role, asserted]
+      properties:
+        company: { type: string }
+        area: { type: string }
+        role:
+          type: string
+          enum: [author, approver, curator, auditor]
+        asserted:
+          type: boolean
+          description: >
+            That an identity provider produced this on sign-in. It cannot be
+            revoked here — it is re-derived the next time its holder signs in,
+            so the group is what to change.
+        by:
+          type: string
+          description: Who granted it, or which provider asserted it.
+
+    Person:
+      type: object
+      required: [id, kind, display, disabled]
+      properties:
+        id: { type: string }
+        kind:
+          type: string
+          enum: [user, service, agent]
+        display: { type: string }
+        email: { type: string }
+        provider:
+          type: string
+          description: Which identity provider vouched for them, if any.
+        grants:
+          type: array
+          items: { $ref: '#/components/schemas/HeldGrant' }
+        lastSeen: { type: string, format: date-time }
+        disabled: { type: boolean }
 
     Run:
       type: object

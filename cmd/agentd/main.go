@@ -171,7 +171,8 @@ func serve(args []string) error {
 		// provider straight away, so a configuration never needs a restart to
 		// take effect — and start-up loads what is already stored.
 		identityStore := admin.NewIdentity(identity.pool, store)
-		api = api.WithIdentity(identityStore, identity.oidc)
+		api = api.WithIdentity(identityStore, identity.oidc).
+			WithPeople(auth.NewPostgres(identity.pool))
 		registerProviders(ctx, identityStore, identity.oidc)
 	}
 
