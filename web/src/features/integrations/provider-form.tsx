@@ -129,6 +129,7 @@ export function ProviderForm({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
+                      {/* eslint-disable-next-line i18next/no-literal-string */}
                       <SelectItem value="anthropic">Anthropic</SelectItem>
                       <SelectItem value="openai_compatible">
                         {t("integrations.openAiCompatible")}

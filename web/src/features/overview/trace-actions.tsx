@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ConfirmAction } from "@/features/runs/confirm-action";
@@ -19,6 +20,7 @@ export function TraceActions({
   runId: string;
   approval: PendingApproval;
 }) {
+  const { t } = useTranslation();
   const decide = useDecideApproval(runId);
 
   const submit = (approved: boolean) =>
@@ -49,7 +51,7 @@ export function TraceActions({
         disabled={decide.isPending}
         onClick={() => submit(false)}
       >
-        Recusar
+        {t("runs.refuse")}
       </Button>
     </div>
   );

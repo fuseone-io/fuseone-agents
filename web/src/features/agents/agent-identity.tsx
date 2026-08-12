@@ -1,4 +1,4 @@
-import { useTranslation } from "react-i18next";
+import { Trans, useTranslation } from "react-i18next";
 import { Pencil } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -52,13 +52,16 @@ export function AgentIdentity({
           <Mono dim>{agent.agentId}</Mono>
           <Separator orientation="vertical" className="!h-3" />
           <span>
-            {t("agents.version")}
-            <Mono dim>{agent.versionId.slice(0, 9)}</Mono> · {agent.provider}/
-            {agent.model}
-            {agent.publishedBy
-              ? ` · publicada por ${agent.publishedBy}`
-              : ""}{" "}
-            em {formatInstant(agent.publishedAt)}
+            <Trans
+              i18nKey="agents.publishedLine"
+              values={{
+                version: agent.versionId.slice(0, 9),
+                model: `${agent.provider}/${agent.model}`,
+                by: agent.publishedBy ?? "",
+                at: formatInstant(agent.publishedAt),
+              }}
+              components={{ v: <Mono dim /> }}
+            />
           </span>
         </div>
       </div>

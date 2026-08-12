@@ -1,3 +1,4 @@
+import { Trans, useTranslation } from "react-i18next";
 import { Hand } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Mono } from "@/components/shared/mono";
@@ -26,12 +27,13 @@ export function TraceDecision({
   runId: string;
   approval: PendingApproval;
 }) {
+  const { t } = useTranslation();
   return (
     <section className="flex flex-col gap-1.5 rounded-lg border border-warning bg-warning-surface p-3">
       <div className="flex items-center gap-2">
         <Hand className="size-3.5 shrink-0 text-warning" aria-hidden />
         <span className="text-xs font-medium text-warning">
-          Aguardando decisão · passo #{approval.atSeq}
+          {t("overview.awaitingDecision", { seq: approval.atSeq })}
         </span>
         <span className="ml-auto shrink-0 text-2xs text-warning">
           {formatRelative(approval.requestedAt)}
@@ -39,15 +41,23 @@ export function TraceDecision({
       </div>
 
       <p className="text-xs">
-        Quer executar <Mono>{approval.tool}</Mono>
-        {explainRule(approval.rule) ? ` — ${explainRule(approval.rule)}` : "."}
+        <Trans
+          i18nKey="overview.wantsToRunTool"
+          values={{
+            tool: approval.tool,
+            why: explainRule(approval.rule)
+              ? ` — ${explainRule(approval.rule)}`
+              : ".",
+          }}
+          components={{ tool: <Mono /> }}
+        />
       </p>
 
       <Link
         to={`/runs/${runId}`}
         className="text-xs text-primary hover:underline"
       >
-        Ver os argumentos propostos
+        {t("overview.seeArguments")}
       </Link>
     </section>
   );

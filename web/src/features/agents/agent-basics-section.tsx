@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Section, Labelled } from "@/features/policies/section";
@@ -18,6 +19,7 @@ export function AgentBasicsSection({
   editable: boolean;
   onAgentId: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <Section
       title="Identidade"
@@ -90,9 +92,9 @@ export function AgentBasicsSection({
           placeholder="Você atende chamados que chegam em suporte@…"
         />
         <p className="text-xs text-muted-foreground">
-          {draft.instructions.trim().length} caracteres. É o texto que a versão
-          publicada carrega, e é o que um auditor vai ler para entender uma
-          execução daqui a dois anos.
+          {t("agents.instructionsLength", {
+            count: draft.instructions.trim().length,
+          })}
         </p>
       </Labelled>
     </Section>

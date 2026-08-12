@@ -5,8 +5,16 @@ import { Toolbar } from "@/components/shared/toolbar";
 
 describe("the filter bar", () => {
   it("gives the search field a name, because a placeholder disappears on the first keystroke", () => {
-    render(<Toolbar placeholder="Buscar por execução" value="" onChange={() => {}} />);
-    expect(screen.getByRole("searchbox", { name: "Buscar por execução" })).toBeInTheDocument();
+    render(
+      <Toolbar
+        placeholder="Buscar por execução"
+        value=""
+        onChange={() => {}}
+      />,
+    );
+    expect(
+      screen.getByRole("searchbox", { name: "Buscar por execução" }),
+    ).toBeInTheDocument();
   });
 
   it("reports what was typed", async () => {

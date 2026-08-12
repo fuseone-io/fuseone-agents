@@ -66,7 +66,11 @@ export function TrailFold({ steps, last }: { steps: Step[]; last: boolean }) {
 
       <div className="pt-1.5 text-right">
         <Mono dim className="text-2xs">
-          #{first.seq} – #{final.seq} · {formatDurationMs(elapsed)}
+          {t("runs.foldRange", {
+            from: first.seq,
+            to: final.seq,
+            elapsed: formatDurationMs(elapsed),
+          })}
         </Mono>
       </div>
     </li>

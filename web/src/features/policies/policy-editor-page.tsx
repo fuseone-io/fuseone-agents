@@ -94,8 +94,7 @@ export function PolicyEditorPage() {
       <div className="sticky bottom-0 -mx-6 -mb-6 flex items-center gap-2 border-t border-border bg-card px-6 py-3 shadow-md">
         {changes.length > 0 && (
           <span className="text-xs text-warning">
-            {changes.length} {changes.length === 1 ? "alteração" : "alterações"}{" "}
-            sem gravar
+            {t("policies.unsavedChanges", { count: changes.length })}
           </span>
         )}
         <div className="ml-auto flex items-center gap-2">

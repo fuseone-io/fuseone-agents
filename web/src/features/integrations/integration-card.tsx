@@ -1,4 +1,4 @@
-import { useTranslation } from "react-i18next";
+import { Trans, useTranslation } from "react-i18next";
 import type { ReactNode } from "react";
 import { Mono } from "@/components/shared/mono";
 import { formatRelative } from "@/lib/format";
@@ -95,13 +95,19 @@ function Observation({ health }: { health?: IntegrationHealth | null }) {
     <div className="flex flex-col gap-1">
       <p className="text-2xs text-muted-foreground">
         {health.reachable ? (
-          <>
-            <Mono dim>{health.toolCount}</Mono> ferramentas · visto{" "}
-            {formatRelative(health.observedAt)}
-          </>
+          <Trans
+            i18nKey="integrations.toolsSeen"
+            values={{
+              count: health.toolCount,
+              seen: formatRelative(health.observedAt),
+            }}
+            components={{ n: <Mono dim /> }}
+          />
         ) : (
           <>
-            Não respondeu · última tentativa {formatRelative(health.observedAt)}
+            {t("integrations.didNotAnswer", {
+              seen: formatRelative(health.observedAt),
+            })}
           </>
         )}
         {health.observedBy ? ` · por ${health.observedBy}` : ""}

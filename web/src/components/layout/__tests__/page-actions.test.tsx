@@ -36,7 +36,9 @@ describe("a screen's primary action", () => {
       </PageHeader>,
     );
 
-    expect(screen.getByRole("button", { name: "Novo agente" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Novo agente" }),
+    ).toBeInTheDocument();
   });
 
   it("leaves with the page that owns it", () => {
@@ -53,7 +55,9 @@ describe("a screen's primary action", () => {
         </PageHeader>
       </PageActionsProvider>,
     );
-    expect(screen.getByRole("button", { name: "Novo agente" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Novo agente" }),
+    ).toBeInTheDocument();
 
     rerender(
       <PageActionsProvider>
@@ -63,6 +67,8 @@ describe("a screen's primary action", () => {
         <PageHeader icon={Bot} title="Custo" />
       </PageActionsProvider>,
     );
-    expect(screen.queryByRole("button", { name: "Novo agente" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Novo agente" }),
+    ).not.toBeInTheDocument();
   });
 });

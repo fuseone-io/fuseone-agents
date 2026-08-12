@@ -85,7 +85,7 @@ export function ConditionBuilder({
 
           <div>
             <Label htmlFor={`value-${index}`} className="sr-only">
-              Valor da condição {index + 1}
+              {t("policies.conditionValue", { n: index + 1 })}
             </Label>
             <Input
               id={`value-${index}`}
@@ -102,7 +102,9 @@ export function ConditionBuilder({
             onClick={() => onChange(conditions.filter((_, i) => i !== index))}
           >
             <X className="size-4" aria-hidden />
-            <span className="sr-only">Remover a condição {index + 1}</span>
+            <span className="sr-only">
+              {t("policies.removeCondition", { n: index + 1 })}
+            </span>
           </Button>
         </div>
       ))}

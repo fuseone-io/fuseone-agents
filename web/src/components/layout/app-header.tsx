@@ -70,7 +70,9 @@ function Crumbs({ pathname }: { pathname: string }) {
             <BreadcrumbSeparator />
             <BreadcrumbItem>
               {/* A run id is machine-generated, so it reads in mono. */}
-              <BreadcrumbPage className="font-mono text-xs">{detail}</BreadcrumbPage>
+              <BreadcrumbPage className="font-mono text-xs">
+                {detail}
+              </BreadcrumbPage>
             </BreadcrumbItem>
           </>
         )}

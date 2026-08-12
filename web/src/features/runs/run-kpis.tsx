@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { ReactNode } from "react";
 import { formatCost, formatDuration, formatTokens } from "@/lib/format";
 import type { Run } from "@/lib/api/client";
@@ -10,6 +11,7 @@ import type { Run } from "@/lib/api/client";
  * run can go. A bare number invites the reader to invent the comparison.
  */
 export function RunKpis({ run, steps }: { run: Run; steps: number }) {
+  const { t } = useTranslation();
   const input = run.cost.inputTokens ?? 0;
   const output = run.cost.outputTokens ?? 0;
   const reserved = run.reservedMicros ?? 0;
@@ -22,12 +24,17 @@ export function RunKpis({ run, steps }: { run: Run; steps: number }) {
           : "nada reservado em aberto"}
       </Kpi>
 
-      <Kpi label="Tokens" value={formatTokens(input + output)}>
-        {formatTokens(input)} entrada · {formatTokens(output)} saída
+      <Kpi label={t("runs.kpiTokens")} value={formatTokens(input + output)}>
+        {t("runs.tokensSplit", {
+          input: formatTokens(input),
+          output: formatTokens(output),
+        })}
       </Kpi>
 
       <Kpi label="Passos" value={String(steps)}>
-        <span className="text-muted-foreground">último selado #{run.seq}</span>
+        <span className="text-muted-foreground">
+          {t("runs.lastSealed", { seq: run.seq })}
+        </span>
       </Kpi>
 
       <Kpi label="Duração" value={formatDuration(run.startedAt, run.endedAt)}>

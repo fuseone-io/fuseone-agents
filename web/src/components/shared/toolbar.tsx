@@ -24,7 +24,10 @@ export function Toolbar({
   return (
     <div className="flex shrink-0 items-center gap-2.5">
       <label className="flex h-8 max-w-[320px] flex-1 items-center gap-[7px] rounded-sm border border-input bg-card px-2.5 focus-within:shadow-[var(--elevation-focus)]">
-        <Search className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+        <Search
+          className="size-3.5 shrink-0 text-muted-foreground"
+          aria-hidden
+        />
         <span className="sr-only">{placeholder}</span>
         <input
           type="search"

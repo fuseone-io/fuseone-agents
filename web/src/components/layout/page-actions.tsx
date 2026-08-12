@@ -21,7 +21,11 @@ const SlotContext = createContext<{
 /** Holds the slot for everything inside the shell. */
 export function PageActionsProvider({ children }: { children: ReactNode }) {
   const [node, attach] = useState<HTMLElement | null>(null);
-  return <SlotContext.Provider value={{ node, attach }}>{children}</SlotContext.Provider>;
+  return (
+    <SlotContext.Provider value={{ node, attach }}>
+      {children}
+    </SlotContext.Provider>
+  );
 }
 
 /** Marks the place in the header where the action lands. */

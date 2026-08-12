@@ -8,11 +8,21 @@ import { STATE_DOT, type AgentState } from "@/lib/agent-state";
  * meaning, so it is hidden from assistive technology rather than announced as
  * a colour nobody can act on.
  */
-export function StateDot({ state, className }: { state: AgentState; className?: string }) {
+export function StateDot({
+  state,
+  className,
+}: {
+  state: AgentState;
+  className?: string;
+}) {
   return (
     <span
       aria-hidden
-      className={cn("size-[7px] shrink-0 rounded-pill", STATE_DOT[state], className)}
+      className={cn(
+        "size-[7px] shrink-0 rounded-pill",
+        STATE_DOT[state],
+        className,
+      )}
     />
   );
 }

@@ -64,7 +64,7 @@ export function RunNowDialog({
 
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Executar {agentName}</DialogTitle>
+          <DialogTitle>{t("agents.runNamed", { name: agentName })}</DialogTitle>
           <DialogDescription>
             {t("agents.runOpensOnPublished")}
           </DialogDescription>

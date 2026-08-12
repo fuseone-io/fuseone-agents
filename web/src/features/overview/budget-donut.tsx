@@ -51,8 +51,9 @@ export function BudgetDonut({
         <Skeleton className="h-32 rounded-lg" />
       ) : rows.length === 0 ? (
         <p className="py-6 text-sm text-muted-foreground">
-          Nenhum teto por escopo configurado, então não há denominador para uma
-          porcentagem. Gasto hoje: {formatCost({ micros: spend.total })}.{" "}
+          {t("overview.noCeilingConfigured", {
+            spent: formatCost({ micros: spend.total }),
+          })}{" "}
           <Link to="/admin" className="text-primary hover:underline">
             {t("overview.configure")}
           </Link>
@@ -94,6 +95,7 @@ const RADIUS = 46;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 function Donut({ share, cap }: { share: number; cap: number }) {
+  const { t } = useTranslation();
   const filled = Math.min(share, 1);
 
   return (
@@ -123,7 +125,7 @@ function Donut({ share, cap }: { share: number; cap: number }) {
           {Math.round(share * 100)}%
         </span>
         <span className="text-2xs text-muted-foreground">
-          de {formatCost({ micros: cap })}
+          {t("overview.ofCap", { cap: formatCost({ micros: cap }) })}
         </span>
       </div>
     </div>

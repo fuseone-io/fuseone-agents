@@ -50,12 +50,15 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="/agents" element={<AgentsPage />} />
                 <Route path="/agents/new" element={<AgentEditorPage />} />
                 <Route path="/agents/:agentId" element={<AgentDetailPage />} />
-                <Route path="/agents/:agentId/edit" element={<AgentEditorPage />} />
-              <Route path="/runs" element={<RunsPage />} />
+                <Route
+                  path="/agents/:agentId/edit"
+                  element={<AgentEditorPage />}
+                />
+                <Route path="/runs" element={<RunsPage />} />
                 <Route path="/runs/:runId" element={<RunDetailPage />} />
                 <Route path="/approvals" element={<ApprovalsPage />} />
                 <Route path="/cost" element={<CostPage />} />
-              <Route path="/policies" element={<PoliciesPage />} />
+                <Route path="/policies" element={<PoliciesPage />} />
                 <Route path="/policies/:code" element={<PolicyEditorPage />} />
                 <Route path="/audit" element={<AuditPage />} />
                 <Route path="/integrations" element={<IntegrationsPage />} />

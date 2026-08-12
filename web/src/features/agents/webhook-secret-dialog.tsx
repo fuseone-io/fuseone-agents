@@ -1,4 +1,4 @@
-import { useTranslation } from "react-i18next";
+import { Trans, useTranslation } from "react-i18next";
 import { useState } from "react";
 import { Check, Copy, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -74,14 +74,10 @@ export function WebhookSecretDialog({
               aria-hidden
             />
             <span>
-              {t("agents.callerAlsoNeeds")}
-              <code className="font-mono">
-                {/* eslint-disable-next-line i18next/no-literal-string */}
-                Idempotency-Key
-              </code>{" "}
-              único por entrega, repetindo o mesmo valor em cada nova tentativa
-              daquela entrega. Sem isso, uma reentrega abre uma segunda
-              execução.
+              <Trans
+                i18nKey="agents.idempotencyExplains"
+                components={{ code: <code className="font-mono" /> }}
+              />
             </span>
           </p>
         </div>

@@ -13,7 +13,9 @@ export function Mono({
   dim,
   className,
 }: {
-  children: ReactNode;
+  /** Optional because <Trans> supplies it by cloning: the element written in
+   *  `components` is a shape, not a finished node. */
+  children?: ReactNode;
   dim?: boolean;
   className?: string;
 }) {

@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -55,10 +56,11 @@ export function SessionGate({ children }: { children: ReactNode }) {
 }
 
 function Loading() {
+  const { t } = useTranslation();
   return (
     <div className="flex min-h-svh items-center justify-center bg-sidebar p-4">
       <Skeleton className="h-64 w-full max-w-md rounded-2xl" />
-      <span className="sr-only">Carregando</span>
+      <span className="sr-only">{t("common.loading")}</span>
     </div>
   );
 }

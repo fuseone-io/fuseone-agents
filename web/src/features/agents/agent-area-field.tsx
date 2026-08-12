@@ -40,7 +40,7 @@ export function AgentAreaField({
         <SelectContent>
           {area !== "" && !known && (
             <SelectItem value={area} className="font-mono">
-              {area} · não declarada
+              {t("agents.areaUndeclared", { area })}
             </SelectItem>
           )}
           {declared.map((s) => (

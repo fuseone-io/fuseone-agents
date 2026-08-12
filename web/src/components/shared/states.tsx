@@ -32,7 +32,9 @@ export function EmptyState({
 }) {
   return (
     <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed px-6 py-12 text-center">
-      <div className="text-muted-foreground">{icon ?? <Inbox className="size-6" />}</div>
+      <div className="text-muted-foreground">
+        {icon ?? <Inbox className="size-6" />}
+      </div>
       <p className="font-medium">{title}</p>
       {/* An empty state that only says "nothing here" wastes the moment: say
           what would appear and what produces it. */}
@@ -41,7 +43,13 @@ export function EmptyState({
   );
 }
 
-export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
+export function ErrorState({
+  error,
+  onRetry,
+}: {
+  error: unknown;
+  onRetry?: () => void;
+}) {
   const { t } = useTranslation();
   const problem = error instanceof ApiError ? error : undefined;
   return (

@@ -32,7 +32,10 @@ export function LanguageToggle() {
           <DropdownMenuItem
             key={locale}
             onSelect={() => setLocale(locale)}
-            data-active={isLocale(i18n.resolvedLanguage) && i18n.resolvedLanguage === locale}
+            data-active={
+              isLocale(i18n.resolvedLanguage) &&
+              i18n.resolvedLanguage === locale
+            }
             className="data-[active=true]:text-text-accent"
           >
             {LOCALE_NAMES[locale]}

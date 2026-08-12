@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import {
   Tooltip,
@@ -154,6 +155,7 @@ function Bar({
   dimmed: boolean;
   onHover: (at: string | null) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <li className="flex h-full min-w-0 flex-1 flex-col justify-end">
       <Tooltip>
@@ -166,7 +168,7 @@ function Bar({
           onBlur={() => onHover(null)}
         >
           <span className="sr-only">
-            {column.hour}h: {column.total} execuções
+            {t("overview.hourRuns", { hour: column.hour, count: column.total })}
           </span>
           <span
             className={cn(
@@ -194,6 +196,10 @@ function Bar({
         {/* The breakdown, not just the total: the reason to look at one hour
             is to find out which column of it grew. */}
         <TooltipContent className="flex flex-col gap-1">
+          {/* An hour range in 24h notation, and a figure. It reads the same
+              in both languages the console ships, and routing digits through
+              the catalogue would invite somebody to translate them. */}
+          {/* eslint-disable-next-line i18next/no-literal-string */}
           <p className="font-mono text-2xs tabular-nums">
             {String(column.hour).padStart(2, "0")}:00 –{" "}
             {String(column.hour + 1).padStart(2, "0")}:00

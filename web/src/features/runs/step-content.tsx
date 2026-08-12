@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useStepContent } from "@/features/runs/api";
 
@@ -17,6 +18,7 @@ export function StepContent({
   seq: number;
   open: boolean;
 }) {
+  const { t } = useTranslation();
   const content = useStepContent(runId, seq, open);
 
   if (content.isLoading)
@@ -24,8 +26,7 @@ export function StepContent({
   if (content.error || !content.data) {
     return (
       <p className="mt-2.5 rounded-lg border border-border bg-muted p-3 text-xs text-muted-foreground">
-        O conteúdo não está mais disponível. A retenção o apaga; a trilha guarda
-        o resumo criptográfico dele.
+        {t("runs.contentGone")}
       </p>
     );
   }

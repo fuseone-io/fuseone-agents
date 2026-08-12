@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -10,6 +11,7 @@ import type { IdentityProvider } from "@/features/session/providers";
  * that issues the session.
  */
 export function SignInPage({ providers }: { providers: IdentityProvider[] }) {
+  const { t } = useTranslation();
   const returnTo = globalThis.location.pathname + globalThis.location.search;
 
   return (
@@ -20,10 +22,7 @@ export function SignInPage({ providers }: { providers: IdentityProvider[] }) {
     >
       {providers.length === 0 ? (
         <Alert>
-          <AlertDescription>
-            Nenhum provedor de identidade está configurado. Quem administra esta
-            instalação precisa cadastrar um antes que alguém consiga entrar.
-          </AlertDescription>
+          <AlertDescription>{t("session.noProvider")}</AlertDescription>
         </Alert>
       ) : (
         <div className="flex flex-col gap-2">
@@ -37,7 +36,9 @@ export function SignInPage({ providers }: { providers: IdentityProvider[] }) {
               <a
                 href={`/auth/start/${provider.id}?returnTo=${encodeURIComponent(returnTo)}`}
               >
-                Entrar com {provider.display || provider.id}
+                {t("session.signInWith", {
+                  provider: provider.display || provider.id,
+                })}
               </a>
             </Button>
           ))}

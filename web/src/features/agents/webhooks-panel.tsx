@@ -61,6 +61,8 @@ export function WebhooksPanel({ agentId }: { agentId: string }) {
         <ul className="flex flex-col gap-3">
           {hooks.map((hook) => (
             <li key={hook.path} className="flex flex-col gap-1.5">
+              {/* A route, not a phrase. */}
+              {/* eslint-disable-next-line i18next/no-literal-string */}
               <Mono className="truncate">/hooks/{hook.path}</Mono>
               <div className="flex items-center gap-2">
                 <State hook={hook} />
@@ -96,8 +98,10 @@ function State({ hook }: { hook: Webhook }) {
   }
   return (
     <span className="truncate text-2xs text-muted-foreground">
-      chave gerada{hook.rotatedAt ? ` em ${formatInstant(hook.rotatedAt)}` : ""}
-      {hook.rotatedBy ? ` por ${hook.rotatedBy}` : ""}
+      {t("agents.keyGenerated", {
+        at: hook.rotatedAt ? formatInstant(hook.rotatedAt) : "",
+        by: hook.rotatedBy ?? "",
+      })}
     </span>
   );
 }
@@ -145,7 +149,7 @@ function RotateButton({
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>
-            Rotacionar a chave de /hooks/{hook.path}?
+            {t("agents.rotateTitle", { path: hook.path })}
           </AlertDialogTitle>
           <AlertDialogDescription>
             {t("agents.rotateWarning")}

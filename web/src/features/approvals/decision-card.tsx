@@ -1,3 +1,4 @@
+import { Trans, useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { Mono } from "@/components/shared/mono";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +22,7 @@ export function DecisionCard({
   selected: boolean;
   onSelect: () => void;
 }) {
+  const { t } = useTranslation();
   const risk = riskOf(item.effect);
 
   return (
@@ -39,7 +41,11 @@ export function DecisionCard({
           className={cn("size-[7px] shrink-0 rounded-pill", RISK_DOT[risk])}
         />
         <span className="min-w-0 flex-1 truncate font-medium">
-          {item.agentId ?? item.runId} quer usar <Mono>{item.tool}</Mono>
+          <Trans
+            i18nKey="approvals.wantsToUse"
+            values={{ agent: item.agentId ?? item.runId, tool: item.tool }}
+            components={{ tool: <Mono /> }}
+          />
         </span>
         <Mono dim>{formatRelative(item.requestedAt)}</Mono>
       </div>
@@ -52,7 +58,7 @@ export function DecisionCard({
 
       <div className="flex flex-wrap items-center gap-1.5">
         <Badge variant="secondary" className="font-normal">
-          Risco {RISK_LABEL[risk].toLowerCase()}
+          {t("approvals.risk", { level: t(RISK_LABEL[risk]).toLowerCase() })}
         </Badge>
         {item.scope?.area && (
           <Badge

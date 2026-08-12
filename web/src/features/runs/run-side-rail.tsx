@@ -1,3 +1,4 @@
+import { Trans, useTranslation } from "react-i18next";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { ShieldCheck } from "lucide-react";
@@ -12,6 +13,7 @@ import type { Run, Step } from "@/lib/api/client";
  * is, what it touched, and whether the record can be trusted.
  */
 export function RunSideRail({ run, steps }: { run: Run; steps: Step[] }) {
+  const { t } = useTranslation();
   const tools = toolsOf(steps);
   const wrote = tools.some((tool) => tool.wrote);
   const last = steps[steps.length - 1];
@@ -41,7 +43,7 @@ export function RunSideRail({ run, steps }: { run: Run; steps: Step[] }) {
       <Card title="Ferramentas usadas">
         {tools.length === 0 ? (
           <p className="text-xs text-muted-foreground">
-            Nenhuma ferramenta foi chamada nesta execução.
+            {t("runs.noToolsCalled")}
           </p>
         ) : (
           <div className="flex flex-wrap gap-1.5">
@@ -72,16 +74,19 @@ export function RunSideRail({ run, steps }: { run: Run; steps: Step[] }) {
       <Card title="Integridade">
         <p className="flex items-center gap-2 text-sm">
           <ShieldCheck className="size-4 text-success" aria-hidden />
-          Cadeia encadeada · {steps.length} eventos
+          {t("runs.chainSealed", { count: steps.length })}
         </p>
         {last && (
           <p className="text-xs text-muted-foreground">
-            Último selo <Mono dim>{shortHash(last.hash)}</Mono> ·{" "}
-            {formatTime(last.at)}
+            <Trans
+              i18nKey="runs.lastSealLine"
+              values={{ hash: shortHash(last.hash), at: formatTime(last.at) }}
+              components={{ h: <Mono dim /> }}
+            />
           </p>
         )}
         <p className="text-xs text-muted-foreground">
-          Verificar recalcula a cadeia inteira e diz em qual passo ela quebra.
+          {t("runs.verifyExplains")}
         </p>
       </Card>
     </aside>

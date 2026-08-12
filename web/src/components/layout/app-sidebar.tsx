@@ -48,7 +48,11 @@ export function AppSidebar() {
             </SidebarGroupLabel>
             <SidebarMenu>
               {group.items.filter(allowed).map((item) => (
-                <NavLink key={item.to} item={item} active={pathname.startsWith(item.to)} />
+                <NavLink
+                  key={item.to}
+                  item={item}
+                  active={pathname.startsWith(item.to)}
+                />
               ))}
             </SidebarMenu>
           </SidebarGroup>
@@ -94,7 +98,8 @@ function usePendingCount(to: string): number {
  * server will refuse.
  */
 function permissionFilter(can: string[] | undefined) {
-  return (item: NavItem) => !can || !item.permission || can.includes(item.permission);
+  return (item: NavItem) =>
+    !can || !item.permission || can.includes(item.permission);
 }
 
 // An installation with no identity configured has no scope to name, and an em

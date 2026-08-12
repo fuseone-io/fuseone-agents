@@ -58,8 +58,10 @@ export function DecisionPanel({
           <Mono>{item.tool}</Mono>
         </h2>
         <p className="text-xs text-muted-foreground">
-          Pedido {formatRelative(item.requestedAt)} ·{" "}
-          {formatInstant(item.requestedAt)}
+          {t("approvals.requestedAt", {
+            relative: formatRelative(item.requestedAt),
+            instant: formatInstant(item.requestedAt),
+          })}
         </p>
       </header>
 

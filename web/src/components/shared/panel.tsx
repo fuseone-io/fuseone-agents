@@ -33,7 +33,9 @@ export function Panel({
       {title && (
         <header className="flex items-center gap-3 border-b px-4 py-3">
           <h2 className="flex-1 text-base font-medium">{title}</h2>
-          {action && <div className="flex shrink-0 items-center gap-2">{action}</div>}
+          {action && (
+            <div className="flex shrink-0 items-center gap-2">{action}</div>
+          )}
         </header>
       )}
       <div className={cn(!flush && "p-4")}>{children}</div>

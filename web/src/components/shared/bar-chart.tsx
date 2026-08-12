@@ -16,7 +16,15 @@ export interface Bar {
  * data draws the same picture — which matters because a figure in a governance
  * console gets screenshotted into tickets.
  */
-export function BarChart({ bars, label, className }: { bars: Bar[]; label: string; className?: string }) {
+export function BarChart({
+  bars,
+  label,
+  className,
+}: {
+  bars: Bar[];
+  label: string;
+  className?: string;
+}) {
   const max = Math.max(...bars.map((b) => b.value), 1);
   const width = 620;
   const height = 150;
@@ -44,7 +52,11 @@ export function BarChart({ bars, label, className }: { bars: Bar[]; label: strin
               rx={2}
               // The most recent column is the one being asked about; the rest
               // are context for it.
-              className={i === bars.length - 1 ? "fill-primary" : "fill-[var(--fuse-200)]"}
+              className={
+                i === bars.length - 1
+                  ? "fill-primary"
+                  : "fill-[var(--fuse-200)]"
+              }
             >
               <title>
                 {bar.label}: {bar.display}
@@ -52,7 +64,14 @@ export function BarChart({ bars, label, className }: { bars: Bar[]; label: strin
             </rect>
           );
         })}
-        <line x1={0} x2={width} y1={baseline} y2={baseline} className="stroke-border" strokeWidth={1} />
+        <line
+          x1={0}
+          x2={width}
+          y1={baseline}
+          y2={baseline}
+          className="stroke-border"
+          strokeWidth={1}
+        />
       </svg>
 
       {/* The same data as text, for anyone who cannot see the bars. */}

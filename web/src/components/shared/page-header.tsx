@@ -35,9 +35,13 @@ export function PageHeader({
       )}
 
       <div className="min-w-0 flex-1">
-        <h1 className="truncate text-2xl font-medium tracking-display">{title}</h1>
+        <h1 className="truncate text-2xl font-medium tracking-display">
+          {title}
+        </h1>
         {description && (
-          <p className="truncate text-sm text-muted-foreground">{description}</p>
+          <p className="truncate text-sm text-muted-foreground">
+            {description}
+          </p>
         )}
       </div>
 

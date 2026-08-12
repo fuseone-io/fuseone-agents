@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Section, Labelled } from "@/features/policies/section";
@@ -17,6 +18,7 @@ export function IdentitySection({
   editable: boolean;
   onCode: (code: string) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <Section
       title="Identidade"
@@ -60,8 +62,7 @@ export function IdentitySection({
           placeholder="respostas ao cliente saem por um canal revisado"
         />
         <p className="text-xs text-muted-foreground">
-          Aparece na trilha e para quem for barrado. É a diferença entre
-          “bloqueado por {code}” e saber o que fazer a respeito.
+          {t("policies.reasonExplains", { code })}
         </p>
       </Labelled>
     </Section>

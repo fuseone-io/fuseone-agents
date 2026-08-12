@@ -1,3 +1,4 @@
+import { Trans, useTranslation } from "react-i18next";
 import { Mono } from "@/components/shared/mono";
 import { SimulationCard } from "@/features/policies/simulation-card";
 import { draftSentence } from "@/features/policies/policy-sentence";
@@ -21,6 +22,7 @@ export function PolicySideRail({
   creating: boolean;
   changes: Change[];
 }) {
+  const { t } = useTranslation();
   return (
     <aside className="flex flex-col gap-3 lg:sticky lg:top-0">
       <Card title="A regra">
@@ -37,20 +39,21 @@ export function PolicySideRail({
       {creating ? (
         <Card title="Ordem de avaliação">
           <p className="text-xs text-muted-foreground">
-            A ordem entre políticas não muda o resultado: o Portão devolve a
-            decisão mais restritiva entre todas que casam. Negar vence escalar,
-            que vence permitir.
+            {t("policies.mostRestrictiveWins")}
           </p>
           <p className="text-xs text-muted-foreground">
-            A única exceção é um{" "}
-            <span className="text-foreground">permitir</span> que casou: é a
-            única coisa que afrouxa o padrão embutido, e é o que uma exceção é.
+            <Trans
+              i18nKey="policies.onlyExceptionIsAllow"
+              components={{ em: <span className="text-foreground" /> }}
+            />
           </p>
         </Card>
       ) : (
         <Card title={`Sem gravar (${changes.length})`}>
           {changes.length === 0 ? (
-            <p className="text-xs text-muted-foreground">Nada mudou ainda.</p>
+            <p className="text-xs text-muted-foreground">
+              {t("policies.nothingChangedYet")}
+            </p>
           ) : (
             <ul className="flex flex-col gap-1.5">
               {changes.map((change) => (

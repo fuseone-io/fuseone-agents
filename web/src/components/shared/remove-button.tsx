@@ -42,7 +42,9 @@ export function RemoveButton({
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
-          <AlertDialogAction onClick={onConfirm}>{t("common.remove")}</AlertDialogAction>
+          <AlertDialogAction onClick={onConfirm}>
+            {t("common.remove")}
+          </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

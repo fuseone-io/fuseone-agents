@@ -72,7 +72,11 @@ export function CostCaps({ byArea }: { byArea?: CostRollup }) {
               <div className="mb-1 flex justify-between gap-2 text-xs">
                 <span>{scopeLabel(budget)}</span>
                 <span className="whitespace-nowrap font-mono tabular-nums text-muted-foreground">
-                  {formatMicros(spent)} de {formatMicros(cap)} · {share}%
+                  {t("cost.spentOfCap", {
+                    spent: formatMicros(spent),
+                    cap: formatMicros(cap),
+                    share,
+                  })}
                 </span>
               </div>
               <div className="h-1.5 overflow-hidden rounded-pill bg-muted">

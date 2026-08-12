@@ -1,4 +1,4 @@
-import { useTranslation } from "react-i18next";
+import { Trans, useTranslation } from "react-i18next";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -105,9 +105,10 @@ export function ServerForm({
                     />
                   </FormControl>
                   <FormDescription>
-                    Prefixa as ferramentas:{" "}
-                    <code className="font-mono">crm</code> dá{" "}
-                    <code className="font-mono">crm.lookup</code>.
+                    <Trans
+                      i18nKey="integrations.prefixExplains"
+                      components={{ code: <code className="font-mono" /> }}
+                    />
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

@@ -24,7 +24,7 @@ export function AgentVersions({
   return (
     <section className="flex flex-col gap-2.5 rounded-xl border border-border bg-card p-4 shadow-sm">
       <h2 className="text-2xs uppercase tracking-label text-muted-foreground">
-        Versões ({versions.length})
+        {t("agents.versions", { count: versions.length })}
       </h2>
 
       <ol className="flex flex-col">

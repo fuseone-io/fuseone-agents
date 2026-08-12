@@ -34,7 +34,9 @@ export function KpiCard({
 }) {
   return (
     <div className="min-w-0 flex-1 rounded-xl border bg-card p-[18px] shadow-sm">
-      <div className="text-2xs uppercase tracking-label text-muted-foreground">{label}</div>
+      <div className="text-2xs uppercase tracking-label text-muted-foreground">
+        {label}
+      </div>
 
       <div className="mt-2 flex items-baseline gap-1">
         <span className="font-mono text-[26px] font-medium leading-none tabular-nums">

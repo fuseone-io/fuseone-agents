@@ -40,12 +40,44 @@ export function LogoMark({
       className={cn("shrink-0", className)}
     >
       <g transform="translate(0 5)">
-        <rect x="8" y="13" width="4.5" height="10" rx="2.25" fill={ear} stroke={line} strokeWidth={stroke} />
-        <rect x="35.5" y="13" width="4.5" height="10" rx="2.25" fill={ear} stroke={line} strokeWidth={stroke} />
-        <rect x="11.5" y="8" width="25" height="24" rx="10" fill={shell} stroke={line} strokeWidth={stroke} />
+        <rect
+          x="8"
+          y="13"
+          width="4.5"
+          height="10"
+          rx="2.25"
+          fill={ear}
+          stroke={line}
+          strokeWidth={stroke}
+        />
+        <rect
+          x="35.5"
+          y="13"
+          width="4.5"
+          height="10"
+          rx="2.25"
+          fill={ear}
+          stroke={line}
+          strokeWidth={stroke}
+        />
+        <rect
+          x="11.5"
+          y="8"
+          width="25"
+          height="24"
+          rx="10"
+          fill={shell}
+          stroke={line}
+          strokeWidth={stroke}
+        />
         {/* The light is detached because a status here is something reported,
             never something built in. */}
-        <path d="M24 8V5.6" stroke={line} strokeWidth={stroke} strokeLinecap="round" />
+        <path
+          d="M24 8V5.6"
+          stroke={line}
+          strokeWidth={stroke}
+          strokeLinecap="round"
+        />
         <circle
           cx="24"
           cy="3.6"

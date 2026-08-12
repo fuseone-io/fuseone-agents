@@ -17,7 +17,9 @@ export function NotFoundPage() {
     <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed px-6 py-16 text-center">
       <Compass className="size-6 text-muted-foreground" aria-hidden />
       <p className="font-medium">{t("notFound.title")}</p>
-      <p className="max-w-md text-sm text-muted-foreground">{t("notFound.hint")}</p>
+      <p className="max-w-md text-sm text-muted-foreground">
+        {t("notFound.hint")}
+      </p>
       <Button asChild variant="outline" size="sm" className="mt-1">
         <Link to="/overview">{t("notFound.goToOverview")}</Link>
       </Button>

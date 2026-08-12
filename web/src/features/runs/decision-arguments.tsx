@@ -1,3 +1,4 @@
+import { Trans, useTranslation } from "react-i18next";
 import { TriangleAlert } from "lucide-react";
 import { Mono } from "@/components/shared/mono";
 
@@ -7,11 +8,11 @@ import { Mono } from "@/components/shared/mono";
  * summary of it.
  */
 export function DecisionArguments({ body }: { body?: string }) {
+  const { t } = useTranslation();
   if (!body) {
     return (
       <p className="rounded-lg border border-border bg-muted p-3 text-sm text-muted-foreground">
-        Os argumentos não estão mais disponíveis. A retenção apaga o conteúdo; a
-        trilha guarda o resumo criptográfico dele.
+        {t("runs.argumentsGone")}
       </p>
     );
   }
@@ -45,11 +46,11 @@ export function DecisionProvenance({ labels }: { labels?: string[] }) {
         aria-hidden
       />
       <span>
-        Os argumentos derivam de dado marcado{" "}
-        {labels.map((label) => (
-          <Mono key={label}>{label} </Mono>
-        ))}
-        em um passo anterior desta execução.
+        <Trans
+          i18nKey="runs.taintedArguments"
+          values={{ labels: labels.join(", ") }}
+          components={{ l: <Mono /> }}
+        />
       </span>
     </p>
   );

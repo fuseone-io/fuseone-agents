@@ -79,7 +79,7 @@ export function PoliciesPage() {
             // Showing it is how somebody checks that a worker picked up a
             // change without reading a log.
             <Mono dim className="text-2xs">
-              conjunto {data.policyHash.slice(0, 12)}
+              {t("policies.setNamed", { hash: data.policyHash.slice(0, 12) })}
             </Mono>
           ) : undefined
         }

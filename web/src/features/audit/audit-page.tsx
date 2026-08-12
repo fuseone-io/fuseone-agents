@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useDeferredValue, useMemo, useState } from "react";
 import { ScrollText } from "lucide-react";
 import { PAGE_ICONS } from "@/components/layout/nav";
@@ -39,6 +40,7 @@ const PERIODS: FilterOption[] = [
  * them can prove it was not altered.
  */
 export function AuditPage() {
+  const { t } = useTranslation();
   const [source, setSource] = useState("all");
   const [period, setPeriod] = useState("7");
   const [actor, setActor] = useState("");
@@ -87,7 +89,9 @@ export function AuditPage() {
       <Panel
         title="Trilha"
         action={
-          <span className="text-xs text-muted-foreground">append-only</span>
+          <span className="text-xs text-muted-foreground">
+            {t("admin.appendOnly")}
+          </span>
         }
         flush
       >

@@ -1,3 +1,4 @@
+import { Trans, useTranslation } from "react-i18next";
 import { Hand } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -44,6 +45,7 @@ export function PendingDecision({
   approval: PendingApproval;
   step?: Step;
 }) {
+  const { t } = useTranslation();
   const decide = useDecideApproval(runId);
   const content = useStepContent(runId, approval.atSeq);
 
@@ -75,20 +77,27 @@ export function PendingDecision({
             id="decision-heading"
             className="text-sm font-medium text-warning"
           >
-            Aguardando sua decisão · passo #{approval.atSeq}
+            {t("runs.awaitingYou", { seq: approval.atSeq })}
           </h2>
           <p className="mt-0.5 text-sm">
-            O agente quer executar{" "}
-            <Mono className="rounded-md border border-border bg-card px-1.5 py-px">
-              {approval.tool}
-            </Mono>
-            {explainRule(approval.rule)
-              ? ` — ${explainRule(approval.rule)}`
-              : "."}
+            <Trans
+              i18nKey="runs.agentWantsToRun"
+              values={{
+                tool: approval.tool,
+                why: explainRule(approval.rule)
+                  ? ` — ${explainRule(approval.rule)}`
+                  : ".",
+              }}
+              components={{
+                tool: (
+                  <Mono className="rounded-md border border-border bg-card px-1.5 py-px" />
+                ),
+              }}
+            />
           </p>
         </div>
         <div className="ml-auto shrink-0 text-right">
-          <div className="text-2xs text-warning">Pedido</div>
+          <div className="text-2xs text-warning">{t("runs.requested")}</div>
           <div className="font-mono text-sm tabular-nums text-warning">
             {formatRelative(approval.requestedAt)}
           </div>
@@ -98,7 +107,7 @@ export function PendingDecision({
       <div className="grid border-t border-border md:grid-cols-[1fr_288px]">
         <div className="border-border p-4 md:border-r">
           <h3 className="mb-2 text-2xs uppercase tracking-label text-muted-foreground">
-            Argumentos propostos
+            {t("runs.proposedArguments")}
           </h3>
           {content.isLoading ? (
             <Skeleton className="h-20 w-full rounded-lg" />
@@ -124,7 +133,7 @@ export function PendingDecision({
               disabled={decide.isPending}
               onClick={() => submit(false)}
             >
-              Recusar
+              {t("runs.refuse")}
             </Button>
           </div>
         </div>

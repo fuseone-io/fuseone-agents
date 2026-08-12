@@ -1,3 +1,4 @@
+import { Trans, useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Mono } from "@/components/shared/mono";
@@ -13,19 +14,19 @@ import type { PolicyInput, Simulation } from "@/lib/api/client";
  * proportion to how carefully it was written.
  */
 export function SimulationCard({ draft }: { draft: PolicyInput }) {
+  const { t } = useTranslation();
   const simulate = useSimulatePolicy();
   const result = simulate.data;
 
   return (
     <section className="flex flex-col gap-2.5 rounded-xl border border-border bg-card p-4 shadow-sm">
       <h2 className="text-2xs uppercase tracking-label text-muted-foreground">
-        Simulação
+        {t("policies.simulation")}
       </h2>
 
       {!result ? (
         <p className="text-xs text-muted-foreground">
-          Roda esta regra contra as decisões já registradas e mostra o que ela
-          teria feito, antes de gravar.
+          {t("policies.simulationExplains")}
         </p>
       ) : (
         <Result result={result} />
@@ -49,13 +50,13 @@ export function SimulationCard({ draft }: { draft: PolicyInput }) {
 }
 
 function Result({ result }: { result: Simulation }) {
+  const { t } = useTranslation();
   // Zero out of zero is not evidence a rule is harmless, and this is the line
   // that keeps a quiet installation from reading as a safe rule.
   if (result.considered === 0) {
     return (
       <p className="text-xs text-muted-foreground">
-        Nenhuma decisão registrada no período, então não há o que simular. Isso
-        não diz que a regra é inofensiva — diz que não houve com o que comparar.
+        {t("policies.nothingToSimulate")}
       </p>
     );
   }
@@ -72,7 +73,11 @@ function Result({ result }: { result: Simulation }) {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Sobre <Mono dim>{result.considered}</Mono> decisões registradas.
+        <Trans
+          i18nKey="policies.overNDecisions"
+          values={{ count: result.considered }}
+          components={{ n: <Mono dim /> }}
+        />
       </p>
 
       {/* The number that keeps this panel honest. A rule reading arguments
@@ -81,9 +86,11 @@ function Result({ result }: { result: Simulation }) {
           rule somebody was nervous about. */}
       {result.unknown > 0 && (
         <p className="text-xs text-warning">
-          <Mono>{result.unknown}</Mono> decisões não puderam ser respondidas:
-          esta regra lê argumentos, e chamadas recusadas nunca guardaram nenhum.
-          O número acima é um piso, não um total.
+          <Trans
+            i18nKey="policies.unknownDecisions"
+            values={{ count: result.unknown }}
+            components={{ n: <Mono /> }}
+          />
         </p>
       )}
 

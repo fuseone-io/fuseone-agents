@@ -9,7 +9,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
+import {
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+} from "@/components/ui/sidebar";
 import { csrfToken } from "@/lib/api/client";
 import { useMe, type MeGrant } from "@/features/session/api";
 
@@ -34,7 +38,9 @@ export function UserMenu() {
                 </Avatar>
               </span>
               <div className="grid flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
-                <span className="truncate text-sm font-medium">{me.display}</span>
+                <span className="truncate text-sm font-medium">
+                  {me.display}
+                </span>
                 {/* The design shows an email here. This console shows the role
                     instead: in a governance tool, what somebody may do is the
                     fact a reader needs at a glance. */}

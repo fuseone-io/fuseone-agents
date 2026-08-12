@@ -1,3 +1,4 @@
+import { Trans, useTranslation } from "react-i18next";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -54,6 +55,7 @@ export function BudgetForm({
   budget: ScopeBudget | null;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const put = usePutBudget();
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
@@ -94,11 +96,7 @@ export function BudgetForm({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{budget ? "Editar teto" : "Novo teto"}</DialogTitle>
-          <DialogDescription>
-            Tetos herdam para baixo e nunca ampliam: uma área não levanta o que
-            a empresa dela permite. Ao atingir um teto a execução pausa e
-            continua de onde parou, em vez de terminar.
-          </DialogDescription>
+          <DialogDescription>{t("admin.ceilingsInherit")}</DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
@@ -111,7 +109,7 @@ export function BudgetForm({
               name="scope"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Aplica-se a</FormLabel>
+                  <FormLabel>{t("admin.appliesTo")}</FormLabel>
                   <FormControl>
                     <Input
                       {...field}
@@ -121,8 +119,10 @@ export function BudgetForm({
                     />
                   </FormControl>
                   <FormDescription>
-                    <code className="font-mono">installation</code>, uma
-                    empresa, ou <code className="font-mono">empresa/área</code>.
+                    <Trans
+                      i18nKey="admin.scopeShapes"
+                      components={{ code: <code className="font-mono" /> }}
+                    />
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -134,7 +134,7 @@ export function BudgetForm({
               name="period"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Janela</FormLabel>
+                  <FormLabel>{t("admin.window")}</FormLabel>
                   <Select value={field.value} onValueChange={field.onChange}>
                     <FormControl>
                       <SelectTrigger>
@@ -143,11 +143,9 @@ export function BudgetForm({
                     </FormControl>
                     <SelectContent>
                       <SelectItem value="monthly">
-                        Mensal — reinicia no dia 1
+                        {t("admin.monthly")}
                       </SelectItem>
-                      <SelectItem value="daily">
-                        Diária — reinicia à meia-noite UTC
-                      </SelectItem>
+                      <SelectItem value="daily">{t("admin.daily")}</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -160,7 +158,7 @@ export function BudgetForm({
               name="amount"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Teto de gasto</FormLabel>
+                  <FormLabel>{t("admin.spendCeiling")}</FormLabel>
                   <FormControl>
                     <Input
                       {...field}
@@ -169,9 +167,7 @@ export function BudgetForm({
                       placeholder="500"
                     />
                   </FormControl>
-                  <FormDescription>
-                    Em reais. Deixe vazio para não limitar por valor.
-                  </FormDescription>
+                  <FormDescription>{t("admin.inCurrency")}</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -182,7 +178,7 @@ export function BudgetForm({
               name="steps"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Teto de passos</FormLabel>
+                  <FormLabel>{t("admin.stepCeiling")}</FormLabel>
                   <FormControl>
                     <Input
                       {...field}
@@ -201,7 +197,9 @@ export function BudgetForm({
               name="enabled"
               render={({ field }) => (
                 <FormItem className="flex items-center justify-between rounded-lg border p-3">
-                  <FormLabel className="m-0">Ativo</FormLabel>
+                  <FormLabel className="m-0">
+                    {t("integrations.enabled")}
+                  </FormLabel>
                   <FormControl>
                     <Switch
                       checked={field.value}
@@ -214,10 +212,10 @@ export function BudgetForm({
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose}>
-                Cancelar
+                {t("common.cancel")}
               </Button>
               <Button type="submit" disabled={form.formState.isSubmitting}>
-                Salvar
+                {t("common.save")}
               </Button>
             </DialogFooter>
           </form>
