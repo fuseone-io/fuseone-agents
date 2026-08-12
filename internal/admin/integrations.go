@@ -40,6 +40,8 @@ type storedProvider struct {
 type Integrations struct {
 	pool     *pgxpool.Pool
 	settings *settings.Store
+	// health is where observations are forgotten when a server is removed.
+	health *Health
 }
 
 func NewIntegrations(pool *pgxpool.Pool, store *settings.Store) *Integrations {
@@ -121,8 +123,25 @@ func (i *Integrations) MCPToken(ctx context.Context, name string) (string, error
 	return set.Secret, nil
 }
 
+// ForgettingHealth wires where observations are dropped when a server is
+// removed. Optional: a store without it still removes the configuration.
+func (i *Integrations) ForgettingHealth(h *Health) *Integrations {
+	i.health = h
+	return i
+}
+
 func (i *Integrations) DeleteMCPServer(ctx context.Context, by domain.UserID, scope domain.Scope, name string) error {
-	return removeSetting(ctx, i.pool, i.settings, by, scope, settings.KindMCPServer, name, "mcp_server.removed")
+	if err := removeSetting(ctx, i.pool, i.settings, by, scope,
+		settings.KindMCPServer, name, "mcp_server.removed"); err != nil {
+		return err
+	}
+	if i.health == nil {
+		return nil
+	}
+	// After the configuration, and separately: the removal has happened either
+	// way, and a screen showing a stale observation is better than a server
+	// that could not be removed because its observation could not be.
+	return i.health.Forget(ctx, name)
 }
 
 func (i *Integrations) Providers(ctx context.Context) ([]domain.ModelProvider, error) {

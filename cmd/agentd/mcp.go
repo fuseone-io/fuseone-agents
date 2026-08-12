@@ -194,6 +194,8 @@ func (r *reconciler) reconcile(ctx context.Context) {
 		changed = true
 	}
 
+	r.refreshHealth(ctx)
+
 	// Published after the pass rather than only at start-up. Without this a
 	// server that connected later offered its tools to every agent and
 	// appeared on no screen, so the one place an operator goes to classify a
@@ -202,6 +204,18 @@ func (r *reconciler) reconcile(ctx context.Context) {
 		if err := r.publisher.Publish(ctx, r.catalog.Entries()); err != nil {
 			slog.Error("could not publish the tool catalogue", "err", err)
 		}
+	}
+}
+
+// refreshHealth restates what is connected right now.
+//
+// Without it an observation only ever records the moment a server was reached,
+// so a server connected by a process that has since died reads as reachable
+// for ever — and the console has no way to tell a live integration from the
+// ghost of one.
+func (r *reconciler) refreshHealth(ctx context.Context) {
+	for name := range r.connected {
+		observe(ctx, r.health, name, true, r.catalog.CountFrom(name), "")
 	}
 }
 

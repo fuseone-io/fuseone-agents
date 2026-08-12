@@ -42,6 +42,23 @@ func (h *Health) Record(ctx context.Context, obs domain.IntegrationHealth) error
 	return nil
 }
 
+// Forget drops what was observed about a server.
+//
+// Called when one is removed, because the screen shows configuration and
+// observation together: an observation left behind renders as a server nobody
+// configured, which cannot be edited and cannot be deleted. A deletion that
+// leaves a row nobody can act on is not a deletion.
+//
+// Forgetting one nobody observed is not an error: removal is asked from the
+// configured set, not from knowledge of what was ever reached.
+func (h *Health) Forget(ctx context.Context, name string) error {
+	if _, err := h.pool.Exec(ctx,
+		`delete from integration_health where name = $1`, name); err != nil {
+		return fmt.Errorf("admin: forget health of %s: %w", name, err)
+	}
+	return nil
+}
+
 // All returns the latest observation of every server, by name.
 func (h *Health) All(ctx context.Context) (map[string]domain.IntegrationHealth, error) {
 	rows, err := h.pool.Query(ctx, `

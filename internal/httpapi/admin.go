@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
@@ -38,6 +39,12 @@ type Tools interface {
 // installation-wide and the permission to make one is checked in the scope
 // that owns the installation.
 var adminScope = domain.Scope{Company: "default", Area: "platform"}
+
+// staleObservation is how long an unconfigured server stays on the screen
+// after the last worker stopped saying it holds it. Generous next to the
+// reconcile interval, so a worker restart does not blink every flag-configured
+// server off the list.
+const staleObservation = 5 * time.Minute
 
 func (s *Server) ListTools(ctx context.Context, _ openapi.ListToolsRequestObject) (openapi.ListToolsResponseObject, error) {
 	if resp := s.refuse(ctx, domain.PermToolRead); resp != nil {
@@ -242,8 +249,14 @@ func (s *Server) ListIntegrations(ctx context.Context, _ openapi.ListIntegration
 	// to the process by flag or environment. It belongs on this screen: the
 	// question the screen answers is what the installation talks to, and
 	// listing only what the console wrote would answer a different one.
+	//
+	// Only while a worker is still saying so. Workers restate what they hold
+	// on every pass, so an observation that has stopped being refreshed is the
+	// ghost of a process that is gone — and a ghost cannot be edited or
+	// removed, which makes it a row nobody can get rid of.
+	fresh := clockOr(s.clock).Now().Add(-staleObservation)
 	for name, seen := range observed {
-		if configured[name] {
+		if configured[name] || seen.ObservedAt.Before(fresh) {
 			continue
 		}
 		body.McpServers = append(body.McpServers, openapi.MCPServer{

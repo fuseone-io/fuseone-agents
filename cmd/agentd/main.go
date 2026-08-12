@@ -141,7 +141,11 @@ func serve(args []string) error {
 				"variable", vault.KeyEnv)
 		}
 		store := settings.NewStore(identity.pool, v)
-		integrations := admin.NewIntegrations(identity.pool, store)
+		// Forgetting health on removal, because this is the process that serves
+		// the delete: without it a removed server stays on the screen as one
+		// nobody configured, which cannot be edited or removed.
+		integrations := admin.NewIntegrations(identity.pool, store).
+			ForgettingHealth(admin.NewHealth(identity.pool))
 		api = api.WithAdministration(curator, curator, integrations).
 			WithAgents(spec.NewRegistry(identity.pool)).
 			WithCeilings(admin.NewBudgets(identity.pool, store)).
@@ -386,7 +390,7 @@ func workerCmd(args []string) error {
 		}
 		store := settings.NewStore(pool, v)
 		curator = admin.NewCurator(pool)
-		integrations = admin.NewIntegrations(pool, store)
+		integrations = admin.NewIntegrations(pool, store).ForgettingHealth(admin.NewHealth(pool))
 		registry = spec.NewRegistry(pool)
 		budgets = admin.NewBudgets(pool, store)
 

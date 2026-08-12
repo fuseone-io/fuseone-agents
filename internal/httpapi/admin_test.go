@@ -571,3 +571,58 @@ func TestPutBudget_withoutThePermission_isRefused(t *testing.T) {
 		t.Error("a refused request still reached the store")
 	}
 }
+
+func TestListIntegrations_dropsAServerNoWorkerStillHolds(t *testing.T) {
+	t.Parallel()
+
+	// Workers restate what they hold on every pass, so an observation that
+	// stopped being refreshed is the ghost of a process that is gone. It is
+	// not configured, so it cannot be edited or removed — leaving it on the
+	// screen leaves a row nobody can get rid of.
+	admin := &fakeAdmin{}
+	health := fakeHealth{"antigo": {
+		Name: "antigo", Reachable: true,
+		ObservedAt: time.Now().Add(-time.Hour), ObservedBy: "worker-morto",
+	}}
+
+	resp, err := serverWith(t, admin).WithHealth(health).
+		ListIntegrations(as(domain.RoleCurator), openapi.ListIntegrationsRequestObject{})
+	if err != nil {
+		t.Fatalf("ListIntegrations: %v", err)
+	}
+	body := resp.(openapi.ListIntegrations200JSONResponse)
+	if len(body.McpServers) != 0 {
+		t.Errorf("servers = %+v, want the ghost gone", body.McpServers)
+	}
+}
+
+func TestListIntegrations_keepsOneAWorkerStillHolds(t *testing.T) {
+	t.Parallel()
+
+	// The screen answers what the installation talks to, and a server passed
+	// by flag is part of that however little the console can do about it.
+	health := fakeHealth{"crm": {
+		Name: "crm", Reachable: true, ToolCount: 3,
+		ObservedAt: time.Now(), ObservedBy: "worker-1",
+	}}
+
+	resp, err := serverWith(t, &fakeAdmin{}).WithHealth(health).
+		ListIntegrations(as(domain.RoleCurator), openapi.ListIntegrationsRequestObject{})
+	if err != nil {
+		t.Fatalf("ListIntegrations: %v", err)
+	}
+	body := resp.(openapi.ListIntegrations200JSONResponse)
+	if len(body.McpServers) != 1 || body.McpServers[0].Name != "crm" {
+		t.Fatalf("servers = %+v", body.McpServers)
+	}
+	if managed := body.McpServers[0].Managed; managed == nil || *managed {
+		t.Error("a server nobody configured here is reported as managed")
+	}
+}
+
+// fakeHealth stands in for what workers observed.
+type fakeHealth map[string]domain.IntegrationHealth
+
+func (f fakeHealth) All(context.Context) (map[string]domain.IntegrationHealth, error) {
+	return f, nil
+}
