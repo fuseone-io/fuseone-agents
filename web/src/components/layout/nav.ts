@@ -13,6 +13,8 @@ import type { LucideIcon } from "lucide-react";
 
 export interface NavItem {
   to: string;
+  /** A catalogue key. The label is resolved where it is rendered — a label
+   *  read at module load would be pinned to whichever language loaded first. */
   label: string;
   icon: LucideIcon;
   /**
@@ -37,22 +39,22 @@ export interface NavGroup {
  */
 export const NAV: NavGroup[] = [
   {
-    label: "Operar",
+    label: "nav.operate",
     items: [
-      { to: "/overview", label: "Visão geral", icon: LayoutDashboard, permission: "run:read" },
-      { to: "/agents", label: "Agentes", icon: Bot, permission: "agent:read" },
-      { to: "/runs", label: "Execuções", icon: Activity, permission: "run:read" },
-      { to: "/approvals", label: "Fila humana", icon: Hand, permission: "approval:act" },
+      { to: "/overview", label: "nav.overview", icon: LayoutDashboard, permission: "run:read" },
+      { to: "/agents", label: "nav.agents", icon: Bot, permission: "agent:read" },
+      { to: "/runs", label: "nav.runs", icon: Activity, permission: "run:read" },
+      { to: "/approvals", label: "nav.approvals", icon: Hand, permission: "approval:act" },
     ],
   },
   {
-    label: "Governar",
+    label: "nav.govern",
     items: [
-      { to: "/policies", label: "Políticas", icon: Scale, permission: "policy:read" },
-      { to: "/audit", label: "Trilha de auditoria", icon: ScrollText, permission: "audit:read" },
-      { to: "/cost", label: "Custo e limites", icon: Wallet, permission: "cost:read" },
-      { to: "/integrations", label: "Integrações", icon: Plug, permission: "tool:read" },
-      { to: "/admin", label: "Administração", icon: Settings2, permission: "tool:read" },
+      { to: "/policies", label: "nav.policies", icon: Scale, permission: "policy:read" },
+      { to: "/audit", label: "nav.audit", icon: ScrollText, permission: "audit:read" },
+      { to: "/cost", label: "nav.cost", icon: Wallet, permission: "cost:read" },
+      { to: "/integrations", label: "nav.integrations", icon: Plug, permission: "tool:read" },
+      { to: "/admin", label: "nav.admin", icon: Settings2, permission: "tool:read" },
     ],
   },
 ];
@@ -76,14 +78,16 @@ export const PAGE_ICONS: Record<string, LucideIcon> = {
   integrations: Plug,
 };
 
+/** The catalogue key for each screen's name, so the breadcrumb and the
+ *  navigation cannot drift into calling one screen two things. */
 export const PAGE_TITLES: Record<string, string> = {
-  overview: "Visão geral",
-  agents: "Agentes",
-  runs: "Execuções",
-  approvals: "Fila humana",
-  policies: "Políticas",
-  audit: "Trilha de auditoria",
-  cost: "Custo e limites",
-  admin: "Administração",
-  integrations: "Integrações",
+  overview: "nav.overview",
+  agents: "nav.agents",
+  runs: "nav.runs",
+  approvals: "nav.approvals",
+  policies: "nav.policies",
+  audit: "nav.audit",
+  cost: "nav.cost",
+  admin: "nav.admin",
+  integrations: "nav.integrations",
 };

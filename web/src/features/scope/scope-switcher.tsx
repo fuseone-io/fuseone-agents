@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronsUpDown } from "lucide-react";
 import {
   DropdownMenu,
@@ -14,8 +15,6 @@ import { ScopeChoice } from "@/features/scope/scope-choice";
 import { ScopeGroup } from "@/features/scope/scope-group";
 import { useMe } from "@/features/session/api";
 
-const EVERYTHING = "Tudo o que eu alcanço";
-
 /**
  * Which company and area the console is reading.
  *
@@ -25,6 +24,7 @@ const EVERYTHING = "Tudo o que eu alcanço";
  * dropped the moment the grant behind it is.
  */
 export function ScopeSwitcher() {
+  const { t } = useTranslation();
   const { data: me } = useMe();
   const { data } = useScopes();
   const { company, area, choose, reconcile } = useActiveScope();
@@ -49,7 +49,7 @@ export function ScopeSwitcher() {
           <div className="grid flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
             <LogoLockup className="text-base text-sidebar-accent-foreground" />
             <span className="truncate text-xs text-muted-foreground">
-              {currentLabel({ company, area }, areas)}
+              {currentLabel({ company, area }, areas, t)}
             </span>
           </div>
           <ChevronsUpDown className="ml-auto size-4 shrink-0 opacity-60 group-data-[collapsible=icon]:hidden" />
@@ -58,10 +58,10 @@ export function ScopeSwitcher() {
 
       <DropdownMenuContent align="start" side={isMobile ? "bottom" : "right"} className="w-[248px]">
         <DropdownMenuLabel className="text-2xs uppercase tracking-label text-muted-foreground">
-          Contexto
+          {t("scope.label")}
         </DropdownMenuLabel>
         <ScopeChoice
-          label={EVERYTHING}
+          label={t("scope.everything")}
           chosen={company === ""}
           onChoose={() => choose({ company: "", area: "" })}
         />
@@ -82,8 +82,9 @@ export function ScopeSwitcher() {
 function currentLabel(
   { company, area }: { company: string; area: string },
   areas: RegisteredScope[],
+  t: (key: string) => string,
 ): string {
-  if (company === "") return EVERYTHING;
+  if (company === "") return t("scope.everything");
   if (area === "") return company;
   return areas.find((a) => a.company === company && a.area === area)?.label || area;
 }

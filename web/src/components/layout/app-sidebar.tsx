@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Link, useLocation } from "react-router-dom";
 import {
   Sidebar,
@@ -18,6 +19,7 @@ import { useMe } from "@/features/session/api";
 import { ScopeSwitcher } from "@/features/scope/scope-switcher";
 
 export function AppSidebar() {
+  const { t } = useTranslation();
   const { pathname } = useLocation();
   const { data: me } = useMe();
   const allowed = permissionFilter(me?.can);
@@ -42,7 +44,7 @@ export function AppSidebar() {
         {NAV.map((group) => (
           <SidebarGroup key={group.label}>
             <SidebarGroupLabel className="text-2xs uppercase tracking-label">
-              {group.label}
+              {t(group.label)}
             </SidebarGroupLabel>
             <SidebarMenu>
               {group.items.filter(allowed).map((item) => (
@@ -61,15 +63,17 @@ export function AppSidebar() {
 }
 
 function NavLink({ item, active }: { item: NavItem; active: boolean }) {
+  const { t } = useTranslation();
   const Icon = item.icon;
+  const label = t(item.label);
   const pending = usePendingCount(item.to);
 
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton asChild isActive={active} tooltip={item.label}>
+      <SidebarMenuButton asChild isActive={active} tooltip={label}>
         <Link to={item.to}>
           <Icon className={active ? "text-primary" : undefined} />
-          <span>{item.label}</span>
+          <span>{label}</span>
         </Link>
       </SidebarMenuButton>
       {/* The count is what makes the queue worth opening; without it the

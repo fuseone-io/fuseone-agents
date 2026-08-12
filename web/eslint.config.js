@@ -2,6 +2,7 @@ import js from "@eslint/js";
 import globals from "globals";
 import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
+import i18next from "eslint-plugin-i18next";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
@@ -13,6 +14,7 @@ export default tseslint.config(
     plugins: {
       "react-hooks": reactHooks,
       "react-refresh": reactRefresh,
+      i18next,
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
@@ -20,7 +22,24 @@ export default tseslint.config(
       // The core rules say what this codebase has already decided in CLAUDE.md.
       "@typescript-eslint/no-explicit-any": "error",
       "no-restricted-imports": ["error", { patterns: ["../*"] }],
+      // A literal in JSX is a bug: it ships in one language to everyone.
+      // Whoever adds one is reading their own locale and cannot see the
+      // failure, so the rule has to be the thing that notices.
+      // A warning while the migration runs, an error the moment it lands.
+      // Leaving it at error today would make `make console` red for the whole
+      // sweep, and a red check nobody can act on is a check nobody reads.
+      "i18next/no-literal-string": [
+        "warn",
+        { mode: "jsx-text-only", "should-validate-template": true },
+      ],
     },
+  },
+  {
+    // A test asserts on the words a person sees. Routing those through the
+    // catalogue would make the test pass whenever the catalogue and the
+    // component agree — including when they agree on the wrong words.
+    files: ["**/__tests__/**"],
+    rules: { "i18next/no-literal-string": "off" },
   },
   {
     // CLI-owned: these files come from `shadcn add` and are re-generated. The
@@ -29,6 +48,7 @@ export default tseslint.config(
     // re-applied on every update for no product gain.
     files: ["src/components/ui/**", "src/hooks/use-mobile.ts"],
     rules: {
+      "i18next/no-literal-string": "off",
       "react-hooks/purity": "off",
       "react-hooks/set-state-in-effect": "off",
       "react-refresh/only-export-components": "off",

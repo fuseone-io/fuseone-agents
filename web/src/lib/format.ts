@@ -1,56 +1,53 @@
+import { currentLocale } from "@/i18n";
 import type { Cost } from "@/lib/api/client";
 
 const MICROS_PER_UNIT = 1_000_000;
 
-const currency = new Intl.NumberFormat("pt-BR", {
-  style: "currency",
-  currency: "BRL",
-});
-
-const compactCurrency = new Intl.NumberFormat("pt-BR", {
-  style: "currency",
-  currency: "BRL",
-  maximumFractionDigits: 4,
-});
+/**
+ * What the installation bills in.
+ *
+ * Deliberately not a function of the locale. Money crosses the wire as
+ * millionths of the installation's currency, so choosing English must change
+ * "1.234,50" into "1,234.50" and leave R$ as R$ — a reader who switched
+ * language and saw dollars would be looking at a different number. When the
+ * API reports the installation's currency, this reads it from there.
+ */
+const CURRENCY = "BRL";
 
 /**
- * Money crosses the wire as an integer in millionths of the installation's
- * currency and is only ever divided here, at the edge. A run costing a
- * fraction of a cent is normal, so small amounts keep four decimals instead of
- * rounding to R$ 0,00 and reading as free.
+ * Built per call rather than once at module load.
+ *
+ * A formatter captured at import time is pinned to whichever locale was active
+ * then, so every figure on the screen would keep the old language after a
+ * switch. Intl caches internally, so this is not the cost it looks like.
+ */
+const numberFormat = (options: Intl.NumberFormatOptions) =>
+  new Intl.NumberFormat(currentLocale(), options);
+
+/**
+ * A run costing a fraction of a cent is normal, so small amounts keep four
+ * decimals instead of rounding to zero and reading as free.
  */
 export function formatMicros(micros: number): string {
   const value = micros / MICROS_PER_UNIT;
-  if (value !== 0 && Math.abs(value) < 0.01) {
-    return compactCurrency.format(value);
-  }
-  return currency.format(value);
+  const digits = value !== 0 && Math.abs(value) < 0.01 ? { maximumFractionDigits: 4 } : {};
+  return numberFormat({ style: "currency", currency: CURRENCY, ...digits }).format(value);
 }
 
 export function formatCost(cost: Cost | undefined): string {
   return formatMicros(cost?.micros ?? 0);
 }
 
-const integer = new Intl.NumberFormat("pt-BR");
-
 export function formatTokens(n: number | undefined): string {
-  return integer.format(n ?? 0);
+  return numberFormat({}).format(n ?? 0);
 }
-
-const dateTime = new Intl.DateTimeFormat("pt-BR", {
-  dateStyle: "short",
-  timeStyle: "medium",
-});
 
 export function formatInstant(iso: string): string {
-  return dateTime.format(new Date(iso));
+  return new Intl.DateTimeFormat(currentLocale(), {
+    dateStyle: "short",
+    timeStyle: "medium",
+  }).format(new Date(iso));
 }
-
-const timeOnly = new Intl.DateTimeFormat("pt-BR", {
-  hour: "2-digit",
-  minute: "2-digit",
-  second: "2-digit",
-});
 
 /**
  * The time alone, for a sequence that happens within one day.
@@ -60,10 +57,12 @@ const timeOnly = new Intl.DateTimeFormat("pt-BR", {
  * how far apart two steps were.
  */
 export function formatTime(iso: string): string {
-  return timeOnly.format(new Date(iso));
+  return new Intl.DateTimeFormat(currentLocale(), {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(new Date(iso));
 }
-
-const relative = new Intl.RelativeTimeFormat("pt-BR", { numeric: "auto" });
 
 const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ["second", 60],
@@ -73,6 +72,7 @@ const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
 ];
 
 export function formatRelative(iso: string, now = Date.now()): string {
+  const relative = new Intl.RelativeTimeFormat(currentLocale(), { numeric: "auto" });
   let delta = (new Date(iso).getTime() - now) / 1000;
   for (const [unit, step] of UNITS) {
     if (Math.abs(delta) < step) {
@@ -93,9 +93,14 @@ export function shortHash(hash: string): string {
  *
  * Rendered coarsely on purpose — "2m 41s", not "2m 41.283s". The reader is
  * comparing runs in a column, and precision they cannot act on only makes the
- * column harder to scan.
+ * column harder to scan. The unit letters are the same in both languages the
+ * console ships, which is why this is not a translated string.
  */
-export function formatDuration(startedAt: string, endedAt?: string | null, now = Date.now()): string {
+export function formatDuration(
+  startedAt: string,
+  endedAt?: string | null,
+  now = Date.now(),
+): string {
   const start = Date.parse(startedAt);
   const end = endedAt ? Date.parse(endedAt) : now;
   if (Number.isNaN(start) || Number.isNaN(end)) return "—";

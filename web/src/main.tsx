@@ -1,4 +1,7 @@
 import { StrictMode } from "react";
+// Before anything renders: a component that called t() first would render key
+// names for one pass and then correct itself.
+import "@/i18n";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";

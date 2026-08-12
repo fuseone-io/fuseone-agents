@@ -1,0 +1,51 @@
+{
+  "common": {
+    "cancel": "Cancel",
+    "close": "Close",
+    "loadFailed": "Could not load",
+    "loadFailedHint": "Check the connection to the server and try again.",
+    "loading": "Loading",
+    "new": "New",
+    "remove": "Remove",
+    "retry": "Try again",
+    "save": "Save"
+  },
+  "language": {
+    "change": "Change language"
+  },
+  "nav": {
+    "admin": "Administration",
+    "agents": "Agents",
+    "approvals": "Human queue",
+    "audit": "Audit trail",
+    "cost": "Cost and limits",
+    "govern": "Govern",
+    "integrations": "Integrations",
+    "operate": "Operate",
+    "overview": "Overview",
+    "policies": "Policies",
+    "runs": "Runs"
+  },
+  "notFound": {
+    "goToOverview": "Go to the overview",
+    "hint": "The address matches no screen in the console. It may be an old link, or a screen nobody has built yet.",
+    "title": "This screen does not exist"
+  },
+  "scope": {
+    "everything": "Everything I can reach",
+    "label": "Context",
+    "noAreas": "No area declared",
+    "wholeCompany": "All of {{company}}"
+  },
+  "shell": {
+    "breadcrumb": "Breadcrumb",
+    "signOut": "Sign out",
+    "toggleSidebar": "Toggle sidebar"
+  },
+  "theme": {
+    "change": "Change theme",
+    "dark": "Dark",
+    "light": "Light",
+    "system": "System"
+  }
+}

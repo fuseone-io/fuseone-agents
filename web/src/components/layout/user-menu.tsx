@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { ChevronsUpDown, LogOut } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -13,6 +14,7 @@ import { csrfToken } from "@/lib/api/client";
 import { useMe, type MeGrant } from "@/features/session/api";
 
 export function UserMenu() {
+  const { t } = useTranslation();
   const { data: me } = useMe();
   if (!me) return null;
 
@@ -51,7 +53,7 @@ export function UserMenu() {
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={signOut}>
               <LogOut className="size-4" />
-              Sair
+              {t("shell.signOut")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

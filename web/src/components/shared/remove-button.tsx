@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,6 +26,8 @@ export function RemoveButton({
   description: string;
   onConfirm: () => void;
 }) {
+  const { t } = useTranslation();
+
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
@@ -38,8 +41,8 @@ export function RemoveButton({
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-          <AlertDialogAction onClick={onConfirm}>Remover</AlertDialogAction>
+          <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm}>{t("common.remove")}</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useTheme } from "next-themes";
 import { Monitor, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,9 +10,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 const OPTIONS = [
-  { value: "light", label: "Claro", icon: Sun },
-  { value: "dark", label: "Escuro", icon: Moon },
-  { value: "system", label: "Do sistema", icon: Monitor },
+  { value: "light", label: "theme.light", icon: Sun },
+  { value: "dark", label: "theme.dark", icon: Moon },
+  { value: "system", label: "theme.system", icon: Monitor },
 ] as const;
 
 /**
@@ -19,12 +20,13 @@ const OPTIONS = [
  * people have already made once and should not have to make again per app.
  */
 export function ThemeToggle() {
+  const { t } = useTranslation();
   const { theme, setTheme } = useTheme();
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label="Mudar tema">
+        <Button variant="ghost" size="icon" aria-label={t("theme.change")}>
           <Sun className="size-4 dark:hidden" />
           <Moon className="hidden size-4 dark:block" />
         </Button>
@@ -38,7 +40,7 @@ export function ThemeToggle() {
             className="data-[active=true]:text-text-accent"
           >
             <Icon className="size-4" />
-            {label}
+            {t(label)}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

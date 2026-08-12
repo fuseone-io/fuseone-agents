@@ -1,0 +1,51 @@
+{
+  "common": {
+    "cancel": "Cancelar",
+    "close": "Fechar",
+    "loadFailed": "Não foi possível carregar",
+    "loadFailedHint": "Verifique a conexão com o servidor e tente novamente.",
+    "loading": "Carregando",
+    "new": "Novo",
+    "remove": "Remover",
+    "retry": "Tentar de novo",
+    "save": "Salvar"
+  },
+  "language": {
+    "change": "Mudar idioma"
+  },
+  "nav": {
+    "admin": "Administração",
+    "agents": "Agentes",
+    "approvals": "Fila humana",
+    "audit": "Trilha de auditoria",
+    "cost": "Custo e limites",
+    "govern": "Governar",
+    "integrations": "Integrações",
+    "operate": "Operar",
+    "overview": "Visão geral",
+    "policies": "Políticas",
+    "runs": "Execuções"
+  },
+  "notFound": {
+    "goToOverview": "Ir para a visão geral",
+    "hint": "O endereço não corresponde a nenhuma tela do console. Pode ser um link antigo, ou uma tela que ainda não foi construída.",
+    "title": "Esta tela não existe"
+  },
+  "scope": {
+    "everything": "Tudo o que eu alcanço",
+    "label": "Contexto",
+    "noAreas": "Nenhuma área declarada",
+    "wholeCompany": "Toda a {{company}}"
+  },
+  "shell": {
+    "breadcrumb": "Trilha de navegação",
+    "signOut": "Sair",
+    "toggleSidebar": "Alternar barra lateral"
+  },
+  "theme": {
+    "change": "Mudar tema",
+    "dark": "Escuro",
+    "light": "Claro",
+    "system": "Do sistema"
+  }
+}

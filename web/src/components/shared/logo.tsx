@@ -80,11 +80,15 @@ function strokeFor(size: number, mono?: boolean): number {
  */
 export function LogoLockup({ className }: { className?: string }) {
   return (
+    /* The product's name, not a phrase: it reads the same in both languages,
+       and translating it would rename the product for half its users. */
+    /* eslint-disable i18next/no-literal-string */
     <span className={cn("whitespace-nowrap tracking-[-0.035em]", className)}>
       <span className="font-light">Fuse</span>
       <span className="font-semibold">One</span>
       <span className="ml-[0.34em] font-normal text-text-accent">Agents</span>
     </span>
+    /* eslint-enable i18next/no-literal-string */
   );
 }
 
