@@ -10,6 +10,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/fuseone/agents/internal/settings"
+	"github.com/fuseone/agents/internal/simulate"
 	"github.com/fuseone/agents/internal/vault"
 	"log/slog"
 	"net/http"
@@ -151,6 +152,10 @@ func serve(args []string) error {
 			// can show that an approval is pending but not what it is for,
 			// which is the one thing the approver needs.
 			WithContent(ledger.NewContent(identity.pool)).
+			// The same store, filing the case sets a simulation is run
+			// against. A set is real customer records and belongs under the
+			// installation's retention like every other bulky payload (AU-04).
+			WithCases(ledger.NewContent(identity.pool)).
 			WithWebhooks(trigger.NewPostgresWebhooks(identity.pool)).
 			WithAudit(audit.NewPostgres(identity.pool)).
 			WithHealth(admin.NewHealth(identity.pool)).
@@ -465,10 +470,34 @@ func workerCmd(args []string) error {
 		Owner: *owner, Concurrency: *concurrency, Lease: *lease,
 	}, queue, deps, specs, engine.SystemClock{}, slog.Default())
 
+	// The other half of the queue, drained by a pool built with the dry tool
+	// layer. A separate pool rather than a branch inside this one: the branch
+	// would be a single mistaken condition away from executing a dry run's
+	// proposals against production, and the two claims cannot reach each
+	// other's runs.
+	//
+	// Smaller, because a simulation is somebody waiting at a screen for a set
+	// of a few dozen, not the installation's steady load — and because the
+	// budget it spends is real.
+	dry := simulations(store)
+	sim := worker.New(worker.Config{
+		Owner: *owner + "-sim", Concurrency: simulationSlots(*concurrency), Lease: *lease,
+	}, dry, simulate.Deps(deps), specs, engine.SystemClock{}, slog.Default())
+
 	if budgets != nil {
 		if spender, ok := store.(spendReader); ok {
 			w = w.WithCeilings(ceilings{Budgets: budgets, spend: spender})
+			// The same ceilings. A simulation is dry at the tool layer and
+			// nowhere else: every planning call is billed by the provider, and
+			// a set of fifty that ignored the scope's budget would be the
+			// cheapest way to exhaust it.
+			sim = sim.WithCeilings(ceilings{Budgets: budgets, spend: spender})
 		}
+	}
+
+	if dry != nil {
+		go runSimulations(ctx, sim)
+		slog.Info("simulation pool started", "slots", simulationSlots(*concurrency))
 	}
 
 	// The scheduler is a goroutine with an owner: it stops when the worker's
@@ -493,6 +522,34 @@ func workerCmd(args []string) error {
 		return nil
 	}
 	return err
+}
+
+// simulations returns the half of the queue holding simulated runs, or nil
+// when the store cannot serve one.
+func simulations(store Store) worker.Queue {
+	type simulatable interface{ Simulations() ledger.SimulationQueue }
+	if s, ok := store.(simulatable); ok {
+		return s.Simulations()
+	}
+	return nil
+}
+
+// simulationSlots keeps the simulation pool a fraction of the main one, and
+// never zero: an installation running a single worker still has to be able to
+// simulate, or an agent could never leave Draft.
+func simulationSlots(concurrency int) int {
+	if slots := concurrency / 2; slots > 0 {
+		return slots
+	}
+	return 1
+}
+
+// runSimulations owns the simulation pool: it stops when the worker's context
+// does, like the scheduler beside it.
+func runSimulations(ctx context.Context, w *worker.Worker) {
+	if err := w.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+		slog.Error("simulation pool stopped", "err", err)
+	}
 }
 
 // policyRefresh bounds how long an authored policy takes to reach a running

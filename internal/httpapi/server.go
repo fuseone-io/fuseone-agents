@@ -39,6 +39,9 @@ type Store interface {
 	ListRuns(ctx context.Context, filter domain.RunFilter, phase string, limit int) ([]domain.RunSummary, error)
 	CostRollup(ctx context.Context, filter domain.RunFilter, groupBy string) ([]domain.CostBucket, error)
 	AgentActivity(ctx context.Context, filter domain.RunFilter) ([]domain.AgentActivity, error)
+	// SimulationRuns finds the runs one simulation opened. The report is a
+	// fold of them, like every other projection here.
+	SimulationRuns(ctx context.Context, simulation string) ([]domain.RunID, error)
 }
 
 // Server implements openapi.StrictServerInterface.
@@ -65,12 +68,9 @@ type Server struct {
 	spend        Spend
 	rates        Rates
 	pauses       trigger.Pauses
-	// simulations, resolve and cases back the authoring safety net. Optional
-	// together: an installation that publishes agents from files has no use
-	// for any of them.
-	simulations Simulations
-	resolve     Resolve
-	cases       Cases
+	// cases is where an uploaded simulation set is filed. Optional, like the
+	// rest of the authoring area.
+	cases Cases
 	publisher   Publisher
 	// clock is injectable so a run's opening instant is a fact of the request
 	// rather than of whichever machine happened to serve it.

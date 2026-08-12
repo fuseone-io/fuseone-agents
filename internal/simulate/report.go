@@ -181,12 +181,9 @@ type Report struct {
 	Version domain.VersionID `json:"version"`
 	Cases   []Case           `json:"cases"`
 
-	// Expected is how many cases the set holds. A report read while the
-	// simulation is still going says seven of twenty rather than seven, and a
-	// finished one whose count falls short says plainly that some cases never
-	// ran.
-	Expected int `json:"expected"`
-	// Running is whether anything is still driving it.
+	// Running is whether any case has yet to settle. Derived rather than
+	// tracked: the runs are the queue, so a simulation is still going exactly
+	// when one of its runs is, and a flag kept beside them could say otherwise.
 	Running bool `json:"running"`
 }
 

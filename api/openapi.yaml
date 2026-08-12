@@ -405,8 +405,9 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409':
           description: |
-            Another simulation is already queued. Refused rather than queued
-            without limit: these cost real money at a real provider.
+            Not one case could be opened — a paused agent, most likely.
+            Answering as though the set had started would leave the author
+            polling a report that will never have a row.
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
@@ -1564,7 +1565,10 @@ components:
         id: { type: string }
         cases:
           type: integer
-          description: How many cases the file held.
+          description: >
+            How many runs the set actually opened. A file of fifty that opened
+            forty-eight is a simulation of forty-eight cases, and saying fifty
+            would give an author coverage that is a lie.
 
     SimulationSettled:
       type: string
@@ -1619,7 +1623,7 @@ components:
 
     SimulationReport:
       type: object
-      required: [id, cases, expected, running]
+      required: [id, cases, running]
       properties:
         id: { type: string }
         agent: { type: string }
@@ -1627,12 +1631,12 @@ components:
         cases:
           type: array
           items: { $ref: '#/components/schemas/SimulationCase' }
-        expected:
-          type: integer
-          description: How many cases the set holds.
         running:
           type: boolean
-          description: Whether anything is still driving it.
+          description: >
+            Whether any case has yet to settle. Derived from the runs rather
+            than tracked beside them: the runs are the queue, so a simulation
+            is still going exactly when one of its runs is.
 
     Run:
       type: object

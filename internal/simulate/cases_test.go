@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/simulate"
 )
 
@@ -32,7 +31,7 @@ func TestLoad_eachLineBecomesOneCase(t *testing.T) {
 	t.Parallel()
 
 	store := &fakeStore{}
-	got, err := simulate.Load(t.Context(), store, domain.AgentID("suporte"), []byte(
+	got, err := simulate.Load(t.Context(), store, "sim-1", []byte(
 		`{"assunto":"cobrança"}`+"\n"+`{"assunto":"acesso"}`+"\n"))
 	if err != nil {
 		t.Fatalf("load: %v", err)
@@ -51,7 +50,7 @@ func TestLoad_blankLines_areNotCases(t *testing.T) {
 	t.Parallel()
 
 	store := &fakeStore{}
-	got, err := simulate.Load(t.Context(), store, "suporte", []byte("\n\n"+`{"a":1}`+"\n\n"))
+	got, err := simulate.Load(t.Context(), store, "sim-1", []byte("\n\n"+`{"a":1}`+"\n\n"))
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
@@ -65,7 +64,7 @@ func TestLoad_blankLines_areNotCases(t *testing.T) {
 func TestLoad_aLineThatIsNotJSON_namesTheLineAndRefusesTheFile(t *testing.T) {
 	t.Parallel()
 
-	_, err := simulate.Load(t.Context(), &fakeStore{}, "suporte",
+	_, err := simulate.Load(t.Context(), &fakeStore{}, "sim-1",
 		[]byte(`{"a":1}`+"\nnão é json\n"+`{"b":2}`))
 
 	// Refused whole rather than partly loaded. Fifty cases minus one that
@@ -79,7 +78,7 @@ func TestLoad_aLineThatIsNotJSON_namesTheLineAndRefusesTheFile(t *testing.T) {
 func TestLoad_anEmptyFile_isRefused(t *testing.T) {
 	t.Parallel()
 
-	if _, err := simulate.Load(t.Context(), &fakeStore{}, "suporte", []byte("  \n")); err == nil {
+	if _, err := simulate.Load(t.Context(), &fakeStore{}, "sim-1", []byte("  \n")); err == nil {
 		t.Error("want a refusal")
 	}
 }

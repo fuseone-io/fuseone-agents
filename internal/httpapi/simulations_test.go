@@ -1,7 +1,8 @@
 package httpapi
 
 import (
-	"context"
+	gocontext "context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -9,44 +10,18 @@ import (
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/ledger"
-	"github.com/fuseone/agents/internal/simulate"
 )
 
-// Simulating is how an agent earns its way out of Draft (FU-10), so the two
+// Simulating is how an agent earns its way out of Draft (FU-10). The two
 // things that matter here are that a set is accepted whole or not at all, and
-// that reading a report never depends on the process that produced it.
+// that what comes back is a fold of the runs rather than a record kept beside
+// them.
 
-type fakeSimulations struct {
-	submitted []simulate.Job
-	err       error
-	report    simulate.Report
-}
-
-func (f *fakeSimulations) Submit(job simulate.Job) error {
-	if f.err != nil {
-		return f.err
-	}
-	f.submitted = append(f.submitted, job)
-	return nil
-}
-
-func (f *fakeSimulations) Report(context.Context, string) (simulate.Report, error) {
-	return f.report, nil
-}
-
-func simulatable(t *testing.T, sims *fakeSimulations) *Server {
+func simulatable(t *testing.T, store *ledger.Memory) *Server {
 	t.Helper()
-	resolve := func(context.Context, domain.AgentID, domain.VersionID) (engine.Start, engine.Planner, error) {
-		return engine.Start{}, stubPlanner{}, nil
-	}
-	return NewServer(ledger.NewMemory(), "test").WithAgents(triggerable(t)).
-		WithSimulations(sims, resolve, engine.NewMemoryContent())
-}
-
-type stubPlanner struct{}
-
-func (stubPlanner) Plan(context.Context, engine.PlanInput) (engine.Proposal, error) {
-	return engine.Proposal{Done: true}, nil
+	content := engine.NewMemoryContent()
+	return NewServer(store, "test").WithAgents(triggerable(t)).
+		WithContent(content).WithCases(content)
 }
 
 func startSimulation(cases string) openapi.StartSimulationRequestObject {
@@ -57,11 +32,11 @@ func startSimulation(cases string) openapi.StartSimulationRequestObject {
 	}
 }
 
-func TestStartSimulation_acceptsTheSetAndNamesTheSimulation(t *testing.T) {
+func TestStartSimulation_opensOneRunPerCase_eachNamingTheSimulation(t *testing.T) {
 	t.Parallel()
 
-	sims := &fakeSimulations{}
-	resp, err := simulatable(t, sims).StartSimulation(
+	store := ledger.NewMemory()
+	resp, err := simulatable(t, store).StartSimulation(
 		inArea("cx", domain.RoleAuthor),
 		startSimulation(`{"assunto":"cobrança"}`+"\n"+`{"assunto":"acesso"}`+"\n"))
 	if err != nil {
@@ -73,23 +48,34 @@ func TestStartSimulation_acceptsTheSetAndNamesTheSimulation(t *testing.T) {
 		t.Fatalf("response = %T, want the set accepted", resp)
 	}
 	if accepted.Cases != 2 || accepted.Id == "" {
-		t.Errorf("accepted = %+v", accepted)
+		t.Fatalf("accepted = %+v", accepted)
 	}
-	if len(sims.submitted) != 1 || len(sims.submitted[0].Cases) != 2 {
-		t.Fatalf("submitted = %+v", sims.submitted)
+
+	// The runs are the queue, so they exist the moment this answers — and
+	// every one of them says which simulation it belongs to.
+	ids, err := store.SimulationRuns(gocontext.Background(), accepted.Id)
+	if err != nil {
+		t.Fatalf("SimulationRuns: %v", err)
 	}
-	// The job carries the id it answered with, or the caller polls a report
-	// that will never exist.
-	if sims.submitted[0].ID != accepted.Id {
-		t.Errorf("job %q, answered %q", sims.submitted[0].ID, accepted.Id)
+	if len(ids) != 2 {
+		t.Fatalf("runs = %v, want one per case", ids)
+	}
+	steps, _ := store.Read(gocontext.Background(), ids[0], domain.FirstSeq)
+	var p domain.RunStartedPayload
+	if err := json.Unmarshal(steps[0].Payload, &p); err != nil {
+		t.Fatalf("payload: %v", err)
+	}
+	// Marked, so no worker holding real tools can ever claim it.
+	if !p.Simulated || p.Simulation != accepted.Id {
+		t.Errorf("run opened as %+v", p)
 	}
 }
 
 func TestStartSimulation_aLineThatIsNotJSON_refusesTheWholeFile(t *testing.T) {
 	t.Parallel()
 
-	sims := &fakeSimulations{}
-	resp, err := simulatable(t, sims).StartSimulation(
+	store := ledger.NewMemory()
+	resp, err := simulatable(t, store).StartSimulation(
 		inArea("cx", domain.RoleAuthor),
 		startSimulation(`{"assunto":"cobrança"}`+"\nnão é json\n"))
 	if err != nil {
@@ -104,33 +90,20 @@ func TestStartSimulation_aLineThatIsNotJSON_refusesTheWholeFile(t *testing.T) {
 	if bad.Detail == nil || !strings.Contains(*bad.Detail, "2") {
 		t.Errorf("detail = %v, want the line named", bad.Detail)
 	}
-	// Nothing started: half a set is coverage that lies.
-	if len(sims.submitted) != 0 {
-		t.Error("a set with a bad line was submitted anyway")
-	}
-}
-
-func TestStartSimulation_whenTheQueueIsFull_saysSoRatherThanFailing(t *testing.T) {
-	t.Parallel()
-
-	sims := &fakeSimulations{err: simulate.ErrBusy}
-	resp, err := simulatable(t, sims).StartSimulation(
-		inArea("cx", domain.RoleAuthor), startSimulation(`{"n":1}`))
-	if err != nil {
-		t.Fatalf("StartSimulation: %v", err)
-	}
-	if _, ok := resp.(openapi.StartSimulation409ApplicationProblemPlusJSONResponse); !ok {
-		t.Fatalf("response = %T, want a conflict", resp)
+	// And nothing opened: half a set is coverage that lies.
+	runs, _ := store.Runs(gocontext.Background())
+	if len(runs) != 0 {
+		t.Errorf("runs = %v, want none", runs)
 	}
 }
 
 func TestStartSimulation_withoutTheAuthorityToPublish_isForbidden(t *testing.T) {
 	t.Parallel()
 
-	sims := &fakeSimulations{}
+	store := ledger.NewMemory()
 	// Simulating spends real money at a real provider and is the gate an
 	// agent passes before it may be published. Reading runs is not that.
-	resp, err := simulatable(t, sims).StartSimulation(
+	resp, err := simulatable(t, store).StartSimulation(
 		inArea("cx", domain.RoleAuditor), startSimulation(`{"n":1}`))
 	if err != nil {
 		t.Fatalf("StartSimulation: %v", err)
@@ -138,56 +111,85 @@ func TestStartSimulation_withoutTheAuthorityToPublish_isForbidden(t *testing.T) 
 	if _, ok := resp.(openapi.StartSimulation403ApplicationProblemPlusJSONResponse); !ok {
 		t.Fatalf("response = %T, want it refused", resp)
 	}
-	if len(sims.submitted) != 0 {
-		t.Error("it was submitted anyway")
+	if runs, _ := store.Runs(gocontext.Background()); len(runs) != 0 {
+		t.Error("runs were opened anyway")
 	}
 }
 
-func TestGetSimulation_rendersTheRowsAndWhatEachActWas(t *testing.T) {
+func TestStartSimulation_whenNotOneCaseCanOpen_saysSoRatherThanAccepting(t *testing.T) {
 	t.Parallel()
 
-	sims := &fakeSimulations{report: simulate.Report{
-		ID: "sim-1", Agent: "triage", Version: "v2", Expected: 2, Running: true,
-		Cases: []simulate.Case{{
-			RunID: "run-1", Settled: simulate.SettledParked, Steps: 4,
-			Cost: domain.Cost{Micros: 1500, InputTokens: 900},
-			Acted: []simulate.Act{{
-				Step: "Responder", Tool: "crm.refund", Effect: domain.EffectFinancial,
-				Verdict: domain.VerdictBlock, Rule: "capability",
-			}},
-		}},
-	}}
+	store := ledger.NewMemory()
+	server := simulatable(t, store).WithPauses(pausedAgent{})
 
-	resp, err := simulatable(t, sims).GetSimulation(
-		inArea("cx", domain.RoleAuthor),
-		openapi.GetSimulationRequestObject{AgentId: "triage", SimulationId: "sim-1"})
+	resp, err := server.StartSimulation(inArea("cx", domain.RoleAuthor), startSimulation(`{"n":1}`))
+	if err != nil {
+		t.Fatalf("StartSimulation: %v", err)
+	}
+	// Answering as though it had started would leave the author polling a
+	// report that will never have a row.
+	if _, ok := resp.(openapi.StartSimulation409ApplicationProblemPlusJSONResponse); !ok {
+		t.Fatalf("response = %T, want a conflict", resp)
+	}
+}
+
+type pausedAgent struct{}
+
+func (pausedAgent) IsPaused(gocontext.Context, domain.AgentID) (bool, error) { return true, nil }
+
+func TestGetSimulation_foldsTheRunsIntoRowsAndNamesTheRuleThatStopped(t *testing.T) {
+	t.Parallel()
+
+	store := ledger.NewMemory()
+	server := simulatable(t, store)
+	ctx := inArea("cx", domain.RoleAuthor)
+
+	started, err := server.StartSimulation(ctx, startSimulation(`{"n":1}`))
+	if err != nil {
+		t.Fatalf("StartSimulation: %v", err)
+	}
+	id := started.(openapi.StartSimulation202JSONResponse).Id
+
+	ids, _ := store.SimulationRuns(gocontext.Background(), id)
+	appendStep(t, store, ids[0], domain.StepPlanned, domain.PlannedPayload{Node: "Responder"})
+	appendStep(t, store, ids[0], domain.StepGateDecided, domain.GateDecidedPayload{
+		Tool: "crm.refund", Effect: domain.EffectFinancial,
+		Verdict: domain.VerdictBlock, Rule: "capability",
+	})
+	appendStep(t, store, ids[0], domain.StepParked, domain.ParkedPayload{Reason: "blocked"})
+
+	resp, err := server.GetSimulation(ctx, openapi.GetSimulationRequestObject{
+		AgentId: "triage", SimulationId: id,
+	})
 	if err != nil {
 		t.Fatalf("GetSimulation: %v", err)
 	}
-
 	got, ok := resp.(openapi.GetSimulation200JSONResponse)
 	if !ok {
 		t.Fatalf("response = %T", resp)
 	}
-	// Seven of twenty rather than seven: a report read while it is still
-	// being written has to say so.
-	if got.Expected != 2 || !got.Running || len(got.Cases) != 1 {
+
+	if len(got.Cases) != 1 || got.Running {
 		t.Fatalf("report = %+v", got)
 	}
 	act := (*got.Cases[0].Acted)[0]
 	if act.Verdict != openapi.VerdictBlock || act.Effect != openapi.Financial || act.Reached {
 		t.Errorf("act = %+v", act)
 	}
-	// The rule, never only the verdict.
+	// The rule, never only the verdict: "blocked by policy" tells an author
+	// nothing about what to change.
 	if act.Rule == nil || *act.Rule != "capability" {
 		t.Errorf("rule = %v", act.Rule)
+	}
+	if act.Step == nil || *act.Step != "Responder" {
+		t.Errorf("step = %v, want the one it was proposed in", act.Step)
 	}
 }
 
 func TestGetSimulation_withoutTheAgent_isNotFound(t *testing.T) {
 	t.Parallel()
 
-	resp, err := simulatable(t, &fakeSimulations{}).GetSimulation(
+	resp, err := simulatable(t, ledger.NewMemory()).GetSimulation(
 		inArea("cx", domain.RoleAuthor),
 		openapi.GetSimulationRequestObject{AgentId: "outro", SimulationId: "sim-1"})
 	if err != nil {
@@ -195,5 +197,19 @@ func TestGetSimulation_withoutTheAgent_isNotFound(t *testing.T) {
 	}
 	if _, ok := resp.(openapi.GetSimulation404ApplicationProblemPlusJSONResponse); !ok {
 		t.Fatalf("response = %T, want not found", resp)
+	}
+}
+
+func appendStep(t *testing.T, store *ledger.Memory, id domain.RunID, kind domain.StepKind, payload any) {
+	t.Helper()
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("payload: %v", err)
+	}
+	if _, err := store.Append(gocontext.Background(), domain.Step{
+		RunID: id, Kind: kind, Scope: domain.Scope{Company: "acme", Area: "cx"},
+		AgentID: "triage", VersionID: "v2", Payload: raw,
+	}); err != nil {
+		t.Fatalf("append %s: %v", kind, err)
 	}
 }

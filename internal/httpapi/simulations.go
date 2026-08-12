@@ -4,34 +4,15 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
-	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/simulate"
 )
-
-// Simulations is the queue the API hands work to, declared here by the
-// consumer. The API never drives a simulation itself: a set is minutes of
-// model calls, and a request is the wrong thing to hold open for it.
-type Simulations interface {
-	Submit(job simulate.Job) error
-	Report(ctx context.Context, id string) (simulate.Report, error)
-}
-
-// Resolve turns an agent version into something that can be simulated.
-//
-// A function rather than an interface: there is one method, and the only
-// implementation is four lines of adapter in the wiring. Declaring an
-// interface for it would make this package name the one that resolves
-// definitions, and the dependencies point the other way.
-type Resolve func(
-	ctx context.Context, agent domain.AgentID, version domain.VersionID,
-) (engine.Start, engine.Planner, error)
 
 // Cases is where an uploaded set is filed: the ledger's claim check, under the
 // same retention as every other bulky payload (AU-04).
@@ -39,15 +20,21 @@ type Cases interface {
 	PutFor(ctx context.Context, kind, owner string, seq int64, data []byte) (string, error)
 }
 
-// WithSimulations wires the authoring safety net. Optional, like the rest of
+// WithCases wires where simulation sets are filed. Optional, like the rest of
 // the authoring area: an installation that publishes agents from files has no
 // use for it.
-func (s *Server) WithSimulations(sims Simulations, resolve Resolve, cases Cases) *Server {
-	s.simulations, s.resolve, s.cases = sims, resolve, cases
+func (s *Server) WithCases(cases Cases) *Server {
+	s.cases = cases
 	return s
 }
 
-// StartSimulation accepts a set of occurrences and answers before running it.
+// StartSimulation opens one run per case and answers.
+//
+// Nothing is driven here. The runs are the queue: a simulated run is claimed
+// by the pool built with the dry tool layer and advanced turn by turn like
+// every other run. Opening is an append per case with no model call, which is
+// why it fits inside the request and why the number answered is the number
+// that actually opened.
 func (s *Server) StartSimulation(
 	ctx context.Context, req openapi.StartSimulationRequestObject,
 ) (openapi.StartSimulationResponseObject, error) {
@@ -67,11 +54,12 @@ func (s *Server) StartSimulation(
 			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermAgentPublish, published.Scope),
 		}, nil
 	}
-	if s.simulations == nil || s.resolve == nil || s.cases == nil {
+	if s.cases == nil {
 		return absent, nil
 	}
 
-	cases, err := simulate.Load(ctx, s.cases, published.ID, []byte(req.Body.Cases))
+	id := simulationID(published.ID, clockOr(s.clock).Now().UnixMilli(), req.Params.IdempotencyKey)
+	cases, err := simulate.Load(ctx, s.cases, id, []byte(req.Body.Cases))
 	if err != nil {
 		// The whole file, named line and all. Running forty-nine of fifty and
 		// mentioning nothing gives an author coverage that is a lie.
@@ -79,30 +67,25 @@ func (s *Server) StartSimulation(
 			problem(http.StatusBadRequest, "Case set refused", err.Error())), nil
 	}
 
-	start, planner, err := s.resolve(ctx, published.ID, published.VersionID)
+	opened, err := simulate.Open(ctx, s.opener(), simulate.Batch{
+		ID: id, Agent: published.ID, By: callerOf(ctx), Cases: cases,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("resolve %s@%s: %w", published.ID, published.VersionID, err)
+		return nil, fmt.Errorf("open simulation %s: %w", id, err)
+	}
+	for _, why := range opened.Failed {
+		slog.Warn("simulated case did not open", "simulation", id, "agent", published.ID, "err", why)
+	}
+	if len(opened.Runs) == 0 {
+		// Every case refused for the same reason — a paused agent, most
+		// likely. Answering 202 with nothing behind it would leave the author
+		// polling a report that will never have a row.
+		return openapi.StartSimulation409ApplicationProblemPlusJSONResponse(problem(
+			http.StatusConflict, "Nothing could be simulated", firstOr(opened.Failed, "no case opened a run"),
+		)), nil
 	}
 
-	job := simulate.Job{
-		ID:      simulationID(published.ID, clockOr(s.clock).Now().UnixMilli(), req.Params.IdempotencyKey),
-		Agent:   published.ID,
-		Version: published.VersionID,
-		Start:   start,
-		Planner: planner,
-		Cases:   cases,
-	}
-	if err := s.simulations.Submit(job); err != nil {
-		if errors.Is(err, simulate.ErrBusy) {
-			return openapi.StartSimulation409ApplicationProblemPlusJSONResponse(problem(
-				http.StatusConflict, "Another simulation is running",
-				"These cost real money at a real provider, so they are not queued without limit.",
-			)), nil
-		}
-		return nil, fmt.Errorf("submit simulation: %w", err)
-	}
-
-	return openapi.StartSimulation202JSONResponse{Id: job.ID, Cases: len(cases)}, nil
+	return openapi.StartSimulation202JSONResponse{Id: id, Cases: len(opened.Runs)}, nil
 }
 
 // GetSimulation folds the runs the simulation opened back into rows.
@@ -121,11 +104,8 @@ func (s *Server) GetSimulation(
 			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermAgentRead, published.Scope),
 		}, nil
 	}
-	if s.simulations == nil {
-		return absent, nil
-	}
 
-	report, err := s.simulations.Report(ctx, req.SimulationId)
+	report, err := simulate.Gather(ctx, s.store, req.SimulationId)
 	if err != nil {
 		return nil, fmt.Errorf("simulation %s: %w", req.SimulationId, err)
 	}
@@ -155,11 +135,18 @@ func simulationID(agent domain.AgentID, at int64, key string) string {
 	return fmt.Sprintf("sim_%s_%d_%s", agent, at, hex.EncodeToString(sum[:4]))
 }
 
+func firstOr(reasons []string, fallback string) string {
+	if len(reasons) == 0 {
+		return fallback
+	}
+	return reasons[0]
+}
+
 // --- rendering -------------------------------------------------------------
 
 func toSimulationReport(r simulate.Report) openapi.SimulationReport {
 	out := openapi.SimulationReport{
-		Id: r.ID, Expected: r.Expected, Running: r.Running,
+		Id: r.ID, Running: r.Running,
 		Cases: make([]openapi.SimulationCase, 0, len(r.Cases)),
 	}
 	if r.Agent != "" {
@@ -179,12 +166,10 @@ func toSimulationCase(c simulate.Case) openapi.SimulationCase {
 		Settled: openapi.SimulationSettled(c.Settled),
 		Steps:   c.Steps,
 		Cost:    toCost(c.Cost),
+		RunId:   someString(string(c.RunID)),
+		Outcome: someString(c.Outcome),
+		Reason:  someString(c.Reason),
 	}
-	out.RunId = someString(string(c.RunID))
-	out.Outcome = someString(c.Outcome)
-	out.Reason = someString(c.Reason)
-	out.Error = someString(c.Error)
-
 	if len(c.Acted) > 0 {
 		acts := make([]openapi.SimulationAct, 0, len(c.Acted))
 		for _, a := range c.Acted {
@@ -196,16 +181,15 @@ func toSimulationCase(c simulate.Case) openapi.SimulationCase {
 }
 
 func toSimulationAct(a simulate.Act) openapi.SimulationAct {
-	out := openapi.SimulationAct{
+	return openapi.SimulationAct{
 		Tool:    string(a.Tool),
 		Effect:  openapi.Effect(a.Effect.String()),
 		Verdict: openapi.Verdict(a.Verdict.String()),
 		Reached: a.Reached,
+		Step:    someString(a.Step),
+		Rule:    someString(a.Rule),
+		Reason:  someString(a.Reason),
 	}
-	out.Step = someString(a.Step)
-	out.Rule = someString(a.Rule)
-	out.Reason = someString(a.Reason)
-	return out
 }
 
 // someString renders an optional field, and renders nothing rather than an

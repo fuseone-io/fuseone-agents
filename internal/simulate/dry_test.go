@@ -1,67 +1,56 @@
 package simulate_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/simulate"
 )
 
-// A dry run is a real run with one thing missing: the tool call. Everything
-// else happens — the Gate decides, the ledger records, the budget reserves —
-// because the point of a simulation is to show where the policy would have
-// stopped it, and a simulation that skipped the Gate would answer a question
-// nobody asked.
+// liveTools is a tool layer that acts. Nothing in a simulation may reach it,
+// and this is here to prove nothing does.
+type liveTools struct{ calls int }
 
-func TestDryTools_neverInvokeAnything(t *testing.T) {
+func (l *liveTools) Invoke(context.Context, engine.Call) (engine.ToolResult, error) {
+	l.calls++
+	return engine.ToolResult{}, nil
+}
+
+func TestDeps_dropsTheToolLayerItWasHanded(t *testing.T) {
 	t.Parallel()
 
-	dry := simulate.NewDryTools()
-	got, err := dry.Invoke(t.Context(), engine.Call{
-		RunID: "sim_1", Seq: 3, Tool: "crm.reply", Args: []byte(`{"texto":"olá"}`),
-	})
+	live := &liveTools{}
+	got := simulate.Deps(engine.Deps{Tools: live, Clock: engine.SystemClock{}})
+
+	if _, err := got.Tools.Invoke(t.Context(), engine.Call{Tool: "crm.refund"}); err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	// The property the whole feature rests on: whatever the caller was
+	// holding, a simulated run has no path to a real system.
+	if live.calls != 0 {
+		t.Fatalf("the real tool layer was invoked %d times", live.calls)
+	}
+	// And the rest of the loop is untouched, or a simulation would be
+	// deciding by different rules than the thing it stands in for.
+	if got.Clock == nil {
+		t.Error("Deps dropped more than the tool layer")
+	}
+}
+
+func TestDryTools_answersWithNothingRatherThanFailing(t *testing.T) {
+	t.Parallel()
+
+	got, err := simulate.DryTools{}.Invoke(t.Context(), engine.Call{Tool: "crm.note"})
 	if err != nil {
-		t.Fatalf("invoke: %v", err)
+		// A refusal would end the run at the first write, and the case would
+		// report "stopped at step 4" when nobody let it try.
+		t.Fatalf("Invoke: %v", err)
 	}
-
-	// It answers rather than failing. A refusal would end the run at the
-	// first write, and the case would report "stopped at step 4" when what
-	// happened is that nobody let it try.
-	if got.Failed {
-		t.Errorf("a dry call must not read as a failure: %+v", got)
-	}
-	if len(dry.Calls()) != 1 || dry.Calls()[0].Tool != "crm.reply" {
-		t.Errorf("got %+v", dry.Calls())
-	}
-}
-
-func TestDryTools_aReadIsAnsweredWithNothingRatherThanInvented(t *testing.T) {
-	t.Parallel()
-
-	dry := simulate.NewDryTools()
-	got, _ := dry.Invoke(t.Context(), engine.Call{Tool: "crm.lookup"})
-
-	// No reference, so the transcript carries no fabricated customer. A made
-	// up answer would make the rest of the case a story about data that does
-	// not exist — and the author would be reviewing it as though it were real.
-	if got.ResultRef != "" {
-		t.Errorf("a dry read invented an answer: %+v", got)
-	}
-}
-
-func TestDryTools_recordOnlyWhatTheyWereGiven(t *testing.T) {
-	t.Parallel()
-
-	dry := simulate.NewDryTools()
-	if _, err := dry.Invoke(t.Context(), engine.Call{Tool: "crm.reply", Seq: 4}); err != nil {
-		t.Fatalf("invoke: %v", err)
-	}
-
-	// The effect is not here, and should not be: the Gate decided it before
-	// the call and wrote it to the ledger. The report is a fold of that
-	// ledger, like every other projection in this product — building a second
-	// account of the same run here would be a second thing to keep in step.
-	if got := dry.Calls()[0]; got.Tool != "crm.reply" || got.Seq != 4 {
-		t.Errorf("got %+v", got)
+	// Never a fabricated reference, and never a label: nothing was read, so
+	// nothing can be tainted by it, and the next decision must not be a
+	// decision about data the run never saw.
+	if got.ResultRef != "" || len(got.Labels) != 0 || got.Failed {
+		t.Errorf("result = %+v, want nothing", got)
 	}
 }

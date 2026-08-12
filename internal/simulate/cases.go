@@ -14,11 +14,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-
-	"github.com/fuseone/agents/internal/domain"
 )
 
-// Store is where the cases live, declared here by the consumer. It is the
+// Store is where the case set lives, declared here by the consumer. It is the
 // ledger's claim check: a case is a real customer record, and it belongs
 // under the same retention as every other bulky payload (AU-04).
 type Store interface {
@@ -44,11 +42,16 @@ A line that is not JSON refuses the whole file and says which line. Loading
 forty-nine of fifty and mentioning nothing would give somebody a simulation
 whose coverage is a lie, and an author told the line number can fix the export.
 
-The cases come back as well as going in, so whoever runs them straight away
-does not parse the same file twice and risk the two parses disagreeing about
-what a case is.
+Filed under the simulation rather than the agent, so a set stays the set that
+was run. Correcting an agent by example means running the same occurrences
+against the next version (FU-12), and a set that the next upload overwrote
+would make the comparison meaningless.
+
+The cases come back as well as going in, so whoever opens runs for them
+straight away does not parse the same file twice and risk the two parses
+disagreeing about what a case is.
 */
-func Load(ctx context.Context, store Store, agent domain.AgentID, file []byte) ([][]byte, error) {
+func Load(ctx context.Context, store Store, simulation string, file []byte) ([][]byte, error) {
 	var loaded [][]byte
 	for i, line := range bytes.Split(file, []byte("\n")) {
 		trimmed := bytes.TrimSpace(line)
@@ -62,7 +65,7 @@ func Load(ctx context.Context, store Store, agent domain.AgentID, file []byte) (
 		}
 
 		loaded = append(loaded, trimmed)
-		if _, err := store.PutFor(ctx, OwnerKind, string(agent), int64(len(loaded)), trimmed); err != nil {
+		if _, err := store.PutFor(ctx, OwnerKind, simulation, int64(len(loaded)), trimmed); err != nil {
 			return nil, fmt.Errorf("simulate: store case %d: %w", len(loaded), err)
 		}
 	}
