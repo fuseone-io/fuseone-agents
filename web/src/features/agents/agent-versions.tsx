@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { Mono } from "@/components/shared/mono";
 import { formatInstant } from "@/lib/format";
@@ -19,6 +20,7 @@ export function AgentVersions({
   versions: AgentVersion[];
   current: string;
 }) {
+  const { t } = useTranslation();
   return (
     <section className="flex flex-col gap-2.5 rounded-xl border border-border bg-card p-4 shadow-sm">
       <h2 className="text-2xs uppercase tracking-label text-muted-foreground">
@@ -38,7 +40,7 @@ export function AgentVersions({
               <Mono>{version.versionId.slice(0, 9)}</Mono>
               {version.latest && (
                 <span className="rounded-pill bg-success-surface px-1.5 text-2xs text-success">
-                  atual
+                  {t("agents.currentVersion")}
                 </span>
               )}
               <span className="ml-auto shrink-0 text-2xs text-muted-foreground">

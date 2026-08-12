@@ -15,7 +15,11 @@ export function AgentKpis({ agent }: { agent: Agent }) {
 
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      <Kpi label="Execuções" value={String(activity?.runs ?? 0)} note="desde a primeira versão" />
+      <Kpi
+        label="Execuções"
+        value={String(activity?.runs ?? 0)}
+        note="desde a primeira versão"
+      />
       <Kpi
         label="Concluídas"
         value={successRate(agent)}
@@ -30,18 +34,32 @@ export function AgentKpis({ agent }: { agent: Agent }) {
         label="Esperando pessoas"
         value={String(activity?.waiting ?? 0)}
         note={
-          activity?.lastRunAt ? `última execução ${formatRelative(activity.lastRunAt)}` : "nunca executou"
+          activity?.lastRunAt
+            ? `última execução ${formatRelative(activity.lastRunAt)}`
+            : "nunca executou"
         }
       />
     </div>
   );
 }
 
-function Kpi({ label, value, note }: { label: string; value: string; note: string }) {
+function Kpi({
+  label,
+  value,
+  note,
+}: {
+  label: string;
+  value: string;
+  note: string;
+}) {
   return (
     <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-      <div className="text-2xs uppercase tracking-label text-muted-foreground">{label}</div>
-      <div className="mt-1.5 font-mono text-[22px]/7 font-medium tabular-nums">{value}</div>
+      <div className="text-2xs uppercase tracking-label text-muted-foreground">
+        {label}
+      </div>
+      <div className="mt-1.5 font-mono text-[22px]/7 font-medium tabular-nums">
+        {value}
+      </div>
       <div className="mt-0.5 text-xs text-muted-foreground">{note}</div>
     </div>
   );

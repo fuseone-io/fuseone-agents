@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { CircleCheck, CircleDashed, ShieldAlert } from "lucide-react";
 import { Mono } from "@/components/shared/mono";
 import { riskSurface } from "@/features/agents/risk-surface";
@@ -29,7 +30,10 @@ export function AgentEditorRail({
       <Card title="Superfície de risco">
         <ul className="flex flex-col gap-1">
           {riskSurface(draft.tools ?? [], catalogue).map((line) => (
-            <li key={line} className="flex items-start gap-2 text-xs text-muted-foreground">
+            <li
+              key={line}
+              className="flex items-start gap-2 text-xs text-muted-foreground"
+            >
               <ShieldAlert className="mt-px size-3.5 shrink-0" aria-hidden />
               {line}
             </li>
@@ -42,9 +46,13 @@ export function AgentEditorRail({
 
 /** What is still missing, and what happens when it is not. */
 function Checklist({ draft }: { draft: AgentDefinition }) {
+  const { t } = useTranslation();
   const items = [
     { done: draft.name !== "" && draft.area !== "", label: "Nome e área" },
-    { done: draft.provider !== "" && draft.model !== "", label: "Provedor e modelo" },
+    {
+      done: draft.provider !== "" && draft.model !== "",
+      label: "Provedor e modelo",
+    },
     { done: draft.instructions.trim() !== "", label: "Instruções" },
     { done: (draft.tools ?? []).length > 0, label: "Ao menos uma ferramenta" },
     {
@@ -59,18 +67,26 @@ function Checklist({ draft }: { draft: AgentDefinition }) {
         {items.map((item) => (
           <li key={item.label} className="flex items-center gap-2 text-xs">
             {item.done ? (
-              <CircleCheck className="size-3.5 shrink-0 text-success" aria-hidden />
+              <CircleCheck
+                className="size-3.5 shrink-0 text-success"
+                aria-hidden
+              />
             ) : (
-              <CircleDashed className="size-3.5 shrink-0 text-text-disabled" aria-hidden />
+              <CircleDashed
+                className="size-3.5 shrink-0 text-text-disabled"
+                aria-hidden
+              />
             )}
-            <span className={item.done ? "" : "text-muted-foreground"}>{item.label}</span>
+            <span className={item.done ? "" : "text-muted-foreground"}>
+              {item.label}
+            </span>
           </li>
         ))}
       </ul>
       <p className="text-xs text-muted-foreground">
-        Um agente novo é criado <span className="text-foreground">pausado</span>.
-        Publicar é escrever a definição; iniciar é uma decisão à parte, e as
-        quatro formas de disparar uma execução obedecem a ela.
+        {t("agents.newAgentIsCreated")}
+        <span className="text-foreground">{t("agents.paused")}</span>
+        {t("agents.publishIsWriting")}
       </p>
     </Card>
   );
@@ -78,12 +94,12 @@ function Checklist({ draft }: { draft: AgentDefinition }) {
 
 /** What moved since the version that is published. */
 function Diff({ changes }: { changes: Change[] }) {
+  const { t } = useTranslation();
   return (
     <Card title={`Sem publicar (${changes.length})`}>
       {changes.length === 0 ? (
         <p className="text-xs text-muted-foreground">
-          Nada mudou. Publicar agora devolveria a versão que já existe: a versão
-          é o resumo do conteúdo, e o mesmo texto é a mesma versão.
+          {t("agents.nothingChanged")}
         </p>
       ) : (
         <ul className="flex flex-col gap-1.5">
@@ -101,10 +117,18 @@ function Diff({ changes }: { changes: Change[] }) {
   );
 }
 
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
+function Card({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4 shadow-sm">
-      <h2 className="text-2xs uppercase tracking-label text-muted-foreground">{title}</h2>
+      <h2 className="text-2xs uppercase tracking-label text-muted-foreground">
+        {title}
+      </h2>
       {children}
     </section>
   );

@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Section, Labelled } from "@/features/policies/section";
 import { formatMicros } from "@/lib/format";
@@ -16,8 +17,10 @@ export function AgentBudgetSection({
   draft: AgentDefinition;
   patch: (over: Partial<AgentDefinition>) => void;
 }) {
+  const { t } = useTranslation();
   const budget = draft.budget ?? {};
-  const set = (over: Partial<typeof budget>) => patch({ budget: { ...budget, ...over } });
+  const set = (over: Partial<typeof budget>) =>
+    patch({ budget: { ...budget, ...over } });
 
   return (
     <Section
@@ -67,8 +70,7 @@ export function AgentBudgetSection({
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Uma execução precisa de pelo menos um teto de custo ou de passos: é o
-        que a torna finita, e terminar é estrutural aqui, nunca pedido no prompt.
+        {t("agents.budgetNeeded")}
       </p>
     </Section>
   );

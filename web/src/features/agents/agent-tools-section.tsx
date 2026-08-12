@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Mono } from "@/components/shared/mono";
 import { Section } from "@/features/policies/section";
@@ -31,8 +32,13 @@ export function AgentToolsSection({
   policies: Policy[];
   onChange: (tools: string[]) => void;
 }) {
+  const { t } = useTranslation();
   const toggle = (tool: string) =>
-    onChange(granted.includes(tool) ? granted.filter((t) => t !== tool) : [...granted, tool]);
+    onChange(
+      granted.includes(tool)
+        ? granted.filter((t) => t !== tool)
+        : [...granted, tool],
+    );
 
   return (
     <Section
@@ -41,8 +47,7 @@ export function AgentToolsSection({
     >
       {catalogue.length === 0 ? (
         <p className="text-xs text-muted-foreground">
-          Nenhuma ferramenta no catálogo. Um servidor MCP precisa estar
-          conectado antes que um agente possa fazer qualquer coisa.
+          {t("agents.emptyCatalogue")}
         </p>
       ) : (
         <ul className="flex flex-col">
@@ -75,10 +80,14 @@ export function AgentToolsSection({
                   </span>
                 </div>
 
-                <span className="font-mono text-2xs text-muted-foreground">{tool.effect}</span>
+                <span className="font-mono text-2xs text-muted-foreground">
+                  {tool.effect}
+                </span>
 
                 <div className="min-w-0 text-right">
-                  <span className={cn("text-xs", RULE_TONE[rule.kind])}>{rule.label}</span>
+                  <span className={cn("text-xs", RULE_TONE[rule.kind])}>
+                    {rule.label}
+                  </span>
                   {rule.because && (
                     <Mono dim className="ml-1.5 text-2xs">
                       {rule.because}
@@ -92,9 +101,7 @@ export function AgentToolsSection({
       )}
 
       <p className="text-xs text-muted-foreground">
-        A coluna da direita é o que a política em vigor vai fazer, não um ajuste
-        deste agente. Mudar isso é editar a política — que tem dono, motivo e um
-        código que aparece na trilha.
+        {t("agents.rightColumnIsPolicy")}
       </p>
     </Section>
   );

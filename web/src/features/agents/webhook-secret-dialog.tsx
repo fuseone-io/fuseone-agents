@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import { Check, Copy, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,7 @@ export function WebhookSecretDialog({
   url?: string;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {
@@ -39,11 +41,8 @@ export function WebhookSecretDialog({
     <Dialog open={Boolean(secret)} onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>A chave deste webhook</DialogTitle>
-          <DialogDescription>
-            Configure o sistema que vai chamar agora. Esta é a única vez que ela
-            aparece — a plataforma guarda só o resumo criptográfico dela.
-          </DialogDescription>
+          <DialogTitle>{t("agents.webhookKey")}</DialogTitle>
+          <DialogDescription>{t("agents.configureNow")}</DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-3">
@@ -59,34 +58,54 @@ export function WebhookSecretDialog({
                 {secret}
               </code>
               <Button variant="outline" size="sm" onClick={() => void copy()}>
-                {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
+                {copied ? (
+                  <Check className="size-4" />
+                ) : (
+                  <Copy className="size-4" />
+                )}
                 {copied ? "Copiado" : "Copiar"}
               </Button>
             </div>
           </Field>
 
           <p className="flex items-start gap-2 text-xs text-muted-foreground">
-            <TriangleAlert className="mt-px size-3.5 shrink-0 text-warning" aria-hidden />
+            <TriangleAlert
+              className="mt-px size-3.5 shrink-0 text-warning"
+              aria-hidden
+            />
             <span>
-              Quem chama também precisa enviar um <code className="font-mono">Idempotency-Key</code>{" "}
+              {t("agents.callerAlsoNeeds")}
+              <code className="font-mono">
+                {/* eslint-disable-next-line i18next/no-literal-string */}
+                Idempotency-Key
+              </code>{" "}
               único por entrega, repetindo o mesmo valor em cada nova tentativa
-              daquela entrega. Sem isso, uma reentrega abre uma segunda execução.
+              daquela entrega. Sem isso, uma reentrega abre uma segunda
+              execução.
             </span>
           </p>
         </div>
 
         <DialogFooter>
-          <Button onClick={onClose}>Já configurei</Button>
+          <Button onClick={onClose}>{t("agents.done")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-2xs uppercase tracking-label text-muted-foreground">{label}</span>
+      <span className="text-2xs uppercase tracking-label text-muted-foreground">
+        {label}
+      </span>
       {children}
     </div>
   );

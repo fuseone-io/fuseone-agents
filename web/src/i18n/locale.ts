@@ -38,7 +38,9 @@ export function preferredLocale(): Locale {
     // Blocked. The choice lasts the session.
   }
   for (const tag of globalThis.navigator?.languages ?? []) {
-    const match = LOCALES.find((l) => l.toLowerCase().startsWith(tag.slice(0, 2).toLowerCase()));
+    const match = LOCALES.find((l) =>
+      l.toLowerCase().startsWith(tag.slice(0, 2).toLowerCase()),
+    );
     if (match) return match;
   }
   return DEFAULT_LOCALE;

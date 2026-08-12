@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Play } from "lucide-react";
@@ -24,7 +25,14 @@ import { useStartRun } from "@/features/agents/start-run";
  * — a step worth taking deliberately rather than by brushing against a
  * control.
  */
-export function RunNowDialog({ agentId, agentName }: { agentId: string; agentName: string }) {
+export function RunNowDialog({
+  agentId,
+  agentName,
+}: {
+  agentId: string;
+  agentName: string;
+}) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const navigate = useNavigate();
@@ -50,7 +58,7 @@ export function RunNowDialog({ agentId, agentName }: { agentId: string; agentNam
       <DialogTrigger asChild>
         <Button variant="outline" size="sm" className="h-8">
           <Play className="size-4" aria-hidden />
-          Executar
+          {t("agents.run")}
         </Button>
       </DialogTrigger>
 
@@ -58,13 +66,12 @@ export function RunNowDialog({ agentId, agentName }: { agentId: string; agentNam
         <DialogHeader>
           <DialogTitle>Executar {agentName}</DialogTitle>
           <DialogDescription>
-            A execução é aberta na versão publicada agora e fica registrada em
-            seu nome. Uma pessoa ainda decide qualquer ação que exija aprovação.
+            {t("agents.runOpensOnPublished")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-2">
-          <Label htmlFor="run-input">Sobre o quê</Label>
+          <Label htmlFor="run-input">{t("agents.aboutWhat")}</Label>
           <Textarea
             id="run-input"
             value={input}
@@ -73,14 +80,13 @@ export function RunNowDialog({ agentId, agentName }: { agentId: string; agentNam
             rows={4}
           />
           <p className="text-xs text-muted-foreground">
-            Guardado fora da trilha, como todo conteúdo: um chamado costuma
-            carregar dado pessoal e a trilha é mantida por anos.
+            {t("agents.keptOutsideTrail")}
           </p>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>
-            Cancelar
+            {t("common.cancel")}
           </Button>
           <Button onClick={submit} disabled={start.isPending}>
             {start.isPending ? "Abrindo…" : "Executar"}

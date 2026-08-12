@@ -26,7 +26,9 @@ export function AgentDetailPage() {
 
   if (agent.isLoading) return <LoadingRows rows={8} />;
   if (agent.error) {
-    return <ErrorState error={agent.error} onRetry={() => void agent.refetch()} />;
+    return (
+      <ErrorState error={agent.error} onRetry={() => void agent.refetch()} />
+    );
   }
   if (!agent.data) return null;
 
@@ -42,7 +44,11 @@ export function AgentDetailPage() {
         <div className="flex flex-col gap-4">
           <AgentCapabilities agent={published} />
           <WebhooksPanel agentId={agentId} />
-          <AgentVersions agentId={agentId} versions={versions} current={published.versionId} />
+          <AgentVersions
+            agentId={agentId}
+            versions={versions}
+            current={published.versionId}
+          />
         </div>
       </div>
 

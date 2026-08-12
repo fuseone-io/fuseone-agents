@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useMemo, useState } from "react";
 import { Bot } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -5,15 +6,23 @@ import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
-import { EmptyState, ErrorState, LoadingRows } from "@/components/shared/states";
+import {
+  EmptyState,
+  ErrorState,
+  LoadingRows,
+} from "@/components/shared/states";
 import { Toolbar } from "@/components/shared/toolbar";
-import { FilterSelect, type FilterOption } from "@/components/shared/filter-select";
+import {
+  FilterSelect,
+  type FilterOption,
+} from "@/components/shared/filter-select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AgentCard } from "@/features/agents/agent-card";
 import { useAgents, type Agent } from "@/features/agents/api";
 import { stateOfAgent, type AgentState } from "@/lib/agent-state";
 
 export function AgentsPage() {
+  const { t } = useTranslation();
   const [history, setHistory] = useState(false);
   const [search, setSearch] = useState("");
   const [area, setArea] = useState("all");
@@ -44,21 +53,28 @@ export function AgentsPage() {
         <Button size="sm" asChild>
           <Link to="/agents/new">
             <Plus className="size-4" aria-hidden />
-            Novo agente
+            {t("agents.newAgent")}
           </Link>
         </Button>
       </PageHeader>
 
       {/* A view toggle is a filter, not the screen's action: it belongs beside
           the content it filters rather than up in the chrome. */}
-      <Tabs value={history ? "all" : "latest"} onValueChange={(v) => setHistory(v === "all")}>
+      <Tabs
+        value={history ? "all" : "latest"}
+        onValueChange={(v) => setHistory(v === "all")}
+      >
         <TabsList>
-          <TabsTrigger value="latest">Atuais</TabsTrigger>
-          <TabsTrigger value="all">Histórico</TabsTrigger>
+          <TabsTrigger value="latest">{t("agents.current")}</TabsTrigger>
+          <TabsTrigger value="all">{t("agents.history")}</TabsTrigger>
         </TabsList>
       </Tabs>
 
-      <Toolbar placeholder="Buscar por nome ou identificador" value={search} onChange={setSearch}>
+      <Toolbar
+        placeholder="Buscar por nome ou identificador"
+        value={search}
+        onChange={setSearch}
+      >
         <FilterSelect
           label="Filtrar por área"
           value={area}
@@ -85,7 +101,9 @@ export function AgentsPage() {
       ) : shown.length === 0 ? (
         <EmptyState
           icon={<Bot className="size-6" />}
-          title={agents.length === 0 ? "Nenhum agente publicado" : "Nada encontrado"}
+          title={
+            agents.length === 0 ? "Nenhum agente publicado" : "Nada encontrado"
+          }
           hint={
             agents.length === 0
               ? "Agentes aparecem aqui quando um worker publica as definições que carregou. Cada publicação cria uma versão nova; a anterior continua legível."
@@ -95,7 +113,10 @@ export function AgentsPage() {
       ) : (
         <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(268px,1fr))]">
           {shown.map((agent) => (
-            <AgentCard key={`${agent.agentId}@${agent.versionId}`} agent={agent} />
+            <AgentCard
+              key={`${agent.agentId}@${agent.versionId}`}
+              agent={agent}
+            />
           ))}
         </div>
       )}
@@ -119,10 +140,12 @@ function matcher(search: string, area: string, state: AgentState | "all") {
   const q = search.trim().toLowerCase();
   return (agent: Agent) => {
     if (area !== "all" && agent.scope.area !== area) return false;
-    if (state !== "all" && stateOfAgent(agent.activity?.lastPhase) !== state) return false;
+    if (state !== "all" && stateOfAgent(agent.activity?.lastPhase) !== state)
+      return false;
     if (!q) return true;
     return (
-      agent.name.toLowerCase().includes(q) || agent.agentId.toLowerCase().includes(q)
+      agent.name.toLowerCase().includes(q) ||
+      agent.agentId.toLowerCase().includes(q)
     );
   };
 }

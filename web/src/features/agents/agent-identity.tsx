@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Pencil } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -22,20 +23,27 @@ export function AgentIdentity({
   agent: Agent;
   versions: AgentVersion[];
 }) {
+  const { t } = useTranslation();
   const superseded = !agent.latest && versions.length > 1;
 
   return (
     <div className="flex flex-wrap items-start gap-4">
       <div className="flex min-w-0 flex-col gap-1.5">
         <div className="flex items-center gap-2.5">
-          <h1 className="text-2xl font-medium tracking-display">{agent.name}</h1>
+          <h1 className="text-2xl font-medium tracking-display">
+            {agent.name}
+          </h1>
           <span className="inline-flex h-6 items-center gap-1.5 rounded-pill bg-muted px-2.5 text-xs font-medium">
-            <StateDot state={stateOfAgent(agent.activity?.lastPhase as Phase | undefined)} />
+            <StateDot
+              state={stateOfAgent(
+                agent.activity?.lastPhase as Phase | undefined,
+              )}
+            />
             {agent.scope.area || "sem área"}
           </span>
           {superseded && (
             <span className="inline-flex h-6 items-center rounded-pill bg-warning-surface px-2.5 text-xs font-medium text-warning">
-              versão antiga
+              {t("agents.oldVersion")}
             </span>
           )}
         </div>
@@ -44,9 +52,13 @@ export function AgentIdentity({
           <Mono dim>{agent.agentId}</Mono>
           <Separator orientation="vertical" className="!h-3" />
           <span>
-            versão <Mono dim>{agent.versionId.slice(0, 9)}</Mono> · {agent.provider}/{agent.model}
-            {agent.publishedBy ? ` · publicada por ${agent.publishedBy}` : ""} em{" "}
-            {formatInstant(agent.publishedAt)}
+            {t("agents.version")}
+            <Mono dim>{agent.versionId.slice(0, 9)}</Mono> · {agent.provider}/
+            {agent.model}
+            {agent.publishedBy
+              ? ` · publicada por ${agent.publishedBy}`
+              : ""}{" "}
+            em {formatInstant(agent.publishedAt)}
           </span>
         </div>
       </div>
@@ -59,14 +71,14 @@ export function AgentIdentity({
             <Button variant="outline" size="sm" asChild className="h-8">
               <Link to={`/agents/${agent.agentId}/edit`}>
                 <Pencil className="size-4" aria-hidden />
-                Editar
+                {t("agents.edit")}
               </Link>
             </Button>
             <RunNowDialog agentId={agent.agentId} agentName={agent.name} />
           </>
         ) : (
           <Button variant="outline" size="sm" disabled className="h-8">
-            Somente leitura
+            {t("agents.readOnly")}
           </Button>
         )}
       </div>

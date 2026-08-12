@@ -19,7 +19,10 @@ export function AgentBasicsSection({
   onAgentId: (id: string) => void;
 }) {
   return (
-    <Section title="Identidade" hint="A área é a unidade de custo e de política.">
+    <Section
+      title="Identidade"
+      hint="A área é a unidade de custo e de política."
+    >
       <div className="grid gap-3 sm:grid-cols-[200px_1fr_160px]">
         <Labelled label="Identificador" htmlFor="agent-id">
           {/* Set once: runs reference it forever, and an id that moved would
@@ -42,7 +45,10 @@ export function AgentBasicsSection({
             placeholder="Atendimento de suporte"
           />
         </Labelled>
-        <AgentAreaField area={draft.area} onChange={(area) => patch({ area })} />
+        <AgentAreaField
+          area={draft.area}
+          onChange={(area) => patch({ area })}
+        />
       </div>
 
       <div className="grid gap-3 sm:grid-cols-[1fr_1fr_140px]">

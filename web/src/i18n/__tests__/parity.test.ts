@@ -20,7 +20,9 @@ describe("the two catalogues", () => {
     const pt = keysOf(ptBR).sort();
     const en = keysOf(enUS).sort();
 
-    expect({ missingInEnglish: pt.filter((k) => !en.includes(k)) }).toEqual({ missingInEnglish: [] });
+    expect({ missingInEnglish: pt.filter((k) => !en.includes(k)) }).toEqual({
+      missingInEnglish: [],
+    });
     expect({ missingInPortuguese: en.filter((k) => !pt.includes(k)) }).toEqual({
       missingInPortuguese: [],
     });
@@ -30,7 +32,12 @@ describe("the two catalogues", () => {
     const empty = (catalogue: object, locale: string) =>
       keysOf(catalogue)
         .filter((key) => {
-          const value = key.split(".").reduce<unknown>((o, k) => (o as Record<string, unknown>)?.[k], catalogue);
+          const value = key
+            .split(".")
+            .reduce<unknown>(
+              (o, k) => (o as Record<string, unknown>)?.[k],
+              catalogue,
+            );
           return typeof value !== "string" || value.trim() === "";
         })
         .map((key) => `${locale}:${key}`);

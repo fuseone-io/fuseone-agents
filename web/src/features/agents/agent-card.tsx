@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Mono } from "@/components/shared/mono";
@@ -19,6 +20,7 @@ import type { Agent } from "@/features/agents/api";
  * and a whole card is a far easier target than a line of text.
  */
 export function AgentCard({ agent }: { agent: Agent }) {
+  const { t } = useTranslation();
   return (
     <Link
       to={hrefFor(agent)}
@@ -27,7 +29,10 @@ export function AgentCard({ agent }: { agent: Agent }) {
       <header className="flex items-start gap-2">
         {/* The dot repeats what the footer says in words: an agent's state is
             a fact about its runs, never colour on its own. */}
-        <StateDot state={stateOfAgent(agent.activity?.lastPhase)} className="mt-[7px]" />
+        <StateDot
+          state={stateOfAgent(agent.activity?.lastPhase)}
+          className="mt-[7px]"
+        />
         <div className="min-w-0 flex-1">
           <h3 className="truncate font-medium">{agent.name}</h3>
           <div className="truncate text-xs text-muted-foreground">
@@ -36,17 +41,23 @@ export function AgentCard({ agent }: { agent: Agent }) {
         </div>
         {!agent.latest && (
           <Badge variant="outline" className="text-muted-foreground">
-            versão antiga
+            {t("agents.oldVersion")}
           </Badge>
         )}
       </header>
 
       <div className="flex flex-wrap gap-1">
         {agent.tools.length === 0 ? (
-          <span className="text-xs text-muted-foreground">Sem ferramentas</span>
+          <span className="text-xs text-muted-foreground">
+            {t("agents.withoutTools")}
+          </span>
         ) : (
           agent.tools.map((tool) => (
-            <Badge key={tool} variant="secondary" className="font-mono text-2xs font-normal">
+            <Badge
+              key={tool}
+              variant="secondary"
+              className="font-mono text-2xs font-normal"
+            >
               {tool}
             </Badge>
           ))
@@ -54,14 +65,30 @@ export function AgentCard({ agent }: { agent: Agent }) {
       </div>
 
       <dl className="grid grid-cols-3 gap-2 border-t border-border-subtle pt-3 text-xs">
-        <Figure label="Execuções" value={agent.activity ? String(agent.activity.runs) : "—"} />
+        <Figure
+          label="Execuções"
+          value={agent.activity ? String(agent.activity.runs) : "—"}
+        />
         <Figure label="Concluídas" value={successRate(agent)} />
-        <Figure label="Custo" value={agent.activity?.costMicros ? formatMicros(agent.activity.costMicros) : "—"} />
+        <Figure
+          label="Custo"
+          value={
+            agent.activity?.costMicros
+              ? formatMicros(agent.activity.costMicros)
+              : "—"
+          }
+        />
       </dl>
 
       <dl className="grid grid-cols-3 gap-2 text-xs">
-        <Figure label="Teto" value={agent.budget.micros ? formatMicros(agent.budget.micros) : "—"} />
-        <Figure label="Passos" value={agent.budget.steps ? String(agent.budget.steps) : "—"} />
+        <Figure
+          label="Teto"
+          value={agent.budget.micros ? formatMicros(agent.budget.micros) : "—"}
+        />
+        <Figure
+          label="Passos"
+          value={agent.budget.steps ? String(agent.budget.steps) : "—"}
+        />
         <Figure label="Gatilhos" value={triggerSummary(agent)} />
       </dl>
 
@@ -91,7 +118,9 @@ function hrefFor(agent: Agent): string {
 function Figure({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-2xs uppercase tracking-label text-muted-foreground">{label}</dt>
+      <dt className="text-2xs uppercase tracking-label text-muted-foreground">
+        {label}
+      </dt>
       <dd className="font-mono tabular-nums">{value}</dd>
     </div>
   );

@@ -2,7 +2,12 @@ import i18next from "i18next";
 import { initReactI18next } from "react-i18next";
 import ptBR from "@/i18n/pt-BR.json";
 import enUS from "@/i18n/en-US.json";
-import { DEFAULT_LOCALE, preferredLocale, rememberLocale, type Locale } from "@/i18n/locale";
+import {
+  DEFAULT_LOCALE,
+  preferredLocale,
+  rememberLocale,
+  type Locale,
+} from "@/i18n/locale";
 
 /**
  * Both catalogues ship in the bundle rather than being fetched.

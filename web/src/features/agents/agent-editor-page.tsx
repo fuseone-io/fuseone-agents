@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -24,6 +25,7 @@ import { usePolicies } from "@/features/policies/api";
  * an agent creates something a run will be pinned to.
  */
 export function AgentEditorPage() {
+  const { t } = useTranslation();
   const { agentId: routeId } = useParams();
   const creating = routeId === undefined || routeId === "new";
   const navigate = useNavigate();
@@ -32,12 +34,16 @@ export function AgentEditorPage() {
   const tools = useTools();
   const policies = usePolicies();
   const [agentId, setAgentId] = useState(creating ? "" : (routeId ?? ""));
-  const { draft, patch, changes } = useAgentDraft(creating ? undefined : loaded.data);
+  const { draft, patch, changes } = useAgentDraft(
+    creating ? undefined : loaded.data,
+  );
   const publish = usePublishAgent();
 
   if (!creating && loaded.isLoading) return <LoadingRows rows={6} />;
   if (!creating && loaded.error) {
-    return <ErrorState error={loaded.error} onRetry={() => void loaded.refetch()} />;
+    return (
+      <ErrorState error={loaded.error} onRetry={() => void loaded.refetch()} />
+    );
   }
 
   const submit = () => {
@@ -46,7 +52,9 @@ export function AgentEditorPage() {
       {
         onSuccess: (result) => {
           toast.success(
-            result.created ? `Versão ${result.versionId.slice(0, 9)} publicada` : "Nada mudou",
+            result.created
+              ? `Versão ${result.versionId.slice(0, 9)} publicada`
+              : "Nada mudou",
             {
               description: result.created
                 ? result.paused
@@ -65,7 +73,8 @@ export function AgentEditorPage() {
     );
   };
 
-  const ready = agentId !== "" && draft.name !== "" && draft.instructions.trim() !== "";
+  const ready =
+    agentId !== "" && draft.name !== "" && draft.instructions.trim() !== "";
 
   return (
     <>
@@ -104,12 +113,13 @@ export function AgentEditorPage() {
       <div className="sticky bottom-0 -mx-6 -mb-6 flex items-center gap-2 border-t border-border bg-card px-6 py-3 shadow-md">
         {changes.length > 0 && (
           <span className="text-xs text-warning">
-            {changes.length} {changes.length === 1 ? "alteração" : "alterações"} sem publicar
+            {changes.length} {changes.length === 1 ? "alteração" : "alterações"}{" "}
+            sem publicar
           </span>
         )}
         <div className="ml-auto flex items-center gap-2">
           <Button variant="outline" onClick={() => navigate("/agents")}>
-            Cancelar
+            {t("common.cancel")}
           </Button>
           <Button onClick={submit} disabled={publish.isPending || !ready}>
             {creating ? "Criar agente pausado" : "Publicar versão"}

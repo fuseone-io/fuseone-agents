@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { FileText } from "lucide-react";
 import { Mono } from "@/components/shared/mono";
 
@@ -16,22 +17,29 @@ export function AgentDefinition({
   instructions?: string;
   source?: string;
 }) {
+  const { t } = useTranslation();
   return (
     <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-sm">
       <div className="flex flex-wrap items-center gap-2">
-        <h2 className="text-sm font-medium">Definição</h2>
-        {source && <Mono dim className="truncate">{source}</Mono>}
+        <h2 className="text-sm font-medium">{t("agents.definition")}</h2>
+        {source && (
+          <Mono dim className="truncate">
+            {source}
+          </Mono>
+        )}
         <span className="ml-auto text-xs text-muted-foreground">
-          publicada, não editável
+          {t("agents.publishedReadOnly")}
         </span>
       </div>
 
       {instructions ? (
-        <p className="whitespace-pre-wrap text-sm leading-relaxed">{instructions}</p>
+        <p className="whitespace-pre-wrap text-sm leading-relaxed">
+          {instructions}
+        </p>
       ) : (
         <p className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
           <FileText className="size-4" aria-hidden />
-          Esta versão foi publicada sem instruções.
+          {t("agents.publishedWithout")}
         </p>
       )}
     </section>

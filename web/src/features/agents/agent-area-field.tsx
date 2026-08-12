@@ -1,5 +1,10 @@
+import { useTranslation } from "react-i18next";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { Labelled } from "@/features/policies/section";
 import { useScopes } from "@/features/scope/api";
@@ -21,6 +26,7 @@ export function AgentAreaField({
   area: string;
   onChange: (area: string) => void;
 }) {
+  const { t } = useTranslation();
   const { data } = useScopes();
   const declared = data?.items ?? [];
   const known = declared.some((s) => s.area === area);
@@ -38,14 +44,18 @@ export function AgentAreaField({
             </SelectItem>
           )}
           {declared.map((s) => (
-            <SelectItem key={`${s.company}/${s.area}`} value={s.area} className="font-mono">
+            <SelectItem
+              key={`${s.company}/${s.area}`}
+              value={s.area}
+              className="font-mono"
+            >
               {s.area}
               {s.label && s.label !== s.area ? ` · ${s.label}` : ""}
             </SelectItem>
           ))}
           {declared.length === 0 && area === "" && (
             <p className="px-2 py-3 text-xs text-muted-foreground">
-              Nenhuma área declarada. Administração → Áreas.
+              {t("agents.noAreasDeclared")}
             </p>
           )}
         </SelectContent>

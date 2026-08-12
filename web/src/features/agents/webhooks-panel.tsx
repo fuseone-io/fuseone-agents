@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -15,7 +16,10 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Mono } from "@/components/shared/mono";
 import { WebhookSecretDialog } from "@/features/agents/webhook-secret-dialog";
-import { useRotateWebhookSecret, useWebhooks } from "@/features/agents/webhooks-api";
+import {
+  useRotateWebhookSecret,
+  useWebhooks,
+} from "@/features/agents/webhooks-api";
 import { formatInstant } from "@/lib/format";
 import type { Webhook } from "@/lib/api/client";
 
@@ -27,6 +31,7 @@ import type { Webhook } from "@/lib/api/client";
  * one action that changes it.
  */
 export function WebhooksPanel({ agentId }: { agentId: string }) {
+  const { t } = useTranslation();
   const { data, isLoading } = useWebhooks(agentId);
   const rotate = useRotateWebhookSecret(agentId);
   const [issued, setIssued] = useState<{ secret: string; url: string }>();
@@ -46,7 +51,9 @@ export function WebhooksPanel({ agentId }: { agentId: string }) {
 
   return (
     <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-sm">
-      <h2 className="text-2xs uppercase tracking-label text-muted-foreground">Webhooks</h2>
+      <h2 className="text-2xs uppercase tracking-label text-muted-foreground">
+        {t("agents.webhooks")}
+      </h2>
 
       {isLoading ? (
         <Skeleton className="h-12 rounded-lg" />
@@ -79,10 +86,11 @@ export function WebhooksPanel({ agentId }: { agentId: string }) {
 
 /** Closed is the safe state, and worth saying rather than leaving to silence. */
 function State({ hook }: { hook: Webhook }) {
+  const { t } = useTranslation();
   if (!hook.armed) {
     return (
       <span className="rounded-pill bg-warning-surface px-2 py-0.5 text-2xs font-medium text-warning">
-        sem chave · não dispara
+        {t("agents.noKeyNoFire")}
       </span>
     );
   }
@@ -107,10 +115,17 @@ function RotateButton({
   pending: boolean;
   onGenerate: () => void;
 }) {
+  const { t } = useTranslation();
   if (!hook.armed) {
     return (
-      <Button variant="outline" size="sm" className="ml-auto h-7" disabled={pending} onClick={onGenerate}>
-        Gerar chave
+      <Button
+        variant="outline"
+        size="sm"
+        className="ml-auto h-7"
+        disabled={pending}
+        onClick={onGenerate}
+      >
+        {t("agents.generateKey")}
       </Button>
     );
   }
@@ -118,22 +133,29 @@ function RotateButton({
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button variant="outline" size="sm" className="ml-auto h-7" disabled={pending}>
-          Rotacionar
+        <Button
+          variant="outline"
+          size="sm"
+          className="ml-auto h-7"
+          disabled={pending}
+        >
+          {t("agents.rotate")}
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Rotacionar a chave de /hooks/{hook.path}?</AlertDialogTitle>
+          <AlertDialogTitle>
+            Rotacionar a chave de /hooks/{hook.path}?
+          </AlertDialogTitle>
           <AlertDialogDescription>
-            A chave atual para de funcionar imediatamente. Todo sistema
-            configurado com ela vai passar a receber 401 até ser atualizado com
-            a nova.
+            {t("agents.rotateWarning")}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-          <AlertDialogAction onClick={onGenerate}>Rotacionar</AlertDialogAction>
+          <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+          <AlertDialogAction onClick={onGenerate}>
+            {t("agents.rotate")}
+          </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
