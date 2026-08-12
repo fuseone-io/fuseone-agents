@@ -67,8 +67,13 @@ func (s *Server) StartSimulation(
 			problem(http.StatusBadRequest, "Case set refused", err.Error())), nil
 	}
 
+	occurrences := make([]simulate.Occurrence, 0, len(cases))
+	for _, input := range cases {
+		occurrences = append(occurrences, simulate.Occurrence{Input: input})
+	}
+
 	opened, err := simulate.Open(ctx, s.opener(), simulate.Batch{
-		ID: id, Agent: published.ID, By: callerOf(ctx), Cases: cases,
+		ID: id, Agent: published.ID, By: callerOf(ctx), Cases: occurrences,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("open simulation %s: %w", id, err)

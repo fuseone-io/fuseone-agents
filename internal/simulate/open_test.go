@@ -72,9 +72,9 @@ func depsFor(store *ledger.Memory, content *engine.MemoryContent, tools engine.T
 }
 
 func batchOf(cases ...string) simulate.Batch {
-	inputs := make([][]byte, 0, len(cases))
+	inputs := make([]simulate.Occurrence, 0, len(cases))
 	for _, c := range cases {
-		inputs = append(inputs, []byte(c))
+		inputs = append(inputs, simulate.Occurrence{Input: []byte(c)})
 	}
 	return simulate.Batch{ID: "sim-1", Agent: "suporte", By: "ana", Cases: inputs}
 }

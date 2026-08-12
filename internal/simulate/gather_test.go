@@ -149,3 +149,26 @@ func TestGather_aSimulationNobodyRan_isEmptyRatherThanAnError(t *testing.T) {
 		t.Errorf("report = %+v", got)
 	}
 }
+
+func TestGather_readsWhichCorpusCaseARunReplayed(t *testing.T) {
+	t.Parallel()
+
+	store, content := ledger.NewMemory(), engine.NewMemoryContent()
+	batch := simulate.Batch{
+		ID: "sim-1", Agent: "suporte", By: "ana",
+		Cases: []simulate.Occurrence{{ID: "reg-7", Input: []byte(`{"n":1}`)}},
+	}
+	if _, err := simulate.Open(t.Context(), openerFor(store, content), batch); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	got, err := simulate.Gather(t.Context(), store, "sim-1")
+	if err != nil {
+		t.Fatalf("Gather: %v", err)
+	}
+	// Without this the battery would match a correction to a run by position,
+	// and the ledger's order is not the corpus's.
+	if len(got.Cases) != 1 || got.Cases[0].ID != "reg-7" {
+		t.Errorf("cases = %+v, want the corpus case named", got.Cases)
+	}
+}

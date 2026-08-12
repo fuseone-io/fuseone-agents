@@ -55,6 +55,8 @@ type Act struct {
 
 // Case is what happened to one occurrence.
 type Case struct {
+	// ID is the regression case this row replays, when it replays one.
+	ID      string       `json:"id,omitempty"`
 	RunID   domain.RunID `json:"run_id,omitempty"`
 	Settled Settled      `json:"settled"`
 	Steps   int          `json:"steps"`
@@ -66,6 +68,11 @@ type Case struct {
 	// than an omission: a report that silently drops what it could not run
 	// tells an author the set was covered when it was not.
 	Error string `json:"error,omitempty"`
+
+	// Expected is what a correction said must be true of this case, and Unmet
+	// is what stopped being true. Both empty for an ordinary simulation.
+	Expected []domain.Expectation `json:"expected,omitempty"`
+	Unmet    []domain.Expectation `json:"unmet,omitempty"`
 }
 
 // Fold turns one simulated run's steps into its row in the report.
@@ -97,6 +104,13 @@ type folder struct {
 
 func (f *folder) apply(step domain.Step) error {
 	switch step.Kind {
+	case domain.StepRunStarted:
+		var p domain.RunStartedPayload
+		if err := decodeInto(step, &p); err != nil {
+			return err
+		}
+		f.c.ID = p.Case
+
 	case domain.StepPlanned:
 		var p domain.PlannedPayload
 		if err := decodeInto(step, &p); err != nil {
@@ -184,6 +198,11 @@ type Report struct {
 	Agent   domain.AgentID   `json:"agent"`
 	Version domain.VersionID `json:"version"`
 	Cases   []Case           `json:"cases"`
+
+	// Held and Broken count the corrections that still stand and the ones
+	// that stopped standing. Zero for a simulation that is not a battery.
+	Held   int `json:"held"`
+	Broken int `json:"broken"`
 
 	// Running is whether any case has yet to settle. Derived rather than
 	// tracked: the runs are the queue, so a simulation is still going exactly

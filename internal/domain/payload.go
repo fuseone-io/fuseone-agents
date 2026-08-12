@@ -25,6 +25,13 @@ type RunStartedPayload struct {
 	// two marks somebody could set independently is two marks that disagree,
 	// and the disagreement that matters is a simulated run a worker claims.
 	Simulation string `json:"simulation,omitempty"`
+	// Case names the regression case this run replays, when it replays one.
+	// The battery matches an expectation to a run by this rather than by
+	// position: runs are folded in the order the ledger holds them, which is
+	// not the order a corpus was written in, and checking case three against
+	// case one's correction reports a failure nobody can act on while hiding
+	// a real one.
+	Case string `json:"case,omitempty"`
 }
 
 type PlannedPayload struct {

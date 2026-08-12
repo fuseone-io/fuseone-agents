@@ -18,6 +18,14 @@ type Opener interface {
 	Open(ctx context.Context, req trigger.Request) (trigger.Result, error)
 }
 
+// Occurrence is one thing to replay: the bytes, and what it is called when it
+// has a name. A case from the corpus carries its id so the battery can find
+// its correction again; an uploaded one has none.
+type Occurrence struct {
+	ID    string
+	Input []byte
+}
+
 // Batch is one simulation: an agent, and the occurrences to replay against it.
 type Batch struct {
 	// ID names the simulation. Generated at the edge and recorded in every
@@ -27,7 +35,7 @@ type Batch struct {
 	// By is who asked. A simulation spends real money and the trail says whose
 	// decision that was.
 	By    domain.UserID
-	Cases [][]byte
+	Cases []Occurrence
 }
 
 // Opened is what a batch produced.
@@ -54,7 +62,7 @@ answered is the number that actually opened.
 */
 func Open(ctx context.Context, opener Opener, batch Batch) (Opened, error) {
 	var out Opened
-	for i, input := range batch.Cases {
+	for i, occurrence := range batch.Cases {
 		if err := ctx.Err(); err != nil {
 			return out, err
 		}
@@ -67,8 +75,9 @@ func Open(ctx context.Context, opener Opener, batch Batch) (Opened, error) {
 			IdemKey:    fmt.Sprintf("sim:%s:%d", batch.ID, i+1),
 			Trigger:    "simulation",
 			By:         batch.By,
-			Input:      input,
+			Input:      occurrence.Input,
 			Simulation: batch.ID,
+			Case:       occurrence.ID,
 		})
 		if err != nil {
 			// One case failing never stops the rest.

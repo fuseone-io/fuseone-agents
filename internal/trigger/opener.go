@@ -97,6 +97,8 @@ type Request struct {
 	// because the failure a flag allows is a run marked as a simulation that
 	// a worker claims and executes for real.
 	Simulation string
+	// Case names the regression case being replayed, when one is.
+	Case string
 }
 
 // ErrUnknownAgent means nothing is published under that id.
@@ -165,6 +167,7 @@ func (o *Opener) Open(ctx context.Context, req Request) (Result, error) {
 		Payload: mustJSON(domain.RunStartedPayload{
 			Trigger: req.Trigger, InputRef: inputRef,
 			Simulated: req.Simulation != "", Simulation: req.Simulation,
+			Case: req.Case,
 		}),
 	})
 	if err != nil {
