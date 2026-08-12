@@ -324,6 +324,23 @@
   "language": {
     "change": "Mudar idioma"
   },
+  "narrative": {
+    "asks": "Para e espera uma pessoa antes de {{tools}}.",
+    "asksNobody": "Não para para ninguém: tudo que ele faz, faz sozinho.",
+    "boundedBoth": "Pausa ao atingir {{micros}} ou {{steps}} passos, e retoma de onde parou.",
+    "boundedCost": "Pausa ao atingir {{micros}}, e retoma de onde parou.",
+    "boundedSteps": "Pausa ao atingir {{steps}} passos, e retoma de onde parou.",
+    "hint": "Aprove esta leitura, não o formulário. É o que a plataforma vai fazer — cada frase sai da especificação e do que o Portão decide hoje.",
+    "never": "Nunca vai conseguir usar {{tools}} — a política em vigor nega.",
+    "noTools": "Não alcança ferramenta nenhuma, então só consegue raciocinar.",
+    "reads": "Consulta {{tools}}, sem alterar nada.",
+    "startedByEvent": "Executa quando acontece o evento {{event}}.",
+    "startedByHand": "Só executa quando alguém pedir aqui.",
+    "startedByWebhook": "Executa quando chega uma chamada em /hooks/{{path}}.",
+    "startedOnSchedule": "Executa sozinho no agendamento {{schedule}}.",
+    "title": "O que entendi",
+    "unbounded": "Sem teto de custo nem de passos: nada o obriga a terminar."
+  },
   "nav": {
     "admin": "Administração",
     "agents": "Agentes",

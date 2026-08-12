@@ -9,6 +9,7 @@ import { ErrorState, LoadingRows } from "@/components/shared/states";
 import { AgentBasicsSection } from "@/features/agents/agent-basics-section";
 import { AgentToolsSection } from "@/features/agents/agent-tools-section";
 import { AgentBudgetSection } from "@/features/agents/agent-budget-section";
+import { NarrativeCard } from "@/features/agents/narrative-card";
 import { AgentEditorRail } from "@/features/agents/agent-editor-rail";
 import { useAgentDraft } from "@/features/agents/agent-draft";
 import { usePublishAgent } from "@/features/agents/agent-editor-api";
@@ -102,6 +103,11 @@ export function AgentEditorPage() {
             onChange={(list) => patch({ tools: list })}
           />
           <AgentBudgetSection draft={draft} patch={patch} />
+
+          {/* Last, deliberately: the author fills the form and then reads back
+              what it amounts to. FU-08 asks for approval of the prose, not of
+              the fields. */}
+          <NarrativeCard draft={draft} />
         </div>
 
         <AgentEditorRail

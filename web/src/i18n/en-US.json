@@ -324,6 +324,23 @@
   "language": {
     "change": "Change language"
   },
+  "narrative": {
+    "asks": "It stops and waits for a person before {{tools}}.",
+    "asksNobody": "It stops for nobody: everything it does, it does on its own.",
+    "boundedBoth": "It pauses at {{micros}} or {{steps}} steps, and resumes where it stopped.",
+    "boundedCost": "It pauses at {{micros}}, and resumes where it stopped.",
+    "boundedSteps": "It pauses at {{steps}} steps, and resumes where it stopped.",
+    "hint": "Approve this reading, not the form. It is what the platform will do — every sentence comes from the specification and from what the Gate decides today.",
+    "never": "It will never be able to use {{tools}} — the policy in force denies it.",
+    "noTools": "It reaches no tool at all, so it can only reason.",
+    "reads": "It looks {{tools}} up, changing nothing.",
+    "startedByEvent": "It runs when the {{event}} event happens.",
+    "startedByHand": "It only runs when somebody asks here.",
+    "startedByWebhook": "It runs when a call arrives at /hooks/{{path}}.",
+    "startedOnSchedule": "It runs on its own, on the {{schedule}} schedule.",
+    "title": "What I understood",
+    "unbounded": "No cost or step ceiling: nothing obliges it to finish."
+  },
   "nav": {
     "admin": "Administration",
     "agents": "Agents",
