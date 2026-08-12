@@ -144,13 +144,12 @@ descriptions somebody already published.
 | # | Decision | Blocks | Note |
 |---|---|---|---|
 | D1 | Where the simulation's real cases come from: a connector per system, a file, or capture in shadow mode | Stage 3 | The PRD leaves this open at Q2. Stage 3 is what it calls the central safety mechanism |
-| D2 | What a "step" is in the specification: an ordered stage naming reachable tools, or something finer | Stage 4, FU-13 | Also decides what `PlannedPayload.Node` records |
+| D2 | ~~What a "step" is~~ | — | **Answered in §8**, against a real agent |
 | D3 | Whether regression cases live in the ledger or beside the specification | Stage 4, FU-12 | They are neither runs nor spec text; they are fixtures with expected outcomes |
 | D4 | Whether the autonomy stage is a field on the spec or state beside it | Stage 5 | A published version is immutable; promotion is not a new version |
 
-D2 is the one that unblocks the most and is the least reversible. It should be
-answered first, and it should be answered by writing one real agent's steps by
-hand and seeing whether the shape survives contact.
+D2 was the one that unblocked the most and was the least reversible, so it was
+answered first, by writing one real agent's steps by hand. §8 has the result.
 
 ---
 
@@ -176,3 +175,77 @@ Steps 1 and 2 are worth doing regardless of how the rest is decided: an
 installation that can read back, in plain language, what a published agent
 actually says is better off than one that cannot, whether or not anybody is
 ever interviewed.
+
+
+---
+
+## 8. D2 answered: what a step is
+
+Written out by hand for `dev/agents/suporte.agent.md`, which exists and runs,
+rather than for an agent invented to fit a shape.
+
+Its instructions say: identify the customer in the CRM by the ticket's email,
+search the knowledge base for the reported subject, summarise what was found,
+then reply. And: if the customer is not found, say so and stop.
+
+| # | Step | Reaches | Ends when |
+|---|---|---|---|
+| 1 | Identify the customer | `crm.lookup` | A customer is found — or is not, and the run stops |
+| 2 | Research the subject | `kb.search` | There is enough to summarise |
+| 3 | Summarise | *nothing* | The summary exists |
+| 4 | Reply | `crm.reply` | The reply is sent |
+
+Three things fell out of the exercise that no amount of discussion would have
+settled.
+
+**A step is not a tool call.** Step 3 reaches nothing at all — it is the agent
+thinking. A model where steps are tools cannot represent this agent, and this
+agent is the simplest real one the repository has.
+
+**The exception belongs to a step, not to the agent.** "If I cannot find the
+customer, stop" is a property of step 1 and of nothing else. That is FU-04
+answered per step, and it is what lets a correction be localised: an agent that
+replied badly is corrected at step 4 without touching how it looks customers
+up.
+
+**Strict order breaks it.** Searching the knowledge base before looking the
+customer up is a legitimate way to run this process, and a specification that
+forbade it would be describing the author's first draft rather than their
+process. But a plain unordered set loses the guardrail that matters most —
+"reply only after the summary exists".
+
+So a step is an **envelope with a gate at its exit**:
+
+- Steps are ordered, and the run occupies exactly one at a time.
+- Inside a step the loop stays free: the interpreter decides what to call and
+  in what order, bounded by the tools that step reaches.
+- Advancing is monotonic. A run moves forward when the step's closing condition
+  holds, and never back.
+
+That preserves "the reply comes after the lookup stage" without dictating the
+order of calls within a stage, which is the distinction the author actually
+cares about and the one a rigid sequence destroys.
+
+### What it changes
+
+**The capability check narrows.** Today the Gate asks whether a tool is in the
+agent's pack. It would ask whether it is in the current step's envelope, which
+is strictly tighter and costs nothing: an agent that may reply cannot reply
+before it has looked anything up.
+
+**`PlannedPayload.Node` finally carries something.** It records the step a
+proposal came from — reserved since the beginning, written by the runner,
+never set. That is the anchor FU-13 asks for, and it means the run diagram
+already built can group its nodes by step without any new record.
+
+**A specification with no steps keeps working.** One step whose envelope is the
+whole pack is exactly today's behaviour, which is what lets this land without
+republishing anything.
+
+### What it does not settle
+
+Who decides a step is over. The closing condition is written in business
+language by the author, and something has to judge it against the run so far.
+The candidates are the interpreter asking the model, or a declared condition
+over the ledger. That is a separate decision and it blocks stage 4, not this
+one.
