@@ -12,6 +12,9 @@ import { agentKeys } from "@/features/agents/api";
  */
 export function useAgent(agentId: string, version?: string) {
   return useQuery({
+    // Never with no id: the create screen has nothing to load, and asking
+    // anyway is a 404 on every page view that means nothing went wrong.
+    enabled: agentId !== "",
     queryKey: [...agentKeys.all, "detail", agentId, version ?? "latest"] as const,
     queryFn: async () =>
       unwrap(

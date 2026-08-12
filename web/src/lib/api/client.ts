@@ -68,6 +68,8 @@ export type Policy = components["schemas"]["Policy"];
 export type PolicyInput = components["schemas"]["PolicyInput"];
 export type PolicyCondition = components["schemas"]["PolicyCondition"];
 export type Simulation = components["schemas"]["Simulation"];
+export type AgentDefinition = components["schemas"]["AgentDefinition"];
+export type AgentDetail = components["schemas"]["AgentDetail"];
 export type ModelProvider = components["schemas"]["ModelProvider"];
 export type Problem = components["schemas"]["Problem"];
 

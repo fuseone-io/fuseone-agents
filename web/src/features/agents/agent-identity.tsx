@@ -1,3 +1,5 @@
+import { Pencil } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Mono } from "@/components/shared/mono";
@@ -53,7 +55,15 @@ export function AgentIdentity({
         {/* An older version is read, never re-run: what would open is the
             newest, which is not the version being looked at. */}
         {agent.latest ? (
-          <RunNowDialog agentId={agent.agentId} agentName={agent.name} />
+          <>
+            <Button variant="outline" size="sm" asChild className="h-8">
+              <Link to={`/agents/${agent.agentId}/edit`}>
+                <Pencil className="size-4" aria-hidden />
+                Editar
+              </Link>
+            </Button>
+            <RunNowDialog agentId={agent.agentId} agentName={agent.name} />
+          </>
         ) : (
           <Button variant="outline" size="sm" disabled className="h-8">
             Somente leitura

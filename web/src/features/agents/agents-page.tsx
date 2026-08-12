@@ -1,5 +1,8 @@
 import { useMemo, useState } from "react";
 import { Bot } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/shared/states";
 import { Toolbar } from "@/components/shared/toolbar";
@@ -42,6 +45,12 @@ export function AgentsPage() {
             <TabsTrigger value="all">Histórico</TabsTrigger>
           </TabsList>
         </Tabs>
+        <Button size="sm" asChild>
+          <Link to="/agents/new">
+            <Plus className="size-4" aria-hidden />
+            Novo agente
+          </Link>
+        </Button>
       </PageHeader>
 
       <Toolbar placeholder="Buscar por nome ou identificador" value={search} onChange={setSearch}>
