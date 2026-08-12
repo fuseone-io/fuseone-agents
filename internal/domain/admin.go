@@ -38,6 +38,38 @@ type MCPServer struct {
 	UpdatedAt time.Time
 }
 
+// IdentityProvider is one configured way of signing in.
+//
+// Authenticating and being allowed to do something are separate: the mappings
+// are what turn an assertion's groups into scoped grants, and a provider with
+// none grants nothing however successfully somebody signs in.
+type IdentityProvider struct {
+	ID      string
+	Display string
+	Issuer  string
+	// ClientID names this installation to the provider. The secret beside it
+	// lives in the vault and is never returned by a listing.
+	ClientID     string
+	ClientSecret string
+	// HasSecret reports that a credential is stored, never what it is.
+	HasSecret bool
+	// GroupsClaim names the claim carrying group membership. Providers differ:
+	// Keycloak and Okta commonly use "groups", Entra ID "roles".
+	GroupsClaim string
+	Mappings    []GroupMapping
+	Enabled     bool
+	UpdatedBy   string
+	UpdatedAt   time.Time
+}
+
+// GroupMapping turns a group asserted by the provider into a scoped grant.
+type GroupMapping struct {
+	Group   string `json:"group"`
+	Company string `json:"company"`
+	Area    string `json:"area"`
+	Role    string `json:"role"`
+}
+
 type ModelProvider struct {
 	Name    string
 	Kind    string

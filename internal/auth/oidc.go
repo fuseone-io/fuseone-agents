@@ -25,12 +25,11 @@ var ErrNoProvider = errors.New("auth: no such identity provider")
 // Without at least one mapping a successful sign-in grants nothing. That is
 // the correct default: authenticating proves who someone is, and it should
 // never by itself decide what they may do.
-type GroupMapping struct {
-	Group   string `json:"group"`
-	Company string `json:"company"`
-	Area    string `json:"area"`
-	Role    string `json:"role"`
-}
+//
+// The type lives in domain because the administration area writes these and
+// the sign-in flow reads them; two declarations of the same four fields is how
+// the screen and the flow end up disagreeing about what a mapping is.
+type GroupMapping = domain.GroupMapping
 
 // OIDCProvider is one configured identity provider.
 type OIDCProvider struct {
@@ -43,7 +42,7 @@ type OIDCProvider struct {
 	// GroupsClaim names the claim carrying group membership. Providers differ:
 	// Keycloak and Okta commonly use "groups", Entra ID "roles".
 	GroupsClaim string
-	Mappings    []GroupMapping
+	Mappings    []domain.GroupMapping
 
 	oauth    *oauth2.Config
 	verifier *oidc.IDTokenVerifier

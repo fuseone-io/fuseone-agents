@@ -77,7 +77,7 @@ func (i *Integrations) PutMCPServer(ctx context.Context, by domain.UserID, scope
 		return fmt.Errorf("admin: encode MCP server: %w", err)
 	}
 
-	return i.write(ctx, by, scope, settings.Setting{
+	return writeSetting(ctx, i.pool, i.settings, by, scope, settings.Setting{
 		ScopeKind: settings.ScopeInstallation,
 		Kind:      settings.KindMCPServer,
 		Name:      server.Name,
@@ -90,7 +90,7 @@ func (i *Integrations) PutMCPServer(ctx context.Context, by domain.UserID, scope
 }
 
 func (i *Integrations) DeleteMCPServer(ctx context.Context, by domain.UserID, scope domain.Scope, name string) error {
-	return i.remove(ctx, by, scope, settings.KindMCPServer, name, "mcp_server.removed")
+	return removeSetting(ctx, i.pool, i.settings, by, scope, settings.KindMCPServer, name, "mcp_server.removed")
 }
 
 func (i *Integrations) Providers(ctx context.Context) ([]domain.ModelProvider, error) {
@@ -134,7 +134,7 @@ func (i *Integrations) PutProvider(ctx context.Context, by domain.UserID, scope 
 		return fmt.Errorf("admin: encode provider: %w", err)
 	}
 
-	return i.write(ctx, by, scope, settings.Setting{
+	return writeSetting(ctx, i.pool, i.settings, by, scope, settings.Setting{
 		ScopeKind: settings.ScopeInstallation,
 		Kind:      settings.KindModelProvider,
 		Name:      provider.Name,
@@ -150,7 +150,7 @@ func (i *Integrations) PutProvider(ctx context.Context, by domain.UserID, scope 
 }
 
 func (i *Integrations) DeleteProvider(ctx context.Context, by domain.UserID, scope domain.Scope, name string) error {
-	return i.remove(ctx, by, scope, settings.KindModelProvider, name, "provider.removed")
+	return removeSetting(ctx, i.pool, i.settings, by, scope, settings.KindModelProvider, name, "provider.removed")
 }
 
 // Credential opens a provider's key. Separate and explicit: reading
@@ -161,46 +161,4 @@ func (i *Integrations) Credential(ctx context.Context, name string) (string, err
 		return "", err
 	}
 	return set.Secret, nil
-}
-
-func (i *Integrations) write(
-	ctx context.Context, by domain.UserID, scope domain.Scope,
-	set settings.Setting, action, target string, detail any,
-) error {
-	tx, err := i.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("admin: begin: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	if err := i.settings.PutTx(ctx, tx, set); err != nil {
-		return err
-	}
-	if err := Record(ctx, tx, Event{
-		Principal: by, Scope: scope, Action: action, Target: target, Detail: detail,
-	}); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
-}
-
-func (i *Integrations) remove(
-	ctx context.Context, by domain.UserID, scope domain.Scope,
-	kind settings.Kind, name, action string,
-) error {
-	tx, err := i.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("admin: begin: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	if err := i.settings.DeleteTx(ctx, tx, settings.ScopeInstallation, domain.Scope{}, kind, name); err != nil {
-		return err
-	}
-	if err := Record(ctx, tx, Event{
-		Principal: by, Scope: scope, Action: action, Target: name,
-	}); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
 }

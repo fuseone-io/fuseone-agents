@@ -1,0 +1,12 @@
+-- The identity provider table nobody read.
+--
+-- 0004 created it with the right columns and the right comment about group
+-- mappings, and then no Go code ever selected from it or wrote to it: the
+-- pattern that emerged for everything an operator configures is the settings
+-- table, which already carries the vault, the administrative trail and the
+-- reveal-once path a client secret needs.
+--
+-- Dropped rather than left in place. A table that looks like the place
+-- identity providers live, and is not, is a trap for whoever writes the next
+-- feature — and an empty one is a promise the schema cannot keep.
+drop table if exists identity_providers;

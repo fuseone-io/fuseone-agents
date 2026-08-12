@@ -38,6 +38,11 @@ const (
 	KindBudget        Kind = "budget"
 	KindRetention     Kind = "retention"
 	KindPolicy        Kind = "policy"
+	// KindIdentityProvider holds who may sign in and what signing in grants.
+	// Here rather than in a table of its own because the vault, the trail and
+	// the reveal-once path all already work for a setting, and an identity
+	// provider needs all three.
+	KindIdentityProvider Kind = "identity_provider"
 )
 
 // ScopeKind is the level a setting applies at.

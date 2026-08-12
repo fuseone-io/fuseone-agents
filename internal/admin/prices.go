@@ -104,5 +104,5 @@ func (i *Integrations) Prices(ctx context.Context) ([]ModelPrice, error) {
 func (i *Integrations) DeletePrice(
 	ctx context.Context, by domain.UserID, scope domain.Scope, provider, model string,
 ) error {
-	return i.remove(ctx, by, scope, KindModelPrice, provider+"/"+model, "price.removed")
+	return removeSetting(ctx, i.pool, i.settings, by, scope, KindModelPrice, provider+"/"+model, "price.removed")
 }
