@@ -25,7 +25,7 @@ export function ServerCard({
       kind={t("integrations.mcpServer")}
       description={
         server.managed === false
-          ? "configurado fora do console, por flag ou ambiente"
+          ? t("integrations.serverFromFlag")
           : [server.command, ...(server.args ?? [])].join(" ")
       }
       enabled={server.enabled}
@@ -40,11 +40,14 @@ export function ServerCard({
               {t("agents.edit")}
             </Button>
             <RemoveButton
-              title={`Remover ${server.name}?`}
+              title={t("integrations.removeServerTitle", { name: server.name })}
               description={t("integrations.removeServer")}
               onConfirm={() =>
                 remove.mutate(server.name, {
-                  onSuccess: () => toast.success(`${server.name} removido`),
+                  onSuccess: () =>
+                    toast.success(
+                      t("integrations.serverRemoved", { name: server.name }),
+                    ),
                   onError: (e) =>
                     toast.error(
                       e instanceof Error ? e.message : t("common.removeFailed"),

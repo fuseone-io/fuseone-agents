@@ -306,6 +306,51 @@ Two ways to make it true rather than decorative:
 - **Actual scheduled syncs**: a periodic tool-catalogue refresh with its own
   record. Larger, and it needs the same single-owner discipline as cron.
 
+### Queued: remote tool servers
+
+Only one transport is wired. `cmd/agentd` connects every MCP server with
+`mcp.CommandTransport` over a locally executed command, so the form asks for a
+command and arguments because that is the only thing the platform can do. The
+SDK already in `go.mod` ships `StreamableClientTransport` and
+`SSEClientTransport`; neither is used. Remote MCP was never decided against —
+it was not built.
+
+Three consequences, in the order they bite:
+
+- **An installation cannot reach a hosted MCP server at all.** The honest
+  answer to "connect this to Google Sheets" is currently "write an MCP server",
+  which is a development project rather than a configuration.
+- **A command with arguments is remote code execution by configuration.**
+  Whoever may register a server runs an arbitrary binary inside the worker's
+  container. In a product installed in the customer's own environment that is a
+  property worth being deliberate about, and it argues for the remote transport
+  being the primary path rather than an addition to it.
+- **A server registered from the console does nothing until the worker
+  restarts.** `servers.connect` runs once at start-up; the tool rulings
+  refresh on a timer, the servers themselves do not. Nothing on the screen says
+  so, so the observed behaviour is a server that is configured and offers no
+  tools.
+
+The work: a transport on the record (`stdio | http`), a URL, the credential
+through the vault that already holds model provider keys, a branch at the
+connection point, and the form. Plus reconnecting without a restart, and the
+screen saying why a server the console does not own cannot be edited here —
+which today is a Portuguese literal in the component rather than a catalogue
+entry.
+
+### Reopened: connectors
+
+N4 rules out an integration engine, and §4 above takes that as settled. The
+owner has reopened it — the position to be argued is that the platform needs
+connectors and that the PRD may have got this wrong.
+
+Recorded here unargued, on purpose. What is worth separating before that
+conversation is that two different things get called "connectors": a catalogue
+of per-system integrations, which is what N4 refuses, and remote MCP, which is
+not an integration engine at all and would answer most of the same need by
+pointing at servers somebody else maintains. The first is a product decision;
+the second is the queued work above.
+
 ### Size
 
 Smallest of the four if it takes the health reading. The cost half of §8 is
