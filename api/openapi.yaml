@@ -1022,6 +1022,97 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /admin/scopes:
+    get:
+      tags: [admin]
+      operationId: listScopes
+      summary: The areas that exist
+      description: |
+        An area is where work is filed: an agent belongs to one, a ceiling
+        governs one, a policy can reach a set of them, and a grant is held in
+        one. Before this list existed an area was whatever text somebody typed
+        into an agent, so `financeiro` and `Financeiro` were two areas that
+        never meet — a ceiling on one governs no agent under the other, and
+        nothing reports it.
+
+        Answers only with the areas inside the scopes the caller reaches, so
+        the list doubles as what a context switcher may offer.
+      responses:
+        '200':
+          description: The areas, ordered by company then id.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/RegisteredScope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [admin]
+      operationId: registerScope
+      summary: Register an area
+      description: |
+        The typed name is folded to a canonical id — lowercased, accents
+        removed, spaces hyphenated — and the reply carries it, because the
+        caller cannot know beforehand what "Risco de Crédito" becomes.
+        Registering a name that folds onto an existing area relabels it rather
+        than creating a second one.
+
+        Behind scope:write, held only by the Curator: an area is where
+        authority is granted, so anybody who could create one could create a
+        place to hold authority nobody meant to give.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [company, name]
+              properties:
+                company: { type: string }
+                name:
+                  type: string
+                  description: As a person types it. Folded to an id server-side.
+                label:
+                  type: string
+                  description: How it is shown. Defaults to the typed name.
+      responses:
+        '200':
+          description: The area, with the id it was folded to.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RegisteredScope' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/scopes/{scope}:
+    delete:
+      tags: [admin]
+      operationId: deleteScope
+      summary: Withdraw an area
+      description: |
+        Withdraws the area from the list offered for new work. It does not
+        touch the agents, ceilings or policies already filed under it: those
+        rows keep naming it and keep meaning what they meant. Withdrawing an
+        area and rewriting history are different acts, and only the first is
+        available here.
+      parameters:
+        - name: scope
+          in: path
+          required: true
+          description: '`company/area`.'
+          schema: { type: string }
+      responses:
+        '204': { description: The area is withdrawn. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /admin/events:
     get:
       tags: [admin]
@@ -1297,6 +1388,20 @@ components:
           description: Whether a credential is stored. The credential itself never leaves the vault through this API.
         updatedBy: { type: string }
         updatedAt: { type: string, format: date-time }
+
+    RegisteredScope:
+      type: object
+      required: [company, area]
+      properties:
+        company: { type: string }
+        area:
+          type: string
+          description: The canonical id. Lowercase, no accents, hyphenated.
+        label:
+          type: string
+          description: How it is shown. Empty means show the id.
+        createdAt: { type: string, format: date-time }
+        createdBy: { type: string }
 
     ScopeBudget:
       type: object

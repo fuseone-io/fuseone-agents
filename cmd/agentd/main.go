@@ -35,6 +35,7 @@ import (
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/model"
 	"github.com/fuseone/agents/internal/policy"
+	"github.com/fuseone/agents/internal/scope"
 	"github.com/fuseone/agents/internal/spec"
 	"github.com/fuseone/agents/internal/tools"
 	"github.com/fuseone/agents/internal/trigger"
@@ -153,6 +154,7 @@ func serve(args []string) error {
 			WithAudit(audit.NewPostgres(identity.pool)).
 			WithHealth(admin.NewHealth(identity.pool)).
 			WithPolicies(policy.NewStore(identity.pool)).
+			WithAreas(scope.NewStore(identity.pool)).
 			WithPauses(spec.NewState(identity.pool)).
 			WithPublisher(spec.NewPublisher(identity.pool, engine.SystemClock{}))
 	}
