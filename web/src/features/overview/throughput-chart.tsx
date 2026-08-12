@@ -101,7 +101,11 @@ function Area({ columns, ceiling }: { columns: Column[]; ceiling: number }) {
       className="pointer-events-none absolute inset-x-0 top-0 text-primary"
       viewBox={`0 0 100 ${PLOT}`}
       preserveAspectRatio="none"
-      style={{ height: PLOT }}
+      // Width stated, not inferred. An inline SVG with a viewBox and no width
+      // takes the viewBox's own ratio — 100 wide against 180 tall — so this
+      // drew the whole day inside the first hundred pixels while the bars
+      // spanned the panel, and read as a broken chart beside a correct one.
+      style={{ width: "100%", height: PLOT }}
     >
       <defs>
         <linearGradient id="throughput-area" x1="0" y1="0" x2="0" y2="1">

@@ -8,6 +8,7 @@ import { AgentFleet } from "@/features/overview/agent-fleet";
 import { DecisionsFeed } from "@/features/overview/decisions-feed";
 import { RecentRuns } from "@/features/overview/recent-runs";
 import { TracePanel } from "@/features/overview/trace-panel";
+import { useSuggestedRun } from "@/features/overview/suggested-run";
 import { windowsFor } from "@/features/overview/window";
 
 /**
@@ -22,8 +23,16 @@ export function OverviewPage() {
   // Rounded to the hour and held, so the query keys do not move under the
   // page while somebody is reading it.
   const [windows] = useState(() => windowsFor());
-  const [selected, setSelected] = useState<string>();
+  const [chosen, setChosen] = useState<string>();
+  const [dismissed, setDismissed] = useState(false);
   const { since } = windows.current;
+
+  // Open on its own, on the run most worth looking at. The panel exists so
+  // somebody can act, so it opens on one waiting for a person before one that
+  // merely finished — and stays closed once somebody closes it, because a
+  // panel that reopens itself is a panel that cannot be closed.
+  const suggested = useSuggestedRun(since);
+  const selected = chosen ?? (dismissed ? undefined : suggested);
 
   return (
     <>
@@ -48,10 +57,18 @@ export function OverviewPage() {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
         <div className="flex min-w-0 flex-1 flex-col gap-4">
           <DecisionsFeed since={since} />
-          <RecentRuns since={since} selected={selected} onSelect={setSelected} />
+          <RecentRuns since={since} selected={selected} onSelect={setChosen} />
         </div>
 
-        {selected && <TracePanel runId={selected} onClose={() => setSelected(undefined)} />}
+        {selected && (
+          <TracePanel
+            runId={selected}
+            onClose={() => {
+              setChosen(undefined);
+              setDismissed(true);
+            }}
+          />
+        )}
       </div>
     </>
   );
