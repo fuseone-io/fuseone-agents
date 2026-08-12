@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   EmptyState,
@@ -6,6 +7,8 @@ import {
 } from "@/components/shared/states";
 import { SimulationSummary } from "@/features/agents/simulation-summary";
 import { CaseRow } from "@/features/agents/simulation-case";
+import { CorrectionDialog } from "@/features/agents/correction-dialog";
+import type { SimulationCase } from "@/features/agents/simulation-api";
 import type { useSimulation } from "@/features/agents/simulation-api";
 
 /**
@@ -23,6 +26,7 @@ export function SimulationReportView({
   report: ReturnType<typeof useSimulation>;
 }) {
   const { t } = useTranslation();
+  const [correcting, setCorrecting] = useState<SimulationCase | null>(null);
 
   if (report.isLoading) return <LoadingRows rows={6} />;
   if (report.error) {
@@ -46,11 +50,25 @@ export function SimulationReportView({
       <SimulationSummary report={report.data} />
       <ul className="flex flex-col gap-2">
         {report.data.cases.map((entry, i) => (
-          <li key={entry.runId ?? i}>
-            <CaseRow index={i + 1} entry={entry} />
+          <li key={entry.runId ?? entry.id ?? i}>
+            <CaseRow
+              index={i + 1}
+              entry={entry}
+              // A case with no run behind it never happened, and there is
+              // nothing to say should have been true of it.
+              onCorrect={entry.runId ? () => setCorrecting(entry) : undefined}
+            />
           </li>
         ))}
       </ul>
+
+      {correcting && (
+        <CorrectionDialog
+          agentId={agentId}
+          entry={correcting}
+          onClose={() => setCorrecting(null)}
+        />
+      )}
     </>
   );
 }

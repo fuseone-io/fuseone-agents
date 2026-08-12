@@ -51,7 +51,7 @@ export function useStartSimulation(agentId: string) {
   const intention = useRef<string | undefined>(undefined);
 
   return useMutation({
-    mutationFn: async (cases: string) => {
+    mutationFn: async (input: { cases?: string; corpus?: boolean }) => {
       intention.current ??= `sim-${crypto.randomUUID()}`;
       return unwrap(
         await api.POST("/agents/{agentId}/simulations", {
@@ -59,7 +59,7 @@ export function useStartSimulation(agentId: string) {
             path: { agentId },
             header: { "Idempotency-Key": intention.current },
           },
-          body: { cases },
+          body: input,
         }),
       );
     },

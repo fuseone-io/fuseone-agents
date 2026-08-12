@@ -32,16 +32,19 @@ export function SimulationStart({
   const count = countCases(cases);
 
   const submit = () =>
-    start.mutate(cases, {
-      onSuccess: (accepted) => onStarted(accepted.id),
-      // The server refuses the whole file and names the line. Shown as it
-      // came, because "invalid file" would leave the author guessing which of
-      // fifty lines to fix.
-      onError: (error) =>
-        toast.error(t("simulation.startFailed"), {
-          description: error instanceof Error ? error.message : undefined,
-        }),
-    });
+    start.mutate(
+      { cases },
+      {
+        onSuccess: (accepted) => onStarted(accepted.id),
+        // The server refuses the whole file and names the line. Shown as it
+        // came, because "invalid file" would leave the author guessing which of
+        // fifty lines to fix.
+        onError: (error) =>
+          toast.error(t("simulation.startFailed"), {
+            description: error instanceof Error ? error.message : undefined,
+          }),
+      },
+    );
 
   return (
     <Panel title={t("simulation.setTitle")}>
@@ -93,13 +96,34 @@ export function SimulationStart({
           </p>
         </div>
 
-        <Button
-          className="self-start"
-          disabled={count === 0 || start.isPending}
-          onClick={submit}
-        >
-          {t("simulation.start")}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button disabled={count === 0 || start.isPending} onClick={submit}>
+            {t("simulation.start")}
+          </Button>
+
+          {/* Beside the upload, because re-checking what was already
+              corrected is the more common of the two once an agent has been
+              running for a while. */}
+          <Button
+            variant="outline"
+            disabled={start.isPending}
+            onClick={() =>
+              start.mutate(
+                { corpus: true },
+                {
+                  onSuccess: (accepted) => onStarted(accepted.id),
+                  onError: (error) =>
+                    toast.error(t("correction.batteryFailed"), {
+                      description:
+                        error instanceof Error ? error.message : undefined,
+                    }),
+                },
+              )
+            }
+          >
+            {t("correction.runBattery")}
+          </Button>
+        </div>
       </div>
     </Panel>
   );

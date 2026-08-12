@@ -28,6 +28,18 @@ export function SimulationSummary({ report }: { report: SimulationReport }) {
       }
     >
       <dl className="flex flex-wrap gap-x-8 gap-y-3">
+        {(report.held ?? 0) + (report.broken ?? 0) > 0 && (
+          <>
+            <Figure
+              label={t("correction.tallyHeld")}
+              value={report.held ?? 0}
+            />
+            <Figure
+              label={t("correction.tallyBroken")}
+              value={report.broken ?? 0}
+            />
+          </>
+        )}
         <Figure label={t("simulation.tallyCases")} value={counted.cases} />
         <Figure
           label={t("simulation.tallyFinished")}

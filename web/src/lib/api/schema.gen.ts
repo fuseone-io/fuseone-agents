@@ -205,6 +205,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{agentId}/regressions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The corrections this agent is held to
+         * @description Every one of them is re-checked on every future version. A correction
+         *     that could not be checked was refused when it was made, so what is
+         *     listed here is exactly what the battery proves.
+         */
+        get: operations["listRegressions"];
+        put?: never;
+        /**
+         * Correct a case that came out wrong
+         * @description The author points at a run and says what should have been true of it.
+         *     What is recorded is the checkable half: prose cannot be re-run, and a
+         *     correction that cannot be re-run is a note rather than a correction.
+         *
+         *     The occurrence is copied into the corpus. Runs are purged on the
+         *     installation's retention, and a corpus that lost its cases as runs aged
+         *     out would stop checking while still reporting green.
+         */
+        post: operations["recordRegression"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agentId}/regressions/{caseId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Stop holding the agent to a correction */
+        delete: operations["deleteRegression"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{agentId}/simulations": {
         parameters: {
             query?: never;
@@ -1109,14 +1158,17 @@ export interface components {
             /** Format: int64 */
             cacheWriteTokens?: number;
         };
+        /** @description Either an uploaded set or the corpus. Running the corpus is the battery: it answers whether what was already corrected is still corrected. */
         SimulationRequest: {
+            /** @description Replay the agent's regression corpus instead of an uploaded set. */
+            corpus?: boolean;
             /**
              * @description One case per line, each a JSON object: an export of occurrences
              *     that already happened. Blank lines are not cases — every export
              *     ends in a newline, and counting it would put an empty occurrence in
              *     a report somebody reads as real.
              */
-            cases: string;
+            cases?: string;
         };
         SimulationAccepted: {
             id: string;
@@ -1148,6 +1200,11 @@ export interface components {
             reached: boolean;
         };
         SimulationCase: {
+            /** @description The regression case this row replays, when it replays one. */
+            id?: string;
+            expected?: components["schemas"]["Expectation"][];
+            /** @description What stopped being true. Empty is what an author wants to see. */
+            unmet?: components["schemas"]["Expectation"][];
             /** @description The run it drove. Absent when the case never opened one. */
             runId?: string;
             settled: components["schemas"]["SimulationSettled"];
@@ -1160,6 +1217,10 @@ export interface components {
             error?: string;
         };
         SimulationReport: {
+            /** @description Corrections that still stand. Zero for a simulation that is not a battery. */
+            held?: number;
+            /** @description Corrections that stopped standing. */
+            broken?: number;
             id: string;
             agent?: string;
             version?: string;
@@ -1229,6 +1290,31 @@ export interface components {
             /** Format: date-time */
             lastSeen?: string;
             disabled: boolean;
+        };
+        /** @description One thing that must be true of a case. The four kinds are what a fold of the run can answer without inventing anything — prose cannot be re-run, and a correction that cannot be re-run is a note. */
+        Expectation: {
+            /** @enum {string} */
+            kind: "settles" | "calls" | "never_calls" | "asks";
+            /** @description The declared step it is anchored to. A correction about the reply step must not start failing because the lookup step changed. */
+            step?: string;
+            /** @description A tool, or a settled state, depending on the kind. */
+            value?: string;
+        };
+        RegressionCase: {
+            id: string;
+            expectations: components["schemas"]["Expectation"][];
+            /** @description The run the correction was made from. It may be purged long before this case is. */
+            fromRun?: string;
+            note?: string;
+            createdBy?: string;
+            /** Format: date-time */
+            createdAt?: string;
+        };
+        RegressionInput: {
+            /** @description The run that came out wrong. Its occurrence is copied into the corpus. */
+            runId: string;
+            expectations: components["schemas"]["Expectation"][];
+            note?: string;
         };
         Run: {
             runId: string;
@@ -2194,6 +2280,94 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    listRegressions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The corpus. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["RegressionCase"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    recordRegression: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegressionInput"];
+            };
+        };
+        responses: {
+            /** @description Recorded, and part of every battery from now on. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegressionCase"];
+                };
+            };
+            /** @description Nothing to check, or a run with no occurrence behind it. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteRegression: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed from the corpus. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     startSimulation: {
