@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { ScrollText } from "lucide-react";
 import { Panel } from "@/components/shared/panel";
 import { Mono } from "@/components/shared/mono";
@@ -16,6 +17,7 @@ import { useAdminEvents } from "@/features/admin/api";
  * did it. An auditor asking "why was this allowed" needs both.
  */
 export function EventsPanel() {
+  const { t } = useTranslation();
   const { data, isLoading, error, refetch } = useAdminEvents();
   const events = data?.items ?? [];
 
@@ -23,7 +25,9 @@ export function EventsPanel() {
     <Panel
       title="Trilha administrativa"
       action={
-        <span className="text-xs text-muted-foreground">append-only</span>
+        <span className="text-xs text-muted-foreground">
+          {t("admin.appendOnly")}
+        </span>
       }
     >
       {isLoading ? (

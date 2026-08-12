@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import { Layers, Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -26,6 +27,7 @@ import {
  * switch context into an area before any agent lives there.
  */
 export function AreasPanel() {
+  const { t } = useTranslation();
   const { data, isLoading, error, refetch } = useScopes();
   const [adding, setAdding] = useState(false);
   const areas = data?.items ?? [];
@@ -36,7 +38,7 @@ export function AreasPanel() {
       action={
         <Button size="sm" onClick={() => setAdding(true)}>
           <Plus className="size-4" />
-          Nova
+          {t("admin.newFeminine")}
         </Button>
       }
     >

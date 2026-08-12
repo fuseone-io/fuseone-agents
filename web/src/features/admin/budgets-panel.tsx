@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import { Gauge, Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -23,6 +24,7 @@ import { formatMicros } from "@/lib/format";
 const PERIOD: Record<string, string> = { daily: "por dia", monthly: "por mês" };
 
 export function BudgetsPanel() {
+  const { t } = useTranslation();
   const { data, isLoading, error, refetch } = useBudgets();
   const [editing, setEditing] = useState<ScopeBudget | null | undefined>();
   const budgets = data?.items ?? [];
@@ -33,7 +35,7 @@ export function BudgetsPanel() {
       action={
         <Button size="sm" onClick={() => setEditing(null)}>
           <Plus className="size-4" />
-          Novo
+          {t("common.new")}
         </Button>
       }
     >

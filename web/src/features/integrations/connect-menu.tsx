@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Plug, Plus, Server } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,22 +20,23 @@ export function ConnectMenu({
 }: {
   onConnect: (kind: "server" | "provider") => void;
 }) {
+  const { t } = useTranslation();
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button size="sm">
           <Plus className="size-4" aria-hidden />
-          Conectar sistema
+          {t("integrations.connect")}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem onSelect={() => onConnect("server")}>
           <Server className="size-4" aria-hidden />
-          Servidor de ferramentas
+          {t("integrations.toolServer")}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onConnect("provider")}>
           <Plug className="size-4" aria-hidden />
-          Provedor de modelo
+          {t("integrations.modelProvider")}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

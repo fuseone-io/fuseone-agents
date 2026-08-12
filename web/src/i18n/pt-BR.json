@@ -1,4 +1,32 @@
 {
+  "admin": {
+    "appendOnly": "append-only",
+    "areaExplains": "Uma área é onde o trabalho fica arquivado. Declarar aqui é o que impede que duas grafias do mesmo nome virem duas áreas que nunca se encontram.",
+    "areaFolds": "Vira um identificador em minúsculas, sem acentos e com hífens no lugar dos espaços.",
+    "areas": "Áreas",
+    "arriveAsRead": "chegam como leitura",
+    "bringsOutside": "Traz dado de fora",
+    "budgets": "Tetos",
+    "classify": "Classificar",
+    "company": "Empresa",
+    "declare": "Declarar",
+    "effect": "Efeito",
+    "emptyUsesName": "Vazio usa o próprio nome.",
+    "name": "Nome",
+    "newArea": "Nova área",
+    "newFeminine": "Nova",
+    "readMarksRun": "Ler marca a execução. Uma escrita depois disso para para uma pessoa decidir.",
+    "recordClassification": "Registrar classificação",
+    "recordedInTrail": "Fica registrado com seu nome na trilha administrativa. Corrigir depois cria um novo registro; nenhum registro é apagado.",
+    "server": "Servidor",
+    "shownAs": "Como aparece",
+    "tool": "Ferramenta",
+    "tools": "Ferramentas",
+    "trail": "Trilha",
+    "untrusted": "Dado de fora",
+    "whatItDoes": "O que esta ferramenta faz com o mundo",
+    "why": "Por quê"
+  },
   "agents": {
     "aboutWhat": "Sobre o quê",
     "budgetNeeded": "Uma execução precisa de pelo menos um teto de custo ou de passos: é o que a torna finita, e terminar é estrutural aqui, nunca pedido no prompt.",
@@ -75,6 +103,22 @@
     "noTokens": "Nenhum token contabilizado no período.",
     "runs": "Execuções",
     "tokens": "Tokens"
+  },
+  "integrations": {
+    "address": "Endereço",
+    "arguments": "Argumentos",
+    "command": "Comando",
+    "connect": "Conectar sistema",
+    "credential": "Credencial",
+    "credentialSealed": "A credencial é selada assim que chega e nunca volta por esta tela.",
+    "enabled": "Ativo",
+    "mcpExplains": "Um servidor MCP é o que dá ferramentas aos agentes. Tudo que ele oferece chega como leitura até alguém classificar.",
+    "modelProvider": "Provedor de modelo",
+    "neverTried": "Nenhum worker tentou conectar ainda.",
+    "openAiCompatible": "Compatível com OpenAI",
+    "protocol": "Protocolo",
+    "referencedBySpecs": "É o que as definições de agente referenciam.",
+    "toolServer": "Servidor de ferramentas"
   },
   "language": {
     "change": "Mudar idioma"

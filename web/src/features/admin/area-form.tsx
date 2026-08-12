@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -39,6 +40,7 @@ const schema = z.object({
  * string they will type into a ceiling and read in a policy.
  */
 export function AreaForm({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation();
   const register = useRegisterScope();
   const { data: me } = useMe();
   const companies = [...new Set(me?.grants.map((g) => g.company) ?? [])];
@@ -70,12 +72,8 @@ export function AreaForm({ onClose }: { onClose: () => void }) {
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Nova área</DialogTitle>
-          <DialogDescription>
-            Uma área é onde o trabalho fica arquivado. Declarar aqui é o que
-            impede que duas grafias do mesmo nome virem duas áreas que nunca se
-            encontram.
-          </DialogDescription>
+          <DialogTitle>{t("admin.newArea")}</DialogTitle>
+          <DialogDescription>{t("admin.areaExplains")}</DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
@@ -88,7 +86,7 @@ export function AreaForm({ onClose }: { onClose: () => void }) {
               name="company"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Empresa</FormLabel>
+                  <FormLabel>{t("admin.company")}</FormLabel>
                   <FormControl>
                     <Input {...field} placeholder="default" />
                   </FormControl>
@@ -101,14 +99,11 @@ export function AreaForm({ onClose }: { onClose: () => void }) {
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Nome</FormLabel>
+                  <FormLabel>{t("admin.name")}</FormLabel>
                   <FormControl>
                     <Input {...field} placeholder="Risco de Crédito" />
                   </FormControl>
-                  <FormDescription>
-                    Vira um identificador em minúsculas, sem acentos e com
-                    hífens no lugar dos espaços.
-                  </FormDescription>
+                  <FormDescription>{t("admin.areaFolds")}</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -118,11 +113,11 @@ export function AreaForm({ onClose }: { onClose: () => void }) {
               name="label"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Como aparece</FormLabel>
+                  <FormLabel>{t("admin.shownAs")}</FormLabel>
                   <FormControl>
                     <Input {...field} placeholder="opcional" />
                   </FormControl>
-                  <FormDescription>Vazio usa o próprio nome.</FormDescription>
+                  <FormDescription>{t("admin.emptyUsesName")}</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -130,10 +125,10 @@ export function AreaForm({ onClose }: { onClose: () => void }) {
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose}>
-                Cancelar
+                {t("common.cancel")}
               </Button>
               <Button type="submit" disabled={register.isPending}>
-                Declarar
+                {t("admin.declare")}
               </Button>
             </DialogFooter>
           </form>

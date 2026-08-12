@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -49,6 +50,7 @@ export function ProviderForm({
   provider: ModelProvider | null;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const put = usePutProvider();
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
@@ -83,7 +85,7 @@ export function ProviderForm({
             {provider ? "Editar provedor" : "Novo provedor de modelo"}
           </DialogTitle>
           <DialogDescription>
-            A credencial é selada assim que chega e nunca volta por esta tela.
+            {t("integrations.credentialSealed")}
           </DialogDescription>
         </DialogHeader>
 
@@ -97,7 +99,7 @@ export function ProviderForm({
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Nome</FormLabel>
+                  <FormLabel>{t("admin.name")}</FormLabel>
                   <FormControl>
                     <Input
                       {...field}
@@ -107,7 +109,7 @@ export function ProviderForm({
                     />
                   </FormControl>
                   <FormDescription>
-                    É o que as definições de agente referenciam.
+                    {t("integrations.referencedBySpecs")}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -119,7 +121,7 @@ export function ProviderForm({
               name="kind"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Protocolo</FormLabel>
+                  <FormLabel>{t("integrations.protocol")}</FormLabel>
                   <Select value={field.value} onValueChange={field.onChange}>
                     <FormControl>
                       <SelectTrigger>
@@ -129,7 +131,7 @@ export function ProviderForm({
                     <SelectContent>
                       <SelectItem value="anthropic">Anthropic</SelectItem>
                       <SelectItem value="openai_compatible">
-                        Compatível com OpenAI
+                        {t("integrations.openAiCompatible")}
                       </SelectItem>
                     </SelectContent>
                   </Select>
@@ -143,7 +145,7 @@ export function ProviderForm({
               name="baseUrl"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Endereço</FormLabel>
+                  <FormLabel>{t("integrations.address")}</FormLabel>
                   <FormControl>
                     <Input
                       {...field}
@@ -161,7 +163,7 @@ export function ProviderForm({
               name="apiKey"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Credencial</FormLabel>
+                  <FormLabel>{t("integrations.credential")}</FormLabel>
                   <FormControl>
                     <Input
                       {...field}
@@ -185,7 +187,9 @@ export function ProviderForm({
               name="enabled"
               render={({ field }) => (
                 <FormItem className="flex items-center justify-between rounded-lg border p-3">
-                  <FormLabel className="m-0">Ativo</FormLabel>
+                  <FormLabel className="m-0">
+                    {t("integrations.enabled")}
+                  </FormLabel>
                   <FormControl>
                     <Switch
                       checked={field.value}
@@ -198,10 +202,10 @@ export function ProviderForm({
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose}>
-                Cancelar
+                {t("common.cancel")}
               </Button>
               <Button type="submit" disabled={form.formState.isSubmitting}>
-                Salvar
+                {t("common.save")}
               </Button>
             </DialogFooter>
           </form>

@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -41,6 +42,7 @@ export function ServerForm({
   server: MCPServer | null;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const put = usePutMCPServer();
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
@@ -81,10 +83,7 @@ export function ServerForm({
           <DialogTitle>
             {server ? "Editar servidor" : "Novo servidor de ferramentas"}
           </DialogTitle>
-          <DialogDescription>
-            Um servidor MCP é o que dá ferramentas aos agentes. Tudo que ele
-            oferece chega como leitura até alguém classificar.
-          </DialogDescription>
+          <DialogDescription>{t("integrations.mcpExplains")}</DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
@@ -97,7 +96,7 @@ export function ServerForm({
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Nome</FormLabel>
+                  <FormLabel>{t("admin.name")}</FormLabel>
                   <FormControl>
                     <Input
                       {...field}
@@ -120,7 +119,7 @@ export function ServerForm({
               name="command"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Comando</FormLabel>
+                  <FormLabel>{t("integrations.command")}</FormLabel>
                   <FormControl>
                     <Input
                       {...field}
@@ -138,7 +137,7 @@ export function ServerForm({
               name="args"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Argumentos</FormLabel>
+                  <FormLabel>{t("integrations.arguments")}</FormLabel>
                   <FormControl>
                     <Input
                       {...field}
@@ -156,7 +155,9 @@ export function ServerForm({
               name="enabled"
               render={({ field }) => (
                 <FormItem className="flex items-center justify-between rounded-lg border p-3">
-                  <FormLabel className="m-0">Ativo</FormLabel>
+                  <FormLabel className="m-0">
+                    {t("integrations.enabled")}
+                  </FormLabel>
                   <FormControl>
                     <Switch
                       checked={field.value}
@@ -169,10 +170,10 @@ export function ServerForm({
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose}>
-                Cancelar
+                {t("common.cancel")}
               </Button>
               <Button type="submit" disabled={form.formState.isSubmitting}>
-                Salvar
+                {t("common.save")}
               </Button>
             </DialogFooter>
           </form>

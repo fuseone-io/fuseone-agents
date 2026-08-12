@@ -1,4 +1,32 @@
 {
+  "admin": {
+    "appendOnly": "append-only",
+    "areaExplains": "An area is where work is filed. Declaring one here is what stops two spellings of the same name becoming two areas that never meet.",
+    "areaFolds": "Becomes a lowercase identifier, without accents and with hyphens in place of spaces.",
+    "areas": "Areas",
+    "arriveAsRead": "arrive as reads",
+    "bringsOutside": "Brings outside data",
+    "budgets": "Ceilings",
+    "classify": "Classify",
+    "company": "Company",
+    "declare": "Declare",
+    "effect": "Effect",
+    "emptyUsesName": "Empty uses the name itself.",
+    "name": "Name",
+    "newArea": "New area",
+    "newFeminine": "New",
+    "readMarksRun": "A read marks the run. A write after that stops for a person to decide.",
+    "recordClassification": "Record the classification",
+    "recordedInTrail": "Recorded in your name in the administrative trail. Correcting it later creates a new record; no record is erased.",
+    "server": "Server",
+    "shownAs": "How it is shown",
+    "tool": "Tool",
+    "tools": "Tools",
+    "trail": "Trail",
+    "untrusted": "Outside data",
+    "whatItDoes": "What this tool does to the world",
+    "why": "Why"
+  },
   "agents": {
     "aboutWhat": "About what",
     "budgetNeeded": "A run needs at least a cost or a step ceiling: it is what makes it finite, and ending is structural here, never something asked for in the prompt.",
@@ -75,6 +103,22 @@
     "noTokens": "No token accounted for in the period.",
     "runs": "Runs",
     "tokens": "Tokens"
+  },
+  "integrations": {
+    "address": "Address",
+    "arguments": "Arguments",
+    "command": "Command",
+    "connect": "Connect a system",
+    "credential": "Credential",
+    "credentialSealed": "The credential is sealed the moment it arrives and never comes back through this screen.",
+    "enabled": "Enabled",
+    "mcpExplains": "An MCP server is what gives agents their tools. Everything it offers arrives as a read until somebody classifies it.",
+    "modelProvider": "Model provider",
+    "neverTried": "No worker has tried to connect yet.",
+    "openAiCompatible": "OpenAI compatible",
+    "protocol": "Protocol",
+    "referencedBySpecs": "It is what agent definitions reference.",
+    "toolServer": "Tool server"
   },
   "language": {
     "change": "Change language"

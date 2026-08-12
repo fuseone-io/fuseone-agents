@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import { Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ const HEAD =
   "h-[30px] bg-muted text-2xs uppercase tracking-label text-muted-foreground";
 
 export function ToolsPanel() {
+  const { t } = useTranslation();
   const { data, isLoading, error, refetch } = useTools();
   const [classifying, setClassifying] = useState<Tool | null>(null);
   const tools = data?.items ?? [];
@@ -33,7 +35,7 @@ export function ToolsPanel() {
       title="Ferramentas"
       action={
         <span className="text-xs text-muted-foreground">
-          chegam como leitura
+          {t("admin.arriveAsRead")}
         </span>
       }
       flush
@@ -58,10 +60,10 @@ export function ToolsPanel() {
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className={HEAD}>Ferramenta</TableHead>
-              <TableHead className={HEAD}>Servidor</TableHead>
-              <TableHead className={HEAD}>Efeito</TableHead>
-              <TableHead className={HEAD}>Dado de fora</TableHead>
+              <TableHead className={HEAD}>{t("admin.tool")}</TableHead>
+              <TableHead className={HEAD}>{t("admin.server")}</TableHead>
+              <TableHead className={HEAD}>{t("admin.effect")}</TableHead>
+              <TableHead className={HEAD}>{t("admin.untrusted")}</TableHead>
               <TableHead className={`${HEAD} text-right`} />
             </TableRow>
           </TableHeader>
@@ -91,7 +93,7 @@ export function ToolsPanel() {
                     size="sm"
                     onClick={() => setClassifying(tool)}
                   >
-                    Classificar
+                    {t("admin.classify")}
                   </Button>
                 </TableCell>
               </TableRow>

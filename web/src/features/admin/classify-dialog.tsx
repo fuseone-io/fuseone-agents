@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -45,6 +46,7 @@ export function ClassifyDialog({
   tool: Tool | null;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const [effect, setEffect] = useState<Effect>("read");
   const [untrusted, setUntrusted] = useState(true);
   const [reason, setReason] = useState("");
@@ -77,17 +79,12 @@ export function ClassifyDialog({
           <DialogTitle className="font-mono text-base">
             {tool.toolId}
           </DialogTitle>
-          <DialogDescription>
-            Fica registrado com seu nome na trilha administrativa. Corrigir
-            depois cria um novo registro; nenhum registro é apagado.
-          </DialogDescription>
+          <DialogDescription>{t("admin.recordedInTrail")}</DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
-            <Label htmlFor="effect">
-              O que esta ferramenta faz com o mundo
-            </Label>
+            <Label htmlFor="effect">{t("admin.whatItDoes")}</Label>
             <Select
               value={effect}
               onValueChange={(v) => setEffect(v as Effect)}
@@ -107,10 +104,9 @@ export function ClassifyDialog({
 
           <div className="flex items-start justify-between gap-4 rounded-lg border p-3">
             <div>
-              <Label htmlFor="untrusted">Traz dado de fora</Label>
+              <Label htmlFor="untrusted">{t("admin.bringsOutside")}</Label>
               <p className="mt-1 text-xs text-muted-foreground">
-                Ler marca a execução. Uma escrita depois disso para para uma
-                pessoa decidir.
+                {t("admin.readMarksRun")}
               </p>
             </div>
             <Switch
@@ -121,7 +117,7 @@ export function ClassifyDialog({
           </div>
 
           <div className="flex flex-col gap-2">
-            <Label htmlFor="reason">Por quê</Label>
+            <Label htmlFor="reason">{t("admin.why")}</Label>
             <Input
               id="reason"
               value={reason}
@@ -133,10 +129,10 @@ export function ClassifyDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
-            Cancelar
+            {t("common.cancel")}
           </Button>
           <Button onClick={() => void submit()} disabled={classify.isPending}>
-            Registrar classificação
+            {t("admin.recordClassification")}
           </Button>
         </DialogFooter>
       </DialogContent>

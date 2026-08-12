@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Plus } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,7 @@ export function IntegrationsSection({
   empty: ReactNode;
   children: ReactNode;
 }) {
+  const { t } = useTranslation();
   return (
     <section className="flex flex-col gap-2.5">
       <div className="flex items-center gap-2">
@@ -26,7 +28,7 @@ export function IntegrationsSection({
           onClick={onAdd}
         >
           <Plus className="size-4" aria-hidden />
-          Novo
+          {t("common.new")}
         </Button>
       </div>
 

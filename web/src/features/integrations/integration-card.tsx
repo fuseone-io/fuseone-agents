@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { ReactNode } from "react";
 import { Mono } from "@/components/shared/mono";
 import { formatRelative } from "@/lib/format";
@@ -81,10 +82,11 @@ export function IntegrationCard({
  * them would let a server nobody has connected to look healthy.
  */
 function Observation({ health }: { health?: IntegrationHealth | null }) {
+  const { t } = useTranslation();
   if (!health) {
     return (
       <p className="text-2xs text-muted-foreground">
-        Nenhum worker tentou conectar ainda.
+        {t("integrations.neverTried")}
       </p>
     );
   }

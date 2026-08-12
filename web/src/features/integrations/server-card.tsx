@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { IntegrationCard } from "@/features/integrations/integration-card";
@@ -15,6 +16,7 @@ export function ServerCard({
   server: MCPServer;
   onEdit: () => void;
 }) {
+  const { t } = useTranslation();
   const remove = useDeleteMCPServer();
 
   return (
@@ -35,7 +37,7 @@ export function ServerCard({
         server.managed === false ? undefined : (
           <div className="flex items-center gap-1">
             <Button variant="ghost" size="sm" className="h-7" onClick={onEdit}>
-              Editar
+              {t("agents.edit")}
             </Button>
             <RemoveButton
               title={`Remover ${server.name}?`}

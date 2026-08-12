@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -12,6 +13,7 @@ import { BudgetsPanel } from "@/features/admin/budgets-panel";
  * the edits are auditable, or neither is worth much.
  */
 export function AdminPage() {
+  const { t } = useTranslation();
   return (
     <>
       <PageHeader
@@ -22,10 +24,10 @@ export function AdminPage() {
 
       <Tabs defaultValue="tools" className="min-h-0 flex-1">
         <TabsList>
-          <TabsTrigger value="tools">Ferramentas</TabsTrigger>
-          <TabsTrigger value="areas">Áreas</TabsTrigger>
-          <TabsTrigger value="budgets">Tetos</TabsTrigger>
-          <TabsTrigger value="events">Trilha</TabsTrigger>
+          <TabsTrigger value="tools">{t("admin.tools")}</TabsTrigger>
+          <TabsTrigger value="areas">{t("admin.areas")}</TabsTrigger>
+          <TabsTrigger value="budgets">{t("admin.budgets")}</TabsTrigger>
+          <TabsTrigger value="events">{t("admin.trail")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="tools" className="mt-4">
