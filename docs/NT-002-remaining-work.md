@@ -194,17 +194,83 @@ Two things could be drawn today:
 The handoff's visual language survives either choice: node shapes, the
 serpentine grid, edge rules, condition pills.
 
-### The decision that has to come first
+### The decision, answered by the handoff's own data
 
-**Does the specification gain a graph?** If yes, that changes authoring,
-FU-13's per-step corrections, and the engine. If no, the diagram is a
-projection of something else and FU-17 should be rewritten to say so.
+The prototype settles it, and not in the direction its chrome suggests.
 
-This is the only front where the decision is worth more than the work.
+`FLOW_NODES` in `ui_kits/console/Console.jsx` is nine nodes, and every one of
+them carries a **latency** and a **health**:
+
+```
+Webhook received      12ms   Policy gate POL-114    8ms
+Analyze profile       1.4s   CRM · read account   180ms
+Human approval      4h SLA   Apply new limit      220ms
+Seal audit trail      14ms
+```
+
+A specification does not have 12ms. That is an execution — the design draws a
+run and wraps it in an authoring shell. Which means the diagram is buildable
+today, from the ledger, with no change to the specification at all.
+
+Eight node kinds, seven of which are step kinds we already record:
+
+| Node | Comes from |
+|---|---|
+| trigger | `run_started`, with its trigger |
+| policy | `gate_decided`, with the policy code |
+| agent | `planned` |
+| tool | `tool_called` / `tool_returned` |
+| human | `approval_requested` / `approval_decided` |
+| action | `tool_called` whose effect is not a read |
+| seal | the hash chain, and `run_finished` |
+| **branch** | **nothing — the loop belongs to the interpreter** |
+
+So the specification does not gain a graph, FU-17's "the agent's graph" is
+really the run's, and the honest screen is the run trail drawn as a diagram
+rather than as a list.
+
+What stays out is the chrome around it: the flow dropdown, Draft/Staging/
+Production, "Test run", and a searchable rail of draggable components. That is
+the builder N5 rules out, and it is separable from the picture.
 
 ---
 
-## 4. Integrations — delivered
+## 4. Integrations — delivered, and one level below the handoff
+
+### The mismatch worth naming
+
+The prototype's cards are **business systems**: Salesforce (CRM), SAP (ERP),
+Postgres · risk, Slack, S3 · documents — each with read/write scopes, a row
+count, and a last sync.
+
+Ours are **MCP servers**: `crm`, `kb`. In this architecture Salesforce sits
+*behind* an MCP server, and the platform never talks to it directly (N4: tools
+arrive over MCP, heavy integration stays the FuseOne platform's problem). So
+the handoff's cards describe a layer this product deliberately does not own.
+
+Two ways to close that, and they are not the same product:
+
+- **Name the server after what it fronts.** A server called `salesforce`
+  offering `salesforce.*` tools reads exactly like the handoff's card, and the
+  platform keeps knowing nothing about Salesforce. Costs nothing, buys most of
+  the look.
+- **Model the system behind the server.** The platform learns that `crm` fronts
+  Salesforce, with credentials and sync state of its own. That is the
+  integration engine N4 rules out.
+
+The first is the one consistent with the PRD, and it is mostly a naming
+convention plus a screen that shows what a server offers.
+
+### Still missing: its own screen
+
+The handoff gives Integrations a top-level view with its own title, a
+`Connect system` primary action and a `Recent syncs` table. Ours is a tab
+inside Administração. Promoting it is small; the syncs table is the part with
+no data behind it, and the honest substitute is the health reading already
+recorded — when a server was last reached, by which worker, and how many tools
+it offered.
+
+### What was delivered
 
 ### What existed
 
@@ -278,8 +344,8 @@ The screen implies more than a table of rules, and the parts are separable:
 |---|---|---|---|
 | 1 | Decision table or expression language for rules | Policies | **Settled** — decision table, by the handoff |
 | 2 | How much of the Studio is in scope | Agent authoring | **Settled** — the form, by the handoff |
-| 3 | Does the specification gain a graph | The diagram, and FU-17's wording | Open |
+| 3 | Does the specification gain a graph | The diagram, and FU-17's wording | **Answered** — no. The handoff's own node data is a run |
 | 4 | Health reading or scheduled syncs | Integrations | **Settled** — health reading, delivered |
 
-One decision left, and it is the one where the answer is worth more than the
-work.
+None left open. The diagram turns out to be a projection of the ledger, which
+is data that already exists.
