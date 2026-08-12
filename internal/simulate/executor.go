@@ -100,10 +100,10 @@ func (e *Executor) one(ctx context.Context, job Job, i int, input []byte) Case {
 		// The intention is this case of this simulation. Simulating again is a
 		// new intention and opens its own runs; retrying one that timed out
 		// reaches the runs it already opened.
-		IdemKey:   fmt.Sprintf("sim:%s:%d", job.ID, i+1),
-		Trigger:   "simulation",
-		Input:     input,
-		Simulated: true,
+		IdemKey:    fmt.Sprintf("sim:%s:%d", job.ID, i+1),
+		Trigger:    "simulation",
+		Input:      input,
+		Simulation: job.ID,
 	})
 	if err != nil {
 		return Case{Settled: SettledUnsettled, Error: err.Error()}

@@ -20,6 +20,11 @@ type RunStartedPayload struct {
 	// ledger so the trail, the diagram and the verifier read it unchanged,
 	// and every projection excludes it so it is never counted as production.
 	Simulated bool `json:"simulated,omitempty"`
+	// Simulation names the batch this run belonged to, so a report can find
+	// its cases again. Both fields are written from one input by the opener:
+	// two marks somebody could set independently is two marks that disagree,
+	// and the disagreement that matters is a simulated run a worker claims.
+	Simulation string `json:"simulation,omitempty"`
 }
 
 type PlannedPayload struct {
