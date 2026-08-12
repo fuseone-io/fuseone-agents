@@ -3,6 +3,7 @@ import { Bot } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/shared/states";
 import { Toolbar } from "@/components/shared/toolbar";
@@ -36,6 +37,7 @@ export function AgentsPage() {
   return (
     <>
       <PageHeader
+        icon={PAGE_ICONS.agents}
         title="Agentes"
         description="Cada versão publicada é imutável: o identificador é o resumo do conteúdo, então o texto que uma execução rodou pode sempre ser lido de volta."
       >

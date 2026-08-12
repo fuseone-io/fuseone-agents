@@ -79,10 +79,21 @@ the base layout for both Console and Studio. Do not invent a second shell.
 
 - Sidebar 248px, collapsing to 48px, one border on its right edge. Navigation
   is grouped by job — Operar, Governar — in `components/layout/nav.ts`.
-- Header 52px, transparent, **no bottom border**.
-- Content is a card floating on the sidebar colour: `rounded-2xl`, a hairline
-  border, `shadow-sm`, `mx-4 mb-4`, `p-10`, `gap-6`. That inset is what makes
-  the working area read as lifted, which is why the header carries no rule.
+- Header 52px, with a **`1px` bottom border** running the width of the main
+  region.
+- Content is **flush**: it sits directly on `background`, `p-6`, `gap-6`, with
+  no border, radius, margin or shadow on the container.
+- **One level of lift, not two.** Elevation belongs to the cards inside a page
+  (`rounded-xl` + `shadow-sm`), never to the page container. A container that
+  also lifts makes every card inside it mean less.
+- The header's rule and the flush content are one decision: the rule separates
+  chrome from content because no floating panel is doing that job. Do not
+  reintroduce either half alone.
+- **Every screen leads with an icon tile**: 34px, `rounded-md`, hairline
+  border, `muted` fill, holding a 17px lucide icon. The icon comes from
+  `PAGE_ICONS` in `components/layout/nav.ts` so a screen and its navigation
+  entry cannot show two different symbols for the same thing. In edit modes it
+  precedes the record's identifier and never replaces it.
 - **Only routes that exist appear in the navigation.** An entry pointing at a
   screen nobody built teaches people the console is unreliable.
 

@@ -1,5 +1,6 @@
 import { useDeferredValue, useMemo, useState } from "react";
 import { Activity } from "lucide-react";
+import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
 import { Panel } from "@/components/shared/panel";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/shared/states";
@@ -35,6 +36,7 @@ export function RunsPage() {
   return (
     <>
       <PageHeader
+        icon={PAGE_ICONS.runs}
         title="Execuções"
         description="Cada execução é a unidade de auditoria e de custo: o que o agente propôs, o que o Portão decidiu e o que de fato aconteceu."
       />

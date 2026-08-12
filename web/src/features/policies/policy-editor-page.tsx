@@ -2,6 +2,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ErrorState, LoadingRows } from "@/components/shared/states";
+import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
 import { IdentitySection } from "@/features/policies/identity-section";
 import { ScopeSection } from "@/features/policies/scope-section";
@@ -59,6 +60,7 @@ export function PolicyEditorPage() {
   return (
     <>
       <PageHeader
+        icon={PAGE_ICONS.policies}
         title={creating ? "Nova política" : loaded!.name}
         description="Uma regra avaliada em todo passo de agente: escopo, condição, e o que acontece quando bate."
       />
@@ -77,7 +79,7 @@ export function PolicyEditorPage() {
       {/* The commit never leaves the screen, and its label names the
           consequence: a rule that will watch and a rule that will stop things
           are different acts and must not share a button that says "Salvar". */}
-      <div className="sticky bottom-0 -mx-10 flex items-center gap-2 border-t border-border bg-card px-10 py-3 shadow-md">
+      <div className="sticky bottom-0 -mx-6 -mb-6 flex items-center gap-2 border-t border-border bg-card px-6 py-3 shadow-md">
         {changes.length > 0 && (
           <span className="text-xs text-warning">
             {changes.length} {changes.length === 1 ? "alteração" : "alterações"} sem gravar

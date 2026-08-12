@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Plus, Scale } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
 import { Panel } from "@/components/shared/panel";
 import { Mono } from "@/components/shared/mono";
@@ -29,6 +30,7 @@ export function PoliciesPage() {
   return (
     <>
       <PageHeader
+        icon={PAGE_ICONS.policies}
         title="Políticas"
         description="As regras que o Portão avalia em todo passo de agente. Uma política em modo monitorar é avaliada, registrada, e não muda nada."
       >

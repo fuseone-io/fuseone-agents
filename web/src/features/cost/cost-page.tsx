@@ -1,4 +1,5 @@
 import { Wallet } from "lucide-react";
+import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
 import { Panel } from "@/components/shared/panel";
 import { BarChart } from "@/components/shared/bar-chart";
@@ -29,6 +30,7 @@ export function CostPage() {
   return (
     <>
       <PageHeader
+        icon={PAGE_ICONS.cost}
         title="Custo e limites"
         description="Toda execução tem custo conhecido antes de alguém decidir escalá-la. A execução é a unidade contábil; agente, área e período são recortes dela."
       />

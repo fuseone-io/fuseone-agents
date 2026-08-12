@@ -1,5 +1,6 @@
 import { useDeferredValue, useMemo, useState } from "react";
 import { ScrollText } from "lucide-react";
+import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
 import { Panel } from "@/components/shared/panel";
 import { Toolbar } from "@/components/shared/toolbar";
@@ -48,6 +49,7 @@ export function AuditPage() {
   return (
     <>
       <PageHeader
+        icon={PAGE_ICONS.audit}
         title="Trilha de auditoria"
         description="O que os agentes fizeram e o que as pessoas mudaram nas regras sob as quais eles rodam. Os dois registros são append-only; só um é encadeado."
       />

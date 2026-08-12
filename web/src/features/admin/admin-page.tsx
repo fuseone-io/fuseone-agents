@@ -1,3 +1,4 @@
+import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToolsPanel } from "@/features/admin/tools-panel";
@@ -14,6 +15,7 @@ export function AdminPage() {
   return (
     <>
       <PageHeader
+        icon={PAGE_ICONS.admin}
         title="Administração"
         description="O que a plataforma conversa, o que cada ferramenta faz com o mundo, e quem mudou o quê."
       />

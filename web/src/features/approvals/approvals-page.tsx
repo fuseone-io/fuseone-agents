@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { CheckCheck } from "lucide-react";
+import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/shared/states";
 import { DecisionCard } from "@/features/approvals/decision-card";
@@ -20,6 +21,7 @@ export function ApprovalsPage() {
   return (
     <>
       <PageHeader
+        icon={PAGE_ICONS.approvals}
         title="Fila humana"
         description="Passos em que um agente parou porque uma pessoa precisa decidir. A decisão fica na trilha, com quem a tomou."
       />

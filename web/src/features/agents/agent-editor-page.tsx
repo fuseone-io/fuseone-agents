@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
 import { ErrorState, LoadingRows } from "@/components/shared/states";
 import { AgentBasicsSection } from "@/features/agents/agent-basics-section";
@@ -69,6 +70,7 @@ export function AgentEditorPage() {
   return (
     <>
       <PageHeader
+        icon={PAGE_ICONS.agents}
         title={creating ? "Novo agente" : `Editar ${draft.name || routeId}`}
         description="Publicar escreve uma versão nova. As execuções já feitas continuam presas à versão que rodou nelas."
       />
@@ -99,7 +101,7 @@ export function AgentEditorPage() {
         />
       </div>
 
-      <div className="sticky bottom-0 -mx-10 flex items-center gap-2 border-t border-border bg-card px-10 py-3 shadow-md">
+      <div className="sticky bottom-0 -mx-6 -mb-6 flex items-center gap-2 border-t border-border bg-card px-6 py-3 shadow-md">
         {changes.length > 0 && (
           <span className="text-xs text-warning">
             {changes.length} {changes.length === 1 ? "alteração" : "alterações"} sem publicar

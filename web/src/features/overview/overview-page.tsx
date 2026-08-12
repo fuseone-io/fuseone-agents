@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
 import { KpiRow } from "@/features/overview/kpi-row";
 import { ThroughputPanel } from "@/features/overview/throughput-panel";
@@ -25,6 +26,7 @@ export function OverviewPage() {
   return (
     <>
       <PageHeader
+        icon={PAGE_ICONS.overview}
         title="Visão geral"
         description="Como o dia está indo: quanto rodou, o que o Portão decidiu e quanto custou."
       />

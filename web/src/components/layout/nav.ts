@@ -1,4 +1,14 @@
-import { Activity, Bot, Hand, LayoutDashboard, Scale, ScrollText, Settings2, Wallet } from "lucide-react";
+import {
+  Activity,
+  Bot,
+  Hand,
+  LayoutDashboard,
+  Plug,
+  Scale,
+  ScrollText,
+  Settings2,
+  Wallet,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export interface NavItem {
@@ -45,6 +55,25 @@ export const NAV: NavGroup[] = [
     ],
   },
 ];
+
+/**
+ * The icon each screen leads with.
+ *
+ * Beside the titles rather than inside every page, so a screen and its
+ * navigation entry cannot drift into showing two different symbols for the
+ * same thing.
+ */
+export const PAGE_ICONS: Record<string, LucideIcon> = {
+  overview: LayoutDashboard,
+  agents: Bot,
+  runs: Activity,
+  approvals: Hand,
+  policies: Scale,
+  audit: ScrollText,
+  cost: Wallet,
+  admin: Settings2,
+  integrations: Plug,
+};
 
 export const PAGE_TITLES: Record<string, string> = {
   overview: "Visão geral",

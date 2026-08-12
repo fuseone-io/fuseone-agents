@@ -13,14 +13,18 @@ import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { PAGE_TITLES } from "@/components/layout/nav";
 
 /**
- * 52px, transparent, no bottom border — it sits on the sidebar-coloured
- * ground alongside the content card rather than capping it.
+ * 52px, with a rule along its bottom edge.
+ *
+ * The rule is what separates chrome from content now that the content is flush
+ * rather than a floating panel. Removing the panel and adding this are one
+ * change: something has to draw that line, and a border costs one pixel where
+ * a card cost a whole level of elevation.
  */
 export function AppHeader() {
   const { pathname } = useLocation();
 
   return (
-    <header className="flex h-[52px] shrink-0 items-center gap-2 px-4">
+    <header className="flex h-[52px] shrink-0 items-center gap-2 border-b border-border px-6">
       <SidebarTrigger className="-ml-1" />
       <Separator orientation="vertical" className="mr-1 !h-[18px]" />
       <Crumbs pathname={pathname} />
