@@ -143,7 +143,7 @@ descriptions somebody already published.
 
 | # | Decision | Blocks | Note |
 |---|---|---|---|
-| D1 | Where the simulation's real cases come from: a connector per system, a file, or capture in shadow mode | Stage 3 | The PRD leaves this open at Q2. Stage 3 is what it calls the central safety mechanism |
+| D1 | ~~Where the simulation's cases come from~~ | — | **Answered in §10** |
 | D2 | ~~What a "step" is~~ | — | **Answered in §8**, against a real agent |
 | D3 | Whether regression cases live in the ledger or beside the specification | Stage 4, FU-12 | They are neither runs nor spec text; they are fixtures with expected outcomes |
 | D4 | Whether the autonomy stage is a field on the spec or state beside it | Stage 5 | A published version is immutable; promotion is not a new version |
@@ -299,3 +299,48 @@ only job is that field.
    into both `Config` paths — the planner's and the completer's.
 2. **The exception per step**, structurally rather than by rewording.
 3. Stage 3 of the PRD, simulation over real cases, which still waits on D1.
+
+
+---
+
+## 10. D1 answered: where the cases come from
+
+A file first, the ledger second, shadow capture third, a connector never.
+
+**Shadow capture cannot be the only source, because it is circular.** FU-10
+says an agent cannot leave Draft without a reviewed simulation; shadow comes
+after Draft. If cases only accumulate in shadow, the first agent can never be
+simulated — and the first agent is exactly when simulation matters most, since
+it is the first time somebody non-technical publishes something.
+
+**A connector per system is N4's non-goal**, and it breaks something else on
+the way. The authoring path deliberately does not touch customer data — it is
+the one part of the platform that does not pass through the Gate, and not
+touching production is why that is defensible. A connector reading the last
+fifty tickets would quietly end that.
+
+**A file works on day one**: for the first agent, in an air-gapped install,
+with no integration work, for any system that can export. And it leaves the
+author deciding what the platform sees, which is the right default when what it
+sees is real customer records.
+
+### The order
+
+| # | Source | Serves |
+|---|---|---|
+| 1 | An uploaded file (JSONL) | The first agent, which is the hard case |
+| 2 | The run ledger | Rewriting an agent that already runs — its own past inputs |
+| 3 | Shadow capture | FU-12's regression battery, accumulating on its own |
+| 4 | A connector | Somebody's own MCP tool, not a platform feature |
+
+Source 2 is nearly free and was hiding in plain sight: `run_started` already
+stores what each run was about, outside the ledger, as a reference and a digest
+(`opener.go`). The platform has had real cases since the first webhook.
+
+### Where the cases live
+
+In the content store, not in a table of their own. A case is a real customer
+record — an email, a ticket — and the claim check exists for exactly this
+shape: bulky or sensitive payloads held outside the ledger as a reference plus
+a digest, under retention (AU-04). A new table would be a second place for
+personal data to accumulate, with its own retention nobody remembers to set.
