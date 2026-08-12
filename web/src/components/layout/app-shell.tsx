@@ -18,7 +18,12 @@ import { PageActionsProvider } from "@/components/layout/page-actions";
  */
 export function AppShell({ children }: { children: ReactNode }) {
   return (
-    <SidebarProvider className="bg-background">
+    // h-svh, not the block's min-h-svh. With only a minimum the wrapper grew
+    // with the page, the content area below never had a height to overflow,
+    // and so the whole document scrolled: the header's rule and its action
+    // scrolled away with it, and every sticky element inside was inert
+    // because its scroll container never scrolled.
+    <SidebarProvider className="h-svh bg-background">
       <AppSidebar />
 
       <SidebarInset className="min-w-0 bg-background">
@@ -26,8 +31,14 @@ export function AppShell({ children }: { children: ReactNode }) {
             into the header above it. */}
         <PageActionsProvider>
           <AppHeader />
-          {/* SidebarInset is already the page's main landmark. */}
-          <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-auto p-6">
+          {/* SidebarInset is already the page's main landmark.
+              Children do not shrink. A card that clips its own corners with
+              overflow-hidden loses its automatic minimum size, so in a column
+              with a real height it collapses instead of overflowing — the runs
+              table came out 197px tall over 2078px of rows, with no scrollbar
+              to say so. A page that wants the full height asks with flex-1,
+              which is sized from zero and unaffected by this. */}
+          <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-auto p-6 [&>*]:shrink-0">
             {children}
           </div>
         </PageActionsProvider>
