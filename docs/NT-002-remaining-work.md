@@ -26,8 +26,8 @@ estimate anybody here can check.
 | Administration — tools, MCP servers, model providers, budgets | Delivered |
 | **Policies** | Enforced in code, not authorable, not visible. Next |
 | **Agent authoring** | Only by dropping a file in a directory |
-| **Generated diagram** | Nothing, and nothing to draw yet |
-| Integrations | Delivered, with health beside configuration |
+| Generated diagram | Delivered — the run drawn from the ledger, beside the list |
+| Integrations | Delivered, and now a screen of its own |
 | i18n | Deferred to last, by decision |
 
 ---
@@ -166,7 +166,13 @@ the pre-flight checklist. Small next to policies — and it depends on them.
 
 ---
 
-## 3. The generated diagram
+## 3. The generated diagram — delivered
+
+> Built as decided below: the run drawn from the ledger, as a second view
+> of the trail rather than a separate screen. Eight node kinds, no branch.
+> Laid out as a serpentine rather than by elkjs — a run is a chain, and a
+> computed layout is more deterministic than a solver whose output can shift
+> between versions. When the ledger gains a branch, elk is the answer.
 
 ### The conflict
 
@@ -235,7 +241,10 @@ the builder N5 rules out, and it is separable from the picture.
 
 ---
 
-## 4. Integrations — delivered, and one level below the handoff
+## 4. Integrations — delivered, and now at the handoff's level
+
+> The top-level screen exists: its own navigation entry, title and header
+> action. What is still missing from the handoff is the syncs table.
 
 ### The mismatch worth naming
 
