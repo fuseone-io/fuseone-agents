@@ -358,10 +358,14 @@ func workerCmd(args []string) error {
 	// tool cannot be resumed by any other process without its earlier content
 	// — including this same worker after a restart (PRD NF-02, DE-15).
 	var content engine.ContentStore = engine.NewMemoryContent()
+	// durable outlives the block: retention erases through it, and it is the
+	// only handle that can — the engine's port has no erase and should not.
+	var durable *ledger.Content
 	if pool, err := contentPool(ctx, *dsn); err != nil {
 		return err
 	} else if pool != nil {
-		content = ledger.NewContent(pool)
+		durable = ledger.NewContent(pool)
+		content = durable
 	}
 	catalog := tools.NewCatalog(content)
 
@@ -374,6 +378,7 @@ func workerCmd(args []string) error {
 		integrations *admin.Integrations
 		registry     *spec.Registry
 		budgets      *admin.Budgets
+		retention    *admin.Retention
 		// configPool outlives the block that opens it: the scheduler needs it
 		// after the configuration is read, and opening a second pool for the
 		// same database to avoid saying so would be worse.
@@ -392,6 +397,7 @@ func workerCmd(args []string) error {
 			return err
 		}
 		store := settings.NewStore(pool, v)
+		retention = admin.NewRetention(pool, store)
 		curator = admin.NewCurator(pool)
 		integrations = admin.NewIntegrations(pool, store).ForgettingHealth(admin.NewHealth(pool))
 		registry = spec.NewRegistry(pool)
@@ -529,6 +535,13 @@ func workerCmd(args []string) error {
 		slog.Info("simulation pool started", "slots", simulationSlots(*concurrency))
 	}
 
+	// Retention, on a timer with an owner. It reads the configured window on
+	// every pass, so shortening it takes effect on the next sweep rather than
+	// at the next deploy — which is the whole reason it is a setting.
+	if configPool != nil && durable != nil && retention != nil {
+		go sweepContent(ctx, admin.NewErasures(configPool, durable, retention))
+	}
+
 	// The scheduler is a goroutine with an owner: it stops when the worker's
 	// context does. Every worker runs one — they do not coordinate, because
 	// the run's idempotency key is derived from the due moment and the ledger
@@ -578,6 +591,38 @@ func simulationSlots(concurrency int) int {
 func runSimulations(ctx context.Context, w *worker.Worker) {
 	if err := w.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 		slog.Error("simulation pool stopped", "err", err)
+	}
+}
+
+// retentionSweep is how often content past its window is erased.
+//
+// Daily, because retention is measured in years and a sweep that ran every
+// minute would be a delete statement against the whole content table every
+// minute for no benefit. The first one runs at start-up so an installation
+// that was down past its window does not wait a day to honour it.
+const retentionSweep = 24 * time.Hour
+
+// sweepContent erases what is past its retention window, for ever, until its
+// context is cancelled.
+func sweepContent(ctx context.Context, erasures *admin.Erasures) {
+	ticker := time.NewTicker(retentionSweep)
+	defer ticker.Stop()
+
+	for {
+		if erased, err := erasures.Sweep(ctx); err != nil {
+			// Logged and retried tomorrow. A failed sweep keeps data longer
+			// than promised, which is a problem; stopping the worker over it
+			// would be a bigger one.
+			slog.Error("retention sweep failed", "err", err)
+		} else if erased > 0 {
+			slog.Info("content erased past its retention window", "objects", erased)
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
 	}
 }
 
