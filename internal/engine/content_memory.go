@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/fuseone/agents/internal/domain"
 )
@@ -17,11 +18,20 @@ import (
 // retention rules that apply to them are the customer's, not ours.
 type MemoryContent struct {
 	mu   sync.RWMutex
-	data map[string][]byte
+	data map[string]object
+}
+
+// object is one stored payload and when it was put there, so the fake can
+// answer retention the way the durable store does.
+type object struct {
+	bytes  []byte
+	owner  string
+	at     time.Time
+	erased bool
 }
 
 func NewMemoryContent() *MemoryContent {
-	return &MemoryContent{data: make(map[string][]byte)}
+	return &MemoryContent{data: make(map[string]object)}
 }
 
 func (m *MemoryContent) Put(ctx context.Context, runID domain.RunID, seq int64, data []byte) (string, error) {
@@ -45,7 +55,9 @@ func (m *MemoryContent) PutFor(
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.data[ref] = append([]byte(nil), data...)
+	m.data[ref] = object{
+		bytes: append([]byte(nil), data...), owner: owner, at: time.Now(),
+	}
 	return ref, nil
 }
 
@@ -56,9 +68,44 @@ func (m *MemoryContent) Get(ctx context.Context, ref string) ([]byte, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	data, ok := m.data[ref]
+	held, ok := m.data[ref]
 	if !ok {
 		return nil, fmt.Errorf("content: no object at %s", ref)
 	}
-	return append([]byte(nil), data...), nil
+	if held.erased {
+		// The same distinction the durable store makes: erased and
+		// never-stored are different facts, and a fake that conflated them
+		// would let a screen ship that cannot tell an auditor which happened.
+		return nil, fmt.Errorf("%w: %s", domain.ErrContentErased, ref)
+	}
+	return append([]byte(nil), held.bytes...), nil
+}
+
+// Erase removes one owner's content, leaving a tombstone.
+func (m *MemoryContent) Erase(ctx context.Context, owner string, reason string) (int, error) {
+	return m.erase(ctx, func(o object) bool { return o.owner == owner })
+}
+
+// ErasePast is retention: everything stored before a moment goes.
+func (m *MemoryContent) ErasePast(ctx context.Context, before time.Time, reason string) (int, error) {
+	return m.erase(ctx, func(o object) bool { return o.at.Before(before) })
+}
+
+func (m *MemoryContent) erase(ctx context.Context, matches func(object) bool) (int, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	count := 0
+	for ref, held := range m.data {
+		if held.erased || !matches(held) {
+			continue
+		}
+		m.data[ref] = object{owner: held.owner, at: held.at, erased: true}
+		count++
+	}
+	return count, nil
 }

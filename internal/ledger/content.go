@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -13,8 +14,13 @@ import (
 	"github.com/fuseone/agents/internal/domain"
 )
 
-// ErrNoContent means the reference points at nothing.
-var ErrNoContent = errors.New("ledger: no content at that reference")
+var (
+	// ErrNoContent means the reference points at nothing.
+	ErrNoContent = errors.New("ledger: no content at that reference")
+	// ErrErased is the domain's, so a caller matching it handles this store
+	// and the in-memory one with the same line.
+	ErrErased = domain.ErrContentErased
+)
 
 // Content is the durable claim check.
 //
@@ -64,12 +70,55 @@ func (c *Content) PutFor(
 
 func (c *Content) Get(ctx context.Context, ref string) ([]byte, error) {
 	var data []byte
-	err := c.pool.QueryRow(ctx, `select bytes from run_content where ref = $1`, ref).Scan(&data)
+	var erased *time.Time
+	err := c.pool.QueryRow(ctx,
+		`select bytes, erased_at from run_content where ref = $1`, ref).Scan(&data, &erased)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("%w: %s", ErrNoContent, ref)
+	}
+	if erased != nil {
+		return nil, fmt.Errorf("%w: %s", ErrErased, ref)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("ledger: read content %s: %w", ref, err)
 	}
 	return data, nil
+}
+
+/*
+Erase removes everything one owner's content holds, leaving a tombstone.
+
+This is per-subject erasure (NF-09), and it reaches the referenced content
+rather than the ledger: the step keeps its reference and its digest, neither
+changes, and the hash chain is untouched. That is the whole reason bulky
+content was segregated in the first place (AU-04).
+
+Erasing what is already erased is not an error. The caller is asking for a
+state, not for an event, and a retry after a failure must not refuse.
+*/
+func (c *Content) Erase(ctx context.Context, owner string, reason string) (int, error) {
+	tag, err := c.pool.Exec(ctx, `
+		update run_content
+		set bytes = null, erased_at = now(), erased_reason = $2
+		where run_id = $1 and erased_at is null`, owner, reason)
+	if err != nil {
+		return 0, fmt.Errorf("ledger: erase content of %s: %w", owner, err)
+	}
+	return int(tag.RowsAffected()), nil
+}
+
+// ErasePast is retention: everything stored before a moment goes.
+//
+// The moment is computed by the caller from what the installation configured,
+// and never defaulted here. A purge that ran on a default nobody chose would
+// be the one operation in this system that destroys data without being asked.
+func (c *Content) ErasePast(ctx context.Context, before time.Time, reason string) (int, error) {
+	tag, err := c.pool.Exec(ctx, `
+		update run_content
+		set bytes = null, erased_at = now(), erased_reason = $2
+		where created_at < $1 and erased_at is null`, before.UTC(), reason)
+	if err != nil {
+		return 0, fmt.Errorf("ledger: erase content before %s: %w", before, err)
+	}
+	return int(tag.RowsAffected()), nil
 }

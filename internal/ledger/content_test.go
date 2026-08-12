@@ -2,8 +2,10 @@ package ledger_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -17,6 +19,8 @@ type ContentStore interface {
 	Put(ctx context.Context, runID domain.RunID, seq int64, data []byte) (string, error)
 	PutFor(ctx context.Context, kind, owner string, seq int64, data []byte) (string, error)
 	Get(ctx context.Context, ref string) ([]byte, error)
+	Erase(ctx context.Context, owner string, reason string) (int, error)
+	ErasePast(ctx context.Context, before time.Time, reason string) (int, error)
 }
 
 func contentStores(t *testing.T) map[string]func(*testing.T) ContentStore {
@@ -133,6 +137,102 @@ func TestContentContract(t *testing.T) {
 			b, _ := store.Put(ctx, "run-b", 1, []byte("shared"))
 			if a == b {
 				t.Errorf("both runs share the reference %q", a)
+			}
+		})
+	}
+}
+
+// Retention and per-subject erasure both reach the referenced content and
+// never the step that references it (AU-11, NF-09). That is what keeps the
+// hash chain intact while the personal data goes: the step keeps a reference
+// and a digest, and neither changes.
+
+func TestEraseContract(t *testing.T) {
+	for name, open := range contentStores(t) {
+		t.Run(name+"/erasing an owner leaves a tombstone, not a hole", func(t *testing.T) {
+			store := open(t)
+			ctx := context.Background()
+
+			ref, err := store.Put(ctx, "run-1", 1, []byte(`{"email":"ana@exemplo.com.br"}`))
+			if err != nil {
+				t.Fatalf("Put: %v", err)
+			}
+			erased, err := store.Erase(ctx, "run-1", "subject")
+			if err != nil {
+				t.Fatalf("Erase: %v", err)
+			}
+			if erased != 1 {
+				t.Errorf("erased %d objects, want 1", erased)
+			}
+
+			// Erased and never-stored are different facts, and an auditor
+			// reading a trail that points at nothing has to be able to tell
+			// them apart: one is a deletion somebody performed, the other is a
+			// reference that was always wrong.
+			_, err = store.Get(ctx, ref)
+			if !errors.Is(err, ledger.ErrErased) {
+				t.Errorf("Get = %v, want it reported as erased", err)
+			}
+		})
+
+		t.Run(name+"/erasing one owner leaves another alone", func(t *testing.T) {
+			store := open(t)
+			ctx := context.Background()
+
+			mine, _ := store.Put(ctx, "run-mine", 1, []byte("mine"))
+			theirs, _ := store.Put(ctx, "run-theirs", 1, []byte("theirs"))
+			if _, err := store.Erase(ctx, "run-mine", "subject"); err != nil {
+				t.Fatalf("Erase: %v", err)
+			}
+
+			if _, err := store.Get(ctx, mine); !errors.Is(err, ledger.ErrErased) {
+				t.Errorf("Get(mine) = %v", err)
+			}
+			// Erasure is per subject. Taking a neighbour's data with it would
+			// be the same failure as not erasing at all, in the other
+			// direction.
+			if _, err := store.Get(ctx, theirs); err != nil {
+				t.Errorf("Get(theirs) = %v, want it untouched", err)
+			}
+		})
+
+		t.Run(name+"/retention reaches only what is old enough", func(t *testing.T) {
+			store := open(t)
+			ctx := context.Background()
+
+			ref, _ := store.Put(ctx, "run-1", 1, []byte("recent"))
+			// Nothing is old yet, and a purge that took today's data because
+			// nothing was configured would be the worst possible default.
+			count, err := store.ErasePast(ctx, time.Now().Add(-time.Hour), "retention")
+			if err != nil {
+				t.Fatalf("ErasePast: %v", err)
+			}
+			if count != 0 {
+				t.Errorf("erased %d, want none", count)
+			}
+			if _, err := store.Get(ctx, ref); err != nil {
+				t.Errorf("Get = %v, want it kept", err)
+			}
+		})
+
+		t.Run(name+"/erasing twice is not an error", func(t *testing.T) {
+			store := open(t)
+			ctx := context.Background()
+
+			if _, err := store.Put(ctx, "run-1", 1, []byte("x")); err != nil {
+				t.Fatalf("Put: %v", err)
+			}
+			if _, err := store.Erase(ctx, "run-1", "subject"); err != nil {
+				t.Fatalf("first: %v", err)
+			}
+			// A retry after a failed erasure must not refuse: the caller is
+			// asking for a state, not for an event.
+			again, err := store.Erase(ctx, "run-1", "subject")
+			if err != nil {
+				t.Fatalf("second: %v", err)
+			}
+			if again != 0 {
+				t.Errorf("erased %d the second time, want none left", again)
 			}
 		})
 	}
