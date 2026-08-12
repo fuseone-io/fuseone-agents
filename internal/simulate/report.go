@@ -43,7 +43,11 @@ type Act struct {
 	Effect  domain.Effect  `json:"effect"`
 	Verdict domain.Verdict `json:"verdict"`
 	Rule    string         `json:"rule,omitempty"`
-	Reason  string         `json:"reason,omitempty"`
+	// Policy names the authored rule, when one decided. Without it every
+	// policy decision reads "blocked by policy", which tells an author nothing
+	// about what to change and cannot tell two rules apart (AU-10).
+	Policy string `json:"policy,omitempty"`
+	Reason string `json:"reason,omitempty"`
 	// Reached says the proposal got as far as the tool layer — which under
 	// simulation is exactly where it stopped.
 	Reached bool `json:"reached"`
@@ -107,7 +111,7 @@ func (f *folder) apply(step domain.Step) error {
 		}
 		f.c.Acted = append(f.c.Acted, Act{
 			Step: f.node, Tool: p.Tool, Effect: p.Effect,
-			Verdict: p.Verdict, Rule: p.Rule, Reason: p.Reason,
+			Verdict: p.Verdict, Rule: p.Rule, Policy: p.PolicyCode, Reason: p.Reason,
 		})
 
 	case domain.StepToolCalled:

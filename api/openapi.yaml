@@ -1595,6 +1595,12 @@ components:
         rule:
           type: string
           description: Which check decided. Never "blocked by policy" — that tells an author nothing about what to change.
+        policy:
+          type: string
+          description: >
+            Which authored rule decided, when one did. Every policy decides
+            under the rule name `policy`, so without this the report reads the
+            same for all of them.
         reason: { type: string }
         reached:
           type: boolean

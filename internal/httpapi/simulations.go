@@ -188,6 +188,7 @@ func toSimulationAct(a simulate.Act) openapi.SimulationAct {
 		Reached: a.Reached,
 		Step:    someString(a.Step),
 		Rule:    someString(a.Rule),
+		Policy:  someString(a.Policy),
 		Reason:  someString(a.Reason),
 	}
 }

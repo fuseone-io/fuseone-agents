@@ -50,6 +50,29 @@ func decided(tool string, verdict domain.Verdict, rule string) entry {
 	}}
 }
 
+func TestFold_aPolicyBlock_namesTheRuleThatDecidedIt(t *testing.T) {
+	t.Parallel()
+
+	// Every authored rule decides under the rule name "policy", so without the
+	// code the report reads "blocked by policy" for all of them — the one
+	// sentence the trail is not allowed to produce (AU-10).
+	got, err := simulate.Fold(run(t,
+		started(),
+		planned("Consultar"),
+		entry{kind: domain.StepGateDecided, payload: domain.GateDecidedPayload{
+			Tool: "crm.lookup", Effect: domain.EffectRead, Verdict: domain.VerdictBlock,
+			Rule: "policy", PolicyCode: "sem-dados-de-cliente",
+		}},
+		entry{kind: domain.StepParked, payload: domain.ParkedPayload{Reason: "no_progress"}},
+	))
+	if err != nil {
+		t.Fatalf("fold: %v", err)
+	}
+	if got.Acted[0].Policy != "sem-dados-de-cliente" {
+		t.Errorf("policy = %q, want the authored rule named", got.Acted[0].Policy)
+	}
+}
+
 func called(tool string) entry {
 	return entry{kind: domain.StepToolCalled, payload: domain.ToolCalledPayload{
 		Tool: domain.ToolID(tool), Effect: domain.EffectWrite,
