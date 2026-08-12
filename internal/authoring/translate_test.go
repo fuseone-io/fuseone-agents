@@ -77,14 +77,23 @@ func TestRead_prosePaddedAroundTheJSON_isStillRead(t *testing.T) {
 }
 
 type fakeCompleter struct {
-	reply string
-	spent int64
-	calls int
+	// replies are answered in order, so a two-pass translation can be given a
+	// different answer for each pass.
+	replies []string
+	reply   string
+	spent   int64
+	calls   int
+	prompts []string
 }
 
-func (f *fakeCompleter) Complete(_ context.Context, _ string) (model.Completion, error) {
+func (f *fakeCompleter) Complete(_ context.Context, prompt string) (model.Completion, error) {
+	f.prompts = append(f.prompts, prompt)
+	text := f.reply
+	if f.calls < len(f.replies) {
+		text = f.replies[f.calls]
+	}
 	f.calls++
-	return model.Completion{Text: f.reply, Cost: domain.Cost{Micros: f.spent}}, nil
+	return model.Completion{Text: text, Cost: domain.Cost{Micros: f.spent}}, nil
 }
 
 func TestTranslate_spendPastTheDailyCeiling_isRefusedBeforeTheCall(t *testing.T) {
@@ -157,5 +166,98 @@ func TestPrompt_asksForTheExceptionOnTheStepItBelongsTo(t *testing.T) {
 	// exception is simply lost.
 	if !strings.Contains(got, "stops_when") || !strings.Contains(got, "exceç") {
 		t.Errorf("the prompt does not ask for the exception per step:\n%s", got)
+	}
+}
+
+func TestTranslate_placesTheExceptionOnTheStepItBelongsTo(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeCompleter{replies: []string{
+		`{"tools":["crm.lookup"],"steps":[
+		   {"name":"Identificar o cliente","reaches":["crm.lookup"]},
+		   {"name":"Responder"}]}`,
+		`{"step":0,"stops_when":"não encontrar o cliente"}`,
+	}}
+
+	got, err := authoring.Translate(t.Context(), authoring.Job{
+		Completer: fake,
+		Choice:    authoring.Choice{DailyMicros: 1_000_000, Enabled: true},
+		Answers:   authoring.Answers{GoesWrong: "às vezes o cliente não está cadastrado; aviso e paro"},
+		Catalogue: catalogue,
+	})
+	if err != nil {
+		t.Fatalf("translate: %v", err)
+	}
+
+	// Asked on its own rather than as one field among many. Given as part of
+	// a larger request it came back empty on every step across two live
+	// attempts, and an exception attached to no step costs stage 4 its anchor.
+	if got.Translated.Steps[0].StopsWhen != "não encontrar o cliente" {
+		t.Errorf("got %+v", got.Translated.Steps)
+	}
+	if got.Translated.Steps[1].StopsWhen != "" {
+		t.Errorf("the exception landed on every step: %+v", got.Translated.Steps)
+	}
+}
+
+func TestTranslate_noExceptionAnswered_makesOnlyOneCall(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeCompleter{reply: `{"tools":[],"steps":[{"name":"Resumir"}]}`}
+	if _, err := authoring.Translate(t.Context(), authoring.Job{
+		Completer: fake,
+		Choice:    authoring.Choice{DailyMicros: 1_000_000, Enabled: true},
+		Catalogue: catalogue,
+	}); err != nil {
+		t.Fatalf("translate: %v", err)
+	}
+
+	// A second call costs money and time. Nothing to place means nothing to
+	// ask.
+	if fake.calls != 1 {
+		t.Errorf("made %d calls", fake.calls)
+	}
+}
+
+func TestTranslate_secondPassNamingAStepThatIsNotThere_leavesTheStepsStanding(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeCompleter{replies: []string{
+		`{"tools":[],"steps":[{"name":"Resumir"}]}`,
+		`{"step":7,"stops_when":"qualquer coisa"}`,
+	}}
+
+	got, err := authoring.Translate(t.Context(), authoring.Job{
+		Completer: fake,
+		Choice:    authoring.Choice{DailyMicros: 1_000_000, Enabled: true},
+		Answers:   authoring.Answers{GoesWrong: "algo dá errado"},
+		Catalogue: catalogue,
+	})
+
+	// The steps are the expensive half. Losing them because the cheap half
+	// answered nonsense would spend the call and return nothing.
+	if err != nil || len(got.Translated.Steps) != 1 {
+		t.Fatalf("got %+v, err %v", got.Translated, err)
+	}
+}
+
+func TestTranslate_bothPasses_areChargedTogether(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeCompleter{spent: 1_000, replies: []string{
+		`{"tools":[],"steps":[{"name":"Resumir"}]}`,
+		`{"step":0,"stops_when":"parar"}`,
+	}}
+
+	got, _ := authoring.Translate(t.Context(), authoring.Job{
+		Completer: fake,
+		Choice:    authoring.Choice{DailyMicros: 1_000_000, Enabled: true},
+		Answers:   authoring.Answers{GoesWrong: "algo"},
+		Catalogue: catalogue,
+	})
+
+	// Two calls left the installation. Reporting one is how a ceiling drifts.
+	if got.Cost.Micros != 2_000 {
+		t.Errorf("got %d micros, want both calls", got.Cost.Micros)
 	}
 }

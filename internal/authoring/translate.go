@@ -137,7 +137,71 @@ func Translate(ctx context.Context, job Job) (Result, error) {
 	if err != nil {
 		return Result{Cost: out.Cost}, err
 	}
-	return Result{Translated: translated, Cost: out.Cost}, nil
+
+	spent := out.Cost
+	if job.Answers.GoesWrong != "" && len(translated.Steps) > 0 {
+		placed, cost := place(ctx, job, translated.Steps)
+		translated.Steps = placed
+		spent.Micros += cost.Micros
+		spent.InputTokens += cost.InputTokens
+		spent.OutputTokens += cost.OutputTokens
+	}
+	return Result{Translated: translated, Cost: spent}, nil
+}
+
+/*
+place asks, on its own, which step the exception belongs to.
+
+A second call, because the first one does not answer this. Given as one field
+among many in a larger request, stops_when came back empty on every step across
+two live attempts and two prompt rewordings — and an exception attached to no
+step costs stage 4 its anchor (FU-13). Asked alone, with the steps numbered and
+one thing to decide, it is a question with a short answer.
+
+It never fails the translation. The steps are the expensive half; losing them
+because the cheap half answered nonsense would spend the call and return
+nothing.
+*/
+func place(ctx context.Context, job Job, steps []spec.Step) ([]spec.Step, domain.Cost) {
+	out, err := job.Completer.Complete(ctx, placePrompt(job.Answers.GoesWrong, steps))
+	if err != nil {
+		return steps, out.Cost
+	}
+
+	body, ok := jsonIn([]byte(out.Text))
+	if !ok {
+		return steps, out.Cost
+	}
+	var placed struct {
+		Step      int    `json:"step"`
+		StopsWhen string `json:"stops_when"`
+	}
+	if err := json.Unmarshal(body, &placed); err != nil {
+		return steps, out.Cost
+	}
+	// A step nobody has is not a step. Writing the exception somewhere else
+	// would anchor a correction to the wrong stage, which is worse than
+	// leaving it unanchored.
+	if placed.Step < 0 || placed.Step >= len(steps) || placed.StopsWhen == "" {
+		return steps, out.Cost
+	}
+
+	steps[placed.Step].StopsWhen = placed.StopsWhen
+	return steps, out.Cost
+}
+
+func placePrompt(exception string, steps []spec.Step) string {
+	var b strings.Builder
+	b.WriteString("Uma pessoa descreveu um processo em passos:\n")
+	for i, step := range steps {
+		b.WriteString(fmt.Sprintf("%d: %s\n", i, step.Name))
+	}
+	b.WriteString("\nE disse o que costuma dar errado:\n\"" + exception + "\"\n")
+	b.WriteString(`
+Em qual passo isso acontece? Responda só com JSON:
+{"step":<número do passo>,"stops_when":"<a condição, nas palavras dela>"}
+`)
+	return b.String()
 }
 
 /*
