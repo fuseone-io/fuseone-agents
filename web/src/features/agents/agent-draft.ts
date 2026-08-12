@@ -13,12 +13,33 @@ export const BLANK: AgentDefinition = {
   triggers: [],
 };
 
-/** Everything the form owns, and what differs from what was loaded. */
+/**
+ * Everything the form owns, and what differs from what was loaded.
+ *
+ * Seeded once, when the agent arrives — which is not always the first render.
+ * Opening /agents/{id}/edit cold renders before the query resolves, so a draft
+ * built only in the initialiser stayed blank: the screen showed an empty form
+ * for a real agent, and publishing from it would have replaced the definition
+ * with empty fields. Navigating in from the list hid this, because the agent
+ * was already in the cache.
+ *
+ * Seeded once and no more, so a refetch does not overwrite what somebody is
+ * halfway through typing.
+ */
 export function useAgentDraft(loaded?: AgentDetail) {
-  const [draft, setDraft] = useState<AgentDefinition>(() => toDefinition(loaded) ?? BLANK);
-  const patch = (over: Partial<AgentDefinition>) => setDraft((d) => ({ ...d, ...over }));
-
   const original = toDefinition(loaded);
+  const [draft, setDraft] = useState<AgentDefinition>(() => original ?? BLANK);
+  const [seeded, setSeeded] = useState(original !== undefined);
+
+  if (!seeded && original) {
+    // Adjusting state during render rather than in an effect: React discards
+    // this pass and re-renders with the value, so the blank form is never
+    // shown and never flashes.
+    setSeeded(true);
+    setDraft(original);
+  }
+
+  const patch = (over: Partial<AgentDefinition>) => setDraft((d) => ({ ...d, ...over }));
   return { draft, patch, changes: original ? changesBetween(original, draft) : [] };
 }
 
