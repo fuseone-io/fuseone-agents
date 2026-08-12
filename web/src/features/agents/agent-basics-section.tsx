@@ -1,6 +1,7 @@
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Section, Labelled } from "@/features/policies/section";
+import { AgentAreaField } from "@/features/agents/agent-area-field";
 import type { AgentDefinition } from "@/lib/api/client";
 
 /** Who this agent is, and what it was told to do. */
@@ -41,15 +42,7 @@ export function AgentBasicsSection({
             placeholder="Atendimento de suporte"
           />
         </Labelled>
-        <Labelled label="Área" htmlFor="agent-area">
-          <Input
-            id="agent-area"
-            value={draft.area}
-            onChange={(e) => patch({ area: e.target.value })}
-            placeholder="cx"
-            className="font-mono"
-          />
-        </Labelled>
+        <AgentAreaField area={draft.area} onChange={(area) => patch({ area })} />
       </div>
 
       <div className="grid gap-3 sm:grid-cols-[1fr_1fr_140px]">

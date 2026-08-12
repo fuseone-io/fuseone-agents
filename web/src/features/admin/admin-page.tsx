@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToolsPanel } from "@/features/admin/tools-panel";
 import { IntegrationsPanel } from "@/features/admin/integrations-panel";
 import { EventsPanel } from "@/features/admin/events-panel";
+import { AreasPanel } from "@/features/admin/areas-panel";
 import { BudgetsPanel } from "@/features/admin/budgets-panel";
 
 /**
@@ -24,6 +25,7 @@ export function AdminPage() {
         <TabsList>
           <TabsTrigger value="tools">Ferramentas</TabsTrigger>
           <TabsTrigger value="integrations">Integrações</TabsTrigger>
+          <TabsTrigger value="areas">Áreas</TabsTrigger>
           <TabsTrigger value="budgets">Tetos</TabsTrigger>
           <TabsTrigger value="events">Trilha</TabsTrigger>
         </TabsList>
@@ -33,6 +35,9 @@ export function AdminPage() {
         </TabsContent>
         <TabsContent value="integrations" className="mt-4">
           <IntegrationsPanel />
+        </TabsContent>
+        <TabsContent value="areas" className="mt-4">
+          <AreasPanel />
         </TabsContent>
         <TabsContent value="budgets" className="mt-4">
           <BudgetsPanel />
