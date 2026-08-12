@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { AppHeader } from "@/components/layout/app-header";
+import { PageActionsProvider } from "@/components/layout/page-actions";
 
 /**
  * The sidebar-07 shell: an icon-collapsible sidebar and a flush content area.
@@ -21,11 +22,15 @@ export function AppShell({ children }: { children: ReactNode }) {
       <AppSidebar />
 
       <SidebarInset className="min-w-0 bg-background">
-        <AppHeader />
-        {/* SidebarInset is already the page's main landmark. */}
-        <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-auto p-6">
-          {children}
-        </div>
+        {/* Wraps both, so a page deep in the content can render its action
+            into the header above it. */}
+        <PageActionsProvider>
+          <AppHeader />
+          {/* SidebarInset is already the page's main landmark. */}
+          <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-auto p-6">
+            {children}
+          </div>
+        </PageActionsProvider>
       </SidebarInset>
     </SidebarProvider>
   );

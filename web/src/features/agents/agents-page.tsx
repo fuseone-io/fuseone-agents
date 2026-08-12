@@ -41,12 +41,6 @@ export function AgentsPage() {
         title="Agentes"
         description="Cada versão publicada é imutável: o identificador é o resumo do conteúdo, então o texto que uma execução rodou pode sempre ser lido de volta."
       >
-        <Tabs value={history ? "all" : "latest"} onValueChange={(v) => setHistory(v === "all")}>
-          <TabsList>
-            <TabsTrigger value="latest">Atuais</TabsTrigger>
-            <TabsTrigger value="all">Histórico</TabsTrigger>
-          </TabsList>
-        </Tabs>
         <Button size="sm" asChild>
           <Link to="/agents/new">
             <Plus className="size-4" aria-hidden />
@@ -54,6 +48,15 @@ export function AgentsPage() {
           </Link>
         </Button>
       </PageHeader>
+
+      {/* A view toggle is a filter, not the screen's action: it belongs beside
+          the content it filters rather than up in the chrome. */}
+      <Tabs value={history ? "all" : "latest"} onValueChange={(v) => setHistory(v === "all")}>
+        <TabsList>
+          <TabsTrigger value="latest">Atuais</TabsTrigger>
+          <TabsTrigger value="all">Histórico</TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       <Toolbar placeholder="Buscar por nome ou identificador" value={search} onChange={setSearch}>
         <FilterSelect

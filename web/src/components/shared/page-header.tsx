@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
+import { PageActions } from "@/components/layout/page-actions";
 
 /**
  * Title, one line of context, and at most one primary action.
@@ -40,7 +41,10 @@ export function PageHeader({
         )}
       </div>
 
-      {children && <div className="flex shrink-0 items-center gap-2">{children}</div>}
+      {/* Rendered in the header, beside the theme toggle. A screen's one
+          primary action belongs to the chrome: it stays reachable when the
+          page is scrolled, and it stops each page inventing its own place. */}
+      {children && <PageActions>{children}</PageActions>}
     </div>
   );
 }

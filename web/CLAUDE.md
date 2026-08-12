@@ -94,6 +94,11 @@ the base layout for both Console and Studio. Do not invent a second shell.
   `PAGE_ICONS` in `components/layout/nav.ts` so a screen and its navigation
   entry cannot show two different symbols for the same thing. In edit modes it
   precedes the record's identifier and never replaces it.
+- **A screen's one primary action goes in the header**, portalled up from its
+  `PageHeader` children. It stays reachable when the page is scrolled, and it
+  stops each page inventing its own place for it. A filter, a view toggle or a
+  segmented control is not an action: those belong beside the content they
+  change.
 - **Only routes that exist appear in the navigation.** An entry pointing at a
   screen nobody built teaches people the console is unreliable.
 

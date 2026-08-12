@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { PageActionsTarget } from "@/components/layout/page-actions";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { PAGE_TITLES } from "@/components/layout/nav";
 
@@ -29,6 +30,10 @@ export function AppHeader() {
       <Separator orientation="vertical" className="mr-1 !h-[18px]" />
       <Crumbs pathname={pathname} />
       <div className="flex-1" />
+      {/* The screen's own primary action, portalled up from its PageHeader.
+          One per screen: the prototype shows a fixed "New agent" here, which
+          would offer to create an agent from the cost report. */}
+      <PageActionsTarget />
       <ThemeToggle />
     </header>
   );
