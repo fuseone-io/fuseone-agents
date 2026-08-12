@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"testing"
@@ -33,6 +34,12 @@ func (p *flakyPlanner) Plan(context.Context, engine.PlanInput) (engine.Proposal,
 		return *p.proposal, nil
 	}
 	return engine.Proposal{Done: true, Outcome: "completed"}, nil
+}
+
+// plannerThatFails never succeeds, so the supervision policy is what ends the
+// run rather than the run ending itself.
+func plannerThatFails() *flakyPlanner {
+	return &flakyPlanner{failures: 99}
 }
 
 // wantsATool is a planner that proposes a call, so the Gate has something to
@@ -295,6 +302,51 @@ func TestTurn_resolutionCarriesNoPlanner_runIsParkedRatherThanCrashed(t *testing
 	// planner, so the backoff ladder would only delay someone noticing.
 	if _, err := store.Claim(context.Background(), "other", time.Minute); !errors.Is(err, domain.ErrNoClaimableRun) {
 		t.Error("a run whose spec has no planner is still being retried")
+	}
+
+	// And in the ledger, not only in the projection. The projection is not the
+	// record: a trail that ends without saying the run was parked reads as a
+	// run that stopped mid-turn, and every projection folded from it — the
+	// diagram, the simulation report, replay — reports it as still going.
+	if got := phaseOf(t, store); got != engine.PhaseParked {
+		t.Errorf("ledger phase = %v, want the run parked", got)
+	}
+	if got := parkReason(t, store); got != "spec_unresolved" {
+		t.Errorf("reason = %q, want what whoever unparks it needs", got)
+	}
+}
+
+func parkReason(t *testing.T, store *ledger.Memory) string {
+	t.Helper()
+	steps, err := store.Read(context.Background(), "run-1", domain.FirstSeq)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	last := steps[len(steps)-1]
+	if last.Kind != domain.StepParked {
+		t.Fatalf("last step is %s, want the parking", last.Kind)
+	}
+	var p domain.ParkedPayload
+	if err := json.Unmarshal(last.Payload, &p); err != nil {
+		t.Fatalf("payload: %v", err)
+	}
+	return p.Reason
+}
+
+func TestTurn_attemptsExhausted_parksTheRunInTheLedgerToo(t *testing.T) {
+	t.Parallel()
+
+	// A run that fails for ever burns budget and hides the fault (NF-14). The
+	// supervisor stops it, and the trail has to say that is what happened
+	// rather than ending on the last failure.
+	s := newSetup(t, Config{MaxAttempts: 1}, plannerThatFails(), nil)
+	openRun(t, s.store)
+
+	if _, err := s.worker.turn(context.Background(), slog.New(slog.DiscardHandler)); err != nil {
+		t.Fatalf("turn: %v", err)
+	}
+	if got := parkReason(t, s.store); got != "attempts_exhausted" {
+		t.Errorf("reason = %q", got)
 	}
 }
 

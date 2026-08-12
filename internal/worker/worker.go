@@ -195,7 +195,7 @@ func (w *Worker) turn(ctx context.Context, log *slog.Logger) (bool, error) {
 	if err != nil {
 		// A run whose spec cannot be resolved will not fix itself by retrying:
 		// park it so someone sees it.
-		return true, w.release(ctx, claim, domain.ClaimOutcome{Err: err, Parked: true})
+		return true, w.park(ctx, claim, err, "spec_unresolved")
 	}
 
 	// The agent's own ceiling is per run; the scope's is over a window. They
@@ -204,7 +204,7 @@ func (w *Worker) turn(ctx context.Context, log *slog.Logger) (bool, error) {
 	// from the exact step rather than repeat an effect (PRD FO-02, FO-04).
 	budget, err := w.scopedBudget(ctx, claim.Scope, resolved.Start.Budget)
 	if err != nil {
-		return true, w.release(ctx, claim, domain.ClaimOutcome{Err: err, Parked: true})
+		return true, w.park(ctx, claim, err, "budget_unreadable")
 	}
 
 	start := resolved.Start
@@ -224,6 +224,9 @@ func (w *Worker) turn(ctx context.Context, log *slog.Logger) (bool, error) {
 		outcome := w.failure(claim, advErr)
 		log.Warn("advance failed",
 			"attempt", claim.Attempts+1, "parked", outcome.Parked, "err", advErr)
+		if outcome.Parked {
+			return true, w.park(ctx, claim, advErr, "attempts_exhausted")
+		}
 		return true, w.release(ctx, claim, outcome)
 	}
 
@@ -231,7 +234,6 @@ func (w *Worker) turn(ctx context.Context, log *slog.Logger) (bool, error) {
 	return true, w.release(ctx, claim, domain.ClaimOutcome{})
 }
 
-// failure decides whether to back off or give up, per the supervision policy.
 // scopedBudget narrows a run's ceiling by what its scope has left.
 //
 // Read per claim rather than cached: a ceiling raised because a run parked has
@@ -257,49 +259,4 @@ func (w *Worker) scopedBudget(ctx context.Context, scope domain.Scope, agent dom
 		return domain.Budget{}, fmt.Errorf("read spend for %s: %w", scope, err)
 	}
 	return agent.Narrow(domain.Headroom(ceiling, spent)), nil
-}
-
-func (w *Worker) failure(claim domain.Claim, err error) domain.ClaimOutcome {
-	attempts := claim.Attempts + 1
-	if attempts >= w.cfg.MaxAttempts {
-		return domain.ClaimOutcome{Err: err, Parked: true}
-	}
-	return domain.ClaimOutcome{Err: err, NextAttemptAt: w.clock.Now().Add(backoff(w.cfg, attempts))}
-}
-
-func (w *Worker) release(ctx context.Context, claim domain.Claim, outcome domain.ClaimOutcome) error {
-	// Release with a fresh context: cancelling the worker must still hand the
-	// lease back, or the run waits out the full lease before anyone retries.
-	relCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
-	defer cancel()
-
-	if err := w.queue.Release(relCtx, claim.RunID, outcome); err != nil {
-		return fmt.Errorf("release %s: %w", claim.RunID, err)
-	}
-	return nil
-}
-
-// backoff doubles per attempt and caps. Deterministic on purpose: jitter
-// belongs at the claim, where many workers contend, not here, where the delay
-// is already spread by each run's own failure time.
-func backoff(cfg Config, attempts int) time.Duration {
-	d := cfg.BaseBackoff
-	for range attempts - 1 {
-		d *= 2
-		if d >= cfg.MaxBackoff {
-			return cfg.MaxBackoff
-		}
-	}
-	return d
-}
-
-func sleep(ctx context.Context, d time.Duration) bool {
-	t := time.NewTimer(d)
-	defer t.Stop()
-	select {
-	case <-ctx.Done():
-		return false
-	case <-t.C:
-		return true
-	}
 }
