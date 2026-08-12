@@ -322,6 +322,30 @@
     "toolsAppearHint": "Tools appear when a worker restarts and connects.",
     "toolsSeen": "<n>{{count}}</n> tools · seen {{seen}}"
   },
+  "interview": {
+    "assistantFailed": "The assistant could not answer",
+    "back": "Back",
+    "closingHint": "The sign that the work has finished.",
+    "finish": "Finish",
+    "goesWrongHint": "The exception you have seen happen, and the way out you take.",
+    "howDoYouKnowItIsDone": "How do you know you are done?",
+    "mustKnowHint": "Where the information comes from: a record, a knowledge base, a history.",
+    "neverHint": "The thing that would be a serious problem if it happened. Say it your way.",
+    "next": "Next",
+    "notDecideHint": "What you would take to somebody for approval before doing it.",
+    "progress": "question {{at}} of {{of}}",
+    "skip": "Skip",
+    "stepsHint": "In the order you would take them. A step can be just thinking.",
+    "subtitle": "Seven questions. Answer as you would explain it to a new colleague.",
+    "title": "New interview",
+    "whatAreTheSteps": "What are the steps?",
+    "whatGoesWrong": "What usually goes wrong? And then what do you do?",
+    "whatMustNeverHappen": "What must never happen?",
+    "whatMustYouKnow": "What do you need to know in order to do it?",
+    "whatWouldYouNotDecide": "What would you not decide on your own?",
+    "whenDoesItStart": "When does this start?",
+    "whenHint": "A time of day, an email arriving, a ticket opened."
+  },
   "language": {
     "change": "Change language"
   },

@@ -13,7 +13,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { PageActionsTarget } from "@/components/layout/page-actions";
 import { LanguageToggle } from "@/components/shared/language-toggle";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
-import { PAGE_TITLES } from "@/components/layout/nav";
+import { PAGE_TITLES, SUB_TITLES } from "@/components/layout/nav";
 
 /**
  * 52px, with a rule along its bottom edge.
@@ -69,10 +69,17 @@ function Crumbs({ pathname }: { pathname: string }) {
           <>
             <BreadcrumbSeparator />
             <BreadcrumbItem>
-              {/* A run id is machine-generated, so it reads in mono. */}
-              <BreadcrumbPage className="font-mono text-xs">
-                {detail}
-              </BreadcrumbPage>
+              {/* A record's identifier is machine-generated and reads in
+                  mono. A named sub-screen is not one: "interview" set in the
+                  same face as a run id claims to be a record somebody could
+                  look up. */}
+              {SUB_TITLES[detail] ? (
+                <BreadcrumbPage>{t(SUB_TITLES[detail])}</BreadcrumbPage>
+              ) : (
+                <BreadcrumbPage className="font-mono text-xs">
+                  {detail}
+                </BreadcrumbPage>
+              )}
             </BreadcrumbItem>
           </>
         )}

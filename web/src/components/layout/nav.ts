@@ -131,3 +131,15 @@ export const PAGE_TITLES: Record<string, string> = {
   admin: "nav.admin",
   integrations: "nav.integrations",
 };
+
+/**
+ * Sub-screens that have a name rather than an identifier.
+ *
+ * Everything else in a second breadcrumb position is a record — a run, an
+ * agent, a policy code — and reads in mono because it is machine-generated.
+ */
+export const SUB_TITLES: Record<string, string> = {
+  new: "agents.newAgent",
+  interview: "interview.title",
+  edit: "agents.edit",
+};

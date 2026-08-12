@@ -2,7 +2,7 @@ import { useTranslation } from "react-i18next";
 import { useMemo, useState } from "react";
 import { Bot } from "lucide-react";
 import { Link } from "react-router-dom";
-import { Plus } from "lucide-react";
+import { MessagesSquare, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
@@ -50,6 +50,12 @@ export function AgentsPage() {
         title={t("nav.agents")}
         description={t("agents.subtitle")}
       >
+        <Button size="sm" variant="outline" asChild>
+          <Link to="/agents/interview">
+            <MessagesSquare className="size-4" aria-hidden />
+            {t("interview.title")}
+          </Link>
+        </Button>
         <Button size="sm" asChild>
           <Link to="/agents/new">
             <Plus className="size-4" aria-hidden />

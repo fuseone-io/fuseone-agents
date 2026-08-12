@@ -16,6 +16,7 @@ import { AuditPage } from "@/features/audit/audit-page";
 import { NotFoundPage } from "@/components/shared/not-found";
 import { AgentsPage } from "@/features/agents/agents-page";
 import { AgentDetailPage } from "@/features/agents/agent-detail-page";
+import { InterviewPage } from "@/features/agents/interview-page";
 import { AgentEditorPage } from "@/features/agents/agent-editor-page";
 import { RunsPage } from "@/features/runs/runs-page";
 import { RunDetailPage } from "@/features/runs/run-detail-page";
@@ -48,6 +49,7 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="/" element={<Navigate to="/overview" replace />} />
                 <Route path="/overview" element={<OverviewPage />} />
                 <Route path="/agents" element={<AgentsPage />} />
+                <Route path="/agents/interview" element={<InterviewPage />} />
                 <Route path="/agents/new" element={<AgentEditorPage />} />
                 <Route path="/agents/:agentId" element={<AgentDetailPage />} />
                 <Route

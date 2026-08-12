@@ -28,7 +28,9 @@ export const BLANK: AgentDefinition = {
  */
 export function useAgentDraft(loaded?: AgentDetail) {
   const original = toDefinition(loaded);
-  const [draft, setDraft] = useState<AgentDefinition>(() => original ?? BLANK);
+  const [draft, setDraft] = useState<AgentDefinition>(
+    () => original ?? fromInterview() ?? BLANK,
+  );
   const [seeded, setSeeded] = useState(original !== undefined);
 
   if (!seeded && original) {
@@ -135,4 +137,24 @@ function render(value: unknown): string {
       .join(" ");
   }
   return String(value);
+}
+
+/**
+ * A draft the interview left behind, read once and then forgotten.
+ *
+ * Handed over rather than published: nothing reaches the registry without a
+ * person having read it back first (FU-08). Removed on read so that a reload
+ * of the editor an hour later does not resurrect an interview somebody
+ * abandoned.
+ */
+function fromInterview(): AgentDefinition | undefined {
+  try {
+    const held = globalThis.sessionStorage?.getItem("fuseone.draft");
+    if (!held) return undefined;
+    globalThis.sessionStorage.removeItem("fuseone.draft");
+    return { ...BLANK, ...(JSON.parse(held) as Partial<AgentDefinition>) };
+  } catch {
+    // A browser that refuses storage still authors agents through the form.
+    return undefined;
+  }
 }

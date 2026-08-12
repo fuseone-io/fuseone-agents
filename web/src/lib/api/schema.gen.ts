@@ -61,6 +61,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/interview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Turn answers into a draft
+         * @description The interview's prose answers, translated into specification fields by
+         *     the model Administração points at.
+         *
+         *     The model translates and never grants: what comes back is read against
+         *     the tool catalogue, and a name that is not in it is dropped however
+         *     confidently it was proposed. Without that, describing a process
+         *     persuasively would be a way to widen an agent's reach.
+         *
+         *     The daily ceiling is checked before the request leaves. What the call
+         *     cost is appended to the administrative trail whether or not the answer
+         *     was usable — the money left the installation either way.
+         */
+        post: operations["interviewAgent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{agentId}": {
         parameters: {
             query?: never;
@@ -955,6 +985,26 @@ export interface components {
             /** Format: date-time */
             updatedAt?: string;
         };
+        InterviewAnswers: {
+            mustKnow?: string;
+            steps?: string;
+            goesWrong?: string;
+            notDecide?: string;
+        };
+        InterviewDraft: {
+            tools: string[];
+            steps: components["schemas"]["AgentStep"][];
+            /**
+             * Format: int64
+             * @description What this call cost, appended to the trail as well.
+             */
+            micros?: number;
+        };
+        AgentStep: {
+            name: string;
+            reaches?: string[];
+            stopsWhen?: string;
+        };
         AuthoringChoice: {
             /** @description The name of a provider registered under /admin/integrations. */
             provider: string;
@@ -1587,6 +1637,46 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    interviewAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InterviewAnswers"];
+            };
+        };
+        responses: {
+            /** @description The half of a draft the model produced. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewDraft"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /**
+             * @description The assistant is switched off, or its daily ceiling is reached.
+             *     Both are configuration rather than failure, and the form remains
+             *     the way to publish an agent without it.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     getAgent: {
