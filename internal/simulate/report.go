@@ -180,6 +180,14 @@ type Report struct {
 	Agent   domain.AgentID   `json:"agent"`
 	Version domain.VersionID `json:"version"`
 	Cases   []Case           `json:"cases"`
+
+	// Expected is how many cases the set holds. A report read while the
+	// simulation is still going says seven of twenty rather than seven, and a
+	// finished one whose count falls short says plainly that some cases never
+	// ran.
+	Expected int `json:"expected"`
+	// Running is whether anything is still driving it.
+	Running bool `json:"running"`
 }
 
 // Tally is the line an author reads before any of the rows.

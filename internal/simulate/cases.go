@@ -43,9 +43,13 @@ agent, in an installation with no way out to the internet.
 A line that is not JSON refuses the whole file and says which line. Loading
 forty-nine of fifty and mentioning nothing would give somebody a simulation
 whose coverage is a lie, and an author told the line number can fix the export.
+
+The cases come back as well as going in, so whoever runs them straight away
+does not parse the same file twice and risk the two parses disagreeing about
+what a case is.
 */
-func Load(ctx context.Context, store Store, agent domain.AgentID, file []byte) (int, error) {
-	var loaded int
+func Load(ctx context.Context, store Store, agent domain.AgentID, file []byte) ([][]byte, error) {
+	var loaded [][]byte
 	for i, line := range bytes.Split(file, []byte("\n")) {
 		trimmed := bytes.TrimSpace(line)
 		if len(trimmed) == 0 {
@@ -54,17 +58,17 @@ func Load(ctx context.Context, store Store, agent domain.AgentID, file []byte) (
 			continue
 		}
 		if !json.Valid(trimmed) {
-			return 0, fmt.Errorf("simulate: line %d is not JSON", i+1)
+			return nil, fmt.Errorf("simulate: line %d is not JSON", i+1)
 		}
 
-		loaded++
-		if _, err := store.PutFor(ctx, OwnerKind, string(agent), int64(loaded), trimmed); err != nil {
-			return 0, fmt.Errorf("simulate: store case %d: %w", loaded, err)
+		loaded = append(loaded, trimmed)
+		if _, err := store.PutFor(ctx, OwnerKind, string(agent), int64(len(loaded)), trimmed); err != nil {
+			return nil, fmt.Errorf("simulate: store case %d: %w", len(loaded), err)
 		}
 	}
 
-	if loaded == 0 {
-		return 0, ErrEmpty
+	if len(loaded) == 0 {
+		return nil, ErrEmpty
 	}
 	return loaded, nil
 }

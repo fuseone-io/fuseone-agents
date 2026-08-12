@@ -32,13 +32,18 @@ func TestLoad_eachLineBecomesOneCase(t *testing.T) {
 	t.Parallel()
 
 	store := &fakeStore{}
-	n, err := simulate.Load(t.Context(), store, domain.AgentID("suporte"), []byte(
+	got, err := simulate.Load(t.Context(), store, domain.AgentID("suporte"), []byte(
 		`{"assunto":"cobrança"}`+"\n"+`{"assunto":"acesso"}`+"\n"))
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	if n != 2 || len(store.stored) != 2 {
-		t.Errorf("got %d cases, stored %d", n, len(store.stored))
+	if len(got) != 2 || len(store.stored) != 2 {
+		t.Errorf("got %d cases, stored %d", len(got), len(store.stored))
+	}
+	// Handed back as well as stored, so whoever runs them now is running the
+	// same bytes that were filed.
+	if string(got[0]) != `{"assunto":"cobrança"}` {
+		t.Errorf("case 1 = %s", got[0])
 	}
 }
 
@@ -46,14 +51,14 @@ func TestLoad_blankLines_areNotCases(t *testing.T) {
 	t.Parallel()
 
 	store := &fakeStore{}
-	n, err := simulate.Load(t.Context(), store, "suporte", []byte("\n\n"+`{"a":1}`+"\n\n"))
+	got, err := simulate.Load(t.Context(), store, "suporte", []byte("\n\n"+`{"a":1}`+"\n\n"))
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
 	// An export ending in a newline is every export. Counting it as a case
 	// would put an empty occurrence in a report somebody reads as real.
-	if n != 1 {
-		t.Errorf("got %d cases, want 1", n)
+	if len(got) != 1 {
+		t.Errorf("got %d cases, want 1", len(got))
 	}
 }
 
