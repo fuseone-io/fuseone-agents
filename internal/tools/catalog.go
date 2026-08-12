@@ -122,6 +122,36 @@ func (c *Catalog) AddServer(ctx context.Context, name string, session Session) e
 	return nil
 }
 
+// RemoveServer disconnects a server and drops its tools.
+//
+// Both halves matter. A tool left behind by a server nobody is connected to
+// would be offered to a planner, ruled on by the Gate, and then fail at the
+// call — a refusal the trail explains badly. And a session left open is a
+// process this installation started that keeps running until somebody stops
+// it.
+//
+// Removing one that was never connected is not an error: the reconciler asks
+// from a desired state rather than from knowledge of what is connected.
+func (c *Catalog) RemoveServer(name string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	session, connected := c.sessions[name]
+	if !connected {
+		return nil
+	}
+	delete(c.sessions, name)
+	for id, entry := range c.entries {
+		if entry.Server == name {
+			delete(c.entries, id)
+		}
+	}
+	if err := session.Close(); err != nil {
+		return fmt.Errorf("tools: close %s: %w", name, err)
+	}
+	return nil
+}
+
 // Entries renders the catalogue for the administration area: what the platform
 // knows, where each tool came from, and what somebody decided it does.
 func (c *Catalog) Entries() []domain.ToolEntry {

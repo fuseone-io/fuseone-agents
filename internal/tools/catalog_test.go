@@ -354,3 +354,46 @@ func noteServer() *fakeServer {
 		result: text("ok"),
 	}
 }
+
+func TestRemoveServer_takesItsToolsWithIt(t *testing.T) {
+	t.Parallel()
+
+	catalog := tools.NewCatalog(engine.NewMemoryContent())
+	crm := &fakeServer{list: []*mcp.Tool{{Name: "lookup"}, {Name: "note"}}}
+	if err := catalog.AddServer(t.Context(), "crm", crm); err != nil {
+		t.Fatalf("AddServer: %v", err)
+	}
+	if err := catalog.AddServer(t.Context(), "kb", &fakeServer{list: []*mcp.Tool{{Name: "search"}}}); err != nil {
+		t.Fatalf("AddServer: %v", err)
+	}
+
+	if err := catalog.RemoveServer("crm"); err != nil {
+		t.Fatalf("RemoveServer: %v", err)
+	}
+
+	// A tool from a server nobody is connected to any more would be proposed,
+	// gated, and then fail at the call — a refusal the trail explains badly.
+	if _, ok := catalog.Effect("crm.lookup"); ok {
+		t.Error("a removed server's tool is still in the catalogue")
+	}
+	// And only that server's: the others are still connected.
+	if _, ok := catalog.Effect("kb.search"); !ok {
+		t.Error("removing one server took another's tools with it")
+	}
+	// The session is closed rather than left open: a process this
+	// installation started keeps running until somebody stops it.
+	if !crm.closed {
+		t.Error("the removed server's session was left open")
+	}
+}
+
+func TestRemoveServer_thatWasNeverConnected_isNotAnError(t *testing.T) {
+	t.Parallel()
+
+	// The reconciler asks for removal from a desired state, not from
+	// knowledge of what is connected. Refusing here would make an ordinary
+	// pass log an error nobody can act on.
+	if err := tools.NewCatalog(engine.NewMemoryContent()).RemoveServer("nunca"); err != nil {
+		t.Errorf("RemoveServer: %v", err)
+	}
+}

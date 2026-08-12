@@ -15,15 +15,12 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/signal"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/fuseone/agents/internal/admin"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -393,21 +390,35 @@ func workerCmd(args []string) error {
 		registry = spec.NewRegistry(pool)
 		budgets = admin.NewBudgets(pool, store)
 
-		configured, err := integrations.MCPServers(ctx)
-		if err != nil {
-			return fmt.Errorf("read configured MCP servers: %w", err)
-		}
-		for _, server := range configured {
-			if !server.Enabled {
-				continue
-			}
-			servers = append(servers, server.Name+"="+
-				strings.Join(append([]string{server.Command}, server.Args...), " "))
-		}
 	}
 
-	if err := servers.connect(ctx, catalog, healthOf(configPool)); err != nil {
-		return err
+	// The flags first: they are the way to point a laptop at a server before
+	// there is an administrator to configure one, and the reconciler must not
+	// disconnect what it did not connect.
+	health := healthOf(configPool)
+	reconcile := newReconciler(catalog, integrations, health)
+	for _, entry := range servers {
+		name, command, _ := strings.Cut(entry, "=")
+		if err := connectServer(ctx, catalog, domain.MCPServer{
+			Name: name, Transport: domain.TransportStdio, Command: command,
+		}, ""); err != nil {
+			slog.Error("tool server did not answer; its tools are unavailable",
+				"server", name, "err", err)
+			observe(ctx, health, name, false, 0, err.Error())
+			continue
+		}
+		reconcile.hold(name)
+		count := catalog.CountFrom(name)
+		slog.Info("tool server connected", "server", name, "transport", "stdio", "tools", count)
+		observe(ctx, health, name, true, count, "")
+	}
+
+	// Then the configured ones, and again on a timer. Before this, a server
+	// added from the console offered nothing until somebody restarted the
+	// worker, with nothing on any screen saying so.
+	if integrations != nil {
+		reconcile.reconcile(ctx)
+		go reconcile.watch(ctx, toolRefresh)
 	}
 
 	if curator != nil {
@@ -785,45 +796,6 @@ func (m *mcpServers) Set(v string) error {
 		return fmt.Errorf("want name=command, got %q", v)
 	}
 	*m = append(*m, v)
-	return nil
-}
-
-// connect starts each server and imports its tools.
-//
-// Every tool arrives classified read-only whatever the server says about
-// itself. Promoting one is the Curator's separate act.
-//
-// A server that will not answer does not stop the worker. It used to: the
-// first failure returned, and one broken integration meant nothing on the
-// installation ran — including every agent that never touches it. Now the
-// failure is recorded and the worker starts; agents needing that server get a
-// clean capability refusal, which is a diagnosable outcome, and the console
-// says which server is down and why.
-func (m mcpServers) connect(ctx context.Context, catalog *tools.Catalog, health healthRecorder) error {
-	for _, entry := range m {
-		name, command, _ := strings.Cut(entry, "=")
-
-		fields := strings.Fields(command)
-		cmd := exec.CommandContext(ctx, fields[0], fields[1:]...)
-		cmd.Stderr = os.Stderr
-
-		client := mcp.NewClient(&mcp.Implementation{Name: "fuseone-agents", Version: version}, nil)
-		session, err := client.Connect(ctx, &mcp.CommandTransport{Command: cmd}, nil)
-		if err != nil {
-			slog.Error("mcp server did not answer; its tools are unavailable",
-				"server", name, "command", fields[0], "err", err)
-			observe(ctx, health, name, false, 0, err.Error())
-			continue
-		}
-		if err := catalog.AddServer(ctx, name, session); err != nil {
-			slog.Error("mcp server answered but its tools could not be imported",
-				"server", name, "err", err)
-			observe(ctx, health, name, false, 0, err.Error())
-			continue
-		}
-		slog.Info("mcp server connected", "server", name, "command", fields[0])
-		observe(ctx, health, name, true, catalog.CountFrom(name), "")
-	}
 	return nil
 }
 
