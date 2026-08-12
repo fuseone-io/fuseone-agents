@@ -3,6 +3,7 @@ package authoring_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/fuseone/agents/internal/authoring"
@@ -140,5 +141,21 @@ func TestTranslate_reportsWhatItSpent_evenWhenTheReplyIsUnreadable(t *testing.T)
 	}
 	if got.Cost.Micros != 4_200 {
 		t.Errorf("got %d micros, want the spend reported", got.Cost.Micros)
+	}
+}
+
+func TestPrompt_asksForTheExceptionOnTheStepItBelongsTo(t *testing.T) {
+	t.Parallel()
+
+	got := authoring.Prompt(authoring.Answers{
+		GoesWrong: "às vezes o cliente não está cadastrado; aí eu aviso e paro",
+	}, catalogue)
+
+	// FU-04 is answered per step, and a run that ends "the customer was not
+	// found" has to be anchored where it happened. Asked for loosely, the
+	// model returns four steps with an empty stops_when and the author's
+	// exception is simply lost.
+	if !strings.Contains(got, "stops_when") || !strings.Contains(got, "exceç") {
+		t.Errorf("the prompt does not ask for the exception per step:\n%s", got)
 	}
 }

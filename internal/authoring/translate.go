@@ -158,14 +158,27 @@ func Prompt(a Answers, catalogue []domain.ToolID) string {
 	b.WriteString("\nO que a pessoa respondeu:\n")
 	b.WriteString("Precisa saber: " + a.MustKnow + "\n")
 	b.WriteString("Passos: " + a.Steps + "\n")
-	b.WriteString("O que dá errado: " + a.GoesWrong + "\n")
 	b.WriteString("Não decidiria sozinha: " + a.NotDecide + "\n")
+
+	// Placed beside the field it fills rather than in a list of answers. Given
+	// as one answer among four, the exception came back unattached to any
+	// step and the author's "aviso e paro" was simply lost.
+	if a.GoesWrong != "" {
+		b.WriteString("\nA exceção, para o campo stops_when: \"" + a.GoesWrong + "\"\n")
+		b.WriteString("Decida a qual passo ela pertence e escreva-a lá, nas palavras da pessoa.\n")
+	}
 	b.WriteString(`
 Responda só com JSON:
 {"tools":["..."],"steps":[{"name":"...","reaches":["..."],"stops_when":"..."}]}
 
 Um passo pode não alcançar ferramenta nenhuma: é a pessoa pensando.
 Não invente ferramenta fora da lista; nomes fora dela são descartados.
+
+O campo stops_when é a exceção daquele passo, nas palavras da pessoa:
+a condição em que a execução para ali em vez de seguir. Coloque-a no
+passo onde ela acontece, não no agente inteiro — "não encontrar o
+cliente" pertence ao passo que procura o cliente. Deixe vazio só nos
+passos que não têm exceção.
 `)
 	return b.String()
 }
