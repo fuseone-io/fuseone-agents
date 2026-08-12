@@ -95,14 +95,20 @@ export class ApiError extends Error {
  * unwrap turns openapi-fetch's `{ data, error }` into a value or a throw, so
  * TanStack Query handles failures through its own error channel instead of
  * every caller branching on two shapes.
+ *
+ * The status decides, never the presence of a body. Nine endpoints answer 204
+ * — every budget, provider and MCP write, deleting a policy, pausing an agent —
+ * and reading a missing body as a failure made all of them report "Request
+ * failed with status 204" over work the server had already committed. A person
+ * told their change failed will do it again.
  */
 export function unwrap<T>(result: {
   data?: T;
   error?: unknown;
   response: Response;
 }): T {
-  if (result.error !== undefined || result.data === undefined) {
+  if (result.error !== undefined || !result.response.ok) {
     throw new ApiError(result.response.status, result.error as Problem);
   }
-  return result.data;
+  return result.data as T;
 }
