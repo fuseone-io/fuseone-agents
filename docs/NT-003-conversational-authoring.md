@@ -145,7 +145,7 @@ descriptions somebody already published.
 |---|---|---|---|
 | D1 | ~~Where the simulation's cases come from~~ | — | **Answered in §10** |
 | D2 | ~~What a "step" is~~ | — | **Answered in §8**, against a real agent |
-| D3 | Whether regression cases live in the ledger or beside the specification | Stage 4, FU-12 | They are neither runs nor spec text; they are fixtures with expected outcomes |
+| D3 | ~~Whether regression cases live in the ledger or beside the specification~~ | — | **Answered in §11**, by building it |
 | D4 | Whether the autonomy stage is a field on the spec or state beside it | Stage 5 | A published version is immutable; promotion is not a new version |
 
 D2 was the one that unblocked the most and was the least reversible, so it was
@@ -344,3 +344,38 @@ record — an email, a ticket — and the claim check exists for exactly this
 shape: bulky or sensitive payloads held outside the ledger as a reference plus
 a digest, under retention (AU-04). A new table would be a second place for
 personal data to accumulate, with its own retention nobody remembers to set.
+
+---
+
+## 11. Where a case set lives — D3, answered by building it
+
+The question was whether regression cases belong in the ledger or beside the
+specification, and the note said they are neither runs nor spec text: fixtures
+with expected outcomes.
+
+Building the simulation answered it, and the answer is the ledger's claim
+check, filed under the simulation that ran them.
+
+**Why not beside the specification.** A case is a real customer record — a
+ticket, a message, an invoice. Putting it next to the definition would put
+personal data into the thing an author edits, a reviewer reads and a
+publication renders into a version digest. It would also make the case set part
+of what a version *is*, so uploading twenty new cases would publish a new
+agent.
+
+**Why not a table of its own.** Retention and per-subject erasure already work
+per owner on `run_content` (AU-11, NF-09). A second store for the same class of
+data is a second retention policy nobody remembers to set, and it would be
+holding exactly the data the first one exists to govern.
+
+**Why under the simulation rather than the agent.** Correcting an agent by
+example means running the next version against the same occurrences (FU-12).
+A set filed under the agent is overwritten by the next upload, which makes the
+comparison meaningless — the two runs would be against different sets and
+nothing would say so.
+
+The expected outcome half of "fixtures with expected outcomes" is still open,
+and it is the smaller half: a case today has an input and a report, not an
+assertion. What an author corrects against — "this one should have asked me"
+— is FU-13's shape, and it anchors to the step the proposal came from, which
+`PlannedPayload.Node` now records.
