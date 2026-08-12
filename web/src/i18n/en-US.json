@@ -284,7 +284,11 @@
   },
   "integrations": {
     "address": "Address",
+    "addressFilledByPreset": "Choosing a known provider in the Name field fills the address in. Change it only for a proxy or a self-hosted model.",
+    "addressNeeded": "This protocol needs an address. Choose a known provider above and it is filled in.",
+    "addressOnlyForProxy": "Leave it empty. Fill it in only to point at a proxy.",
     "arguments": "Arguments",
+    "clientKnowsIt": "the client already knows the address",
     "command": "Command",
     "connect": "Connect a system",
     "credential": "Credential",

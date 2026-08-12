@@ -284,7 +284,11 @@
   },
   "integrations": {
     "address": "Endereço",
+    "addressFilledByPreset": "Escolhendo um provedor conhecido no campo Nome, o endereço vem preenchido. Troque só para um proxy ou um modelo self-hosted.",
+    "addressNeeded": "Este protocolo precisa de um endereço. Escolha um provedor conhecido acima e ele é preenchido.",
+    "addressOnlyForProxy": "Deixe vazio. Preencha só para apontar a um proxy.",
     "arguments": "Argumentos",
+    "clientKnowsIt": "o cliente já sabe o endereço",
     "command": "Comando",
     "connect": "Conectar sistema",
     "credential": "Credencial",

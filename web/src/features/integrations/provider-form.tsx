@@ -39,7 +39,11 @@ import {
 const schema = z.object({
   name: z.string().min(1, "integrations.nameProvider"),
   kind: z.enum(["anthropic", "openai_compatible"]),
-  baseUrl: z.string().url("Precisa ser uma URL completa."),
+  // Optional, and the reason is not laziness. Anthropic's preset carries no
+  // address because its client already knows one, and a self-hosted model's
+  // is known only to the installation. Requiring it made the reference
+  // provider impossible to configure at all.
+  baseUrl: z.string(),
   apiKey: z.string(),
   enabled: z.boolean(),
 });
@@ -80,6 +84,12 @@ export function ProviderForm({
   };
 
   async function submit(values: z.infer<typeof schema>) {
+    // An address is needed where the client does not already know one, which
+    // is every OpenAI-compatible provider including the self-hosted ones.
+    if (values.kind === "openai_compatible" && !values.baseUrl.trim()) {
+      form.setError("baseUrl", { message: "integrations.addressNeeded" });
+      return;
+    }
     try {
       await put.mutateAsync({ ...values, apiKey: values.apiKey || undefined });
       toast.success(`${values.name} configurado`);
@@ -174,9 +184,23 @@ export function ProviderForm({
                     <Input
                       {...field}
                       className="font-mono"
-                      placeholder="https://api.openai.com/v1"
+                      placeholder={
+                        form.watch("kind") === "anthropic"
+                          ? t("integrations.clientKnowsIt")
+                          : "https://api.openai.com/v1"
+                      }
                     />
                   </FormControl>
+                  {/* Said where it applies rather than always: the address is
+                      for a proxy or a self-hosted model, and a field that
+                      looks mandatory is one somebody fills with a guess. */}
+                  <FormDescription>
+                    {t(
+                      form.watch("kind") === "anthropic"
+                        ? "integrations.addressOnlyForProxy"
+                        : "integrations.addressFilledByPreset",
+                    )}
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
