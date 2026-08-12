@@ -83,11 +83,17 @@ function Grid() {
 function Area({ columns, ceiling }: { columns: Column[]; ceiling: number }) {
   if (columns.length < 2) return null;
 
+  // Through the centre of each bar, not edge to edge. The area traces the
+  // hourly total, and a curve that started at the container's edge would
+  // begin half a column before the hour it describes.
+  const width = 100 / columns.length;
   const points = columns.map((c, i) => {
-    const x = (i / (columns.length - 1)) * 100;
+    const x = width * i + width / 2;
     const y = PLOT - (c.total / ceiling) * PLOT;
     return `${x.toFixed(2)},${y.toFixed(1)}`;
   });
+  const first = width / 2;
+  const last = width * (columns.length - 1) + width / 2;
 
   return (
     <svg
@@ -103,7 +109,10 @@ function Area({ columns, ceiling }: { columns: Column[]; ceiling: number }) {
           <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
         </linearGradient>
       </defs>
-      <polygon points={`0,${PLOT} ${points.join(" ")} 100,${PLOT}`} fill="url(#throughput-area)" />
+      <polygon
+        points={`${first.toFixed(2)},${PLOT} ${points.join(" ")} ${last.toFixed(2)},${PLOT}`}
+        fill="url(#throughput-area)"
+      />
     </svg>
   );
 }

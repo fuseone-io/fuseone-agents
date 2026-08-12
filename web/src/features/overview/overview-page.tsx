@@ -7,6 +7,7 @@ import { BudgetDonut } from "@/features/overview/budget-donut";
 import { AgentFleet } from "@/features/overview/agent-fleet";
 import { DecisionsFeed } from "@/features/overview/decisions-feed";
 import { RecentRuns } from "@/features/overview/recent-runs";
+import { TracePanel } from "@/features/overview/trace-panel";
 import { windowsFor } from "@/features/overview/window";
 
 /**
@@ -21,6 +22,7 @@ export function OverviewPage() {
   // Rounded to the hour and held, so the query keys do not move under the
   // page while somebody is reading it.
   const [windows] = useState(() => windowsFor());
+  const [selected, setSelected] = useState<string>();
   const { since } = windows.current;
 
   return (
@@ -39,8 +41,18 @@ export function OverviewPage() {
       </div>
 
       <AgentFleet since={since} />
-      <DecisionsFeed since={since} />
-      <RecentRuns since={since} />
+
+      {/* The trace docks beside the feed and the table rather than replacing
+          them: somebody opening a run should not lose the page they were
+          reading it from. */}
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+        <div className="flex min-w-0 flex-1 flex-col gap-4">
+          <DecisionsFeed since={since} />
+          <RecentRuns since={since} selected={selected} onSelect={setSelected} />
+        </div>
+
+        {selected && <TracePanel runId={selected} onClose={() => setSelected(undefined)} />}
+      </div>
     </>
   );
 }

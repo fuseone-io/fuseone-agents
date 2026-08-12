@@ -12,6 +12,7 @@ import { StateDot } from "@/components/shared/state-dot";
 import { stateOfPhase } from "@/lib/agent-state";
 import { PHASE_LABELS } from "@/features/runs/phase-badge";
 import { formatCost, formatDuration, formatRelative } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import type { Run } from "@/lib/api/client";
 
 const HEAD = "h-[30px] bg-muted text-2xs uppercase tracking-label text-muted-foreground";
@@ -24,7 +25,21 @@ const NUM = "text-right font-mono text-xs tabular-nums";
  * sits on the right, so the four numeric columns can be compared down the page
  * without reading each cell.
  */
-export function RunsTable({ runs }: { runs: Run[] }) {
+export function RunsTable({
+  runs,
+  selected,
+  onSelect,
+}: {
+  runs: Run[];
+  /** The run whose trace is open beside the table, if any. */
+  selected?: string;
+  /**
+   * Opens the run beside the table instead of navigating to it. Without this
+   * a row goes to the run's own screen, which is right on a page that is only
+   * the table and wrong on one somebody is scanning.
+   */
+  onSelect?: (runId: string) => void;
+}) {
   const navigate = useNavigate();
 
   return (
@@ -47,8 +62,17 @@ export function RunsTable({ runs }: { runs: Run[] }) {
           return (
             <TableRow
               key={run.runId}
-              onClick={() => navigate(`/runs/${run.runId}`)}
-              className="h-10 cursor-pointer border-border-subtle"
+              onClick={() =>
+                onSelect ? onSelect(run.runId) : navigate(`/runs/${run.runId}`)
+              }
+              // The selected row keeps the accent bar the design gives it, so
+              // the trace beside the table is visibly about this row.
+              data-state={selected === run.runId ? "selected" : undefined}
+              className={cn(
+                "h-10 cursor-pointer border-border-subtle",
+                selected === run.runId &&
+                  "bg-surface-accent shadow-[inset_2px_0_0_var(--primary)]",
+              )}
             >
               <TableCell>
                 <Mono dim>{run.runId}</Mono>

@@ -11,7 +11,15 @@ import { useRuns } from "@/features/runs/api";
  * the screen built for them — this is the panel somebody clicks through from,
  * not the one they work in.
  */
-export function RecentRuns({ since }: { since: string }) {
+export function RecentRuns({
+  since,
+  selected,
+  onSelect,
+}: {
+  since: string;
+  selected?: string;
+  onSelect?: (runId: string) => void;
+}) {
   const { data, isLoading, error } = useRuns({ since });
   const runs = (data?.items ?? []).slice(0, 8);
 
@@ -38,7 +46,7 @@ export function RecentRuns({ since }: { since: string }) {
             Nenhuma execução hoje. Agentes disparam por agendamento, webhook ou evento.
           </p>
         ) : (
-          <RunsTable runs={runs} />
+          <RunsTable runs={runs} selected={selected} onSelect={onSelect} />
         )}
       </div>
     </section>
