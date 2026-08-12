@@ -46,13 +46,13 @@ export function WebhookSecretDialog({
         </DialogHeader>
 
         <div className="flex flex-col gap-3">
-          <Field label="Endereço">
+          <Field label={t("integrations.address")}>
             <code className="block truncate rounded-lg border border-border bg-muted px-3 py-2 font-mono text-xs">
               POST {url}
             </code>
           </Field>
 
-          <Field label="Cabeçalho X-FuseOne-Secret">
+          <Field label={t("agents.secretHeader")}>
             <div className="flex items-center gap-2">
               <code className="min-w-0 flex-1 truncate rounded-lg border border-border bg-muted px-3 py-2 font-mono text-xs">
                 {secret}

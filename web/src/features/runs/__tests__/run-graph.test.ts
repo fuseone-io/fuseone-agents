@@ -3,25 +3,38 @@ import { buildGraph } from "@/features/runs/run-graph";
 import type { Step, StepKind } from "@/lib/api/client";
 
 let seq = 0;
-const step = (kind: StepKind, at: string, payload: Record<string, unknown> = {}): Step =>
-  ({ seq: ++seq, kind, at, hash: "", payload }) as Step;
+const step = (
+  kind: StepKind,
+  at: string,
+  payload: Record<string, unknown> = {},
+): Step => ({ seq: ++seq, kind, at, hash: "", payload }) as Step;
 
 describe("a run drawn as a graph", () => {
   it("pairs a call with its answer into one node carrying how long it took", () => {
     const { nodes } = buildGraph([
-      step("tool_called", "2026-08-12T10:00:00Z", { tool: "crm.lookup", effect: 1 }),
+      step("tool_called", "2026-08-12T10:00:00Z", {
+        tool: "crm.lookup",
+        effect: 1,
+      }),
       step("tool_returned", "2026-08-12T10:00:00.180Z", { tool: "crm.lookup" }),
     ]);
 
     expect(nodes).toHaveLength(1);
-    expect(nodes[0]).toMatchObject({ kind: "tool", title: "crm.lookup", latencyMs: 180 });
+    expect(nodes[0]).toMatchObject({
+      kind: "tool",
+      title: "crm.lookup",
+      latencyMs: 180,
+    });
   });
 
   it("draws a call that changed something as an action, not as a lookup", () => {
     // The distinction is the product's whole point: two nodes that look alike
     // would hide which one touched a real system.
     const { nodes } = buildGraph([
-      step("tool_called", "2026-08-12T10:00:00Z", { tool: "crm.reply", effect: 2 }),
+      step("tool_called", "2026-08-12T10:00:00Z", {
+        tool: "crm.reply",
+        effect: 2,
+      }),
       step("tool_returned", "2026-08-12T10:00:00.220Z", {}),
     ]);
 
@@ -42,7 +55,10 @@ describe("a run drawn as a graph", () => {
     // Rendering zero would say it answered instantly, which is the opposite of
     // what is happening.
     const { nodes } = buildGraph([
-      step("tool_called", "2026-08-12T10:00:00Z", { tool: "crm.lookup", effect: 1 }),
+      step("tool_called", "2026-08-12T10:00:00Z", {
+        tool: "crm.lookup",
+        effect: 1,
+      }),
     ]);
 
     expect(nodes[0]?.latencyMs).toBeUndefined();
@@ -72,9 +88,16 @@ describe("a run drawn as a graph", () => {
 
   it("names the rule a gate decision applied, never just its verdict", () => {
     const { nodes } = buildGraph([
-      step("gate_decided", "2026-08-12T10:00:00Z", { verdict: 4, rule: "POL-114" }),
+      step("gate_decided", "2026-08-12T10:00:00Z", {
+        verdict: 4,
+        rule: "POL-114",
+      }),
     ]);
 
-    expect(nodes[0]).toMatchObject({ kind: "policy", detail: "POL-114", tone: "block" });
+    expect(nodes[0]).toMatchObject({
+      kind: "policy",
+      detail: "POL-114",
+      tone: "block",
+    });
   });
 });

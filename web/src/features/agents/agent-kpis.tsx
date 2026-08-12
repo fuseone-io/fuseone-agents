@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { costPerRun, successRate } from "@/features/agents/activity";
 import { formatCost, formatRelative } from "@/lib/format";
 import type { Agent } from "@/lib/api/client";
@@ -10,23 +11,24 @@ import type { Agent } from "@/lib/api/client";
  * would report it as an empty screen.
  */
 export function AgentKpis({ agent }: { agent: Agent }) {
+  const { t } = useTranslation();
   const activity = agent.activity;
   const perRun = costPerRun(agent);
 
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <Kpi
-        label="Execuções"
+        label={t("runs.runs")}
         value={String(activity?.runs ?? 0)}
-        note="desde a primeira versão"
+        note={t("agents.sinceFirstVersion")}
       />
       <Kpi
-        label="Concluídas"
+        label={t("runs.finishedPlural")}
         value={successRate(agent)}
         note={`${activity?.finished ?? 0} de ${activity?.runs ?? 0}`}
       />
       <Kpi
-        label="Custo por execução"
+        label={t("agents.costPerRun")}
         value={perRun === undefined ? "—" : formatCost({ micros: perRun })}
         note={`${formatCost({ micros: activity?.costMicros ?? 0 })} no total`}
       />

@@ -22,6 +22,10 @@ export function useAgents(allVersions = false) {
   return useQuery({
     queryKey: agentKeys.list(scope.key, allVersions),
     queryFn: async () =>
-      unwrap(await api.GET("/agents", { params: { query: { ...scope.params, allVersions } } })),
+      unwrap(
+        await api.GET("/agents", {
+          params: { query: { ...scope.params, allVersions } },
+        }),
+      ),
   });
 }

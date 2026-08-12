@@ -29,7 +29,7 @@ const schema = z.object({
   name: z
     .string()
     .min(1, "Dê um nome ao servidor.")
-    .regex(/^[a-z0-9][a-z0-9_-]*$/, "Minúsculas, números, hífen e sublinhado."),
+    .regex(/^[a-z0-9][a-z0-9_-]*$/, "integrations.nameCharset"),
   command: z.string().min(1, "Diga o que executar."),
   args: z.string(),
   enabled: z.boolean(),
@@ -71,7 +71,7 @@ export function ServerForm({
       onClose();
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Não foi possível salvar",
+        error instanceof Error ? error.message : t("common.saveFailed"),
       );
     }
   }

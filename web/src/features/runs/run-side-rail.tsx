@@ -29,7 +29,7 @@ export function RunSideRail({ run, steps }: { run: Run; steps: Step[] }) {
             {run.agentId}
           </Link>
         </Row>
-        <Row label="Versão">
+        <Row label={t("runs.version")}>
           <Mono>{run.versionId.slice(0, 9)}</Mono>
         </Row>
         <Row label="Área">
@@ -65,9 +65,7 @@ export function RunSideRail({ run, steps }: { run: Run; steps: Step[] }) {
         {/* Whether anything actually changed is the first thing asked after an
             incident, and it is not answerable by reading a list of names. */}
         <p className="text-xs text-muted-foreground">
-          {wrote
-            ? "Esta execução alterou estado em pelo menos um sistema."
-            : "Nenhuma escrita executada nesta execução."}
+          {wrote ? t("runs.changedState") : t("runs.noWrites")}
         </p>
       </Card>
 

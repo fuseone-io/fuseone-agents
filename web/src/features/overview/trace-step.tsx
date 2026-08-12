@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Mono } from "@/components/shared/mono";
 import { TONE_DOT, TONE_TEXT, verbOf } from "@/features/runs/step-verb";
 import { titleOf, chipsOf } from "@/features/runs/step-story";
@@ -14,6 +15,7 @@ import type { Step } from "@/lib/api/client";
  * and when, and the run's own page is one click away for the rest.
  */
 export function TraceStep({ step, last }: { step: Step; last: boolean }) {
+  const { t } = useTranslation();
   const { tone } = verbOf(step);
   const tool = chipsOf(step).find((chip) => !chip.pill);
 
@@ -36,7 +38,7 @@ export function TraceStep({ step, last }: { step: Step; last: boolean }) {
             {formatTime(step.at)}
           </Mono>
           <span className={cn("truncate text-xs", TONE_TEXT[tone])}>
-            {titleOf(step)}
+            {t(titleOf(step))}
           </span>
         </div>
         {tool && (

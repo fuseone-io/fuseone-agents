@@ -13,14 +13,21 @@ import type { AgentDefinition } from "@/lib/api/client";
 export function usePublishAgent() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ agentId, definition }: { agentId: string; definition: AgentDefinition }) =>
+    mutationFn: async ({
+      agentId,
+      definition,
+    }: {
+      agentId: string;
+      definition: AgentDefinition;
+    }) =>
       unwrap(
         await api.PUT("/agents/{agentId}/versions", {
           params: { path: { agentId } },
           body: definition,
         }),
       ),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: agentKeys.all }),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({ queryKey: agentKeys.all }),
   });
 }
 
@@ -35,6 +42,7 @@ export function useSetAgentPaused(agentId: string) {
           body: { paused },
         }),
       ),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: agentKeys.all }),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({ queryKey: agentKeys.all }),
   });
 }

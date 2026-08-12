@@ -66,10 +66,10 @@ export function AgentCard({ agent }: { agent: Agent }) {
 
       <dl className="grid grid-cols-3 gap-2 border-t border-border-subtle pt-3 text-xs">
         <Figure
-          label="Execuções"
+          label={t("runs.runs")}
           value={agent.activity ? String(agent.activity.runs) : "—"}
         />
-        <Figure label="Concluídas" value={successRate(agent)} />
+        <Figure label={t("runs.finishedPlural")} value={successRate(agent)} />
         <Figure
           label="Custo"
           value={

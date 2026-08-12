@@ -6,19 +6,19 @@ import type { PolicyInput } from "@/lib/api/client";
 const EFFECT_CHOICES = [
   {
     value: "allow",
-    label: "Permitir",
+    label: "policies.allow",
     note: "registra e segue",
     className: "border-success bg-success-surface",
   },
   {
     value: "escalate",
-    label: "Escalar",
-    note: "para até uma pessoa decidir",
+    label: "policies.escalate",
+    note: "policies.stopsForAPerson",
     className: "border-warning bg-warning-surface",
   },
   {
     value: "deny",
-    label: "Negar",
+    label: "policies.deny",
     note: "recusa e registra",
     className: "border-danger bg-danger-surface",
   },
@@ -34,7 +34,7 @@ export function EffectSection({
 }) {
   const { t } = useTranslation();
   return (
-    <Section title="Efeito e aplicação">
+    <Section title={t("policies.effectAndEnforcement")}>
       <fieldset>
         <legend className="sr-only">{t("policies.effectWhenMatched")}</legend>
         <div className="grid gap-2 sm:grid-cols-3">
@@ -52,7 +52,7 @@ export function EffectSection({
                   : "border-border",
               )}
             >
-              <span className="text-sm font-medium">{choice.label}</span>
+              <span className="text-sm font-medium">{t(choice.label)}</span>
               <span className="text-xs text-muted-foreground">
                 {choice.note}
               </span>
@@ -78,7 +78,7 @@ export function EffectSection({
                   : "border-border",
               )}
             >
-              {mode === "monitor" ? "Monitorar" : "Impor"}
+              {mode === "monitor" ? "policies.monitor" : "policies.enforce"}
             </button>
           ))}
         </div>

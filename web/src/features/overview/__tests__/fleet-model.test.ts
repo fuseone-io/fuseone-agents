@@ -4,7 +4,10 @@ import type { ThroughputBucket } from "@/lib/api/client";
 
 const SINCE = "2026-08-11T00:00:00.000Z";
 
-function bucket(hour: number, byAgent: Record<string, number>): ThroughputBucket {
+function bucket(
+  hour: number,
+  byAgent: Record<string, number>,
+): ThroughputBucket {
   return {
     at: new Date(Date.parse(SINCE) + hour * 3_600_000).toISOString(),
     byAgent,
@@ -18,7 +21,10 @@ describe("each agent's trend", () => {
   it("gives every agent a full day, so two sparklines share a time axis", () => {
     // Drawn side by side. Series of different lengths would put the same hour
     // at different x positions on adjacent cards.
-    const trends = trendsByAgent([bucket(9, { triage: 3 }), bucket(11, { billing: 1 })], SINCE);
+    const trends = trendsByAgent(
+      [bucket(9, { triage: 3 }), bucket(11, { billing: 1 })],
+      SINCE,
+    );
 
     expect(trends.get("triage")).toHaveLength(24);
     expect(trends.get("billing")).toHaveLength(24);

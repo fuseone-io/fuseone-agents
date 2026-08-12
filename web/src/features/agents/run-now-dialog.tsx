@@ -43,11 +43,11 @@ export function RunNowDialog({
       onSuccess: (run) => {
         setOpen(false);
         setInput("");
-        toast.success("Execução aberta", { description: run.runId });
+        toast.success(t("agents.runOpened"), { description: run.runId });
         navigate(`/runs/${run.runId}`);
       },
       onError: (error) =>
-        toast.error("Não foi possível abrir a execução", {
+        toast.error(t("agents.runFailed"), {
           description: error instanceof Error ? error.message : undefined,
         }),
     });

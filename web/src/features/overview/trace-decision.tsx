@@ -46,7 +46,7 @@ export function TraceDecision({
           values={{
             tool: approval.tool,
             why: explainRule(approval.rule)
-              ? ` — ${explainRule(approval.rule)}`
+              ? ` — ${t(explainRule(approval.rule))}`
               : ".",
           }}
           components={{ tool: <Mono /> }}

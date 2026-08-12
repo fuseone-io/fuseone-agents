@@ -30,7 +30,7 @@ export function TraceActions({
         onSuccess: () =>
           toast.success(approved ? "Ação aprovada" : "Ação recusada"),
         onError: (error) =>
-          toast.error("Não foi possível registrar a decisão", {
+          toast.error(t("runs.decisionFailed"), {
             description: error instanceof Error ? error.message : undefined,
           }),
       },
@@ -40,7 +40,7 @@ export function TraceActions({
     <div className="flex gap-2">
       <ConfirmAction
         label="Aprovar"
-        title="Aprovar esta ação?"
+        title={t("runs.approveThis")}
         description={`A ferramenta ${approval.tool} será executada e o efeito ficará registrado na trilha em seu nome.`}
         disabled={decide.isPending}
         onConfirm={() => submit(true)}

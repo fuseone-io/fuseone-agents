@@ -22,7 +22,11 @@ export function useThroughput(since: string) {
   return useQuery({
     queryKey: overviewKeys.throughput(scope.key, since),
     queryFn: async () =>
-      unwrap(await api.GET("/runs/throughput", { params: { query: { ...scope.params, since } } })),
+      unwrap(
+        await api.GET("/runs/throughput", {
+          params: { query: { ...scope.params, since } },
+        }),
+      ),
   });
 }
 
@@ -31,7 +35,11 @@ export function useDecisions(since: string, limit = 12) {
   return useQuery({
     queryKey: overviewKeys.decisions(scope.key, since),
     queryFn: async () =>
-      unwrap(await api.GET("/decisions", { params: { query: { ...scope.params, since, limit } } })),
+      unwrap(
+        await api.GET("/decisions", {
+          params: { query: { ...scope.params, since, limit } },
+        }),
+      ),
     // The Gate keeps deciding while somebody watches the feed. Short enough
     // to feel live, long enough not to be a load generator on a shared API.
     refetchInterval: 15_000,

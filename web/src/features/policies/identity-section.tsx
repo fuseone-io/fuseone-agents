@@ -20,10 +20,7 @@ export function IdentitySection({
 }) {
   const { t } = useTranslation();
   return (
-    <Section
-      title="Identidade"
-      hint="O código aparece na trilha e na mensagem de quem for negado."
-    >
+    <Section title="Identidade" hint={t("policies.codeAppears")}>
       <div className="grid gap-3 sm:grid-cols-[140px_1fr_200px]">
         <Labelled label="Código" htmlFor="code">
           {/* Set once. It is in the trail and in support conversations, and a

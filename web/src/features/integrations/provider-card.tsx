@@ -30,7 +30,7 @@ export function ProviderCard({
     <IntegrationCard
       name={provider.name}
       kind={provider.kind}
-      description={provider.baseUrl || "endpoint padrão do provedor"}
+      description={provider.baseUrl || t("integrations.defaultEndpoint")}
       enabled={provider.enabled && provider.hasKey}
       observes={false}
       action={
@@ -40,13 +40,13 @@ export function ProviderCard({
           </Button>
           <RemoveButton
             title={`Remover ${provider.name}?`}
-            description="Execuções que dependem deste provedor param de avançar. Fica registrado na trilha."
+            description={t("integrations.removeProvider")}
             onConfirm={() =>
               remove.mutate(provider.name, {
                 onSuccess: () => toast.success(`${provider.name} removido`),
                 onError: (e) =>
                   toast.error(
-                    e instanceof Error ? e.message : "Não foi possível remover",
+                    e instanceof Error ? e.message : t("common.removeFailed"),
                   ),
               })
             }

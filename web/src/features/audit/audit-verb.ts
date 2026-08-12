@@ -14,14 +14,35 @@ export const VERBS: Record<string, { label: string; className: string }> = {
   "gate.decided": { label: "decidiu", className: "text-muted-foreground" },
   "approval.granted": { label: "aprovou", className: "text-primary" },
   "approval.refused": { label: "recusou", className: "text-danger" },
-  "tool.classified": { label: "classificou", className: "text-muted-foreground" },
-  "provider.created": { label: "configurou provedor", className: "text-muted-foreground" },
-  "provider.deleted": { label: "removeu provedor", className: "text-muted-foreground" },
-  "server.created": { label: "configurou servidor", className: "text-muted-foreground" },
-  "server.deleted": { label: "removeu servidor", className: "text-muted-foreground" },
+  "tool.classified": {
+    label: "classificou",
+    className: "text-muted-foreground",
+  },
+  "provider.created": {
+    label: "configurou provedor",
+    className: "text-muted-foreground",
+  },
+  "provider.deleted": {
+    label: "removeu provedor",
+    className: "text-muted-foreground",
+  },
+  "server.created": {
+    label: "configurou servidor",
+    className: "text-muted-foreground",
+  },
+  "server.deleted": {
+    label: "removeu servidor",
+    className: "text-muted-foreground",
+  },
   "budget.set": { label: "definiu teto", className: "text-muted-foreground" },
-  "budget.cleared": { label: "removeu teto", className: "text-muted-foreground" },
-  bootstrap_reopened: { label: "reabriu a instalação", className: "text-danger" },
+  "budget.cleared": {
+    label: "removeu teto",
+    className: "text-muted-foreground",
+  },
+  bootstrap_reopened: {
+    label: "audit.reopened",
+    className: "text-danger",
+  },
 };
 
 /**

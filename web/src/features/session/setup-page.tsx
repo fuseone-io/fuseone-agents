@@ -19,7 +19,7 @@ import { AuthLayout } from "@/features/session/auth-layout";
 
 const schema = z.object({
   token: z.string().min(1, "Cole o token que o servidor imprimiu ao iniciar."),
-  display: z.string().min(1, "Diga quem é, para a trilha registrar."),
+  display: z.string().min(1, "session.sayWhoYouAre"),
 });
 
 /**
@@ -47,7 +47,7 @@ export function SetupPage({ onClaimed }: { onClaimed: () => void }) {
     if (!response.ok) {
       const problem = await response.json().catch(() => undefined);
       form.setError("token", {
-        message: problem?.detail ?? "Não foi possível concluir a configuração.",
+        message: problem?.detail ?? t("session.setupFailed"),
       });
       return;
     }
@@ -57,8 +57,8 @@ export function SetupPage({ onClaimed }: { onClaimed: () => void }) {
   return (
     <AuthLayout
       icon={<ShieldCheck className="size-5 text-primary" />}
-      title="Configurar esta instalação"
-      description="Esta é a única vez que isto acontece. Depois o acesso passa pelo provedor de identidade que você configurar."
+      title={t("session.setupTitle")}
+      description={t("session.setupOnce")}
     >
       <Alert>
         <AlertDescription>{t("session.tokenInLog")}</AlertDescription>

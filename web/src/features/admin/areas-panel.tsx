@@ -49,8 +49,8 @@ export function AreasPanel() {
       ) : areas.length === 0 ? (
         <EmptyState
           icon={<Layers className="size-6" />}
-          title="Nenhuma área declarada"
-          hint="Uma área é onde o trabalho fica arquivado: o agente pertence a uma, o teto governa uma, a política alcança um conjunto delas e a concessão é feita em uma. Sem declarar, cada tela inventa a sua a partir do que existe."
+          title={t("scope.noAreas")}
+          hint={t("admin.areaHint")}
         />
       ) : (
         <ul className="flex flex-col gap-2">
@@ -66,6 +66,7 @@ export function AreasPanel() {
 }
 
 function AreaRow({ area }: { area: RegisteredScope }) {
+  const { t } = useTranslation();
   const remove = useDeleteScope();
   const shown = area.label || area.area;
 
@@ -82,13 +83,13 @@ function AreaRow({ area }: { area: RegisteredScope }) {
       </div>
       <RemoveButton
         title={`Retirar a área ${shown}?`}
-        description="Ela deixa de ser oferecida para trabalho novo. Os agentes, tetos e políticas já arquivados nela continuam apontando para ela e continuam valendo — retirar uma área e reescrever o passado são atos diferentes."
+        description={t("admin.withdrawArea")}
         onConfirm={() =>
           remove.mutate(`${area.company}/${area.area}`, {
             onSuccess: () => toast.success("Área retirada"),
             onError: (e) =>
               toast.error(
-                e instanceof Error ? e.message : "Não foi possível retirar",
+                e instanceof Error ? e.message : t("admin.withdrawFailed"),
               ),
           })
         }

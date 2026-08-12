@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
@@ -20,6 +21,7 @@ import { windowsFor } from "@/features/overview/window";
  * figure on this screen with nothing to measure it against is decoration.
  */
 export function OverviewPage() {
+  const { t } = useTranslation();
   // Rounded to the hour and held, so the query keys do not move under the
   // page while somebody is reading it.
   const [windows] = useState(() => windowsFor());
@@ -41,8 +43,8 @@ export function OverviewPage() {
           it a title-height above the first card and read as misaligned. */}
       <PageHeader
         icon={PAGE_ICONS.overview}
-        title="Visão geral"
-        description="Como o dia está indo: quanto rodou, o que o Portão decidiu e quanto custou."
+        title={t("nav.overview")}
+        description={t("overview.subtitle")}
       />
 
       <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">

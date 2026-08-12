@@ -44,7 +44,7 @@ export function CostPage() {
       <PageHeader
         icon={PAGE_ICONS.cost}
         title="Custo e limites"
-        description="Toda execução tem custo conhecido antes de alguém decidir escalá-la. A execução é a unidade contábil; agente, área e período são recortes dela."
+        description={t("cost.subtitle")}
       />
 
       <CostKpis daily={daily.data} isLoading={daily.isLoading} />
@@ -56,18 +56,18 @@ export function CostPage() {
       ) : buckets.length === 0 ? (
         <EmptyState
           icon={<Wallet className="size-6" />}
-          title="Sem consumo no período"
-          hint="O custo aparece assim que a primeira execução for concluída. Se as execuções já rodaram e o valor está zerado, o provedor de modelo está sem tabela de preços — a plataforma conta tokens e se recusa a chutar dinheiro."
+          title={t("cost.noConsumption")}
+          hint={t("cost.emptyHint")}
         />
       ) : (
         <>
           <div className="flex flex-wrap gap-4">
             <Panel
-              title="Gasto · últimos 14 dias"
+              title={t("cost.spentLast14")}
               className="min-w-[320px] flex-[2_1_380px]"
             >
               <BarChart
-                label="Gasto por dia nos últimos 14 dias"
+                label={t("cost.spentPerDay")}
                 bars={(daily.data?.buckets ?? []).slice(-14).map((b) => ({
                   label: b.key,
                   value: b.cost.micros,

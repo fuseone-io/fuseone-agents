@@ -10,7 +10,8 @@ export type ScopeBudget = components["schemas"]["ScopeBudget"];
 export const adminKeys = {
   all: ["admin"] as const,
   tools: () => [...adminKeys.all, "tools"] as const,
-  events: (target?: string) => [...adminKeys.all, "events", target ?? ""] as const,
+  events: (target?: string) =>
+    [...adminKeys.all, "events", target ?? ""] as const,
   budgets: () => [...adminKeys.all, "budgets"] as const,
 };
 
@@ -25,7 +26,11 @@ export function useAdminEvents(target?: string) {
   return useQuery({
     queryKey: adminKeys.events(target),
     queryFn: async () =>
-      unwrap(await api.GET("/admin/events", { params: { query: { target, limit: 50 } } })),
+      unwrap(
+        await api.GET("/admin/events", {
+          params: { query: { target, limit: 50 } },
+        }),
+      ),
   });
 }
 
@@ -37,11 +42,20 @@ export function useAdminEvents(target?: string) {
 export function useClassifyTool() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { toolId: string; effect: Effect; untrusted: boolean; reason?: string }) =>
+    mutationFn: async (input: {
+      toolId: string;
+      effect: Effect;
+      untrusted: boolean;
+      reason?: string;
+    }) =>
       unwrap(
         await api.PUT("/admin/tools/{toolId}/classification", {
           params: { path: { toolId: input.toolId } },
-          body: { effect: input.effect, untrusted: input.untrusted, reason: input.reason },
+          body: {
+            effect: input.effect,
+            untrusted: input.untrusted,
+            reason: input.reason,
+          },
         }),
       ),
     onSuccess: () => {
@@ -85,7 +99,8 @@ export function usePutBudget() {
           },
         }),
       ),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: adminKeys.all }),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({ queryKey: adminKeys.all }),
   });
 }
 
@@ -93,7 +108,12 @@ export function useDeleteBudget() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (scope: string) =>
-      unwrap(await api.DELETE("/admin/budgets/{scope}", { params: { path: { scope } } })),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: adminKeys.all }),
+      unwrap(
+        await api.DELETE("/admin/budgets/{scope}", {
+          params: { path: { scope } },
+        }),
+      ),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({ queryKey: adminKeys.all }),
   });
 }

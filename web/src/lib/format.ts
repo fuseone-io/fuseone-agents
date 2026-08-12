@@ -30,8 +30,13 @@ const numberFormat = (options: Intl.NumberFormatOptions) =>
  */
 export function formatMicros(micros: number): string {
   const value = micros / MICROS_PER_UNIT;
-  const digits = value !== 0 && Math.abs(value) < 0.01 ? { maximumFractionDigits: 4 } : {};
-  return numberFormat({ style: "currency", currency: CURRENCY, ...digits }).format(value);
+  const digits =
+    value !== 0 && Math.abs(value) < 0.01 ? { maximumFractionDigits: 4 } : {};
+  return numberFormat({
+    style: "currency",
+    currency: CURRENCY,
+    ...digits,
+  }).format(value);
 }
 
 export function formatCost(cost: Cost | undefined): string {
@@ -72,7 +77,9 @@ const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
 ];
 
 export function formatRelative(iso: string, now = Date.now()): string {
-  const relative = new Intl.RelativeTimeFormat(currentLocale(), { numeric: "auto" });
+  const relative = new Intl.RelativeTimeFormat(currentLocale(), {
+    numeric: "auto",
+  });
   let delta = (new Date(iso).getTime() - now) / 1000;
   for (const [unit, step] of UNITS) {
     if (Math.abs(delta) < step) {

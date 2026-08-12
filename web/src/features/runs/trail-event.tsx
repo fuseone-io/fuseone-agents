@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import {
@@ -34,6 +35,7 @@ export function TrailEvent({
   last: boolean;
   showHashes: boolean;
 }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const { icon: Icon, tone } = tileOf(step, live);
   const expandable = hasContent(step);
@@ -41,7 +43,7 @@ export function TrailEvent({
   const body = (
     <>
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-medium">{titleOf(step)}</span>
+        <span className="text-sm font-medium">{t(titleOf(step))}</span>
         {chipsOf(step).map((chip) => (
           <span
             key={chip.text}

@@ -44,9 +44,7 @@ export function DecisionPanel({
       onDecided();
     } catch (error) {
       toast.error(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível registrar a decisão",
+        error instanceof Error ? error.message : t("runs.decisionFailed"),
       );
     }
   }
@@ -98,7 +96,7 @@ export function DecisionPanel({
           id="note"
           value={note}
           onChange={(event) => setNote(event.target.value)}
-          placeholder="Fica na trilha junto com a decisão"
+          placeholder={t("approvals.notePlaceholder")}
         />
       </div>
 

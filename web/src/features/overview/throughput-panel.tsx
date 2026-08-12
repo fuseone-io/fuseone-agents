@@ -12,7 +12,7 @@ import { ThroughputChart } from "@/features/overview/throughput-chart";
 import { useThroughput } from "@/features/overview/api";
 
 const LEGEND: Partial<Record<AgentState, string>> = {
-  done: "concluídas",
+  done: "overview.doneLegend",
   waiting: "em curso",
   blocked: "paradas",
 };
@@ -47,7 +47,7 @@ export function ThroughputPanel({ since }: { since: string }) {
                 aria-hidden
                 className={cn("size-[7px] rounded-[2px]", STATE_DOT[state])}
               />
-              {LEGEND[state]}
+              {t(LEGEND[state] ?? "")}
             </span>
           ))}
         </div>

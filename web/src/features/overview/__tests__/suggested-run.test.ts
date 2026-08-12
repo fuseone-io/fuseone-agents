@@ -4,9 +4,14 @@ import type { Run } from "@/lib/api/client";
 
 function run(over: Partial<Run>): Run {
   return {
-    runId: "run-1", scope: { company: "acme", area: "cx" }, agentId: "triage",
-    versionId: "v1", phase: "finished", seq: 10,
-    startedAt: "2026-08-11T12:00:00Z", cost: { micros: 0 },
+    runId: "run-1",
+    scope: { company: "acme", area: "cx" },
+    agentId: "triage",
+    versionId: "v1",
+    phase: "finished",
+    seq: 10,
+    startedAt: "2026-08-11T12:00:00Z",
+    cost: { micros: 0 },
     ...over,
   };
 }
@@ -24,7 +29,9 @@ describe("which run the trace opens on", () => {
   });
 
   it("falls back to the most recent when nothing is waiting", () => {
-    expect(suggestedRun([run({ runId: "run-new" }), run({ runId: "run-old" })])).toBe("run-new");
+    expect(
+      suggestedRun([run({ runId: "run-new" }), run({ runId: "run-old" })]),
+    ).toBe("run-new");
   });
 
   it("opens on nothing when nothing ran", () => {

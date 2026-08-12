@@ -18,7 +18,7 @@ export function SignInPage({ providers }: { providers: IdentityProvider[] }) {
     <AuthLayout
       icon={<LogIn className="size-5 text-primary" />}
       title="Entrar"
-      description="Use a conta da sua organização. O acesso que você recebe vem dos grupos que ela informa."
+      description={t("session.useOrgAccount")}
     >
       {providers.length === 0 ? (
         <Alert>

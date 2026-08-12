@@ -11,13 +11,13 @@ export type Tone = "neutral" | "good" | "warn" | "bad";
  */
 const VERBS: Record<StepKind, { verb: string; tone: Tone }> = {
   run_started: { verb: "iniciou", tone: "neutral" },
-  planned: { verb: "propôs", tone: "neutral" },
+  planned: { verb: "runs.verbProposed", tone: "neutral" },
   gate_decided: { verb: "decidiu", tone: "neutral" },
   budget_reserved: { verb: "reservou", tone: "neutral" },
   tool_called: { verb: "chamou", tone: "neutral" },
   tool_returned: { verb: "respondeu", tone: "neutral" },
   budget_reconciled: { verb: "conciliou", tone: "neutral" },
-  approval_requested: { verb: "pediu aprovação", tone: "warn" },
+  approval_requested: { verb: "runs.verbAskedApproval", tone: "warn" },
   approval_decided: { verb: "decidiu", tone: "good" },
   compensated: { verb: "reverteu", tone: "warn" },
   failed: { verb: "falhou", tone: "bad" },
@@ -28,14 +28,20 @@ const VERBS: Record<StepKind, { verb: string; tone: Tone }> = {
 const VERDICTS: Record<string, { verb: string; tone: Tone }> = {
   allow: { verb: "permitiu", tone: "good" },
   constrain: { verb: "restringiu", tone: "warn" },
-  require_approval: { verb: "exigiu aprovação", tone: "warn" },
+  require_approval: { verb: "runs.verbRequiredApproval", tone: "warn" },
   block: { verb: "bloqueou", tone: "bad" },
 };
 
 // The wire encodes verdict and effect as the domain's integers; map them back
 // for display. Switching on the number would break silently the day a value is
 // inserted in the middle of either list.
-const VERDICT_BY_CODE = ["unknown", "allow", "constrain", "require_approval", "block"];
+const VERDICT_BY_CODE = [
+  "unknown",
+  "allow",
+  "constrain",
+  "require_approval",
+  "block",
+];
 const EFFECT_BY_CODE = ["unknown", "read", "write", "destructive", "financial"];
 
 /** A step's effect, by name, whatever form the payload carries it in. */

@@ -101,7 +101,7 @@ function Row({ decision }: { decision: RecordedDecision }) {
         <span className="shrink-0 truncate text-xs text-muted-foreground">
           {decision.agentId}
         </span>
-        {/* The rule, never a category: "recusado por política" tells a reader
+        {/* The rule, never a category: t("overview.refusedByPolicy") tells a reader
             nothing about what to change. */}
         {decision.rule && decision.rule !== "passed" && (
           <Mono dim className="ml-auto shrink-0 text-2xs">

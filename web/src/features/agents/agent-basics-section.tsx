@@ -21,10 +21,7 @@ export function AgentBasicsSection({
 }) {
   const { t } = useTranslation();
   return (
-    <Section
-      title="Identidade"
-      hint="A área é a unidade de custo e de política."
-    >
+    <Section title="Identidade" hint={t("agents.areaIsUnit")}>
       <div className="grid gap-3 sm:grid-cols-[200px_1fr_160px]">
         <Labelled label="Identificador" htmlFor="agent-id">
           {/* Set once: runs reference it forever, and an id that moved would
@@ -71,7 +68,7 @@ export function AgentBasicsSection({
             className="font-mono"
           />
         </Labelled>
-        <Labelled label="Esforço" htmlFor="agent-effort">
+        <Labelled label={t("agents.effort")} htmlFor="agent-effort">
           <Input
             id="agent-effort"
             value={draft.effort ?? ""}
@@ -82,14 +79,14 @@ export function AgentBasicsSection({
         </Labelled>
       </div>
 
-      <Labelled label="Instruções" htmlFor="agent-instructions">
+      <Labelled label={t("agents.instructions")} htmlFor="agent-instructions">
         <Textarea
           id="agent-instructions"
           rows={8}
           value={draft.instructions}
           onChange={(e) => patch({ instructions: e.target.value })}
           className="font-mono text-xs"
-          placeholder="Você atende chamados que chegam em suporte@…"
+          placeholder={t("agents.instructionsPlaceholder")}
         />
         <p className="text-xs text-muted-foreground">
           {t("agents.instructionsLength", {

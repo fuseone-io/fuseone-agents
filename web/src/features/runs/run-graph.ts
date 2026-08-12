@@ -53,9 +53,15 @@ const BOOKKEEPING: ReadonlySet<StepKind> = new Set<StepKind>([
 ]);
 
 /** The second half of a pair, folded into the node its opener made. */
-const CLOSERS: ReadonlySet<StepKind> = new Set<StepKind>(["tool_returned", "approval_decided"]);
+const CLOSERS: ReadonlySet<StepKind> = new Set<StepKind>([
+  "tool_returned",
+  "approval_decided",
+]);
 
-export function buildGraph(steps: Step[]): { nodes: FlowNode[]; edges: FlowEdge[] } {
+export function buildGraph(steps: Step[]): {
+  nodes: FlowNode[];
+  edges: FlowEdge[];
+} {
   const nodes: FlowNode[] = [];
 
   steps.forEach((step, i) => {
@@ -101,15 +107,28 @@ function previousOf(steps: Step[], i: number): Step | undefined {
   return i === 0 ? undefined : steps[i - 1];
 }
 
-function describe(step: Step): Pick<FlowNode, "kind" | "title" | "detail" | "tone"> {
+function describe(
+  step: Step,
+): Pick<FlowNode, "kind" | "title" | "detail" | "tone"> {
   const payload = (step.payload ?? {}) as Record<string, unknown>;
-  const text = (key: string) => (typeof payload[key] === "string" ? payload[key] : undefined);
+  const text = (key: string) =>
+    typeof payload[key] === "string" ? payload[key] : undefined;
 
   switch (step.kind) {
     case "run_started":
-      return { kind: "trigger", title: "Execução iniciada", detail: text("trigger"), tone: "neutral" };
+      return {
+        kind: "trigger",
+        title: "runs.nodeStarted",
+        detail: text("trigger"),
+        tone: "neutral",
+      };
     case "planned":
-      return { kind: "agent", title: "Modelo propôs", detail: text("tool"), tone: "neutral" };
+      return {
+        kind: "agent",
+        title: "runs.nodeProposed",
+        detail: text("tool"),
+        tone: "neutral",
+      };
     case "gate_decided":
       return gate(step, text("rule"));
     case "tool_called":
@@ -122,13 +141,28 @@ function describe(step: Step): Pick<FlowNode, "kind" | "title" | "detail" | "ton
         tone: "neutral",
       };
     case "approval_requested":
-      return { kind: "human", title: "Decisão humana", detail: text("rule"), tone: "escalate" };
+      return {
+        kind: "human",
+        title: "runs.nodeHuman",
+        detail: text("rule"),
+        tone: "escalate",
+      };
     case "compensated":
       return { kind: "fault", title: "Efeito revertido", tone: "escalate" };
     case "failed":
-      return { kind: "fault", title: "Falhou", detail: text("reason"), tone: "block" };
+      return {
+        kind: "fault",
+        title: "Falhou",
+        detail: text("reason"),
+        tone: "block",
+      };
     case "parked":
-      return { kind: "fault", title: "Estacionada", detail: text("reason"), tone: "escalate" };
+      return {
+        kind: "fault",
+        title: "Estacionada",
+        detail: text("reason"),
+        tone: "escalate",
+      };
     default:
       return { kind: "seal", title: "Selada na trilha", tone: "allow" };
   }
@@ -142,19 +176,22 @@ const GATE_TONE: Record<string, TileTone> = {
 };
 
 const GATE_TITLE: Record<string, string> = {
-  allow: "Portão permitiu",
-  constrain: "Portão restringiu",
-  require_approval: "Portão escalou",
-  block: "Portão bloqueou",
+  allow: "runs.nodeAllowed",
+  constrain: "runs.nodeConstrained",
+  require_approval: "runs.nodeEscalated",
+  block: "runs.nodeBlocked",
 };
 
-/** The rule, never only the verdict: "bloqueado por política" tells a reader
+/** The rule, never only the verdict: "runs.nodeRefused" tells a reader
  *  nothing about what to change. */
-function gate(step: Step, rule?: string): Pick<FlowNode, "kind" | "title" | "detail" | "tone"> {
+function gate(
+  step: Step,
+  rule?: string,
+): Pick<FlowNode, "kind" | "title" | "detail" | "tone"> {
   const verdict = verdictOf(step) ?? "allow";
   return {
     kind: "policy",
-    title: GATE_TITLE[verdict] ?? "Portão decidiu",
+    title: GATE_TITLE[verdict] ?? "runs.nodeDecided",
     detail: rule,
     tone: GATE_TONE[verdict] ?? "neutral",
   };

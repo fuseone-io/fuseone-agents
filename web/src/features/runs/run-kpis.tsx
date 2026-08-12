@@ -37,8 +37,11 @@ export function RunKpis({ run, steps }: { run: Run; steps: number }) {
         </span>
       </Kpi>
 
-      <Kpi label="Duração" value={formatDuration(run.startedAt, run.endedAt)}>
-        {run.endedAt ? "concluída" : "em curso"}
+      <Kpi
+        label={t("runs.kpiDuration")}
+        value={formatDuration(run.startedAt, run.endedAt)}
+      >
+        {run.endedAt ? t("runs.finished") : "em curso"}
       </Kpi>
     </div>
   );

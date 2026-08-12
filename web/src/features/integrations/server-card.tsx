@@ -41,15 +41,13 @@ export function ServerCard({
             </Button>
             <RemoveButton
               title={`Remover ${server.name}?`}
-              description="Os agentes perdem as ferramentas deste servidor no próximo restart do worker. Fica registrado na trilha."
+              description={t("integrations.removeServer")}
               onConfirm={() =>
                 remove.mutate(server.name, {
                   onSuccess: () => toast.success(`${server.name} removido`),
                   onError: (e) =>
                     toast.error(
-                      e instanceof Error
-                        ? e.message
-                        : "Não foi possível remover",
+                      e instanceof Error ? e.message : t("common.removeFailed"),
                     ),
                 })
               }

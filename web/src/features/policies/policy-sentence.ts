@@ -1,11 +1,18 @@
 import type { PolicyInput } from "@/lib/api/client";
 
 const OPERATORS: Record<string, string> = {
-  eq: "=", ne: "≠", gt: ">", lt: "<", contains: "contém", in: "em",
+  eq: "=",
+  ne: "≠",
+  gt: ">",
+  lt: "<",
+  contains: "contém",
+  in: "em",
 };
 
 const EFFECTS: Record<string, string> = {
-  allow: "permitir", escalate: "escalar", deny: "negar",
+  allow: "permitir",
+  escalate: "escalar",
+  deny: "negar",
 };
 
 /**
@@ -26,7 +33,9 @@ export function draftSentence(policy: PolicyInput): string {
     parts.push(policy.effects.join(", "));
   }
   for (const condition of policy.conditions ?? []) {
-    parts.push(`${condition.field} ${OPERATORS[condition.op] ?? condition.op} ${condition.value}`);
+    parts.push(
+      `${condition.field} ${OPERATORS[condition.op] ?? condition.op} ${condition.value}`,
+    );
   }
 
   let sentence = `${parts.join(" · ")} → ${EFFECTS[policy.effect] ?? policy.effect}`;

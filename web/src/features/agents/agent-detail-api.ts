@@ -15,7 +15,12 @@ export function useAgent(agentId: string, version?: string) {
     // Never with no id: the create screen has nothing to load, and asking
     // anyway is a 404 on every page view that means nothing went wrong.
     enabled: agentId !== "",
-    queryKey: [...agentKeys.all, "detail", agentId, version ?? "latest"] as const,
+    queryKey: [
+      ...agentKeys.all,
+      "detail",
+      agentId,
+      version ?? "latest",
+    ] as const,
     queryFn: async () =>
       unwrap(
         await api.GET("/agents/{agentId}", {

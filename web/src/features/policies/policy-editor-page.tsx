@@ -51,12 +51,12 @@ export function PolicyEditorPage() {
             description:
               draft.mode === "monitor"
                 ? "Em modo monitorar: avaliada, registrada, sem mudar nada."
-                : "Impondo a partir do próximo passo de agente.",
+                : t("policies.enforcingNextStep"),
           });
           navigate("/policies");
         },
         onError: (e) =>
-          toast.error("Não foi possível gravar", {
+          toast.error(t("policies.saveFailed"), {
             description: e instanceof Error ? e.message : undefined,
           }),
       },
@@ -67,8 +67,8 @@ export function PolicyEditorPage() {
     <>
       <PageHeader
         icon={PAGE_ICONS.policies}
-        title={creating ? "Nova política" : loaded!.name}
-        description="Uma regra avaliada em todo passo de agente: escopo, condição, e o que acontece quando bate."
+        title={creating ? t("policies.newPolicy") : loaded!.name}
+        description={t("policies.editorSubtitle")}
       />
 
       <div className="grid gap-5 lg:grid-cols-[1fr_316px] lg:items-start">

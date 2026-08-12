@@ -39,7 +39,7 @@ export function AgentIdentity({
                 agent.activity?.lastPhase as Phase | undefined,
               )}
             />
-            {agent.scope.area || "sem área"}
+            {agent.scope.area || t("agents.noArea")}
           </span>
           {superseded && (
             <span className="inline-flex h-6 items-center rounded-pill bg-warning-surface px-2.5 text-xs font-medium text-warning">

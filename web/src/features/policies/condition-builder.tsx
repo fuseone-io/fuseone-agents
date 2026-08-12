@@ -17,7 +17,7 @@ import type { PolicyCondition } from "@/lib/api/client";
 const FIELDS = [
   { value: "tool.id", label: "ferramenta" },
   { value: "tool.effect", label: "efeito da ferramenta" },
-  { value: "data.taint", label: "marcação do dado" },
+  { value: "data.taint", label: "policies.dataLabel" },
   { value: "agent.id", label: "agente" },
   { value: "scope.area", label: "área" },
   { value: "args.rows", label: "args.rows" },
@@ -25,11 +25,11 @@ const FIELDS = [
 
 const OPERATORS = [
   { value: "eq", label: "é" },
-  { value: "ne", label: "não é" },
+  { value: "ne", label: "policies.isNot" },
   { value: "gt", label: "maior que" },
   { value: "lt", label: "menor que" },
-  { value: "contains", label: "contém" },
-  { value: "in", label: "está em" },
+  { value: "contains", label: "policies.contains" },
+  { value: "in", label: "policies.isIn" },
 ];
 
 /**
@@ -135,6 +135,7 @@ function Field({
   options: { value: string; label: string }[];
   onChange: (value: string) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <Select value={value} onValueChange={onChange}>
       <SelectTrigger
@@ -150,7 +151,7 @@ function Field({
             value={option.value}
             className="font-mono text-xs"
           >
-            {option.label}
+            {t(option.label)}
           </SelectItem>
         ))}
       </SelectContent>

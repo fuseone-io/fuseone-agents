@@ -1,5 +1,9 @@
 import { useMemo } from "react";
-import { scopeKeyOf, scopeParamsOf, useActiveScope } from "@/features/scope/active-scope";
+import {
+  scopeKeyOf,
+  scopeParamsOf,
+  useActiveScope,
+} from "@/features/scope/active-scope";
 
 /**
  * The active context, in the two shapes every read needs it.
@@ -9,7 +13,10 @@ import { scopeKeyOf, scopeParamsOf, useActiveScope } from "@/features/scope/acti
  * from the previous context's cache, so switching would appear to do nothing
  * until something else invalidated it.
  */
-export function useScopeFilter(): { params: { company?: string; area?: string }; key: string } {
+export function useScopeFilter(): {
+  params: { company?: string; area?: string };
+  key: string;
+} {
   const company = useActiveScope((s) => s.company);
   const area = useActiveScope((s) => s.area);
 

@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import { Mono } from "@/components/shared/mono";
 import { cn } from "@/lib/utils";
@@ -13,10 +14,11 @@ import type { Step } from "@/lib/api/client";
  * set. The dot and the line are what make the order legible at a glance.
  */
 export function StepRow({ step, last }: { step: Step; last: boolean }) {
+  const { t } = useTranslation();
   const { verb, tone } = verbOf(step);
   const payload = (step.payload ?? {}) as Record<string, unknown>;
   const explanation =
-    typeof payload.rule === "string" ? explainRule(payload.rule) : "";
+    typeof payload.rule === "string" ? t(explainRule(payload.rule)) : "";
 
   return (
     <li className="grid grid-cols-[16px_1fr] gap-3">

@@ -56,7 +56,7 @@ export function PendingDecision({
         onSuccess: () =>
           toast.success(approved ? "Ação aprovada" : "Ação recusada"),
         onError: (error) =>
-          toast.error("Não foi possível registrar a decisão", {
+          toast.error(t("runs.decisionFailed"), {
             description: error instanceof Error ? error.message : undefined,
           }),
       },
@@ -85,7 +85,7 @@ export function PendingDecision({
               values={{
                 tool: approval.tool,
                 why: explainRule(approval.rule)
-                  ? ` — ${explainRule(approval.rule)}`
+                  ? ` — ${t(explainRule(approval.rule))}`
                   : ".",
               }}
               components={{
@@ -122,7 +122,7 @@ export function PendingDecision({
           <div className="mt-auto flex gap-2 pt-2">
             <ConfirmAction
               label="Aprovar"
-              title="Aprovar esta ação?"
+              title={t("runs.approveThis")}
               description={`A ferramenta ${approval.tool} será executada e o efeito ficará registrado na trilha em seu nome.`}
               disabled={decide.isPending}
               onConfirm={() => submit(true)}

@@ -18,10 +18,7 @@ export function ScopeSection({
   const covered = draft.effects ?? [];
 
   return (
-    <Section
-      title="Escopo"
-      hint="O que a regra alcança antes de qualquer condição."
-    >
+    <Section title="Escopo" hint={t("policies.scopeReach")}>
       <Labelled label="Ferramenta" htmlFor="resource">
         <Input
           id="resource"

@@ -56,7 +56,7 @@ export function TrailFold({ steps, last }: { steps: Step[]; last: boolean }) {
                   <Mono dim className="text-2xs">
                     #{step.seq}
                   </Mono>
-                  {summaryOf(step)}
+                  {t(summaryOf(step))}
                 </li>
               ))}
             </ul>

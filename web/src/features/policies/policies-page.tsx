@@ -37,8 +37,8 @@ export function PoliciesPage() {
     <>
       <PageHeader
         icon={PAGE_ICONS.policies}
-        title="Políticas"
-        description="As regras que o Portão avalia em todo passo de agente. Uma política em modo monitorar é avaliada, registrada, e não muda nada."
+        title={t("nav.policies")}
+        description={t("policies.subtitle")}
       >
         <Button size="sm" asChild>
           <Link to="/policies/new">
@@ -57,17 +57,17 @@ export function PoliciesPage() {
         <Figure
           label="Monitorando"
           value={String(tally.monitoring)}
-          note="avaliadas, não obedecidas"
+          note={t("policies.evaluatedNotObeyed")}
         />
         <Figure
-          label="Negações"
+          label={t("policies.denials")}
           value={String(tally.denied)}
-          note="nos últimos 7 dias"
+          note={t("policies.last7Days")}
         />
         <Figure
-          label="Escalações"
+          label={t("policies.escalations")}
           value={String(tally.escalated)}
-          note="nos últimos 7 dias"
+          note={t("policies.last7Days")}
         />
       </div>
 
@@ -97,8 +97,8 @@ export function PoliciesPage() {
           <div className="p-4">
             <EmptyState
               icon={<Scale className="size-6" />}
-              title="Nenhuma política escrita"
-              hint="Sem regras escritas, vale o padrão embutido: leitura passa, escrita pede aprovação humana, e efeito destrutivo ou financeiro é negado. Uma política escrita aperta esse padrão — ou abre uma exceção com o nome de alguém nela."
+              title={t("policies.noneWritten")}
+              hint={t("policies.emptyHint")}
             />
           </div>
         ) : (

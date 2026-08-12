@@ -29,7 +29,9 @@ export function useSignInOptions() {
   return useQuery({
     queryKey: providerKeys.all,
     queryFn: async (): Promise<SignInOptions> => {
-      const response = await fetch("/auth/providers", { credentials: "same-origin" });
+      const response = await fetch("/auth/providers", {
+        credentials: "same-origin",
+      });
       if (!response.ok) throw new ApiError(response.status);
       return (await response.json()) as SignInOptions;
     },

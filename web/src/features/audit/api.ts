@@ -21,7 +21,9 @@ export function useAudit(filters: AuditFilters) {
     queryKey: ["audit", scope.key, filters] as const,
     queryFn: async () =>
       unwrap(
-        await api.GET("/audit", { params: { query: { ...scope.params, ...filters, limit: 100 } } }),
+        await api.GET("/audit", {
+          params: { query: { ...scope.params, ...filters, limit: 100 } },
+        }),
       ),
   });
 }

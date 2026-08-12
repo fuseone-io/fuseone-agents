@@ -32,7 +32,9 @@ beforeEach(() => {
 
 describe("the trail's phases", () => {
   it("separates what started the run from what it then did", () => {
-    const groups = buildTrail([step("run_started"), ...routineCycle()], { filter: "all" });
+    const groups = buildTrail([step("run_started"), ...routineCycle()], {
+      filter: "all",
+    });
 
     expect(groups[0]?.phase).toBe("input");
     expect(groups[0]?.entries).toHaveLength(2); // run_started, planned
@@ -43,7 +45,12 @@ describe("the trail's phases", () => {
     // The decision the reader is looking for is the gate's: it is what
     // explains why a human was called at all.
     const groups = buildTrail(
-      [step("run_started"), step("planned"), step("gate_decided", ESCALATE), step("approval_requested")],
+      [
+        step("run_started"),
+        step("planned"),
+        step("gate_decided", ESCALATE),
+        step("approval_requested"),
+      ],
       { filter: "all" },
     );
 
@@ -72,9 +79,12 @@ describe("folding routine steps", () => {
     // An eighteen-event run must not read as eighteen identical blocks: the
     // eye should land on the decisions, not on the bookkeeping. An allowed
     // read is bookkeeping, gate decision included.
-    const groups = buildTrail([step("run_started"), ...routineCycle(), ...routineCycle()], {
-      filter: "all",
-    });
+    const groups = buildTrail(
+      [step("run_started"), ...routineCycle(), ...routineCycle()],
+      {
+        filter: "all",
+      },
+    );
 
     const folds = entriesOf(groups).filter((e) => e.kind === "fold");
     expect(folds).toHaveLength(1);
@@ -91,15 +101,20 @@ describe("folding routine steps", () => {
       { filter: "all" },
     );
 
-    const folded = entriesOf(groups).flatMap((e) => (e.kind === "fold" ? e.steps : []));
+    const folded = entriesOf(groups).flatMap((e) =>
+      e.kind === "fold" ? e.steps : [],
+    );
     expect(folded.map((s) => s.seq)).not.toContain(escalation.seq);
     expect(folded.map((s) => s.seq)).not.toContain(request.seq);
   });
 
   it("leaves a short run of steps alone rather than hiding two things behind a fold", () => {
-    const groups = buildTrail([step("run_started"), step("planned"), step("gate_decided", ALLOW)], {
-      filter: "all",
-    });
+    const groups = buildTrail(
+      [step("run_started"), step("planned"), step("gate_decided", ALLOW)],
+      {
+        filter: "all",
+      },
+    );
 
     expect(entriesOf(groups).every((e) => e.kind === "step")).toBe(true);
   });
@@ -107,26 +122,42 @@ describe("folding routine steps", () => {
 
 describe("the trail's filters", () => {
   it("narrows to the calls the agent made", () => {
-    const groups = buildTrail([step("run_started"), ...routineCycle()], { filter: "tools" });
+    const groups = buildTrail([step("run_started"), ...routineCycle()], {
+      filter: "tools",
+    });
 
-    const kinds = entriesOf(groups).flatMap((e) => (e.kind === "step" ? [e.step.kind] : []));
+    const kinds = entriesOf(groups).flatMap((e) =>
+      e.kind === "step" ? [e.step.kind] : [],
+    );
     expect(new Set(kinds)).toEqual(new Set(["tool_called", "tool_returned"]));
   });
 
   it("narrows to what the gate and the humans decided", () => {
     const groups = buildTrail(
-      [step("run_started"), ...routineCycle(), step("gate_decided", ESCALATE), step("approval_requested")],
+      [
+        step("run_started"),
+        ...routineCycle(),
+        step("gate_decided", ESCALATE),
+        step("approval_requested"),
+      ],
       { filter: "policy" },
     );
 
-    const kinds = entriesOf(groups).flatMap((e) => (e.kind === "step" ? [e.step.kind] : []));
-    expect(new Set(kinds)).toEqual(new Set(["gate_decided", "approval_requested"]));
+    const kinds = entriesOf(groups).flatMap((e) =>
+      e.kind === "step" ? [e.step.kind] : [],
+    );
+    expect(new Set(kinds)).toEqual(
+      new Set(["gate_decided", "approval_requested"]),
+    );
   });
 
   it("never folds inside a narrowed trail, where every remaining step is the point", () => {
-    const groups = buildTrail([step("run_started"), ...routineCycle(), ...routineCycle()], {
-      filter: "tools",
-    });
+    const groups = buildTrail(
+      [step("run_started"), ...routineCycle(), ...routineCycle()],
+      {
+        filter: "tools",
+      },
+    );
 
     expect(entriesOf(groups).every((e) => e.kind === "step")).toBe(true);
   });

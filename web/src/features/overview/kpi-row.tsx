@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRunStats } from "@/features/runs/api";
 import { useThroughput } from "@/features/overview/api";
@@ -14,6 +15,7 @@ import { formatCost, formatDurationMs } from "@/lib/format";
  * to invent the comparison, and they will invent a flattering one.
  */
 export function KpiRow({ windows }: { windows: Windows }) {
+  const { t } = useTranslation();
   const today = useRunStats({
     since: windows.current.since,
     until: windows.current.until,
@@ -47,7 +49,7 @@ export function KpiRow({ windows }: { windows: Windows }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <OverviewKpi
-        label="Execuções hoje"
+        label={t("overview.runsToday")}
         value={String(runs)}
         delta={runsDelta}
         // "vs ontem" beside nothing invites the reader to supply the missing
@@ -82,7 +84,7 @@ export function KpiRow({ windows }: { windows: Windows }) {
         note={
           waiting > 0
             ? `${waiting} esperando uma pessoa`
-            : "nenhuma esperando decisão"
+            : t("overview.noneWaiting")
         }
         tone={blocked > 0 ? "bad" : "neutral"}
         trend={columns.map((c) => c.byState.blocked)}

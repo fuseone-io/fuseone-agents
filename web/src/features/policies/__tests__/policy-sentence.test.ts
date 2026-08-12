@@ -24,7 +24,9 @@ describe("the draft sentence", () => {
     // The two are separate implementations of one thing, which is the risk
     // this test exists to bound. The server's version is the one shown beside
     // a stored rule; this one only exists while a draft has been nowhere.
-    const got = draftSentence(draft({ resource: "crm.reply", effects: ["write"] }));
+    const got = draftSentence(
+      draft({ resource: "crm.reply", effects: ["write"] }),
+    );
 
     // Taken from the Go side's own test: internal/domain/policy_test.go.
     expect(got).toBe("crm.reply · write → negar");
@@ -62,8 +64,12 @@ describe("what is about to change", () => {
   it("sees a condition that changed inside a list", () => {
     // A rule whose threshold moved from 100 to 10 is a different rule, and a
     // diff that only counted list length would call it unchanged.
-    const before = draft({ conditions: [{ field: "args.rows", op: "gt", value: "100" }] });
-    const after = draft({ conditions: [{ field: "args.rows", op: "gt", value: "10" }] });
+    const before = draft({
+      conditions: [{ field: "args.rows", op: "gt", value: "100" }],
+    });
+    const after = draft({
+      conditions: [{ field: "args.rows", op: "gt", value: "10" }],
+    });
 
     expect(changesBetween(before, after)).toHaveLength(1);
   });

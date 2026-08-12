@@ -13,7 +13,9 @@ export const EFFECTS: Record<string, { label: string; className: string }> = {
 };
 
 export function effectOf(policy: Policy): { label: string; className: string } {
-  return EFFECTS[policy.effect] ?? { label: policy.effect, className: "bg-muted" };
+  return (
+    EFFECTS[policy.effect] ?? { label: policy.effect, className: "bg-muted" }
+  );
 }
 
 /**

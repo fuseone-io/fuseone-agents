@@ -13,31 +13,38 @@ import type { Step, StepKind } from "@/lib/api/client";
  */
 
 const TITLES: Record<StepKind, string> = {
-  run_started: "Execução iniciada",
-  planned: "Modelo propôs",
-  gate_decided: "Portão de política decidiu",
+  run_started: "runs.storyStarted",
+  planned: "runs.storyProposed",
+  gate_decided: "runs.storyGateDecided",
   budget_reserved: "Orçamento reservado",
   tool_called: "Ferramenta chamada",
   tool_returned: "Ferramenta respondeu",
   budget_reconciled: "Orçamento reconciliado",
-  approval_requested: "Aguardando aprovação humana",
-  approval_decided: "Decisão humana registrada",
+  approval_requested: "runs.storyAwaitingHuman",
+  approval_decided: "runs.storyHumanDecided",
   compensated: "Efeito revertido",
-  failed: "Execução falhou",
-  parked: "Execução estacionada",
-  run_finished: "Execução concluída",
+  failed: "runs.storyFailed",
+  parked: "runs.storyParked",
+  run_finished: "runs.storyFinished",
 };
 
 const VERDICT_CHIP: Record<string, { text: string; className: string }> = {
   allow: { text: "permitir", className: "bg-success-surface text-success" },
-  constrain: { text: "restringir", className: "bg-warning-surface text-warning" },
-  require_approval: { text: "escalar", className: "bg-warning-surface text-warning" },
+  constrain: {
+    text: "restringir",
+    className: "bg-warning-surface text-warning",
+  },
+  require_approval: {
+    text: "escalar",
+    className: "bg-warning-surface text-warning",
+  },
   block: { text: "bloquear", className: "bg-danger-surface text-danger" },
 };
 
 const PARKED: Record<string, string> = {
-  budget_exhausted: "o teto de custo foi atingido; elevar o limite retoma daqui",
-  no_progress: "o modelo insistiu numa chamada recusada e a execução foi interrompida",
+  budget_exhausted:
+    "o teto de custo foi atingido; elevar o limite retoma daqui",
+  no_progress: "runs.storyInsisted",
 };
 
 export interface Chip {
@@ -57,7 +64,11 @@ export function chipsOf(step: Step): Chip[] {
   if (typeof payload.tool === "string") chips.push({ text: payload.tool });
   const effect = effectOf(step);
   if (effect && effect !== "read" && step.kind === "tool_called") {
-    chips.push({ text: effect, pill: true, className: "bg-warning-surface text-warning" });
+    chips.push({
+      text: effect,
+      pill: true,
+      className: "bg-warning-surface text-warning",
+    });
   }
   if (typeof payload.model === "string") chips.push({ text: payload.model });
 
@@ -66,7 +77,11 @@ export function chipsOf(step: Step): Chip[] {
     chips.push({ ...VERDICT_CHIP[verdict], pill: true });
   }
   for (const label of step.labels ?? []) {
-    chips.push({ text: label, pill: true, className: "bg-warning-surface text-warning" });
+    chips.push({
+      text: label,
+      pill: true,
+      className: "bg-warning-surface text-warning",
+    });
   }
   return chips;
 }
@@ -76,10 +91,12 @@ export function detailOf(step: Step): string {
 
   switch (step.kind) {
     case "run_started":
-      return typeof payload.trigger === "string" ? `gatilho ${payload.trigger}` : "";
+      return typeof payload.trigger === "string"
+        ? `gatilho ${payload.trigger}`
+        : "";
 
     case "gate_decided": {
-      // Never "recusado por política": the rule is named and explained, so the
+      // Never "runs.storyRefused": the rule is named and explained, so the
       // reader knows what to change. An allowed call has no rule to explain —
       // it says which effect was inside which pack, which is the fact an
       // auditor is checking.
@@ -96,7 +113,10 @@ export function detailOf(step: Step): string {
         : "";
 
     case "budget_reconciled": {
-      const released = typeof payload.released_micros === "number" ? payload.released_micros : 0;
+      const released =
+        typeof payload.released_micros === "number"
+          ? payload.released_micros
+          : 0;
       return `${formatCost(step.cost)} consumidos · ${formatMicros(released)} devolvidos`;
     }
 
@@ -114,7 +134,9 @@ export function detailOf(step: Step): string {
     }
 
     case "failed":
-      return typeof payload.message === "string" ? payload.message : String(payload.code ?? "");
+      return typeof payload.message === "string"
+        ? payload.message
+        : String(payload.code ?? "");
 
     case "run_finished":
       return typeof payload.outcome === "string" ? payload.outcome : "";
@@ -141,7 +163,9 @@ export function summaryOf(step: Step): string {
       return `Ferramenta respondeu${tool}`;
     case "budget_reserved":
       return `Orçamento reservado${
-        typeof payload.tokens === "number" ? ` · ${formatTokens(payload.tokens)} tokens` : ""
+        typeof payload.tokens === "number"
+          ? ` · ${formatTokens(payload.tokens)} tokens`
+          : ""
       }`;
     case "budget_reconciled":
       return `Orçamento reconciliado · ${formatCost(step.cost)}`;

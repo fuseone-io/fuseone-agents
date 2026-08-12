@@ -38,7 +38,7 @@ export function EventsPanel() {
         <EmptyState
           icon={<ScrollText className="size-6" />}
           title="Nada mudou ainda"
-          hint="Toda mudança de configuração aparece aqui com quem fez e quando: classificar uma ferramenta, cadastrar um provedor, remover um servidor."
+          hint={t("admin.eventsHint")}
         />
       ) : (
         <ul className="flex flex-col">

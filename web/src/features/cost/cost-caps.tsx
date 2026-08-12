@@ -28,7 +28,7 @@ export function CostCaps({ byArea }: { byArea?: CostRollup }) {
         <EmptyState
           icon={<Gauge className="size-6" />}
           title="Nenhum teto configurado"
-          hint="Sem teto por escopo, o único limite é o de cada agente por execução. Configure um em Administração → Tetos."
+          hint={t("cost.noCapsHint")}
         />
       </Panel>
     );

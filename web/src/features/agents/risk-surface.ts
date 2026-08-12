@@ -14,9 +14,17 @@ export function riskSurface(tools: string[], catalogue: Tool[]): string[] {
   }
 
   const effects = new Map(catalogue.map((t) => [t.toolId, t.effect]));
-  const untrusted = new Set(catalogue.filter((t) => t.untrusted).map((t) => t.toolId));
+  const untrusted = new Set(
+    catalogue.filter((t) => t.untrusted).map((t) => t.toolId),
+  );
 
-  const byEffect = { read: 0, write: 0, destructive: 0, financial: 0, unknown: 0 };
+  const byEffect = {
+    read: 0,
+    write: 0,
+    destructive: 0,
+    financial: 0,
+    unknown: 0,
+  };
   let bringsOutside = 0;
 
   for (const tool of tools) {
@@ -27,7 +35,9 @@ export function riskSurface(tools: string[], catalogue: Tool[]): string[] {
 
   const lines: string[] = [];
   if (byEffect.read > 0) {
-    lines.push(`Lê de ${byEffect.read} ${plural(byEffect.read, "ferramenta", "ferramentas")}.`);
+    lines.push(
+      `Lê de ${byEffect.read} ${plural(byEffect.read, "ferramenta", "ferramentas")}.`,
+    );
   }
   if (byEffect.write > 0) {
     lines.push(
@@ -35,7 +45,9 @@ export function riskSurface(tools: string[], catalogue: Tool[]): string[] {
     );
   }
   if (byEffect.destructive > 0) {
-    lines.push(`Apaga ou substitui de forma difícil de desfazer em ${byEffect.destructive}.`);
+    lines.push(
+      `Apaga ou substitui de forma difícil de desfazer em ${byEffect.destructive}.`,
+    );
   }
   if (byEffect.financial > 0) {
     lines.push(`Move dinheiro em ${byEffect.financial}.`);

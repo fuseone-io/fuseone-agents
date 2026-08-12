@@ -21,7 +21,10 @@ import {
 } from "@/features/admin/api";
 import { formatMicros } from "@/lib/format";
 
-const PERIOD: Record<string, string> = { daily: "por dia", monthly: "por mês" };
+const PERIOD: Record<string, string> = {
+  daily: "por dia",
+  monthly: "admin.perMonth",
+};
 
 export function BudgetsPanel() {
   const { t } = useTranslation();
@@ -47,7 +50,7 @@ export function BudgetsPanel() {
         <EmptyState
           icon={<Gauge className="size-6" />}
           title="Nenhum teto configurado"
-          hint="Sem teto por escopo, o único limite é o que cada especificação de agente define por execução — ninguém consegue limitar uma área. Ao atingir um teto a execução pausa e continua depois."
+          hint={t("admin.noCeilingHint")}
         />
       ) : (
         <ul className="flex flex-col gap-2">
@@ -75,6 +78,7 @@ function BudgetRow({
   budget: ScopeBudget;
   onEdit: () => void;
 }) {
+  const { t } = useTranslation();
   const remove = useDeleteBudget();
 
   return (
@@ -99,13 +103,13 @@ function BudgetRow({
       </Badge>
       <RemoveButton
         title={`Remover o teto de ${scopeLabel(budget)}?`}
-        description="As execuções desse escopo passam a ser limitadas apenas pelo teto por execução de cada agente. Fica registrado na trilha."
+        description={t("admin.removeCeiling")}
         onConfirm={() =>
           remove.mutate(scopePath(budget), {
             onSuccess: () => toast.success("Teto removido"),
             onError: (e) =>
               toast.error(
-                e instanceof Error ? e.message : "Não foi possível remover",
+                e instanceof Error ? e.message : t("common.removeFailed"),
               ),
           })
         }

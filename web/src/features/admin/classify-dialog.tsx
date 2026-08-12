@@ -23,12 +23,12 @@ import {
 import { useClassifyTool, type Effect, type Tool } from "@/features/admin/api";
 
 const EFFECTS: { value: Effect; label: string; hint: string }[] = [
-  { value: "read", label: "Leitura", hint: "Consulta dados. Não muda nada." },
-  { value: "write", label: "Escrita", hint: "Altera algo, e é reversível." },
+  { value: "read", label: "Leitura", hint: "admin.effectRead" },
+  { value: "write", label: "Escrita", hint: "admin.effectWrite" },
   {
     value: "destructive",
     label: "Destrutivo",
-    hint: "Apaga ou substitui de forma difícil de desfazer.",
+    hint: "admin.effectDestructive",
   },
   { value: "financial", label: "Financeiro", hint: "Move dinheiro." },
 ];
@@ -67,7 +67,7 @@ export function ClassifyDialog({
       onClose();
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Não foi possível registrar",
+        error instanceof Error ? error.message : t("admin.recordFailed"),
       );
     }
   }
@@ -95,7 +95,7 @@ export function ClassifyDialog({
               <SelectContent>
                 {EFFECTS.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
-                    {option.label} — {option.hint}
+                    {t(option.label)} — {t(option.hint)}
                   </SelectItem>
                 ))}
               </SelectContent>

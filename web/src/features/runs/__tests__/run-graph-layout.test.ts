@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { edgePorts, placeGraph, PER_ROW } from "@/features/runs/run-graph-layout";
+import {
+  edgePorts,
+  placeGraph,
+  PER_ROW,
+} from "@/features/runs/run-graph-layout";
 import type { FlowNode } from "@/features/runs/run-graph";
 
 const nodes = (n: number): FlowNode[] =>
@@ -40,7 +44,9 @@ describe("placing a run on the canvas", () => {
 
 describe("where an edge leaves and enters", () => {
   it("leaves on the right when the next node is to the right", () => {
-    expect(edgePorts({ id: "a", x: 0, y: 0 }, { id: "b", x: 264, y: 0 })).toEqual({
+    expect(
+      edgePorts({ id: "a", x: 0, y: 0 }, { id: "b", x: 264, y: 0 }),
+    ).toEqual({
       source: "right",
       target: "left",
     });
@@ -49,14 +55,18 @@ describe("where an edge leaves and enters", () => {
   it("leaves on the left when the row reads backwards", () => {
     // Anchored right-to-left regardless, the edge would exit the node, loop
     // around the outside of the canvas and come back — which is what it did.
-    expect(edgePorts({ id: "a", x: 264, y: 0 }, { id: "b", x: 0, y: 0 })).toEqual({
+    expect(
+      edgePorts({ id: "a", x: 264, y: 0 }, { id: "b", x: 0, y: 0 }),
+    ).toEqual({
       source: "left",
       target: "right",
     });
   });
 
   it("drops straight down at the turn of a row", () => {
-    expect(edgePorts({ id: "a", x: 792, y: 0 }, { id: "b", x: 792, y: 128 })).toEqual({
+    expect(
+      edgePorts({ id: "a", x: 792, y: 0 }, { id: "b", x: 792, y: 128 }),
+    ).toEqual({
       source: "bottom",
       target: "top",
     });

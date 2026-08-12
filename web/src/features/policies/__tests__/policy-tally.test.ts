@@ -4,8 +4,12 @@ import type { Policy } from "@/lib/api/client";
 
 function policy(over: Partial<Policy>): Policy {
   return {
-    code: "POL-1", name: "x", sentence: "x → negar",
-    effect: "deny", mode: "enforce", enabled: true,
+    code: "POL-1",
+    name: "x",
+    sentence: "x → negar",
+    effect: "deny",
+    mode: "enforce",
+    enabled: true,
     ...over,
   };
 }

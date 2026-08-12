@@ -5,7 +5,10 @@ function captureRequests() {
   const seen: Request[] = [];
   vi.stubGlobal("fetch", async (request: Request) => {
     seen.push(request);
-    return new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } });
+    return new Response("{}", {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
   });
   return seen;
 }

@@ -1,11 +1,12 @@
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { TrailFilter } from "@/features/runs/trail-model";
 
 const OPTIONS: { value: TrailFilter; label: string }[] = [
-  { value: "all", label: "Tudo" },
-  { value: "tools", label: "Ferramentas" },
-  { value: "policy", label: "Política" },
+  { value: "all", label: "runs.filterAll" },
+  { value: "tools", label: "runs.filterTools" },
+  { value: "policy", label: "runs.policyFilter" },
 ];
 
 /**
@@ -22,6 +23,7 @@ export function TrailFilters({
   value: TrailFilter;
   onChange: (value: TrailFilter) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div
       role="radiogroup"
@@ -43,7 +45,7 @@ export function TrailFilters({
           )}
           onClick={() => onChange(option.value)}
         >
-          {option.label}
+          {t(option.label)}
         </Button>
       ))}
     </div>

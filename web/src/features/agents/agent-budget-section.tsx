@@ -24,8 +24,8 @@ export function AgentBudgetSection({
 
   return (
     <Section
-      title="Teto por execução"
-      hint="Zero é sem teto, o que é diferente de um teto de zero."
+      title={t("agents.perRunCeiling")}
+      hint={t("agents.zeroIsNoCeiling")}
     >
       <div className="grid gap-3 sm:grid-cols-4">
         <Labelled label="Custo (micros)" htmlFor="budget-micros">

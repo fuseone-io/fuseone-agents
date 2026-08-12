@@ -65,7 +65,10 @@ const VERDICT_ICON: Record<string, LucideIcon> = {
   block: ShieldX,
 };
 
-export function tileOf(step: Step, live: boolean): { icon: LucideIcon; tone: TileTone } {
+export function tileOf(
+  step: Step,
+  live: boolean,
+): { icon: LucideIcon; tone: TileTone } {
   const verdict = verdictOf(step);
   if (verdict) {
     return {

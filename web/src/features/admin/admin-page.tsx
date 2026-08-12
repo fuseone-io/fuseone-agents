@@ -18,8 +18,8 @@ export function AdminPage() {
     <>
       <PageHeader
         icon={PAGE_ICONS.admin}
-        title="Administração"
-        description="O que a plataforma conversa, o que cada ferramenta faz com o mundo, e quem mudou o quê."
+        title={t("nav.admin")}
+        description={t("admin.subtitle")}
       />
 
       <Tabs defaultValue="tools" className="min-h-0 flex-1">

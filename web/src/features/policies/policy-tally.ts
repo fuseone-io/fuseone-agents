@@ -18,7 +18,12 @@ export interface Tally {
 
 export function tallyOf(policies: Policy[]): Tally {
   const tally: Tally = {
-    enforcing: 0, monitoring: 0, disabled: 0, hits: 0, denied: 0, escalated: 0,
+    enforcing: 0,
+    monitoring: 0,
+    disabled: 0,
+    hits: 0,
+    denied: 0,
+    escalated: 0,
   };
 
   for (const policy of policies) {

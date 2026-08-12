@@ -20,8 +20,7 @@ export type TrailPhase = "input" | "execution" | "human" | "end";
 export type TrailFilter = "all" | "tools" | "policy";
 
 export type TrailEntry =
-  | { kind: "step"; step: Step }
-  | { kind: "fold"; steps: Step[] };
+  { kind: "step"; step: Step } | { kind: "fold"; steps: Step[] };
 
 export interface TrailGroup {
   phase: TrailPhase;
@@ -65,7 +64,10 @@ export function keptSteps(steps: Step[], filter: TrailFilter): Step[] {
   return steps.filter(KEPT[filter]);
 }
 
-export function buildTrail(steps: Step[], opts: { filter: TrailFilter }): TrailGroup[] {
+export function buildTrail(
+  steps: Step[],
+  opts: { filter: TrailFilter },
+): TrailGroup[] {
   const groups: TrailGroup[] = [];
 
   let decided = false;

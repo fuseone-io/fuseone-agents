@@ -82,7 +82,9 @@ function durableOrMemory(): Storage {
 
 /** A grant over a whole company reaches every area in it. */
 function reaches(grants: MeGrant[], company: string, area: string): boolean {
-  return grants.some((g) => g.company === company && (g.area === "" || g.area === area));
+  return grants.some(
+    (g) => g.company === company && (g.area === "" || g.area === area),
+  );
 }
 
 /**
@@ -90,7 +92,10 @@ function reaches(grants: MeGrant[], company: string, area: string): boolean {
  * filter for a company named "", and the endpoints read a present parameter as
  * a scope to check.
  */
-export function scopeParamsOf({ company, area }: Scope): { company?: string; area?: string } {
+export function scopeParamsOf({ company, area }: Scope): {
+  company?: string;
+  area?: string;
+} {
   if (company === "") return {};
   return area === "" ? { company } : { company, area };
 }

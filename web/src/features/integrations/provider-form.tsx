@@ -72,7 +72,7 @@ export function ProviderForm({
       onClose();
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Não foi possível salvar",
+        error instanceof Error ? error.message : t("common.saveFailed"),
       );
     }
   }
@@ -175,8 +175,8 @@ export function ProviderForm({
                   </FormControl>
                   <FormDescription>
                     {provider?.hasKey
-                      ? "Já existe uma guardada. Deixe em branco para mantê-la."
-                      : "Fica selada no cofre; nem esta tela consegue lê-la de volta."}
+                      ? t("integrations.credentialKept")
+                      : t("integrations.credentialVault")}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

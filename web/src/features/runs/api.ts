@@ -11,7 +11,8 @@ export const runKeys = {
   detail: (runId: string) => [...runKeys.all, "detail", runId] as const,
   steps: (runId: string) => [...runKeys.all, "steps", runId] as const,
   verify: (runId: string) => [...runKeys.all, "verify", runId] as const,
-  content: (runId: string, seq: number) => [...runKeys.all, "content", runId, seq] as const,
+  content: (runId: string, seq: number) =>
+    [...runKeys.all, "content", runId, seq] as const,
 };
 
 export interface RunFilters {
@@ -67,7 +68,11 @@ export function useRunSteps(runId: string) {
  * It is fetched when somebody opens the step that needs it, which is why this
  * takes an `enabled` rather than being called for every row.
  */
-export function useStepContent(runId: string, seq: number | undefined, enabled = true) {
+export function useStepContent(
+  runId: string,
+  seq: number | undefined,
+  enabled = true,
+) {
   return useQuery({
     queryKey: runKeys.content(runId, seq ?? 0),
     enabled: enabled && seq !== undefined,
@@ -98,7 +103,11 @@ export function useVerifyRun(runId: string) {
 export function useDecideApproval(runId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { approved: boolean; atSeq: number; note?: string }) =>
+    mutationFn: async (input: {
+      approved: boolean;
+      atSeq: number;
+      note?: string;
+    }) =>
       unwrap(
         await api.POST("/runs/{runId}/approvals", {
           params: { path: { runId } },

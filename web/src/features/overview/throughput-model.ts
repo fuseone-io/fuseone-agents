@@ -21,7 +21,11 @@ export interface Column {
   micros: number;
 }
 
-export function columnsFor(buckets: ThroughputBucket[], since: string, hours = 24): Column[] {
+export function columnsFor(
+  buckets: ThroughputBucket[],
+  since: string,
+  hours = 24,
+): Column[] {
   const start = new Date(since);
   const byHour = new Map<number, ThroughputBucket>();
   for (const bucket of buckets) {
@@ -36,7 +40,11 @@ export function columnsFor(buckets: ThroughputBucket[], since: string, hours = 2
 
 function columnOf(at: Date, bucket: ThroughputBucket | undefined): Column {
   const byState: Record<AgentState, number> = {
-    draft: 0, running: 0, waiting: 0, blocked: 0, done: 0,
+    draft: 0,
+    running: 0,
+    waiting: 0,
+    blocked: 0,
+    done: 0,
   };
   for (const [phase, count] of Object.entries(bucket?.byPhase ?? {})) {
     byState[stateOfPhase(phase as never)] += count;

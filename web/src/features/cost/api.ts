@@ -21,7 +21,10 @@ export const costKeys = {
 export function useCostWindow(days = 30) {
   return useState(() => {
     const to = Math.floor(Date.now() / HOUR_MS) * HOUR_MS;
-    return { from: new Date(to - days * DAY_MS).toISOString(), to: new Date(to).toISOString() };
+    return {
+      from: new Date(to - days * DAY_MS).toISOString(),
+      to: new Date(to).toISOString(),
+    };
   })[0];
 }
 
@@ -34,6 +37,10 @@ export function useCostRollup(
   return useQuery({
     queryKey: costKeys.rollup(scope.key, from, to, groupBy),
     queryFn: async () =>
-      unwrap(await api.GET("/cost", { params: { query: { ...scope.params, from, to, groupBy } } })),
+      unwrap(
+        await api.GET("/cost", {
+          params: { query: { ...scope.params, from, to, groupBy } },
+        }),
+      ),
   });
 }

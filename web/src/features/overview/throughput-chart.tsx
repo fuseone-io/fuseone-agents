@@ -17,7 +17,7 @@ const PLOT = 132;
 const AXIS = 20;
 const GRIDLINES = 4;
 const LABEL: Partial<Record<AgentState, string>> = {
-  done: "concluídas",
+  done: "overview.doneLegend",
   waiting: "em curso",
   blocked: "paradas",
 };
@@ -211,7 +211,7 @@ function Bar({
                 aria-hidden
                 className={cn("size-1.5 rounded-[2px]", STATE_DOT[state])}
               />
-              {LABEL[state]}
+              {t(LABEL[state] ?? "")}
               <span className="ml-auto font-mono tabular-nums">
                 {column.byState[state]}
               </span>

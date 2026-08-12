@@ -48,7 +48,7 @@ export function AgentsPage() {
       <PageHeader
         icon={PAGE_ICONS.agents}
         title="Agentes"
-        description="Cada versão publicada é imutável: o identificador é o resumo do conteúdo, então o texto que uma execução rodou pode sempre ser lido de volta."
+        description={t("agents.subtitle")}
       >
         <Button size="sm" asChild>
           <Link to="/agents/new">
@@ -71,22 +71,22 @@ export function AgentsPage() {
       </Tabs>
 
       <Toolbar
-        placeholder="Buscar por nome ou identificador"
+        placeholder="agents.searchPlaceholder"
         value={search}
         onChange={setSearch}
       >
         <FilterSelect
-          label="Filtrar por área"
+          label={t("agents.filterByArea")}
           value={area}
           options={[
-            { value: "all", label: "Todas as áreas" },
+            { value: "all", label: t("agents.allAreas") },
             ...areas.map((a) => ({ value: a, label: a })),
           ]}
           onChange={setArea}
           width={170}
         />
         <FilterSelect
-          label="Filtrar por estado"
+          label="agents.filterByState"
           value={state}
           options={STATES}
           onChange={(v) => setState(v as AgentState | "all")}
@@ -105,9 +105,7 @@ export function AgentsPage() {
             agents.length === 0 ? "Nenhum agente publicado" : "Nada encontrado"
           }
           hint={
-            agents.length === 0
-              ? "Agentes aparecem aqui quando um worker publica as definições que carregou. Cada publicação cria uma versão nova; a anterior continua legível."
-              : "Nenhum agente com esse nome, nessa área e nesse estado."
+            agents.length === 0 ? t("agents.emptyHint") : t("agents.noMatch")
           }
         />
       ) : (
@@ -128,11 +126,11 @@ export function AgentsPage() {
 // These are the states of its runs, which is what an operator is actually
 // asking about: what is going, what is stuck, what has never run.
 const STATES: FilterOption[] = [
-  { value: "all", label: "Todos os estados" },
-  { value: "running", label: "Em execução" },
+  { value: "all", label: "agents.allStates" },
+  { value: "running", label: "runs.phaseRunning" },
   { value: "waiting", label: "Esperando pessoa" },
   { value: "blocked", label: "Estacionado" },
-  { value: "done", label: "Última concluída" },
+  { value: "done", label: "agents.lastFinished" },
   { value: "draft", label: "Nunca executou" },
 ];
 

@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { formatDuration } from "@/lib/format";
 
 const START = "2026-08-11T12:00:00Z";
-const at = (seconds: number) => new Date(Date.parse(START) + seconds * 1000).toISOString();
+const at = (seconds: number) =>
+  new Date(Date.parse(START) + seconds * 1000).toISOString();
 
 describe("run duration", () => {
   it("reads coarsely, because the reader is comparing a column not timing a lap", () => {

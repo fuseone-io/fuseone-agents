@@ -21,9 +21,12 @@ describe("the agent draft", () => {
     // A cold load of /agents/{id}/edit renders before the query resolves. A
     // draft seeded only once shows a blank form for a real agent, and
     // publishing from it would replace the definition with empty fields.
-    const { result, rerender } = renderHook(({ loaded }) => useAgentDraft(loaded), {
-      initialProps: { loaded: undefined as AgentDetail | undefined },
-    });
+    const { result, rerender } = renderHook(
+      ({ loaded }) => useAgentDraft(loaded),
+      {
+        initialProps: { loaded: undefined as AgentDetail | undefined },
+      },
+    );
 
     expect(result.current.draft.name).toBe("");
     rerender({ loaded: cobranca });
@@ -35,9 +38,12 @@ describe("the agent draft", () => {
   });
 
   it("does not overwrite what somebody typed when the query refetches", () => {
-    const { result, rerender } = renderHook(({ loaded }) => useAgentDraft(loaded), {
-      initialProps: { loaded: undefined as AgentDetail | undefined },
-    });
+    const { result, rerender } = renderHook(
+      ({ loaded }) => useAgentDraft(loaded),
+      {
+        initialProps: { loaded: undefined as AgentDetail | undefined },
+      },
+    );
 
     rerender({ loaded: cobranca });
     act(() => result.current.patch({ name: "Cobrança firme" }));

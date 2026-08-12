@@ -7,7 +7,11 @@ export function useWebhooks(agentId: string) {
   return useQuery({
     queryKey: [...agentKeys.all, "webhooks", agentId] as const,
     queryFn: async () =>
-      unwrap(await api.GET("/agents/{agentId}/webhooks", { params: { path: { agentId } } })),
+      unwrap(
+        await api.GET("/agents/{agentId}/webhooks", {
+          params: { path: { agentId } },
+        }),
+      ),
   });
 }
 
@@ -31,7 +35,9 @@ export function useRotateWebhookSecret(agentId: string) {
     onSuccess: () => {
       // Only the armed state is worth refetching. The secret is not stored
       // anywhere it could be refetched from, which is the point.
-      void queryClient.invalidateQueries({ queryKey: [...agentKeys.all, "webhooks", agentId] });
+      void queryClient.invalidateQueries({
+        queryKey: [...agentKeys.all, "webhooks", agentId],
+      });
     },
   });
 }

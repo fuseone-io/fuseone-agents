@@ -9,7 +9,11 @@ import type { Policy } from "@/lib/api/client";
  * that it is in the trail and in support conversations, and a code that moved
  * would orphan every one of them.
  */
-export function useCode(creating: boolean, existing: Policy[], routeCode?: string) {
+export function useCode(
+  creating: boolean,
+  existing: Policy[],
+  routeCode?: string,
+) {
   const [code, setCode] = useState(() =>
     creating ? nextCode(existing) : (routeCode ?? ""),
   );

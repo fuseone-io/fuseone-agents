@@ -31,13 +31,13 @@ export function PolicySideRail({
         </Mono>
         <p className="text-xs text-muted-foreground">
           {draft.mode === "monitor"
-            ? "Vai ser avaliada em todo passo que o escopo cobre, registrada na trilha, e não vai mudar nenhuma decisão."
-            : "Vai valer no próximo passo de agente depois que os workers recarregarem o conjunto."}
+            ? t("policies.willBeMonitored")
+            : t("policies.willApplyAfterReload")}
         </p>
       </Card>
 
       {creating ? (
-        <Card title="Ordem de avaliação">
+        <Card title={t("policies.evaluationOrder")}>
           <p className="text-xs text-muted-foreground">
             {t("policies.mostRestrictiveWins")}
           </p>

@@ -18,8 +18,11 @@ export const BLANK: PolicyInput = {
 
 /** Everything the form edits, and whether it differs from what was loaded. */
 export function usePolicyDraft(loaded?: Policy) {
-  const [draft, setDraft] = useState<PolicyInput>(() => toInput(loaded) ?? BLANK);
-  const patch = (over: Partial<PolicyInput>) => setDraft((d) => ({ ...d, ...over }));
+  const [draft, setDraft] = useState<PolicyInput>(
+    () => toInput(loaded) ?? BLANK,
+  );
+  const patch = (over: Partial<PolicyInput>) =>
+    setDraft((d) => ({ ...d, ...over }));
 
   const original = toInput(loaded);
   const changes = original ? changesBetween(original, draft) : [];
@@ -59,7 +62,10 @@ export interface Change {
  * act: somebody should see that widening the reach is part of what they are
  * about to do, rather than discovering it from the runs it stops.
  */
-export function changesBetween(before: PolicyInput, after: PolicyInput): Change[] {
+export function changesBetween(
+  before: PolicyInput,
+  after: PolicyInput,
+): Change[] {
   const changes: Change[] = [];
   const compare = (field: string, from: unknown, to: unknown) => {
     const left = render(from);

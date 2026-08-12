@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { KpiCard } from "@/components/shared/kpi-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDurationMs } from "@/lib/format";
@@ -18,6 +19,7 @@ export function RunsKpis({
   stats?: RunStats;
   isLoading: boolean;
 }) {
+  const { t } = useTranslation();
   if (isLoading || !stats) {
     return (
       <div className="flex shrink-0 gap-3">
@@ -38,18 +40,18 @@ export function RunsKpis({
   return (
     <div className="flex shrink-0 gap-3">
       <KpiCard
-        label="Execuções"
+        label={t("runs.runs")}
         value={stats.total.toLocaleString("pt-BR")}
         delta={`${running.toLocaleString("pt-BR")} em andamento`}
       />
       <KpiCard
-        label="Concluídas"
+        label={t("runs.finishedPlural")}
         value={stats.total === 0 ? "—" : `${percent(finished, stats.total)}%`}
         delta={`${finished.toLocaleString("pt-BR")} de ${stats.total.toLocaleString("pt-BR")}`}
         trend={stats.total > 0 && finished === stats.total ? "up" : "flat"}
       />
       <KpiCard
-        label="Duração mediana"
+        label={t("runs.medianDuration")}
         value={
           stats.ended === 0
             ? "—"
@@ -59,16 +61,14 @@ export function RunsKpis({
         // three thousand are different claims.
         delta={
           stats.ended === 0
-            ? "nenhuma execução concluída ainda"
-            : `sobre ${stats.ended} ${stats.ended === 1 ? "concluída" : "concluídas"}`
+            ? t("runs.noneFinishedYet")
+            : `sobre ${stats.ended} ${stats.ended === 1 ? t("runs.finished") : t("overview.doneLegend")}`
         }
       />
       <KpiCard
         label="Esperando pessoa"
         value={waiting.toLocaleString("pt-BR")}
-        delta={
-          waiting === 0 ? "nada na fila" : "aprovação ou execução estacionada"
-        }
+        delta={waiting === 0 ? "nada na fila" : t("runs.approvalOrParked")}
         trend={waiting > 0 ? "down" : "flat"}
       />
     </div>

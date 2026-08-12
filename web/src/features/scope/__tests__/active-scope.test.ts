@@ -2,7 +2,11 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { scopeParamsOf, useActiveScope } from "@/features/scope/active-scope";
 import type { MeGrant } from "@/features/session/api";
 
-const grant = (company: string, area: string): MeGrant => ({ company, area, role: "author" });
+const grant = (company: string, area: string): MeGrant => ({
+  company,
+  area,
+  role: "author",
+});
 
 describe("the active scope", () => {
   beforeEach(() => useActiveScope.setState({ company: "", area: "" }));
@@ -13,12 +17,17 @@ describe("the active scope", () => {
 
   it("sends the company alone when the whole company is chosen", () => {
     useActiveScope.getState().choose({ company: "acme", area: "" });
-    expect(scopeParamsOf(useActiveScope.getState())).toEqual({ company: "acme" });
+    expect(scopeParamsOf(useActiveScope.getState())).toEqual({
+      company: "acme",
+    });
   });
 
   it("sends both when an area is chosen", () => {
     useActiveScope.getState().choose({ company: "acme", area: "cx" });
-    expect(scopeParamsOf(useActiveScope.getState())).toEqual({ company: "acme", area: "cx" });
+    expect(scopeParamsOf(useActiveScope.getState())).toEqual({
+      company: "acme",
+      area: "cx",
+    });
   });
 
   it("drops a stored scope the caller no longer reaches, rather than filtering every screen to nothing", () => {
@@ -30,6 +39,9 @@ describe("the active scope", () => {
   it("keeps an area chosen inside a company the caller holds wholesale", () => {
     useActiveScope.getState().choose({ company: "acme", area: "cx" });
     useActiveScope.getState().reconcile([grant("acme", "")]);
-    expect(useActiveScope.getState()).toMatchObject({ company: "acme", area: "cx" });
+    expect(useActiveScope.getState()).toMatchObject({
+      company: "acme",
+      area: "cx",
+    });
   });
 });

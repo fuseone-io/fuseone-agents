@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import {
   Select,
   SelectContent,
@@ -30,10 +31,11 @@ export function FilterSelect({
   onChange: (value: string) => void;
   width?: number;
 }) {
+  const { t } = useTranslation();
   return (
     <Select value={value} onValueChange={onChange}>
       <SelectTrigger
-        aria-label={label}
+        aria-label={t(label)}
         style={{ width }}
         className="h-8 shrink-0 gap-2 rounded-sm px-2.5 text-sm font-medium data-[size=default]:h-8"
       >
@@ -42,7 +44,7 @@ export function FilterSelect({
       <SelectContent>
         {options.map((option) => (
           <SelectItem key={option.value} value={option.value}>
-            {option.label}
+            {t(option.label)}
           </SelectItem>
         ))}
       </SelectContent>

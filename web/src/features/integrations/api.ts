@@ -21,14 +21,24 @@ export function useIntegrations() {
 export function usePutMCPServer() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { name: string; command: string; args: string[]; enabled: boolean }) =>
+    mutationFn: async (input: {
+      name: string;
+      command: string;
+      args: string[];
+      enabled: boolean;
+    }) =>
       unwrap(
         await api.PUT("/admin/integrations/mcp-servers/{name}", {
           params: { path: { name: input.name } },
-          body: { command: input.command, args: input.args, enabled: input.enabled },
+          body: {
+            command: input.command,
+            args: input.args,
+            enabled: input.enabled,
+          },
         }),
       ),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: integrationKeys.all }),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({ queryKey: integrationKeys.all }),
   });
 }
 
@@ -36,8 +46,13 @@ export function useDeleteMCPServer() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (name: string) =>
-      unwrap(await api.DELETE("/admin/integrations/mcp-servers/{name}", { params: { path: { name } } })),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: integrationKeys.all }),
+      unwrap(
+        await api.DELETE("/admin/integrations/mcp-servers/{name}", {
+          params: { path: { name } },
+        }),
+      ),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({ queryKey: integrationKeys.all }),
   });
 }
 
@@ -66,7 +81,8 @@ export function usePutProvider() {
           },
         }),
       ),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: integrationKeys.all }),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({ queryKey: integrationKeys.all }),
   });
 }
 
@@ -74,7 +90,12 @@ export function useDeleteProvider() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (name: string) =>
-      unwrap(await api.DELETE("/admin/integrations/providers/{name}", { params: { path: { name } } })),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: integrationKeys.all }),
+      unwrap(
+        await api.DELETE("/admin/integrations/providers/{name}", {
+          params: { path: { name } },
+        }),
+      ),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({ queryKey: integrationKeys.all }),
   });
 }

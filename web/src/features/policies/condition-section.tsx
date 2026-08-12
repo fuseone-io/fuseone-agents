@@ -15,7 +15,10 @@ export function ConditionSection({
 }) {
   const { t } = useTranslation();
   return (
-    <Section title="Condição" hint="Todas precisam ser verdadeiras.">
+    <Section
+      title={t("policies.condition")}
+      hint="Todas precisam ser verdadeiras."
+    >
       <ConditionBuilder
         conditions={draft.conditions ?? []}
         onChange={(conditions) => patch({ conditions })}

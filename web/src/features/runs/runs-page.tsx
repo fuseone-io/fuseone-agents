@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useDeferredValue, useMemo, useState } from "react";
 import { Activity } from "lucide-react";
 import { PAGE_ICONS } from "@/components/layout/nav";
@@ -15,6 +16,7 @@ import { useRunStats, useRuns } from "@/features/runs/api";
 import type { Phase } from "@/lib/api/client";
 
 export function RunsPage() {
+  const { t } = useTranslation();
   const [search, setSearch] = useState("");
   const [phase, setPhase] = useState<Phase | "all">("all");
   const [period, setPeriod] = useState("7");
@@ -41,8 +43,8 @@ export function RunsPage() {
     <>
       <PageHeader
         icon={PAGE_ICONS.runs}
-        title="Execuções"
-        description="Cada execução é a unidade de auditoria e de custo: o que o agente propôs, o que o Portão decidiu e o que de fato aconteceu."
+        title={t("runs.runs")}
+        description={t("runs.subtitle")}
       />
 
       <RunsKpis stats={stats.data} isLoading={stats.isLoading} />
@@ -57,10 +59,10 @@ export function RunsPage() {
       />
 
       <Panel
-        title="Execuções"
+        title={t("runs.runs")}
         action={
           <span className="text-xs text-muted-foreground tabular-nums">
-            {runs.length} {runs.length === 1 ? "execução" : "execuções"}
+            {t("runs.runCount", { count: runs.length })}
           </span>
         }
         flush
@@ -111,15 +113,12 @@ function Body({
 /** An empty result says which of the two things happened: nothing matched the
  *  search, or nothing ran in the period. They call for different actions. */
 function Nothing({ query }: { query: string }) {
+  const { t } = useTranslation();
   return (
     <EmptyState
       icon={<Activity className="size-6" />}
-      title={query ? "Nada encontrado" : "Nenhuma execução no período"}
-      hint={
-        query
-          ? `Nenhuma execução ou agente com "${query}". A busca respeita o período e a situação selecionados.`
-          : "Execuções aparecem aqui assim que um agente é disparado por agendamento, webhook ou evento. Amplie o período ou remova o filtro de situação."
-      }
+      title={query ? "Nada encontrado" : t("runs.noneInPeriod")}
+      hint={query ? t("runs.noMatchFor", { query }) : t("runs.emptyHint")}
     />
   );
 }

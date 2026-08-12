@@ -42,12 +42,19 @@ function ladder(effect: string): ToolRule {
  * happens on every one would be worse than saying nothing. Those are reported
  * as conditional.
  */
-export function ruleFor(tool: string, effect: string, policies: Policy[]): ToolRule {
+export function ruleFor(
+  tool: string,
+  effect: string,
+  policies: Policy[],
+): ToolRule {
   const covering = policies.filter(
-    (p) => p.enabled !== false && p.mode === "enforce" && covers(p, tool, effect),
+    (p) =>
+      p.enabled !== false && p.mode === "enforce" && covers(p, tool, effect),
   );
 
-  const unconditional = covering.filter((p) => (p.conditions ?? []).length === 0);
+  const unconditional = covering.filter(
+    (p) => (p.conditions ?? []).length === 0,
+  );
   const conditional = covering.filter((p) => (p.conditions ?? []).length > 0);
 
   for (const policy of unconditional) {
@@ -57,7 +64,11 @@ export function ruleFor(tool: string, effect: string, policies: Policy[]): ToolR
   }
   for (const policy of unconditional) {
     if (policy.effect === "escalate") {
-      return { kind: "asks", label: "pede aprovação", because: policy.code };
+      return {
+        kind: "asks",
+        label: "pede aprovação",
+        because: policy.code,
+      };
     }
   }
   // An explicit allow is the one thing that lowers the built-in floor.
@@ -83,7 +94,9 @@ function covers(policy: Policy, tool: string, effect: string): boolean {
   const resource = policy.resource ?? "*";
   const matchesTool =
     resource === "*" ||
-    (resource.endsWith("*") ? tool.startsWith(resource.slice(0, -1)) : resource === tool);
+    (resource.endsWith("*")
+      ? tool.startsWith(resource.slice(0, -1))
+      : resource === tool);
   if (!matchesTool) return false;
 
   const effects = policy.effects ?? [];

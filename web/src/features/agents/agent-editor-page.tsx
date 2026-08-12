@@ -58,15 +58,15 @@ export function AgentEditorPage() {
             {
               description: result.created
                 ? result.paused
-                  ? "O agente está pausado. Inicie quando quiser que ele rode."
-                  : "Vale a partir da próxima execução."
-                : "Este texto já era a versão publicada.",
+                  ? t("agents.pausedStartWhenReady")
+                  : t("agents.appliesNextRun")
+                : t("agents.textAlreadyPublished"),
             },
           );
           navigate(`/agents/${agentId}`);
         },
         onError: (e) =>
-          toast.error("Não foi possível publicar", {
+          toast.error(t("agents.publishFailed"), {
             description: e instanceof Error ? e.message : undefined,
           }),
       },
@@ -81,7 +81,7 @@ export function AgentEditorPage() {
       <PageHeader
         icon={PAGE_ICONS.agents}
         title={creating ? "Novo agente" : `Editar ${draft.name || routeId}`}
-        description="Publicar escreve uma versão nova. As execuções já feitas continuam presas à versão que rodou nelas."
+        description={t("agents.publishWritesVersion")}
       />
 
       <div className="grid gap-5 lg:grid-cols-[1fr_316px] lg:items-start">
@@ -121,7 +121,7 @@ export function AgentEditorPage() {
             {t("common.cancel")}
           </Button>
           <Button onClick={submit} disabled={publish.isPending || !ready}>
-            {creating ? "Criar agente pausado" : "Publicar versão"}
+            {creating ? "Criar agente pausado" : t("agents.publishVersion")}
           </Button>
         </div>
       </div>

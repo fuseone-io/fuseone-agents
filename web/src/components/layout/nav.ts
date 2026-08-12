@@ -41,20 +41,60 @@ export const NAV: NavGroup[] = [
   {
     label: "nav.operate",
     items: [
-      { to: "/overview", label: "nav.overview", icon: LayoutDashboard, permission: "run:read" },
-      { to: "/agents", label: "nav.agents", icon: Bot, permission: "agent:read" },
-      { to: "/runs", label: "nav.runs", icon: Activity, permission: "run:read" },
-      { to: "/approvals", label: "nav.approvals", icon: Hand, permission: "approval:act" },
+      {
+        to: "/overview",
+        label: "nav.overview",
+        icon: LayoutDashboard,
+        permission: "run:read",
+      },
+      {
+        to: "/agents",
+        label: "nav.agents",
+        icon: Bot,
+        permission: "agent:read",
+      },
+      {
+        to: "/runs",
+        label: "nav.runs",
+        icon: Activity,
+        permission: "run:read",
+      },
+      {
+        to: "/approvals",
+        label: "nav.approvals",
+        icon: Hand,
+        permission: "approval:act",
+      },
     ],
   },
   {
     label: "nav.govern",
     items: [
-      { to: "/policies", label: "nav.policies", icon: Scale, permission: "policy:read" },
-      { to: "/audit", label: "nav.audit", icon: ScrollText, permission: "audit:read" },
+      {
+        to: "/policies",
+        label: "nav.policies",
+        icon: Scale,
+        permission: "policy:read",
+      },
+      {
+        to: "/audit",
+        label: "nav.audit",
+        icon: ScrollText,
+        permission: "audit:read",
+      },
       { to: "/cost", label: "nav.cost", icon: Wallet, permission: "cost:read" },
-      { to: "/integrations", label: "nav.integrations", icon: Plug, permission: "tool:read" },
-      { to: "/admin", label: "nav.admin", icon: Settings2, permission: "tool:read" },
+      {
+        to: "/integrations",
+        label: "nav.integrations",
+        icon: Plug,
+        permission: "tool:read",
+      },
+      {
+        to: "/admin",
+        label: "nav.admin",
+        icon: Settings2,
+        permission: "tool:read",
+      },
     ],
   },
 ];

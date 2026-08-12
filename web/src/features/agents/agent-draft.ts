@@ -39,12 +39,19 @@ export function useAgentDraft(loaded?: AgentDetail) {
     setDraft(original);
   }
 
-  const patch = (over: Partial<AgentDefinition>) => setDraft((d) => ({ ...d, ...over }));
-  return { draft, patch, changes: original ? changesBetween(original, draft) : [] };
+  const patch = (over: Partial<AgentDefinition>) =>
+    setDraft((d) => ({ ...d, ...over }));
+  return {
+    draft,
+    patch,
+    changes: original ? changesBetween(original, draft) : [],
+  };
 }
 
 /** Strips a published version back to what the form edits. */
-export function toDefinition(detail?: AgentDetail): AgentDefinition | undefined {
+export function toDefinition(
+  detail?: AgentDetail,
+): AgentDefinition | undefined {
   if (!detail) return undefined;
   const { agent, instructions } = detail;
   return {
@@ -73,7 +80,10 @@ export interface Change {
  * somebody should see that they widened the tool pack as part of what they are
  * about to do — rather than from the run that used it.
  */
-export function changesBetween(before: AgentDefinition, after: AgentDefinition): Change[] {
+export function changesBetween(
+  before: AgentDefinition,
+  after: AgentDefinition,
+): Change[] {
   const changes: Change[] = [];
   const compare = (field: string, from: unknown, to: unknown) => {
     const left = render(from);
@@ -83,9 +93,17 @@ export function changesBetween(before: AgentDefinition, after: AgentDefinition):
 
   compare("nome", before.name, after.name);
   compare("área", before.area, after.area);
-  compare("modelo", `${before.provider}/${before.model}`, `${after.provider}/${after.model}`);
+  compare(
+    "modelo",
+    `${before.provider}/${before.model}`,
+    `${after.provider}/${after.model}`,
+  );
   compare("esforço", before.effort, after.effort);
-  compare("instruções", summarise(before.instructions), summarise(after.instructions));
+  compare(
+    "instruções",
+    summarise(before.instructions),
+    summarise(after.instructions),
+  );
   compare("ferramentas", before.tools, after.tools);
   compare("teto", before.budget, after.budget);
   compare("gatilhos", before.triggers, after.triggers);
@@ -100,7 +118,9 @@ export function changesBetween(before: AgentDefinition, after: AgentDefinition):
  * itself is on the screen already.
  */
 function summarise(instructions: string): string {
-  return instructions.trim() === "" ? "—" : `${instructions.trim().length} caracteres`;
+  return instructions.trim() === ""
+    ? "—"
+    : `${instructions.trim().length} caracteres`;
 }
 
 function render(value: unknown): string {

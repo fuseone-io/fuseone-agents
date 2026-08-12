@@ -80,13 +80,12 @@ export function BudgetForm({
         enabled: values.enabled,
       });
       toast.success("Teto definido", {
-        description:
-          "Vale a partir da próxima execução; uma que já parou retoma quando houver folga.",
+        description: t("admin.ceilingApplies"),
       });
       onClose();
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Não foi possível salvar",
+        error instanceof Error ? error.message : t("common.saveFailed"),
       );
     }
   }

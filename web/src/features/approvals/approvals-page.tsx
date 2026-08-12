@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import { CheckCheck } from "lucide-react";
 import { PAGE_ICONS } from "@/components/layout/nav";
@@ -12,6 +13,7 @@ import { DecisionPanel } from "@/features/approvals/decision-panel";
 import { useApprovals } from "@/features/approvals/api";
 
 export function ApprovalsPage() {
+  const { t } = useTranslation();
   const { data, isLoading, error, refetch } = useApprovals();
   const items = data?.items ?? [];
   const [selectedRun, setSelectedRun] = useState<string>();
@@ -27,7 +29,7 @@ export function ApprovalsPage() {
       <PageHeader
         icon={PAGE_ICONS.approvals}
         title="Fila humana"
-        description="Passos em que um agente parou porque uma pessoa precisa decidir. A decisão fica na trilha, com quem a tomou."
+        description={t("approvals.subtitle")}
       />
 
       {isLoading ? (
@@ -37,8 +39,8 @@ export function ApprovalsPage() {
       ) : items.length === 0 ? (
         <EmptyState
           icon={<CheckCheck className="size-6" />}
-          title="Nada aguardando você"
-          hint="Quando um agente propuser uma ação que exige decisão humana, ela aparece aqui com o motivo e o que a ação faz."
+          title={t("approvals.nothingWaiting")}
+          hint={t("approvals.emptyHint")}
         />
       ) : (
         <div className="flex min-h-0 flex-1 gap-4">

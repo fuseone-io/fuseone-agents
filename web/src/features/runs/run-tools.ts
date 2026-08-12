@@ -30,7 +30,12 @@ export function toolsOf(steps: Step[]): ToolUse[] {
     // write: claiming a system was touched when it was not sends people
     // looking for damage that is not there.
     const effect = effectOf(step);
-    if (step.kind === "tool_called" && effect !== undefined && effect !== "read" && effect !== "unknown") {
+    if (
+      step.kind === "tool_called" &&
+      effect !== undefined &&
+      effect !== "read" &&
+      effect !== "unknown"
+    ) {
       use.wrote = true;
     }
     const verdict = verdictOf(step);

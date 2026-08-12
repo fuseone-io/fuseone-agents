@@ -43,7 +43,7 @@ export function WebhooksPanel({ agentId }: { agentId: string }) {
     rotate.mutate(path, {
       onSuccess: (result) => setIssued(result),
       onError: (error) =>
-        toast.error("Não foi possível gerar a chave", {
+        toast.error(t("agents.keyFailed"), {
           description: error instanceof Error ? error.message : undefined,
         }),
     });

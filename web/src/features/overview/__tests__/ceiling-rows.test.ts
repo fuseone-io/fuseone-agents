@@ -2,11 +2,25 @@ import { describe, expect, it } from "vitest";
 import { ceilingRows } from "@/features/overview/ceiling-rows";
 import type { ScopeBudget } from "@/features/admin/api";
 
-const budget = (kind: ScopeBudget["scopeKind"], company: string, area: string, micros: number) =>
-  ({ scopeKind: kind, scope: { company, area }, micros, period: "daily", enabled: true }) as ScopeBudget;
+const budget = (
+  kind: ScopeBudget["scopeKind"],
+  company: string,
+  area: string,
+  micros: number,
+) =>
+  ({
+    scopeKind: kind,
+    scope: { company, area },
+    micros,
+    period: "daily",
+    enabled: true,
+  }) as ScopeBudget;
 
 const spend = {
-  byCompany: new Map([["cx", 40], ["devops", 10]]),
+  byCompany: new Map([
+    ["cx", 40],
+    ["devops", 10],
+  ]),
   byArea: new Map([["cx", 7]]),
   total: 50,
 };
@@ -29,7 +43,11 @@ describe("pairing a ceiling with what was spent under it", () => {
 
   it("gives ceilings on different scopes different keys, so none is dropped from the list", () => {
     const rows = ceilingRows(
-      [budget("company", "cx", "", 1), budget("company", "devops", "", 2), budget("installation", "", "", 3)],
+      [
+        budget("company", "cx", "", 1),
+        budget("company", "devops", "", 2),
+        budget("installation", "", "", 3),
+      ],
       spend,
     );
     expect(new Set(rows.map((r) => r.key)).size).toBe(3);

@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
@@ -35,6 +36,7 @@ type Editing =
  * on the right.
  */
 export function IntegrationsPage() {
+  const { t } = useTranslation();
   const { data, isLoading, error, refetch } = useIntegrations();
   const [editing, setEditing] = useState<Editing | null>(null);
 
@@ -45,8 +47,8 @@ export function IntegrationsPage() {
     <>
       <PageHeader
         icon={PAGE_ICONS.integrations}
-        title="Integrações"
-        description="Tudo que os agentes alcançam fora desta instalação, e se está respondendo."
+        title={t("nav.integrations")}
+        description={t("integrations.subtitle")}
       >
         <ConnectMenu onConnect={(kind) => setEditing({ kind, value: null })} />
       </PageHeader>
@@ -65,7 +67,7 @@ export function IntegrationsPage() {
                 <EmptyState
                   icon={<Server className="size-6" />}
                   title="Nenhum servidor configurado"
-                  hint="Um servidor MCP é o que dá ferramentas aos agentes. Enquanto não houver um, os agentes só conseguem raciocinar."
+                  hint={t("integrations.noServerHint")}
                 />
               )
             }
@@ -87,7 +89,7 @@ export function IntegrationsPage() {
                 <EmptyState
                   icon={<Plug className="size-6" />}
                   title="Nenhum provedor configurado"
-                  hint="Sem provedor, nenhuma execução avança: o agente não tem com o que planejar."
+                  hint={t("integrations.noProviderHint")}
                 />
               )
             }

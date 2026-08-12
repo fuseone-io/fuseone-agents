@@ -118,5 +118,5 @@ function detailOf(entry: AuditEntry): string {
     const value = detail[key];
     if (typeof value === "string" && value !== "") return value;
   }
-  return entry.scope?.area ? `área ${entry.scope.area}` : "instalação";
+  return entry.scope?.area ? `área ${entry.scope.area}` : "audit.installation";
 }

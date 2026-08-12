@@ -11,5 +11,5 @@ export function scopePath(budget: ScopeBudget): string {
 /** How a scope reads to a person. */
 export function scopeLabel(budget: ScopeBudget): string {
   const path = scopePath(budget);
-  return path === "installation" ? "Instalação inteira" : path;
+  return path === "installation" ? "admin.wholeInstallation" : path;
 }

@@ -4,7 +4,10 @@ import type { ThroughputBucket } from "@/lib/api/client";
 
 const SINCE = "2026-08-11T00:00:00.000Z";
 
-function bucket(hour: number, byPhase: Record<string, number>): ThroughputBucket {
+function bucket(
+  hour: number,
+  byPhase: Record<string, number>,
+): ThroughputBucket {
   const at = new Date(Date.parse(SINCE) + hour * 3_600_000).toISOString();
   return {
     at,
@@ -29,7 +32,10 @@ describe("the throughput columns", () => {
   it("folds a run still going in with the ones waiting", () => {
     // Three columns: finished, still going, stopped. A reader deciding
     // whether to act does not need the interpreter's phase.
-    const columns = columnsFor([bucket(1, { running: 2, awaiting_approval: 1 })], SINCE);
+    const columns = columnsFor(
+      [bucket(1, { running: 2, awaiting_approval: 1 })],
+      SINCE,
+    );
 
     expect(columns[1]?.byState.waiting).toBe(3);
     expect(columns[1]?.byState.running).toBe(0);

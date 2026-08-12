@@ -26,8 +26,8 @@ import { useRegisterScope } from "@/features/scope/api";
 import { useMe } from "@/features/session/api";
 
 const schema = z.object({
-  company: z.string().min(1, "Diga a que empresa a área pertence."),
-  name: z.string().min(1, "Uma área precisa de um nome."),
+  company: z.string().min(1, "admin.sayCompany"),
+  name: z.string().min(1, "admin.areaNeedsName"),
   label: z.string(),
 });
 
@@ -63,7 +63,7 @@ export function AreaForm({ onClose }: { onClose: () => void }) {
       onClose();
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Não foi possível declarar",
+        error instanceof Error ? error.message : t("admin.declareFailed"),
       );
     }
   }
@@ -101,7 +101,7 @@ export function AreaForm({ onClose }: { onClose: () => void }) {
                 <FormItem>
                   <FormLabel>{t("admin.name")}</FormLabel>
                   <FormControl>
-                    <Input {...field} placeholder="Risco de Crédito" />
+                    <Input {...field} placeholder={t("admin.areaExample")} />
                   </FormControl>
                   <FormDescription>{t("admin.areaFolds")}</FormDescription>
                   <FormMessage />

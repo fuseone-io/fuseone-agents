@@ -35,7 +35,11 @@ export function placeGraph(nodes: FlowNode[]): Placement[] {
     // Odd rows read right to left, so the eye follows the run instead of
     // jumping back across the canvas at every wrap.
     const placed = row % 2 === 0 ? column : PER_ROW - 1 - column;
-    return { id: node.id, x: placed * (NODE_WIDTH + GAP_X), y: row * (NODE_HEIGHT + GAP_Y) };
+    return {
+      id: node.id,
+      x: placed * (NODE_WIDTH + GAP_X),
+      y: row * (NODE_HEIGHT + GAP_Y),
+    };
   });
 }
 
@@ -44,7 +48,10 @@ export function placeGraph(nodes: FlowNode[]): Placement[] {
  *  A serpentine reverses every other row, so anchoring every edge left-to-right
  *  makes half of them exit a node, loop around the outside of the canvas and
  *  come back in. The turn between rows drops straight down. */
-export function edgePorts(from: Placement, to: Placement): { source: Port; target: Port } {
+export function edgePorts(
+  from: Placement,
+  to: Placement,
+): { source: Port; target: Port } {
   if (to.x > from.x) return { source: "right", target: "left" };
   if (to.x < from.x) return { source: "left", target: "right" };
   return { source: "bottom", target: "top" };

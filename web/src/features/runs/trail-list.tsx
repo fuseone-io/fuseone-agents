@@ -6,8 +6,8 @@ import type { TrailGroup, TrailPhase } from "@/features/runs/trail-model";
 
 const PHASE_LABEL: Record<TrailPhase, string> = {
   input: "Entrada",
-  execution: "Execução",
-  human: "Decisão humana",
+  execution: "runs.phaseExecution",
+  human: "runs.phaseHuman",
   end: "Encerramento",
 };
 

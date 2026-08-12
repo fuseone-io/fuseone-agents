@@ -23,11 +23,12 @@ export function AgentEditorRail({
   creating: boolean;
   changes: Change[];
 }) {
+  const { t } = useTranslation();
   return (
     <aside className="flex flex-col gap-3 lg:sticky lg:top-0">
       {creating ? <Checklist draft={draft} /> : <Diff changes={changes} />}
 
-      <Card title="Superfície de risco">
+      <Card title={t("agents.riskSurface")}>
         <ul className="flex flex-col gap-1">
           {riskSurface(draft.tools ?? [], catalogue).map((line) => (
             <li
@@ -46,13 +47,17 @@ export function AgentEditorRail({
 
 /** What is still missing, and what happens when it is not. */
 function Checklist({ draft }: { draft: AgentDefinition }) {
+  const { t } = useTranslation();
   const items = [
-    { done: draft.name !== "" && draft.area !== "", label: "Nome e área" },
+    {
+      done: draft.name !== "" && draft.area !== "",
+      label: t("agents.nameAndArea"),
+    },
     {
       done: draft.provider !== "" && draft.model !== "",
       label: "Provedor e modelo",
     },
-    { done: draft.instructions.trim() !== "", label: "Instruções" },
+    { done: draft.instructions.trim() !== "", label: t("agents.instructions") },
     { done: (draft.tools ?? []).length > 0, label: "Ao menos uma ferramenta" },
     {
       done: (draft.budget?.micros ?? 0) > 0 || (draft.budget?.steps ?? 0) > 0,

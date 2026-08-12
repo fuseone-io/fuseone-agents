@@ -33,9 +33,13 @@ export function useScopes() {
 export function useRegisterScope() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { company: string; name: string; label?: string }) =>
-      unwrap(await api.POST("/admin/scopes", { body: input })),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: scopeKeys.all }),
+    mutationFn: async (input: {
+      company: string;
+      name: string;
+      label?: string;
+    }) => unwrap(await api.POST("/admin/scopes", { body: input })),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({ queryKey: scopeKeys.all }),
   });
 }
 
@@ -43,7 +47,12 @@ export function useDeleteScope() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (scope: string) =>
-      unwrap(await api.DELETE("/admin/scopes/{scope}", { params: { path: { scope } } })),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: scopeKeys.all }),
+      unwrap(
+        await api.DELETE("/admin/scopes/{scope}", {
+          params: { path: { scope } },
+        }),
+      ),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({ queryKey: scopeKeys.all }),
   });
 }

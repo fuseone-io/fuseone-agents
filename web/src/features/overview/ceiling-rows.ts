@@ -23,7 +23,10 @@ export interface CeilingRow {
  * empty area, all showed zero spent, and all carried the same React key —
  * which is how the bug announced itself before anybody noticed the figures.
  */
-export function ceilingRows(budgets: ScopeBudget[], spend: Spend): CeilingRow[] {
+export function ceilingRows(
+  budgets: ScopeBudget[],
+  spend: Spend,
+): CeilingRow[] {
   return budgets.map((budget) => ({
     key: `${budget.scopeKind}:${scopePath(budget)}`,
     label: scopeLabel(budget),

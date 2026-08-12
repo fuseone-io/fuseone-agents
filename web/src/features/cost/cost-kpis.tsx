@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { KpiCard } from "@/components/shared/kpi-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatMicros } from "@/lib/format";
@@ -20,6 +21,7 @@ export function CostKpis({
   daily?: CostRollup;
   isLoading: boolean;
 }) {
+  const { t } = useTranslation();
   if (isLoading || !daily) {
     return (
       <div className="flex shrink-0 gap-3">
@@ -43,25 +45,21 @@ export function CostKpis({
   return (
     <div className="flex shrink-0 gap-3">
       <KpiCard
-        label="Gasto no período"
+        label={t("cost.spentInPeriod")}
         value={formatMicros(total.micros)}
-        delta={`${runs.toLocaleString("pt-BR")} ${runs === 1 ? "execução" : "execuções"}`}
+        delta={t("runs.runCount", { count: runs })}
       />
       <KpiCard
         label="Hoje"
         value={today ? formatMicros(today.cost.micros) : "—"}
-        delta={
-          today
-            ? `${today.runs} ${today.runs === 1 ? "execução" : "execuções"}`
-            : "nada hoje"
-        }
+        delta={today ? t("runs.runCount", { count: today.runs }) : "nada hoje"}
       />
       <KpiCard
-        label="Custo médio"
+        label={t("cost.averageCost")}
         value={runs === 0 ? "—" : formatMicros(Math.round(total.micros / runs))}
         // A mean is the right figure here, unlike for duration: cost per run
         // is what multiplies by volume when somebody asks to scale an agent.
-        delta={runs === 0 ? "nenhuma execução ainda" : "por execução"}
+        delta={runs === 0 ? t("cost.noRunsYet") : t("cost.perRun")}
       />
       <KpiCard
         label="Leitura de cache"
@@ -69,7 +67,7 @@ export function CostKpis({
         delta={
           cacheShare === null
             ? "sem tokens contabilizados"
-            : "do que entrou no modelo, a fração do preço"
+            : t("cost.cacheShare")
         }
         trend={cacheShare !== null && cacheShare >= 50 ? "up" : "flat"}
       />

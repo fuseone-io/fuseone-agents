@@ -43,7 +43,7 @@ export function SimulationCard({ draft }: { draft: PolicyInput }) {
           ? "Rodando…"
           : result
             ? "Rodar de novo"
-            : "Rodar contra o histórico"}
+            : t("policies.runAgainstHistory")}
       </Button>
     </section>
   );

@@ -20,16 +20,16 @@ import { useAudit } from "@/features/audit/api";
 import { sinceFor } from "@/features/runs/runs-filters";
 
 const SOURCES: FilterOption[] = [
-  { value: "all", label: "Os dois registros" },
-  { value: "ledger", label: "Ledger — decisões" },
-  { value: "admin", label: "Administrativo — mudanças" },
+  { value: "all", label: "audit.bothRecords" },
+  { value: "ledger", label: "audit.ledgerDecisions" },
+  { value: "admin", label: "audit.adminChanges" },
 ];
 
 const PERIODS: FilterOption[] = [
-  { value: "1", label: "Últimas 24h" },
-  { value: "7", label: "Últimos 7 dias" },
-  { value: "30", label: "Últimos 30 dias" },
-  { value: "all", label: "Desde o início" },
+  { value: "1", label: "audit.last24h" },
+  { value: "7", label: "audit.last7d" },
+  { value: "30", label: "audit.last30d" },
+  { value: "all", label: "audit.sinceBeginning" },
 ];
 
 /**
@@ -60,7 +60,7 @@ export function AuditPage() {
       <PageHeader
         icon={PAGE_ICONS.audit}
         title="Trilha de auditoria"
-        description="O que os agentes fizeram e o que as pessoas mudaram nas regras sob as quais eles rodam. Os dois registros são append-only; só um é encadeado."
+        description={t("audit.subtitle")}
       />
 
       {!isLoading && !error && <IntegrityBanner entries={entries} />}
@@ -78,7 +78,7 @@ export function AuditPage() {
           width={230}
         />
         <FilterSelect
-          label="Período"
+          label={t("audit.period")}
           value={period}
           options={PERIODS}
           onChange={setPeriod}
@@ -107,8 +107,8 @@ export function AuditPage() {
           <div className="p-4">
             <EmptyState
               icon={<ScrollText className="size-6" />}
-              title="Nada registrado no período"
-              hint="Aparecem aqui as decisões do Portão, as aprovações humanas e toda mudança que alguém fizer nas regras — classificar uma ferramenta, configurar um provedor, definir um teto."
+              title={t("audit.nothingInPeriod")}
+              hint={t("audit.emptyHint")}
             />
           </div>
         ) : (

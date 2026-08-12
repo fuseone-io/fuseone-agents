@@ -5,8 +5,13 @@ import type { Policy } from "@/lib/api/client";
 
 function policy(over: Partial<Policy>): Policy {
   return {
-    code: "POL-1", name: "x", sentence: "x", effect: "deny",
-    mode: "enforce", enabled: true, resource: "*",
+    code: "POL-1",
+    name: "x",
+    sentence: "x",
+    effect: "deny",
+    mode: "enforce",
+    enabled: true,
+    resource: "*",
     ...over,
   };
 }
@@ -54,7 +59,9 @@ describe("what a tool will actually do", () => {
     // column claiming it happens on every one is worse than saying nothing.
     const rule = ruleFor("crm.reply", "write", [
       policy({
-        code: "POL-114", resource: "crm.*", effect: "deny",
+        code: "POL-114",
+        resource: "crm.*",
+        effect: "deny",
         conditions: [{ field: "args.rows", op: "gt", value: "100" }],
       }),
     ]);
@@ -67,7 +74,12 @@ describe("what a tool will actually do", () => {
     // A monitored rule changes no verdict, so a column reporting it as the
     // outcome would describe something that does not happen.
     const rule = ruleFor("crm.reply", "write", [
-      policy({ code: "POL-114", resource: "crm.*", effect: "deny", mode: "monitor" }),
+      policy({
+        code: "POL-114",
+        resource: "crm.*",
+        effect: "deny",
+        mode: "monitor",
+      }),
     ]);
 
     expect(rule.kind).toBe("asks");
@@ -76,7 +88,12 @@ describe("what a tool will actually do", () => {
 
   it("ignores a policy that is switched off", () => {
     const rule = ruleFor("crm.reply", "write", [
-      policy({ code: "POL-114", resource: "crm.*", effect: "deny", enabled: false }),
+      policy({
+        code: "POL-114",
+        resource: "crm.*",
+        effect: "deny",
+        enabled: false,
+      }),
     ]);
 
     expect(rule.kind).toBe("asks");
@@ -85,15 +102,32 @@ describe("what a tool will actually do", () => {
 
 describe("the risk surface", () => {
   const catalogue = [
-    { toolId: "crm.lookup", server: "crm", effect: "read" as const, untrusted: true },
-    { toolId: "crm.reply", server: "crm", effect: "write" as const, untrusted: false },
-    { toolId: "erp.transfer", server: "erp", effect: "financial" as const, untrusted: false },
+    {
+      toolId: "crm.lookup",
+      server: "crm",
+      effect: "read" as const,
+      untrusted: true,
+    },
+    {
+      toolId: "crm.reply",
+      server: "crm",
+      effect: "write" as const,
+      untrusted: false,
+    },
+    {
+      toolId: "erp.transfer",
+      server: "erp",
+      effect: "financial" as const,
+      untrusted: false,
+    },
   ];
 
   it("answers in what the agent can do, not in tool ids", () => {
     // "crm.reply, erp.transfer" is a list. "Alters state, moves money" is the
     // thing somebody approves or refuses.
-    const lines = riskSurface(["crm.reply", "erp.transfer"], catalogue).join(" ");
+    const lines = riskSurface(["crm.reply", "erp.transfer"], catalogue).join(
+      " ",
+    );
 
     expect(lines).toMatch(/Altera estado em 1/);
     expect(lines).toMatch(/Move dinheiro em 1/);
@@ -111,6 +145,8 @@ describe("the risk surface", () => {
   });
 
   it("says plainly when an agent can touch nothing", () => {
-    expect(riskSurface([], catalogue).join(" ")).toMatch(/só consegue raciocinar/);
+    expect(riskSurface([], catalogue).join(" ")).toMatch(
+      /só consegue raciocinar/,
+    );
   });
 });
