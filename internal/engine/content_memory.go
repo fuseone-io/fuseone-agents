@@ -25,11 +25,23 @@ func NewMemoryContent() *MemoryContent {
 }
 
 func (m *MemoryContent) Put(ctx context.Context, runID domain.RunID, seq int64, data []byte) (string, error) {
+	return m.PutFor(ctx, "run", string(runID), seq, data)
+}
+
+// PutFor stores content belonging to something other than a run — a set of
+// simulation cases, so far.
+//
+// The reference is built exactly as the durable store builds it, owner and
+// all. A fake that filed two owners under one reference would let a test pass
+// on a store that cannot purge a run without taking a case set with it.
+func (m *MemoryContent) PutFor(
+	ctx context.Context, kind, owner string, seq int64, data []byte,
+) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
 	sum := sha256.Sum256(data)
-	ref := fmt.Sprintf("mem://%s/%d/%s", runID, seq, hex.EncodeToString(sum[:])[:12])
+	ref := fmt.Sprintf("%s://%s/%d/%s", kind, owner, seq, hex.EncodeToString(sum[:])[:16])
 
 	m.mu.Lock()
 	defer m.mu.Unlock()

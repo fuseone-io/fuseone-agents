@@ -15,6 +15,7 @@ import (
 // ContentStore is what the engine needs of a claim check.
 type ContentStore interface {
 	Put(ctx context.Context, runID domain.RunID, seq int64, data []byte) (string, error)
+	PutFor(ctx context.Context, kind, owner string, seq int64, data []byte) (string, error)
 	Get(ctx context.Context, ref string) ([]byte, error)
 }
 
@@ -96,6 +97,32 @@ func TestContentContract(t *testing.T) {
 			}
 		})
 
+		t.Run(name+"/a case set and a run holding the same bytes are separate objects", func(t *testing.T) {
+			store := open(t)
+			ctx := context.Background()
+
+			runRef, err := store.Put(ctx, "run_a", 1, []byte(`{"assunto":"cobrança"}`))
+			if err != nil {
+				t.Fatalf("Put: %v", err)
+			}
+			caseRef, err := store.PutFor(ctx, "case", "suporte", 1, []byte(`{"assunto":"cobrança"}`))
+			if err != nil {
+				t.Fatalf("PutFor: %v", err)
+			}
+
+			// Retention and per-subject erasure work per owner (AU-11,
+			// NF-09), so a purged run must not take a case set with it.
+			if runRef == caseRef {
+				t.Fatalf("one reference for two owners: %s", runRef)
+			}
+			if _, err := store.Get(ctx, runRef); err != nil {
+				t.Errorf("run content gone: %v", err)
+			}
+			if _, err := store.Get(ctx, caseRef); err != nil {
+				t.Errorf("case content gone: %v", err)
+			}
+		})
+
 		t.Run(name+"/different runs holding the same bytes get their own reference", func(t *testing.T) {
 			store := open(t)
 			ctx := context.Background()
@@ -108,44 +135,5 @@ func TestContentContract(t *testing.T) {
 				t.Errorf("both runs share the reference %q", a)
 			}
 		})
-	}
-}
-
-func TestPutFor_casesAndRuns_areSeparateOwners(t *testing.T) {
-	dsn := os.Getenv("TEST_DATABASE_URL")
-	if dsn == "" {
-		t.Skip("TEST_DATABASE_URL is unset")
-	}
-	pool, err := pgxpool.New(t.Context(), dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	if err := ledger.Migrate(t.Context(), pool); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	content := ledger.NewContent(pool)
-	ctx := t.Context()
-
-	runRef, err2 := content.Put(ctx, "run_a", 1, []byte(`{"assunto":"cobrança"}`))
-	if err2 != nil {
-		t.Fatalf("put run: %v", err2)
-	}
-	caseRef, err := content.PutFor(ctx, "case", "suporte", 1, []byte(`{"assunto":"cobrança"}`))
-	if err != nil {
-		t.Fatalf("put case: %v", err)
-	}
-
-	// Identical bytes, different owners, and both must survive independently:
-	// retention and per-subject erasure work per owner (AU-11, NF-09), so a
-	// purged run must not take a case set with it.
-	if runRef == caseRef {
-		t.Fatalf("one reference for two owners: %s", runRef)
-	}
-	if _, err := content.Get(ctx, runRef); err != nil {
-		t.Errorf("run content gone: %v", err)
-	}
-	if _, err := content.Get(ctx, caseRef); err != nil {
-		t.Errorf("case content gone: %v", err)
 	}
 }

@@ -345,6 +345,105 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /agents/{agentId}/simulations:
+    post:
+      tags: [agents]
+      operationId: startSimulation
+      summary: Run this agent against occurrences that already happened
+      description: |
+        The central safety mechanism, and the only validation legible to
+        somebody who cannot read a specification. A human description of a
+        process is always incomplete — people describe the happy path and omit
+        the exception — and this is what exposes the gap before production.
+
+        Every case is a real run with exactly one thing missing: the call
+        itself. The Gate still decides, the ledger still records, the budget
+        still reserves. What the tool layer does is answer with nothing, so a
+        case that would have written to a real system reports where it would
+        have, and changes nothing.
+
+        The cases are uploaded, never fetched from the systems themselves. A
+        connector reading the last fifty tickets would end the one property
+        that makes this defensible — that authoring never touches production —
+        and would be an integration project per customer besides.
+
+        Returns immediately. A set is minutes of model calls, for the same
+        reason starting a run returns before the run does.
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: |
+            Unique per intention. It names the simulation, so a caller that
+            never saw the answer can ask again without starting a second one.
+          schema: { type: string, minLength: 8, maxLength: 128 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SimulationRequest' }
+      responses:
+        '202':
+          description: The set was accepted and is being run.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SimulationAccepted' }
+        '400':
+          description: |
+            A line that is not JSON refuses the whole file and says which line.
+            Running forty-nine of fifty and mentioning nothing would give an
+            author coverage that is a lie.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: |
+            Another simulation is already queued. Refused rather than queued
+            without limit: these cost real money at a real provider.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /agents/{agentId}/simulations/{simulationId}:
+    get:
+      tags: [agents]
+      operationId: getSimulation
+      summary: What the agent would have done
+      description: |
+        A fold of the runs the simulation opened — not a record kept beside
+        them. Readable while it is still going: the cases that have finished
+        are rows, and `expected` says how many are coming.
+
+        A finished simulation whose row count falls short of `expected` is one
+        where some cases never opened a run at all. That is reported rather
+        than hidden, because a report that quietly drops what it could not run
+        tells an author the set was covered when it was not.
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: simulationId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The report so far.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SimulationReport' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /agents/{agentId}/webhooks:
     get:
       tags: [agents]
@@ -1444,6 +1543,96 @@ components:
         outputTokens: { type: integer, format: int64 }
         cacheReadTokens: { type: integer, format: int64 }
         cacheWriteTokens: { type: integer, format: int64 }
+
+    SimulationRequest:
+      type: object
+      required: [cases]
+      properties:
+        cases:
+          type: string
+          description: |
+            One case per line, each a JSON object: an export of occurrences
+            that already happened. Blank lines are not cases — every export
+            ends in a newline, and counting it would put an empty occurrence in
+            a report somebody reads as real.
+          maxLength: 1048576
+
+    SimulationAccepted:
+      type: object
+      required: [id, cases]
+      properties:
+        id: { type: string }
+        cases:
+          type: integer
+          description: How many cases the file held.
+
+    SimulationSettled:
+      type: string
+      description: >
+        Where a case ended. `unsettled` is a run still going when the turn
+        bound ran out — a result, not a missing row: a planner that will not
+        finish is one of the things a simulation exists to reveal.
+      enum: [finished, parked, awaiting_approval, unsettled]
+
+    SimulationAct:
+      type: object
+      description: |
+        One thing the agent proposed, and what the Gate did about it. Anchored
+        on the decision rather than on the call: the proposals that never
+        became calls are the ones an author most needs to see.
+      required: [tool, effect, verdict, reached]
+      properties:
+        step:
+          type: string
+          description: The declared step it was proposed in, which is what a correction anchors to.
+        tool: { type: string }
+        effect: { $ref: '#/components/schemas/Effect' }
+        verdict: { $ref: '#/components/schemas/Verdict' }
+        rule:
+          type: string
+          description: Which check decided. Never "blocked by policy" — that tells an author nothing about what to change.
+        reason: { type: string }
+        reached:
+          type: boolean
+          description: >
+            Whether it got as far as the tool layer, which under simulation is
+            exactly where it stopped.
+
+    SimulationCase:
+      type: object
+      required: [settled, steps, cost]
+      properties:
+        runId:
+          type: string
+          description: The run it drove. Absent when the case never opened one.
+        settled: { $ref: '#/components/schemas/SimulationSettled' }
+        steps: { type: integer }
+        cost: { $ref: '#/components/schemas/Cost' }
+        acted:
+          type: array
+          items: { $ref: '#/components/schemas/SimulationAct' }
+        outcome: { type: string }
+        reason: { type: string }
+        error:
+          type: string
+          description: Why this case did not run, when it did not.
+
+    SimulationReport:
+      type: object
+      required: [id, cases, expected, running]
+      properties:
+        id: { type: string }
+        agent: { type: string }
+        version: { type: string }
+        cases:
+          type: array
+          items: { $ref: '#/components/schemas/SimulationCase' }
+        expected:
+          type: integer
+          description: How many cases the set holds.
+        running:
+          type: boolean
+          description: Whether anything is still driving it.
 
     Run:
       type: object

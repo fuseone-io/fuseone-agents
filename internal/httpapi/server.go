@@ -65,7 +65,13 @@ type Server struct {
 	spend        Spend
 	rates        Rates
 	pauses       trigger.Pauses
-	publisher    Publisher
+	// simulations, resolve and cases back the authoring safety net. Optional
+	// together: an installation that publishes agents from files has no use
+	// for any of them.
+	simulations Simulations
+	resolve     Resolve
+	cases       Cases
+	publisher   Publisher
 	// clock is injectable so a run's opening instant is a fact of the request
 	// rather than of whichever machine happened to serve it.
 	clock Clock
