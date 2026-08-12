@@ -34,6 +34,7 @@ import (
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/model"
 	"github.com/fuseone/agents/internal/policy"
+	"github.com/fuseone/agents/internal/regression"
 	"github.com/fuseone/agents/internal/scope"
 	"github.com/fuseone/agents/internal/spec"
 	"github.com/fuseone/agents/internal/tools"
@@ -157,6 +158,8 @@ func serve(args []string) error {
 			// against. A set is real customer records and belongs under the
 			// installation's retention like every other bulky payload (AU-04).
 			WithCases(ledger.NewContent(identity.pool)).
+			// The corrections a future version is checked against (FU-12).
+			WithRegressions(regression.NewStore(identity.pool)).
 			WithWebhooks(trigger.NewPostgresWebhooks(identity.pool)).
 			WithAudit(audit.NewPostgres(identity.pool)).
 			WithHealth(admin.NewHealth(identity.pool)).

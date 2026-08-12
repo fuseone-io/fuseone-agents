@@ -345,6 +345,92 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /agents/{agentId}/regressions:
+    get:
+      tags: [agents]
+      operationId: listRegressions
+      summary: The corrections this agent is held to
+      description: |
+        Every one of them is re-checked on every future version. A correction
+        that could not be checked was refused when it was made, so what is
+        listed here is exactly what the battery proves.
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The corpus.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/RegressionCase' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [agents]
+      operationId: recordRegression
+      summary: Correct a case that came out wrong
+      description: |
+        The author points at a run and says what should have been true of it.
+        What is recorded is the checkable half: prose cannot be re-run, and a
+        correction that cannot be re-run is a note rather than a correction.
+
+        The occurrence is copied into the corpus. Runs are purged on the
+        installation's retention, and a corpus that lost its cases as runs aged
+        out would stop checking while still reporting green.
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegressionInput' }
+      responses:
+        '201':
+          description: Recorded, and part of every battery from now on.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RegressionCase' }
+        '400':
+          description: |
+            Nothing to check, or a run with no occurrence behind it.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /agents/{agentId}/regressions/{caseId}:
+    delete:
+      tags: [agents]
+      operationId: deleteRegression
+      summary: Stop holding the agent to a correction
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: caseId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: Removed from the corpus. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /agents/{agentId}/simulations:
     post:
       tags: [agents]
@@ -1701,8 +1787,14 @@ components:
 
     SimulationRequest:
       type: object
-      required: [cases]
+      description: >
+        Either an uploaded set or the corpus. Running the corpus is the
+        battery: it answers whether what was already corrected is still
+        corrected.
       properties:
+        corpus:
+          type: boolean
+          description: Replay the agent's regression corpus instead of an uploaded set.
         cases:
           type: string
           description: |
@@ -1766,6 +1858,16 @@ components:
       type: object
       required: [settled, steps, cost]
       properties:
+        id:
+          type: string
+          description: The regression case this row replays, when it replays one.
+        expected:
+          type: array
+          items: { $ref: '#/components/schemas/Expectation' }
+        unmet:
+          type: array
+          description: What stopped being true. Empty is what an author wants to see.
+          items: { $ref: '#/components/schemas/Expectation' }
         runId:
           type: string
           description: The run it drove. Absent when the case never opened one.
@@ -1785,6 +1887,12 @@ components:
       type: object
       required: [id, cases, running]
       properties:
+        held:
+          type: integer
+          description: Corrections that still stand. Zero for a simulation that is not a battery.
+        broken:
+          type: integer
+          description: Corrections that stopped standing.
         id: { type: string }
         agent: { type: string }
         version: { type: string }
@@ -1899,6 +2007,54 @@ components:
           items: { $ref: '#/components/schemas/HeldGrant' }
         lastSeen: { type: string, format: date-time }
         disabled: { type: boolean }
+
+    Expectation:
+      type: object
+      description: >
+        One thing that must be true of a case. The four kinds are what a fold
+        of the run can answer without inventing anything — prose cannot be
+        re-run, and a correction that cannot be re-run is a note.
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          enum: [settles, calls, never_calls, asks]
+        step:
+          type: string
+          description: >
+            The declared step it is anchored to. A correction about the reply
+            step must not start failing because the lookup step changed.
+        value:
+          type: string
+          description: A tool, or a settled state, depending on the kind.
+
+    RegressionCase:
+      type: object
+      required: [id, expectations]
+      properties:
+        id: { type: string }
+        expectations:
+          type: array
+          items: { $ref: '#/components/schemas/Expectation' }
+        fromRun:
+          type: string
+          description: The run the correction was made from. It may be purged long before this case is.
+        note: { type: string }
+        createdBy: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    RegressionInput:
+      type: object
+      required: [runId, expectations]
+      properties:
+        runId:
+          type: string
+          description: The run that came out wrong. Its occurrence is copied into the corpus.
+        expectations:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/Expectation' }
+        note: { type: string }
 
     Run:
       type: object

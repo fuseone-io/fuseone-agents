@@ -28,7 +28,7 @@ func startSimulation(cases string) openapi.StartSimulationRequestObject {
 	return openapi.StartSimulationRequestObject{
 		AgentId: "triage",
 		Params:  openapi.StartSimulationParams{IdempotencyKey: "sim-intent-0001"},
-		Body:    &openapi.StartSimulationJSONRequestBody{Cases: cases},
+		Body:    &openapi.StartSimulationJSONRequestBody{Cases: &cases},
 	}
 }
 

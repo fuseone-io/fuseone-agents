@@ -76,8 +76,10 @@ type Server struct {
 	identity Identity
 	signIn   SignIn
 	// people is the directory of who exists and what each one holds.
-	people    People
-	publisher Publisher
+	people People
+	// regressions is the corpus a future version is checked against.
+	regressions Regressions
+	publisher   Publisher
 	// clock is injectable so a run's opening instant is a fact of the request
 	// rather than of whichever machine happened to serve it.
 	clock Clock
