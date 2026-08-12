@@ -40,6 +40,7 @@ type Store interface {
 	Decisions(ctx context.Context, filter domain.RunFilter, limit int) ([]domain.RecordedDecision, error)
 	RunByIdemKey(ctx context.Context, key string) (domain.RunID, error)
 	SpentSince(ctx context.Context, scope domain.Scope, since time.Time) (domain.Consumption, error)
+	SimulationRuns(ctx context.Context, simulation string) ([]domain.RunID, error)
 }
 
 type factory struct {
@@ -1402,6 +1403,69 @@ func TestRunByIdemKeyContract(t *testing.T) {
 		second.IdemKey = "trigger-abc"
 		if _, err := s.Append(ctx, second); err == nil {
 			t.Fatal("the same key opened two runs, which is two real effects")
+		}
+	})
+}
+
+// --- simulations -----------------------------------------------------------
+
+// A simulation is a batch of runs, and the report is a fold of them. Finding
+// them again is the one thing the ledger has to answer that the runs
+// themselves cannot.
+
+func TestSimulationRunsContract(t *testing.T) {
+	base := time.Date(2026, 8, 12, 9, 0, 0, 0, time.UTC)
+
+	opened := func(id domain.RunID, at time.Time, simulation string) domain.Step {
+		st := startedAt(id, at)
+		st.IdemKey = string(id)
+		st.Payload = mustJSON(t, domain.RunStartedPayload{
+			Trigger: "simulation", Simulated: simulation != "", Simulation: simulation,
+		})
+		return st
+	}
+
+	run(t, "a simulation finds its own runs and nobody else's", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		mustAppend(t, s, opened("run-a1", base, "sim-a"))
+		mustAppend(t, s, opened("run-b1", base.Add(time.Second), "sim-b"))
+		mustAppend(t, s, opened("run-a2", base.Add(2*time.Second), "sim-a"))
+		mustAppend(t, s, opened("run-real", base.Add(3*time.Second), ""))
+
+		got, err := s.SimulationRuns(ctx, "sim-a")
+		if err != nil {
+			t.Fatalf("SimulationRuns: %v", err)
+		}
+		// In the order the cases were run, because the report reads case one
+		// as case one.
+		if len(got) != 2 || got[0] != "run-a1" || got[1] != "run-a2" {
+			t.Errorf("runs = %v, want run-a1 then run-a2", got)
+		}
+	})
+
+	run(t, "a simulation nobody ran is empty rather than an error", func(t *testing.T, s Store) {
+		got, err := s.SimulationRuns(context.Background(), "sim-never")
+		if err != nil {
+			t.Fatalf("SimulationRuns: %v", err)
+		}
+		if len(got) != 0 {
+			t.Errorf("runs = %v, want none", got)
+		}
+	})
+
+	run(t, "an empty id never matches the real runs", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		mustAppend(t, s, opened("run-real", base, ""))
+
+		// Real runs carry no simulation, and a query for "" asking for
+		// everything unmarked would report production as a simulation.
+		got, err := s.SimulationRuns(ctx, "")
+		if err != nil {
+			t.Fatalf("SimulationRuns: %v", err)
+		}
+		if len(got) != 0 {
+			t.Errorf("runs = %v, want none", got)
 		}
 	})
 }
