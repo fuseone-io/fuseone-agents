@@ -4,15 +4,12 @@ import type { components } from "@/lib/api/schema.gen";
 
 export type Tool = components["schemas"]["Tool"];
 export type Effect = components["schemas"]["Effect"];
-export type MCPServer = components["schemas"]["MCPServer"];
-export type ModelProvider = components["schemas"]["ModelProvider"];
 export type AdminEvent = components["schemas"]["AdminEvent"];
 export type ScopeBudget = components["schemas"]["ScopeBudget"];
 
 export const adminKeys = {
   all: ["admin"] as const,
   tools: () => [...adminKeys.all, "tools"] as const,
-  integrations: () => [...adminKeys.all, "integrations"] as const,
   events: (target?: string) => [...adminKeys.all, "events", target ?? ""] as const,
   budgets: () => [...adminKeys.all, "budgets"] as const,
 };
@@ -21,13 +18,6 @@ export function useTools() {
   return useQuery({
     queryKey: adminKeys.tools(),
     queryFn: async () => unwrap(await api.GET("/admin/tools")),
-  });
-}
-
-export function useIntegrations() {
-  return useQuery({
-    queryKey: adminKeys.integrations(),
-    queryFn: async () => unwrap(await api.GET("/admin/integrations")),
   });
 }
 
@@ -57,67 +47,6 @@ export function useClassifyTool() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: adminKeys.all });
     },
-  });
-}
-
-export function usePutMCPServer() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (input: { name: string; command: string; args: string[]; enabled: boolean }) =>
-      unwrap(
-        await api.PUT("/admin/integrations/mcp-servers/{name}", {
-          params: { path: { name: input.name } },
-          body: { command: input.command, args: input.args, enabled: input.enabled },
-        }),
-      ),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: adminKeys.all }),
-  });
-}
-
-export function useDeleteMCPServer() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (name: string) =>
-      unwrap(await api.DELETE("/admin/integrations/mcp-servers/{name}", { params: { path: { name } } })),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: adminKeys.all }),
-  });
-}
-
-/**
- * An omitted key keeps the stored one, so the form sends nothing rather than
- * an empty string when the operator left the field alone.
- */
-export function usePutProvider() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (input: {
-      name: string;
-      kind: "anthropic" | "openai_compatible";
-      baseUrl: string;
-      apiKey?: string;
-      enabled: boolean;
-    }) =>
-      unwrap(
-        await api.PUT("/admin/integrations/providers/{name}", {
-          params: { path: { name: input.name } },
-          body: {
-            kind: input.kind,
-            baseUrl: input.baseUrl,
-            enabled: input.enabled,
-            ...(input.apiKey ? { apiKey: input.apiKey } : {}),
-          },
-        }),
-      ),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: adminKeys.all }),
-  });
-}
-
-export function useDeleteProvider() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (name: string) =>
-      unwrap(await api.DELETE("/admin/integrations/providers/{name}", { params: { path: { name } } })),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: adminKeys.all }),
   });
 }
 

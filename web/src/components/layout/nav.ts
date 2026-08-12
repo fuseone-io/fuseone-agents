@@ -51,6 +51,7 @@ export const NAV: NavGroup[] = [
       { to: "/policies", label: "Políticas", icon: Scale, permission: "policy:read" },
       { to: "/audit", label: "Trilha de auditoria", icon: ScrollText, permission: "audit:read" },
       { to: "/cost", label: "Custo e limites", icon: Wallet, permission: "cost:read" },
+      { to: "/integrations", label: "Integrações", icon: Plug, permission: "tool:read" },
       { to: "/admin", label: "Administração", icon: Settings2, permission: "tool:read" },
     ],
   },
@@ -84,4 +85,5 @@ export const PAGE_TITLES: Record<string, string> = {
   audit: "Trilha de auditoria",
   cost: "Custo e limites",
   admin: "Administração",
+  integrations: "Integrações",
 };

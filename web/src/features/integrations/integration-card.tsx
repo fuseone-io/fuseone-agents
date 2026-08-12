@@ -55,7 +55,12 @@ export function IntegrationCard({
           <p className="truncate text-xs text-muted-foreground">{kind}</p>
         </div>
 
-        <span className={cn("shrink-0 rounded-pill px-2 py-0.5 text-2xs font-medium", state.pill)}>
+        <span
+          className={cn(
+            "shrink-0 rounded-pill px-2 py-0.5 text-2xs font-medium",
+            state.pill,
+          )}
+        >
           {state.label}
         </span>
       </header>
@@ -93,14 +98,19 @@ function Observation({ health }: { health?: IntegrationHealth | null }) {
             {formatRelative(health.observedAt)}
           </>
         ) : (
-          <>Não respondeu · última tentativa {formatRelative(health.observedAt)}</>
+          <>
+            Não respondeu · última tentativa {formatRelative(health.observedAt)}
+          </>
         )}
         {health.observedBy ? ` · por ${health.observedBy}` : ""}
       </p>
 
       {/* Shown as-is: the person reading it is the one who fixes the server. */}
       {!health.reachable && health.detail && (
-        <p className="truncate font-mono text-2xs text-danger" title={health.detail}>
+        <p
+          className="truncate font-mono text-2xs text-danger"
+          title={health.detail}
+        >
           {health.detail}
         </p>
       )}
@@ -113,7 +123,11 @@ function Observation({ health }: { health?: IntegrationHealth | null }) {
  * screen that painted both red would send somebody to debug a server that was
  * switched off on purpose.
  */
-function stateOf(enabled: boolean, health?: IntegrationHealth | null, observes = true) {
+function stateOf(
+  enabled: boolean,
+  health?: IntegrationHealth | null,
+  observes = true,
+) {
   if (!enabled) {
     return {
       label: "desligado",

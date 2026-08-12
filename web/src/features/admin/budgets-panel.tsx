@@ -6,7 +6,7 @@ import { Mono } from "@/components/shared/mono";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/shared/states";
-import { RemoveButton } from "@/features/admin/remove-button";
+import { RemoveButton } from "@/components/shared/remove-button";
 import { BudgetForm } from "@/features/admin/budget-form";
 import { scopeLabel, scopePath } from "@/features/admin/budget-scope";
 import { useBudgets, useDeleteBudget, type ScopeBudget } from "@/features/admin/api";

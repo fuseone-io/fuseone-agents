@@ -22,7 +22,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { usePutMCPServer, type MCPServer } from "@/features/admin/api";
+import { usePutMCPServer, type MCPServer } from "@/features/integrations/api";
 
 const schema = z.object({
   name: z
@@ -34,7 +34,13 @@ const schema = z.object({
   enabled: z.boolean(),
 });
 
-export function ServerForm({ server, onClose }: { server: MCPServer | null; onClose: () => void }) {
+export function ServerForm({
+  server,
+  onClose,
+}: {
+  server: MCPServer | null;
+  onClose: () => void;
+}) {
   const put = usePutMCPServer();
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
@@ -57,11 +63,14 @@ export function ServerForm({ server, onClose }: { server: MCPServer | null; onCl
       toast.success(`${values.name} configurado`, {
         // Servers are connected when a worker starts, so saying it is live
         // would be a promise the platform does not keep yet.
-        description: "As ferramentas aparecem quando um worker reiniciar e conectar.",
+        description:
+          "As ferramentas aparecem quando um worker reiniciar e conectar.",
       });
       onClose();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível salvar");
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível salvar",
+      );
     }
   }
 
@@ -69,15 +78,20 @@ export function ServerForm({ server, onClose }: { server: MCPServer | null; onCl
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{server ? "Editar servidor" : "Novo servidor de ferramentas"}</DialogTitle>
+          <DialogTitle>
+            {server ? "Editar servidor" : "Novo servidor de ferramentas"}
+          </DialogTitle>
           <DialogDescription>
-            Um servidor MCP é o que dá ferramentas aos agentes. Tudo que ele oferece
-            chega como leitura até alguém classificar.
+            Um servidor MCP é o que dá ferramentas aos agentes. Tudo que ele
+            oferece chega como leitura até alguém classificar.
           </DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(submit)} className="flex flex-col gap-4">
+          <form
+            onSubmit={form.handleSubmit(submit)}
+            className="flex flex-col gap-4"
+          >
             <FormField
               control={form.control}
               name="name"
@@ -85,10 +99,15 @@ export function ServerForm({ server, onClose }: { server: MCPServer | null; onCl
                 <FormItem>
                   <FormLabel>Nome</FormLabel>
                   <FormControl>
-                    <Input {...field} disabled={!!server} className="font-mono" />
+                    <Input
+                      {...field}
+                      disabled={!!server}
+                      className="font-mono"
+                    />
                   </FormControl>
                   <FormDescription>
-                    Prefixa as ferramentas: <code className="font-mono">crm</code> dá{" "}
+                    Prefixa as ferramentas:{" "}
+                    <code className="font-mono">crm</code> dá{" "}
                     <code className="font-mono">crm.lookup</code>.
                   </FormDescription>
                   <FormMessage />
@@ -103,7 +122,11 @@ export function ServerForm({ server, onClose }: { server: MCPServer | null; onCl
                 <FormItem>
                   <FormLabel>Comando</FormLabel>
                   <FormControl>
-                    <Input {...field} className="font-mono" placeholder="/usr/local/bin/crm-mcp" />
+                    <Input
+                      {...field}
+                      className="font-mono"
+                      placeholder="/usr/local/bin/crm-mcp"
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -117,7 +140,11 @@ export function ServerForm({ server, onClose }: { server: MCPServer | null; onCl
                 <FormItem>
                   <FormLabel>Argumentos</FormLabel>
                   <FormControl>
-                    <Input {...field} className="font-mono" placeholder="--config /etc/crm.yaml" />
+                    <Input
+                      {...field}
+                      className="font-mono"
+                      placeholder="--config /etc/crm.yaml"
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -131,7 +158,10 @@ export function ServerForm({ server, onClose }: { server: MCPServer | null; onCl
                 <FormItem className="flex items-center justify-between rounded-lg border p-3">
                   <FormLabel className="m-0">Ativo</FormLabel>
                   <FormControl>
-                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
                   </FormControl>
                 </FormItem>
               )}

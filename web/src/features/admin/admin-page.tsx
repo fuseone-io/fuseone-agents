@@ -2,7 +2,6 @@ import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToolsPanel } from "@/features/admin/tools-panel";
-import { IntegrationsPanel } from "@/features/admin/integrations-panel";
 import { EventsPanel } from "@/features/admin/events-panel";
 import { AreasPanel } from "@/features/admin/areas-panel";
 import { BudgetsPanel } from "@/features/admin/budgets-panel";
@@ -24,7 +23,6 @@ export function AdminPage() {
       <Tabs defaultValue="tools" className="min-h-0 flex-1">
         <TabsList>
           <TabsTrigger value="tools">Ferramentas</TabsTrigger>
-          <TabsTrigger value="integrations">Integrações</TabsTrigger>
           <TabsTrigger value="areas">Áreas</TabsTrigger>
           <TabsTrigger value="budgets">Tetos</TabsTrigger>
           <TabsTrigger value="events">Trilha</TabsTrigger>
@@ -32,9 +30,6 @@ export function AdminPage() {
 
         <TabsContent value="tools" className="mt-4">
           <ToolsPanel />
-        </TabsContent>
-        <TabsContent value="integrations" className="mt-4">
-          <IntegrationsPanel />
         </TabsContent>
         <TabsContent value="areas" className="mt-4">
           <AreasPanel />

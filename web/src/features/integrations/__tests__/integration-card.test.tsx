@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { IntegrationCard } from "@/features/admin/integration-card";
+import { IntegrationCard } from "@/features/integrations/integration-card";
 
 const base = { name: "crm", kind: "servidor MCP", description: "bin/devstack mcp" };
 

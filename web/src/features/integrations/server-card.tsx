@@ -1,11 +1,20 @@
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { IntegrationCard } from "@/features/admin/integration-card";
-import { RemoveButton } from "@/features/admin/remove-button";
-import { useDeleteMCPServer, type MCPServer } from "@/features/admin/api";
+import { IntegrationCard } from "@/features/integrations/integration-card";
+import { RemoveButton } from "@/components/shared/remove-button";
+import {
+  useDeleteMCPServer,
+  type MCPServer,
+} from "@/features/integrations/api";
 
 /** A tool server: what it runs, and whether it answered. */
-export function ServerCard({ server, onEdit }: { server: MCPServer; onEdit: () => void }) {
+export function ServerCard({
+  server,
+  onEdit,
+}: {
+  server: MCPServer;
+  onEdit: () => void;
+}) {
   const remove = useDeleteMCPServer();
 
   return (
@@ -35,7 +44,11 @@ export function ServerCard({ server, onEdit }: { server: MCPServer; onEdit: () =
                 remove.mutate(server.name, {
                   onSuccess: () => toast.success(`${server.name} removido`),
                   onError: (e) =>
-                    toast.error(e instanceof Error ? e.message : "Não foi possível remover"),
+                    toast.error(
+                      e instanceof Error
+                        ? e.message
+                        : "Não foi possível remover",
+                    ),
                 })
               }
             />

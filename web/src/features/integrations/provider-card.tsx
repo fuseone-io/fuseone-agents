@@ -1,8 +1,11 @@
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { IntegrationCard } from "@/features/admin/integration-card";
-import { RemoveButton } from "@/features/admin/remove-button";
-import { useDeleteProvider, type ModelProvider } from "@/features/admin/api";
+import { IntegrationCard } from "@/features/integrations/integration-card";
+import { RemoveButton } from "@/components/shared/remove-button";
+import {
+  useDeleteProvider,
+  type ModelProvider,
+} from "@/features/integrations/api";
 
 /**
  * A model provider.
@@ -40,7 +43,9 @@ export function ProviderCard({
               remove.mutate(provider.name, {
                 onSuccess: () => toast.success(`${provider.name} removido`),
                 onError: (e) =>
-                  toast.error(e instanceof Error ? e.message : "Não foi possível remover"),
+                  toast.error(
+                    e instanceof Error ? e.message : "Não foi possível remover",
+                  ),
               })
             }
           />

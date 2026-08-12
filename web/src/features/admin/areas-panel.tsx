@@ -5,7 +5,7 @@ import { Panel } from "@/components/shared/panel";
 import { Mono } from "@/components/shared/mono";
 import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/shared/states";
-import { RemoveButton } from "@/features/admin/remove-button";
+import { RemoveButton } from "@/components/shared/remove-button";
 import { AreaForm } from "@/features/admin/area-form";
 import { useDeleteScope, useScopes, type RegisteredScope } from "@/features/scope/api";
 

@@ -29,7 +29,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { usePutProvider, type ModelProvider } from "@/features/admin/api";
+import {
+  usePutProvider,
+  type ModelProvider,
+} from "@/features/integrations/api";
 
 const schema = z.object({
   name: z.string().min(1, "Dê um nome ao provedor."),
@@ -51,7 +54,9 @@ export function ProviderForm({
     resolver: zodResolver(schema),
     defaultValues: {
       name: provider?.name ?? "",
-      kind: (provider?.kind as "anthropic" | "openai_compatible") ?? "openai_compatible",
+      kind:
+        (provider?.kind as "anthropic" | "openai_compatible") ??
+        "openai_compatible",
       baseUrl: provider?.baseUrl ?? "",
       apiKey: "",
       enabled: provider?.enabled ?? true,
@@ -64,7 +69,9 @@ export function ProviderForm({
       toast.success(`${values.name} configurado`);
       onClose();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível salvar");
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível salvar",
+      );
     }
   }
 
@@ -72,14 +79,19 @@ export function ProviderForm({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{provider ? "Editar provedor" : "Novo provedor de modelo"}</DialogTitle>
+          <DialogTitle>
+            {provider ? "Editar provedor" : "Novo provedor de modelo"}
+          </DialogTitle>
           <DialogDescription>
             A credencial é selada assim que chega e nunca volta por esta tela.
           </DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(submit)} className="flex flex-col gap-4">
+          <form
+            onSubmit={form.handleSubmit(submit)}
+            className="flex flex-col gap-4"
+          >
             <FormField
               control={form.control}
               name="name"
@@ -87,9 +99,16 @@ export function ProviderForm({
                 <FormItem>
                   <FormLabel>Nome</FormLabel>
                   <FormControl>
-                    <Input {...field} disabled={!!provider} className="font-mono" placeholder="openai" />
+                    <Input
+                      {...field}
+                      disabled={!!provider}
+                      className="font-mono"
+                      placeholder="openai"
+                    />
                   </FormControl>
-                  <FormDescription>É o que as definições de agente referenciam.</FormDescription>
+                  <FormDescription>
+                    É o que as definições de agente referenciam.
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -109,7 +128,9 @@ export function ProviderForm({
                     </FormControl>
                     <SelectContent>
                       <SelectItem value="anthropic">Anthropic</SelectItem>
-                      <SelectItem value="openai_compatible">Compatível com OpenAI</SelectItem>
+                      <SelectItem value="openai_compatible">
+                        Compatível com OpenAI
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -124,7 +145,11 @@ export function ProviderForm({
                 <FormItem>
                   <FormLabel>Endereço</FormLabel>
                   <FormControl>
-                    <Input {...field} className="font-mono" placeholder="https://api.openai.com/v1" />
+                    <Input
+                      {...field}
+                      className="font-mono"
+                      placeholder="https://api.openai.com/v1"
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -138,7 +163,12 @@ export function ProviderForm({
                 <FormItem>
                   <FormLabel>Credencial</FormLabel>
                   <FormControl>
-                    <Input {...field} type="password" autoComplete="off" className="font-mono" />
+                    <Input
+                      {...field}
+                      type="password"
+                      autoComplete="off"
+                      className="font-mono"
+                    />
                   </FormControl>
                   <FormDescription>
                     {provider?.hasKey
@@ -157,7 +187,10 @@ export function ProviderForm({
                 <FormItem className="flex items-center justify-between rounded-lg border p-3">
                   <FormLabel className="m-0">Ativo</FormLabel>
                   <FormControl>
-                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
                   </FormControl>
                 </FormItem>
               )}
