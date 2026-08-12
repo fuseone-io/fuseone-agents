@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { LoadingRows } from "@/components/shared/states";
@@ -27,15 +28,19 @@ export function RecentRuns({
   selected?: string;
   onSelect?: (runId: string) => void;
 }) {
+  const { t } = useTranslation();
   const { data, isLoading, error } = useRuns({ since });
   const runs = (data?.items ?? []).slice(0, FETCHED);
 
   return (
     <section className="flex flex-col gap-2.5">
       <div className="flex items-center gap-2">
-        <h2 className="text-sm font-medium">Execuções recentes</h2>
-        <Link to="/runs" className="ml-auto text-xs text-primary hover:underline">
-          ver todas
+        <h2 className="text-sm font-medium">{t("overview.recentRuns")}</h2>
+        <Link
+          to="/runs"
+          className="ml-auto text-xs text-primary hover:underline"
+        >
+          {t("overview.seeAll")}
         </Link>
       </div>
 
@@ -46,11 +51,11 @@ export function RecentRuns({
           </div>
         ) : error ? (
           <p className="p-8 text-center text-sm text-muted-foreground">
-            Não foi possível ler as execuções.
+            {t("overview.runsUnreadable")}
           </p>
         ) : runs.length === 0 ? (
           <p className="p-8 text-center text-sm text-muted-foreground">
-            Nenhuma execução hoje. Agentes disparam por agendamento, webhook ou evento.
+            {t("overview.noRunsToday")}
           </p>
         ) : (
           <ScrollArea

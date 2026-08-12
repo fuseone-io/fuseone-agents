@@ -27,9 +27,7 @@ export function RunKpis({ run, steps }: { run: Run; steps: number }) {
       </Kpi>
 
       <Kpi label="Passos" value={String(steps)}>
-        <span className="text-muted-foreground">
-          último selado #{run.seq}
-        </span>
+        <span className="text-muted-foreground">último selado #{run.seq}</span>
       </Kpi>
 
       <Kpi label="Duração" value={formatDuration(run.startedAt, run.endedAt)}>
@@ -50,8 +48,12 @@ function Kpi({
 }) {
   return (
     <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-      <div className="text-2xs uppercase tracking-label text-muted-foreground">{label}</div>
-      <div className="mt-1.5 font-mono text-[22px]/7 font-medium tabular-nums">{value}</div>
+      <div className="text-2xs uppercase tracking-label text-muted-foreground">
+        {label}
+      </div>
+      <div className="mt-1.5 font-mono text-[22px]/7 font-medium tabular-nums">
+        {value}
+      </div>
       <div className="mt-0.5 text-xs text-muted-foreground">{children}</div>
     </div>
   );

@@ -3,7 +3,11 @@ import { Activity } from "lucide-react";
 import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
 import { Panel } from "@/components/shared/panel";
-import { EmptyState, ErrorState, LoadingRows } from "@/components/shared/states";
+import {
+  EmptyState,
+  ErrorState,
+  LoadingRows,
+} from "@/components/shared/states";
 import { RunsFilters, sinceFor } from "@/features/runs/runs-filters";
 import { RunsKpis } from "@/features/runs/runs-kpis";
 import { RunsTable } from "@/features/runs/runs-table";
@@ -88,8 +92,18 @@ function Body({
   empty?: React.ReactNode;
   children: React.ReactNode;
 }) {
-  if (isLoading) return <div className="p-4"><LoadingRows /></div>;
-  if (error) return <div className="p-4"><ErrorState error={error} onRetry={onRetry} /></div>;
+  if (isLoading)
+    return (
+      <div className="p-4">
+        <LoadingRows />
+      </div>
+    );
+  if (error)
+    return (
+      <div className="p-4">
+        <ErrorState error={error} onRetry={onRetry} />
+      </div>
+    );
   if (empty) return <div className="p-4">{empty}</div>;
   return <>{children}</>;
 }

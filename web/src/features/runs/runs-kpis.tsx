@@ -11,7 +11,13 @@ const WAITING = ["awaiting_approval", "parked"] as const;
  * "97,2%" alone is a number nobody can act on; "97,2% de 1.284" is one they
  * can. The delta line always carries the basis for that reason.
  */
-export function RunsKpis({ stats, isLoading }: { stats?: RunStats; isLoading: boolean }) {
+export function RunsKpis({
+  stats,
+  isLoading,
+}: {
+  stats?: RunStats;
+  isLoading: boolean;
+}) {
   if (isLoading || !stats) {
     return (
       <div className="flex shrink-0 gap-3">
@@ -23,7 +29,10 @@ export function RunsKpis({ stats, isLoading }: { stats?: RunStats; isLoading: bo
   }
 
   const finished = stats.byPhase.finished ?? 0;
-  const waiting = WAITING.reduce((sum, phase) => sum + (stats.byPhase[phase] ?? 0), 0);
+  const waiting = WAITING.reduce(
+    (sum, phase) => sum + (stats.byPhase[phase] ?? 0),
+    0,
+  );
   const running = stats.total - finished - waiting;
 
   return (
@@ -41,7 +50,11 @@ export function RunsKpis({ stats, isLoading }: { stats?: RunStats; isLoading: bo
       />
       <KpiCard
         label="Duração mediana"
-        value={stats.ended === 0 ? "—" : formatDurationMs(stats.medianDurationMs ?? 0)}
+        value={
+          stats.ended === 0
+            ? "—"
+            : formatDurationMs(stats.medianDurationMs ?? 0)
+        }
         // The basis is not decoration: a median over three runs and one over
         // three thousand are different claims.
         delta={
@@ -53,7 +66,9 @@ export function RunsKpis({ stats, isLoading }: { stats?: RunStats; isLoading: bo
       <KpiCard
         label="Esperando pessoa"
         value={waiting.toLocaleString("pt-BR")}
-        delta={waiting === 0 ? "nada na fila" : "aprovação ou execução estacionada"}
+        delta={
+          waiting === 0 ? "nada na fila" : "aprovação ou execução estacionada"
+        }
         trend={waiting > 0 ? "down" : "flat"}
       />
     </div>

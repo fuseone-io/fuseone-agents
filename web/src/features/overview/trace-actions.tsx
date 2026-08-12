@@ -25,7 +25,8 @@ export function TraceActions({
     decide.mutate(
       { approved, atSeq: approval.atSeq },
       {
-        onSuccess: () => toast.success(approved ? "Ação aprovada" : "Ação recusada"),
+        onSuccess: () =>
+          toast.success(approved ? "Ação aprovada" : "Ação recusada"),
         onError: (error) =>
           toast.error("Não foi possível registrar a decisão", {
             description: error instanceof Error ? error.message : undefined,

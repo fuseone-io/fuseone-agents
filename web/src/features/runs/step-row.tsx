@@ -15,12 +15,19 @@ import type { Step } from "@/lib/api/client";
 export function StepRow({ step, last }: { step: Step; last: boolean }) {
   const { verb, tone } = verbOf(step);
   const payload = (step.payload ?? {}) as Record<string, unknown>;
-  const explanation = typeof payload.rule === "string" ? explainRule(payload.rule) : "";
+  const explanation =
+    typeof payload.rule === "string" ? explainRule(payload.rule) : "";
 
   return (
     <li className="grid grid-cols-[16px_1fr] gap-3">
       <div className="flex flex-col items-center">
-        <span aria-hidden className={cn("mt-1.5 size-[7px] shrink-0 rounded-pill", TONE_DOT[tone])} />
+        <span
+          aria-hidden
+          className={cn(
+            "mt-1.5 size-[7px] shrink-0 rounded-pill",
+            TONE_DOT[tone],
+          )}
+        />
         {!last && <span aria-hidden className="w-px flex-1 bg-border" />}
       </div>
 
@@ -29,12 +36,16 @@ export function StepRow({ step, last }: { step: Step; last: boolean }) {
           <Mono dim>{formatInstant(step.at)}</Mono>
           <Mono className={TONE_TEXT[tone]}>{verb}</Mono>
           {typeof payload.tool === "string" && <Mono>{payload.tool}</Mono>}
-          {step.cost && step.cost.micros > 0 && <Mono dim>{formatCost(step.cost)}</Mono>}
+          {step.cost && step.cost.micros > 0 && (
+            <Mono dim>{formatCost(step.cost)}</Mono>
+          )}
         </div>
 
         {/* The trail never reads "denied by policy": it names the rule that
             fired and explains it, so the reader knows what to change. */}
-        {explanation && <p className="mt-1 text-sm text-text-secondary">{explanation}</p>}
+        {explanation && (
+          <p className="mt-1 text-sm text-text-secondary">{explanation}</p>
+        )}
 
         {step.labels && step.labels.length > 0 && (
           <div className="mt-1.5 flex flex-wrap gap-1">

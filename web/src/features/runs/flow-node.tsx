@@ -1,6 +1,13 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import {
-  Flag, Hand, Play, ShieldCheck, Sparkles, TriangleAlert, Wrench, Zap,
+  Flag,
+  Hand,
+  Play,
+  ShieldCheck,
+  Sparkles,
+  TriangleAlert,
+  Wrench,
+  Zap,
   type LucideIcon,
 } from "lucide-react";
 import { Mono } from "@/components/shared/mono";
@@ -44,7 +51,9 @@ export function FlowNode({ data }: NodeProps & { data: Model }) {
 
       <div className="flex items-center gap-2">
         <Icon className="size-3.5 shrink-0" aria-hidden />
-        <span className="truncate text-xs font-medium text-foreground">{data.title}</span>
+        <span className="truncate text-xs font-medium text-foreground">
+          {data.title}
+        </span>
       </div>
 
       <div className="flex items-baseline justify-between gap-2">
@@ -82,8 +91,18 @@ function Anchors() {
     <>
       {SIDES.map(([side, position]) => (
         <div key={side}>
-          <Handle id={side} type="target" position={position} className="!opacity-0" />
-          <Handle id={`${side}-out`} type="source" position={position} className="!opacity-0" />
+          <Handle
+            id={side}
+            type="target"
+            position={position}
+            className="!opacity-0"
+          />
+          <Handle
+            id={`${side}-out`}
+            type="source"
+            position={position}
+            className="!opacity-0"
+          />
         </div>
       ))}
     </>

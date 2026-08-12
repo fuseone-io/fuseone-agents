@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Mono } from "@/components/shared/mono";
@@ -19,7 +20,12 @@ import { cn } from "@/lib/utils";
  * was spent but how close it is to stopping runs — a ceiling reached pauses
  * every run in its scope until somebody raises it.
  */
-export function BudgetDonut({ windows }: { windows: { since: string; until: string } }) {
+export function BudgetDonut({
+  windows,
+}: {
+  windows: { since: string; until: string };
+}) {
+  const { t } = useTranslation();
   const budgets = useBudgets();
   // Both dimensions, because a ceiling can be filed at either and reading one
   // against the other reports it as untouched.
@@ -39,7 +45,7 @@ export function BudgetDonut({ windows }: { windows: { since: string; until: stri
 
   return (
     <section className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 shadow-sm">
-      <h2 className="text-sm font-medium">Teto de custo · hoje</h2>
+      <h2 className="text-sm font-medium">{t("overview.ceiling")}</h2>
 
       {budgets.isLoading || byArea.isLoading ? (
         <Skeleton className="h-32 rounded-lg" />
@@ -48,7 +54,7 @@ export function BudgetDonut({ windows }: { windows: { since: string; until: stri
           Nenhum teto por escopo configurado, então não há denominador para uma
           porcentagem. Gasto hoje: {formatCost({ micros: spend.total })}.{" "}
           <Link to="/admin" className="text-primary hover:underline">
-            Configurar
+            {t("overview.configure")}
           </Link>
         </p>
       ) : (
@@ -60,7 +66,8 @@ export function BudgetDonut({ windows }: { windows: { since: string; until: stri
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="truncate text-xs">{row.label}</span>
                   <Mono dim>
-                    {formatCost({ micros: row.spent })} / {formatCost({ micros: row.cap })}
+                    {formatCost({ micros: row.spent })} /{" "}
+                    {formatCost({ micros: row.cap })}
                   </Mono>
                 </div>
                 <Bar share={row.cap > 0 ? row.spent / row.cap : 0} />
@@ -92,7 +99,14 @@ function Donut({ share, cap }: { share: number; cap: number }) {
   return (
     <div className="relative size-28 shrink-0">
       <svg viewBox="0 0 112 112" className="size-28 -rotate-90">
-        <circle cx="56" cy="56" r={RADIUS} fill="none" strokeWidth="10" className="stroke-muted" />
+        <circle
+          cx="56"
+          cy="56"
+          r={RADIUS}
+          fill="none"
+          strokeWidth="10"
+          className="stroke-muted"
+        />
         <circle
           cx="56"
           cy="56"
@@ -108,7 +122,9 @@ function Donut({ share, cap }: { share: number; cap: number }) {
         <span className="font-mono text-xl font-medium tabular-nums">
           {Math.round(share * 100)}%
         </span>
-        <span className="text-2xs text-muted-foreground">de {formatCost({ micros: cap })}</span>
+        <span className="text-2xs text-muted-foreground">
+          de {formatCost({ micros: cap })}
+        </span>
       </div>
     </div>
   );

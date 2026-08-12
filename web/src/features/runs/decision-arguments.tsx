@@ -40,7 +40,10 @@ export function DecisionProvenance({ labels }: { labels?: string[] }) {
   if (!labels?.length) return null;
   return (
     <p className="mt-2.5 flex items-start gap-2 text-xs text-muted-foreground">
-      <TriangleAlert className="mt-px size-3.5 shrink-0 text-warning" aria-hidden />
+      <TriangleAlert
+        className="mt-px size-3.5 shrink-0 text-warning"
+        aria-hidden
+      />
       <span>
         Os argumentos derivam de dado marcado{" "}
         {labels.map((label) => (

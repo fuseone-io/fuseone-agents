@@ -20,7 +20,10 @@ export function RunSideRail({ run, steps }: { run: Run; steps: Step[] }) {
     <aside className="flex flex-col gap-3 lg:sticky lg:top-0">
       <Card title="Resumo">
         <Row label="Agente">
-          <Link to={`/agents/${run.agentId}`} className="text-sm text-primary hover:underline">
+          <Link
+            to={`/agents/${run.agentId}`}
+            className="text-sm text-primary hover:underline"
+          >
             {run.agentId}
           </Link>
         </Row>
@@ -73,7 +76,8 @@ export function RunSideRail({ run, steps }: { run: Run; steps: Step[] }) {
         </p>
         {last && (
           <p className="text-xs text-muted-foreground">
-            Último selo <Mono dim>{shortHash(last.hash)}</Mono> · {formatTime(last.at)}
+            Último selo <Mono dim>{shortHash(last.hash)}</Mono> ·{" "}
+            {formatTime(last.at)}
           </p>
         )}
         <p className="text-xs text-muted-foreground">
@@ -87,7 +91,9 @@ export function RunSideRail({ run, steps }: { run: Run; steps: Step[] }) {
 function Card({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-2.5 rounded-xl border border-border bg-card p-4 shadow-sm">
-      <h2 className="text-2xs uppercase tracking-label text-muted-foreground">{title}</h2>
+      <h2 className="text-2xs uppercase tracking-label text-muted-foreground">
+        {title}
+      </h2>
       {children}
     </section>
   );

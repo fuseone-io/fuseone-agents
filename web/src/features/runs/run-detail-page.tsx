@@ -22,8 +22,12 @@ export function RunDetailPage() {
   const steps = useRunSteps(runId);
 
   if (run.isLoading || steps.isLoading) return <LoadingRows rows={8} />;
-  if (run.error) return <ErrorState error={run.error} onRetry={() => void run.refetch()} />;
-  if (steps.error) return <ErrorState error={steps.error} onRetry={() => void steps.refetch()} />;
+  if (run.error)
+    return <ErrorState error={run.error} onRetry={() => void run.refetch()} />;
+  if (steps.error)
+    return (
+      <ErrorState error={steps.error} onRetry={() => void steps.refetch()} />
+    );
   if (!run.data) return null;
 
   const { data } = run;
@@ -60,6 +64,7 @@ export function RunDetailPage() {
  *  the ledger is the record, and the projection is derived from it. */
 function triggerOf(steps: Step[]): string | undefined {
   const started = steps.find((step) => step.kind === "run_started");
-  const trigger = (started?.payload as Record<string, unknown> | undefined)?.trigger;
+  const trigger = (started?.payload as Record<string, unknown> | undefined)
+    ?.trigger;
   return typeof trigger === "string" ? trigger : undefined;
 }

@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -5,7 +6,11 @@ import { RunDiagram } from "@/features/runs/run-diagram";
 import { TrailFilters } from "@/features/runs/trail-filters";
 import { TrailList } from "@/features/runs/trail-list";
 import { TrailViewToggle, type TrailView } from "@/features/runs/trail-view";
-import { buildTrail, keptSteps, type TrailFilter } from "@/features/runs/trail-model";
+import {
+  buildTrail,
+  keptSteps,
+  type TrailFilter,
+} from "@/features/runs/trail-model";
 import type { Step } from "@/lib/api/client";
 
 /**
@@ -27,13 +32,16 @@ export function TrailPanel({
   const [filter, setFilter] = useState<TrailFilter>("all");
   const [view, setView] = useState<TrailView>("list");
   const [showHashes, setShowHashes] = useState(true);
+  const { t } = useTranslation();
 
   const openStep = (seq: number) => {
     setView("list");
     // After the list has rendered. A fold may hold the step, in which case the
     // panel still lands on the right stretch of the run.
     requestAnimationFrame(() =>
-      document.getElementById(`step-${seq}`)?.scrollIntoView({ block: "center" }),
+      document
+        .getElementById(`step-${seq}`)
+        ?.scrollIntoView({ block: "center" }),
     );
   };
 
@@ -44,8 +52,10 @@ export function TrailPanel({
   return (
     <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
       <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
-        <h2 className="text-sm font-medium">Trilha</h2>
-        <span className="text-xs text-muted-foreground">{steps.length} eventos</span>
+        <h2 className="text-sm font-medium">{t("runs.trail")}</h2>
+        <span className="text-xs text-muted-foreground">
+          {t("runs.events", { count: steps.length })}
+        </span>
         <div className="ml-auto flex items-center gap-1.5">
           <TrailViewToggle value={view} onChange={setView} />
           <Separator orientation="vertical" className="mx-0.5 !h-4" />

@@ -28,7 +28,9 @@ export function OverviewKpi({
 }) {
   return (
     <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-      <div className="text-2xs uppercase tracking-label text-muted-foreground">{label}</div>
+      <div className="text-2xs uppercase tracking-label text-muted-foreground">
+        {label}
+      </div>
 
       <div className="mt-1.5 flex items-baseline gap-1.5">
         <span
@@ -64,7 +66,12 @@ function Delta({ value }: { value: number }) {
   // Direction only. More runs is not inherently good and fewer is not
   // inherently bad — this is a volume, not a score.
   return (
-    <span className={cn("flex items-center gap-1 text-xs", up ? "text-success" : "text-danger")}>
+    <span
+      className={cn(
+        "flex items-center gap-1 text-xs",
+        up ? "text-success" : "text-danger",
+      )}
+    >
       <Icon className="size-3.5" aria-hidden />
       <span className="font-mono tabular-nums">
         {up ? "+" : ""}

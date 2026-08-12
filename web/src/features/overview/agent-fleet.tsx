@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,7 @@ import { trendsByAgent } from "@/features/overview/fleet-model";
  * by volume hides it at the bottom.
  */
 export function AgentFleet({ since }: { since: string }) {
+  const { t } = useTranslation();
   const agents = useAgents();
   const hours = useThroughput(since);
 
@@ -24,11 +26,16 @@ export function AgentFleet({ since }: { since: string }) {
   return (
     <section className="flex flex-col gap-2.5">
       <div className="flex items-center gap-2">
-        <h2 className="text-sm font-medium">Frota de agentes</h2>
-        <Button variant="ghost" size="sm" asChild className="ml-auto h-7 text-muted-foreground">
+        <h2 className="text-sm font-medium">{t("overview.fleet")}</h2>
+        <Button
+          variant="ghost"
+          size="sm"
+          asChild
+          className="ml-auto h-7 text-muted-foreground"
+        >
           <Link to="/agents">
             <SlidersHorizontal className="size-4" aria-hidden />
-            Gerenciar
+            {t("overview.manage")}
           </Link>
         </Button>
       </div>
@@ -41,8 +48,7 @@ export function AgentFleet({ since }: { since: string }) {
         </div>
       ) : items.length === 0 ? (
         <p className="rounded-xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">
-          Nenhum agente publicado. Uma definição publicada aparece aqui com a
-          atividade do dia.
+          {t("overview.noAgents")}
         </p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">

@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -27,15 +28,21 @@ const VERDICT: Record<Verdict, { verb: string; className: string }> = {
  * from inside a single run, which is the only place this used to be readable.
  */
 export function DecisionsFeed({ since }: { since: string }) {
+  const { t } = useTranslation();
   const { data, isLoading, error } = useDecisions(since);
   const items = data?.items ?? [];
 
   return (
     <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4 shadow-sm">
       <div className="flex items-center gap-2">
-        <h2 className="text-sm font-medium">Decisões de política</h2>
-        <span aria-hidden className="size-1.5 rounded-pill bg-success motion-safe:animate-pulse" />
-        <span className="text-xs text-muted-foreground">ao vivo</span>
+        <h2 className="text-sm font-medium">{t("overview.decisions")}</h2>
+        <span
+          aria-hidden
+          className="size-1.5 rounded-pill bg-success motion-safe:animate-pulse"
+        />
+        <span className="text-xs text-muted-foreground">
+          {t("overview.live")}
+        </span>
       </div>
 
       {isLoading ? (
@@ -46,20 +53,25 @@ export function DecisionsFeed({ since }: { since: string }) {
         </div>
       ) : error ? (
         <p className="py-8 text-center text-sm text-muted-foreground">
-          Não foi possível ler as decisões.
+          {t("overview.decisionsUnreadable")}
         </p>
       ) : items.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">
-          O Portão não decidiu nada hoje. Nenhum agente pediu para executar uma
-          ferramenta no período.
+          {t("overview.noDecisions")}
         </p>
       ) : (
         // The feed is live. Left to grow, every decision the Gate records
         // would push the runs table further down under somebody reading it.
-        <ScrollArea type="auto" className={cn(items.length > VISIBLE && "h-40")}>
+        <ScrollArea
+          type="auto"
+          className={cn(items.length > VISIBLE && "h-40")}
+        >
           <ol className="flex flex-col pr-2.5">
             {items.map((decision) => (
-              <Row key={`${decision.runId}-${decision.seq}`} decision={decision} />
+              <Row
+                key={`${decision.runId}-${decision.seq}`}
+                decision={decision}
+              />
             ))}
           </ol>
         </ScrollArea>
@@ -80,7 +92,9 @@ function Row({ decision }: { decision: RecordedDecision }) {
         <Mono dim className="text-2xs">
           {formatTime(decision.at)}
         </Mono>
-        <span className={cn("text-xs font-medium", verdict.className)}>{verdict.verb}</span>
+        <span className={cn("text-xs font-medium", verdict.className)}>
+          {verdict.verb}
+        </span>
         <Mono className="truncate">{decision.tool}</Mono>
         {/* Whose agent it was. Without it the feed says something was blocked
             and leaves the reader to find out for whom. */}

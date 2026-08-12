@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,14 @@ import { cn } from "@/lib/utils";
  * from here, because the alternative is that noticing something and acting on
  * it are two different sittings.
  */
-export function TracePanel({ runId, onClose }: { runId: string; onClose: () => void }) {
+export function TracePanel({
+  runId,
+  onClose,
+}: {
+  runId: string;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
   const run = useRun(runId);
   const steps = useRunSteps(runId);
 
@@ -38,7 +46,10 @@ export function TracePanel({ runId, onClose }: { runId: string; onClose: () => v
     <aside className="flex max-h-[calc(100vh-100px)] w-full flex-col rounded-xl border border-border bg-card shadow-sm lg:w-[340px] lg:shrink-0">
       <header className="flex items-start gap-2 border-b border-border p-4">
         <div className="min-w-0 flex-1">
-          <Link to={`/runs/${runId}`} className="text-sm font-medium hover:underline">
+          <Link
+            to={`/runs/${runId}`}
+            className="text-sm font-medium hover:underline"
+          >
             {run.data?.agentId ?? runId}
           </Link>
           <div className="truncate">
@@ -50,9 +61,14 @@ export function TracePanel({ runId, onClose }: { runId: string; onClose: () => v
             </Mono>
           </div>
         </div>
-        <Button variant="ghost" size="icon" className="size-7 shrink-0" onClick={onClose}>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7 shrink-0"
+          onClick={onClose}
+        >
           <X className="size-4" aria-hidden />
-          <span className="sr-only">Fechar o rastro</span>
+          <span className="sr-only">{t("overview.closeTrace")}</span>
         </Button>
       </header>
 
@@ -67,7 +83,11 @@ export function TracePanel({ runId, onClose }: { runId: string; onClose: () => v
 
             <ol className={cn("flex flex-col", pending && "mt-3")}>
               {items.map((step, i) => (
-                <TraceStep key={step.seq} step={step} last={i === items.length - 1} />
+                <TraceStep
+                  key={step.seq}
+                  step={step}
+                  last={i === items.length - 1}
+                />
               ))}
             </ol>
           </div>

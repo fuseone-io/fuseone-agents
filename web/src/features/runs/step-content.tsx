@@ -19,7 +19,8 @@ export function StepContent({
 }) {
   const content = useStepContent(runId, seq, open);
 
-  if (content.isLoading) return <Skeleton className="mt-2.5 h-16 w-full rounded-lg" />;
+  if (content.isLoading)
+    return <Skeleton className="mt-2.5 h-16 w-full rounded-lg" />;
   if (content.error || !content.data) {
     return (
       <p className="mt-2.5 rounded-lg border border-border bg-muted p-3 text-xs text-muted-foreground">

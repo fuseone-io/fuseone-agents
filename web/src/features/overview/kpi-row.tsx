@@ -14,8 +14,14 @@ import { formatCost, formatDurationMs } from "@/lib/format";
  * to invent the comparison, and they will invent a flattering one.
  */
 export function KpiRow({ windows }: { windows: Windows }) {
-  const today = useRunStats({ since: windows.current.since, until: windows.current.until });
-  const yesterday = useRunStats({ since: windows.previous.since, until: windows.previous.until });
+  const today = useRunStats({
+    since: windows.current.since,
+    until: windows.current.until,
+  });
+  const yesterday = useRunStats({
+    since: windows.previous.since,
+    until: windows.previous.until,
+  });
   const hours = useThroughput(windows.current.since);
 
   if (today.isLoading) {
@@ -46,7 +52,11 @@ export function KpiRow({ windows }: { windows: Windows }) {
         delta={runsDelta}
         // "vs ontem" beside nothing invites the reader to supply the missing
         // number, and the honest answer is that yesterday had none.
-        note={runsDelta === undefined ? "nada ontem para comparar" : `vs ${before?.total ?? 0} ontem`}
+        note={
+          runsDelta === undefined
+            ? "nada ontem para comparar"
+            : `vs ${before?.total ?? 0} ontem`
+        }
         trend={columns.map((c) => c.total)}
       />
 
@@ -59,7 +69,9 @@ export function KpiRow({ windows }: { windows: Windows }) {
 
       <OverviewKpi
         label="Cauda lenta (p95)"
-        value={stats?.p95DurationMs ? formatDurationMs(stats.p95DurationMs) : "—"}
+        value={
+          stats?.p95DurationMs ? formatDurationMs(stats.p95DurationMs) : "—"
+        }
         delta={deltaOf(stats?.p95DurationMs ?? 0, before?.p95DurationMs ?? 0)}
         note={`mediana ${stats?.medianDurationMs ? formatDurationMs(stats.medianDurationMs) : "—"}`}
       />
@@ -67,7 +79,11 @@ export function KpiRow({ windows }: { windows: Windows }) {
       <OverviewKpi
         label="Paradas"
         value={String(blocked)}
-        note={waiting > 0 ? `${waiting} esperando uma pessoa` : "nenhuma esperando decisão"}
+        note={
+          waiting > 0
+            ? `${waiting} esperando uma pessoa`
+            : "nenhuma esperando decisão"
+        }
         tone={blocked > 0 ? "bad" : "neutral"}
         trend={columns.map((c) => c.byState.blocked)}
       />

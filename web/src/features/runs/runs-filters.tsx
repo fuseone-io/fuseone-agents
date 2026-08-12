@@ -1,5 +1,8 @@
 import { Toolbar } from "@/components/shared/toolbar";
-import { FilterSelect, type FilterOption } from "@/components/shared/filter-select";
+import {
+  FilterSelect,
+  type FilterOption,
+} from "@/components/shared/filter-select";
 import type { Phase } from "@/lib/api/client";
 
 const PHASES: FilterOption[] = [
@@ -18,7 +21,12 @@ const PERIODS: FilterOption[] = [
   { value: "all", label: "Todo o período" },
 ];
 
-const DAYS: Record<string, number | null> = { "1": 1, "7": 7, "30": 30, all: null };
+const DAYS: Record<string, number | null> = {
+  "1": 1,
+  "7": 7,
+  "30": 30,
+  all: null,
+};
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MINUTE_MS = 60 * 1000;
 
@@ -40,7 +48,11 @@ export function RunsFilters({
   onPeriod: (value: string) => void;
 }) {
   return (
-    <Toolbar placeholder="Buscar por execução ou agente" value={search} onChange={onSearch}>
+    <Toolbar
+      placeholder="Buscar por execução ou agente"
+      value={search}
+      onChange={onSearch}
+    >
       <FilterSelect
         label="Filtrar por situação"
         value={phase}

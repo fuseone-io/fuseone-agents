@@ -20,7 +20,13 @@ export function TraceStep({ step, last }: { step: Step; last: boolean }) {
   return (
     <li className="grid grid-cols-[10px_1fr] gap-2">
       <div className="flex flex-col items-center">
-        <span aria-hidden className={cn("mt-1.5 size-[6px] shrink-0 rounded-pill", TONE_DOT[tone])} />
+        <span
+          aria-hidden
+          className={cn(
+            "mt-1.5 size-[6px] shrink-0 rounded-pill",
+            TONE_DOT[tone],
+          )}
+        />
         {!last && <span aria-hidden className="w-px flex-1 bg-border" />}
       </div>
 
@@ -29,7 +35,9 @@ export function TraceStep({ step, last }: { step: Step; last: boolean }) {
           <Mono dim className="text-2xs">
             {formatTime(step.at)}
           </Mono>
-          <span className={cn("truncate text-xs", TONE_TEXT[tone])}>{titleOf(step)}</span>
+          <span className={cn("truncate text-xs", TONE_TEXT[tone])}>
+            {titleOf(step)}
+          </span>
         </div>
         {tool && (
           <Mono dim className="block truncate text-2xs">

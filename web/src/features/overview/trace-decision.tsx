@@ -43,7 +43,10 @@ export function TraceDecision({
         {explainRule(approval.rule) ? ` — ${explainRule(approval.rule)}` : "."}
       </p>
 
-      <Link to={`/runs/${runId}`} className="text-xs text-primary hover:underline">
+      <Link
+        to={`/runs/${runId}`}
+        className="text-xs text-primary hover:underline"
+      >
         Ver os argumentos propostos
       </Link>
     </section>

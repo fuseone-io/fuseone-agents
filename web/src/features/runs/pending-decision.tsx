@@ -4,7 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Mono } from "@/components/shared/mono";
 import { ConfirmAction } from "@/features/runs/confirm-action";
-import { DecisionArguments, DecisionProvenance } from "@/features/runs/decision-arguments";
+import {
+  DecisionArguments,
+  DecisionProvenance,
+} from "@/features/runs/decision-arguments";
 import { DecisionFacts } from "@/features/runs/decision-facts";
 import { useDecideApproval, useStepContent } from "@/features/runs/api";
 import { formatRelative } from "@/lib/format";
@@ -19,7 +22,9 @@ import type { PendingApproval, Step } from "@/lib/api/client";
  */
 function labelsOf(step?: Step): string[] | undefined {
   const labels = (step?.payload as Record<string, unknown> | undefined)?.labels;
-  return Array.isArray(labels) ? labels.filter((l): l is string => typeof l === "string") : undefined;
+  return Array.isArray(labels)
+    ? labels.filter((l): l is string => typeof l === "string")
+    : undefined;
 }
 
 /**
@@ -46,7 +51,8 @@ export function PendingDecision({
     decide.mutate(
       { approved, atSeq: approval.atSeq },
       {
-        onSuccess: () => toast.success(approved ? "Ação aprovada" : "Ação recusada"),
+        onSuccess: () =>
+          toast.success(approved ? "Ação aprovada" : "Ação recusada"),
         onError: (error) =>
           toast.error("Não foi possível registrar a decisão", {
             description: error instanceof Error ? error.message : undefined,
@@ -65,7 +71,10 @@ export function PendingDecision({
           <Hand className="size-4" aria-hidden />
         </span>
         <div className="min-w-0 flex-1">
-          <h2 id="decision-heading" className="text-sm font-medium text-warning">
+          <h2
+            id="decision-heading"
+            className="text-sm font-medium text-warning"
+          >
             Aguardando sua decisão · passo #{approval.atSeq}
           </h2>
           <p className="mt-0.5 text-sm">
@@ -73,7 +82,9 @@ export function PendingDecision({
             <Mono className="rounded-md border border-border bg-card px-1.5 py-px">
               {approval.tool}
             </Mono>
-            {explainRule(approval.rule) ? ` — ${explainRule(approval.rule)}` : "."}
+            {explainRule(approval.rule)
+              ? ` — ${explainRule(approval.rule)}`
+              : "."}
           </p>
         </div>
         <div className="ml-auto shrink-0 text-right">

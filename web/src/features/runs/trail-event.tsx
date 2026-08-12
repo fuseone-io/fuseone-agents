@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Mono } from "@/components/shared/mono";
 import { StepContent } from "@/features/runs/step-content";
 import { TILE, tileOf } from "@/features/runs/trail-icon";
@@ -53,16 +57,24 @@ export function TrailEvent({
         {expandable && (
           <ChevronDown
             aria-hidden
-            className={cn("size-3.5 text-muted-foreground transition-transform", open && "rotate-180")}
+            className={cn(
+              "size-3.5 text-muted-foreground transition-transform",
+              open && "rotate-180",
+            )}
           />
         )}
       </div>
-      {detailOf(step) && <p className="mt-0.5 text-xs text-muted-foreground">{detailOf(step)}</p>}
+      {detailOf(step) && (
+        <p className="mt-0.5 text-xs text-muted-foreground">{detailOf(step)}</p>
+      )}
     </>
   );
 
   return (
-    <li id={`step-${step.seq}`} className="grid grid-cols-[26px_1fr_auto] gap-x-3">
+    <li
+      id={`step-${step.seq}`}
+      className="grid grid-cols-[26px_1fr_auto] gap-x-3"
+    >
       <div className="flex flex-col items-center">
         <span
           className={cn(
@@ -96,7 +108,7 @@ export function TrailEvent({
         </Mono>
         {showHashes && (
           <div>
-            <Mono className="text-2xs text-text-disabled" >
+            <Mono className="text-2xs text-text-disabled">
               <span title={step.hash}>{shortHash(step.hash)}</span>
             </Mono>
           </div>

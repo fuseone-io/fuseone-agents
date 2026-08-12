@@ -23,7 +23,13 @@ const NODE_TYPES = { step: FlowNode };
  * render and stored nowhere — the ledger is the record and this is a
  * projection of it (PRD FU-18).
  */
-export function RunDiagram({ steps, onSelect }: { steps: Step[]; onSelect?: (seq: number) => void }) {
+export function RunDiagram({
+  steps,
+  onSelect,
+}: {
+  steps: Step[];
+  onSelect?: (seq: number) => void;
+}) {
   // XYFlow ships its own chrome with its own palette. colorMode is how it is
   // told which one, and "system" is a value it understands — hand-styling its
   // controls with our tokens would fight the library on every upgrade.
@@ -34,19 +40,23 @@ export function RunDiagram({ steps, onSelect }: { steps: Step[]; onSelect?: (seq
     const placed = new Map(placeGraph(graph.nodes).map((p) => [p.id, p]));
 
     return {
-      nodes: graph.nodes.map(
-        (node): Node => ({
-          id: node.id,
-          type: "step",
-          position: { x: placed.get(node.id)?.x ?? 0, y: placed.get(node.id)?.y ?? 0 },
-          data: { ...node },
-          draggable: false,
-        }),
-      ),
+      nodes: graph.nodes.map((node): Node => ({
+        id: node.id,
+        type: "step",
+        position: {
+          x: placed.get(node.id)?.x ?? 0,
+          y: placed.get(node.id)?.y ?? 0,
+        },
+        data: { ...node },
+        draggable: false,
+      })),
       edges: graph.edges.map((edge): Edge => {
         const from = placed.get(edge.from);
         const to = placed.get(edge.to);
-        const ports = from && to ? edgePorts(from, to) : { source: "right", target: "left" };
+        const ports =
+          from && to
+            ? edgePorts(from, to)
+            : { source: "right", target: "left" };
         return {
           id: `${edge.from}-${edge.to}`,
           source: edge.from,

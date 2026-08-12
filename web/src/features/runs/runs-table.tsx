@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
   Table,
   TableBody,
@@ -15,7 +16,8 @@ import { formatCost, formatDuration, formatRelative } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Run } from "@/lib/api/client";
 
-const HEAD = "h-[30px] bg-muted text-2xs uppercase tracking-label text-muted-foreground";
+const HEAD =
+  "h-[30px] bg-muted text-2xs uppercase tracking-label text-muted-foreground";
 const NUM = "text-right font-mono text-xs tabular-nums";
 
 /**
@@ -41,18 +43,27 @@ export function RunsTable({
   onSelect?: (runId: string) => void;
 }) {
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   return (
     <Table>
       <TableHeader>
         <TableRow className="hover:bg-transparent">
-          <TableHead className={HEAD}>Execução</TableHead>
-          <TableHead className={HEAD}>Agente</TableHead>
-          <TableHead className={HEAD}>Situação</TableHead>
-          <TableHead className={`${HEAD} text-right`}>Passos</TableHead>
-          <TableHead className={`${HEAD} text-right`}>Duração</TableHead>
-          <TableHead className={`${HEAD} text-right`}>Custo</TableHead>
-          <TableHead className={`${HEAD} text-right`}>Início</TableHead>
+          <TableHead className={HEAD}>{t("runs.columnRun")}</TableHead>
+          <TableHead className={HEAD}>{t("runs.columnAgent")}</TableHead>
+          <TableHead className={HEAD}>{t("runs.columnState")}</TableHead>
+          <TableHead className={`${HEAD} text-right`}>
+            {t("runs.columnSteps")}
+          </TableHead>
+          <TableHead className={`${HEAD} text-right`}>
+            {t("runs.columnDuration")}
+          </TableHead>
+          <TableHead className={`${HEAD} text-right`}>
+            {t("runs.columnCost")}
+          </TableHead>
+          <TableHead className={`${HEAD} text-right`}>
+            {t("runs.columnStarted")}
+          </TableHead>
         </TableRow>
       </TableHeader>
 
@@ -83,7 +94,7 @@ export function RunsTable({
                     monochrome print and a colour-blind reader. */}
                 <span className="flex items-center gap-2">
                   <StateDot state={state} />
-                  {PHASE_LABELS[run.phase]}
+                  {t(PHASE_LABELS[run.phase])}
                 </span>
               </TableCell>
               <TableCell className={NUM}>{run.seq}</TableCell>

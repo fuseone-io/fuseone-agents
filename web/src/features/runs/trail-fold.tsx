@@ -1,6 +1,11 @@
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import { Ellipsis } from "lucide-react";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Mono } from "@/components/shared/mono";
 import { summaryOf } from "@/features/runs/step-story";
 import { formatDurationMs } from "@/lib/format";
@@ -15,6 +20,7 @@ import type { Step } from "@/lib/api/client";
  * among the bookkeeping that does not.
  */
 export function TrailFold({ steps, last }: { steps: Step[]; last: boolean }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const first = steps[0];
   const final = steps.at(-1);
@@ -38,12 +44,15 @@ export function TrailFold({ steps, last }: { steps: Step[]; last: boolean }) {
       <div className="min-w-0 pb-4 pt-1">
         <Collapsible open={open} onOpenChange={setOpen}>
           <CollapsibleTrigger className="rounded-lg text-left text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/26">
-            {steps.length} passos de rotina · leituras permitidas, sem alteração de estado
+            {t("runs.foldSummary", { count: steps.length })}
           </CollapsibleTrigger>
           <CollapsibleContent>
             <ul className="mt-2 flex flex-col gap-1.5">
               {steps.map((step) => (
-                <li key={step.seq} className="flex gap-2.5 text-xs text-muted-foreground">
+                <li
+                  key={step.seq}
+                  className="flex gap-2.5 text-xs text-muted-foreground"
+                >
                   <Mono dim className="text-2xs">
                     #{step.seq}
                   </Mono>

@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useVerifyRun } from "@/features/runs/api";
@@ -10,18 +11,29 @@ import { useVerifyRun } from "@/features/runs/api";
  */
 export function VerifyButton({ runId }: { runId: string }) {
   const verify = useVerifyRun(runId);
+  const { t } = useTranslation();
 
   return (
     <div className="flex items-center gap-2">
-      <Button variant="outline" size="sm" onClick={() => verify.mutate()} disabled={verify.isPending}>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => verify.mutate()}
+        disabled={verify.isPending}
+      >
         <ShieldCheck className="size-4" />
-        Verificar trilha
+        {t("runs.verifyTrail")}
       </Button>
       {verify.data && (
-        <span role="status" className={verify.data.valid ? "text-sm text-success" : "text-sm text-danger"}>
+        <span
+          role="status"
+          className={
+            verify.data.valid ? "text-sm text-success" : "text-sm text-danger"
+          }
+        >
           {verify.data.valid
-            ? `Íntegra — ${verify.data.stepsChecked} passos`
-            : `Rompida no passo ${verify.data.brokenAtSeq}`}
+            ? t("runs.verifyIntact", { count: verify.data.stepsChecked })
+            : t("runs.verifyBroken", { seq: verify.data.brokenAtSeq })}
         </span>
       )}
     </div>
