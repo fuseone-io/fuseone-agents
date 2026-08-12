@@ -34,6 +34,18 @@ func openPool(t *testing.T) *pgxpool.Pool {
 	if err := ledger.Migrate(context.Background(), pool); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
+	return pool
+}
+
+// freshPool is openPool with the shared tables emptied.
+//
+// Separate because openPool used to do both, and a helper that wipes shared
+// state every time it is called is a trap: asking for a second pool in the
+// middle of a test deleted what the test had just recorded, twice, before
+// anybody noticed the two were the same function.
+func freshPool(t *testing.T) *pgxpool.Pool {
+	t.Helper()
+	pool := openPool(t)
 	if _, err := pool.Exec(context.Background(),
 		`delete from settings where kind = 'tool_classification'; delete from admin_events`); err != nil {
 		t.Fatalf("clean: %v", err)
@@ -44,7 +56,7 @@ func openPool(t *testing.T) *pgxpool.Pool {
 var platform = domain.Scope{Company: "default", Area: "platform"}
 
 func TestClassify_survivesTheProcessThatMadeIt(t *testing.T) {
-	pool := openPool(t)
+	pool := freshPool(t)
 	ctx := context.Background()
 
 	// The Curator's act is the single point where write access enters the
@@ -70,7 +82,7 @@ func TestClassify_survivesTheProcessThatMadeIt(t *testing.T) {
 }
 
 func TestClassify_recordsWhoRuledInTheSameTransaction(t *testing.T) {
-	pool := openPool(t)
+	pool := freshPool(t)
 	ctx := context.Background()
 
 	if err := admin.NewCurator(pool).Classify(ctx, platform, domain.ToolClassification{
@@ -94,7 +106,7 @@ func TestClassify_recordsWhoRuledInTheSameTransaction(t *testing.T) {
 }
 
 func TestClassify_unknownEffect_isRefusedRatherThanStored(t *testing.T) {
-	pool := openPool(t)
+	pool := freshPool(t)
 
 	// EffectUnknown is the zero value that makes an unclassified tool fail
 	// closed. Storing it deliberately would look like a decision.
@@ -106,7 +118,7 @@ func TestClassify_unknownEffect_isRefusedRatherThanStored(t *testing.T) {
 }
 
 func TestClassify_twice_keepsTheLatestAndBothRecords(t *testing.T) {
-	pool := openPool(t)
+	pool := freshPool(t)
 	ctx := context.Background()
 	curator := admin.NewCurator(pool)
 
