@@ -338,18 +338,57 @@ screen saying why a server the console does not own cannot be edited here —
 which today is a Portuguese literal in the component rather than a catalogue
 entry.
 
-### Reopened: connectors
+### Connectors: reopened, argued, and settled for now
 
-N4 rules out an integration engine, and §4 above takes that as settled. The
-owner has reopened it — the position to be argued is that the platform needs
-connectors and that the PRD may have got this wrong.
+**Decision: a tool is an MCP server. Connectors are revisited only if the need
+turns up in practice.**
 
-Recorded here unargued, on purpose. What is worth separating before that
-conversation is that two different things get called "connectors": a catalogue
-of per-system integrations, which is what N4 refuses, and remote MCP, which is
-not an integration engine at all and would answer most of the same need by
-pointing at servers somebody else maintains. The first is a product decision;
-the second is the queued work above.
+The conversation was worth having, and it invalidated the reason N4 gives
+rather than its conclusion.
+
+N4 justifies refusing an integration engine with "heavy integration remains the
+FuseOne platform's domain". That is only a boundary if the FuseOne platform is
+on the other side of it, and it is not: this product is installed on its own,
+and an installation may have no FuseOne anywhere near it. Standalone, "remains
+the domain of" delegates nothing — it describes work that does not happen,
+while the customer hears "not our problem" from the only thing they installed.
+
+So the line was redrawn on grounds that stand without FuseOne: **action per
+call belongs here; moving data in volume does not.** An agent is the
+orchestrator — mapping a field, choosing a route, transforming a record is what
+it does by reasoning, and that is the premise of the product. What an agent is
+bad at is moving half a million rows every night: that is a pipe, and a pipe
+driven by a language model is expensive, slow and wrong.
+
+Most of what an EIP does either already exists here or is the agent itself:
+retry and backoff are the worker's, scheduling is the cron trigger's,
+orchestration is the loop, mapping is the reasoning. What is left is volume,
+and volume does not become an agent by decree.
+
+**Why not a generic HTTP tool**, which is the obvious way to cover an API with
+no MCP server: the Gate decides per tool, and effect classification lives on
+the tool. One tool that can issue any request makes `DELETE /customers/123`
+and `GET /balance` the same entry in the pack, with the same classification. A
+policy saying "nothing destructive without approval" is a sentence about the
+catalogue, and a generic tool empties it. The trail would record "called
+http.request", which tells an auditor nothing in two years.
+
+**If the need does turn up**, the shape to reach for is a *declared* HTTP tool
+— name, method, URL, argument schema, credential and effect, configured rather
+than coded — served by a built-in MCP server. That keeps every property the
+Gate depends on and is not an integration engine: no field mapping, no
+transformation, no per-vendor semantics. It is a way of minting a tool without
+writing one.
+
+What was surveyed while deciding: Tessera Labs, the closest adjacent product,
+uses pre-built per-system connectors (SAP, S/4HANA, Salesforce, Workday,
+Oracle) and does not mention MCP. That is consistent with what they sell —
+an integrator's engagement, where the connectors are the product — and not
+evidence about a governance platform installed at the customer, where each
+connector would be maintenance for ever.
+
+**N4 needs rewriting rather than amending**, because its stated reason is void.
+The conclusion survives on the new reasoning above.
 
 ### Size
 
