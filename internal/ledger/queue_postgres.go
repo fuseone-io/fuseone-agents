@@ -30,11 +30,26 @@ func claimable(phase string) bool {
 	return slices.Contains(claimablePhaseNames, phase)
 }
 
-// Claim leases the run that has been waiting longest.
+// simulatedRuns is the other half of the queue from realRuns, which the
+// projections above already name. Applied explicitly on both sides, so a claim
+// always says which half it means.
+const simulatedRuns = "simulated"
+
+// Claim leases the real run that has been waiting longest.
 //
 // SKIP LOCKED is what lets a pool share one queue without coordinating: a row
 // another worker is already claiming is passed over rather than waited on.
 func (p *Postgres) Claim(ctx context.Context, owner string, lease time.Duration) (domain.Claim, error) {
+	return p.claim(ctx, owner, lease, realRuns)
+}
+
+func (p *Postgres) claimSimulated(ctx context.Context, owner string, lease time.Duration) (domain.Claim, error) {
+	return p.claim(ctx, owner, lease, simulatedRuns)
+}
+
+func (p *Postgres) claim(
+	ctx context.Context, owner string, lease time.Duration, which string,
+) (domain.Claim, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return domain.Claim{}, fmt.Errorf("begin claim: %w", err)
@@ -50,11 +65,11 @@ func (p *Postgres) Claim(ctx context.Context, owner string, lease time.Duration)
 		select run_id, company_id, area_id, agent_id, version_id, on_behalf_of, attempts
 		from runs
 		where phase in `+claimablePhases+`
-		  -- A worker must never claim a simulated run. It would execute the
-		  -- dry run's proposals with the real tool layer, against real
-		  -- systems, on the strength of a case somebody uploaded to find out
-		  -- what would happen.
-		  and not simulated
+		  -- Which half of the queue this is. A pool built with the real tool
+		  -- layer must never reach a simulated run: it would execute the dry
+		  -- run's proposals against real systems, on the strength of a case
+		  -- somebody uploaded to find out what would happen.
+		  and `+which+`
 		  and next_attempt_at <= now()
 		  and (leased_until is null or leased_until <= now())
 		order by next_attempt_at

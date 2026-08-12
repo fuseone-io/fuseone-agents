@@ -41,6 +41,7 @@ type Store interface {
 	RunByIdemKey(ctx context.Context, key string) (domain.RunID, error)
 	SpentSince(ctx context.Context, scope domain.Scope, since time.Time) (domain.Consumption, error)
 	SimulationRuns(ctx context.Context, simulation string) ([]domain.RunID, error)
+	Simulations() ledger.SimulationQueue
 }
 
 type factory struct {
@@ -1466,6 +1467,82 @@ func TestSimulationRunsContract(t *testing.T) {
 		}
 		if len(got) != 0 {
 			t.Errorf("runs = %v, want none", got)
+		}
+	})
+}
+
+// The two halves of the queue. A pool built with the real tool layer reaching
+// a simulated run would execute a dry run's proposals against real systems, on
+// the strength of a case somebody uploaded to find out what would happen — so
+// this is checked against both stores rather than only the one that happened
+// to have the predicate.
+
+func TestClaimContract_theTwoHalvesOfTheQueueNeverOverlap(t *testing.T) {
+	base := time.Date(2026, 8, 12, 9, 0, 0, 0, time.UTC)
+
+	opened := func(id domain.RunID, simulation string) domain.Step {
+		st := startedAt(id, base)
+		st.IdemKey = string(id)
+		st.Payload = mustJSON(t, domain.RunStartedPayload{
+			Trigger: "simulation", Simulated: simulation != "", Simulation: simulation,
+		})
+		return st
+	}
+
+	run(t, "an ordinary worker never claims a simulated run", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		mustAppend(t, s, opened("run-sim", "sim-a"))
+
+		_, err := s.Claim(ctx, "worker-1", time.Minute)
+		if !errors.Is(err, domain.ErrNoClaimableRun) {
+			t.Fatalf("Claim = %v, want nothing claimable", err)
+		}
+	})
+
+	run(t, "the simulation queue never claims a real run", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		mustAppend(t, s, opened("run-real", ""))
+
+		_, err := s.Simulations().Claim(ctx, "sim-worker-1", time.Minute)
+		if !errors.Is(err, domain.ErrNoClaimableRun) {
+			t.Fatalf("Claim = %v, want nothing claimable", err)
+		}
+	})
+
+	run(t, "each half claims its own", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		mustAppend(t, s, opened("run-real", ""))
+		mustAppend(t, s, opened("run-sim", "sim-a"))
+
+		real, err := s.Claim(ctx, "worker-1", time.Minute)
+		if err != nil {
+			t.Fatalf("Claim: %v", err)
+		}
+		sim, err := s.Simulations().Claim(ctx, "sim-worker-1", time.Minute)
+		if err != nil {
+			t.Fatalf("Claim simulated: %v", err)
+		}
+		if real.RunID != "run-real" || sim.RunID != "run-sim" {
+			t.Errorf("claimed %q and %q", real.RunID, sim.RunID)
+		}
+	})
+
+	run(t, "releasing works the same on both", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		mustAppend(t, s, opened("run-sim", "sim-a"))
+
+		claimed, err := s.Simulations().Claim(ctx, "sim-worker-1", time.Minute)
+		if err != nil {
+			t.Fatalf("Claim: %v", err)
+		}
+		if err := s.Simulations().Release(ctx, claimed.RunID, domain.ClaimOutcome{}); err != nil {
+			t.Fatalf("Release: %v", err)
+		}
+		// A simulated run is a run: the lease, the backoff and the parking are
+		// the same machinery, which is the whole reason it is a run.
+		again, err := s.Simulations().Claim(ctx, "sim-worker-2", time.Minute)
+		if err != nil || again.RunID != claimed.RunID {
+			t.Errorf("reclaim = %q, %v", again.RunID, err)
 		}
 	})
 }

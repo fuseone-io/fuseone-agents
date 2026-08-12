@@ -45,13 +45,22 @@ func (m *Memory) SimulationRuns(ctx context.Context, simulation string) ([]domai
 	return out, nil
 }
 
+// isSimulated reads the mark off a run's opening step.
+func isSimulated(steps []domain.Step) bool {
+	return len(steps) > 0 && startedPayload(steps[0]).Simulated
+}
+
 func simulationOf(opening domain.Step) string {
-	if opening.Kind != domain.StepRunStarted {
-		return ""
-	}
+	return startedPayload(opening).Simulation
+}
+
+func startedPayload(opening domain.Step) domain.RunStartedPayload {
 	var started domain.RunStartedPayload
-	if err := json.Unmarshal(opening.Payload, &started); err != nil {
-		return ""
+	if opening.Kind != domain.StepRunStarted {
+		return started
 	}
-	return started.Simulation
+	if err := json.Unmarshal(opening.Payload, &started); err != nil {
+		return domain.RunStartedPayload{}
+	}
+	return started
 }

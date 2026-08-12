@@ -21,6 +21,16 @@ type leaseState struct {
 }
 
 func (m *Memory) Claim(ctx context.Context, owner string, lease time.Duration) (domain.Claim, error) {
+	return m.claim(ctx, owner, lease, false)
+}
+
+func (m *Memory) claimSimulated(ctx context.Context, owner string, lease time.Duration) (domain.Claim, error) {
+	return m.claim(ctx, owner, lease, true)
+}
+
+func (m *Memory) claim(
+	ctx context.Context, owner string, lease time.Duration, simulated bool,
+) (domain.Claim, error) {
 	if err := ctx.Err(); err != nil {
 		return domain.Claim{}, err
 	}
@@ -51,6 +61,13 @@ func (m *Memory) Claim(ctx context.Context, owner string, lease time.Duration) (
 
 		steps := m.runs[id]
 		if !claimable(phaseOf(steps)) {
+			continue
+		}
+		// Which half of the queue this is. The fake enforced nothing here for
+		// as long as it existed, so a worker on the in-memory ledger would
+		// claim a simulated run and execute its proposals with the real tool
+		// layer — exactly what the Postgres query has always refused.
+		if isSimulated(steps) != simulated {
 			continue
 		}
 
