@@ -78,6 +78,12 @@ type State struct {
 	// Labels is the accumulated taint of the run context. It only grows.
 	Labels domain.Labels
 
+	// Called is every tool this run has reached the far side of the Gate
+	// with, in order. It is what advances a run through its declared steps:
+	// the proposal moves it forward, so nothing has to judge whether a stage
+	// is finished.
+	Called []domain.ToolID
+
 	PendingApproval *PendingApproval
 	// PendingTool is set while a tool call is recorded but its result is not.
 	// A run loaded in that shape crashed mid-call, and the outcome is unknown.
@@ -160,6 +166,7 @@ func (s *State) applyKind(step domain.Step) error {
 			return err
 		}
 		s.Spent.ToolCalls++
+		s.Called = append(s.Called, p.Tool)
 		s.PendingTool = p.Tool
 		s.Phase = PhaseAwaitingTool
 		// A call that reached the Gate's far side is progress, whatever it

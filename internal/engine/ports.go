@@ -113,8 +113,14 @@ type Start struct {
 	VersionID  domain.VersionID
 	OnBehalfOf domain.UserID
 	Pack       gate.Pack
-	Budget     domain.Budget
-	Trigger    string
+
+	// Steps are the envelopes a run advances through, in order, as data rather
+	// than as spec types: the dependencies point inward, and engine cannot
+	// import the package that parses definitions. Empty means one envelope
+	// holding the whole pack.
+	Steps   [][]domain.ToolID
+	Budget  domain.Budget
+	Trigger string
 }
 
 // Status is the outcome of one Advance.

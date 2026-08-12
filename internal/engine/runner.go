@@ -95,7 +95,7 @@ func (r *Runner) act(ctx context.Context, state State, start Start, p Proposal) 
 		Effect:          effect,
 		Args:            p.Args,
 		ArgLabels:       state.Labels,
-		Pack:            start.Pack,
+		Pack:            envelopeOf(start, state.Called),
 		Budget:          start.Budget,
 		Committed:       state.Committed(),
 		Estimate:        p.Estimate,

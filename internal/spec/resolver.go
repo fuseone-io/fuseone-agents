@@ -61,6 +61,7 @@ func (r *Resolver) Resolve(_ context.Context, agent domain.AgentID, version doma
 			// The pack is frozen here, at the start of the run, and only ever
 			// shrinks from this point (PRD SE-04).
 			Pack:    gate.NewPack(spec.Tools...),
+			Steps:   envelopes(spec),
 			Budget:  spec.Budget,
 			Trigger: "worker",
 		},
@@ -91,4 +92,18 @@ func (r *Resolver) planner(spec Spec) (engine.Planner, error) {
 	defer r.mu.Unlock()
 	r.planners[spec.Version] = planner
 	return planner, nil
+}
+
+// envelopes hands the engine the step list as plain tool sets. The engine
+// cannot import this package — dependencies point inward — so the shape
+// crosses as data.
+func envelopes(s Spec) [][]domain.ToolID {
+	if len(s.Steps) == 0 {
+		return nil
+	}
+	out := make([][]domain.ToolID, 0, len(s.Steps))
+	for _, step := range s.Steps {
+		out = append(out, step.Reaches)
+	}
+	return out
 }
