@@ -3,7 +3,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Mono } from "@/components/shared/mono";
 import { useBudgets } from "@/features/admin/api";
 import { useCostRollup } from "@/features/cost/api";
-import { scopeLabel } from "@/features/admin/budget-scope";
+import { ceilingRows } from "@/features/overview/ceiling-rows";
 import { formatCost } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -21,18 +21,19 @@ import { cn } from "@/lib/utils";
  */
 export function BudgetDonut({ windows }: { windows: { since: string; until: string } }) {
   const budgets = useBudgets();
-  const cost = useCostRollup(windows.since, windows.until, "area");
+  // Both dimensions, because a ceiling can be filed at either and reading one
+  // against the other reports it as untouched.
+  const byArea = useCostRollup(windows.since, windows.until, "area");
+  const byCompany = useCostRollup(windows.since, windows.until, "company");
 
   const caps = (budgets.data?.items ?? []).filter((b) => b.enabled && b.micros);
-  const spentByArea = new Map(
-    (cost.data?.buckets ?? []).map((b) => [b.key, b.cost.micros ?? 0]),
-  );
+  const spend = {
+    byArea: bucketed(byArea.data?.buckets),
+    byCompany: bucketed(byCompany.data?.buckets),
+    total: total(byArea.data?.buckets),
+  };
 
-  const rows = caps.map((budget) => {
-    const key = budget.scope?.area ?? "";
-    const spent = spentByArea.get(key) ?? 0;
-    return { key, label: scopeLabel(budget), cap: budget.micros ?? 0, spent };
-  });
+  const rows = ceilingRows(caps, spend);
   const cap = rows.reduce((sum, r) => sum + r.cap, 0);
   const spent = rows.reduce((sum, r) => sum + r.spent, 0);
 
@@ -40,12 +41,12 @@ export function BudgetDonut({ windows }: { windows: { since: string; until: stri
     <section className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 shadow-sm">
       <h2 className="text-sm font-medium">Teto de custo · hoje</h2>
 
-      {budgets.isLoading || cost.isLoading ? (
+      {budgets.isLoading || byArea.isLoading ? (
         <Skeleton className="h-32 rounded-lg" />
       ) : rows.length === 0 ? (
         <p className="py-6 text-sm text-muted-foreground">
           Nenhum teto por escopo configurado, então não há denominador para uma
-          porcentagem. Gasto hoje: {formatCost({ micros: totalOf(spentByArea) })}.{" "}
+          porcentagem. Gasto hoje: {formatCost({ micros: spend.total })}.{" "}
           <Link to="/admin" className="text-primary hover:underline">
             Configurar
           </Link>
@@ -72,8 +73,14 @@ export function BudgetDonut({ windows }: { windows: { since: string; until: stri
   );
 }
 
-function totalOf(spent: Map<string, number>): number {
-  return [...spent.values()].reduce((sum, v) => sum + v, 0);
+type Bucket = { key: string; cost: { micros?: number } };
+
+function bucketed(buckets: Bucket[] | undefined): Map<string, number> {
+  return new Map((buckets ?? []).map((b) => [b.key, b.cost.micros ?? 0]));
+}
+
+function total(buckets: Bucket[] | undefined): number {
+  return (buckets ?? []).reduce((sum, b) => sum + (b.cost.micros ?? 0), 0);
 }
 
 const RADIUS = 46;

@@ -24,7 +24,7 @@ export function useCostWindow(days = 30) {
   })[0];
 }
 
-export function useCostRollup(from: string, to: string, groupBy: "agent" | "area" | "day") {
+export function useCostRollup(from: string, to: string, groupBy: "agent" | "area" | "company" | "day") {
   return useQuery({
     queryKey: costKeys.rollup(from, to, groupBy),
     queryFn: async () => unwrap(await api.GET("/cost", { params: { query: { from, to, groupBy } } })),
