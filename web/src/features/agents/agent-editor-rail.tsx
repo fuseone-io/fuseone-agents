@@ -1,4 +1,4 @@
-import { useTranslation } from "react-i18next";
+import { Trans, useTranslation } from "react-i18next";
 import { CircleCheck, CircleDashed, ShieldAlert } from "lucide-react";
 import { Mono } from "@/components/shared/mono";
 import { riskSurface } from "@/features/agents/risk-surface";
@@ -46,7 +46,6 @@ export function AgentEditorRail({
 
 /** What is still missing, and what happens when it is not. */
 function Checklist({ draft }: { draft: AgentDefinition }) {
-  const { t } = useTranslation();
   const items = [
     { done: draft.name !== "" && draft.area !== "", label: "Nome e área" },
     {
@@ -84,9 +83,13 @@ function Checklist({ draft }: { draft: AgentDefinition }) {
         ))}
       </ul>
       <p className="text-xs text-muted-foreground">
-        {t("agents.newAgentIsCreated")}
-        <span className="text-foreground">{t("agents.paused")}</span>
-        {t("agents.publishIsWriting")}
+        {/* One key, not three. A sentence split around its emphasis cannot be
+            translated: word order differs between languages, and three
+            fragments give a translator no way to reorder them. */}
+        <Trans
+          i18nKey="agents.pausedOnCreate"
+          components={{ em: <span className="text-foreground" /> }}
+        />
       </p>
     </Card>
   );
