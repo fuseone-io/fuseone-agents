@@ -17,6 +17,9 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/settings"
 )
@@ -43,9 +46,14 @@ type Choice struct {
 	Enabled bool `json:"-"`
 }
 
-type Store struct{ settings *settings.Store }
+type Store struct {
+	pool     *pgxpool.Pool
+	settings *settings.Store
+}
 
-func NewStore(s *settings.Store) *Store { return &Store{settings: s} }
+func NewStore(pool *pgxpool.Pool, s *settings.Store) *Store {
+	return &Store{pool: pool, settings: s}
+}
 
 // Current answers with the choice in force, or a disabled one.
 func (s *Store) Current(ctx context.Context) (Choice, error) {
@@ -84,18 +92,7 @@ func (s *Store) Choose(ctx context.Context, choice Choice, by domain.UserID) err
 		return fmt.Errorf("%w: %s", ErrNoProvider, choice.Provider)
 	}
 
-	value, err := json.Marshal(choice)
-	if err != nil {
-		return fmt.Errorf("authoring: encode: %w", err)
-	}
-	return s.settings.Put(ctx, settings.Setting{
-		ScopeKind: settings.ScopeInstallation,
-		Kind:      KindAuthoring,
-		Name:      name,
-		Value:     value,
-		Enabled:   true,
-		UpdatedBy: string(by),
-	})
+	return s.write(ctx, choice, true, by, "authoring.changed")
 }
 
 // Disable turns the assistant off without forgetting which provider it used.
@@ -104,18 +101,46 @@ func (s *Store) Disable(ctx context.Context, by domain.UserID) error {
 	if err != nil {
 		return err
 	}
-	value, err := json.Marshal(current)
+	return s.write(ctx, current, false, by, "authoring.disabled")
+}
+
+// write stores the choice and records it in the same transaction.
+//
+// Together, always. The assistant writes drafts a person then publishes, so
+// which model wrote them is part of how a published agent came to say what it
+// says. A change that reached the settings table without reaching the trail
+// would leave that unanswerable.
+func (s *Store) write(
+	ctx context.Context, choice Choice, enabled bool, by domain.UserID, action string,
+) error {
+	value, err := json.Marshal(choice)
 	if err != nil {
 		return fmt.Errorf("authoring: encode: %w", err)
 	}
-	return s.settings.Put(ctx, settings.Setting{
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("authoring: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if err := s.settings.PutTx(ctx, tx, settings.Setting{
 		ScopeKind: settings.ScopeInstallation,
 		Kind:      KindAuthoring,
 		Name:      name,
 		Value:     value,
-		Enabled:   false,
+		Enabled:   enabled,
 		UpdatedBy: string(by),
-	})
+	}); err != nil {
+		return err
+	}
+	if err := admin.Record(ctx, tx, admin.Event{
+		Principal: by, Action: action, Target: name,
+		Detail: map[string]string{"provider": choice.Provider, "model": choice.Model},
+	}); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func has(connected []settings.Setting, name string) bool {

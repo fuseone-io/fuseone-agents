@@ -17,6 +17,10 @@ import (
 // connected. It is a choice, not a second registry: a separate credential
 // store would be a second place to leak from, to rotate and to audit.
 
+var pools = map[*testing.T]*pgxpool.Pool{}
+
+func poolOf(t *testing.T) *pgxpool.Pool { return pools[t] }
+
 func storeFor(t *testing.T) (*authoring.Store, *settings.Store) {
 	t.Helper()
 	dsn := os.Getenv("TEST_DATABASE_URL")
@@ -41,8 +45,9 @@ func storeFor(t *testing.T) (*authoring.Store, *settings.Store) {
 	if err != nil {
 		t.Fatalf("vault: %v", err)
 	}
+	pools[t] = pool
 	set := settings.NewStore(pool, keys)
-	return authoring.NewStore(set), set
+	return authoring.NewStore(pool, set), set
 }
 
 func TestChoose_providerNobodyConnected_refused(t *testing.T) {
@@ -98,5 +103,30 @@ func connect(t *testing.T, set *settings.Store, name string) {
 		Enabled:   true,
 	}); err != nil {
 		t.Fatalf("connect %s: %v", name, err)
+	}
+}
+
+func TestChoose_recordsWhoPointedItWhere(t *testing.T) {
+	store, set := storeFor(t)
+	connect(t, set, "anthropic")
+
+	if err := store.Choose(t.Context(), authoring.Choice{
+		Provider: "anthropic", Model: "claude-opus-5",
+	}, "usr_a"); err != nil {
+		t.Fatalf("choose: %v", err)
+	}
+
+	// The assistant writes drafts a person then publishes. Which model wrote
+	// them is part of how a published agent came to say what it says, so the
+	// change belongs in the trail with a name on it.
+	var action, principal string
+	err := poolOf(t).QueryRow(t.Context(),
+		`select action, principal_id from admin_events
+		 where action like 'authoring.%' order by at desc limit 1`).Scan(&action, &principal)
+	if err != nil {
+		t.Fatalf("read trail: %v", err)
+	}
+	if action != "authoring.changed" || principal != "usr_a" {
+		t.Errorf("got %s by %s", action, principal)
 	}
 }
