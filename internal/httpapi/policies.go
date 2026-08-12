@@ -143,3 +143,62 @@ func (s *Server) policyHits(ctx context.Context, since time.Time) (map[string]in
 // figure is "at least", and a screen claiming an exact count over an unbounded
 // ledger would be claiming something nobody measured.
 const maxHitScan = 5000
+
+// SimulatePolicy replays a draft rule against decisions already recorded.
+//
+// Reading, not writing: nothing is stored and nothing changes, so it needs the
+// permission to read policies rather than the one to author them. Somebody
+// asking "what would this do" before proposing it is behaving well.
+func (s *Server) SimulatePolicy(
+	ctx context.Context, req openapi.SimulatePolicyRequestObject,
+) (openapi.SimulatePolicyResponseObject, error) {
+	if len(auth.VisibleScopes(ctx, domain.PermPolicyRead)) == 0 {
+		return openapi.SimulatePolicy403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermPolicyRead, domain.Scope{}),
+		}, nil
+	}
+
+	// A draft is simulated before it is named: what a rule does has nothing to
+	// do with what it is called, and refusing to answer until somebody names
+	// it would make the safety check the last thing anybody runs.
+	draft, err := draftInto("POL-DRAFT", *req.Body)
+	if err != nil {
+		return openapi.SimulatePolicy400ApplicationProblemPlusJSONResponse{
+			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
+				problem(400, "A regra não pode ser simulada", err.Error())),
+		}, nil
+	}
+
+	since := clockOr(s.clock).Now().Add(-hitWindow)
+	if req.Params.Since != nil {
+		since = *req.Params.Since
+	}
+
+	// Scoped like every other read of the trail: a simulation that counted
+	// decisions from an area the caller cannot see would report their volume.
+	filter := domain.RunFilter{Since: since, Scopes: auth.VisibleScopes(ctx, domain.PermRunRead)}
+	decisions, err := s.store.Decisions(ctx, filter, limitOf(req.Params.Limit))
+	if err != nil {
+		return nil, fmt.Errorf("simulate policy: %w", err)
+	}
+
+	return openapi.SimulatePolicy200JSONResponse(simulationFrom(policy.Simulate(draft, decisions))), nil
+}
+
+func simulationFrom(sim policy.Simulation) openapi.Simulation {
+	samples := make([]openapi.SimulationSample, 0, len(sim.Samples))
+	for _, s := range sim.Samples {
+		samples = append(samples, openapi.SimulationSample{
+			RunId: string(s.RunID), Seq: s.Seq, Tool: string(s.Tool),
+			Was: openapi.Verdict(s.Was.String()), WouldBe: openapi.Verdict(s.WouldBe.String()),
+		})
+	}
+	return openapi.Simulation{
+		Considered:    sim.Considered,
+		Matched:       sim.Matched,
+		Unknown:       sim.Unknown,
+		WouldDeny:     ptr(sim.ByVerdict[domain.VerdictBlock]),
+		WouldEscalate: ptr(sim.ByVerdict[domain.VerdictRequireApproval]),
+		Samples:       samples,
+	}
+}

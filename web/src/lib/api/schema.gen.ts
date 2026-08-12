@@ -416,6 +416,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/policies/simulate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * What a draft rule would have done
+         * @description Replays a rule that has not been saved against decisions already
+         *     recorded, so a policy is never saved blind.
+         *
+         *     A rule that reads `args.*` cannot be replayed against every decision:
+         *     a blocked call never stored arguments, so for those the answer is not
+         *     "no match" but "unknown", and it is reported separately. Counting them
+         *     as no-matches would show zero denials for exactly the rule somebody was
+         *     nervous about.
+         */
+        post: operations["simulatePolicy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/policies/{code}": {
         parameters: {
             query?: never;
@@ -811,6 +838,32 @@ export interface components {
              *     so by omission rather than by an empty promise.
              */
             hash?: string;
+        };
+        Simulation: {
+            /**
+             * @description How many recorded decisions were examined. Zero matches out of zero
+             *     decisions is not evidence a rule is harmless, and this is what lets
+             *     a screen tell the two apart.
+             */
+            considered: number;
+            matched: number;
+            /**
+             * @description Decisions the rule could not be answered against, because it reads
+             *     arguments and those did not keep any.
+             */
+            unknown: number;
+            wouldDeny?: number;
+            wouldEscalate?: number;
+            /** @description A few of the matches, so a number has runs behind it. */
+            samples: components["schemas"]["SimulationSample"][];
+        };
+        SimulationSample: {
+            runId: string;
+            /** Format: int64 */
+            seq: number;
+            tool: string;
+            was: components["schemas"]["Verdict"];
+            wouldBe: components["schemas"]["Verdict"];
         };
         PolicyPage: {
             items: components["schemas"]["Policy"][];
@@ -1753,6 +1806,36 @@ export interface operations {
                     "application/json": components["schemas"]["PolicyPage"];
                 };
             };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    simulatePolicy: {
+        parameters: {
+            query?: {
+                since?: string;
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyInput"];
+            };
+        };
+        responses: {
+            /** @description What the rule would have done. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Simulation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
         };

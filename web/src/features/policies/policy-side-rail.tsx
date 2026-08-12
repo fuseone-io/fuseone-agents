@@ -1,4 +1,5 @@
 import { Mono } from "@/components/shared/mono";
+import { SimulationCard } from "@/features/policies/simulation-card";
 import { draftSentence } from "@/features/policies/policy-sentence";
 import type { Change } from "@/features/policies/policy-form";
 import type { PolicyInput } from "@/lib/api/client";
@@ -63,16 +64,7 @@ export function PolicySideRail({
         </Card>
       )}
 
-      <Card title="Simulação">
-        {/* Said plainly. The alternative is a panel that looks like it ran
-            something, which on a screen about governance is worse than one
-            that admits it did not. */}
-        <p className="text-xs text-muted-foreground">
-          Ainda não é possível rodar esta regra contra execuções passadas antes
-          de gravá-la. Até lá, o caminho seguro é gravar em modo monitorar e
-          ler na trilha o que ela teria feito.
-        </p>
-      </Card>
+      <SimulationCard draft={draft} />
     </aside>
   );
 }

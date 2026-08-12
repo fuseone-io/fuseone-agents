@@ -97,4 +97,11 @@ type RecordedDecision struct {
 	// Counting what a policy actually decided reads the trail rather than a
 	// counter, because a counter drifts and the trail is what happened.
 	PolicyCode string
+	// Effect and Labels are what a draft rule is replayed against. The
+	// arguments are not here: a blocked call never stored any, so a rule that
+	// reads them cannot be replayed against every decision — and a simulation
+	// that quietly treated missing arguments as empty would report no matches
+	// and read as reassurance.
+	Effect Effect
+	Labels Labels
 }

@@ -143,7 +143,7 @@ func decisionOf(step domain.Step) domain.RecordedDecision {
 	return domain.RecordedDecision{
 		RunID: step.RunID, Seq: step.Seq, At: step.At.UTC(), Scope: step.Scope,
 		AgentID: step.AgentID, Tool: p.Tool, Verdict: p.Verdict, Rule: p.Rule,
-		PolicyCode: p.PolicyCode,
+		PolicyCode: p.PolicyCode, Effect: p.Effect, Labels: step.Labels,
 	}
 }
 

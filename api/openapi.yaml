@@ -613,6 +613,40 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /policies/simulate:
+    post:
+      tags: [policies]
+      operationId: simulatePolicy
+      summary: What a draft rule would have done
+      description: |
+        Replays a rule that has not been saved against decisions already
+        recorded, so a policy is never saved blind.
+
+        A rule that reads `args.*` cannot be replayed against every decision:
+        a blocked call never stored arguments, so for those the answer is not
+        "no match" but "unknown", and it is reported separately. Counting them
+        as no-matches would show zero denials for exactly the rule somebody was
+        nervous about.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PolicyInput' }
+      parameters:
+        - name: since
+          in: query
+          schema: { type: string, format: date-time }
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: What the rule would have done.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Simulation' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /policies/{code}:
     put:
       tags: [policies]
@@ -1245,6 +1279,39 @@ components:
             Seals this entry to the one before it. Present only on ledger
             entries; an administrative entry has nothing to show here and says
             so by omission rather than by an empty promise.
+
+    Simulation:
+      type: object
+      required: [considered, matched, unknown, samples]
+      properties:
+        considered:
+          type: integer
+          description: |
+            How many recorded decisions were examined. Zero matches out of zero
+            decisions is not evidence a rule is harmless, and this is what lets
+            a screen tell the two apart.
+        matched: { type: integer }
+        unknown:
+          type: integer
+          description: |
+            Decisions the rule could not be answered against, because it reads
+            arguments and those did not keep any.
+        wouldDeny: { type: integer }
+        wouldEscalate: { type: integer }
+        samples:
+          type: array
+          description: A few of the matches, so a number has runs behind it.
+          items: { $ref: '#/components/schemas/SimulationSample' }
+
+    SimulationSample:
+      type: object
+      required: [runId, seq, tool, was, wouldBe]
+      properties:
+        runId: { type: string }
+        seq: { type: integer, format: int64 }
+        tool: { type: string }
+        was: { $ref: '#/components/schemas/Verdict' }
+        wouldBe: { $ref: '#/components/schemas/Verdict' }
 
     PolicyPage:
       type: object

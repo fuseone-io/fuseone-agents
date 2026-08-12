@@ -67,6 +67,7 @@ export type MCPServer = components["schemas"]["MCPServer"];
 export type Policy = components["schemas"]["Policy"];
 export type PolicyInput = components["schemas"]["PolicyInput"];
 export type PolicyCondition = components["schemas"]["PolicyCondition"];
+export type Simulation = components["schemas"]["Simulation"];
 export type ModelProvider = components["schemas"]["ModelProvider"];
 export type Problem = components["schemas"]["Problem"];
 

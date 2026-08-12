@@ -165,3 +165,30 @@ func seedPolicyDecision(t *testing.T, store *ledger.Memory, runID domain.RunID, 
 		}
 	}
 }
+
+func TestSimulatePolicy_beforeTheRuleIsNamed_stillAnswers(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	seedPolicyDecision(t, store, "run-1", "")
+
+	// What a rule does has nothing to do with what it is called. Refusing
+	// until somebody names it would make the safety check the last thing
+	// anybody runs, which is the one place it is useless.
+	resp, err := NewServer(store, "test").WithPolicies(&policyStore{}).
+		SimulatePolicy(inArea("cx", domain.RoleAuthor), openapi.SimulatePolicyRequestObject{
+			Body: &openapi.SimulatePolicyJSONRequestBody{
+				Name: "", Effect: "deny", Mode: "monitor", Resource: ptr("crm.*"),
+			},
+		})
+	if err != nil {
+		t.Fatalf("SimulatePolicy: %v", err)
+	}
+
+	got, ok := resp.(openapi.SimulatePolicy200JSONResponse)
+	if !ok {
+		t.Fatalf("response = %T, want the simulation", resp)
+	}
+	if got.Considered == 0 {
+		t.Error("nothing was considered, so nothing was replayed")
+	}
+}

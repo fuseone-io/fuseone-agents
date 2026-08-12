@@ -49,13 +49,23 @@ func policyFrom(p domain.Policy) openapi.Policy {
 	}
 }
 
-// policyInto reads a written rule, refusing one that cannot mean anything.
+// policyInto reads a rule that is about to be stored.
+//
+// Stricter than draftInto by exactly one field: a stored rule needs a name
+// because people have to find it again, and a draft does not because a name
+// changes nothing about what the rule does.
 func policyInto(code string, in openapi.PolicyInput) (domain.Policy, error) {
-	if code == "" {
-		return domain.Policy{}, errors.New("uma política precisa de um código")
-	}
 	if in.Name == "" {
 		return domain.Policy{}, errors.New("uma política precisa de um nome")
+	}
+	return draftInto(code, in)
+}
+
+// draftInto reads a rule that is only being evaluated, refusing one that
+// cannot mean anything.
+func draftInto(code string, in openapi.PolicyInput) (domain.Policy, error) {
+	if code == "" {
+		return domain.Policy{}, errors.New("uma política precisa de um código")
 	}
 
 	p := domain.Policy{

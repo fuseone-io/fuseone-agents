@@ -31,6 +31,20 @@ export function usePutPolicy() {
   });
 }
 
+/**
+ * What a draft rule would have done, against decisions already recorded.
+ *
+ * Runs on demand rather than on every keystroke: it reads the trail, and a
+ * panel that re-queried while somebody typed a threshold would make the cost
+ * of writing a rule proportional to how carefully they wrote it.
+ */
+export function useSimulatePolicy() {
+  return useMutation({
+    mutationFn: async (policy: PolicyInput) =>
+      unwrap(await api.POST("/policies/simulate", { body: policy })),
+  });
+}
+
 export function useDeletePolicy() {
   const queryClient = useQueryClient();
   return useMutation({
