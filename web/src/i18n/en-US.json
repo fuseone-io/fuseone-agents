@@ -28,6 +28,7 @@
     "company": "Company",
     "connectFirst": "The assistant points at a provider already connected under Integrations. Connect one there first — the credential lives in a single place.",
     "daily": "Daily — resets at midnight UTC",
+    "dailyCeiling": "Daily ceiling",
     "declare": "Declare",
     "declareFailed": "Could not declare",
     "editCeiling": "Edit the ceiling",

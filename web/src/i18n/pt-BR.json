@@ -28,6 +28,7 @@
     "company": "Empresa",
     "connectFirst": "O assistente aponta para um provedor já conectado em Integrações. Conecte um lá primeiro — a credencial mora num lugar só.",
     "daily": "Diária — reinicia à meia-noite UTC",
+    "dailyCeiling": "Teto por dia",
     "declare": "Declarar",
     "declareFailed": "Não foi possível declarar",
     "editCeiling": "Editar teto",

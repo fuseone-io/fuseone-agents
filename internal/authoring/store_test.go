@@ -53,7 +53,7 @@ func storeFor(t *testing.T) (*authoring.Store, *settings.Store) {
 func TestChoose_providerNobodyConnected_refused(t *testing.T) {
 	store, _ := storeFor(t)
 
-	err := store.Choose(t.Context(), authoring.Choice{Provider: "fantasma", Model: "x"}, "usr_a")
+	err := store.Choose(t.Context(), authoring.Choice{Provider: "fantasma", Model: "x", DailyMicros: 1_000_000}, "usr_a")
 
 	if !errors.Is(err, authoring.ErrNoProvider) {
 		t.Fatalf("got %v, want ErrNoProvider", err)
@@ -79,7 +79,7 @@ func TestChoose_connectedProvider_becomesTheCurrentChoice(t *testing.T) {
 	connect(t, set, "anthropic")
 
 	if err := store.Choose(t.Context(), authoring.Choice{
-		Provider: "anthropic", Model: "claude-opus-5", Effort: "high",
+		Provider: "anthropic", Model: "claude-opus-5", Effort: "high", DailyMicros: 1_000_000,
 	}, "usr_a"); err != nil {
 		t.Fatalf("choose: %v", err)
 	}
@@ -111,7 +111,7 @@ func TestChoose_recordsWhoPointedItWhere(t *testing.T) {
 	connect(t, set, "anthropic")
 
 	if err := store.Choose(t.Context(), authoring.Choice{
-		Provider: "anthropic", Model: "claude-opus-5",
+		Provider: "anthropic", Model: "claude-opus-5", DailyMicros: 1_000_000,
 	}, "usr_a"); err != nil {
 		t.Fatalf("choose: %v", err)
 	}
@@ -128,5 +128,46 @@ func TestChoose_recordsWhoPointedItWhere(t *testing.T) {
 	}
 	if action != "authoring.changed" || principal != "usr_a" {
 		t.Errorf("got %s by %s", action, principal)
+	}
+}
+
+func TestChoose_withoutACeiling_isRefused(t *testing.T) {
+	store, set := storeFor(t)
+	connect(t, set, "anthropic")
+
+	err := store.Choose(t.Context(), authoring.Choice{
+		Provider: "anthropic", Model: "claude-opus-5",
+	}, "usr_a")
+
+	// This is the only place the platform spends money outside a run: no
+	// Gate, no ledger, no per-run ceiling. A configuration that could be
+	// saved without a bound would make it the one invisible spend in a
+	// product whose argument is that nothing is invisible.
+	if !errors.Is(err, authoring.ErrNoCeiling) {
+		t.Fatalf("got %v, want ErrNoCeiling", err)
+	}
+}
+
+func TestChoose_theCeilingSurvivesBeingSwitchedOffAndOn(t *testing.T) {
+	store, set := storeFor(t)
+	connect(t, set, "anthropic")
+
+	if err := store.Choose(t.Context(), authoring.Choice{
+		Provider: "anthropic", Model: "m", DailyMicros: 2_000_000,
+	}, "usr_a"); err != nil {
+		t.Fatalf("choose: %v", err)
+	}
+	if err := store.Disable(t.Context(), "usr_a"); err != nil {
+		t.Fatalf("disable: %v", err)
+	}
+
+	choice, err := store.Current(t.Context())
+	if err != nil {
+		t.Fatalf("current: %v", err)
+	}
+	// Switching it off must not quietly reset the bound: turning it back on
+	// would then be unbounded until somebody noticed.
+	if choice.DailyMicros != 2_000_000 {
+		t.Errorf("got %+v", choice)
 	}
 }

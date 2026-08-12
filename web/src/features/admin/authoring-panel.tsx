@@ -40,15 +40,22 @@ export function AuthoringPanel() {
   const [draft, setDraft] = useState<{
     provider: string;
     model: string;
+    dailyMicros: number;
   } | null>(null);
   const current = draft ?? {
     provider: data?.provider ?? "",
     model: data?.model ?? "",
+    dailyMicros: data?.dailyMicros ?? 0,
   };
 
   const submit = (enabled: boolean) =>
     save.mutate(
-      { provider: current.provider, model: current.model, enabled },
+      {
+        provider: current.provider,
+        model: current.model,
+        dailyMicros: current.dailyMicros,
+        enabled,
+      },
       {
         onSuccess: () =>
           toast.success(
@@ -76,7 +83,7 @@ export function AuthoringPanel() {
             {t("admin.authoringHint")}
           </p>
 
-          <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
+          <div className="grid gap-3 sm:grid-cols-[1fr_1fr_1fr_auto]">
             <Labelled label={t("agents.provider")} htmlFor="authoring-provider">
               <Select
                 value={current.provider || undefined}
@@ -114,10 +121,40 @@ export function AuthoringPanel() {
               />
             </Labelled>
 
+            {/* Required, not optional. This is the only place the platform
+                spends outside a run, so the bound is part of configuring it. */}
+            <Labelled label={t("admin.dailyCeiling")} htmlFor="authoring-cap">
+              <Input
+                id="authoring-cap"
+                inputMode="decimal"
+                value={
+                  current.dailyMicros
+                    ? String(current.dailyMicros / 1_000_000)
+                    : ""
+                }
+                onChange={(e) =>
+                  setDraft({
+                    ...current,
+                    dailyMicros:
+                      Math.round(
+                        Number(e.target.value.replace(",", ".")) * 1_000_000,
+                      ) || 0,
+                  })
+                }
+                className="font-mono"
+                placeholder="5"
+              />
+            </Labelled>
+
             <div className="flex items-end">
               <Button
                 size="sm"
-                disabled={!current.provider || !current.model || save.isPending}
+                disabled={
+                  !current.provider ||
+                  !current.model ||
+                  !current.dailyMicros ||
+                  save.isPending
+                }
                 onClick={() => submit(true)}
               >
                 {t("common.save")}

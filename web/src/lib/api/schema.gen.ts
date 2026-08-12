@@ -961,6 +961,14 @@ export interface components {
             model: string;
             effort?: string;
             /**
+             * Format: int64
+             * @description What the assistant may spend in a day. Required: this is the only
+             *     place the platform spends outside a run — no Gate, no ledger, no
+             *     per-run ceiling — so the bound is part of configuring it rather
+             *     than something added afterwards.
+             */
+            dailyMicros?: number;
+            /**
              * @description False means the installation has no authoring assistant, which is a
              *     supported state rather than a broken one.
              */

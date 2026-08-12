@@ -33,11 +33,24 @@ const name = "assistant"
 // ErrNoProvider means the choice named a provider nobody connected.
 var ErrNoProvider = errors.New("authoring: no provider connected under that name")
 
+// ErrNoCeiling means the assistant was configured without a daily bound.
+//
+// This is the only place the platform spends money outside a run — no Gate, no
+// ledger, no per-run ceiling — so the bound is part of configuring it rather
+// than something to add afterwards. Without it, authoring would be the single
+// invisible spend in a product whose argument is that nothing is invisible.
+var ErrNoCeiling = errors.New("authoring: the assistant needs a daily ceiling")
+
 // Choice is which connected provider writes the drafts.
 type Choice struct {
 	Provider string `json:"provider"`
 	Model    string `json:"model"`
 	Effort   string `json:"effort,omitempty"`
+
+	// DailyMicros bounds what the assistant may spend in a day. It survives
+	// being switched off: resetting it there would make turning the assistant
+	// back on unbounded until somebody noticed.
+	DailyMicros int64 `json:"dailyMicros"`
 
 	// Enabled reports whether an installation has an authoring assistant at
 	// all. False is a supported state, not a broken one: an air-gapped install
@@ -82,6 +95,9 @@ func (s *Store) Current(ctx context.Context) (Choice, error) {
 func (s *Store) Choose(ctx context.Context, choice Choice, by domain.UserID) error {
 	if choice.Provider == "" || choice.Model == "" {
 		return errors.New("authoring: the assistant needs a provider and a model")
+	}
+	if choice.DailyMicros <= 0 {
+		return ErrNoCeiling
 	}
 
 	connected, err := s.settings.List(ctx, settings.KindModelProvider)

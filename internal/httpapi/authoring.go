@@ -64,11 +64,12 @@ func (s *Server) SetAuthoring(
 	}
 
 	err := s.authoring.Choose(ctx, authoring.Choice{
-		Provider: req.Body.Provider,
-		Model:    req.Body.Model,
-		Effort:   valueOr(req.Body.Effort),
+		Provider:    req.Body.Provider,
+		Model:       req.Body.Model,
+		Effort:      valueOr(req.Body.Effort),
+		DailyMicros: valueOr(req.Body.DailyMicros),
 	}, callerOf(ctx))
-	if errors.Is(err, authoring.ErrNoProvider) {
+	if errors.Is(err, authoring.ErrNoProvider) || errors.Is(err, authoring.ErrNoCeiling) {
 		return openapi.SetAuthoring400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
 				problem(http.StatusBadRequest, "Provedor desconhecido", err.Error())),
@@ -85,9 +86,10 @@ func (s *Server) SetAuthoring(
 
 func choiceFrom(c authoring.Choice) openapi.AuthoringChoice {
 	return openapi.AuthoringChoice{
-		Provider: c.Provider,
-		Model:    c.Model,
-		Effort:   ptr(c.Effort),
-		Enabled:  c.Enabled,
+		Provider:    c.Provider,
+		Model:       c.Model,
+		Effort:      ptr(c.Effort),
+		DailyMicros: ptr(c.DailyMicros),
+		Enabled:     c.Enabled,
 	}
 }

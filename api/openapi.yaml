@@ -1464,6 +1464,14 @@ components:
           description: The name of a provider registered under /admin/integrations.
         model: { type: string }
         effort: { type: string }
+        dailyMicros:
+          type: integer
+          format: int64
+          description: |
+            What the assistant may spend in a day. Required: this is the only
+            place the platform spends outside a run — no Gate, no ledger, no
+            per-run ceiling — so the bound is part of configuring it rather
+            than something added afterwards.
         enabled:
           type: boolean
           description: |
