@@ -4,2541 +4,2618 @@
  */
 
 export interface paths {
-  "/agents": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/agents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Published agents
+         * @description One row per agent, its newest published version, unless every version is asked for. A version is immutable: the identifier is the digest of the definition's content, so the text a run was pinned to can always be read back.
+         */
+        get: operations["listAgents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * Published agents
-     * @description One row per agent, its newest published version, unless every version is asked for. A version is immutable: the identifier is the digest of the definition's content, so the text a run was pinned to can always be read back.
-     */
-    get: operations["listAgents"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/runs": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List runs */
+        get: operations["listRuns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** List runs */
-    get: operations["listRuns"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/runs/stats": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/runs/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Aggregate counts over runs
+         * @description Counts every run that matches, not just the page a list would return. The console shows these figures as facts, so they are computed where the whole set is — never derived from a page.
+         */
+        get: operations["getRunStats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * Aggregate counts over runs
-     * @description Counts every run that matches, not just the page a list would return. The console shows these figures as facts, so they are computed where the whole set is — never derived from a page.
-     */
-    get: operations["getRunStats"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/agents/{agentId}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/agents/{agentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One published agent, as it was published
+         * @description The latest version by default, or the exact one asked for. Publishing a
+         *     new version never affects a run already in flight, so an auditor
+         *     opening a run's version reads that version — not whatever is newest
+         *     now.
+         *
+         *     This is the only place the definition's text is returned. The list
+         *     deliberately omits it: a page of twenty agents would carry twenty
+         *     bodies of prose nobody asked to read.
+         */
+        get: operations["getAgent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * One published agent, as it was published
-     * @description The latest version by default, or the exact one asked for. Publishing a
-     *     new version never affects a run already in flight, so an auditor
-     *     opening a run's version reads that version — not whatever is newest
-     *     now.
-     *
-     *     This is the only place the definition's text is returned. The list
-     *     deliberately omits it: a page of twenty agents would carry twenty
-     *     bodies of prose nobody asked to read.
-     */
-    get: operations["getAgent"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/agents/{agentId}/versions": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/agents/{agentId}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Publish a new version of an agent
+         * @description Creating and editing are the same call, because editing an agent is
+         *     authoring its next version: runs are pinned to versions, and the older
+         *     ones stay the only correct explanation of the runs that used them.
+         *
+         *     The definition is rendered back to the file format and published from
+         *     that, so a version stays the digest of its bytes — the same definition
+         *     typed here and written in an editor produce the same version, and
+         *     publishing identical text twice is a no-op rather than a second version
+         *     of the same words.
+         *
+         *     An agent nobody has decided about is recorded as paused. Authoring
+         *     never starts anything.
+         */
+        put: operations["publishAgent"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    /**
-     * Publish a new version of an agent
-     * @description Creating and editing are the same call, because editing an agent is
-     *     authoring its next version: runs are pinned to versions, and the older
-     *     ones stay the only correct explanation of the runs that used them.
-     *
-     *     The definition is rendered back to the file format and published from
-     *     that, so a version stays the digest of its bytes — the same definition
-     *     typed here and written in an editor produce the same version, and
-     *     publishing identical text twice is a no-op rather than a second version
-     *     of the same words.
-     *
-     *     An agent nobody has decided about is recorded as paused. Authoring
-     *     never starts anything.
-     */
-    put: operations["publishAgent"];
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/agents/{agentId}/paused": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/agents/{agentId}/paused": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Start or stop an agent
+         * @description Not part of the definition and not versioned: a specification is what
+         *     somebody wrote and never changes, while whether it may start changes on
+         *     an afternoon when something is wrong. Versioning it would put a version
+         *     between a run and the text that actually ran.
+         *
+         *     Every way a run can start obeys this — the schedule, a webhook, the
+         *     button, and the command line.
+         */
+        put: operations["setAgentPaused"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    /**
-     * Start or stop an agent
-     * @description Not part of the definition and not versioned: a specification is what
-     *     somebody wrote and never changes, while whether it may start changes on
-     *     an afternoon when something is wrong. Versioning it would put a version
-     *     between a run and the text that actually ran.
-     *
-     *     Every way a run can start obeys this — the schedule, a webhook, the
-     *     button, and the command line.
-     */
-    put: operations["setAgentPaused"];
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/agents/{agentId}/runs": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/agents/{agentId}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open a run of this agent
+         * @description Opens a run pinned to the newest published version and returns
+         *     immediately. A worker picks it up; nothing is executed inside this
+         *     request, because a tool call can take minutes and a human approval can
+         *     take hours.
+         *
+         *     The idempotency key is required, not optional. A double-clicked button,
+         *     a retried request after a timeout, a scheduler firing twice in the same
+         *     minute — each of those is a duplicated run with real effects against
+         *     real systems. Repeating a key returns the run it already opened rather
+         *     than opening another, so a caller that never saw the first answer can
+         *     safely ask again.
+         */
+        post: operations["startRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * Open a run of this agent
-     * @description Opens a run pinned to the newest published version and returns
-     *     immediately. A worker picks it up; nothing is executed inside this
-     *     request, because a tool call can take minutes and a human approval can
-     *     take hours.
-     *
-     *     The idempotency key is required, not optional. A double-clicked button,
-     *     a retried request after a timeout, a scheduler firing twice in the same
-     *     minute — each of those is a duplicated run with real effects against
-     *     real systems. Repeating a key returns the run it already opened rather
-     *     than opening another, so a caller that never saw the first answer can
-     *     safely ask again.
-     */
-    post: operations["startRun"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/agents/{agentId}/webhooks": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/agents/{agentId}/webhooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The webhook paths this agent declares
+         * @description A declared path cannot fire until somebody generates its secret. This
+         *     reports which are armed and which are still closed, so an operator can
+         *     see that a webhook exists and does nothing.
+         */
+        get: operations["listWebhooks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * The webhook paths this agent declares
-     * @description A declared path cannot fire until somebody generates its secret. This
-     *     reports which are armed and which are still closed, so an operator can
-     *     see that a webhook exists and does nothing.
-     */
-    get: operations["listWebhooks"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/agents/{agentId}/webhooks/{path}/secret": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/agents/{agentId}/webhooks/{path}/secret": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate this webhook's secret
+         * @description Returns the secret once and stores only its hash — what is kept cannot
+         *     be turned back into what a caller sends. There is no way to read it
+         *     again; rotating produces a new one and retires the old.
+         *
+         *     This is also how a webhook is first opened. A declared path with no
+         *     secret refuses everything, which is the safe state for a door with an
+         *     agent behind it.
+         */
+        post: operations["rotateWebhookSecret"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * Generate this webhook's secret
-     * @description Returns the secret once and stores only its hash — what is kept cannot
-     *     be turned back into what a caller sends. There is no way to read it
-     *     again; rotating produces a new one and retires the old.
-     *
-     *     This is also how a webhook is first opened. A declared path with no
-     *     secret refuses everything, which is the safe state for a door with an
-     *     agent behind it.
-     */
-    post: operations["rotateWebhookSecret"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/runs/throughput": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/runs/throughput": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Runs per hour, split by what became of them
+         * @description Runs are bucketed by the hour they started and counted under the phase
+         *     they are in now. That is the honest reading of "how is today going": a
+         *     run that started at nine and is still waiting belongs to nine o'clock
+         *     and to the waiting column, not to whenever it eventually ends.
+         *
+         *     Hours with no runs are absent rather than zero. The caller chose the
+         *     period and knows which hours it covers.
+         */
+        get: operations["getThroughput"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * Runs per hour, split by what became of them
-     * @description Runs are bucketed by the hour they started and counted under the phase
-     *     they are in now. That is the honest reading of "how is today going": a
-     *     run that started at nine and is still waiting belongs to nine o'clock
-     *     and to the waiting column, not to whenever it eventually ends.
-     *
-     *     Hours with no runs are absent rather than zero. The caller chose the
-     *     period and knows which hours it covers.
-     */
-    get: operations["getThroughput"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/decisions": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What the Gate has decided, most recent first
+         * @description Every effect passes the Gate, and this is that record read across runs
+         *     rather than down one. It is how somebody sees whether the
+         *     installation's rules are doing anything: a feed of nothing but
+         *     "allowed" says the policy is not engaging, and a run of escalations on
+         *     one rule says it is engaging too much.
+         *
+         *     Each entry names the rule, never a category. "Denied by policy" tells
+         *     a reader nothing about what to change.
+         */
+        get: operations["listDecisions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * What the Gate has decided, most recent first
-     * @description Every effect passes the Gate, and this is that record read across runs
-     *     rather than down one. It is how somebody sees whether the
-     *     installation's rules are doing anything: a feed of nothing but
-     *     "allowed" says the policy is not engaging, and a run of escalations on
-     *     one rule says it is engaging too much.
-     *
-     *     Each entry names the rule, never a category. "Denied by policy" tells
-     *     a reader nothing about what to change.
-     */
-    get: operations["listDecisions"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/runs/{runId}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/runs/{runId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one run */
+        get: operations["getRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Get one run */
-    get: operations["getRun"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/runs/{runId}/steps": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/runs/{runId}/steps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the run's ledger trail
+         * @description Returns the run's steps in order. This is the audit trail: every entry
+         *     is immutable and sealed into a hash chain, so the same request always
+         *     returns the same bytes for the same range.
+         */
+        get: operations["listRunSteps"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * Read the run's ledger trail
-     * @description Returns the run's steps in order. This is the audit trail: every entry
-     *     is immutable and sealed into a hash chain, so the same request always
-     *     returns the same bytes for the same range.
-     */
-    get: operations["listRunSteps"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/runs/{runId}/steps/{seq}/content": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/runs/{runId}/steps/{seq}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the content a step references
+         * @description Resolves the reference a step carries — the proposed tool arguments, a
+         *     tool result, the run's input — and returns the bytes.
+         *
+         *     This is deliberately a second request. The trail is read constantly and
+         *     by many people; the content behind it routinely carries personal data,
+         *     so it is fetched only when someone opens the step that needs it. The
+         *     digest lets the caller prove the bytes are the ones the chain sealed.
+         */
+        get: operations["getStepContent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * Read the content a step references
-     * @description Resolves the reference a step carries — the proposed tool arguments, a
-     *     tool result, the run's input — and returns the bytes.
-     *
-     *     This is deliberately a second request. The trail is read constantly and
-     *     by many people; the content behind it routinely carries personal data,
-     *     so it is fetched only when someone opens the step that needs it. The
-     *     digest lets the caller prove the bytes are the ones the chain sealed.
-     */
-    get: operations["getStepContent"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/runs/{runId}/verify": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/runs/{runId}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify the run's hash chain
+         * @description Walks the chain and reports whether every link is intact. Used by the
+         *     signed export and by the tamper alarm.
+         */
+        post: operations["verifyRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * Verify the run's hash chain
-     * @description Walks the chain and reports whether every link is intact. Used by the
-     *     signed export and by the tamper alarm.
-     */
-    post: operations["verifyRun"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/approvals": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The approval inbox */
+        get: operations["listApprovals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** The approval inbox */
-    get: operations["listApprovals"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/runs/{runId}/approvals": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/runs/{runId}/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve or reject a suspended action */
+        post: operations["decideApproval"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /** Approve or reject a suspended action */
-    post: operations["decideApproval"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/cost": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/cost": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Consumption rolled up over a period
+         * @description The run is the accounting unit; company, area and agent are dimensions
+         *     derived from it. Totals always reconcile because they are projections
+         *     of the same ledger rows.
+         */
+        get: operations["getCostRollup"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * Consumption rolled up over a period
-     * @description The run is the accounting unit; company, area and agent are dimensions
-     *     derived from it. Totals always reconcile because they are projections
-     *     of the same ledger rows.
-     */
-    get: operations["getCostRollup"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/audit": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What happened, across both records that keep it
+         * @description The platform keeps two append-only trails and they are not the same
+         *     kind of thing. The run ledger is hash-chained: every step seals the one
+         *     before it, so an altered step can be detected. The administrative trail
+         *     records what people changed about the rules agents run under, and it is
+         *     append-only by grant — nobody holds UPDATE — but it is not chained.
+         *
+         *     Every entry says which record it came from and carries a seal only
+         *     where one exists. A screen that merged them and called the result
+         *     verified would claim a guarantee half its rows do not have.
+         *
+         *     Scoped like every other read. An audit trail that showed an area
+         *     somebody cannot otherwise see would be a way around every other check.
+         */
+        get: operations["listAudit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * What happened, across both records that keep it
-     * @description The platform keeps two append-only trails and they are not the same
-     *     kind of thing. The run ledger is hash-chained: every step seals the one
-     *     before it, so an altered step can be detected. The administrative trail
-     *     records what people changed about the rules agents run under, and it is
-     *     append-only by grant — nobody holds UPDATE — but it is not chained.
-     *
-     *     Every entry says which record it came from and carries a seal only
-     *     where one exists. A screen that merged them and called the result
-     *     verified would claim a guarantee half its rows do not have.
-     *
-     *     Scoped like every other read. An audit trail that showed an area
-     *     somebody cannot otherwise see would be a way around every other check.
-     */
-    get: operations["listAudit"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/policies": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The rules in force
+         * @description Every authored policy, with how many times each one decided something
+         *     in the period. Readable by anybody a policy constrains — an author who
+         *     cannot see the rule that stopped their agent cannot act on it — and
+         *     writable only with policy:write, because a rule somebody constrained
+         *     can edit is that person's rule rather than the organisation's.
+         */
+        get: operations["listPolicies"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * The rules in force
-     * @description Every authored policy, with how many times each one decided something
-     *     in the period. Readable by anybody a policy constrains — an author who
-     *     cannot see the rule that stopped their agent cannot act on it — and
-     *     writable only with policy:write, because a rule somebody constrained
-     *     can edit is that person's rule rather than the organisation's.
-     */
-    get: operations["listPolicies"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/policies/simulate": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/policies/simulate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * What a draft rule would have done
+         * @description Replays a rule that has not been saved against decisions already
+         *     recorded, so a policy is never saved blind.
+         *
+         *     A rule that reads `args.*` cannot be replayed against every decision:
+         *     a blocked call never stored arguments, so for those the answer is not
+         *     "no match" but "unknown", and it is reported separately. Counting them
+         *     as no-matches would show zero denials for exactly the rule somebody was
+         *     nervous about.
+         */
+        post: operations["simulatePolicy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * What a draft rule would have done
-     * @description Replays a rule that has not been saved against decisions already
-     *     recorded, so a policy is never saved blind.
-     *
-     *     A rule that reads `args.*` cannot be replayed against every decision:
-     *     a blocked call never stored arguments, so for those the answer is not
-     *     "no match" but "unknown", and it is reported separately. Counting them
-     *     as no-matches would show zero denials for exactly the rule somebody was
-     *     nervous about.
-     */
-    post: operations["simulatePolicy"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/policies/{code}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/policies/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Write a policy
+         * @description Creating and editing are the same call: the code is the identity, set
+         *     once and never changed, because it appears in the trail and in the
+         *     message somebody denied reads.
+         *
+         *     Every write takes a snapshot of the whole set in the same transaction,
+         *     so the hash recorded on decisions from this moment names rules that can
+         *     be fetched back.
+         */
+        put: operations["putPolicy"];
+        post?: never;
+        /**
+         * Remove a policy
+         * @description The rule stops being evaluated. Decisions it already made keep pointing
+         *     at the snapshot that held it, so removing a policy never rewrites what
+         *     it did.
+         */
+        delete: operations["deletePolicy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    /**
-     * Write a policy
-     * @description Creating and editing are the same call: the code is the identity, set
-     *     once and never changed, because it appears in the trail and in the
-     *     message somebody denied reads.
-     *
-     *     Every write takes a snapshot of the whole set in the same transaction,
-     *     so the hash recorded on decisions from this moment names rules that can
-     *     be fetched back.
-     */
-    put: operations["putPolicy"];
-    post?: never;
-    /**
-     * Remove a policy
-     * @description The rule stops being evaluated. Decisions it already made keep pointing
-     *     at the snapshot that held it, so removing a policy never rewrites what
-     *     it did.
-     */
-    delete: operations["deletePolicy"];
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/admin/tools": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/admin/tools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every tool the platform knows, and what it is classified as
+         * @description Tools arrive from their servers classified read-only whatever the server claims about itself. Promoting one is a separate, recorded act.
+         */
+        get: operations["listTools"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * Every tool the platform knows, and what it is classified as
-     * @description Tools arrive from their servers classified read-only whatever the server claims about itself. Promoting one is a separate, recorded act.
-     */
-    get: operations["listTools"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/admin/tools/{toolId}/classification": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/admin/tools/{toolId}/classification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Record what a tool does to the world
+         * @description The single point where write access enters the platform. The ruling is durable and attributed; the previous one is not amended, it is superseded, and both stay in the administrative trail.
+         */
+        put: operations["classifyTool"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    /**
-     * Record what a tool does to the world
-     * @description The single point where write access enters the platform. The ruling is durable and attributed; the previous one is not amended, it is superseded, and both stay in the administrative trail.
-     */
-    put: operations["classifyTool"];
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/admin/integrations": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/admin/integrations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Everything the platform is configured to talk to
+         * @description Tool servers and model providers. Credentials are never returned; a provider only reports whether one is stored.
+         */
+        get: operations["listIntegrations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * Everything the platform is configured to talk to
-     * @description Tool servers and model providers. Credentials are never returned; a provider only reports whether one is stored.
-     */
-    get: operations["listIntegrations"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/admin/integrations/mcp-servers/{name}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/admin/integrations/mcp-servers/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Configure a tool server
+         * @description Adding a server changes what agents can do, so it is recorded like any other administrative change. The tools it offers still arrive classified read-only; promoting one stays a separate act.
+         */
+        put: operations["putMCPServer"];
+        post?: never;
+        /** Remove a tool server */
+        delete: operations["deleteMCPServer"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    /**
-     * Configure a tool server
-     * @description Adding a server changes what agents can do, so it is recorded like any other administrative change. The tools it offers still arrive classified read-only; promoting one stays a separate act.
-     */
-    put: operations["putMCPServer"];
-    post?: never;
-    /** Remove a tool server */
-    delete: operations["deleteMCPServer"];
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/admin/integrations/providers/{name}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/admin/integrations/providers/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Configure a model provider */
+        put: operations["putModelProvider"];
+        post?: never;
+        /** Remove a model provider */
+        delete: operations["deleteModelProvider"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    /** Configure a model provider */
-    put: operations["putModelProvider"];
-    post?: never;
-    /** Remove a model provider */
-    delete: operations["deleteModelProvider"];
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/admin/budgets": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/admin/budgets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The ceilings configured per scope
+         * @description A scope ceiling is a limit over a window, distinct from the per-run ceiling in an agent's specification. Both are enforced by the same check; a run is bounded by whichever binds first.
+         */
+        get: operations["listBudgets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * The ceilings configured per scope
-     * @description A scope ceiling is a limit over a window, distinct from the per-run ceiling in an agent's specification. Both are enforced by the same check; a run is bounded by whichever binds first.
-     */
-    get: operations["listBudgets"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/admin/budgets/{scope}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/admin/budgets/{scope}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set a scope's ceiling
+         * @description Ceilings inherit downwards and never widen: an area cannot raise what its company allows. Reaching one pauses the run resumably rather than ending it, so raising the ceiling continues from the same step.
+         */
+        put: operations["putBudget"];
+        post?: never;
+        /** Remove a scope's ceiling */
+        delete: operations["deleteBudget"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    /**
-     * Set a scope's ceiling
-     * @description Ceilings inherit downwards and never widen: an area cannot raise what its company allows. Reaching one pauses the run resumably rather than ending it, so raising the ceiling continues from the same step.
-     */
-    put: operations["putBudget"];
-    post?: never;
-    /** Remove a scope's ceiling */
-    delete: operations["deleteBudget"];
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/admin/scopes": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/admin/authoring": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The model the interview uses
+         * @description Which connected provider writes the drafts when somebody authors an
+         *     agent by answering questions instead of filling a form.
+         *
+         *     A choice, not a second registry: the connection itself — endpoint,
+         *     credential, health — stays in `/admin/integrations`, and this points
+         *     into it. Two credential stores would be two places to leak from, two to
+         *     rotate and two to audit, and an installation with one account would
+         *     configure it twice.
+         *
+         *     Disabled is a supported state. An installation with no strong model
+         *     still publishes agents through the form; the interview is the good
+         *     path rather than the only one.
+         */
+        get: operations["getAuthoring"];
+        /**
+         * Point the interview at a provider
+         * @description Refuses a provider `/admin/integrations` does not know. Without that
+         *     check the two drift apart silently, and the failure surfaces as a call
+         *     to an endpoint that does not exist — at the moment somebody is halfway
+         *     through describing a process.
+         */
+        put: operations["setAuthoring"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * The areas that exist
-     * @description An area is where work is filed: an agent belongs to one, a ceiling
-     *     governs one, a policy can reach a set of them, and a grant is held in
-     *     one. Before this list existed an area was whatever text somebody typed
-     *     into an agent, so `financeiro` and `Financeiro` were two areas that
-     *     never meet — a ceiling on one governs no agent under the other, and
-     *     nothing reports it.
-     *
-     *     Answers only with the areas inside the scopes the caller reaches, so
-     *     the list doubles as what a context switcher may offer.
-     */
-    get: operations["listScopes"];
-    put?: never;
-    /**
-     * Register an area
-     * @description The typed name is folded to a canonical id — lowercased, accents
-     *     removed, spaces hyphenated — and the reply carries it, because the
-     *     caller cannot know beforehand what "Risco de Crédito" becomes.
-     *     Registering a name that folds onto an existing area relabels it rather
-     *     than creating a second one.
-     *
-     *     Behind scope:write, held only by the Curator: an area is where
-     *     authority is granted, so anybody who could create one could create a
-     *     place to hold authority nobody meant to give.
-     */
-    post: operations["registerScope"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/admin/scopes/{scope}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/admin/scopes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The areas that exist
+         * @description An area is where work is filed: an agent belongs to one, a ceiling
+         *     governs one, a policy can reach a set of them, and a grant is held in
+         *     one. Before this list existed an area was whatever text somebody typed
+         *     into an agent, so `financeiro` and `Financeiro` were two areas that
+         *     never meet — a ceiling on one governs no agent under the other, and
+         *     nothing reports it.
+         *
+         *     Answers only with the areas inside the scopes the caller reaches, so
+         *     the list doubles as what a context switcher may offer.
+         */
+        get: operations["listScopes"];
+        put?: never;
+        /**
+         * Register an area
+         * @description The typed name is folded to a canonical id — lowercased, accents
+         *     removed, spaces hyphenated — and the reply carries it, because the
+         *     caller cannot know beforehand what "Risco de Crédito" becomes.
+         *     Registering a name that folds onto an existing area relabels it rather
+         *     than creating a second one.
+         *
+         *     Behind scope:write, held only by the Curator: an area is where
+         *     authority is granted, so anybody who could create one could create a
+         *     place to hold authority nobody meant to give.
+         */
+        post: operations["registerScope"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    post?: never;
-    /**
-     * Withdraw an area
-     * @description Withdraws the area from the list offered for new work. It does not
-     *     touch the agents, ceilings or policies already filed under it: those
-     *     rows keep naming it and keep meaning what they meant. Withdrawing an
-     *     area and rewriting history are different acts, and only the first is
-     *     available here.
-     */
-    delete: operations["deleteScope"];
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/admin/events": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/admin/scopes/{scope}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Withdraw an area
+         * @description Withdraws the area from the list offered for new work. It does not
+         *     touch the agents, ceilings or policies already filed under it: those
+         *     rows keep naming it and keep meaning what they meant. Withdrawing an
+         *     area and rewriting history are different acts, and only the first is
+         *     available here.
+         */
+        delete: operations["deleteScope"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * What operators changed about the platform
-     * @description The run ledger records what agents did; this records what people did to the rules agents run under. Append-only.
-     */
-    get: operations["listAdminEvents"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/healthz": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/admin/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What operators changed about the platform
+         * @description The run ledger records what agents did; this records what people did to the rules agents run under. Append-only.
+         */
+        get: operations["listAdminEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Liveness probe */
-    get: operations["health"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
+    "/healthz": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Liveness probe */
+        get: operations["health"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
-  schemas: {
-    /** @description RFC 9457 problem detail. */
-    Problem: {
-      /** @default about:blank */
-      type: string;
-      title: string;
-      status: number;
-      detail?: string;
-      instance?: string;
+    schemas: {
+        /** @description RFC 9457 problem detail. */
+        Problem: {
+            /** @default about:blank */
+            type: string;
+            title: string;
+            status: number;
+            detail?: string;
+            instance?: string;
+        };
+        /** @enum {string} */
+        Phase: "unstarted" | "running" | "awaiting_approval" | "awaiting_tool" | "parked" | "finished";
+        /** @enum {string} */
+        Verdict: "allow" | "constrain" | "require_approval" | "block";
+        /**
+         * @description What a tool does to the world. The domain's `unknown` is deliberately absent: it is the zero value that makes an unclassified tool fail closed, never something a caller may assert.
+         * @enum {string}
+         */
+        Effect: "read" | "write" | "destructive" | "financial";
+        /** @enum {string} */
+        StepKind: "run_started" | "planned" | "gate_decided" | "budget_reserved" | "tool_called" | "tool_returned" | "budget_reconciled" | "approval_requested" | "approval_decided" | "compensated" | "failed" | "parked" | "run_finished";
+        Scope: {
+            company: string;
+            area: string;
+        };
+        /**
+         * @description Cache tokens are reported separately from input tokens: a cache read
+         *     costs a fraction of the price, and without the split an expensive agent
+         *     cannot be diagnosed.
+         */
+        Cost: {
+            /** Format: int64 */
+            micros: number;
+            /** Format: int64 */
+            inputTokens?: number;
+            /** Format: int64 */
+            outputTokens?: number;
+            /** Format: int64 */
+            cacheReadTokens?: number;
+            /** Format: int64 */
+            cacheWriteTokens?: number;
+        };
+        Run: {
+            runId: string;
+            scope: components["schemas"]["Scope"];
+            agentId: string;
+            /** @description The specification version the run is pinned to. Publishing a new version never affects a run already in flight. */
+            versionId: string;
+            onBehalfOf?: string;
+            phase: components["schemas"]["Phase"];
+            /**
+             * Format: int64
+             * @description Sequence number of the last recorded step.
+             */
+            seq: number;
+            /** Format: date-time */
+            startedAt: string;
+            /** Format: date-time */
+            endedAt?: string | null;
+            cost: components["schemas"]["Cost"];
+            /**
+             * Format: int64
+             * @description Outstanding reservations not yet reconciled.
+             */
+            reservedMicros?: number;
+            /** @description Accumulated data-flow labels of the run context. */
+            labels?: string[];
+            pendingApproval?: components["schemas"]["PendingApproval"] | null;
+        };
+        Tool: {
+            /** @description Namespaced by server, because two servers naming a tool "search" must not collide into one capability. */
+            toolId: string;
+            server: string;
+            description?: string;
+            effect: components["schemas"]["Effect"];
+            untrusted: boolean;
+        };
+        MCPServer: {
+            /** @description Namespaces the tools it offers, so two servers naming a tool "search" do not collide. */
+            name: string;
+            command: string;
+            args?: string[];
+            enabled: boolean;
+            /**
+             * @description Whether this server is configured from the console. False for one
+             *     passed to the process by flag or environment: the platform is
+             *     connected to it and cannot change it here, and hiding it would make
+             *     this screen disagree with what the installation actually talks to.
+             */
+            managed?: boolean;
+            updatedBy?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+            /**
+             * @description What the platform observed the last time it tried to reach this
+             *     server. Absent when no worker has tried yet, which is a different
+             *     thing from a server that failed.
+             */
+            health?: components["schemas"]["IntegrationHealth"] | null;
+        };
+        IntegrationHealth: {
+            reachable: boolean;
+            /**
+             * @description How many tools it offered. Zero on an unreachable server and also
+             *     on a reachable one that offers nothing, which is why reachable is
+             *     separate rather than inferred from this.
+             */
+            toolCount: number;
+            /** @description Why it failed, when it did. Shown as-is — the reader is who fixes the server. */
+            detail?: string;
+            /** Format: date-time */
+            observedAt: string;
+            /**
+             * @description Which worker saw this. Several connect to the same servers and can
+             *     disagree — one pod on a network that reaches it, one not.
+             */
+            observedBy?: string;
+        };
+        ModelProvider: {
+            name: string;
+            /** @enum {string} */
+            kind: "anthropic" | "openai_compatible";
+            baseUrl: string;
+            enabled: boolean;
+            /** @description Whether a credential is stored. The credential itself never leaves the vault through this API. */
+            hasKey: boolean;
+            updatedBy?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        AuthoringChoice: {
+            /** @description The name of a provider registered under /admin/integrations. */
+            provider: string;
+            model: string;
+            effort?: string;
+            /**
+             * @description False means the installation has no authoring assistant, which is a
+             *     supported state rather than a broken one.
+             */
+            enabled: boolean;
+        };
+        RegisteredScope: {
+            company: string;
+            /** @description The canonical id. Lowercase, no accents, hyphenated. */
+            area: string;
+            /** @description How it is shown. Empty means show the id. */
+            label?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            createdBy?: string;
+        };
+        ScopeBudget: {
+            /** @enum {string} */
+            scopeKind: "installation" | "company" | "area";
+            scope?: components["schemas"]["Scope"];
+            /** @enum {string} */
+            period: "daily" | "monthly";
+            /** Format: int64 */
+            micros?: number;
+            /** Format: int64 */
+            tokens?: number;
+            /** Format: int64 */
+            toolCalls?: number;
+            /** Format: int64 */
+            steps?: number;
+            /** Format: int64 */
+            wallClockMs?: number;
+            enabled: boolean;
+            updatedBy?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        AuditEntry: {
+            /** Format: date-time */
+            at: string;
+            /**
+             * @description Which record this came from, and therefore what can be proved about
+             *     it. Ledger entries are hash-chained; administrative ones are
+             *     append-only but not chained.
+             * @enum {string}
+             */
+            source: "ledger" | "admin";
+            /**
+             * @description A person for an administrative change or a human decision; the
+             *     agent for a Gate decision, because the Gate decides about an
+             *     agent's proposal rather than on anybody's behalf.
+             */
+            actor: string;
+            /** @description Past tense, namespaced — tool.classified, gate.blocked, approval.granted. */
+            verb: string;
+            target: string;
+            scope?: components["schemas"]["Scope"];
+            detail?: {
+                [key: string]: unknown;
+            };
+            runId?: string;
+            /** Format: int64 */
+            seq?: number;
+            /**
+             * @description Seals this entry to the one before it. Present only on ledger
+             *     entries; an administrative entry has nothing to show here and says
+             *     so by omission rather than by an empty promise.
+             */
+            hash?: string;
+        };
+        Simulation: {
+            /**
+             * @description How many recorded decisions were examined. Zero matches out of zero
+             *     decisions is not evidence a rule is harmless, and this is what lets
+             *     a screen tell the two apart.
+             */
+            considered: number;
+            matched: number;
+            /**
+             * @description Decisions the rule could not be answered against, because it reads
+             *     arguments and those did not keep any.
+             */
+            unknown: number;
+            wouldDeny?: number;
+            wouldEscalate?: number;
+            /** @description A few of the matches, so a number has runs behind it. */
+            samples: components["schemas"]["SimulationSample"][];
+        };
+        SimulationSample: {
+            runId: string;
+            /** Format: int64 */
+            seq: number;
+            tool: string;
+            was: components["schemas"]["Verdict"];
+            wouldBe: components["schemas"]["Verdict"];
+        };
+        PolicyPage: {
+            items: components["schemas"]["Policy"][];
+            /** @description Names the set as a whole. Every decision records it. */
+            policyHash: string;
+        };
+        PolicyWritten: {
+            policy: components["schemas"]["Policy"];
+            policyHash: string;
+        };
+        PolicyInput: {
+            name: string;
+            owner?: string;
+            /**
+             * @description The sentence shown in the trail and to whoever is denied. The
+             *     difference between "blocked by POL-114" and knowing what to do.
+             */
+            reason?: string;
+            /** @description A glob over the tool id — `crm.*`, `crm.reply`, `*`. */
+            resource?: string;
+            /** @description Which effects it covers. Empty means any. */
+            effects?: components["schemas"]["Effect"][];
+            /** @enum {string} */
+            reach?: "installation" | "scopes" | "agents";
+            scopes?: components["schemas"]["Scope"][];
+            agents?: string[];
+            /** @description Every clause must hold. There is no "or". */
+            conditions?: components["schemas"]["PolicyCondition"][];
+            /** @enum {string} */
+            effect: "allow" | "escalate" | "deny";
+            /**
+             * @description A monitored policy is evaluated and recorded and changes no
+             *     verdict, so an operator can read what it would have done before it
+             *     does it.
+             * @enum {string}
+             */
+            mode: "monitor" | "enforce";
+            enabled?: boolean;
+        };
+        PolicyCondition: {
+            /** @description tool.id, tool.effect, data.taint, agent.id, scope.area, or args.<path>. */
+            field: string;
+            /** @enum {string} */
+            op: "eq" | "ne" | "gt" | "lt" | "contains" | "in";
+            value: string;
+        };
+        Policy: components["schemas"]["PolicyInput"] & {
+            /** @description Set once and never changed — it appears in the trail and in what a denied person reads. */
+            code: string;
+            /**
+             * @description The rule as one line, generated from the same fields the Gate
+             *     evaluates. The builder is never the only representation.
+             */
+            sentence: string;
+            /**
+             * Format: int64
+             * @description How many decisions this rule produced in the period.
+             */
+            hits?: number;
+            updatedBy?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        AdminEvent: {
+            /** Format: date-time */
+            at: string;
+            principalId: string;
+            scope?: components["schemas"]["Scope"];
+            /** @description Past tense, namespaced by what it touched — tool.classified, provider.created. */
+            action: string;
+            target: string;
+            detail?: {
+                [key: string]: unknown;
+            };
+        };
+        Agent: {
+            agentId: string;
+            /** @description The digest of the definition's content. Publishing new text is a new version; the old one stays readable. */
+            versionId: string;
+            scope: components["schemas"]["Scope"];
+            name: string;
+            provider: string;
+            model: string;
+            effort?: string;
+            /** @description The capability pack resolved to concrete tools. What is not here cannot be invoked. */
+            tools: string[];
+            budget: components["schemas"]["Budget"];
+            triggers?: components["schemas"]["AgentTrigger"][];
+            publishedBy?: string;
+            /** Format: date-time */
+            publishedAt: string;
+            /** @description Whether this is the newest published version of the agent. */
+            latest: boolean;
+            /** @description Absent when the agent has never run, which is a different thing from having run and finished. */
+            activity?: components["schemas"]["AgentActivity"] | null;
+        };
+        /** @description How the agent has been doing, aggregated from its runs. An agent has no state of its own to report — there is no autonomy stage yet — so what an operator sees is a fact about its runs. */
+        AgentActivity: {
+            /** Format: int64 */
+            runs: number;
+            /** Format: int64 */
+            finished: number;
+            /**
+             * Format: int64
+             * @description Runs stopped for a person — awaiting approval or parked.
+             */
+            waiting: number;
+            /** Format: int64 */
+            costMicros: number;
+            lastPhase?: components["schemas"]["Phase"];
+            /** Format: date-time */
+            lastRunAt?: string;
+        };
+        AgentDefinition: {
+            name: string;
+            area: string;
+            provider: string;
+            model: string;
+            effort?: string;
+            /** @description What the agent is for, in the author's own words. */
+            instructions: string;
+            /** @description The capability pack. What is not here cannot be invoked. */
+            tools?: string[];
+            budget?: components["schemas"]["Budget"];
+            triggers?: components["schemas"]["AgentTrigger"][];
+        };
+        AgentPublished: {
+            agentId: string;
+            versionId: string;
+            /**
+             * @description False when this exact definition was already published. The version
+             *     is the digest of its bytes, so republishing identical text returns
+             *     the version it already had.
+             */
+            created: boolean;
+            /** @description Whether the agent is allowed to start. A new one never is. */
+            paused: boolean;
+            /**
+             * @description The definition as a file, exactly as published. An installation
+             *     that keeps its agents in git commits this.
+             */
+            definition?: string;
+        };
+        AgentDetail: {
+            agent: components["schemas"]["Agent"];
+            /**
+             * @description The definition's body, exactly as published. Read-only: a
+             *     specification is changed by publishing a new version, never by
+             *     editing one that runs already reference.
+             */
+            instructions?: string;
+            /** @description Where the definition came from — a path, a repository. */
+            source?: string;
+            /** @description Every published version, newest first. */
+            versions: components["schemas"]["AgentVersion"][];
+        };
+        AgentVersion: {
+            versionId: string;
+            publishedBy?: string;
+            /** Format: date-time */
+            publishedAt: string;
+            latest: boolean;
+        };
+        Webhook: {
+            path: string;
+            /**
+             * @description Whether a secret exists. A declared path without one refuses
+             *     everything, which is the safe state for a door with an agent
+             *     behind it.
+             */
+            armed: boolean;
+            rotatedBy?: string;
+            /** Format: date-time */
+            rotatedAt?: string | null;
+        };
+        AgentTrigger: {
+            /** @enum {string} */
+            type: "cron" | "webhook" | "event";
+            schedule?: string;
+            path?: string;
+            event?: string;
+        };
+        /** @description The ceilings a run is checked against. Every dimension is enforced at the Gate. */
+        Budget: {
+            /** Format: int64 */
+            micros?: number;
+            /** Format: int64 */
+            tokens?: number;
+            /** Format: int64 */
+            toolCalls?: number;
+            /** Format: int64 */
+            steps?: number;
+            /** Format: int64 */
+            wallClockMs?: number;
+        };
+        RunStats: {
+            /**
+             * Format: int64
+             * @description Runs matching the filter, not runs returned.
+             */
+            total: number;
+            /** @description Runs per phase. A phase with no runs is absent, so "none" is distinguishable from "not measured". */
+            byPhase: {
+                [key: string]: number;
+            };
+            /**
+             * Format: int64
+             * @description How many runs the median was computed over.
+             */
+            ended: number;
+            /**
+             * Format: int64
+             * @description Median wall-clock duration of runs that ended. Absent when none have.
+             */
+            medianDurationMs?: number | null;
+            /**
+             * Format: int64
+             * @description The slow tail, over the same runs as the median. On its own a
+             *     median says nothing about the runs people complain about.
+             */
+            p95DurationMs?: number | null;
+        };
+        DecisionPage: {
+            items: components["schemas"]["RecordedDecision"][];
+        };
+        RecordedDecision: {
+            runId: string;
+            /** Format: int64 */
+            seq: number;
+            /** Format: date-time */
+            at: string;
+            scope?: components["schemas"]["Scope"];
+            agentId?: string;
+            tool?: string;
+            verdict: components["schemas"]["Verdict"];
+            /** @description The rule that applied. The feed names it rather than a category. */
+            rule?: string;
+        };
+        Throughput: {
+            buckets: components["schemas"]["ThroughputBucket"][];
+        };
+        ThroughputBucket: {
+            /**
+             * Format: date-time
+             * @description The start of the hour, in UTC.
+             */
+            at: string;
+            /** Format: int64 */
+            total: number;
+            /**
+             * Format: int64
+             * @description What the hour cost, read off the same rows as the count.
+             */
+            micros: number;
+            /** @description Runs per phase within the hour. A phase with none is absent. */
+            byPhase: {
+                [key: string]: number;
+            };
+            /**
+             * @description The same hour split by who ran. Travels with the phase split rather
+             *     than in its own request: every screen that wants one wants the
+             *     other, and two queries over the same rows can disagree if a run
+             *     finishes between them.
+             */
+            byAgent: {
+                [key: string]: number;
+            };
+        };
+        RunPage: {
+            items: components["schemas"]["Run"][];
+            nextCursor?: string | null;
+        };
+        Step: {
+            /** Format: int64 */
+            seq: number;
+            kind: components["schemas"]["StepKind"];
+            /** Format: date-time */
+            at: string;
+            cost?: components["schemas"]["Cost"];
+            labels?: string[];
+            policyHash?: string;
+            /**
+             * @description Kind-specific detail. Bulky content is not inlined: payloads carry
+             *     a reference into object storage plus a digest, because arguments
+             *     and results routinely contain personal data.
+             */
+            payload?: {
+                [key: string]: unknown;
+            };
+            /** @description Hex-encoded SHA-256 sealing this step to the previous one. */
+            hash: string;
+        };
+        StepContent: {
+            /** Format: int64 */
+            seq: number;
+            /**
+             * @description Hex-encoded SHA-256 of the content, as recorded in the step. A
+             *     caller that hashes the body and gets a different value is not
+             *     looking at what the chain sealed.
+             */
+            digest: string;
+            /** @description The bytes, as text. JSON arguments arrive as a JSON string. */
+            content: string;
+        };
+        StepPage: {
+            items: components["schemas"]["Step"][];
+            /** Format: int64 */
+            nextSeq?: number | null;
+        };
+        VerifyResult: {
+            valid: boolean;
+            /** Format: int64 */
+            stepsChecked: number;
+            /**
+             * Format: int64
+             * @description The first step whose link failed, when valid is false.
+             */
+            brokenAtSeq?: number | null;
+        };
+        PendingApproval: {
+            runId: string;
+            scope?: components["schemas"]["Scope"];
+            agentId?: string;
+            tool: string;
+            effect?: components["schemas"]["Effect"];
+            /** @description The rule that required approval. The trail never says "denied by policy" — it names the rule. */
+            rule?: string;
+            reason?: string;
+            /** Format: date-time */
+            requestedAt: string;
+            /** Format: date-time */
+            expiresAt?: string | null;
+            /** Format: int64 */
+            atSeq: number;
+        };
+        ApprovalPage: {
+            items: components["schemas"]["PendingApproval"][];
+            nextCursor?: string | null;
+        };
+        ApprovalDecision: {
+            approved: boolean;
+            /**
+             * Format: int64
+             * @description Sequence number of the approval_requested step being answered.
+             *     Required so a stale browser tab cannot approve an action that a
+             *     later step already superseded.
+             */
+            atSeq: number;
+            note?: string;
+        };
+        CostBucket: {
+            key: string;
+            cost: components["schemas"]["Cost"];
+            /** Format: int64 */
+            runs: number;
+        };
+        CostRollup: {
+            /** Format: date-time */
+            from: string;
+            /** Format: date-time */
+            to: string;
+            groupBy: string;
+            total: components["schemas"]["Cost"];
+            buckets: components["schemas"]["CostBucket"][];
+        };
+        Health: {
+            /** @enum {string} */
+            status: "ok" | "degraded";
+            version: string;
+        };
     };
-    /** @enum {string} */
-    Phase:
-      | "unstarted"
-      | "running"
-      | "awaiting_approval"
-      | "awaiting_tool"
-      | "parked"
-      | "finished";
-    /** @enum {string} */
-    Verdict: "allow" | "constrain" | "require_approval" | "block";
-    /**
-     * @description What a tool does to the world. The domain's `unknown` is deliberately absent: it is the zero value that makes an unclassified tool fail closed, never something a caller may assert.
-     * @enum {string}
-     */
-    Effect: "read" | "write" | "destructive" | "financial";
-    /** @enum {string} */
-    StepKind:
-      | "run_started"
-      | "planned"
-      | "gate_decided"
-      | "budget_reserved"
-      | "tool_called"
-      | "tool_returned"
-      | "budget_reconciled"
-      | "approval_requested"
-      | "approval_decided"
-      | "compensated"
-      | "failed"
-      | "parked"
-      | "run_finished";
-    Scope: {
-      company: string;
-      area: string;
+    responses: {
+        /** @description The request is malformed. */
+        BadRequest: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description Missing or invalid credentials. */
+        Unauthorized: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description Authenticated, but the caller does not hold the permission in this scope. */
+        Forbidden: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description No such resource, or it is outside the caller's scope. */
+        NotFound: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
     };
-    /**
-     * @description Cache tokens are reported separately from input tokens: a cache read
-     *     costs a fraction of the price, and without the split an expensive agent
-     *     cannot be diagnosed.
-     */
-    Cost: {
-      /** Format: int64 */
-      micros: number;
-      /** Format: int64 */
-      inputTokens?: number;
-      /** Format: int64 */
-      outputTokens?: number;
-      /** Format: int64 */
-      cacheReadTokens?: number;
-      /** Format: int64 */
-      cacheWriteTokens?: number;
+    parameters: {
+        RunId: string;
+        /** @description Company scope. A single value until multi-company (PRD 3.1). */
+        Company: string;
+        Area: string;
+        /** @description Opaque cursor from the previous page. */
+        Cursor: string;
+        Limit: number;
     };
-    Run: {
-      runId: string;
-      scope: components["schemas"]["Scope"];
-      agentId: string;
-      /** @description The specification version the run is pinned to. Publishing a new version never affects a run already in flight. */
-      versionId: string;
-      onBehalfOf?: string;
-      phase: components["schemas"]["Phase"];
-      /**
-       * Format: int64
-       * @description Sequence number of the last recorded step.
-       */
-      seq: number;
-      /** Format: date-time */
-      startedAt: string;
-      /** Format: date-time */
-      endedAt?: string | null;
-      cost: components["schemas"]["Cost"];
-      /**
-       * Format: int64
-       * @description Outstanding reservations not yet reconciled.
-       */
-      reservedMicros?: number;
-      /** @description Accumulated data-flow labels of the run context. */
-      labels?: string[];
-      pendingApproval?: components["schemas"]["PendingApproval"] | null;
-    };
-    Tool: {
-      /** @description Namespaced by server, because two servers naming a tool "search" must not collide into one capability. */
-      toolId: string;
-      server: string;
-      description?: string;
-      effect: components["schemas"]["Effect"];
-      untrusted: boolean;
-    };
-    MCPServer: {
-      /** @description Namespaces the tools it offers, so two servers naming a tool "search" do not collide. */
-      name: string;
-      command: string;
-      args?: string[];
-      enabled: boolean;
-      /**
-       * @description Whether this server is configured from the console. False for one
-       *     passed to the process by flag or environment: the platform is
-       *     connected to it and cannot change it here, and hiding it would make
-       *     this screen disagree with what the installation actually talks to.
-       */
-      managed?: boolean;
-      updatedBy?: string;
-      /** Format: date-time */
-      updatedAt?: string;
-      /**
-       * @description What the platform observed the last time it tried to reach this
-       *     server. Absent when no worker has tried yet, which is a different
-       *     thing from a server that failed.
-       */
-      health?: components["schemas"]["IntegrationHealth"] | null;
-    };
-    IntegrationHealth: {
-      reachable: boolean;
-      /**
-       * @description How many tools it offered. Zero on an unreachable server and also
-       *     on a reachable one that offers nothing, which is why reachable is
-       *     separate rather than inferred from this.
-       */
-      toolCount: number;
-      /** @description Why it failed, when it did. Shown as-is — the reader is who fixes the server. */
-      detail?: string;
-      /** Format: date-time */
-      observedAt: string;
-      /**
-       * @description Which worker saw this. Several connect to the same servers and can
-       *     disagree — one pod on a network that reaches it, one not.
-       */
-      observedBy?: string;
-    };
-    ModelProvider: {
-      name: string;
-      /** @enum {string} */
-      kind: "anthropic" | "openai_compatible";
-      baseUrl: string;
-      enabled: boolean;
-      /** @description Whether a credential is stored. The credential itself never leaves the vault through this API. */
-      hasKey: boolean;
-      updatedBy?: string;
-      /** Format: date-time */
-      updatedAt?: string;
-    };
-    RegisteredScope: {
-      company: string;
-      /** @description The canonical id. Lowercase, no accents, hyphenated. */
-      area: string;
-      /** @description How it is shown. Empty means show the id. */
-      label?: string;
-      /** Format: date-time */
-      createdAt?: string;
-      createdBy?: string;
-    };
-    ScopeBudget: {
-      /** @enum {string} */
-      scopeKind: "installation" | "company" | "area";
-      scope?: components["schemas"]["Scope"];
-      /** @enum {string} */
-      period: "daily" | "monthly";
-      /** Format: int64 */
-      micros?: number;
-      /** Format: int64 */
-      tokens?: number;
-      /** Format: int64 */
-      toolCalls?: number;
-      /** Format: int64 */
-      steps?: number;
-      /** Format: int64 */
-      wallClockMs?: number;
-      enabled: boolean;
-      updatedBy?: string;
-      /** Format: date-time */
-      updatedAt?: string;
-    };
-    AuditEntry: {
-      /** Format: date-time */
-      at: string;
-      /**
-       * @description Which record this came from, and therefore what can be proved about
-       *     it. Ledger entries are hash-chained; administrative ones are
-       *     append-only but not chained.
-       * @enum {string}
-       */
-      source: "ledger" | "admin";
-      /**
-       * @description A person for an administrative change or a human decision; the
-       *     agent for a Gate decision, because the Gate decides about an
-       *     agent's proposal rather than on anybody's behalf.
-       */
-      actor: string;
-      /** @description Past tense, namespaced — tool.classified, gate.blocked, approval.granted. */
-      verb: string;
-      target: string;
-      scope?: components["schemas"]["Scope"];
-      detail?: {
-        [key: string]: unknown;
-      };
-      runId?: string;
-      /** Format: int64 */
-      seq?: number;
-      /**
-       * @description Seals this entry to the one before it. Present only on ledger
-       *     entries; an administrative entry has nothing to show here and says
-       *     so by omission rather than by an empty promise.
-       */
-      hash?: string;
-    };
-    Simulation: {
-      /**
-       * @description How many recorded decisions were examined. Zero matches out of zero
-       *     decisions is not evidence a rule is harmless, and this is what lets
-       *     a screen tell the two apart.
-       */
-      considered: number;
-      matched: number;
-      /**
-       * @description Decisions the rule could not be answered against, because it reads
-       *     arguments and those did not keep any.
-       */
-      unknown: number;
-      wouldDeny?: number;
-      wouldEscalate?: number;
-      /** @description A few of the matches, so a number has runs behind it. */
-      samples: components["schemas"]["SimulationSample"][];
-    };
-    SimulationSample: {
-      runId: string;
-      /** Format: int64 */
-      seq: number;
-      tool: string;
-      was: components["schemas"]["Verdict"];
-      wouldBe: components["schemas"]["Verdict"];
-    };
-    PolicyPage: {
-      items: components["schemas"]["Policy"][];
-      /** @description Names the set as a whole. Every decision records it. */
-      policyHash: string;
-    };
-    PolicyWritten: {
-      policy: components["schemas"]["Policy"];
-      policyHash: string;
-    };
-    PolicyInput: {
-      name: string;
-      owner?: string;
-      /**
-       * @description The sentence shown in the trail and to whoever is denied. The
-       *     difference between "blocked by POL-114" and knowing what to do.
-       */
-      reason?: string;
-      /** @description A glob over the tool id — `crm.*`, `crm.reply`, `*`. */
-      resource?: string;
-      /** @description Which effects it covers. Empty means any. */
-      effects?: components["schemas"]["Effect"][];
-      /** @enum {string} */
-      reach?: "installation" | "scopes" | "agents";
-      scopes?: components["schemas"]["Scope"][];
-      agents?: string[];
-      /** @description Every clause must hold. There is no "or". */
-      conditions?: components["schemas"]["PolicyCondition"][];
-      /** @enum {string} */
-      effect: "allow" | "escalate" | "deny";
-      /**
-       * @description A monitored policy is evaluated and recorded and changes no
-       *     verdict, so an operator can read what it would have done before it
-       *     does it.
-       * @enum {string}
-       */
-      mode: "monitor" | "enforce";
-      enabled?: boolean;
-    };
-    PolicyCondition: {
-      /** @description tool.id, tool.effect, data.taint, agent.id, scope.area, or args.<path>. */
-      field: string;
-      /** @enum {string} */
-      op: "eq" | "ne" | "gt" | "lt" | "contains" | "in";
-      value: string;
-    };
-    Policy: components["schemas"]["PolicyInput"] & {
-      /** @description Set once and never changed — it appears in the trail and in what a denied person reads. */
-      code: string;
-      /**
-       * @description The rule as one line, generated from the same fields the Gate
-       *     evaluates. The builder is never the only representation.
-       */
-      sentence: string;
-      /**
-       * Format: int64
-       * @description How many decisions this rule produced in the period.
-       */
-      hits?: number;
-      updatedBy?: string;
-      /** Format: date-time */
-      updatedAt?: string;
-    };
-    AdminEvent: {
-      /** Format: date-time */
-      at: string;
-      principalId: string;
-      scope?: components["schemas"]["Scope"];
-      /** @description Past tense, namespaced by what it touched — tool.classified, provider.created. */
-      action: string;
-      target: string;
-      detail?: {
-        [key: string]: unknown;
-      };
-    };
-    Agent: {
-      agentId: string;
-      /** @description The digest of the definition's content. Publishing new text is a new version; the old one stays readable. */
-      versionId: string;
-      scope: components["schemas"]["Scope"];
-      name: string;
-      provider: string;
-      model: string;
-      effort?: string;
-      /** @description The capability pack resolved to concrete tools. What is not here cannot be invoked. */
-      tools: string[];
-      budget: components["schemas"]["Budget"];
-      triggers?: components["schemas"]["AgentTrigger"][];
-      publishedBy?: string;
-      /** Format: date-time */
-      publishedAt: string;
-      /** @description Whether this is the newest published version of the agent. */
-      latest: boolean;
-      /** @description Absent when the agent has never run, which is a different thing from having run and finished. */
-      activity?: components["schemas"]["AgentActivity"] | null;
-    };
-    /** @description How the agent has been doing, aggregated from its runs. An agent has no state of its own to report — there is no autonomy stage yet — so what an operator sees is a fact about its runs. */
-    AgentActivity: {
-      /** Format: int64 */
-      runs: number;
-      /** Format: int64 */
-      finished: number;
-      /**
-       * Format: int64
-       * @description Runs stopped for a person — awaiting approval or parked.
-       */
-      waiting: number;
-      /** Format: int64 */
-      costMicros: number;
-      lastPhase?: components["schemas"]["Phase"];
-      /** Format: date-time */
-      lastRunAt?: string;
-    };
-    AgentDefinition: {
-      name: string;
-      area: string;
-      provider: string;
-      model: string;
-      effort?: string;
-      /** @description What the agent is for, in the author's own words. */
-      instructions: string;
-      /** @description The capability pack. What is not here cannot be invoked. */
-      tools?: string[];
-      budget?: components["schemas"]["Budget"];
-      triggers?: components["schemas"]["AgentTrigger"][];
-    };
-    AgentPublished: {
-      agentId: string;
-      versionId: string;
-      /**
-       * @description False when this exact definition was already published. The version
-       *     is the digest of its bytes, so republishing identical text returns
-       *     the version it already had.
-       */
-      created: boolean;
-      /** @description Whether the agent is allowed to start. A new one never is. */
-      paused: boolean;
-      /**
-       * @description The definition as a file, exactly as published. An installation
-       *     that keeps its agents in git commits this.
-       */
-      definition?: string;
-    };
-    AgentDetail: {
-      agent: components["schemas"]["Agent"];
-      /**
-       * @description The definition's body, exactly as published. Read-only: a
-       *     specification is changed by publishing a new version, never by
-       *     editing one that runs already reference.
-       */
-      instructions?: string;
-      /** @description Where the definition came from — a path, a repository. */
-      source?: string;
-      /** @description Every published version, newest first. */
-      versions: components["schemas"]["AgentVersion"][];
-    };
-    AgentVersion: {
-      versionId: string;
-      publishedBy?: string;
-      /** Format: date-time */
-      publishedAt: string;
-      latest: boolean;
-    };
-    Webhook: {
-      path: string;
-      /**
-       * @description Whether a secret exists. A declared path without one refuses
-       *     everything, which is the safe state for a door with an agent
-       *     behind it.
-       */
-      armed: boolean;
-      rotatedBy?: string;
-      /** Format: date-time */
-      rotatedAt?: string | null;
-    };
-    AgentTrigger: {
-      /** @enum {string} */
-      type: "cron" | "webhook" | "event";
-      schedule?: string;
-      path?: string;
-      event?: string;
-    };
-    /** @description The ceilings a run is checked against. Every dimension is enforced at the Gate. */
-    Budget: {
-      /** Format: int64 */
-      micros?: number;
-      /** Format: int64 */
-      tokens?: number;
-      /** Format: int64 */
-      toolCalls?: number;
-      /** Format: int64 */
-      steps?: number;
-      /** Format: int64 */
-      wallClockMs?: number;
-    };
-    RunStats: {
-      /**
-       * Format: int64
-       * @description Runs matching the filter, not runs returned.
-       */
-      total: number;
-      /** @description Runs per phase. A phase with no runs is absent, so "none" is distinguishable from "not measured". */
-      byPhase: {
-        [key: string]: number;
-      };
-      /**
-       * Format: int64
-       * @description How many runs the median was computed over.
-       */
-      ended: number;
-      /**
-       * Format: int64
-       * @description Median wall-clock duration of runs that ended. Absent when none have.
-       */
-      medianDurationMs?: number | null;
-      /**
-       * Format: int64
-       * @description The slow tail, over the same runs as the median. On its own a
-       *     median says nothing about the runs people complain about.
-       */
-      p95DurationMs?: number | null;
-    };
-    DecisionPage: {
-      items: components["schemas"]["RecordedDecision"][];
-    };
-    RecordedDecision: {
-      runId: string;
-      /** Format: int64 */
-      seq: number;
-      /** Format: date-time */
-      at: string;
-      scope?: components["schemas"]["Scope"];
-      agentId?: string;
-      tool?: string;
-      verdict: components["schemas"]["Verdict"];
-      /** @description The rule that applied. The feed names it rather than a category. */
-      rule?: string;
-    };
-    Throughput: {
-      buckets: components["schemas"]["ThroughputBucket"][];
-    };
-    ThroughputBucket: {
-      /**
-       * Format: date-time
-       * @description The start of the hour, in UTC.
-       */
-      at: string;
-      /** Format: int64 */
-      total: number;
-      /**
-       * Format: int64
-       * @description What the hour cost, read off the same rows as the count.
-       */
-      micros: number;
-      /** @description Runs per phase within the hour. A phase with none is absent. */
-      byPhase: {
-        [key: string]: number;
-      };
-      /**
-       * @description The same hour split by who ran. Travels with the phase split rather
-       *     than in its own request: every screen that wants one wants the
-       *     other, and two queries over the same rows can disagree if a run
-       *     finishes between them.
-       */
-      byAgent: {
-        [key: string]: number;
-      };
-    };
-    RunPage: {
-      items: components["schemas"]["Run"][];
-      nextCursor?: string | null;
-    };
-    Step: {
-      /** Format: int64 */
-      seq: number;
-      kind: components["schemas"]["StepKind"];
-      /** Format: date-time */
-      at: string;
-      cost?: components["schemas"]["Cost"];
-      labels?: string[];
-      policyHash?: string;
-      /**
-       * @description Kind-specific detail. Bulky content is not inlined: payloads carry
-       *     a reference into object storage plus a digest, because arguments
-       *     and results routinely contain personal data.
-       */
-      payload?: {
-        [key: string]: unknown;
-      };
-      /** @description Hex-encoded SHA-256 sealing this step to the previous one. */
-      hash: string;
-    };
-    StepContent: {
-      /** Format: int64 */
-      seq: number;
-      /**
-       * @description Hex-encoded SHA-256 of the content, as recorded in the step. A
-       *     caller that hashes the body and gets a different value is not
-       *     looking at what the chain sealed.
-       */
-      digest: string;
-      /** @description The bytes, as text. JSON arguments arrive as a JSON string. */
-      content: string;
-    };
-    StepPage: {
-      items: components["schemas"]["Step"][];
-      /** Format: int64 */
-      nextSeq?: number | null;
-    };
-    VerifyResult: {
-      valid: boolean;
-      /** Format: int64 */
-      stepsChecked: number;
-      /**
-       * Format: int64
-       * @description The first step whose link failed, when valid is false.
-       */
-      brokenAtSeq?: number | null;
-    };
-    PendingApproval: {
-      runId: string;
-      scope?: components["schemas"]["Scope"];
-      agentId?: string;
-      tool: string;
-      effect?: components["schemas"]["Effect"];
-      /** @description The rule that required approval. The trail never says "denied by policy" — it names the rule. */
-      rule?: string;
-      reason?: string;
-      /** Format: date-time */
-      requestedAt: string;
-      /** Format: date-time */
-      expiresAt?: string | null;
-      /** Format: int64 */
-      atSeq: number;
-    };
-    ApprovalPage: {
-      items: components["schemas"]["PendingApproval"][];
-      nextCursor?: string | null;
-    };
-    ApprovalDecision: {
-      approved: boolean;
-      /**
-       * Format: int64
-       * @description Sequence number of the approval_requested step being answered.
-       *     Required so a stale browser tab cannot approve an action that a
-       *     later step already superseded.
-       */
-      atSeq: number;
-      note?: string;
-    };
-    CostBucket: {
-      key: string;
-      cost: components["schemas"]["Cost"];
-      /** Format: int64 */
-      runs: number;
-    };
-    CostRollup: {
-      /** Format: date-time */
-      from: string;
-      /** Format: date-time */
-      to: string;
-      groupBy: string;
-      total: components["schemas"]["Cost"];
-      buckets: components["schemas"]["CostBucket"][];
-    };
-    Health: {
-      /** @enum {string} */
-      status: "ok" | "degraded";
-      version: string;
-    };
-  };
-  responses: {
-    /** @description The request is malformed. */
-    BadRequest: {
-      headers: {
-        [name: string]: unknown;
-      };
-      content: {
-        "application/problem+json": components["schemas"]["Problem"];
-      };
-    };
-    /** @description Missing or invalid credentials. */
-    Unauthorized: {
-      headers: {
-        [name: string]: unknown;
-      };
-      content: {
-        "application/problem+json": components["schemas"]["Problem"];
-      };
-    };
-    /** @description Authenticated, but the caller does not hold the permission in this scope. */
-    Forbidden: {
-      headers: {
-        [name: string]: unknown;
-      };
-      content: {
-        "application/problem+json": components["schemas"]["Problem"];
-      };
-    };
-    /** @description No such resource, or it is outside the caller's scope. */
-    NotFound: {
-      headers: {
-        [name: string]: unknown;
-      };
-      content: {
-        "application/problem+json": components["schemas"]["Problem"];
-      };
-    };
-  };
-  parameters: {
-    RunId: string;
-    /** @description Company scope. A single value until multi-company (PRD 3.1). */
-    Company: string;
-    Area: string;
-    /** @description Opaque cursor from the previous page. */
-    Cursor: string;
-    Limit: number;
-  };
-  requestBodies: never;
-  headers: never;
-  pathItems: never;
+    requestBodies: never;
+    headers: never;
+    pathItems: never;
 }
 export type $defs = Record<string, never>;
 export interface operations {
-  listAgents: {
-    parameters: {
-      query?: {
-        /** @description Company scope. A single value until multi-company (PRD 3.1). */
-        company?: components["parameters"]["Company"];
-        area?: components["parameters"]["Area"];
-        /** @description Return the publication history instead of the newest version of each agent. */
-        allVersions?: boolean;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Published agents. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            items: components["schemas"]["Agent"][];
-          };
-        };
-      };
-      401: components["responses"]["Unauthorized"];
-      403: components["responses"]["Forbidden"];
-    };
-  };
-  listRuns: {
-    parameters: {
-      query?: {
-        /** @description Company scope. A single value until multi-company (PRD 3.1). */
-        company?: components["parameters"]["Company"];
-        area?: components["parameters"]["Area"];
-        agentId?: string;
-        phase?: components["schemas"]["Phase"];
-        /** @description Only runs started at or after this instant. */
-        since?: string;
-        /** @description Matches the run identifier or the agent identifier. Applied where the whole set is, so a page of results is the whole answer rather than whatever happened to be loaded. */
-        q?: string;
-        /** @description Opaque cursor from the previous page. */
-        cursor?: components["parameters"]["Cursor"];
-        limit?: components["parameters"]["Limit"];
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description A page of runs, newest first. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["RunPage"];
-        };
-      };
-      400: components["responses"]["BadRequest"];
-      401: components["responses"]["Unauthorized"];
-      403: components["responses"]["Forbidden"];
-    };
-  };
-  getRunStats: {
-    parameters: {
-      query?: {
-        /** @description Company scope. A single value until multi-company (PRD 3.1). */
-        company?: components["parameters"]["Company"];
-        area?: components["parameters"]["Area"];
-        agentId?: string;
-        /** @description Only runs started at or after this instant. */
-        since?: string;
-        /**
-         * @description Only runs started before this instant. Needed to close a window:
-         *     a figure compared against another — yesterday against today — is
-         *     wrong if the earlier window has no upper bound.
-         */
-        until?: string;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Aggregates over the matching runs. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["RunStats"];
-        };
-      };
-      400: components["responses"]["BadRequest"];
-      401: components["responses"]["Unauthorized"];
-      403: components["responses"]["Forbidden"];
-    };
-  };
-  getAgent: {
-    parameters: {
-      query?: {
-        /** @description A specific version. Defaults to the newest published. */
-        version?: string;
-      };
-      header?: never;
-      path: {
-        agentId: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The agent. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["AgentDetail"];
-        };
-      };
-      401: components["responses"]["Unauthorized"];
-      404: components["responses"]["NotFound"];
-    };
-  };
-  publishAgent: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        agentId: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["AgentDefinition"];
-      };
-    };
-    responses: {
-      /** @description The published version. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["AgentPublished"];
-        };
-      };
-      400: components["responses"]["BadRequest"];
-      401: components["responses"]["Unauthorized"];
-      403: components["responses"]["Forbidden"];
-    };
-  };
-  setAgentPaused: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        agentId: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          paused: boolean;
-        };
-      };
-    };
-    responses: {
-      /** @description Recorded. */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      401: components["responses"]["Unauthorized"];
-      403: components["responses"]["Forbidden"];
-      404: components["responses"]["NotFound"];
-    };
-  };
-  startRun: {
-    parameters: {
-      query?: never;
-      header: {
-        /**
-         * @description Unique per intention, not per attempt. The same key always names
-         *     the same run.
-         */
-        "Idempotency-Key": string;
-      };
-      path: {
-        agentId: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: {
-      content: {
-        "application/json": {
-          /**
-           * @description What the run is about — a ticket, a message, a payload. It
-           *     is stored outside the ledger like any other content,
-           *     because it routinely carries personal data.
-           */
-          input?: string;
-        };
-      };
-    };
-    responses: {
-      /**
-       * @description This key already opened a run, and here it is. Not an error: a
-       *     caller retrying after a timeout is doing the right thing.
-       */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["Run"];
-        };
-      };
-      /** @description The run was opened. */
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["Run"];
-        };
-      };
-      401: components["responses"]["Unauthorized"];
-      403: components["responses"]["Forbidden"];
-      404: components["responses"]["NotFound"];
-    };
-  };
-  listWebhooks: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        agentId: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The declared paths. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            items: components["schemas"]["Webhook"][];
-          };
-        };
-      };
-      401: components["responses"]["Unauthorized"];
-      404: components["responses"]["NotFound"];
-    };
-  };
-  rotateWebhookSecret: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        agentId: string;
-        /** @description The declared path, without a leading slash. */
-        path: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The new secret, returned once. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            /** @description Shown once. Configure the sender with it now. */
-            secret: string;
-            /** @description Where the sender posts. */
-            url: string;
-          };
-        };
-      };
-      401: components["responses"]["Unauthorized"];
-      403: components["responses"]["Forbidden"];
-      404: components["responses"]["NotFound"];
-    };
-  };
-  getThroughput: {
-    parameters: {
-      query?: {
-        /** @description Company scope. A single value until multi-company (PRD 3.1). */
-        company?: components["parameters"]["Company"];
-        area?: components["parameters"]["Area"];
-        agentId?: string;
-        since?: string;
-        until?: string;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The buckets, oldest first. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["Throughput"];
-        };
-      };
-      401: components["responses"]["Unauthorized"];
-      403: components["responses"]["Forbidden"];
-    };
-  };
-  listDecisions: {
-    parameters: {
-      query?: {
-        /** @description Company scope. A single value until multi-company (PRD 3.1). */
-        company?: components["parameters"]["Company"];
-        area?: components["parameters"]["Area"];
-        agentId?: string;
-        /** @description Only decisions taken at or after this instant. */
-        since?: string;
-        limit?: components["parameters"]["Limit"];
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The decisions. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["DecisionPage"];
-        };
-      };
-      401: components["responses"]["Unauthorized"];
-      403: components["responses"]["Forbidden"];
-    };
-  };
-  getRun: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        runId: components["parameters"]["RunId"];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The run. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["Run"];
-        };
-      };
-      404: components["responses"]["NotFound"];
-    };
-  };
-  listRunSteps: {
-    parameters: {
-      query?: {
-        /** @description First sequence number to return. Defaults to 1. */
-        fromSeq?: number;
-        limit?: components["parameters"]["Limit"];
-      };
-      header?: never;
-      path: {
-        runId: components["parameters"]["RunId"];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description A page of steps. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["StepPage"];
-        };
-      };
-      404: components["responses"]["NotFound"];
-    };
-  };
-  getStepContent: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        runId: components["parameters"]["RunId"];
-        /** @description The step's sequence number. */
-        seq: number;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The referenced content. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["StepContent"];
-        };
-      };
-      404: components["responses"]["NotFound"];
-    };
-  };
-  verifyRun: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        runId: components["parameters"]["RunId"];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Verification result. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["VerifyResult"];
-        };
-      };
-      404: components["responses"]["NotFound"];
-    };
-  };
-  listApprovals: {
-    parameters: {
-      query?: {
-        /** @description Company scope. A single value until multi-company (PRD 3.1). */
-        company?: components["parameters"]["Company"];
-        area?: components["parameters"]["Area"];
-        /** @description Opaque cursor from the previous page. */
-        cursor?: components["parameters"]["Cursor"];
-        limit?: components["parameters"]["Limit"];
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Pending approvals, oldest first. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ApprovalPage"];
-        };
-      };
-    };
-  };
-  decideApproval: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        runId: components["parameters"]["RunId"];
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["ApprovalDecision"];
-      };
-    };
-    responses: {
-      /** @description The decision was recorded and the run resumed or ended. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["Run"];
-        };
-      };
-      401: components["responses"]["Unauthorized"];
-      403: components["responses"]["Forbidden"];
-      404: components["responses"]["NotFound"];
-      /** @description The run has no pending approval, or it already expired. */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-    };
-  };
-  getCostRollup: {
-    parameters: {
-      query: {
-        /** @description Company scope. A single value until multi-company (PRD 3.1). */
-        company?: components["parameters"]["Company"];
-        area?: components["parameters"]["Area"];
-        from: string;
-        to: string;
-        groupBy?: "company" | "area" | "agent" | "day";
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The rollup. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["CostRollup"];
-        };
-      };
-      401: components["responses"]["Unauthorized"];
-      403: components["responses"]["Forbidden"];
-    };
-  };
-  listAudit: {
-    parameters: {
-      query?: {
-        /** @description Company scope. A single value until multi-company (PRD 3.1). */
-        company?: components["parameters"]["Company"];
-        area?: components["parameters"]["Area"];
-        since?: string;
-        until?: string;
-        /** @description One person or agent. */
-        actor?: string;
-        /** @description Narrow to one record. Both when absent. */
-        source?: "ledger" | "admin";
-        limit?: components["parameters"]["Limit"];
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The trail, newest first. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            items: components["schemas"]["AuditEntry"][];
-          };
-        };
-      };
-      401: components["responses"]["Unauthorized"];
-      403: components["responses"]["Forbidden"];
-    };
-  };
-  listPolicies: {
-    parameters: {
-      query?: {
-        /** @description Count decisions from this instant. Defaults to seven days ago. */
-        since?: string;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The policies, and the hash naming the set. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["PolicyPage"];
-        };
-      };
-      401: components["responses"]["Unauthorized"];
-      403: components["responses"]["Forbidden"];
-    };
-  };
-  simulatePolicy: {
-    parameters: {
-      query?: {
-        since?: string;
-        limit?: components["parameters"]["Limit"];
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["PolicyInput"];
-      };
-    };
-    responses: {
-      /** @description What the rule would have done. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["Simulation"];
-        };
-      };
-      400: components["responses"]["BadRequest"];
-      401: components["responses"]["Unauthorized"];
-      403: components["responses"]["Forbidden"];
-    };
-  };
-  putPolicy: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        code: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["PolicyInput"];
-      };
-    };
-    responses: {
-      /** @description The policy as stored, and the new set hash. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["PolicyWritten"];
-        };
-      };
-      400: components["responses"]["BadRequest"];
-      401: components["responses"]["Unauthorized"];
-      403: components["responses"]["Forbidden"];
-    };
-  };
-  deletePolicy: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        code: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Removed. */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      401: components["responses"]["Unauthorized"];
-      403: components["responses"]["Forbidden"];
-      404: components["responses"]["NotFound"];
-    };
-  };
-  listTools: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The tool catalogue. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            items: components["schemas"]["Tool"][];
-          };
-        };
-      };
-      401: components["responses"]["Unauthorized"];
-      403: components["responses"]["Forbidden"];
-    };
-  };
-  classifyTool: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        toolId: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          effect: components["schemas"]["Effect"];
-          /** @description Whether results carry data the platform did not author. Reading one taints the run. */
-          untrusted?: boolean;
-          reason?: string;
-        };
-      };
-    };
-    responses: {
-      /** @description The ruling is recorded. */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      400: components["responses"]["BadRequest"];
-      401: components["responses"]["Unauthorized"];
-      403: components["responses"]["Forbidden"];
-    };
-  };
-  listIntegrations: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The configured integrations. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            mcpServers: components["schemas"]["MCPServer"][];
-            providers: components["schemas"]["ModelProvider"][];
-          };
-        };
-      };
-      401: components["responses"]["Unauthorized"];
-      403: components["responses"]["Forbidden"];
-    };
-  };
-  putMCPServer: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Namespaces the tools this server offers. */
-        name: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          command: string;
-          args?: string[];
-          /** @default true */
-          enabled?: boolean;
-        };
-      };
-    };
-    responses: {
-      /** @description The server is configured. */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      400: components["responses"]["BadRequest"];
-      401: components["responses"]["Unauthorized"];
-      403: components["responses"]["Forbidden"];
-    };
-  };
-  deleteMCPServer: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        name: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The server is removed. */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      401: components["responses"]["Unauthorized"];
-      403: components["responses"]["Forbidden"];
-    };
-  };
-  putModelProvider: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        name: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          /** @enum {string} */
-          kind: "anthropic" | "openai_compatible";
-          baseUrl: string;
-          /** @description Sealed in the vault on arrival and never returned. Omit it to keep the stored credential — changing a base URL should not require re-entering a key. */
-          apiKey?: string;
-          /** @default true */
-          enabled?: boolean;
-        };
-      };
-    };
-    responses: {
-      /** @description The provider is configured. */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      400: components["responses"]["BadRequest"];
-      401: components["responses"]["Unauthorized"];
-      403: components["responses"]["Forbidden"];
-    };
-  };
-  deleteModelProvider: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        name: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The provider is removed. */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      401: components["responses"]["Unauthorized"];
-      403: components["responses"]["Forbidden"];
-    };
-  };
-  listBudgets: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Configured ceilings. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            items: components["schemas"]["ScopeBudget"][];
-          };
-        };
-      };
-      401: components["responses"]["Unauthorized"];
-      403: components["responses"]["Forbidden"];
-    };
-  };
-  putBudget: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description `installation`, a company id, or `company/area`. */
-        scope: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          /** @enum {string} */
-          period: "daily" | "monthly";
-          /** Format: int64 */
-          micros?: number;
-          /** Format: int64 */
-          tokens?: number;
-          /** Format: int64 */
-          toolCalls?: number;
-          /** Format: int64 */
-          steps?: number;
-          /** Format: int64 */
-          wallClockMs?: number;
-          /** @default true */
-          enabled?: boolean;
-        };
-      };
-    };
-    responses: {
-      /** @description The ceiling is set. */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      400: components["responses"]["BadRequest"];
-      401: components["responses"]["Unauthorized"];
-      403: components["responses"]["Forbidden"];
-    };
-  };
-  deleteBudget: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        scope: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The ceiling is removed. */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      401: components["responses"]["Unauthorized"];
-      403: components["responses"]["Forbidden"];
-    };
-  };
-  listScopes: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The areas, ordered by company then id. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            items: components["schemas"]["RegisteredScope"][];
-          };
-        };
-      };
-      401: components["responses"]["Unauthorized"];
-      403: components["responses"]["Forbidden"];
-    };
-  };
-  registerScope: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          company: string;
-          /** @description As a person types it. Folded to an id server-side. */
-          name: string;
-          /** @description How it is shown. Defaults to the typed name. */
-          label?: string;
-        };
-      };
-    };
-    responses: {
-      /** @description The area, with the id it was folded to. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["RegisteredScope"];
-        };
-      };
-      400: components["responses"]["BadRequest"];
-      401: components["responses"]["Unauthorized"];
-      403: components["responses"]["Forbidden"];
-    };
-  };
-  deleteScope: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description `company/area`. */
-        scope: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The area is withdrawn. */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      401: components["responses"]["Unauthorized"];
-      403: components["responses"]["Forbidden"];
-      404: components["responses"]["NotFound"];
-    };
-  };
-  listAdminEvents: {
-    parameters: {
-      query?: {
-        /** @description Read the trail backwards from one object. */
-        target?: string;
-        limit?: components["parameters"]["Limit"];
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Administrative events, newest first. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            items: components["schemas"]["AdminEvent"][];
-          };
-        };
-      };
-      401: components["responses"]["Unauthorized"];
-      403: components["responses"]["Forbidden"];
-    };
-  };
-  health: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The process is alive. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["Health"];
-        };
-      };
-    };
-  };
+    listAgents: {
+        parameters: {
+            query?: {
+                /** @description Company scope. A single value until multi-company (PRD 3.1). */
+                company?: components["parameters"]["Company"];
+                area?: components["parameters"]["Area"];
+                /** @description Return the publication history instead of the newest version of each agent. */
+                allVersions?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Published agents. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Agent"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listRuns: {
+        parameters: {
+            query?: {
+                /** @description Company scope. A single value until multi-company (PRD 3.1). */
+                company?: components["parameters"]["Company"];
+                area?: components["parameters"]["Area"];
+                agentId?: string;
+                phase?: components["schemas"]["Phase"];
+                /** @description Only runs started at or after this instant. */
+                since?: string;
+                /** @description Matches the run identifier or the agent identifier. Applied where the whole set is, so a page of results is the whole answer rather than whatever happened to be loaded. */
+                q?: string;
+                /** @description Opaque cursor from the previous page. */
+                cursor?: components["parameters"]["Cursor"];
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of runs, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getRunStats: {
+        parameters: {
+            query?: {
+                /** @description Company scope. A single value until multi-company (PRD 3.1). */
+                company?: components["parameters"]["Company"];
+                area?: components["parameters"]["Area"];
+                agentId?: string;
+                /** @description Only runs started at or after this instant. */
+                since?: string;
+                /**
+                 * @description Only runs started before this instant. Needed to close a window:
+                 *     a figure compared against another — yesterday against today — is
+                 *     wrong if the earlier window has no upper bound.
+                 */
+                until?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Aggregates over the matching runs. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunStats"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getAgent: {
+        parameters: {
+            query?: {
+                /** @description A specific version. Defaults to the newest published. */
+                version?: string;
+            };
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The agent. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    publishAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentDefinition"];
+            };
+        };
+        responses: {
+            /** @description The published version. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentPublished"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    setAgentPaused: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    paused: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Recorded. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    startRun: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Unique per intention, not per attempt. The same key always names
+                 *     the same run.
+                 */
+                "Idempotency-Key": string;
+            };
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /**
+                     * @description What the run is about — a ticket, a message, a payload. It
+                     *     is stored outside the ledger like any other content,
+                     *     because it routinely carries personal data.
+                     */
+                    input?: string;
+                };
+            };
+        };
+        responses: {
+            /**
+             * @description This key already opened a run, and here it is. Not an error: a
+             *     caller retrying after a timeout is doing the right thing.
+             */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"];
+                };
+            };
+            /** @description The run was opened. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listWebhooks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The declared paths. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Webhook"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    rotateWebhookSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+                /** @description The declared path, without a leading slash. */
+                path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The new secret, returned once. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description Shown once. Configure the sender with it now. */
+                        secret: string;
+                        /** @description Where the sender posts. */
+                        url: string;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getThroughput: {
+        parameters: {
+            query?: {
+                /** @description Company scope. A single value until multi-company (PRD 3.1). */
+                company?: components["parameters"]["Company"];
+                area?: components["parameters"]["Area"];
+                agentId?: string;
+                since?: string;
+                until?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The buckets, oldest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Throughput"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listDecisions: {
+        parameters: {
+            query?: {
+                /** @description Company scope. A single value until multi-company (PRD 3.1). */
+                company?: components["parameters"]["Company"];
+                area?: components["parameters"]["Area"];
+                agentId?: string;
+                /** @description Only decisions taken at or after this instant. */
+                since?: string;
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The decisions. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionPage"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: components["parameters"]["RunId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The run. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listRunSteps: {
+        parameters: {
+            query?: {
+                /** @description First sequence number to return. Defaults to 1. */
+                fromSeq?: number;
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path: {
+                runId: components["parameters"]["RunId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of steps. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StepPage"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getStepContent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: components["parameters"]["RunId"];
+                /** @description The step's sequence number. */
+                seq: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The referenced content. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StepContent"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    verifyRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: components["parameters"]["RunId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Verification result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerifyResult"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listApprovals: {
+        parameters: {
+            query?: {
+                /** @description Company scope. A single value until multi-company (PRD 3.1). */
+                company?: components["parameters"]["Company"];
+                area?: components["parameters"]["Area"];
+                /** @description Opaque cursor from the previous page. */
+                cursor?: components["parameters"]["Cursor"];
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pending approvals, oldest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalPage"];
+                };
+            };
+        };
+    };
+    decideApproval: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: components["parameters"]["RunId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApprovalDecision"];
+            };
+        };
+        responses: {
+            /** @description The decision was recorded and the run resumed or ended. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description The run has no pending approval, or it already expired. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getCostRollup: {
+        parameters: {
+            query: {
+                /** @description Company scope. A single value until multi-company (PRD 3.1). */
+                company?: components["parameters"]["Company"];
+                area?: components["parameters"]["Area"];
+                from: string;
+                to: string;
+                groupBy?: "company" | "area" | "agent" | "day";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rollup. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CostRollup"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listAudit: {
+        parameters: {
+            query?: {
+                /** @description Company scope. A single value until multi-company (PRD 3.1). */
+                company?: components["parameters"]["Company"];
+                area?: components["parameters"]["Area"];
+                since?: string;
+                until?: string;
+                /** @description One person or agent. */
+                actor?: string;
+                /** @description Narrow to one record. Both when absent. */
+                source?: "ledger" | "admin";
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The trail, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["AuditEntry"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listPolicies: {
+        parameters: {
+            query?: {
+                /** @description Count decisions from this instant. Defaults to seven days ago. */
+                since?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The policies, and the hash naming the set. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyPage"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    simulatePolicy: {
+        parameters: {
+            query?: {
+                since?: string;
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyInput"];
+            };
+        };
+        responses: {
+            /** @description What the rule would have done. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Simulation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    putPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyInput"];
+            };
+        };
+        responses: {
+            /** @description The policy as stored, and the new set hash. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyWritten"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    deletePolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listTools: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The tool catalogue. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Tool"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    classifyTool: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                toolId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    effect: components["schemas"]["Effect"];
+                    /** @description Whether results carry data the platform did not author. Reading one taints the run. */
+                    untrusted?: boolean;
+                    reason?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The ruling is recorded. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listIntegrations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The configured integrations. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        mcpServers: components["schemas"]["MCPServer"][];
+                        providers: components["schemas"]["ModelProvider"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    putMCPServer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Namespaces the tools this server offers. */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    command: string;
+                    args?: string[];
+                    /** @default true */
+                    enabled?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description The server is configured. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    deleteMCPServer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The server is removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    putModelProvider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    kind: "anthropic" | "openai_compatible";
+                    baseUrl: string;
+                    /** @description Sealed in the vault on arrival and never returned. Omit it to keep the stored credential — changing a base URL should not require re-entering a key. */
+                    apiKey?: string;
+                    /** @default true */
+                    enabled?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description The provider is configured. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    deleteModelProvider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The provider is removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listBudgets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Configured ceilings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ScopeBudget"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    putBudget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description `installation`, a company id, or `company/area`. */
+                scope: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    period: "daily" | "monthly";
+                    /** Format: int64 */
+                    micros?: number;
+                    /** Format: int64 */
+                    tokens?: number;
+                    /** Format: int64 */
+                    toolCalls?: number;
+                    /** Format: int64 */
+                    steps?: number;
+                    /** Format: int64 */
+                    wallClockMs?: number;
+                    /** @default true */
+                    enabled?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description The ceiling is set. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    deleteBudget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scope: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The ceiling is removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getAuthoring: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The choice in force, or a disabled one. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringChoice"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    setAuthoring: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringChoice"];
+            };
+        };
+        responses: {
+            /** @description The choice is recorded. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listScopes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The areas, ordered by company then id. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["RegisteredScope"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    registerScope: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    company: string;
+                    /** @description As a person types it. Folded to an id server-side. */
+                    name: string;
+                    /** @description How it is shown. Defaults to the typed name. */
+                    label?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The area, with the id it was folded to. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegisteredScope"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    deleteScope: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description `company/area`. */
+                scope: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The area is withdrawn. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listAdminEvents: {
+        parameters: {
+            query?: {
+                /** @description Read the trail backwards from one object. */
+                target?: string;
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Administrative events, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["AdminEvent"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    health: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The process is alive. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Health"];
+                };
+            };
+        };
+    };
 }
