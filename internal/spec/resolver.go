@@ -97,13 +97,13 @@ func (r *Resolver) planner(spec Spec) (engine.Planner, error) {
 // envelopes hands the engine the step list as plain tool sets. The engine
 // cannot import this package — dependencies point inward — so the shape
 // crosses as data.
-func envelopes(s Spec) [][]domain.ToolID {
+func envelopes(s Spec) []engine.Envelope {
 	if len(s.Steps) == 0 {
 		return nil
 	}
-	out := make([][]domain.ToolID, 0, len(s.Steps))
+	out := make([]engine.Envelope, 0, len(s.Steps))
 	for _, step := range s.Steps {
-		out = append(out, step.Reaches)
+		out = append(out, engine.Envelope{Name: step.Name, Reaches: step.Reaches})
 	}
 	return out
 }

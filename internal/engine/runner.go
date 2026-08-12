@@ -63,9 +63,13 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 		return Status{}, err
 	}
 	if state, err = r.append(ctx, state, start, domain.Step{
-		Kind:    domain.StepPlanned,
-		Cost:    proposal.Cost,
-		Payload: mustJSON(domain.PlannedPayload{Node: proposal.Node}),
+		Kind: domain.StepPlanned,
+		Cost: proposal.Cost,
+		// The step the run was in when it proposed this. Reserved on the
+		// payload since the beginning and never written, because nothing knew
+		// which step a run was in — that is what a correction anchors to
+		// (PRD FU-13), and what lets the diagram group by stage.
+		Payload: mustJSON(domain.PlannedPayload{Node: StepNameAt(start, state.Called)}),
 	}); err != nil {
 		return Status{}, err
 	}

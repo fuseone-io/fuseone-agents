@@ -118,7 +118,7 @@ type Start struct {
 	// than as spec types: the dependencies point inward, and engine cannot
 	// import the package that parses definitions. Empty means one envelope
 	// holding the whole pack.
-	Steps   [][]domain.ToolID
+	Steps   []Envelope
 	Budget  domain.Budget
 	Trigger string
 }
@@ -128,4 +128,14 @@ type Status struct {
 	Phase Phase
 	Seq   int64
 	Done  bool
+}
+
+// Envelope is one declared step: what it reaches, and what it is called.
+//
+// The name travels with it because the ledger records which step a proposal
+// came from, and an auditor reading that trail in two years is better served
+// by "Responder" than by "2".
+type Envelope struct {
+	Name    string
+	Reaches []domain.ToolID
 }

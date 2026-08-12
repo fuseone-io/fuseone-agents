@@ -33,16 +33,9 @@ func envelopeOf(start Start, called []domain.ToolID) gate.Pack {
 		return start.Pack
 	}
 
-	from := 0
-	for _, tool := range called {
-		if at, ok := stepOf(start.Steps, tool); ok && at > from {
-			from = at
-		}
-	}
-
 	var reachable []domain.ToolID
-	for _, step := range start.Steps[from:] {
-		reachable = append(reachable, step...)
+	for _, step := range start.Steps[StepAt(start, called):] {
+		reachable = append(reachable, step.Reaches...)
 	}
 	// Built from the steps rather than intersected with the pack: a tool
 	// granted and then left out of every step was never placed anywhere, and
@@ -50,10 +43,31 @@ func envelopeOf(start Start, called []domain.ToolID) gate.Pack {
 	return gate.NewPack(reachable...)
 }
 
+// StepAt is the step a run has advanced to: the furthest one whose tools it
+// has already used. It is what the ledger records against a proposal, so a
+// correction can be anchored where the run actually was (PRD FU-13).
+func StepAt(start Start, called []domain.ToolID) int {
+	at := 0
+	for _, tool := range called {
+		if i, ok := stepOf(start.Steps, tool); ok && i > at {
+			at = i
+		}
+	}
+	return at
+}
+
+// StepNameAt is that step's name, or empty where a specification declared none.
+func StepNameAt(start Start, called []domain.ToolID) string {
+	if len(start.Steps) == 0 {
+		return ""
+	}
+	return start.Steps[StepAt(start, called)].Name
+}
+
 // stepOf reports which step first reaches a tool.
-func stepOf(steps [][]domain.ToolID, tool domain.ToolID) (int, bool) {
+func stepOf(steps []Envelope, tool domain.ToolID) (int, bool) {
 	for i, step := range steps {
-		for _, t := range step {
+		for _, t := range step.Reaches {
 			if t == tool {
 				return i, true
 			}

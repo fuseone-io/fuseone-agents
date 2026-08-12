@@ -24,7 +24,7 @@ func TestEnvelopeOf_noSteps_isThePackItself(t *testing.T) {
 func TestEnvelopeOf_beforeAnythingIsCalled_reachesEveryStep(t *testing.T) {
 	t.Parallel()
 
-	start := Start{Steps: [][]domain.ToolID{{"lookup"}, {}, {"reply"}}}
+	start := Start{Steps: []Envelope{{Name: "um", Reaches: []domain.ToolID{"lookup"}}, {Name: "dois"}, {Name: "tres", Reaches: []domain.ToolID{"reply"}}}}
 
 	// Forward is open; it is going back that is refused. Forbidding the
 	// author's second-favourite ordering would describe their first draft
@@ -38,7 +38,7 @@ func TestEnvelopeOf_beforeAnythingIsCalled_reachesEveryStep(t *testing.T) {
 func TestEnvelopeOf_afterALaterStepIsUsed_theEarlierOneIsClosed(t *testing.T) {
 	t.Parallel()
 
-	start := Start{Steps: [][]domain.ToolID{{"lookup"}, {}, {"reply"}}}
+	start := Start{Steps: []Envelope{{Name: "um", Reaches: []domain.ToolID{"lookup"}}, {Name: "dois"}, {Name: "tres", Reaches: []domain.ToolID{"reply"}}}}
 
 	// Having replied, the run cannot look anything up again. That is the
 	// guarantee steps exist to make, and it holds without anybody deciding
@@ -54,7 +54,7 @@ func TestEnvelopeOf_aToolInNoStep_isReachableNowhere(t *testing.T) {
 
 	start := Start{
 		Pack:  gate.NewPack("lookup", "purge"),
-		Steps: [][]domain.ToolID{{"lookup"}},
+		Steps: []Envelope{{Name: "um", Reaches: []domain.ToolID{"lookup"}}},
 	}
 
 	// Declaring steps narrows the pack rather than restating it: a tool left

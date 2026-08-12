@@ -17,10 +17,10 @@ func TestStart_afterALaterStep_theEarlierToolsAreOutOfReach(t *testing.T) {
 
 	start := engine.Start{
 		Pack: gate.NewPack("crm.lookup", "kb.search", "crm.reply"),
-		Steps: [][]domain.ToolID{
-			{"crm.lookup"},
-			{"kb.search"},
-			{"crm.reply"},
+		Steps: []engine.Envelope{
+			{Name: "Identificar", Reaches: []domain.ToolID{"crm.lookup"}},
+			{Name: "Pesquisar", Reaches: []domain.ToolID{"kb.search"}},
+			{Name: "Responder", Reaches: []domain.ToolID{"crm.reply"}},
 		},
 	}
 
@@ -35,5 +35,25 @@ func TestStart_afterALaterStep_theEarlierToolsAreOutOfReach(t *testing.T) {
 	}
 	if !after.Allows("crm.reply") {
 		t.Error("the step it is in stays reachable")
+	}
+}
+
+func TestPlanned_recordsTheStepTheRunWasIn(t *testing.T) {
+	t.Parallel()
+
+	start := engine.Start{
+		Steps: []engine.Envelope{
+			{Name: "Identificar", Reaches: []domain.ToolID{"crm.lookup"}},
+			{Name: "Responder", Reaches: []domain.ToolID{"crm.reply"}},
+		},
+	}
+
+	// A correction is anchored to the step it went wrong at, so the step has
+	// to be in the record rather than reconstructed from it later.
+	if got := engine.StepNameAt(start, nil); got != "Identificar" {
+		t.Errorf("fresh run: got %q", got)
+	}
+	if got := engine.StepNameAt(start, []domain.ToolID{"crm.reply"}); got != "Responder" {
+		t.Errorf("after replying: got %q", got)
 	}
 }
