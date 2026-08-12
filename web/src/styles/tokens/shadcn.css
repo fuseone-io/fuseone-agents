@@ -46,6 +46,15 @@
   --sidebar-accent: var(--gray-100);
   --sidebar-accent-foreground: var(--gray-900);
   --sidebar-border: var(--gray-200);
+  /* Tabs. The active tab is the lifted surface in the group, in both themes.
+     Light earns a hairline lift; dark uses contrast only — a shadow on a dark
+     track reads as misalignment rather than as elevation. */
+  --tab-track: var(--gray-50);
+  --tab-track-border: #e3eaea;
+  --tab-active-bg: var(--gray-0);
+  --tab-active-border: #dce4e4;
+  --tab-active-shadow: 0 1px 2px rgba(11, 20, 22, 0.06);
+
   --sidebar-ring: var(--fuse-400);
   --sidebar-width: 248px;
   --sidebar-width-icon: 48px;
@@ -82,4 +91,9 @@
      bundle off the cool-slate temperature the palette is built on. Read as a
      typo and corrected to the neutral at the same lightness. */
   --sidebar-border: var(--gray-700);
+  --tab-track: #101a1c;
+  --tab-track-border: #1f2c2e;
+  --tab-active-bg: #243437;
+  --tab-active-border: #35484b;
+  --tab-active-shadow: none;
 }
