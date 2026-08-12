@@ -50,6 +50,15 @@
   /* ---- Semantic aliases: LIGHT (default) ---- */
   --surface-page: var(--gray-25);
   --surface-card: var(--gray-0);
+
+  /* The mark. Not palette values used directly, because the mark inverts with
+     the theme rather than darkening: the line and the ear fill swap places,
+     the head takes the theme's most extreme surface, and the status light
+     steps one shade lighter so it still reads as lit against a dark shell. */
+  --logo-line: var(--fuse-600);
+  --logo-ear: var(--fuse-200);
+  --logo-shell: var(--gray-0);
+  --logo-light: var(--fuse-400);
   --surface-sunken: var(--gray-50);
   --surface-raised: var(--gray-0);
   --surface-inverse: var(--gray-900);
@@ -98,6 +107,13 @@
 .dark {
   --surface-page: var(--gray-950);
   --surface-card: var(--gray-900);
+
+  /* Inverted, not dimmed. A mark drawn in --fuse-600 on a dark sidebar is a
+     dark teal line on near-black: technically present, effectively gone. */
+  --logo-line: var(--fuse-200);
+  --logo-ear: var(--fuse-600);
+  --logo-shell: var(--gray-950);
+  --logo-light: var(--fuse-300);
   --surface-sunken: #070f10;
   --surface-raised: var(--gray-800);
   --surface-inverse: var(--gray-50);

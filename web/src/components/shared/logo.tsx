@@ -20,10 +20,14 @@ export function LogoMark({
 }) {
   const stroke = strokeFor(size, mono);
 
-  const line = mono ? "currentColor" : "var(--fuse-600)";
-  const shell = mono ? "none" : "var(--surface-card)";
-  const ear = mono ? "none" : "var(--fuse-200)";
-  const eye = mono ? "currentColor" : "var(--fuse-600)";
+  // Semantic, never palette: these invert between themes rather than shifting
+  // one step, so a mark painted from the ramp directly is the same dark teal
+  // on white and on near-black — present in one and gone in the other.
+  const line = mono ? "currentColor" : "var(--logo-line)";
+  const shell = mono ? "none" : "var(--logo-shell)";
+  const ear = mono ? "none" : "var(--logo-ear)";
+  // The eyes are the line: they are holes in the head, not a third colour.
+  const eye = mono ? "currentColor" : "var(--logo-line)";
 
   return (
     <svg
@@ -46,7 +50,7 @@ export function LogoMark({
           cx="24"
           cy="3.6"
           r="2.6"
-          fill={mono ? "none" : "var(--fuse-400)"}
+          fill={mono ? "none" : "var(--logo-light)"}
           stroke={line}
           strokeWidth={stroke}
         />
