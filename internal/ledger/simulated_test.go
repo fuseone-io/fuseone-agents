@@ -84,3 +84,43 @@ func TestClaim_neverPicksUpASimulatedRun(t *testing.T) {
 		t.Fatal("a worker claimed a simulated run")
 	}
 }
+
+func TestAppend_aSimulatedRunStart_marksTheProjection(t *testing.T) {
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("TEST_DATABASE_URL is unset")
+	}
+	pool, err := pgxpool.New(t.Context(), dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	if err := ledger.Migrate(t.Context(), pool); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	if _, err := pool.Exec(t.Context(), `delete from runs where run_id = 'sim_marked'`); err != nil {
+		t.Fatalf("clean: %v", err)
+	}
+
+	store := ledger.NewPostgres(pool)
+	if _, err := store.Append(t.Context(), domain.Step{
+		RunID: "sim_marked", Seq: 1, Kind: domain.StepRunStarted,
+		Scope: domain.Scope{Company: "c", Area: "a"}, AgentID: "ag", VersionID: "v",
+		At: time.Now(), IdemKey: "sim_marked:1",
+		Payload: []byte(`{"trigger":"simulation","simulated":true}`),
+	}); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+
+	// The mark travels in the step, not in a parameter beside it: the ledger
+	// is the record, and a projection that learned it from somewhere else
+	// could disagree with the thing it projects.
+	var simulated bool
+	if err := pool.QueryRow(t.Context(),
+		`select simulated from runs where run_id = 'sim_marked'`).Scan(&simulated); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if !simulated {
+		t.Error("the projection did not take the mark")
+	}
+}

@@ -14,6 +14,12 @@ import "time"
 type RunStartedPayload struct {
 	Trigger  string `json:"trigger"`
 	InputRef string `json:"input_ref,omitempty"`
+
+	// Simulated marks a run that never called a tool: the Gate decided, the
+	// ledger recorded, and the tool layer answered with nothing. It is in the
+	// ledger so the trail, the diagram and the verifier read it unchanged,
+	// and every projection excludes it so it is never counted as production.
+	Simulated bool `json:"simulated,omitempty"`
 }
 
 type PlannedPayload struct {

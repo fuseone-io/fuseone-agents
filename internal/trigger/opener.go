@@ -89,6 +89,10 @@ type Request struct {
 	By domain.UserID
 	// Input is what the run is about. Stored outside the ledger.
 	Input []byte
+	// Simulated opens a run that is never claimed by a worker and never
+	// counted as production. It exists because FU-10 wants a simulation
+	// somebody reviewed, and reviewing one means reading its trail.
+	Simulated bool
 }
 
 // ErrUnknownAgent means nothing is published under that id.
@@ -154,7 +158,9 @@ func (o *Opener) Open(ctx context.Context, req Request) (Result, error) {
 		OnBehalfOf: req.By,
 		IdemKey:    req.IdemKey,
 		At:         o.clock.Now(),
-		Payload:    mustJSON(domain.RunStartedPayload{Trigger: req.Trigger, InputRef: inputRef}),
+		Payload: mustJSON(domain.RunStartedPayload{
+			Trigger: req.Trigger, InputRef: inputRef, Simulated: req.Simulated,
+		}),
 	})
 	if err != nil {
 		// Two attempts raced and this one lost. Asked rather than matched on
