@@ -167,7 +167,8 @@ func forbidden(perm domain.Permission, scope domain.Scope) openapi.ForbiddenAppl
 type Integrations interface {
 	MCPServers(ctx context.Context) ([]domain.MCPServer, error)
 	Providers(ctx context.Context) ([]domain.ModelProvider, error)
-	PutMCPServer(ctx context.Context, by domain.UserID, scope domain.Scope, server domain.MCPServer) error
+	PutMCPServer(ctx context.Context, by domain.UserID, scope domain.Scope, server domain.MCPServer, token string) error
+	MCPToken(ctx context.Context, name string) (string, error)
 	DeleteMCPServer(ctx context.Context, by domain.UserID, scope domain.Scope, name string) error
 	PutProvider(ctx context.Context, by domain.UserID, scope domain.Scope, provider domain.ModelProvider, apiKey string) error
 	DeleteProvider(ctx context.Context, by domain.UserID, scope domain.Scope, name string) error
@@ -221,10 +222,14 @@ func (s *Server) ListIntegrations(ctx context.Context, _ openapi.ListIntegration
 	for _, srv := range servers {
 		configured[srv.Name] = true
 		server := openapi.MCPServer{
-			Name: srv.Name, Command: srv.Command, Args: &srv.Args, Enabled: srv.Enabled,
+			Name: srv.Name, Args: &srv.Args, Enabled: srv.Enabled,
+			Transport: ptr(openapi.Transport(srv.TransportOf())),
+			HasSecret: ptr(srv.HasSecret),
 			Managed:   ptr(true),
 			UpdatedBy: ptr(srv.UpdatedBy), UpdatedAt: ptr(srv.UpdatedAt),
 		}
+		server.Command = someString(srv.Command)
+		server.Url = someString(srv.URL)
 		// Absent when no worker has tried yet, which is a different thing from
 		// a server that failed — and the screen has to be able to say so.
 		if seen, tried := observed[srv.Name]; tried {

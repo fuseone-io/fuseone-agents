@@ -1161,12 +1161,25 @@ paths:
           application/json:
             schema:
               type: object
-              required: [command]
               properties:
-                command: { type: string }
+                transport:
+                  allOf: [{ $ref: '#/components/schemas/Transport' }]
+                  default: stdio
+                command:
+                  type: string
+                  description: Required for stdio.
                 args:
                   type: array
                   items: { type: string }
+                url:
+                  type: string
+                  description: Required for http.
+                token:
+                  type: string
+                  description: >
+                    Bearer token for a remote server. Omit to keep the stored
+                    one — correcting a URL must not demand re-entering a secret
+                    nobody has to hand.
                 enabled: { type: boolean, default: true }
       responses:
         '204': { description: The server is configured. }
@@ -1965,17 +1978,35 @@ components:
             worse than no list at all.
           items: { type: string }
 
+    Transport:
+      type: string
+      description: >
+        How a tool server is reached. `stdio` is a process this installation
+        runs; `http` is an address it calls. The difference is not cosmetic — a
+        command with arguments is code executed inside the worker's container,
+        which is a far larger thing to hand somebody than a URL.
+      enum: [stdio, http]
+
     MCPServer:
       type: object
-      required: [name, command, enabled]
+      required: [name, enabled]
       properties:
         name:
           type: string
           description: Namespaces the tools it offers, so two servers naming a tool "search" do not collide.
-        command: { type: string }
+        transport: { $ref: '#/components/schemas/Transport' }
+        command:
+          type: string
+          description: The local process, for stdio.
         args:
           type: array
           items: { type: string }
+        url:
+          type: string
+          description: The endpoint, for http.
+        hasSecret:
+          type: boolean
+          description: That a bearer token is stored, never what it is.
         enabled: { type: boolean }
         managed:
           type: boolean

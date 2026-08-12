@@ -15,6 +15,7 @@ import (
 
 var (
 	ErrNoName    = errors.New("admin: an integration needs a name")
+	ErrNoURL     = errors.New("admin: a remote tool server needs an address")
 	ErrNoCommand = errors.New("admin: an MCP server needs a command to run")
 	ErrNoBaseURL = errors.New("admin: a provider needs a base URL")
 )
@@ -24,8 +25,10 @@ var (
 // how they are encoded into a settings row.
 
 type storedServer struct {
-	Command string   `json:"command"`
-	Args    []string `json:"args,omitempty"`
+	Transport string   `json:"transport,omitempty"`
+	Command   string   `json:"command,omitempty"`
+	Args      []string `json:"args,omitempty"`
+	URL       string   `json:"url,omitempty"`
 }
 
 type storedProvider struct {
@@ -55,24 +58,40 @@ func (i *Integrations) MCPServers(ctx context.Context) ([]domain.MCPServer, erro
 		if err := json.Unmarshal(row.Value, &stored); err != nil {
 			return nil, fmt.Errorf("admin: decode MCP server %s: %w", row.Name, err)
 		}
-		out = append(out, domain.MCPServer{
-			Name: row.Name, Command: stored.Command, Args: stored.Args,
-			Enabled: row.Enabled, UpdatedBy: row.UpdatedBy, UpdatedAt: row.UpdatedAt,
-		})
+		server := domain.MCPServer{
+			Name: row.Name, Transport: stored.Transport,
+			Command: stored.Command, Args: stored.Args, URL: stored.URL,
+			HasSecret: row.HasSecret, Enabled: row.Enabled,
+			UpdatedBy: row.UpdatedBy, UpdatedAt: row.UpdatedAt,
+		}
+		server.Transport = server.TransportOf()
+		out = append(out, server)
 	}
 	return out, nil
 }
 
 // PutMCPServer records a server and who configured it.
-func (i *Integrations) PutMCPServer(ctx context.Context, by domain.UserID, scope domain.Scope, server domain.MCPServer) error {
+//
+// An empty token keeps whichever one is stored, like every other credential
+// here: correcting a URL must not demand re-entering a secret nobody has to
+// hand.
+func (i *Integrations) PutMCPServer(
+	ctx context.Context, by domain.UserID, scope domain.Scope,
+	server domain.MCPServer, token string,
+) error {
+	transport := server.TransportOf()
 	switch {
 	case strings.TrimSpace(server.Name) == "":
 		return ErrNoName
-	case strings.TrimSpace(server.Command) == "":
+	case transport == domain.TransportStdio && strings.TrimSpace(server.Command) == "":
 		return ErrNoCommand
+	case transport == domain.TransportHTTP && strings.TrimSpace(server.URL) == "":
+		return ErrNoURL
 	}
 
-	value, err := json.Marshal(storedServer{Command: server.Command, Args: server.Args})
+	value, err := json.Marshal(storedServer{
+		Transport: transport, Command: server.Command, Args: server.Args, URL: server.URL,
+	})
 	if err != nil {
 		return fmt.Errorf("admin: encode MCP server: %w", err)
 	}
@@ -82,11 +101,24 @@ func (i *Integrations) PutMCPServer(ctx context.Context, by domain.UserID, scope
 		Kind:      settings.KindMCPServer,
 		Name:      server.Name,
 		Value:     value,
+		Secret:    token,
 		Enabled:   server.Enabled,
 		UpdatedBy: string(by),
 	}, "mcp_server.configured", server.Name, map[string]any{
-		"command": server.Command, "enabled": server.Enabled,
+		// Never the token, only that one arrived.
+		"transport": transport, "command": server.Command, "url": server.URL,
+		"enabled": server.Enabled, "tokenChanged": token != "",
 	})
+}
+
+// MCPToken opens a remote server's bearer token. Separate and explicit:
+// reading configuration is routine, reading a credential is not.
+func (i *Integrations) MCPToken(ctx context.Context, name string) (string, error) {
+	set, err := i.settings.Reveal(ctx, settings.ScopeInstallation, domain.Scope{}, settings.KindMCPServer, name)
+	if err != nil {
+		return "", err
+	}
+	return set.Secret, nil
 }
 
 func (i *Integrations) DeleteMCPServer(ctx context.Context, by domain.UserID, scope domain.Scope, name string) error {

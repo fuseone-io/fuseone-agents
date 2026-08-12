@@ -30,18 +30,31 @@ func (s *Server) PutMCPServer(ctx context.Context, req openapi.PutMCPServerReque
 		return nil, errNoAdministration
 	}
 
-	server := domain.MCPServer{Name: req.Name, Command: req.Body.Command, Enabled: true}
+	server := domain.MCPServer{Name: req.Name, Enabled: true}
+	if req.Body.Transport != nil {
+		server.Transport = string(*req.Body.Transport)
+	}
+	if req.Body.Command != nil {
+		server.Command = *req.Body.Command
+	}
 	if req.Body.Args != nil {
 		server.Args = *req.Body.Args
+	}
+	if req.Body.Url != nil {
+		server.URL = *req.Body.Url
 	}
 	if req.Body.Enabled != nil {
 		server.Enabled = *req.Body.Enabled
 	}
+	token := ""
+	if req.Body.Token != nil {
+		token = *req.Body.Token
+	}
 
-	if err := s.integrations.PutMCPServer(ctx, caller, adminScope, server); err != nil {
+	if err := s.integrations.PutMCPServer(ctx, caller, adminScope, server, token); err != nil {
 		return openapi.PutMCPServer400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-				problem(http.StatusBadRequest, "Não foi possível configurar", err.Error())),
+				problem(http.StatusBadRequest, "Tool server refused", err.Error())),
 		}, nil
 	}
 	return openapi.PutMCPServer204Response{}, nil

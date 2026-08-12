@@ -19,6 +19,8 @@ type fakeAdmin struct {
 	providers []domain.ModelProvider
 
 	putServer   domain.MCPServer
+	putToken    string
+	token       string
 	putProvider domain.ModelProvider
 	putKey      string
 	putBy       domain.UserID
@@ -32,10 +34,14 @@ func (f *fakeAdmin) MCPServers(context.Context) ([]domain.MCPServer, error) {
 func (f *fakeAdmin) Providers(context.Context) ([]domain.ModelProvider, error) {
 	return f.providers, f.err
 }
-func (f *fakeAdmin) PutMCPServer(_ context.Context, by domain.UserID, _ domain.Scope, s domain.MCPServer) error {
-	f.putServer, f.putBy = s, by
+func (f *fakeAdmin) PutMCPServer(
+	_ context.Context, by domain.UserID, _ domain.Scope, s domain.MCPServer, token string,
+) error {
+	f.putServer, f.putBy, f.putToken = s, by, token
 	return f.err
 }
+
+func (f *fakeAdmin) MCPToken(context.Context, string) (string, error) { return f.token, nil }
 func (f *fakeAdmin) DeleteMCPServer(_ context.Context, by domain.UserID, _ domain.Scope, name string) error {
 	f.deleted, f.putBy = name, by
 	return f.err
@@ -78,7 +84,7 @@ func TestPutMCPServer_withoutThePermission_isRefused(t *testing.T) {
 	// An auditor reads everything and changes nothing. Hiding the screen from
 	// them would be a courtesy; this is the control.
 	resp, err := serverWith(t, admin).PutMCPServer(as(domain.RoleAuditor), openapi.PutMCPServerRequestObject{
-		Name: "crm", Body: &openapi.PutMCPServerJSONRequestBody{Command: "/usr/bin/crm-mcp"},
+		Name: "crm", Body: &openapi.PutMCPServerJSONRequestBody{Command: ptr("/usr/bin/crm-mcp")},
 	})
 	if err != nil {
 		t.Fatalf("PutMCPServer: %v", err)
@@ -97,7 +103,7 @@ func TestPutMCPServer_withoutAnyCredential_isRefused(t *testing.T) {
 	// No principal in the context at all: a handler reached without
 	// authentication must fail closed rather than act as a zero principal.
 	resp, err := serverWith(t, &fakeAdmin{}).PutMCPServer(context.Background(),
-		openapi.PutMCPServerRequestObject{Name: "crm", Body: &openapi.PutMCPServerJSONRequestBody{Command: "x"}})
+		openapi.PutMCPServerRequestObject{Name: "crm", Body: &openapi.PutMCPServerJSONRequestBody{Command: ptr("x")}})
 	if err != nil {
 		t.Fatalf("PutMCPServer: %v", err)
 	}
@@ -112,7 +118,7 @@ func TestPutMCPServer_attributesTheChangeToTheCaller(t *testing.T) {
 	admin := &fakeAdmin{}
 	resp, err := serverWith(t, admin).PutMCPServer(as(domain.RoleCurator), openapi.PutMCPServerRequestObject{
 		Name: "crm",
-		Body: &openapi.PutMCPServerJSONRequestBody{Command: "bin/devstack", Args: &[]string{"mcp"}},
+		Body: &openapi.PutMCPServerJSONRequestBody{Command: ptr("bin/devstack"), Args: &[]string{"mcp"}},
 	})
 	if err != nil {
 		t.Fatalf("PutMCPServer: %v", err)
@@ -194,7 +200,7 @@ func TestPutMCPServer_storeRefuses_readsBackAsABadRequestNotAServerError(t *test
 	// so is more useful than a 500 that reads as the platform being broken.
 	admin := &fakeAdmin{err: errors.New("an MCP server needs a command to run")}
 	resp, err := serverWith(t, admin).PutMCPServer(as(domain.RoleCurator), openapi.PutMCPServerRequestObject{
-		Name: "crm", Body: &openapi.PutMCPServerJSONRequestBody{Command: " "},
+		Name: "crm", Body: &openapi.PutMCPServerJSONRequestBody{Command: ptr(" ")},
 	})
 	if err != nil {
 		t.Fatalf("PutMCPServer: %v", err)

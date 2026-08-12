@@ -115,7 +115,7 @@ func TestPutMCPServer_withoutACommand_isRefused(t *testing.T) {
 
 	// A server row with nothing to run is a tool source that silently offers
 	// nothing, which reads as "no tools" rather than "misconfigured".
-	err := i.PutMCPServer(context.Background(), "usr_ana", platform, domain.MCPServer{Name: "crm"})
+	err := i.PutMCPServer(context.Background(), "usr_ana", platform, domain.MCPServer{Name: "crm"}, "")
 	if err == nil {
 		t.Fatal("PutMCPServer accepted a server with no command")
 	}
@@ -127,7 +127,7 @@ func TestDeleteMCPServer_isRecorded(t *testing.T) {
 	ctx := context.Background()
 
 	if err := i.PutMCPServer(ctx, "usr_ana", platform,
-		domain.MCPServer{Name: "crm", Command: "/usr/local/bin/crm-mcp", Enabled: true}); err != nil {
+		domain.MCPServer{Name: "crm", Command: "/usr/local/bin/crm-mcp", Enabled: true}, ""); err != nil {
 		t.Fatalf("PutMCPServer: %v", err)
 	}
 	if err := i.DeleteMCPServer(ctx, "usr_ana", platform, "crm"); err != nil {
@@ -179,5 +179,84 @@ func TestPutProvider_openAICompatibleWithoutABaseURL_isRefused(t *testing.T) {
 	// installation knows where its own model is listening.
 	if !errors.Is(err, admin.ErrNoBaseURL) {
 		t.Fatalf("got %v, want ErrNoBaseURL", err)
+	}
+}
+
+// A tool server is either a process this installation runs or an address it
+// calls. Everything here is about not letting one be configured as the other.
+
+func TestPutMCPServer_remote_needsAnAddressRatherThanACommand(t *testing.T) {
+	i := newIntegrations(t)
+
+	err := i.PutMCPServer(context.Background(), "usr_ana", platform, domain.MCPServer{
+		Name: "github", Transport: domain.TransportHTTP, Enabled: true,
+	}, "")
+	if !errors.Is(err, admin.ErrNoURL) {
+		t.Fatalf("PutMCPServer = %v, want a refusal naming the missing address", err)
+	}
+}
+
+func TestPutMCPServer_local_stillNeedsACommand(t *testing.T) {
+	i := newIntegrations(t)
+
+	err := i.PutMCPServer(context.Background(), "usr_ana", platform, domain.MCPServer{
+		Name: "crm", Transport: domain.TransportStdio, Enabled: true,
+	}, "")
+	if !errors.Is(err, admin.ErrNoCommand) {
+		t.Fatalf("PutMCPServer = %v", err)
+	}
+}
+
+func TestPutMCPServer_remote_sealsItsTokenAndNeverListsIt(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, domain.MCPServer{
+		Name: "github", Transport: domain.TransportHTTP,
+		URL: "https://api.githubcopilot.com/mcp/", Enabled: true,
+	}, "ghp_secret"); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+
+	servers, err := i.MCPServers(ctx)
+	if err != nil {
+		t.Fatalf("MCPServers: %v", err)
+	}
+	if len(servers) != 1 || servers[0].URL != "https://api.githubcopilot.com/mcp/" {
+		t.Fatalf("servers = %+v", servers)
+	}
+	// A remote server's token is a credential like any other: the listing says
+	// one exists, and reading it is a separate act.
+	if !servers[0].HasSecret {
+		t.Error("the listing does not say a token is stored")
+	}
+	token, err := i.MCPToken(ctx, "github")
+	if err != nil {
+		t.Fatalf("MCPToken: %v", err)
+	}
+	if token != "ghp_secret" {
+		t.Errorf("token = %q", token)
+	}
+}
+
+func TestPutMCPServer_storedBeforeTransportsExisted_readsAsLocal(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+
+	// Rows written before the field existed carry no transport. They are the
+	// commands they always were, and defaulting them to anything else would
+	// silently stop an installation's tools from connecting on upgrade.
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, domain.MCPServer{
+		Name: "crm", Command: "bin/devstack", Args: []string{"mcp"}, Enabled: true,
+	}, ""); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+
+	servers, err := i.MCPServers(ctx)
+	if err != nil {
+		t.Fatalf("MCPServers: %v", err)
+	}
+	if servers[0].Transport != domain.TransportStdio {
+		t.Errorf("transport = %q, want it read as a local command", servers[0].Transport)
 	}
 }

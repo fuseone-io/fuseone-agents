@@ -29,13 +29,45 @@ type ToolEntry struct {
 // them. They live here for the same reason ToolClassification does: the
 // administration that writes them and the API that renders them must not
 // import each other.
+// Transports a tool server can be reached over.
+//
+// A server is either a process this installation runs or an address it calls.
+// The difference is not cosmetic: a command with arguments is code executed
+// inside the worker's container, which is a far larger thing to hand somebody
+// than a URL.
+const (
+	TransportStdio = "stdio"
+	TransportHTTP  = "http"
+)
+
 type MCPServer struct {
-	Name      string
-	Command   string
-	Args      []string
+	Name string
+	// Transport is stdio or http. Empty reads as stdio: rows written before
+	// the field existed are the commands they always were, and defaulting them
+	// to anything else would stop an installation's tools connecting on
+	// upgrade.
+	Transport string
+
+	// Command and Args are the local process, for stdio.
+	Command string
+	Args    []string
+
+	// URL is the endpoint, for http.
+	URL string
+	// HasSecret reports that a bearer token is stored, never what it is.
+	HasSecret bool
+
 	Enabled   bool
 	UpdatedBy string
 	UpdatedAt time.Time
+}
+
+// TransportOf reads a server's transport, defaulting an unset one to stdio.
+func (s MCPServer) TransportOf() string {
+	if s.Transport == "" {
+		return TransportStdio
+	}
+	return s.Transport
 }
 
 // IdentityProvider is one configured way of signing in.
