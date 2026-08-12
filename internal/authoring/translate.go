@@ -1,12 +1,15 @@
 package authoring
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
 
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/model"
 	"github.com/fuseone/agents/internal/spec"
 )
 
@@ -80,4 +83,89 @@ func jsonIn(reply []byte) ([]byte, bool) {
 		return nil, false
 	}
 	return []byte(text[start : end+1]), true
+}
+
+// ErrOverCeiling means the day's authoring budget is already gone.
+var ErrOverCeiling = errors.New("authoring: the daily ceiling is reached")
+
+// ErrDisabled means the installation has no authoring assistant switched on.
+var ErrDisabled = errors.New("authoring: the assistant is switched off")
+
+// Job is one translation: the answers to turn into fields, and the bounds it
+// happens inside.
+type Job struct {
+	Completer model.Completer
+	Choice    Choice
+	// SpentToday is what authoring has already cost since the window opened.
+	SpentToday int64
+	Answers    Answers
+	Catalogue  []domain.ToolID
+}
+
+// Result is what came back, and what it cost.
+type Result struct {
+	Translated Translated
+	Cost       domain.Cost
+}
+
+/*
+Translate turns the interview's prose answers into specification fields.
+
+The ceiling is checked before the request leaves rather than after the answer
+arrives. A ceiling enforced afterwards is a report: the money is already gone,
+and the only thing it can do is describe the overspend.
+
+The cost comes back on every path, including the ones that fail. It left the
+installation whether or not the answer was usable, and dropping the figure when
+the reply is unreadable is how a ceiling drifts away from what was really
+spent — quietly, and in the direction that costs money.
+*/
+func Translate(ctx context.Context, job Job) (Result, error) {
+	if !job.Choice.Enabled {
+		return Result{}, ErrDisabled
+	}
+	if job.Choice.DailyMicros > 0 && job.SpentToday >= job.Choice.DailyMicros {
+		return Result{}, ErrOverCeiling
+	}
+
+	out, err := job.Completer.Complete(ctx, Prompt(job.Answers, job.Catalogue))
+	if err != nil {
+		return Result{Cost: out.Cost}, err
+	}
+
+	translated, err := Read([]byte(out.Text), job.Catalogue)
+	if err != nil {
+		return Result{Cost: out.Cost}, err
+	}
+	return Result{Translated: translated, Cost: out.Cost}, nil
+}
+
+/*
+Prompt is what the assistant is asked.
+
+It names the tools that exist and says the reply is read against them. That is
+not a hint the model may take or leave — Read enforces it — but saying so
+turns a silently discarded invention into an answer that fits the first time,
+for the price of a few words.
+*/
+func Prompt(a Answers, catalogue []domain.ToolID) string {
+	var b strings.Builder
+	b.WriteString("Você organiza a descrição de um processo em campos.\n\n")
+	b.WriteString("Ferramentas disponíveis, e só estas existem:\n")
+	for _, tool := range catalogue {
+		b.WriteString("- " + string(tool) + "\n")
+	}
+	b.WriteString("\nO que a pessoa respondeu:\n")
+	b.WriteString("Precisa saber: " + a.MustKnow + "\n")
+	b.WriteString("Passos: " + a.Steps + "\n")
+	b.WriteString("O que dá errado: " + a.GoesWrong + "\n")
+	b.WriteString("Não decidiria sozinha: " + a.NotDecide + "\n")
+	b.WriteString(`
+Responda só com JSON:
+{"tools":["..."],"steps":[{"name":"...","reaches":["..."],"stops_when":"..."}]}
+
+Um passo pode não alcançar ferramenta nenhuma: é a pessoa pensando.
+Não invente ferramenta fora da lista; nomes fora dela são descartados.
+`)
+	return b.String()
 }
