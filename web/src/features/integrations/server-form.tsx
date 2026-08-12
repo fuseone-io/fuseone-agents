@@ -1,11 +1,8 @@
-import { Trans, useTranslation } from "react-i18next";
+import { useTranslation } from "react-i18next";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -14,26 +11,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Form } from "@/components/ui/form";
+import { ServerFormBody } from "@/features/integrations/server-form-body";
 import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+  serverSchema,
+  type ServerFormValues,
+} from "@/features/integrations/server-schema";
 import { usePutMCPServer, type MCPServer } from "@/features/integrations/api";
-
-const schema = z.object({
-  name: z
-    .string()
-    .min(1, "integrations.nameServer")
-    .regex(/^[a-z0-9][a-z0-9_-]*$/, "integrations.nameCharset"),
-  command: z.string().min(1, "agents.sayWhatToRun"),
-  args: z.string(),
-  enabled: z.boolean(),
-});
 
 export function ServerForm({
   server,
@@ -44,27 +28,33 @@ export function ServerForm({
 }) {
   const { t } = useTranslation();
   const put = usePutMCPServer();
-  const form = useForm<z.infer<typeof schema>>({
-    resolver: zodResolver(schema),
+  const form = useForm<ServerFormValues>({
+    resolver: zodResolver(serverSchema),
     defaultValues: {
       name: server?.name ?? "",
+      transport: server?.transport ?? "stdio",
       command: server?.command ?? "",
       args: (server?.args ?? []).join(" "),
+      url: server?.url ?? "",
+      token: "",
       enabled: server?.enabled ?? true,
     },
   });
 
-  async function submit(values: z.infer<typeof schema>) {
+  async function submit(values: ServerFormValues) {
     try {
       await put.mutateAsync({
         name: values.name,
+        transport: values.transport,
         command: values.command,
         args: values.args.split(/\s+/).filter(Boolean),
+        url: values.url,
+        token: values.token,
         enabled: values.enabled,
       });
-      toast.success(`${values.name} configurado`, {
-        // Servers are connected when a worker starts, so saying it is live
-        // would be a promise the platform does not keep yet.
+      toast.success(t("integrations.serverConfigured", { name: values.name }), {
+        // A worker picks the change up on its next pass rather than at its
+        // next restart, which is a wait with an end somebody can be told.
         description: t("integrations.toolsAppearHint"),
       });
       onClose();
@@ -92,82 +82,10 @@ export function ServerForm({
             onSubmit={form.handleSubmit(submit)}
             className="flex flex-col gap-4"
           >
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("admin.name")}</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      disabled={!!server}
-                      className="font-mono"
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    <Trans
-                      i18nKey="integrations.prefixExplains"
-                      components={{ code: <code className="font-mono" /> }}
-                    />
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="command"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("integrations.command")}</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      className="font-mono"
-                      placeholder="/usr/local/bin/crm-mcp"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="args"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("integrations.arguments")}</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      className="font-mono"
-                      placeholder="--config /etc/crm.yaml"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="enabled"
-              render={({ field }) => (
-                <FormItem className="flex items-center justify-between rounded-lg border p-3">
-                  <FormLabel className="m-0">
-                    {t("integrations.enabled")}
-                  </FormLabel>
-                  <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
+            <ServerFormBody
+              form={form}
+              editing={server !== null}
+              hasSecret={server?.hasSecret === true}
             />
 
             <DialogFooter>

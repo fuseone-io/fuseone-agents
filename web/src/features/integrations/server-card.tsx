@@ -26,7 +26,9 @@ export function ServerCard({
       description={
         server.managed === false
           ? t("integrations.serverFromFlag")
-          : [server.command, ...(server.args ?? [])].join(" ")
+          : server.transport === "http"
+            ? (server.url ?? "")
+            : [server.command, ...(server.args ?? [])].join(" ")
       }
       enabled={server.enabled}
       health={server.health}

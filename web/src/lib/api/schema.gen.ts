@@ -1299,11 +1299,22 @@ export interface components {
              */
             models?: string[];
         };
+        /**
+         * @description How a tool server is reached. `stdio` is a process this installation runs; `http` is an address it calls. The difference is not cosmetic — a command with arguments is code executed inside the worker's container, which is a far larger thing to hand somebody than a URL.
+         * @enum {string}
+         */
+        Transport: "stdio" | "http";
         MCPServer: {
             /** @description Namespaces the tools it offers, so two servers naming a tool "search" do not collide. */
             name: string;
-            command: string;
+            transport?: components["schemas"]["Transport"];
+            /** @description The local process, for stdio. */
+            command?: string;
             args?: string[];
+            /** @description The endpoint, for http. */
+            url?: string;
+            /** @description That a bearer token is stored, never what it is. */
+            hasSecret?: boolean;
             enabled: boolean;
             /**
              * @description Whether this server is configured from the console. False for one
@@ -2960,8 +2971,15 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    command: string;
+                    /** @default stdio */
+                    transport?: components["schemas"]["Transport"];
+                    /** @description Required for stdio. */
+                    command?: string;
                     args?: string[];
+                    /** @description Required for http. */
+                    url?: string;
+                    /** @description Bearer token for a remote server. Omit to keep the stored one — correcting a URL must not demand re-entering a secret nobody has to hand. */
+                    token?: string;
                     /** @default true */
                     enabled?: boolean;
                 };

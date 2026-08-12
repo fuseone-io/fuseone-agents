@@ -23,16 +23,24 @@ export function usePutMCPServer() {
   return useMutation({
     mutationFn: async (input: {
       name: string;
+      transport: "stdio" | "http";
       command: string;
       args: string[];
+      url: string;
+      token: string;
       enabled: boolean;
     }) =>
       unwrap(
         await api.PUT("/admin/integrations/mcp-servers/{name}", {
           params: { path: { name: input.name } },
           body: {
+            transport: input.transport,
             command: input.command,
             args: input.args,
+            url: input.url,
+            // Omitted rather than emptied: an empty one would read as
+            // "clear it", and correcting a URL must not drop the token.
+            token: input.token || undefined,
             enabled: input.enabled,
           },
         }),

@@ -306,16 +306,48 @@ Two ways to make it true rather than decorative:
 - **Actual scheduled syncs**: a periodic tool-catalogue refresh with its own
   record. Larger, and it needs the same single-owner discipline as cron.
 
+### Still open after remote transport: the published list never shrinks
+
+A server that is removed or switched off is disconnected within the reconcile
+interval, and its tools leave that worker's catalogue — an agent can no longer
+call them, which is the half that matters. What does not happen is the
+administration area forgetting them: the tool list is published with upsert
+semantics, so publishing a smaller set changes nothing, and the console keeps
+listing tools nothing offers.
+
+Replacing wholesale is not the fix. Two workers connected to different servers
+each publish what they see, and a replace would have them delete each other's
+tools on every pass — a worse failure than a stale row, and an intermittent
+one.
+
+What it needs is either ownership on a published entry (which worker saw it,
+so a set can be replaced within its own scope) or the console reading liveness
+from `integration_health`, which already records when each server was last
+reached, rather than trusting the list to be current. The second is smaller and
+is probably right: the list answers "what has this installation ever offered",
+and health answers "what answers now", and those are different questions that
+one table is currently being asked to answer at once.
+
 ### Queued: remote tool servers
 
-Only one transport is wired. `cmd/agentd` connects every MCP server with
-`mcp.CommandTransport` over a locally executed command, so the form asks for a
-command and arguments because that is the only thing the platform can do. The
-SDK already in `go.mod` ships `StreamableClientTransport` and
-`SSEClientTransport`; neither is used. Remote MCP was never decided against —
+**Delivered.** A server is now either a process this installation runs or an
+address it calls, the token for a remote one is sealed in the vault, and a
+reconciler keeps the connected set matching the configured one on a timer, so
+nothing waits for a restart. The development stack can serve MCP over HTTP with
+a bearer token, so the remote path is exercised locally rather than only in
+production.
+
+What follows is the original entry, kept because the reasoning is still the
+reasoning.
+
+Only one transport was wired. `cmd/agentd` connected every MCP server with
+`mcp.CommandTransport` over a locally executed command, so the form asked for a
+command and arguments because that was the only thing the platform could do.
+The SDK already in `go.mod` ships `StreamableClientTransport` and
+`SSEClientTransport`; neither was used. Remote MCP was never decided against —
 it was not built.
 
-Three consequences, in the order they bite:
+Three consequences, in the order they bit:
 
 - **An installation cannot reach a hosted MCP server at all.** The honest
   answer to "connect this to Google Sheets" is currently "write an MCP server",
