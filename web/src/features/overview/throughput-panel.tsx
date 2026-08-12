@@ -42,7 +42,7 @@ export function ThroughputPanel({ since }: { since: string }) {
       </div>
 
       {isLoading ? (
-        <Skeleton className="h-[200px] w-full rounded-lg" />
+        <Skeleton className="h-[152px] w-full rounded-lg" />
       ) : error ? (
         <p className="py-16 text-center text-sm text-muted-foreground">
           Não foi possível ler a vazão de hoje.

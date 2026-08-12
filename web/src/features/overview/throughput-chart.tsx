@@ -5,7 +5,10 @@ import { STATE_DOT, type AgentState } from "@/lib/agent-state";
 import { formatCost } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-const PLOT = 180;
+// 132 = four gridlines of 33. The panel stands beside the cost ceiling and
+// the pair reads as one row, so the chart is sized to that card rather than
+// to whatever height the bars would like.
+const PLOT = 132;
 const AXIS = 20;
 const GRIDLINES = 4;
 const LABEL: Partial<Record<AgentState, string>> = {

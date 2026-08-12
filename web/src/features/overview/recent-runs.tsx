@@ -1,7 +1,14 @@
 import { Link } from "react-router-dom";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { LoadingRows } from "@/components/shared/states";
 import { RunsTable } from "@/features/runs/runs-table";
 import { useRuns } from "@/features/runs/api";
+import { cn } from "@/lib/utils";
+
+// A 30px head over five 40px rows. The table keeps eight so there is
+// something to scroll to; anything past that belongs on the Runs screen.
+const VISIBLE = 5;
+const FETCHED = 8;
 
 /**
  * The last few runs, in the same table the Runs screen uses.
@@ -21,7 +28,7 @@ export function RecentRuns({
   onSelect?: (runId: string) => void;
 }) {
   const { data, isLoading, error } = useRuns({ since });
-  const runs = (data?.items ?? []).slice(0, 8);
+  const runs = (data?.items ?? []).slice(0, FETCHED);
 
   return (
     <section className="flex flex-col gap-2.5">
@@ -46,7 +53,12 @@ export function RecentRuns({
             Nenhuma execução hoje. Agentes disparam por agendamento, webhook ou evento.
           </p>
         ) : (
-          <RunsTable runs={runs} selected={selected} onSelect={onSelect} />
+          <ScrollArea
+            type="auto"
+            className={cn(runs.length > VISIBLE && "h-[230px]")}
+          >
+            <RunsTable runs={runs} selected={selected} onSelect={onSelect} />
+          </ScrollArea>
         )}
       </div>
     </section>

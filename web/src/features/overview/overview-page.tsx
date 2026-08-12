@@ -45,11 +45,19 @@ export function OverviewPage() {
         description="Como o dia está indo: quanto rodou, o que o Portão decidiu e quanto custou."
       />
 
-      <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row lg:items-start">
-        <div className="flex min-w-0 flex-1 flex-col gap-4">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
+        {/* The content scrolls, the title and the trace do not. Sticky was the
+            other way to keep the trace in view and it cannot work here: the row
+            is exactly the height left under the title, so there is nowhere for a
+            stuck element to travel. Clicking the last row of the runs table has
+            to open something the reader can see. */}
+        <div className="flex min-w-0 flex-1 flex-col gap-4 lg:min-h-0 lg:overflow-auto lg:pr-1">
           <KpiRow windows={windows} />
 
-          <div className="grid gap-4 lg:grid-cols-[2fr_1fr] lg:items-start">
+          {/* Stretched, not each to its own height: side by side they read as
+              one band, and two cards ending at different lines read as one of
+              them having failed to load. */}
+          <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
             <ThroughputPanel since={since} />
             <BudgetDonut windows={windows.current} />
           </div>

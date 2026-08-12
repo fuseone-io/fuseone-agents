@@ -30,7 +30,12 @@ export function TracePanel({ runId, onClose }: { runId: string; onClose: () => v
     // A column, not a card that grows: the steps scroll and the decision stays
     // pinned. A run with forty steps must not push its own Approve button off
     // the screen.
-    <aside className="flex max-h-[calc(100vh-100px)] w-full flex-col rounded-xl border border-border bg-card shadow-sm lg:sticky lg:top-0 lg:w-[340px] lg:shrink-0">
+    //
+    // Full height by stretching, not by a viewport calculation: the row already
+    // measures the space left under the title, and a calc would have to restate
+    // the header, the padding and the title block and go wrong the day one of
+    // them changes.
+    <aside className="flex max-h-[calc(100vh-100px)] w-full flex-col rounded-xl border border-border bg-card shadow-sm lg:w-[340px] lg:shrink-0">
       <header className="flex items-start gap-2 border-b border-border p-4">
         <div className="min-w-0 flex-1">
           <Link to={`/runs/${runId}`} className="text-sm font-medium hover:underline">

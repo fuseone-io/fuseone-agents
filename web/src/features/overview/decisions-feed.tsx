@@ -1,10 +1,15 @@
 import { Link } from "react-router-dom";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Mono } from "@/components/shared/mono";
 import { useDecisions } from "@/features/overview/api";
 import { formatTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { RecordedDecision, Verdict } from "@/lib/api/client";
+
+// Five rows of h-8. Fixed only once there are more than five, so a quiet
+// morning shows three rows rather than three rows and a hole.
+const VISIBLE = 5;
 
 const VERDICT: Record<Verdict, { verb: string; className: string }> = {
   allow: { verb: "permitiu", className: "text-success" },
@@ -49,11 +54,15 @@ export function DecisionsFeed({ since }: { since: string }) {
           ferramenta no período.
         </p>
       ) : (
-        <ol className="flex flex-col">
-          {items.map((decision) => (
-            <Row key={`${decision.runId}-${decision.seq}`} decision={decision} />
-          ))}
-        </ol>
+        // The feed is live. Left to grow, every decision the Gate records
+        // would push the runs table further down under somebody reading it.
+        <ScrollArea type="auto" className={cn(items.length > VISIBLE && "h-40")}>
+          <ol className="flex flex-col pr-2.5">
+            {items.map((decision) => (
+              <Row key={`${decision.runId}-${decision.seq}`} decision={decision} />
+            ))}
+          </ol>
+        </ScrollArea>
       )}
     </section>
   );
