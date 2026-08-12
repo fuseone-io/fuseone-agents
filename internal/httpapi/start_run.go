@@ -75,6 +75,12 @@ func (s *Server) opener() *trigger.Opener {
 	if s.content != nil {
 		opener = opener.WithContent(s.content)
 	}
+	if s.pauses != nil {
+		// Including the button. If a person could run a paused agent by
+		// pressing something, "paused" would mean "does not run by itself",
+		// which is not what the word says.
+		opener = opener.WithPauses(s.pauses)
+	}
 	return opener
 }
 

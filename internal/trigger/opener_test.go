@@ -3,6 +3,7 @@ package trigger_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -137,4 +138,59 @@ func decode(t *testing.T, raw []byte, into any) {
 	if err := json.Unmarshal(raw, into); err != nil {
 		t.Fatalf("decode payload: %v", err)
 	}
+}
+
+func TestOpen_pausedAgent_opensNothing(t *testing.T) {
+	t.Parallel()
+	opener, store := openerFor(t)
+	opener = opener.WithPauses(paused{"triage": true})
+
+	// Every way a run can start goes through here, which is the point of the
+	// Opener existing. A pause honoured by the scheduler and not by the
+	// webhook would be a pause that stops an agent on weekdays.
+	if _, err := opener.Open(t.Context(), trigger.Request{
+		Agent: "triage", IdemKey: "intent-1", Trigger: "cron",
+	}); !errors.Is(err, trigger.ErrPaused) {
+		t.Fatalf("Open on a paused agent = %v, want ErrPaused", err)
+	}
+
+	runs, _ := store.Runs(context.Background())
+	if len(runs) != 0 {
+		t.Errorf("the ledger holds %d runs, want none", len(runs))
+	}
+}
+
+func TestOpen_agentNobodyStarted_isTreatedAsPaused(t *testing.T) {
+	t.Parallel()
+	opener, _ := openerFor(t)
+	opener = opener.WithPauses(paused{})
+
+	// A new agent is created paused, so an absent row means nobody ever
+	// decided otherwise. Reading that as running would let an agent start
+	// because a write failed.
+	if _, err := opener.Open(t.Context(), trigger.Request{
+		Agent: "triage", IdemKey: "intent-1",
+	}); !errors.Is(err, trigger.ErrPaused) {
+		t.Fatalf("Open for an agent with no state = %v, want ErrPaused", err)
+	}
+}
+
+func TestOpen_runningAgent_opensAsBefore(t *testing.T) {
+	t.Parallel()
+	opener, _ := openerFor(t)
+	opener = opener.WithPauses(paused{"triage": false})
+
+	if _, err := opener.Open(t.Context(), trigger.Request{
+		Agent: "triage", IdemKey: "intent-1",
+	}); err != nil {
+		t.Fatalf("Open on a running agent: %v", err)
+	}
+}
+
+// paused stands in for the state store.
+type paused map[domain.AgentID]bool
+
+func (p paused) IsPaused(_ context.Context, agent domain.AgentID) (bool, error) {
+	stopped, known := p[agent]
+	return !known || stopped, nil
 }

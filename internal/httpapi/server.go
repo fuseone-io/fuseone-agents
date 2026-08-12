@@ -59,6 +59,7 @@ type Server struct {
 	audit        audit.Reader
 	health       Health
 	policies     Policies
+	pauses       trigger.Pauses
 	// clock is injectable so a run's opening instant is a fact of the request
 	// rather than of whichever machine happened to serve it.
 	clock Clock
@@ -105,6 +106,12 @@ func (s *Server) WithCeilings(ceilings Ceilings) *Server {
 // act, because it is the one that connects.
 type Health interface {
 	All(ctx context.Context) (map[string]domain.IntegrationHealth, error)
+}
+
+// WithPauses wires whether an agent is allowed to start.
+func (s *Server) WithPauses(pauses trigger.Pauses) *Server {
+	s.pauses = pauses
+	return s
 }
 
 // WithHealth wires the observations beside the configuration.

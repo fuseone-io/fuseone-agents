@@ -8,24 +8,30 @@ import (
 	"os"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/engine"
+	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/spec"
+	"github.com/fuseone/agents/internal/trigger"
 )
 
 // startCmd opens a run so a worker can pick it up.
 //
-// Triggers — cron, webhook, event — are what will do this in the product. This
-// is the same act reduced to its essence: append the opening step and let the
-// queue do the rest. It exists so an operator can exercise an agent without
-// waiting for a schedule, and it is deliberately the only way to start a run
-// by hand, so "who started this" is always answerable from the trail.
+// The same path the console, the scheduler and the webhook take. It used to
+// append the opening step itself, which made it the one door that did not
+// honour a paused agent — a pause obeyed by three of four ways to start
+// something is not a pause.
 func startCmd(args []string) error {
 	fs := flag.NewFlagSet("start", flag.ContinueOnError)
 	dsn := fs.String("dsn", os.Getenv("DATABASE_URL"), "PostgreSQL connection string")
 	agent := fs.String("agent", "", "agent id, as written in its definition")
-	specDir := fs.String("specs", "agents", "directory of *.agent.md definitions")
-	company := fs.String("company", "default", "company the run belongs to")
-	runID := fs.String("run", "", "run id; generated when empty")
+	// The definition comes from the registry now, not from disk: the console
+	// and the schedulers all read what was published, and a run started from
+	// a file nobody published would be a run pinned to a version the rest of
+	// the installation cannot see.
+	runID := fs.String("run", "", "idempotency key; one is generated per invocation when empty")
 	by := fs.String("by", "cli", "who is starting this run, for the trail")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -36,45 +42,40 @@ func startCmd(args []string) error {
 
 	ctx := context.Background()
 
-	// The version is resolved from the definition on disk rather than accepted
-	// as an argument: a run pinned to a version nobody published is a run
-	// nobody can reproduce.
-	specs := spec.NewStore()
-	if _, err := specs.LoadDir(ctx, os.DirFS("."), *specDir); err != nil {
-		return fmt.Errorf("start: load definitions from %s: %w", *specDir, err)
-	}
-	versions := specs.Versions(domain.AgentID(*agent))
-	if len(versions) == 0 {
-		return fmt.Errorf("start: no definition for agent %q in %s", *agent, *specDir)
-	}
-	published, err := specs.Get(domain.AgentID(*agent), versions[len(versions)-1])
-	if err != nil {
-		return fmt.Errorf("start: %w", err)
-	}
-
 	store, err := openStore(ctx, *dsn)
 	if err != nil {
 		return err
 	}
+	pool, err := pgxpool.New(ctx, *dsn)
+	if err != nil {
+		return fmt.Errorf("start: connect: %w", err)
+	}
+	defer pool.Close()
 
-	id := domain.RunID(*runID)
-	if id == "" {
-		id = domain.RunID(fmt.Sprintf("run_%s_%d", published.ID, time.Now().UnixMilli()))
+	// The version is resolved from the registry rather than accepted as an
+	// argument: a run pinned to a version nobody published is a run nobody
+	// can reproduce.
+	opener := trigger.NewOpener(store, spec.NewRegistry(pool), engine.SystemClock{}).
+		WithContent(ledger.NewContent(pool)).
+		WithPauses(spec.NewState(pool))
+
+	key := *runID
+	if key == "" {
+		// One intention per invocation. A caller who wants the retry to reach
+		// the same run passes --run, which is what that flag now means.
+		key = fmt.Sprintf("cli:%s:%d", *agent, time.Now().UnixNano())
 	}
 
-	step, err := store.Append(ctx, domain.Step{
-		RunID:      id,
-		Kind:       domain.StepRunStarted,
-		Scope:      domain.Scope{Company: domain.CompanyID(*company), Area: published.Area},
-		AgentID:    published.ID,
-		VersionID:  published.Version,
-		OnBehalfOf: domain.UserID(*by),
-		At:         time.Now(),
+	opened, err := opener.Open(ctx, trigger.Request{
+		Agent:   domain.AgentID(*agent),
+		IdemKey: key,
+		Trigger: "cli",
+		By:      domain.UserID(*by),
 	})
 	if err != nil {
-		return fmt.Errorf("start: open run: %w", err)
+		return fmt.Errorf("start: %w", err)
 	}
 
-	fmt.Printf("%s  agent=%s version=%s seq=%d\n", id, published.ID, published.Version, step.Seq)
+	fmt.Printf("%s  agent=%s created=%v\n", opened.RunID, *agent, opened.Created)
 	return nil
 }

@@ -12,6 +12,7 @@ package trigger
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -37,11 +38,24 @@ type Content interface {
 // Clock is the time a run is stamped with.
 type Clock interface{ Now() time.Time }
 
+// Pauses reports whether an agent is stopped.
+//
+// Checked here rather than in each trigger because every way a run can start
+// goes through this one place. A pause honoured by the scheduler and not by
+// the webhook is a pause that stops an agent on weekdays.
+type Pauses interface {
+	IsPaused(ctx context.Context, agent domain.AgentID) (bool, error)
+}
+
+// ErrPaused means the agent exists and is not running.
+var ErrPaused = errors.New("trigger: the agent is paused")
+
 // Opener turns an intention into a run.
 type Opener struct {
 	ledger   Ledger
 	registry Registry
 	content  Content
+	pauses   Pauses
 	clock    Clock
 }
 
@@ -52,6 +66,12 @@ func NewOpener(ledger Ledger, registry Registry, clock Clock) *Opener {
 // WithContent wires where the run's input is stored.
 func (o *Opener) WithContent(content Content) *Opener {
 	o.content = content
+	return o
+}
+
+// WithPauses wires whether an agent is allowed to start at all.
+func (o *Opener) WithPauses(pauses Pauses) *Opener {
+	o.pauses = pauses
 	return o
 }
 
@@ -94,6 +114,19 @@ func (o *Opener) Open(ctx context.Context, req Request) (Result, error) {
 
 	if existing, err := o.ledger.RunByIdemKey(ctx, req.IdemKey); err == nil {
 		return Result{RunID: existing}, nil
+	}
+
+	// After the key and before anything is written: a repeat of an intention
+	// that already opened a run still answers with that run, because pausing
+	// an agent does not unmake what it already started.
+	if o.pauses != nil {
+		stopped, err := o.pauses.IsPaused(ctx, req.Agent)
+		if err != nil {
+			return Result{}, fmt.Errorf("trigger: read pause state: %w", err)
+		}
+		if stopped {
+			return Result{}, fmt.Errorf("%w: %s", ErrPaused, req.Agent)
+		}
 	}
 
 	versions, err := o.registry.Versions(ctx, req.Agent)

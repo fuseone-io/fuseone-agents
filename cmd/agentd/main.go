@@ -152,7 +152,8 @@ func serve(args []string) error {
 			WithWebhooks(trigger.NewPostgresWebhooks(identity.pool)).
 			WithAudit(audit.NewPostgres(identity.pool)).
 			WithHealth(admin.NewHealth(identity.pool)).
-			WithPolicies(policy.NewStore(identity.pool))
+			WithPolicies(policy.NewStore(identity.pool)).
+			WithPauses(spec.NewState(identity.pool))
 	}
 
 	apiHandler := openapi.HandlerWithOptions(
@@ -192,7 +193,8 @@ func serve(args []string) error {
 		httpapi.NewHooks(
 			trigger.NewPostgresWebhooks(identity.pool),
 			trigger.NewOpener(store, spec.NewRegistry(identity.pool), engine.SystemClock{}).
-				WithContent(ledger.NewContent(identity.pool)),
+				WithContent(ledger.NewContent(identity.pool)).
+				WithPauses(spec.NewState(identity.pool)),
 			slog.Default(),
 		).Mount(root)
 	} else {
@@ -434,6 +436,13 @@ func workerCmd(args []string) error {
 		}
 		slog.Info("agent versions published", "count", published, "dir", *specDir)
 
+		// A definition arriving from disk is authoring, and authoring never
+		// starts anything. An agent already started stays started: this only
+		// records the ones nobody has decided about.
+		if err := pauseNewAgents(ctx, configPool, specDir); err != nil {
+			return err
+		}
+
 		// What each version declares becomes what the scheduler watches. A
 		// schedule withdrawn by a new version stops firing; one that is still
 		// declared keeps the moment it was already waiting for.
@@ -463,7 +472,8 @@ func workerCmd(args []string) error {
 		scheduler := trigger.NewScheduler(
 			trigger.NewPostgresSchedules(configPool),
 			trigger.NewOpener(store, registry, engine.SystemClock{}).
-				WithContent(ledger.NewContent(configPool)),
+				WithContent(ledger.NewContent(configPool)).
+				WithPauses(spec.NewState(configPool)),
 			engine.SystemClock{}, slog.Default(),
 		)
 		go runScheduler(ctx, scheduler)
@@ -605,6 +615,22 @@ func webhookPathsOf(s spec.Spec) []string {
 		}
 	}
 	return out
+}
+
+// pauseNewAgents records every agent nobody has decided about as paused.
+func pauseNewAgents(ctx context.Context, pool *pgxpool.Pool, specDir *string) error {
+	loaded := spec.NewStore()
+	if _, err := loaded.LoadDir(ctx, os.DirFS("."), *specDir); err != nil {
+		return fmt.Errorf("record new agents as paused: load %s: %w", *specDir, err)
+	}
+
+	state := spec.NewState(pool)
+	for _, agent := range loaded.Agents() {
+		if err := state.EnsurePaused(ctx, agent, "worker"); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // cronSchedulesOf picks the schedules out of a specification's triggers.

@@ -240,3 +240,55 @@ func TestInstructions_readsTheTextThatVersionWasPublishedWith(t *testing.T) {
 		t.Errorf("instructions = %q, want the text that version carried", text)
 	}
 }
+
+// The console does not publish a different kind of artefact from the one on
+// disk. It renders the file, and the file is what gets parsed and published.
+
+func TestRender_roundTripsThroughParse(t *testing.T) {
+	original := published(t, definition)
+
+	rendered, err := spec.Render(original)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	back, err := spec.Parse("console", rendered)
+	if err != nil {
+		t.Fatalf("Parse what Render wrote: %v\n%s", err, rendered)
+	}
+
+	if back.ID != original.ID || back.Name != original.Name || back.Model != original.Model {
+		t.Errorf("identity changed: %+v", back)
+	}
+	if back.Instructions != original.Instructions {
+		t.Errorf("instructions = %q, want %q", back.Instructions, original.Instructions)
+	}
+	if len(back.Tools) != len(original.Tools) || back.Tools[0] != original.Tools[0] {
+		t.Errorf("tools = %v, want %v", back.Tools, original.Tools)
+	}
+	if len(back.Triggers) != 1 || back.Triggers[0].Schedule != "*/15 * * * *" {
+		t.Errorf("triggers = %+v, want the schedule back", back.Triggers)
+	}
+	if back.Budget != original.Budget {
+		t.Errorf("budget = %+v, want %+v", back.Budget, original.Budget)
+	}
+}
+
+func TestRender_theSameDefinitionTwice_isTheSameVersion(t *testing.T) {
+	// The property the registry rests on: publishing is a no-op when the
+	// content is identical. A console that produced different bytes for the
+	// same definition would create a second version of the same text on every
+	// save, and every run pinned to either would be pinned to a coin toss.
+	original := published(t, definition)
+
+	first, err := spec.Render(original)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	second, _ := spec.Render(original)
+
+	a, _ := spec.Parse("console", first)
+	b, _ := spec.Parse("console", second)
+	if a.Version != b.Version {
+		t.Errorf("two renders gave %s and %s", a.Version, b.Version)
+	}
+}

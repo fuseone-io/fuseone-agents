@@ -96,7 +96,7 @@ track $!
 
 step "first run"
 sleep 1
-bin/agentd start --dsn "$DSN" --specs "$SPECS" --agent suporte --by "$(whoami)"
+bin/agentd start --dsn "$DSN" --agent suporte --by "$(whoami)"
 
 cat <<EOF
 
@@ -106,7 +106,7 @@ cat <<EOF
   ${SETUP}
 
   open another run:
-    bin/agentd start --dsn ${DSN} --specs ${SPECS} --agent suporte
+    bin/agentd start --dsn ${DSN} --agent suporte
 
 Ctrl-C stops everything.
 EOF
