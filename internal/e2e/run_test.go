@@ -208,6 +208,11 @@ func newPlatform(t *testing.T, store Store, agentSource string, reply func(turn 
 		worker.Config{
 			Owner: "e2e", Concurrency: 1, Lease: time.Minute,
 			IdleWait: time.Millisecond, MaxAttempts: 3,
+			// The real backoff is seconds, doubling. A scenario about an
+			// outage would spend most of its time asleep, and what it is
+			// testing is what the platform does between the attempts, not
+			// how long it waits.
+			BaseBackoff: time.Millisecond, MaxBackoff: 5 * time.Millisecond,
 		},
 		store,
 		engine.Deps{

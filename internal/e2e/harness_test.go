@@ -23,6 +23,22 @@ type modelServer struct {
 	turn  int
 	seen  []chatRequest
 	reply func(turn int) chatReply
+	// down makes the provider unavailable, the way a real one is: the address
+	// answers, and answers badly.
+	down bool
+}
+
+// fail takes the provider offline, and restore brings it back.
+func (m *modelServer) fail() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.down = true
+}
+
+func (m *modelServer) restore() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.down = false
 }
 
 type chatReply struct {
@@ -51,10 +67,18 @@ func newModelServer(t *testing.T, reply func(turn int) chatReply) *modelServer {
 		}
 
 		m.mu.Lock()
+		down := m.down
 		turn := m.turn
-		m.turn++
-		m.seen = append(m.seen, req)
+		if !down {
+			m.turn++
+			m.seen = append(m.seen, req)
+		}
 		m.mu.Unlock()
+
+		if down {
+			http.Error(w, "upstream unavailable", http.StatusServiceUnavailable)
+			return
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(responseFor(m.reply(turn)))
