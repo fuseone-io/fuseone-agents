@@ -841,6 +841,38 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
 
+  /runs/{runId}/replay:
+    get:
+      tags: [runs]
+      operationId: replayRun
+      summary: Would these decisions be made the same way again?
+      description: |
+        Faithful replay (PRD AU-07). The recorded inputs are fed back through
+        the Gate, under the policy set each step names and the specification
+        version the run was pinned to, and the answers are compared with what
+        was recorded.
+
+        The hash chain proves the steps were not edited. It does not prove they
+        were ever the correct output of the rules in force — a chain of
+        well-sealed lies verifies perfectly. This is the other half.
+
+        A decision that cannot be re-derived at all is reported as such rather
+        than counted either way: a policy snapshot nobody kept, or a trail from
+        before the platform recorded the trust stage.
+
+        Nothing is executed. No tool, no model, no network.
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+      responses:
+        '200':
+          description: What the replay found.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReplayReport' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /runs/{runId}/compensation:
     get:
       tags: [runs]
@@ -3206,6 +3238,40 @@ components:
           type: array
           items: { $ref: '#/components/schemas/Step' }
         nextSeq: { type: integer, format: int64, nullable: true }
+
+    ReplayReport:
+      type: object
+      required: [runId, decisions, reproduced, faithful, divergences]
+      properties:
+        runId: { type: string }
+        decisions:
+          type: integer
+          description: How many gate decisions the run recorded.
+        reproduced:
+          type: integer
+          description: How many produced the same verdict, for the same reason.
+        faithful:
+          type: boolean
+          description: True when every decision came out the same way.
+        divergences:
+          type: array
+          items: { $ref: '#/components/schemas/Divergence' }
+
+    Divergence:
+      type: object
+      required: [seq]
+      properties:
+        seq: { type: integer, format: int64 }
+        tool: { type: string }
+        was: { $ref: '#/components/schemas/Verdict' }
+        now: { $ref: '#/components/schemas/Verdict' }
+        wasRule: { type: string }
+        nowRule: { type: string }
+        why:
+          type: string
+          description: |
+            Set when the decision could not be re-derived at all. Not a
+            divergence and not a match — reporting it as either would be a lie.
 
     CompensationPlan:
       type: object

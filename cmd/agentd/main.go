@@ -185,6 +185,10 @@ func serve(args []string) error {
 			WithPauses(spec.NewState(identity.pool)).
 			WithStops(admin.NewStops(identity.pool)).
 			WithMarks(admin.NewMarks(identity.pool)).
+			WithReplays(httpapi.NewReplays(
+				policy.NewStore(identity.pool).Policies,
+				spec.NewRegistry(identity.pool).Pack,
+			)).
 			WithStages(spec.NewState(identity.pool)).
 			WithPromotions(spec.NewState(identity.pool)).
 			WithPublisher(spec.NewPublisher(identity.pool, engine.SystemClock{}))

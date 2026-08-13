@@ -560,6 +560,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/runs/{runId}/replay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Would these decisions be made the same way again?
+         * @description Faithful replay (PRD AU-07). The recorded inputs are fed back through
+         *     the Gate, under the policy set each step names and the specification
+         *     version the run was pinned to, and the answers are compared with what
+         *     was recorded.
+         *
+         *     The hash chain proves the steps were not edited. It does not prove they
+         *     were ever the correct output of the rules in force — a chain of
+         *     well-sealed lies verifies perfectly. This is the other half.
+         *
+         *     A decision that cannot be re-derived at all is reported as such rather
+         *     than counted either way: a policy snapshot nobody kept, or a trail from
+         *     before the platform recorded the trust stage.
+         *
+         *     Nothing is executed. No tool, no model, no network.
+         */
+        get: operations["replayRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runs/{runId}/compensation": {
         parameters: {
             query?: never;
@@ -2172,6 +2205,30 @@ export interface components {
             /** Format: int64 */
             nextSeq?: number | null;
         };
+        ReplayReport: {
+            runId: string;
+            /** @description How many gate decisions the run recorded. */
+            decisions: number;
+            /** @description How many produced the same verdict, for the same reason. */
+            reproduced: number;
+            /** @description True when every decision came out the same way. */
+            faithful: boolean;
+            divergences: components["schemas"]["Divergence"][];
+        };
+        Divergence: {
+            /** Format: int64 */
+            seq: number;
+            tool?: string;
+            was?: components["schemas"]["Verdict"];
+            now?: components["schemas"]["Verdict"];
+            wasRule?: string;
+            nowRule?: string;
+            /**
+             * @description Set when the decision could not be re-derived at all. Not a
+             *     divergence and not a match — reporting it as either would be a lie.
+             */
+            why?: string;
+        };
         CompensationPlan: {
             acts: components["schemas"]["CompensationAct"][];
         };
@@ -3094,6 +3151,31 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+        };
+    };
+    replayRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: components["parameters"]["RunId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What the replay found. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplayReport"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     getCompensation: {

@@ -73,7 +73,9 @@ type Server struct {
 	// stops are the switches wider than one agent (PRD FO-06).
 	stops Stoppers
 	// marks are the budget thresholds each scope has crossed (PRD FO-05).
-	marks      Marks
+	marks Marks
+	// replays re-derive a run's decisions from what was recorded (PRD AU-07).
+	replays    Replays
 	stages     trigger.Stages
 	promotions Promotions
 	// cases is where an uploaded simulation set is filed. Optional, like the
@@ -162,6 +164,13 @@ func (s *Server) WithStops(stops Stoppers) *Server {
 // WithMarks wires the budget thresholds already crossed.
 func (s *Server) WithMarks(marks Marks) *Server {
 	s.marks = marks
+	return s
+}
+
+// WithReplays wires what a faithful replay needs: the policy set each decision
+// was made under, and the pack of the version that ran.
+func (s *Server) WithReplays(replays Replays) *Server {
+	s.replays = replays
 	return s
 }
 

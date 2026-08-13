@@ -53,7 +53,7 @@ export function TrailEvent({
               chip.className ?? "bg-muted text-foreground",
             )}
           >
-            {chip.text}
+            {t(chip.text)}
           </span>
         ))}
         {expandable && (

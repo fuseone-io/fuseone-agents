@@ -801,6 +801,12 @@
     "policyFilter": "Política",
     "proposedArguments": "Argumentos propostos",
     "refuse": "Recusar",
+    "replay": "Reproduzir",
+    "replayAtStep": "passo {{seq}}",
+    "replayChanged": "era {{was}}, hoje seria {{now}}",
+    "replayCount": "{{reproduced}} de {{decisions}} decisões saíram iguais",
+    "replayHelp": "As entradas registradas voltam pelo Portão, sob o conjunto de políticas que cada passo nomeia e a versão da especificação a que a execução foi fixada. Verificar prova que os passos não foram editados; isto prova que eles eram a resposta que as regras davam.",
+    "replayTitle": "As mesmas decisões seriam tomadas de novo?",
     "requested": "Pedido",
     "reservedOpen": "{{amount}} ainda reservados",
     "resume": "Retomar",
@@ -975,5 +981,11 @@
     "dark": "Escuro",
     "light": "Claro",
     "system": "Do sistema"
+  },
+  "verdict": {
+    "allow": "permitir",
+    "block": "bloquear",
+    "constrain": "restringir",
+    "require_approval": "escalar"
   }
 }

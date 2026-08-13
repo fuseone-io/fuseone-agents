@@ -15,6 +15,7 @@ import { VerifyButton } from "@/features/runs/verify-button";
 import { ExportButton } from "@/features/runs/export-button";
 import { AbandonDialog } from "@/features/runs/abandon-dialog";
 import { ResumeButton } from "@/features/runs/resume-button";
+import { ReplayButton } from "@/features/runs/replay-button";
 import { PHASE_LABELS } from "@/features/runs/phase-badge";
 import { stateOfPhase } from "@/lib/agent-state";
 import { formatInstant } from "@/lib/format";
@@ -77,6 +78,10 @@ export function RunIdentity({ run, trigger }: { run: Run; trigger?: string }) {
         {run.phase === "parked" && <ResumeButton runId={run.runId} />}
         {!ENDED.includes(run.phase) && <AbandonDialog runId={run.runId} />}
         <VerifyButton runId={run.runId} />
+        {/* Beside verification, because they are the two halves of one
+            question: that the steps were not edited, and that they were the
+            answer the rules actually give. */}
+        <ReplayButton runId={run.runId} />
         <ExportButton runId={run.runId} />
       </div>
     </div>

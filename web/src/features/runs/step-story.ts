@@ -31,16 +31,16 @@ const TITLES: Record<StepKind, string> = {
 };
 
 const VERDICT_CHIP: Record<string, { text: string; className: string }> = {
-  allow: { text: "permitir", className: "bg-success-surface text-success" },
+  allow: { text: "verdict.allow", className: "bg-success-surface text-success" },
   constrain: {
-    text: "restringir",
+    text: "verdict.constrain",
     className: "bg-warning-surface text-warning",
   },
   require_approval: {
-    text: "escalar",
+    text: "verdict.require_approval",
     className: "bg-warning-surface text-warning",
   },
-  block: { text: "bloquear", className: "bg-danger-surface text-danger" },
+  block: { text: "verdict.block", className: "bg-danger-surface text-danger" },
 };
 
 const PARKED: Record<string, string> = {

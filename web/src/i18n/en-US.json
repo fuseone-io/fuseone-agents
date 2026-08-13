@@ -801,6 +801,12 @@
     "policyFilter": "Policy",
     "proposedArguments": "Proposed arguments",
     "refuse": "Refuse",
+    "replay": "Replay",
+    "replayAtStep": "step {{seq}}",
+    "replayChanged": "was {{was}}, today would be {{now}}",
+    "replayCount": "{{reproduced}} of {{decisions}} decisions came out the same",
+    "replayHelp": "The recorded inputs are fed back through the Gate, under the policy set each step names and the specification version the run was pinned to. Verifying proves the steps were not edited; this proves they were the answer the rules give.",
+    "replayTitle": "Would the same decisions be made again?",
     "requested": "Requested",
     "reservedOpen": "{{amount}} still reserved",
     "resume": "Resume",
@@ -975,5 +981,11 @@
     "dark": "Dark",
     "light": "Light",
     "system": "System"
+  },
+  "verdict": {
+    "allow": "allow",
+    "block": "block",
+    "constrain": "constrain",
+    "require_approval": "escalate"
   }
 }

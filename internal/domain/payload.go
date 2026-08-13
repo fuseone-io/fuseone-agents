@@ -57,6 +57,12 @@ type GateDecidedPayload struct {
 	// beside a run that carried on, and somebody spends an afternoon on it.
 	Monitored []MonitoredPolicy `json:"monitored,omitempty"`
 
+	// Stage is how far the agent was trusted when this was decided. Recorded
+	// because it is state beside the specification rather than in it: it
+	// changes on an afternoon, and a decision replayed under today's trust is
+	// not the decision that was made (PRD AU-07).
+	Stage Stage `json:"stage,omitempty"`
+
 	// Labels is the taint the arguments carried, and ArgsDigest identifies
 	// them without holding them.
 	//
