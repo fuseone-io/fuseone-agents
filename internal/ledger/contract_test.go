@@ -1546,3 +1546,36 @@ func TestClaimContract_theTwoHalvesOfTheQueueNeverOverlap(t *testing.T) {
 		}
 	})
 }
+
+func TestDecisionsContract_carriesTheTaintTheDecisionWasMadeOn(t *testing.T) {
+	base := time.Date(2026, 8, 13, 9, 0, 0, 0, time.UTC)
+
+	run(t, "a decision reports the labels it was decided on", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		mustAppend(t, s, startedAt("run-1", base))
+
+		decided := step("run-1", domain.StepGateDecided)
+		decided.At = base.Add(time.Second)
+		decided.Payload = mustJSON(t, domain.GateDecidedPayload{
+			Tool: "crm.reply", Effect: domain.EffectWrite, Verdict: domain.VerdictAllow,
+			Rule: "passed", Labels: domain.NewLabels(domain.LabelUntrusted),
+		})
+		mustAppend(t, s, decided)
+
+		got, err := s.Decisions(ctx, domain.RunFilter{}, 10)
+		if err != nil {
+			t.Fatalf("Decisions: %v", err)
+		}
+		if len(got) != 1 {
+			t.Fatalf("decisions = %d", len(got))
+		}
+		// Read from the decision's payload, not from the step's label column:
+		// that column says what a step contributed and is empty here, so
+		// reading it made every rule about untrusted data simulate against
+		// nothing and report zero — the reassuring answer, for exactly the
+		// rule somebody writes when they are nervous.
+		if !got[0].Labels.Has(domain.LabelUntrusted) {
+			t.Errorf("labels = %v, want the taint it was decided on", got[0].Labels)
+		}
+	})
+}

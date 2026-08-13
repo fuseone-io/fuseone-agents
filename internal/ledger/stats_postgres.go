@@ -142,7 +142,14 @@ func (p *Postgres) Decisions(ctx context.Context, filter domain.RunFilter, limit
 		select run_id, seq, at, company_id, area_id, agent_id,
 		       payload->>'tool', coalesce((payload->>'verdict')::int, 0),
 		       coalesce(payload->>'rule', ''), coalesce(payload->>'policy_code', ''),
-		       coalesce((payload->>'effect')::int, 0), labels
+		       coalesce((payload->>'effect')::int, 0),
+		       -- The taint the arguments carried, which the decision records
+		       -- beside its outcome so it can be re-evaluated later. The
+		       -- step's own label column says what a step contributed, which
+		       -- is a different fact and is empty for a decision.
+		       coalesce(
+		           (select array_agg(value) from jsonb_array_elements_text(payload->'labels')),
+		           '{}'::text[])
 		from run_steps `+where+`
 		order by at desc, seq desc
 		limit $`+fmt.Sprint(len(args)), args...)

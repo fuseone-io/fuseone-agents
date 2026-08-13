@@ -25,6 +25,13 @@ type Simulation struct {
 	Considered int
 	// Matched is how many the rule would have applied to.
 	Matched int
+	// Changed is how many of those the Gate would have ruled differently on.
+	//
+	// The question the PRD actually asks (AU-08), and a different one from
+	// Matched: a rule that denies what was already denied fires constantly
+	// and changes nothing, and a count of matches alone makes it look like a
+	// rule with teeth.
+	Changed int
 	// Unknown is how many could not be answered, because the rule reads
 	// arguments and those decisions did not keep any.
 	Unknown int
@@ -74,6 +81,9 @@ func Simulate(draft domain.Policy, decisions []domain.RecordedDecision) Simulati
 		verdict := draft.Effect.Verdict()
 		out.Matched++
 		out.ByVerdict[verdict]++
+		if verdict != d.Verdict {
+			out.Changed++
+		}
 		if len(out.Samples) < maxSamples {
 			out.Samples = append(out.Samples, Sample{
 				RunID: d.RunID, Seq: d.Seq, Tool: d.Tool,

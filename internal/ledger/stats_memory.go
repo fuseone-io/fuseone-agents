@@ -143,7 +143,12 @@ func decisionOf(step domain.Step) domain.RecordedDecision {
 	return domain.RecordedDecision{
 		RunID: step.RunID, Seq: step.Seq, At: step.At.UTC(), Scope: step.Scope,
 		AgentID: step.AgentID, Tool: p.Tool, Verdict: p.Verdict, Rule: p.Rule,
-		PolicyCode: p.PolicyCode, Effect: p.Effect, Labels: step.Labels,
+		PolicyCode: p.PolicyCode, Effect: p.Effect,
+		// The taint the arguments carried, from the decision's own
+		// payload. The step's label column says what a step contributed,
+		// which is a different fact and is empty for a decision — reading
+		// it here made every taint rule simulate against nothing.
+		Labels: p.Labels,
 	}
 }
 
