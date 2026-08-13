@@ -292,3 +292,32 @@ func TestRender_theSameDefinitionTwice_isTheSameVersion(t *testing.T) {
 		t.Errorf("two renders gave %s and %s", a.Version, b.Version)
 	}
 }
+
+func TestPublish_emits_survivesTheRegistry(t *testing.T) {
+	registry := openRegistry(t)
+	ctx := context.Background()
+
+	// The composition graph is derived from what the registry holds, so a
+	// field the registry drops is an edge that silently disappears — and the
+	// parse and render tests next door both pass while it does. Found by
+	// declaring an emitter in the development stack and reading "nobody
+	// publishes" on the screen.
+	source := spec.Spec{
+		ID: "triagem", Name: "Triagem", Area: "cx", Version: "v1",
+		Provider: "openai", Model: "gpt-4o-mini",
+		Tools:  []domain.ToolID{"crm.lookup"},
+		Emits:  []string{"ticket.triado"},
+		Budget: domain.Budget{Micros: 100_000},
+	}
+	if err := registry.Publish(ctx, source, "usr_ana", "acme"); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+
+	again, err := registry.Get(ctx, "triagem", "v1")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if len(again.Emits) != 1 || again.Emits[0] != "ticket.triado" {
+		t.Errorf("Emits = %v, want the declared event", again.Emits)
+	}
+}

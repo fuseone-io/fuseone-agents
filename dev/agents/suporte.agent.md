@@ -12,6 +12,8 @@ tools:
 triggers:
   - { type: cron, schedule: "*/15 * * * *" }
   - { type: webhook, path: "crm/ticket" }
+emits:
+  - ticket.atendido
 budget:
   micros: 500000
   tool_calls: 20
@@ -25,3 +27,5 @@ na base de conhecimento o assunto relatado e resuma o que encontrou.
 
 Depois de resumir, responda ao cliente com crm.reply. Se não encontrar o
 cliente, avise e pare — não invente um cadastro.
+
+Ao terminar, o atendimento publica o evento que a revisão de qualidade consome.

@@ -49,17 +49,23 @@ func (r *Registry) Publish(ctx context.Context, s Spec, by domain.UserID, compan
 	for _, t := range s.Tools {
 		tools = append(tools, string(t))
 	}
+	// Never nil: a nil slice reaches Postgres as null, and the column says not
+	// null because "declares no events" is the empty list rather than unknown.
+	emits := s.Emits
+	if emits == nil {
+		emits = []string{}
+	}
 
 	_, err = r.pool.Exec(ctx, `
 		insert into agent_specs (
 			agent_id, version_id, company_id, area_id, name,
 			provider, model, effort, tools, budget, triggers,
-			instructions, source, published_by
-		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+			instructions, source, published_by, emits
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
 		on conflict (agent_id, version_id) do nothing`,
 		string(s.ID), string(s.Version), string(company), string(s.Area), s.Name,
 		s.Provider, s.Model, s.Effort, tools, budget, triggers,
-		s.Instructions, s.Source, string(by))
+		s.Instructions, s.Source, string(by), emits)
 	if err != nil {
 		return fmt.Errorf("spec: publish %s@%s: %w", s.ID, s.Version, err)
 	}
@@ -175,11 +181,13 @@ func (r *Registry) Get(ctx context.Context, agent domain.AgentID, version domain
 	)
 	err := r.pool.QueryRow(ctx, `
 		select agent_id, version_id, company_id, area_id, name,
-		       provider, model, effort, tools, budget, triggers, instructions, source
+		       provider, model, effort, tools, budget, triggers, instructions,
+		       source, emits
 		from agent_specs where agent_id = $1 and version_id = $2`,
 		string(agent), string(version),
 	).Scan(&s.ID, &s.Version, &company, &s.Area, &s.Name,
-		&s.Provider, &s.Model, &s.Effort, &tools, &budget, &triggers, &s.Instructions, &s.Source)
+		&s.Provider, &s.Model, &s.Effort, &tools, &budget, &triggers,
+		&s.Instructions, &s.Source, &s.Emits)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Spec{}, fmt.Errorf("%w: %s@%s", ErrNotPublished, agent, version)
