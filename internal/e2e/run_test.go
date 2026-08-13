@@ -118,6 +118,10 @@ type platform struct {
 	// server is what the MCP server actually executed.
 	server serverCalls
 
+	// content is where tool results are filed. Held so a scenario can erase
+	// one and check what that does to the trail.
+	content *engine.MemoryContent
+
 	// gate is swappable because the worker takes its dependencies once, and a
 	// scenario that needs an installation's own rules in force decides that
 	// after the platform is built.
@@ -170,6 +174,7 @@ func newPlatform(t *testing.T, store Store, agentSource string, reply func(turn 
 	// the engine resolves them back out when building the next transcript;
 	// two instances silently lose every result.
 	content := engine.NewMemoryContent()
+	p.content = content
 	p.catalog = tools.NewCatalog(content)
 	if err := p.catalog.AddServer(t.Context(), "crm", mcpSession(t, &p.server)); err != nil {
 		t.Fatalf("add MCP server: %v", err)
