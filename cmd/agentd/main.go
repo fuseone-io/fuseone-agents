@@ -28,6 +28,7 @@ import (
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/authoring"
 	"github.com/fuseone/agents/internal/autonomy"
+	"github.com/fuseone/agents/internal/budget"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/httpapi"
@@ -183,6 +184,7 @@ func serve(args []string) error {
 			WithAssistants(assistants(ctx, integrations), authoring.NewStore(identity.pool, store)).
 			WithPauses(spec.NewState(identity.pool)).
 			WithStops(admin.NewStops(identity.pool)).
+			WithMarks(admin.NewMarks(identity.pool)).
 			WithStages(spec.NewState(identity.pool)).
 			WithPromotions(spec.NewState(identity.pool)).
 			WithPublisher(spec.NewPublisher(identity.pool, engine.SystemClock{}))
@@ -587,6 +589,17 @@ func workerCmd(args []string) error {
 		}
 	}
 
+	// Warning before the ceiling rather than at it. A limit that says nothing
+	// until it stops the work is a limit discovered by a run parking
+	// mid-afternoon (PRD FO-05).
+	if configPool != nil && budgets != nil {
+		if spender, ok := store.(budget.Spend); ok {
+			go watchBudgets(ctx, budget.NewWatcher(
+				budgets, spender, admin.NewMarks(configPool),
+				engine.SystemClock{}, slog.Default()))
+		}
+	}
+
 	// The scheduler is a goroutine with an owner: it stops when the worker's
 	// context does. Every worker runs one — they do not coordinate, because
 	// the run's idempotency key is derived from the due moment and the ledger
@@ -653,6 +666,30 @@ const retentionSweep = 24 * time.Hour
 
 // sweepContent erases what is past its retention window, for ever, until its
 // context is cancelled.
+// budgetSweep is how often spend is compared to the ceilings. Minutes rather
+// than seconds: a monthly budget does not move fast, and every pass is a query
+// per configured scope.
+const budgetSweep = 5 * time.Minute
+
+func watchBudgets(ctx context.Context, watcher *budget.Watcher) {
+	ticker := time.NewTicker(budgetSweep)
+	defer ticker.Stop()
+
+	for {
+		if _, err := watcher.Sweep(ctx); err != nil {
+			// Logged and retried. A failed sweep means a warning arrives late,
+			// which is worth a line in the log and not worth stopping over.
+			slog.Error("budget sweep failed", "err", err)
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
 func sweepContent(ctx context.Context, erasures *admin.Erasures) {
 	ticker := time.NewTicker(retentionSweep)
 	defer ticker.Stop()

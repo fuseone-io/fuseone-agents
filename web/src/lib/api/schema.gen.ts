@@ -805,6 +805,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/budgets/alerts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Which scopes have crossed a budget threshold
+         * @description Half, four fifths, and all of it (PRD FO-05). One entry per scope,
+         *     naming the highest threshold it has reached in the current period —
+         *     a scope at 85% is reported once, at 80, rather than twice.
+         *
+         *     An empty list means nothing has crossed 50% this period.
+         */
+        get: operations["listBudgetAlerts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/stops": {
         parameters: {
             query?: never;
@@ -2244,6 +2268,20 @@ export interface components {
             total: components["schemas"]["Cost"];
             buckets: components["schemas"]["CostBucket"][];
         };
+        BudgetAlert: {
+            scope: components["schemas"]["Scope"];
+            /** @description The percentage crossed — 50, 80 or 100. */
+            threshold: number;
+            /** Format: int64 */
+            spentMicros: number;
+            /** Format: int64 */
+            ceilingMicros: number;
+            /**
+             * Format: date-time
+             * @description The start of the period the spend is measured over.
+             */
+            since: string;
+        };
         Health: {
             /** @enum {string} */
             status: "ok" | "degraded";
@@ -3416,6 +3454,34 @@ export interface operations {
                 content?: never;
             };
             400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listBudgetAlerts: {
+        parameters: {
+            query?: {
+                /** @description Company scope. A single value until multi-company (PRD 3.1). */
+                company?: components["parameters"]["Company"];
+                area?: components["parameters"]["Area"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The crossings in force. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["BudgetAlert"][];
+                    };
+                };
+            };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
         };

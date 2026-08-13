@@ -1203,6 +1203,35 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /budgets/alerts:
+    get:
+      tags: [cost]
+      operationId: listBudgetAlerts
+      summary: Which scopes have crossed a budget threshold
+      description: |
+        Half, four fifths, and all of it (PRD FO-05). One entry per scope,
+        naming the highest threshold it has reached in the current period —
+        a scope at 85% is reported once, at 80, rather than twice.
+
+        An empty list means nothing has crossed 50% this period.
+      parameters:
+        - $ref: '#/components/parameters/Company'
+        - $ref: '#/components/parameters/Area'
+      responses:
+        '200':
+          description: The crossings in force.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/BudgetAlert' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /admin/stops:
     get:
       tags: [admin]
@@ -3311,6 +3340,21 @@ components:
         buckets:
           type: array
           items: { $ref: '#/components/schemas/CostBucket' }
+
+    BudgetAlert:
+      type: object
+      required: [scope, threshold, spentMicros, ceilingMicros, since]
+      properties:
+        scope: { $ref: '#/components/schemas/Scope' }
+        threshold:
+          type: integer
+          description: The percentage crossed — 50, 80 or 100.
+        spentMicros: { type: integer, format: int64 }
+        ceilingMicros: { type: integer, format: int64 }
+        since:
+          type: string
+          format: date-time
+          description: The start of the period the spend is measured over.
 
     Health:
       type: object

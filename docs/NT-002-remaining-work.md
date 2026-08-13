@@ -32,6 +32,20 @@ estimate anybody here can check.
 
 ---
 
+## Budget alerts have no outbound channel
+
+FO-05 asks for progressive alerts per area at 50%, 80% and 100% of the monthly
+budget. The platform notices the crossings, records them once per threshold per
+period, writes them to the administrative trail and shows them on the cost
+screen. What it does not do is *send* anything: this installation has no mail,
+no chat, no outbound webhook.
+
+That is the honest half. A person who opens the console sees it; a person who
+does not, does not. Wiring a channel is a small piece on top of what exists —
+`budget.Watcher.Sweep` returns exactly the crossings it announced — and it
+needs a decision about where an installation wants to be told, which is a
+question for a customer rather than for this repository.
+
 ## Stops: "per pack" became "per scope"
 
 FO-06 asks for a global switch per agent, **per pack** and per installation.

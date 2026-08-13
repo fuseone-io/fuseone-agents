@@ -1,6 +1,9 @@
 package domain
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // Period is the window a scope's ceiling applies over.
 //
@@ -68,4 +71,27 @@ func remaining(ceiling, spent int64) int64 {
 	// Exhausted. One rather than zero, because zero means "unlimited" and
 	// would turn a spent budget into a free pass.
 	return 1
+}
+
+/*
+BudgetMark is a threshold a scope has been told it crossed (PRD FO-05).
+
+It carries the period it belongs to because a monthly budget starts its
+warnings again each month, and a mark with no period would silence the second
+month for ever.
+*/
+type BudgetMark struct {
+	Scope     Scope
+	Threshold int
+	// Since is the start of the period the spend was measured over.
+	Since time.Time
+
+	SpentMicros   int64
+	CeilingMicros int64
+	At            time.Time
+}
+
+// Key names the scope this mark is about, so the newest one replaces the last.
+func (m BudgetMark) Key() string {
+	return fmt.Sprintf("%s/%s", m.Scope.Company, m.Scope.Area)
 }

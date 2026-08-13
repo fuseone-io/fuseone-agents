@@ -19,6 +19,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatMicros, formatTokens } from "@/lib/format";
+import { BudgetAlerts } from "@/features/cost/budget-alerts";
 import { CostKpis } from "@/features/cost/cost-kpis";
 import { CostDrivers } from "@/features/cost/cost-drivers";
 import { CostCaps } from "@/features/cost/cost-caps";
@@ -46,6 +47,11 @@ export function CostPage() {
         title={t("nav.cost")}
         description={t("cost.subtitle")}
       />
+
+      {/* Above the numbers, not beside them. Somebody on this screen is
+          asking how the money is going, and a scope that has crossed a
+          threshold is the answer before any chart is. */}
+      <BudgetAlerts />
 
       <CostKpis daily={daily.data} isLoading={daily.isLoading} />
 

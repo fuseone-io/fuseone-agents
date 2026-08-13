@@ -71,7 +71,9 @@ type Server struct {
 	rates        Rates
 	pauses       trigger.Pauses
 	// stops are the switches wider than one agent (PRD FO-06).
-	stops      Stoppers
+	stops Stoppers
+	// marks are the budget thresholds each scope has crossed (PRD FO-05).
+	marks      Marks
 	stages     trigger.Stages
 	promotions Promotions
 	// cases is where an uploaded simulation set is filed. Optional, like the
@@ -154,6 +156,12 @@ func (s *Server) WithPauses(pauses trigger.Pauses) *Server {
 // WithStops wires the switches wider than one agent (PRD FO-06).
 func (s *Server) WithStops(stops Stoppers) *Server {
 	s.stops = stops
+	return s
+}
+
+// WithMarks wires the budget thresholds already crossed.
+func (s *Server) WithMarks(marks Marks) *Server {
+	s.marks = marks
 	return s
 }
 

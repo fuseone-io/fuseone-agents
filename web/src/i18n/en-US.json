@@ -338,6 +338,9 @@
   },
   "cost": {
     "agent": "Agent",
+    "alertApproaching": "{{where}} has passed {{threshold}}% of this month's budget",
+    "alertExhausted": "{{where}} has spent this month's budget",
+    "alertSpend": "{{spent}} of {{ceiling}}",
     "average": "Average",
     "averageCost": "Average cost",
     "byAgent": "By agent",
