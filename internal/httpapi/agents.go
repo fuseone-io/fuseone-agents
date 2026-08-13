@@ -147,6 +147,16 @@ func (s *Server) ListAgents(ctx context.Context, req openapi.ListAgentsRequestOb
 		byAgent[a.AgentID] = a
 	}
 
+	// One read for the page, like the activity above. How far each agent is
+	// trusted is the first thing somebody looks for on this screen now that a
+	// draft cannot act at all.
+	stages := map[domain.AgentID]domain.Stage{}
+	if s.promotions != nil {
+		if stages, err = s.promotions.Stages(ctx); err != nil {
+			return nil, fmt.Errorf("agent stages: %w", err)
+		}
+	}
+
 	// An unscoped list is narrowed to what the caller may see rather than
 	// refused: asking "which agents are there" should answer with theirs, not
 	// with a permission error naming a scope they never mentioned (NF-06).
@@ -157,6 +167,7 @@ func (s *Server) ListAgents(ctx context.Context, req openapi.ListAgentsRequestOb
 		if !readable(a.Scope, visible) {
 			continue
 		}
+		a.Stage = stages[a.ID]
 		agent := agentFrom(a)
 		if seen, ran := byAgent[a.ID]; ran {
 			agent.Activity = ptr(activityFrom(seen))
@@ -202,6 +213,7 @@ func agentFrom(a domain.AgentSummary) openapi.Agent {
 		PublishedAt: a.PublishedAt,
 		Latest:      a.Latest,
 	}
+	agent.Stage = ptr(openapi.Stage(domain.StageOf(string(a.Stage))))
 	if a.Effort != "" {
 		agent.Effort = ptr(a.Effort)
 	}

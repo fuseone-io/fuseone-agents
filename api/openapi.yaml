@@ -254,6 +254,50 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /agents/{agentId}/stage:
+    put:
+      tags: [agents]
+      operationId: setAgentStage
+      summary: How far this agent is trusted to act alone
+      description: |
+        Draft may be simulated and may not act. Copilot acts only with a
+        person's approval, whatever a policy would otherwise allow. Autonomous
+        is judged by the policy set like anything else.
+
+        Promoting takes the authority to cause runs, because that is what it
+        does: every action this agent takes from now on is one nobody will be
+        asked about. Demoting takes the same authority and is always allowed —
+        the platform demotes on its own when people keep overruling an agent,
+        and a person must never have less power than the sweep.
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [stage]
+              properties:
+                stage: { $ref: '#/components/schemas/Stage' }
+      responses:
+        '204': { description: Stored. It applies to the next turn of every run. }
+        '400':
+          description: |
+            Leaving Draft without a reviewed simulation. An agent earns its way
+            out by being run against occurrences that already happened (FU-10),
+            and skipping that is skipping the only check that exists before
+            real work.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /agents/{agentId}/paused:
     put:
       tags: [agents]
@@ -2208,6 +2252,14 @@ components:
             distinction matters: a default is a promise the installation has
             not made deliberately.
 
+    Stage:
+      type: string
+      description: >
+        How far an agent is trusted to act alone. State beside the
+        specification rather than in it: a published version is immutable and
+        promotion is not a new version.
+      enum: [draft, copilot, autonomous]
+
     Run:
       type: object
       required: [runId, scope, agentId, versionId, phase, seq, startedAt, cost]
@@ -2638,6 +2690,11 @@ components:
       required: [agentId, versionId, scope, name, provider, model, tools, budget, publishedAt, latest]
       properties:
         agentId: { type: string }
+        stage:
+          allOf: [{ $ref: '#/components/schemas/Stage' }]
+          description: >
+            Absent on an older reading. A client that does not find one should
+            assume draft, which is what the platform assumes.
         versionId:
           type: string
           description: The digest of the definition's content. Publishing new text is a new version; the old one stays readable.

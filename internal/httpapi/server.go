@@ -42,6 +42,8 @@ type Store interface {
 	// SimulationRuns finds the runs one simulation opened. The report is a
 	// fold of them, like every other projection here.
 	SimulationRuns(ctx context.Context, simulation string) ([]domain.RunID, error)
+	// HasSimulation is the gate on an agent leaving Draft (FU-10).
+	HasSimulation(ctx context.Context, agent domain.AgentID) (bool, error)
 }
 
 // Server implements openapi.StrictServerInterface.
@@ -69,6 +71,7 @@ type Server struct {
 	rates        Rates
 	pauses       trigger.Pauses
 	stages       trigger.Stages
+	promotions   Promotions
 	// cases is where an uploaded simulation set is filed. Optional, like the
 	// rest of the authoring area.
 	cases Cases

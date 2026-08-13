@@ -36,3 +36,25 @@ func (p *Postgres) SimulationRuns(ctx context.Context, simulation string) ([]dom
 	}
 	return out, rows.Err()
 }
+
+/*
+HasSimulation reports whether an agent has ever been run against occurrences
+that already happened.
+
+It is the gate on leaving Draft (PRD FU-10). What it checks is that a
+simulation exists — not that anybody read it. Reviewing is the half of that
+requirement this platform cannot observe: it can put the report in front of a
+person and record that somebody asked for it, and it cannot know they thought
+about it. Claiming otherwise in a check would be worse than the gap.
+*/
+func (p *Postgres) HasSimulation(ctx context.Context, agent domain.AgentID) (bool, error) {
+	var exists bool
+	err := p.pool.QueryRow(ctx, `
+		select exists (
+			select 1 from runs where agent_id = $1 and simulated
+		)`, string(agent)).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("ledger: read simulations of %s: %w", agent, err)
+	}
+	return exists, nil
+}

@@ -8,6 +8,11 @@ import "time"
 // run is pinned to a version, and an auditor reading a two-year-old run needs
 // the exact text it ran under, not whatever the file says today.
 type AgentSummary struct {
+	// Stage is how far this agent is trusted to act alone. State beside the
+	// specification, so it is filled in by whoever reads it rather than
+	// carried by the published version.
+	Stage Stage
+
 	ID        AgentID
 	VersionID VersionID
 	Scope     Scope

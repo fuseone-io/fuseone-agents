@@ -45,6 +45,24 @@ func (m *Memory) SimulationRuns(ctx context.Context, simulation string) ([]domai
 	return out, nil
 }
 
+// HasSimulation reports whether an agent has ever been simulated. The gate on
+// leaving Draft (FU-10), and the same fold the durable store does in SQL.
+func (m *Memory) HasSimulation(ctx context.Context, agent domain.AgentID) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	for _, steps := range m.runs {
+		if len(steps) > 0 && steps[0].AgentID == agent && isSimulated(steps) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // isSimulated reads the mark off a run's opening step.
 func isSimulated(steps []domain.Step) bool {
 	return len(steps) > 0 && startedPayload(steps[0]).Simulated

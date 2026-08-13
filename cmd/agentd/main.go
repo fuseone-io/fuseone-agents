@@ -183,6 +183,7 @@ func serve(args []string) error {
 			WithAssistants(assistants(ctx, integrations), authoring.NewStore(identity.pool, store)).
 			WithPauses(spec.NewState(identity.pool)).
 			WithStages(spec.NewState(identity.pool)).
+			WithPromotions(spec.NewState(identity.pool)).
 			WithPublisher(spec.NewPublisher(identity.pool, engine.SystemClock{}))
 
 		// Who may sign in, and what signing in grants. Saving registers the
@@ -233,7 +234,6 @@ func serve(args []string) error {
 			trigger.NewOpener(store, spec.NewRegistry(identity.pool), engine.SystemClock{}).
 				WithContent(ledger.NewContent(identity.pool)).
 				WithPauses(spec.NewState(identity.pool)).
-				WithStages(spec.NewState(identity.pool)).
 				WithStages(spec.NewState(identity.pool)),
 			slog.Default(),
 		).Mount(root)
