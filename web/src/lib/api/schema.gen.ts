@@ -785,6 +785,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/retention": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How long this installation keeps content
+         * @description Content, never the ledger. The trail is immutable and survives every
+         *     erasure: what goes is the referenced payload, and the step keeps its
+         *     reference and its digest, so the hash chain is untouched.
+         */
+        get: operations["getRetention"];
+        /**
+         * Change how long content is kept
+         * @description Shortening it destroys data on the next sweep, which runs daily. There
+         *     is a floor of one day: this is the one setting where a typo cannot be
+         *     undone.
+         */
+        put: operations["setRetention"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/erasures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Erase what a set of runs was about
+         * @description Per-subject erasure (NF-09). The runs are named by the caller: nothing
+         *     here indexes content by the person it concerns, deliberately, because
+         *     an index of who appears in what would be the very record a subject is
+         *     asking to be rid of.
+         *
+         *     The runs themselves remain, and so does their trail. What goes is the
+         *     content they point at, which is where personal data lives.
+         */
+        post: operations["eraseContent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/identity-providers": {
         parameters: {
             query?: never;
@@ -1315,6 +1369,11 @@ export interface components {
             runId: string;
             expectations: components["schemas"]["Expectation"][];
             note?: string;
+        };
+        Retention: {
+            days: number;
+            /** @description False when nobody has set one and the default is in force. The distinction matters: a default is a promise the installation has not made deliberately. */
+            configured: boolean;
         };
         Run: {
             runId: string;
@@ -3046,6 +3105,95 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    getRetention: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The window in force. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Retention"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    setRetention: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    days: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Stored. It takes effect on the next sweep. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A window shorter than a day. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    eraseContent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    runs: string[];
+                    /** @description Recorded in the trail. An erasure nobody can account for is indistinguishable from data loss. */
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description What was erased. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        objects: number;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     listIdentityProviders: {

@@ -8,6 +8,7 @@ import { AuthoringPanel } from "@/features/admin/authoring-panel";
 import { PricesPanel } from "@/features/admin/prices-panel";
 import { IdentityPanel } from "@/features/admin/identity-panel";
 import { PeoplePanel } from "@/features/admin/people-panel";
+import { RetentionPanel } from "@/features/admin/retention-panel";
 import { AreasPanel } from "@/features/admin/areas-panel";
 import { BudgetsPanel } from "@/features/admin/budgets-panel";
 
@@ -35,6 +36,7 @@ export function AdminPage() {
           <TabsTrigger value="people">{t("admin.people")}</TabsTrigger>
           <TabsTrigger value="prices">{t("admin.prices")}</TabsTrigger>
           <TabsTrigger value="budgets">{t("admin.budgets")}</TabsTrigger>
+          <TabsTrigger value="retention">{t("admin.retention")}</TabsTrigger>
           <TabsTrigger value="events">{t("admin.trail")}</TabsTrigger>
         </TabsList>
 
@@ -58,6 +60,9 @@ export function AdminPage() {
         </TabsContent>
         <TabsContent value="budgets" className="mt-4">
           <BudgetsPanel />
+        </TabsContent>
+        <TabsContent value="retention" className="mt-4">
+          <RetentionPanel />
         </TabsContent>
         <TabsContent value="events" className="mt-4">
           <EventsPanel />
