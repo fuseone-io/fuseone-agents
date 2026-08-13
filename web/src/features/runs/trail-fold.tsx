@@ -7,7 +7,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Mono } from "@/components/shared/mono";
-import { summaryOf } from "@/features/runs/step-story";
+import { summaryOf, line } from "@/features/runs/step-story";
 import { formatDurationMs } from "@/lib/format";
 import type { Step } from "@/lib/api/client";
 
@@ -56,7 +56,7 @@ export function TrailFold({ steps, last }: { steps: Step[]; last: boolean }) {
                   <Mono dim className="text-2xs">
                     #{step.seq}
                   </Mono>
-                  {t(summaryOf(step))}
+                  {line(summaryOf(step), t)}
                 </li>
               ))}
             </ul>

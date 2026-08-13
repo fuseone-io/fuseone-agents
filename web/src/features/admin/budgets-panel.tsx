@@ -104,7 +104,7 @@ function BudgetRow({
         {budget.enabled ? "ativo" : "desativado"}
       </Badge>
       <RemoveButton
-        title={`Remover o teto de ${scopeLabel(budget)}?`}
+        title={t("admin.removeCeilingOf", { scope: scopeLabel(budget) })}
         description={t("admin.removeCeiling")}
         onConfirm={() =>
           remove.mutate(scopePath(budget), {

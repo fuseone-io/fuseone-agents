@@ -83,7 +83,7 @@ export function AgentToolsSection({
 
                 <div className="min-w-0 text-right">
                   <span className={cn("text-xs", RULE_TONE[rule.kind])}>
-                    {rule.label}
+                    {t(rule.label, rule.labelValues)}
                   </span>
                   {rule.because && (
                     <Mono dim className="ml-1.5 text-2xs">

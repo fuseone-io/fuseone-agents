@@ -38,7 +38,7 @@ export function DecisionPanel({
         atSeq: item.atSeq,
         note: note.trim() || undefined,
       });
-      toast.success(approved ? t("runs.actionApproved") : "Ação negada", {
+      toast.success(approved ? t("runs.actionApproved") : "approvals.actionDenied", {
         description: `${item.tool} · ${item.runId}`,
       });
       setNote("");
@@ -67,13 +67,13 @@ export function DecisionPanel({
       <dl className="flex flex-col gap-2 border-y border-border-subtle py-3 text-sm">
         <Row label={t("cost.agent")} value={item.agentId ?? "—"} />
         <Row label={t("admin.area")} value={item.scope?.area ?? "—"} />
-        <Row label="Risco" value={RISK_LABEL[riskOf(item.effect)]} />
+        <Row label={t("runs.risk")} value={t(RISK_LABEL[riskOf(item.effect)])} />
         <Row
           label={t("policies.effect")}
-          value={item.effect ? EFFECT_LABEL[item.effect] : "não classificado"}
+          value={t(item.effect ? EFFECT_LABEL[item.effect] : "approvals.riskUnknown")}
         />
         <Row label={t("policies.rule")} value={item.rule ?? "—"} mono />
-        <Row label="Passo" value={`#${item.atSeq}`} mono />
+        <Row label={t("approvals.step")} value={`#${item.atSeq}`} mono />
       </dl>
 
       <div>

@@ -50,12 +50,12 @@ export function PoliciesPage() {
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Figure
-          label="Impondo"
+          label={t("policies.enforcing")}
           value={String(tally.enforcing)}
           note="param alguma coisa"
         />
         <Figure
-          label="Monitorando"
+          label={t("policies.monitoring")}
           value={String(tally.monitoring)}
           note={t("policies.evaluatedNotObeyed")}
         />

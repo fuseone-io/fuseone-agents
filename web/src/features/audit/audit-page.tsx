@@ -71,7 +71,7 @@ export function AuditPage() {
         onChange={setActor}
       >
         <FilterSelect
-          label="Registro"
+          label={t("audit.record")}
           value={source}
           options={SOURCES}
           onChange={setSource}

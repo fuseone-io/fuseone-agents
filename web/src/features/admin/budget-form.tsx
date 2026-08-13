@@ -43,7 +43,7 @@ const schema = z.object({
     .string()
     .refine(
       (v) => v === "" || Number(v.replace(",", ".")) > 0,
-      "Use um valor maior que zero.",
+      "admin.aboveZero",
     ),
   steps: z.string(),
   enabled: z.boolean(),
@@ -186,7 +186,7 @@ export function BudgetForm({
                       {...field}
                       inputMode="numeric"
                       className="font-mono"
-                      placeholder="opcional"
+                      placeholder={t("common.optional")}
                     />
                   </FormControl>
                   <FormMessage />

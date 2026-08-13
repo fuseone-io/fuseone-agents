@@ -66,7 +66,7 @@ export function CostKpis({
         delta={runs === 0 ? t("cost.noRunsYet") : t("cost.perRun")}
       />
       <KpiCard
-        label="Leitura de cache"
+        label={t("cost.cacheReads")}
         value={cacheShare === null ? "—" : `${cacheShare}%`}
         delta={cacheShare === null ? t("cost.noTokens2") : t("cost.cacheShare")}
         trend={cacheShare !== null && cacheShare >= 50 ? "up" : "flat"}

@@ -83,7 +83,7 @@ export function AgentCapabilities({ agent }: { agent: Agent }) {
           value={budgetOf(agent.budget.tokens, formatTokens)}
         />
         <Limit
-          label="Chamadas"
+          label={t("agents.calls")}
           value={budgetOf(agent.budget.toolCalls, String)}
         />
         <Limit

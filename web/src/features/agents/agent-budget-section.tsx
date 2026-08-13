@@ -49,7 +49,7 @@ export function AgentBudgetSection({
             className="font-mono"
           />
         </Labelled>
-        <Labelled label="Chamadas" htmlFor="budget-calls">
+        <Labelled label={t("agents.calls")} htmlFor="budget-calls">
           <Input
             id="budget-calls"
             type="number"

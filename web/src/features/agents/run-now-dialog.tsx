@@ -77,7 +77,7 @@ export function RunNowDialog({
             id="run-input"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="o chamado, a mensagem, o payload"
+            placeholder={t("agents.inputPlaceholder")}
             rows={4}
           />
           <p className="text-xs text-muted-foreground">

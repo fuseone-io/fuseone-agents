@@ -21,9 +21,9 @@ export function AgentBasicsSection({
 }) {
   const { t } = useTranslation();
   return (
-    <Section title="Identidade" hint={t("agents.areaIsUnit")}>
+    <Section title={t("agents.identity")} hint={t("agents.areaIsUnit")}>
       <div className="grid gap-3 sm:grid-cols-[200px_1fr_160px]">
-        <Labelled label="Identificador" htmlFor="agent-id">
+        <Labelled label={t("agents.identifier")} htmlFor="agent-id">
           {/* Set once: runs reference it forever, and an id that moved would
               orphan every one of them. */}
           <Input
@@ -41,7 +41,7 @@ export function AgentBasicsSection({
             id="agent-name"
             value={draft.name}
             onChange={(e) => patch({ name: e.target.value })}
-            placeholder="Atendimento de suporte"
+            placeholder={t("agents.namePlaceholder")}
           />
         </Labelled>
         <AgentAreaField
@@ -60,7 +60,7 @@ export function AgentBasicsSection({
             placeholder="openai"
           />
         </Labelled>
-        <Labelled label="Modelo" htmlFor="agent-model">
+        <Labelled label={t("agents.model")} htmlFor="agent-model">
           <Input
             id="agent-model"
             value={draft.model}

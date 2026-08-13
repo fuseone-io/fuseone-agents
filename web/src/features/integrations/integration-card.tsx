@@ -36,6 +36,7 @@ export function IntegrationCard({
   observes?: boolean;
   action?: ReactNode;
 }) {
+  const { t } = useTranslation();
   const state = stateOf(enabled, health, observes);
 
   return (
@@ -62,7 +63,7 @@ export function IntegrationCard({
             state.pill,
           )}
         >
-          {state.label}
+          {t(state.label)}
         </span>
       </header>
 
@@ -138,34 +139,34 @@ function stateOf(
 ) {
   if (!enabled) {
     return {
-      label: "desligado",
+      label: "integrations.stateOff",
       pill: "bg-muted text-muted-foreground",
       tile: "border-border bg-muted text-muted-foreground",
     };
   }
   if (health && !health.reachable) {
     return {
-      label: "não responde",
+      label: "integrations.notAnswering",
       pill: "bg-danger-surface text-danger",
       tile: "border-danger bg-danger-surface text-danger",
     };
   }
   if (!observes) {
     return {
-      label: "configurado",
+      label: "integrations.stateConfigured",
       pill: "bg-success-surface text-success",
       tile: "border-success bg-success-surface text-success",
     };
   }
   if (!health) {
     return {
-      label: "sem contato",
+      label: "integrations.noContact",
       pill: "bg-warning-surface text-warning",
       tile: "border-warning bg-warning-surface text-warning",
     };
   }
   return {
-    label: "respondendo",
+    label: "integrations.stateAnswering",
     pill: "bg-success-surface text-success",
     tile: "border-success bg-success-surface text-success",
   };

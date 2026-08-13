@@ -16,10 +16,10 @@ const TITLES: Record<StepKind, string> = {
   run_started: "runs.storyStarted",
   planned: "runs.storyProposed",
   gate_decided: "runs.storyGateDecided",
-  budget_reserved: "Orçamento reservado",
+  budget_reserved: "runs.storyBudgetReserved",
   tool_called: "runs.storyToolCalled",
   tool_returned: "runs.storyToolReturned",
-  budget_reconciled: "Orçamento reconciliado",
+  budget_reconciled: "runs.storyBudgetReconciled",
   approval_requested: "runs.storyAwaitingHuman",
   approval_decided: "runs.storyHumanDecided",
   resumed: "runs.storyResumed",
@@ -87,14 +87,27 @@ export function chipsOf(step: Step): Chip[] {
   return chips;
 }
 
-export function detailOf(step: Step): string {
+/**
+ * A line to render: which sentence, and what to put in it.
+ *
+ * Not a formatted string, because this module has no React context and cannot
+ * translate. Returning the words would mean returning them in one language —
+ * which is what it did, and why an English installation read "gatilho cron"
+ * under an English title.
+ */
+export type Line = { key: string; values?: Record<string, unknown> };
+
+/** Nothing to say. */
+const NOTHING: Line = { key: "" };
+
+export function detailOf(step: Step): Line {
   const payload = (step.payload ?? {}) as Record<string, unknown>;
 
   switch (step.kind) {
     case "run_started":
       return typeof payload.trigger === "string"
-        ? `gatilho ${payload.trigger}`
-        : "";
+        ? { key: "runs.storyTrigger", values: { trigger: payload.trigger } }
+        : NOTHING;
 
     case "gate_decided": {
       // Never "runs.storyRefused": the rule is named and explained, so the
@@ -103,74 +116,108 @@ export function detailOf(step: Step): string {
       // auditor is checking.
       const rule = typeof payload.rule === "string" ? payload.rule : "";
       const explained = explainRule(rule);
-      if (explained) return explained;
+      if (explained) return { key: explained };
       const effect = effectOf(step);
-      return effect ? `efeito ${effect} dentro do pacote da execução` : "";
+      return effect
+        ? { key: "runs.storyEffectInPack", values: { effect } }
+        : NOTHING;
     }
 
     case "budget_reserved":
       return typeof payload.micros === "number"
-        ? `${formatMicros(payload.micros)} retidos do teto da execução`
-        : "";
+        ? { key: "runs.storyHeld", values: { amount: formatMicros(payload.micros) } }
+        : NOTHING;
 
     case "budget_reconciled": {
       const released =
         typeof payload.released_micros === "number"
           ? payload.released_micros
           : 0;
-      return `${formatCost(step.cost)} consumidos · ${formatMicros(released)} devolvidos`;
+      return {
+        key: "runs.storySpentReleased",
+        values: { spent: formatCost(step.cost), released: formatMicros(released) },
+      };
     }
 
     case "tool_returned":
-      return payload.failed ? `falhou: ${payload.error_code ?? "erro"}` : "";
+      return payload.failed
+        ? { key: "runs.storyToolFailed", values: { code: payload.error_code ?? "" } }
+        : NOTHING;
 
     case "approval_decided":
-      return payload.approved
-        ? `aprovada por ${payload.by ?? "—"}`
-        : `recusada por ${payload.by ?? "—"}`;
+      return {
+        key: payload.approved ? "runs.storyApprovedBy" : "runs.storyRefusedBy",
+        values: { who: payload.by ?? "—" },
+      };
 
     case "parked": {
       const reason = typeof payload.reason === "string" ? payload.reason : "";
-      return PARKED[reason] ?? reason;
+      // A reason this console does not know is shown as it came. The trail
+      // outlives the console, and hiding a word it has not learned yet would
+      // be the console editing history.
+      return { key: PARKED[reason] ?? reason };
     }
 
     case "failed":
-      return typeof payload.message === "string"
-        ? payload.message
-        : String(payload.code ?? "");
+      return {
+        key: typeof payload.message === "string"
+          ? payload.message
+          : String(payload.code ?? ""),
+      };
 
     case "run_finished":
-      return typeof payload.outcome === "string" ? payload.outcome : "";
+      return { key: typeof payload.outcome === "string" ? payload.outcome : "" };
 
     default:
-      return "";
+      return NOTHING;
   }
 }
 
 /** The one-line summary a folded step gets in the opened list. */
-export function summaryOf(step: Step): string {
+export function summaryOf(step: Step): Line {
   const payload = (step.payload ?? {}) as Record<string, unknown>;
-  const tool = typeof payload.tool === "string" ? ` ${payload.tool}` : "";
+  const tool = typeof payload.tool === "string" ? payload.tool : "";
   const verdict = verdictOf(step);
 
   switch (step.kind) {
     case "planned":
-      return `Modelo propôs${tool}`;
+      return { key: "runs.summaryProposed", values: { tool } };
     case "gate_decided":
-      return `Portão ${verdict === "allow" ? "permitiu" : "decidiu"}${tool}`;
+      return {
+        key: verdict === "allow" ? "runs.summaryAllowed" : "runs.summaryDecided",
+        values: { tool },
+      };
     case "tool_called":
-      return `Ferramenta chamada${tool}`;
+      return { key: "runs.summaryToolCalled", values: { tool } };
     case "tool_returned":
-      return `Ferramenta respondeu${tool}`;
+      return { key: "runs.summaryToolReturned", values: { tool } };
     case "budget_reserved":
-      return `Orçamento reservado${
-        typeof payload.tokens === "number"
-          ? ` · ${formatTokens(payload.tokens)} tokens`
-          : ""
-      }`;
+      return typeof payload.tokens === "number"
+        ? {
+            key: "runs.summaryReservedTokens",
+            values: { tokens: formatTokens(payload.tokens) },
+          }
+        : { key: "runs.storyBudgetReserved" };
     case "budget_reconciled":
-      return `Orçamento reconciliado · ${formatCost(step.cost)}`;
+      return {
+        key: "runs.storyReconciledWith",
+        values: { spent: formatCost(step.cost) },
+      };
     default:
-      return TITLES[step.kind];
+      return { key: TITLES[step.kind] };
   }
+}
+
+/**
+ * Renders a line. Empty key renders nothing, which is how a step with nothing
+ * to add says so.
+ *
+ * Here rather than at each call site because there are three of them and the
+ * shape is the module's, not the screen's.
+ */
+export function line(
+  { key, values }: Line,
+  t: (key: string, values?: Record<string, unknown>) => string,
+): string {
+  return key ? t(key, values) : "";
 }

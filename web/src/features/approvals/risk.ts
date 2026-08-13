@@ -26,10 +26,10 @@ export function riskOf(effect: Effect | undefined): Risk {
 }
 
 export const RISK_LABEL: Record<Risk, string> = {
-  high: "Alto",
+  high: "approvals.riskHigh",
   medium: "cost.average",
-  low: "Baixo",
-  unknown: "Não classificado",
+  low: "approvals.riskLow",
+  unknown: "approvals.riskUnknown",
 };
 
 export const RISK_DOT: Record<Risk, string> = {
@@ -39,9 +39,12 @@ export const RISK_DOT: Record<Risk, string> = {
   unknown: "bg-muted-foreground",
 };
 
+// The words live in the shared effect namespace: the trail, the tool table and
+// this queue all name the same four things, and three copies of them is three
+// places to correct a wording.
 export const EFFECT_LABEL: Record<Effect, string> = {
-  read: "leitura",
-  write: "escrita",
-  destructive: "destrutivo",
-  financial: "financeiro",
+  read: "effect.read",
+  write: "effect.write",
+  destructive: "effect.destructive",
+  financial: "effect.financial",
 };

@@ -17,7 +17,13 @@ import {
   type FilterOption,
 } from "@/components/shared/filter-select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Panel } from "@/components/shared/panel";
 import { AgentCard } from "@/features/agents/agent-card";
+import { AgentsTable } from "@/features/agents/agents-table";
+import {
+  AgentsViewToggle,
+  type AgentsView,
+} from "@/features/agents/agents-view";
 import { EventGraph } from "@/features/agents/event-graph";
 import { useAgents, type Agent } from "@/features/agents/api";
 import { stateOfAgent, type AgentState } from "@/lib/agent-state";
@@ -25,6 +31,9 @@ import { stateOfAgent, type AgentState } from "@/lib/agent-state";
 export function AgentsPage() {
   const { t } = useTranslation();
   const [history, setHistory] = useState(false);
+  // Cards by default: most installations have a screenful of agents, and the
+  // question at that size is how each one is doing rather than which is which.
+  const [view, setView] = useState<AgentsView>("cards");
   const [search, setSearch] = useState("");
   const [area, setArea] = useState("all");
   const [state, setState] = useState<AgentState | "all">("all");
@@ -65,22 +74,28 @@ export function AgentsPage() {
         </Button>
       </PageHeader>
 
-      {/* A view toggle is a filter, not the screen's action: it belongs beside
-          the content it filters rather than up in the chrome. */}
-      <Tabs
-        value={history ? "all" : "latest"}
-        onValueChange={(v) => setHistory(v === "all")}
-      >
-        <TabsList>
-          <TabsTrigger value="latest">{t("agents.current")}</TabsTrigger>
-          <TabsTrigger value="all">{t("agents.history")}</TabsTrigger>
-        </TabsList>
-      </Tabs>
-
+      {/* Everything that changes the view sits on one row, filters first and
+          shape last: a reader narrows the set moving left to right, and how it
+          is drawn is the last thing they decide. None of it belongs in the
+          header — that is where the screen's one action lives. */}
       <Toolbar
         placeholder="agents.searchPlaceholder"
         value={search}
         onChange={setSearch}
+        trailing={
+          <>
+            <Tabs
+              value={history ? "all" : "latest"}
+              onValueChange={(v) => setHistory(v === "all")}
+            >
+              <TabsList>
+                <TabsTrigger value="latest">{t("agents.current")}</TabsTrigger>
+                <TabsTrigger value="all">{t("agents.history")}</TabsTrigger>
+              </TabsList>
+            </Tabs>
+            <AgentsViewToggle view={view} onChange={setView} />
+          </>
+        }
       >
         <FilterSelect
           label={t("agents.filterByArea")}
@@ -117,7 +132,7 @@ export function AgentsPage() {
             agents.length === 0 ? t("agents.emptyHint") : t("agents.noMatch")
           }
         />
-      ) : (
+      ) : view === "cards" ? (
         <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(268px,1fr))]">
           {shown.map((agent) => (
             <AgentCard
@@ -126,6 +141,10 @@ export function AgentsPage() {
             />
           ))}
         </div>
+      ) : (
+        <Panel flush>
+          <AgentsTable agents={shown} />
+        </Panel>
       )}
 
       {/* Below the list, because the wiring is a fact about all of them and

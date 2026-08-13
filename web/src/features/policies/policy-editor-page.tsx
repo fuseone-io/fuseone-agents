@@ -37,7 +37,7 @@ export function PolicyEditorPage() {
   if (!creating && !loaded) {
     return (
       <ErrorState
-        error={new Error(`Nenhuma política com o código ${routeCode}`)}
+        error={new Error(t("policies.noneWithCode", { code: routeCode }))}
       />
     );
   }

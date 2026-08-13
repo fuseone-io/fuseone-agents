@@ -94,7 +94,7 @@ export function AgentCard({ agent }: { agent: Agent }) {
           label={t("runs.columnSteps")}
           value={agent.budget.steps ? String(agent.budget.steps) : "—"}
         />
-        <Figure label="Gatilhos" value={triggerSummary(agent)} />
+        <Figure label={t("agents.triggers")} value={triggerSummary(agent)} />
       </dl>
 
       <footer className="flex flex-col gap-1 border-t border-border-subtle pt-3 text-2xs text-muted-foreground">

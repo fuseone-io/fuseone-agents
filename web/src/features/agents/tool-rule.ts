@@ -17,6 +17,8 @@ import type { Policy } from "@/lib/api/client";
 export interface ToolRule {
   kind: "allowed" | "asks" | "blocked";
   label: string;
+  /** Interpolated into label when it needs them. */
+  labelValues?: Record<string, unknown>;
   /** The policy that produced this, when one did rather than the ladder. */
   because?: string;
 }
@@ -90,7 +92,11 @@ export function ruleFor(
   if (conditional.length > 0) {
     return {
       ...base,
-      label: `${base.label} · ${conditional[0]!.code} às vezes`,
+      // The composite is a key too, with the base sentence inside it. Built
+      // here as a pair rather than as a string: this module has no React
+      // context, so a sentence assembled here is a sentence in one language.
+      label: "agents.ruleSometimes",
+      labelValues: { rule: base.label },
       because: conditional[0]!.code,
     };
   }

@@ -67,7 +67,10 @@ describe("what a tool will actually do", () => {
     ]);
 
     expect(rule.kind).toBe("asks");
-    expect(rule.label).toContain("às vezes");
+    // The words belong to the catalogue; what this decides is that the rule
+    // reads as conditional and which sentence it wraps.
+    expect(rule.label).toBe("agents.ruleSometimes");
+    expect(rule.labelValues).toEqual({ rule: "agents.ruleAsks" });
   });
 
   it("ignores a policy that is only watching", () => {

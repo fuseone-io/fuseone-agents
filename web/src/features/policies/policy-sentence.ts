@@ -5,8 +5,8 @@ const OPERATORS: Record<string, string> = {
   ne: "≠",
   gt: ">",
   lt: "<",
-  contains: "contém",
-  in: "em",
+  contains: "policies.contains",
+  in: "policies.isIn",
 };
 
 const EFFECTS: Record<string, string> = {

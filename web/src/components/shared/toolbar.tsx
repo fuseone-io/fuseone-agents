@@ -16,11 +16,19 @@ export function Toolbar({
   value,
   onChange,
   children,
+  trailing,
 }: {
   placeholder: string;
   value: string;
   onChange: (value: string) => void;
   children?: ReactNode;
+  /**
+   * Controls that change how the content is shown rather than which content it
+   * is — a view toggle, a segmented control. They sit at the far end because a
+   * reader scanning left to right is narrowing first and choosing a shape
+   * second, and because the filters keep their own edge as they grow.
+   */
+  trailing?: ReactNode;
 }) {
   const { t } = useTranslation();
   return (
@@ -40,6 +48,7 @@ export function Toolbar({
         />
       </label>
       {children}
+      {trailing && <div className="ml-auto flex items-center gap-2">{trailing}</div>}
     </div>
   );
 }

@@ -20,7 +20,7 @@ export function IdentitySection({
 }) {
   const { t } = useTranslation();
   return (
-    <Section title="Identidade" hint={t("policies.codeAppears")}>
+    <Section title={t("policies.identity")} hint={t("policies.codeAppears")}>
       <div className="grid gap-3 sm:grid-cols-[140px_1fr_200px]">
         <Labelled label={t("policies.code")} htmlFor="code">
           {/* Set once. It is in the trail and in support conversations, and a
@@ -50,13 +50,13 @@ export function IdentitySection({
         </Labelled>
       </div>
 
-      <Labelled label="Motivo" htmlFor="reason">
+      <Labelled label={t("policies.reason")} htmlFor="reason">
         <Textarea
           id="reason"
           rows={2}
           value={draft.reason ?? ""}
           onChange={(e) => patch({ reason: e.target.value })}
-          placeholder="respostas ao cliente saem por um canal revisado"
+          placeholder={t("policies.reasonPlaceholder")}
         />
         <p className="text-xs text-muted-foreground">
           {t("policies.reasonExplains", { code })}

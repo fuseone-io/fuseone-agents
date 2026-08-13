@@ -65,17 +65,17 @@ export function ConditionBuilder({
           className="grid grid-cols-[42px_1fr_120px_1fr_32px] items-center gap-2"
         >
           <span className="text-right text-xs text-muted-foreground">
-            {index === 0 ? "quando" : "e"}
+            {index === 0 ? "policies.when" : "e"}
           </span>
 
           <Field
-            label="Campo"
+            label={t("policies.field")}
             value={condition.field}
             options={FIELDS}
             onChange={(field) => update(index, { field })}
           />
           <Field
-            label="Operador"
+            label={t("policies.operator")}
             value={condition.op}
             options={OPERATORS}
             onChange={(op) =>

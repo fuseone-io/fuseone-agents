@@ -54,7 +54,7 @@ export function AgentEditorPage() {
         onSuccess: (result) => {
           toast.success(
             result.created
-              ? `Versão ${result.versionId.slice(0, 9)} publicada`
+              ? t("agents.versionPublished", { version: result.versionId.slice(0, 9) })
               : t("agents.noChange"),
             {
               description: result.created

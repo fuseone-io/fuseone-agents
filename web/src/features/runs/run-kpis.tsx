@@ -20,7 +20,7 @@ export function RunKpis({ run, steps }: { run: Run; steps: number }) {
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <Kpi label={t("runs.kpiCost")} value={formatCost(run.cost)}>
         {reserved > 0
-          ? `${formatCost({ micros: reserved })} ainda reservados`
+          ? t("runs.stillReserved", { amount: formatCost({ micros: reserved }) })
           : t("runs.nothingReserved")}
       </Kpi>
 

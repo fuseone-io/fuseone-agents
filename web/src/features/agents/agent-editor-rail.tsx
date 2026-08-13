@@ -73,7 +73,7 @@ function Checklist({ draft }: { draft: AgentDefinition }) {
   ];
 
   return (
-    <Card title="Antes de publicar">
+    <Card title={t("agents.beforePublishing")}>
       <ul className="flex flex-col gap-1.5">
         {items.map((item) => (
           <li key={item.label} className="flex items-center gap-2 text-xs">
@@ -111,7 +111,7 @@ function Checklist({ draft }: { draft: AgentDefinition }) {
 function Diff({ changes }: { changes: Change[] }) {
   const { t } = useTranslation();
   return (
-    <Card title={`Sem publicar (${changes.length})`}>
+    <Card title={t("agents.unpublishedChanges", { count: changes.length })}>
       {changes.length === 0 ? (
         <p className="text-xs text-muted-foreground">
           {t("agents.nothingChanged")}

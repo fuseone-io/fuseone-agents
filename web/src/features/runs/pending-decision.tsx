@@ -55,7 +55,7 @@ export function PendingDecision({
       { approved, atSeq: approval.atSeq },
       {
         onSuccess: () =>
-          toast.success(approved ? t("runs.actionApproved") : "Ação recusada"),
+          toast.success(approved ? t("runs.actionApproved") : "approvals.actionRefused"),
         onError: (error) =>
           toast.error(t("runs.decisionFailed"), {
             description: problemMessage(error, t),
@@ -124,7 +124,7 @@ export function PendingDecision({
             <ConfirmAction
               label={t("runs.approve")}
               title={t("runs.approveThis")}
-              description={`A ferramenta ${approval.tool} será executada e o efeito ficará registrado na trilha em seu nome.`}
+              description={t("approvals.willRunNamed", { tool: approval.tool })}
               disabled={decide.isPending}
               onConfirm={() => submit(true)}
             />

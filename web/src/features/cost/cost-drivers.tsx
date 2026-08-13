@@ -16,10 +16,10 @@ export function CostDrivers({ total }: { total?: Cost }) {
   if (!total) return null;
 
   const drivers = [
-    { label: "Entrada", value: total.inputTokens ?? 0 },
-    { label: "Saída", value: total.outputTokens ?? 0 },
-    { label: "Leitura de cache", value: total.cacheReadTokens ?? 0 },
-    { label: "Escrita de cache", value: total.cacheWriteTokens ?? 0 },
+    { label: "cost.input", value: total.inputTokens ?? 0 },
+    { label: "cost.output", value: total.outputTokens ?? 0 },
+    { label: "cost.cacheReads", value: total.cacheReadTokens ?? 0 },
+    { label: "cost.cacheWrites", value: total.cacheWriteTokens ?? 0 },
   ].filter((d) => d.value > 0);
 
   const sum = drivers.reduce((acc, d) => acc + d.value, 0);
@@ -36,7 +36,7 @@ export function CostDrivers({ total }: { total?: Cost }) {
         return (
           <li key={driver.label}>
             <div className="mb-1 flex justify-between gap-2 text-xs">
-              <span>{driver.label}</span>
+              <span>{t(driver.label)}</span>
               <span className="whitespace-nowrap font-mono tabular-nums text-muted-foreground">
                 {formatTokens(driver.value)} · {share}%
               </span>

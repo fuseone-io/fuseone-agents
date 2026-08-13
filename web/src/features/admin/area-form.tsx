@@ -58,8 +58,8 @@ export function AreaForm({ onClose }: { onClose: () => void }) {
         name: values.name.trim(),
         label: values.label.trim() || undefined,
       });
-      toast.success(`Área ${created.label || created.area} declarada`, {
-        description: `A plataforma a chama de ${created.company}/${created.area}.`,
+      toast.success(t("admin.areaDeclared", { area: created.label || created.area }), {
+        description: t("admin.areaCalled", { scope: `${created.company}/${created.area}` }),
       });
       onClose();
     } catch (error) {
@@ -116,7 +116,7 @@ export function AreaForm({ onClose }: { onClose: () => void }) {
                 <FormItem>
                   <FormLabel>{t("admin.shownAs")}</FormLabel>
                   <FormControl>
-                    <Input {...field} placeholder="opcional" />
+                    <Input {...field} placeholder={t("common.optional")} />
                   </FormControl>
                   <FormDescription>{t("admin.emptyUsesName")}</FormDescription>
                   <FormMessage />

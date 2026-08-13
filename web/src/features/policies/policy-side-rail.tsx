@@ -49,7 +49,7 @@ export function PolicySideRail({
           </p>
         </Card>
       ) : (
-        <Card title={`Sem gravar (${changes.length})`}>
+        <Card title={t("policies.unsavedChanges", { count: changes.length })}>
           {changes.length === 0 ? (
             <p className="text-xs text-muted-foreground">
               {t("policies.nothingChangedYet")}

@@ -20,7 +20,7 @@ export function RunSideRail({ run, steps }: { run: Run; steps: Step[] }) {
 
   return (
     <aside className="flex flex-col gap-3 lg:sticky lg:top-0">
-      <Card title="Resumo">
+      <Card title={t("runs.summary")}>
         <Row label={t("cost.agent")}>
           <Link
             to={`/agents/${run.agentId}`}
@@ -69,7 +69,7 @@ export function RunSideRail({ run, steps }: { run: Run; steps: Step[] }) {
         </p>
       </Card>
 
-      <Card title="Integridade">
+      <Card title={t("runs.integrity")}>
         <p className="flex items-center gap-2 text-sm">
           <ShieldCheck className="size-4 text-success" aria-hidden />
           {t("runs.chainSealed", { count: steps.length })}

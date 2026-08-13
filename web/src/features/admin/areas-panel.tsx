@@ -82,7 +82,7 @@ function AreaRow({ area }: { area: RegisteredScope }) {
         </Mono>
       </div>
       <RemoveButton
-        title={`Retirar a área ${shown}?`}
+        title={t("admin.removeArea", { area: shown })}
         description={t("admin.withdrawArea")}
         onConfirm={() =>
           remove.mutate(`${area.company}/${area.area}`, {

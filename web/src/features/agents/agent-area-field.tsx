@@ -35,7 +35,7 @@ export function AgentAreaField({
     <Labelled label={t("admin.area")} htmlFor="agent-area">
       <Select value={area || undefined} onValueChange={onChange}>
         <SelectTrigger id="agent-area" className="w-full font-mono">
-          <SelectValue placeholder="Escolha" />
+          <SelectValue placeholder={t("agents.choose")} />
         </SelectTrigger>
         <SelectContent>
           {area !== "" && !known && (

@@ -64,9 +64,9 @@ function Result({ result }: { result: Simulation }) {
   return (
     <div className="flex flex-col gap-2.5">
       <div className="grid grid-cols-2 gap-2">
-        <Tile label="Bateriam" value={result.matched} />
+        <Tile label={t("policies.wouldMatch")} value={result.matched} />
         <Tile
-          label="Seriam negadas"
+          label={t("policies.wouldDeny")}
           value={result.wouldDeny ?? 0}
           alarming={(result.wouldDeny ?? 0) > 0}
         />

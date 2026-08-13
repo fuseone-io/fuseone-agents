@@ -25,7 +25,7 @@ export function AgentKpis({ agent }: { agent: Agent }) {
       <Kpi
         label={t("runs.finishedPlural")}
         value={successRate(agent)}
-        note={`${activity?.finished ?? 0} de ${activity?.runs ?? 0}`}
+        note={t("common.ofTotal", { count: activity?.finished ?? 0, total: activity?.runs ?? 0 })}
       />
       <Kpi
         label={t("agents.costPerRun")}
@@ -37,7 +37,7 @@ export function AgentKpis({ agent }: { agent: Agent }) {
         value={String(activity?.waiting ?? 0)}
         note={
           activity?.lastRunAt
-            ? `última execução ${formatRelative(activity.lastRunAt)}`
+            ? t("agents.lastRun", { when: formatRelative(activity.lastRunAt) })
             : t("agents.neverRanLower")
         }
       />

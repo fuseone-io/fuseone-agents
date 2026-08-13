@@ -65,12 +65,12 @@ export function KpiRow({ windows }: { windows: Windows }) {
       <OverviewKpi
         label={t("overview.spentToday")}
         value={formatCost({ micros: spent })}
-        note={`sobre ${runs} execuções`}
+        note={t("overview.overRuns", { count: runs })}
         trend={cumulative(columns.map((c) => c.micros))}
       />
 
       <OverviewKpi
-        label="Cauda lenta (p95)"
+        label={t("overview.slowTail")}
         value={
           stats?.p95DurationMs ? formatDurationMs(stats.p95DurationMs) : "—"
         }
@@ -79,11 +79,11 @@ export function KpiRow({ windows }: { windows: Windows }) {
       />
 
       <OverviewKpi
-        label="Paradas"
+        label={t("overview.stops")}
         value={String(blocked)}
         note={
           waiting > 0
-            ? `${waiting} esperando uma pessoa`
+            ? t("overview.waitingOnAPerson", { count: waiting })
             : t("overview.noneWaiting")
         }
         tone={blocked > 0 ? "bad" : "neutral"}

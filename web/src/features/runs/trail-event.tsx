@@ -9,7 +9,7 @@ import {
 import { Mono } from "@/components/shared/mono";
 import { StepContent } from "@/features/runs/step-content";
 import { TILE, tileOf } from "@/features/runs/trail-icon";
-import { titleOf, detailOf, chipsOf } from "@/features/runs/step-story";
+import { titleOf, detailOf, chipsOf, line } from "@/features/runs/step-story";
 import { cn } from "@/lib/utils";
 import { formatTime, shortHash } from "@/lib/format";
 import type { Step } from "@/lib/api/client";
@@ -66,8 +66,10 @@ export function TrailEvent({
           />
         )}
       </div>
-      {detailOf(step) && (
-        <p className="mt-0.5 text-xs text-muted-foreground">{detailOf(step)}</p>
+      {line(detailOf(step), t) && (
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {line(detailOf(step), t)}
+        </p>
       )}
     </>
   );

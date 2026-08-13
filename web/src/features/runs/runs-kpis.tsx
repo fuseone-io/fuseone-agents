@@ -42,12 +42,12 @@ export function RunsKpis({
       <KpiCard
         label={t("runs.runs")}
         value={stats.total.toLocaleString("pt-BR")}
-        delta={`${running.toLocaleString("pt-BR")} em andamento`}
+        delta={t("runs.inFlight", { count: running })}
       />
       <KpiCard
         label={t("runs.finishedPlural")}
         value={stats.total === 0 ? "—" : `${percent(finished, stats.total)}%`}
-        delta={`${finished.toLocaleString("pt-BR")} de ${stats.total.toLocaleString("pt-BR")}`}
+        delta={t("common.ofTotal", { count: finished, total: stats.total })}
         trend={stats.total > 0 && finished === stats.total ? "up" : "flat"}
       />
       <KpiCard

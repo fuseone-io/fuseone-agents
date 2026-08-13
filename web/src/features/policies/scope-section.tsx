@@ -24,7 +24,7 @@ export function ScopeSection({
           id="resource"
           value={draft.resource ?? ""}
           onChange={(e) => patch({ resource: e.target.value })}
-          placeholder="crm.* ou crm.reply ou *"
+          placeholder={t("policies.resourcePlaceholder")}
           className="font-mono"
         />
       </Labelled>
