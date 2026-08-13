@@ -14,6 +14,7 @@ package compensate
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/fuseone/agents/internal/domain"
 )
@@ -36,6 +37,18 @@ type Act struct {
 	// a run that reported itself cleanly undone while part of what it did
 	// stands would be telling somebody the opposite of what they need to know.
 	Undo domain.ToolID
+
+	// ResultRef points at what the original call returned, which is what the
+	// undo is called with.
+	//
+	// The convention is that the undo takes what the do returned: a tool that
+	// creates something answers with its identifier, and the tool that removes
+	// it asks for that identifier. It is the shape almost every API that has a
+	// reversal already has, and it needs no mapping language, no second schema
+	// and no Curator translating field names between two tools they did not
+	// write. Where the shapes genuinely do not line up, the honest answer is
+	// that no compensator can be declared — not a mapping nobody can audit.
+	ResultRef string
 }
 
 /*
@@ -72,6 +85,7 @@ func Plan(steps []domain.Step, catalogue Catalogue) []Act {
 			// returned by the second one's answer.
 			if at := pending(calls, order); at != nil {
 				at.returned, at.failed = true, p.Failed
+				at.resultRef = p.ResultRef
 			}
 
 		case domain.StepCompensated:
@@ -98,7 +112,9 @@ func Plan(steps []domain.Step, catalogue Catalogue) []Act {
 			continue
 		}
 		undo, _ := catalogue.CompensatedBy(at.tool)
-		out = append(out, Act{Tool: at.tool, Seq: at.seq, Undo: undo})
+		out = append(out, Act{
+			Tool: at.tool, Seq: at.seq, Undo: undo, ResultRef: at.resultRef,
+		})
 	}
 	return out
 }
@@ -111,6 +127,9 @@ type call struct {
 	returned bool
 	failed   bool
 	undone   bool
+	// resultRef is what the call answered with, and what the undo is called
+	// with in turn.
+	resultRef string
 }
 
 // pending is the most recent call still waiting for its answer.
@@ -128,4 +147,12 @@ func decode(step domain.Step, into any) error {
 		return nil
 	}
 	return json.Unmarshal(step.Payload, into)
+}
+
+func jsonOf(v any) ([]byte, error) {
+	out, err := json.Marshal(v)
+	if err != nil {
+		return nil, fmt.Errorf("compensate: encode: %w", err)
+	}
+	return out, nil
 }
