@@ -22,7 +22,7 @@ func readThenAnswer(turn int) chatReply {
 func TestRun_readOnlyAgent_reachesAVerifiableFinish(t *testing.T) {
 	eachLedger(t, "a read-only agent runs to a verifiable finish", func(t *testing.T, store Store) {
 		p := newPlatform(t, store, agentFull, readThenAnswer)
-		if err := p.catalog.Classify("crm.lookup", domain.EffectRead, false); err != nil {
+		if err := p.catalog.Classify(domain.ToolClassification{Tool: "crm.lookup", Effect: domain.EffectRead, Untrusted: false}); err != nil {
 			t.Fatalf("classify: %v", err)
 		}
 		p.open(t, "run-e2e-1")
@@ -43,7 +43,7 @@ func TestRun_readOnlyAgent_reachesAVerifiableFinish(t *testing.T) {
 func TestRun_theToolActuallyReachesTheMCPServer(t *testing.T) {
 	eachLedger(t, "the tool call arrives at the server with the model's arguments", func(t *testing.T, store Store) {
 		p := newPlatform(t, store, agentFull, readThenAnswer)
-		if err := p.catalog.Classify("crm.lookup", domain.EffectRead, false); err != nil {
+		if err := p.catalog.Classify(domain.ToolClassification{Tool: "crm.lookup", Effect: domain.EffectRead, Untrusted: false}); err != nil {
 			t.Fatalf("classify: %v", err)
 		}
 		p.open(t, "run-e2e-2")
@@ -64,7 +64,7 @@ func TestRun_theToolActuallyReachesTheMCPServer(t *testing.T) {
 func TestRun_theTrailRecordsGateThenReserveThenCall(t *testing.T) {
 	eachLedger(t, "the trail records the decision before the effect", func(t *testing.T, store Store) {
 		p := newPlatform(t, store, agentFull, readThenAnswer)
-		if err := p.catalog.Classify("crm.lookup", domain.EffectRead, false); err != nil {
+		if err := p.catalog.Classify(domain.ToolClassification{Tool: "crm.lookup", Effect: domain.EffectRead, Untrusted: false}); err != nil {
 			t.Fatalf("classify: %v", err)
 		}
 		p.open(t, "run-e2e-3")
@@ -93,7 +93,7 @@ func TestRun_theTrailRecordsGateThenReserveThenCall(t *testing.T) {
 func TestRun_costIsSpentNotLeftReserved(t *testing.T) {
 	eachLedger(t, "a finished run leaves nothing reserved", func(t *testing.T, store Store) {
 		p := newPlatform(t, store, agentFull, readThenAnswer)
-		if err := p.catalog.Classify("crm.lookup", domain.EffectRead, false); err != nil {
+		if err := p.catalog.Classify(domain.ToolClassification{Tool: "crm.lookup", Effect: domain.EffectRead, Untrusted: false}); err != nil {
 			t.Fatalf("classify: %v", err)
 		}
 		p.open(t, "run-e2e-4")
@@ -134,10 +134,10 @@ func TestRun_writeOnDataReadFromOutside_stopsForAHumanBeforeTheWriteHappens(t *t
 		p := newPlatform(t, store, agentFull, readThenWrite)
 		// An imported tool is read-only until the Curator says otherwise; this
 		// is that act. Reading from an outside system marks the run untrusted.
-		if err := p.catalog.Classify("crm.lookup", domain.EffectRead, true); err != nil {
+		if err := p.catalog.Classify(domain.ToolClassification{Tool: "crm.lookup", Effect: domain.EffectRead, Untrusted: true}); err != nil {
 			t.Fatalf("classify lookup: %v", err)
 		}
-		if err := p.catalog.Classify("crm.note", domain.EffectWrite, false); err != nil {
+		if err := p.catalog.Classify(domain.ToolClassification{Tool: "crm.note", Effect: domain.EffectWrite, Untrusted: false}); err != nil {
 			t.Fatalf("classify note: %v", err)
 		}
 		p.open(t, "run-e2e-5")
@@ -166,7 +166,7 @@ func TestRun_toolOutsideTheAgentsPack_neverReachesTheServer(t *testing.T) {
 		p := newPlatform(t, store, agentReadOnly, func(int) chatReply {
 			return chatReply{Tool: "crm.note", Args: `{"text":"fora do pacote"}`, PromptTokens: 900, CompletionTokens: 30}
 		})
-		if err := p.catalog.Classify("crm.note", domain.EffectWrite, false); err != nil {
+		if err := p.catalog.Classify(domain.ToolClassification{Tool: "crm.note", Effect: domain.EffectWrite, Untrusted: false}); err != nil {
 			t.Fatalf("classify: %v", err)
 		}
 		p.open(t, "run-e2e-6")

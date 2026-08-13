@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -116,6 +117,46 @@ type platform struct {
 
 	// server is what the MCP server actually executed.
 	server serverCalls
+
+	// gate is swappable because the worker takes its dependencies once, and a
+	// scenario that needs an installation's own rules in force decides that
+	// after the platform is built.
+	gate *swappableGate
+}
+
+// trusted is an installation that has promoted this agent all the way. The
+// stage is orthogonal to what these scenarios are about — a draft cannot act
+// at all, and every one of them is about what happens when it does.
+type trusted struct{}
+
+func (trusted) StageOf(context.Context, domain.AgentID) (domain.Stage, error) {
+	return domain.StageAutonomous, nil
+}
+
+// swappableGate lets a scenario put policies in force after the worker holds
+// its dependencies. WithPolicies returns a new Gate rather than mutating one —
+// a snapshot on the path of every effect should not change under a running
+// evaluation — so the indirection is where the swap happens instead.
+type swappableGate struct {
+	mu    sync.RWMutex
+	inner *gate.Gate
+}
+
+func (g *swappableGate) Evaluate(ctx context.Context, r gate.Request) (domain.Decision, error) {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	return g.inner.Evaluate(ctx, r)
+}
+
+// allow puts a written exception in force for one tool, which is the one thing
+// that lowers the built-in floor.
+func (g *swappableGate) allow(tool domain.ToolID) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.inner = g.inner.WithPolicies(gate.Policies{Hash: "pol_e2e", Set: []domain.Policy{{
+		Code: "POL-E2E", Enabled: true, Resource: string(tool),
+		Effect: domain.PolicyAllow, Reach: domain.ReachInstallation,
+	}}})
 }
 
 func newPlatform(t *testing.T, store Store, agentSource string, reply func(turn int) chatReply) *platform {
@@ -153,6 +194,11 @@ func newPlatform(t *testing.T, store Store, agentSource string, reply func(turn 
 	}
 	p.spec = parsed
 
+	// A written exception is how a real installation lets an agent write
+	// without a person in the loop. Held on the platform so a scenario that
+	// needs one does not have to rebuild the worker.
+	p.gate = &swappableGate{inner: gate.New()}
+
 	p.worker = worker.New(
 		worker.Config{
 			Owner: "e2e", Concurrency: 1, Lease: time.Minute,
@@ -161,7 +207,7 @@ func newPlatform(t *testing.T, store Store, agentSource string, reply func(turn 
 		store,
 		engine.Deps{
 			Ledger:  store,
-			Gate:    gate.New(),
+			Gate:    p.gate,
 			Tools:   p.catalog,
 			Catalog: p.catalog,
 			Clock:   engine.SystemClock{},
@@ -170,7 +216,7 @@ func newPlatform(t *testing.T, store Store, agentSource string, reply func(turn 
 		spec.NewResolver(specs, registry, p.catalog),
 		engine.SystemClock{},
 		slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn})),
-	)
+	).WithUndos(p.catalog).WithStages(trusted{})
 	return p
 }
 
@@ -218,7 +264,11 @@ func (p *platform) settle(t *testing.T, runID domain.RunID) engine.State {
 
 // settled means nothing unattended will move this run again.
 func settled(p engine.Phase) bool {
-	return p == engine.PhaseFinished || p == engine.PhaseParked || p == engine.PhaseAwaitingApproval
+	switch p {
+	case engine.PhaseFinished, engine.PhaseParked, engine.PhaseAwaitingApproval, engine.PhaseFailed:
+		return true
+	}
+	return false
 }
 
 func (p *platform) steps(t *testing.T, runID domain.RunID) []domain.Step {

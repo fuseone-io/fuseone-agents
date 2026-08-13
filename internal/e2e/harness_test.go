@@ -126,12 +126,30 @@ type noteOutput struct {
 	NoteID string `json:"note_id"`
 }
 
+// unnoteInput is what takes a note back. The compensation path has to reach a
+// real server too — a ledger saying "compensated" proves the platform decided
+// to undo something, never that the note is gone.
+type unnoteInput struct {
+	NoteID string `json:"note_id" jsonschema:"the note to remove"`
+}
+
+type unnoteOutput struct {
+	Removed bool `json:"removed"`
+}
+
 // serverCalls is what the MCP server actually did. The ledger records what the
 // platform decided; only this records what reached the outside world.
 type serverCalls struct {
 	mu      sync.Mutex
 	lookups []lookupInput
 	notes   []noteInput
+	unnotes []unnoteInput
+}
+
+func (c *serverCalls) Unnotes() []unnoteInput {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]unnoteInput(nil), c.unnotes...)
 }
 
 func (c *serverCalls) Lookups() []lookupInput {
@@ -172,6 +190,16 @@ func mcpSession(t *testing.T, calls *serverCalls) *mcp.ClientSession {
 		defer calls.mu.Unlock()
 		calls.notes = append(calls.notes, in)
 		return nil, noteOutput{NoteID: "note_9"}, nil
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "unnote",
+		Description: "Remove an internal note from the account",
+	}, func(_ context.Context, _ *mcp.CallToolRequest, in unnoteInput) (*mcp.CallToolResult, unnoteOutput, error) {
+		calls.mu.Lock()
+		defer calls.mu.Unlock()
+		calls.unnotes = append(calls.unnotes, in)
+		return nil, unnoteOutput{Removed: true}, nil
 	})
 
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()

@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fuseone/agents/internal/compensate"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
 )
@@ -125,6 +126,16 @@ type Worker struct {
 	ceilings Ceilings
 	// stages is optional; nil means every agent is treated as a draft.
 	stages Stages
+	// undos is what takes each tool back. Optional: an installation that has
+	// ruled on nothing can still abandon a run, and every act comes back
+	// reported as standing rather than quietly dropped.
+	undos compensate.Catalogue
+}
+
+// WithUndos wires the Curator's ruling on what compensates what.
+func (w *Worker) WithUndos(c compensate.Catalogue) *Worker {
+	w.undos = c
+	return w
 }
 
 // WithStages wires how far each agent is trusted.
@@ -234,6 +245,13 @@ func (w *Worker) turn(ctx context.Context, log *slog.Logger) (bool, error) {
 	// next turn, and a demotion has to take effect faster than that.
 	if start.Stage, err = w.stageOf(ctx, claim.AgentID); err != nil {
 		return true, w.park(ctx, claim, err, "stage_unreadable")
+	}
+
+	// Not every claimable run wants advancing. One a person abandoned wants
+	// undoing, and asking the model what to do next would be asking it to
+	// carry on with a run somebody already ended.
+	if claim.Phase == engine.PhaseCompensating.String() {
+		return true, w.undo(ctx, claim, start, log)
 	}
 
 	// The runner is a thin wrapper over its dependencies, so building one per

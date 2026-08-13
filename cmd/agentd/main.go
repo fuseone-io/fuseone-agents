@@ -519,7 +519,11 @@ func workerCmd(args []string) error {
 
 	w := worker.New(worker.Config{
 		Owner: *owner, Concurrency: *concurrency, Lease: *lease,
-	}, queue, deps, specs, engine.SystemClock{}, slog.Default())
+	}, queue, deps, specs, engine.SystemClock{}, slog.Default()).
+		// What takes each tool back, for a run somebody abandons. The same
+		// catalogue that says what a tool does: the Curator rules on both in
+		// one act, because they are one judgement (PRD SE-08).
+		WithUndos(catalog)
 
 	// The other half of the queue, drained by a pool built with the dry tool
 	// layer. A separate pool rather than a branch inside this one: the branch
@@ -533,7 +537,8 @@ func workerCmd(args []string) error {
 	dry := simulations(store)
 	sim := worker.New(worker.Config{
 		Owner: *owner + "-sim", Concurrency: simulationSlots(*concurrency), Lease: *lease,
-	}, dry, simulate.Deps(deps), specs, engine.SystemClock{}, slog.Default())
+	}, dry, simulate.Deps(deps), specs, engine.SystemClock{}, slog.Default()).
+		WithUndos(catalog)
 
 	if configPool != nil {
 		// How far each agent is trusted. Without it the pool treats every
