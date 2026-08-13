@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"context"
+	"encoding/json"
 	"slices"
 	"strings"
 	"time"
@@ -90,5 +91,55 @@ func (m *Memory) SpentSince(ctx context.Context, scope domain.Scope, since time.
 		out.ToolCalls += summary.ToolCalls
 		out.Steps += summary.Seq
 	}
+	return out, nil
+}
+
+// Agreement counts what people decided about each agent's proposals.
+//
+// The same fold the durable store does in SQL. It exists so a test that passes
+// here cannot fail in production over a store that counted differently — the
+// number decides whether an agent is trusted to act alone.
+func (m *Memory) Agreement(ctx context.Context, since time.Time) ([]domain.Agreement, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	counted := map[domain.AgentID]*domain.Agreement{}
+	for _, steps := range m.runs {
+		if isSimulated(steps) {
+			// Nobody was really asked in a simulation.
+			continue
+		}
+		for _, step := range steps {
+			if step.Kind != domain.StepApprovalDecided || step.At.Before(since) {
+				continue
+			}
+			var decided domain.ApprovalDecidedPayload
+			if err := json.Unmarshal(step.Payload, &decided); err != nil {
+				continue
+			}
+			at, seen := counted[step.AgentID]
+			if !seen {
+				at = &domain.Agreement{Agent: step.AgentID}
+				counted[step.AgentID] = at
+			}
+			if decided.Approved {
+				at.Approved++
+			} else {
+				at.Refused++
+			}
+		}
+	}
+
+	out := make([]domain.Agreement, 0, len(counted))
+	for _, a := range counted {
+		out = append(out, *a)
+	}
+	slices.SortFunc(out, func(a, b domain.Agreement) int {
+		return strings.Compare(string(a.Agent), string(b.Agent))
+	})
 	return out, nil
 }

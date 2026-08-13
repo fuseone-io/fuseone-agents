@@ -70,3 +70,43 @@ func (p *Postgres) SpentSince(ctx context.Context, scope domain.Scope, since tim
 	}
 	return c, nil
 }
+
+/*
+Agreement counts what people decided about each agent's proposals.
+
+Read from the trail rather than from a counter, for the reason every other
+number here is: a counter drifts and the trail is what happened. It counts
+approval decisions only — a run nobody was asked about says nothing about
+whether they would have agreed, and reading silence as consent is how an agent
+gets promoted for never having been checked.
+
+Simulated runs are excluded. Nobody was really asked in one.
+*/
+func (p *Postgres) Agreement(ctx context.Context, since time.Time) ([]domain.Agreement, error) {
+	rows, err := p.pool.Query(ctx, `
+		select agent_id,
+		       count(*) filter (where (payload->>'approved')::boolean),
+		       count(*) filter (where not (payload->>'approved')::boolean)
+		from run_steps
+		where kind = 'approval_decided'
+		  and at >= $1
+		  and `+realSteps+`
+		group by agent_id
+		order by agent_id`, since.UTC())
+	if err != nil {
+		return nil, fmt.Errorf("agreement: %w", err)
+	}
+	defer rows.Close()
+
+	var out []domain.Agreement
+	for rows.Next() {
+		var a domain.Agreement
+		var agent string
+		if err := rows.Scan(&agent, &a.Approved, &a.Refused); err != nil {
+			return nil, fmt.Errorf("agreement: scan: %w", err)
+		}
+		a.Agent = domain.AgentID(agent)
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}

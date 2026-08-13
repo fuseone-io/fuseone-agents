@@ -27,6 +27,7 @@ import (
 	"github.com/fuseone/agents/internal/audit"
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/authoring"
+	"github.com/fuseone/agents/internal/autonomy"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/httpapi"
@@ -564,6 +565,16 @@ func workerCmd(args []string) error {
 	// at the next deploy — which is the whole reason it is a setting.
 	if configPool != nil && durable != nil && retention != nil {
 		go sweepContent(ctx, admin.NewErasures(configPool, durable, retention))
+	}
+
+	// Demoting an agent people keep overruling. Promotion is not here on
+	// purpose: it is only ever suggested, and a person does it.
+	if configPool != nil {
+		if agreements, ok := store.(autonomy.Agreements); ok {
+			go watchAutonomy(ctx, autonomy.New(
+				agreements, spec.NewState(configPool),
+				demotions{pool: configPool}, slog.Default()))
+		}
 	}
 
 	// The scheduler is a goroutine with an owner: it stops when the worker's

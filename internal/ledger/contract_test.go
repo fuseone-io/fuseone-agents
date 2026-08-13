@@ -41,6 +41,7 @@ type Store interface {
 	RunByIdemKey(ctx context.Context, key string) (domain.RunID, error)
 	SpentSince(ctx context.Context, scope domain.Scope, since time.Time) (domain.Consumption, error)
 	SimulationRuns(ctx context.Context, simulation string) ([]domain.RunID, error)
+	Agreement(ctx context.Context, since time.Time) ([]domain.Agreement, error)
 	Simulations() ledger.SimulationQueue
 }
 
@@ -1576,6 +1577,76 @@ func TestDecisionsContract_carriesTheTaintTheDecisionWasMadeOn(t *testing.T) {
 		// rule somebody writes when they are nervous.
 		if !got[0].Labels.Has(domain.LabelUntrusted) {
 			t.Errorf("labels = %v, want the taint it was decided on", got[0].Labels)
+		}
+	})
+}
+
+// Whether an agent is trusted to act alone comes off this number, so the two
+// stores counting it differently is a difference in what the product does.
+
+func TestAgreementContract(t *testing.T) {
+	base := time.Date(2026, 8, 13, 9, 0, 0, 0, time.UTC)
+
+	answered := func(id domain.RunID, seq int64, approved bool) domain.Step {
+		st := step(id, domain.StepApprovalDecided)
+		st.At = base.Add(time.Duration(seq) * time.Second)
+		st.Payload = mustJSON(t, domain.ApprovalDecidedPayload{Approved: approved, By: "ana"})
+		return st
+	}
+
+	run(t, "counts what people decided, for and against", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		mustAppend(t, s, startedAt("run-1", base))
+		mustAppend(t, s, answered("run-1", 2, true))
+		mustAppend(t, s, answered("run-1", 3, true))
+		mustAppend(t, s, answered("run-1", 4, false))
+
+		got, err := s.Agreement(ctx, base.Add(-time.Hour))
+		if err != nil {
+			t.Fatalf("Agreement: %v", err)
+		}
+		if len(got) != 1 {
+			t.Fatalf("agreements = %+v", got)
+		}
+		if got[0].Approved != 2 || got[0].Refused != 1 {
+			t.Errorf("agreement = %+v, want two for and one against", got[0])
+		}
+	})
+
+	run(t, "a simulated run is nobody agreeing", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		opened := startedAt("run-sim", base)
+		opened.IdemKey = "sim:1"
+		opened.Payload = mustJSON(t, domain.RunStartedPayload{
+			Trigger: "simulation", Simulated: true, Simulation: "sim-a",
+		})
+		mustAppend(t, s, opened)
+		mustAppend(t, s, answered("run-sim", 2, true))
+
+		// Nobody was really asked. Counting it would let an agent earn its way
+		// to acting alone out of runs where nothing was at stake.
+		got, err := s.Agreement(ctx, base.Add(-time.Hour))
+		if err != nil {
+			t.Fatalf("Agreement: %v", err)
+		}
+		if len(got) != 0 {
+			t.Errorf("agreements = %+v, want none", got)
+		}
+	})
+
+	run(t, "older decisions are outside the window", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		mustAppend(t, s, startedAt("run-1", base))
+		mustAppend(t, s, answered("run-1", 2, false))
+
+		// A rate over all of history never recovers from a bad first week,
+		// and an agent that improved would stay demoted for ever.
+		got, err := s.Agreement(ctx, base.Add(time.Hour))
+		if err != nil {
+			t.Fatalf("Agreement: %v", err)
+		}
+		if len(got) != 0 {
+			t.Errorf("agreements = %+v, want none in the window", got)
 		}
 	})
 }
