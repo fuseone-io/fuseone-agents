@@ -124,27 +124,32 @@ describe("the risk surface", () => {
 
   it("answers in what the agent can do, not in tool ids", () => {
     // "crm.reply, erp.transfer" is a list. "Alters state, moves money" is the
-    // thing somebody approves or refuses.
-    const lines = riskSurface(["crm.reply", "erp.transfer"], catalogue).join(
-      " ",
-    );
-
-    expect(lines).toMatch(/Altera estado em 1/);
-    expect(lines).toMatch(/Move dinheiro em 1/);
+    // thing somebody approves or refuses. The words belong to the catalogue;
+    // what this function decides is which lines there are and about how many.
+    expect(riskSurface(["crm.reply", "erp.transfer"], catalogue)).toEqual([
+      { key: "agents.riskWrites", count: 1 },
+      { key: "agents.riskPays", count: 1 },
+    ]);
   });
 
   it("says an unclassified tool will not run", () => {
     // Otherwise somebody waits for something that never happens.
-    const lines = riskSurface(["kb.search"], catalogue).join(" ");
-    expect(lines).toMatch(/sem classificação/);
+    expect(riskSurface(["kb.search"], catalogue)).toContainEqual({
+      key: "agents.riskUnclassified",
+      count: 1,
+    });
   });
 
   it("flags what brings outside data in, because that marks the run", () => {
-    const lines = riskSurface(["crm.lookup"], catalogue).join(" ");
-    expect(lines).toMatch(/dado de fora/);
+    expect(riskSurface(["crm.lookup"], catalogue)).toContainEqual({
+      key: "agents.riskFromOutside",
+      count: 1,
+    });
   });
 
   it("says plainly when an agent can touch nothing", () => {
-    expect(riskSurface([], catalogue).join(" ")).toMatch("agents.riskNothing");
+    expect(riskSurface([], catalogue)).toEqual([
+      { key: "agents.riskNothing", count: 0 },
+    ]);
   });
 });

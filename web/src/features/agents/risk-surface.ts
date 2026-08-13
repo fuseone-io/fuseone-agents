@@ -1,5 +1,8 @@
 import type { Tool } from "@/lib/api/client";
 
+/** One line of the surface: a key and the count it is about. */
+export type RiskLine = { key: string; count: number };
+
 /**
  * What this agent can touch, in words.
  *
@@ -7,10 +10,15 @@ import type { Tool } from "@/lib/api/client";
  * ids does not answer the question anybody actually has. "crm.reply,
  * erp.transfer" is a list; "can write to two systems and move money" is the
  * thing somebody approves or refuses.
+ *
+ * Keys and counts rather than sentences: the sentences were written here in
+ * Portuguese and rendered straight into the page, so an installation running
+ * in English read them anyway — and the empty case returned a key that nothing
+ * translated, putting "agents.riskNothing" on screen.
  */
-export function riskSurface(tools: string[], catalogue: Tool[]): string[] {
+export function riskSurface(tools: string[], catalogue: Tool[]): RiskLine[] {
   if (tools.length === 0) {
-    return ["agents.riskNothing"];
+    return [{ key: "agents.riskNothing", count: 0 }];
   }
 
   const effects = new Map(catalogue.map((t) => [t.toolId, t.effect]));
@@ -33,40 +41,21 @@ export function riskSurface(tools: string[], catalogue: Tool[]): string[] {
     if (untrusted.has(tool)) bringsOutside += 1;
   }
 
-  const lines: string[] = [];
-  if (byEffect.read > 0) {
-    lines.push(
-      `Lê de ${byEffect.read} ${plural(byEffect.read, "ferramenta", "ferramentas")}.`,
-    );
-  }
-  if (byEffect.write > 0) {
-    lines.push(
-      `Altera estado em ${byEffect.write} ${plural(byEffect.write, "sistema", "sistemas")}.`,
-    );
-  }
-  if (byEffect.destructive > 0) {
-    lines.push(
-      `Apaga ou substitui de forma difícil de desfazer em ${byEffect.destructive}.`,
-    );
-  }
-  if (byEffect.financial > 0) {
-    lines.push(`Move dinheiro em ${byEffect.financial}.`);
-  }
-  // An unclassified tool never executes, which is a fact worth saying rather
-  // than leaving somebody to wonder why nothing happens.
-  if (byEffect.unknown > 0) {
-    lines.push(
-      `${byEffect.unknown} sem classificação — não executam até o Curador classificar.`,
-    );
+  const lines: RiskLine[] = [];
+  for (const [effect, key] of [
+    ["read", "agents.riskReads"],
+    ["write", "agents.riskWrites"],
+    ["destructive", "agents.riskDestroys"],
+    ["financial", "agents.riskPays"],
+    // An unclassified tool never executes, which is a fact worth saying rather
+    // than leaving somebody to wonder why nothing happens.
+    ["unknown", "agents.riskUnclassified"],
+  ] as const) {
+    const count = byEffect[effect];
+    if (count > 0) lines.push({ key, count });
   }
   if (bringsOutside > 0) {
-    lines.push(
-      `${bringsOutside} ${plural(bringsOutside, "traz", "trazem")} dado de fora, o que marca a execução.`,
-    );
+    lines.push({ key: "agents.riskFromOutside", count: bringsOutside });
   }
   return lines;
-}
-
-function plural(n: number, one: string, many: string): string {
-  return n === 1 ? one : many;
 }

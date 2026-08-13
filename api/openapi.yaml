@@ -254,6 +254,44 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /agents/{agentId}/flow:
+    post:
+      tags: [agents]
+      operationId: checkDataFlow
+      summary: Where data from outside reaches an act, before publishing
+      description: |
+        Answered from the definition, without running anything (PRD SE-07).
+        Does data this installation did not author reach a tool that acts on
+        the world, and through which step?
+
+        It reports; it does not refuse. The path it finds is usually the point
+        of the agent — reading something and acting on it is what these things
+        are for — and a check that blocked publication would be turned off
+        within a week. What it buys is that nobody is surprised on Monday by an
+        approval queue they did not expect.
+
+        The Gate still answers the same question per call at runtime, with the
+        taint the run actually carries. This is the earlier, cheaper answer.
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AgentDefinition' }
+      responses:
+        '200':
+          description: What the definition implies.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FlowFinding' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /agents/{agentId}/stage:
     put:
       tags: [agents]
@@ -3238,6 +3276,35 @@ components:
           type: array
           items: { $ref: '#/components/schemas/Step' }
         nextSeq: { type: integer, format: int64, nullable: true }
+
+    FlowFinding:
+      type: object
+      required: [paths, unclassified]
+      properties:
+        paths:
+          type: array
+          items: { $ref: '#/components/schemas/FlowPath' }
+        unclassified:
+          type: array
+          items: { type: string }
+          description: |
+            Tools the Curator has not ruled on. They read as read-only and
+            untrusted, which is the safe default and also means this check
+            cannot say anything true about them.
+
+    FlowPath:
+      type: object
+      required: [from, to, effect]
+      properties:
+        from:
+          type: string
+          description: The tool that brings data in from outside.
+        to:
+          type: string
+          description: The tool that acts on the world with it.
+        fromStep: { type: string }
+        toStep: { type: string }
+        effect: { $ref: '#/components/schemas/Effect' }
 
     ReplayReport:
       type: object

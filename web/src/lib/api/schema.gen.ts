@@ -149,6 +149,37 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{agentId}/flow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Where data from outside reaches an act, before publishing
+         * @description Answered from the definition, without running anything (PRD SE-07).
+         *     Does data this installation did not author reach a tool that acts on
+         *     the world, and through which step?
+         *
+         *     It reports; it does not refuse. The path it finds is usually the point
+         *     of the agent — reading something and acting on it is what these things
+         *     are for — and a check that blocked publication would be turned off
+         *     within a week. What it buys is that nobody is surprised on Monday by an
+         *     approval queue they did not expect.
+         *
+         *     The Gate still answers the same question per call at runtime, with the
+         *     taint the run actually carries. This is the earlier, cheaper answer.
+         */
+        post: operations["checkDataFlow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{agentId}/stage": {
         parameters: {
             query?: never;
@@ -2205,6 +2236,24 @@ export interface components {
             /** Format: int64 */
             nextSeq?: number | null;
         };
+        FlowFinding: {
+            paths: components["schemas"]["FlowPath"][];
+            /**
+             * @description Tools the Curator has not ruled on. They read as read-only and
+             *     untrusted, which is the safe default and also means this check
+             *     cannot say anything true about them.
+             */
+            unclassified: string[];
+        };
+        FlowPath: {
+            /** @description The tool that brings data in from outside. */
+            from: string;
+            /** @description The tool that acts on the world with it. */
+            to: string;
+            fromStep?: string;
+            toStep?: string;
+            effect: components["schemas"]["Effect"];
+        };
         ReplayReport: {
             runId: string;
             /** @description How many gate decisions the run recorded. */
@@ -2589,6 +2638,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentPublished"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    checkDataFlow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentDefinition"];
+            };
+        };
+        responses: {
+            /** @description What the definition implies. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FlowFinding"];
                 };
             };
             400: components["responses"]["BadRequest"];

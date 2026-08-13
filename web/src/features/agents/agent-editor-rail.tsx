@@ -2,6 +2,7 @@ import { Trans, useTranslation } from "react-i18next";
 import { CircleCheck, CircleDashed, ShieldAlert } from "lucide-react";
 import { Mono } from "@/components/shared/mono";
 import { riskSurface } from "@/features/agents/risk-surface";
+import { FlowCard } from "@/features/agents/flow-card";
 import type { Change } from "@/features/agents/agent-draft";
 import type { AgentDefinition, Tool } from "@/lib/api/client";
 
@@ -28,15 +29,21 @@ export function AgentEditorRail({
     <aside className="flex flex-col gap-3 lg:sticky lg:top-0">
       {creating ? <Checklist draft={draft} /> : <Diff changes={changes} />}
 
+      {/* What the definition implies about data leaving, answered by the
+          server from the steps rather than guessed from the tool list: the
+          order of the envelopes is what decides whether a read can reach a
+          write at all (PRD SE-07). */}
+      <FlowCard draft={draft} />
+
       <Card title={t("agents.riskSurface")}>
         <ul className="flex flex-col gap-1">
           {riskSurface(draft.tools ?? [], catalogue).map((line) => (
             <li
-              key={line}
+              key={line.key}
               className="flex items-start gap-2 text-xs text-muted-foreground"
             >
               <ShieldAlert className="mt-px size-3.5 shrink-0" aria-hidden />
-              {line}
+              {t(line.key, { count: line.count })}
             </li>
           ))}
         </ul>
