@@ -35,9 +35,17 @@ const (
 	PhaseAwaitingTool
 	PhaseParked
 	PhaseFinished
+	// PhaseCompensating is a run a person ended whose undoing is still being
+	// carried out. Claimable, because the undos are real tool calls and the
+	// worker pool is what runs those.
+	PhaseCompensating
+	// PhaseFailed is the other ending. Parking is a pause and resumes; this
+	// one does not — it is the run somebody decided cannot go on, after what
+	// it left standing was compensated (PRD SE-08).
+	PhaseFailed
 )
 
-var phaseNames = [...]string{"unstarted", "running", "awaiting_approval", "awaiting_tool", "parked", "finished"}
+var phaseNames = [...]string{"unstarted", "running", "awaiting_approval", "awaiting_tool", "parked", "finished", "compensating", "failed"}
 
 func (p Phase) String() string {
 	if int(p) < len(phaseNames) {
@@ -207,7 +215,22 @@ func (s *State) applyKind(step domain.Step) error {
 			s.ConsecutiveBlocks++
 		}
 
-	case domain.StepPlanned, domain.StepCompensated, domain.StepFailed:
+	case domain.StepAbandoned:
+		var p domain.AbandonedPayload
+		if err := decode(step, &p); err != nil {
+			return err
+		}
+		// The decision is made either way. What differs is whether anything
+		// still has to be undone before the run can be called over.
+		s.Phase = PhaseFailed
+		if p.Compensate {
+			s.Phase = PhaseCompensating
+		}
+
+	case domain.StepFailed:
+		s.Phase = PhaseFailed
+
+	case domain.StepPlanned, domain.StepCompensated:
 		// Recorded for the trail; they carry no state transition of their own.
 
 	default:
@@ -238,13 +261,13 @@ func (s State) AlreadyExecuted(key string) bool {
 // Terminal reports whether the run has ended for good. Parked runs are not
 // terminal: they are suspended and resumable.
 func (s State) Terminal() bool {
-	return s.Phase == PhaseFinished
+	return s.Phase == PhaseFinished || s.Phase == PhaseFailed
 }
 
 // Resumable reports whether a worker may pick this run up and continue it.
 func (s State) Resumable() bool {
 	switch s.Phase {
-	case PhaseRunning, PhaseAwaitingTool, PhaseParked:
+	case PhaseRunning, PhaseAwaitingTool, PhaseParked, PhaseCompensating:
 		return true
 	}
 	return false

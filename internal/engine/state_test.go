@@ -319,3 +319,70 @@ func stripSeal(steps []domain.Step) []domain.Step {
 	}
 	return out
 }
+
+func TestFold_failed_isTerminalAndNotResumable(t *testing.T) {
+	t.Parallel()
+
+	// A run somebody abandoned has ended. Parking is a pause and resumes; this
+	// is the other ending, and a worker that picked it up again would redo
+	// work a person just had undone.
+	s := mustFold(t, chain(t, domain.Step{
+		Kind: domain.StepRunStarted, AgentID: "billing", Payload: []byte(`{}`),
+	}, domain.Step{
+		Kind:    domain.StepFailed,
+		Payload: payload(t, domain.FailedPayload{Code: "abandoned"}),
+	}))
+
+	if s.Phase != PhaseFailed {
+		t.Errorf("Phase = %v, want %v", s.Phase, PhaseFailed)
+	}
+	if !s.Terminal() {
+		t.Error("Terminal() = false; an abandoned run has ended")
+	}
+	if s.Resumable() {
+		t.Error("Resumable() = true; a worker would redo what was just undone")
+	}
+}
+
+func TestFold_abandonedWithCompensation_waitsForAWorker(t *testing.T) {
+	t.Parallel()
+
+	// The person's decision ends the run, but the undoing is real tool calls
+	// that take as long as they take. A request handler is the wrong place to
+	// hold them, so the run stays claimable until a worker has done it.
+	s := mustFold(t, chain(t, domain.Step{
+		Kind: domain.StepRunStarted, AgentID: "billing", Payload: []byte(`{}`),
+	}, domain.Step{
+		Kind: domain.StepAbandoned,
+		Payload: payload(t, domain.AbandonedPayload{
+			By: "ana", Reason: "duplicate order", Compensate: true,
+		}),
+	}))
+
+	if s.Phase != PhaseCompensating {
+		t.Errorf("Phase = %v, want %v", s.Phase, PhaseCompensating)
+	}
+	if s.Terminal() {
+		t.Error("Terminal() = true; the undoing has not happened yet")
+	}
+}
+
+func TestFold_abandonedWithoutCompensation_endsThere(t *testing.T) {
+	t.Parallel()
+
+	// Leaving the world as it is can be the right answer. Nothing to do, so
+	// no worker should pick this up looking for work.
+	s := mustFold(t, chain(t, domain.Step{
+		Kind: domain.StepRunStarted, AgentID: "billing", Payload: []byte(`{}`),
+	}, domain.Step{
+		Kind: domain.StepAbandoned,
+		Payload: payload(t, domain.AbandonedPayload{
+			By: "ana", Reason: "the charge should stand", Compensate: false,
+		}),
+	}))
+
+	if s.Phase != PhaseFailed || !s.Terminal() || s.Resumable() {
+		t.Errorf("Phase = %v, terminal = %v, resumable = %v; want it ended",
+			s.Phase, s.Terminal(), s.Resumable())
+	}
+}

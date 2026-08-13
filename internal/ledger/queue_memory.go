@@ -16,8 +16,14 @@ import (
 type leaseState struct {
 	attempts      int
 	nextAttemptAt time.Time
-	leasedUntil   time.Time
-	parked        bool
+	// parkedAt is how many steps the run had when the supervisor withdrew it.
+	// Postgres records parking by overwriting the phase column, which any
+	// later append recomputes — so a step arriving from outside (an approval,
+	// an abandonment) returns the run to the queue there. Holding the length
+	// is how the same thing happens here, rather than a sticky flag that made
+	// this fake refuse work the real store would hand out.
+	parkedAt    int
+	leasedUntil time.Time
 }
 
 func (m *Memory) Claim(ctx context.Context, owner string, lease time.Duration) (domain.Claim, error) {
@@ -52,7 +58,10 @@ func (m *Memory) claim(
 
 	for _, id := range ids {
 		st := m.leases[id]
-		if st.parked || st.nextAttemptAt.After(now) {
+		if st.parkedAt > 0 && len(m.runs[id]) <= st.parkedAt {
+			continue
+		}
+		if st.nextAttemptAt.After(now) {
 			continue
 		}
 		if !st.leasedUntil.IsZero() && st.leasedUntil.After(now) {
@@ -60,7 +69,8 @@ func (m *Memory) claim(
 		}
 
 		steps := m.runs[id]
-		if !claimable(phaseOf(steps)) {
+		phase := phaseOf(steps)
+		if !claimable(phase) {
 			continue
 		}
 		// Which half of the queue this is. The fake enforced nothing here for
@@ -82,6 +92,7 @@ func (m *Memory) claim(
 			AgentID:     who.AgentID,
 			VersionID:   who.VersionID,
 			OnBehalfOf:  who.OnBehalfOf,
+			Phase:       phase,
 			Attempts:    st.attempts,
 			LeasedUntil: st.leasedUntil,
 		}, nil
@@ -105,7 +116,7 @@ func (m *Memory) Release(ctx context.Context, runID domain.RunID, outcome domain
 		st.attempts = 0
 	}
 	if outcome.Parked {
-		st.parked = true
+		st.parkedAt = len(m.runs[runID])
 	}
 	st.nextAttemptAt = outcome.NextAttemptAt
 	if st.nextAttemptAt.IsZero() {

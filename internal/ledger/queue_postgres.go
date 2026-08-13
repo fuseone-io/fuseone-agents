@@ -19,7 +19,10 @@ import (
 // excluded for a less obvious one: parking means a human has to do something —
 // raise a ceiling, fix an upstream — and a worker that resumed it anyway would
 // turn the supervision policy into an infinite retry with extra steps.
-var claimablePhaseNames = []string{"running", "awaiting_tool"}
+// compensating joins them: a run somebody abandoned still has undos to make,
+// and those are real tool calls that belong to a worker rather than to the
+// request that asked for them.
+var claimablePhaseNames = []string{"running", "awaiting_tool", "compensating"}
 
 // claimablePhases renders the same set as a SQL literal. Deriving it from the
 // list is what keeps the in-memory queue and the SQL one from drifting apart
@@ -62,7 +65,7 @@ func (p *Postgres) claim(
 	// An expired lease is claimable again: a worker that died stops renewing,
 	// and no separate reaper is needed to notice.
 	err = tx.QueryRow(ctx, `
-		select run_id, company_id, area_id, agent_id, version_id, on_behalf_of, attempts
+		select run_id, company_id, area_id, agent_id, version_id, on_behalf_of, phase, attempts
 		from runs
 		where phase in `+claimablePhases+`
 		  -- Which half of the queue this is. A pool built with the real tool
@@ -75,7 +78,7 @@ func (p *Postgres) claim(
 		order by next_attempt_at
 		for update skip locked
 		limit 1`,
-	).Scan(&runID, &company, &area, &agentID, &versionID, &onBehalf, &c.Attempts)
+	).Scan(&runID, &company, &area, &agentID, &versionID, &onBehalf, &c.Phase, &c.Attempts)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Claim{}, domain.ErrNoClaimableRun

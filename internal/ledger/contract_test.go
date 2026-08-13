@@ -437,6 +437,36 @@ func TestQueueContract(t *testing.T) {
 		}
 	})
 
+	run(t, "a step appended to a parked run returns it to the queue", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		openRun(t, s, "run-1")
+
+		if _, err := s.Claim(ctx, "w1", lease); err != nil {
+			t.Fatalf("Claim: %v", err)
+		}
+		if err := s.Release(ctx, "run-1", domain.ClaimOutcome{
+			Err: errors.New("gave up"), Parked: true,
+		}); err != nil {
+			t.Fatalf("Release: %v", err)
+		}
+
+		// Parking waits for a person, and this is a person acting. A store
+		// that kept refusing the run would strand every abandonment and every
+		// resumed approval on a run the supervisor had given up on.
+		if _, err := s.Append(ctx, domain.Step{
+			RunID: "run-1", Kind: domain.StepAbandoned,
+			Scope: domain.Scope{Company: "acme", Area: "cx"}, AgentID: "triage",
+			At:      time.Now(),
+			Payload: []byte(`{"by":"ana","reason":"over","compensate":true}`),
+		}); err != nil {
+			t.Fatalf("Append: %v", err)
+		}
+
+		if _, err := s.Claim(ctx, "w1", lease); err != nil {
+			t.Errorf("Claim after the abandonment = %v, want the run back", err)
+		}
+	})
+
 	run(t, "an expired lease returns the run to the queue", func(t *testing.T, s Store) {
 		ctx := context.Background()
 		openRun(t, s, "run-1")

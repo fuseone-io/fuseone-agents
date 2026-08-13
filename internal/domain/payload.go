@@ -132,6 +132,20 @@ type ApprovalDecidedPayload struct {
 	Note     string `json:"note,omitempty"`
 }
 
+// AbandonedPayload records a person deciding a run cannot go on.
+//
+// It is never written by the loop. Parking is the machine saying it is stuck;
+// this is somebody saying it is over, which is a different fact and belongs to
+// a different actor (PRD SE-08).
+type AbandonedPayload struct {
+	By     UserID `json:"by"`
+	Reason string `json:"reason"`
+	// Compensate is whether to undo what the run left standing. False is a
+	// legitimate answer — sometimes the world should keep what happened — and
+	// it is recorded so the trail shows it was chosen, not forgotten.
+	Compensate bool `json:"compensate"`
+}
+
 type CompensatedPayload struct {
 	Tool      ToolID `json:"tool"`
 	ForSeq    int64  `json:"for_seq"`

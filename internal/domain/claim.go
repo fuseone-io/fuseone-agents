@@ -22,6 +22,10 @@ type Claim struct {
 	AgentID    AgentID
 	VersionID  VersionID
 	OnBehalfOf UserID
+	// Phase is what the run was doing when it was claimed. The worker needs it
+	// because not every claimable run wants advancing: one somebody abandoned
+	// wants undoing, and that is a different job entirely.
+	Phase string
 	// Attempts is the number of consecutive failures preceding this turn. It
 	// resets on any turn that makes progress.
 	Attempts int
