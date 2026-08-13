@@ -73,7 +73,9 @@ export function ConversationForm({
   });
 
   async function submit(values: z.infer<typeof schema>) {
-    const [company, area = ""] = values.scope.split("/");
+    // The select's values are always company/area, but a destructure of a
+    // split is typed as possibly absent and the compiler is right to say so.
+    const [company = "", area = ""] = values.scope.split("/");
     try {
       await save.mutateAsync({
         channel,

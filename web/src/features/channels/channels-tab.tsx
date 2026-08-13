@@ -1,9 +1,11 @@
 import { MessageSquare } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { EmptyState } from "@/components/shared/empty-state";
-import { ErrorState } from "@/components/shared/error-state";
-import { LoadingRows } from "@/components/shared/loading-rows";
+import {
+  EmptyState,
+  ErrorState,
+  LoadingRows,
+} from "@/components/shared/states";
 import { useChannels } from "@/features/channels/api";
 import { ChannelCard } from "@/features/channels/channel-card";
 import { ChannelForm } from "@/features/channels/channel-form";
