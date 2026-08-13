@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "fuseone.fullname" . }}
+  labels: {{- include "fuseone.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http
+  # Only the API. The worker answers nothing, and a Service selecting both
+  # would send half the requests to a pod with no listener.
+  selector: {{- include "fuseone.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: serve

@@ -1,0 +1,77 @@
+{{/*
+The API and the console, in one process (PRD DE-01).
+
+Stateless: any number of replicas, and a request holds nothing. Long work
+belongs to the worker, which is why these two scale on different axes and are
+two deployments rather than one.
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "fuseone.fullname" . }}-serve
+  labels: {{- include "fuseone.labels" . | nindent 4 }}
+    app.kubernetes.io/component: serve
+spec:
+  replicas: {{ .Values.serve.replicas }}
+  selector:
+    matchLabels: {{- include "fuseone.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: serve
+  template:
+    metadata:
+      labels: {{- include "fuseone.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: serve
+      annotations:
+        # Rolls the pods when the Secret changes. Without it a rotated master
+        # key takes effect whenever something else happens to restart them.
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "fuseone.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      terminationGracePeriodSeconds: {{ .Values.serve.terminationGracePeriodSeconds }}
+      containers:
+        - name: serve
+          image: {{ include "fuseone.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - serve
+            - --addr=0.0.0.0:8080
+            {{- if .Values.baseUrl }}
+            - --base-url={{ .Values.baseUrl }}
+            {{- end }}
+          env: {{- include "fuseone.env" . | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 8080
+          # Liveness touches nothing outside the process: one that asked the
+          # database would restart every pod during a database blip, turning a
+          # recoverable outage into a crash loop.
+          livenessProbe:
+            httpGet: { path: /api/v1/healthz, port: http }
+            periodSeconds: 10
+            failureThreshold: 3
+          # Readiness does ask, and answers 503 with the reason. A pod that
+          # cannot read the ledger leaves the rotation rather than restarting.
+          readinessProbe:
+            httpGet: { path: /api/v1/readyz, port: http }
+            periodSeconds: 5
+            failureThreshold: 2
+          # The same endpoint again, with a budget: a pod that never becomes
+          # ready is a failed rollout rather than one that hangs.
+          startupProbe:
+            httpGet: { path: /api/v1/readyz, port: http }
+            periodSeconds: 3
+            failureThreshold: 30
+          securityContext: {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          resources: {{- toYaml .Values.serve.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}

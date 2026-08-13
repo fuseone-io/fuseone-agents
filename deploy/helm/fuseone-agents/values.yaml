@@ -1,0 +1,102 @@
+# What an installation configures.
+#
+# Two things have no default and cannot: the database and the master key.
+# Shipping a working default for either is how a demonstration becomes a
+# production installation nobody meant to make.
+
+image:
+  repository: ghcr.io/fuseone-io/fuseone-agents
+  # Empty follows the chart's appVersion, which is what a release sets. Pin it
+  # to a digest for an air-gapped install.
+  tag: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+# The one secret every process needs. Provide an existing Secret holding
+# DATABASE_URL and FUSEONE_MASTER_KEY, or let the chart create one from
+# `values` below — which puts both in your values file, and therefore in
+# whatever holds your values file.
+secret:
+  existingSecret: ""
+  values:
+    databaseUrl: ""
+    masterKey: ""
+
+# Where the console tells a browser to come back to. It is also what an OIDC
+# provider redirects to, so it has to be the address people actually use.
+baseUrl: ""
+
+serve:
+  replicas: 2
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { memory: 512Mi }
+  # Enough for a request in flight to finish. The API holds nothing long: a
+  # tool call belongs to a worker.
+  terminationGracePeriodSeconds: 30
+
+worker:
+  replicas: 2
+  # Runs advanced at once, per process.
+  concurrency: 4
+  # Must outlast the slowest single turn: a lease that expires mid-turn hands
+  # the run to a second worker while the first is still in a tool call.
+  lease: 2m
+  resources:
+    requests: { cpu: 200m, memory: 256Mi }
+    limits: { memory: 1Gi }
+  # Longer than the API's, and longer than a turn. A worker killed mid-turn
+  # loses nothing — the ledger is the memory, and the lease expires — but
+  # letting it finish avoids a run that has to be picked up and re-read.
+  terminationGracePeriodSeconds: 120
+  # Agent definitions on disk, if any. Optional and usually empty: publishing
+  # is an interface action rather than a deploy (PRD DE-07), so an installation
+  # authors through the console and the registry is the source. A directory is
+  # a way to seed one, not a way to run one.
+  specs:
+    configMap: ""
+
+# Migrations run as a job before the pods that need them. It takes an advisory
+# lock, so a second one waits rather than racing — but a hook gives a clear
+# failure before anything serves against a schema it does not know.
+migrations:
+  enabled: true
+  backoffLimit: 3
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  host: ""
+  tls: []
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# Applied to every pod. Defaults are the ones the image already satisfies, so
+# an installation that tightens its cluster policy does not have to loosen this
+# chart to match.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  seccompProfile: { type: RuntimeDefault }
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities: { drop: ["ALL"] }
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# One serve pod may always go. Two replicas and a disruption budget of one is
+# what makes a node drain not an outage.
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1

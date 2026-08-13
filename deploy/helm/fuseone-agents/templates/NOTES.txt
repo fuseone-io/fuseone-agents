@@ -1,0 +1,25 @@
+{{ .Chart.Name }} {{ .Chart.AppVersion }} is installed as {{ .Release.Name }}.
+
+  API and console   {{ include "fuseone.fullname" . }}:{{ .Values.service.port }}
+  Workers           {{ .Values.worker.replicas }} × {{ .Values.worker.concurrency }} concurrent runs
+{{- if .Values.ingress.enabled }}
+  Reachable at      https://{{ .Values.ingress.host }}
+{{- else }}
+
+  No ingress. To look at it now:
+    kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "fuseone.fullname" . }} 8080:{{ .Values.service.port }}
+{{- end }}
+
+The first person to open it claims the installation with the setup token,
+which the API prints once at start-up:
+
+  kubectl -n {{ .Release.Namespace }} logs -l app.kubernetes.io/component=serve --tail=100 | grep setup
+
+After that, sign-in goes through the identity provider configured in the
+administration area, and the token stops working.
+{{- if not .Values.baseUrl }}
+
+  baseUrl is unset. The console will send a browser back to whatever address
+  it was reached on, and an OIDC provider will refuse a redirect it does not
+  recognise. Set it to the address people actually use.
+{{- end }}

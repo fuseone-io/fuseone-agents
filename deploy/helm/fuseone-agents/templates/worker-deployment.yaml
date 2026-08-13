@@ -1,0 +1,93 @@
+{{/*
+The pool that drains the queue.
+
+A separate deployment from the API on purpose: the two scale on different axes,
+and a pool that needs its own network policy or its own resource limits becomes
+its own thing without touching the server.
+
+Several replicas are safe by construction. The queue is claim-based with
+leases — `FOR UPDATE SKIP LOCKED` — so workers share one queue without
+coordinating, and a run has one writer at a time (NF-15).
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "fuseone.fullname" . }}-worker
+  labels: {{- include "fuseone.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: {{ .Values.worker.replicas }}
+  selector:
+    matchLabels: {{- include "fuseone.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: worker
+  strategy:
+    # One at a time, and the old one finishes first. Two workers of different
+    # versions can share the queue safely — a run is pinned to a version — but
+    # a rolling restart that stops half the pool mid-turn hands every claim to
+    # a lease expiry rather than to a clean handover.
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 0
+  template:
+    metadata:
+      labels: {{- include "fuseone.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: worker
+      annotations:
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "fuseone.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      # Longer than a turn. A worker killed mid-turn loses nothing — the ledger
+      # is its memory and the lease expires — but letting it finish avoids a
+      # run that has to be picked up and re-read.
+      terminationGracePeriodSeconds: {{ .Values.worker.terminationGracePeriodSeconds }}
+      containers:
+        - name: worker
+          image: {{ include "fuseone.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - worker
+            - --concurrency={{ .Values.worker.concurrency }}
+            - --lease={{ .Values.worker.lease }}
+            {{- if .Values.worker.specs.configMap }}
+            - --specs=/agents
+            {{- end }}
+          env:
+            {{- include "fuseone.env" . | nindent 12 }}
+            # Identifies this process in a lease, so an abandoned claim names
+            # the pod that held it.
+            - name: HOSTNAME
+              valueFrom:
+                fieldRef: { fieldPath: metadata.name }
+          {{- if .Values.worker.specs.configMap }}
+          volumeMounts:
+            - name: specs
+              mountPath: /agents
+              readOnly: true
+          {{- end }}
+          # No probes. A worker serves nothing, so there is no endpoint to ask;
+          # it stops when its context does, and a wedged one is visible as a
+          # queue that stops draining rather than as a port that stops
+          # answering. Giving it an HTTP server to be probed on would be adding
+          # a listener for the benefit of the probe.
+          securityContext: {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          resources: {{- toYaml .Values.worker.resources | nindent 12 }}
+      {{- if .Values.worker.specs.configMap }}
+      volumes:
+        - name: specs
+          configMap:
+            name: {{ .Values.worker.specs.configMap }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}

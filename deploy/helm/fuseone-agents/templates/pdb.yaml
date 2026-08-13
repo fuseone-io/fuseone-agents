@@ -1,0 +1,19 @@
+{{- if and .Values.podDisruptionBudget.enabled (gt (int .Values.serve.replicas) 1) }}
+{{/*
+What makes a node drain not an outage.
+
+Only the API has one. A worker pool that loses a pod loses nothing: the run it
+held returns to the queue when its lease expires, and the ledger is what it
+was reading from anyway.
+*/}}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "fuseone.fullname" . }}-serve
+  labels: {{- include "fuseone.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels: {{- include "fuseone.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: serve
+{{- end }}

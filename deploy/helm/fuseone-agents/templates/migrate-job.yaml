@@ -1,0 +1,49 @@
+{{- if .Values.migrations.enabled }}
+{{/*
+The schema, before anything serves against it.
+
+A hook rather than an initContainer on every pod: `ledger.Migrate` takes an
+advisory lock so concurrent runs are safe, but a job that fails is a release
+that fails, visibly, before a single pod starts answering. An initContainer
+would spread the same failure across every replica as a crash loop.
+*/}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "fuseone.fullname" . }}-migrate
+  labels: {{- include "fuseone.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-5"
+    # Kept after a failure. The log is the only account of what went wrong
+    # with a schema change, and deleting it leaves an operator an exit code.
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: {{ .Values.migrations.backoffLimit }}
+  template:
+    metadata:
+      labels: {{- include "fuseone.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: migrate
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "fuseone.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: migrate
+          image: {{ include "fuseone.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["migrate"]
+          env: {{- include "fuseone.env" . | nindent 12 }}
+          securityContext: {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+      {{- with .Values.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

@@ -1,0 +1,35 @@
+{{- if .Values.ingress.enabled }}
+{{/*
+Off by default.
+
+This platform is installed inside the customer's perimeter (NF-07), and the
+usual answer is an ingress they already run with their own certificates and
+their own policy. Turning one on here is a decision, not a default.
+*/}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "fuseone.fullname" . }}
+  labels: {{- include "fuseone.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations: {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with .Values.ingress.tls }}
+  tls: {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ required "ingress.host is required when the ingress is enabled" .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "fuseone.fullname" . }}
+                port:
+                  name: http
+{{- end }}

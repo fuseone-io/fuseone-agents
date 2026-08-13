@@ -1,0 +1,18 @@
+apiVersion: v2
+name: fuseone-agents
+description: |
+  A governed AI-agent platform, installed inside the customer's perimeter.
+  One chart, one binary, one PostgreSQL — and no other mandatory
+  infrastructure component (PRD DE-01).
+type: application
+# The chart's own version. appVersion follows the binary and is set by the
+# release process; both are here so an operator reading `helm list` can tell a
+# chart change from a product change.
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.27.0-0"
+home: https://github.com/fuseone-io/fuseone-agents
+sources:
+  - https://github.com/fuseone-io/fuseone-agents
+maintainers:
+  - name: FuseOne
