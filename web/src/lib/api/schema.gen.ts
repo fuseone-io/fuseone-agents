@@ -533,6 +533,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/runs/{runId}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Return a parked run to the queue
+         * @description Parking withdraws a run because retrying will not help until somebody
+         *     does something — raise a ceiling, fix an upstream, widen a pack. This
+         *     is that somebody saying they have, and the run continues from the exact
+         *     step it stopped at (PRD FO-04, NF-14).
+         *
+         *     Deliberately not automatic. A ceiling raised across a company would
+         *     otherwise restart every run that ever hit it, including the ones people
+         *     have since dealt with by hand.
+         */
+        post: operations["resumeRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runs/{runId}/compensation": {
         parameters: {
             query?: never;
@@ -1302,7 +1329,7 @@ export interface components {
          */
         Effect: "read" | "write" | "destructive" | "financial";
         /** @enum {string} */
-        StepKind: "run_started" | "planned" | "gate_decided" | "budget_reserved" | "tool_called" | "tool_returned" | "budget_reconciled" | "approval_requested" | "approval_decided" | "abandoned" | "compensated" | "failed" | "parked" | "run_finished";
+        StepKind: "run_started" | "planned" | "gate_decided" | "budget_reserved" | "tool_called" | "tool_returned" | "budget_reconciled" | "approval_requested" | "approval_decided" | "resumed" | "abandoned" | "compensated" | "failed" | "parked" | "run_finished";
         Scope: {
             company: string;
             area: string;
@@ -2933,6 +2960,47 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+        };
+    };
+    resumeRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: components["parameters"]["RunId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** @description What changed, in the words of whoever changed it. */
+                    note?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The run is back in the queue. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description The run is not parked. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     getCompensation: {

@@ -242,6 +242,12 @@ func (s *State) applyKind(step domain.Step) error {
 	case domain.StepParked:
 		s.Phase = PhaseParked
 
+	case domain.StepResumed:
+		// Straight back to running, at the sequence it stopped at. Nothing is
+		// replayed and nothing is reset: the run's whole state is the fold of
+		// the steps before this one.
+		s.Phase = PhaseRunning
+
 	case domain.StepRunFinished:
 		s.PendingApproval, s.requested, s.Approved = nil, nil, nil
 		s.Phase = PhaseFinished

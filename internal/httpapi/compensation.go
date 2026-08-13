@@ -200,3 +200,61 @@ func actsFrom(plan []compensate.Act) []openapi.CompensationAct {
 	}
 	return out
 }
+
+/*
+ResumeRun returns a parked run to the queue.
+
+Parking is a pause, and this is what makes that true. Without it the platform
+said in four places that raising a ceiling continues a run from the step it
+stopped at, and there was no way to say the ceiling had been raised: every
+parked run was parked for ever.
+
+Not automatic, on purpose. A ceiling raised across a company would otherwise
+restart every run that ever hit it, including the ones somebody has since dealt
+with by hand.
+*/
+func (s *Server) ResumeRun(ctx context.Context, req openapi.ResumeRunRequestObject) (openapi.ResumeRunResponseObject, error) {
+	runID := domain.RunID(req.RunId)
+	steps, state, err := s.trail(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+	if steps == nil {
+		return openapi.ResumeRun404ApplicationProblemPlusJSONResponse{
+			NotFoundApplicationProblemPlusJSONResponse: notFound(req.RunId),
+		}, nil
+	}
+
+	// Making the platform act again is the authority to make it run, not the
+	// authority to read what it did.
+	if err := auth.Require(ctx, domain.PermRunTrigger, state.Scope); err != nil {
+		return openapi.ResumeRun403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermRunTrigger, state.Scope),
+		}, nil
+	}
+	if state.Phase != engine.PhaseParked {
+		return openapi.ResumeRun409ApplicationProblemPlusJSONResponse(problem(
+			http.StatusConflict, "The run is not parked",
+			fmt.Sprintf("Run %s is %s; only a parked run can be resumed",
+				req.RunId, state.Phase))), nil
+	}
+
+	note := ""
+	if req.Body != nil && req.Body.Note != nil {
+		note = *req.Body.Note
+	}
+	if _, err := s.store.Append(ctx, domain.Step{
+		RunID: runID, Kind: domain.StepResumed, Scope: state.Scope,
+		AgentID: state.AgentID, VersionID: state.VersionID,
+		OnBehalfOf: state.OnBehalfOf, At: clockOr(s.clock).Now(),
+		Payload: mustJSON(domain.ResumedPayload{By: callerOf(ctx), Note: note}),
+	}); err != nil {
+		return nil, fmt.Errorf("resume %s: %w", runID, err)
+	}
+
+	run, _, err := s.project(ctx, runID)
+	if err != nil {
+		return nil, fmt.Errorf("project %s: %w", runID, err)
+	}
+	return openapi.ResumeRun200JSONResponse(run), nil
+}

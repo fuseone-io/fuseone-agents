@@ -22,6 +22,7 @@ const TITLES: Record<StepKind, string> = {
   budget_reconciled: "Orçamento reconciliado",
   approval_requested: "runs.storyAwaitingHuman",
   approval_decided: "runs.storyHumanDecided",
+  resumed: "runs.storyResumed",
   abandoned: "runs.storyAbandoned",
   compensated: "runs.nodeCompensated",
   failed: "runs.storyFailed",

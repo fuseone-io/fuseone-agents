@@ -799,6 +799,48 @@ paths:
               schema: { $ref: '#/components/schemas/VerifyResult' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /runs/{runId}/resume:
+    post:
+      tags: [runs]
+      operationId: resumeRun
+      summary: Return a parked run to the queue
+      description: |
+        Parking withdraws a run because retrying will not help until somebody
+        does something — raise a ceiling, fix an upstream, widen a pack. This
+        is that somebody saying they have, and the run continues from the exact
+        step it stopped at (PRD FO-04, NF-14).
+
+        Deliberately not automatic. A ceiling raised across a company would
+        otherwise restart every run that ever hit it, including the ones people
+        have since dealt with by hand.
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+                  maxLength: 500
+                  description: What changed, in the words of whoever changed it.
+      responses:
+        '200':
+          description: The run is back in the queue.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Run' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: The run is not parked.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
   /runs/{runId}/compensation:
     get:
       tags: [runs]
@@ -2008,6 +2050,7 @@ components:
         - budget_reconciled
         - approval_requested
         - approval_decided
+        - resumed
         - abandoned
         - compensated
         - failed

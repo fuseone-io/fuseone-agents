@@ -467,6 +467,36 @@ func TestQueueContract(t *testing.T) {
 		}
 	})
 
+	run(t, "a resumed run is claimable again", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		openRun(t, s, "run-1")
+
+		if _, err := s.Claim(ctx, "w1", lease); err != nil {
+			t.Fatalf("Claim: %v", err)
+		}
+		if err := s.Release(ctx, "run-1", domain.ClaimOutcome{
+			Err: errors.New("budget exhausted"), Parked: true,
+		}); err != nil {
+			t.Fatalf("Release: %v", err)
+		}
+		if _, err := s.Append(ctx, domain.Step{
+			RunID: "run-1", Kind: domain.StepResumed,
+			Scope: domain.Scope{Company: "acme", Area: "cx"}, AgentID: "triage",
+			At: time.Now(), Payload: []byte(`{"by":"ana","note":"teto erguido"}`),
+		}); err != nil {
+			t.Fatalf("Append: %v", err)
+		}
+
+		// The claim that makes parking a pause rather than an ending.
+		claim, err := s.Claim(ctx, "w1", lease)
+		if err != nil {
+			t.Fatalf("Claim after the resume = %v, want the run back", err)
+		}
+		if claim.RunID != "run-1" {
+			t.Errorf("claimed %q, want run-1", claim.RunID)
+		}
+	})
+
 	run(t, "an expired lease returns the run to the queue", func(t *testing.T, s Store) {
 		ctx := context.Background()
 		openRun(t, s, "run-1")

@@ -132,6 +132,20 @@ type ApprovalDecidedPayload struct {
 	Note     string `json:"note,omitempty"`
 }
 
+// ResumedPayload records a person returning a parked run to the queue.
+//
+// Parking withdraws a run because retrying will not help until somebody does
+// something — raise a ceiling, fix an upstream, widen a pack. This is that
+// somebody saying they have. It is deliberately not automatic: a ceiling
+// raised across a company would otherwise restart every run that ever hit it,
+// including the ones people have since dealt with by hand.
+type ResumedPayload struct {
+	By UserID `json:"by"`
+	// Note is what changed, in the words of whoever changed it. The trail
+	// otherwise records a run that resumed for no stated reason.
+	Note string `json:"note,omitempty"`
+}
+
 // AbandonedPayload records a person deciding a run cannot go on.
 //
 // It is never written by the loop. Parking is the machine saying it is stuck;

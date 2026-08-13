@@ -668,3 +668,31 @@ func (h *harness) approve(t *testing.T, granted bool) {
 		t.Fatalf("append approval: %v", err)
 	}
 }
+
+func TestAdvance_toolCallCeilingReached_blocksTheNextCall(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	// A ceiling of one call has to mean one call. The engine never told the
+	// Gate that the request it was ruling on was itself a call, so every
+	// tool-call ceiling let one more through than it said. The Gate's own test
+	// fixture filled the field in, which is how the gap survived: the fake was
+	// more careful than the thing it stood for.
+	h := newHarness(t,
+		Proposal{Tool: "crm.lookup", Args: []byte(`{"a":1}`)},
+		Proposal{Tool: "crm.lookup", Args: []byte(`{"a":2}`)},
+	)
+	start := h.start(t, domain.Budget{Micros: 1_000_000, ToolCalls: 1, Steps: 40})
+
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+
+	if len(h.tools.invocations) != 1 {
+		t.Errorf("invocations = %v, want one call against a ceiling of one",
+			h.tools.invocations)
+	}
+}

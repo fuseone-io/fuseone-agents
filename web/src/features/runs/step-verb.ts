@@ -19,6 +19,7 @@ const VERBS: Record<StepKind, { verb: string; tone: Tone }> = {
   budget_reconciled: { verb: "conciliou", tone: "neutral" },
   approval_requested: { verb: "runs.verbAskedApproval", tone: "warn" },
   approval_decided: { verb: "decidiu", tone: "good" },
+  resumed: { verb: "runs.verbResumed", tone: "good" },
   abandoned: { verb: "runs.verbAbandoned", tone: "bad" },
   compensated: { verb: "runs.verbCompensated", tone: "warn" },
   failed: { verb: "falhou", tone: "bad" },

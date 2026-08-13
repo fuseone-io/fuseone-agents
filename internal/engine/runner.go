@@ -131,25 +131,37 @@ func (r *Runner) resolve(ctx context.Context, ref string) ([]byte, error) {
 	return r.deps.Content.Get(ctx, ref)
 }
 
+// withThisCall adds the call being ruled on to the planner's estimate.
+//
+// The planner estimates cost and tokens, which are the things it can guess at.
+// How many calls a proposal is, is not a guess: it is one.
+func withThisCall(estimate domain.Consumption) domain.Consumption {
+	estimate.ToolCalls++
+	return estimate
+}
+
 // act runs the proposal through the Gate and, if it survives, executes it.
 func (r *Runner) act(ctx context.Context, state State, start Start, p Proposal) (Status, error) {
 	effect, _ := r.deps.Catalog.Effect(p.Tool)
 	idemKey := idempotencyKey(start.RunID, p.Tool, p.Args)
 
 	decision, err := r.deps.Gate.Evaluate(ctx, gate.Request{
-		Scope:           start.Scope,
-		RunID:           start.RunID,
-		AgentID:         start.AgentID,
-		Seq:             state.Seq + 1,
-		Tool:            p.Tool,
-		Effect:          effect,
-		Args:            p.Args,
-		ArgLabels:       state.Labels,
-		Pack:            envelopeOf(start, state.Called),
-		Stage:           start.Stage,
-		Budget:          start.Budget,
-		Committed:       state.Committed(),
-		Estimate:        p.Estimate,
+		Scope:     start.Scope,
+		RunID:     start.RunID,
+		AgentID:   start.AgentID,
+		Seq:       state.Seq + 1,
+		Tool:      p.Tool,
+		Effect:    effect,
+		Args:      p.Args,
+		ArgLabels: state.Labels,
+		Pack:      envelopeOf(start, state.Called),
+		Stage:     start.Stage,
+		Budget:    start.Budget,
+		Committed: state.Committed(),
+		// The request is itself a call, and the Gate cannot know that on its
+		// own. Left out, a ceiling of N tool calls permitted N+1: the check
+		// counted the calls already made and never the one it was ruling on.
+		Estimate:        withThisCall(p.Estimate),
 		IdemKey:         idemKey,
 		AlreadyExecuted: state.AlreadyExecuted(idemKey),
 		// Only for the exact call that was cleared. A grant that travelled to

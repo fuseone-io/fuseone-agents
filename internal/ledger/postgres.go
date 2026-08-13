@@ -338,6 +338,8 @@ func projectPhase(s domain.Step) (phase *string, endedAt *time.Time) {
 		return set("awaiting_approval"), nil
 	case domain.StepParked:
 		return set("parked"), nil
+	case domain.StepResumed:
+		return set("running"), nil
 	case domain.StepAbandoned:
 		// A person ended the run. Whether it is over depends on whether
 		// anything still has to be taken back first.

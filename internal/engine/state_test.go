@@ -411,3 +411,28 @@ func TestFold_abandonedWhileAwaitingApproval_leavesNothingToDecide(t *testing.T)
 		t.Errorf("PendingApproval = %+v, want nothing left to decide", s.PendingApproval)
 	}
 }
+
+func TestFold_resumed_returnsAParkedRunToRunning(t *testing.T) {
+	t.Parallel()
+
+	// Parking is a pause, and the product says so in four places: raise the
+	// ceiling and the run continues from the exact step it stopped at. There
+	// was no way to say the ceiling had been raised, so every parked run was
+	// parked for ever.
+	s := mustFold(t, chain(t, domain.Step{
+		Kind: domain.StepRunStarted, AgentID: "billing", Payload: []byte(`{}`),
+	}, domain.Step{
+		Kind:    domain.StepParked,
+		Payload: payload(t, domain.ParkedPayload{Reason: "budget_exhausted"}),
+	}, domain.Step{
+		Kind:    domain.StepResumed,
+		Payload: payload(t, domain.ResumedPayload{By: "ana", Note: "teto erguido"}),
+	}))
+
+	if s.Phase != PhaseRunning {
+		t.Errorf("Phase = %v, want %v", s.Phase, PhaseRunning)
+	}
+	if !s.Resumable() {
+		t.Error("Resumable() = false; no worker will ever pick it up")
+	}
+}

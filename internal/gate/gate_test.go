@@ -270,3 +270,35 @@ func TestPack_frozenSet_onlyEverShrinks(t *testing.T) {
 		t.Error("Narrow dropped a capability present in both sets")
 	}
 }
+
+func TestEvaluate_lastPermittedToolCallAlreadyMade_blocksTheNextOne(t *testing.T) {
+	t.Parallel()
+
+	// A ceiling of one call has to mean one call. The check counted only the
+	// calls already made, never the one it was ruling on, so every tool-call
+	// ceiling permitted one more than it said — and a policy written as "at
+	// most one write per run" let two through.
+	r := request()
+	r.Budget = domain.Budget{Micros: 1_000_000, ToolCalls: 1}
+	r.Committed = domain.Consumption{ToolCalls: 1}
+
+	d := evaluate(t, New(), r)
+
+	if d.Verdict != domain.VerdictBlock || d.Rule != RuleBudget {
+		t.Errorf("decision = %+v, want the second call refused on budget", d)
+	}
+}
+
+func TestEvaluate_firstToolCallAgainstACeilingOfOne_isAllowed(t *testing.T) {
+	t.Parallel()
+
+	// The other half. Counting the call must not make a ceiling of one refuse
+	// the only call it was meant to permit.
+	r := request()
+	r.Budget = domain.Budget{Micros: 1_000_000, ToolCalls: 1}
+	r.Committed = domain.Consumption{}
+
+	if d := evaluate(t, New(), r); d.Rule == RuleBudget {
+		t.Errorf("decision = %+v, want the first call allowed", d)
+	}
+}
