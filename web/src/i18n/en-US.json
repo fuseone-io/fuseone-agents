@@ -30,6 +30,7 @@
     "classified": "{{tool}} classified as {{effect}}",
     "classify": "Classify",
     "company": "Company",
+    "companyFixed": "A company is created at installation, not here.",
     "connectFirst": "The assistant points at a provider already connected under Integrations. Connect one there first — the credential lives in a single place.",
     "daily": "Daily — resets at midnight UTC",
     "dailyCeiling": "Daily ceiling",

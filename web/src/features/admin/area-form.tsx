@@ -23,6 +23,13 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { useRegisterScope } from "@/features/scope/api";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useMe } from "@/features/session/api";
 import { problemMessage } from "@/lib/api/problem-message";
 
@@ -58,14 +65,17 @@ export function AreaForm({ onClose }: { onClose: () => void }) {
         name: values.name.trim(),
         label: values.label.trim() || undefined,
       });
-      toast.success(t("admin.areaDeclared", { area: created.label || created.area }), {
-        description: t("admin.areaCalled", { scope: `${created.company}/${created.area}` }),
-      });
+      toast.success(
+        t("admin.areaDeclared", { area: created.label || created.area }),
+        {
+          description: t("admin.areaCalled", {
+            scope: `${created.company}/${created.area}`,
+          }),
+        },
+      );
       onClose();
     } catch (error) {
-      toast.error(
-        problemMessage(error, t),
-      );
+      toast.error(problemMessage(error, t));
     }
   }
 
@@ -88,9 +98,26 @@ export function AreaForm({ onClose }: { onClose: () => void }) {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{t("admin.company")}</FormLabel>
-                  <FormControl>
-                    <Input {...field} placeholder="default" />
-                  </FormControl>
+                  {/* The companies the caller reaches, not a text box. Typing
+                      one they hold no grant in wrote a row they could never
+                      see afterwards: the form said it worked and the list
+                      stayed empty. The server refuses it now; offering it at
+                      all was the other half of the same mistake. */}
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder={t("admin.company")} />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {companies.map((c) => (
+                        <SelectItem key={c} value={c}>
+                          {c}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>{t("admin.companyFixed")}</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

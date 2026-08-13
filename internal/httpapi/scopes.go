@@ -58,13 +58,21 @@ func (s *Server) ListScopes(
 func (s *Server) RegisterScope(
 	ctx context.Context, req openapi.RegisterScopeRequestObject,
 ) (openapi.RegisterScopeResponseObject, error) {
-	if resp := s.refuse(ctx, domain.PermScopeWrite); resp != nil {
-		return openapi.RegisterScope403ApplicationProblemPlusJSONResponse{
-			ForbiddenApplicationProblemPlusJSONResponse: *resp,
-		}, nil
-	}
 	if s.areas == nil || req.Body == nil {
 		return nil, errNoAdministration
+	}
+
+	// Checked in the company being written, not in a fixed administration
+	// scope. It used to be the latter, which let an operator register an area
+	// in any company at all — and then not see it, because listing is filtered
+	// by the scopes they hold. The console reported success, the row existed,
+	// and the screen stayed empty. A write nobody can read back is worse than
+	// a refusal: it leaves rows in a governance table no grant reaches.
+	target := domain.Scope{Company: domain.CompanyID(req.Body.Company)}
+	if err := auth.Require(ctx, domain.PermScopeWrite, target); err != nil {
+		return openapi.RegisterScope403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermScopeWrite, target),
+		}, nil
 	}
 
 	label := req.Body.Name
@@ -87,11 +95,6 @@ func (s *Server) RegisterScope(
 func (s *Server) DeleteScope(
 	ctx context.Context, req openapi.DeleteScopeRequestObject,
 ) (openapi.DeleteScopeResponseObject, error) {
-	if resp := s.refuse(ctx, domain.PermScopeWrite); resp != nil {
-		return openapi.DeleteScope403ApplicationProblemPlusJSONResponse{
-			ForbiddenApplicationProblemPlusJSONResponse: *resp,
-		}, nil
-	}
 	if s.areas == nil {
 		return nil, errNoAdministration
 	}
@@ -100,6 +103,14 @@ func (s *Server) DeleteScope(
 	if !ok || company == "" || area == "" {
 		return openapi.DeleteScope404ApplicationProblemPlusJSONResponse{
 			NotFoundApplicationProblemPlusJSONResponse: notFound(req.Scope),
+		}, nil
+	}
+
+	// In the company being withdrawn from, for the same reason registering is.
+	target := domain.Scope{Company: domain.CompanyID(company)}
+	if err := auth.Require(ctx, domain.PermScopeWrite, target); err != nil {
+		return openapi.DeleteScope403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermScopeWrite, target),
 		}, nil
 	}
 

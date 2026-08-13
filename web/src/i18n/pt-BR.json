@@ -30,6 +30,7 @@
     "classified": "{{tool}} classificada como {{effect}}",
     "classify": "Classificar",
     "company": "Empresa",
+    "companyFixed": "Uma empresa é criada na instalação, não aqui.",
     "connectFirst": "O assistente aponta para um provedor já conectado em Integrações. Conecte um lá primeiro — a credencial mora num lugar só.",
     "daily": "Diária — reinicia à meia-noite UTC",
     "dailyCeiling": "Teto por dia",
