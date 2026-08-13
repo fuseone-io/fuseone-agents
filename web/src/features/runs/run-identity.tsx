@@ -40,7 +40,7 @@ export function RunIdentity({ run, trigger }: { run: Run; trigger?: string }) {
           </h1>
           <span className="inline-flex h-6 items-center gap-1.5 rounded-pill bg-muted px-2.5 text-xs font-medium">
             <StateDot state={stateOfPhase(run.phase)} />
-            {PHASE_LABELS[run.phase]}
+            {t(PHASE_LABELS[run.phase])}
           </span>
         </div>
 

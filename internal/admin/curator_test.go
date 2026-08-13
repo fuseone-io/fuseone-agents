@@ -143,3 +143,35 @@ func TestClassify_twice_keepsTheLatestAndBothRecords(t *testing.T) {
 		t.Errorf("admin_events = %d, want both rulings on record", events)
 	}
 }
+
+func TestTools_carryTheUndoTheCuratorDeclared(t *testing.T) {
+	pool := freshPool(t)
+	ctx := context.Background()
+	curator := admin.NewCurator(pool)
+
+	if err := curator.Publish(ctx, []domain.ToolEntry{
+		{ID: "crm.note", Server: "crm", Description: "escreve nota"},
+	}); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+	if err := curator.Classify(ctx, platform, domain.ToolClassification{
+		Tool: "crm.note", Effect: domain.EffectWrite, By: "usr_ana",
+		CompensatedBy: "crm.note.delete",
+	}); err != nil {
+		t.Fatalf("Classify: %v", err)
+	}
+
+	// The published catalogue and the rulings are two records that meet here.
+	// The serve process reads only this, so a field the join forgets is a
+	// ruling that was made, stored, and is invisible to everyone.
+	entries, err := curator.Tools(ctx)
+	if err != nil {
+		t.Fatalf("Tools: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("Tools = %+v, want the one published tool", entries)
+	}
+	if entries[0].CompensatedBy != "crm.note.delete" {
+		t.Errorf("CompensatedBy = %q, want the tool that undoes it", entries[0].CompensatedBy)
+	}
+}

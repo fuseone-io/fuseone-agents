@@ -587,3 +587,84 @@ func TestAdvance_policyDecision_recordsWhichRuleAndWhatWasOnlyWatching(t *testin
 		t.Errorf("monitored = %+v, want the watching rule recorded", decided.Monitored)
 	}
 }
+
+func TestAdvance_afterAnApproval_executesTheCallThatWasApproved(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	// The whole point of the approval queue. Granting one and then asking the
+	// model what to do next means the approval decided nothing: the Gate sees
+	// a fresh proposal, requires approval again, and the run loops until it
+	// parks — which is what it did.
+	h := newHarness(t,
+		Proposal{Tool: "crm.note", Args: []byte(`{"text":"hi"}`)},
+		// A second proposal, so a run that wrongly replans reaches for it and
+		// the test can tell the two apart.
+		Proposal{Tool: "crm.lookup", Args: []byte(`{"email":"x@y.z"}`)},
+	)
+	start := h.start(t, generousBudget())
+
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+	h.approve(t, true)
+
+	st, err := h.runner.Advance(ctx, start)
+	if err != nil {
+		t.Fatalf("Advance after approval: %v", err)
+	}
+
+	if len(h.tools.invocations) != 1 {
+		t.Fatalf("invocations = %v, want the approved call to have run", h.tools.invocations)
+	}
+	if h.tools.invocations[0] != "crm.note" {
+		t.Errorf("invoked %q, want the tool the person approved", h.tools.invocations[0])
+	}
+	if st.Phase == PhaseAwaitingApproval {
+		t.Error("asked for approval again on a call somebody already approved")
+	}
+}
+
+func TestAdvance_afterARejection_doesNotExecute(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t,
+		Proposal{Tool: "crm.note", Args: []byte(`{"text":"hi"}`)},
+		Proposal{Tool: "crm.lookup", Args: []byte(`{"email":"x@y.z"}`)},
+	)
+	start := h.start(t, generousBudget())
+
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+	h.approve(t, false)
+
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("Advance after rejection: %v", err)
+	}
+
+	for _, called := range h.tools.invocations {
+		if called == "crm.note" {
+			t.Fatalf("invoked %q after a person refused it", called)
+		}
+	}
+}
+
+// approve records a person's decision the way the API does.
+func (h *harness) approve(t *testing.T, granted bool) {
+	t.Helper()
+
+	head, err := h.ledger.Head(context.Background(), "run-1")
+	if err != nil {
+		t.Fatalf("Head: %v", err)
+	}
+	if _, err := h.ledger.Append(context.Background(), domain.Step{
+		RunID: "run-1", Kind: domain.StepApprovalDecided,
+		Scope:   domain.Scope{Company: "acme", Area: "cx"},
+		AgentID: "triage", VersionID: "v3", At: head.At,
+		Payload: mustJSON(domain.ApprovalDecidedPayload{Approved: granted, By: "ana"}),
+	}); err != nil {
+		t.Fatalf("append approval: %v", err)
+	}
+}

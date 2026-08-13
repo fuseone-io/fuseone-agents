@@ -1,16 +1,17 @@
+import { useTranslation } from "react-i18next";
 import type { ReactNode } from "react";
 import { Mono } from "@/components/shared/mono";
 import { effectOf } from "@/features/runs/step-verb";
 import { formatMicros } from "@/lib/format";
 import type { PendingApproval, Step } from "@/lib/api/client";
 
-const UNCLASSIFIED = { label: "baixo", className: "text-muted-foreground" };
+const UNCLASSIFIED = { label: "runs.riskLow", className: "text-muted-foreground" };
 
 const EFFECT_RISK: Record<string, { label: string; className: string }> = {
   read: UNCLASSIFIED,
-  write: { label: "médio", className: "text-warning" },
-  financial: { label: "alto", className: "text-danger" },
-  irreversible: { label: "alto", className: "text-danger" },
+  write: { label: "runs.riskMedium", className: "text-warning" },
+  financial: { label: "runs.riskHigh", className: "text-danger" },
+  irreversible: { label: "runs.riskHigh", className: "text-danger" },
 };
 
 /**
@@ -27,6 +28,7 @@ export function DecisionFacts({
   approval: PendingApproval;
   step?: Step;
 }) {
+  const { t } = useTranslation();
   const payload = (step?.payload ?? {}) as { estimate?: { micros?: number } };
   // The run summary carries the effect by name; the step's payload carries the
   // domain's integer. Reading the raw payload put "2" on screen where the
@@ -37,16 +39,16 @@ export function DecisionFacts({
 
   return (
     <dl className="flex flex-col gap-2.5">
-      <Fact label={"policies.rule"}>
+      <Fact label={t("policies.rule")}>
         <span className="text-sm">{approval.rule ?? "—"}</span>
       </Fact>
-      <Fact label={"policies.effect"}>
+      <Fact label={t("policies.effect")}>
         <Mono>{effect}</Mono>
       </Fact>
-      <Fact label="Risco">
-        <span className={`text-sm ${risk.className}`}>{risk.label}</span>
+      <Fact label={t("runs.risk")}>
+        <span className={`text-sm ${risk.className}`}>{t(risk.label)}</span>
       </Fact>
-      <Fact label={"runs.estimatedCost"}>
+      <Fact label={t("runs.estimatedCost")}>
         {/* No estimate is not zero cost. Printing R$ 0,00 would be a claim the
             platform cannot make about a call it has not run. */}
         <Mono>{micros === undefined ? "—" : formatMicros(micros)}</Mono>

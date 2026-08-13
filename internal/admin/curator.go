@@ -269,6 +269,7 @@ func (c *Curator) Tools(ctx context.Context) ([]domain.ToolEntry, error) {
 		if r, ok := byTool[e.ID]; ok {
 			entries[i].Effect = r.Effect
 			entries[i].Untrusted = r.Untrusted
+			entries[i].CompensatedBy = r.CompensatedBy
 		}
 	}
 	return entries, nil

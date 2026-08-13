@@ -48,7 +48,11 @@ export function UndoPicker({
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    // modal, because this lives inside a dialog. A non-modal popover is not
+    // registered as a blocking layer, so the click that picks a tool reaches
+    // the dialog underneath as an outside interaction and closes the whole
+    // form — losing everything typed into it.
+    <Popover open={open} onOpenChange={setOpen} modal>
       <PopoverTrigger asChild>
         <Button
           id="compensatedBy"

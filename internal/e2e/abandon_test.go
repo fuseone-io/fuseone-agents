@@ -115,3 +115,70 @@ func (p *platform) abandon(t *testing.T, runID domain.RunID) {
 		t.Fatalf("abandon run: %v", err)
 	}
 }
+
+// writeThenAnswer makes the note once and then reports done, which is the run
+// an approver expects: they cleared one thing and it happened.
+func writeThenAnswer(turn int) chatReply {
+	if turn == 0 {
+		return chatReply{
+			Tool: "crm.note", Args: `{"text":"cobranca duplicada"}`,
+			PromptTokens: 900, CompletionTokens: 30,
+		}
+	}
+	return chatReply{Text: "Nota registrada.", PromptTokens: 950, CompletionTokens: 20}
+}
+
+func TestApproval_granted_executesTheCallThatWasApproved(t *testing.T) {
+	eachLedger(t, "an approved write reaches the server", func(t *testing.T, store Store) {
+		p := newPlatform(t, store, agentFull, writeThenAnswer)
+		if err := p.catalog.Classify(domain.ToolClassification{
+			Tool: "crm.note", Effect: domain.EffectWrite,
+		}); err != nil {
+			t.Fatalf("classify: %v", err)
+		}
+
+		// No written exception, so the built-in floor sends the write to a
+		// person. That is the whole path this covers.
+		p.open(t, "run-approval-1")
+		if state := p.settle(t, "run-approval-1"); state.Phase != engine.PhaseAwaitingApproval {
+			t.Fatalf("phase = %v, want it waiting for a person", state.Phase)
+		}
+		if len(p.server.Notes()) != 0 {
+			t.Fatal("the write reached the server before anybody approved it")
+		}
+
+		p.decide(t, "run-approval-1", true)
+		state := p.settle(t, "run-approval-1")
+
+		// The assertion the platform did not have: a granted approval has to
+		// reach the outside world. Without it the loop replans, the Gate asks
+		// again, and the run circles until it parks.
+		if got := p.server.Notes(); len(got) != 1 {
+			t.Fatalf("the server saw %d notes, want the approved one; steps: %v",
+				len(got), kindsOf(p.steps(t, "run-approval-1")))
+		}
+		if state.Phase != engine.PhaseFinished {
+			t.Errorf("phase = %v, want the run to have carried on", state.Phase)
+		}
+	})
+}
+
+// decide records a person's answer the way the API does.
+func (p *platform) decide(t *testing.T, runID domain.RunID, granted bool) {
+	t.Helper()
+
+	payload, err := json.Marshal(domain.ApprovalDecidedPayload{Approved: granted, By: "ana"})
+	if err != nil {
+		t.Fatalf("encode decision: %v", err)
+	}
+	if _, err := p.store.Append(t.Context(), domain.Step{
+		RunID: runID, Kind: domain.StepApprovalDecided,
+		Scope:     domain.Scope{Company: "acme", Area: "cx"},
+		AgentID:   p.spec.ID,
+		VersionID: p.spec.Version,
+		At:        time.Now(),
+		Payload:   payload,
+	}); err != nil {
+		t.Fatalf("decide approval: %v", err)
+	}
+}

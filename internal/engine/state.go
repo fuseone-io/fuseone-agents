@@ -66,6 +66,19 @@ type PendingApproval struct {
 	At     time.Time
 }
 
+// ApprovedCall is the exact call a person cleared.
+//
+// Exact on purpose. A grant is for one tool with one set of arguments, and
+// executing anything else on the strength of it would be the platform doing
+// something nobody agreed to — the failure this whole queue exists to prevent.
+type ApprovedCall struct {
+	Tool       domain.ToolID
+	ArgsRef    string
+	ArgsDigest string
+	// AtSeq is the approval_requested step it answers.
+	AtSeq int64
+}
+
 // State is the run reconstructed from its ledger. Every field is derived; none
 // is authoritative on its own.
 type State struct {
@@ -93,6 +106,13 @@ type State struct {
 	Called []domain.ToolID
 
 	PendingApproval *PendingApproval
+	// Approved is a call a person cleared and the loop has not made yet.
+	//
+	// It exists because an approval has to survive the turn that granted it.
+	// Without it the loop replans, the model proposes something else, and the
+	// Gate — which never saw the grant — asks again: the approval decided
+	// nothing and the run loops until it parks.
+	Approved *ApprovedCall
 	// PendingTool is set while a tool call is recorded but its result is not.
 	// A run loaded in that shape crashed mid-call, and the outcome is unknown.
 	PendingTool domain.ToolID
@@ -101,6 +121,10 @@ type State struct {
 	// A refusal is fed back to the planner so it can choose differently; this
 	// is how the platform notices that it did not.
 	ConsecutiveBlocks int
+
+	// requested is the call the pending approval is about, held between the
+	// request and the decision so the grant can name what it granted.
+	requested *ApprovedCall
 
 	// executed holds the idempotency keys the ledger has already recorded, so
 	// a resumed run never causes the same effect twice (PRD DE-16).
@@ -169,6 +193,9 @@ func (s *State) applyKind(step domain.Step) error {
 		s.Reserved.Tokens -= p.ReleasedTokens
 
 	case domain.StepToolCalled:
+		// The grant is spent. Holding it would let a resumed run make the
+		// approved call a second time.
+		s.Approved = nil
 		var p domain.ToolCalledPayload
 		if err := decode(step, &p); err != nil {
 			return err
@@ -194,10 +221,22 @@ func (s *State) applyKind(step domain.Step) error {
 			Tool: p.Tool, Rule: p.Rule, Reason: p.Reason,
 			AtSeq: step.Seq, Effect: p.Effect, At: step.At,
 		}
+		s.requested = &ApprovedCall{
+			Tool: p.Tool, ArgsRef: p.ArgsRef, ArgsDigest: p.ArgsDigest, AtSeq: step.Seq,
+		}
 		s.Phase = PhaseAwaitingApproval
 
 	case domain.StepApprovalDecided:
-		s.PendingApproval = nil
+		var p domain.ApprovalDecidedPayload
+		if err := decode(step, &p); err != nil {
+			return err
+		}
+		// A refusal leaves nothing to carry forward. The planner sees it in
+		// the transcript and chooses again, which is the point of asking.
+		if p.Approved {
+			s.Approved = s.requested
+		}
+		s.PendingApproval, s.requested = nil, nil
 		s.Phase = PhaseRunning
 
 	case domain.StepParked:

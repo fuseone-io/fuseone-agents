@@ -57,6 +57,12 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 	if state.Phase == PhaseAwaitingTool {
 		return r.recoverOrphanedCall(ctx, state, start)
 	}
+	// A granted approval is an instruction, not a suggestion to reconsider.
+	// Planning here would ask the model what to do next and execute whatever
+	// it said — on the strength of a person agreeing to something else.
+	if state.Approved != nil {
+		return r.actApproved(ctx, state, start)
+	}
 
 	proposal, err := r.plan(ctx, state, start)
 	if err != nil {
@@ -85,6 +91,46 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 	return r.act(ctx, state, start, proposal)
 }
 
+/*
+actApproved makes the call a person cleared.
+
+The arguments come back from the content store rather than from the model,
+because what was approved is what the approver read on the screen. Asking for
+them again would let a second planning call change them between the agreeing
+and the doing.
+
+It still crosses the Gate. The grant answers one check; the budget, the pack
+and the policy have all had time to change while the request sat in a queue,
+and any of them may now say no.
+*/
+func (r *Runner) actApproved(ctx context.Context, state State, start Start) (Status, error) {
+	approved := state.Approved
+
+	args, err := r.resolve(ctx, approved.ArgsRef)
+	if err != nil {
+		return Status{}, fmt.Errorf("engine: approved args of %s: %w", start.RunID, err)
+	}
+	// What the approver saw, byte for byte. A mismatch means the content store
+	// answered with something other than what was sealed into the trail, and
+	// acting on it would be acting on something nobody approved.
+	if got := digest(args); got != approved.ArgsDigest {
+		return Status{}, fmt.Errorf(
+			"engine: approved args of %s do not match the trail: %s != %s",
+			start.RunID, got, approved.ArgsDigest)
+	}
+
+	return r.act(ctx, state, start, Proposal{Tool: approved.Tool, Args: args})
+}
+
+// resolve reads a stored payload back. An empty reference is an approved call
+// that carried no arguments, which is not an error.
+func (r *Runner) resolve(ctx context.Context, ref string) ([]byte, error) {
+	if ref == "" || r.deps.Content == nil {
+		return nil, nil
+	}
+	return r.deps.Content.Get(ctx, ref)
+}
+
 // act runs the proposal through the Gate and, if it survives, executes it.
 func (r *Runner) act(ctx context.Context, state State, start Start, p Proposal) (Status, error) {
 	effect, _ := r.deps.Catalog.Effect(p.Tool)
@@ -106,6 +152,12 @@ func (r *Runner) act(ctx context.Context, state State, start Start, p Proposal) 
 		Estimate:        p.Estimate,
 		IdemKey:         idemKey,
 		AlreadyExecuted: state.AlreadyExecuted(idemKey),
+		// Only for the exact call that was cleared. A grant that travelled to
+		// a different tool, or to the same tool with different arguments,
+		// would be the platform doing something nobody agreed to.
+		ApprovalGranted: state.Approved != nil &&
+			state.Approved.Tool == p.Tool &&
+			state.Approved.ArgsDigest == digest(p.Args),
 	})
 	if err != nil {
 		return Status{}, fmt.Errorf("engine: gate: %w", err)

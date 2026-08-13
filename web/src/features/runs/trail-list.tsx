@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Mono } from "@/components/shared/mono";
 import { TrailEvent } from "@/features/runs/trail-event";
 import { TrailFold } from "@/features/runs/trail-fold";
@@ -5,10 +6,10 @@ import { formatTime } from "@/lib/format";
 import type { TrailGroup, TrailPhase } from "@/features/runs/trail-model";
 
 const PHASE_LABEL: Record<TrailPhase, string> = {
-  input: "Entrada",
+  input: "runs.phaseInput",
   execution: "runs.phaseExecution",
   human: "runs.phaseHuman",
-  end: "Encerramento",
+  end: "runs.phaseEnd",
 };
 
 /** The run as a sequence, grouped by phase and folded where nothing needed a
@@ -26,13 +27,14 @@ export function TrailList({
   liveSeq?: number;
   showHashes: boolean;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="px-4 pb-4">
       {groups.map((group) => (
         <div key={`${group.phase}-${group.at}`}>
           <div className="flex items-center gap-2.5 py-2 pt-3.5">
             <span className="text-2xs uppercase tracking-label text-muted-foreground">
-              {PHASE_LABEL[group.phase]}
+              {t(PHASE_LABEL[group.phase])}
             </span>
             <span aria-hidden className="h-px flex-1 bg-border-subtle" />
             <Mono dim className="text-2xs">
