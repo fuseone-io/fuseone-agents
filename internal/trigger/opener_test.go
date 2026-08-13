@@ -259,3 +259,81 @@ func TestOpen_aDraft_canStillBeSimulated(t *testing.T) {
 		t.Error("the simulated run was not opened")
 	}
 }
+
+// stops is the set of switches in force, as an operator left them.
+type stops []domain.Stop
+
+func (s stops) InForce(context.Context) ([]domain.Stop, error) { return s, nil }
+
+func TestOpen_installationStopped_opensNothingForAnyAgent(t *testing.T) {
+	t.Parallel()
+	opener, store := openerFor(t)
+	opener = opener.WithStops(stops{{
+		Level: domain.StopInstallation, Reason: "incidente no provedor de pagamentos",
+	}})
+
+	// The switch somebody reaches for when they do not yet know which agent is
+	// the problem. It has to hold without anybody naming one.
+	if _, err := opener.Open(t.Context(), trigger.Request{
+		Agent: "triage", IdemKey: "intent-1", Trigger: "cron",
+	}); !errors.Is(err, trigger.ErrStopped) {
+		t.Fatalf("Open under an installation stop = %v, want ErrStopped", err)
+	}
+
+	runs, _ := store.Runs(context.Background())
+	if len(runs) != 0 {
+		t.Errorf("the ledger holds %d runs, want none", len(runs))
+	}
+}
+
+func TestOpen_scopeStopped_reachesTheAgentsInsideIt(t *testing.T) {
+	t.Parallel()
+	opener, _ := openerFor(t)
+	// The agent is in acme/cx; the stop names the company. Stopping a company
+	// that left its areas running would be the widest switch behaving like the
+	// narrowest one.
+	opener = opener.WithStops(stops{{
+		Level: domain.StopScope, Scope: domain.Scope{Company: "acme"},
+		Reason: "auditoria em curso",
+	}})
+
+	if _, err := opener.Open(t.Context(), trigger.Request{
+		Agent: "triage", IdemKey: "intent-1", Trigger: "cron",
+	}); !errors.Is(err, trigger.ErrStopped) {
+		t.Fatalf("Open under a company stop = %v, want ErrStopped", err)
+	}
+}
+
+func TestOpen_stopOnAnotherScope_leavesThisAgentRunning(t *testing.T) {
+	t.Parallel()
+	opener, _ := openerFor(t)
+	opener = opener.WithStops(stops{{
+		Level: domain.StopScope, Scope: domain.Scope{Company: "outra"},
+		Reason: "não é aqui",
+	}})
+
+	// The other half. A switch that stopped everything whatever it named
+	// would be reached for once and never again.
+	if _, err := opener.Open(t.Context(), trigger.Request{
+		Agent: "triage", IdemKey: "intent-1", Trigger: "cron",
+	}); err != nil {
+		t.Fatalf("Open with a stop on another company = %v, want it to run", err)
+	}
+}
+
+func TestOpen_stopped_refusesASimulationToo(t *testing.T) {
+	t.Parallel()
+	opener, _ := openerFor(t)
+	opener = opener.WithStops(stops{{
+		Level: domain.StopInstallation, Reason: "parado",
+	}})
+
+	// A simulation is dry at the tool layer and nowhere else: every planning
+	// call is billed by the provider. Somebody who pressed stop wanted the
+	// platform quiet, not cheaper.
+	if _, err := opener.Open(t.Context(), trigger.Request{
+		Agent: "triage", IdemKey: "intent-1", Trigger: "manual", Simulation: "sim-1",
+	}); !errors.Is(err, trigger.ErrStopped) {
+		t.Fatalf("Open of a simulation under a stop = %v, want ErrStopped", err)
+	}
+}

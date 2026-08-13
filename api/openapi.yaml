@@ -1203,6 +1203,54 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /admin/stops:
+    get:
+      tags: [admin]
+      operationId: listStops
+      summary: What is currently stopped
+      description: |
+        The switches that are off, widest first. An empty list is the normal
+        state: nothing is stopped (PRD FO-06).
+      responses:
+        '200':
+          description: The switches in force.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Stop' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+    put:
+      tags: [admin]
+      operationId: setStop
+      summary: Stop or start a level of the platform
+      description: |
+        Three levels, from the narrow to the total: one agent, everything in a
+        scope, and the whole installation. An incident does not arrive scoped
+        to the agent somebody happens to be looking at.
+
+        Stopping takes effect on the next trigger of any kind — schedule,
+        webhook, event or the console's own button — because every way a run
+        can start goes through one place. Runs already in flight are not
+        touched: stopping is not undoing, and a run that has already acted on
+        the world is ended deliberately, with its compensation, from the run
+        itself.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StopRequest' }
+      responses:
+        '204': { description: The switch is set. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /admin/integrations:
     get:
       tags: [admin]
@@ -2414,6 +2462,38 @@ components:
         compensatedBy:
           type: string
           description: The tool that undoes this one, when the Curator has said which does.
+
+    Stop:
+      type: object
+      required: [level, reason]
+      properties:
+        level:
+          type: string
+          enum: [installation, scope, agent]
+        scope: { $ref: '#/components/schemas/Scope' }
+        agentId: { type: string }
+        reason:
+          type: string
+          description: Why, in the words of whoever threw it.
+        by: { type: string }
+        at: { type: string, format: date-time }
+
+    StopRequest:
+      type: object
+      required: [level, stopped]
+      properties:
+        level:
+          type: string
+          enum: [installation, scope, agent]
+        scope: { $ref: '#/components/schemas/Scope' }
+        agentId: { type: string }
+        stopped:
+          type: boolean
+          description: True stops it, false starts it again.
+        reason:
+          type: string
+          maxLength: 500
+          description: Required when stopping. Somebody else will find this.
 
     ModelPrice:
       type: object

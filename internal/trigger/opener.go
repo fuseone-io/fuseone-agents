@@ -58,9 +58,22 @@ type Pauses interface {
 	IsPaused(ctx context.Context, agent domain.AgentID) (bool, error)
 }
 
+// Stops are the switches wider than one agent: a scope, or the installation
+// (PRD FO-06).
+//
+// Declared here for the same reason as Pauses, and checked in the same place.
+// An incident does not arrive scoped to the agent somebody is looking at, and
+// a switch honoured by one trigger and not another is a switch that stops the
+// platform on weekdays.
+type Stops interface {
+	InForce(ctx context.Context) ([]domain.Stop, error)
+}
+
 var (
 	// ErrPaused means the agent exists and is not running.
 	ErrPaused = errors.New("trigger: the agent is paused")
+	// ErrStopped means a switch wider than the agent is off (PRD FO-06).
+	ErrStopped = errors.New("trigger: the platform is stopped")
 	// ErrDraft means the agent has not been let out of Draft. It can be
 	// simulated, which is how it earns its way out (PRD FU-10).
 	ErrDraft = errors.New("trigger: the agent is still a draft")
@@ -72,6 +85,7 @@ type Opener struct {
 	registry Registry
 	content  Content
 	pauses   Pauses
+	stops    Stops
 	stages   Stages
 	clock    Clock
 }
@@ -84,6 +98,59 @@ func NewOpener(ledger Ledger, registry Registry, clock Clock) *Opener {
 func (o *Opener) WithContent(content Content) *Opener {
 	o.content = content
 	return o
+}
+
+// WithStops wires the switches wider than one agent.
+func (o *Opener) WithStops(stops Stops) *Opener {
+	o.stops = stops
+	return o
+}
+
+/*
+stopping returns the switch that covers this agent, or nil.
+
+The agent's scope comes from its published version, which means resolving the
+registry before the check rather than after. That is the right order anyway: a
+stop naming a scope cannot be evaluated against an agent whose scope nobody
+looked up, and an agent nobody published is refused by the same lookup.
+*/
+func (o *Opener) stopping(ctx context.Context, agent domain.AgentID) (*domain.Stop, error) {
+	inForce, err := o.stops.InForce(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("trigger: read stops: %w", err)
+	}
+	if len(inForce) == 0 {
+		return nil, nil
+	}
+
+	scope := domain.Scope{}
+	// Only worth a lookup when a scope-level switch is on. An installation
+	// stop answers without knowing anything about the agent.
+	if needsScope(inForce) {
+		versions, err := o.registry.Versions(ctx, agent)
+		if err != nil {
+			return nil, fmt.Errorf("trigger: versions of %s: %w", agent, err)
+		}
+		if len(versions) > 0 {
+			scope = versions[0].Scope
+		}
+	}
+
+	for _, stop := range inForce {
+		if stop.Covers(scope, agent) {
+			return &stop, nil
+		}
+	}
+	return nil, nil
+}
+
+func needsScope(stops []domain.Stop) bool {
+	for _, s := range stops {
+		if s.Level == domain.StopScope {
+			return true
+		}
+	}
+	return false
 }
 
 // WithStages wires how far an agent is trusted, so a draft cannot open a real
@@ -158,6 +225,22 @@ func (o *Opener) Open(ctx context.Context, req Request) (Result, error) {
 		}
 		if stopped {
 			return Result{}, fmt.Errorf("%w: %s", ErrPaused, req.Agent)
+		}
+	}
+
+	// Wider than the agent, and checked after it: an operator who has stopped
+	// a scope gets one refusal naming the scope, rather than a per-agent
+	// message that makes them wonder which agents are covered.
+	//
+	// A simulation is stopped too. It spends real money at the provider and
+	// the person who pressed this wanted the platform quiet.
+	if o.stops != nil {
+		stop, err := o.stopping(ctx, req.Agent)
+		if err != nil {
+			return Result{}, err
+		}
+		if stop != nil {
+			return Result{}, fmt.Errorf("%w: %s", ErrStopped, stop.Reason)
 		}
 	}
 

@@ -182,6 +182,7 @@ func serve(args []string) error {
 			WithAuthoring(authoring.NewStore(identity.pool, store)).
 			WithAssistants(assistants(ctx, integrations), authoring.NewStore(identity.pool, store)).
 			WithPauses(spec.NewState(identity.pool)).
+			WithStops(admin.NewStops(identity.pool)).
 			WithStages(spec.NewState(identity.pool)).
 			WithPromotions(spec.NewState(identity.pool)).
 			WithPublisher(spec.NewPublisher(identity.pool, engine.SystemClock{}))
@@ -234,6 +235,10 @@ func serve(args []string) error {
 			trigger.NewOpener(store, spec.NewRegistry(identity.pool), engine.SystemClock{}).
 				WithContent(ledger.NewContent(identity.pool)).
 				WithPauses(spec.NewState(identity.pool)).
+				// A webhook is a way a run starts, so the switches reach it
+				// too. One honoured by the console and not by an inbound hook
+				// is a stop that quietens the half nobody is watching.
+				WithStops(admin.NewStops(identity.pool)).
 				WithStages(spec.NewState(identity.pool)),
 			slog.Default(),
 		).Mount(root)
@@ -592,6 +597,9 @@ func workerCmd(args []string) error {
 			trigger.NewOpener(store, registry, engine.SystemClock{}).
 				WithContent(ledger.NewContent(configPool)).
 				WithPauses(spec.NewState(configPool)).
+				// The schedule is the one that fires unattended, so it is the
+				// one a stop most needs to reach.
+				WithStops(admin.NewStops(configPool)).
 				WithStages(spec.NewState(configPool)),
 			engine.SystemClock{}, slog.Default(),
 		)

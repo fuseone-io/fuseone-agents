@@ -46,8 +46,13 @@ func openPool(t *testing.T) *pgxpool.Pool {
 func freshPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	pool := openPool(t)
+	// Every settings kind a test in this package writes. Naming them one by
+	// one rather than emptying the table keeps the fixtures a `make dev` left
+	// behind, and the list grows with the package: a kind left off leaks
+	// between tests and fails whichever one happens to run second.
 	if _, err := pool.Exec(context.Background(),
-		`delete from settings where kind = 'tool_classification'; delete from admin_events`); err != nil {
+		`delete from settings where kind in ('tool_classification', 'stop');
+		 delete from admin_events`); err != nil {
 		t.Fatalf("clean: %v", err)
 	}
 	return pool

@@ -32,6 +32,27 @@ estimate anybody here can check.
 
 ---
 
+## Stops: "per pack" became "per scope"
+
+FO-06 asks for a global switch per agent, **per pack** and per installation.
+This implementation has no named packs — an author lists tools directly in the
+specification, and `gate.Pack` is derived from that list rather than referring
+to a curated object somebody registered. There is a `pack:write` permission and
+no pack to write.
+
+The middle level is therefore the scope. It is the grouping the rest of the
+platform is built on, it is what an operator says out loud during an incident
+("stop everything in billing"), and it composes with the hierarchy: stopping a
+company stops its areas.
+
+If named packs arrive, a pack-level stop is a fourth `StopLevel` and a fourth
+case in `Stop.Covers`. Nothing else has to move.
+
+The console offers the two wide levels; one agent is the pause that already
+exists on the agent's own screen. A scope stop can also be thrown through the
+API by anything that holds `run:read` in that scope.
+
+
 ## 1. Policies
 
 ### What exists

@@ -943,6 +943,30 @@
       "draft": "Voltou para rascunho"
     }
   },
+  "stops": {
+    "by": "por {{who}}",
+    "howWide": "Até onde",
+    "levelInstallation": "Toda a instalação",
+    "levelScope": "Somente {{where}}",
+    "start": "Religar",
+    "startFailed": "Não foi possível religar.",
+    "startHelp": "Toda agenda que esteve esperando volta a disparar. Confira o que causou a parada antes de confirmar.",
+    "startTitle": "Religar?",
+    "started": "Religado",
+    "stop": "Parar",
+    "stopFailed": "Não foi possível parar.",
+    "stopHelp": "Nenhuma execução nova começa — nem por agenda, nem por webhook, nem por evento, nem por este console. As execuções em curso não são tocadas: parar não é desfazer, e uma execução que já agiu no mundo se encerra deliberadamente, com a compensação dela.",
+    "stopTitle": "Parar a plataforma",
+    "stopped": {
+      "agent": "O agente {{agent}} está parado",
+      "installation": "A instalação está parada",
+      "scope": "{{where}} está parada"
+    },
+    "stoppedHint": "Nenhuma execução nova começa até alguém religar.",
+    "stoppedNow": "Plataforma parada",
+    "why": "Por quê",
+    "whyPlaceholder": "incidente no provedor de pagamentos"
+  },
   "theme": {
     "change": "Mudar tema",
     "dark": "Escuro",

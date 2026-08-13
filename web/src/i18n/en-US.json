@@ -943,6 +943,30 @@
       "draft": "Back to draft"
     }
   },
+  "stops": {
+    "by": "by {{who}}",
+    "howWide": "How wide",
+    "levelInstallation": "The whole installation",
+    "levelScope": "Only {{where}}",
+    "start": "Start again",
+    "startFailed": "It could not be started.",
+    "startHelp": "Every schedule that has been waiting fires again. Check what caused the stop before confirming.",
+    "startTitle": "Start again?",
+    "started": "Started again",
+    "stop": "Stop",
+    "stopFailed": "It could not be stopped.",
+    "stopHelp": "No new run starts — not by schedule, webhook, event, or this console. Runs already in flight are not touched: stopping is not undoing, and a run that has already acted on the world is ended deliberately, with its compensation.",
+    "stopTitle": "Stop the platform",
+    "stopped": {
+      "agent": "Agent {{agent}} is stopped",
+      "installation": "The installation is stopped",
+      "scope": "{{where}} is stopped"
+    },
+    "stoppedHint": "No new run starts until somebody starts it again.",
+    "stoppedNow": "Platform stopped",
+    "why": "Why",
+    "whyPlaceholder": "incident at the payments provider"
+  },
   "theme": {
     "change": "Change theme",
     "dark": "Dark",

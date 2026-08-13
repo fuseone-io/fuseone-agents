@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
+import { StopButton } from "@/features/admin/stop-button";
 import { KpiRow } from "@/features/overview/kpi-row";
 import { ThroughputPanel } from "@/features/overview/throughput-panel";
 import { BudgetDonut } from "@/features/overview/budget-donut";
@@ -45,7 +46,12 @@ export function OverviewPage() {
         icon={PAGE_ICONS.overview}
         title={t("nav.overview")}
         description={t("overview.subtitle")}
-      />
+      >
+        {/* The one control on this screen that is not a filter. It is here
+            because the person who needs it is looking at the numbers that
+            told them something is wrong, not browsing administration. */}
+        <StopButton />
+      </PageHeader>
 
       <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
         {/* The content scrolls, the title and the trace do not. Sticky was the

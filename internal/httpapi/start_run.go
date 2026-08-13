@@ -80,6 +80,11 @@ func (s *Server) opener() *trigger.Opener {
 		// this button.
 		opener = opener.WithStages(s.stages)
 	}
+	if s.stops != nil {
+		// The console's own button obeys the switch too. A stop that left one
+		// way of starting a run open would be a stop somebody trusts once.
+		opener = opener.WithStops(s.stops)
+	}
 	if s.pauses != nil {
 		// Including the button. If a person could run a paused agent by
 		// pressing something, "paused" would mean "does not run by itself",

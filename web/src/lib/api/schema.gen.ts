@@ -805,6 +805,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/stops": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What is currently stopped
+         * @description The switches that are off, widest first. An empty list is the normal
+         *     state: nothing is stopped (PRD FO-06).
+         */
+        get: operations["listStops"];
+        /**
+         * Stop or start a level of the platform
+         * @description Three levels, from the narrow to the total: one agent, everything in a
+         *     scope, and the whole installation. An incident does not arrive scoped
+         *     to the agent somebody happens to be looking at.
+         *
+         *     Stopping takes effect on the next trigger of any kind — schedule,
+         *     webhook, event or the console's own button — because every way a run
+         *     can start goes through one place. Runs already in flight are not
+         *     touched: stopping is not undoing, and a run that has already acted on
+         *     the world is ended deliberately, with its compensation, from the run
+         *     itself.
+         */
+        put: operations["setStop"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/integrations": {
         parameters: {
             query?: never;
@@ -1555,6 +1589,27 @@ export interface components {
             untrusted: boolean;
             /** @description The tool that undoes this one, when the Curator has said which does. */
             compensatedBy?: string;
+        };
+        Stop: {
+            /** @enum {string} */
+            level: "installation" | "scope" | "agent";
+            scope?: components["schemas"]["Scope"];
+            agentId?: string;
+            /** @description Why, in the words of whoever threw it. */
+            reason: string;
+            by?: string;
+            /** Format: date-time */
+            at?: string;
+        };
+        StopRequest: {
+            /** @enum {string} */
+            level: "installation" | "scope" | "agent";
+            scope?: components["schemas"]["Scope"];
+            agentId?: string;
+            /** @description True stops it, false starts it again. */
+            stopped: boolean;
+            /** @description Required when stopping. Somebody else will find this. */
+            reason?: string;
         };
         /**
          * @description Micros per million tokens. Cache reads and cache writes are their own
@@ -3354,6 +3409,54 @@ export interface operations {
         };
         responses: {
             /** @description The ruling is recorded. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listStops: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The switches in force. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Stop"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    setStop: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StopRequest"];
+            };
+        };
+        responses: {
+            /** @description The switch is set. */
             204: {
                 headers: {
                     [name: string]: unknown;

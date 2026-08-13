@@ -70,8 +70,10 @@ type Server struct {
 	spend        Spend
 	rates        Rates
 	pauses       trigger.Pauses
-	stages       trigger.Stages
-	promotions   Promotions
+	// stops are the switches wider than one agent (PRD FO-06).
+	stops      Stoppers
+	stages     trigger.Stages
+	promotions Promotions
 	// cases is where an uploaded simulation set is filed. Optional, like the
 	// rest of the authoring area.
 	cases Cases
@@ -146,6 +148,12 @@ func (s *Server) WithStages(stages trigger.Stages) *Server {
 // WithPauses wires whether an agent is allowed to start.
 func (s *Server) WithPauses(pauses trigger.Pauses) *Server {
 	s.pauses = pauses
+	return s
+}
+
+// WithStops wires the switches wider than one agent (PRD FO-06).
+func (s *Server) WithStops(stops Stoppers) *Server {
+	s.stops = stops
 	return s
 }
 

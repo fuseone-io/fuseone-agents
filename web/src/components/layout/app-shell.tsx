@@ -3,6 +3,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { AppHeader } from "@/components/layout/app-header";
 import { PageActionsProvider } from "@/components/layout/page-actions";
+import { StopBanner } from "@/features/admin/stop-banner";
 
 /**
  * The sidebar-07 shell: an icon-collapsible sidebar and a flush content area.
@@ -39,6 +40,11 @@ export function AppShell({ children }: { children: ReactNode }) {
               to say so. A page that wants the full height asks with flex-1,
               which is sized from zero and unaffected by this. */}
           <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-auto p-6 [&>*]:shrink-0">
+            {/* Above every screen's content, not inside one panel. The
+                question it answers is "why is nothing running", and somebody
+                asking that is looking at stale numbers, not at the
+                administration area (PRD FO-06). */}
+            <StopBanner />
             {children}
           </div>
         </PageActionsProvider>

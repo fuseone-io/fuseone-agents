@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/ledger"
@@ -57,7 +58,10 @@ func startCmd(args []string) error {
 	// can reproduce.
 	opener := trigger.NewOpener(store, spec.NewRegistry(pool), engine.SystemClock{}).
 		WithContent(ledger.NewContent(pool)).
-		WithPauses(spec.NewState(pool))
+		WithPauses(spec.NewState(pool)).
+		// Including the command line. A stop honoured everywhere except the
+		// terminal is one somebody works around without meaning to.
+		WithStops(admin.NewStops(pool))
 
 	key := *runID
 	if key == "" {
