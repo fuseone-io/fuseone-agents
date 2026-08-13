@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"time"
 
 	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/autonomy"
@@ -35,6 +36,11 @@ func (p *workerParts) startLoops(ctx context.Context, cfg workerFlags, sim *work
 	if p.configPool == nil {
 		return
 	}
+
+	// The months the ledger is about to need. First, because everything below
+	// writes steps and a month with no partition costs the ability to archive
+	// it later.
+	go keepMonthsAhead(ctx, ledger.NewPartitions(p.configPool, time.Now))
 
 	// Retention. It reads the configured window on every pass, so shortening
 	// it takes effect on the next sweep rather than at the next deploy —

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -96,10 +97,16 @@ func insertStep(ctx context.Context, tx pgx.Tx, s domain.Step) error {
 			run_id, seq, kind, company_id, area_id, agent_id, version_id,
 			on_behalf_of, payload, labels,
 			input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
-			cost_micros, idem_key, policy_hash, at, prev_hash, hash
+			cost_micros, idem_key, policy_hash, at, prev_hash, hash, opened_at
 		) values (
 			$1,$2,$3,$4,$5,$6,$7,$8,coalesce($9,'{}'::jsonb),$10,
-			$11,$12,$13,$14,$15,$16,$17,$18,$19,$20
+			$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
+			-- The partition key: when the run started, the same on every step
+			-- of it. Read from the projection rather than passed in, because
+			-- the caller of an append does not know it and a step that guessed
+			-- would put itself in a partition its own run cannot see.
+			-- Absent for the first step, which is the one that sets it.
+			coalesce((select started_at from runs where run_id = $1), $18)
 		)`,
 		string(s.RunID), s.Seq, string(s.Kind),
 		string(s.Scope.Company), string(s.Scope.Area),
@@ -115,12 +122,17 @@ func insertStep(ctx context.Context, tx pgx.Tx, s domain.Step) error {
 
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-		switch pgErr.ConstraintName {
-		case "run_steps_idem_key_uniq":
+		// Matched loosely, on purpose. The unique index is declared once on the
+		// partitioned parent, but a violation is raised against the partition's
+		// own copy of it, whose name Postgres generates —
+		// run_steps_2026_08_opened_at_idem_key_idx. An exact match on the
+		// parent's name stopped firing the day the table was partitioned, and
+		// what it did instead was report every duplicate effect as a sequence
+		// conflict: the caller retried a call that had already happened.
+		if strings.Contains(pgErr.ConstraintName, "idem_key") {
 			return ErrIdemConflict
-		default:
-			return ErrSeqConflict
 		}
+		return ErrSeqConflict
 	}
 	return fmt.Errorf("insert step: %w", err)
 }

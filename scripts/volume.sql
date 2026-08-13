@@ -11,7 +11,7 @@
 insert into run_steps (
     run_id, seq, kind, company_id, area_id, agent_id, version_id,
     payload, labels, input_tokens, output_tokens, cost_micros,
-    idem_key, policy_hash, at, prev_hash, hash)
+    idem_key, policy_hash, at, opened_at, prev_hash, hash)
 select
     'run_' || (n / 20)::text,
     (n % 20) + 1,
@@ -35,6 +35,7 @@ select
     case when n % 8 = 2 then md5(n::text) else '' end,
     'builtin/v1',
     now() - (n || ' seconds')::interval,
+    now() - ((n / 20) * 20 || ' seconds')::interval,
     case when n % 20 = 0 then null else sha256((n-1)::text::bytea) end,
     sha256(n::text::bytea)
 from generate_series(0, :steps::bigint - 1) n;
@@ -50,8 +51,16 @@ from generate_series(0, (:steps / 200)::bigint) n;
 analyze run_steps;
 analyze admin_events;
 
-select pg_size_pretty(pg_total_relation_size('run_steps')) as ledger_total,
-       pg_size_pretty(pg_indexes_size('run_steps'))        as ledger_indexes,
-       count(*)                                            as steps,
-       pg_total_relation_size('run_steps') / count(*)      as bytes_per_step
-from run_steps;
+-- Summed over the partition tree: the parent of a partitioned table holds no
+-- rows, so asking it for its size answers zero however large the ledger is.
+with tree as (
+    select coalesce(sum(pg_total_relation_size(relid)), 0) as total,
+           coalesce(sum(pg_indexes_size(relid)), 0)        as indexes
+    from pg_partition_tree('run_steps') where isleaf
+), rows as (select count(*) as steps from run_steps)
+select pg_size_pretty(tree.total)      as ledger_total,
+       pg_size_pretty(tree.indexes)    as ledger_indexes,
+       rows.steps,
+       tree.total / nullif(rows.steps, 0) as bytes_per_step,
+       (select count(*) from pg_partition_tree('run_steps') where isleaf) as partitions
+from tree, rows;

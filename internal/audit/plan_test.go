@@ -92,7 +92,7 @@ func seedSteps(t *testing.T, pool *pgxpool.Pool, steps int) {
 	_, err := pool.Exec(t.Context(), `
 		insert into run_steps (
 			run_id, seq, kind, company_id, area_id, agent_id, version_id,
-			payload, at, prev_hash, hash)
+			payload, at, opened_at, prev_hash, hash)
 		select 'run_' || (n / 20)::text, (n % 20) + 1,
 		       (array['planned','gate_decided','tool_called','tool_returned','approval_decided'])[1 + n % 5],
 		       'acme', (array['finance','support','ops'])[1 + n % 3],
@@ -100,6 +100,9 @@ func seedSteps(t *testing.T, pool *pgxpool.Pool, steps int) {
 		       jsonb_build_object('verdict', 1 + n % 4, 'approved', n % 2 = 0,
 		                          'tool', 'erp.invoice.read'),
 		       now() - (n || ' seconds')::interval,
+		       -- Every step of a run carries the run's opening time: it is
+		       -- the partition key, and steps of one run belong together.
+		       now() - ((n / 20) * 20 || ' seconds')::interval,
 		       case when n % 20 = 0 then null else sha256(n::text::bytea) end,
 		       sha256(n::text::bytea)
 		from generate_series(0, $1::int - 1) n`, steps)
@@ -111,7 +114,11 @@ func seedSteps(t *testing.T, pool *pgxpool.Pool, steps int) {
 	}
 }
 
-// seqScans counts sequential scans of the ledger, partitions included.
+// seqScans counts sequential scans of the ledger.
+//
+// Across the partitions as well as the parent: a scan of a partitioned table
+// is reported against whichever partitions it read, and counting only the
+// parent would report zero for a query that walked every month.
 func seqScans(t *testing.T, pool *pgxpool.Pool) int64 {
 	t.Helper()
 	if _, err := pool.Exec(t.Context(), `select pg_stat_force_next_flush()`); err != nil {
@@ -120,7 +127,7 @@ func seqScans(t *testing.T, pool *pgxpool.Pool) int64 {
 	var n int64
 	if err := pool.QueryRow(t.Context(), `
 		select coalesce(sum(seq_scan), 0) from pg_stat_user_tables
-		where relname = 'run_steps' or relname like 'run_steps_p%'`).Scan(&n); err != nil {
+		where relname = 'run_steps' or relname like 'run\_steps\_%'`).Scan(&n); err != nil {
 		t.Fatalf("read statistics: %v", err)
 	}
 	return n
