@@ -125,16 +125,25 @@ jobs:
             | helm registry login ${{ env.REGISTRY }} \
                 --username ${{ github.actor }} --password-stdin
 
-      # The chart's version is the release's. An `appVersion` that lags the
-      # image is a chart that installs something other than what it says.
+      # Two versions, and they are not the same string.
+      #
+      # The chart's own version has to be semver, so a build off main is a
+      # prerelease. Its appVersion is something else entirely: the chart uses
+      # it as the image tag, so it has to be a tag the image job actually
+      # pushed. Setting both to the chart version published a chart pointing at
+      # an image tag that did not exist, and the failure was an ImagePullBackOff
+      # five minutes into an install — as far from the mistake as it could land.
       - name: package
         run: |
-          version="${GITHUB_REF_NAME#v}"
-          if [ "${GITHUB_REF_TYPE}" != "tag" ]; then
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            version="${GITHUB_REF_NAME#v}"
+            app="${GITHUB_REF_NAME#v}"
+          else
             version="0.0.0-main.$(git rev-parse --short HEAD)"
+            app="sha-$(git rev-parse --short HEAD)"
           fi
           helm package deploy/helm/fuseone-agents \
-            --version "$version" --app-version "$version" -d /tmp/chart
+            --version "$version" --app-version "$app" -d /tmp/chart
           echo "CHART=$(ls /tmp/chart/*.tgz)" >> "$GITHUB_ENV"
 
       - name: push
