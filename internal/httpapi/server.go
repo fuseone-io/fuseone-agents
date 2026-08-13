@@ -68,6 +68,7 @@ type Server struct {
 	spend        Spend
 	rates        Rates
 	pauses       trigger.Pauses
+	stages       trigger.Stages
 	// cases is where an uploaded simulation set is filed. Optional, like the
 	// rest of the authoring area.
 	cases Cases
@@ -131,6 +132,12 @@ func (s *Server) WithCeilings(ceilings Ceilings) *Server {
 // act, because it is the one that connects.
 type Health interface {
 	All(ctx context.Context) (map[string]domain.IntegrationHealth, error)
+}
+
+// WithStages wires how far each agent is trusted to act alone.
+func (s *Server) WithStages(stages trigger.Stages) *Server {
+	s.stages = stages
+	return s
 }
 
 // WithPauses wires whether an agent is allowed to start.

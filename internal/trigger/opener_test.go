@@ -219,3 +219,43 @@ func TestOpen_twoIntentionsAtTheSameInstant_openSeparateRuns(t *testing.T) {
 		t.Fatalf("both intentions opened %q", first.RunID)
 	}
 }
+
+type staged struct{ stage domain.Stage }
+
+func (s staged) StageOf(context.Context, domain.AgentID) (domain.Stage, error) {
+	return s.stage, nil
+}
+
+func TestOpen_aDraft_cannotBeStartedForReal(t *testing.T) {
+	t.Parallel()
+	opener, _ := openerFor(t)
+	opener = opener.WithStages(staged{stage: domain.StageDraft})
+
+	_, err := opener.Open(t.Context(), trigger.Request{
+		Agent: "triage", IdemKey: "intent-1", Trigger: "manual",
+	})
+	// Checked at the opener rather than at the Gate: a run that should never
+	// have opened leaves a trail somebody has to explain, and every route in
+	// goes through here.
+	if !errors.Is(err, trigger.ErrDraft) {
+		t.Fatalf("Open = %v, want it refused", err)
+	}
+}
+
+func TestOpen_aDraft_canStillBeSimulated(t *testing.T) {
+	t.Parallel()
+	opener, _ := openerFor(t)
+	opener = opener.WithStages(staged{stage: domain.StageDraft})
+
+	// Simulation is how a draft earns its way out (FU-10). Refusing it here
+	// would make the stage impossible to leave.
+	got, err := opener.Open(t.Context(), trigger.Request{
+		Agent: "triage", IdemKey: "sim:1", Trigger: "simulation", Simulation: "sim-1",
+	})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if !got.Created {
+		t.Error("the simulated run was not opened")
+	}
+}

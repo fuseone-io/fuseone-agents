@@ -31,6 +31,10 @@ const (
 	RuleBudget      = "budget"
 	RuleIdempotency = "idempotency"
 	RuleApproval    = "approval"
+	// RuleAutonomy is an agent not yet trusted to act alone. Named in the
+	// trail so an operator reading an escalation knows the stage caused it
+	// rather than hunting for a policy that does not exist.
+	RuleAutonomy = "autonomy"
 )
 
 // policyVersion must be bumped whenever the semantics of a built-in check
@@ -47,6 +51,21 @@ func pass() result                 { return result{verdict: domain.VerdictAllow}
 func stop(why string) result       { return result{domain.VerdictBlock, why} }
 func needsHuman(why string) result { return result{domain.VerdictRequireApproval, why} }
 
+// checkAutonomy asks a person for anything an agent not yet trusted alone
+// would do to the world.
+func checkAutonomy(r Request) result {
+	if r.Stage.NeedsApproval(r.Effect) || (!r.Stage.Valid() && r.Effect != domain.EffectRead) {
+		return needsHuman("gate.autonomy.copilot")
+	}
+	if r.Stage == domain.StageDraft && r.Effect != domain.EffectRead {
+		// A draft should never have reached a real run at all — the opener
+		// refuses to start one. Reaching here means something opened it
+		// anyway, and the answer is still not to act unsupervised.
+		return needsHuman("gate.autonomy.draft")
+	}
+	return pass()
+}
+
 type check struct {
 	rule string
 	eval func(Request) result
@@ -62,6 +81,12 @@ var checkOrder = []check{
 	{RulePolicy, checkPolicy},
 	{RuleBudget, checkBudget},
 	{RuleIdempotency, checkIdempotency},
+	// Last on purpose. It escalates everything an untrusted agent would do,
+	// so running it early would report "the agent is in Copilot" for a call
+	// that a policy or a taint rule was already stopping for a specific
+	// reason — and the specific reason is the one somebody can act on. When
+	// nothing else objected, this is the explanation.
+	{RuleAutonomy, checkAutonomy},
 }
 
 // Gate evaluates requests against the seven checks and the authored policies.

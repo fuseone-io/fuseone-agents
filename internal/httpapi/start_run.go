@@ -75,6 +75,11 @@ func (s *Server) opener() *trigger.Opener {
 	if s.content != nil {
 		opener = opener.WithContent(s.content)
 	}
+	if s.stages != nil {
+		// A draft may be simulated and may not act, by any route including
+		// this button.
+		opener = opener.WithStages(s.stages)
+	}
 	if s.pauses != nil {
 		// Including the button. If a person could run a paused agent by
 		// pressing something, "paused" would mean "does not run by itself",

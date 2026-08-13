@@ -2,9 +2,11 @@ package spec
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/domain"
@@ -49,6 +51,63 @@ func (s *State) Paused(ctx context.Context) (map[domain.AgentID]bool, error) {
 // An agent nobody has a row for is paused. A new agent is created paused, and
 // an absent row means nobody ever decided otherwise — reading that as running
 // would let an agent start because a write failed.
+// Stages reads how far each agent is trusted, by agent.
+//
+// Read as a set for the same reason pauses are: the worker asks once per pass
+// rather than once per run, and a stage that arrived a moment late is a run
+// judged under the trust of a minute ago — which is the safe direction, since
+// promotion only ever loosens.
+func (s *State) Stages(ctx context.Context) (map[domain.AgentID]domain.Stage, error) {
+	rows, err := s.pool.Query(ctx, `select agent_id, stage from agent_state`)
+	if err != nil {
+		return nil, fmt.Errorf("spec: read stages: %w", err)
+	}
+	defer rows.Close()
+
+	out := map[domain.AgentID]domain.Stage{}
+	for rows.Next() {
+		var agent, stage string
+		if err := rows.Scan(&agent, &stage); err != nil {
+			return nil, fmt.Errorf("spec: scan stage: %w", err)
+		}
+		out[domain.AgentID(agent)] = domain.StageOf(stage)
+	}
+	return out, rows.Err()
+}
+
+// StageOf reads one agent's stage. An agent nobody has staged is a draft.
+func (s *State) StageOf(ctx context.Context, agent domain.AgentID) (domain.Stage, error) {
+	var stage string
+	err := s.pool.QueryRow(ctx,
+		`select stage from agent_state where agent_id = $1`, string(agent)).Scan(&stage)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.StageDraft, nil
+	}
+	if err != nil {
+		return domain.StageDraft, fmt.Errorf("spec: read stage of %s: %w", agent, err)
+	}
+	return domain.StageOf(stage), nil
+}
+
+// SetStage records how far an agent is trusted, and who decided.
+func (s *State) SetStage(
+	ctx context.Context, agent domain.AgentID, stage domain.Stage, by domain.UserID,
+) error {
+	if !stage.Valid() {
+		return fmt.Errorf("spec: %q is not a stage", stage)
+	}
+	_, err := s.pool.Exec(ctx, `
+		insert into agent_state (agent_id, paused, stage, changed_at, changed_by)
+		values ($1, true, $2, now(), $3)
+		on conflict (agent_id) do update set
+			stage = excluded.stage, changed_at = now(), changed_by = excluded.changed_by`,
+		string(agent), string(stage), string(by))
+	if err != nil {
+		return fmt.Errorf("spec: set stage of %s: %w", agent, err)
+	}
+	return nil
+}
+
 func (s *State) IsPaused(ctx context.Context, agent domain.AgentID) (bool, error) {
 	var paused bool
 	err := s.pool.QueryRow(ctx,

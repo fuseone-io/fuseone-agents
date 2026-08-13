@@ -69,6 +69,11 @@ type Request struct {
 
 	Pack Pack
 
+	// Stage is how much this agent is trusted to do on its own. An unset one
+	// reads as draft: a request with no stage is a wiring mistake, and the
+	// safe reading of a wiring mistake is the least trusted one.
+	Stage domain.Stage
+
 	Budget    domain.Budget
 	Committed domain.Consumption
 	// Estimate is what this call would reserve. The Gate checks

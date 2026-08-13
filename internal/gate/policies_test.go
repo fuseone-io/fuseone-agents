@@ -21,6 +21,11 @@ func request(over func(*gate.Request)) gate.Request {
 		Effect:  domain.EffectWrite,
 		Pack:    gate.NewPack("crm.reply", "crm.lookup", "crm.refund"),
 		Budget:  domain.Budget{Micros: 1_000_000, ToolCalls: 20, Steps: 50},
+		// Trusted to act alone, so these read as tests about the policy set
+		// rather than about the agent's stage. A request with no stage
+		// escalates every effect, which is the safe default and a different
+		// subject.
+		Stage: domain.StageAutonomous,
 	}
 	if over != nil {
 		over(&r)

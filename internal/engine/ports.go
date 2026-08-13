@@ -118,8 +118,12 @@ type Start struct {
 	// than as spec types: the dependencies point inward, and engine cannot
 	// import the package that parses definitions. Empty means one envelope
 	// holding the whole pack.
-	Steps   []Envelope
-	Budget  domain.Budget
+	Steps  []Envelope
+	Budget domain.Budget
+	// Stage is how far this agent is trusted to act alone. It is state beside
+	// the specification rather than in it — promotion is not a new version —
+	// so it arrives with the run rather than with the definition.
+	Stage   domain.Stage
 	Trigger string
 }
 

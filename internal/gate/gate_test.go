@@ -20,6 +20,9 @@ func request() Request {
 		Budget:   domain.Budget{Micros: 500_000, ToolCalls: 40},
 		Estimate: domain.Consumption{Micros: 20_000, ToolCalls: 1},
 		IdemKey:  "run-1:7:crm.lookup:abcd",
+		// Trusted to act alone: these are tests about the checks, and an
+		// unstaged agent escalates everything before they get a chance.
+		Stage: domain.StageAutonomous,
 	}
 }
 

@@ -40,6 +40,15 @@ type Content interface {
 // Clock is the time a run is stamped with.
 type Clock interface{ Now() time.Time }
 
+// Stages reports how far an agent is trusted, declared here by the consumer.
+//
+// Checked here for the same reason a pause is: every way a run can start goes
+// through this one place, and a draft that a webhook could start is not a
+// draft.
+type Stages interface {
+	StageOf(ctx context.Context, agent domain.AgentID) (domain.Stage, error)
+}
+
 // Pauses reports whether an agent is stopped.
 //
 // Checked here rather than in each trigger because every way a run can start
@@ -49,8 +58,13 @@ type Pauses interface {
 	IsPaused(ctx context.Context, agent domain.AgentID) (bool, error)
 }
 
-// ErrPaused means the agent exists and is not running.
-var ErrPaused = errors.New("trigger: the agent is paused")
+var (
+	// ErrPaused means the agent exists and is not running.
+	ErrPaused = errors.New("trigger: the agent is paused")
+	// ErrDraft means the agent has not been let out of Draft. It can be
+	// simulated, which is how it earns its way out (PRD FU-10).
+	ErrDraft = errors.New("trigger: the agent is still a draft")
+)
 
 // Opener turns an intention into a run.
 type Opener struct {
@@ -58,6 +72,7 @@ type Opener struct {
 	registry Registry
 	content  Content
 	pauses   Pauses
+	stages   Stages
 	clock    Clock
 }
 
@@ -68,6 +83,13 @@ func NewOpener(ledger Ledger, registry Registry, clock Clock) *Opener {
 // WithContent wires where the run's input is stored.
 func (o *Opener) WithContent(content Content) *Opener {
 	o.content = content
+	return o
+}
+
+// WithStages wires how far an agent is trusted, so a draft cannot open a real
+// run by any route.
+func (o *Opener) WithStages(stages Stages) *Opener {
+	o.stages = stages
 	return o
 }
 
@@ -136,6 +158,19 @@ func (o *Opener) Open(ctx context.Context, req Request) (Result, error) {
 		}
 		if stopped {
 			return Result{}, fmt.Errorf("%w: %s", ErrPaused, req.Agent)
+		}
+	}
+
+	// A draft may be simulated and may not act. That is what Draft means, and
+	// it is checked here rather than at the Gate because a run that should
+	// never have opened leaves a trail somebody has to explain.
+	if o.stages != nil && req.Simulation == "" {
+		stage, err := o.stages.StageOf(ctx, req.Agent)
+		if err != nil {
+			return Result{}, fmt.Errorf("trigger: read stage: %w", err)
+		}
+		if stage == domain.StageDraft {
+			return Result{}, fmt.Errorf("%w: %s", ErrDraft, req.Agent)
 		}
 	}
 

@@ -181,6 +181,7 @@ func serve(args []string) error {
 			WithAuthoring(authoring.NewStore(identity.pool, store)).
 			WithAssistants(assistants(ctx, integrations), authoring.NewStore(identity.pool, store)).
 			WithPauses(spec.NewState(identity.pool)).
+			WithStages(spec.NewState(identity.pool)).
 			WithPublisher(spec.NewPublisher(identity.pool, engine.SystemClock{}))
 
 		// Who may sign in, and what signing in grants. Saving registers the
@@ -230,7 +231,9 @@ func serve(args []string) error {
 			trigger.NewPostgresWebhooks(identity.pool),
 			trigger.NewOpener(store, spec.NewRegistry(identity.pool), engine.SystemClock{}).
 				WithContent(ledger.NewContent(identity.pool)).
-				WithPauses(spec.NewState(identity.pool)),
+				WithPauses(spec.NewState(identity.pool)).
+				WithStages(spec.NewState(identity.pool)).
+				WithStages(spec.NewState(identity.pool)),
 			slog.Default(),
 		).Mount(root)
 	} else {
@@ -531,6 +534,15 @@ func workerCmd(args []string) error {
 		Owner: *owner + "-sim", Concurrency: simulationSlots(*concurrency), Lease: *lease,
 	}, dry, simulate.Deps(deps), specs, engine.SystemClock{}, slog.Default())
 
+	if configPool != nil {
+		// How far each agent is trusted. Without it the pool treats every
+		// agent as a draft, which escalates every effect — the safe reading
+		// of a missing wire, and a very loud one.
+		stages := spec.NewState(configPool)
+		w = w.WithStages(stages)
+		sim = sim.WithStages(stages)
+	}
+
 	if budgets != nil {
 		if spender, ok := store.(spendReader); ok {
 			w = w.WithCeilings(ceilings{Budgets: budgets, spend: spender})
@@ -563,7 +575,8 @@ func workerCmd(args []string) error {
 			trigger.NewPostgresSchedules(configPool),
 			trigger.NewOpener(store, registry, engine.SystemClock{}).
 				WithContent(ledger.NewContent(configPool)).
-				WithPauses(spec.NewState(configPool)),
+				WithPauses(spec.NewState(configPool)).
+				WithStages(spec.NewState(configPool)),
 			engine.SystemClock{}, slog.Default(),
 		)
 		go runScheduler(ctx, scheduler)

@@ -1,0 +1,14 @@
+-- How much an agent is trusted to do on its own (PRD FU-14, FU-15).
+--
+-- Beside the specification rather than in it, for the reason the pause flag is
+-- beside it: a published version is immutable and every run is pinned to one,
+-- and promotion is not a new version. An agent promoted on a Tuesday is the
+-- same agent doing the same thing, trusted further — and versioning that would
+-- put a new version between a run and the text it actually ran.
+--
+-- That is the answer to the question NT-003 left open as D4.
+--
+-- Draft by default, including for every agent that already exists. The default
+-- is what an agent gets when nobody has decided, and nobody deciding is the
+-- least of all reasons to let something act unsupervised.
+alter table agent_state add column if not exists stage text not null default 'draft';

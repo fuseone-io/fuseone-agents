@@ -30,6 +30,13 @@ type Queue interface {
 	Release(ctx context.Context, runID domain.RunID, outcome domain.ClaimOutcome) error
 }
 
+// Stages is how far each agent is trusted to act alone, declared here by the
+// consumer. Optional: a pool without it treats every agent as a draft, which
+// escalates every effect and is the safe reading of a missing wire.
+type Stages interface {
+	StageOf(ctx context.Context, agent domain.AgentID) (domain.Stage, error)
+}
+
 // Specs resolves everything needed to advance one run of one agent version.
 //
 // It returns the planner as well as the run configuration because the model,
@@ -116,6 +123,14 @@ type Worker struct {
 
 	// ceilings is optional; nil means the only budget is the agent's own.
 	ceilings Ceilings
+	// stages is optional; nil means every agent is treated as a draft.
+	stages Stages
+}
+
+// WithStages wires how far each agent is trusted.
+func (w *Worker) WithStages(s Stages) *Worker {
+	w.stages = s
+	return w
 }
 
 // WithCeilings wires the scope budgets a run is narrowed by.
@@ -215,6 +230,12 @@ func (w *Worker) turn(ctx context.Context, log *slog.Logger) (bool, error) {
 	start.VersionID = claim.VersionID
 	start.OnBehalfOf = claim.OnBehalfOf
 
+	// Read per claim rather than cached: promotion has to take effect on the
+	// next turn, and a demotion has to take effect faster than that.
+	if start.Stage, err = w.stageOf(ctx, claim.AgentID); err != nil {
+		return true, w.park(ctx, claim, err, "stage_unreadable")
+	}
+
 	// The runner is a thin wrapper over its dependencies, so building one per
 	// turn costs nothing and keeps each run on its own agent's planner.
 	deps := w.deps
@@ -239,6 +260,22 @@ func (w *Worker) turn(ctx context.Context, log *slog.Logger) (bool, error) {
 // Read per claim rather than cached: a ceiling raised because a run parked has
 // to take effect on the next attempt, which is the whole point of parking
 // resumably rather than failing.
+// stageOf reads how far this agent is trusted.
+//
+// A failure parks the run rather than guessing. Guessing high would let an
+// untrusted agent act alone because a query failed, and guessing low would
+// send every action of a trusted one to a person who did not ask for them.
+func (w *Worker) stageOf(ctx context.Context, agent domain.AgentID) (domain.Stage, error) {
+	if w.stages == nil {
+		return domain.StageDraft, nil
+	}
+	stage, err := w.stages.StageOf(ctx, agent)
+	if err != nil {
+		return "", fmt.Errorf("read the stage of %s: %w", agent, err)
+	}
+	return stage, nil
+}
+
 func (w *Worker) scopedBudget(ctx context.Context, scope domain.Scope, agent domain.Budget) (domain.Budget, error) {
 	if w.ceilings == nil {
 		return agent, nil
