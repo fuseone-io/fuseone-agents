@@ -12,6 +12,7 @@ import { Mono } from "@/components/shared/mono";
 import { StateDot } from "@/components/shared/state-dot";
 import { RunNowDialog } from "@/features/agents/run-now-dialog";
 import { VerifyButton } from "@/features/runs/verify-button";
+import { ExportButton } from "@/features/runs/export-button";
 import { PHASE_LABELS } from "@/features/runs/phase-badge";
 import { stateOfPhase } from "@/lib/agent-state";
 import { formatInstant } from "@/lib/format";
@@ -66,6 +67,7 @@ export function RunIdentity({ run, trigger }: { run: Run; trigger?: string }) {
             against systems that already changed. */}
         <RunNowDialog agentId={run.agentId} agentName={run.agentId} />
         <VerifyButton runId={run.runId} />
+        <ExportButton runId={run.runId} />
       </div>
     </div>
   );

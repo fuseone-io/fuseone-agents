@@ -813,6 +813,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/audit/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A signed range of the ledger
+         * @description Checkable by somebody who does not trust this installation. Two
+         *     mechanisms have to hold: the hash chain proves the content — editing a
+         *     payload, reordering two steps or removing one from the middle all break
+         *     a link — and the signature proves the range came from here.
+         *
+         *     `agentd verify <file>` checks both, and needs no database, no
+         *     credential and no network. An export somebody has to ask us about is an
+         *     export they are trusting us for.
+         */
+        get: operations["exportLedger"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/audit/signing-key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The key this installation signs exports with
+         * @description The public half, which is not a secret: publishing it is what lets
+         *     somebody check an export without asking us anything. The fingerprint is
+         *     short enough to read out loud, which is how it is usually compared.
+         */
+        get: operations["getSigningKey"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/erasures": {
         parameters: {
             query?: never;
@@ -3162,6 +3211,59 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    exportLedger: {
+        parameters: {
+            query: {
+                /** @description One run. Ranges by time come later; a run is the unit an auditor asks about. */
+                runId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The signed bundle. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getSigningKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The public key. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description Base64 */
+                        publicKey: string;
+                        fingerprint: string;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
         };
     };
     eraseContent: {
