@@ -1,0 +1,13 @@
+# Everything the build does not read. Keeping the context small is why a
+# rebuild takes seconds: node_modules alone is larger than the repository.
+.git
+.github
+bin
+web/node_modules
+web/dist
+internal/web/dist
+.playwright-mcp
+.dev
+docs
+*.md
+!README.md
