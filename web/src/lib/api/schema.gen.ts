@@ -1278,6 +1278,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/channels/{name}/available": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The conversations this connection can be pointed at
+         * @description Only the ones the bot is already a member of. A picker built on this
+         *     cannot offer a place where posting would fail, so the commonest mistake
+         *     in configuring a channel — forgetting to invite the bot — stops being
+         *     possible rather than being caught later by a notification that never
+         *     arrived.
+         *
+         *     Nobody should have to find `C0123ABCDEF`. What an operator knows is
+         *     `#alertas`, so that is what they choose; the identifier is what gets
+         *     stored, because a channel can be renamed and its id cannot.
+         */
+        get: operations["listAvailableConversations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/channels/{name}/conversations/{conversation}": {
         parameters: {
             query?: never;
@@ -4508,6 +4536,45 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listAvailableConversations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What the bot can post to. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: {
+                            id: string;
+                            name: string;
+                            private?: boolean;
+                        }[];
+                    };
+                };
+            };
+            /** @description The channel could not be asked — most often an app granted chat:write and not channels:read. The reason is the channel's own. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
             };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];

@@ -276,3 +276,59 @@ func (s *Server) TestConversation(
 // renders a message that says it is a test rather than one that reads like a
 // run nobody can find.
 const eventTest channel.Event = "test"
+
+// Lister answers which conversations a connection can be pointed at.
+type Lister interface {
+	Conversations(ctx context.Context, channel string) ([]channel.Available, error)
+}
+
+// WithChannelListing wires the picker's source.
+func (s *Server) WithChannelListing(l Lister) *Server {
+	s.channelListing = l
+	return s
+}
+
+/*
+ListAvailableConversations offers the places the bot is already in.
+
+Nobody should have to find `C0123ABCDEF`. What an operator knows is `#alertas`,
+so that is what they pick — and because the listing is what the bot is a member
+of, the picker cannot offer somewhere the message would fail to arrive.
+*/
+func (s *Server) ListAvailableConversations(
+	ctx context.Context, req openapi.ListAvailableConversationsRequestObject,
+) (openapi.ListAvailableConversationsResponseObject, error) {
+	if resp := s.refuse(ctx, permConfigure); resp != nil {
+		return openapi.ListAvailableConversations403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: *resp,
+		}, nil
+	}
+	if s.channelListing == nil {
+		return nil, errNoAdministration
+	}
+
+	found, err := s.channelListing.Conversations(ctx, req.Name)
+	if err != nil {
+		// The channel's own reason. An app granted chat:write and not
+		// channels:read can post and cannot list, and an empty answer there
+		// would read as "the bot is in no channels" — which sends somebody to
+		// fix the wrong thing entirely.
+		return openapi.ListAvailableConversations400ApplicationProblemPlusJSONResponse(
+			invalid(err.Error())), nil
+	}
+
+	items := make([]struct {
+		Id      string `json:"id"`
+		Name    string `json:"name"`
+		Private *bool  `json:"private,omitempty"`
+	}, 0, len(found))
+	for _, c := range found {
+		private := c.Private
+		items = append(items, struct {
+			Id      string `json:"id"`
+			Name    string `json:"name"`
+			Private *bool  `json:"private,omitempty"`
+		}{Id: c.ID, Name: c.Name, Private: &private})
+	}
+	return openapi.ListAvailableConversations200JSONResponse{Items: items}, nil
+}

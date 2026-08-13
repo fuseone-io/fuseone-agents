@@ -127,7 +127,7 @@ func TestPost_messageNamesTheRunAndWhyItStopped(t *testing.T) {
 }
 
 func poster(server *httptest.Server) *slack.Poster {
-	return slack.New("xoxb-test").WithEndpoint(server.URL)
+	return slack.New("xoxb-test").WithEndpointBase(server.URL)
 }
 
 func message() channel.Message {

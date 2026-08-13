@@ -30,7 +30,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useSaveConversation } from "@/features/channels/api";
+import {
+  useAvailableConversations,
+  useSaveConversation,
+} from "@/features/channels/api";
 import { useScopes } from "@/features/scope/api";
 import { problemMessage } from "@/lib/api/problem-message";
 
@@ -38,8 +41,8 @@ const EVENTS = ["parked", "failed", "finished"] as const;
 
 const schema = z.object({
   conversation: z.string().min(1, "channels.needsConversation"),
-  scope: z.string().min(1, "channels.needsScope"),
   label: z.string(),
+  scope: z.string().min(1, "channels.needsScope"),
   wants: z.array(z.enum(EVENTS)).min(1, "channels.needsEvent"),
 });
 
@@ -61,6 +64,7 @@ export function ConversationForm({
   const { t } = useTranslation();
   const save = useSaveConversation();
   const { data: scopes } = useScopes();
+  const available = useAvailableConversations(channel);
 
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
@@ -112,12 +116,55 @@ export function ConversationForm({
               name="conversation"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t("channels.conversationId")}</FormLabel>
-                  <FormControl>
-                    <Input {...field} placeholder="C0123ABCDEF" />
-                  </FormControl>
+                  <FormLabel>{t("channels.conversation")}</FormLabel>
+                  {available.isError ? (
+                    <>
+                      {/* The listing needs a scope posting does not. Rather
+                          than an empty picker reading as "the bot is in no
+                          channels", the reason is shown and the identifier can
+                          be typed. */}
+                      <FormControl>
+                        <Input {...field} placeholder="C0123ABCDEF" />
+                      </FormControl>
+                      <FormDescription className="text-warning">
+                        {problemMessage(available.error, t)}
+                      </FormDescription>
+                    </>
+                  ) : (
+                    <Select
+                      onValueChange={(id) => {
+                        field.onChange(id);
+                        const picked = (available.data?.items ?? []).find(
+                          (c) => c.id === id,
+                        );
+                        if (picked) form.setValue("label", `#${picked.name}`);
+                      }}
+                      value={field.value}
+                      disabled={available.isLoading}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue
+                            placeholder={
+                              available.isLoading
+                                ? t("common.loadingMore")
+                                : t("channels.pickConversation")
+                            }
+                          />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {(available.data?.items ?? []).map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.private ? "🔒 " : "#"}
+                            {c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                   <FormDescription>
-                    {t("channels.conversationIdExplains")}
+                    {t("channels.onlyWhereInvited")}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -149,19 +196,6 @@ export function ConversationForm({
                   <FormDescription>
                     {t("channels.scopeGoverns")}
                   </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="label"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("admin.shownAs")}</FormLabel>
-                  <FormControl>
-                    <Input {...field} placeholder="#alertas" />
-                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

@@ -116,3 +116,25 @@ export function useTestConversation() {
       ),
   });
 }
+
+/**
+ * The conversations this connection can be pointed at.
+ *
+ * Only the ones the bot is already in, so choosing from it cannot produce a
+ * configuration that saves cleanly and delivers nothing. A failure here is
+ * usually an app granted `chat:write` and not `channels:read` — the screen
+ * shows the reason and falls back to typing an identifier rather than
+ * pretending the bot is in no channels.
+ */
+export function useAvailableConversations(channel: string) {
+  return useQuery({
+    queryKey: [...channelKeys.all, "available", channel] as const,
+    queryFn: async () =>
+      unwrap(
+        await api.GET("/admin/channels/{name}/available", {
+          params: { path: { name: channel } },
+        }),
+      ),
+    retry: false,
+  });
+}

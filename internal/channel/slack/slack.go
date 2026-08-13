@@ -22,34 +22,36 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/fuseone/agents/internal/channel"
 )
 
-// Endpoint is Slack's own. Overridable for tests and for an installation
+// API is Slack's own base. Overridable for tests and for an installation
 // behind a proxy that terminates outbound traffic.
-const Endpoint = "https://slack.com/api/chat.postMessage"
+const API = "https://slack.com/api"
 
 // Poster posts as one bot, to whichever conversation it is asked for.
 type Poster struct {
-	token    string
-	endpoint string
-	client   *http.Client
+	token  string
+	base   string
+	client *http.Client
 }
 
 func New(token string) *Poster {
 	return &Poster{
-		token:    token,
-		endpoint: Endpoint,
+		token: token,
+		base:  API,
 		// Bounded, because a channel that hangs must not hold the sweep that
 		// still has other conversations to reach.
 		client: &http.Client{Timeout: 10 * time.Second},
 	}
 }
 
-func (p *Poster) WithEndpoint(url string) *Poster {
-	p.endpoint = url
+// WithEndpointBase points every call at another host.
+func (p *Poster) WithEndpointBase(url string) *Poster {
+	p.base = strings.TrimSuffix(url, "/")
 	return p
 }
 
@@ -68,7 +70,8 @@ func (p *Poster) Post(
 		return "", fmt.Errorf("slack: build message: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		p.base+"/chat.postMessage", bytes.NewReader(body))
 	if err != nil {
 		return "", fmt.Errorf("slack: build request: %w", err)
 	}

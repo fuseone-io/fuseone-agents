@@ -1882,6 +1882,54 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /admin/channels/{name}/available:
+    get:
+      tags: [admin]
+      operationId: listAvailableConversations
+      summary: The conversations this connection can be pointed at
+      description: |
+        Only the ones the bot is already a member of. A picker built on this
+        cannot offer a place where posting would fail, so the commonest mistake
+        in configuring a channel — forgetting to invite the bot — stops being
+        possible rather than being caught later by a notification that never
+        arrived.
+
+        Nobody should have to find `C0123ABCDEF`. What an operator knows is
+        `#alertas`, so that is what they choose; the identifier is what gets
+        stored, because a channel can be renamed and its id cannot.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: What the bot can post to.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, name]
+                      properties:
+                        id: { type: string }
+                        name: { type: string }
+                        private: { type: boolean }
+        '400':
+          description: >
+            The channel could not be asked — most often an app granted
+            chat:write and not channels:read. The reason is the channel's own.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /admin/channels/{name}/conversations/{conversation}:
     put:
       tags: [admin]

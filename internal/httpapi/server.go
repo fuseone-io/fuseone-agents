@@ -88,10 +88,11 @@ type Server struct {
 	// regressions is the corpus a future version is checked against.
 	regressions Regressions
 	// retention and erasures decide whether content survives.
-	retention Retention
-	channels  ChannelAdmin
-	announcer Announcer
-	erasures  Erasures
+	retention      Retention
+	channels       ChannelAdmin
+	channelListing Lister
+	announcer      Announcer
+	erasures       Erasures
 	// signing is the key exports are sealed with.
 	signing   Signing
 	publisher Publisher

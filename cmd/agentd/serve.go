@@ -101,10 +101,12 @@ func serve(args []string) error {
 			ForgettingHealth(admin.NewHealth(identity.pool))
 		// Where runs report, and a way to prove the bot was invited without
 		// waiting for one to park (NT-005 stage 1).
+		drivers := connect.New(store)
 		api = api.WithChannels(
 			admin.NewChannels(identity.pool, store),
-			channel.NewRouter(connect.New(store)),
-		).WithAdministration(curator, curator, integrations).
+			channel.NewRouter(drivers),
+		).WithChannelListing(drivers).
+			WithAdministration(curator, curator, integrations).
 			WithAgents(spec.NewRegistry(identity.pool)).
 			WithCeilings(admin.NewBudgets(identity.pool, store)).
 			// The same store the worker writes into. Without it the console

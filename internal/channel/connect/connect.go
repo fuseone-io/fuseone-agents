@@ -57,3 +57,35 @@ func (d *Drivers) For(ctx context.Context, name string) (channel.Poster, error) 
 		return nil, fmt.Errorf("connect: channel %q is of an unsupported kind %q", name, conn.Kind)
 	}
 }
+
+/*
+Conversations answers what a connection can be pointed at.
+
+Only the driver knows how, and not every driver can: a channel with no listing
+API answers with a refusal the console shows as "type the identifier" rather
+than pretending the bot is in nothing.
+*/
+func (d *Drivers) Conversations(
+	ctx context.Context, name string,
+) ([]channel.Available, error) {
+	driver, err := d.For(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	lister, ok := driver.(interface {
+		Conversations(context.Context) ([]slack.Conversation, error)
+	})
+	if !ok {
+		return nil, fmt.Errorf("connect: channel %q cannot list its conversations", name)
+	}
+
+	found, err := lister.Conversations(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]channel.Available, 0, len(found))
+	for _, c := range found {
+		out = append(out, channel.Available{ID: c.ID, Name: c.Name, Private: c.Private})
+	}
+	return out, nil
+}

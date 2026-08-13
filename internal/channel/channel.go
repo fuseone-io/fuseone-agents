@@ -127,3 +127,22 @@ type Deliveries interface {
 	Record(ctx context.Context, d Delivery) error
 	Delivered(ctx context.Context, run domain.RunID, e Event, conversation string) (bool, error)
 }
+
+// Available is a place a connection could be pointed at, as a person would
+// recognise it.
+//
+// The name is offered and the identifier is stored: a conversation can be
+// renamed and its id cannot, so keeping what the operator recognised would
+// break delivery on the day somebody tidied the workspace up.
+type Available struct {
+	ID      string
+	Name    string
+	Private bool
+}
+
+// Listers answer what a connection can be pointed at. Declared here because
+// not every channel can be asked — a driver that cannot list says so, and the
+// console falls back to letting somebody type an identifier.
+type Listers interface {
+	Conversations(ctx context.Context, channel string) ([]Available, error)
+}
