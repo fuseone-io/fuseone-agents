@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { usePreferences, useTab } from "@/features/preferences/use-preferences";
 import { useMemo, useState } from "react";
 import { Bot } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -30,15 +31,21 @@ import { stateOfAgent, type AgentState } from "@/lib/agent-state";
 
 export function AgentsPage() {
   const { t } = useTranslation();
-  const [history, setHistory] = useState(false);
+  // Remembered rather than reset. Somebody who reads this screen in list form
+  // reads it in list form tomorrow, and re-choosing on every visit is the kind
+  // of small friction nobody reports and everybody feels.
+  const history = useTab("agents", "latest");
   // Cards by default: most installations have a screenful of agents, and the
   // question at that size is how each one is doing rather than which is which.
-  const [view, setView] = useState<AgentsView>("cards");
+  const view = usePreferences((s) => s.agentsView) as AgentsView;
+  const setView = usePreferences((s) => s.setAgentsView);
   const [search, setSearch] = useState("");
   const [area, setArea] = useState("all");
   const [state, setState] = useState<AgentState | "all">("all");
 
-  const { data, isLoading, error, refetch } = useAgents(history);
+  const { data, isLoading, error, refetch } = useAgents(
+    history.value === "all",
+  );
   const agents = useMemo(() => data?.items ?? [], [data]);
 
   // Filtered here rather than at the API, and that is defensible only because
@@ -84,10 +91,7 @@ export function AgentsPage() {
         onChange={setSearch}
         trailing={
           <>
-            <Tabs
-              value={history ? "all" : "latest"}
-              onValueChange={(v) => setHistory(v === "all")}
-            >
+            <Tabs {...history}>
               <TabsList>
                 <TabsTrigger value="latest">{t("agents.current")}</TabsTrigger>
                 <TabsTrigger value="all">{t("agents.history")}</TabsTrigger>

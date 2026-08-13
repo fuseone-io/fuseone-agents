@@ -4,6 +4,7 @@ import { AppSidebar } from "@/components/layout/app-sidebar";
 import { AppHeader } from "@/components/layout/app-header";
 import { PageActionsProvider } from "@/components/layout/page-actions";
 import { StopBanner } from "@/features/admin/stop-banner";
+import { usePreferences } from "@/features/preferences/use-preferences";
 
 /**
  * The sidebar-07 shell: an icon-collapsible sidebar and a flush content area.
@@ -18,13 +19,23 @@ import { StopBanner } from "@/features/admin/stop-banner";
  * because the card no longer does.
  */
 export function AppShell({ children }: { children: ReactNode }) {
+  const sidebarOpen = usePreferences((state) => state.sidebarOpen);
+  const setSidebarOpen = usePreferences((state) => state.setSidebarOpen);
+
   return (
     // h-svh, not the block's min-h-svh. With only a minimum the wrapper grew
     // with the page, the content area below never had a height to overflow,
     // and so the whole document scrolled: the header's rule and its action
     // scrolled away with it, and every sticky element inside was inert
     // because its scroll container never scrolled.
-    <SidebarProvider className="h-svh bg-background">
+    // Controlled, so the choice survives a reload. The block ships this
+    // uncontrolled, which means somebody who works with the sidebar collapsed
+    // collapses it again on every single page load.
+    <SidebarProvider
+      className="h-svh bg-background"
+      open={sidebarOpen}
+      onOpenChange={setSidebarOpen}
+    >
       <AppSidebar />
 
       <SidebarInset className="min-w-0 bg-background">

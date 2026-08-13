@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useTab } from "@/features/preferences/use-preferences";
 import { ToolsPanel } from "@/features/admin/tools-panel";
 import { EventsPanel } from "@/features/admin/events-panel";
 import { AuthoringPanel } from "@/features/admin/authoring-panel";
@@ -19,6 +20,8 @@ import { BudgetsPanel } from "@/features/admin/budgets-panel";
  */
 export function AdminPage() {
   const { t } = useTranslation();
+  const tab = useTab("admin", "tools");
+
   return (
     <>
       <PageHeader
@@ -27,8 +30,12 @@ export function AdminPage() {
         description={t("admin.subtitle")}
       />
 
-      <Tabs defaultValue="tools" className="min-h-0 flex-1">
-        <TabsList>
+      {/* Vertical, because nine tabs in a row is a row that wraps on a
+          laptop and reads as a paragraph of links rather than as navigation.
+          Down the side they are a list, they have room for their full names,
+          and the one in force is obvious without counting. */}
+      <Tabs {...tab} orientation="vertical" className="min-h-0 flex-1 gap-6">
+        <TabsList className="w-48 shrink-0 self-start">
           <TabsTrigger value="tools">{t("admin.tools")}</TabsTrigger>
           <TabsTrigger value="authoring">{t("admin.authoring")}</TabsTrigger>
           <TabsTrigger value="areas">{t("admin.areas")}</TabsTrigger>
@@ -40,31 +47,31 @@ export function AdminPage() {
           <TabsTrigger value="events">{t("admin.trail")}</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="tools" className="mt-4">
+        <TabsContent value="tools" className="min-w-0">
           <ToolsPanel />
         </TabsContent>
-        <TabsContent value="authoring" className="mt-4">
+        <TabsContent value="authoring" className="min-w-0">
           <AuthoringPanel />
         </TabsContent>
-        <TabsContent value="identity" className="mt-4">
+        <TabsContent value="identity" className="min-w-0">
           <IdentityPanel />
         </TabsContent>
-        <TabsContent value="people" className="mt-4">
+        <TabsContent value="people" className="min-w-0">
           <PeoplePanel />
         </TabsContent>
-        <TabsContent value="areas" className="mt-4">
+        <TabsContent value="areas" className="min-w-0">
           <AreasPanel />
         </TabsContent>
-        <TabsContent value="prices" className="mt-4">
+        <TabsContent value="prices" className="min-w-0">
           <PricesPanel />
         </TabsContent>
-        <TabsContent value="budgets" className="mt-4">
+        <TabsContent value="budgets" className="min-w-0">
           <BudgetsPanel />
         </TabsContent>
-        <TabsContent value="retention" className="mt-4">
+        <TabsContent value="retention" className="min-w-0">
           <RetentionPanel />
         </TabsContent>
-        <TabsContent value="events" className="mt-4">
+        <TabsContent value="events" className="min-w-0">
           <EventsPanel />
         </TabsContent>
       </Tabs>

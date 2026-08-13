@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import type { MeGrant } from "@/features/session/api";
+import { durableOrMemory } from "@/lib/durable-storage";
 
 /**
  * Which company and area the console is currently reading.
@@ -44,41 +45,10 @@ export const useActiveScope = create<ActiveScope>()(
     {
       name: "fuseone.scope",
       partialize: ({ company, area }) => ({ company, area }),
-      storage: createJSONStorage(durableOrMemory),
+      storage: createJSONStorage(durableOrMemory("fuseone.scope")),
     },
   ),
 );
-
-/**
- * localStorage where it exists, memory where it does not.
- *
- * The console is installed inside the customer's network and a locked-down
- * browser profile can refuse storage outright. Reading it unguarded throws
- * while this module is still evaluating, which takes down the whole console
- * rather than the one preference it was trying to remember.
- */
-function durableOrMemory(): Storage {
-  try {
-    const probe = globalThis.localStorage;
-    if (probe) {
-      probe.getItem("fuseone.scope");
-      return probe;
-    }
-  } catch {
-    // Blocked. The choice lasts the session instead of surviving a reload.
-  }
-  const held = new Map<string, string>();
-  return {
-    getItem: (key) => held.get(key) ?? null,
-    setItem: (key, value) => void held.set(key, value),
-    removeItem: (key) => void held.delete(key),
-    clear: () => held.clear(),
-    key: (i) => [...held.keys()][i] ?? null,
-    get length() {
-      return held.size;
-    },
-  };
-}
 
 /** A grant over a whole company reaches every area in it. */
 function reaches(grants: MeGrant[], company: string, area: string): boolean {

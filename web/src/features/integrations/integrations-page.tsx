@@ -4,6 +4,7 @@ import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
 import { Plug, Server } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useTab } from "@/features/preferences/use-preferences";
 import { ConnectMenu } from "@/features/integrations/connect-menu";
 import { IntegrationsSection } from "@/features/integrations/integrations-section";
 import {
@@ -40,6 +41,7 @@ export function IntegrationsPage() {
   const { t } = useTranslation();
   const { data, isLoading, error, refetch } = useIntegrations();
   const [editing, setEditing] = useState<Editing | null>(null);
+  const tab = useTab("integrations", "servers");
 
   const servers = data?.mcpServers ?? [];
   const providers = data?.providers ?? [];
@@ -64,7 +66,7 @@ export function IntegrationsPage() {
         // on different days. The cost is that the page no longer answers
         // "what are we connected to" in one glance, so each tab says how many
         // it holds without being opened.
-        <Tabs defaultValue="servers">
+        <Tabs {...tab}>
           <TabsList>
             <TabsTrigger value="servers">
               {t("integrations.servers")}
