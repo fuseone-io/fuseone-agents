@@ -54,7 +54,13 @@ func openRegistry(t *testing.T) *spec.Registry {
 	// TRUNCATE, not DELETE: the table refuses row deletion, which is the
 	// point — a version a run is pinned to must not be removable. Truncation
 	// does not fire row triggers, and is how the ledger's own suite resets.
-	if _, err := pool.Exec(context.Background(), `truncate agent_specs`); err != nil {
+	//
+	// agent_state goes with it. Which version is current lives there, so a
+	// test that chose one left the next test's fresh specs answering with a
+	// version that no longer existed — the fixture outliving the rows it
+	// pointed at.
+	if _, err := pool.Exec(context.Background(),
+		`truncate agent_specs; truncate agent_state`); err != nil {
 		t.Fatalf("clean: %v", err)
 	}
 	return spec.NewRegistry(pool)
@@ -319,5 +325,95 @@ func TestPublish_emits_survivesTheRegistry(t *testing.T) {
 	}
 	if len(again.Emits) != 1 || again.Emits[0] != "ticket.triado" {
 		t.Errorf("Emits = %v, want the declared event", again.Emits)
+	}
+}
+
+func TestList_currentVersion_isTheOneNamedRatherThanTheNewest(t *testing.T) {
+	registry := openRegistry(t)
+	ctx := context.Background()
+
+	// The failure this prevents: an author edits a definition, the platform
+	// publishes it, they revert the file. The withdrawn version stays newest
+	// by timestamp for ever, every new run pins to a specification nobody
+	// holds, and it parks with spec_unresolved seconds after opening.
+	first := published(t, definition)
+	if err := registry.Publish(ctx, first, "usr_ana", "acme"); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+	second := first
+	second.Version = "v-withdrawn"
+	second.Instructions = first.Instructions + "\n\nUm parágrafo que alguém removeu depois."
+	if err := registry.Publish(ctx, second, "usr_ana", "acme"); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+
+	// The worker holds the first one again, and says so.
+	if err := registry.MakeCurrent(ctx, first.ID, first.Version); err != nil {
+		t.Fatalf("MakeCurrent: %v", err)
+	}
+
+	listed, err := registry.List(ctx, domain.Scope{}, false)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(listed) != 1 {
+		t.Fatalf("List = %+v, want one agent", listed)
+	}
+	if listed[0].VersionID != first.Version {
+		t.Errorf("VersionID = %q, want the version somebody chose (%q)",
+			listed[0].VersionID, first.Version)
+	}
+}
+
+func TestList_nobodyChose_fallsBackToTheNewest(t *testing.T) {
+	registry := openRegistry(t)
+	ctx := context.Background()
+
+	// An installation upgrading into this has no choice recorded for any
+	// agent. Answering with nothing would take every agent off every screen.
+	first := published(t, definition)
+	if err := registry.Publish(ctx, first, "usr_ana", "acme"); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+
+	listed, err := registry.List(ctx, domain.Scope{}, false)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(listed) != 1 || listed[0].VersionID != first.Version {
+		t.Errorf("List = %+v, want the newest by publication", listed)
+	}
+}
+
+func TestVersions_currentFirst_soARunPinsToWhatIsHeld(t *testing.T) {
+	registry := openRegistry(t)
+	ctx := context.Background()
+
+	// The opener reads the first row and pins the run to it. Ordering by
+	// publication alone meant every new run pinned to a version somebody had
+	// withdrawn, and parked with spec_unresolved seconds after opening.
+	first := published(t, definition)
+	if err := registry.Publish(ctx, first, "usr_ana", "acme"); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+	withdrawn := first
+	withdrawn.Version = "v-withdrawn"
+	withdrawn.Instructions = first.Instructions + "\n\nRemovido depois."
+	if err := registry.Publish(ctx, withdrawn, "usr_ana", "acme"); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+	if err := registry.MakeCurrent(ctx, first.ID, first.Version); err != nil {
+		t.Fatalf("MakeCurrent: %v", err)
+	}
+
+	versions, err := registry.Versions(ctx, first.ID)
+	if err != nil {
+		t.Fatalf("Versions: %v", err)
+	}
+	if len(versions) != 2 {
+		t.Fatalf("Versions = %+v, want both", versions)
+	}
+	if versions[0].VersionID != first.Version || !versions[0].Latest {
+		t.Errorf("first = %+v, want the current version marked latest", versions[0])
 	}
 }

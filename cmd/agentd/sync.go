@@ -161,6 +161,13 @@ func publishSpecs(ctx context.Context, registry *spec.Registry, dir string) (int
 			if err := registry.Publish(ctx, s, "worker", auth.BootstrapScope.Company); err != nil {
 				return published, err
 			}
+			// What this worker holds is what the installation runs. Without
+			// saying so, a version published once and then withdrawn from
+			// disk stays the newest by timestamp for ever, and every new run
+			// pins to a specification nobody holds (PRD DE-08).
+			if err := registry.MakeCurrent(ctx, s.ID, s.Version); err != nil {
+				return published, err
+			}
 			published++
 		}
 	}
