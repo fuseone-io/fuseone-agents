@@ -9,6 +9,7 @@ import (
 	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/autonomy"
 	"github.com/fuseone/agents/internal/budget"
+	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/spec"
@@ -41,6 +42,12 @@ func (p *workerParts) startLoops(ctx context.Context, cfg workerFlags, sim *work
 	// writes steps and a month with no partition costs the ability to archive
 	// it later.
 	go keepMonthsAhead(ctx, ledger.NewPartitions(p.configPool, time.Now))
+
+	// What the people waiting on a run get told (NT-005 stage 1). Outbound
+	// only: nothing a conversation says reaches this process.
+	if p.settings != nil {
+		go reportToChannels(ctx, p.settings, channel.NewPostgres(p.configPool), cfg.baseURL)
+	}
 
 	// Retention. It reads the configured window on every pass, so shortening
 	// it takes effect on the next sweep rather than at the next deploy —

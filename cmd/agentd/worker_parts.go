@@ -54,7 +54,11 @@ type workerParts struct {
 	registry     *spec.Registry
 	budgets      *admin.Budgets
 	retention    *admin.Retention
-	health       healthRecorder
+	// settings is what the administration area configures, and the channel
+	// sweep reads its conversations from it rather than from a table of its
+	// own (NT-005 §5 of the note, and the reason the credential is sealed).
+	settings *settings.Store
+	health   healthRecorder
 }
 
 // openWorkerParts connects everything a worker reads before it runs.
@@ -113,6 +117,7 @@ func (p *workerParts) openConfiguration(ctx context.Context, dsn string) error {
 		return err
 	}
 	store := settings.NewStore(pool, v)
+	p.settings = store
 	p.retention = admin.NewRetention(pool, store)
 	p.curator = admin.NewCurator(pool)
 	p.integrations = admin.NewIntegrations(pool, store).ForgettingHealth(admin.NewHealth(pool))

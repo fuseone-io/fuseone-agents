@@ -27,12 +27,18 @@ type workerFlags struct {
 	lease       time.Duration
 	specDir     string
 	servers     mcpServers
+	// baseURL is where a notification sends somebody to act. A message about
+	// a run waiting for approval that does not link to it is a message that
+	// makes the reader go looking.
+	baseURL string
 }
 
 func readWorkerFlags(args []string) (workerFlags, error) {
 	fs := flag.NewFlagSet("worker", flag.ContinueOnError)
 	var cfg workerFlags
 	fs.StringVar(&cfg.dsn, "dsn", os.Getenv("DATABASE_URL"), "PostgreSQL connection string")
+	fs.StringVar(&cfg.baseURL, "base-url", os.Getenv("FUSEONE_BASE_URL"),
+		"where the console answers, for the links a notification carries")
 	fs.StringVar(&cfg.owner, "owner", defaultOwner(), "identifies this process in a lease")
 	fs.IntVar(&cfg.concurrency, "concurrency", 4, "runs advanced at once")
 	fs.DurationVar(&cfg.lease, "lease", 2*time.Minute, "must outlast the slowest single turn")

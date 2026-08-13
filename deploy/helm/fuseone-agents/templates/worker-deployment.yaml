@@ -53,6 +53,12 @@ spec:
             - worker
             - --concurrency={{ .Values.worker.concurrency }}
             - --lease={{ .Values.worker.lease }}
+            {{- if .Values.baseUrl }}
+            # The worker announces runs to channels, and a notification about a
+            # run waiting for approval has to link to it. This process serves
+            # nothing, so it cannot know the address it has to point at.
+            - --base-url={{ .Values.baseUrl }}
+            {{- end }}
             {{- if .Values.worker.specs.configMap }}
             - --specs=/agents
             {{- end }}
