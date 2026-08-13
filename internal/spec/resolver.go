@@ -103,7 +103,10 @@ func envelopes(s Spec) []engine.Envelope {
 	}
 	out := make([]engine.Envelope, 0, len(s.Steps))
 	for _, step := range s.Steps {
-		out = append(out, engine.Envelope{Name: step.Name, Reaches: step.Reaches})
+		out = append(out, engine.Envelope{
+			Name: step.Name, Reaches: step.Reaches,
+			Model: step.Model, Effort: step.Effort,
+		})
 	}
 	return out
 }

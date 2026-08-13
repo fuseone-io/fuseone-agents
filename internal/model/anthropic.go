@@ -98,7 +98,10 @@ func (a *Anthropic) Plan(ctx context.Context, in engine.PlanInput) (engine.Propo
 	tools := a.toolParams(in.Tools)
 
 	resp, err := a.client.Messages.New(ctx, anthropic.MessageNewParams{
-		Model:     anthropic.Model(a.cfg.Model),
+		// The step's, when it named one. The provider is not overridable: it
+		// carries a credential, and a definition able to choose one could
+		// route an installation's traffic wherever its author liked.
+		Model:     anthropic.Model(or(in.Model, a.cfg.Model)),
 		MaxTokens: a.cfg.MaxTokens,
 		System:    a.system(in),
 		Messages:  messagesFrom(in.Transcript),
@@ -109,7 +112,7 @@ func (a *Anthropic) Plan(ctx context.Context, in engine.PlanInput) (engine.Propo
 			OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{},
 		},
 		OutputConfig: anthropic.OutputConfigParam{
-			Effort: anthropic.OutputConfigEffort(a.cfg.Effort),
+			Effort: anthropic.OutputConfigEffort(or(in.Effort, a.cfg.Effort)),
 		},
 	})
 	if err != nil {
@@ -272,4 +275,13 @@ func messagesFrom(turns []engine.Turn) []anthropic.MessageParam {
 		}
 	}
 	return out
+}
+
+// or is the step's choice, falling back to the agent's. Almost every step
+// takes the fallback: the lever exists for the one that does not.
+func or(step, agent string) string {
+	if step != "" {
+		return step
+	}
+	return agent
 }

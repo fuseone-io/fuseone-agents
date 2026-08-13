@@ -29,6 +29,11 @@ type PlanInput struct {
 	// what its predecessor saw.
 	Transcript []Turn
 	Budget     domain.Budget
+	// Model and Effort are the step's, when it named its own. A planner that
+	// ignores them runs the agent's, which is the correct reading of a
+	// provider that cannot switch model per call.
+	Model  string
+	Effort string
 	// Remaining is shown to the model so it can pace itself rather than being
 	// cut off mid-thought.
 	Remaining domain.Consumption
@@ -142,4 +147,12 @@ type Status struct {
 type Envelope struct {
 	Name    string
 	Reaches []domain.ToolID
+
+	// Model and Effort are what this step is worth spending on. Empty means
+	// the agent's own, which is what almost every step uses: the lever exists
+	// because one step reasons and another classifies, and paying the
+	// reasoning price for both is how an agent becomes expensive for nothing
+	// (PRD FO-10, FO-11).
+	Model  string
+	Effort string
 }

@@ -267,12 +267,19 @@ func (r *Runner) plan(ctx context.Context, state State, start Start) (Proposal, 
 		return Proposal{}, err
 	}
 
+	// What this step is worth spending on. A step that classifies a ticket and
+	// one that decides what to do about it are the same run and not the same
+	// expense (PRD FO-10, FO-11).
+	model, effort := SpendAt(start, state.Called)
+
 	p, err := r.deps.Planner.Plan(ctx, PlanInput{
 		State:      state,
 		Transcript: transcript,
 		Budget:     start.Budget,
 		Remaining:  remaining(start.Budget, state.Committed()),
 		Tools:      start.Pack.Tools(),
+		Model:      model,
+		Effort:     effort,
 	})
 	if err != nil {
 		return Proposal{}, fmt.Errorf("engine: plan: %w", err)

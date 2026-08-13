@@ -25,6 +25,17 @@ type Step struct {
 	// cliente". Nothing judges it yet — who decides a step is over is a
 	// separate decision, and NT-003 leaves it open on purpose.
 	StopsWhen string `yaml:"stops_when,omitempty"`
+
+	// Model and Effort override the agent's for this step alone (PRD FO-10,
+	// FO-11). Empty means the agent's, which is what almost every step wants:
+	// the point is that the one step doing the reasoning can be expensive
+	// while the one classifying a ticket is not.
+	//
+	// The provider is deliberately not overridable. It carries a credential
+	// and a client, and letting a step pick one would make a definition able
+	// to route an installation's traffic somewhere its author chose.
+	Model  string `yaml:"model,omitempty"`
+	Effort string `yaml:"effort,omitempty"`
 }
 
 /*

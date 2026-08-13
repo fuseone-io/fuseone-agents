@@ -64,6 +64,33 @@ func StepNameAt(start Start, called []domain.ToolID) string {
 	return start.Steps[StepAt(start, called)].Name
 }
 
+/*
+SpendAt is what the planning about to happen is worth spending on.
+
+The step being *entered*, not the one just finished, and the difference is the
+whole feature. A run that has used the triage step's tool is no longer
+triaging: the reasoning that happens next is the reasoning that decides what to
+do, and pricing it at the step behind it would give the cheap model to exactly
+the decision the expensive one was configured for.
+
+Empty where the specification declared no steps, or where the step named
+nothing of its own — the agent's then, never the previous step's, which would
+leak a cheap model forward into work nobody chose it for.
+*/
+func SpendAt(start Start, called []domain.ToolID) (model, effort string) {
+	if len(start.Steps) == 0 {
+		return "", ""
+	}
+
+	// Before anything has been called the run is entering the first step.
+	// After that it is entering the one past the furthest it has reached.
+	at := 0
+	if len(called) > 0 {
+		at = min(StepAt(start, called)+1, len(start.Steps)-1)
+	}
+	return start.Steps[at].Model, start.Steps[at].Effort
+}
+
 // stepOf reports which step first reaches a tool.
 func stepOf(steps []Envelope, tool domain.ToolID) (int, bool) {
 	for i, step := range steps {
