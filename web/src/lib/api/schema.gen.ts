@@ -1474,8 +1474,40 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Liveness probe */
+        /**
+         * Liveness probe
+         * @description Whether this process is wedged. It touches nothing outside itself on
+         *     purpose: a liveness probe that asked the database would restart every
+         *     pod during a database blip, turning a recoverable outage into a crash
+         *     loop across the installation.
+         */
         get: operations["health"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/readyz": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Readiness probe
+         * @description Whether this process can serve. Unlike liveness it does reach the
+         *     database, because a process that cannot read the ledger has nothing to
+         *     answer with — it should leave the load balancer's rotation, and it
+         *     should not be restarted for it.
+         *
+         *     Answers 503 with the reason rather than a bare failure, so `kubectl
+         *     describe` shows what is wrong without anybody opening a shell.
+         */
+        get: operations["ready"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2761,7 +2793,20 @@ export interface operations {
     };
     listTemplates: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description Which language to answer in. The console says which one it is
+                 *     rendering; the server does not guess from a header.
+                 *
+                 *     This is the one place the server holds the reader's words rather
+                 *     than a code, because `instructions` is not interface text — it is
+                 *     the agent's prompt, and an installation whose work arrives in one
+                 *     language wants the model reasoning in it.
+                 *
+                 *     An unknown language is answered in the default rather than empty.
+                 */
+                locale?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -4621,6 +4666,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Health"];
+                };
+            };
+        };
+    };
+    ready: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ready to serve. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Health"];
+                };
+            };
+            /** @description Not ready. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };

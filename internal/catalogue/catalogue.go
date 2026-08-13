@@ -13,8 +13,16 @@ author's act anyway — they choose from what the Curator has connected, which i
 the whole of SE-03. What a template carries instead is `needs`: the roles it
 expects, in words, so the author knows what they are looking for in the picker.
 
-They ship inside the binary. A catalogue an operator can edit is one that
-drifts from the product, and there is nothing here worth configuring.
+They ship inside the binary, one set per language. This is the one place where
+the server holds the reader's words rather than a code, and the reason is that
+`instructions` is not interface text at all — it is the agent's prompt. An
+installation whose tickets arrive in Portuguese wants a Portuguese prompt,
+because that is what the model will be reasoning in. The name and the summary
+follow it: an English card describing a Portuguese prompt would be worse than
+either.
+
+A catalogue an operator can edit is one that drifts from the product, and there
+is nothing here worth configuring.
 */
 package catalogue
 
@@ -29,8 +37,15 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-//go:embed templates/*.agent.md
+//go:embed all:templates
 var files embed.FS
+
+// Default is the language a request that names none, or names one this
+// installation does not ship, is answered in.
+//
+// Falling back rather than answering empty: a console in a third language
+// showing four cards it can read is better off than one showing none.
+const Default = "pt-BR"
 
 // Template is a starting point, not an agent.
 type Template struct {
@@ -79,15 +94,16 @@ type Budget struct {
 // Sorted by name rather than by filename so the gallery does not reorder itself
 // when somebody renames a file, and read once per call because there are four
 // of them and they are in memory already.
-func All() ([]Template, error) {
-	entries, err := fs.ReadDir(files, "templates")
+func All(locale string) ([]Template, error) {
+	dir := path.Join("templates", resolve(locale))
+	entries, err := fs.ReadDir(files, dir)
 	if err != nil {
 		return nil, fmt.Errorf("catalogue: read templates: %w", err)
 	}
 
 	out := make([]Template, 0, len(entries))
 	for _, entry := range entries {
-		raw, err := files.ReadFile(path.Join("templates", entry.Name()))
+		raw, err := files.ReadFile(path.Join(dir, entry.Name()))
 		if err != nil {
 			return nil, fmt.Errorf("catalogue: read %s: %w", entry.Name(), err)
 		}
@@ -101,9 +117,24 @@ func All() ([]Template, error) {
 	return out, nil
 }
 
+// resolve is which set of templates answers a request.
+//
+// An exact match or the default. No negotiation beyond that: the console knows
+// which language it is rendering in and says so, and a server guessing from a
+// header is a server that guesses wrong on the one request that matters.
+func resolve(locale string) string {
+	if locale == "" {
+		return Default
+	}
+	if _, err := fs.Stat(files, path.Join("templates", locale)); err != nil {
+		return Default
+	}
+	return locale
+}
+
 // Get returns one template by id.
-func Get(id string) (Template, error) {
-	all, err := All()
+func Get(locale, id string) (Template, error) {
+	all, err := All(locale)
 	if err != nil {
 		return Template{}, err
 	}

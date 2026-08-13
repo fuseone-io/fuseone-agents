@@ -259,6 +259,20 @@ paths:
       tags: [agents]
       operationId: listTemplates
       summary: Agents somebody can start from
+      parameters:
+        - name: locale
+          in: query
+          description: |
+            Which language to answer in. The console says which one it is
+            rendering; the server does not guess from a header.
+
+            This is the one place the server holds the reader's words rather
+            than a code, because `instructions` is not interface text — it is
+            the agent's prompt, and an installation whose work arrives in one
+            language wants the model reasoning in it.
+
+            An unknown language is answered in the default rather than empty.
+          schema: { type: string }
       description: |
         Recurring shapes — triaging a ticket, qualifying a lead, reconciling
         two records, answering an alert — written out so an author adjusts one

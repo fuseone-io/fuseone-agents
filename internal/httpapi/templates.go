@@ -15,8 +15,13 @@ Readable by anyone who can read agents. A template is shipped with the product
 and holds nothing about this installation — no tools, no scope, no data — so
 there is nothing here to narrow by scope.
 */
-func (s *Server) ListTemplates(_ context.Context, _ openapi.ListTemplatesRequestObject) (openapi.ListTemplatesResponseObject, error) {
-	all, err := catalogue.All()
+func (s *Server) ListTemplates(_ context.Context, req openapi.ListTemplatesRequestObject) (openapi.ListTemplatesResponseObject, error) {
+	locale := ""
+	if req.Params.Locale != nil {
+		locale = *req.Params.Locale
+	}
+
+	all, err := catalogue.All(locale)
 	if err != nil {
 		return nil, fmt.Errorf("read the template catalogue: %w", err)
 	}
