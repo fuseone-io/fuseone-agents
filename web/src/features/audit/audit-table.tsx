@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { Link } from "react-router-dom";
 import {
   Table,
@@ -68,14 +69,14 @@ export function AuditTable({ entries }: { entries: AuditEntry[] }) {
                   verbOf(entry.verb).className,
                 )}
               >
-                {verbOf(entry.verb).label}
+                {t(verbOf(entry.verb).label)}
               </span>
             </TableCell>
             <TableCell>
               <Mono>{entry.target}</Mono>
             </TableCell>
             <TableCell className="max-w-[240px] truncate text-xs text-muted-foreground">
-              {detailOf(entry)}
+              {detailOf(entry, t)}
             </TableCell>
             <TableCell className="text-right">
               <Seal entry={entry} />
@@ -112,11 +113,20 @@ function Seal({ entry }: { entry: AuditEntry }) {
 }
 
 /** The one column written for a person to read. */
-function detailOf(entry: AuditEntry): string {
+/*
+The most specific thing the entry says about itself.
+
+The reason somebody wrote beats the rule that fired, which beats the scope it
+happened in. The fallback is where the change applied, and an entry with no
+scope applied to the whole installation.
+*/
+function detailOf(entry: AuditEntry, t: TFunction): string {
   const detail = entry.detail ?? {};
   for (const key of ["reason", "rule", "effect", "note"]) {
     const value = detail[key];
     if (typeof value === "string" && value !== "") return value;
   }
-  return entry.scope?.area ? `área ${entry.scope.area}` : "audit.installation";
+  return entry.scope?.area
+    ? t("audit.inArea", { area: entry.scope.area })
+    : t("audit.installation");
 }

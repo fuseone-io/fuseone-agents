@@ -15,19 +15,19 @@ import type { PolicyCondition } from "@/lib/api/client";
 /** What a rule can read. Short on purpose: every field here has to be
  *  renderable in a sentence the author checks by eye. */
 const FIELDS = [
-  { value: "tool.id", label: "ferramenta" },
+  { value: "tool.id", label: "policies.fieldTool" },
   { value: "tool.effect", label: "policies.toolEffect" },
   { value: "data.taint", label: "policies.dataLabel" },
   { value: "agent.id", label: "policies.fieldAgent" },
   { value: "scope.area", label: "policies.fieldAreaScope" },
-  { value: "args.rows", label: "args.rows" },
+  { value: "args.rows", label: "policies.fieldRows" },
 ];
 
 const OPERATORS = [
-  { value: "eq", label: "é" },
+  { value: "eq", label: "policies.isEqual" },
   { value: "ne", label: "policies.isNot" },
-  { value: "gt", label: "maior que" },
-  { value: "lt", label: "menor que" },
+  { value: "gt", label: "policies.greaterThan" },
+  { value: "lt", label: "policies.lessThan" },
   { value: "contains", label: "policies.contains" },
   { value: "in", label: "policies.isIn" },
 ];

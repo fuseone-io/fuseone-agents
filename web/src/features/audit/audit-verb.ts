@@ -7,15 +7,15 @@
  * quietly — it is context for the decisions, not a decision itself.
  */
 export const VERBS: Record<string, { label: string; className: string }> = {
-  "gate.allowed": { label: "permitiu", className: "text-success" },
-  "gate.constrained": { label: "restringiu", className: "text-warning" },
-  "gate.escalated": { label: "escalou", className: "text-warning" },
-  "gate.blocked": { label: "bloqueou", className: "text-danger" },
-  "gate.decided": { label: "decidiu", className: "text-muted-foreground" },
-  "approval.granted": { label: "aprovou", className: "text-primary" },
-  "approval.refused": { label: "recusou", className: "text-danger" },
+  "gate.allowed": { label: "audit.verbAllowed", className: "text-success" },
+  "gate.constrained": { label: "audit.verbConstrained", className: "text-warning" },
+  "gate.escalated": { label: "audit.verbEscalated", className: "text-warning" },
+  "gate.blocked": { label: "audit.verbBlocked", className: "text-danger" },
+  "gate.decided": { label: "audit.verbDecided", className: "text-muted-foreground" },
+  "approval.granted": { label: "audit.verbGranted", className: "text-primary" },
+  "approval.refused": { label: "audit.verbRefused", className: "text-danger" },
   "tool.classified": {
-    label: "classificou",
+    label: "audit.verbClassified",
     className: "text-muted-foreground",
   },
   "provider.created": {

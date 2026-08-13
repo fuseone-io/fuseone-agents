@@ -15,8 +15,10 @@ const files = (dir: string): string[] =>
     const path = join(dir, entry);
     return statSync(path).isDirectory()
       ? files(path)
-      : path.match(/\.tsx?$/)
-        ? [path]
+      : path.match(/\.tsx?$/) && !path.includes("__tests__")
+        ? // A test's own prose is not the interface. One describing this
+          // scanner tripped it by quoting the pattern it looks for.
+          [path]
         : [];
   });
 
