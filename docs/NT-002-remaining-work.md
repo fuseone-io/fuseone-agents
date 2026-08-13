@@ -21,7 +21,7 @@ estimate anybody here can check.
 | Area | State |
 |---|---|
 | Ledger, Gate, engine, worker | Delivered |
-| Triggers — manual, cron, webhook | Delivered. Event is declared and unimplemented |
+| Triggers — manual, cron, webhook, event | Delivered |
 | Overview, Runs, Run trail, Human queue, Agents, Agent detail, Cost, Audit trail | Delivered |
 | Administration — tools, MCP servers, model providers, budgets | Delivered |
 | **Policies** | Enforced in code, not authorable, not visible. Next |
