@@ -1146,6 +1146,91 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /admin/retention:
+    get:
+      tags: [admin]
+      operationId: getRetention
+      summary: How long this installation keeps content
+      description: |
+        Content, never the ledger. The trail is immutable and survives every
+        erasure: what goes is the referenced payload, and the step keeps its
+        reference and its digest, so the hash chain is untouched.
+      responses:
+        '200':
+          description: The window in force.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Retention' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    put:
+      tags: [admin]
+      operationId: setRetention
+      summary: Change how long content is kept
+      description: |
+        Shortening it destroys data on the next sweep, which runs daily. There
+        is a floor of one day: this is the one setting where a typo cannot be
+        undone.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [days]
+              properties:
+                days: { type: integer, minimum: 1 }
+      responses:
+        '204': { description: Stored. It takes effect on the next sweep. }
+        '400':
+          description: A window shorter than a day.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/erasures:
+    post:
+      tags: [admin]
+      operationId: eraseContent
+      summary: Erase what a set of runs was about
+      description: |
+        Per-subject erasure (NF-09). The runs are named by the caller: nothing
+        here indexes content by the person it concerns, deliberately, because
+        an index of who appears in what would be the very record a subject is
+        asking to be rid of.
+
+        The runs themselves remain, and so does their trail. What goes is the
+        content they point at, which is where personal data lives.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [runs, reason]
+              properties:
+                runs:
+                  type: array
+                  minItems: 1
+                  items: { type: string }
+                reason:
+                  type: string
+                  description: Recorded in the trail. An erasure nobody can account for is indistinguishable from data loss.
+      responses:
+        '200':
+          description: What was erased.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [objects]
+                properties:
+                  objects: { type: integer }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /admin/identity-providers:
     get:
       tags: [admin]
@@ -2055,6 +2140,18 @@ components:
           minItems: 1
           items: { $ref: '#/components/schemas/Expectation' }
         note: { type: string }
+
+    Retention:
+      type: object
+      required: [days, configured]
+      properties:
+        days: { type: integer }
+        configured:
+          type: boolean
+          description: >
+            False when nobody has set one and the default is in force. The
+            distinction matters: a default is a promise the installation has
+            not made deliberately.
 
     Run:
       type: object

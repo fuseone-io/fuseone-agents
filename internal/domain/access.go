@@ -76,6 +76,14 @@ const (
 	PermPolicyWrite   Permission = "policy:write"
 	PermIdentityWrite Permission = "identity:write"
 	PermScopeWrite    Permission = "scope:write"
+	// PermDataErase is the authority to destroy content — setting how long an
+	// installation keeps it, and erasing a subject's on request.
+	//
+	// Its own permission rather than folded into administration, because it is
+	// the one operation here that cannot be undone by anybody. Every other
+	// administrative change can be changed back; this one leaves a tombstone
+	// and a digest, and the bytes are gone.
+	PermDataErase Permission = "data:erase"
 )
 
 // grants maps each role to what it may do.
@@ -101,7 +109,7 @@ var grants = map[Role][]Permission{
 		PermCostRead, PermAuditRead,
 		PermToolRead, PermToolClassify, PermPackWrite,
 		PermProviderWrite, PermBudgetWrite, PermPolicyRead, PermPolicyWrite,
-		PermIdentityWrite, PermScopeWrite,
+		PermIdentityWrite, PermScopeWrite, PermDataErase,
 	},
 	RoleAuditor: {
 		// Reads everything within scope and changes nothing. An auditor who

@@ -160,6 +160,13 @@ func serve(args []string) error {
 			WithCases(ledger.NewContent(identity.pool)).
 			// The corrections a future version is checked against (FU-12).
 			WithRegressions(regression.NewStore(identity.pool)).
+			// How long content is kept, and erasing it on request. Its own
+			// permission: the one act here nobody can undo.
+			WithRetention(
+				admin.NewRetention(identity.pool, store),
+				admin.NewErasures(identity.pool, ledger.NewContent(identity.pool),
+					admin.NewRetention(identity.pool, store)),
+			).
 			WithWebhooks(trigger.NewPostgresWebhooks(identity.pool)).
 			WithAudit(audit.NewPostgres(identity.pool)).
 			WithHealth(admin.NewHealth(identity.pool)).

@@ -79,7 +79,10 @@ type Server struct {
 	people People
 	// regressions is the corpus a future version is checked against.
 	regressions Regressions
-	publisher   Publisher
+	// retention and erasures decide whether content survives.
+	retention Retention
+	erasures  Erasures
+	publisher Publisher
 	// clock is injectable so a run's opening instant is a fact of the request
 	// rather than of whichever machine happened to serve it.
 	clock Clock
