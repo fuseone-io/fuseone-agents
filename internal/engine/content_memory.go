@@ -47,8 +47,12 @@ type object struct {
 	erased bool
 }
 
+// NewMemoryContent bounds payloads by the same default the durable store uses.
 func NewMemoryContent() *MemoryContent {
-	return &MemoryContent{data: make(map[string]object)}
+	return &MemoryContent{
+		data:  make(map[string]object),
+		limit: domain.DefaultContentLimit,
+	}
 }
 
 func (m *MemoryContent) Put(ctx context.Context, runID domain.RunID, seq int64, data []byte) (string, error) {
@@ -72,10 +76,10 @@ func (m *MemoryContent) PutFor(
 	sum := sha256.Sum256(data)
 	ref := fmt.Sprintf("%s://%s/%d/%s", kind, owner, seq, hex.EncodeToString(sum[:])[:16])
 
-	stored := data
-	if m.limit > 0 && len(stored) > m.limit {
-		stored = stored[:m.limit]
-	}
+	// The same rule the durable store applies, from the same place. Two copies
+	// of it is two rules, and the one that drifts is this one — which is the
+	// copy every test that avoids a database trusts.
+	stored, _ := domain.Truncate(data, m.limit)
 
 	m.mu.Lock()
 	defer m.mu.Unlock()

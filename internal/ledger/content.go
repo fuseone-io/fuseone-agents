@@ -33,7 +33,15 @@ type Content struct {
 	limit int
 }
 
-func NewContent(pool *pgxpool.Pool) *Content { return &Content{pool: pool} }
+// NewContent bounds payloads by default.
+//
+// The limit is here rather than at each call site because a bound somebody has
+// to remember to apply is a bound that is not there: six places build one of
+// these, and the one that forgets is the one that writes a database dump into
+// a row.
+func NewContent(pool *pgxpool.Pool) *Content {
+	return &Content{pool: pool, limit: domain.DefaultContentLimit}
+}
 
 func (c *Content) Put(ctx context.Context, runID domain.RunID, seq int64, data []byte) (string, error) {
 	return c.PutFor(ctx, "run", string(runID), seq, data)
@@ -61,7 +69,7 @@ func (c *Content) PutFor(
 	digest := hex.EncodeToString(sum[:])
 	ref := fmt.Sprintf("%s://%s/%d/%s", kind, owner, seq, digest[:16])
 
-	stored, truncated := Truncate(data, c.limit)
+	stored, truncated := domain.Truncate(data, c.limit)
 
 	// Writing the same reference twice is writing the same bytes: the digest
 	// is part of it. Doing nothing on conflict keeps a retry idempotent.
@@ -77,38 +85,16 @@ func (c *Content) PutFor(
 }
 
 /*
-WithLimit bounds what one payload may occupy.
+WithLimit raises or lowers what one payload may occupy.
 
-Object storage is optional and this installation has none, so bulky payloads
-live in Postgres and there is a size past which that stops being reasonable
-(PRD DE-03). The day one arrives, this is the number that goes up.
-
-Zero means no limit, which is what a caller that never sets one gets — the
-default is set where the store is built, not here, so a nil limit is an
-explicit choice rather than a forgotten one.
+The day object storage arrives, this is where the number goes up. Zero is
+unbounded and is an explicit choice: the default is already a limit, so asking
+for none is something a caller says rather than something it forgets.
 */
 func (c *Content) WithLimit(bytes int) *Content {
 	out := *c
 	out.limit = bytes
 	return &out
-}
-
-/*
-Truncate keeps what fits and reports whether anything was dropped.
-
-Shared by both stores so the in-memory one bounds exactly what Postgres bounds.
-A fake that accepted what production truncates would let every suite that uses
-it certify behaviour the real thing does not have.
-
-Truncating rather than refusing: a tool call that already reached the far side
-cannot be un-made by the store declining to remember its answer, and a run left
-with no result at all is worse off than one with a partial one.
-*/
-func Truncate(data []byte, limit int) ([]byte, bool) {
-	if limit <= 0 || len(data) <= limit {
-		return data, false
-	}
-	return data[:limit], true
 }
 
 func (c *Content) Get(ctx context.Context, ref string) ([]byte, error) {

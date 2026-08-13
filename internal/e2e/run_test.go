@@ -80,6 +80,7 @@ effort: low
 tools:
   - crm.lookup
   - crm.note
+  - crm.dump
 budget:
   micros: 500000
   tool_calls: 20

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 
@@ -161,6 +162,17 @@ type unnoteOutput struct {
 	Removed bool `json:"removed"`
 }
 
+// dumpInput and dumpOutput are the tool that returns more than an installation
+// will store. Every stack has one — a report, an export, a log query — and
+// what it does to a claim check is the thing worth having in a test.
+type dumpInput struct {
+	Bytes int `json:"bytes" jsonschema:"how much to return"`
+}
+
+type dumpOutput struct {
+	Payload string `json:"payload"`
+}
+
 // serverCalls is what the MCP server actually did. The ledger records what the
 // platform decided; only this records what reached the outside world.
 type serverCalls struct {
@@ -224,6 +236,13 @@ func mcpSession(t *testing.T, calls *serverCalls) *mcp.ClientSession {
 		defer calls.mu.Unlock()
 		calls.unnotes = append(calls.unnotes, in)
 		return nil, unnoteOutput{Removed: true}, nil
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "dump",
+		Description: "Return a report of the requested size",
+	}, func(_ context.Context, _ *mcp.CallToolRequest, in dumpInput) (*mcp.CallToolResult, dumpOutput, error) {
+		return nil, dumpOutput{Payload: strings.Repeat("a", in.Bytes)}, nil
 	})
 
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()

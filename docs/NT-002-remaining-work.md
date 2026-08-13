@@ -46,6 +46,29 @@ does not, does not. Wiring a channel is a small piece on top of what exists —
 needs a decision about where an installation wants to be told, which is a
 question for a customer rather than for this repository.
 
+## Payload limit, and what object storage would change
+
+DE-03 says object storage is optional and that without it the system degrades
+gracefully by lowering the inline payload limit. There was no limit at all:
+whatever a tool returned went into a PostgreSQL row, whole, having first been
+held in memory. Nothing to lower, and an unbounded write.
+
+One megabyte now, applied by both stores from one rule in the domain — neither
+can import the other, and two copies of a rule is two rules, with the fake
+being the copy every test trusts. Past the limit the store keeps a prefix and
+appends a line saying what happened and how much the tool actually returned.
+The digest stays the digest of the whole payload, so an auditor holding the
+original can still prove it is the one the run used.
+
+The notice is in the bytes rather than in a column because the reader that
+matters is the model: handed half a JSON document with no notice it reasons
+over it as though it were whole.
+
+The day object storage arrives, `Content.WithLimit` is where the number goes
+up, and the store grows a second backend behind the same reference. Nothing
+above the claim check has to change: a reference and a digest is already the
+contract.
+
 ## Stops: "per pack" became "per scope"
 
 FO-06 asks for a global switch per agent, **per pack** and per installation.
