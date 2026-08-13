@@ -890,6 +890,8 @@
     "nothingReserved": "nothing reserved and open",
     "onBehalfOf": " · on behalf of {{who}}",
     "onBehalfOfLabel": "On behalf of",
+    "overFinished_one": "over 1 finished",
+    "overFinished_other": "over {{count}} finished",
     "phaseAwaitingApproval": "Awaiting approval",
     "phaseAwaitingTool": "Calling a tool",
     "phaseCompensating": "undoing",

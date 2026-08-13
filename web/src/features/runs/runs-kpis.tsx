@@ -62,7 +62,7 @@ export function RunsKpis({
         delta={
           stats.ended === 0
             ? t("runs.noneFinishedYet")
-            : `sobre ${stats.ended} ${stats.ended === 1 ? t("runs.finished") : t("overview.doneLegend")}`
+            : t("runs.overFinished", { count: stats.ended })
         }
       />
       <KpiCard

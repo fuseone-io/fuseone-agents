@@ -56,7 +56,7 @@ export function TracePanel({
             <Mono dim className="text-2xs">
               {runId}
               {run.data
-                ? ` · ${items.length} passos · ${formatCost(run.data.cost)} · ${formatDuration(run.data.startedAt, run.data.endedAt)}`
+                ? ` · ${t("simulation.stepCount", { count: items.length })} · ${formatCost(run.data.cost)} · ${formatDuration(run.data.startedAt, run.data.endedAt)}`
                 : ""}
             </Mono>
           </div>
