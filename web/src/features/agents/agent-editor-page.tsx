@@ -12,6 +12,7 @@ import { AgentBudgetSection } from "@/features/agents/agent-budget-section";
 import { NarrativeCard } from "@/features/agents/narrative-card";
 import { AgentEditorRail } from "@/features/agents/agent-editor-rail";
 import { useAgentDraft } from "@/features/agents/agent-draft";
+import { TemplateGallery } from "@/features/agents/template-gallery";
 import { usePublishAgent } from "@/features/agents/agent-editor-api";
 import { useAgent } from "@/features/agents/agent-detail-api";
 import { useTools } from "@/features/admin/api";
@@ -82,10 +83,30 @@ export function AgentEditorPage() {
       <PageHeader
         icon={PAGE_ICONS.agents}
         title={
-          creating ? t("agents.newAgent") : `Editar ${draft.name || routeId}`
+          creating
+            ? t("agents.newAgent")
+            : t("agents.editing", { agent: draft.name || routeId })
         }
         description={t("agents.publishWritesVersion")}
       />
+
+      {/* Above the form rather than instead of it: starting from nothing is
+          still legitimate, and a gallery that replaced the form would make an
+          author choose a template in order to delete it (PRD FU-16). */}
+      {creating && (
+        <TemplateGallery
+          onChoose={(template) => {
+            patch({
+              name: template.name,
+              area: template.area ?? draft.area,
+              instructions: template.instructions,
+              triggers: template.triggers,
+              budget: template.budget ?? draft.budget,
+            });
+            setAgentId(template.id);
+          }}
+        />
+      )}
 
       <div className="grid gap-5 lg:grid-cols-[1fr_316px] lg:items-start">
         <div className="flex flex-col gap-4">

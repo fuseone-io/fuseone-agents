@@ -254,6 +254,35 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /agents/templates:
+    get:
+      tags: [agents]
+      operationId: listTemplates
+      summary: Agents somebody can start from
+      description: |
+        Recurring shapes — triaging a ticket, qualifying a lead, reconciling
+        two records, answering an alert — written out so an author adjusts one
+        instead of facing an empty page (PRD FU-16).
+
+        A template names no tools. One naming `crm.reply` would be broken in
+        every installation that calls its CRM something else, and choosing the
+        pack is the author's act: they pick from what the Curator connected.
+        What a template carries instead is `needs` — the roles it expects, in
+        words, so the author knows what to look for.
+      responses:
+        '200':
+          description: The catalogue.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/AgentTemplate' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
   /agents/events:
     get:
       tags: [agents]
@@ -3340,6 +3369,30 @@ components:
           type: array
           items: { $ref: '#/components/schemas/Step' }
         nextSeq: { type: integer, format: int64, nullable: true }
+
+    AgentTemplate:
+      type: object
+      required: [id, name, summary, instructions, needs]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        summary:
+          type: string
+          description: The one line that decides whether somebody opens it.
+        area:
+          type: string
+          description: A suggestion. The author's own grant decides where it lands.
+        needs:
+          type: array
+          description: |
+            The roles this agent expects to reach, in the author's language —
+            "read the customer's history", not "crm.lookup".
+          items: { type: string }
+        instructions: { type: string }
+        triggers:
+          type: array
+          items: { $ref: '#/components/schemas/AgentTrigger' }
+        budget: { $ref: '#/components/schemas/Budget' }
 
     EventEdge:
       type: object

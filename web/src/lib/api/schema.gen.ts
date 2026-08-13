@@ -149,6 +149,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Agents somebody can start from
+         * @description Recurring shapes — triaging a ticket, qualifying a lead, reconciling
+         *     two records, answering an alert — written out so an author adjusts one
+         *     instead of facing an empty page (PRD FU-16).
+         *
+         *     A template names no tools. One naming `crm.reply` would be broken in
+         *     every installation that calls its CRM something else, and choosing the
+         *     pack is the author's act: they pick from what the Curator connected.
+         *     What a template carries instead is `needs` — the roles it expects, in
+         *     words, so the author knows what to look for.
+         */
+        get: operations["listTemplates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/events": {
         parameters: {
             query?: never;
@@ -2299,6 +2327,22 @@ export interface components {
             /** Format: int64 */
             nextSeq?: number | null;
         };
+        AgentTemplate: {
+            id: string;
+            name: string;
+            /** @description The one line that decides whether somebody opens it. */
+            summary: string;
+            /** @description A suggestion. The author's own grant decides where it lands. */
+            area?: string;
+            /**
+             * @description The roles this agent expects to reach, in the author's language —
+             *     "read the customer's history", not "crm.lookup".
+             */
+            needs: string[];
+            instructions: string;
+            triggers?: components["schemas"]["AgentTrigger"][];
+            budget?: components["schemas"]["Budget"];
+        };
         EventEdge: {
             event: string;
             /** @description The agent that publishes it. Absent means nothing does. */
@@ -2713,6 +2757,29 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    listTemplates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The catalogue. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["AgentTemplate"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
         };
     };
     getEventGraph: {
