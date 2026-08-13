@@ -122,6 +122,10 @@ type State struct {
 	// is how the platform notices that it did not.
 	ConsecutiveBlocks int
 
+	// startedAt is the first step's instant, held so elapsed time is a fact of
+	// the trail rather than of whichever worker happens to be running.
+	startedAt time.Time
+
 	// requested is the call the pending approval is about, held between the
 	// request and the decision so the grant can name what it granted.
 	requested *ApprovedCall
@@ -155,6 +159,16 @@ func (s *State) Apply(step domain.Step) error {
 	s.Spent.Tokens += step.Cost.TotalTokens()
 	s.Spent.Steps++
 	s.Labels = s.Labels.Union(step.Labels)
+
+	// How long the run has been going, measured from its own trail rather
+	// than from a clock the worker holds. A run that crossed a restart, or
+	// that resumed hours after parking, has to arrive at the Gate with its
+	// real elapsed time — and the only record of that is the instants the
+	// steps were sealed with (PRD FO-03).
+	if s.startedAt.IsZero() {
+		s.startedAt = step.At
+	}
+	s.Spent.WallClockMS = step.At.Sub(s.startedAt).Milliseconds()
 
 	if step.IdemKey != "" {
 		if s.executed == nil {
@@ -302,10 +316,11 @@ func (s *State) applyKind(step domain.Step) error {
 // in which parallel steps overshoot the ceiling (PRD FO-01).
 func (s State) Committed() domain.Consumption {
 	return domain.Consumption{
-		Micros:    s.Spent.Micros + s.Reserved.Micros,
-		Tokens:    s.Spent.Tokens + s.Reserved.Tokens,
-		ToolCalls: s.Spent.ToolCalls,
-		Steps:     s.Spent.Steps,
+		Micros:      s.Spent.Micros + s.Reserved.Micros,
+		Tokens:      s.Spent.Tokens + s.Reserved.Tokens,
+		ToolCalls:   s.Spent.ToolCalls,
+		Steps:       s.Spent.Steps,
+		WallClockMS: s.Spent.WallClockMS,
 	}
 }
 

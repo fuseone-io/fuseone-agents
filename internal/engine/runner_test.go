@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -75,6 +76,21 @@ type fixedClock struct{ t time.Time }
 
 func (f fixedClock) Now() time.Time { return f.t }
 
+// tickingClock advances a second every time it is read, so a test can watch a
+// run age. Deterministic, unlike the wall clock, which is the whole reason the
+// engine takes a Clock rather than calling time.Now.
+type tickingClock struct {
+	mu sync.Mutex
+	t  time.Time
+}
+
+func (c *tickingClock) Now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.t = c.t.Add(time.Second)
+	return c.t
+}
+
 // --- harness ---------------------------------------------------------------
 
 type harness struct {
@@ -101,6 +117,11 @@ func (h *harness) payloadOf(t *testing.T, kind domain.StepKind, into any) error 
 
 func newHarness(t *testing.T, proposals ...Proposal) *harness {
 	t.Helper()
+	return newHarnessOn(t, fixedClock{t: time.Date(2026, 8, 10, 12, 0, 0, 0, time.UTC)}, proposals...)
+}
+
+func newHarnessOn(t *testing.T, clock Clock, proposals ...Proposal) *harness {
+	t.Helper()
 
 	l := ledger.NewMemory()
 	planner := &scriptedPlanner{proposals: proposals}
@@ -119,7 +140,7 @@ func newHarness(t *testing.T, proposals ...Proposal) *harness {
 			"crm.note":   domain.EffectWrite,
 			"crm.refund": domain.EffectFinancial,
 		},
-		Clock: fixedClock{t: time.Date(2026, 8, 10, 12, 0, 0, 0, time.UTC)},
+		Clock: clock,
 	})
 	return h
 }
@@ -694,5 +715,33 @@ func TestAdvance_toolCallCeilingReached_blocksTheNextCall(t *testing.T) {
 	if len(h.tools.invocations) != 1 {
 		t.Errorf("invocations = %v, want one call against a ceiling of one",
 			h.tools.invocations)
+	}
+}
+
+func TestAdvance_pastTheWallClockCeiling_parksResumably(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	// The fourth ceiling. It was declared in the specification, accepted by
+	// the API and reported on the agent screen, and no run ever hit it.
+	h := newHarnessOn(t,
+		&tickingClock{t: time.Date(2026, 8, 10, 12, 0, 0, 0, time.UTC)},
+		Proposal{Tool: "crm.lookup", Args: []byte(`{"a":1}`)},
+		Proposal{Tool: "crm.lookup", Args: []byte(`{"a":2}`)},
+	)
+	start := h.start(t, domain.Budget{Micros: 1_000_000, WallClockMS: 1, Steps: 40})
+
+	// The clock moves a second per step, so by the second turn the run is far
+	// past a ceiling of one millisecond.
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+
+	if got := h.kinds(t); got[len(got)-1] != domain.StepParked {
+		t.Errorf("last step = %q, want the run parked at its wall-clock ceiling; steps: %v",
+			got[len(got)-1], got)
 	}
 }

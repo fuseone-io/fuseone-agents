@@ -462,3 +462,29 @@ func TestFold_resumed_forgetsTheRefusalsThatCausedTheParking(t *testing.T) {
 		t.Errorf("ConsecutiveBlocks = %d, want the count forgotten", s.ConsecutiveBlocks)
 	}
 }
+
+func TestFold_wallClock_accumulatesFromTheRunsOwnInstants(t *testing.T) {
+	t.Parallel()
+
+	// A budget covers an amount, a number of steps, a number of tool calls
+	// and wall-clock time, and all four are checked at the Gate (PRD FO-03).
+	// Three of them were. Nothing ever measured how long a run had been going,
+	// so `wall_clock_ms` in a specification was a ceiling an author could
+	// write, the API would report, and no run would ever hit.
+	steps := chain(t,
+		domain.Step{Kind: domain.StepRunStarted, AgentID: "suporte", Payload: []byte(`{}`)},
+		domain.Step{Kind: domain.StepPlanned, Payload: []byte(`{}`)},
+	)
+	steps[1].At = steps[0].At.Add(90 * time.Second)
+
+	s := mustFold(t, steps)
+
+	if s.Spent.WallClockMS != 90_000 {
+		t.Errorf("Spent.WallClockMS = %d, want the 90s between the first step and the last",
+			s.Spent.WallClockMS)
+	}
+	if s.Committed().WallClockMS != 90_000 {
+		t.Errorf("Committed().WallClockMS = %d; the Gate never sees the elapsed time",
+			s.Committed().WallClockMS)
+	}
+}
