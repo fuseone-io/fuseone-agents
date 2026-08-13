@@ -74,6 +74,17 @@ type Request struct {
 	// safe reading of a wiring mistake is the least trusted one.
 	Stage domain.Stage
 
+	// Compensating names the call this one undoes, when it is a compensation
+	// (PRD SE-08).
+	//
+	// It is how a compensating tool crosses the capability check without
+	// being in the pack: the author never chose it, and demanding they list
+	// every undo alongside every do would make the pack a list of things
+	// nobody meant to allow. The rule it stands on is narrow — you may undo
+	// what you were allowed to do — and it is the Curator who decides what
+	// undoes what, never the author.
+	Compensating domain.ToolID
+
 	Budget    domain.Budget
 	Committed domain.Consumption
 	// Estimate is what this call would reserve. The Gate checks

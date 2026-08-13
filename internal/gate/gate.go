@@ -215,10 +215,17 @@ func checkCapability(r Request) result {
 	if r.Pack.Empty() {
 		return stop("the run has no capability pack")
 	}
-	if !r.Pack.Allows(r.Tool) {
-		return stop(fmt.Sprintf("tool %q is outside the run's capability pack", r.Tool))
+	if r.Pack.Allows(r.Tool) {
+		return pass()
 	}
-	return pass()
+	// You may undo what you were allowed to do. The compensating tool is not
+	// in the pack because the author never chose it — the Curator decided
+	// what undoes what — and the permission it borrows is exactly the one
+	// that let the original call happen.
+	if r.Compensating != "" && r.Pack.Allows(r.Compensating) {
+		return pass()
+	}
+	return stop(fmt.Sprintf("tool %q is outside the run's capability pack", r.Tool))
 }
 
 func checkContract(r Request) result {
@@ -264,6 +271,19 @@ func checkTaint(r Request) result {
 // checkPolicy is the built-in effect ladder. An installation replaces it with
 // its own rules; the ladder is the safe default, not the design.
 func checkPolicy(r Request) result {
+	// The ladder exists to stop an agent inventing a dangerous call nobody
+	// authorised. A compensation is not that: it undoes an act that already
+	// crossed this Gate, and it only runs because a person asked for it. Held
+	// to the ladder, the effects most worth undoing — financial, destructive —
+	// would be exactly the ones that never could be.
+	//
+	// This lowers the built-in floor and nothing else. An authored rule still
+	// decides: mergePolicy takes the stricter of the two, so a deny written
+	// against the compensating tool still blocks it.
+	if r.Compensating != "" {
+		return pass()
+	}
+
 	switch r.Effect {
 	case domain.EffectRead:
 		return pass()

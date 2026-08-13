@@ -99,3 +99,84 @@ func ruleOn(t *testing.T, r gate.Request) domain.Decision {
 	}
 	return got
 }
+
+func TestEvaluate_aCompensation_undoesWhatWasAllowed(t *testing.T) {
+	t.Parallel()
+
+	// The undo is not in the pack, because the author never chose it: the
+	// Curator decided what undoes what. The permission it borrows is exactly
+	// the one that let the original call happen.
+	got := ruleOn(t, gate.Request{
+		Tool: "crm.charge.refund", Effect: domain.EffectFinancial,
+		Compensating: "crm.charge", Stage: domain.StageAutonomous,
+		Pack: gate.NewPack("crm.charge"), Args: []byte(`{}`),
+	})
+
+	if got.Rule == gate.RuleCapability {
+		t.Fatalf("refused on capability: %+v", got)
+	}
+}
+
+func TestEvaluate_aCompensationForSomethingOutsideThePack_isStillRefused(t *testing.T) {
+	t.Parallel()
+
+	// Otherwise "compensating" would be a word that opens the pack: anything
+	// could be called by claiming to undo something the agent never had.
+	got := ruleOn(t, gate.Request{
+		Tool: "crm.anything", Effect: domain.EffectWrite,
+		Compensating: "crm.never", Stage: domain.StageAutonomous,
+		Pack: gate.NewPack("crm.charge"), Args: []byte(`{}`),
+	})
+
+	if got.Verdict != domain.VerdictBlock || got.Rule != gate.RuleCapability {
+		t.Errorf("decision = %+v, want it refused on capability", got)
+	}
+}
+
+func TestEvaluate_aFinancialCompensation_isNotHeldByTheBuiltInFloor(t *testing.T) {
+	t.Parallel()
+
+	// The floor denies financial effects so an agent cannot invent one nobody
+	// authorised. A refund of a charge that already crossed the Gate is not
+	// that: it is a person undoing an act the installation permitted. Holding
+	// it here would mean the acts most worth undoing are the ones that never
+	// can be.
+	got := ruleOn(t, gate.Request{
+		Tool: "crm.charge.refund", Effect: domain.EffectFinancial,
+		Compensating: "crm.charge", Stage: domain.StageAutonomous,
+		Pack: gate.NewPack("crm.charge"), Args: []byte(`{}`),
+		ApprovalGranted: true,
+	})
+
+	if !got.Verdict.Executable() {
+		t.Errorf("decision = %+v, want the refund allowed to run", got)
+	}
+}
+
+func TestEvaluate_anAuthoredDenyStillStopsACompensation(t *testing.T) {
+	t.Parallel()
+
+	// Lowering the built-in floor is not the same as ignoring the rules an
+	// installation wrote. If somebody denied this tool by name, it stays
+	// denied — compensation included.
+	g := gate.New().WithPolicies(gate.Policies{Set: []domain.Policy{{
+		Code: "POL-900", Enabled: true, Resource: "crm.charge.refund",
+		Reason: "no refunds by machine",
+		Effect: domain.PolicyDeny, Reach: domain.ReachInstallation,
+	}}})
+
+	got, err := g.Evaluate(t.Context(), gate.Request{
+		Scope: domain.Scope{Company: "acme", Area: "billing"},
+		RunID: "run-1", AgentID: "billing", Seq: 1,
+		Tool: "crm.charge.refund", Effect: domain.EffectFinancial,
+		Compensating: "crm.charge", Stage: domain.StageAutonomous,
+		Pack: gate.NewPack("crm.charge"), Args: []byte(`{}`),
+		ApprovalGranted: true,
+	})
+	if err != nil {
+		t.Fatalf("evaluate: %v", err)
+	}
+	if got.Verdict != domain.VerdictBlock {
+		t.Errorf("decision = %+v, want it blocked by the authored rule", got)
+	}
+}
