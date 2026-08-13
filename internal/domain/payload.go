@@ -56,6 +56,20 @@ type GateDecidedPayload struct {
 	// and the trail says so — otherwise a screen shows a rule denying things
 	// beside a run that carried on, and somebody spends an afternoon on it.
 	Monitored []MonitoredPolicy `json:"monitored,omitempty"`
+
+	// Labels is the taint the arguments carried, and ArgsDigest identifies
+	// them without holding them.
+	//
+	// Recorded because a decision is only re-evaluable if its inputs were
+	// written down (AU-08): a record of the outcome alone can be replayed and
+	// never re-decided. The arguments themselves are deliberately not copied
+	// here — they carry whatever the case carries, and creating a second copy
+	// of personal data to enable a reporting feature is the wrong trade. What
+	// that costs is exact: a policy reading argument content cannot be
+	// re-evaluated against a past decision, and the replay says so rather
+	// than reporting it unchanged.
+	Labels     Labels `json:"labels,omitempty"`
+	ArgsDigest string `json:"args_digest,omitempty"`
 }
 
 type BudgetReservedPayload struct {

@@ -117,6 +117,9 @@ func (r *Runner) act(ctx context.Context, state State, start Start, p Proposal) 
 			Tool: p.Tool, Effect: effect, Verdict: decision.Verdict,
 			Rule: decision.Rule, Reason: decision.Reason,
 			PolicyCode: decision.PolicyCode, Monitored: decision.Monitored,
+			// The inputs beside the outcome, so this decision can be
+			// re-evaluated later and not merely replayed (AU-08).
+			Labels: state.Labels, ArgsDigest: digest(p.Args),
 		}),
 	})
 	if err != nil {
