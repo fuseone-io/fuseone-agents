@@ -26,7 +26,19 @@ spec:
         app.kubernetes.io/component: migrate
     spec:
       restartPolicy: Never
-      serviceAccountName: {{ include "fuseone.serviceAccountName" . }}
+      # No service account, and no token.
+      #
+      # A pre-install hook runs before the release's own resources exist, so a
+      # hook naming the chart's ServiceAccount cannot start: Kubernetes refuses
+      # the pod, the Job sits at 0/1, and the install times out five minutes
+      # later with nothing in the log. Annotating the ServiceAccount as a hook
+      # too would fix the order and take it out of the release, which is a
+      # worse trade.
+      #
+      # It does not need one. This job talks to Postgres and never to the
+      # Kubernetes API, so mounting a token would only widen what a migration
+      # could reach.
+      automountServiceAccountToken: false
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets: {{- toYaml . | nindent 8 }}
       {{- end }}

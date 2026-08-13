@@ -113,6 +113,17 @@ func (s *Store) Versions(agent domain.AgentID) []domain.VersionID {
 func (s *Store) LoadDir(ctx context.Context, fsys fs.FS, root string) (int, error) {
 	var loaded int
 
+	// An absent directory is nothing to load, not a failure.
+	//
+	// Publishing is an interface action (PRD DE-07), so the ordinary
+	// installation authors through the console and never has one. Treating its
+	// absence as an error made the worker exit fatal on every clean install
+	// while the API served beside it, which read as a broken image rather than
+	// as a missing directory nobody was meant to create.
+	if _, err := fs.Stat(fsys, root); errors.Is(err, fs.ErrNotExist) {
+		return 0, nil
+	}
+
 	err := fs.WalkDir(fsys, root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err

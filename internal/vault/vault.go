@@ -14,11 +14,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 )
 
 var (
-	ErrNoKey      = errors.New("vault: no master key configured")
-	ErrBadKey     = errors.New("vault: master key must be 32 bytes")
+	ErrNoKey = errors.New("vault: no master key configured")
+	// Base64 is named in the message because it is the mistake people make:
+	// 32 bytes of hex reads like a key and decodes to 48.
+	ErrBadKey     = errors.New("vault: master key must be 32 bytes, base64-encoded")
 	ErrCiphertext = errors.New("vault: ciphertext is not valid")
 )
 
@@ -139,4 +142,22 @@ func Mask(secret string) string {
 	default:
 		return "••••••••" + secret[n-4:]
 	}
+}
+
+/*
+FromEnv reads the master key from the environment.
+
+It distinguishes no key from a wrong key, which the callers need and used not
+to have. An installation that has not configured a provider yet has none and
+must still start — configuring one is what the administration area is for. An
+installation whose key is malformed has somebody's mistake in it, and a process
+that shrugs at that lets a console serve happily beside workers crash-looping
+on the same value.
+*/
+func FromEnv(id string) (*Vault, error) {
+	encoded := os.Getenv(KeyEnv)
+	if encoded == "" {
+		return nil, ErrNoKey
+	}
+	return FromBase64(encoded, id)
 }

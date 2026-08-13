@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -158,13 +159,14 @@ func keygen() error {
 // openVault reads the master key. Configuration with a credential in it is
 // unreadable without one, so a worker that needs providers needs this.
 func openVault() (*vault.Vault, error) {
-	encoded := os.Getenv(vault.KeyEnv)
-	if encoded == "" {
-		return nil, fmt.Errorf("the administration area seals credentials; set %s (agentd version prints how)", vault.KeyEnv)
-	}
 	// The key id travels with the ciphertext so a future rotation can tell
 	// which key sealed a given row.
-	v, err := vault.FromBase64(encoded, "primary")
+	v, err := vault.FromEnv("primary")
+	if errors.Is(err, vault.ErrNoKey) {
+		return nil, fmt.Errorf(
+			"the administration area seals credentials; set %s (agentd version prints how)",
+			vault.KeyEnv)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", vault.KeyEnv, err)
 	}

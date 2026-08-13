@@ -80,9 +80,16 @@ func serve(args []string) error {
 		// configured a provider yet from starting at all — and configuring one
 		// is what the administration area is for.
 		v, err := openVault()
-		if err != nil {
+		switch {
+		case errors.Is(err, vault.ErrNoKey):
 			slog.Warn("no master key; credentials cannot be stored from the console until one is set",
 				"variable", vault.KeyEnv)
+		case err != nil:
+			// Set and wrong is not the same as unset. Warning here let a
+			// console serve happily beside workers crash-looping on the same
+			// value, which is a configuration mistake dressed as a broken
+			// image.
+			return fmt.Errorf("%s is set but unusable: %w", vault.KeyEnv, err)
 		}
 		store := settings.NewStore(identity.pool, v)
 		// Forgetting health on removal, because this is the process that serves
