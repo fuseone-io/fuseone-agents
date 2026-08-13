@@ -100,10 +100,12 @@ func TestPutPolicy_asACurator_storesTheRuleAndReturnsTheNewHash(t *testing.T) {
 	if store.written.Code != "POL-114" || len(store.written.Conditions) != 1 {
 		t.Errorf("stored = %+v, want the rule as written", store.written)
 	}
-	// The sentence travels with it, generated rather than authored, so the
-	// screen cannot describe a rule the engine does not run.
-	if got.Policy.Sentence == "" {
-		t.Error("the rule came back with no sentence")
+	// The fields the Gate evaluates travel back, and the console renders the
+	// line from them. The server used to compose that sentence too, which was
+	// two renderings of one structure and, being prose in a binary, arrived in
+	// one language for every reader.
+	if got.Policy.Resource == nil || *got.Policy.Resource == "" || got.Policy.Effect == "" {
+		t.Errorf("policy = %+v, want the fields a sentence is rendered from", got.Policy)
 	}
 }
 

@@ -733,6 +733,7 @@
     "nothingChangedYetTitle": "Nada mudou ainda",
     "nothingToSimulate": "Nenhuma decisão registrada no período, então não há o que simular. Isso não diz que a regra é inofensiva — diz que não houve com o que comparar.",
     "onlyExceptionIsAllow": "A única exceção é um <em>permitir</em> que casou: é a única coisa que afrouxa o padrão embutido, e é o que uma exceção é.",
+    "onlyMonitoring": "(apenas monitorando)",
     "operator": "Operador",
     "overNDecisions": "Sobre <n>{{count}}</n> decisões registradas.",
     "owner": "Dono",

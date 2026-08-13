@@ -3076,16 +3076,11 @@ components:
       allOf:
         - $ref: '#/components/schemas/PolicyInput'
         - type: object
-          required: [code, sentence]
+          required: [code]
           properties:
             code:
               type: string
               description: Set once and never changed — it appears in the trail and in what a denied person reads.
-            sentence:
-              type: string
-              description: |
-                The rule as one line, generated from the same fields the Gate
-                evaluates. The builder is never the only representation.
             hits:
               type: integer
               format: int64

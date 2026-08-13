@@ -33,7 +33,6 @@ func policyFrom(p domain.Policy) openapi.Policy {
 		Code: p.Code,
 		// Generated from the same fields the Gate reads, so the screen cannot
 		// describe a rule the engine does not run.
-		Sentence:   p.Sentence(),
 		Name:       p.Name,
 		Owner:      ptr(p.Owner),
 		Reason:     ptr(p.Reason),

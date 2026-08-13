@@ -12,6 +12,7 @@ import { Mono } from "@/components/shared/mono";
 import { effectOf, stateOf } from "@/features/policies/policy-effect";
 import { cn } from "@/lib/utils";
 import type { Policy } from "@/lib/api/client";
+import { draftSentence } from "@/features/policies/policy-sentence";
 
 /**
  * The rules in force, as a table an owner reads down.
@@ -66,7 +67,7 @@ export function PoliciesTable({ policies }: { policies: Policy[] }) {
                 {/* Generated from the fields the Gate reads, so this row
                     cannot describe a rule the engine does not run. */}
                 <Mono dim className="block truncate text-2xs">
-                  {policy.sentence}
+                  {draftSentence(policy, t)}
                 </Mono>
               </Link>
             </TableCell>
@@ -78,13 +79,13 @@ export function PoliciesTable({ policies }: { policies: Policy[] }) {
                   effectOf(policy).className,
                 )}
               >
-                {effectOf(policy).label}
+                {t(effectOf(policy).label)}
               </span>
             </TableCell>
 
             <TableCell>
               <span className={cn("text-xs", stateOf(policy).className)}>
-                {stateOf(policy).label}
+                {t(stateOf(policy).label)}
               </span>
             </TableCell>
 

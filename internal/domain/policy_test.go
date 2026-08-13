@@ -1,7 +1,6 @@
 package domain_test
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/fuseone/agents/internal/domain"
@@ -240,47 +239,3 @@ func TestPolicyEffect_translatesToTheGatesVocabulary(t *testing.T) {
 
 // The sentence is generated from the fields the Gate reads, so the screen
 // cannot describe a rule the engine does not run.
-
-func TestSentence_readsBackTheRuleTheGateWillEvaluate(t *testing.T) {
-	t.Parallel()
-
-	p := policy(func(p *domain.Policy) {
-		p.Resource = "customer.*"
-		p.Effects = []domain.Effect{domain.EffectRead, domain.EffectWrite}
-		p.Conditions = []domain.Condition{
-			{Field: "args.rows", Op: domain.OpGreaterThan, Value: "100"},
-			{Field: "data.taint", Op: domain.OpIn, Value: "untrusted"},
-		}
-	})
-
-	want := "customer.* · read, write · args.rows > 100 · data.taint em untrusted → negar"
-	if got := p.Sentence(); got != want {
-		t.Errorf("sentence =\n  %s\nwant\n  %s", got, want)
-	}
-}
-
-func TestSentence_saysWhenAPolicyIsOnlyWatching(t *testing.T) {
-	t.Parallel()
-
-	// A rule reading "→ negar" while denying nothing is the most misleading
-	// thing this screen could show.
-	p := policy(func(p *domain.Policy) { p.Mode = domain.PolicyMonitor })
-
-	if got := p.Sentence(); !strings.Contains(got, "monitorando") {
-		t.Errorf("sentence = %q, want it to say the rule is not enforcing", got)
-	}
-}
-
-func TestSentence_anUnimplementedOperatorReadsAsItself(t *testing.T) {
-	t.Parallel()
-
-	// It does not hold either. The two have to agree, or an author reads a
-	// sentence describing a rule that silently never fires.
-	p := policy(func(p *domain.Policy) {
-		p.Conditions = []domain.Condition{{Field: "tool.id", Op: "roughly", Value: "crm.reply"}}
-	})
-
-	if got := p.Sentence(); !strings.Contains(got, "roughly") {
-		t.Errorf("sentence = %q, want the operator visible", got)
-	}
-}

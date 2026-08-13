@@ -733,6 +733,7 @@
     "nothingChangedYetTitle": "Nothing has changed yet",
     "nothingToSimulate": "No decision recorded in the period, so there is nothing to simulate. That does not say the rule is harmless — it says there was nothing to compare against.",
     "onlyExceptionIsAllow": "The only exception is an <em>allow</em> that matched: it is the one thing that loosens the built-in default, and that is what an exception is.",
+    "onlyMonitoring": "(only monitoring)",
     "operator": "Operator",
     "overNDecisions": "Over <n>{{count}}</n> recorded decisions.",
     "owner": "Owner",

@@ -28,7 +28,7 @@ export function ConditionSection({
           {t("policies.ruleEvaluated")}
         </span>
         <Mono className="mt-1 block break-words text-xs">
-          {draftSentence(draft)}
+          {draftSentence(draft, t)}
         </Mono>
       </div>
     </Section>

@@ -3,6 +3,7 @@ package policy_test
 import (
 	"errors"
 	"os"
+	"reflect"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -235,8 +236,12 @@ func TestPut_roundTripsEveryFieldTheGateReads(t *testing.T) {
 	if got.Mode != domain.PolicyMonitor {
 		t.Errorf("mode = %q, want monitor — a rule enforcing when it should watch", got.Mode)
 	}
-	if got.Sentence() != written.Sentence() {
-		t.Errorf("sentence changed in storage:\n  %s\n  %s", got.Sentence(), written.Sentence())
+	// Everything, not a proxy for it. This used to compare the two rendered
+	// sentences, which was a neat shorthand and a weak one: the sentence never
+	// carried the reason, the owner or whether the rule was enabled, so a
+	// field lost in storage could pass it.
+	if !reflect.DeepEqual(got, written) {
+		t.Errorf("read back a different rule:\n  stored:  %+v\n  written: %+v", got, written)
 	}
 }
 

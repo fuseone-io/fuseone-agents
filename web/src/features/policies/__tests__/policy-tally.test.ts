@@ -6,7 +6,6 @@ function policy(over: Partial<Policy>): Policy {
   return {
     code: "POL-1",
     name: "x",
-    sentence: "x → negar",
     effect: "deny",
     mode: "enforce",
     enabled: true,

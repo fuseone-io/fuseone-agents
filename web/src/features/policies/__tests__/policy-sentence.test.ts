@@ -7,7 +7,15 @@ function draft(over: Partial<PolicyInput> = {}): PolicyInput {
   return { name: "x", effect: "deny", mode: "enforce", ...over };
 }
 
-describe("the draft sentence", () => {
+/**
+ * The words come from the catalogue, so the tests assert the shape: which
+ * parts, in which order, joined how. A test pinning the Portuguese would fail
+ * the day somebody improves the wording and pass the day the sentence stops
+ * making sense.
+ */
+const t = (key: string) => key;
+
+describe("the sentence", () => {
   it("reads the rule the author is building", () => {
     const got = draftSentence(
       draft({
@@ -15,30 +23,36 @@ describe("the draft sentence", () => {
         effects: ["read", "write"],
         conditions: [{ field: "args.rows", op: "gt", value: "100" }],
       }),
+      t,
     );
 
-    expect(got).toBe("customer.* · read, write · args.rows > 100 → negar");
+    expect(got).toBe(
+      "customer.* · effect.read, effect.write · args.rows > 100 → verdict.block",
+    );
   });
 
-  it("matches what the server renders for the same rule", () => {
-    // The two are separate implementations of one thing, which is the risk
-    // this test exists to bound. The server's version is the one shown beside
-    // a stored rule; this one only exists while a draft has been nowhere.
-    const got = draftSentence(
-      draft({ resource: "crm.reply", effects: ["write"] }),
-    );
+  it("reads the same for a draft and for a stored rule", () => {
+    // One renderer. The server used to compose this too, which meant two
+    // renderings of one structure — and the stored one arrived in whichever
+    // language the binary held.
+    const stored = draft({ resource: "crm.reply", effects: ["write"] });
 
-    // Taken from the Go side's own test: internal/domain/policy_test.go.
-    expect(got).toBe("crm.reply · write → negar");
+    expect(draftSentence(stored, t)).toBe(
+      "crm.reply · effect.write → verdict.block",
+    );
   });
 
   it("says when the rule will not be enforcing", () => {
-    expect(draftSentence(draft({ mode: "monitor" }))).toContain("monitorando");
+    // A rule that reads "→ deny" while denying nothing is the most misleading
+    // thing this screen could show.
+    expect(draftSentence(draft({ mode: "monitor" }), t)).toContain(
+      "policies.onlyMonitoring",
+    );
   });
 
   it("covers everything when no resource is chosen yet", () => {
     // A half-written rule must not read as narrower than it is.
-    expect(draftSentence(draft())).toBe("* → negar");
+    expect(draftSentence(draft(), t)).toBe("* → verdict.block");
   });
 });
 

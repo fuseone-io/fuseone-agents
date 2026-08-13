@@ -27,7 +27,7 @@ export function PolicySideRail({
     <aside className="flex flex-col gap-3 lg:sticky lg:top-0">
       <Card title={t("policies.theRule")}>
         <Mono className="block break-words text-xs">
-          {draftSentence(draft)}
+          {draftSentence(draft, t)}
         </Mono>
         <p className="text-xs text-muted-foreground">
           {draft.mode === "monitor"

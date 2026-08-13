@@ -2091,11 +2091,6 @@ export interface components {
             /** @description Set once and never changed — it appears in the trail and in what a denied person reads. */
             code: string;
             /**
-             * @description The rule as one line, generated from the same fields the Gate
-             *     evaluates. The builder is never the only representation.
-             */
-            sentence: string;
-            /**
              * Format: int64
              * @description How many decisions this rule produced in the period.
              */

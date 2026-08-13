@@ -7,9 +7,9 @@ import type { Policy } from "@/lib/api/client";
  * colour-blind, or looking at a printout of an audit, gets the same answer.
  */
 export const EFFECTS: Record<string, { label: string; className: string }> = {
-  allow: { label: "permitir", className: "bg-success-surface text-success" },
-  escalate: { label: "escalar", className: "bg-warning-surface text-warning" },
-  deny: { label: "negar", className: "bg-danger-surface text-danger" },
+  allow: { label: "verdict.allow", className: "bg-success-surface text-success" },
+  escalate: { label: "verdict.require_approval", className: "bg-warning-surface text-warning" },
+  deny: { label: "verdict.block", className: "bg-danger-surface text-danger" },
 };
 
 export function effectOf(policy: Policy): { label: string; className: string } {
@@ -30,7 +30,7 @@ export function stateOf(policy: Policy): { label: string; className: string } {
     return { label: "desligada", className: "text-muted-foreground" };
   }
   if (policy.mode === "monitor") {
-    return { label: "monitorando", className: "text-warning" };
+    return { label: "policies.monitoring", className: "text-warning" };
   }
-  return { label: "impondo", className: "text-success" };
+  return { label: "policies.enforcing", className: "text-success" };
 }
