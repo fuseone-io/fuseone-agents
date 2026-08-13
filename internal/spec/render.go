@@ -34,6 +34,7 @@ func Render(s Spec) ([]byte, error) {
 		Model:    s.Model,
 		Effort:   s.Effort,
 		Triggers: s.Triggers,
+		Emits:    s.Emits,
 		Steps:    s.Steps,
 	}
 	for _, t := range s.Tools {

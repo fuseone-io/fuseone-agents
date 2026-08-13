@@ -46,6 +46,16 @@ type Spec struct {
 
 	Triggers []Trigger
 
+	// Emits are the events this agent publishes when a run of it finishes
+	// (PRD SE-10).
+	//
+	// Declared rather than called. If emitting were a tool the model chose,
+	// the graph of who triggers whom would depend on what a model decided on
+	// the day, and the requirement is that it is static and inspectable. An
+	// agent names an event and never an agent: it does not know who listens,
+	// which is what keeps this composition rather than a phone call.
+	Emits []string
+
 	// Steps narrow what is reachable as a run advances. Absent means one
 	// envelope holding the whole pack, which is how every agent behaved
 	// before steps existed.
@@ -77,6 +87,7 @@ type frontmatter struct {
 	Effort   string    `yaml:"effort"`
 	Tools    []string  `yaml:"tools"`
 	Triggers []Trigger `yaml:"triggers"`
+	Emits    []string  `yaml:"emits,omitempty"`
 	Steps    []Step    `yaml:"steps,omitempty"`
 	Budget   struct {
 		Micros      int64 `yaml:"micros"`
@@ -108,6 +119,7 @@ func Parse(source string, data []byte) (Spec, error) {
 		Model:        fm.Model,
 		Effort:       fm.Effort,
 		Triggers:     fm.Triggers,
+		Emits:        fm.Emits,
 		Steps:        fm.Steps,
 		Instructions: strings.TrimSpace(string(body)),
 		Source:       source,

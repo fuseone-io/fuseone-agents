@@ -185,6 +185,7 @@ func serve(args []string) error {
 			WithPauses(spec.NewState(identity.pool)).
 			WithStops(admin.NewStops(identity.pool)).
 			WithMarks(admin.NewMarks(identity.pool)).
+			WithComposition(spec.NewRegistry(identity.pool)).
 			WithReplays(httpapi.NewReplays(
 				policy.NewStore(identity.pool).Policies,
 				spec.NewRegistry(identity.pool).Pack,
@@ -621,6 +622,21 @@ func workerCmd(args []string) error {
 			engine.SystemClock{}, slog.Default(),
 		)
 		go runScheduler(ctx, scheduler)
+
+		// Composition between agents (PRD SE-10). A sweep rather than a hook
+		// on the finishing run: a worker that died between finishing and
+		// publishing would drop the event, and a sweep cannot — the run it
+		// opens carries a key derived from the source run, so a second pass
+		// reaches the run the first one opened.
+		go dispatchEvents(ctx, trigger.NewDispatcher(
+			registry, store,
+			trigger.NewOpener(store, registry, engine.SystemClock{}).
+				WithContent(ledger.NewContent(configPool)).
+				WithPauses(spec.NewState(configPool)).
+				WithStops(admin.NewStops(configPool)).
+				WithStages(spec.NewState(configPool)),
+			engine.SystemClock{}, slog.Default(),
+		))
 	}
 
 	slog.Info("worker started", "owner", *owner, "concurrency", *concurrency)
@@ -684,6 +700,30 @@ func watchBudgets(ctx context.Context, watcher *budget.Watcher) {
 			// Logged and retried. A failed sweep means a warning arrives late,
 			// which is worth a line in the log and not worth stopping over.
 			slog.Error("budget sweep failed", "err", err)
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+// eventSweep is how often finished runs are checked for events to publish.
+// Short, because a person waiting for the second agent to start is waiting for
+// this; every pass is one indexed query when nothing emits.
+const eventSweep = 15 * time.Second
+
+func dispatchEvents(ctx context.Context, dispatcher *trigger.Dispatcher) {
+	ticker := time.NewTicker(eventSweep)
+	defer ticker.Stop()
+
+	for {
+		if opened, err := dispatcher.Sweep(ctx, trigger.Window); err != nil {
+			slog.Error("event dispatch failed", "err", err)
+		} else if opened > 0 {
+			slog.Info("events opened runs", "runs", opened)
 		}
 
 		select {

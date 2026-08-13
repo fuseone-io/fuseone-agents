@@ -7,6 +7,7 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/spec"
 )
 
@@ -220,5 +221,64 @@ func TestLoadDir_publishesEveryDefinition(t *testing.T) {
 	}
 	if got := store.Agents(); len(got) != 2 {
 		t.Errorf("Agents = %v, want two", got)
+	}
+}
+
+func TestParse_emits_isReadFromTheDefinition(t *testing.T) {
+	t.Parallel()
+
+	// Declared rather than called: an agent that chose when to emit would make
+	// the composition graph a fact about the day rather than about the
+	// definitions (PRD SE-10).
+	parsed, err := spec.Parse("triagem.agent.md", []byte(`---
+id: triagem
+name: Triagem
+area: cx
+provider: openai
+model: gpt-4o-mini
+tools:
+  - crm.lookup
+budget:
+  micros: 100000
+emits:
+  - ticket.triado
+---
+
+Triar o ticket.
+`))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	if len(parsed.Emits) != 1 || parsed.Emits[0] != "ticket.triado" {
+		t.Errorf("Emits = %v, want the declared event", parsed.Emits)
+	}
+}
+
+func TestRender_emits_survivesTheRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	// A version is the digest of its bytes, so a field the renderer drops is a
+	// field that silently disappears when somebody edits the agent in the
+	// console rather than in a file.
+	source := spec.Spec{
+		ID: "triagem", Name: "Triagem", Area: "cx",
+		Provider: "openai", Model: "gpt-4o-mini",
+		Tools:        []domain.ToolID{"crm.lookup"},
+		Emits:        []string{"ticket.triado"},
+		Budget:       domain.Budget{Micros: 100_000},
+		Instructions: "Triar o ticket.",
+	}
+
+	rendered, err := spec.Render(source)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	again, err := spec.Parse("triagem.agent.md", rendered)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if len(again.Emits) != 1 || again.Emits[0] != "ticket.triado" {
+		t.Errorf("Emits = %v after the round trip, want the declared event", again.Emits)
 	}
 }

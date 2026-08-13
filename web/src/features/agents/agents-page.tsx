@@ -18,6 +18,7 @@ import {
 } from "@/components/shared/filter-select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AgentCard } from "@/features/agents/agent-card";
+import { EventGraph } from "@/features/agents/event-graph";
 import { useAgents, type Agent } from "@/features/agents/api";
 import { stateOfAgent, type AgentState } from "@/lib/agent-state";
 
@@ -126,6 +127,12 @@ export function AgentsPage() {
           ))}
         </div>
       )}
+
+      {/* Below the list, because the wiring is a fact about all of them and
+          nobody comes to this screen looking for it first. It has to be here
+          somewhere, though: composition is by event and neither side names the
+          other, so this is the only place the graph is visible (PRD SE-10). */}
+      <EventGraph />
     </>
   );
 }
@@ -137,7 +144,7 @@ const STATES: FilterOption[] = [
   { value: "all", label: "agents.allStates" },
   { value: "running", label: "runs.phaseRunning" },
   { value: "waiting", label: "runs.waitingPerson" },
-  { value: "blocked", label: "Estacionado" },
+  { value: "blocked", label: "runs.phaseParked" },
   { value: "done", label: "agents.lastFinished" },
   { value: "draft", label: "agents.neverRanShort" },
 ];

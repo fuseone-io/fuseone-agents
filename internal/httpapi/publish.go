@@ -161,6 +161,7 @@ func renderAndParse(id string, in openapi.AgentDefinition) ([]byte, spec.Spec, e
 	for _, t := range valueOr(in.Tools) {
 		draft.Tools = append(draft.Tools, domain.ToolID(t))
 	}
+	draft.Emits = valueOr(in.Emits)
 	if in.Budget != nil {
 		draft.Budget = domain.Budget{
 			Micros: valueOr(in.Budget.Micros), Tokens: valueOr(in.Budget.Tokens),

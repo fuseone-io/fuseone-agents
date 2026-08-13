@@ -72,3 +72,16 @@ func (a AgentActivity) SuccessRate() float64 {
 	}
 	return float64(a.Finished) / float64(a.Runs)
 }
+
+/*
+EventEdge is one link in the composition graph (PRD SE-10).
+
+An edge with no To is an event nobody listens to; an edge with no From is a
+trigger nothing publishes. Both are kept, because they are the two mistakes
+this graph exists to make visible and a picture without them looks correct.
+*/
+type EventEdge struct {
+	From  AgentID
+	Event string
+	To    AgentID
+}

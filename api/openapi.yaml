@@ -254,6 +254,35 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /agents/events:
+    get:
+      tags: [agents]
+      operationId: getEventGraph
+      summary: Who triggers whom
+      description: |
+        Composition between agents is by event: one publishes a typed event,
+        another consumes it as a trigger (PRD SE-10). Neither names the other,
+        so this graph is the only place the wiring is visible — and it is
+        derived from the published specifications rather than from a table
+        somebody maintains beside them, so it cannot disagree with them.
+
+        Edges that go nowhere are included. An event nobody listens to and a
+        trigger nothing publishes are the two mistakes this exists to make
+        visible, and a picture without them looks correct.
+      responses:
+        '200':
+          description: Every edge.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [edges]
+                properties:
+                  edges:
+                    type: array
+                    items: { $ref: '#/components/schemas/EventEdge' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
   /agents/{agentId}/flow:
     post:
       tags: [agents]
@@ -3050,6 +3079,14 @@ components:
         triggers:
           type: array
           items: { $ref: '#/components/schemas/AgentTrigger' }
+        emits:
+          type: array
+          description: |
+            Events a finished run of this agent publishes (PRD SE-10). Declared
+            rather than called: an agent that chose when to emit would make the
+            composition graph a fact about the day rather than about the
+            definitions.
+          items: { type: string }
 
     AgentPublished:
       type: object
@@ -3276,6 +3313,18 @@ components:
           type: array
           items: { $ref: '#/components/schemas/Step' }
         nextSeq: { type: integer, format: int64, nullable: true }
+
+    EventEdge:
+      type: object
+      required: [event]
+      properties:
+        event: { type: string }
+        from:
+          type: string
+          description: The agent that publishes it. Absent means nothing does.
+        to:
+          type: string
+          description: The agent it starts. Absent means nobody listens.
 
     FlowFinding:
       type: object

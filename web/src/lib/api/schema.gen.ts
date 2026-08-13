@@ -149,6 +149,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Who triggers whom
+         * @description Composition between agents is by event: one publishes a typed event,
+         *     another consumes it as a trigger (PRD SE-10). Neither names the other,
+         *     so this graph is the only place the wiring is visible — and it is
+         *     derived from the published specifications rather than from a table
+         *     somebody maintains beside them, so it cannot disagree with them.
+         *
+         *     Edges that go nowhere are included. An event nobody listens to and a
+         *     trigger nothing publishes are the two mistakes this exists to make
+         *     visible, and a picture without them looks correct.
+         */
+        get: operations["getEventGraph"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{agentId}/flow": {
         parameters: {
             query?: never;
@@ -2052,6 +2080,13 @@ export interface components {
             tools?: string[];
             budget?: components["schemas"]["Budget"];
             triggers?: components["schemas"]["AgentTrigger"][];
+            /**
+             * @description Events a finished run of this agent publishes (PRD SE-10). Declared
+             *     rather than called: an agent that chose when to emit would make the
+             *     composition graph a fact about the day rather than about the
+             *     definitions.
+             */
+            emits?: string[];
         };
         AgentPublished: {
             agentId: string;
@@ -2235,6 +2270,13 @@ export interface components {
             items: components["schemas"]["Step"][];
             /** Format: int64 */
             nextSeq?: number | null;
+        };
+        EventEdge: {
+            event: string;
+            /** @description The agent that publishes it. Absent means nothing does. */
+            from?: string;
+            /** @description The agent it starts. Absent means nobody listens. */
+            to?: string;
         };
         FlowFinding: {
             paths: components["schemas"]["FlowPath"][];
@@ -2643,6 +2685,29 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    getEventGraph: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every edge. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        edges: components["schemas"]["EventEdge"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
         };
     };
     checkDataFlow: {

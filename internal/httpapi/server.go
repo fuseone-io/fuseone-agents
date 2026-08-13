@@ -75,9 +75,11 @@ type Server struct {
 	// marks are the budget thresholds each scope has crossed (PRD FO-05).
 	marks Marks
 	// replays re-derive a run's decisions from what was recorded (PRD AU-07).
-	replays    Replays
-	stages     trigger.Stages
-	promotions Promotions
+	replays Replays
+	// composition is the graph of who triggers whom (PRD SE-10).
+	composition Composition
+	stages      trigger.Stages
+	promotions  Promotions
 	// cases is where an uploaded simulation set is filed. Optional, like the
 	// rest of the authoring area.
 	cases Cases
@@ -171,6 +173,12 @@ func (s *Server) WithMarks(marks Marks) *Server {
 // was made under, and the pack of the version that ran.
 func (s *Server) WithReplays(replays Replays) *Server {
 	s.replays = replays
+	return s
+}
+
+// WithComposition wires the graph of who triggers whom.
+func (s *Server) WithComposition(composition Composition) *Server {
+	s.composition = composition
 	return s
 }
 
