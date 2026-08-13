@@ -8,9 +8,10 @@
 name: check
 
 on:
-  push:
-    branches: [main]
   pull_request:
+  # Called by publish.yml, so a commit on main meets this gate exactly once and
+  # publishing cannot run against a laxer copy of it.
+  workflow_call:
 
 permissions:
   contents: read
@@ -70,9 +71,12 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      # -p 1: these suites share one database and truncate the same tables.
+      # Through the Makefile rather than as a list here. This job carried its
+      # own copy and had fallen three packages behind, so CI was running fewer
+      # suites than `make check-pg` did locally — and the missing ones were the
+      # newest, which is the worst possible bias.
       - name: contract suites against a real database
-        run: go test ./internal/ledger/ ./internal/e2e/ ./internal/admin/ ./internal/spec/ ./internal/auth/ ./internal/trigger/ ./internal/audit/ ./internal/policy/ -count=1 -race -p 1
+        run: make test-pg
 
   web:
     name: console
@@ -84,7 +88,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 26
           cache: npm
           cache-dependency-path: web/package-lock.json
 
@@ -95,6 +99,32 @@ jobs:
       - run: npm run lint
       - run: npm run test
       - run: npm run build
+
+  chart:
+    name: chart
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+
+      - name: lint
+        run: helm lint deploy/helm/fuseone-agents
+
+      # Rendered and checked against the real schemas. `helm lint` only proves
+      # the templates produce YAML; this proves the YAML is Kubernetes.
+      - name: install kubeconform
+        run: |
+          curl -sSfL https://github.com/yannh/kubeconform/releases/download/v0.7.0/kubeconform-linux-amd64.tar.gz \
+            | tar -xz -C /usr/local/bin kubeconform
+
+      - name: manifests are valid Kubernetes
+        run: |
+          helm template fuseone-agents deploy/helm/fuseone-agents \
+            --set secret.values.databaseUrl=postgres://u:p@h:5432/d \
+            --set secret.values.masterKey=ZGV2ZWxvcG1lbnQtb25seS1rZXktZG8tbm90LXVzZSE= \
+            --set ingress.enabled=true --set ingress.host=agents.example.com \
+            | kubeconform -strict -summary -kubernetes-version 1.31.0 \
+                -schema-location default
 
   artifact:
     name: artifact
@@ -121,7 +151,7 @@ jobs:
           cache: true
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 26
           cache: npm
           cache-dependency-path: web/package-lock.json
 

@@ -5,8 +5,13 @@
 # to exec into, which is the point rather than an inconvenience: a container
 # with a shell is a container somebody debugs in production by changing it.
 
+# The two build stages pin themselves to the machine doing the building rather
+# than to the image being built. A console bundle is the same bytes whatever
+# runs it, and Go cross-compiles: emulating either through QEMU to reach arm64
+# would multiply the build time to produce identical output.
+
 # --- the console ------------------------------------------------------------
-FROM node:26-alpine AS console
+FROM --platform=$BUILDPLATFORM node:26-alpine AS console
 
 WORKDIR /src/web
 # The manifest first, so a change to a component does not reinstall the world.
@@ -18,7 +23,7 @@ COPY api/openapi.yaml /src/api/openapi.yaml
 RUN npm run build
 
 # --- the binary -------------------------------------------------------------
-FROM golang:1.26-alpine AS build
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS build
 
 WORKDIR /src
 COPY go.mod go.sum ./
@@ -36,7 +41,11 @@ RUN rm -rf internal/web/dist && mkdir -p internal/web/dist && \
 # Static, so the runtime image needs no libc. Trimmed, because a path from a
 # build machine in a stack trace tells an attacker about the build machine.
 ARG VERSION=0.0.0-dev
-RUN CGO_ENABLED=0 go build -tags embedui -trimpath \
+# Supplied by buildx. Defaulted so a plain `docker build` still works.
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go build -tags embedui -trimpath \
     -ldflags "-s -w -X main.version=${VERSION}" \
     -o /out/agentd ./cmd/agentd
 

@@ -4,10 +4,34 @@ One chart, one binary, one PostgreSQL. No orchestration cluster, no external
 queue, no time-series database (PRD DE-01).
 
 ```sh
-helm install agents deploy/helm/fuseone-agents \
+helm install agents oci://ghcr.io/fuseone-io/charts/fuseone-agents \
+  --version 0.1.0 \
   --namespace fuseone --create-namespace \
   --set secret.existingSecret=fuseone-agents \
   --set baseUrl=https://agents.exemplo.com
+```
+
+From a clone, `deploy/helm/fuseone-agents` stands in for the `oci://` reference.
+
+## What you are installing
+
+Every image is built by a workflow in the open, published to
+`ghcr.io/fuseone-io/fuseone-agents` for `linux/amd64` and `linux/arm64`, and
+signed with no key at all — the signature's identity is the workflow that built
+it. This software is installed inside your network, where you cannot watch it
+build, so verify it before it runs:
+
+```sh
+cosign verify ghcr.io/fuseone-io/fuseone-agents:0.1.0 \
+  --certificate-identity-regexp '^https://github.com/fuseone-io/fuseone-agents/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+Each image also carries its build provenance and a bill of what is in it:
+
+```sh
+docker buildx imagetools inspect ghcr.io/fuseone-io/fuseone-agents:0.1.0 \
+  --format '{{ json .SBOM }}'
 ```
 
 ## The two things with no default

@@ -1,0 +1,141 @@
+# What an installation actually receives.
+#
+# Two artefacts and they travel together: the image, and the chart that knows
+# how to run it. Publishing one without the other leaves a customer holding
+# something they cannot install.
+#
+# Both go to this repository's own registry, which is what the chart already
+# defaults to. Nothing is published from a pull request — a fork must not be
+# able to push an image the tag `main` resolves to.
+name: publish
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  # For rebuilding a release without a new commit, which is what happens when a
+  # base image is patched.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  # Nothing is published from a commit that has not passed. The reusable call
+  # runs the whole of check.yml, so this is the same gate a pull request meets
+  # rather than a second, laxer one.
+  check:
+    uses: ./.github/workflows/check.yml
+
+  image:
+    name: image
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      # Keyless signing: the identity is this workflow, so there is no key to
+      # store and none to leak.
+      id-token: write
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # arm64 without emulation: the Dockerfile pins its build stages to the
+      # building machine and cross-compiles, so this only has to describe the
+      # platforms.
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # A tag says where an image came from. `main` moves, `sha-` never does,
+      # and a version tag is what an installation pins.
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=sha,format=short,prefix=sha-
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+
+      # What `agentd version` will report. On a tag it is the release; on main
+      # it is the commit, because an image labelled "main" tells somebody
+      # diagnosing an incident nothing about which code they are looking at.
+      - id: version
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=main-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # The version the binary reports. `agentd version` and the image tag
+          # disagreeing is how an incident gets diagnosed against the wrong
+          # code.
+          build-args: |
+            VERSION=${{ steps.version.outputs.value }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # This platform is installed inside somebody else's network, where
+          # nobody can watch it build. What it can offer instead is an account
+          # of how it was built and a bill of what is in it.
+          provenance: mode=max
+          sbom: true
+
+      - uses: sigstore/cosign-installer@v3
+
+      - name: sign the digest
+        run: cosign sign --yes ${{ env.IMAGE }}@${{ steps.push.outputs.digest }}
+
+  chart:
+    name: chart
+    needs: image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+
+      - name: log in to the registry
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" \
+            | helm registry login ${{ env.REGISTRY }} \
+                --username ${{ github.actor }} --password-stdin
+
+      # The chart's version is the release's. An `appVersion` that lags the
+      # image is a chart that installs something other than what it says.
+      - name: package
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if [ "${GITHUB_REF_TYPE}" != "tag" ]; then
+            version="0.0.0-main.$(git rev-parse --short HEAD)"
+          fi
+          helm package deploy/helm/fuseone-agents \
+            --version "$version" --app-version "$version" -d /tmp/chart
+          echo "CHART=$(ls /tmp/chart/*.tgz)" >> "$GITHUB_ENV"
+
+      - name: push
+        run: helm push "$CHART" oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/charts

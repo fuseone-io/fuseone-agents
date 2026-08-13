@@ -9,7 +9,7 @@ BIN     := bin/agentd
 OAPI    := github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.8.0
 GEN_GO  := internal/httpapi/openapi/server.gen.go
 
-.PHONY: volume check check-pg smoke dev stop reset db run-pg build build-api web console test race cover vet fmt lint tidy clean docs generate verify-generate run
+.PHONY: volume check check-pg test-pg smoke dev stop reset db run-pg build build-api web console test race cover vet fmt lint tidy clean docs generate verify-generate run
 
 # A database of its own. Sharing one with `make dev` meant a running worker
 # claimed the runs a test had just opened, and a test run wiped the
@@ -28,14 +28,29 @@ db:
 		docker compose exec -T postgres createdb -U agents agents_test
 	@echo "postgres ready on 5433 (dev: agents, tests: agents_test)"
 
+# The suites that need a real database, named once.
+#
+# CI used to carry its own copy of this list and had fallen three packages
+# behind, so `make check-pg` locally and the postgres job in CI were running
+# different suites — and the ones CI was missing were the newest.
+PG_PKGS = ./internal/ledger/ ./internal/e2e/ ./internal/admin/ ./internal/spec/ \
+          ./internal/auth/ ./internal/trigger/ ./internal/audit/ ./internal/policy/ \
+          ./internal/scope/ ./internal/authoring/ ./internal/regression/
+
 ## check-pg: the contract suite against a real database as well as the fake.
 ## A fake that is more permissive than the store is how green tests become
 ## incidents, so CI runs this, not just `check`.
 check-pg: db
-	@# -p 1: both suites truncate the same tables, and go test runs packages
+	TEST_DATABASE_URL=$(TEST_DSN) $(MAKE) test-pg
+
+## test-pg: the same suites against whatever TEST_DATABASE_URL points at.
+## Separate from check-pg because CI brings its own database and must not have
+## its own copy of the list.
+test-pg:
+	@# -p 1: these suites truncate the same tables, and go test runs packages
 	@# concurrently by default. Serialising them is the honest fix while they
 	@# share one database; a schema per suite would be the next step.
-	TEST_DATABASE_URL=$(TEST_DSN) $(GO) test ./internal/ledger/ ./internal/e2e/ ./internal/admin/ ./internal/spec/ ./internal/auth/ ./internal/trigger/ ./internal/audit/ ./internal/policy/ ./internal/scope/ ./internal/authoring/ ./internal/regression/ -count=1 -race -p 1
+	$(GO) test $(PG_PKGS) -count=1 -race -p 1
 
 ## smoke: prove the shipping artefact serves what it should and nothing else.
 ## The unit suites cannot see this: it is a property of the binary, not the code.
