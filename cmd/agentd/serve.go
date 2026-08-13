@@ -164,11 +164,12 @@ func serve(args []string) error {
 	if identity != nil {
 		root.Handle("/api/", apiProblems(identity.auth.Middleware(apiHandler)))
 		root.Handle("GET /api/v1/me", identity.auth.Middleware(http.HandlerFunc(httpapi.MeHandler)))
-		// Liveness is reachable without a credential. A probe cannot hold one,
-		// and a health check that answers 401 reads as a dead pod to every
-		// orchestrator — the endpoint reports status and version, nothing a
+		// Both probes are reachable without a credential. A probe cannot hold
+		// one, and a health check that answers 401 reads as a dead pod to
+		// every orchestrator — they report status and version, nothing a
 		// caller could not learn by connecting.
 		root.Handle("GET /api/v1/healthz", apiProblems(apiHandler))
+		root.Handle("GET /api/v1/readyz", apiProblems(apiHandler))
 		identity.routes.Mount(root)
 
 		// Webhooks are outside the session middleware on purpose: the caller

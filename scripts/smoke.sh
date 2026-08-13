@@ -49,6 +49,9 @@ check "no sourcemap ships with the binary"     404 "${JS}.map"
 check "a missing asset is not the app shell"   404 "/assets/nope.js"
 check "an unauthenticated caller is refused"   401 "/api/v1/me"
 check "liveness answers without a credential"  200 "/api/v1/healthz"
+# Readiness reaches the database, so it also proves the migrations ran: a
+# binary serving against an empty schema answers 503 here and 200 above.
+check "readiness answers without a credential" 200 "/api/v1/readyz"
 # Authentication wraps the whole /api/ prefix, so an unknown path answers 401
 # rather than 404: an anonymous caller learns nothing about which endpoints
 # exist. What must never happen is the console's HTML being returned to

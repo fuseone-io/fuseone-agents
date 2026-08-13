@@ -2148,6 +2148,11 @@ paths:
       tags: [system]
       operationId: health
       summary: Liveness probe
+      description: |
+        Whether this process is wedged. It touches nothing outside itself on
+        purpose: a liveness probe that asked the database would restart every
+        pod during a database blip, turning a recoverable outage into a crash
+        loop across the installation.
       security: []
       responses:
         '200':
@@ -2155,6 +2160,32 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Health' }
+
+  /readyz:
+    get:
+      tags: [system]
+      operationId: ready
+      summary: Readiness probe
+      description: |
+        Whether this process can serve. Unlike liveness it does reach the
+        database, because a process that cannot read the ledger has nothing to
+        answer with — it should leave the load balancer's rotation, and it
+        should not be restarted for it.
+
+        Answers 503 with the reason rather than a bare failure, so `kubectl
+        describe` shows what is wrong without anybody opening a shell.
+      security: []
+      responses:
+        '200':
+          description: Ready to serve.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+        '503':
+          description: Not ready.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
 
 components:
   securitySchemes:
