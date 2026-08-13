@@ -58,8 +58,11 @@ func (s *Server) ListAudit(
 	if req.Params.Source != nil {
 		filter.Sources = []audit.Source{audit.Source(*req.Params.Source)}
 	}
+	if req.Params.Cursor != nil {
+		filter.Cursor = *req.Params.Cursor
+	}
 
-	entries, err := s.audit.Read(ctx, filter, limitOf(req.Params.Limit))
+	entries, next, err := s.audit.Read(ctx, filter, limitOf(req.Params.Limit))
 	if err != nil {
 		return nil, fmt.Errorf("read audit trail: %w", err)
 	}
@@ -68,7 +71,11 @@ func (s *Server) ListAudit(
 	for _, entry := range entries {
 		items = append(items, auditEntryFrom(entry))
 	}
-	return openapi.ListAudit200JSONResponse{Items: items}, nil
+	page := openapi.ListAudit200JSONResponse{Items: items}
+	if next != "" {
+		page.NextCursor = &next
+	}
+	return page, nil
 }
 
 func auditEntryFrom(entry audit.Entry) openapi.AuditEntry {

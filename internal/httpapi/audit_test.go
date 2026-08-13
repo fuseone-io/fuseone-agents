@@ -18,11 +18,14 @@ import (
 type trailSpy struct {
 	asked   audit.Filter
 	entries []audit.Entry
+	next    string
 }
 
-func (t *trailSpy) Read(_ context.Context, filter audit.Filter, _ int) ([]audit.Entry, error) {
+func (t *trailSpy) Read(
+	_ context.Context, filter audit.Filter, _ int,
+) ([]audit.Entry, string, error) {
 	t.asked = filter
-	return t.entries, nil
+	return t.entries, t.next, nil
 }
 
 func TestListAudit_narrowsToTheScopesTheCallerHolds(t *testing.T) {
@@ -96,5 +99,32 @@ func TestListAudit_reportsASealOnlyWhereOneExists(t *testing.T) {
 	// chained, and an empty string reads as a seal that failed.
 	if page.Items[1].Hash != nil {
 		t.Error("an administrative entry reported a seal it cannot have")
+	}
+}
+
+// The cursor reaches the store, and comes back where a client can follow it.
+// A contract that declares a cursor nobody threads is worse than no cursor: a
+// client that trusts it pages forever over the first page.
+func TestListAudit_cursorReachesTheStoreAndTheAnswerCarriesTheNext(t *testing.T) {
+	t.Parallel()
+	spy := &trailSpy{next: "eyJsIjp7fX0"}
+
+	resp, err := NewServer(ledger.NewMemory(), "test").WithAudit(spy).
+		ListAudit(inArea("cx", domain.RoleAuditor), openapi.ListAuditRequestObject{
+			Params: openapi.ListAuditParams{Cursor: ptr("from-the-last-page")},
+		})
+	if err != nil {
+		t.Fatalf("ListAudit: %v", err)
+	}
+	if spy.asked.Cursor != "from-the-last-page" {
+		t.Errorf("the store was asked with cursor %q", spy.asked.Cursor)
+	}
+
+	page, ok := resp.(openapi.ListAudit200JSONResponse)
+	if !ok {
+		t.Fatalf("response = %T", resp)
+	}
+	if page.NextCursor == nil || *page.NextCursor != "eyJsIjp7fX0" {
+		t.Errorf("nextCursor = %v, want the one the store gave", page.NextCursor)
 	}
 }

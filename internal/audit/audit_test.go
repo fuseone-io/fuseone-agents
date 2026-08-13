@@ -78,7 +78,7 @@ func TestRead_mergesBothRecordsInOneOrderedStream(t *testing.T) {
 	seedAdmin(t, pool, noon, "usr_ana", "tool.classified", "cx")
 	seedDecision(t, pool, noon.Add(time.Minute), 4, "cx")
 
-	entries, err := reader.Read(t.Context(), audit.Filter{}, 50)
+	entries, _, err := reader.Read(t.Context(), audit.Filter{}, 50)
 	if err != nil {
 		t.Fatalf("Read: %v", err)
 	}
@@ -98,7 +98,7 @@ func TestRead_saysWhichRecordAnEntryCameFrom(t *testing.T) {
 	seedAdmin(t, pool, noon, "usr_ana", "tool.classified", "cx")
 	seedDecision(t, pool, noon.Add(time.Minute), 4, "cx")
 
-	entries, _ := reader.Read(t.Context(), audit.Filter{}, 50)
+	entries, _, _ := reader.Read(t.Context(), audit.Filter{}, 50)
 
 	// Only one of these two records is hash-chained. Calling the merged result
 	// "verified" would claim a guarantee half the rows do not have.
@@ -115,7 +115,7 @@ func TestRead_namesTheVerdictRatherThanItsNumber(t *testing.T) {
 
 	seedDecision(t, pool, noon, 4, "cx")
 
-	entries, _ := reader.Read(t.Context(), audit.Filter{}, 50)
+	entries, _, _ := reader.Read(t.Context(), audit.Filter{}, 50)
 	if len(entries) != 1 || entries[0].Verb != "gate.blocked" {
 		t.Errorf("verb = %+v, want gate.blocked — a number is not an audit record", entries)
 	}
@@ -128,7 +128,7 @@ func TestRead_showsOnlyAreasTheCallerReaches(t *testing.T) {
 	seedDecision(t, pool, noon.Add(time.Minute), 4, "marketing")
 	seedAdmin(t, pool, noon.Add(2*time.Minute), "usr_ana", "tool.classified", "marketing")
 
-	entries, err := reader.Read(t.Context(), audit.Filter{
+	entries, _, err := reader.Read(t.Context(), audit.Filter{
 		Scopes: []domain.Scope{{Company: "acme", Area: "cx"}},
 	}, 50)
 	if err != nil {
@@ -153,7 +153,7 @@ func TestRead_narrowsToOneRecordWhenAsked(t *testing.T) {
 	seedAdmin(t, pool, noon, "usr_ana", "tool.classified", "cx")
 	seedDecision(t, pool, noon.Add(time.Minute), 4, "cx")
 
-	entries, err := reader.Read(t.Context(),
+	entries, _, err := reader.Read(t.Context(),
 		audit.Filter{Sources: []audit.Source{audit.SourceAdmin}}, 50)
 	if err != nil {
 		t.Fatalf("Read: %v", err)
@@ -169,7 +169,7 @@ func TestRead_narrowsToOneActor_byPartOfTheIdentifier(t *testing.T) {
 	seedAdmin(t, pool, noon, "usr_ana", "tool.classified", "cx")
 	seedAdmin(t, pool, noon.Add(time.Minute), "usr_bruno", "provider.created", "cx")
 
-	entries, err := reader.Read(t.Context(), audit.Filter{Actor: "ana"}, 50)
+	entries, _, err := reader.Read(t.Context(), audit.Filter{Actor: "ana"}, 50)
 	if err != nil {
 		t.Fatalf("Read: %v", err)
 	}
@@ -185,7 +185,7 @@ func TestRead_boundsTheWindowAtBothEnds(t *testing.T) {
 	seedAdmin(t, pool, noon, "usr_ana", "provider.created", "cx")
 	seedAdmin(t, pool, noon.Add(2*time.Hour), "usr_ana", "budget.set", "cx")
 
-	entries, err := reader.Read(t.Context(), audit.Filter{
+	entries, _, err := reader.Read(t.Context(), audit.Filter{
 		Since: noon.Add(-time.Hour), Until: noon.Add(time.Hour),
 	}, 50)
 	if err != nil {

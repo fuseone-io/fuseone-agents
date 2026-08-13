@@ -66,9 +66,15 @@ type Filter struct {
 	Actor string
 	// Sources narrows to one record. Empty means both.
 	Sources []Source
+	// Cursor resumes a previous page. Empty starts at the most recent entry.
+	// It carries a position and no authority: the scopes above are applied to
+	// the resumed page exactly as they were to the one before it.
+	Cursor string
 }
 
 // Reader is the trail, declared here by the consumer.
 type Reader interface {
-	Read(ctx context.Context, filter Filter, limit int) ([]Entry, error)
+	// Read answers one page and the cursor that starts the next, empty when
+	// the trail ended.
+	Read(ctx context.Context, filter Filter, limit int) ([]Entry, string, error)
 }

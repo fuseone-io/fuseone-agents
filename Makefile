@@ -9,7 +9,7 @@ BIN     := bin/agentd
 OAPI    := github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.8.0
 GEN_GO  := internal/httpapi/openapi/server.gen.go
 
-.PHONY: check check-pg smoke dev stop reset db run-pg build build-api web console test race cover vet fmt lint tidy clean docs generate verify-generate run
+.PHONY: volume check check-pg smoke dev stop reset db run-pg build build-api web console test race cover vet fmt lint tidy clean docs generate verify-generate run
 
 # A database of its own. Sharing one with `make dev` meant a running worker
 # claimed the runs a test had just opened, and a test run wiped the
@@ -139,3 +139,17 @@ docs:
 
 clean:
 	rm -rf bin coverage.out .dev
+
+## volume: a ledger the size a real installation reaches, for measuring plans.
+##         STEPS=1000000 make volume
+STEPS ?= 1000000
+volume: db
+	@docker compose exec -T postgres psql -U agents -d agents -tc \
+		"select 1 from pg_database where datname = 'agents_vol'" | grep -q 1 || \
+		docker compose exec -T postgres createdb -U agents agents_vol
+	@docker compose exec -T postgres psql -U agents -d agents_vol -qc \
+		"drop schema public cascade; create schema public;" >/dev/null
+	@DATABASE_URL=postgres://agents:agents@127.0.0.1:5433/agents_vol \
+		$(GO) run ./cmd/agentd migrate
+	@docker compose exec -T postgres psql -U agents -d agents_vol -q \
+		-v steps=$(STEPS) < scripts/volume.sql

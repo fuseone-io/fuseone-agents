@@ -1167,19 +1167,17 @@ paths:
           in: query
           description: Narrow to one record. Both when absent.
           schema: { type: string, enum: [ledger, admin] }
+        - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Limit'
       responses:
         '200':
-          description: The trail, newest first.
+          description: |
+            A page of the trail, newest first. Walk `nextCursor` and you have
+            walked the whole trail, each entry once — which is what an auditor
+            needs and what a bare limit cannot give.
           content:
             application/json:
-              schema:
-                type: object
-                required: [items]
-                properties:
-                  items:
-                    type: array
-                    items: { $ref: '#/components/schemas/AuditEntry' }
+              schema: { $ref: '#/components/schemas/AuditPage' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
@@ -2243,7 +2241,15 @@ components:
     Cursor:
       name: cursor
       in: query
-      description: Opaque cursor from the previous page.
+      description: |
+        Opaque cursor from the previous page, taken verbatim from that page's
+        `nextCursor`. It carries a position and no authority: the caller's
+        scopes are applied to the resumed page exactly as they were to the one
+        before it, so a cursor obtained under a wide grant reaches nothing
+        under a narrow one.
+
+        Absent starts at the most recent entry. A page that answers fewer rows
+        than the limit is the last one and returns no cursor.
       schema: { type: string }
     Limit:
       name: limit
@@ -2944,6 +2950,15 @@ components:
         enabled: { type: boolean }
         updatedBy: { type: string }
         updatedAt: { type: string, format: date-time }
+
+    AuditPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AuditEntry' }
+        nextCursor: { type: string, nullable: true }
 
     AuditEntry:
       type: object
