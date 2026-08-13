@@ -13,10 +13,14 @@ import { StateDot } from "@/components/shared/state-dot";
 import { RunNowDialog } from "@/features/agents/run-now-dialog";
 import { VerifyButton } from "@/features/runs/verify-button";
 import { ExportButton } from "@/features/runs/export-button";
+import { AbandonDialog } from "@/features/runs/abandon-dialog";
 import { PHASE_LABELS } from "@/features/runs/phase-badge";
 import { stateOfPhase } from "@/lib/agent-state";
 import { formatInstant } from "@/lib/format";
-import type { Run } from "@/lib/api/client";
+import type { Phase, Run } from "@/lib/api/client";
+
+// A run in one of these has nowhere left to go.
+const ENDED: Phase[] = ["finished", "failed", "unstarted"];
 
 /**
  * Which run this is, in one row.
@@ -66,6 +70,10 @@ export function RunIdentity({ run, trigger }: { run: Run; trigger?: string }) {
             replay. Replaying would re-execute effects that already happened
             against systems that already changed. */}
         <RunNowDialog agentId={run.agentId} agentName={run.agentId} />
+        {/* Only while there is a run to end. Abandoning a finished one is a
+            request the server refuses, and offering it is a button that
+            teaches people the console does not know what it is showing. */}
+        {!ENDED.includes(run.phase) && <AbandonDialog runId={run.runId} />}
         <VerifyButton runId={run.runId} />
         <ExportButton runId={run.runId} />
       </div>

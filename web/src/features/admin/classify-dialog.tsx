@@ -10,28 +10,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { useClassifyTool, type Effect, type Tool } from "@/features/admin/api";
+  ClassifyFields,
+  type Ruling,
+} from "@/features/admin/classify-fields";
+import { useClassifyTool, type Tool } from "@/features/admin/api";
 
-const EFFECTS: { value: Effect; label: string; hint: string }[] = [
-  { value: "read", label: "Leitura", hint: "admin.effectRead" },
-  { value: "write", label: "Escrita", hint: "admin.effectWrite" },
-  {
-    value: "destructive",
-    label: "Destrutivo",
-    hint: "admin.effectDestructive",
-  },
-  { value: "financial", label: "Financeiro", hint: "Move dinheiro." },
-];
+const BLANK: Ruling = {
+  effect: "read",
+  untrusted: true,
+  reason: "",
+  compensatedBy: "",
+};
 
 /**
  * The Curator's act, and the only way write access enters the platform.
@@ -41,15 +31,16 @@ const EFFECTS: { value: Effect; label: string; hint: string }[] = [
  */
 export function ClassifyDialog({
   tool,
+  tools,
   onClose,
 }: {
   tool: Tool | null;
+  /** The catalogue, so the ruling can name the tool that undoes this one. */
+  tools: Tool[];
   onClose: () => void;
 }) {
   const { t } = useTranslation();
-  const [effect, setEffect] = useState<Effect>("read");
-  const [untrusted, setUntrusted] = useState(true);
-  const [reason, setReason] = useState("");
+  const [ruling, setRuling] = useState<Ruling>(BLANK);
   const classify = useClassifyTool();
 
   if (!tool) return null;
@@ -57,13 +48,13 @@ export function ClassifyDialog({
   async function submit() {
     if (!tool) return;
     try {
-      await classify.mutateAsync({
-        toolId: tool.toolId,
-        effect,
-        untrusted,
-        reason,
-      });
-      toast.success(`${tool.toolId} classificada como ${effect}`);
+      await classify.mutateAsync({ toolId: tool.toolId, ...ruling });
+      toast.success(
+        t("admin.classified", {
+          tool: tool.toolId,
+          effect: t(`effect.${ruling.effect}`),
+        }),
+      );
       onClose();
     } catch (error) {
       toast.error(
@@ -82,50 +73,12 @@ export function ClassifyDialog({
           <DialogDescription>{t("admin.recordedInTrail")}</DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="effect">{t("admin.whatItDoes")}</Label>
-            <Select
-              value={effect}
-              onValueChange={(v) => setEffect(v as Effect)}
-            >
-              <SelectTrigger id="effect">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {EFFECTS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {t(option.label)} — {t(option.hint)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex items-start justify-between gap-4 rounded-lg border p-3">
-            <div>
-              <Label htmlFor="untrusted">{t("admin.bringsOutside")}</Label>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {t("admin.readMarksRun")}
-              </p>
-            </div>
-            <Switch
-              id="untrusted"
-              checked={untrusted}
-              onCheckedChange={setUntrusted}
-            />
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="reason">{t("admin.why")}</Label>
-            <Input
-              id="reason"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="registra nota interna no CRM"
-            />
-          </div>
-        </div>
+        <ClassifyFields
+          ruling={ruling}
+          onChange={setRuling}
+          tools={tools}
+          self={tool.toolId}
+        />
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>

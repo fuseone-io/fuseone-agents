@@ -64,10 +64,14 @@ func (s *Server) ListTools(ctx context.Context, _ openapi.ListToolsRequestObject
 	items := make([]openapi.Tool, 0, len(entries))
 	for _, e := range entries {
 		description := e.Description
-		items = append(items, openapi.Tool{
+		tool := openapi.Tool{
 			ToolId: string(e.ID), Server: e.Server, Description: &description,
 			Effect: openapi.Effect(e.Effect.String()), Untrusted: e.Untrusted,
-		})
+		}
+		if e.CompensatedBy != "" {
+			tool.CompensatedBy = ptr(string(e.CompensatedBy))
+		}
+		items = append(items, tool)
 	}
 	return openapi.ListTools200JSONResponse{Items: items}, nil
 }
@@ -99,6 +103,9 @@ func (s *Server) ClassifyTool(ctx context.Context, req openapi.ClassifyToolReque
 	}
 	if req.Body.Reason != nil {
 		ruling.Reason = *req.Body.Reason
+	}
+	if req.Body.CompensatedBy != nil {
+		ruling.CompensatedBy = domain.ToolID(*req.Body.CompensatedBy)
 	}
 
 	if err := s.curator.Classify(ctx, adminScope, ruling); err != nil {

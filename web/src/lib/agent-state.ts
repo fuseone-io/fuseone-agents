@@ -17,7 +17,14 @@ const BY_PHASE: Record<Phase, AgentState> = {
   awaiting_tool: "running",
   awaiting_approval: "waiting",
   parked: "blocked",
+  // Undoing is work in progress, and an operator scanning a list wants to know
+  // it is still moving.
+  compensating: "running",
   finished: "done",
+  // Ended, and not well. The palette has no sixth colour, and blocked is the
+  // honest one: a run that failed is a run somebody may still have to deal
+  // with, unlike one that finished.
+  failed: "blocked",
 };
 
 export function stateOfPhase(phase: Phase): AgentState {

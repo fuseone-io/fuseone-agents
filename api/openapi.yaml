@@ -1148,6 +1148,13 @@ paths:
                   type: boolean
                   description: Whether results carry data the platform did not author. Reading one taints the run.
                 reason: { type: string }
+                compensatedBy:
+                  type: string
+                  description: |
+                    The tool that takes an act by this one back, called with
+                    what the original call returned. Empty means an act by this
+                    tool cannot be undone by machine — which abandoning a run
+                    reports rather than hides.
       responses:
         '204': { description: The ruling is recorded. }
         '400': { $ref: '#/components/responses/BadRequest' }
@@ -1975,7 +1982,7 @@ components:
 
     Phase:
       type: string
-      enum: [unstarted, running, awaiting_approval, awaiting_tool, parked, finished]
+      enum: [unstarted, running, awaiting_approval, awaiting_tool, parked, compensating, finished, failed]
 
     Verdict:
       type: string
@@ -2360,6 +2367,9 @@ components:
         description: { type: string }
         effect: { $ref: '#/components/schemas/Effect' }
         untrusted: { type: boolean }
+        compensatedBy:
+          type: string
+          description: The tool that undoes this one, when the Curator has said which does.
 
     ModelPrice:
       type: object

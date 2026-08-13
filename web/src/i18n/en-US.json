@@ -24,6 +24,7 @@
     "ceilingSet": "Ceiling set",
     "ceilingsInherit": "Ceilings inherit downwards and never widen: an area cannot raise what its company allows. Reaching one pauses the run and it continues from where it stopped, rather than ending.",
     "choose": "Choose",
+    "classified": "{{tool}} classified as {{effect}}",
     "classify": "Classify",
     "company": "Company",
     "connectFirst": "The assistant points at a provider already connected under Integrations. Connect one there first — the credential lives in a single place.",
@@ -35,6 +36,12 @@
     "editRate": "Edit the rate",
     "effect": "Effect",
     "effectDestructive": "Erases or replaces in a way that is hard to undo.",
+    "effectHint": {
+      "destructive": "Deletes or overwrites in a way that is hard to undo.",
+      "financial": "Moves money.",
+      "read": "Reads data. Changes nothing.",
+      "write": "Changes something, and it can be reversed."
+    },
     "effectRead": "Looks data up. Changes nothing.",
     "effectWrite": "Changes something, and is reversible.",
     "emptyUsesName": "Empty uses the name itself.",
@@ -54,7 +61,8 @@
     "noPrices": "No rate configured",
     "noPricesHint": "With no rate every cost in the console reads zero: the platform counts tokens and refuses to guess at money. Run ceilings, area ceilings and the authoring assistant's bound are all without effect.",
     "noProviderForAuthoring": "No provider connected",
-    "noToolsFound": "No tool discovered",
+    "noToolsFound": "No tool by that name.",
+    "noUndo": "Nothing undoes this tool",
     "people": "People",
     "perDay": "per day",
     "perMonth": "per month",
@@ -69,6 +77,7 @@
     "rateSet": "Rate set",
     "ratesAreYours": "Nothing arrives filled in: rates vary by contract, and a wrong one is worse than none — it is a number somebody trusts.",
     "readMarksRun": "A read marks the run. A write after that stops for a person to decide.",
+    "reasonPlaceholder": "records an internal note on the CRM",
     "recordClassification": "Record the classification",
     "recordFailed": "Could not record",
     "recordedInTrail": "Recorded in your name in the administrative trail. Correcting it later creates a new record; no record is erased.",
@@ -79,6 +88,7 @@
     "sayCompany": "Say which company the area belongs to.",
     "sayScope": "Say what this ceiling applies to.",
     "scopeShapes": "<code>installation</code>, a company, or <code>company/area</code>.",
+    "searchTools": "Search tools…",
     "server": "Server",
     "shownAs": "How it is shown",
     "spendCeiling": "Spend ceiling",
@@ -88,8 +98,11 @@
     "tools": "Tools",
     "toolsEmptyHint": "Tools appear here when a worker connects to an MCP server configured below and publishes what it found.",
     "trail": "Trail",
+    "undoColumn": "Undone by",
+    "undoTakesTheResult": "The undo is called with what this tool returned. Leave it empty if an act by this tool cannot be taken back by machine — abandoning a run will say so rather than hide it.",
     "untrusted": "Outside data",
     "whatItDoes": "What this tool does to the world",
+    "whatUndoesIt": "What undoes it",
     "wholeInstallation": "The whole installation",
     "why": "Why",
     "window": "Window",
@@ -261,12 +274,33 @@
     "loadFailedHint": "Check the connection to the server and try again.",
     "loading": "Loading",
     "new": "New",
+    "no": "no",
     "nothingFound": "Nothing found",
     "remove": "Remove",
     "removeFailed": "Could not remove",
     "retry": "Try again",
     "save": "Save",
-    "saveFailed": "Could not save"
+    "saveFailed": "Could not save",
+    "yes": "yes"
+  },
+  "compensation": {
+    "abandon": "End run",
+    "abandonHint": "A parked run is paused, not over: raising a ceiling continues it from where it stopped. Ending it says it will not continue.",
+    "abandonTitle": "End this run",
+    "abandoned": "Run ended",
+    "abandonedAsIs": "The world was left as it was. Nothing was undone.",
+    "abandonedUndoing": "A worker is undoing what it left. Each step lands on the trail.",
+    "atStep": "step {{seq}}",
+    "confirm": "End the run",
+    "failed": "The run could not be ended.",
+    "nothingStanding": "This run left nothing to undo.",
+    "nothingUndoesIt": "nothing undoes it",
+    "undoIt": "Undo what it left standing",
+    "undoItHint": "Every undo crosses the Gate and is recorded. Turning this off ends the run and leaves the world as it is — sometimes that is right, and it is recorded as the choice it was.",
+    "undoneBy": "undone by",
+    "why": "Why",
+    "whyPlaceholder": "duplicate charge, the customer was already helped by phone",
+    "wouldUndo": "What would be undone"
   },
   "correction": {
     "asksFirst": "should ask before calling",
@@ -317,6 +351,12 @@
     "today": "Today",
     "tokens": "Tokens",
     "whereFrom": "Where the cost comes from"
+  },
+  "effect": {
+    "destructive": "destructive",
+    "financial": "financial",
+    "read": "read",
+    "write": "write"
   },
   "gate": {
     "badArgs": "The arguments do not match the tool's contract.",
@@ -521,27 +561,27 @@
     "wantsToRunTool": "Wants to run <tool>{{tool}}</tool>{{why}}"
   },
   "people": {
-    "title": "People",
-    "manage": "Manage",
-    "editing": "{{name}}'s access",
-    "noAccess": "no access",
-    "disabled": "disabled",
-    "asserted": "from provider",
-    "assertedHint": "Comes from the identity provider and is re-derived on every sign-in. To take it away, change the group there.",
-    "assertedHere": "What {{provider}} grants. Re-derived on every sign-in — to change it, change the group at the provider.",
-    "grantedHere": "Granted here, directly. It survives the next sign-in.",
     "addGrant": "Add access",
-    "removeGrant": "Remove this access",
-    "saved": "{{name}}'s access updated",
-    "saveFailed": "Could not save the access",
-    "lastSeen": "seen {{when}}",
-    "emptyTitle": "Nobody but you",
+    "asserted": "from provider",
+    "assertedHere": "What {{provider}} grants. Re-derived on every sign-in — to change it, change the group at the provider.",
+    "assertedHint": "Comes from the identity provider and is re-derived on every sign-in. To take it away, change the group there.",
+    "disabled": "disabled",
+    "editing": "{{name}}'s access",
     "emptyHint": "People appear here after they sign in for the first time through an identity provider.",
+    "emptyTitle": "Nobody but you",
+    "grantedHere": "Granted here, directly. It survives the next sign-in.",
     "kind": {
-      "service": "service account",
       "agent": "agent",
+      "service": "service account",
       "user": "person"
-    }
+    },
+    "lastSeen": "seen {{when}}",
+    "manage": "Manage",
+    "noAccess": "no access",
+    "removeGrant": "Remove this access",
+    "saveFailed": "Could not save the access",
+    "saved": "{{name}}'s access updated",
+    "title": "People"
   },
   "policies": {
     "addCondition": "Add a condition",
@@ -730,7 +770,9 @@
     "onBehalfOfLabel": "On behalf of",
     "phaseAwaitingApproval": "Awaiting approval",
     "phaseAwaitingTool": "Calling a tool",
+    "phaseCompensating": "undoing",
     "phaseExecution": "Execution",
+    "phaseFailed": "ended",
     "phaseFinished": "Finished",
     "phaseHuman": "Human decision",
     "phaseParked": "Parked",
@@ -851,21 +893,21 @@
     "wouldHaveCalled": "would call here"
   },
   "stage": {
-    "label": "Autonomy",
-    "draft": "Draft",
-    "copilot": "Copilot",
     "autonomous": "Autonomous",
+    "copilot": "Copilot",
+    "draft": "Draft",
+    "failed": "Could not change the autonomy",
+    "label": "Autonomy",
     "means": {
-      "draft": "simulates only, never acts",
+      "autonomous": "acts alone, under the policies",
       "copilot": "acts with a person's approval",
-      "autonomous": "acts alone, under the policies"
+      "draft": "simulates only, never acts"
     },
     "moved": {
-      "draft": "Back to draft",
+      "autonomous": "Now acts alone",
       "copilot": "Now acts with approval",
-      "autonomous": "Now acts alone"
-    },
-    "failed": "Could not change the autonomy"
+      "draft": "Back to draft"
+    }
   },
   "theme": {
     "change": "Change theme",

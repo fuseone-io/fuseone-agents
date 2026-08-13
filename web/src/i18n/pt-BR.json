@@ -24,6 +24,7 @@
     "ceilingSet": "Teto definido",
     "ceilingsInherit": "Tetos herdam para baixo e nunca ampliam: uma área não levanta o que a empresa dela permite. Ao atingir um teto a execução pausa e continua de onde parou, em vez de terminar.",
     "choose": "Escolha",
+    "classified": "{{tool}} classificada como {{effect}}",
     "classify": "Classificar",
     "company": "Empresa",
     "connectFirst": "O assistente aponta para um provedor já conectado em Integrações. Conecte um lá primeiro — a credencial mora num lugar só.",
@@ -35,6 +36,12 @@
     "editRate": "Editar tarifa",
     "effect": "Efeito",
     "effectDestructive": "Apaga ou substitui de forma difícil de desfazer.",
+    "effectHint": {
+      "destructive": "Apaga ou substitui de forma difícil de desfazer.",
+      "financial": "Move dinheiro.",
+      "read": "Consulta dados. Não muda nada.",
+      "write": "Altera algo, e é reversível."
+    },
     "effectRead": "Consulta dados. Não muda nada.",
     "effectWrite": "Altera algo, e é reversível.",
     "emptyUsesName": "Vazio usa o próprio nome.",
@@ -54,7 +61,8 @@
     "noPrices": "Nenhuma tarifa configurada",
     "noPricesHint": "Sem tarifa, todo custo do console lê zero: a plataforma conta tokens e se recusa a chutar dinheiro. Teto de execução, teto de área e o limite do assistente de autoria ficam todos sem efeito.",
     "noProviderForAuthoring": "Nenhum provedor conectado",
-    "noToolsFound": "Nenhuma ferramenta descoberta",
+    "noToolsFound": "Nenhuma ferramenta com esse nome.",
+    "noUndo": "Nada desfaz esta ferramenta",
     "people": "Pessoas",
     "perDay": "por dia",
     "perMonth": "por mês",
@@ -69,6 +77,7 @@
     "rateSet": "Tarifa definida",
     "ratesAreYours": "Nada vem preenchido: tarifa varia por contrato, e uma errada é pior que nenhuma — é um número em que alguém confia.",
     "readMarksRun": "Ler marca a execução. Uma escrita depois disso para para uma pessoa decidir.",
+    "reasonPlaceholder": "registra nota interna no CRM",
     "recordClassification": "Registrar classificação",
     "recordFailed": "Não foi possível registrar",
     "recordedInTrail": "Fica registrado com seu nome na trilha administrativa. Corrigir depois cria um novo registro; nenhum registro é apagado.",
@@ -79,6 +88,7 @@
     "sayCompany": "Diga a que empresa a área pertence.",
     "sayScope": "Diga a que este teto se aplica.",
     "scopeShapes": "<code>installation</code>, uma empresa, ou <code>empresa/área</code>.",
+    "searchTools": "Buscar ferramenta…",
     "server": "Servidor",
     "shownAs": "Como aparece",
     "spendCeiling": "Teto de gasto",
@@ -88,8 +98,11 @@
     "tools": "Ferramentas",
     "toolsEmptyHint": "Ferramentas aparecem aqui quando um worker conecta em um servidor MCP configurado abaixo e publica o que encontrou.",
     "trail": "Trilha",
+    "undoColumn": "Desfaz com",
+    "undoTakesTheResult": "A ferramenta de desfazer é chamada com o que esta devolveu. Deixe vazio se um ato desta ferramenta não pode ser desfeito por máquina — abandonar uma execução vai dizer isso em vez de esconder.",
     "untrusted": "Dado de fora",
     "whatItDoes": "O que esta ferramenta faz com o mundo",
+    "whatUndoesIt": "O que desfaz",
     "wholeInstallation": "Instalação inteira",
     "why": "Por quê",
     "window": "Janela",
@@ -261,12 +274,33 @@
     "loadFailedHint": "Verifique a conexão com o servidor e tente novamente.",
     "loading": "Carregando",
     "new": "Novo",
+    "no": "não",
     "nothingFound": "Nada encontrado",
     "remove": "Remover",
     "removeFailed": "Não foi possível remover",
     "retry": "Tentar de novo",
     "save": "Salvar",
-    "saveFailed": "Não foi possível salvar"
+    "saveFailed": "Não foi possível salvar",
+    "yes": "sim"
+  },
+  "compensation": {
+    "abandon": "Encerrar",
+    "abandonHint": "Uma execução parada está pausada, não encerrada: erguer um teto faz ela continuar de onde estava. Encerrar é dizer que ela não vai continuar.",
+    "abandonTitle": "Encerrar esta execução",
+    "abandoned": "Execução encerrada",
+    "abandonedAsIs": "O mundo ficou como estava. Nada foi desfeito.",
+    "abandonedUndoing": "Um worker está desfazendo o que ela deixou. Cada passo aparece na trilha.",
+    "atStep": "passo {{seq}}",
+    "confirm": "Encerrar execução",
+    "failed": "Não foi possível encerrar a execução.",
+    "nothingStanding": "Esta execução não deixou nada para desfazer.",
+    "nothingUndoesIt": "nada desfaz",
+    "undoIt": "Desfazer o que ficou",
+    "undoItHint": "Cada desfazer passa pelo Gate e é registrado. Desligar encerra a execução e deixa o mundo como está — às vezes é o certo, e fica registrado como escolha.",
+    "undoneBy": "desfeito por",
+    "why": "Por quê",
+    "whyPlaceholder": "cobrança duplicada, o cliente já foi atendido por telefone",
+    "wouldUndo": "O que seria desfeito"
   },
   "correction": {
     "asksFirst": "deveria perguntar antes de chamar",
@@ -317,6 +351,12 @@
     "today": "Hoje",
     "tokens": "Tokens",
     "whereFrom": "De onde vem o custo"
+  },
+  "effect": {
+    "destructive": "destrutivo",
+    "financial": "financeiro",
+    "read": "leitura",
+    "write": "escrita"
   },
   "gate": {
     "badArgs": "Os argumentos não batem com o contrato da ferramenta.",
@@ -521,27 +561,27 @@
     "wantsToRunTool": "Quer executar <tool>{{tool}}</tool>{{why}}"
   },
   "people": {
-    "title": "Pessoas",
-    "manage": "Gerenciar",
-    "editing": "Acesso de {{name}}",
-    "noAccess": "sem acesso",
-    "disabled": "desativado",
-    "asserted": "do provedor",
-    "assertedHint": "Vem do provedor de identidade e é recalculado a cada entrada. Para tirar, mude o grupo lá.",
-    "assertedHere": "O que {{provider}} concede. Recalculado a cada entrada — para mudar, mude o grupo no provedor.",
-    "grantedHere": "Concedido aqui, diretamente. Sobrevive às entradas seguintes.",
     "addGrant": "Adicionar acesso",
-    "removeGrant": "Remover este acesso",
-    "saved": "Acesso de {{name}} atualizado",
-    "saveFailed": "Não foi possível salvar o acesso",
-    "lastSeen": "visto {{when}}",
-    "emptyTitle": "Ninguém além de você",
+    "asserted": "do provedor",
+    "assertedHere": "O que {{provider}} concede. Recalculado a cada entrada — para mudar, mude o grupo no provedor.",
+    "assertedHint": "Vem do provedor de identidade e é recalculado a cada entrada. Para tirar, mude o grupo lá.",
+    "disabled": "desativado",
+    "editing": "Acesso de {{name}}",
     "emptyHint": "As pessoas aparecem aqui depois de entrarem pela primeira vez por um provedor de identidade.",
+    "emptyTitle": "Ninguém além de você",
+    "grantedHere": "Concedido aqui, diretamente. Sobrevive às entradas seguintes.",
     "kind": {
-      "service": "conta de serviço",
       "agent": "agente",
+      "service": "conta de serviço",
       "user": "pessoa"
-    }
+    },
+    "lastSeen": "visto {{when}}",
+    "manage": "Gerenciar",
+    "noAccess": "sem acesso",
+    "removeGrant": "Remover este acesso",
+    "saveFailed": "Não foi possível salvar o acesso",
+    "saved": "Acesso de {{name}} atualizado",
+    "title": "Pessoas"
   },
   "policies": {
     "addCondition": "Adicionar condição",
@@ -730,7 +770,9 @@
     "onBehalfOfLabel": "Em nome de",
     "phaseAwaitingApproval": "Aguardando aprovação",
     "phaseAwaitingTool": "Chamando ferramenta",
+    "phaseCompensating": "desfazendo",
     "phaseExecution": "Execução",
+    "phaseFailed": "encerrada",
     "phaseFinished": "Concluída",
     "phaseHuman": "Decisão humana",
     "phaseParked": "Estacionada",
@@ -851,21 +893,21 @@
     "wouldHaveCalled": "chamaria aqui"
   },
   "stage": {
-    "label": "Autonomia",
-    "draft": "Rascunho",
-    "copilot": "Copiloto",
     "autonomous": "Autônomo",
+    "copilot": "Copiloto",
+    "draft": "Rascunho",
+    "failed": "Não foi possível mudar a autonomia",
+    "label": "Autonomia",
     "means": {
-      "draft": "só simula, não age",
+      "autonomous": "age sozinho, sob as políticas",
       "copilot": "age com aprovação de uma pessoa",
-      "autonomous": "age sozinho, sob as políticas"
+      "draft": "só simula, não age"
     },
     "moved": {
-      "draft": "Voltou para rascunho",
+      "autonomous": "Agora age sozinho",
       "copilot": "Agora age com aprovação",
-      "autonomous": "Agora age sozinho"
-    },
-    "failed": "Não foi possível mudar a autonomia"
+      "draft": "Voltou para rascunho"
+    }
   },
   "theme": {
     "change": "Mudar tema",

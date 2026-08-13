@@ -533,6 +533,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/runs/{runId}/compensation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What undoing this run would do
+         * @description The plan, before anybody performs it. Reverse order — the charge is
+         *     refunded before the order it paid for is cancelled — with the acts
+         *     nothing undoes reported rather than dropped, because those are the
+         *     half somebody has to deal with by hand (PRD SE-08).
+         *
+         *     Reading this changes nothing.
+         */
+        get: operations["getCompensation"];
+        put?: never;
+        /**
+         * End the run and undo what it left standing
+         * @description The one thing that performs a compensation, and it is always a person's
+         *     decision. A parked run is paused, not failed: compensating one
+         *     automatically would undo work it was about to resume.
+         *
+         *     Every undo crosses the Gate on the narrow rule that you may undo what
+         *     you were allowed to do. The run ends failed, never finished — an
+         *     abandoned run did not complete, and the trail must not say it did.
+         */
+        post: operations["abandonRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/approvals": {
         parameters: {
             query?: never;
@@ -1258,7 +1293,7 @@ export interface components {
             instance?: string;
         };
         /** @enum {string} */
-        Phase: "unstarted" | "running" | "awaiting_approval" | "awaiting_tool" | "parked" | "finished";
+        Phase: "unstarted" | "running" | "awaiting_approval" | "awaiting_tool" | "parked" | "compensating" | "finished" | "failed";
         /** @enum {string} */
         Verdict: "allow" | "constrain" | "require_approval" | "block";
         /**
@@ -1491,6 +1526,8 @@ export interface components {
             description?: string;
             effect: components["schemas"]["Effect"];
             untrusted: boolean;
+            /** @description The tool that undoes this one, when the Curator has said which does. */
+            compensatedBy?: string;
         };
         /**
          * @description Micros per million tokens. Cache reads and cache writes are their own
@@ -2028,6 +2065,46 @@ export interface components {
             items: components["schemas"]["Step"][];
             /** Format: int64 */
             nextSeq?: number | null;
+        };
+        CompensationPlan: {
+            acts: components["schemas"]["CompensationAct"][];
+        };
+        CompensationAct: {
+            /** @description The call being undone. */
+            tool: string;
+            /**
+             * Format: int64
+             * @description Where in the run it happened.
+             */
+            seq: number;
+            /**
+             * @description The tool that takes it back, as the Curator classified it. Absent
+             *     when nothing does, which is the case a person has to handle.
+             */
+            undo?: string;
+        };
+        CompensationResult: {
+            outcomes: {
+                act: components["schemas"]["CompensationAct"];
+                /** @description Whether the undo ran and the tool accepted it. */
+                done: boolean;
+                /**
+                 * @description Why it did not. Empty on success. This is the line somebody
+                 *     acts on: it names something still standing in the world.
+                 */
+                why?: string;
+            }[];
+        };
+        AbandonRequest: {
+            /** @description Why the run cannot go on. Recorded in the trail. */
+            reason: string;
+            /**
+             * @description Undo what the run left standing. False ends the run and leaves the
+             *     world as it is — which is sometimes right, and is recorded as the
+             *     deliberate choice it is.
+             * @default true
+             */
+            compensate: boolean;
         };
         VerifyResult: {
             valid: boolean;
@@ -2858,6 +2935,69 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    getCompensation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: components["parameters"]["RunId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The plan. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompensationPlan"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    abandonRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: components["parameters"]["RunId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AbandonRequest"];
+            };
+        };
+        responses: {
+            /** @description The run ended, with what became of each undo. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompensationResult"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description The run has already ended. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     listApprovals: {
         parameters: {
             query?: {
@@ -3134,6 +3274,13 @@ export interface operations {
                     /** @description Whether results carry data the platform did not author. Reading one taints the run. */
                     untrusted?: boolean;
                     reason?: string;
+                    /**
+                     * @description The tool that takes an act by this one back, called with
+                     *     what the original call returned. Empty means an act by this
+                     *     tool cannot be undone by machine — which abandoning a run
+                     *     reports rather than hides.
+                     */
+                    compensatedBy?: string;
                 };
             };
         };

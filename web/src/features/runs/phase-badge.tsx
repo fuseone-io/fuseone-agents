@@ -14,7 +14,9 @@ export const PHASE_LABELS: Record<Phase, string> = {
   awaiting_approval: "runs.phaseAwaitingApproval",
   awaiting_tool: "runs.phaseAwaitingTool",
   parked: "runs.phaseParked",
+  compensating: "runs.phaseCompensating",
   finished: "runs.phaseFinished",
+  failed: "runs.phaseFailed",
 };
 
 export function PhaseBadge({ phase }: { phase: Phase }) {

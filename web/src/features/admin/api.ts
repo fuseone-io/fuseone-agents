@@ -47,6 +47,7 @@ export function useClassifyTool() {
       effect: Effect;
       untrusted: boolean;
       reason?: string;
+      compensatedBy?: string;
     }) =>
       unwrap(
         await api.PUT("/admin/tools/{toolId}/classification", {
@@ -55,6 +56,7 @@ export function useClassifyTool() {
             effect: input.effect,
             untrusted: input.untrusted,
             reason: input.reason,
+            compensatedBy: input.compensatedBy,
           },
         }),
       ),

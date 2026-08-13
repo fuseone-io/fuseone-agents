@@ -64,6 +64,7 @@ export function ToolsPanel() {
               <TableHead className={HEAD}>{t("admin.server")}</TableHead>
               <TableHead className={HEAD}>{t("admin.effect")}</TableHead>
               <TableHead className={HEAD}>{t("admin.untrusted")}</TableHead>
+              <TableHead className={HEAD}>{t("admin.undoColumn")}</TableHead>
               <TableHead className={`${HEAD} text-right`} />
             </TableRow>
           </TableHeader>
@@ -85,7 +86,17 @@ export function ToolsPanel() {
                   <EffectBadge effect={tool.effect} />
                 </TableCell>
                 <TableCell className="text-muted-foreground">
-                  {tool.untrusted ? "sim" : "não"}
+                  {tool.untrusted ? t("common.yes") : t("common.no")}
+                </TableCell>
+                {/* A ruling nobody can see from the outside is a ruling that
+                    gets made twice. An em dash rather than a blank: nothing
+                    undoes this tool is an answer, not a missing field. */}
+                <TableCell>
+                  {tool.compensatedBy ? (
+                    <Mono className="text-xs">{tool.compensatedBy}</Mono>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
                 </TableCell>
                 <TableCell className="text-right">
                   <Button
@@ -102,7 +113,11 @@ export function ToolsPanel() {
         </Table>
       )}
 
-      <ClassifyDialog tool={classifying} onClose={() => setClassifying(null)} />
+      <ClassifyDialog
+        tool={classifying}
+        tools={tools}
+        onClose={() => setClassifying(null)}
+      />
     </Panel>
   );
 }
