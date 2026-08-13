@@ -13,6 +13,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 
 	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/channel/slack"
@@ -48,14 +49,38 @@ func (d *Drivers) For(ctx context.Context, name string) (channel.Poster, error) 
 		return nil, fmt.Errorf("connect: read connection %q: %w", name, err)
 	}
 
-	switch conn.Kind {
-	case "slack":
-		return slack.New(s.Secret), nil
-	default:
+	build, known := drivers[conn.Kind]
+	if !known {
 		// Named rather than ignored. A connection of a kind nobody has built
 		// should say so, not fail as a notification that never arrives.
 		return nil, fmt.Errorf("connect: channel %q is of an unsupported kind %q", name, conn.Kind)
 	}
+	return build(s.Secret), nil
+}
+
+/*
+drivers is every vendor this binary can talk to.
+
+A table rather than a switch, because the console asks what it may offer and
+the answer has to be the same list that builds the connection. Two places
+saying which vendors exist is one place offering a kind the binary cannot make.
+*/
+var drivers = map[string]func(secret string) channel.Poster{
+	"slack": func(secret string) channel.Poster { return slack.New(secret) },
+}
+
+// Kinds is what this installation can connect, sorted so the console offers
+// them in a stable order.
+func (d *Drivers) Kinds() []string { return Kinds() }
+
+// Kinds is the same list, without needing a configured store to ask.
+func Kinds() []string {
+	out := make([]string, 0, len(drivers))
+	for kind := range drivers {
+		out = append(out, kind)
+	}
+	slices.Sort(out)
+	return out
 }
 
 /*

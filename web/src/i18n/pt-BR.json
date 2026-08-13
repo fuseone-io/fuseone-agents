@@ -1126,6 +1126,7 @@
     "conversation": "Conversa",
     "conversationExplains": "A conversa recebe os runs do escopo escolhido, e de nenhum outro.",
     "conversationSaved": "Conversa salva",
+    "credential": "Credencial",
     "editChannel": "Editar canal",
     "event": {
       "parked": "Esperando uma decisão",
@@ -1133,9 +1134,11 @@
       "finished": "Terminou"
     },
     "explains": "Só saída. Um canal é onde os runs falam — nada que for dito lá inicia coisa alguma.",
+    "kind": "Tipo",
     "nameExplains": "Identifica a conexão, não o fornecedor. As conversas se referem a ele.",
     "needsConversation": "Informe o ID da conversa",
     "needsEvent": "Escolha ao menos um aviso",
+    "needsKind": "Escolha o tipo",
     "needsName": "Dê um nome à conexão",
     "needsScope": "Escolha o escopo",
     "newChannel": "Conectar canal",
@@ -1152,6 +1155,9 @@
     "testDelivered": "Mensagem entregue",
     "tokenSealed": "Selado pelo vault. Nunca é devolvido para o navegador.",
     "tokenStored": "Guardado — deixe em branco para manter",
+    "vendor": {
+      "slack": "Slack"
+    },
     "wants": "O que avisar",
     "wantsExplains": "Canal que ouve todo run terminando é canal que as pessoas silenciam.",
     "workspace": "Workspace"

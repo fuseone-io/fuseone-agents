@@ -4475,6 +4475,8 @@ export interface operations {
                 content: {
                     "application/json": {
                         items: components["schemas"]["Channel"][];
+                        /** @description The vendors this installation can connect. Answered by the binary rather than assumed by the console, so a screen can never offer a kind the process cannot build. */
+                        kinds: string[];
                     };
                 };
             };

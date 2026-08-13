@@ -47,8 +47,18 @@ func (s *Server) ListChannels(
 			ForbiddenApplicationProblemPlusJSONResponse: *resp,
 		}, nil
 	}
+	// The vendors come from the process, not from the screen. A console that
+	// decided for itself which kinds exist would offer one the binary cannot
+	// build, and the failure would arrive as a saved connection that never
+	// delivers.
+	kinds := []string{}
+	if s.channelListing != nil {
+		kinds = s.channelListing.Kinds()
+	}
 	if s.channels == nil {
-		return openapi.ListChannels200JSONResponse{Items: []openapi.Channel{}}, nil
+		return openapi.ListChannels200JSONResponse{
+			Items: []openapi.Channel{}, Kinds: kinds,
+		}, nil
 	}
 
 	configured, err := s.channels.List(ctx)
@@ -60,7 +70,7 @@ func (s *Server) ListChannels(
 	for _, c := range configured {
 		items = append(items, channelFrom(c))
 	}
-	return openapi.ListChannels200JSONResponse{Items: items}, nil
+	return openapi.ListChannels200JSONResponse{Items: items, Kinds: kinds}, nil
 }
 
 func (s *Server) PutChannel(
@@ -277,9 +287,11 @@ func (s *Server) TestConversation(
 // run nobody can find.
 const eventTest channel.Event = "test"
 
-// Lister answers which conversations a connection can be pointed at.
+// Lister answers which conversations a connection can be pointed at, and which
+// vendors this binary can connect at all.
 type Lister interface {
 	Conversations(ctx context.Context, channel string) ([]channel.Available, error)
+	Kinds() []string
 }
 
 // WithChannelListing wires the picker's source.

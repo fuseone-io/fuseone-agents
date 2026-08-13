@@ -22,15 +22,34 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useSaveChannel } from "@/features/channels/api";
 import { problemMessage } from "@/lib/api/problem-message";
 import type { components } from "@/lib/api/schema.gen";
 
 const schema = z.object({
   name: z.string().min(1, "channels.needsName"),
+  kind: z.string().min(1, "channels.needsKind"),
   workspace: z.string(),
   token: z.string(),
 });
+
+/**
+ * What the credential is called, per vendor.
+ *
+ * The kind used to be invisible: the only thing on the form saying this was
+ * Slack was an `xoxb-…` placeholder. Naming it makes the choice explicit, and
+ * it has to be a choice because there will be more than one.
+ */
+const CREDENTIAL: Record<string, { label: string; hint: string }> = {
+  slack: { label: "channels.botToken", hint: "xoxb-…" },
+};
 
 /**
  * Connecting a workspace.
@@ -41,9 +60,12 @@ const schema = z.object({
  */
 export function ChannelForm({
   channel,
+  kinds,
   onClose,
 }: {
   channel: components["schemas"]["Channel"] | null;
+  /** What this installation can connect, answered by the process. */
+  kinds: string[];
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -53,16 +75,22 @@ export function ChannelForm({
     resolver: zodResolver(schema),
     defaultValues: {
       name: channel?.name ?? "",
+      kind: channel?.kind ?? kinds[0] ?? "",
       workspace: channel?.workspace ?? "",
       token: "",
     },
   });
 
+  const credential = CREDENTIAL[form.watch("kind")] ?? {
+    label: "channels.credential",
+    hint: "",
+  };
+
   async function submit(values: z.infer<typeof schema>) {
     try {
       await save.mutateAsync({
         name: values.name.trim(),
-        kind: "slack",
+        kind: values.kind as "slack",
         workspace: values.workspace.trim() || undefined,
         token: values.token.trim() || undefined,
       });
@@ -106,6 +134,38 @@ export function ChannelForm({
             />
             <FormField
               control={form.control}
+              name="kind"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("channels.kind")}</FormLabel>
+                  {/* Offered by the process rather than listed here. A console
+                      that decided for itself which vendors exist would offer
+                      one the binary cannot build, and the failure would arrive
+                      as a connection that saves cleanly and never delivers. */}
+                  <Select
+                    onValueChange={field.onChange}
+                    value={field.value}
+                    disabled={channel !== null}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder={t("channels.kind")} />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {kinds.map((kind) => (
+                        <SelectItem key={kind} value={kind}>
+                          {t(`channels.vendor.${kind}`)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
               name="workspace"
               render={({ field }) => (
                 <FormItem>
@@ -122,7 +182,7 @@ export function ChannelForm({
               name="token"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t("channels.botToken")}</FormLabel>
+                  <FormLabel>{t(credential.label)}</FormLabel>
                   <FormControl>
                     <Input
                       {...field}
@@ -131,7 +191,7 @@ export function ChannelForm({
                       placeholder={
                         channel?.hasCredential
                           ? t("channels.tokenStored")
-                          : "xoxb-…"
+                          : credential.hint
                       }
                     />
                   </FormControl>

@@ -60,7 +60,11 @@ export function ChannelsTab() {
       </IntegrationsSection>
 
       {editing !== undefined && (
-        <ChannelForm channel={editing} onClose={() => setEditing(undefined)} />
+        <ChannelForm
+          channel={editing}
+          kinds={data?.kinds ?? []}
+          onClose={() => setEditing(undefined)}
+        />
       )}
       {addingTo && (
         <ConversationForm

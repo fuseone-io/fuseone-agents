@@ -25,7 +25,8 @@ func TestListChannels_neverHandsBackTheCredential(t *testing.T) {
 	s := NewServer(ledger.NewMemory(), "test").
 		WithChannels(&channelSpy{listed: []admin.Channel{{
 			Name: "acme-slack", Kind: "slack", Enabled: true, HasCredential: true,
-		}}}, nil)
+		}}}, nil).
+		WithChannelListing(&listerSpy{kinds: []string{"slack"}})
 
 	resp, err := s.ListChannels(as(domain.RoleCurator), openapi.ListChannelsRequestObject{})
 	if err != nil {
@@ -43,7 +44,21 @@ func TestListChannels_neverHandsBackTheCredential(t *testing.T) {
 	if page.Items[0].Kind != "slack" {
 		t.Errorf("kind = %q", page.Items[0].Kind)
 	}
+
+	// The screen asks the process which vendors it can connect, so it can
+	// never offer one the binary has no driver for.
+	if len(page.Kinds) != 1 || page.Kinds[0] != "slack" {
+		t.Errorf("kinds = %v, want what this binary can build", page.Kinds)
+	}
 }
+
+type listerSpy struct{ kinds []string }
+
+func (l *listerSpy) Conversations(context.Context, string) ([]channel.Available, error) {
+	return nil, nil
+}
+
+func (l *listerSpy) Kinds() []string { return l.kinds }
 
 func TestDeleteConversation_scopeComesFromWhatIsStored(t *testing.T) {
 	t.Parallel()

@@ -1126,6 +1126,7 @@
     "conversation": "Conversation",
     "conversationExplains": "The conversation receives the runs of the scope you choose, and no others.",
     "conversationSaved": "Conversation saved",
+    "credential": "Credential",
     "editChannel": "Edit channel",
     "event": {
       "parked": "Waiting on a decision",
@@ -1133,9 +1134,11 @@
       "finished": "Finished"
     },
     "explains": "Outbound only. A channel is where runs speak — nothing said there starts anything.",
+    "kind": "Kind",
     "nameExplains": "Names the connection, not the vendor. Conversations refer to it.",
     "needsConversation": "Give the conversation id",
     "needsEvent": "Choose at least one",
+    "needsKind": "Choose a kind",
     "needsName": "Give the connection a name",
     "needsScope": "Choose the scope",
     "newChannel": "Connect a channel",
@@ -1152,6 +1155,9 @@
     "testDelivered": "Message delivered",
     "tokenSealed": "Sealed by the vault. Never handed back to a browser.",
     "tokenStored": "Stored — leave empty to keep it",
+    "vendor": {
+      "slack": "Slack"
+    },
     "wants": "What to announce",
     "wantsExplains": "A channel that hears every run finish is one people mute.",
     "workspace": "Workspace"

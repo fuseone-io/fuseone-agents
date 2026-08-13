@@ -1825,11 +1825,18 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [items]
+                required: [items, kinds]
                 properties:
                   items:
                     type: array
                     items: { $ref: '#/components/schemas/Channel' }
+                  kinds:
+                    type: array
+                    description: >
+                      The vendors this installation can connect. Answered by
+                      the binary rather than assumed by the console, so a
+                      screen can never offer a kind the process cannot build.
+                    items: { type: string }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
