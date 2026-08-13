@@ -16,6 +16,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/fuseone/agents/internal/channel"
+	"github.com/fuseone/agents/internal/channel/connect"
 	"github.com/fuseone/agents/internal/settings"
 	"github.com/fuseone/agents/internal/vault"
 
@@ -97,7 +99,12 @@ func serve(args []string) error {
 		// nobody configured, which cannot be edited or removed.
 		integrations := admin.NewIntegrations(identity.pool, store).
 			ForgettingHealth(admin.NewHealth(identity.pool))
-		api = api.WithAdministration(curator, curator, integrations).
+		// Where runs report, and a way to prove the bot was invited without
+		// waiting for one to park (NT-005 stage 1).
+		api = api.WithChannels(
+			admin.NewChannels(identity.pool, store),
+			channel.NewRouter(connect.New(store)),
+		).WithAdministration(curator, curator, integrations).
 			WithAgents(spec.NewRegistry(identity.pool)).
 			WithCeilings(admin.NewBudgets(identity.pool, store)).
 			// The same store the worker writes into. Without it the console

@@ -4,6 +4,7 @@ import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
 import { Plug, Server } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ChannelsTab } from "@/features/channels/channels-tab";
 import { useTab } from "@/features/preferences/use-preferences";
 import { ConnectMenu } from "@/features/integrations/connect-menu";
 import { IntegrationsSection } from "@/features/integrations/integrations-section";
@@ -80,6 +81,9 @@ export function IntegrationsPage() {
                 {providers.length}
               </span>
             </TabsTrigger>
+            {/* Same job — what this installation is connected to — and unlike
+                the other two, nothing here grants an agent any ability. */}
+            <TabsTrigger value="channels">{t("channels.channels")}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="servers" className="mt-4">
@@ -104,6 +108,10 @@ export function IntegrationsPage() {
                 />
               ))}
             </IntegrationsSection>
+          </TabsContent>
+
+          <TabsContent value="channels" className="mt-4">
+            <ChannelsTab />
           </TabsContent>
 
           <TabsContent value="providers" className="mt-4">

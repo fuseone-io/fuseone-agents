@@ -38,9 +38,29 @@ func writeSetting(
 	return tx.Commit(ctx)
 }
 
+// removeSetting deletes an installation-wide setting and records who did.
 func removeSetting(
 	ctx context.Context, pool *pgxpool.Pool, store *settings.Store,
 	by domain.UserID, scope domain.Scope,
+	kind settings.Kind, name, action string,
+) error {
+	return removeScopedSetting(ctx, pool, store, by,
+		settings.ScopeInstallation, domain.Scope{}, scope, kind, name, action)
+}
+
+/*
+removeScopedSetting deletes a setting that lives at a scope of its own.
+
+Separate because deleting is keyed by where the setting is stored while the
+trail is keyed by what the change was about, and for most settings those are
+different things: an installation-wide provider changed on behalf of one area
+is recorded against that area. A conversation is the case where they are the
+same, and where assuming installation would delete the wrong key and report
+success.
+*/
+func removeScopedSetting(
+	ctx context.Context, pool *pgxpool.Pool, store *settings.Store,
+	by domain.UserID, at settings.ScopeKind, stored, recorded domain.Scope,
 	kind settings.Kind, name, action string,
 ) error {
 	tx, err := pool.Begin(ctx)
@@ -49,11 +69,11 @@ func removeSetting(
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if err := store.DeleteTx(ctx, tx, settings.ScopeInstallation, domain.Scope{}, kind, name); err != nil {
+	if err := store.DeleteTx(ctx, tx, at, stored, kind, name); err != nil {
 		return err
 	}
 	if err := Record(ctx, tx, Event{
-		Principal: by, Scope: scope, Action: action, Target: name,
+		Principal: by, Scope: recorded, Action: action, Target: name,
 	}); err != nil {
 		return err
 	}

@@ -27,6 +27,10 @@ func summary(m channel.Message) string {
 		return fmt.Sprintf("%s is waiting for a decision", m.Agent)
 	case channel.EventFailed:
 		return fmt.Sprintf("%s stopped: %s", m.Agent, reasonOr(m.Reason, "no reason recorded"))
+	case "test":
+		// Says what it is. A test message that looked like a real one would
+		// have somebody opening a run that does not exist.
+		return "FuseOne Agents is connected to this conversation. This is a test."
 	default:
 		return fmt.Sprintf("%s finished", m.Agent)
 	}
@@ -34,6 +38,14 @@ func summary(m channel.Message) string {
 
 func blocks(m channel.Message) []any {
 	out := []any{section(summary(m))}
+	if m.RunID == "" {
+		// A test carries no run, and a fact block naming an empty one would be
+		// the first thing a reader tried to look up.
+		if m.Scope.Area != "" {
+			out = append(out, context_(fmt.Sprintf("Runs in *%s* report here.", m.Scope.Area)))
+		}
+		return out
+	}
 
 	facts := []string{"*Run*\n`" + string(m.RunID) + "`"}
 	if m.Scope.Area != "" {

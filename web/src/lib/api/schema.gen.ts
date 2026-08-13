@@ -1235,6 +1235,99 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Where runs report, and to whom
+         * @description The connections this installation can post through, and the
+         *     conversations mapped onto scopes inside them.
+         *
+         *     Outbound only. Nothing a conversation says reaches this platform, so a
+         *     connection here grants no ability to start anything — it is a place
+         *     runs speak to (NT-005 stage 1).
+         */
+        get: operations["listChannels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/channels/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Configure a channel connection */
+        put: operations["putChannel"];
+        post?: never;
+        /** Remove a channel connection */
+        delete: operations["deleteChannel"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/channels/{name}/conversations/{conversation}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Point a scope's runs at a conversation
+         * @description The scope is the governing part. A conversation receives the runs of
+         *     the scope it is configured in and no others — a channel carrying
+         *     another area's runs would be a way around every read check on this
+         *     platform, arriving as a notification.
+         */
+        put: operations["putConversation"];
+        post?: never;
+        /** Stop reporting to a conversation */
+        delete: operations["deleteConversation"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/channels/{name}/conversations/{conversation}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Prove the wiring, without waiting for a run
+         * @description Posts one message saying what it is. Configuring a channel otherwise
+         *     means waiting for a run to park to find out whether the bot was ever
+         *     invited — and a notification that silently goes nowhere is the failure
+         *     this whole stage exists to avoid.
+         *
+         *     Recorded in the administrative trail like any other act that reaches
+         *     outside this installation.
+         */
+        post: operations["testConversation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/integrations/providers/{name}": {
         parameters: {
             query?: never;
@@ -1982,6 +2075,22 @@ export interface components {
             updatedBy?: string;
             /** Format: date-time */
             updatedAt?: string;
+        };
+        Channel: {
+            name: string;
+            kind: string;
+            workspace?: string;
+            enabled: boolean;
+            /** @description Whether a credential is stored, never what it is. */
+            hasCredential: boolean;
+            conversations: components["schemas"]["ChannelConversation"][];
+        };
+        ChannelConversation: {
+            id: string;
+            label?: string;
+            scope: components["schemas"]["Scope"];
+            wants?: string[];
+            enabled: boolean;
         };
         AuditPage: {
             items: components["schemas"]["AuditEntry"][];
@@ -4316,6 +4425,189 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listChannels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The channels, with their conversations. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Channel"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    putChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Names the connection, not the vendor. Conversations refer to it. */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    kind: "slack";
+                    /** @description What a person calls it. Never used to address anything. */
+                    workspace?: string;
+                    /** @description The bot credential, sealed by the vault. Omit to keep the stored one — renaming a workspace must not demand re-entering a secret nobody has to hand. */
+                    token?: string;
+                    /** @default true */
+                    enabled?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description The channel is configured. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    deleteChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The channel is removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    putConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                /** @description The conversation as the channel knows it, e.g. a Slack channel id. */
+                conversation: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    company: string;
+                    /** @description Empty covers the whole company. */
+                    area?: string;
+                    /** @description What a person calls it, for the console and the logs. */
+                    label?: string;
+                    /** @description Which events reach it. Empty means the defaults, which are parked and failed — a conversation that hears every run finish is one people mute. */
+                    wants?: ("parked" | "failed" | "finished")[];
+                    /** @default true */
+                    enabled?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description The conversation is configured. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    deleteConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                conversation: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The conversation is removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    testConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                conversation: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The message was delivered. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        delivered: boolean;
+                        /** @description What the channel called the message. */
+                        ref?: string;
+                    };
+                };
+            };
+            /** @description The channel refused it, with its own reason. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
             };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];

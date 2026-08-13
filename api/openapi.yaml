@@ -1806,6 +1806,191 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /admin/channels:
+    get:
+      tags: [admin]
+      operationId: listChannels
+      summary: Where runs report, and to whom
+      description: |
+        The connections this installation can post through, and the
+        conversations mapped onto scopes inside them.
+
+        Outbound only. Nothing a conversation says reaches this platform, so a
+        connection here grants no ability to start anything — it is a place
+        runs speak to (NT-005 stage 1).
+      responses:
+        '200':
+          description: The channels, with their conversations.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Channel' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/channels/{name}:
+    put:
+      tags: [admin]
+      operationId: putChannel
+      summary: Configure a channel connection
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: Names the connection, not the vendor. Conversations refer to it.
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind]
+              properties:
+                kind: { type: string, enum: [slack] }
+                workspace:
+                  type: string
+                  description: What a person calls it. Never used to address anything.
+                token:
+                  type: string
+                  description: >
+                    The bot credential, sealed by the vault. Omit to keep the
+                    stored one — renaming a workspace must not demand
+                    re-entering a secret nobody has to hand.
+                enabled: { type: boolean, default: true }
+      responses:
+        '204': { description: The channel is configured. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    delete:
+      tags: [admin]
+      operationId: deleteChannel
+      summary: Remove a channel connection
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: The channel is removed, with its conversations. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/channels/{name}/conversations/{conversation}:
+    put:
+      tags: [admin]
+      operationId: putConversation
+      summary: Point a scope's runs at a conversation
+      description: |
+        The scope is the governing part. A conversation receives the runs of
+        the scope it is configured in and no others — a channel carrying
+        another area's runs would be a way around every read check on this
+        platform, arriving as a notification.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+        - name: conversation
+          in: path
+          required: true
+          description: The conversation as the channel knows it, e.g. a Slack channel id.
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [company]
+              properties:
+                company: { type: string }
+                area:
+                  type: string
+                  description: Empty covers the whole company.
+                label:
+                  type: string
+                  description: What a person calls it, for the console and the logs.
+                wants:
+                  type: array
+                  description: >
+                    Which events reach it. Empty means the defaults, which are
+                    parked and failed — a conversation that hears every run
+                    finish is one people mute.
+                  items: { type: string, enum: [parked, failed, finished] }
+                enabled: { type: boolean, default: true }
+      responses:
+        '204': { description: The conversation is configured. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    delete:
+      tags: [admin]
+      operationId: deleteConversation
+      summary: Stop reporting to a conversation
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+        - name: conversation
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: The conversation is removed. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/channels/{name}/conversations/{conversation}/test:
+    post:
+      tags: [admin]
+      operationId: testConversation
+      summary: Prove the wiring, without waiting for a run
+      description: |
+        Posts one message saying what it is. Configuring a channel otherwise
+        means waiting for a run to park to find out whether the bot was ever
+        invited — and a notification that silently goes nowhere is the failure
+        this whole stage exists to avoid.
+
+        Recorded in the administrative trail like any other act that reaches
+        outside this installation.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+        - name: conversation
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The message was delivered.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [delivered]
+                properties:
+                  delivered: { type: boolean }
+                  ref:
+                    type: string
+                    description: What the channel called the message.
+        '400':
+          description: The channel refused it, with its own reason.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /admin/integrations/providers/{name}:
     put:
       tags: [admin]
@@ -2950,6 +3135,33 @@ components:
         enabled: { type: boolean }
         updatedBy: { type: string }
         updatedAt: { type: string, format: date-time }
+
+    Channel:
+      type: object
+      required: [name, kind, enabled, hasCredential, conversations]
+      properties:
+        name: { type: string }
+        kind: { type: string }
+        workspace: { type: string }
+        enabled: { type: boolean }
+        hasCredential:
+          type: boolean
+          description: Whether a credential is stored, never what it is.
+        conversations:
+          type: array
+          items: { $ref: '#/components/schemas/ChannelConversation' }
+
+    ChannelConversation:
+      type: object
+      required: [id, scope, enabled]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        scope: { $ref: '#/components/schemas/Scope' }
+        wants:
+          type: array
+          items: { type: string }
+        enabled: { type: boolean }
 
     AuditPage:
       type: object

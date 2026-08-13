@@ -46,6 +46,11 @@ const SAMPLES = new Set([
   "low",
   "suporte",
   "run_suporte_1786...",
+  // A Slack channel id and the name of a channel: both are shown as the
+  // shape of the thing being asked for, and translating either would be
+  // teaching somebody the wrong format.
+  "C0123ABCDEF",
+  "#alertas",
   "https://api.example.com/mcp/",
   "https://api.openai.com/v1",
   "/usr/local/bin/crm-mcp",
