@@ -436,3 +436,29 @@ func TestFold_resumed_returnsAParkedRunToRunning(t *testing.T) {
 		t.Error("Resumable() = false; no worker will ever pick it up")
 	}
 }
+
+func TestFold_resumed_forgetsTheRefusalsThatCausedTheParking(t *testing.T) {
+	t.Parallel()
+
+	// The block counter exists to stop the platform arguing with a planner
+	// that will not take no for an answer. Carried across a resume it is
+	// evidence about a world that changed: the person resuming has just said
+	// they fixed the thing, and the run would park again on its first refusal
+	// instead of getting the attempts the supervision policy allows.
+	blocked := domain.Step{
+		Kind: domain.StepGateDecided,
+		Payload: payload(t, domain.GateDecidedPayload{
+			Tool: "kb.search", Verdict: domain.VerdictBlock, Rule: "policy",
+		}),
+	}
+	s := mustFold(t, chain(t,
+		domain.Step{Kind: domain.StepRunStarted, AgentID: "suporte", Payload: []byte(`{}`)},
+		blocked, blocked, blocked,
+		domain.Step{Kind: domain.StepParked, Payload: payload(t, domain.ParkedPayload{Reason: "no_progress"})},
+		domain.Step{Kind: domain.StepResumed, Payload: payload(t, domain.ResumedPayload{By: "ana", Note: "política desligada"})},
+	))
+
+	if s.ConsecutiveBlocks != 0 {
+		t.Errorf("ConsecutiveBlocks = %d, want the count forgotten", s.ConsecutiveBlocks)
+	}
+}

@@ -243,9 +243,16 @@ func (s *State) applyKind(step domain.Step) error {
 		s.Phase = PhaseParked
 
 	case domain.StepResumed:
-		// Straight back to running, at the sequence it stopped at. Nothing is
-		// replayed and nothing is reset: the run's whole state is the fold of
-		// the steps before this one.
+		// Back to running at the sequence it stopped at. Nothing is replayed:
+		// the run's spend, its calls and its taint are all the fold of the
+		// steps before this one, and they stand.
+		//
+		// The refusal count is the exception, because it is not a fact about
+		// the run — it is evidence about a world that has just changed. The
+		// person resuming has said they fixed the thing; carrying the count
+		// would park the run again on its first refusal instead of giving it
+		// the attempts the supervision policy allows.
+		s.ConsecutiveBlocks = 0
 		s.Phase = PhaseRunning
 
 	case domain.StepRunFinished:
