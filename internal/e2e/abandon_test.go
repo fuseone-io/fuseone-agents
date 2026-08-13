@@ -109,8 +109,12 @@ func (p *platform) abandon(t *testing.T, runID domain.RunID) {
 		Scope:     domain.Scope{Company: "acme", Area: "cx"},
 		AgentID:   p.spec.ID,
 		VersionID: p.spec.Version,
-		At:        time.Now(),
-		Payload:   payload,
+		// The handlers carry this from the folded state. A helper that stands
+		// in for the API and drops it would let the trail invariant pass here
+		// while production wrote anonymous steps.
+		OnBehalfOf: "ana",
+		At:         time.Now(),
+		Payload:    payload,
 	}); err != nil {
 		t.Fatalf("abandon run: %v", err)
 	}
@@ -176,8 +180,12 @@ func (p *platform) decide(t *testing.T, runID domain.RunID, granted bool) {
 		Scope:     domain.Scope{Company: "acme", Area: "cx"},
 		AgentID:   p.spec.ID,
 		VersionID: p.spec.Version,
-		At:        time.Now(),
-		Payload:   payload,
+		// The handlers carry this from the folded state. A helper that stands
+		// in for the API and drops it would let the trail invariant pass here
+		// while production wrote anonymous steps.
+		OnBehalfOf: "ana",
+		At:         time.Now(),
+		Payload:    payload,
 	}); err != nil {
 		t.Fatalf("decide approval: %v", err)
 	}

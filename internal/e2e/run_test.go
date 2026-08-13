@@ -231,10 +231,11 @@ func (p *platform) open(t *testing.T, runID domain.RunID) {
 
 	if _, err := p.store.Append(t.Context(), domain.Step{
 		RunID: runID, Kind: domain.StepRunStarted,
-		Scope:     domain.Scope{Company: "acme", Area: "cx"},
-		AgentID:   p.spec.ID,
-		VersionID: p.spec.Version,
-		At:        time.Now(),
+		Scope:      domain.Scope{Company: "acme", Area: "cx"},
+		AgentID:    p.spec.ID,
+		VersionID:  p.spec.Version,
+		OnBehalfOf: "ana",
+		At:         time.Now(),
 	}); err != nil {
 		t.Fatalf("open run: %v", err)
 	}
