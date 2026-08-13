@@ -120,7 +120,7 @@ the same buyer.
 | **N1** | **SaaS multi-tenancy.** Isolation between customers who do not trust each other | It is the largest source of complexity in SaaS platforms and adds nothing for somebody installing in their own cluster. **Not to be confused with multi-company** ([§3.1](#31-scope-model-and-the-path-to-multi-company)), which is on the roadmap and is a different problem |
 | **N2** | **Operate as SaaS.** No customer data on our infrastructure | Removes data residency, DPAs and an external control plane from scope |
 | **N3** | Compete as an agent framework | The value is in the governed runtime, not in the loop library |
-| **N4** | Build an integration engine or EIP | Tools arrive over MCP. Heavy integration remains the FuseOne platform's domain |
+| **N4** | Move data in volume | A tool is an MCP server, local or remote, and an agent is the orchestrator: mapping a field, choosing a route, transforming a record is what it does by reasoning. What it is bad at is being a pipe — half a million rows every night is not an agent's work, and one driven by a language model is expensive, slow and wrong |
 | **N5** | Drag-and-drop builder as the primary authoring interface | Composing a graph is a technical skill dressed as a friendly UI — it fails precisely with the target audience. The visual exists, generated and read-only |
 | **N6** | Free-form conversation between agents as the default | Less predictable, more expensive and not auditable, authored by people who cannot evaluate it. Composition is by event, not by chat |
 | **N7** | Replace the platform team | The role changes from executor to curator — it defines packs and classifies effects, it does not write agents |
@@ -287,6 +287,13 @@ Estimated cost: R$ 0.31 per email · ~R$ 124/month at your current volume
 
 ### 6.3 Simulation over real cases
 
+> **As built.** A simulation opens one run per case, marked, and a second
+> worker pool drains them with a tool layer that answers with nothing. The runs
+> are the queue: the lease, the backoff, the parking and the step ceiling are
+> the ones every run gets, and a simulated run is a run in every respect except
+> the call. The report is a fold of those runs rather than a record kept beside
+> them.
+
 **FU-09.** Before being switched on, the agent runs dry against the last N real
 occurrences — emails, tickets, leads. The screen shows, per case: what it would
 have done, where it would have asked for approval, where it was unsure, and what
@@ -298,6 +305,11 @@ it would have cost.
 > happy path and omit the exception. Simulation is what exposes that gap before
 > production, and it is the only validation legible to somebody who cannot read a
 > specification. Without it, non-technical authoring is reckless.
+
+> **As built, with a gap named.** Leaving Draft requires a simulation to exist.
+> Whether anybody *read* it is the half this platform cannot observe: it can put
+> the report in front of a person and record that somebody asked for it, and it
+> cannot know they thought about it. The check says what it checks.
 
 **FU-10.** An agent cannot leave Draft without at least one simulation run and
 reviewed.
@@ -327,6 +339,14 @@ calendar decision.
 | **Shadow** | Proposes, does not act | Does the work; the system compares | Agreement ≥ threshold over N cases |
 | **Copilot** | Proposes each action | Approves with one click | Approval rate ≥ threshold |
 | **Autonomous** | Acts inside the envelope | Handles exceptions only | — |
+
+> **As built.** The stage is state beside the specification, not a field in it:
+> a published version is immutable, every run is pinned to one, and promotion
+> is not a new version. Draft may be simulated and may not act, refused at the
+> opener because every route in goes through there. Copilot escalates every
+> effect at the Gate, including one a written exception allows — otherwise the
+> stage would mean nothing on exactly the agents somebody wrote an exception
+> for.
 
 **FU-14.** The platform measures the agreement rate and *suggests* promotion:
 *"This agent agreed with you on 94% of the last 100 cases. Promote to copilot?"*
@@ -408,6 +428,19 @@ discovering the impact in production.
 > AU-08 is only possible because the Ledger records `policy_version`, the inputs
 > and the verdict of each decision separately. A log that records only the
 > outcome of an evaluation allows replaying it, but not re-evaluating it.
+>
+> This was written as a description and was not true of the implementation for
+> some time: a decision recorded its tool, its effect and its outcome, so a
+> rule about untrusted data re-evaluated against no data and reported that it
+> would change nothing. The taint and a digest of the arguments are now
+> recorded beside the verdict.
+>
+> The arguments themselves are deliberately not kept. They carry whatever the
+> case carried, and making a second copy of personal data to enable a reporting
+> feature is the wrong trade beside AU-11. What that costs is exact: a rule
+> reading argument content cannot be checked against a past decision, and the
+> report says so rather than counting it as unchanged — "nothing would change"
+> about a question nobody asked is the one way this feature can do harm.
 
 ### 7.4 A legible trail
 
@@ -423,8 +456,23 @@ that caused it, named — never "denied by policy".
 **AU-11.** Retention configurable per installation, defaulting to 5 years. No
 automatic purge below what is configured.
 
+> **As built.** The window has a floor of one day: this is the one setting
+> where a typo destroys data on the next sweep and cannot be undone. Erasure
+> for a subject takes the runs the operator names, because nothing here indexes
+> content by the person it concerns — an index of who appears in what would be
+> the very record a subject is asking to be rid of. Finding the runs is done in
+> the trail; performing it is recorded there as the single request it was.
+
 **AU-12.** Signed export of Ledger ranges, independently verifiable through the
 hash chain.
+
+> **As built.** `agentd verify <file>` checks the chain and the signature and
+> needs no database, no credential and no network — an export somebody has to
+> ask us about is an export they are trusting us for. What it cannot tell them
+> is whether the key is ours, so it prints the fingerprint and says so. The
+> export format is written down separately from the internal types, because an
+> auditor holds a copy for five years and a rename in the codebase must not
+> change what they are reading.
 
 **AU-13.** LLM observability (traces, latency) is a separate system with its own
 retention, and does not replace the Ledger.
@@ -583,12 +631,21 @@ effect.** Conversation is free and cheap; action passes through the Gate.
 
 ### 10.1 The Gate
 
-**SE-01.** Every action passes seven checks, always in the same order. The order
-is normative: the cheap and absolute come before the expensive and contextual.
+**SE-01.** Every action passes the same checks, always in the same order. The
+order is normative: the cheap and absolute come before the expensive and
+contextual, and the earliest objection is the one reported — it is the failure
+the operator actually has to fix.
 
 ```
-capability → contract → data label → policy → reservation → idempotency → approval
+capability → contract → data label → policy → reservation → idempotency
+           → autonomy → approval
 ```
+
+> Autonomy was added when the stages landed (FU-14), and it runs late on
+> purpose. Placed early it reported "the agent is in Copilot" for calls a taint
+> rule or a policy was already stopping for a specific reason, and the specific
+> reason is the one somebody can act on. When nothing else objected, the stage
+> is the explanation.
 
 | # | Check | What it does |
 |---|---|---|
@@ -598,7 +655,8 @@ capability → contract → data label → policy → reservation → idempotenc
 | 4 | Policy | Deterministic, versioned evaluation. Produces one of the four verdicts |
 | 5 | Reservation | Is there budget? Reserves the estimated maximum before spending |
 | 6 | Idempotency | A key derived from the run, sequence, tool and arguments. A repeat returns the previous result |
-| 7 | Approval | If required, suspends durably until a human decision or expiry |
+| 7 | Autonomy | Is this agent trusted to act alone? A Copilot escalates every effect, including one a written exception allows |
+| 8 | Approval | If required, suspends durably until a human decision or expiry |
 
 ### 10.2 Four verdicts
 
@@ -794,9 +852,9 @@ features.
 |---|---|---|
 | **Q1** | What is the first use case, and does it have historical cases accessible in enough volume to simulate? | Before F0 |
 | **Q2** | How are historical cases imported? A connector per system, a file, or capture in shadow mode? | F1 |
-| **Q3** | Per-subject erasure (NF-09) can invalidate the hash chain. Adopt a content digest with a tombstone, or segregate personal content from the start? | F0 — a schema decision |
+| ~~**Q3**~~ | ~~Per-subject erasure can invalidate the hash chain~~ — **answered: both, and by construction.** Personal data was never in the chain: bulky content is segregated into the claim check (AU-04) and the step keeps a reference and a digest, so erasing content never touches a step. Erasure leaves a tombstone rather than a deleted row, because erased and never-stored are different facts and a trail pointing at nothing has to say which | — |
 | **Q4** | Policy language: do declarative rules in the pack solve the foreseen cases, or is a full rules engine needed from the start? | F2 |
-| **Q5** | What is the agreement threshold for promoting Shadow → Copilot, and is it global or per pack? | F5 |
+| ~~**Q5**~~ | ~~The agreement threshold for promotion~~ — **answered, and the answer is asymmetric.** Twenty decisions at 95% suggests promotion; five at under 80% performs demotion. Global rather than per pack, because the number describes whether people agree with the agent and not with its tools. Promotion is only ever suggested and demotion is automatic: loosening on thin evidence risks harm, tightening on thin evidence costs somebody a few clicks | — |
 | **Q6** | Licensing model per installation: per active agent, per run, or per seat? | Before the first external customer |
 | **Q7** | Relationship with the FuseOne integration platform: a sibling product installable separately, or a module of the same chart? | F2 |
 | **Q8** | A catalogue of approved MCP servers: do we curate our own list, or accept any server with manual classification? | F0 |
