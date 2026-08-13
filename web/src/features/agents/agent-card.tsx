@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Mono } from "@/components/shared/mono";
 import { StateDot } from "@/components/shared/state-dot";
+import { StageBadge } from "@/features/agents/stage-badge";
 import { stateOfAgent } from "@/lib/agent-state";
 import { formatMicros, formatRelative } from "@/lib/format";
 import { successRate } from "@/features/agents/activity";
@@ -40,6 +41,9 @@ export function AgentCard({ agent }: { agent: Agent }) {
             <Mono dim>{agent.agentId}</Mono> · {agent.scope.area}
           </div>
         </div>
+        {/* Before anything about its runs: a draft has none and will have
+            none, and the reason belongs where somebody looks first. */}
+        <StageBadge stage={agent.stage} />
         {!agent.latest && (
           <Badge variant="outline" className="text-muted-foreground">
             {t("agents.oldVersion")}

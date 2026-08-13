@@ -850,6 +850,23 @@
     "verdictConstrain": "Would constrain",
     "wouldHaveCalled": "would call here"
   },
+  "stage": {
+    "label": "Autonomy",
+    "draft": "Draft",
+    "copilot": "Copilot",
+    "autonomous": "Autonomous",
+    "means": {
+      "draft": "simulates only, never acts",
+      "copilot": "acts with a person's approval",
+      "autonomous": "acts alone, under the policies"
+    },
+    "moved": {
+      "draft": "Back to draft",
+      "copilot": "Now acts with approval",
+      "autonomous": "Now acts alone"
+    },
+    "failed": "Could not change the autonomy"
+  },
   "theme": {
     "change": "Change theme",
     "dark": "Dark",

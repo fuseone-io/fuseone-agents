@@ -7,6 +7,7 @@ import { Mono } from "@/components/shared/mono";
 import { StateDot } from "@/components/shared/state-dot";
 import { stateOfAgent } from "@/lib/agent-state";
 import { RunNowDialog } from "@/features/agents/run-now-dialog";
+import { StageControl } from "@/features/agents/stage-control";
 import { formatInstant } from "@/lib/format";
 import type { Agent, AgentVersion, Phase } from "@/lib/api/client";
 
@@ -86,6 +87,7 @@ export function AgentIdentity({
                 {t("agents.simulate")}
               </Link>
             </Button>
+            <StageControl agentId={agent.agentId} stage={agent.stage} />
             <RunNowDialog agentId={agent.agentId} agentName={agent.name} />
           </>
         ) : (

@@ -850,6 +850,23 @@
     "verdictConstrain": "Restringiria",
     "wouldHaveCalled": "chamaria aqui"
   },
+  "stage": {
+    "label": "Autonomia",
+    "draft": "Rascunho",
+    "copilot": "Copiloto",
+    "autonomous": "Autônomo",
+    "means": {
+      "draft": "só simula, não age",
+      "copilot": "age com aprovação de uma pessoa",
+      "autonomous": "age sozinho, sob as políticas"
+    },
+    "moved": {
+      "draft": "Voltou para rascunho",
+      "copilot": "Agora age com aprovação",
+      "autonomous": "Agora age sozinho"
+    },
+    "failed": "Não foi possível mudar a autonomia"
+  },
   "theme": {
     "change": "Mudar tema",
     "dark": "Escuro",

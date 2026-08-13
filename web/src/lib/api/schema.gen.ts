@@ -149,6 +149,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{agentId}/stage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * How far this agent is trusted to act alone
+         * @description Draft may be simulated and may not act. Copilot acts only with a
+         *     person's approval, whatever a policy would otherwise allow. Autonomous
+         *     is judged by the policy set like anything else.
+         *
+         *     Promoting takes the authority to cause runs, because that is what it
+         *     does: every action this agent takes from now on is one nobody will be
+         *     asked about. Demoting takes the same authority and is always allowed —
+         *     the platform demotes on its own when people keep overruling an agent,
+         *     and a person must never have less power than the sweep.
+         */
+        put: operations["setAgentStage"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{agentId}/paused": {
         parameters: {
             query?: never;
@@ -1424,6 +1452,11 @@ export interface components {
             /** @description False when nobody has set one and the default is in force. The distinction matters: a default is a promise the installation has not made deliberately. */
             configured: boolean;
         };
+        /**
+         * @description How far an agent is trusted to act alone. State beside the specification rather than in it: a published version is immutable and promotion is not a new version.
+         * @enum {string}
+         */
+        Stage: "draft" | "copilot" | "autonomous";
         Run: {
             runId: string;
             scope: components["schemas"]["Scope"];
@@ -1762,6 +1795,8 @@ export interface components {
         };
         Agent: {
             agentId: string;
+            /** @description Absent on an older reading. A client that does not find one should assume draft, which is what the platform assumes. */
+            stage?: components["schemas"]["Stage"];
             /** @description The digest of the definition's content. Publishing new text is a new version; the old one stays readable. */
             versionId: string;
             scope: components["schemas"]["Scope"];
@@ -2305,6 +2340,49 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    setAgentStage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    stage: components["schemas"]["Stage"];
+                };
+            };
+        };
+        responses: {
+            /** @description Stored. It applies to the next turn of every run. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description Leaving Draft without a reviewed simulation. An agent earns its way
+             *     out by being run against occurrences that already happened (FU-10),
+             *     and skipping that is skipping the only check that exists before
+             *     real work.
+             */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     setAgentPaused: {
