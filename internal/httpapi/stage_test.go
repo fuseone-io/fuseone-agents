@@ -22,6 +22,10 @@ func (f *fakeStages) StageOf(gocontext.Context, domain.AgentID) (domain.Stage, e
 	return f.stage, nil
 }
 
+func (f *fakeStages) Stages(gocontext.Context) (map[domain.AgentID]domain.Stage, error) {
+	return map[domain.AgentID]domain.Stage{"triage": f.stage}, nil
+}
+
 func (f *fakeStages) SetStage(_ gocontext.Context, _ domain.AgentID, s domain.Stage, _ domain.UserID) error {
 	f.set = s
 	return nil
