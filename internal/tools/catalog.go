@@ -54,6 +54,10 @@ type Entry struct {
 	// the default for anything registered from outside, and it is what makes
 	// taint propagate into the run (PRD DE-14, SE-05).
 	Untrusted bool
+	// CompensatedBy is what takes an act by this tool back. The Curator rules
+	// on it alongside the effect, because what a tool does to the world and
+	// how to undo it are one judgement (PRD SE-08).
+	CompensatedBy domain.ToolID
 }
 
 // Catalog is the registered tool surface of an installation.
@@ -163,6 +167,7 @@ func (c *Catalog) Entries() []domain.ToolEntry {
 		out = append(out, domain.ToolEntry{
 			ID: e.ID, Server: e.Server, Description: e.Description,
 			Effect: e.Effect, Untrusted: e.Untrusted,
+			CompensatedBy: e.CompensatedBy,
 		})
 	}
 	slices.SortFunc(out, func(a, b domain.ToolEntry) int {
@@ -219,6 +224,7 @@ func (c *Catalog) Sync(ctx context.Context, from Classifier, scope domain.Scope)
 		}
 		entry.Effect = r.Effect
 		entry.Untrusted = r.Untrusted
+		entry.CompensatedBy = r.CompensatedBy
 		c.entries[r.Tool] = entry
 		applied++
 	}
@@ -230,22 +236,35 @@ func (c *Catalog) Sync(ctx context.Context, from Classifier, scope domain.Scope)
 // This is the Curator's act and the single point where write access enters the
 // system. It is deliberately separate from registration so that importing a
 // server can never widen what agents may do.
-func (c *Catalog) Classify(id domain.ToolID, effect domain.Effect, untrusted bool) error {
-	if !effect.Valid() {
-		return fmt.Errorf("tools: %q is not a valid effect classification", effect)
+func (c *Catalog) Classify(ruling domain.ToolClassification) error {
+	if !ruling.Effect.Valid() {
+		return fmt.Errorf("tools: %q is not a valid effect classification", ruling.Effect)
 	}
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	entry, ok := c.entries[id]
+	entry, ok := c.entries[ruling.Tool]
 	if !ok {
-		return fmt.Errorf("%w: %s", ErrUnknownTool, id)
+		return fmt.Errorf("%w: %s", ErrUnknownTool, ruling.Tool)
 	}
-	entry.Effect = effect
-	entry.Untrusted = untrusted
-	c.entries[id] = entry
+	entry.Effect = ruling.Effect
+	entry.Untrusted = ruling.Untrusted
+	entry.CompensatedBy = ruling.CompensatedBy
+	c.entries[ruling.Tool] = entry
 	return nil
+}
+
+// CompensatedBy answers what undoes a tool, for the abandonment path.
+func (c *Catalog) CompensatedBy(id domain.ToolID) (domain.ToolID, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	entry, ok := c.entries[id]
+	if !ok || entry.CompensatedBy == "" {
+		return "", false
+	}
+	return entry.CompensatedBy, true
 }
 
 // Effect answers the Gate's first question about a tool.

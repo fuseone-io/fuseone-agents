@@ -23,6 +23,10 @@ type ToolEntry struct {
 	Description string
 	Effect      Effect
 	Untrusted   bool
+	// CompensatedBy is the tool that takes this one back, when the Curator has
+	// said which does. Empty means an act by this tool cannot be undone by
+	// machine, which the abandonment screen reports rather than hides.
+	CompensatedBy ToolID
 }
 
 // MCPServer and ModelProvider are the configured integrations as a reader sees

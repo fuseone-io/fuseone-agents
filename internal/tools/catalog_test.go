@@ -121,7 +121,7 @@ func TestClassify_curatorWidensEffect(t *testing.T) {
 
 	c, _ := catalogWith(t, lookupServer())
 
-	if err := c.Classify("crm.lookup", domain.EffectWrite, true); err != nil {
+	if err := c.Classify(domain.ToolClassification{Tool: "crm.lookup", Effect: domain.EffectWrite, Untrusted: true}); err != nil {
 		t.Fatalf("Classify: %v", err)
 	}
 	if effect, _ := c.Effect("crm.lookup"); effect != domain.EffectWrite {
@@ -134,7 +134,7 @@ func TestClassify_unknownTool_isRejected(t *testing.T) {
 
 	c, _ := catalogWith(t, lookupServer())
 
-	if err := c.Classify("crm.nope", domain.EffectWrite, false); !errors.Is(err, tools.ErrUnknownTool) {
+	if err := c.Classify(domain.ToolClassification{Tool: "crm.nope", Effect: domain.EffectWrite, Untrusted: false}); !errors.Is(err, tools.ErrUnknownTool) {
 		t.Errorf("Classify = %v, want %v", err, tools.ErrUnknownTool)
 	}
 }
@@ -162,7 +162,7 @@ func TestInvoke_vouchedServer_returnsUntaintedResults(t *testing.T) {
 	t.Parallel()
 
 	c, _ := catalogWith(t, lookupServer())
-	if err := c.Classify("crm.lookup", domain.EffectRead, false); err != nil {
+	if err := c.Classify(domain.ToolClassification{Tool: "crm.lookup", Effect: domain.EffectRead, Untrusted: false}); err != nil {
 		t.Fatalf("Classify: %v", err)
 	}
 

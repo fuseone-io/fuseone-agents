@@ -47,10 +47,14 @@ func (c *Curator) Classify(ctx context.Context, scope domain.Scope, ruling domai
 	}
 
 	value, err := json.Marshal(struct {
-		Effect    string `json:"effect"`
-		Untrusted bool   `json:"untrusted"`
-		Reason    string `json:"reason,omitempty"`
-	}{ruling.Effect.String(), ruling.Untrusted, ruling.Reason})
+		Effect        string `json:"effect"`
+		Untrusted     bool   `json:"untrusted"`
+		Reason        string `json:"reason,omitempty"`
+		CompensatedBy string `json:"compensated_by,omitempty"`
+	}{
+		ruling.Effect.String(), ruling.Untrusted, ruling.Reason,
+		string(ruling.CompensatedBy),
+	})
 	if err != nil {
 		return fmt.Errorf("admin: encode ruling: %w", err)
 	}
@@ -110,9 +114,10 @@ func (c *Curator) List(ctx context.Context, scope domain.Scope) ([]domain.ToolCl
 			name, by string
 			raw      []byte
 			stored   struct {
-				Effect    string `json:"effect"`
-				Untrusted bool   `json:"untrusted"`
-				Reason    string `json:"reason"`
+				Effect        string `json:"effect"`
+				Untrusted     bool   `json:"untrusted"`
+				Reason        string `json:"reason"`
+				CompensatedBy string `json:"compensated_by"`
 			}
 		)
 		if err := rows.Scan(&name, &raw, &by); err != nil {
@@ -132,6 +137,7 @@ func (c *Curator) List(ctx context.Context, scope domain.Scope) ([]domain.ToolCl
 		out = append(out, domain.ToolClassification{
 			Tool: domain.ToolID(name), Effect: effect,
 			Untrusted: stored.Untrusted, By: domain.UserID(by), Reason: stored.Reason,
+			CompensatedBy: domain.ToolID(stored.CompensatedBy),
 		})
 	}
 	return out, rows.Err()
