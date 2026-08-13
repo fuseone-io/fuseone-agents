@@ -626,3 +626,60 @@ type fakeHealth map[string]domain.IntegrationHealth
 func (f fakeHealth) All(context.Context) (map[string]domain.IntegrationHealth, error) {
 	return f, nil
 }
+
+func TestListTools_aServerThatStoppedAnswering_marksItsToolsUnoffered(t *testing.T) {
+	t.Parallel()
+
+	// The published list never shrinks: two workers connected to different
+	// servers would delete each other's rows if it did. So a tool from a
+	// server nobody can reach stays listed — and a screen that did not say so
+	// would be offering a capability nothing has.
+	server := NewServer(ledger.NewMemory(), "test").
+		WithAdministration(nil, &fakeTools{entries: []domain.ToolEntry{
+			{ID: "crm.lookup", Server: "crm", Effect: domain.EffectRead},
+			{ID: "old.thing", Server: "removed", Effect: domain.EffectRead},
+		}}, nil).
+		WithHealth(fakeHealth{"crm": {Name: "crm", Reachable: true, ObservedAt: time.Now()}})
+
+	got, err := server.ListTools(as(domain.RoleCurator), openapi.ListToolsRequestObject{})
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+	listed := got.(openapi.ListTools200JSONResponse)
+
+	offered := map[string]bool{}
+	for _, tool := range listed.Items {
+		offered[tool.ToolId] = tool.Offered != nil && *tool.Offered
+	}
+	if !offered["crm.lookup"] {
+		t.Error("a tool from a server that answers reads as unoffered")
+	}
+	if offered["old.thing"] {
+		t.Error("a tool from a server nobody observed reads as offered")
+	}
+}
+
+func TestListTools_aStaleObservation_isSilenceRatherThanAYes(t *testing.T) {
+	t.Parallel()
+
+	// A worker that stopped observing leaves its last reading behind. Trusting
+	// it for ever would report a server as answering years after it stopped.
+	server := NewServer(ledger.NewMemory(), "test").
+		WithAdministration(nil, &fakeTools{entries: []domain.ToolEntry{
+			{ID: "crm.lookup", Server: "crm", Effect: domain.EffectRead},
+		}}, nil).
+		WithHealth(fakeHealth{"crm": {
+			Name: "crm", Reachable: true,
+			ObservedAt: time.Now().Add(-time.Hour),
+		}})
+
+	got, err := server.ListTools(as(domain.RoleCurator), openapi.ListToolsRequestObject{})
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+	listed := got.(openapi.ListTools200JSONResponse)
+
+	if len(listed.Items) != 1 || (listed.Items[0].Offered != nil && *listed.Items[0].Offered) {
+		t.Errorf("items = %+v, want the stale server's tool unoffered", listed.Items)
+	}
+}

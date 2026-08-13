@@ -341,7 +341,7 @@ Two ways to make it true rather than decorative:
 - **Actual scheduled syncs**: a periodic tool-catalogue refresh with its own
   record. Larger, and it needs the same single-owner discipline as cron.
 
-### Still open after remote transport: the published list never shrinks
+### Settled: the published list never shrinks, and now says so
 
 A server that is removed or switched off is disconnected within the reconcile
 interval, and its tools leave that worker's catalogue — an agent can no longer
@@ -355,13 +355,18 @@ each publish what they see, and a replace would have them delete each other's
 tools on every pass — a worse failure than a stale row, and an intermittent
 one.
 
-What it needs is either ownership on a published entry (which worker saw it,
-so a set can be replaced within its own scope) or the console reading liveness
-from `integration_health`, which already records when each server was last
-reached, rather than trusting the list to be current. The second is smaller and
-is probably right: the list answers "what has this installation ever offered",
-and health answers "what answers now", and those are different questions that
-one table is currently being asked to answer at once.
+The second option is what shipped: the list answers "what has this installation
+ever offered" and health answers "what answers now", and one table was being
+asked both at once. Each tool now carries whether its server was observed
+reachable recently, and the tools screen marks the ones nothing offers.
+
+A stale observation counts as silence rather than as a yes. A worker that
+stopped observing — shut down, or reconfigured without that server — leaves its
+last reading behind, and trusting it for ever would report a server as
+answering years after it stopped existing.
+
+Ownership on a published entry is still the better answer if two workers ever
+need to disagree about the same server. It is not needed for this.
 
 ### Queued: remote tool servers
 

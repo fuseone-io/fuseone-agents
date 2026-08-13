@@ -1722,6 +1722,17 @@ export interface components {
             untrusted: boolean;
             /** @description The tool that undoes this one, when the Curator has said which does. */
             compensatedBy?: string;
+            /**
+             * @description Whether the server that offers this tool answers now.
+             *
+             *     The list is what this installation has ever offered; whether a tool
+             *     can actually be called is a fact about the server, and the two are
+             *     different questions. A server that is removed or switched off stops
+             *     offering its tools within a reconcile interval, and the list keeps
+             *     them — an agent cannot call them either way, but a screen that did
+             *     not say so would be listing capabilities nothing has.
+             */
+            offered?: boolean;
         };
         Stop: {
             /** @enum {string} */

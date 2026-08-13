@@ -20,6 +20,7 @@ import {
 import { EffectBadge } from "@/features/admin/effect-badge";
 import { ClassifyDialog } from "@/features/admin/classify-dialog";
 import { useTools, type Tool } from "@/features/admin/api";
+import { Badge } from "@/components/ui/badge";
 
 const HEAD =
   "h-[30px] bg-muted text-2xs uppercase tracking-label text-muted-foreground";
@@ -72,15 +73,32 @@ export function ToolsPanel() {
             {tools.map((tool) => (
               <TableRow key={tool.toolId} className="h-10 border-border-subtle">
                 <TableCell>
-                  <Mono>{tool.toolId}</Mono>
+                  <Mono className={tool.offered === false ? "opacity-60" : ""}>
+                    {tool.toolId}
+                  </Mono>
                   {tool.description && (
                     <div className="truncate text-xs text-muted-foreground">
                       {tool.description}
                     </div>
                   )}
                 </TableCell>
+                {/* The list is what this installation has ever offered and
+                    never shrinks — two workers connected to different servers
+                    would delete each other's rows if it did. Whether a tool
+                    can be called now is a fact about its server, said here
+                    rather than left for somebody to infer from silence. */}
                 <TableCell className="text-muted-foreground">
-                  {tool.server}
+                  <span className="flex items-center gap-1.5">
+                    {tool.server}
+                    {tool.offered === false && (
+                      <Badge
+                        variant="outline"
+                        className="rounded-pill border-transparent bg-warning-surface text-2xs font-normal text-warning"
+                      >
+                        {t("admin.notOffered")}
+                      </Badge>
+                    )}
+                  </span>
                 </TableCell>
                 <TableCell>
                   <EffectBadge effect={tool.effect} />

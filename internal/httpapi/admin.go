@@ -32,6 +32,34 @@ type Tools interface {
 	Tools(ctx context.Context) ([]domain.ToolEntry, error)
 }
 
+/*
+answeringServers is which tool servers were reachable when last observed.
+
+Stale observations count as silence. A worker that stopped observing — because
+it was shut down, or because the server was removed from its configuration —
+leaves its last "reachable" reading behind, and trusting it for ever would
+report a server as answering years after it stopped existing.
+*/
+func (s *Server) answeringServers(ctx context.Context) (map[string]bool, error) {
+	if s.health == nil {
+		// Nothing observes. Every tool reads as offered, because nothing says
+		// otherwise and greying out a working installation for want of a
+		// health store would be worse than saying nothing.
+		return nil, nil
+	}
+	observed, err := s.health.All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("read integration health: %w", err)
+	}
+
+	fresh := clockOr(s.clock).Now().Add(-staleObservation)
+	out := make(map[string]bool, len(observed))
+	for name, h := range observed {
+		out[name] = h.Reachable && h.ObservedAt.After(fresh)
+	}
+	return out, nil
+}
+
 // adminScope is where platform-wide administration is authorised.
 //
 // What a tool does to the world does not vary by who calls it, so a ruling is
@@ -60,6 +88,15 @@ func (s *Server) ListTools(ctx context.Context, _ openapi.ListToolsRequestObject
 		return nil, fmt.Errorf("list tools: %w", err)
 	}
 
+	// Whether each tool's server answers now. The published list is what this
+	// installation has ever offered and it never shrinks — two workers
+	// connected to different servers would delete each other's rows if it did
+	// — so liveness is read from the observations instead.
+	answering, err := s.answeringServers(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	items := make([]openapi.Tool, 0, len(entries))
 	for _, e := range entries {
 		description := e.Description
@@ -70,6 +107,10 @@ func (s *Server) ListTools(ctx context.Context, _ openapi.ListToolsRequestObject
 		if e.CompensatedBy != "" {
 			tool.CompensatedBy = ptr(string(e.CompensatedBy))
 		}
+		// No observations at all means nothing can be said, and everything
+		// reads as offered. With observations, silence about a server is the
+		// answer: it is not answering.
+		tool.Offered = ptr(answering == nil || answering[e.Server])
 		items = append(items, tool)
 	}
 	return openapi.ListTools200JSONResponse{Items: items}, nil
