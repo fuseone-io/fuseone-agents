@@ -1,0 +1,100 @@
+# The stand-in tool servers, in the lab.
+#
+# Two Deployments of one image, because a tool is named after the server it
+# came from: `crm.reply` and `erp.transfer` read as what they are, and policies
+# are written against `crm.*`. The shape of the identifier is part of what this
+# demonstrates.
+#
+# A bearer token on each, not because the lab needs protecting but because the
+# path most installations will actually use carries one — a fixture that
+# accepted anything would leave the credentialed transport exercised nowhere.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: lab-mcp
+type: Opaque
+stringData:
+  crm: lab-crm-token
+  erp: lab-erp-token
+---
+apiVersion: v1
+kind: Service
+metadata: { name: lab-mcp-crm }
+spec:
+  selector: { app: lab-mcp, profile: crm }
+  ports: [{ port: 80, targetPort: 8080 }]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: lab-mcp-erp }
+spec:
+  selector: { app: lab-mcp, profile: erp }
+  ports: [{ port: 80, targetPort: 8080 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: lab-mcp-crm }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: lab-mcp, profile: crm } }
+  template:
+    metadata: { labels: { app: lab-mcp, profile: crm } }
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        # Numeric, and not the image's own `nonroot` name. The kubelet cannot
+        # verify a non-numeric user and refuses the container outright — which
+        # the platform's chart already carries and this fixture had to learn
+        # for itself.
+        runAsUser: 65532
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: mcp
+          image: img.fuseone.io/public/fuseone-agents-labmcp:0.1.0
+          args: ["--profile=crm", "--addr=:8080", "--token=$(TOKEN)"]
+          env:
+            - name: TOKEN
+              valueFrom: { secretKeyRef: { name: lab-mcp, key: crm } }
+          ports: [{ containerPort: 8080 }]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { memory: 128Mi }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: lab-mcp-erp }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: lab-mcp, profile: erp } }
+  template:
+    metadata: { labels: { app: lab-mcp, profile: erp } }
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        # Numeric, and not the image's own `nonroot` name. The kubelet cannot
+        # verify a non-numeric user and refuses the container outright — which
+        # the platform's chart already carries and this fixture had to learn
+        # for itself.
+        runAsUser: 65532
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: mcp
+          image: img.fuseone.io/public/fuseone-agents-labmcp:0.1.0
+          args: ["--profile=erp", "--addr=:8080", "--token=$(TOKEN)"]
+          env:
+            - name: TOKEN
+              valueFrom: { secretKeyRef: { name: lab-mcp, key: erp } }
+          ports: [{ containerPort: 8080 }]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { memory: 128Mi }

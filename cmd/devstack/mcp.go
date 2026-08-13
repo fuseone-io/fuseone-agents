@@ -26,10 +26,54 @@ func serveMCP(args []string) error {
 	// actually use tested nowhere but in production.
 	addr := fs.String("addr", "", "serve over HTTP at this address instead of stdio")
 	token := fs.String("token", "", "require this bearer token, when serving over HTTP")
+	// Which set of tools this process offers.
+	//
+	// Two servers rather than one with everything, because a tool is named
+	// after the server it came from: `crm.reply` and `erp.transfer` read as
+	// what they are, and `lab.transfer` reads as a fixture. Policies are
+	// written against `crm.*`, so the shape of the identifier is part of what
+	// the lab is demonstrating.
+	profile := fs.String("profile", "crm", "which tools to offer: crm or erp")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 
+	server, err := serverFor(*profile)
+	if err != nil {
+		return err
+	}
+
+	if *addr == "" {
+		return server.Run(context.Background(), &mcp.StdioTransport{})
+	}
+
+	handler := mcp.NewStreamableHTTPHandler(
+		func(*http.Request) *mcp.Server { return server }, nil)
+	fmt.Fprintf(os.Stderr, "devstack mcp (%s) listening on %s\n", *profile, *addr)
+
+	srv := &http.Server{
+		Addr:              *addr,
+		Handler:           requireToken(*token, handler),
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	return srv.ListenAndServe()
+}
+
+// serverFor builds one of the two stand-ins.
+func serverFor(profile string) (*mcp.Server, error) {
+	switch profile {
+	case "crm":
+		return crmServer(), nil
+	case "erp":
+		server := mcp.NewServer(&mcp.Implementation{Name: "erp", Version: "0.1.0-dev"}, nil)
+		newERP().register(server)
+		return server, nil
+	default:
+		return nil, fmt.Errorf("unknown profile %q: crm or erp", profile)
+	}
+}
+
+func crmServer() *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{Name: "crm", Version: "0.1.0-dev"}, nil)
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -60,20 +104,7 @@ func serveMCP(args []string) error {
 		Description: "Retract a reply already sent to the customer",
 	}, retractReply)
 
-	if *addr == "" {
-		return server.Run(context.Background(), &mcp.StdioTransport{})
-	}
-
-	handler := mcp.NewStreamableHTTPHandler(
-		func(*http.Request) *mcp.Server { return server }, nil)
-	fmt.Fprintf(os.Stderr, "devstack mcp listening on %s\n", *addr)
-
-	srv := &http.Server{
-		Addr:              *addr,
-		Handler:           requireToken(*token, handler),
-		ReadHeaderTimeout: 10 * time.Second,
-	}
-	return srv.ListenAndServe()
+	return server
 }
 
 // requireToken refuses a request without the bearer the operator configured.
