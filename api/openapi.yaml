@@ -799,6 +799,64 @@ paths:
               schema: { $ref: '#/components/schemas/VerifyResult' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /runs/{runId}/compensation:
+    get:
+      tags: [runs]
+      operationId: getCompensation
+      summary: What undoing this run would do
+      description: |
+        The plan, before anybody performs it. Reverse order — the charge is
+        refunded before the order it paid for is cancelled — with the acts
+        nothing undoes reported rather than dropped, because those are the
+        half somebody has to deal with by hand (PRD SE-08).
+
+        Reading this changes nothing.
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+      responses:
+        '200':
+          description: The plan.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CompensationPlan' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+    post:
+      tags: [runs]
+      operationId: abandonRun
+      summary: End the run and undo what it left standing
+      description: |
+        The one thing that performs a compensation, and it is always a person's
+        decision. A parked run is paused, not failed: compensating one
+        automatically would undo work it was about to resume.
+
+        Every undo crosses the Gate on the narrow rule that you may undo what
+        you were allowed to do. The run ends failed, never finished — an
+        abandoned run did not complete, and the trail must not say it did.
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AbandonRequest' }
+      responses:
+        '200':
+          description: The run ended, with what became of each undo.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CompensationResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: The run has already ended.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
   /approvals:
     get:
       tags: [approvals]
@@ -2985,6 +3043,68 @@ components:
           type: array
           items: { $ref: '#/components/schemas/Step' }
         nextSeq: { type: integer, format: int64, nullable: true }
+
+    CompensationPlan:
+      type: object
+      required: [acts]
+      properties:
+        acts:
+          type: array
+          items: { $ref: '#/components/schemas/CompensationAct' }
+
+    CompensationAct:
+      type: object
+      required: [tool, seq]
+      properties:
+        tool:
+          type: string
+          description: The call being undone.
+        seq:
+          type: integer
+          format: int64
+          description: Where in the run it happened.
+        undo:
+          type: string
+          description: |
+            The tool that takes it back, as the Curator classified it. Absent
+            when nothing does, which is the case a person has to handle.
+
+    CompensationResult:
+      type: object
+      required: [outcomes]
+      properties:
+        outcomes:
+          type: array
+          items:
+            type: object
+            required: [act, done]
+            properties:
+              act: { $ref: '#/components/schemas/CompensationAct' }
+              done:
+                type: boolean
+                description: Whether the undo ran and the tool accepted it.
+              why:
+                type: string
+                description: |
+                  Why it did not. Empty on success. This is the line somebody
+                  acts on: it names something still standing in the world.
+
+    AbandonRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: Why the run cannot go on. Recorded in the trail.
+        compensate:
+          type: boolean
+          default: true
+          description: |
+            Undo what the run left standing. False ends the run and leaves the
+            world as it is — which is sometimes right, and is recorded as the
+            deliberate choice it is.
 
     VerifyResult:
       type: object
