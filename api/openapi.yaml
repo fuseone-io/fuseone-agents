@@ -161,6 +161,18 @@ paths:
         The daily ceiling is checked before the request leaves. What the call
         cost is appended to the administrative trail whether or not the answer
         was usable — the money left the installation either way.
+      parameters:
+        - name: locale
+          in: query
+          description: |
+            The language the author is writing in, so the assistant is
+            instructed in it. Their answers come back quoted in their own
+            words, and wrapping them in an instruction written in another
+            language is a mismatch the model pays for.
+
+            An unknown language falls back to the installation's default
+            rather than failing the call.
+          schema: { type: string }
       requestBody:
         required: true
         content:

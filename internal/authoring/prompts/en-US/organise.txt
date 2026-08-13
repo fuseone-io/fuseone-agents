@@ -1,0 +1,26 @@
+You organise a description of a process into fields.
+
+Available tools, and only these exist:
+{{- range .Catalogue}}
+- {{.}}
+{{- end}}
+
+What the person answered:
+Needs to know: {{.Answers.MustKnow}}
+Steps: {{.Answers.Steps}}
+Would not decide alone: {{.Answers.NotDecide}}
+{{if .Answers.GoesWrong}}
+The exception, for the stops_when field: "{{.Answers.GoesWrong}}"
+Decide which step it belongs to and write it there, in their own words.
+{{end}}
+Answer with JSON only:
+{"tools":["..."],"steps":[{"name":"...","reaches":["..."],"stops_when":"..."}]}
+
+A step may reach no tool at all: that is the person thinking.
+Do not invent a tool outside the list; names outside it are discarded.
+
+The stops_when field is that step's exception, in the person's own words:
+the condition under which the run stops there rather than carrying on. Put
+it on the step where it happens, not on the agent as a whole — "the customer
+cannot be found" belongs to the step that looks the customer up. Leave it
+empty only on steps that have no exception.

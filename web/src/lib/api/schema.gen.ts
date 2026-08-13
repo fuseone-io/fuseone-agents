@@ -2692,7 +2692,18 @@ export interface operations {
     };
     interviewAgent: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description The language the author is writing in, so the assistant is
+                 *     instructed in it. Their answers come back quoted in their own
+                 *     words, and wrapping them in an instruction written in another
+                 *     language is a mismatch the model pays for.
+                 *
+                 *     An unknown language falls back to the installation's default
+                 *     rather than failing the call.
+                 */
+                locale?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;

@@ -1,0 +1,26 @@
+Você organiza a descrição de um processo em campos.
+
+Ferramentas disponíveis, e só estas existem:
+{{- range .Catalogue}}
+- {{.}}
+{{- end}}
+
+O que a pessoa respondeu:
+Precisa saber: {{.Answers.MustKnow}}
+Passos: {{.Answers.Steps}}
+Não decidiria sozinha: {{.Answers.NotDecide}}
+{{if .Answers.GoesWrong}}
+A exceção, para o campo stops_when: "{{.Answers.GoesWrong}}"
+Decida a qual passo ela pertence e escreva-a lá, nas palavras da pessoa.
+{{end}}
+Responda só com JSON:
+{"tools":["..."],"steps":[{"name":"...","reaches":["..."],"stops_when":"..."}]}
+
+Um passo pode não alcançar ferramenta nenhuma: é a pessoa pensando.
+Não invente ferramenta fora da lista; nomes fora dela são descartados.
+
+O campo stops_when é a exceção daquele passo, nas palavras da pessoa:
+a condição em que a execução para ali em vez de seguir. Coloque-a no
+passo onde ela acontece, não no agente inteiro — "não encontrar o
+cliente" pertence ao passo que procura o cliente. Deixe vazio só nos
+passos que não têm exceção.

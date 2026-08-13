@@ -100,6 +100,9 @@ type Job struct {
 	SpentToday int64
 	Answers    Answers
 	Catalogue  []domain.ToolID
+	// Locale is the language the author is writing in, so the assistant is
+	// instructed in it. Empty is the installation's default.
+	Locale string
 }
 
 // Result is what came back, and what it cost.
@@ -128,7 +131,12 @@ func Translate(ctx context.Context, job Job) (Result, error) {
 		return Result{}, ErrOverCeiling
 	}
 
-	out, err := job.Completer.Complete(ctx, Prompt(job.Answers, job.Catalogue))
+	prompt, err := organisePrompt(job.Locale, job.Answers, job.Catalogue)
+	if err != nil {
+		return Result{}, err
+	}
+
+	out, err := job.Completer.Complete(ctx, prompt)
 	if err != nil {
 		return Result{Cost: out.Cost}, err
 	}
@@ -163,7 +171,12 @@ because the cheap half answered nonsense would spend the call and return
 nothing.
 */
 func place(ctx context.Context, job Job, steps []spec.Step) ([]spec.Step, domain.Cost) {
-	out, err := job.Completer.Complete(ctx, placePrompt(job.Answers.GoesWrong, steps))
+	prompt, err := placePrompt(job.Locale, job.Answers.GoesWrong, steps)
+	if err != nil {
+		return steps, domain.Cost{}
+	}
+
+	out, err := job.Completer.Complete(ctx, prompt)
 	if err != nil {
 		return steps, out.Cost
 	}
@@ -188,61 +201,4 @@ func place(ctx context.Context, job Job, steps []spec.Step) ([]spec.Step, domain
 
 	steps[placed.Step].StopsWhen = placed.StopsWhen
 	return steps, out.Cost
-}
-
-func placePrompt(exception string, steps []spec.Step) string {
-	var b strings.Builder
-	b.WriteString("Uma pessoa descreveu um processo em passos:\n")
-	for i, step := range steps {
-		b.WriteString(fmt.Sprintf("%d: %s\n", i, step.Name))
-	}
-	b.WriteString("\nE disse o que costuma dar errado:\n\"" + exception + "\"\n")
-	b.WriteString(`
-Em qual passo isso acontece? Responda só com JSON:
-{"step":<número do passo>,"stops_when":"<a condição, nas palavras dela>"}
-`)
-	return b.String()
-}
-
-/*
-Prompt is what the assistant is asked.
-
-It names the tools that exist and says the reply is read against them. That is
-not a hint the model may take or leave — Read enforces it — but saying so
-turns a silently discarded invention into an answer that fits the first time,
-for the price of a few words.
-*/
-func Prompt(a Answers, catalogue []domain.ToolID) string {
-	var b strings.Builder
-	b.WriteString("Você organiza a descrição de um processo em campos.\n\n")
-	b.WriteString("Ferramentas disponíveis, e só estas existem:\n")
-	for _, tool := range catalogue {
-		b.WriteString("- " + string(tool) + "\n")
-	}
-	b.WriteString("\nO que a pessoa respondeu:\n")
-	b.WriteString("Precisa saber: " + a.MustKnow + "\n")
-	b.WriteString("Passos: " + a.Steps + "\n")
-	b.WriteString("Não decidiria sozinha: " + a.NotDecide + "\n")
-
-	// Placed beside the field it fills rather than in a list of answers. Given
-	// as one answer among four, the exception came back unattached to any
-	// step and the author's "aviso e paro" was simply lost.
-	if a.GoesWrong != "" {
-		b.WriteString("\nA exceção, para o campo stops_when: \"" + a.GoesWrong + "\"\n")
-		b.WriteString("Decida a qual passo ela pertence e escreva-a lá, nas palavras da pessoa.\n")
-	}
-	b.WriteString(`
-Responda só com JSON:
-{"tools":["..."],"steps":[{"name":"...","reaches":["..."],"stops_when":"..."}]}
-
-Um passo pode não alcançar ferramenta nenhuma: é a pessoa pensando.
-Não invente ferramenta fora da lista; nomes fora dela são descartados.
-
-O campo stops_when é a exceção daquele passo, nas palavras da pessoa:
-a condição em que a execução para ali em vez de seguir. Coloque-a no
-passo onde ela acontece, não no agente inteiro — "não encontrar o
-cliente" pertence ao passo que procura o cliente. Deixe vazio só nos
-passos que não têm exceção.
-`)
-	return b.String()
 }

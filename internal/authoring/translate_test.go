@@ -153,19 +153,56 @@ func TestTranslate_reportsWhatItSpent_evenWhenTheReplyIsUnreadable(t *testing.T)
 	}
 }
 
-func TestPrompt_asksForTheExceptionOnTheStepItBelongsTo(t *testing.T) {
+func TestTranslate_asksForTheExceptionOnTheStepItBelongsTo(t *testing.T) {
 	t.Parallel()
-
-	got := authoring.Prompt(authoring.Answers{
-		GoesWrong: "às vezes o cliente não está cadastrado; aí eu aviso e paro",
-	}, catalogue)
 
 	// FU-04 is answered per step, and a run that ends "the customer was not
 	// found" has to be anchored where it happened. Asked for loosely, the
 	// model returns four steps with an empty stops_when and the author's
 	// exception is simply lost.
-	if !strings.Contains(got, "stops_when") || !strings.Contains(got, "exceç") {
-		t.Errorf("the prompt does not ask for the exception per step:\n%s", got)
+	//
+	// Asserted through what the completer actually received, in every language
+	// this installation prompts in: a prompt that lost the instruction in
+	// translation loses the anchor with it.
+	for _, locale := range []string{"pt-BR", "en-US"} {
+		fake := &fakeCompleter{reply: `{"tools":[],"steps":[]}`}
+		_, err := authoring.Translate(t.Context(), authoring.Job{
+			Completer: fake, Choice: authoring.Choice{DailyMicros: 1_000_000, Enabled: true}, Locale: locale,
+			Catalogue: catalogue,
+			Answers: authoring.Answers{
+				GoesWrong: "às vezes o cliente não está cadastrado; aí eu aviso e paro",
+			},
+		})
+		if err != nil {
+			t.Fatalf("Translate(%s): %v", locale, err)
+		}
+		if len(fake.prompts) == 0 {
+			t.Fatalf("%s: nothing was asked", locale)
+		}
+		if !strings.Contains(fake.prompts[0], "stops_when") {
+			t.Errorf("%s: the prompt does not name the field:\n%s", locale, fake.prompts[0])
+		}
+		if !strings.Contains(fake.prompts[0], "cadastrado") {
+			t.Errorf("%s: the author's own words did not reach the prompt", locale)
+		}
+	}
+}
+
+func TestTranslate_aLanguageNobodyShips_promptsInTheDefault(t *testing.T) {
+	t.Parallel()
+
+	// A console in a third language still authors agents. Falling back beats
+	// failing the call, and beats sending an empty prompt.
+	fake := &fakeCompleter{reply: `{"tools":[],"steps":[]}`}
+	if _, err := authoring.Translate(t.Context(), authoring.Job{
+		Completer: fake, Choice: authoring.Choice{DailyMicros: 1_000_000, Enabled: true}, Locale: "de-DE", Catalogue: catalogue,
+		Answers: authoring.Answers{Steps: "primeiro isto, depois aquilo"},
+	}); err != nil {
+		t.Fatalf("Translate: %v", err)
+	}
+
+	if len(fake.prompts) == 0 || !strings.Contains(fake.prompts[0], "stops_when") {
+		t.Error("an unshipped language did not fall back to a usable prompt")
 	}
 }
 

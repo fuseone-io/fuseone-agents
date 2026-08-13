@@ -1,0 +1,10 @@
+A person described a process in steps:
+{{- range $i, $step := .Steps}}
+{{$i}}: {{$step.Name}}
+{{- end}}
+
+And said what usually goes wrong:
+"{{.Exception}}"
+
+Which step does that happen in? Answer with JSON only:
+{"step":<the step number>,"stops_when":"<the condition, in their own words>"}

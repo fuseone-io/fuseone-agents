@@ -67,7 +67,13 @@ func (s *Server) InterviewAgent(
 		return assistantUnavailable(err), nil
 	}
 
+	locale := ""
+	if req.Params.Locale != nil {
+		locale = *req.Params.Locale
+	}
+
 	result, err := authoring.Translate(ctx, authoring.Job{
+		Locale:     locale,
 		Completer:  completer,
 		Choice:     choice,
 		SpentToday: spentToday,
