@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api, unwrap } from "@/lib/api/client";
 import { runKeys } from "@/features/runs/api";
+import { problemMessage } from "@/lib/api/problem-message";
 
 /**
  * Returns a parked run to the queue (PRD FO-04).
@@ -52,7 +53,7 @@ export function ResumeButton({ runId }: { runId: string }) {
     },
     onError: (error: unknown) =>
       toast.error(
-        error instanceof Error ? error.message : t("runs.resumeFailed"),
+        problemMessage(error, t),
       ),
   });
 

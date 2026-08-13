@@ -1460,9 +1460,26 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** @description RFC 9457 problem detail. */
+        /**
+         * @description RFC 9457 problem detail.
+         *
+         *     `type` carries a stable code — `fuseone:invalid-classification` — and is
+         *     the field a client should branch on. It is what makes this refusal
+         *     readable by a caller that is not the console and by a console in a
+         *     language this server does not hold: the server names the condition, the
+         *     reader chooses the words.
+         *
+         *     `title` is a fallback for a client that knows no codes, in English. It
+         *     is not translated and must not be parsed.
+         *
+         *     `detail` carries the particulars — an identifier, a permission, a scope
+         *     — so a client can render its own sentence around them.
+         */
         Problem: {
-            /** @default about:blank */
+            /**
+             * @description A stable `fuseone:` code, or about:blank when there is none.
+             * @default about:blank
+             */
             type: string;
             title: string;
             status: number;

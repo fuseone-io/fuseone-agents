@@ -3,7 +3,6 @@ package httpapi
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"strings"
 
 	"github.com/fuseone/agents/internal/auth"
@@ -55,8 +54,7 @@ func (s *Server) PutBudget(ctx context.Context, req openapi.PutBudgetRequestObje
 	if !ok {
 		return openapi.PutBudget400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-				problem(http.StatusBadRequest, "Escopo inválido",
-					"use installation, uma empresa, ou empresa/área")),
+				invalid("scope must be installation, a company, or company/area")),
 		}, nil
 	}
 
@@ -77,7 +75,7 @@ func (s *Server) PutBudget(ctx context.Context, req openapi.PutBudgetRequestObje
 	if err := s.ceilings.Put(ctx, caller, budget); err != nil {
 		return openapi.PutBudget400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-				problem(http.StatusBadRequest, "Não foi possível definir o teto", err.Error())),
+				notStored(err.Error())),
 		}, nil
 	}
 	return openapi.PutBudget204Response{}, nil

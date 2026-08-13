@@ -4,6 +4,7 @@ import { AlertCircle, Inbox, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api/client";
+import { problemMessage } from "@/lib/api/problem-message";
 
 // Every view that loads data owes the reader four states. These are the three
 // that are easy to skip, so they live here and are cheap to reach for.
@@ -52,6 +53,10 @@ export function ErrorState({
 }) {
   const { t } = useTranslation();
   const problem = error instanceof ApiError ? error : undefined;
+  // The words are this console's; the particulars are the server's. Showing
+  // the server's own sentence meant showing Portuguese to an English reader
+  // for half the refusals and English to a Portuguese one for the other half.
+  const message = problemMessage(error, t);
   return (
     <div
       role="alert"
@@ -59,7 +64,7 @@ export function ErrorState({
     >
       <div className="flex items-center gap-2 font-medium text-destructive">
         <AlertCircle className="size-4" />
-        {problem?.message ?? t("common.loadFailed")}
+        {message}
       </div>
       <p className="text-sm text-muted-foreground">
         {problem?.detail ?? t("common.loadFailedHint")}

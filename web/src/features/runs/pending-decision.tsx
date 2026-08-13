@@ -14,6 +14,7 @@ import { useDecideApproval, useStepContent } from "@/features/runs/api";
 import { formatRelative } from "@/lib/format";
 import { explainRule } from "@/lib/gate-rules";
 import type { PendingApproval, Step } from "@/lib/api/client";
+import { problemMessage } from "@/lib/api/problem-message";
 
 /**
  * The taint the arguments carry, as recorded with the request.
@@ -57,7 +58,7 @@ export function PendingDecision({
           toast.success(approved ? t("runs.actionApproved") : "Ação recusada"),
         onError: (error) =>
           toast.error(t("runs.decisionFailed"), {
-            description: error instanceof Error ? error.message : undefined,
+            description: problemMessage(error, t),
           }),
       },
     );

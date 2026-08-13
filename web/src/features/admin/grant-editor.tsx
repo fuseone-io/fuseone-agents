@@ -10,6 +10,7 @@ import {
   type GrantInput,
   type Person,
 } from "@/features/admin/people-api";
+import { problemMessage } from "@/lib/api/problem-message";
 
 /**
  * What somebody was given directly.
@@ -51,7 +52,7 @@ export function GrantEditor({
         },
         onError: (error) =>
           toast.error(t("people.saveFailed"), {
-            description: error instanceof Error ? error.message : undefined,
+            description: problemMessage(error, t),
           }),
       },
     );

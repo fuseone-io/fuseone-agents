@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/form";
 import { useRegisterScope } from "@/features/scope/api";
 import { useMe } from "@/features/session/api";
+import { problemMessage } from "@/lib/api/problem-message";
 
 const schema = z.object({
   company: z.string().min(1, "admin.sayCompany"),
@@ -63,7 +64,7 @@ export function AreaForm({ onClose }: { onClose: () => void }) {
       onClose();
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : t("admin.declareFailed"),
+        problemMessage(error, t),
       );
     }
   }

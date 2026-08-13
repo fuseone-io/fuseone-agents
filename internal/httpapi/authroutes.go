@@ -69,7 +69,7 @@ func (a *AuthRoutes) providers(w http.ResponseWriter, r *http.Request) {
 		// or the operator holding that token has nowhere to type it.
 		open, err := a.bootstrap.Open(r.Context())
 		if err != nil {
-			writeProblemJSON(w, http.StatusInternalServerError, "Could not read setup state", err.Error())
+			writeProblemJSON(w, http.StatusInternalServerError, CodeUnavailable, "Could not read setup state", err.Error())
 			return
 		}
 		out.BootstrapPending = open
@@ -81,7 +81,7 @@ func (a *AuthRoutes) providers(w http.ResponseWriter, r *http.Request) {
 func (a *AuthRoutes) start(w http.ResponseWriter, r *http.Request) {
 	provider := r.PathValue("provider")
 	if err := a.oidc.Start(w, r, provider, r.URL.Query().Get("returnTo")); err != nil {
-		writeProblemJSON(w, http.StatusBadRequest, "Cannot start sign-in", err.Error())
+		writeProblemJSON(w, http.StatusBadRequest, CodeInvalidInput, "Cannot start sign-in", err.Error())
 	}
 }
 
@@ -91,7 +91,7 @@ func (a *AuthRoutes) callback(w http.ResponseWriter, r *http.Request) {
 
 	identity, err := a.oidc.Complete(r.Context(), w, r, providerID)
 	if err != nil {
-		writeProblemJSON(w, http.StatusUnauthorized, "Sign-in failed", err.Error())
+		writeProblemJSON(w, http.StatusUnauthorized, CodeSignInFailed, "Sign-in failed", err.Error())
 		return
 	}
 
@@ -103,14 +103,14 @@ func (a *AuthRoutes) callback(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if provider == nil {
-		writeProblemJSON(w, http.StatusBadRequest, "Unknown provider", providerID)
+		writeProblemJSON(w, http.StatusBadRequest, CodeInvalidInput, "Unknown provider", providerID)
 		return
 	}
 
 	principalID, err := a.dir.UpsertPrincipal(r.Context(),
 		identity.Provider, identity.Subject, identity.Display, identity.Email)
 	if err != nil {
-		writeProblemJSON(w, http.StatusInternalServerError, "Could not record the sign-in", err.Error())
+		writeProblemJSON(w, http.StatusInternalServerError, CodeNotStored, "Could not record the sign-in", err.Error())
 		return
 	}
 
@@ -118,21 +118,21 @@ func (a *AuthRoutes) callback(w http.ResponseWriter, r *http.Request) {
 	// access on their next sign-in rather than keeping it for ever.
 	grants := provider.GrantsFor(identity.Groups)
 	if err := a.dir.ReplaceAssertedGrants(r.Context(), principalID, providerID, grants); err != nil {
-		writeProblemJSON(w, http.StatusInternalServerError, "Could not apply access", err.Error())
+		writeProblemJSON(w, http.StatusInternalServerError, CodeNotStored, "Could not apply access", err.Error())
 		return
 	}
 
 	if len(grants) == 0 {
 		// Authenticated but granted nothing. Saying so plainly is far kinder
 		// than an empty console the person cannot explain.
-		writeProblemJSON(w, http.StatusForbidden, "No access granted",
+		writeProblemJSON(w, http.StatusForbidden, CodeForbidden, "No access granted",
 			"Your sign-in worked, but none of your groups map to a role. Ask an administrator to map "+
 				strings.Join(identity.Groups, ", ")+" to a company, area and role.")
 		return
 	}
 
 	if err := a.issueSession(r.Context(), w, r, principalID); err != nil {
-		writeProblemJSON(w, http.StatusInternalServerError, "Could not start the session", err.Error())
+		writeProblemJSON(w, http.StatusInternalServerError, CodeNotStored, "Could not start the session", err.Error())
 		return
 	}
 
@@ -142,7 +142,7 @@ func (a *AuthRoutes) callback(w http.ResponseWriter, r *http.Request) {
 // claimBootstrap exchanges the first-run token for the first administrator.
 func (a *AuthRoutes) claimBootstrap(w http.ResponseWriter, r *http.Request) {
 	if a.bootstrap == nil {
-		writeProblemJSON(w, http.StatusGone, "Setup is not available", "this installation has no setup path")
+		writeProblemJSON(w, http.StatusGone, CodeConflict, "Setup is not available", "this installation has no setup path")
 		return
 	}
 
@@ -151,7 +151,7 @@ func (a *AuthRoutes) claimBootstrap(w http.ResponseWriter, r *http.Request) {
 		Display string `json:"display"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&body); err != nil {
-		writeProblemJSON(w, http.StatusBadRequest, "Invalid request", err.Error())
+		writeProblemJSON(w, http.StatusBadRequest, CodeInvalidInput, "Invalid request", err.Error())
 		return
 	}
 
@@ -164,14 +164,14 @@ func (a *AuthRoutes) claimBootstrap(w http.ResponseWriter, r *http.Request) {
 			// permanently, which is what the caller needs to know.
 			status = http.StatusGone
 		}
-		writeProblemJSON(w, status, "Setup failed", err.Error())
+		writeProblemJSON(w, status, CodeNotStored, "Setup failed", err.Error())
 		return
 	}
 
 	expires := time.Now().Add(auth.SessionTTL)
 	auth.SetCookie(w, session.Secret, expires, a.secure)
 	if err := a.issueCSRF(w, expires); err != nil {
-		writeProblemJSON(w, http.StatusInternalServerError, "Could not start the session", err.Error())
+		writeProblemJSON(w, http.StatusInternalServerError, CodeNotStored, "Could not start the session", err.Error())
 		return
 	}
 
@@ -254,7 +254,7 @@ func meFrom(p domain.Principal) Me {
 func MeHandler(w http.ResponseWriter, r *http.Request) {
 	principal, ok := auth.PrincipalFrom(r.Context())
 	if !ok {
-		writeProblemJSON(w, http.StatusUnauthorized, "Not signed in", "no session")
+		writeProblemJSON(w, http.StatusUnauthorized, CodeNotSignedIn, "Not signed in", "no session")
 		return
 	}
 	writeJSON(w, http.StatusOK, meFrom(principal))
@@ -282,12 +282,23 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 	_ = json.NewEncoder(w).Encode(body)
 }
 
-func writeProblemJSON(w http.ResponseWriter, status int, title, detail string) {
+/*
+writeProblemJSON is the refusal written by the routes that are not generated
+from the contract: signing in, setting up, and receiving a webhook.
+
+It carries a code like every other refusal, so the console translates rather
+than rendering whatever English the server holds. The webhook refusals are the
+one place where the prose is the point: their reader is an integrator looking
+at a raw response, and the detail tells them what header to send.
+*/
+func writeProblemJSON(w http.ResponseWriter, status int, code Code, title, detail string) {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"title": title, "status": status, "detail": detail,
-	})
+	body := map[string]any{"title": title, "status": status, "detail": detail}
+	if code != "" {
+		body["type"] = string(code)
+	}
+	_ = json.NewEncoder(w).Encode(body)
 }
 
 // OpenInstallation answers for a server running with no identity at all.

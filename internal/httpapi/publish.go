@@ -57,7 +57,7 @@ func (s *Server) PublishAgent(
 	if err != nil {
 		return openapi.PublishAgent400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-				problem(400, "A definição não pode ser publicada", err.Error())),
+				invalid(err.Error())),
 		}, nil
 	}
 

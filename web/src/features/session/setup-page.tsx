@@ -16,6 +16,8 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { AuthLayout } from "@/features/session/auth-layout";
+import { ApiError } from "@/lib/api/client";
+import { problemMessage } from "@/lib/api/problem-message";
 
 const schema = z.object({
   token: z.string().min(1, "session.pasteToken"),
@@ -47,7 +49,7 @@ export function SetupPage({ onClaimed }: { onClaimed: () => void }) {
     if (!response.ok) {
       const problem = await response.json().catch(() => undefined);
       form.setError("token", {
-        message: problem?.detail ?? t("session.setupFailed"),
+        message: problemMessage(new ApiError(response.status, problem), t),
       });
       return;
     }

@@ -45,8 +45,7 @@ func (s *Server) SetAgentStage(
 
 	stage := domain.Stage(req.Body.Stage)
 	if !stage.Valid() {
-		return openapi.SetAgentStage400ApplicationProblemPlusJSONResponse(problem(
-			http.StatusBadRequest, "Not a stage", fmt.Sprintf("%q is not a stage", stage))), nil
+		return openapi.SetAgentStage400ApplicationProblemPlusJSONResponse(invalid(fmt.Sprintf("%q is not a stage", stage))), nil
 	}
 
 	if refused := s.earnedItsWayOut(ctx, domain.AgentID(req.AgentId), stage); refused != nil {
@@ -90,8 +89,8 @@ func (s *Server) earnedItsWayOut(
 	if err != nil || simulated {
 		return nil
 	}
-	return openapi.SetAgentStage400ApplicationProblemPlusJSONResponse(problem(
-		http.StatusBadRequest, "Not simulated yet",
-		"An agent leaves Draft by being run against occurrences that already happened. Simulate it first.",
-	))
+	// Its own code: the console tells the author how to leave Draft, which is
+	// a sentence with a link in it rather than a translated error string.
+	return openapi.SetAgentStage400ApplicationProblemPlusJSONResponse(
+		refusal(http.StatusBadRequest, CodeNotSimulated, "Not simulated yet", string(agent)))
 }

@@ -35,6 +35,7 @@ import {
   usePutProvider,
   type ModelProvider,
 } from "@/features/integrations/api";
+import { problemMessage } from "@/lib/api/problem-message";
 
 const schema = z.object({
   name: z.string().min(1, "integrations.nameProvider"),
@@ -96,7 +97,7 @@ export function ProviderForm({
       onClose();
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : t("common.saveFailed"),
+        problemMessage(error, t),
       );
     }
   }

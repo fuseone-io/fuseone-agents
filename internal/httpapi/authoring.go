@@ -3,7 +3,6 @@ package httpapi
 import (
 	"context"
 	"errors"
-	"net/http"
 
 	"github.com/fuseone/agents/internal/authoring"
 	"github.com/fuseone/agents/internal/domain"
@@ -72,13 +71,13 @@ func (s *Server) SetAuthoring(
 	if errors.Is(err, authoring.ErrNoProvider) || errors.Is(err, authoring.ErrNoCeiling) {
 		return openapi.SetAuthoring400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-				problem(http.StatusBadRequest, "Provedor desconhecido", err.Error())),
+				invalid(err.Error())),
 		}, nil
 	}
 	if err != nil {
 		return openapi.SetAuthoring400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-				problem(http.StatusBadRequest, "Escolha inválida", err.Error())),
+				invalid(err.Error())),
 		}, nil
 	}
 	return openapi.SetAuthoring204Response{}, nil

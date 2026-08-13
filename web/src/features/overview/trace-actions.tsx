@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmAction } from "@/features/runs/confirm-action";
 import { useDecideApproval } from "@/features/runs/api";
 import type { PendingApproval } from "@/lib/api/client";
+import { problemMessage } from "@/lib/api/problem-message";
 
 /**
  * Approve or refuse, pinned to the bottom of the trace.
@@ -31,7 +32,7 @@ export function TraceActions({
           toast.success(approved ? t("runs.actionApproved") : "Ação recusada"),
         onError: (error) =>
           toast.error(t("runs.decisionFailed"), {
-            description: error instanceof Error ? error.message : undefined,
+            description: problemMessage(error, t),
           }),
       },
     );

@@ -310,6 +310,7 @@
     "nothingFound": "Nothing found",
     "remove": "Remove",
     "removeFailed": "Could not remove",
+    "requestFailed": "The request failed.",
     "retry": "Try again",
     "save": "Save",
     "saveFailed": "Could not save",
@@ -702,6 +703,19 @@
     "unsavedChanges_other": "{{count}} changes not saved",
     "willApplyAfterReload": "It applies at the next agent step once the workers reload the set.",
     "willBeMonitored": "It will be evaluated at every step its scope covers, recorded in the trail, and will change no decision."
+  },
+  "problem": {
+    "conflict": "That does not hold for the current state: {{detail}}",
+    "forbidden": "Not permitted — this action requires {{detail}}",
+    "invalid-input": "The request could not be accepted: {{detail}}",
+    "not-found": "Not found: {{detail}}",
+    "not-signed-in": "Your session has ended. Sign in again.",
+    "not-simulated": "An agent leaves Draft by being run against occurrences that already happened. Simulate it first.",
+    "not-stored": "It could not be saved: {{detail}}",
+    "saved-not-reachable": "Saved, but nobody can sign in with it yet: {{detail}}",
+    "sign-in-failed": "Sign-in failed: {{detail}}",
+    "unavailable": "Unavailable right now: {{detail}}",
+    "upstream-refused": "The system on the other side refused: {{detail}}"
   },
   "retention": {
     "byDefault": "default, nobody chose it",

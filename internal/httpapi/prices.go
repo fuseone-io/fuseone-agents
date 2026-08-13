@@ -3,7 +3,6 @@ package httpapi
 import (
 	"context"
 	"errors"
-	"net/http"
 
 	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/domain"
@@ -65,7 +64,7 @@ func (s *Server) PutPrice(
 	if errors.Is(err, admin.ErrNoModel) {
 		return openapi.PutPrice400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-				problem(http.StatusBadRequest, "Tarifa incompleta", err.Error())),
+				invalid(err.Error())),
 		}, nil
 	}
 	if err != nil {

@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { useScopes } from "@/features/scope/api";
 import { useSetStop, useStops } from "@/features/admin/stops-api";
+import { problemMessage } from "@/lib/api/problem-message";
 
 /** "" is the whole installation; anything else is `company/area`. */
 const EVERYTHING = "";
@@ -64,7 +65,7 @@ export function StopButton() {
         },
         onError: (error: unknown) =>
           toast.error(
-            error instanceof Error ? error.message : t("stops.stopFailed"),
+            problemMessage(error, t),
           ),
       },
     );

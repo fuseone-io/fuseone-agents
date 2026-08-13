@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
-	"net/http"
 
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
@@ -64,7 +63,7 @@ func (s *Server) StartSimulation(
 		// The whole file, named line and all. Running forty-nine of fifty and
 		// mentioning nothing gives an author coverage that is a lie.
 		return openapi.StartSimulation400ApplicationProblemPlusJSONResponse(
-			problem(http.StatusBadRequest, "Case set refused", err.Error())), nil
+			invalid(err.Error())), nil
 	}
 
 	opened, err := simulate.Open(ctx, s.opener(), simulate.Batch{
@@ -80,9 +79,8 @@ func (s *Server) StartSimulation(
 		// Every case refused for the same reason — a paused agent, most
 		// likely. Answering 202 with nothing behind it would leave the author
 		// polling a report that will never have a row.
-		return openapi.StartSimulation409ApplicationProblemPlusJSONResponse(problem(
-			http.StatusConflict, "Nothing could be simulated", firstOr(opened.Failed, "no case opened a run"),
-		)), nil
+		return openapi.StartSimulation409ApplicationProblemPlusJSONResponse(
+			conflicted(firstOr(opened.Failed, "no case opened a run"))), nil
 	}
 
 	return openapi.StartSimulation202JSONResponse{Id: id, Cases: len(opened.Runs)}, nil

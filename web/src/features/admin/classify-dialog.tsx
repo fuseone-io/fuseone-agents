@@ -15,6 +15,7 @@ import {
   type Ruling,
 } from "@/features/admin/classify-fields";
 import { useClassifyTool, type Tool } from "@/features/admin/api";
+import { problemMessage } from "@/lib/api/problem-message";
 
 const BLANK: Ruling = {
   effect: "read",
@@ -58,7 +59,7 @@ export function ClassifyDialog({
       onClose();
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : t("admin.recordFailed"),
+        problemMessage(error, t),
       );
     }
   }

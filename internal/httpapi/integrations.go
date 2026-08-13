@@ -3,7 +3,6 @@ package httpapi
 import (
 	"context"
 	"errors"
-	"net/http"
 
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
@@ -54,7 +53,7 @@ func (s *Server) PutMCPServer(ctx context.Context, req openapi.PutMCPServerReque
 	if err := s.integrations.PutMCPServer(ctx, caller, adminScope, server, token); err != nil {
 		return openapi.PutMCPServer400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-				problem(http.StatusBadRequest, "Tool server refused", err.Error())),
+				upstreamRefused(err.Error())),
 		}, nil
 	}
 	return openapi.PutMCPServer204Response{}, nil
@@ -105,7 +104,7 @@ func (s *Server) PutModelProvider(ctx context.Context, req openapi.PutModelProvi
 	if err := s.integrations.PutProvider(ctx, caller, adminScope, provider, apiKey); err != nil {
 		return openapi.PutModelProvider400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-				problem(http.StatusBadRequest, "Não foi possível configurar", err.Error())),
+				notStored(err.Error())),
 		}, nil
 	}
 	return openapi.PutModelProvider204Response{}, nil

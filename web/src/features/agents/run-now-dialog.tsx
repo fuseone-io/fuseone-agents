@@ -16,6 +16,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useStartRun } from "@/features/agents/start-run";
+import { problemMessage } from "@/lib/api/problem-message";
 
 /**
  * Opens a run, with what it is about.
@@ -48,7 +49,7 @@ export function RunNowDialog({
       },
       onError: (error) =>
         toast.error(t("agents.runFailed"), {
-          description: error instanceof Error ? error.message : undefined,
+          description: problemMessage(error, t),
         }),
     });
   };

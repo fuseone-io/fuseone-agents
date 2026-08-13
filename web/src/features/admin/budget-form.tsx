@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/select";
 import { usePutBudget, type ScopeBudget } from "@/features/admin/api";
 import { scopePath } from "@/features/admin/budget-scope";
+import { problemMessage } from "@/lib/api/problem-message";
 
 const schema = z.object({
   scope: z.string().min(1, "admin.sayScope"),
@@ -85,7 +86,7 @@ export function BudgetForm({
       onClose();
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : t("common.saveFailed"),
+        problemMessage(error, t),
       );
     }
   }

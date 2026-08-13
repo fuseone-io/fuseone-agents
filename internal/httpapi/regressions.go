@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"net/http"
 
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
@@ -83,7 +82,7 @@ func (s *Server) RecordRegression(
 	input, err := s.occurrenceOf(ctx, domain.RunID(req.Body.RunId))
 	if err != nil {
 		return openapi.RecordRegression400ApplicationProblemPlusJSONResponse(
-			problem(http.StatusBadRequest, "The run has no occurrence to keep", err.Error())), nil
+			invalid(err.Error())), nil
 	}
 
 	// Copied into the corpus rather than pointed at inside the run: runs are
@@ -109,7 +108,7 @@ func (s *Server) RecordRegression(
 
 	if err := s.regressions.Record(ctx, recorded); err != nil {
 		return openapi.RecordRegression400ApplicationProblemPlusJSONResponse(
-			problem(http.StatusBadRequest, "Correction refused", err.Error())), nil
+			invalid(err.Error())), nil
 	}
 	return openapi.RecordRegression201JSONResponse(toRegressionCase(recorded)), nil
 }

@@ -89,7 +89,7 @@ func (s *Server) PutPolicy(
 	if err != nil {
 		return openapi.PutPolicy400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-				problem(400, "A política não pode ser gravada", err.Error())),
+				notStored(err.Error())),
 		}, nil
 	}
 
@@ -165,7 +165,7 @@ func (s *Server) SimulatePolicy(
 	if err != nil {
 		return openapi.SimulatePolicy400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-				problem(400, "A regra não pode ser simulada", err.Error())),
+				invalid(err.Error())),
 		}, nil
 	}
 

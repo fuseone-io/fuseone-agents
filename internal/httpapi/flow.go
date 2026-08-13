@@ -36,7 +36,7 @@ func (s *Server) CheckDataFlow(ctx context.Context, req openapi.CheckDataFlowReq
 	if err != nil {
 		return openapi.CheckDataFlow400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-				problem(400, "Invalid definition", err.Error())),
+				invalid(err.Error())),
 		}, nil
 	}
 

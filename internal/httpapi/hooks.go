@@ -55,7 +55,7 @@ func (h *Hooks) receive(w http.ResponseWriter, r *http.Request) {
 		if err != nil && !errors.Is(err, trigger.ErrNoHook) && !errors.Is(err, trigger.ErrNotArmed) {
 			h.log.Error("could not verify a webhook", "path", path, "err", err)
 		}
-		writeProblemJSON(w, http.StatusUnauthorized, "Rejected", "The secret is missing or wrong.")
+		writeProblemJSON(w, http.StatusUnauthorized, CodeForbidden, "Rejected", "The secret is missing or wrong.")
 		return
 	}
 
@@ -63,7 +63,7 @@ func (h *Hooks) receive(w http.ResponseWriter, r *http.Request) {
 	if delivery == "" {
 		// Stated plainly, because the sender's integrator is the only person
 		// who can fix it and they are reading this response.
-		writeProblemJSON(w, http.StatusBadRequest, "A delivery identifier is required",
+		writeProblemJSON(w, http.StatusBadRequest, CodeInvalidInput, "A delivery identifier is required",
 			"Send a value unique to this delivery in the "+deliveryHeader+" header, and repeat "+
 				"the same value on every retry of it. Without one a redelivery opens a second run.")
 		return
@@ -71,13 +71,13 @@ func (h *Hooks) receive(w http.ResponseWriter, r *http.Request) {
 
 	hook, err := h.webhooks.Find(r.Context(), path)
 	if err != nil {
-		writeProblemJSON(w, http.StatusUnauthorized, "Rejected", "The secret is missing or wrong.")
+		writeProblemJSON(w, http.StatusUnauthorized, CodeForbidden, "Rejected", "The secret is missing or wrong.")
 		return
 	}
 
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxHookBody))
 	if err != nil {
-		writeProblemJSON(w, http.StatusRequestEntityTooLarge, "The body is too large",
+		writeProblemJSON(w, http.StatusRequestEntityTooLarge, CodeInvalidInput, "The body is too large",
 			"A webhook body becomes a run's input and reaches a model.")
 		return
 	}
@@ -90,7 +90,7 @@ func (h *Hooks) receive(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		h.log.Error("could not open a run from a webhook", "path", path, "err", err)
-		writeProblemJSON(w, http.StatusInternalServerError, "Could not open the run", "")
+		writeProblemJSON(w, http.StatusInternalServerError, CodeUnavailable, "Could not open the run", "")
 		return
 	}
 

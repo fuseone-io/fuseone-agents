@@ -22,6 +22,7 @@ import {
 } from "@/features/agents/webhooks-api";
 import { formatInstant } from "@/lib/format";
 import type { Webhook } from "@/lib/api/client";
+import { problemMessage } from "@/lib/api/problem-message";
 
 /**
  * The doors into this agent, and whether each one is open.
@@ -44,7 +45,7 @@ export function WebhooksPanel({ agentId }: { agentId: string }) {
       onSuccess: (result) => setIssued(result),
       onError: (error) =>
         toast.error(t("agents.keyFailed"), {
-          description: error instanceof Error ? error.message : undefined,
+          description: problemMessage(error, t),
         }),
     });
   };

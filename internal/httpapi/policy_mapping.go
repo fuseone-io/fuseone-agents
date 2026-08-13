@@ -56,7 +56,7 @@ func policyFrom(p domain.Policy) openapi.Policy {
 // changes nothing about what the rule does.
 func policyInto(code string, in openapi.PolicyInput) (domain.Policy, error) {
 	if in.Name == "" {
-		return domain.Policy{}, errors.New("uma política precisa de um nome")
+		return domain.Policy{}, errors.New("a policy needs a name")
 	}
 	return draftInto(code, in)
 }
@@ -65,7 +65,7 @@ func policyInto(code string, in openapi.PolicyInput) (domain.Policy, error) {
 // cannot mean anything.
 func draftInto(code string, in openapi.PolicyInput) (domain.Policy, error) {
 	if code == "" {
-		return domain.Policy{}, errors.New("uma política precisa de um código")
+		return domain.Policy{}, errors.New("a policy needs a code")
 	}
 
 	p := domain.Policy{
@@ -111,10 +111,10 @@ func draftInto(code string, in openapi.PolicyInput) (domain.Policy, error) {
 	// A reach naming nothing covers nothing, which reads on the screen as a
 	// rule in force. Refused rather than stored as a rule that never fires.
 	if p.Reach == domain.ReachAgents && len(p.Agents) == 0 {
-		return domain.Policy{}, errors.New("uma política por agente precisa nomear ao menos um")
+		return domain.Policy{}, errors.New("a per-agent policy has to name at least one agent")
 	}
 	if p.Reach == domain.ReachScopes && len(p.Scopes) == 0 {
-		return domain.Policy{}, errors.New("uma política por escopo precisa nomear ao menos um")
+		return domain.Policy{}, errors.New("a per-scope policy has to name at least one scope")
 	}
 	return p, nil
 }

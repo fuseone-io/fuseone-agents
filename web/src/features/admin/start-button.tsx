@@ -13,6 +13,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useSetStop, type Stop } from "@/features/admin/stops-api";
+import { problemMessage } from "@/lib/api/problem-message";
 
 /**
  * Takes a switch off again.
@@ -38,7 +39,7 @@ export function StartButton({ stop }: { stop: Stop }) {
         onSuccess: () => toast.success(t("stops.started")),
         onError: (error: unknown) =>
           toast.error(
-            error instanceof Error ? error.message : t("stops.startFailed"),
+            problemMessage(error, t),
           ),
       },
     );

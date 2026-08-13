@@ -3,7 +3,6 @@ package httpapi
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/fuseone/agents/internal/auth"
@@ -93,12 +92,10 @@ func (s *Server) DecideApproval(ctx context.Context, req openapi.DecideApprovalR
 	switch {
 	case state.PendingApproval == nil:
 		return openapi.DecideApproval409ApplicationProblemPlusJSONResponse(
-			problem(http.StatusConflict, "No pending approval", "This run is not awaiting a decision")), nil
+			conflicted("this run is not awaiting a decision")), nil
 	case state.PendingApproval.AtSeq != req.Body.AtSeq:
-		return openapi.DecideApproval409ApplicationProblemPlusJSONResponse(problem(
-			http.StatusConflict, "Stale approval",
-			fmt.Sprintf("This run is awaiting a decision on step %d, not %d",
-				state.PendingApproval.AtSeq, req.Body.AtSeq))), nil
+		return openapi.DecideApproval409ApplicationProblemPlusJSONResponse(conflicted(fmt.Sprintf("This run is awaiting a decision on step %d, not %d",
+			state.PendingApproval.AtSeq, req.Body.AtSeq))), nil
 	}
 
 	if _, err := s.store.Append(ctx, domain.Step{

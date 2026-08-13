@@ -3,7 +3,6 @@ package httpapi
 import (
 	"context"
 	"errors"
-	"net/http"
 	"strings"
 
 	"github.com/fuseone/agents/internal/auth"
@@ -78,7 +77,7 @@ func (s *Server) RegisterScope(
 	if err != nil {
 		return openapi.RegisterScope400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-				problem(http.StatusBadRequest, "Área inválida", err.Error())),
+				invalid(err.Error())),
 		}, nil
 	}
 	return openapi.RegisterScope200JSONResponse(registeredFrom(registered)), nil

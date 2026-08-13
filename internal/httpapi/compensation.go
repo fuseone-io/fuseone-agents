@@ -3,7 +3,6 @@ package httpapi
 import (
 	"context"
 	"fmt"
-	"net/http"
 
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/compensate"
@@ -79,10 +78,7 @@ func (s *Server) AbandonRun(ctx context.Context, req openapi.AbandonRunRequestOb
 		}, nil
 	}
 	if state.Terminal() {
-		return openapi.AbandonRun409ApplicationProblemPlusJSONResponse(problem(
-			http.StatusConflict, "The run has already ended",
-			fmt.Sprintf("Run %s is %s; there is nothing left to abandon",
-				req.RunId, state.Phase))), nil
+		return openapi.AbandonRun409ApplicationProblemPlusJSONResponse(conflicted(fmt.Sprintf("run %s is %s", req.RunId, state.Phase))), nil
 	}
 
 	// Undoing unless told otherwise. Somebody ending a run mid-flight almost
@@ -233,10 +229,7 @@ func (s *Server) ResumeRun(ctx context.Context, req openapi.ResumeRunRequestObje
 		}, nil
 	}
 	if state.Phase != engine.PhaseParked {
-		return openapi.ResumeRun409ApplicationProblemPlusJSONResponse(problem(
-			http.StatusConflict, "The run is not parked",
-			fmt.Sprintf("Run %s is %s; only a parked run can be resumed",
-				req.RunId, state.Phase))), nil
+		return openapi.ResumeRun409ApplicationProblemPlusJSONResponse(conflicted(fmt.Sprintf("run %s is %s", req.RunId, state.Phase))), nil
 	}
 
 	note := ""

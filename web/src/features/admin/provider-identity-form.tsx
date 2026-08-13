@@ -15,6 +15,7 @@ import {
   type GroupMapping,
   type IdentityProvider,
 } from "@/features/admin/identity-api";
+import { problemMessage } from "@/lib/api/problem-message";
 
 /**
  * One way of signing in.
@@ -68,7 +69,7 @@ export function IdentityProviderForm({
         // wrong address is reported — with what actually failed.
         onError: (error) =>
           toast.error(t("identity.saveFailed"), {
-            description: error instanceof Error ? error.message : undefined,
+            description: problemMessage(error, t),
           }),
       },
     );

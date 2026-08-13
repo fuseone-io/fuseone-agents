@@ -8,6 +8,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useSetStage, type Stage } from "@/features/agents/stage-api";
+import { problemMessage } from "@/lib/api/problem-message";
 
 const ORDER: Stage[] = ["draft", "copilot", "autonomous"];
 
@@ -36,7 +37,7 @@ export function StageControl({
       // and its sentence is the useful one.
       onError: (error) =>
         toast.error(t("stage.failed"), {
-          description: error instanceof Error ? error.message : undefined,
+          description: problemMessage(error, t),
         }),
     });
 

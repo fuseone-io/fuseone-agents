@@ -4,6 +4,7 @@ import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { api, unwrap } from "@/lib/api/client";
+import { problemMessage } from "@/lib/api/problem-message";
 
 /**
  * Downloads the run as a signed export.
@@ -28,7 +29,7 @@ export function ExportButton({ runId }: { runId: string }) {
       });
     } catch (error) {
       toast.error(t("runs.exportFailed"), {
-        description: error instanceof Error ? error.message : undefined,
+        description: problemMessage(error, t),
       });
     } finally {
       setWorking(false);

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/fuseone/agents/internal/admin"
@@ -75,8 +74,7 @@ func (s *Server) SetRetention(
 	window := time.Duration(req.Body.Days) * hoursPerDay * time.Hour
 	if err := s.retention.SetWindow(ctx, callerOf(ctx), adminScope, window); err != nil {
 		if errors.Is(err, admin.ErrRetentionTooShort) {
-			return openapi.SetRetention400ApplicationProblemPlusJSONResponse(problem(
-				http.StatusBadRequest, "Retention refused", err.Error())), nil
+			return openapi.SetRetention400ApplicationProblemPlusJSONResponse(notStored(err.Error())), nil
 		}
 		return nil, fmt.Errorf("set retention: %w", err)
 	}

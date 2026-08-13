@@ -3,7 +3,6 @@ package httpapi
 import (
 	"encoding/hex"
 	"encoding/json"
-	"net/http"
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
@@ -100,16 +99,6 @@ func toCost(c domain.Cost) openapi.Cost {
 
 func toCostFromConsumption(c domain.Consumption) openapi.Cost {
 	return openapi.Cost{Micros: c.Micros, InputTokens: ptr(c.Tokens)}
-}
-
-func problem(status int, title, detail string) openapi.Problem {
-	return openapi.Problem{Title: title, Status: status, Detail: ptr(detail)}
-}
-
-// notFound builds the shared problem body every 404 in the contract reuses.
-func notFound(id string) openapi.NotFoundApplicationProblemPlusJSONResponse {
-	return openapi.NotFoundApplicationProblemPlusJSONResponse(
-		problem(http.StatusNotFound, "Run not found", "No run with id "+id))
 }
 
 func mustJSON(v any) []byte {

@@ -10,6 +10,7 @@ import { Panel } from "@/components/shared/panel";
 import { cn } from "@/lib/utils";
 import { useStartSimulation } from "@/features/agents/simulation-api";
 import { countCases } from "@/features/agents/simulation-tally";
+import { problemMessage } from "@/lib/api/problem-message";
 
 /**
  * The set of occurrences to replay, and the one button that starts it.
@@ -41,7 +42,7 @@ export function SimulationStart({
         // fifty lines to fix.
         onError: (error) =>
           toast.error(t("simulation.startFailed"), {
-            description: error instanceof Error ? error.message : undefined,
+            description: problemMessage(error, t),
           }),
       },
     );

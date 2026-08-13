@@ -19,6 +19,7 @@ import {
   useAbandonRun,
   useCompensationPlan,
 } from "@/features/runs/compensation-api";
+import { problemMessage } from "@/lib/api/problem-message";
 
 /**
  * Ending a run, and undoing what it left standing (PRD SE-08).
@@ -47,7 +48,7 @@ export function AbandonDialog({ runId }: { runId: string }) {
       setOpen(false);
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : t("compensation.failed"),
+        problemMessage(error, t),
       );
     }
   }

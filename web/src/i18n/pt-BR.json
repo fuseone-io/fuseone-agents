@@ -310,6 +310,7 @@
     "nothingFound": "Nada encontrado",
     "remove": "Remover",
     "removeFailed": "Não foi possível remover",
+    "requestFailed": "A requisição falhou.",
     "retry": "Tentar de novo",
     "save": "Salvar",
     "saveFailed": "Não foi possível salvar",
@@ -702,6 +703,19 @@
     "unsavedChanges_other": "{{count}} alterações sem gravar",
     "willApplyAfterReload": "Vai valer no próximo passo de agente depois que os workers recarregarem o conjunto.",
     "willBeMonitored": "Vai ser avaliada em todo passo que o escopo cobre, registrada na trilha, e não vai mudar nenhuma decisão."
+  },
+  "problem": {
+    "conflict": "Isso não vale para o estado atual: {{detail}}",
+    "forbidden": "Sem permissão — esta ação exige {{detail}}",
+    "invalid-input": "O pedido não pôde ser aceito: {{detail}}",
+    "not-found": "Não encontrado: {{detail}}",
+    "not-signed-in": "Sua sessão terminou. Entre de novo.",
+    "not-simulated": "Um agente sai de Rascunho sendo executado contra ocorrências que já aconteceram. Simule antes.",
+    "not-stored": "Não foi possível gravar: {{detail}}",
+    "saved-not-reachable": "Gravado, mas ninguém consegue entrar por ele ainda: {{detail}}",
+    "sign-in-failed": "Não foi possível entrar: {{detail}}",
+    "unavailable": "Indisponível no momento: {{detail}}",
+    "upstream-refused": "O sistema do outro lado recusou: {{detail}}"
   },
   "retention": {
     "byDefault": "padrão, ninguém escolheu",

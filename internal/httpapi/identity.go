@@ -3,7 +3,6 @@ package httpapi
 import (
 	"context"
 	"fmt"
-	"net/http"
 
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
@@ -79,7 +78,7 @@ func (s *Server) PutIdentityProvider(
 	}
 	if err := s.identity.PutIdentityProvider(ctx, callerOf(ctx), adminScope, provider, secret); err != nil {
 		return openapi.PutIdentityProvider400ApplicationProblemPlusJSONResponse(
-			problem(http.StatusBadRequest, "Identity provider refused", err.Error())), nil
+			upstreamRefused(err.Error())), nil
 	}
 
 	if err := s.register(ctx, provider, secret); err != nil {
@@ -91,8 +90,7 @@ func (s *Server) PutIdentityProvider(
 		// The message says both halves. "Could not be reached" alone would
 		// read as nothing having been saved, beside a row that just appeared.
 		return openapi.PutIdentityProvider400ApplicationProblemPlusJSONResponse(
-			problem(http.StatusBadRequest, "Saved, but nobody can sign in with it yet",
-				err.Error())), nil
+			savedNotReachable(err.Error())), nil
 	}
 	return openapi.PutIdentityProvider204Response{}, nil
 }

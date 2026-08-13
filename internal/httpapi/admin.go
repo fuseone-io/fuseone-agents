@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"slices"
 	"strings"
 	"time"
@@ -90,7 +89,7 @@ func (s *Server) ClassifyTool(ctx context.Context, req openapi.ClassifyToolReque
 	if err != nil {
 		return openapi.ClassifyTool400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-				problem(http.StatusBadRequest, "Classificação inválida", err.Error())),
+				invalid(err.Error())),
 		}, nil
 	}
 
@@ -111,7 +110,7 @@ func (s *Server) ClassifyTool(ctx context.Context, req openapi.ClassifyToolReque
 	if err := s.curator.Classify(ctx, adminScope, ruling); err != nil {
 		return openapi.ClassifyTool400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-				problem(http.StatusBadRequest, "Não foi possível registrar", err.Error())),
+				notStored(err.Error())),
 		}, nil
 	}
 	return openapi.ClassifyTool204Response{}, nil
@@ -166,14 +165,6 @@ func (s *Server) refuse(ctx context.Context, perm domain.Permission) *openapi.Fo
 		return &body
 	}
 	return nil
-}
-
-// forbidden names the permission and the scope that were missing. "Forbidden"
-// alone leaves an operator guessing which grant to ask somebody for.
-func forbidden(perm domain.Permission, scope domain.Scope) openapi.ForbiddenApplicationProblemPlusJSONResponse {
-	return openapi.ForbiddenApplicationProblemPlusJSONResponse(problem(
-		http.StatusForbidden, "Sem permissão",
-		fmt.Sprintf("esta ação exige %s em %s", perm, scope)))
 }
 
 // Integrations is what the platform is configured to talk to, declared here by

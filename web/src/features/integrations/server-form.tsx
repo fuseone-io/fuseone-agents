@@ -18,6 +18,7 @@ import {
   type ServerFormValues,
 } from "@/features/integrations/server-schema";
 import { usePutMCPServer, type MCPServer } from "@/features/integrations/api";
+import { problemMessage } from "@/lib/api/problem-message";
 
 export function ServerForm({
   server,
@@ -60,7 +61,7 @@ export function ServerForm({
       onClose();
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : t("common.saveFailed"),
+        problemMessage(error, t),
       );
     }
   }

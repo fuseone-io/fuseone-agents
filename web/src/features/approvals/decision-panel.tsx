@@ -11,6 +11,7 @@ import { explainRule } from "@/lib/gate-rules";
 import { useDecideApproval } from "@/features/runs/api";
 import { EFFECT_LABEL, RISK_LABEL, riskOf } from "@/features/approvals/risk";
 import type { PendingApproval } from "@/lib/api/client";
+import { problemMessage } from "@/lib/api/problem-message";
 
 /**
  * What the approver decides on.
@@ -44,7 +45,7 @@ export function DecisionPanel({
       onDecided();
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : t("runs.decisionFailed"),
+        problemMessage(error, t),
       );
     }
   }

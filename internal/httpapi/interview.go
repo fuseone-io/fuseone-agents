@@ -3,7 +3,6 @@ package httpapi
 import (
 	"context"
 	"errors"
-	"net/http"
 
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/authoring"
@@ -54,7 +53,7 @@ func (s *Server) InterviewAgent(
 	// assistant, and answering that with "no provider named \"\"" describes
 	// the plumbing instead of the state somebody is actually in.
 	if !choice.Enabled {
-		return unavailable(authoring.ErrDisabled), nil
+		return assistantUnavailable(authoring.ErrDisabled), nil
 	}
 
 	spentToday, err := s.spend.SpentToday(ctx)
@@ -65,7 +64,7 @@ func (s *Server) InterviewAgent(
 		Model: choice.Model, Effort: choice.Effort,
 	})
 	if err != nil {
-		return unavailable(err), nil
+		return assistantUnavailable(err), nil
 	}
 
 	result, err := authoring.Translate(ctx, authoring.Job{
@@ -85,23 +84,23 @@ func (s *Server) InterviewAgent(
 		}
 	}
 	if err != nil {
-		return unavailable(err), nil
+		return assistantUnavailable(err), nil
 	}
 
 	return openapi.InterviewAgent200JSONResponse(draftFrom(result)), nil
 }
 
-// unavailable answers the two configuration states and the provider's own
-// failures. Being switched off or out of budget is not a fault: the form
+// assistantUnavailable answers the two configuration states and the provider's
+// own failures. Being switched off or out of budget is not a fault: the form
 // remains the way to publish an agent without the assistant.
-func unavailable(err error) openapi.InterviewAgentResponseObject {
+func assistantUnavailable(err error) openapi.InterviewAgentResponseObject {
 	if errors.Is(err, authoring.ErrDisabled) || errors.Is(err, authoring.ErrOverCeiling) {
 		return openapi.InterviewAgent409ApplicationProblemPlusJSONResponse(
-			problem(http.StatusConflict, "Assistente indisponível", err.Error()))
+			conflicted(err.Error()))
 	}
 	return openapi.InterviewAgent400ApplicationProblemPlusJSONResponse{
 		BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-			problem(http.StatusBadRequest, "O assistente não conseguiu responder", err.Error())),
+			upstreamRefused(err.Error())),
 	}
 }
 

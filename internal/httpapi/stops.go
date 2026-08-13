@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
@@ -56,7 +55,7 @@ func (s *Server) SetStop(ctx context.Context, req openapi.SetStopRequestObject) 
 	if err != nil {
 		return openapi.SetStop400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-				problem(http.StatusBadRequest, "Invalid stop", err.Error())),
+				invalid(err.Error())),
 		}, nil
 	}
 
@@ -87,7 +86,7 @@ func (s *Server) SetStop(ctx context.Context, req openapi.SetStopRequestObject) 
 	if err := act(ctx, stop); err != nil {
 		return openapi.SetStop400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-				problem(http.StatusBadRequest, "The switch could not be set", err.Error())),
+				notStored(err.Error())),
 		}, nil
 	}
 	return openapi.SetStop204Response{}, nil

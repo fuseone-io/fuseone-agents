@@ -17,6 +17,7 @@ import { Mono } from "@/components/shared/mono";
 import { correctionOptions } from "@/features/agents/correction-options";
 import { useRecordRegression } from "@/features/agents/regressions-api";
 import type { SimulationCase } from "@/features/agents/simulation-api";
+import { problemMessage } from "@/lib/api/problem-message";
 
 /**
  * "This one came out wrong, and here is what should have been true."
@@ -69,7 +70,7 @@ export function CorrectionDialog({
         },
         onError: (error) =>
           toast.error(t("correction.failed"), {
-            description: error instanceof Error ? error.message : undefined,
+            description: problemMessage(error, t),
           }),
       },
     );
