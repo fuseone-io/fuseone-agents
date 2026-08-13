@@ -7,6 +7,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   ShieldX,
+  CircleSlash,
   Sparkles,
   TriangleAlert,
   UserRoundCheck,
@@ -45,6 +46,7 @@ const ICONS: Record<StepKind, LucideIcon> = {
   budget_reconciled: Scale,
   approval_requested: Hand,
   approval_decided: UserRoundCheck,
+  abandoned: CircleSlash,
   compensated: Undo2,
   failed: TriangleAlert,
   parked: ShieldAlert,
@@ -81,6 +83,7 @@ export function tileOf(
   switch (step.kind) {
     case "approval_requested":
       return { icon, tone: "escalate" };
+    case "abandoned":
     case "failed":
     case "parked":
       return { icon, tone: "block" };

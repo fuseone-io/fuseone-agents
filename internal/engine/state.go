@@ -243,6 +243,7 @@ func (s *State) applyKind(step domain.Step) error {
 		s.Phase = PhaseParked
 
 	case domain.StepRunFinished:
+		s.PendingApproval, s.requested, s.Approved = nil, nil, nil
 		s.Phase = PhaseFinished
 
 	case domain.StepGateDecided:
@@ -259,6 +260,10 @@ func (s *State) applyKind(step domain.Step) error {
 		if err := decode(step, &p); err != nil {
 			return err
 		}
+		// Nothing left to decide. A run that ended still carrying a pending
+		// approval asks somebody to rule on a call that will never happen,
+		// and the console offers them the button to do it.
+		s.PendingApproval, s.requested, s.Approved = nil, nil, nil
 		// The decision is made either way. What differs is whether anything
 		// still has to be undone before the run can be called over.
 		s.Phase = PhaseFailed
@@ -267,6 +272,7 @@ func (s *State) applyKind(step domain.Step) error {
 		}
 
 	case domain.StepFailed:
+		s.PendingApproval, s.requested, s.Approved = nil, nil, nil
 		s.Phase = PhaseFailed
 
 	case domain.StepPlanned, domain.StepCompensated:

@@ -386,3 +386,28 @@ func TestFold_abandonedWithoutCompensation_endsThere(t *testing.T) {
 			s.Phase, s.Terminal(), s.Resumable())
 	}
 }
+
+func TestFold_abandonedWhileAwaitingApproval_leavesNothingToDecide(t *testing.T) {
+	t.Parallel()
+
+	// The console offers Approve and Reject from the pending approval. A run
+	// somebody ended still carrying one asks a person to decide on a call that
+	// will never happen — and the decision would append to a finished trail.
+	s := mustFold(t, chain(t, domain.Step{
+		Kind: domain.StepRunStarted, AgentID: "billing", Payload: []byte(`{}`),
+	}, domain.Step{
+		Kind: domain.StepApprovalRequested,
+		Payload: payload(t, domain.ApprovalRequestedPayload{
+			Tool: "crm.reply", Rule: "taint", Effect: domain.EffectWrite,
+		}),
+	}, domain.Step{
+		Kind: domain.StepAbandoned,
+		Payload: payload(t, domain.AbandonedPayload{
+			By: "ana", Reason: "handled by phone", Compensate: true,
+		}),
+	}))
+
+	if s.PendingApproval != nil {
+		t.Errorf("PendingApproval = %+v, want nothing left to decide", s.PendingApproval)
+	}
+}

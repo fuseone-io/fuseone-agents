@@ -108,6 +108,7 @@ function phaseOf(step: Step, decided: boolean): TrailPhase {
       return "human";
     case "gate_decided":
       return verdictOf(step) === "require_approval" ? "human" : "execution";
+    case "abandoned":
     case "parked":
     case "failed":
     case "run_finished":

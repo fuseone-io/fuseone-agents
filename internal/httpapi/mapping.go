@@ -33,8 +33,12 @@ func toRun(runID domain.RunID, s engine.State, steps []domain.Step) openapi.Run 
 	}
 	if len(steps) > 0 {
 		out.StartedAt = steps[0].At
-		if last := steps[len(steps)-1]; last.Kind == domain.StepRunFinished {
-			out.EndedAt = ptr(last.At)
+		// The state's notion of ended, not the step kind's: a run somebody
+		// abandoned has ended too, and reporting it as still running put "em
+		// curso" on the duration of a run that was over. Parked stays open,
+		// which is correct — it is a pause.
+		if s.Terminal() {
+			out.EndedAt = ptr(steps[len(steps)-1].At)
 		}
 	}
 	if s.PendingApproval != nil {

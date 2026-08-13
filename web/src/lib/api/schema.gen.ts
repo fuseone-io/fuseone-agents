@@ -1302,7 +1302,7 @@ export interface components {
          */
         Effect: "read" | "write" | "destructive" | "financial";
         /** @enum {string} */
-        StepKind: "run_started" | "planned" | "gate_decided" | "budget_reserved" | "tool_called" | "tool_returned" | "budget_reconciled" | "approval_requested" | "approval_decided" | "compensated" | "failed" | "parked" | "run_finished";
+        StepKind: "run_started" | "planned" | "gate_decided" | "budget_reserved" | "tool_called" | "tool_returned" | "budget_reconciled" | "approval_requested" | "approval_decided" | "abandoned" | "compensated" | "failed" | "parked" | "run_finished";
         Scope: {
             company: string;
             area: string;
