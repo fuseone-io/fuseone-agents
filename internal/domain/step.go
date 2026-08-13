@@ -2,6 +2,7 @@ package domain
 
 import (
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -46,7 +47,12 @@ var (
 	ErrInvalidKind  = errors.New("invalid step kind")
 	ErrInvalidScope = errors.New("invalid scope")
 	ErrInvalidSeq   = errors.New("sequence must start at 1")
-	ErrNoRun        = errors.New("run id is required")
+	// ErrSeqGap is a step missing from the middle, which is the tamper that
+	// matters: every remaining step is internally valid and only the links
+	// give it away. Its own error because "must start at 1" sent whoever read
+	// it looking at the beginning of a chain whose beginning is fine.
+	ErrSeqGap = errors.New("a step is missing from the chain")
+	ErrNoRun  = errors.New("run id is required")
 )
 
 // FirstSeq is the sequence number of a run's opening step.
@@ -134,7 +140,7 @@ func (s Step) VerifyLink(prev *Step) error {
 	case prev == nil && s.Seq != FirstSeq:
 		return ErrInvalidSeq
 	case prev != nil && s.Seq != prev.Seq+1:
-		return ErrInvalidSeq
+		return fmt.Errorf("%w: %s jumps from %d to %d", ErrSeqGap, s.RunID, prev.Seq, s.Seq)
 	case prev != nil && !equalBytes(s.PrevHash, prev.Hash):
 		return ErrChainBroken
 	case prev == nil && len(s.PrevHash) != 0:

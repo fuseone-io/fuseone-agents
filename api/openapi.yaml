@@ -1190,6 +1190,61 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /audit/export:
+    get:
+      tags: [audit]
+      operationId: exportLedger
+      summary: A signed range of the ledger
+      description: |
+        Checkable by somebody who does not trust this installation. Two
+        mechanisms have to hold: the hash chain proves the content — editing a
+        payload, reordering two steps or removing one from the middle all break
+        a link — and the signature proves the range came from here.
+
+        `agentd verify <file>` checks both, and needs no database, no
+        credential and no network. An export somebody has to ask us about is an
+        export they are trusting us for.
+      parameters:
+        - name: runId
+          in: query
+          description: One run. Ranges by time come later; a run is the unit an auditor asks about.
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The signed bundle.
+          content:
+            application/json:
+              schema:
+                type: object
+                description: A ledger export. Its shape is the `format` field's contract, not this one's.
+                additionalProperties: true
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /audit/signing-key:
+    get:
+      tags: [audit]
+      operationId: getSigningKey
+      summary: The key this installation signs exports with
+      description: |
+        The public half, which is not a secret: publishing it is what lets
+        somebody check an export without asking us anything. The fingerprint is
+        short enough to read out loud, which is how it is usually compared.
+      responses:
+        '200':
+          description: The public key.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [publicKey, fingerprint]
+                properties:
+                  publicKey: { type: string, description: Base64, Ed25519. }
+                  fingerprint: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
   /admin/erasures:
     post:
       tags: [admin]

@@ -82,6 +82,8 @@ type Server struct {
 	// retention and erasures decide whether content survives.
 	retention Retention
 	erasures  Erasures
+	// signing is the key exports are sealed with.
+	signing   Signing
 	publisher Publisher
 	// clock is injectable so a run's opening instant is a fact of the request
 	// rather than of whichever machine happened to serve it.

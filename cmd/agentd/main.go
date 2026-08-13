@@ -72,6 +72,8 @@ func run(args []string) error {
 		return bootstrapCmd(args[1:])
 	case "migrate":
 		return migrate(args[1:])
+	case "verify":
+		return verifyCmd(args[1:])
 	case "version":
 		fmt.Println(version)
 		return nil
@@ -90,6 +92,7 @@ usage:
   agentd keygen          print a new master key for sealing credentials
   agentd bootstrap --dsn apply or reissue the first-run setup token
   agentd migrate --dsn   apply pending database migrations
+  agentd verify <file>   check a signed ledger export
   agentd version         print the build version
 `)
 	return errors.New("no command given")
@@ -162,6 +165,8 @@ func serve(args []string) error {
 			WithRegressions(regression.NewStore(identity.pool)).
 			// How long content is kept, and erasing it on request. Its own
 			// permission: the one act here nobody can undo.
+			// The key exports are signed with, and its public half.
+			WithSigning(admin.NewSigning(identity.pool, store)).
 			WithRetention(
 				admin.NewRetention(identity.pool, store),
 				admin.NewErasures(identity.pool, ledger.NewContent(identity.pool),

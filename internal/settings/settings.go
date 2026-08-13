@@ -43,6 +43,10 @@ const (
 	// the reveal-once path all already work for a setting, and an identity
 	// provider needs all three.
 	KindIdentityProvider Kind = "identity_provider"
+	// KindSigningKey holds the key exports are signed with. Its public half
+	// is not a secret — publishing it is what makes an export checkable by
+	// somebody who does not trust this installation.
+	KindSigningKey Kind = "signing_key"
 )
 
 // ScopeKind is the level a setting applies at.
