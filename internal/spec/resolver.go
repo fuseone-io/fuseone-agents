@@ -12,13 +12,29 @@ import (
 	"github.com/fuseone/agents/internal/worker"
 )
 
+/*
+Definitions resolve a published version to what it says, declared here by the
+consumer.
+
+Both stores satisfy it, and which one a process uses is the difference between
+the two ways this platform is installed. With a database the registry is the
+source: publishing is an interface action rather than a deploy (PRD DE-07), so
+an agent authored in the console has no file anywhere and resolving from disk
+would leave it visible on every screen, triggerable, and unable to run.
+
+Without one — a laptop, a test — the directory of definitions stands in.
+*/
+type Definitions interface {
+	Get(ctx context.Context, agent domain.AgentID, version domain.VersionID) (Spec, error)
+}
+
 // Resolver turns an agent version into something a worker can run.
 //
 // It is the seam between the three registries an installation configures —
 // agent definitions, model providers, and the tool catalogue — and the loop,
 // which knows about none of them.
 type Resolver struct {
-	specs     *Store
+	specs     Definitions
 	providers *model.Registry
 	tools     model.ToolSchemas
 
@@ -29,7 +45,7 @@ type Resolver struct {
 	planners map[domain.VersionID]engine.Planner
 }
 
-func NewResolver(specs *Store, providers *model.Registry, tools model.ToolSchemas) *Resolver {
+func NewResolver(specs Definitions, providers *model.Registry, tools model.ToolSchemas) *Resolver {
 	return &Resolver{
 		specs:     specs,
 		providers: providers,
@@ -45,8 +61,8 @@ var _ worker.Specs = (*Resolver)(nil)
 // An empty version resolves to the current one, which is what a fresh trigger
 // gets. A run already in flight passes the version it was pinned to, so
 // publishing never changes what it is doing mid-run (PRD DE-09).
-func (r *Resolver) Resolve(_ context.Context, agent domain.AgentID, version domain.VersionID) (worker.Resolution, error) {
-	spec, err := r.specs.Get(agent, version)
+func (r *Resolver) Resolve(ctx context.Context, agent domain.AgentID, version domain.VersionID) (worker.Resolution, error) {
+	spec, err := r.specs.Get(ctx, agent, version)
 	if err != nil {
 		return worker.Resolution{}, err
 	}

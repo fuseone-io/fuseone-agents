@@ -19,6 +19,23 @@ import (
 type MemoryContent struct {
 	mu   sync.RWMutex
 	data map[string]object
+	// limit is how much of one payload is kept, matching what the durable
+	// store bounds. A fake that accepted what production truncates would let
+	// every suite that uses it certify behaviour the real thing lacks.
+	limit int
+}
+
+// WithLimit bounds what one payload may occupy. Zero is no limit.
+func (m *MemoryContent) WithLimit(bytes int) *MemoryContent {
+	out := NewMemoryContent()
+	out.limit = bytes
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for ref, held := range m.data {
+		out.data[ref] = held
+	}
+	return out
 }
 
 // object is one stored payload and when it was put there, so the fake can
@@ -50,13 +67,20 @@ func (m *MemoryContent) PutFor(
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
+	// The digest is of the whole payload even when only part of it is kept,
+	// exactly as the durable store does it.
 	sum := sha256.Sum256(data)
 	ref := fmt.Sprintf("%s://%s/%d/%s", kind, owner, seq, hex.EncodeToString(sum[:])[:16])
+
+	stored := data
+	if m.limit > 0 && len(stored) > m.limit {
+		stored = stored[:m.limit]
+	}
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.data[ref] = object{
-		bytes: append([]byte(nil), data...), owner: owner, at: time.Now(),
+		bytes: append([]byte(nil), stored...), owner: owner, at: time.Now(),
 	}
 	return ref, nil
 }

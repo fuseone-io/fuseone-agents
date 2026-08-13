@@ -223,7 +223,7 @@ func newPlatform(t *testing.T, store Store, agentSource string, reply func(turn 
 			Clock:   engine.SystemClock{},
 			Content: content,
 		},
-		spec.NewResolver(specs, registry, p.catalog),
+		spec.NewResolver(spec.Local(specs), registry, p.catalog),
 		engine.SystemClock{},
 		slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn})),
 	).WithUndos(p.catalog).WithStages(trusted{})

@@ -29,6 +29,8 @@ var (
 // have to be purgeable independently.
 type Content struct {
 	pool *pgxpool.Pool
+	// limit is how much of one payload is kept. Zero is no limit.
+	limit int
 }
 
 func NewContent(pool *pgxpool.Pool) *Content { return &Content{pool: pool} }
@@ -52,20 +54,61 @@ purged run must not take a case set with it.
 func (c *Content) PutFor(
 	ctx context.Context, kind, owner string, seq int64, data []byte,
 ) (string, error) {
+	// The digest is always of the whole payload, even when only part of it is
+	// kept. That is what keeps the record honest: an auditor holding the
+	// original can still prove it is the one the run used.
 	sum := sha256.Sum256(data)
 	digest := hex.EncodeToString(sum[:])
 	ref := fmt.Sprintf("%s://%s/%d/%s", kind, owner, seq, digest[:16])
 
+	stored, truncated := Truncate(data, c.limit)
+
 	// Writing the same reference twice is writing the same bytes: the digest
 	// is part of it. Doing nothing on conflict keeps a retry idempotent.
 	if _, err := c.pool.Exec(ctx, `
-		insert into run_content (ref, owner_kind, run_id, seq, digest, bytes)
-		values ($1, $2, $3, $4, $5, $6)
+		insert into run_content
+			(ref, owner_kind, run_id, seq, digest, bytes, full_bytes, truncated)
+		values ($1, $2, $3, $4, $5, $6, $7, $8)
 		on conflict (ref) do nothing`,
-		ref, kind, owner, seq, digest, data); err != nil {
+		ref, kind, owner, seq, digest, stored, len(data), truncated); err != nil {
 		return "", fmt.Errorf("ledger: store content for %s: %w", owner, err)
 	}
 	return ref, nil
+}
+
+/*
+WithLimit bounds what one payload may occupy.
+
+Object storage is optional and this installation has none, so bulky payloads
+live in Postgres and there is a size past which that stops being reasonable
+(PRD DE-03). The day one arrives, this is the number that goes up.
+
+Zero means no limit, which is what a caller that never sets one gets — the
+default is set where the store is built, not here, so a nil limit is an
+explicit choice rather than a forgotten one.
+*/
+func (c *Content) WithLimit(bytes int) *Content {
+	out := *c
+	out.limit = bytes
+	return &out
+}
+
+/*
+Truncate keeps what fits and reports whether anything was dropped.
+
+Shared by both stores so the in-memory one bounds exactly what Postgres bounds.
+A fake that accepted what production truncates would let every suite that uses
+it certify behaviour the real thing does not have.
+
+Truncating rather than refusing: a tool call that already reached the far side
+cannot be un-made by the store declining to remember its answer, and a run left
+with no result at all is worse off than one with a partial one.
+*/
+func Truncate(data []byte, limit int) ([]byte, bool) {
+	if limit <= 0 || len(data) <= limit {
+		return data, false
+	}
+	return data[:limit], true
 }
 
 func (c *Content) Get(ctx context.Context, ref string) ([]byte, error) {

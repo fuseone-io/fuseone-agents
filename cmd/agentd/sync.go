@@ -180,13 +180,36 @@ func publishSpecs(ctx context.Context, registry *spec.Registry, dir string) (int
 // Providers come from the installation's configuration; credentials come from
 // the environment rather than the definition, so an agent file is safe to
 // commit to a repository.
-func loadSpecs(ctx context.Context, dir string, catalog *tools.Catalog, integrations *admin.Integrations) (worker.Specs, error) {
+func loadSpecs(
+	ctx context.Context, dir string, catalog *tools.Catalog,
+	integrations *admin.Integrations, registry *spec.Registry,
+) (worker.Specs, error) {
+	/*
+		Where definitions are resolved from, which is the difference between
+		the two ways this platform is installed.
+
+		With a database the registry is the source. Publishing is an interface
+		action rather than a deploy (PRD DE-07), so an agent authored in the
+		console has no file anywhere — resolving from disk left every one of
+		them visible on every screen, accepting triggers, and parking with
+		spec_unresolved on the first turn.
+
+		The directory is still read, and still published: it is how an
+		installation seeds itself and how a laptop with no database works at
+		all. It is a seed, not the source.
+	*/
+	var definitions spec.Definitions = registry
+
 	store := spec.NewStore()
 	loaded, err := store.LoadDir(ctx, os.DirFS("."), dir)
 	if err != nil {
 		return nil, fmt.Errorf("load agent definitions from %s: %w", dir, err)
 	}
 	slog.Info("loaded agent definitions", "count", loaded, "dir", dir)
+
+	if registry == nil {
+		definitions = spec.Local(store)
+	}
 
 	providers := model.NewRegistry(nil)
 	if err := registerConfigured(ctx, providers, integrations); err != nil {
@@ -198,5 +221,5 @@ func loadSpecs(ctx context.Context, dir string, catalog *tools.Catalog, integrat
 		slog.Warn("no model provider configured; add one in the administration area")
 	}
 
-	return spec.NewResolver(store, providers, catalog), nil
+	return spec.NewResolver(definitions, providers, catalog), nil
 }

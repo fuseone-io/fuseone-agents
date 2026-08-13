@@ -144,3 +144,18 @@ func (s *Store) LoadDir(ctx context.Context, fsys fs.FS, root string) (int, erro
 
 	return loaded, err
 }
+
+/*
+Local lets a directory of definitions stand where the registry does.
+
+The mode a laptop runs in, and the one every test that does not want a database
+uses. It exists so the resolver can declare one port rather than branching on
+which kind of installation this is.
+*/
+func Local(store *Store) Definitions { return fromDisk{store: store} }
+
+type fromDisk struct{ store *Store }
+
+func (d fromDisk) Get(_ context.Context, agent domain.AgentID, version domain.VersionID) (Spec, error) {
+	return d.store.Get(agent, version)
+}

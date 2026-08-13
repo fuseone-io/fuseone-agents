@@ -1,9 +1,13 @@
 package ledger_test
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -26,8 +30,23 @@ type ContentStore interface {
 func contentStores(t *testing.T) map[string]func(*testing.T) ContentStore {
 	t.Helper()
 
+	return boundedStores(t, 0)
+}
+
+/*
+boundedStores is the same pair with a payload limit set.
+
+Both stores take one, and the fake bounds exactly what Postgres bounds: a fake
+that accepted what production truncates would let every suite using it certify
+behaviour the real thing does not have.
+*/
+func boundedStores(t *testing.T, limit int) map[string]func(*testing.T) ContentStore {
+	t.Helper()
+
 	stores := map[string]func(*testing.T) ContentStore{
-		"memory": func(*testing.T) ContentStore { return engine.NewMemoryContent() },
+		"memory": func(*testing.T) ContentStore {
+			return engine.NewMemoryContent().WithLimit(limit)
+		},
 	}
 
 	dsn := os.Getenv("TEST_DATABASE_URL")
@@ -49,7 +68,7 @@ func contentStores(t *testing.T) map[string]func(*testing.T) ContentStore {
 		if _, err := pool.Exec(context.Background(), `truncate run_content`); err != nil {
 			t.Fatalf("truncate: %v", err)
 		}
-		return ledger.NewContent(pool)
+		return ledger.NewContent(pool).WithLimit(limit)
 	}
 	return stores
 }
@@ -233,6 +252,41 @@ func TestEraseContract(t *testing.T) {
 			}
 			if again != 0 {
 				t.Errorf("erased %d the second time, want none left", again)
+			}
+		})
+	}
+}
+
+func TestPut_beyondTheLimit_keepsAPrefixAndSaysSo(t *testing.T) {
+	for name, open := range boundedStores(t, 1024) {
+		t.Run(name+"/a payload past the limit is truncated, not refused", func(t *testing.T) {
+			store := open(t)
+			ctx := context.Background()
+
+			// A tool that returns a database dump would otherwise put it in a
+			// row. Refusing outright is worse than truncating: the run needs
+			// an answer, and a call that already reached the far side cannot
+			// be un-made by the store declining to remember it.
+			huge := bytes.Repeat([]byte("a"), 4096)
+
+			ref, err := store.Put(ctx, "run-1", 1, huge)
+			if err != nil {
+				t.Fatalf("Put: %v", err)
+			}
+
+			got, err := store.Get(ctx, ref)
+			if err != nil {
+				t.Fatalf("Get: %v", err)
+			}
+			if len(got) != 1024 {
+				t.Errorf("stored %d bytes, want the limit", len(got))
+			}
+
+			// The digest is of the whole thing, so somebody holding the
+			// original can still prove it is what the run used.
+			whole := sha256.Sum256(huge)
+			if !strings.Contains(ref, hex.EncodeToString(whole[:])[:16]) {
+				t.Errorf("ref = %q, want it to carry the digest of the whole payload", ref)
 			}
 		})
 	}
