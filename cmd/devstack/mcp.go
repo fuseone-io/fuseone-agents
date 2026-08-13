@@ -47,6 +47,19 @@ func serveMCP(args []string) error {
 		Description: "Send a reply to the customer on the support ticket",
 	}, sendReply)
 
+	// The undo for reply, so the development stack has a real compensating
+	// pair. Without one, abandoning a run locally can only ever report that
+	// nothing takes anything back, and the half of SE-08 that matters — the
+	// undo actually reaching a server — is unreachable outside the tests.
+	//
+	// It takes what reply returned. That convention is what lets the Curator
+	// declare a compensator without anybody writing a mapping between two
+	// schemas, and the stack should demonstrate the shape it expects.
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "retract",
+		Description: "Retract a reply already sent to the customer",
+	}, retractReply)
+
 	if *addr == "" {
 		return server.Run(context.Background(), &mcp.StdioTransport{})
 	}
@@ -133,4 +146,22 @@ func sendReply(_ context.Context, _ *mcp.CallToolRequest, in sendReplyIn) (*mcp.
 		return nil, sendReplyOut{}, fmt.Errorf("body is required")
 	}
 	return nil, sendReplyOut{MessageID: "msg_9f21", SentTo: in.Account}, nil
+}
+
+// retractIn is sendReplyOut: the undo is called with what the do returned.
+type retractIn struct {
+	MessageID string `json:"message_id" jsonschema:"the reply to retract"`
+	SentTo    string `json:"sent_to" jsonschema:"who it went to"`
+}
+
+type retractOut struct {
+	Retracted bool `json:"retracted"`
+}
+
+func retractReply(_ context.Context, _ *mcp.CallToolRequest, in retractIn) (*mcp.CallToolResult, retractOut, error) {
+	if in.MessageID == "" {
+		return nil, retractOut{}, fmt.Errorf("message_id is required")
+	}
+	fmt.Fprintf(os.Stderr, "devstack: retracted %s\n", in.MessageID)
+	return nil, retractOut{Retracted: true}, nil
 }
