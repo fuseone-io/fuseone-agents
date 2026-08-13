@@ -6,6 +6,27 @@ traceable record of every decision and hard ceilings on what they can spend.
 
 It installs into the customer's own environment. One binary, one PostgreSQL.
 
+```sh
+helm install agents oci://ghcr.io/fuseone-io/charts/fuseone-agents \
+  --namespace fuseone --create-namespace \
+  --set secret.existingSecret=fuseone-agents \
+  --set baseUrl=https://agents.example.com
+```
+
+Images are built in the open for `linux/amd64` and `linux/arm64`, and signed
+with no key at all — the signature's identity is the workflow that built it.
+This runs inside your network where you cannot watch it build, so check it
+before it does:
+
+```sh
+cosign verify ghcr.io/fuseone-io/fuseone-agents:0.1.0 \
+  --certificate-identity-regexp '^https://github.com/fuseone-io/fuseone-agents/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+Installing, operating and proving it to an auditor:
+[deploy/helm/fuseone-agents/README.md](deploy/helm/fuseone-agents/README.md).
+
 ## The idea in one paragraph
 
 Everything is a projection of an append-only, hash-chained ledger. The audit
@@ -50,8 +71,25 @@ internal/
   httpapi/      HTTP + the OpenAPI contract's implementation
 api/            openapi.yaml — the contract both sides are generated from
 web/            the console: React 19 + Vite + shadcn/ui
-docs/           PRD and technical notes (pt-BR)
+docs/           the PRD and the notes that argue each design decision
 ```
 
+## The reasoning, written down
+
+Every consequential decision here has a note arguing it, including what it
+gives up. They are worth more than the code comments for anyone deciding
+whether this design fits their problem.
+
+| | |
+|---|---|
+| [PRD-001](docs/PRD-001-fuseone-agents.md) | What the product is, requirement by requirement |
+| [NT-001](docs/NT-001-integration-boundary-and-execution-model.md) | Where MCP ends and integration begins |
+| [NT-003](docs/NT-003-conversational-authoring.md) | Authoring an agent by conversation |
+| [NT-004](docs/NT-004-ledger-volume-and-paging.md) | What the ledger costs at volume, measured, and why it is partitioned on the run's opening time |
+| [NT-005](docs/NT-005-interaction-channels.md) | Channels, and why Slack and WhatsApp are two products |
+| [NT-006](docs/NT-006-evaluating-agents.md) | Evaluating agents, and why not to adopt a harness |
+
 Engineering rules are in [CLAUDE.md](CLAUDE.md) for the Go core and
-[web/CLAUDE.md](web/CLAUDE.md) for the console.
+[web/CLAUDE.md](web/CLAUDE.md) for the console. Everything written down is in
+English, including commits and these documents: the repository is public, and a
+document half its readers cannot read is one that does not get reviewed.

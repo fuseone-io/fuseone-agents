@@ -103,3 +103,94 @@ administration area — the platform keeps no password store (DE-04).
 time and the API normally. Two workers of different versions can share the
 queue safely: a run is pinned to the agent version it started with, and the
 older one stays the only correct explanation of the runs that used it (DE-09).
+
+## How much it will hold
+
+Measured, not estimated: a million steps seeded into PostgreSQL 18.
+
+| | |
+|---|---|
+| One step, indexes included | **863 bytes** |
+| A busy installation at 200k steps a day | ~55 GB of ledger a year |
+| Partitions, one per month | created a year ahead, automatically |
+
+The ledger only grows. Nothing updates it and nothing deletes from it, by
+design and by trigger — corrections are new steps, and erasure reaches the
+content a step references and never the step (AU-04, NF-09). Plan storage for
+the record you are keeping on purpose.
+
+`run_steps` is partitioned by the month its run opened, so a year nobody reads
+can be detached and moved to slower storage as a unit. A worker keeps twelve
+months ahead of the clock; if it is ever stopped for longer than that, steps
+land in the default partition and are recorded correctly — they simply cannot
+be archived as a month. The log says so when it happens.
+
+## What to watch
+
+| Signal | Means |
+|---|---|
+| `readyz` answering 503 | This pod cannot read the ledger. The reason is in its log, not in the reply — the endpoint answers without a credential, so it says what is unavailable and not which database. |
+| `healthz` answering anything but 200 | The process itself is wrong. This is the only one worth restarting a pod for. |
+| "steps are in the ledger's default partition" | The partition job has been stopped for over a year, or could not create a month. Nothing is lost; archiving that month is. |
+| Budget alerts in the console | An agent, area or company approaching a ceiling — before it stops work mid-afternoon, which is the alternative (FO-05). |
+| Runs parked and not decided | Somebody is waiting on a person. Point a channel at the scope and they will be told (NT-005). |
+
+## Backing it up
+
+There is no proprietary procedure, and that is deliberate (DE-17). Two things
+hold state:
+
+**PostgreSQL.** Back it up the way your organisation already backs up
+PostgreSQL — `pg_dump`, a physical base backup with WAL archiving, a managed
+snapshot. The ledger, the projections, the registry, the configuration and the
+administrative trail are all in it.
+
+**The master key**, which is *not* in the database and must be backed up
+separately. Restoring a database without it gives you every run, every decision
+and every trail — and no readable credential. That is a recoverable state (an
+operator re-enters the provider keys) but a surprising one to discover during
+a restore.
+
+Restoring is restoring PostgreSQL. Nothing in the platform has to be told it
+happened: state is a fold of the ledger, so a restored database produces the
+same answers the old one did.
+
+Content under retention is the one thing that changes shape: a restore brings
+back bytes an erasure had already removed. Run the retention sweep after a
+restore, or a subject's erasure request is quietly undone by it.
+
+## Proving it to an auditor
+
+The point of the record is that somebody outside can check it. Two commands do
+that, and neither needs this platform to be trusted.
+
+**Re-check a run's chain**, from the console or the API: every step is hashed
+onto the one before it, so an altered step breaks the chain at the step that
+was altered and names it.
+
+**Verify an exported bundle offline.** The console exports a run — or a
+period — signed with the installation's key. The bundle carries the public half
+with it, so checking it needs no network and no access here at all:
+
+```sh
+agentd verify audit-2026-08.json
+# OK — 1,284 steps, chain intact, signature valid
+#   company     acme
+#   signed by   a3f1-9c2e-…
+#
+# Compare the fingerprint against the key the installation publishes.
+# Nothing in the file can tell you it is theirs.
+```
+
+That last line is the part that matters, and the command prints it because it
+is easy to skip. A bundle carrying its own key proves only that it is
+internally consistent — anybody can sign anything with a key they made up and
+put that key in the file. What ties it to *this* installation is comparing the
+fingerprint against the one the installation publishes at
+`GET /api/v1/audit/signing-key`, which is short enough to read out loud over a
+phone. That comparison is the whole trust anchor; without it the signature is
+arithmetic.
+
+What the bundle proves is that the record was not altered after the fact. It
+does not prove the agent behaved well — that is what a reviewed simulation and
+the evaluation corpus are for (FU-10, and [NT-006](../../../docs/NT-006-evaluating-agents.md)).
