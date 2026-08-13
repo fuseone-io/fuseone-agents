@@ -31,7 +31,7 @@ export function RunDetailPage() {
   if (!run.data) return null;
 
   const { data } = run;
-  const items = steps.data?.items ?? [];
+  const items = steps.items;
   const pending = data.pendingApproval;
 
   return (

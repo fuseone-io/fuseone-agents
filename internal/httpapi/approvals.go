@@ -17,9 +17,19 @@ import (
 // approver opening their queue should cost one indexed read, not a fold of
 // every run that ever waited on somebody.
 func (s *Server) ListApprovals(ctx context.Context, req openapi.ListApprovalsRequestObject) (openapi.ListApprovalsResponseObject, error) {
-	waiting, err := s.store.ListRuns(ctx,
-		runFilter(req.Params.Company, req.Params.Area, nil, nil, nil),
-		string(openapi.PhaseAwaitingApproval), limitOf(req.Params.Limit))
+	// The inbox shows what the caller may act on, and the narrowing happens in
+	// the query rather than after it. Filtering a page afterwards makes the
+	// page shrink by however much the caller cannot see, which reads as an
+	// empty queue to somebody whose areas sort late.
+	filter, allowed := narrow(ctx,
+		runFilter(req.Params.Company, req.Params.Area, nil, nil, nil), domain.PermApprovalAct)
+	if !allowed {
+		return openapi.ListApprovals200JSONResponse{Items: []openapi.PendingApproval{}}, nil
+	}
+	filter.After = cursorFrom(req.Params.Cursor)
+
+	limit := limitOf(req.Params.Limit)
+	waiting, err := s.store.ListRuns(ctx, filter, string(openapi.PhaseAwaitingApproval), limit)
 	if err != nil {
 		return nil, fmt.Errorf("list approvals: %w", err)
 	}
@@ -36,6 +46,11 @@ func (s *Server) ListApprovals(ctx context.Context, req openapi.ListApprovalsReq
 	visible := auth.VisibleScopes(ctx, domain.PermApprovalAct)
 
 	page := openapi.ApprovalPage{Items: []openapi.PendingApproval{}}
+	// Taken from what the store returned rather than from what survived the
+	// scope check below, so a page emptied by that check still advances.
+	if next := nextPage(waiting, limit); next != "" {
+		page.NextCursor = &next
+	}
 	for _, run := range waiting {
 		if run.PendingApproval == nil || !readable(run.Scope, visible) {
 			continue

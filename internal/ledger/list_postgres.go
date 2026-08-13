@@ -28,6 +28,13 @@ func (p *Postgres) ListRuns(ctx context.Context, filter domain.RunFilter, phase 
 		args = append(args, phase)
 		where = whereAnd(where, fmt.Sprintf("phase = $%d", len(args)))
 	}
+	if c := filter.After; c != nil {
+		// Compared as a tuple, in the same order the list is read in, so the
+		// boundary is one place rather than three cases.
+		args = append(args, c.StartedAt.UTC(), string(c.RunID))
+		where = whereAnd(where, fmt.Sprintf(
+			"(started_at, run_id) < ($%d, $%d)", len(args)-1, len(args)))
+	}
 	args = append(args, limitOrDefault(limit))
 
 	rows, err := p.pool.Query(ctx, `select`+runColumns+` from runs `+where+

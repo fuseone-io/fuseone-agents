@@ -14,6 +14,7 @@ import {
   ErrorState,
   LoadingRows,
 } from "@/components/shared/states";
+import { LoadMore } from "@/components/shared/load-more";
 import { AuditTable } from "@/features/audit/audit-table";
 import { IntegrityBanner } from "@/features/audit/integrity-banner";
 import { useAudit } from "@/features/audit/api";
@@ -47,13 +48,19 @@ export function AuditPage() {
   const query = useDeferredValue(actor.trim());
 
   const since = useMemo(() => sinceFor(period), [period]);
-  const { data, isLoading, error, refetch } = useAudit({
+  const {
+    items: entries,
+    isLoading,
+    error,
+    refetch,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useAudit({
     since,
     actor: query || undefined,
     source: source === "all" ? undefined : (source as "ledger" | "admin"),
   });
-
-  const entries = data?.items ?? [];
 
   return (
     <>
@@ -112,7 +119,17 @@ export function AuditPage() {
             />
           </div>
         ) : (
-          <AuditTable entries={entries} />
+          <>
+            <AuditTable entries={entries} />
+            <div className="px-4 pb-3">
+              <LoadMore
+                loaded={entries.length}
+                hasMore={hasNextPage}
+                isLoading={isFetchingNextPage}
+                onLoad={() => void fetchNextPage()}
+              />
+            </div>
+          </>
         )}
       </Panel>
     </>

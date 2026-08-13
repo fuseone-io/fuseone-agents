@@ -17,6 +17,6 @@ export function suggestedRun(runs: Run[]): string | undefined {
 }
 
 export function useSuggestedRun(since: string): string | undefined {
-  const { data } = useRuns({ since });
-  return suggestedRun(data?.items ?? []);
+  const { items } = useRuns({ since });
+  return suggestedRun(items);
 }

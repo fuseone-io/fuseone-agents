@@ -21,6 +21,10 @@ type RunFilter struct {
 	Since time.Time
 	Until time.Time
 
+	// After resumes a previous page, at the position that page ended. Nil
+	// starts at the newest run.
+	After *RunCursor
+
 	// Search matches the run or agent identifier. It is a filter like any
 	// other rather than something applied to a page: a search that only looked
 	// at the rows already loaded would answer differently depending on how

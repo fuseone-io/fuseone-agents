@@ -341,7 +341,9 @@
     "close": "Fechar",
     "loadFailed": "Não foi possível carregar",
     "loadFailedHint": "Verifique a conexão com o servidor e tente novamente.",
+    "loadMore": "Carregar mais",
     "loading": "Carregando",
+    "loadingMore": "Carregando…",
     "new": "Novo",
     "no": "não",
     "nothingFound": "Nada encontrado",
@@ -353,6 +355,8 @@
     "retry": "Tentar de novo",
     "save": "Salvar",
     "saveFailed": "Não foi possível salvar",
+    "showing": "{{loaded}} carregados",
+    "showingOf": "{{loaded}} de {{total}}",
     "yes": "sim"
   },
   "compensation": {

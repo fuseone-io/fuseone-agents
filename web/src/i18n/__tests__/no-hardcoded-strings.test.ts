@@ -103,8 +103,15 @@ describe("a string a person reads", () => {
           const text = m[1] ?? m[2] ?? "";
           if (prose(text)) found.push(`${file}:${i + 1} ${text}`);
         }
-        for (const m of line.matchAll(/>\s*([A-Za-zÀ-ú][^<>{}\n]{2,})\s*</g)) {
-          if (prose(m[1] ?? "")) found.push(`${file}:${i + 1} ${m[1]}`);
+        // Text between tags, and only where tags exist. A .ts module has no
+        // JSX, so the same pattern there reads a generic — `=> Promise<Page<T>>`
+        // is not a label somebody sees.
+        if (file.endsWith(".tsx")) {
+          for (const m of line.matchAll(
+            />\s*([A-Za-zÀ-ú][^<>{}\n]{2,})\s*</g,
+          )) {
+            if (prose(m[1] ?? "")) found.push(`${file}:${i + 1} ${m[1]}`);
+          }
         }
 
         // Portuguese anywhere at all, including inside a template literal.

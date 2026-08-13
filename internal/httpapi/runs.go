@@ -46,8 +46,10 @@ func (s *Server) ListRuns(ctx context.Context, req openapi.ListRunsRequestObject
 	if !allowed {
 		return forbiddenListRuns(domain.PermRunRead, scopeParams(req.Params.Company, req.Params.Area)), nil
 	}
+	filter.After = cursorFrom(req.Params.Cursor)
 
-	summaries, err := s.store.ListRuns(ctx, filter, phase, limitOf(req.Params.Limit))
+	limit := limitOf(req.Params.Limit)
+	summaries, err := s.store.ListRuns(ctx, filter, phase, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list runs: %w", err)
 	}
@@ -56,7 +58,32 @@ func (s *Server) ListRuns(ctx context.Context, req openapi.ListRunsRequestObject
 	for _, summary := range summaries {
 		items = append(items, runFromSummary(summary))
 	}
-	return openapi.ListRuns200JSONResponse{Items: items}, nil
+	page := openapi.ListRuns200JSONResponse{Items: items}
+	if next := nextPage(summaries, limit); next != "" {
+		page.NextCursor = &next
+	}
+	return page, nil
+}
+
+// cursorFrom reads a page position off the request.
+func cursorFrom(token *string) *domain.RunCursor {
+	if token == nil {
+		return nil
+	}
+	return domain.DecodeRunCursor(*token)
+}
+
+// nextPage is where the following page starts, or nothing when this one ended
+// the list.
+//
+// A page short of the limit is the last one, and offering a cursor there sends
+// the reader to an empty page. A page exactly at the limit may or may not be
+// the last; answering one empty page is the cheaper mistake.
+func nextPage(summaries []domain.RunSummary, limit int) string {
+	if len(summaries) < limit {
+		return ""
+	}
+	return domain.RunCursorAt(summaries[len(summaries)-1]).Encode()
 }
 
 func (s *Server) GetRun(ctx context.Context, req openapi.GetRunRequestObject) (openapi.GetRunResponseObject, error) {

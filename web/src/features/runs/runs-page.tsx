@@ -11,6 +11,7 @@ import {
 } from "@/components/shared/states";
 import { RunsFilters, sinceFor } from "@/features/runs/runs-filters";
 import { RunsKpis } from "@/features/runs/runs-kpis";
+import { LoadMore } from "@/components/shared/load-more";
 import { RunsTable } from "@/features/runs/runs-table";
 import { useRunStats, useRuns } from "@/features/runs/api";
 import type { Phase } from "@/lib/api/client";
@@ -26,7 +27,15 @@ export function RunsPage() {
   // minute anyway; this keeps the query key from churning at all.
   const since = useMemo(() => sinceFor(period), [period]);
 
-  const { data, isLoading, error, refetch } = useRuns({
+  const {
+    items: runs,
+    isLoading,
+    error,
+    refetch,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useRuns({
     phase: phase === "all" ? undefined : phase,
     since,
     q: query || undefined,
@@ -36,8 +45,6 @@ export function RunsPage() {
   // period is going, and a "concluded" share that moved with the phase filter
   // would always read 100%.
   const stats = useRunStats({ since });
-
-  const runs = data?.items ?? [];
 
   return (
     <>
@@ -58,15 +65,7 @@ export function RunsPage() {
         onPeriod={setPeriod}
       />
 
-      <Panel
-        title={t("runs.runs")}
-        action={
-          <span className="text-xs text-muted-foreground tabular-nums">
-            {t("runs.runCount", { count: runs.length })}
-          </span>
-        }
-        flush
-      >
+      <Panel title={t("runs.runs")} flush>
         <Body
           isLoading={isLoading}
           error={error}
@@ -74,6 +73,18 @@ export function RunsPage() {
           empty={runs.length === 0 ? <Nothing query={query} /> : undefined}
         >
           <RunsTable runs={runs} />
+          <div className="px-4 pb-3">
+            <LoadMore
+              loaded={runs.length}
+              // Only when the list and the count are answering the same
+              // question. A filtered list beside an unfiltered total is the
+              // mismatch this component exists to remove.
+              total={phase === "all" && !query ? stats.data?.total : undefined}
+              hasMore={hasNextPage}
+              isLoading={isFetchingNextPage}
+              onLoad={() => void fetchNextPage()}
+            />
+          </div>
         </Body>
       </Panel>
     </>

@@ -13,8 +13,7 @@ import { useRuns } from "@/features/runs/api";
  */
 export function AgentRuns({ agentId }: { agentId: string }) {
   const { t } = useTranslation();
-  const { data, isLoading, error } = useRuns({ agentId });
-  const runs = data?.items ?? [];
+  const { items: runs, isLoading, error } = useRuns({ agentId });
 
   return (
     <section className="flex flex-col gap-2.5">

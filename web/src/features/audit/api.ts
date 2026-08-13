@@ -1,6 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
 import { api, unwrap } from "@/lib/api/client";
 import { useScopeFilter } from "@/features/scope/use-scope-filter";
+import { usePagedQuery } from "@/features/runs/use-paged";
 
 export interface AuditFilters {
   since?: string;
@@ -17,13 +17,11 @@ export interface AuditFilters {
  */
 export function useAudit(filters: AuditFilters) {
   const scope = useScopeFilter();
-  return useQuery({
-    queryKey: ["audit", scope.key, filters] as const,
-    queryFn: async () =>
-      unwrap(
-        await api.GET("/audit", {
-          params: { query: { ...scope.params, ...filters, limit: 100 } },
-        }),
-      ),
-  });
+  return usePagedQuery(["audit", scope.key, filters] as const, async (cursor) =>
+    unwrap(
+      await api.GET("/audit", {
+        params: { query: { ...scope.params, ...filters, limit: 100, cursor } },
+      }),
+    ),
+  );
 }

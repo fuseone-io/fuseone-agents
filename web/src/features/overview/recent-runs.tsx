@@ -29,8 +29,8 @@ export function RecentRuns({
   onSelect?: (runId: string) => void;
 }) {
   const { t } = useTranslation();
-  const { data, isLoading, error } = useRuns({ since });
-  const runs = (data?.items ?? []).slice(0, FETCHED);
+  const { items, isLoading, error } = useRuns({ since });
+  const runs = items.slice(0, FETCHED);
 
   return (
     <section className="flex flex-col gap-2.5">

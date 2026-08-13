@@ -1983,6 +1983,10 @@ export interface components {
             /** Format: date-time */
             updatedAt?: string;
         };
+        AuditPage: {
+            items: components["schemas"]["AuditEntry"][];
+            nextCursor?: string | null;
+        };
         AuditEntry: {
             /** Format: date-time */
             at: string;
@@ -2578,7 +2582,16 @@ export interface components {
         /** @description Company scope. A single value until multi-company (PRD 3.1). */
         Company: string;
         Area: string;
-        /** @description Opaque cursor from the previous page. */
+        /**
+         * @description Opaque cursor from the previous page, taken verbatim from that page's
+         *     `nextCursor`. It carries a position and no authority: the caller's
+         *     scopes are applied to the resumed page exactly as they were to the one
+         *     before it, so a cursor obtained under a wide grant reaches nothing
+         *     under a narrow one.
+         *
+         *     Absent starts at the most recent entry. A page that answers fewer rows
+         *     than the limit is the last one and returns no cursor.
+         */
         Cursor: string;
         Limit: number;
     };
@@ -2630,7 +2643,16 @@ export interface operations {
                 since?: string;
                 /** @description Matches the run identifier or the agent identifier. Applied where the whole set is, so a page of results is the whole answer rather than whatever happened to be loaded. */
                 q?: string;
-                /** @description Opaque cursor from the previous page. */
+                /**
+                 * @description Opaque cursor from the previous page, taken verbatim from that page's
+                 *     `nextCursor`. It carries a position and no authority: the caller's
+                 *     scopes are applied to the resumed page exactly as they were to the one
+                 *     before it, so a cursor obtained under a wide grant reaches nothing
+                 *     under a narrow one.
+                 *
+                 *     Absent starts at the most recent entry. A page that answers fewer rows
+                 *     than the limit is the last one and returns no cursor.
+                 */
                 cursor?: components["parameters"]["Cursor"];
                 limit?: components["parameters"]["Limit"];
             };
@@ -3536,7 +3558,16 @@ export interface operations {
                 /** @description Company scope. A single value until multi-company (PRD 3.1). */
                 company?: components["parameters"]["Company"];
                 area?: components["parameters"]["Area"];
-                /** @description Opaque cursor from the previous page. */
+                /**
+                 * @description Opaque cursor from the previous page, taken verbatim from that page's
+                 *     `nextCursor`. It carries a position and no authority: the caller's
+                 *     scopes are applied to the resumed page exactly as they were to the one
+                 *     before it, so a cursor obtained under a wide grant reaches nothing
+                 *     under a narrow one.
+                 *
+                 *     Absent starts at the most recent entry. A page that answers fewer rows
+                 *     than the limit is the last one and returns no cursor.
+                 */
                 cursor?: components["parameters"]["Cursor"];
                 limit?: components["parameters"]["Limit"];
             };
@@ -3636,6 +3667,17 @@ export interface operations {
                 actor?: string;
                 /** @description Narrow to one record. Both when absent. */
                 source?: "ledger" | "admin";
+                /**
+                 * @description Opaque cursor from the previous page, taken verbatim from that page's
+                 *     `nextCursor`. It carries a position and no authority: the caller's
+                 *     scopes are applied to the resumed page exactly as they were to the one
+                 *     before it, so a cursor obtained under a wide grant reaches nothing
+                 *     under a narrow one.
+                 *
+                 *     Absent starts at the most recent entry. A page that answers fewer rows
+                 *     than the limit is the last one and returns no cursor.
+                 */
+                cursor?: components["parameters"]["Cursor"];
                 limit?: components["parameters"]["Limit"];
             };
             header?: never;
@@ -3644,15 +3686,17 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The trail, newest first. */
+            /**
+             * @description A page of the trail, newest first. Walk `nextCursor` and you have
+             *     walked the whole trail, each entry once — which is what an auditor
+             *     needs and what a bare limit cannot give.
+             */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        items: components["schemas"]["AuditEntry"][];
-                    };
+                    "application/json": components["schemas"]["AuditPage"];
                 };
             };
             401: components["responses"]["Unauthorized"];

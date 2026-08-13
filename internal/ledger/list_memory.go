@@ -35,6 +35,12 @@ func (m *Memory) ListRuns(ctx context.Context, filter domain.RunFilter, phase st
 		if !filter.Until.IsZero() && summary.StartedAt.After(filter.Until) {
 			continue
 		}
+		// The same boundary the SQL side applies as a tuple comparison. The
+		// fake enforcing a weaker rule is how a suite starts certifying
+		// behaviour production does not have.
+		if !filter.After.Before(summary) {
+			continue
+		}
 		out = append(out, summary)
 	}
 

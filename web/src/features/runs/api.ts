@@ -1,6 +1,13 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { useEffect } from "react";
 import { api, unwrap, type Phase } from "@/lib/api/client";
 import { useScopeFilter } from "@/features/scope/use-scope-filter";
+import { usePagedQuery } from "@/features/runs/use-paged";
 
 // Query keys are centralised per feature so an invalidation cannot miss a
 // cache entry because two call sites spelled the key differently.
@@ -29,15 +36,15 @@ export interface RunFilters {
 
 export function useRuns(filters: RunFilters = {}) {
   const scope = useScopeFilter();
-  return useQuery({
-    queryKey: runKeys.list(scope.key, filters),
-    queryFn: async () =>
-      unwrap(
-        await api.GET("/runs", {
-          params: { query: { ...scope.params, ...filters, limit: 50 } },
-        }),
-      ),
-  });
+  return usePagedQuery(runKeys.list(scope.key, filters), async (cursor) =>
+    unwrap(
+      await api.GET("/runs", {
+        params: {
+          query: { ...scope.params, ...filters, limit: 50, cursor },
+        },
+      }),
+    ),
+  );
 }
 
 export function useRun(runId: string) {
@@ -48,16 +55,47 @@ export function useRun(runId: string) {
   });
 }
 
+/**
+ * The run's trail, a page at a time.
+ *
+ * The trail is the audit record, so a page that stopped at two hundred steps
+ * and said nothing was the worst of the truncations: a long run read as a
+ * short one, and nothing on screen admitted it. The chain's own sequence is
+ * the cursor here rather than an opaque token — for a hash chain an integer
+ * position is both honest and useful.
+ */
 export function useRunSteps(runId: string) {
-  return useQuery({
+  const query = useInfiniteQuery({
     queryKey: runKeys.steps(runId),
-    queryFn: async () =>
+    queryFn: async ({ pageParam }) =>
       unwrap(
         await api.GET("/runs/{runId}/steps", {
-          params: { path: { runId }, query: { limit: 200 } },
+          params: {
+            path: { runId },
+            query: { limit: 200, fromSeq: pageParam as number | undefined },
+          },
         }),
       ),
+    initialPageParam: undefined as number | undefined,
+    getNextPageParam: (last) => last.nextSeq ?? undefined,
   });
+
+  // The whole chain, fetched without being asked. Everything on the run screen
+  // is derived from the trail — the cost, the diagram, the side rail, the
+  // count of steps — so a trail stopped halfway is not a shorter page, it is a
+  // set of wrong figures. The pages exist to bound one request, not to bound
+  // what the reader gets.
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = query;
+  useEffect(() => {
+    if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  return {
+    ...query,
+    items: (query.data?.pages ?? []).flatMap((page) => page.items),
+    /** True until the last page has arrived, so a partial trail can say so. */
+    isCompleting: query.hasNextPage || query.isFetchingNextPage,
+  };
 }
 
 /**

@@ -31,7 +31,7 @@ export function TracePanel({
   const run = useRun(runId);
   const steps = useRunSteps(runId);
 
-  const items = steps.data?.items ?? [];
+  const items = steps.items;
   const pending = run.data?.pendingApproval;
 
   return (
