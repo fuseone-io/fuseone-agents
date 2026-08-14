@@ -69,3 +69,27 @@ export function useStartSimulation(agentId: string) {
     },
   });
 }
+
+export type VersionComparison = components["schemas"]["VersionComparison"];
+export type CaseChange = components["schemas"]["CaseChange"];
+
+/**
+ * What changed between two versions on the same corrections.
+ *
+ * Nothing is stored for it: each side is the newest battery run against that
+ * version. A refusal is the answer when one of them was never run — an empty
+ * diff would read as "nothing changed" about two versions nobody compared.
+ */
+export function useComparison(agentId: string, from?: string, to?: string) {
+  return useQuery({
+    enabled: agentId !== "",
+    queryKey: [...agentKeys.all, "comparison", agentId, from, to] as const,
+    retry: false,
+    queryFn: async () =>
+      unwrap(
+        await api.GET("/agents/{agentId}/comparison", {
+          params: { path: { agentId }, query: { from, to } },
+        }),
+      ),
+  });
+}

@@ -443,6 +443,20 @@
     "whyPlaceholder": "duplicate charge, the customer was already helped by phone",
     "wouldUndo": "What would be undone"
   },
+  "comparison": {
+    "costMovedDown": "{{amount}} less",
+    "costMovedUp": "{{amount}} more",
+    "fixed_one": "{{count}} holds again",
+    "fixed_other": "{{count}} hold again",
+    "regressed_one": "{{count}} correction stopped holding",
+    "regressed_other": "{{count}} corrections stopped holding",
+    "standing": {
+      "held": "held",
+      "broke": "broke",
+      "absent": "did not run"
+    },
+    "title": "Against the previous version"
+  },
   "correction": {
     "asksFirst": "should ask before calling",
     "atStep": "at step {{step}}",

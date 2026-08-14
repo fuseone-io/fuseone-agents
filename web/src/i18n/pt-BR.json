@@ -443,6 +443,20 @@
     "whyPlaceholder": "cobrança duplicada, o cliente já foi atendido por telefone",
     "wouldUndo": "O que seria desfeito"
   },
+  "comparison": {
+    "costMovedDown": "{{amount}} a menos",
+    "costMovedUp": "{{amount}} a mais",
+    "fixed_one": "{{count}} voltou a valer",
+    "fixed_other": "{{count}} voltaram a valer",
+    "regressed_one": "{{count}} correção deixou de valer",
+    "regressed_other": "{{count}} correções deixaram de valer",
+    "standing": {
+      "held": "valia",
+      "broke": "quebrou",
+      "absent": "não rodou"
+    },
+    "title": "Contra a versão anterior"
+  },
   "correction": {
     "asksFirst": "deveria perguntar antes de chamar",
     "atStep": "no passo {{step}}",

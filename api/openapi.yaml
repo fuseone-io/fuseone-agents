@@ -608,6 +608,56 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /agents/{agentId}/comparison:
+    get:
+      tags: [agents]
+      operationId: compareVersions
+      summary: What changed between two versions on the same corpus
+      description: |
+        The question somebody is actually asking when they publish is not
+        "does this version pass" but "is it better than the one before it",
+        and two reports side by side do not answer it: the reader is left
+        matching case identifiers by eye, which works for five cases and
+        fails silently at forty.
+
+        Nothing is stored for this. A battery is a set of simulated runs
+        naming a version, and each side of the comparison is the newest
+        battery run against that version — so this is a fold of two folds,
+        with no third account of the same events to keep in step.
+
+        Both versions default to the obvious ones: the current version, and
+        the one published before it.
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: from
+          in: query
+          description: The older version. Defaults to the one published before `to`.
+          schema: { type: string }
+        - name: to
+          in: query
+          description: The newer version. Defaults to the agent's current version.
+          schema: { type: string }
+      responses:
+        '200':
+          description: What changed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VersionComparison' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: |
+            One of the two versions has never been run against the corpus.
+            There is nothing to compare, and answering with an empty diff
+            would read as "nothing changed".
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
   /agents/{agentId}/simulations:
     post:
       tags: [agents]
@@ -3621,6 +3671,56 @@ components:
               description: How many decisions this rule produced in the period.
             updatedBy: { type: string }
             updatedAt: { type: string, format: date-time }
+
+    VersionComparison:
+      type: object
+      description: >
+        Two versions of one agent, checked against the same corrections.
+      required: [from, to, cases, regressed, fixed, costMicros]
+      properties:
+        from: { type: string }
+        to: { type: string }
+        regressed:
+          type: integer
+          description: Corrections that held on the older version and no longer hold.
+        fixed:
+          type: integer
+          description: Corrections that were broken and hold again.
+        costMicros:
+          type: integer
+          format: int64
+          description: >
+            The movement in cost over every case both versions ran, new minus
+            old. Cases only one side ran are left out: a total mixing a rise
+            in price with a case that did not exist yet cannot be acted on.
+        cases:
+          type: array
+          description: >
+            Ordered so the answer is the first row — regressions, then what is
+            still broken, then what was fixed. Fully ordered, so two readings
+            of the same two versions cannot disagree.
+          items: { $ref: '#/components/schemas/CaseChange' }
+
+    CaseChange:
+      type: object
+      required: [id, was, now, costMicros, steps]
+      properties:
+        id: { type: string }
+        was: { $ref: '#/components/schemas/Standing' }
+        now: { $ref: '#/components/schemas/Standing' }
+        costMicros:
+          type: integer
+          format: int64
+          description: New minus old. An agent that reaches the same answer for three times the money is worse.
+        steps: { type: integer }
+
+    Standing:
+      type: string
+      description: >
+        How a case stood in one battery. `absent` is a case that battery never
+        ran — reported rather than dropped, because a corpus that grew between
+        the two versions is a real difference.
+      enum: [held, broke, absent]
 
     AdminEvent:
       type: object

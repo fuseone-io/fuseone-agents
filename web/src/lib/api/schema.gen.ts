@@ -375,6 +375,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{agentId}/comparison": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What changed between two versions on the same corpus
+         * @description The question somebody is actually asking when they publish is not
+         *     "does this version pass" but "is it better than the one before it",
+         *     and two reports side by side do not answer it: the reader is left
+         *     matching case identifiers by eye, which works for five cases and
+         *     fails silently at forty.
+         *
+         *     Nothing is stored for this. A battery is a set of simulated runs
+         *     naming a version, and each side of the comparison is the newest
+         *     battery run against that version — so this is a fold of two folds,
+         *     with no third account of the same events to keep in step.
+         *
+         *     Both versions default to the obvious ones: the current version, and
+         *     the one published before it.
+         */
+        get: operations["compareVersions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{agentId}/simulations": {
         parameters: {
             query?: never;
@@ -2368,6 +2400,38 @@ export interface components {
             /** Format: date-time */
             updatedAt?: string;
         };
+        /** @description Two versions of one agent, checked against the same corrections. */
+        VersionComparison: {
+            from: string;
+            to: string;
+            /** @description Corrections that held on the older version and no longer hold. */
+            regressed: number;
+            /** @description Corrections that were broken and hold again. */
+            fixed: number;
+            /**
+             * Format: int64
+             * @description The movement in cost over every case both versions ran, new minus old. Cases only one side ran are left out: a total mixing a rise in price with a case that did not exist yet cannot be acted on.
+             */
+            costMicros: number;
+            /** @description Ordered so the answer is the first row — regressions, then what is still broken, then what was fixed. Fully ordered, so two readings of the same two versions cannot disagree. */
+            cases: components["schemas"]["CaseChange"][];
+        };
+        CaseChange: {
+            id: string;
+            was: components["schemas"]["Standing"];
+            now: components["schemas"]["Standing"];
+            /**
+             * Format: int64
+             * @description New minus old. An agent that reaches the same answer for three times the money is worse.
+             */
+            costMicros: number;
+            steps: number;
+        };
+        /**
+         * @description How a case stood in one battery. `absent` is a case that battery never ran — reported rather than dropped, because a corpus that grew between the two versions is a real difference.
+         * @enum {string}
+         */
+        Standing: "held" | "broke" | "absent";
         AdminEvent: {
             /** Format: date-time */
             at: string;
@@ -3395,6 +3459,49 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    compareVersions: {
+        parameters: {
+            query?: {
+                /** @description The older version. Defaults to the one published before `to`. */
+                from?: string;
+                /** @description The newer version. Defaults to the agent's current version. */
+                to?: string;
+            };
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What changed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionComparison"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /**
+             * @description One of the two versions has never been run against the corpus.
+             *     There is nothing to compare, and answering with an empty diff
+             *     would read as "nothing changed".
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     startSimulation: {

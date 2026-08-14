@@ -8,6 +8,7 @@ import {
 import { SimulationSummary } from "@/features/agents/simulation-summary";
 import { CaseRow } from "@/features/agents/simulation-case";
 import { CorrectionDialog } from "@/features/agents/correction-dialog";
+import { VersionComparison } from "@/features/agents/version-comparison";
 import type { SimulationCase } from "@/features/agents/simulation-api";
 import type { useSimulation } from "@/features/agents/simulation-api";
 
@@ -48,6 +49,10 @@ export function SimulationReportView({
   return (
     <>
       <SimulationSummary report={report.data} />
+      {/* Under the tally, above the rows: "did it pass" is answered first,
+          and "is it better than the last one" is the question that follows
+          it — not one somebody should have to open another screen for. */}
+      <VersionComparison agentId={agentId} />
       <ul className="flex flex-col gap-2">
         {report.data.cases.map((entry, i) => (
           <li key={entry.runId ?? entry.id ?? i}>
