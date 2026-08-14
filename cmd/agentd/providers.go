@@ -163,9 +163,14 @@ func openVault() (*vault.Vault, error) {
 	// which key sealed a given row.
 	v, err := vault.FromEnv("primary")
 	if errors.Is(err, vault.ErrNoKey) {
+		// Wrapped, so the sentinel survives. The console serves without a key
+		// and the worker refuses to start without one, and both decide by
+		// asking errors.Is — a message that only reads like the sentinel
+		// makes "no key" indistinguishable from "a key that is wrong", which
+		// is how a first install stops booting at all.
 		return nil, fmt.Errorf(
-			"the administration area seals credentials; set %s (agentd version prints how)",
-			vault.KeyEnv)
+			"%w: the administration area seals credentials; set %s (agentd version prints how)",
+			vault.ErrNoKey, vault.KeyEnv)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", vault.KeyEnv, err)
