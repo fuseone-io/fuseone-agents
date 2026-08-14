@@ -77,6 +77,7 @@ export function EditorBody({
             draft={draft}
             patch={patch}
             editing={editing}
+            tools={tools}
             onSteps={onSteps}
           />
         </div>

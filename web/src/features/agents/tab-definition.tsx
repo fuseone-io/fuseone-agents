@@ -3,7 +3,7 @@ import { ListOrdered } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AgentBasicsSection } from "@/features/agents/agent-basics-section";
 import { InstructionsEditor } from "@/features/agents/instructions-editor";
-import type { AgentDefinition } from "@/lib/api/client";
+import type { AgentDefinition, Policy, Tool } from "@/lib/api/client";
 
 /**
  * Who the agent is, and what it is told to do.
@@ -16,6 +16,7 @@ export function TabDefinition({
   draft,
   patch,
   editing,
+  tools,
   onSteps,
 }: {
   draft: AgentDefinition;
@@ -25,6 +26,7 @@ export function TabDefinition({
     creating: boolean;
     onAgentId: (id: string) => void;
   };
+  tools: { catalogue: Tool[]; policies: Policy[] };
   /** Opens the tab where this text is read as stages. */
   onSteps: () => void;
 }) {
@@ -41,6 +43,7 @@ export function TabDefinition({
       <InstructionsEditor
         instructions={draft.instructions}
         onChange={(instructions) => patch({ instructions })}
+        tools={tools}
       />
 
       <ReadAs steps={(draft.steps ?? []).length} onOpen={onSteps} />

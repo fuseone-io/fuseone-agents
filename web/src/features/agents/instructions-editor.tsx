@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Eye, FileText, Pencil } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Section } from "@/features/policies/section";
+import type { Policy, Tool } from "@/lib/api/client";
 import { InstructionRow } from "@/features/agents/instruction-row";
 import { AddBlock } from "@/features/agents/add-block";
 import { InstructionsPayload } from "@/features/agents/instructions-payload";
@@ -28,9 +29,11 @@ import {
 export function InstructionsEditor({
   instructions,
   onChange,
+  tools,
 }: {
   instructions: string;
   onChange: (instructions: string) => void;
+  tools: { catalogue: Tool[]; policies: Policy[] };
 }) {
   const { t, i18n } = useTranslation();
   const [view, setView] = useState<"write" | "read">("write");
@@ -75,6 +78,7 @@ export function InstructionsEditor({
                 write(blocks.map((b, i) => (i === at ? { ...b, text } : b)))
               }
               onRemove={() => write(blocks.filter((_, i) => i !== at))}
+              tools={tools}
             />
           ))}
 
