@@ -1,6 +1,6 @@
 # NT-006 · Evaluating agents
 
-**Status** Proposal · **Date** 2026-08-13
+**Status** Implemented · **Date** 2026-08-13 · **Delivered** 2026-08-14
 **References** [PRD-001](PRD-001-fuseone-agents.md) — FU-10, FU-11, FU-12, FU-13, FO-05, AU-01, AU-02, DE-01, N4 · [NT-005](NT-005-interaction-channels.md)
 **Outcome** Finish a mechanism that is already most of the way built, rather than adopt a second one
 
@@ -64,34 +64,56 @@ for softening the criterion.
 Everything that exists today is the first column. It is the cheap, objective,
 deterministic one, and in a governed platform it is also the one that matters.
 
-## 3. What is missing
+## 3. What was missing, and what shipped
 
-**A score and a threshold.** `Battery` counts held and broken and a person
-reads it. FU-10 asks for a simulation *reviewed*, not a simulation *passed*. A
-threshold per agent, and publishing refuses below it.
+**A gate, not a score.** `Battery` counted held and broken and a person read
+it. What shipped is a gate — and it is on **starting** an agent, not on
+publishing it, which is where this note originally put it and where it cannot
+work: a version's identifier is the digest of its own bytes, so it does not
+exist until it is published and nothing can have been simulated against it
+before. Publishing writes a definition down; starting is what makes it act.
 
-**Comparison between versions.** There is no way to say v4 is better than v3 on
-this corpus, which is the question somebody is actually asking when they
-publish. The same corpus and two versions is a diff, and everything needed for
-it is stored.
+It is binary rather than a threshold, per §2.1. These are structural
+assertions, and an agent that reached a financial tool in one case out of
+twenty is not ninety-five per cent good. It is also narrow: only a battery run
+against that exact version counts, because FU-10 already stands before a first
+publication and demanding a fresh battery for every corrected sentence would
+make the corpus something people route around. Stopping an agent is never
+refused.
 
-**Drift.** A provider ships a new model under a name that did not change and
-behaviour moves. In an installation inside somebody else's network nobody
-notices until it is an incident. The fix is running the corpus **on a clock**
-rather than only on publish, and saying so when broken rises with nothing
-having been changed. The channel from NT-005 is where that notice goes.
+**Comparison between versions.** Shipped, on `GET /agents/{id}/comparison`.
+Nothing is stored for it: each side is the newest battery run against that
+version, so the comparison is a fold of two folds. Cost is in it as well as
+held and broken — an agent that reaches the same answer for three times the
+money is worse, and a diff of corrections alone reports that as no change.
 
-**Two assertion kinds.** A cost ceiling and a step ceiling per case. An agent
-that reaches the right answer for three times the money is a regression, and
-today it passes green.
+**Drift.** Shipped, as two sweeps in the worker. The reading is two batteries
+of the *same* version: a version that did not change is an agent that did not
+change, so a correction that held last night and does not hold this morning is
+the world moving underneath it. Which means the comparison above was already
+the mechanism — drift is `Compare` with both sides on one version.
 
-**The model, pinned to the case.** `PlannedPayload` already records `model` and
-`effort` per step, and specifications are versioned — but a case does not
-record the model it passed against. Without that, a rise in broken is
-ambiguous: the agent changed, or the model under it did. One field makes drift
-a signal instead of a mystery.
+The battery runs daily and the reading pass hourly, and they are deliberately
+not chained: a battery is a set of runs the pool advances over minutes, so a
+loop that opened one and read it back would read a half-fold every time. Each
+battery is named after the window it belongs to rather than randomly, so three
+workers sweeping the same night ask for the same runs and the ledger accepts
+one of them. The notice goes to the channel from NT-005, and drift is in that
+channel's default events — it fires rarely, and it is the one notice nobody
+would think to opt into.
 
-**Adversarial cases.** NT-005 §5 establishes that text arriving from an
+**Two assertion kinds.** Shipped: `costs_at_most` and `within_steps`, beside
+`calls_before`. An agent that reaches the right answer for three times the
+money is a regression, and it used to pass green.
+
+**The model, pinned to the case.** Shipped. A case records the model and
+effort it last held against, so a rise in broken is no longer ambiguous: every
+case still naming the model it always did is a change somebody made, and one
+where the model moved underneath is drift. That is the difference that decides
+who gets woken up.
+
+**Adversarial cases.** Still a corpus somebody writes rather than code to
+write. NT-005 §5 establishes that text arriving from an
 external channel is entirely adversary-controlled. The assertion for that is
 already expressible: given this poisoned input, did the agent still refuse to
 reach a financial tool? That is `never_calls` on a hostile case — no judge, no
@@ -185,3 +207,22 @@ built.
   *its* job.
 - **A second trace store.** The ledger is the trace. Anything that needed its
   own copy would be a second record of the same runs.
+
+---
+
+## 9. What remains
+
+**Adversarial cases** (§3). The assertion is already expressible — `never_calls`
+on a poisoned input, no judge and no score — so what is missing is a corpus
+somebody writes, not code. It is worth writing: in practice it is the Gate's
+own test against prompt injection.
+
+**Asserting on a tool's arguments.** `never_calls` and `calls` say whether a
+tool was reached and say nothing about what it was asked to do, which leaves
+"refunded the right customer" outside what a case can check. The arguments are
+behind the claim check by design (AU-04), and the fold has no content store —
+so this is a real piece of work rather than a missing switch.
+
+**Synthetic cases for a cold start** (§6). Unbuilt, and still gated on the same
+condition: a synthetic case is marked synthetic, or an installation certifies
+an agent against examples nobody has ever seen happen.
