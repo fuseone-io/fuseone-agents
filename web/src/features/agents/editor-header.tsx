@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { Ellipsis, FlaskConical, History } from "lucide-react";
@@ -9,12 +8,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useSidebar } from "@/components/ui/sidebar";
 import { Mono } from "@/components/shared/mono";
 import { StateDot } from "@/components/shared/state-dot";
 import {
   PageActions,
   PageIdentity,
+  useChrome,
 } from "@/components/layout/page-actions";
 
 /**
@@ -41,21 +40,14 @@ export function EditorHeader({
   stage: string;
 }) {
   const { t } = useTranslation();
-  const { open, setOpen } = useSidebar();
 
-  useEffect(() => {
-    const was = open;
-    setOpen(false);
-    return () => setOpen(was);
-    // Once, on entering the editor. Following `open` would fight somebody who
-    // opened the rail on purpose while working here.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // The trail names the agent, and the chrome stands back while it is being
+  // written. Both asked for rather than set: nothing here is left changed.
+  useChrome({ label: name, compact: true });
 
   return (
     <>
       <PageIdentity>
-        <span className="truncate text-sm font-medium">{name}</span>
         {version && (
           <span className="rounded-md border border-border bg-muted px-1.5 py-px">
             <Mono dim className="text-[11px]">

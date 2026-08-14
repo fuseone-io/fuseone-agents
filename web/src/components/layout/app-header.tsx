@@ -13,6 +13,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import {
   PageActionsTarget,
   PageIdentityTarget,
+  useShellChrome,
 } from "@/components/layout/page-actions";
 import { LanguageToggle } from "@/components/shared/language-toggle";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
@@ -29,6 +30,7 @@ import { PAGE_TITLES, SUB_TITLES } from "@/components/layout/nav";
 export function AppHeader() {
   const { t } = useTranslation();
   const { pathname } = useLocation();
+  const { label } = useShellChrome();
 
   return (
     <header className="flex h-[52px] shrink-0 items-center gap-2 border-b border-border px-6">
@@ -37,7 +39,7 @@ export function AppHeader() {
           its sr-only text without our having to fork the file. */}
       <SidebarTrigger className="-ml-1" aria-label={t("shell.toggleSidebar")} />
       <Separator orientation="vertical" className="mr-1 !h-[18px]" />
-      <Crumbs pathname={pathname} />
+      <Crumbs pathname={pathname} label={label} />
       {/* Which record, beside where you are: a screen that repeats the header
           underneath it has two headers. */}
       <PageIdentityTarget />
@@ -52,7 +54,7 @@ export function AppHeader() {
   );
 }
 
-function Crumbs({ pathname }: { pathname: string }) {
+function Crumbs({ pathname, label }: { pathname: string; label?: string }) {
   const { t } = useTranslation();
   const [section = "runs", detail] = pathname.split("/").filter(Boolean);
   // The key, or the segment itself for a screen with no name registered.
@@ -79,7 +81,12 @@ function Crumbs({ pathname }: { pathname: string }) {
                   mono. A named sub-screen is not one: "interview" set in the
                   same face as a run id claims to be a record somebody could
                   look up. */}
-              {SUB_TITLES[detail] ? (
+              {/* The record's own name when it told us one: an identifier is
+                  what a URL needs and a name is what a person reads, and
+                  showing both side by side reads as a duplicate. */}
+              {label ? (
+                <BreadcrumbPage>{label}</BreadcrumbPage>
+              ) : SUB_TITLES[detail] ? (
                 <BreadcrumbPage>{t(SUB_TITLES[detail])}</BreadcrumbPage>
               ) : (
                 <BreadcrumbPage className="font-mono text-xs">

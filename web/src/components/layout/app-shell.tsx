@@ -2,7 +2,10 @@ import type { ReactNode } from "react";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { AppHeader } from "@/components/layout/app-header";
-import { PageActionsProvider } from "@/components/layout/page-actions";
+import {
+  PageActionsProvider,
+  useShellChrome,
+} from "@/components/layout/page-actions";
 import { StopBanner } from "@/features/admin/stop-banner";
 import { usePreferences } from "@/features/preferences/use-preferences";
 
@@ -19,8 +22,25 @@ import { usePreferences } from "@/features/preferences/use-preferences";
  * because the card no longer does.
  */
 export function AppShell({ children }: { children: ReactNode }) {
+  return (
+    <PageActionsProvider>
+      <Shell>{children}</Shell>
+    </PageActionsProvider>
+  );
+}
+
+/**
+ * The shell proper, inside the slots so it can read what the screen asked for.
+ *
+ * A screen that wants the navigation out of the way asks; it does not write to
+ * the stored preference. Borrowing a setting and forgetting to give it back is
+ * how somebody finds their sidebar collapsed on a screen that never mentioned
+ * it — and stops trusting the rest of their preferences.
+ */
+function Shell({ children }: { children: ReactNode }) {
   const sidebarOpen = usePreferences((state) => state.sidebarOpen);
   const setSidebarOpen = usePreferences((state) => state.setSidebarOpen);
+  const { compact } = useShellChrome();
 
   return (
     // h-svh, not the block's min-h-svh. With only a minimum the wrapper grew
@@ -33,7 +53,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     // collapses it again on every single page load.
     <SidebarProvider
       className="h-svh bg-background"
-      open={sidebarOpen}
+      open={compact ? false : sidebarOpen}
       onOpenChange={setSidebarOpen}
     >
       <AppSidebar />
@@ -41,7 +61,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <SidebarInset className="min-w-0 bg-background">
         {/* Wraps both, so a page deep in the content can render its action
             into the header above it. */}
-        <PageActionsProvider>
+        <>
           <AppHeader />
           {/* SidebarInset is already the page's main landmark.
               Children do not shrink. A card that clips its own corners with
@@ -58,7 +78,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <StopBanner />
             {children}
           </div>
-        </PageActionsProvider>
+        </>
       </SidebarInset>
     </SidebarProvider>
   );

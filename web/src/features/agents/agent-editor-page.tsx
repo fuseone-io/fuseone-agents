@@ -86,11 +86,11 @@ export function AgentEditorPage() {
       />
       <EditorTabBar active={tab} onChange={setTab} counts={counts(draft)} />
 
-      {/* The only scrolling region. The measure belongs to each tab rather
-          than to this container: prose and forms stop at a width somebody can
-          read, and a canvas or a catalogue takes what it is given. */}
-      <div className="flex-1 overflow-y-auto px-5 py-6">
-        <div className="flex w-full flex-col gap-4">
+      {/* The only scrolling region, and unpadded: a tab with a bar of its own
+          needs it to reach both edges, and a tab of cards adds its own
+          measure. Padding here would inset the bar and make it look like one
+          more card. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           <EditorBody
             tab={tab}
             draft={draft}
@@ -104,7 +104,6 @@ export function AgentEditorPage() {
             }}
             tools={{ catalogue, policies: rules }}
           />
-        </div>
       </div>
 
       <EditorFooter

@@ -63,8 +63,11 @@ export function TabSteps({
   }, [draft.instructions, steps.length, drawing]);
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="mx-auto flex w-full max-w-[820px] flex-wrap items-center gap-3">
+    <div className="flex min-h-0 flex-1 flex-col">
+      {/* The tab's own bar: full width, with a rule under it, so the choice
+          of view and the way to add a step sit where every tab's controls sit
+          rather than floating above the content as one more card. */}
+      <div className="flex flex-wrap items-center gap-3 border-b border-border px-5 py-3">
         <Tabs
           value={view}
           onValueChange={(next) => setView(next as typeof view)}
@@ -105,12 +108,12 @@ export function TabSteps({
         </Button>
       </div>
 
-      <div className="mx-auto w-full max-w-[820px]">
+      <div className="mx-auto w-full max-w-[820px] px-5 pt-4">
         <DriftWarning tools={silent} />
       </div>
 
       {steps.length === 0 ? (
-        <div className="flex h-[320px] overflow-hidden rounded-lg border border-border">
+        <div className="flex min-h-0 flex-1">
           <EmptyCanvas
             reading={drawing.reading}
             canRead={draft.instructions.trim() !== ""}
@@ -120,7 +123,7 @@ export function TabSteps({
       ) : view === "text" ? (
         // Sentences are read left to right and stop at a measure somebody can
         // follow; the canvas is looked at and takes what it is given.
-        <div className="mx-auto w-full max-w-[820px]">
+        <div className="mx-auto w-full max-w-[820px] px-5 pt-4 pb-10">
           <StepsTextView
             steps={steps}
             catalogue={catalogue}
@@ -137,7 +140,7 @@ export function TabSteps({
           />
         </div>
       ) : (
-        <div className="flex h-[440px] overflow-hidden rounded-lg border border-border">
+        <div className="flex min-h-0 flex-1">
           <StepStrip
             steps={steps}
             selected={selected}

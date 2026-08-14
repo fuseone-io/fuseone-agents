@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useState,
   type ReactNode,
 } from "react";
@@ -23,13 +24,57 @@ interface Slots {
   actions: HTMLElement | null;
   identity: HTMLElement | null;
   attach: (which: "actions" | "identity", node: HTMLElement | null) => void;
+  /** What the last crumb should read, when the record knows its own name. */
+  label?: string;
+  name: (label?: string) => void;
+  /** Whether the chrome around the page should stand back. */
+  compact: boolean;
+  setCompact: (compact: boolean) => void;
 }
 
 const SlotContext = createContext<Slots>({
   actions: null,
   identity: null,
   attach: () => {},
+  name: () => {},
+  compact: false,
+  setCompact: () => {},
 });
+
+/**
+ * What the shell should call this screen, and how much room it should take.
+ *
+ * Compact is asked for rather than set: an editor collapsing the navigation by
+ * writing to somebody's stored preference leaves it collapsed on the next
+ * screen they open, which is a screen quietly changing a setting it was only
+ * borrowing. Asked this way there is nothing to put back.
+ */
+export function useChrome({
+  label,
+  compact,
+}: {
+  label?: string;
+  compact?: boolean;
+}) {
+  const { name, setCompact } = useContext(SlotContext);
+
+  useEffect(() => {
+    name(label);
+    return () => name(undefined);
+  }, [name, label]);
+
+  useEffect(() => {
+    if (!compact) return;
+    setCompact(true);
+    return () => setCompact(false);
+  }, [setCompact, compact]);
+}
+
+/** What the shell reads to draw its own chrome. */
+export function useShellChrome() {
+  const { label, compact } = useContext(SlotContext);
+  return { label, compact };
+}
 
 /** Holds the slots for everything inside the shell. */
 export function PageActionsProvider({ children }: { children: ReactNode }) {
@@ -37,6 +82,11 @@ export function PageActionsProvider({ children }: { children: ReactNode }) {
     actions: HTMLElement | null;
     identity: HTMLElement | null;
   }>({ actions: null, identity: null });
+  const [label, setLabel] = useState<string | undefined>(undefined);
+  const [compact, setCompactState] = useState(false);
+
+  const name = useCallback((next?: string) => setLabel(next), []);
+  const setCompact = useCallback((next: boolean) => setCompactState(next), []);
 
   const attach = useCallback(
     (which: "actions" | "identity", node: HTMLElement | null) =>
@@ -45,7 +95,9 @@ export function PageActionsProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <SlotContext.Provider value={{ ...slots, attach }}>
+    <SlotContext.Provider
+      value={{ ...slots, attach, label, name, compact, setCompact }}
+    >
       {children}
     </SlotContext.Provider>
   );

@@ -35,7 +35,8 @@ export function EditorBody({
   // Where a column is the right answer: prose and forms are read left to
   // right, and a measure nobody can read is a measure nobody reads twice. A
   // canvas and a catalogue are not read that way and take the width.
-  const column = "mx-auto flex w-full max-w-[820px] flex-col gap-4";
+  const column =
+    "mx-auto flex w-full max-w-[820px] flex-col gap-4 px-5 pt-6 pb-10";
 
   return (
     <>
@@ -85,12 +86,14 @@ export function EditorBody({
         />
       )}
       {tab === "tools" && (
-        <AgentToolsSection
-          granted={draft.tools ?? []}
-          catalogue={tools.catalogue}
-          policies={tools.policies}
-          patch={patch}
-        />
+        <div className="flex min-h-0 flex-1 flex-col">
+          <AgentToolsSection
+            granted={draft.tools ?? []}
+            catalogue={tools.catalogue}
+            policies={tools.policies}
+            patch={patch}
+          />
+        </div>
       )}
       {tab === "governance" && (
         <div className={column}>

@@ -39,7 +39,7 @@ export function StepInspector({
 
   if (!step || at === undefined) {
     return (
-      <div className="flex w-[280px] shrink-0 items-center border-l border-border p-4">
+      <div className="flex w-[300px] shrink-0 items-center border-l border-border p-4">
         <p className="text-xs text-muted-foreground">{t("agents.pickAStep")}</p>
       </div>
     );
@@ -48,7 +48,7 @@ export function StepInspector({
   const { pack, catalogue, policies } = tools;
   const reaches = step.reaches ?? [];
   return (
-    <div className="flex w-[280px] shrink-0 flex-col gap-3 overflow-y-auto border-l border-border p-3">
+    <div className="flex w-[300px] shrink-0 flex-col gap-3 overflow-y-auto border-l border-border p-4">
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="step-name" className="text-2xs uppercase tracking-label">
           {t("agents.stepOf", { number: at + 1, total })}
