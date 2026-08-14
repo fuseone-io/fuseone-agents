@@ -50,12 +50,19 @@ export function useAgentDraft(loaded?: AgentDetail) {
   };
 }
 
-/** Strips a published version back to what the form edits. */
+/**
+ * A published version, as the form's draft.
+ *
+ * Everything it holds travels, including the parts no field on this screen
+ * shows. Publishing writes the draft whole, so a value dropped here is a value
+ * deleted on the next edit — which is how an agent that emitted an event
+ * quietly stopped, taking every agent composed onto it with it.
+ */
 export function toDefinition(
   detail?: AgentDetail,
 ): AgentDefinition | undefined {
   if (!detail) return undefined;
-  const { agent, instructions } = detail;
+  const { agent, instructions, steps, emits } = detail;
   return {
     name: agent.name,
     area: agent.scope.area,
@@ -66,6 +73,11 @@ export function toDefinition(
     tools: agent.tools,
     budget: agent.budget,
     triggers: agent.triggers ?? [],
+    // Everything the version holds, and not only what the form shows a field
+    // for. What is not carried here is deleted the next time somebody
+    // publishes — silently, on an edit they made for another reason.
+    steps: steps ?? [],
+    emits: emits ?? [],
   };
 }
 
@@ -109,6 +121,11 @@ export function changesBetween(
   compare("agents.fieldTools", before.tools, after.tools);
   compare("agents.fieldBudget", before.budget, after.budget);
   compare("agents.fieldTriggers", before.triggers, after.triggers);
+  // The steps are a change worth naming: they are what the Gate is meant to
+  // obey, and "0 changes" on a screen where somebody just redrew the process
+  // is the summary telling them their work did not land.
+  compare("agents.fieldSteps", before.steps, after.steps);
+  compare("agents.fieldEmits", before.emits, after.emits);
   return changes;
 }
 

@@ -12,7 +12,6 @@ import { ModelField, modelsFor } from "@/features/agents/model-field";
 import { useIntegrations } from "@/features/integrations/api";
 import { Section, Labelled } from "@/features/policies/section";
 import { AgentAreaField } from "@/features/agents/agent-area-field";
-import { AgentInstructionsField } from "@/features/agents/agent-instructions-field";
 import type { AgentDefinition } from "@/lib/api/client";
 
 /** Who this agent is, and what it was told to do. */
@@ -125,7 +124,6 @@ export function AgentBasicsSection({
         </Labelled>
       </div>
 
-      <AgentInstructionsField draft={draft} patch={patch} />
 
     </Section>
   );

@@ -4048,6 +4048,15 @@ components:
             pack — a different thing from a single step, and worth telling
             apart on a screen.
           items: { $ref: '#/components/schemas/AgentStep' }
+        emits:
+          type: array
+          description: |
+            Events a finished run of this version publishes (PRD SE-10).
+            Returned so that reading a version and publishing it again is the
+            same version: a client that could not see them would drop them on
+            every edit, and an agent that quietly stopped emitting takes every
+            agent composed onto it down with it.
+          items: { type: string }
         versions:
           type: array
           description: Every published version, newest first.

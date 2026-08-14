@@ -128,29 +128,34 @@ func (r *Registry) Get(ctx context.Context, agent domain.AgentID, version domain
 	return s, nil
 }
 
-// Steps reads the stages one published version declares.
+// Declared reads the parts of a published version a summary leaves out.
 //
-// Its own read rather than a field on the summary: a listing of twenty agents
-// would otherwise carry twenty processes nobody asked to see, which is the
-// same reason the instructions are read one version at a time.
-func (r *Registry) Steps(
+// Its own read rather than fields on the summary: a listing of twenty agents
+// would carry twenty processes nobody asked to see, which is the same reason
+// the instructions are read one version at a time. Both in one answer,
+// because what a read omits an editor cannot put back — and publishing again
+// deletes it.
+func (r *Registry) Declared(
 	ctx context.Context, agent domain.AgentID, version domain.VersionID,
-) ([]Step, error) {
-	var raw []byte
+) ([]Step, []string, error) {
+	var (
+		raw   []byte
+		emits []string
+	)
 	err := r.pool.QueryRow(ctx,
-		`select steps from agent_specs where agent_id = $1 and version_id = $2`,
-		string(agent), string(version)).Scan(&raw)
+		`select steps, emits from agent_specs where agent_id = $1 and version_id = $2`,
+		string(agent), string(version)).Scan(&raw, &emits)
 
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil
+		return nil, nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("spec: read steps of %s@%s: %w", agent, version, err)
+		return nil, nil, fmt.Errorf("spec: read declarations of %s@%s: %w", agent, version, err)
 	}
 
 	var steps []Step
 	if err := json.Unmarshal(raw, &steps); err != nil {
-		return nil, fmt.Errorf("spec: decode steps: %w", err)
+		return nil, nil, fmt.Errorf("spec: decode steps: %w", err)
 	}
-	return steps, nil
+	return steps, emits, nil
 }

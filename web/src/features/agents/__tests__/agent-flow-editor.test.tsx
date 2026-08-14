@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AgentFlowEditor } from "@/features/agents/agent-flow-editor";
-import type { AgentDefinition } from "@/lib/api/client";
+import type { AgentDefinition, Tool } from "@/lib/api/client";
 
 /*
 Drawing the process.
@@ -25,13 +25,26 @@ const draft = (over: Partial<AgentDefinition> = {}): AgentDefinition => ({
   ...over,
 });
 
+const CATALOGUE: Tool[] = [
+  { toolId: "crm.lookup", server: "crm", effect: "read", untrusted: true },
+  { toolId: "crm.reply", server: "crm", effect: "write", untrusted: true },
+  // In the catalogue and not in the pack: dragging it in is a grant, and the
+  // screen has to say so.
+  { toolId: "erp.transfer", server: "erp", effect: "financial", untrusted: true },
+];
+
 function renderEditor(over: Partial<AgentDefinition> = {}, patch = vi.fn()) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   render(
     <QueryClientProvider client={client}>
-      <AgentFlowEditor draft={draft(over)} patch={patch} />
+      <AgentFlowEditor
+        draft={draft(over)}
+        patch={patch}
+        catalogue={CATALOGUE}
+        policies={[]}
+      />
     </QueryClientProvider>,
   );
   return patch;
@@ -41,13 +54,24 @@ describe("drawing an agent's process", () => {
   beforeEach(() => vi.restoreAllMocks());
   afterEach(() => vi.unstubAllGlobals());
 
-  it("offers only what the agent already holds", () => {
-    // A rail of components reads as a catalogue of things you may have. This
-    // one is the pack, so nothing in it can widen the agent.
+  it("shows the whole catalogue, and what every tool does", () => {
+    // Dragging in a tool the agent does not hold grants it — the same
+    // authority the tools section of this form carries. What it must not be is
+    // quiet, so the effect is on every row and not only on the granted ones.
     renderEditor();
 
-    expect(screen.getByText("crm.lookup")).toBeInTheDocument();
-    expect(screen.queryByText("erp.transfer")).not.toBeInTheDocument();
+    expect(screen.getByText("erp.transfer")).toBeInTheDocument();
+    expect(screen.getAllByText(/financeir|financial/i).length).toBeGreaterThan(0);
+  });
+
+  it("says what the Gate will do with what a stage reaches", () => {
+    // The pack is the ceiling and the stage is the permission, so an author
+    // looking at one card wants to know what happens here.
+    renderEditor({ steps: [{ name: "Pagar", reaches: ["erp.transfer"] }] });
+
+    fireEvent.click(screen.getByText("Pagar"));
+
+    expect(screen.getByText(/Gate/)).toBeInTheDocument();
   });
 
   it("offers a stage that calls nothing, which is a real answer", () => {

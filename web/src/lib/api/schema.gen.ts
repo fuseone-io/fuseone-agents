@@ -2651,6 +2651,14 @@ export interface components {
              *     apart on a screen.
              */
             steps?: components["schemas"]["AgentStep"][];
+            /**
+             * @description Events a finished run of this version publishes (PRD SE-10).
+             *     Returned so that reading a version and publishing it again is the
+             *     same version: a client that could not see them would drop them on
+             *     every edit, and an agent that quietly stopped emitting takes every
+             *     agent composed onto it down with it.
+             */
+            emits?: string[];
             /** @description Every published version, newest first. */
             versions: components["schemas"]["AgentVersion"][];
         };

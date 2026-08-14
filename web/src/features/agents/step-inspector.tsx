@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Mono } from "@/components/shared/mono";
+import { StepGuardrails } from "@/features/agents/step-guardrails";
+import type { Policy, Tool } from "@/lib/api/client";
 import type { components } from "@/lib/api/schema.gen";
 
 type AgentStep = components["schemas"]["AgentStep"];
@@ -19,15 +21,16 @@ type AgentStep = components["schemas"]["AgentStep"];
 export function StepInspector({
   step,
   at,
-  pack,
   onChange,
   onRemove,
+  tools,
 }: {
   step?: AgentStep;
   at?: number;
-  pack: string[];
   onChange: (over: Partial<AgentStep>) => void;
   onRemove: () => void;
+  /** The pack, the catalogue it came from, and the policies over it. */
+  tools: { pack: string[]; catalogue: Tool[]; policies: Policy[] };
 }) {
   const { t } = useTranslation();
 
@@ -39,6 +42,7 @@ export function StepInspector({
     );
   }
 
+  const { pack, catalogue, policies } = tools;
   const reaches = step.reaches ?? [];
   const toggle = (tool: string) =>
     onChange({
@@ -101,6 +105,17 @@ export function StepInspector({
           value={step.stopsWhen ?? ""}
           onChange={(e) => onChange({ stopsWhen: e.target.value })}
           placeholder={t("agents.stopsWhenPlaceholder")}
+        />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <span className="text-2xs uppercase tracking-label text-muted-foreground">
+          {t("agents.whatTheGateDoes")}
+        </span>
+        <StepGuardrails
+          reaches={reaches}
+          catalogue={catalogue}
+          policies={policies}
         />
       </div>
 

@@ -1,8 +1,10 @@
 import { useTranslation } from "react-i18next";
+import { FileText } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Section } from "@/features/policies/section";
 import { Textarea } from "@/components/ui/textarea";
 import { AgentFlowEditor } from "@/features/agents/agent-flow-editor";
-import type { AgentDefinition } from "@/lib/api/client";
+import type { AgentDefinition, Policy, Tool } from "@/lib/api/client";
 
 /**
  * What the agent is told to do, written and read.
@@ -20,18 +22,25 @@ import type { AgentDefinition } from "@/lib/api/client";
 export function AgentInstructionsField({
   draft,
   patch,
+  catalogue,
+  policies,
 }: {
   draft: AgentDefinition;
   patch: (over: Partial<AgentDefinition>) => void;
+  catalogue: Tool[];
+  policies: Policy[];
 }) {
   const { t } = useTranslation();
   const declared = draft.steps ?? [];
 
   return (
-    <div className="flex flex-col gap-2">
+    <Section
+      icon={FileText}
+      title={t("agents.instructions")}
+      hint={t("agents.instructionsHint")}
+    >
       <Tabs defaultValue="write">
         <div className="flex items-center gap-3">
-          <span className="text-xs font-medium">{t("agents.instructions")}</span>
           <TabsList className="ml-auto h-8">
             <TabsTrigger value="write">{t("agents.writeIt")}</TabsTrigger>
             <TabsTrigger value="steps">
@@ -58,9 +67,14 @@ export function AgentInstructionsField({
         </TabsContent>
 
         <TabsContent value="steps">
-          <AgentFlowEditor draft={draft} patch={patch} />
+          <AgentFlowEditor
+            draft={draft}
+            patch={patch}
+            catalogue={catalogue}
+            policies={policies}
+          />
         </TabsContent>
       </Tabs>
-    </div>
+    </Section>
   );
 }

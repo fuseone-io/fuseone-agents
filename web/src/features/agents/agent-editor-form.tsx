@@ -1,5 +1,6 @@
 import { AgentBasicsSection } from "@/features/agents/agent-basics-section";
 import { AgentBudgetSection } from "@/features/agents/agent-budget-section";
+import { AgentInstructionsField } from "@/features/agents/agent-instructions-field";
 import { AgentToolsSection } from "@/features/agents/agent-tools-section";
 import { AgentTriggersSection } from "@/features/agents/agent-triggers-section";
 import { NarrativeCard } from "@/features/agents/narrative-card";
@@ -39,6 +40,14 @@ export function AgentEditorForm({
         agentId={agentId}
         editable={creating}
         onAgentId={onAgentId}
+      />
+      {/* The process, next: what the agent is told to do and how that reads
+          as stages. The pack is below because a stage can only narrow it. */}
+      <AgentInstructionsField
+        draft={draft}
+        patch={patch}
+        catalogue={catalogue}
+        policies={policies}
       />
       <AgentTriggersSection draft={draft} patch={patch} />
       <AgentToolsSection

@@ -96,12 +96,15 @@ func (s *Server) GetAgent(ctx context.Context, req openapi.GetAgentRequestObject
 	// the same reason the prose is: a page of twenty agents would otherwise
 	// carry twenty processes nobody asked to read.
 	if s.definitions != nil {
-		declared, err := s.definitions.Steps(ctx, wanted.ID, wanted.VersionID)
+		declared, emits, err := s.definitions.Declared(ctx, wanted.ID, wanted.VersionID)
 		if err != nil {
-			return nil, fmt.Errorf("agent steps: %w", err)
+			return nil, fmt.Errorf("agent declarations: %w", err)
 		}
 		if len(declared) > 0 {
 			out.Steps = ptr(stepsFrom(declared))
+		}
+		if len(emits) > 0 {
+			out.Emits = &emits
 		}
 	}
 	for _, v := range versions {

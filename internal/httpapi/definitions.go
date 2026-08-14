@@ -17,8 +17,12 @@ stages are read one version at a time, beside the instructions they belong to.
 */
 // Definitions reads the half of a specification the summary leaves out,
 // declared here by the consumer.
+//
+// Both halves in one answer, because they are dropped for the same reason:
+// what a read does not return, an editor cannot put back, and publishing
+// again deletes it. Two calls would be two chances to forget one.
 type Definitions interface {
-	Steps(ctx context.Context, agent domain.AgentID, version domain.VersionID) ([]spec.Step, error)
+	Declared(ctx context.Context, agent domain.AgentID, version domain.VersionID) (steps []spec.Step, emits []string, err error)
 }
 
 // WithDefinitions wires reading a published version's declared stages.
