@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { AgentStepsView } from "@/features/agents/agent-steps-view";
+import { AgentFlowEditor } from "@/features/agents/agent-flow-editor";
 import type { AgentDefinition } from "@/lib/api/client";
 
 /**
@@ -58,7 +58,7 @@ export function AgentInstructionsField({
         </TabsContent>
 
         <TabsContent value="steps">
-          <AgentStepsView draft={draft} patch={patch} />
+          <AgentFlowEditor draft={draft} patch={patch} />
         </TabsContent>
       </Tabs>
     </div>

@@ -68,7 +68,16 @@ export function StepNode({
         {data.index + 1}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-xs font-medium">{data.name}</p>
+        {/* A card with a blank title is one nobody can identify later, and
+            the tool is not its name: two stages can call the same one. */}
+        <p
+          className={cn(
+            "truncate text-xs font-medium",
+            !data.name && "italic text-muted-foreground",
+          )}
+        >
+          {data.name || t("agents.unnamedStep")}
+        </p>
         <p className="flex items-center gap-1 truncate text-[11px] text-muted-foreground">
           {data.reaches.length > 0 ? (
             <>

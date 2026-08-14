@@ -6,14 +6,13 @@ import {
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
-  type Edge,
-  type Node,
   type NodeChange,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { StepNode } from "@/features/agents/step-node";
 import { STEP_CELL } from "@/features/agents/agent-canvas-layout";
-import { edgePorts, indexAt, placeAt } from "@/features/runs/run-graph-layout";
+import { buildGraph } from "@/features/agents/agent-graph";
+import { indexAt } from "@/features/runs/run-graph-layout";
 import type { components } from "@/lib/api/schema.gen";
 
 type AgentStep = components["schemas"]["AgentStep"];
@@ -36,8 +35,10 @@ const NODE_TYPES = { step: StepNode };
  */
 export function AgentCanvas(props: {
   steps: AgentStep[];
+  selected?: number;
   onReorder?: (from: number, to: number) => void;
   onSelect?: (at: number) => void;
+  onDropTool?: (tool: string, at: number) => void;
 }) {
   // The provider is what lets the canvas refit itself when the sequence
   // changes, which is the whole of its state — nothing about the picture
@@ -51,51 +52,26 @@ export function AgentCanvas(props: {
 
 function Canvas({
   steps,
+  selected,
   onReorder,
   onSelect,
+  onDropTool,
 }: {
   steps: AgentStep[];
+  selected?: number;
   onReorder?: (from: number, to: number) => void;
   onSelect?: (at: number) => void;
+  onDropTool?: (tool: string, at: number) => void;
 }) {
   // XYFlow ships its own chrome with its own palette, and colorMode is how it
   // is told which. Hand-styling its controls would fight the library on every
   // upgrade.
   const { resolvedTheme } = useTheme();
 
-  const { nodes, edges } = useMemo(() => {
-    const nodes = steps.map((step, at): Node => ({
-      id: String(at),
-      type: "step",
-      position: placeAt(at, STEP_CELL),
-      draggable: onReorder !== undefined,
-      data: {
-        name: step.name,
-        reaches: step.reaches ?? [],
-        stopsWhen: step.stopsWhen,
-        index: at,
-      },
-    }));
-
-    // One edge per adjacency: the specification is a sequence and has no
-    // branch, so an edge here means "then", never "if".
-    const edges = steps.slice(1).map((_, at): Edge => {
-      const ports = edgePorts(placeAt(at, STEP_CELL), placeAt(at + 1, STEP_CELL));
-      return {
-        id: `${at}-${at + 1}`,
-        source: String(at),
-        target: String(at + 1),
-        sourceHandle: `s-${ports.source}`,
-        targetHandle: `t-${ports.target}`,
-        type: "smoothstep",
-        // No arrow markers, per the handoff: within a sequence the direction
-        // is the reading order, and an arrowhead on every edge is noise.
-        style: { stroke: "var(--primary)", strokeWidth: 1.25 },
-      };
-    });
-
-    return { nodes, edges };
-  }, [steps, onReorder]);
+  const { nodes, edges } = useMemo(
+    () => buildGraph(steps, { selected, draggable: onReorder !== undefined }),
+    [steps, onReorder, selected],
+  );
 
   // Refit whenever the sequence changes. fitView alone runs at mount, so a
   // step added afterwards fell outside the viewport and read as a canvas that
@@ -116,8 +92,25 @@ function Canvas({
     }
   };
 
+  // Where a dropped tool lands: the cell under the pointer, in the canvas's
+  // own coordinates rather than the page's.
+  const dropped = (event: React.DragEvent) => {
+    event.preventDefault();
+    const tool = event.dataTransfer.getData("application/fuseone-step");
+    if (tool === null || onDropTool === undefined) return;
+    const at = flow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
+    onDropTool(tool, indexAt(at.x, at.y, steps.length + 1, STEP_CELL));
+  };
+
   return (
-    <div className="h-[420px] w-full overflow-hidden rounded-lg border border-border bg-background">
+    <div
+      className="h-full w-full overflow-hidden bg-background"
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+      }}
+      onDrop={dropped}
+    >
       <ReactFlow
         nodes={nodes}
         edges={edges}
