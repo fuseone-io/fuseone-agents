@@ -50,6 +50,7 @@ const SAMPLES = new Set([
   // shape of the thing being asked for, and translating either would be
   // teaching somebody the wrong format.
   "C0123ABCDEF",
+  "U0123ABCDEF",
   "#alertas",
   "https://api.example.com/mcp/",
   "https://api.openai.com/v1",

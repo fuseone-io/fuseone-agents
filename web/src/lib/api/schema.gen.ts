@@ -1330,6 +1330,37 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/channels/{name}/identities/{account}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Say who a channel account is
+         * @description The most consequential thing configured here. Binding an account grants
+         *     that person's authority — their grants, their permission to decide an
+         *     approval — to whoever holds it, and nothing downstream can tell the
+         *     difference: by the time a decision is being sealed, the principal is
+         *     simply the principal.
+         *
+         *     So it is explicit and it is recorded. There is no matching on email and
+         *     no inferring from a display name: an account speaks for somebody
+         *     because a person said so, and the trail says which person.
+         *
+         *     An account nobody has bound acts as nobody at all.
+         */
+        put: operations["bindChannelIdentity"];
+        post?: never;
+        /** Withdraw a binding */
+        delete: operations["unbindChannelIdentity"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/channels/{name}/conversations/{conversation}/test": {
         parameters: {
             query?: never;
@@ -2111,7 +2142,17 @@ export interface components {
             enabled: boolean;
             /** @description Whether a credential is stored, never what it is. */
             hasCredential: boolean;
+            /** @description Whether this channel can verify what arrives. A channel posts long before anybody switches the inbound half on. */
+            hasSigning?: boolean;
             conversations: components["schemas"]["ChannelConversation"][];
+            /** @description The accounts that speak for somebody in this channel. */
+            identities?: components["schemas"]["ChannelIdentity"][];
+        };
+        ChannelIdentity: {
+            account: string;
+            principal: string;
+            /** @description Who that is, for the screen. Never the key. */
+            display?: string;
         };
         ChannelConversation: {
             id: string;
@@ -4503,6 +4544,17 @@ export interface operations {
                     workspace?: string;
                     /** @description The bot credential, sealed by the vault. Omit to keep the stored one — renaming a workspace must not demand re-entering a secret nobody has to hand. */
                     token?: string;
+                    /**
+                     * @description What arriving requests are checked against, sealed beside
+                     *     the token. Not the same secret and not interchangeable: the
+                     *     token is a bearer this installation sends, this is what it
+                     *     verifies with, and HMAC needs the secret itself — a hash
+                     *     cannot produce one.
+                     *
+                     *     Absent leaves the inbound surface closed, which is the safe
+                     *     reading of a channel nobody has switched it on for.
+                     */
+                    signingSecret?: string;
                     /** @default true */
                     enabled?: boolean;
                 };
@@ -4634,6 +4686,61 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description The conversation is removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    bindChannelIdentity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                /** @description The identifier the channel knows a person by — a Slack user id, not their display name, which people change and two people can share. */
+                account: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Who this account speaks for. */
+                    principal: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The account is bound. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    unbindChannelIdentity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                account: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The binding is withdrawn. */
             204: {
                 headers: {
                     [name: string]: unknown;

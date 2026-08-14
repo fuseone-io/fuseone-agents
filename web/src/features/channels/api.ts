@@ -138,3 +138,46 @@ export function useAvailableConversations(channel: string) {
     retry: false,
   });
 }
+
+export interface BindingInput {
+  channel: string;
+  account: string;
+  principal: string;
+}
+
+/**
+ * Says who a channel account is.
+ *
+ * The most consequential thing configured on this screen: it grants that
+ * person's authority to whoever holds the account, and nothing downstream can
+ * tell the difference. Explicit on purpose — no matching on email, no
+ * inferring from a display name.
+ */
+export function useBindIdentity() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ channel, account, principal }: BindingInput) =>
+      unwrap(
+        await api.PUT("/admin/channels/{name}/identities/{account}", {
+          params: { path: { name: channel, account } },
+          body: { principal },
+        }),
+      ),
+    onSuccess: () =>
+      void client.invalidateQueries({ queryKey: channelKeys.all }),
+  });
+}
+
+export function useUnbindIdentity() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { channel: string; account: string }) =>
+      unwrap(
+        await api.DELETE("/admin/channels/{name}/identities/{account}", {
+          params: { path: { name: input.channel, account: input.account } },
+        }),
+      ),
+    onSuccess: () =>
+      void client.invalidateQueries({ queryKey: channelKeys.all }),
+  });
+}

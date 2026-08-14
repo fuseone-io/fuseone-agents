@@ -26,6 +26,9 @@ type ChannelAdmin interface {
 	DeleteChannel(ctx context.Context, name string, by domain.UserID) error
 	PutConversation(ctx context.Context, channelName string, conv admin.Conversation, by domain.UserID) error
 	DeleteConversation(ctx context.Context, id string, scope domain.Scope, by domain.UserID) error
+	Identities(ctx context.Context) ([]admin.ChannelIdentity, error)
+	BindIdentity(ctx context.Context, id admin.ChannelIdentity, by domain.UserID) error
+	UnbindIdentity(ctx context.Context, channelName, account string, by domain.UserID) error
 }
 
 // Announcer posts one message, for proving the wiring.
@@ -66,9 +69,17 @@ func (s *Server) ListChannels(
 		return nil, fmt.Errorf("list channels: %w", err)
 	}
 
+	// One read for every channel rather than one per channel: bindings are few
+	// and a listing that queried per row would ask the same question five
+	// times to draw five cards.
+	bound, err := s.channels.Identities(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list channel identities: %w", err)
+	}
+
 	items := make([]openapi.Channel, 0, len(configured))
 	for _, c := range configured {
-		items = append(items, channelFrom(c))
+		items = append(items, channelFrom(c, bound))
 	}
 	return openapi.ListChannels200JSONResponse{Items: items, Kinds: kinds}, nil
 }
@@ -199,7 +210,7 @@ func (s *Server) scopeOfConversation(
 	return domain.Scope{}, false
 }
 
-func channelFrom(c admin.Channel) openapi.Channel {
+func channelFrom(c admin.Channel, bound []admin.ChannelIdentity) openapi.Channel {
 	out := openapi.Channel{
 		Name: c.Name, Kind: c.Kind, Enabled: c.Enabled,
 		HasCredential: c.HasCredential, HasSigning: ptr(c.HasSigning),
@@ -208,6 +219,21 @@ func channelFrom(c admin.Channel) openapi.Channel {
 	if c.Workspace != "" {
 		out.Workspace = ptr(c.Workspace)
 	}
+	identities := make([]openapi.ChannelIdentity, 0)
+	for _, id := range bound {
+		if id.Channel != c.Name {
+			continue
+		}
+		item := openapi.ChannelIdentity{
+			Account: id.Account, Principal: string(id.Principal),
+		}
+		if id.Display != "" {
+			item.Display = ptr(id.Display)
+		}
+		identities = append(identities, item)
+	}
+	out.Identities = &identities
+
 	for _, conv := range c.Conversations {
 		item := openapi.ChannelConversation{
 			Id: conv.ID, Enabled: conv.Enabled,
@@ -346,4 +372,74 @@ func (s *Server) ListAvailableConversations(
 		}{Id: c.ID, Name: c.Name, Private: &private})
 	}
 	return openapi.ListAvailableConversations200JSONResponse{Items: items}, nil
+}
+
+func (s *Server) BindChannelIdentity(
+	ctx context.Context, req openapi.BindChannelIdentityRequestObject,
+) (openapi.BindChannelIdentityResponseObject, error) {
+	caller, resp := s.configurer(ctx)
+	if resp != nil {
+		return openapi.BindChannelIdentity403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: *resp,
+		}, nil
+	}
+	if s.channels == nil || req.Body == nil {
+		return nil, errNoAdministration
+	}
+
+	err := s.channels.BindIdentity(ctx, admin.ChannelIdentity{
+		Channel:   req.Name,
+		Account:   req.Account,
+		Principal: domain.UserID(req.Body.Principal),
+		Display:   s.displayOf(ctx, req.Body.Principal),
+	}, caller)
+	if err != nil {
+		return openapi.BindChannelIdentity400ApplicationProblemPlusJSONResponse{
+			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
+				invalid(err.Error())),
+		}, nil
+	}
+	return openapi.BindChannelIdentity204Response{}, nil
+}
+
+func (s *Server) UnbindChannelIdentity(
+	ctx context.Context, req openapi.UnbindChannelIdentityRequestObject,
+) (openapi.UnbindChannelIdentityResponseObject, error) {
+	caller, resp := s.configurer(ctx)
+	if resp != nil {
+		return openapi.UnbindChannelIdentity403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: *resp,
+		}, nil
+	}
+	if s.channels == nil {
+		return nil, errNoAdministration
+	}
+	if err := s.channels.UnbindIdentity(ctx, req.Name, req.Account, caller); err != nil {
+		return nil, fmt.Errorf("unbind channel identity: %w", err)
+	}
+	return openapi.UnbindChannelIdentity204Response{}, nil
+}
+
+/*
+displayOf is who the binding is to, for the screen.
+
+Read at binding time and stored beside it, so the list stays readable when the
+directory is unreachable and so a renamed person does not silently become a
+different one on screen. It is a convenience and never the key: everything that
+decides anything uses the principal.
+*/
+func (s *Server) displayOf(ctx context.Context, principal string) string {
+	if s.people == nil {
+		return ""
+	}
+	found, err := s.people.People(ctx)
+	if err != nil {
+		return ""
+	}
+	for _, person := range found {
+		if string(person.ID) == principal {
+			return person.Display
+		}
+	}
+	return ""
 }

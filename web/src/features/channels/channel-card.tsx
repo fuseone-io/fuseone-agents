@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { IdentityRows } from "@/features/channels/identity-rows";
 import {
   useDeleteConversation,
   useTestConversation,
@@ -82,6 +83,19 @@ export function ChannelCard({
           {t("channels.addConversation")}
         </Button>
       </div>
+
+      {/* Only where an answer could arrive. Binding accounts on a channel that
+          cannot verify what comes back would be configuring authority for a
+          door that is shut. */}
+      {channel.hasSigning && (
+        <>
+          <Separator />
+          <IdentityRows
+            channel={channel.name}
+            identities={channel.identities ?? []}
+          />
+        </>
+      )}
     </Card>
   );
 }

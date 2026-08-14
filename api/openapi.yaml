@@ -2014,6 +2014,69 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /admin/channels/{name}/identities/{account}:
+    put:
+      tags: [admin]
+      operationId: bindChannelIdentity
+      summary: Say who a channel account is
+      description: |
+        The most consequential thing configured here. Binding an account grants
+        that person's authority — their grants, their permission to decide an
+        approval — to whoever holds it, and nothing downstream can tell the
+        difference: by the time a decision is being sealed, the principal is
+        simply the principal.
+
+        So it is explicit and it is recorded. There is no matching on email and
+        no inferring from a display name: an account speaks for somebody
+        because a person said so, and the trail says which person.
+
+        An account nobody has bound acts as nobody at all.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+        - name: account
+          in: path
+          required: true
+          description: >
+            The identifier the channel knows a person by — a Slack user id, not
+            their display name, which people change and two people can share.
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [principal]
+              properties:
+                principal:
+                  type: string
+                  description: Who this account speaks for.
+      responses:
+        '204': { description: The account is bound. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    delete:
+      tags: [admin]
+      operationId: unbindChannelIdentity
+      summary: Withdraw a binding
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+        - name: account
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: The binding is withdrawn. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /admin/channels/{name}/conversations/{conversation}/test:
     post:
       tags: [admin]
@@ -3221,6 +3284,20 @@ components:
         conversations:
           type: array
           items: { $ref: '#/components/schemas/ChannelConversation' }
+        identities:
+          type: array
+          description: The accounts that speak for somebody in this channel.
+          items: { $ref: '#/components/schemas/ChannelIdentity' }
+
+    ChannelIdentity:
+      type: object
+      required: [account, principal]
+      properties:
+        account: { type: string }
+        principal: { type: string }
+        display:
+          type: string
+          description: Who that is, for the screen. Never the key.
 
     ChannelConversation:
       type: object

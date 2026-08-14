@@ -126,6 +126,7 @@ func TestTestConversation_conversationIsNotConfigured_refusesRatherThanPosting(t
 
 type channelSpy struct {
 	listed       []admin.Channel
+	bound        []admin.ChannelIdentity
 	deletedScope domain.Scope
 }
 
@@ -165,4 +166,53 @@ func (r *refusingPoster) Post(
 		return "", r.err
 	}
 	return "1.1", nil
+}
+
+func (c *channelSpy) Identities(context.Context) ([]admin.ChannelIdentity, error) {
+	return c.bound, nil
+}
+
+func (c *channelSpy) BindIdentity(
+	_ context.Context, id admin.ChannelIdentity, _ domain.UserID,
+) error {
+	c.bound = append(c.bound, id)
+	return nil
+}
+
+func (c *channelSpy) UnbindIdentity(context.Context, string, string, domain.UserID) error {
+	return nil
+}
+
+// Binding is what turns a Slack account into somebody's authority, so the list
+// has to say which accounts a channel already trusts — an administrator
+// reviewing this needs to see it without opening anything.
+func TestListChannels_saysWhichAccountsAreBound(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{
+		listed: []admin.Channel{{Name: "acme-slack", Kind: "slack"}},
+		bound: []admin.ChannelIdentity{
+			{Channel: "acme-slack", Account: "U024", Principal: "usr_ana", Display: "Ana"},
+			{Channel: "other", Account: "U999", Principal: "usr_bob"},
+		},
+	}
+	s := NewServer(ledger.NewMemory(), "test").
+		WithChannels(spy, nil).
+		WithChannelListing(&listerSpy{})
+
+	resp, err := s.ListChannels(as(domain.RoleCurator), openapi.ListChannelsRequestObject{})
+	if err != nil {
+		t.Fatalf("ListChannels: %v", err)
+	}
+	page, ok := resp.(openapi.ListChannels200JSONResponse)
+	if !ok {
+		t.Fatalf("response = %T", resp)
+	}
+
+	held := page.Items[0].Identities
+	if held == nil || len(*held) != 1 {
+		t.Fatalf("identities = %v, want only this channel's", held)
+	}
+	if (*held)[0].Account != "U024" || (*held)[0].Principal != "usr_ana" {
+		t.Errorf("identity = %+v", (*held)[0])
+	}
 }

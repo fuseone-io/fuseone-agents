@@ -1177,8 +1177,11 @@
     "require_approval": "escalar"
   },
   "channels": {
+    "account": "Conta no canal",
     "addConversation": "Adicionar conversa",
+    "bind": "Vincular",
     "botToken": "Token do bot",
+    "bound": "Conta vinculada",
     "channels": "Canais",
     "conversation": "Conversa",
     "conversationExplains": "A conversa recebe os runs do escopo escolhido, e de nenhum outro.",
@@ -1202,10 +1205,13 @@
     "newConversation": "Nova conversa",
     "noConversation": "Nenhuma conversa configurada.",
     "noCredential": "sem credencial",
+    "nobodyBound": "Nenhuma conta vinculada. Sem vínculo, ninguém decide por este canal.",
     "none": "Nenhum canal conectado",
     "noneHint": "Conecte um workspace para que os runs avisem quem precisa decidir.",
     "onlyWhereInvited": "Só aparecem os canais onde o bot já foi convidado.",
+    "person": "Pessoa",
     "pickConversation": "Escolha um canal",
+    "pickPerson": "Escolha a pessoa",
     "saved": "Canal salvo",
     "scopeGoverns": "Quem manda aqui é o escopo: só os runs dele chegam nesta conversa.",
     "sendTest": "Enviar teste",
@@ -1217,6 +1223,7 @@
     },
     "wants": "O que avisar",
     "wantsExplains": "Canal que ouve todo run terminando é canal que as pessoas silenciam.",
+    "whoCanDecide": "Quem pode decidir daqui",
     "workspace": "Workspace"
   }
 }
