@@ -182,6 +182,17 @@ func (s *Server) ListAgents(ctx context.Context, req openapi.ListAgentsRequestOb
 		}
 	}
 
+	// And which are out of circulation, so the listing can leave them out —
+	// or answer with only those, for somebody who arrived from one of their
+	// runs and needs to find the agent it belonged to.
+	retired := map[domain.AgentID]bool{}
+	if s.retirements != nil {
+		if retired, err = s.retirements.Retired(ctx); err != nil {
+			return nil, fmt.Errorf("retired agents: %w", err)
+		}
+	}
+	wantRetired := req.Params.Retired != nil && *req.Params.Retired
+
 	// An unscoped list is narrowed to what the caller may see rather than
 	// refused: asking "which agents are there" should answer with theirs, not
 	// with a permission error naming a scope they never mentioned (NF-06).
@@ -192,9 +203,13 @@ func (s *Server) ListAgents(ctx context.Context, req openapi.ListAgentsRequestOb
 		if !readable(a.Scope, visible) {
 			continue
 		}
+		if retired[a.ID] != wantRetired {
+			continue
+		}
 		a.Stage = stages[a.ID]
 		paused, decided := stopped[a.ID]
 		a.Started = decided && !paused
+		a.Retired = retired[a.ID]
 		agent := agentFrom(a)
 		if seen, ran := byAgent[a.ID]; ran {
 			agent.Activity = ptr(activityFrom(seen))
@@ -242,6 +257,9 @@ func agentFrom(a domain.AgentSummary) openapi.Agent {
 	}
 	agent.Stage = ptr(openapi.Stage(domain.StageOf(string(a.Stage))))
 	agent.Paused = ptr(!a.Started)
+	if a.Retired {
+		agent.Retired = ptr(true)
+	}
 	if a.Effort != "" {
 		agent.Effort = ptr(a.Effort)
 	}

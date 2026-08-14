@@ -8,6 +8,7 @@ import { StateDot } from "@/components/shared/state-dot";
 import { stateOfAgent } from "@/lib/agent-state";
 import { RunNowDialog } from "@/features/agents/run-now-dialog";
 import { PauseControl } from "@/features/agents/pause-control";
+import { RetireAgent } from "@/features/agents/retire-agent";
 import { StageControl } from "@/features/agents/stage-control";
 import { formatInstant } from "@/lib/format";
 import type { Agent, AgentVersion, Phase } from "@/lib/api/client";
@@ -95,6 +96,10 @@ export function AgentIdentity({
                 that does not exist. */}
             <PauseControl agentId={agent.agentId} paused={agent.paused} />
             <RunNowDialog agentId={agent.agentId} agentName={agent.name} />
+            <RetireAgent
+              agentId={agent.agentId}
+              retired={agent.retired ?? false}
+            />
           </>
         ) : (
           <Button variant="outline" size="sm" disabled className="h-8">

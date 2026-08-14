@@ -296,6 +296,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{agentId}/retired": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Take an agent out of circulation, or bring it back
+         * @description There is no delete and there will not be one. A run is pinned to a
+         *     version and that version is the only correct explanation of what the
+         *     run did; removing it would leave the ledger pointing at a text nobody
+         *     can read, which is the opposite of what this platform is for.
+         *
+         *     Retiring is the honest alternative. The agent leaves every listing and
+         *     cannot be started, and keeps all of it: its versions, its runs, and a
+         *     line in the trail saying who retired it. A listing can ask for the
+         *     retired ones back with `retired=true`.
+         *
+         *     Retiring stops it in the same act — an agent the screen says is gone
+         *     that a schedule still fires is worse than one nobody retired, because
+         *     now nobody is looking for it. Bringing one back leaves it stopped, for
+         *     the opposite reason: restoring and starting are two decisions.
+         */
+        put: operations["setAgentRetired"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{agentId}/runs": {
         parameters: {
             query?: never;
@@ -2508,6 +2541,8 @@ export interface components {
             stage?: components["schemas"]["Stage"];
             /** @description Whether the agent is stopped. Absent on an older reading, and an agent nobody has decided about is paused — reading an absent answer as running would show an agent as live because a write failed. */
             paused?: boolean;
+            /** @description Whether the agent is out of circulation. It keeps its versions and its runs; what it loses is every listing and the ability to start. */
+            retired?: boolean;
             /** @description The digest of the definition's content. Publishing new text is a new version; the old one stays readable. */
             versionId: string;
             scope: components["schemas"]["Scope"];
@@ -2998,6 +3033,8 @@ export interface operations {
                 area?: components["parameters"]["Area"];
                 /** @description Return the publication history instead of the newest version of each agent. */
                 allVersions?: boolean;
+                /** @description Return the agents taken out of circulation instead of the ones in it. Their runs are still readable, so somebody reading one has to be able to find the agent it belonged to. */
+                retired?: boolean;
             };
             header?: never;
             path?: never;
@@ -3375,6 +3412,35 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+        };
+    };
+    setAgentRetired: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    retired: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Recorded. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     startRun: {

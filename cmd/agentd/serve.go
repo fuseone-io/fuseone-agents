@@ -146,6 +146,9 @@ func serve(args []string) error {
 			WithAuthoring(authoring.NewStore(identity.pool, store)).
 			WithAssistants(assistants(ctx, integrations), authoring.NewStore(identity.pool, store)).
 			WithPauses(spec.NewState(identity.pool)).
+			// Taking an agent out of circulation, which is the only
+			// removal there is: nothing here deletes a version.
+			WithRetirements(spec.NewState(identity.pool)).
 			WithStops(admin.NewStops(identity.pool)).
 			WithMarks(admin.NewMarks(identity.pool)).
 			WithComposition(spec.NewRegistry(identity.pool)).

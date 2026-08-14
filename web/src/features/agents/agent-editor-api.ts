@@ -46,3 +46,25 @@ export function useSetAgentPaused(agentId: string) {
       void queryClient.invalidateQueries({ queryKey: agentKeys.all }),
   });
 }
+
+/**
+ * Takes an agent out of circulation, or brings it back.
+ *
+ * There is no delete: a run is pinned to a version, and that version is the
+ * only correct explanation of what the run did. A retired agent leaves the
+ * lists and keeps everything.
+ */
+export function useSetAgentRetired(agentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (retired: boolean) =>
+      unwrap(
+        await api.PUT("/agents/{agentId}/retired", {
+          params: { path: { agentId } },
+          body: { retired },
+        }),
+      ),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({ queryKey: agentKeys.all }),
+  });
+}

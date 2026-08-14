@@ -110,6 +110,17 @@ func (s *Server) SetAgentPaused(
 	// Only a start is checked. Stopping an agent must always be possible —
 	// a gate that can refuse it is a gate that keeps a broken agent running.
 	if !req.Body.Paused {
+		// An agent out of circulation is not startable, whatever else is
+		// true. Retiring stops it; starting it again from a screen that does
+		// not list it would be a run nobody is watching for.
+		if retired, err := s.isRetired(ctx, current.ID); err != nil {
+			return nil, err
+		} else if retired {
+			return openapi.SetAgentPaused409ApplicationProblemPlusJSONResponse(
+				conflicted(fmt.Sprintf(
+					"%s is retired; bring it back before starting it", current.ID))), nil
+		}
+
 		broken, err := s.brokenCases(ctx, current.ID, current.VersionID)
 		if err != nil {
 			return nil, err

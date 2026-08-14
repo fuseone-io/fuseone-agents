@@ -13,6 +13,11 @@ type AgentSummary struct {
 	// carried by the published version.
 	Stage Stage
 
+	// Retired is whether the agent is out of circulation. It keeps its
+	// versions and its runs; what it loses is every listing and the ability
+	// to start.
+	Retired bool
+
 	// Started is whether the agent may open runs. Stated this way round, and
 	// not as "paused", so that the zero value is the safe reading: a summary
 	// nobody filled in reports an agent that cannot act, rather than showing
