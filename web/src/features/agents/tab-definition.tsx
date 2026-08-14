@@ -1,9 +1,8 @@
 import { useTranslation } from "react-i18next";
-import { FileText, ListOrdered } from "lucide-react";
+import { ListOrdered } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Section } from "@/features/policies/section";
 import { AgentBasicsSection } from "@/features/agents/agent-basics-section";
+import { InstructionsEditor } from "@/features/agents/instructions-editor";
 import type { AgentDefinition } from "@/lib/api/client";
 
 /**
@@ -29,8 +28,6 @@ export function TabDefinition({
   /** Opens the tab where this text is read as stages. */
   onSteps: () => void;
 }) {
-  const { t } = useTranslation();
-
   return (
     <>
       <AgentBasicsSection
@@ -41,37 +38,12 @@ export function TabDefinition({
         onAgentId={editing.onAgentId}
       />
 
-      <Section
-        icon={FileText}
-        title={t("agents.instructions")}
-        hint={t("agents.instructionsHint")}
-        action={
-          <span className="font-mono text-2xs tabular-nums text-muted-foreground">
-            {t("agents.instructionsLength", {
-              count: draft.instructions.trim().length,
-            })}
-          </span>
-        }
-      >
-        {/* An editor surface, and deliberately without line numbers. A number
-            in the gutter says a line is addressable, which teaches that one
-            line is one step — and the moment somebody writes two in a line, or
-            wraps one across three, the numbering is a claim about structure
-            that the steps disagree with. The prose is what the model reads;
-            what the Gate obeys is next door and says so below. */}
-        <Textarea
-          id="agent-instructions"
-          rows={12}
-          value={draft.instructions}
-          onChange={(e) => patch({ instructions: e.target.value })}
-          className="resize-y bg-muted/40 font-mono text-xs leading-relaxed"
-          placeholder={t("agents.instructionsPlaceholder")}
-          aria-label={t("agents.instructions")}
-          spellCheck={false}
-        />
+      <InstructionsEditor
+        instructions={draft.instructions}
+        onChange={(instructions) => patch({ instructions })}
+      />
 
-        <ReadAs steps={(draft.steps ?? []).length} onOpen={onSteps} />
-      </Section>
+      <ReadAs steps={(draft.steps ?? []).length} onOpen={onSteps} />
     </>
   );
 }

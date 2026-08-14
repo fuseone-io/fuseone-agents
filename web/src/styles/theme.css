@@ -98,6 +98,8 @@
   --color-surface-sunken: var(--surface-sunken);
   --color-surface-raised: var(--surface-raised);
   --color-surface-accent: var(--surface-accent);
+  /* The row a pointer is over, one neutral step up. */
+  --color-surface-hover: var(--surface-hover);
   --color-border-subtle: var(--border-subtle);
   --color-border-strong: var(--border-strong);
   --color-border-accent: var(--border-accent);

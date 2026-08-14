@@ -23,6 +23,21 @@ const SKIP = [
   // would be undone by the next `shadcn add`.
   "components/ui/",
   "lib/api/schema.gen",
+  /*
+  The block labels an instruction is written with.
+
+  They are not interface text: they are written into the payload the model
+  receives, and they are read back out of it when somebody opens the version
+  again. Putting them in the catalogue would make what a definition *is*
+  depend on the language of whoever last opened the console — a colleague
+  reading in English would find a Portuguese author's blocks collapsed into an
+  unlabelled paragraph, and saving would rewrite the text.
+
+  So both languages live in that module, and it recognises either on the way
+  back in. It is the one place where a Portuguese string in a source file is
+  the correct answer.
+  */
+  "agents/instruction-blocks",
 ];
 
 const PROPS =
