@@ -75,6 +75,13 @@ func (p *workerParts) startLoops(ctx context.Context, cfg workerFlags, sim *work
 		}
 	}
 
+	// The corpus on a clock (NT-006 §3). Only where there is a corpus and
+	// only where there is somewhere to say it: an installation that keeps no
+	// corrections starts no loop and pays for no batteries.
+	if p.settings != nil && p.registry != nil {
+		go watchDrift(ctx, p, p.settings)
+	}
+
 	if p.registry != nil {
 		// Every worker runs a scheduler. They do not coordinate, because the
 		// run's idempotency key is derived from the due moment and the ledger

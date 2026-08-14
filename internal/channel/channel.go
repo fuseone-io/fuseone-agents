@@ -33,6 +33,11 @@ const (
 	EventFailed Event = "failed"
 	// EventFinished is a run that ended well. Off by default.
 	EventFinished Event = "finished"
+	// EventDrifted is an agent that stopped holding its corrections with
+	// nothing published since. Not a run: it is the one notice here that is
+	// about the world moving rather than about work in progress, and it is
+	// the reason anybody keeps a corpus in an installation nobody watches.
+	EventDrifted Event = "drifted"
 )
 
 // Report is a run, at the moment something happened to it.
@@ -73,7 +78,11 @@ type Conversation struct {
 func (c Conversation) wants(e Event) bool {
 	list := c.Wants
 	if len(list) == 0 {
-		list = []Event{EventParked, EventFailed}
+		// Drift is in the defaults, unlike everything else that had to be
+		// asked for. It fires rarely, and it is the one notice nobody would
+		// think to opt into: an agent that quietly stopped working is
+		// precisely what somebody does not know to go looking for.
+		list = []Event{EventParked, EventFailed, EventDrifted}
 	}
 	for _, want := range list {
 		if want == e {

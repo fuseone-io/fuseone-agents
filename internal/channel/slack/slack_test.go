@@ -10,6 +10,7 @@ import (
 
 	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/channel/slack"
+	"github.com/fuseone/agents/internal/domain"
 )
 
 /*
@@ -137,5 +138,46 @@ func message() channel.Message {
 		Agent: "triage",
 		Tool:  "erp.transfer",
 		Link:  "https://agents.example.com/runs/run_ops_1786",
+	}
+}
+
+/*
+Drift is not a run, and the message carrying it has no run to link to.
+
+Rendered through the default arm it would read as "triage finished", which
+tells a reader the opposite of what happened — and this is the one notice that
+fires when nobody is looking for it.
+*/
+func TestPost_drift_saysNothingWasPublishedAndNamesTheCorrection(t *testing.T) {
+	t.Parallel()
+
+	var body struct {
+		Blocks []struct {
+			Text struct {
+				Text string `json:"text"`
+			} `json:"text"`
+		} `json:"blocks"`
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"ok":true,"ts":"1"}`)
+	}))
+	defer server.Close()
+
+	_, err := poster(server).Post(t.Context(),
+		channel.Conversation{ID: "C07", Label: "#ops"},
+		channel.Message{
+			Event: channel.EventDrifted, Agent: "triage",
+			Scope:  domain.Scope{Company: "acme", Area: "cx"},
+			Reason: "estorno stopped holding, with nothing published since",
+		})
+	if err != nil {
+		t.Fatalf("post: %v", err)
+	}
+
+	said := body.Blocks[0].Text.Text
+	if !strings.Contains(said, "nothing published") || !strings.Contains(said, "estorno") {
+		t.Errorf("summary = %q, want it to say nothing was published, and which case", said)
 	}
 }

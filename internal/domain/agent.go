@@ -91,3 +91,15 @@ type EventEdge struct {
 	Event string
 	To    AgentID
 }
+
+// WatchedCorpus is an agent that has corrections, and the version they are
+// being checked against.
+//
+// A value rather than anything either side owns: the corpus store answers it
+// and the drift watcher reads it, and if it lived in the watcher then the
+// store would have to import the thing that consumes it.
+type WatchedCorpus struct {
+	Agent   AgentID
+	Version VersionID
+	Scope   Scope
+}

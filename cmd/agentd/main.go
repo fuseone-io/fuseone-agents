@@ -19,6 +19,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/drift"
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/httpapi"
 	"github.com/fuseone/agents/internal/ledger"
@@ -84,6 +85,8 @@ usage:
 type Store interface {
 	httpapi.Store
 	httpapi.LastBattery
+	drift.Batteries
+	drift.LastBatteries
 	engine.Ledger
 	Verify(ctx context.Context, runID domain.RunID) error
 }

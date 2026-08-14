@@ -42,6 +42,8 @@ type Store interface {
 	SpentSince(ctx context.Context, scope domain.Scope, since time.Time) (domain.Consumption, error)
 	SimulationRuns(ctx context.Context, simulation string) ([]domain.RunID, error)
 	Latest(ctx context.Context, agent domain.AgentID, version domain.VersionID) (string, bool, error)
+	Batteries(ctx context.Context, agent domain.AgentID, version domain.VersionID, limit int) ([]string, error)
+	LastBatteryAt(ctx context.Context, agent domain.AgentID, version domain.VersionID) (time.Time, bool, error)
 	Agreement(ctx context.Context, since time.Time) ([]domain.Agreement, error)
 	Simulations() ledger.SimulationQueue
 }
@@ -1588,6 +1590,103 @@ func TestLatestBatteryContract(t *testing.T) {
 
 		if got, found, err := s.Latest(ctx, "triage", "v3"); err != nil || found {
 			t.Errorf("Latest = %q found=%v err=%v, want nothing", got, found, err)
+		}
+	})
+}
+
+/*
+The batteries of one version, newest first.
+
+Drift is read from two of them: the same version run twice, so nothing about
+the agent changed and anything that regressed is the world moving underneath
+it. That reading only works if "the one before this one" is answerable.
+*/
+func TestBatteriesContract(t *testing.T) {
+	base := time.Date(2026, 8, 12, 9, 0, 0, 0, time.UTC)
+
+	opened := func(id domain.RunID, at time.Time, simulation string) domain.Step {
+		st := startedAt(id, at)
+		st.IdemKey = string(id)
+		st.Payload = mustJSON(t, domain.RunStartedPayload{
+			Trigger: "simulation", Simulated: true, Simulation: simulation,
+		})
+		return st
+	}
+
+	run(t, "newest first, one entry per battery however many runs it opened", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		mustAppend(t, s, opened("run-1", base, "sim-old"))
+		mustAppend(t, s, opened("run-2", base.Add(time.Minute), "sim-old"))
+		mustAppend(t, s, opened("run-3", base.Add(time.Hour), "sim-new"))
+
+		got, err := s.Batteries(ctx, "triage", "v3", 10)
+		if err != nil {
+			t.Fatalf("Batteries: %v", err)
+		}
+		if len(got) != 2 || got[0] != "sim-new" || got[1] != "sim-old" {
+			t.Errorf("batteries = %v, want sim-new then sim-old", got)
+		}
+	})
+
+	run(t, "the limit is the newest, never an arbitrary two", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		mustAppend(t, s, opened("run-1", base, "sim-1"))
+		mustAppend(t, s, opened("run-2", base.Add(time.Hour), "sim-2"))
+		mustAppend(t, s, opened("run-3", base.Add(2*time.Hour), "sim-3"))
+
+		got, err := s.Batteries(ctx, "triage", "v3", 2)
+		if err != nil {
+			t.Fatalf("Batteries: %v", err)
+		}
+		if len(got) != 2 || got[0] != "sim-3" || got[1] != "sim-2" {
+			t.Errorf("batteries = %v, want the two newest", got)
+		}
+	})
+}
+
+/*
+When a version's corpus last ran.
+
+What decides whether the clock runs it again tonight, so the two ways it
+could be wrong both cost money: reading a real run as a battery would keep
+skipping an agent nobody ever simulated, and answering nothing for a battery
+that exists would open a second one every pass.
+*/
+func TestLastBatteryAtContract(t *testing.T) {
+	base := time.Date(2026, 8, 12, 9, 0, 0, 0, time.UTC)
+
+	opened := func(id domain.RunID, at time.Time, simulation string) domain.Step {
+		st := startedAt(id, at)
+		st.IdemKey = string(id)
+		st.Payload = mustJSON(t, domain.RunStartedPayload{
+			Trigger: "simulation", Simulated: simulation != "", Simulation: simulation,
+		})
+		return st
+	}
+
+	run(t, "the newest battery, whatever ran since", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		mustAppend(t, s, opened("run-1", base, "sim-old"))
+		mustAppend(t, s, opened("run-2", base.Add(time.Hour), "sim-new"))
+		// A real run afterwards is not a battery and must not push the clock.
+		mustAppend(t, s, opened("run-3", base.Add(2*time.Hour), ""))
+
+		at, ran, err := s.LastBatteryAt(ctx, "triage", "v3")
+		if err != nil || !ran {
+			t.Fatalf("LastBatteryAt: %v ran=%v err=%v", at, ran, err)
+		}
+		if !at.Equal(base.Add(time.Hour)) {
+			t.Errorf("at = %s, want the newest battery", at)
+		}
+	})
+
+	run(t, "a corpus nobody ever ran answers nothing, not the zero time", func(t *testing.T, s Store) {
+		at, ran, err := s.LastBatteryAt(context.Background(), "triage", "v3")
+		if err != nil || ran {
+			t.Errorf("LastBatteryAt = %v ran=%v err=%v, want nothing", at, ran, err)
 		}
 	})
 }

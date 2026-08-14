@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -84,25 +85,26 @@ func startedPayload(opening domain.Step) domain.RunStartedPayload {
 	return started
 }
 
-// Latest is the most recent simulation run against one version.
-//
-// The fake enforces the same rule as the store: simulated runs only. A fake
-// that counted a real run would let a suite certify a gate production does not
-// have.
-func (m *Memory) Latest(
-	ctx context.Context, agent domain.AgentID, version domain.VersionID,
-) (string, bool, error) {
+/*
+Batteries are the simulations run against one version, newest first.
+
+The fake enforces the same rule as the store: simulated runs only. A fake that
+counted a real run would let a suite certify a gate production does not have.
+*/
+func (m *Memory) Batteries(
+	ctx context.Context, agent domain.AgentID, version domain.VersionID, limit int,
+) ([]string, error) {
 	if err := ctx.Err(); err != nil {
-		return "", false, err
+		return nil, err
+	}
+	if limit <= 0 {
+		return nil, nil
 	}
 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	var (
-		newest string
-		at     time.Time
-	)
+	opened := map[string]time.Time{}
 	for _, steps := range m.runs {
 		if len(steps) == 0 {
 			continue
@@ -118,9 +120,74 @@ func (m *Memory) Latest(
 		if !started.Simulated || started.Simulation == "" {
 			continue
 		}
-		if newest == "" || first.At.After(at) {
-			newest, at = started.Simulation, first.At
+		if at, seen := opened[started.Simulation]; !seen || first.At.After(at) {
+			opened[started.Simulation] = first.At
 		}
 	}
-	return newest, newest != "", nil
+
+	out := make([]string, 0, len(opened))
+	for simulation := range opened {
+		out = append(out, simulation)
+	}
+	// Newest first, and by name where two opened in the same instant: tests
+	// write whole batteries at one timestamp, and an order that depended on
+	// map iteration would be a different answer on every read.
+	sort.Slice(out, func(i, j int) bool {
+		if !opened[out[i]].Equal(opened[out[j]]) {
+			return opened[out[i]].After(opened[out[j]])
+		}
+		return out[i] > out[j]
+	})
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
+// Latest is the newest battery run against one version.
+func (m *Memory) Latest(
+	ctx context.Context, agent domain.AgentID, version domain.VersionID,
+) (string, bool, error) {
+	found, err := m.Batteries(ctx, agent, version, 1)
+	if err != nil || len(found) == 0 {
+		return "", false, err
+	}
+	return found[0], true, nil
+}
+
+// LastBatteryAt is when a version's corpus last ran.
+//
+// The fake answers the same question the store does, from the same fact: the
+// moment the newest battery opened.
+func (m *Memory) LastBatteryAt(
+	ctx context.Context, agent domain.AgentID, version domain.VersionID,
+) (time.Time, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return time.Time{}, false, err
+	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var newest time.Time
+	for _, steps := range m.runs {
+		if len(steps) == 0 {
+			continue
+		}
+		first := steps[0]
+		if first.AgentID != agent || first.VersionID != version {
+			continue
+		}
+		var started domain.RunStartedPayload
+		if err := json.Unmarshal(first.Payload, &started); err != nil {
+			continue
+		}
+		if !started.Simulated || started.Simulation == "" {
+			continue
+		}
+		if first.At.After(newest) {
+			newest = first.At
+		}
+	}
+	return newest, !newest.IsZero(), nil
 }

@@ -117,3 +117,49 @@ func (s *Store) Delete(ctx context.Context, agent domain.AgentID, id string) err
 	}
 	return nil
 }
+
+/*
+Watching lists the agents that have a corpus at all.
+
+The clock only spends money where there is something to check. An agent with
+no corrections would produce a battery whose report says nothing, at the price
+of a real set of model calls per pass.
+
+The scope comes from the cases, which is where it already is: a correction is
+made in an area and the notice about it has to reach that area's conversation,
+not the installation's.
+*/
+func (s *Store) Watching(ctx context.Context) ([]domain.WatchedCorpus, error) {
+	rows, err := s.pool.Query(ctx, `
+		select c.agent_id, coalesce(st.current_version, ''),
+		       min(c.company_id), min(c.area_id)
+		from regression_cases c
+		left join agent_state st on st.agent_id = c.agent_id
+		group by c.agent_id, st.current_version
+		order by c.agent_id`)
+	if err != nil {
+		return nil, fmt.Errorf("regression: list watched corpora: %w", err)
+	}
+	defer rows.Close()
+
+	var out []domain.WatchedCorpus
+	for rows.Next() {
+		var agent, version, company, area string
+		if err := rows.Scan(&agent, &version, &company, &area); err != nil {
+			return nil, fmt.Errorf("regression: scan watched corpus: %w", err)
+		}
+		// An agent with no current version has never been published, so
+		// there is nothing to have drifted.
+		if version == "" {
+			continue
+		}
+		out = append(out, domain.WatchedCorpus{
+			Agent:   domain.AgentID(agent),
+			Version: domain.VersionID(version),
+			Scope: domain.Scope{
+				Company: domain.CompanyID(company), Area: domain.AreaID(area),
+			},
+		})
+	}
+	return out, rows.Err()
+}

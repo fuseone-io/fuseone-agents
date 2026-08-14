@@ -25,6 +25,11 @@ func summary(m channel.Message) string {
 			return fmt.Sprintf("%s is waiting for permission to run %s", m.Agent, m.Tool)
 		}
 		return fmt.Sprintf("%s is waiting for a decision", m.Agent)
+	case channel.EventDrifted:
+		// Says what did not happen, because that is the surprising half: the
+		// first thing a reader will assume is that somebody deployed.
+		return fmt.Sprintf("%s changed behaviour with nothing published: %s",
+			m.Agent, reasonOr(m.Reason, "corrections stopped holding"))
 	case channel.EventFailed:
 		return fmt.Sprintf("%s stopped: %s", m.Agent, reasonOr(m.Reason, "no reason recorded"))
 	case "test":

@@ -18,6 +18,15 @@ import (
 
 func storeFor(t *testing.T) *regression.Store {
 	t.Helper()
+	pool := poolFor(t)
+	if _, err := pool.Exec(t.Context(), `delete from regression_cases`); err != nil {
+		t.Fatalf("clean: %v", err)
+	}
+	return regression.NewStore(pool)
+}
+
+func poolFor(t *testing.T) *pgxpool.Pool {
+	t.Helper()
 	dsn := os.Getenv("TEST_DATABASE_URL")
 	if dsn == "" {
 		t.Skip("TEST_DATABASE_URL is unset; skipping the regression suite")
@@ -31,10 +40,7 @@ func storeFor(t *testing.T) *regression.Store {
 	if err := ledger.Migrate(t.Context(), pool); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	if _, err := pool.Exec(t.Context(), `delete from regression_cases`); err != nil {
-		t.Fatalf("clean: %v", err)
-	}
-	return regression.NewStore(pool)
+	return pool
 }
 
 func aCase(id string, expectations ...domain.Expectation) domain.RegressionCase {
