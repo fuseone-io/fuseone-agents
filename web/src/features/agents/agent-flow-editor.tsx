@@ -1,17 +1,13 @@
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Sparkles } from "lucide-react";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
+import { TriangleAlert } from "lucide-react";
+import { EmptyCanvas } from "@/features/agents/empty-canvas";
+import { ReadAgainButton } from "@/features/agents/read-again-button";
 import { AgentCanvas } from "@/features/agents/agent-canvas";
 import { StepInspector } from "@/features/agents/step-inspector";
 import { StepRail } from "@/features/agents/step-rail";
-import { useInterview } from "@/features/agents/interview-api";
-import { problemMessage } from "@/lib/api/problem-message";
+import { undescribed } from "@/features/agents/steps-drift";
+import { useStepDrawing } from "@/features/agents/use-step-drawing";
 import type { AgentDefinition, Policy, Tool } from "@/lib/api/client";
-import type { components } from "@/lib/api/schema.gen";
-
-type AgentStep = components["schemas"]["AgentStep"];
 
 /**
  * The process, drawn and edited in one panel.
@@ -38,61 +34,13 @@ export function AgentFlowEditor({
   policies: Policy[];
 }) {
   const { t } = useTranslation();
-  const propose = useInterview();
-  const [selected, setSelected] = useState<number | undefined>(undefined);
+  const drawing = useStepDrawing(draft, patch);
+  const { steps, pack, selected } = drawing;
 
-  const steps = draft.steps ?? [];
-  const pack = draft.tools ?? [];
-
-  const write = (next: AgentStep[]) => patch({ steps: next });
-
-  /*
-  Dropping a tool creates a stage that reaches it, and grants it if the agent
-  did not hold it.
-
-  The same authority the tools section of this form already carries, in the
-  place somebody is actually thinking about the process. What it must not be
-  is quiet: the toast says the pack grew, and the rail shows what every tool
-  does, so `erp.transfer` never arrives as invisibly as `crm.lookup`.
-  */
-  const insert = (tool: string, at: number) => {
-    const step: AgentStep = { name: "", reaches: tool ? [tool] : [] };
-    const next = [...steps];
-    next.splice(Math.min(at, next.length), 0, step);
-
-    const granting = tool !== "" && !pack.includes(tool);
-    patch({
-      steps: next,
-      ...(granting ? { tools: [...pack, tool] } : {}),
-    });
-    if (granting) {
-      toast.info(t("agents.alsoGranted", { tool }));
-    }
-    setSelected(Math.min(at, next.length - 1));
-  };
-
-  const reorder = (from: number, to: number) => {
-    const next = [...steps];
-    const [moved] = next.splice(from, 1);
-    if (moved) next.splice(to, 0, moved);
-    write(next);
-    setSelected(to);
-  };
-
-  const read = () =>
-    propose.mutate(
-      { steps: draft.instructions },
-      {
-        onSuccess: (drafted) => {
-          write(drafted.steps);
-          setSelected(undefined);
-          toast.success(t("agents.stepsProposed"), {
-            description: t("agents.stepsProposedHint"),
-          });
-        },
-        onError: (error) => toast.error(problemMessage(error, t)),
-      },
-    );
+  // What the drawing allows and the words never mention. The direction that
+  // matters: prose may say more than the permissions do, and permissions
+  // saying more means the agent is allowed something nobody wrote down.
+  const silent = undescribed(steps, draft.instructions);
 
   return (
     <div className="flex flex-col gap-2">
@@ -111,83 +59,53 @@ export function AgentFlowEditor({
             counts against the assistant's daily ceiling, so calling it on
             mount would charge somebody for arriving to fix a typo. */}
         {steps.length > 0 && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="ml-auto h-8"
-            disabled={propose.isPending || draft.instructions.trim() === ""}
-            onClick={read}
-          >
-            <Sparkles className="size-3.5" aria-hidden />
-            {t("agents.readAgain")}
-          </Button>
+          <ReadAgainButton
+            steps={steps.length}
+            disabled={drawing.reading || draft.instructions.trim() === ""}
+            onConfirm={drawing.read}
+          />
         )}
       </div>
+
+      {/* Said where the drawing is, not in a toast: it is a fact about the
+          definition somebody is about to publish, and it stays true until one
+          of the two halves changes. */}
+      {silent.length > 0 && (
+        <p className="flex items-start gap-1.5 rounded-md bg-warning-surface px-2.5 py-2 text-2xs text-warning">
+          <TriangleAlert className="mt-px size-3.5 shrink-0" aria-hidden />
+          {t("agents.undescribed", {
+            count: silent.length,
+            tools: silent.join(", "),
+          })}
+        </p>
+      )}
 
       <div className="flex h-[420px] overflow-hidden rounded-lg border border-border">
         <StepRail catalogue={catalogue} pack={pack} />
         {steps.length === 0 ? (
           <EmptyCanvas
-            reading={propose.isPending}
+            reading={drawing.reading}
             canRead={draft.instructions.trim() !== ""}
-            onRead={read}
+            onRead={drawing.read}
           />
         ) : (
         <AgentCanvas
           steps={steps}
           selected={selected}
-          onReorder={reorder}
-          onSelect={setSelected}
-          onDropTool={insert}
+          onReorder={drawing.reorder}
+          onSelect={drawing.setSelected}
+          onDropTool={drawing.insert}
         />
         )}
         <StepInspector
           step={selected === undefined ? undefined : steps[selected]}
           at={selected}
           tools={{ pack, catalogue, policies }}
-          onChange={(over) =>
-            write(steps.map((s, i) => (i === selected ? { ...s, ...over } : s)))
-          }
-          onRemove={() => {
-            write(steps.filter((_, i) => i !== selected));
-            setSelected(undefined);
-          }}
+          onChange={drawing.change}
+          onRemove={drawing.remove}
         />
       </div>
     </div>
   );
 }
 
-/**
- * An agent with no stages yet.
- *
- * The empty state carries the action rather than describing it, because the
- * canvas is where somebody is already looking — a line of prose here and a
- * button in the header above is how an empty screen stays empty.
- */
-function EmptyCanvas({
-  reading,
-  canRead,
-  onRead,
-}: {
-  reading: boolean;
-  canRead: boolean;
-  onRead: () => void;
-}) {
-  const { t } = useTranslation();
-
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-3 bg-background p-6 text-center">
-      <p className="max-w-sm text-xs text-muted-foreground">
-        {canRead ? t("agents.emptyCanvas") : t("agents.writeFirst")}
-      </p>
-      {canRead && (
-        <Button type="button" size="sm" disabled={reading} onClick={onRead}>
-          <Sparkles className="size-3.5" aria-hidden />
-          {t("agents.readTheInstructions")}
-        </Button>
-      )}
-    </div>
-  );
-}
