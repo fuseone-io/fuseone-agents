@@ -13,6 +13,12 @@ type AgentSummary struct {
 	// carried by the published version.
 	Stage Stage
 
+	// Started is whether the agent may open runs. Stated this way round, and
+	// not as "paused", so that the zero value is the safe reading: a summary
+	// nobody filled in reports an agent that cannot act, rather than showing
+	// a stopped agent as live because a read failed.
+	Started bool
+
 	ID        AgentID
 	VersionID VersionID
 	Scope     Scope

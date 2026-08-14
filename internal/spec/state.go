@@ -46,11 +46,6 @@ func (s *State) Paused(ctx context.Context) (map[domain.AgentID]bool, error) {
 	return out, rows.Err()
 }
 
-// IsPaused reports one agent's state.
-//
-// An agent nobody has a row for is paused. A new agent is created paused, and
-// an absent row means nobody ever decided otherwise — reading that as running
-// would let an agent start because a write failed.
 // Stages reads how far each agent is trusted, by agent.
 //
 // Read as a set for the same reason pauses are: the worker asks once per pass
@@ -108,6 +103,11 @@ func (s *State) SetStage(
 	return nil
 }
 
+// IsPaused reports one agent's state.
+//
+// An agent nobody has a row for is paused. A new agent is created paused, and
+// an absent row means nobody ever decided otherwise — reading that as running
+// would let an agent start because a write failed.
 func (s *State) IsPaused(ctx context.Context, agent domain.AgentID) (bool, error) {
 	var paused bool
 	err := s.pool.QueryRow(ctx,

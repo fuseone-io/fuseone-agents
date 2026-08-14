@@ -138,3 +138,52 @@ func (f *fakeDetail) Instructions(
 ) (text, source string, err error) {
 	return f.instructions[version], "dev/agents/triage.agent.md", nil
 }
+
+/*
+Whether the agent is running.
+
+Published paused, so the screen that publishes it is also the screen somebody
+starts it from, and it cannot offer that without knowing the state. Read from
+the agent rather than from the version: an older version is shown beside the
+state of the agent that has it, because there is only one thing to start.
+*/
+func TestGetAgent_reportsWhetherItIsRunning(t *testing.T) {
+	t.Parallel()
+
+	resp, err := NewServer(ledger.NewMemory(), "test").WithAgents(publishedVersions(t)).
+		WithPauses(runningAgent{}).
+		GetAgent(inArea("cx", domain.RoleAuthor), openapi.GetAgentRequestObject{AgentId: "triage"})
+	if err != nil {
+		t.Fatalf("GetAgent: %v", err)
+	}
+	got := resp.(openapi.GetAgent200JSONResponse)
+	if got.Agent.Paused == nil || *got.Agent.Paused {
+		t.Errorf("paused = %v, want it reported as running", got.Agent.Paused)
+	}
+}
+
+// An agent nobody ever decided about is stopped, and reads as stopped. The
+// safe direction: showing a stopped agent as live because a row is missing is
+// how somebody concludes the platform is acting when it is not.
+func TestGetAgent_nobodyEverDecided_readsAsStopped(t *testing.T) {
+	t.Parallel()
+
+	resp, err := NewServer(ledger.NewMemory(), "test").WithAgents(publishedVersions(t)).
+		WithPauses(pausedAgent{}).
+		GetAgent(inArea("cx", domain.RoleAuthor), openapi.GetAgentRequestObject{AgentId: "triage"})
+	if err != nil {
+		t.Fatalf("GetAgent: %v", err)
+	}
+	got := resp.(openapi.GetAgent200JSONResponse)
+	if got.Agent.Paused == nil || !*got.Agent.Paused {
+		t.Errorf("paused = %v, want it reported as stopped", got.Agent.Paused)
+	}
+}
+
+type runningAgent struct{}
+
+func (runningAgent) IsPaused(context.Context, domain.AgentID) (bool, error) { return false, nil }
+
+func (runningAgent) Paused(context.Context) (map[domain.AgentID]bool, error) {
+	return map[domain.AgentID]bool{"triage": false}, nil
+}

@@ -7,6 +7,7 @@ import { Mono } from "@/components/shared/mono";
 import { StateDot } from "@/components/shared/state-dot";
 import { stateOfAgent } from "@/lib/agent-state";
 import { RunNowDialog } from "@/features/agents/run-now-dialog";
+import { PauseControl } from "@/features/agents/pause-control";
 import { StageControl } from "@/features/agents/stage-control";
 import { formatInstant } from "@/lib/format";
 import type { Agent, AgentVersion, Phase } from "@/lib/api/client";
@@ -88,6 +89,11 @@ export function AgentIdentity({
               </Link>
             </Button>
             <StageControl agentId={agent.agentId} stage={agent.stage} />
+            {/* How far it is trusted, then whether it is on. Both belong
+                here: an agent is published stopped, and a screen that can
+                publish but not start sends the author looking for a button
+                that does not exist. */}
+            <PauseControl agentId={agent.agentId} paused={agent.paused} />
             <RunNowDialog agentId={agent.agentId} agentName={agent.name} />
           </>
         ) : (

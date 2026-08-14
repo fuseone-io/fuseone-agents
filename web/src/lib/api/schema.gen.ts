@@ -281,6 +281,12 @@ export interface paths {
          *
          *     Every way a run can start obeys this — the schedule, a webhook, the
          *     button, and the command line.
+         *
+         *     Starting is refused while the corrections this version was last
+         *     simulated against no longer hold (409). The check is here rather than
+         *     on publishing because a version's identifier is the digest of its own
+         *     bytes: it does not exist until it is published, so nothing can have
+         *     been simulated against it before. Stopping is never refused.
          */
         put: operations["setAgentPaused"];
         post?: never;
@@ -2378,6 +2384,8 @@ export interface components {
             agentId: string;
             /** @description Absent on an older reading. A client that does not find one should assume draft, which is what the platform assumes. */
             stage?: components["schemas"]["Stage"];
+            /** @description Whether the agent is stopped. Absent on an older reading, and an agent nobody has decided about is paused — reading an absent answer as running would show an agent as live because a write failed. */
+            paused?: boolean;
             /** @description The digest of the definition's content. Publishing new text is a new version; the old one stays readable. */
             versionId: string;
             scope: components["schemas"]["Scope"];
@@ -3236,6 +3244,15 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            /** @description Corrections this version used to hold no longer hold. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     startRun: {

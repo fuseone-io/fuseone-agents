@@ -137,6 +137,10 @@ type pausedAgent struct{}
 
 func (pausedAgent) IsPaused(gocontext.Context, domain.AgentID) (bool, error) { return true, nil }
 
+func (pausedAgent) Paused(gocontext.Context) (map[domain.AgentID]bool, error) {
+	return map[domain.AgentID]bool{"triage": true}, nil
+}
+
 func TestGetSimulation_foldsTheRunsIntoRowsAndNamesTheRuleThatStopped(t *testing.T) {
 	t.Parallel()
 

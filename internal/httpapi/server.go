@@ -65,7 +65,7 @@ type Server struct {
 	assistants   Assistants
 	spend        Spend
 	rates        Rates
-	pauses       trigger.Pauses
+	pauses       Pauses
 	// stops are the switches wider than one agent (PRD FO-06).
 	stops Stoppers
 	// marks are the budget thresholds each scope has crossed (PRD FO-05).
@@ -153,8 +153,18 @@ func (s *Server) WithStages(stages trigger.Stages) *Server {
 	return s
 }
 
+// Pauses is whether agents may start, declared here by the consumer.
+//
+// Wider than the trigger's own reading of it: opening a run asks about one
+// agent, and a screen listing twenty asks about all of them at once — which
+// is the difference between one query and twenty.
+type Pauses interface {
+	trigger.Pauses
+	Paused(ctx context.Context) (map[domain.AgentID]bool, error)
+}
+
 // WithPauses wires whether an agent is allowed to start.
-func (s *Server) WithPauses(pauses trigger.Pauses) *Server {
+func (s *Server) WithPauses(pauses Pauses) *Server {
 	s.pauses = pauses
 	return s
 }

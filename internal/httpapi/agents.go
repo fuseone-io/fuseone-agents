@@ -66,6 +66,22 @@ func (s *Server) GetAgent(ctx context.Context, req openapi.GetAgentRequestObject
 		return nil, fmt.Errorf("agent instructions: %w", err)
 	}
 
+	// Whether it is running, which is a fact about the agent and not about
+	// the version being read: an older version is shown beside the state of
+	// the agent that has it, because there is only one thing to start.
+	if s.pauses != nil {
+		paused, err := s.pauses.IsPaused(ctx, wanted.ID)
+		if err != nil {
+			return nil, fmt.Errorf("agent state: %w", err)
+		}
+		wanted.Started = !paused
+	}
+	if s.promotions != nil {
+		if wanted.Stage, err = s.promotions.StageOf(ctx, wanted.ID); err != nil {
+			return nil, fmt.Errorf("agent stage: %w", err)
+		}
+	}
+
 	out := openapi.AgentDetail{
 		Agent:    agentFrom(wanted),
 		Versions: make([]openapi.AgentVersion, 0, len(versions)),
@@ -157,6 +173,15 @@ func (s *Server) ListAgents(ctx context.Context, req openapi.ListAgentsRequestOb
 		}
 	}
 
+	// And whether each one is running, in one read for the same reason. An
+	// agent with no row has never been decided about, which is stopped.
+	stopped := map[domain.AgentID]bool{}
+	if s.pauses != nil {
+		if stopped, err = s.pauses.Paused(ctx); err != nil {
+			return nil, fmt.Errorf("agent pauses: %w", err)
+		}
+	}
+
 	// An unscoped list is narrowed to what the caller may see rather than
 	// refused: asking "which agents are there" should answer with theirs, not
 	// with a permission error naming a scope they never mentioned (NF-06).
@@ -168,6 +193,8 @@ func (s *Server) ListAgents(ctx context.Context, req openapi.ListAgentsRequestOb
 			continue
 		}
 		a.Stage = stages[a.ID]
+		paused, decided := stopped[a.ID]
+		a.Started = decided && !paused
 		agent := agentFrom(a)
 		if seen, ran := byAgent[a.ID]; ran {
 			agent.Activity = ptr(activityFrom(seen))
@@ -214,6 +241,7 @@ func agentFrom(a domain.AgentSummary) openapi.Agent {
 		Latest:      a.Latest,
 	}
 	agent.Stage = ptr(openapi.Stage(domain.StageOf(string(a.Stage))))
+	agent.Paused = ptr(!a.Started)
 	if a.Effort != "" {
 		agent.Effort = ptr(a.Effort)
 	}

@@ -3645,6 +3645,13 @@ components:
           description: >
             Absent on an older reading. A client that does not find one should
             assume draft, which is what the platform assumes.
+        paused:
+          type: boolean
+          description: >
+            Whether the agent is stopped. Absent on an older reading, and an
+            agent nobody has decided about is paused — reading an absent
+            answer as running would show an agent as live because a write
+            failed.
         versionId:
           type: string
           description: The digest of the definition's content. Publishing new text is a new version; the old one stays readable.
