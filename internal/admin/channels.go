@@ -46,6 +46,9 @@ type Channel struct {
 	Workspace     string
 	Enabled       bool
 	HasCredential bool
+	// HasSigning reports whether the inbound half is configured, without
+	// exposing it. A channel can post long before it can be answered.
+	HasSigning    bool
 	Conversations []Conversation
 }
 
@@ -73,13 +76,26 @@ func (c *Channels) List(ctx context.Context) ([]Channel, error) {
 	for _, s := range connections {
 		var conn channel.Connection
 		_ = json.Unmarshal(s.Value, &conn)
+		// Whether the inbound half is on, without revealing either secret. It
+		// needs the sealed value, so it is read here rather than inferred.
+		signing := c.hasSigning(ctx, s.Name)
 		out = append(out, Channel{
 			Name: s.Name, Kind: conn.Kind, Workspace: conn.Workspace,
-			Enabled: s.Enabled, HasCredential: s.HasSecret,
+			Enabled: s.Enabled, HasCredential: s.HasSecret, HasSigning: signing,
 			Conversations: conversationsOf(s.Name, conversations),
 		})
 	}
 	return out, nil
+}
+
+// hasSigning answers whether this channel can verify what arrives.
+func (c *Channels) hasSigning(ctx context.Context, name string) bool {
+	held, err := c.settings.Reveal(ctx,
+		settings.ScopeInstallation, domain.Scope{}, channel.KindChannel, name)
+	if err != nil {
+		return false
+	}
+	return channel.ReadCredentials(held.Secret).Signing != ""
 }
 
 func conversationsOf(channelName string, stored []settings.Setting) []Conversation {
@@ -101,8 +117,17 @@ func conversationsOf(channelName string, stored []settings.Setting) []Conversati
 	return out
 }
 
-// PutChannel configures a connection, sealing its credential.
-func (c *Channels) PutChannel(ctx context.Context, ch Channel, token string, by domain.UserID) error {
+/*
+PutChannel configures a connection, sealing its credentials.
+
+Either secret may be omitted to keep the stored one. They are configured at
+different moments — a workspace is connected to receive notifications long
+before anybody switches the inbound half on — and demanding both on every save
+would mean re-pasting a token to add a signing secret.
+*/
+func (c *Channels) PutChannel(
+	ctx context.Context, ch Channel, creds channel.Credentials, by domain.UserID,
+) error {
 	if strings.TrimSpace(ch.Kind) == "" {
 		return ErrNoChannelKind
 	}
@@ -112,14 +137,48 @@ func (c *Channels) PutChannel(ctx context.Context, ch Channel, token string, by 
 		return err
 	}
 
+	merged, err := c.mergeCredentials(ctx, ch.Name, creds)
+	if err != nil {
+		return err
+	}
+
 	return writeSetting(ctx, c.pool, c.settings, by, domain.Scope{}, settings.Setting{
 		ScopeKind: settings.ScopeInstallation,
 		Kind:      channel.KindChannel, Name: ch.Name,
-		Value: value, Secret: token, Enabled: ch.Enabled, UpdatedBy: string(by),
+		Value: value, Secret: merged.Sealed(), Enabled: ch.Enabled, UpdatedBy: string(by),
 	}, "channel.configured", ch.Name, map[string]any{
-		// Never the credential, only that one arrived.
-		"kind": ch.Kind, "workspace": ch.Workspace, "credential": token != "",
+		// Never a credential, only which of them are now held. Whether an
+		// installation can be spoken to is a fact an auditor may need; the
+		// secret is not.
+		"kind": ch.Kind, "workspace": ch.Workspace,
+		"token": merged.Token != "", "signing": merged.Signing != "",
 	})
+}
+
+// mergeCredentials keeps whichever half this write left out.
+func (c *Channels) mergeCredentials(
+	ctx context.Context, name string, given channel.Credentials,
+) (channel.Credentials, error) {
+	if given.Token != "" && given.Signing != "" {
+		return given, nil
+	}
+
+	held, err := c.settings.Reveal(ctx,
+		settings.ScopeInstallation, domain.Scope{}, channel.KindChannel, name)
+	if err != nil {
+		// No such channel yet: this write is the first, and what it carries is
+		// all there is.
+		return given, nil //nolint:nilerr // absent is not a failure here
+	}
+
+	stored := channel.ReadCredentials(held.Secret)
+	if given.Token == "" {
+		given.Token = stored.Token
+	}
+	if given.Signing == "" {
+		given.Signing = stored.Signing
+	}
+	return given, nil
 }
 
 // PutConversation points a scope's runs at a conversation.

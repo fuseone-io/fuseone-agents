@@ -1869,6 +1869,17 @@ paths:
                     The bot credential, sealed by the vault. Omit to keep the
                     stored one — renaming a workspace must not demand
                     re-entering a secret nobody has to hand.
+                signingSecret:
+                  type: string
+                  description: |
+                    What arriving requests are checked against, sealed beside
+                    the token. Not the same secret and not interchangeable: the
+                    token is a bearer this installation sends, this is what it
+                    verifies with, and HMAC needs the secret itself — a hash
+                    cannot produce one.
+
+                    Absent leaves the inbound surface closed, which is the safe
+                    reading of a channel nobody has switched it on for.
                 enabled: { type: boolean, default: true }
       responses:
         '204': { description: The channel is configured. }
@@ -3202,6 +3213,11 @@ components:
         hasCredential:
           type: boolean
           description: Whether a credential is stored, never what it is.
+        hasSigning:
+          type: boolean
+          description: >
+            Whether this channel can verify what arrives. A channel posts long
+            before anybody switches the inbound half on.
         conversations:
           type: array
           items: { $ref: '#/components/schemas/ChannelConversation' }

@@ -131,7 +131,9 @@ type channelSpy struct {
 
 func (c *channelSpy) List(context.Context) ([]admin.Channel, error) { return c.listed, nil }
 
-func (c *channelSpy) PutChannel(context.Context, admin.Channel, string, domain.UserID) error {
+func (c *channelSpy) PutChannel(
+	context.Context, admin.Channel, channel.Credentials, domain.UserID,
+) error {
 	return nil
 }
 

@@ -40,13 +40,14 @@ func (d *Drivers) For(ctx context.Context, name string) (channel.Poster, error) 
 	if !s.Enabled {
 		return nil, fmt.Errorf("connect: channel %q is switched off", name)
 	}
-	if s.Secret == "" {
-		return nil, fmt.Errorf("connect: channel %q has no credential", name)
-	}
-
 	var conn channel.Connection
 	if err := json.Unmarshal(s.Value, &conn); err != nil {
 		return nil, fmt.Errorf("connect: read connection %q: %w", name, err)
+	}
+
+	creds := channel.ReadCredentials(s.Secret)
+	if creds.Token == "" {
+		return nil, fmt.Errorf("connect: channel %q has no credential", name)
 	}
 
 	build, known := drivers[conn.Kind]
@@ -55,7 +56,7 @@ func (d *Drivers) For(ctx context.Context, name string) (channel.Poster, error) 
 		// should say so, not fail as a notification that never arrives.
 		return nil, fmt.Errorf("connect: channel %q is of an unsupported kind %q", name, conn.Kind)
 	}
-	return build(s.Secret), nil
+	return build(creds.Token), nil
 }
 
 /*

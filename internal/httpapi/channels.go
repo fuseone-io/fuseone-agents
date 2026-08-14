@@ -22,7 +22,7 @@ configuring a model provider and no more.
 // ChannelAdmin is channel configuration, declared here by the consumer.
 type ChannelAdmin interface {
 	List(ctx context.Context) ([]admin.Channel, error)
-	PutChannel(ctx context.Context, ch admin.Channel, token string, by domain.UserID) error
+	PutChannel(ctx context.Context, ch admin.Channel, creds channel.Credentials, by domain.UserID) error
 	DeleteChannel(ctx context.Context, name string, by domain.UserID) error
 	PutConversation(ctx context.Context, channelName string, conv admin.Conversation, by domain.UserID) error
 	DeleteConversation(ctx context.Context, id string, scope domain.Scope, by domain.UserID) error
@@ -91,7 +91,10 @@ func (s *Server) PutChannel(
 		Kind:      string(req.Body.Kind),
 		Workspace: valueOr(req.Body.Workspace),
 		Enabled:   orDefault(req.Body.Enabled, true),
-	}, valueOr(req.Body.Token), caller)
+	}, channel.Credentials{
+		Token:   valueOr(req.Body.Token),
+		Signing: valueOr(req.Body.SigningSecret),
+	}, caller)
 	if err != nil {
 		return openapi.PutChannel400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
@@ -199,7 +202,7 @@ func (s *Server) scopeOfConversation(
 func channelFrom(c admin.Channel) openapi.Channel {
 	out := openapi.Channel{
 		Name: c.Name, Kind: c.Kind, Enabled: c.Enabled,
-		HasCredential: c.HasCredential,
+		HasCredential: c.HasCredential, HasSigning: ptr(c.HasSigning),
 		Conversations: make([]openapi.ChannelConversation, 0, len(c.Conversations)),
 	}
 	if c.Workspace != "" {
