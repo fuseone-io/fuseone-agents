@@ -57,7 +57,7 @@ export function RunNowDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="h-8">
+        <Button size="sm" className="h-9">
           <Play className="size-4" aria-hidden />
           {t("agents.run")}
         </Button>

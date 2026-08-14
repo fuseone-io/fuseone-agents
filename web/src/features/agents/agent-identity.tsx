@@ -1,20 +1,16 @@
 import { Trans, useTranslation } from "react-i18next";
-import { FlaskConical, Pencil } from "lucide-react";
-import { Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Mono } from "@/components/shared/mono";
 import { StateDot } from "@/components/shared/state-dot";
 import { stateOfAgent } from "@/lib/agent-state";
-import { RunNowDialog } from "@/features/agents/run-now-dialog";
-import { PauseControl } from "@/features/agents/pause-control";
-import { RetireAgent } from "@/features/agents/retire-agent";
-import { StageControl } from "@/features/agents/stage-control";
 import { formatInstant } from "@/lib/format";
 import type { Agent, AgentVersion, Phase } from "@/lib/api/client";
 
 /**
  * Which agent this is, and which version of it you are reading.
+ *
+ * Identity only. What can be done to it is the bar underneath, so that the
+ * name and the actions are not competing for the same line.
  *
  * The version is stated rather than implied: a reader who arrived from a run
  * is looking at the text that run executed, which may not be the newest.
@@ -69,44 +65,6 @@ export function AgentIdentity({
         </div>
       </div>
 
-      <div className="ml-auto flex shrink-0 items-center gap-2">
-        {/* An older version is read, never re-run: what would open is the
-            newest, which is not the version being looked at. */}
-        {agent.latest ? (
-          <>
-            <Button variant="outline" size="sm" asChild className="h-8">
-              <Link to={`/agents/${agent.agentId}/edit`}>
-                <Pencil className="size-4" aria-hidden />
-                {t("agents.edit")}
-              </Link>
-            </Button>
-            {/* Beside running it, not buried: simulating is how an agent
-                earns its way out of Draft, and running it for real is the
-                thing somebody does instead when they cannot find this. */}
-            <Button variant="outline" size="sm" asChild className="h-8">
-              <Link to={`/agents/${agent.agentId}/simulate`}>
-                <FlaskConical className="size-4" aria-hidden />
-                {t("agents.simulate")}
-              </Link>
-            </Button>
-            <StageControl agentId={agent.agentId} stage={agent.stage} />
-            {/* How far it is trusted, then whether it is on. Both belong
-                here: an agent is published stopped, and a screen that can
-                publish but not start sends the author looking for a button
-                that does not exist. */}
-            <PauseControl agentId={agent.agentId} paused={agent.paused} />
-            <RunNowDialog agentId={agent.agentId} agentName={agent.name} />
-            <RetireAgent
-              agentId={agent.agentId}
-              retired={agent.retired ?? false}
-            />
-          </>
-        ) : (
-          <Button variant="outline" size="sm" disabled className="h-8">
-            {t("agents.readOnly")}
-          </Button>
-        )}
-      </div>
     </div>
   );
 }

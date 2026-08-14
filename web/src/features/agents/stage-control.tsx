@@ -1,24 +1,35 @@
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSetStage, type Stage } from "@/features/agents/stage-api";
 import { problemMessage } from "@/lib/api/problem-message";
 
 const ORDER: Stage[] = ["draft", "copilot", "autonomous"];
 
+// Written out so the guard that checks every key exists can see them.
+const NAMES: Record<Stage, string> = {
+  draft: "stage.draft",
+  copilot: "stage.copilot",
+  autonomous: "stage.autonomous",
+};
+
+const MOVED: Record<Stage, string> = {
+  draft: "stage.moved.draft",
+  copilot: "stage.moved.copilot",
+  autonomous: "stage.moved.autonomous",
+};
+
 /**
- * How far this agent is trusted, and the one control that changes it.
+ * How far this agent is trusted, as a segmented control.
  *
- * The consequence of each choice is written beside it rather than left to be
- * discovered: promoting to autonomous is the moment an agent starts doing
- * things nobody will be asked about, and a dropdown that said only
- * "autonomous" would be hiding that behind a word.
+ * It was a dropdown carrying the consequence of each choice inside the option,
+ * which made the trigger two lines tall and knocked every other control in the
+ * row out of line. The consequence did not stop being worth saying — it moved
+ * out, to one line beside the control, where it is legible without opening
+ * anything.
+ *
+ * Three choices that are always three: a menu that has to be opened to find
+ * out what is in it is the wrong shape for a closed set this small.
  */
 export function StageControl({
   agentId,
@@ -29,10 +40,11 @@ export function StageControl({
 }) {
   const { t } = useTranslation();
   const set = useSetStage(agentId);
+  const current = stage ?? "draft";
 
-  const change = (next: Stage) =>
-    set.mutate(next, {
-      onSuccess: () => toast.success(t(`stage.moved.${next}`)),
+  const change = (next: string) =>
+    set.mutate(next as Stage, {
+      onSuccess: () => toast.success(t(MOVED[next as Stage])),
       // The server refuses a promotion out of Draft with nothing simulated,
       // and its sentence is the useful one.
       onError: (error) =>
@@ -42,26 +54,14 @@ export function StageControl({
     });
 
   return (
-    <Select
-      value={stage ?? "draft"}
-      onValueChange={(next) => change(next as Stage)}
-      disabled={set.isPending}
-    >
-      <SelectTrigger className="!h-8 w-[190px]" aria-label={t("stage.label")}>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
+    <Tabs value={current} onValueChange={change}>
+      <TabsList className="h-8" aria-label={t("stage.label")}>
         {ORDER.map((option) => (
-          <SelectItem key={option} value={option}>
-            <span className="flex flex-col items-start">
-              <span>{t(`stage.${option}`)}</span>
-              <span className="text-xs text-muted-foreground">
-                {t(`stage.means.${option}`)}
-              </span>
-            </span>
-          </SelectItem>
+          <TabsTrigger key={option} value={option} disabled={set.isPending}>
+            {t(NAMES[option])}
+          </TabsTrigger>
         ))}
-      </SelectContent>
-    </Select>
+      </TabsList>
+    </Tabs>
   );
 }

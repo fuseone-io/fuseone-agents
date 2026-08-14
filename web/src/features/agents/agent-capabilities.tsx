@@ -76,19 +76,19 @@ export function AgentCapabilities({ agent }: { agent: Agent }) {
       <dl className="flex flex-col gap-1.5">
         <Limit
           label={t("runs.kpiCost")}
-          value={budgetOf(agent.budget.micros, formatMicros)}
+          value={budgetOf(agent.budget.micros, formatMicros, t)}
         />
         <Limit
           label={t("runs.kpiTokens")}
-          value={budgetOf(agent.budget.tokens, formatTokens)}
+          value={budgetOf(agent.budget.tokens, formatTokens, t)}
         />
         <Limit
           label={t("agents.calls")}
-          value={budgetOf(agent.budget.toolCalls, String)}
+          value={budgetOf(agent.budget.toolCalls, String, t)}
         />
         <Limit
           label={t("runs.columnSteps")}
-          value={budgetOf(agent.budget.steps, String)}
+          value={budgetOf(agent.budget.steps, String, t)}
         />
       </dl>
     </section>
@@ -126,12 +126,19 @@ function Triggers({ agent }: { agent: Agent }) {
   );
 }
 
-/** Zero means no ceiling, which is a different thing from a ceiling of zero. */
+/**
+ * Zero means no ceiling, which is a different thing from a ceiling of zero.
+ *
+ * The translator is a parameter rather than a call at the end, because the
+ * key on its own is what used to reach the screen: a key that exists in both
+ * catalogues and is never handed to `t` passes every guard there is.
+ */
 function budgetOf(
   value: number | undefined,
   format: (n: number) => string,
+  t: (key: string) => string,
 ): string {
-  return value && value > 0 ? format(value) : "agents.noCeiling";
+  return value && value > 0 ? format(value) : t("agents.noCeiling");
 }
 
 function Limit({ label, value }: { label: string; value: string }) {

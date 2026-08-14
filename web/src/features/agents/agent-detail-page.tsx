@@ -2,6 +2,10 @@ import { useParams, useSearchParams } from "react-router-dom";
 import { ErrorState, LoadingRows } from "@/components/shared/states";
 import { useAgent } from "@/features/agents/agent-detail-api";
 import { AgentIdentity } from "@/features/agents/agent-identity";
+import {
+  AgentActionBar,
+  ReadOnlyBar,
+} from "@/features/agents/agent-action-bar";
 import { AgentKpis } from "@/features/agents/agent-kpis";
 import { AgentDefinition } from "@/features/agents/agent-definition";
 import { AgentCapabilities } from "@/features/agents/agent-capabilities";
@@ -37,6 +41,13 @@ export function AgentDetailPage() {
   return (
     <div className="flex w-full min-w-0 flex-col gap-5">
       <AgentIdentity agent={published} versions={versions} />
+      {/* An older version is read, never operated: what a button here would
+          act on is the newest, which is not the version being looked at. */}
+      {published.latest ? (
+        <AgentActionBar agent={published} />
+      ) : (
+        <ReadOnlyBar agent={published} />
+      )}
       <AgentKpis agent={published} />
 
       <div className="grid gap-5 lg:grid-cols-[1fr_320px] lg:items-start">
