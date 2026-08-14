@@ -50,7 +50,7 @@ paths:
         the definition's content, so the text a run was pinned to can always be
         read back.
       parameters:
-        - $ref: '#/components/parameters/Company'
+        - $ref: '#/components/parameters/CompanyScope'
         - $ref: '#/components/parameters/Area'
         - name: allVersions
           in: query
@@ -77,7 +77,7 @@ paths:
       operationId: listRuns
       summary: List runs
       parameters:
-        - $ref: '#/components/parameters/Company'
+        - $ref: '#/components/parameters/CompanyScope'
         - $ref: '#/components/parameters/Area'
         - name: agentId
           in: query
@@ -118,7 +118,7 @@ paths:
         The console shows these figures as facts, so they are computed where
         the whole set is — never derived from a page.
       parameters:
-        - $ref: '#/components/parameters/Company'
+        - $ref: '#/components/parameters/CompanyScope'
         - $ref: '#/components/parameters/Area'
         - name: agentId
           in: query
@@ -782,7 +782,7 @@ paths:
         Hours with no runs are absent rather than zero. The caller chose the
         period and knows which hours it covers.
       parameters:
-        - $ref: '#/components/parameters/Company'
+        - $ref: '#/components/parameters/CompanyScope'
         - $ref: '#/components/parameters/Area'
         - name: agentId
           in: query
@@ -817,7 +817,7 @@ paths:
         Each entry names the rule, never a category. "Denied by policy" tells
         a reader nothing about what to change.
       parameters:
-        - $ref: '#/components/parameters/Company'
+        - $ref: '#/components/parameters/CompanyScope'
         - $ref: '#/components/parameters/Area'
         - name: agentId
           in: query
@@ -1059,7 +1059,7 @@ paths:
       operationId: listApprovals
       summary: The approval inbox
       parameters:
-        - $ref: '#/components/parameters/Company'
+        - $ref: '#/components/parameters/CompanyScope'
         - $ref: '#/components/parameters/Area'
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Limit'
@@ -1107,7 +1107,7 @@ paths:
         derived from it. Totals always reconcile because they are projections
         of the same ledger rows.
       parameters:
-        - $ref: '#/components/parameters/Company'
+        - $ref: '#/components/parameters/CompanyScope'
         - $ref: '#/components/parameters/Area'
         - name: from
           in: query
@@ -1151,7 +1151,7 @@ paths:
         Scoped like every other read. An audit trail that showed an area
         somebody cannot otherwise see would be a way around every other check.
       parameters:
-        - $ref: '#/components/parameters/Company'
+        - $ref: '#/components/parameters/CompanyScope'
         - $ref: '#/components/parameters/Area'
         - name: since
           in: query
@@ -1367,7 +1367,7 @@ paths:
 
         An empty list means nothing has crossed 50% this period.
       parameters:
-        - $ref: '#/components/parameters/Company'
+        - $ref: '#/components/parameters/CompanyScope'
         - $ref: '#/components/parameters/Area'
       responses:
         '200':
@@ -1805,6 +1805,111 @@ paths:
         '204': { description: The server is removed. }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/companies:
+    get:
+      tags: [admin]
+      operationId: listCompanies
+      summary: The companies this installation governs
+      description: |
+        Every one, withdrawn ones included: their runs stay readable and
+        somebody looking at those has to be able to find out what that company
+        was. A withdrawn one says so rather than being hidden.
+
+        This is the administrative listing and needs authority over the
+        installation. The list a person actually chooses a context from comes
+        from their own grants, on `/me`, and shows only what they reach.
+      responses:
+        '200':
+          description: The companies.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Company' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [admin]
+      operationId: createCompany
+      summary: Register a company
+      description: |
+        Creating one grants the caller inside it, in the same act. Every
+        listing here is filtered by the scopes somebody holds, so a company
+        created without a grant would report success and then show nothing.
+
+        Authority over the installation, never over a company: held inside one,
+        this would let that company's administrator mint another and grant
+        themselves in it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id:
+                  type: string
+                  description: >
+                    Lowercase letters, digits and hyphens. It reaches a URL, a
+                    settings key and every scope written as "company/area", and
+                    it never changes.
+                label:
+                  type: string
+                  description: What people read. This does change.
+      responses:
+        '201':
+          description: The company, and the grant that came with it.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Company' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: That identifier is taken.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /admin/companies/{company}:
+    patch:
+      tags: [admin]
+      operationId: updateCompany
+      summary: Rename a company, or withdraw it
+      description: |
+        Withdrawing archives and never deletes. The runs, decisions and trail
+        name the company, and removing it would leave every one of them
+        pointing at nothing.
+      parameters:
+        - name: company
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label: { type: string }
+                archived:
+                  type: boolean
+                  description: >
+                    True withdraws it from what is offered for new work; false
+                    puts it back.
+      responses:
+        '204': { description: The company is changed. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
   /admin/channels:
     get:
@@ -2543,7 +2648,7 @@ components:
       in: path
       required: true
       schema: { type: string }
-    Company:
+    CompanyScope:
       name: company
       in: query
       description: Company scope. A single value until multi-company (PRD 3.1).
@@ -3282,6 +3387,19 @@ components:
         enabled: { type: boolean }
         updatedBy: { type: string }
         updatedAt: { type: string, format: date-time }
+
+    Company:
+      type: object
+      required: [id, label, areas, archived]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        areas:
+          type: integer
+          description: How many areas are registered in it.
+        archived: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        createdBy: { type: string }
 
     Channel:
       type: object

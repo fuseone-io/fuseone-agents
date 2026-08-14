@@ -90,6 +90,7 @@ type Server struct {
 	// retention and erasures decide whether content survives.
 	retention      Retention
 	channels       ChannelAdmin
+	companies      CompanyAdmin
 	channelListing Lister
 	announcer      Announcer
 	erasures       Erasures

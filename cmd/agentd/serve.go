@@ -108,6 +108,7 @@ func serve(args []string) error {
 		channels = admin.NewChannels(identity.pool, store)
 		api = api.WithChannels(channels, channel.NewRouter(drivers)).
 			WithChannelListing(drivers).
+			WithCompanies(admin.NewCompanies(identity.pool)).
 			WithAdministration(curator, curator, integrations).
 			WithAgents(spec.NewRegistry(identity.pool)).
 			WithCeilings(admin.NewBudgets(identity.pool, store)).
