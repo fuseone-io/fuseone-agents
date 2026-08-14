@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
-import { FileText, IdCard } from "lucide-react";
+import { FileText, ListOrdered } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Section } from "@/features/policies/section";
 import { AgentBasicsSection } from "@/features/agents/agent-basics-section";
@@ -15,15 +16,18 @@ import type { AgentDefinition } from "@/lib/api/client";
 export function TabDefinition({
   draft,
   patch,
-  agentId,
-  creating,
-  onAgentId,
+  editing,
+  onSteps,
 }: {
   draft: AgentDefinition;
   patch: (over: Partial<AgentDefinition>) => void;
-  agentId: string;
-  creating: boolean;
-  onAgentId: (id: string) => void;
+  editing: {
+    agentId: string;
+    creating: boolean;
+    onAgentId: (id: string) => void;
+  };
+  /** Opens the tab where this text is read as stages. */
+  onSteps: () => void;
 }) {
   const { t } = useTranslation();
 
@@ -32,9 +36,9 @@ export function TabDefinition({
       <AgentBasicsSection
         draft={draft}
         patch={patch}
-        agentId={agentId}
-        editable={creating}
-        onAgentId={onAgentId}
+        agentId={editing.agentId}
+        editable={editing.creating}
+        onAgentId={editing.onAgentId}
       />
 
       <Section
@@ -49,19 +53,56 @@ export function TabDefinition({
           </span>
         }
       >
+        {/* An editor surface, and deliberately without line numbers. A number
+            in the gutter says a line is addressable, which teaches that one
+            line is one step — and the moment somebody writes two in a line, or
+            wraps one across three, the numbering is a claim about structure
+            that the steps disagree with. The prose is what the model reads;
+            what the Gate obeys is next door and says so below. */}
         <Textarea
           id="agent-instructions"
-          rows={8}
+          rows={12}
           value={draft.instructions}
           onChange={(e) => patch({ instructions: e.target.value })}
-          className="font-mono text-xs"
+          className="resize-y bg-muted/40 font-mono text-xs leading-relaxed"
           placeholder={t("agents.instructionsPlaceholder")}
           aria-label={t("agents.instructions")}
+          spellCheck={false}
         />
+
+        <ReadAs steps={(draft.steps ?? []).length} onOpen={onSteps} />
       </Section>
     </>
   );
 }
 
-/** Kept so the icon the tab bar names is the icon the card carries. */
-export const DEFINITION_ICON = IdCard;
+/**
+ * How many stages this text was read as, and the way to go and look.
+ *
+ * The connection between the two halves, stated once and in the direction
+ * that is true: the stages came out of this text. Numbering the lines would
+ * claim the reverse — that the text is already a list — and it is not.
+ */
+function ReadAs({ steps, onOpen }: { steps: number; onOpen: () => void }) {
+  const { t } = useTranslation();
+
+  return (
+    <div className="flex items-center gap-2 text-2xs text-muted-foreground">
+      <ListOrdered className="size-3.5 shrink-0" aria-hidden />
+      <span>
+        {steps === 0
+          ? t("agents.notReadYet")
+          : t("agents.readAsSteps", { count: steps })}
+      </span>
+      <Button
+        type="button"
+        variant="link"
+        size="sm"
+        className="h-auto p-0 text-2xs"
+        onClick={onOpen}
+      >
+        {t("agents.openSteps")}
+      </Button>
+    </div>
+  );
+}

@@ -61,7 +61,7 @@ func (s *Server) InterviewAgent(
 		return nil, err
 	}
 	completer, err := s.assistants.Completer(choice.Provider, model.Config{
-		Model: choice.Model, Effort: choice.Effort,
+		Model: choice.Model, Effort: authoring.EffortFor(choice.Effort),
 	})
 	if err != nil {
 		return assistantUnavailable(err), nil

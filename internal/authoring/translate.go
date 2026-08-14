@@ -202,3 +202,22 @@ func place(ctx context.Context, job Job, steps []spec.Step) ([]spec.Step, domain
 	steps[placed.Step].StopsWhen = placed.StopsWhen
 	return steps, out.Cost
 }
+
+/*
+EffortFor is how hard the assistant thinks, when nobody has said.
+
+Low, deliberately. The provider's own default is high, which is right for a
+run — a model reasoning at length about an action it is about to take is the
+whole point of paying for it — and wrong here: this job reorganises a
+description somebody already wrote into fields, and thinking harder about it
+mostly makes the author wait.
+
+An installation that finds the readings shallow raises it on the screen that
+configures the assistant, and this never overrides that.
+*/
+func EffortFor(configured string) string {
+	if configured != "" {
+		return configured
+	}
+	return "low"
+}

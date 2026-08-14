@@ -105,6 +105,7 @@ export function AgentEditorPage() {
               onTemplate: setFromTemplate,
             }}
             tools={{ catalogue, policies: rules }}
+            onSteps={() => setTab("steps")}
           />
       </div>
 

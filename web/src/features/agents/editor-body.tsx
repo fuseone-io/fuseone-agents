@@ -19,6 +19,7 @@ export function EditorBody({
   patch,
   editing,
   tools,
+  onSteps,
 }: {
   tab: EditorTab;
   draft: AgentDefinition;
@@ -31,6 +32,8 @@ export function EditorBody({
     onTemplate: (id?: string) => void;
   };
   tools: { catalogue: Tool[]; policies: Policy[] };
+  /** Moving to the tab where the instructions are read as stages. */
+  onSteps: () => void;
 }) {
   // Where a column is the right answer: prose and forms are read left to
   // right, and a measure nobody can read is a measure nobody reads twice. A
@@ -73,9 +76,8 @@ export function EditorBody({
           <TabDefinition
             draft={draft}
             patch={patch}
-            agentId={editing.agentId}
-            creating={editing.creating}
-            onAgentId={editing.onAgentId}
+            editing={editing}
+            onSteps={onSteps}
           />
         </div>
       )}

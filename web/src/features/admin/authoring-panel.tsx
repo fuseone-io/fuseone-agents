@@ -41,11 +41,13 @@ export function AuthoringPanel() {
   const [draft, setDraft] = useState<{
     provider: string;
     model: string;
+    effort: string;
     dailyMicros: number;
   } | null>(null);
   const current = draft ?? {
     provider: data?.provider ?? "",
     model: data?.model ?? "",
+    effort: data?.effort ?? "",
     dailyMicros: data?.dailyMicros ?? 0,
   };
 
@@ -61,6 +63,7 @@ export function AuthoringPanel() {
       {
         provider: current.provider,
         model: current.model,
+        effort: current.effort || undefined,
         dailyMicros: current.dailyMicros,
         enabled,
       },
@@ -154,6 +157,11 @@ export function AuthoringPanel() {
 
             {/* Required, not optional. This is the only place the platform
                 spends outside a run, so the bound is part of configuring it. */}
+            <EffortField
+              effort={current.effort}
+              onChange={(effort) => setDraft({ ...current, effort })}
+            />
+
             <Labelled label={t("admin.dailyCeiling")} htmlFor="authoring-cap">
               <Input
                 id="authoring-cap"
@@ -206,5 +214,46 @@ export function AuthoringPanel() {
         </div>
       )}
     </Panel>
+  );
+}
+
+/**
+ * How hard the assistant thinks about reorganising a paragraph.
+ *
+ * Left unset it asks for little, which is what this job wants. The provider's
+ * own default is written for a run, where a model reasoning at length about
+ * an action it is about to take is the point — here it mostly makes the
+ * author wait for the same JSON.
+ */
+function EffortField({
+  effort,
+  onChange,
+}: {
+  effort: string;
+  onChange: (effort: string) => void;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <Labelled label={t("admin.assistantEffort")} htmlFor="authoring-effort">
+      <Select
+        value={effort || "low"}
+        onValueChange={onChange}
+      >
+        <SelectTrigger id="authoring-effort">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {["low", "medium", "high"].map((level) => (
+            <SelectItem key={level} value={level} className="font-mono">
+              {level}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <p className="text-xs text-muted-foreground">
+        {t("admin.assistantEffortHint")}
+      </p>
+    </Labelled>
   );
 }
