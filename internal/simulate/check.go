@@ -1,6 +1,11 @@
 package simulate
 
-import "github.com/fuseone/agents/internal/domain"
+import (
+	"strconv"
+	"strings"
+
+	"github.com/fuseone/agents/internal/domain"
+)
 
 /*
 Check reports which expectations a case did not meet.
@@ -55,12 +60,33 @@ func met(c Case, e domain.Expectation) bool {
 			return a.Verdict == domain.VerdictRequireApproval
 		})
 
+	case domain.ExpectCallsBefore:
+		return c.inOrder(e)
+
+	case domain.ExpectCostsAtMost:
+		return within(int64(c.Cost.Micros), e.Value)
+
+	case domain.ExpectWithinSteps:
+		return within(int64(c.Steps), e.Value)
+
 	default:
 		// An expectation nothing understands is not quietly satisfied. A
 		// version of the platform older than the correction must fail the
 		// battery rather than pass it.
 		return false
 	}
+}
+
+// within reads a ceiling and answers whether the case came in under it.
+//
+// A ceiling nothing can read fails, for the same reason an unknown kind does:
+// a battery that passes what it did not check is worse than one that fails.
+func within(actual int64, ceiling string) bool {
+	limit, err := strconv.ParseInt(ceiling, 10, 64)
+	if err != nil {
+		return false
+	}
+	return actual <= limit
 }
 
 // any reports whether an act matches, within the step the expectation is
@@ -73,6 +99,38 @@ func (c Case) any(e domain.Expectation, match func(Act) bool) bool {
 		}
 		if match(act) {
 			return true
+		}
+	}
+	return false
+}
+
+/*
+inOrder answers whether the first tool was reached before the second.
+
+Both have to have happened. "Look up before replying" is not satisfied by never
+replying — an ordering that passed when half of it did not happen would let a
+run that did nothing satisfy an assertion about what it did.
+*/
+func (c Case) inOrder(e domain.Expectation) bool {
+	first, second, ok := strings.Cut(e.Value, ",")
+	if !ok {
+		return false
+	}
+	first, second = strings.TrimSpace(first), strings.TrimSpace(second)
+
+	at := -1
+	for i, act := range c.Acted {
+		if !act.Reached || (e.Step != "" && act.Step != e.Step) {
+			continue
+		}
+		switch string(act.Tool) {
+		case first:
+			if at < 0 {
+				at = i
+			}
+		case second:
+			// Reached before the first one ever was, or without it.
+			return at >= 0 && at < i
 		}
 	}
 	return false

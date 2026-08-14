@@ -39,11 +39,35 @@ const (
 	// ExpectAsks is a tool it should stop and ask a person about. Value is
 	// optional: asking about anything at all is sometimes the whole point.
 	ExpectAsks ExpectationKind = "asks"
+
+	// ExpectCostsAtMost and ExpectWithinSteps are ceilings, in micros and in
+	// steps.
+	//
+	// Every other kind is about shape — which tool, which ending, whether a
+	// person was asked — so a version that did all of that correctly and spent
+	// three times as much passed green. The regression nobody could express
+	// was the one that shows up on the invoice.
+	//
+	// Ceilings and not targets: a case that got cheaper is not a failure, and
+	// asserting an exact figure would break the corpus every time a provider
+	// changed its tokeniser.
+	ExpectCostsAtMost ExpectationKind = "costs_at_most"
+	ExpectWithinSteps ExpectationKind = "within_steps"
+
+	// ExpectCallsBefore is one tool reached before another, as "first,second".
+	//
+	// Every other kind is about a set — which tools, which ending, how much.
+	// None of them can say *before*, and "it replied without looking the
+	// customer up first" is a correction people actually make: the agent did
+	// both of the right things in the wrong order, so every other assertion
+	// holds and the run was still wrong.
+	ExpectCallsBefore ExpectationKind = "calls_before"
 )
 
 func (k ExpectationKind) Valid() bool {
 	switch k {
-	case ExpectSettles, ExpectCalls, ExpectNeverCalls, ExpectAsks:
+	case ExpectSettles, ExpectCalls, ExpectNeverCalls, ExpectAsks,
+		ExpectCostsAtMost, ExpectWithinSteps, ExpectCallsBefore:
 		return true
 	}
 	return false
