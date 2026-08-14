@@ -37,11 +37,15 @@ export function EventGraph() {
           />
         </div>
       ) : (
-        <ul className="flex flex-col gap-1.5 p-4 pt-0">
+        // pb-3, not pb-4: the space above the first row is the header's own
+        // twelve pixels, and sixteen below made the card look like it had
+        // slipped. Rows hug their content, because one relationship drawn the
+        // width of the screen reads as an empty field rather than as a fact.
+        <ul className="flex flex-col items-start gap-1.5 px-4 pb-3">
           {edges.map((edge) => (
             <li
               key={`${edge.from ?? ""}-${edge.event}-${edge.to ?? ""}`}
-              className="flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-xs"
+              className="flex max-w-full flex-wrap items-center gap-2 rounded-lg border px-3 py-1.5 text-xs"
             >
               <Side agent={edge.from} missing={t("agents.nobodyPublishes")} />
               <ArrowRight
