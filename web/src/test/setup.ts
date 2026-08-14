@@ -11,3 +11,22 @@ import { setLocale } from "@/i18n";
  * and the component agree, including when they agree on the wrong words.
  */
 setLocale("pt-BR");
+
+/**
+ * jsdom has no matchMedia, and anything that reads the theme asks for it —
+ * which is every screen once a toast is on it. Stubbed as "no preference
+ * stated", which is what a browser answers before somebody chooses.
+ */
+if (!window.matchMedia) {
+  window.matchMedia = (query: string) =>
+    ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }) as MediaQueryList;
+}

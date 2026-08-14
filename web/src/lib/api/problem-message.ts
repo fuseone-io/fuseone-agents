@@ -15,8 +15,12 @@ import { ApiError } from "@/lib/api/client";
  * this console's to write and to translate.
  */
 export function problemMessage(error: unknown, t: TFunction): string {
+  // Not every failure reaches here as a refusal: the network dropping, or a
+  // reply that was never JSON, arrives as an ordinary Error. There is nothing
+  // to interpolate and nothing to name, so it gets the one sentence that is
+  // true of all of them.
   if (!(error instanceof ApiError)) {
-    return problemMessage(error, t);
+    return t("common.requestFailed");
   }
 
   const code = error.problem?.type;
