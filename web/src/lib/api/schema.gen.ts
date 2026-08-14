@@ -1068,6 +1068,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/people/local": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * An account that does not need an identity provider
+         * @description Beside the provider, never instead of it. Where a customer has one,
+         *     the provider is how people arrive: joiners and leavers are handled
+         *     where they are already handled, and the console never sees a password.
+         *
+         *     This is for the installation that has no provider yet, and for the
+         *     small one that never will. The four roles exist to hold an author and
+         *     an approver apart, and an installation with a single account cannot
+         *     show the separation it is sold on — before this, a fresh installation
+         *     had exactly one account, the one the setup token created.
+         *
+         *     The account arrives holding nothing. Granting is a separate act, on
+         *     the screen that already does it, so creating somebody and deciding
+         *     what they may do stay two entries in the trail.
+         */
+        post: operations["createLocalPerson"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/people/{principalId}/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set or replace a local password
+         * @description Sessions already open are left alone: setting a password is
+         *     ordinarily somebody setting one for the first time, and signing them
+         *     out of the browser they are typing in would be a surprise. Revoking
+         *     sessions is a separate act, and the one to reach for when a password
+         *     leaked.
+         */
+        put: operations["setPassword"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/people/{principalId}/grants": {
         parameters: {
             query?: never;
@@ -1967,6 +2023,8 @@ export interface components {
             email?: string;
             /** @description Which identity provider vouched for them, if any. */
             provider?: string;
+            /** @description The handle they sign in with, when they have one. Absent for everybody who arrives through a provider, which is how a screen can tell the two apart without guessing from `provider`. */
+            username?: string;
             grants?: components["schemas"]["HeldGrant"][];
             /** Format: date-time */
             lastSeen?: string;
@@ -4385,6 +4443,89 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    createLocalPerson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description What they type to sign in. Compared without case. */
+                    username: string;
+                    password: string;
+                    display?: string;
+                    email?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Person"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description That username is taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    setPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                principalId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    password: string;
+                    /** @description Given when the account has no handle yet, which is the case for the administrator the setup token created. */
+                    username?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Stored. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description That username is taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     setGrants: {

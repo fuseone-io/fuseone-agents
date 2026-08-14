@@ -175,6 +175,10 @@ type Person struct {
 	// Provider is the identity provider that vouched for them, empty for a
 	// service account or the administrator who claimed the installation.
 	Provider string
+	// Username is the handle they sign in with, when they have one. Empty for
+	// everybody who arrives through a provider, which is how a screen tells
+	// the two apart without guessing from Provider.
+	Username string
 	Grants   []HeldGrant
 	LastSeen time.Time
 	Disabled bool

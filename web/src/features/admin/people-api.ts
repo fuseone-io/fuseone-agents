@@ -38,3 +38,44 @@ export function useSetGrants() {
       void queryClient.invalidateQueries({ queryKey: peopleKeys.all }),
   });
 }
+
+/**
+ * Creates somebody who signs in with a password.
+ *
+ * Beside the identity provider, never instead of it. Where a customer has
+ * one, that is how people arrive — this is for the installation that has no
+ * provider yet, which every installation is on its first day.
+ */
+export function useCreateLocalPerson() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      username: string;
+      password: string;
+      display?: string;
+      email?: string;
+    }) => unwrap(await api.POST("/admin/people/local", { body: input })),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({ queryKey: peopleKeys.all }),
+  });
+}
+
+/** Sets or replaces somebody's password, and their handle when they have none. */
+export function useSetPassword() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      principalId: string;
+      password: string;
+      username?: string;
+    }) =>
+      unwrap(
+        await api.PUT("/admin/people/{principalId}/password", {
+          params: { path: { principalId: input.principalId } },
+          body: { password: input.password, username: input.username },
+        }),
+      ),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({ queryKey: peopleKeys.all }),
+  });
+}

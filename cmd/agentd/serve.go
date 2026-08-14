@@ -162,7 +162,10 @@ func serve(args []string) error {
 		// take effect — and start-up loads what is already stored.
 		identityStore := admin.NewIdentity(identity.pool, store)
 		api = api.WithIdentity(identityStore, identity.oidc).
-			WithPeople(auth.NewPostgres(identity.pool))
+			WithPeople(auth.NewPostgres(identity.pool)).
+			// And the people who do not come from a provider at all, which
+			// on an installation's first day is everybody.
+			WithAccounts(auth.NewLocal(identity.pool, auth.NewPostgres(identity.pool)))
 		registerProviders(ctx, identityStore, identity.oidc)
 	}
 

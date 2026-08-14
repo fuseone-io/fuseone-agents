@@ -50,7 +50,18 @@ export function SessionGate({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!me.data) return <SignInPage providers={options.data?.providers ?? []} />;
+  if (!me.data) {
+    return (
+      <SignInPage
+        providers={options.data?.providers ?? []}
+        localSignIn={options.data?.localSignIn ?? false}
+        onSignedIn={() => {
+          void queryClient.invalidateQueries({ queryKey: sessionKeys.me });
+          void queryClient.invalidateQueries({ queryKey: providerKeys.all });
+        }}
+      />
+    );
+  }
 
   return <>{children}</>;
 }

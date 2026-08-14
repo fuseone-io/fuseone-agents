@@ -79,11 +79,16 @@ func openIdentity(ctx context.Context, dsn, baseURL string) (*identity, error) {
 	oidc := auth.NewOIDC(baseURL, secure)
 
 	return &identity{
-		auth:   auth.NewAuthenticator(dir, secure, nil),
-		routes: httpapi.NewAuthRoutes(oidc, dir, boot, secure),
-		pool:   pool,
-		oidc:   oidc,
-		dir:    dir,
+		auth: auth.NewAuthenticator(dir, secure, nil),
+		// Accounts that sign in with a password, beside the provider and
+		// never instead of it. Wired unconditionally: an installation with no
+		// local account shows no password form, and that is a question the
+		// route answers from the data rather than from how it was built.
+		routes: httpapi.NewAuthRoutes(oidc, dir, boot, secure).
+			WithLocal(auth.NewLocal(pool, dir)),
+		pool: pool,
+		oidc: oidc,
+		dir:  dir,
 	}, nil
 }
 

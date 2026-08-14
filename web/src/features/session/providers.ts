@@ -16,6 +16,8 @@ export interface SignInOptions {
    * nobody and leaves the console unreachable.
    */
   authRequired: boolean;
+  /** Whether anybody can sign in with a password at all. */
+  localSignIn: boolean;
 }
 
 export const providerKeys = { all: ["auth", "providers"] as const };

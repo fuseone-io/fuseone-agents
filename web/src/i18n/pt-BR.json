@@ -734,26 +734,37 @@
   },
   "people": {
     "addGrant": "Adicionar acesso",
+    "addLocal": "Criar acesso local",
     "asserted": "do provedor",
     "assertedHere": "O que {{provider}} concede. Recalculado a cada entrada — para mudar, mude o grupo no provedor.",
     "assertedHint": "Vem do provedor de identidade e é recalculado a cada entrada. Para tirar, mude o grupo lá.",
+    "created": "Acesso criado",
     "disabled": "desativado",
     "editing": "Acesso de {{name}}",
     "emptyHint": "As pessoas aparecem aqui depois de entrarem pela primeira vez por um provedor de identidade.",
     "emptyTitle": "Ninguém além de você",
     "grantedHere": "Concedido aqui, diretamente. Sobrevive às entradas seguintes.",
+    "holdsNothing": "Ele ainda não pode fazer nada: conceda os papéis nesta tela.",
     "kind": {
       "agent": "agente",
       "service": "conta de serviço",
       "user": "pessoa"
     },
     "lastSeen": "visto {{when}}",
+    "localExplains": "Uma conta que entra com senha, para quando ainda não há provedor de identidade configurado.",
     "manage": "Gerenciar",
     "noAccess": "sem acesso",
+    "password": "Senha",
+    "passwordFloor": "A senha precisa de pelo menos 12 caracteres.",
+    "passwordHint": "No mínimo 12 caracteres.",
     "removeGrant": "Remover este acesso",
     "saveFailed": "Não foi possível salvar o acesso",
     "saved": "Acesso de {{name}} atualizado",
-    "title": "Pessoas"
+    "signsInWithPassword": "entra com senha",
+    "title": "Pessoas",
+    "username": "Usuário",
+    "usernameHint": "Letras, números, ponto, hífen e sublinhado.",
+    "usernameShape": "Use 3 ou mais caracteres: letras, números, ponto, hífen ou sublinhado."
   },
   "policies": {
     "addCondition": "Adicionar condição",
@@ -1076,6 +1087,8 @@
   "session": {
     "finishSetup": "Concluir configuração",
     "noProvider": "Nenhum provedor de identidade está configurado. Quem administra esta instalação precisa cadastrar um antes que alguém consiga entrar.",
+    "orProvider": "ou",
+    "passwordLabel": "Senha",
     "pasteToken": "Cole o token que o servidor imprimiu ao iniciar.",
     "recordedAsClaimant": "Fica registrado como quem reivindicou a instalação.",
     "sayWhoYouAre": "Diga quem é, para a trilha registrar.",
@@ -1084,9 +1097,13 @@
     "setupTitle": "Configurar esta instalação",
     "setupToken": "Token de configuração",
     "signIn": "Entrar",
+    "signInFailed": "Usuário ou senha incorretos",
     "signInWith": "Entrar com {{provider}}",
     "tokenInLog": "O token foi impresso no log do servidor ao iniciar, e vale por 24 horas.",
+    "tooManyAttempts": "Tentativas demais. Espere alguns minutos e tente de novo.",
     "useOrgAccount": "Use a conta da sua organização. O acesso que você recebe vem dos grupos que ela informa.",
+    "usernameLabel": "Usuário",
+    "withPassword": "Entrar com usuário e senha",
     "yourName": "Seu nome"
   },
   "shell": {

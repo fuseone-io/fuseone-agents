@@ -88,6 +88,7 @@ func (p *Postgres) replaceGrants(
 func (p *Postgres) People(ctx context.Context) ([]domain.Person, error) {
 	rows, err := p.pool.Query(ctx, `
 		select p.principal_id, p.kind, p.display, coalesce(p.email, ''), p.provider,
+		       coalesce(p.username, ''),
 		       coalesce(p.last_seen_at, 'epoch'::timestamptz), p.disabled_at is not null,
 		       coalesce(g.company_id, ''), coalesce(g.area_id, ''),
 		       coalesce(g.role, ''), coalesce(g.granted_by, '')
@@ -114,7 +115,7 @@ func scanPeople(rows pgx.Rows) ([]domain.Person, error) {
 			grantedBy                 string
 		)
 		if err := rows.Scan(&person.ID, &kind, &person.Display, &person.Email,
-			&person.Provider, &person.LastSeen, &person.Disabled,
+			&person.Provider, &person.Username, &person.LastSeen, &person.Disabled,
 			&company, &area, &role, &grantedBy); err != nil {
 			return nil, fmt.Errorf("auth: scan person: %w", err)
 		}

@@ -83,6 +83,7 @@ func toPerson(p domain.Person) openapi.Person {
 	}
 	out.Email = someString(p.Email)
 	out.Provider = someString(p.Provider)
+	out.Username = someString(p.Username)
 	if !p.LastSeen.IsZero() && p.LastSeen.Year() > 1970 {
 		out.LastSeen = &p.LastSeen
 	}

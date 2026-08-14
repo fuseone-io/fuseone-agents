@@ -734,26 +734,37 @@
   },
   "people": {
     "addGrant": "Add access",
+    "addLocal": "Create local access",
     "asserted": "from provider",
     "assertedHere": "What {{provider}} grants. Re-derived on every sign-in — to change it, change the group at the provider.",
     "assertedHint": "Comes from the identity provider and is re-derived on every sign-in. To take it away, change the group there.",
+    "created": "Access created",
     "disabled": "disabled",
     "editing": "{{name}}'s access",
     "emptyHint": "People appear here after they sign in for the first time through an identity provider.",
     "emptyTitle": "Nobody but you",
     "grantedHere": "Granted here, directly. It survives the next sign-in.",
+    "holdsNothing": "They cannot do anything yet: grant the roles on this screen.",
     "kind": {
       "agent": "agent",
       "service": "service account",
       "user": "person"
     },
     "lastSeen": "seen {{when}}",
+    "localExplains": "An account that signs in with a password, for when no identity provider is configured yet.",
     "manage": "Manage",
     "noAccess": "no access",
+    "password": "Password",
+    "passwordFloor": "A password needs at least 12 characters.",
+    "passwordHint": "At least 12 characters.",
     "removeGrant": "Remove this access",
     "saveFailed": "Could not save the access",
     "saved": "{{name}}'s access updated",
-    "title": "People"
+    "signsInWithPassword": "signs in with a password",
+    "title": "People",
+    "username": "Username",
+    "usernameHint": "Letters, digits, dot, hyphen and underscore.",
+    "usernameShape": "Use 3 or more characters: letters, digits, dot, hyphen or underscore."
   },
   "policies": {
     "addCondition": "Add a condition",
@@ -1076,6 +1087,8 @@
   "session": {
     "finishSetup": "Finish setup",
     "noProvider": "No identity provider is configured. Whoever administers this installation has to register one before anybody can sign in.",
+    "orProvider": "or",
+    "passwordLabel": "Password",
     "pasteToken": "Paste the token the server printed at startup.",
     "recordedAsClaimant": "Recorded as whoever claimed the installation.",
     "sayWhoYouAre": "Say who you are, for the trail to record.",
@@ -1084,9 +1097,13 @@
     "setupTitle": "Set up this installation",
     "setupToken": "Setup token",
     "signIn": "Sign in",
+    "signInFailed": "The username or the password is wrong",
     "signInWith": "Sign in with {{provider}}",
     "tokenInLog": "The token was printed to the server log at startup, and is good for 24 hours.",
+    "tooManyAttempts": "Too many attempts. Wait a few minutes and try again.",
     "useOrgAccount": "Use your organisation's account. The access you get comes from the groups it reports.",
+    "usernameLabel": "Username",
+    "withPassword": "Sign in with a username and password",
     "yourName": "Your name"
   },
   "shell": {

@@ -83,8 +83,10 @@ type Server struct {
 	// configuration and the live registry the sign-in routes read from.
 	identity Identity
 	signIn   SignIn
-	// people is the directory of who exists and what each one holds.
-	people People
+	// people is the directory of who exists and what each one holds, and
+	// accounts is the half of it that signs in with a password.
+	people   People
+	accounts Accounts
 	// regressions is the corpus a future version is checked against, and
 	// batteries is where the last run of it against a version is found.
 	regressions Regressions

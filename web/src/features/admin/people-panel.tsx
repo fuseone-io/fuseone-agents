@@ -7,7 +7,9 @@ import {
   ErrorState,
   LoadingRows,
 } from "@/components/shared/states";
+import { Button } from "@/components/ui/button";
 import { GrantEditor } from "@/features/admin/grant-editor";
+import { LocalPersonForm } from "@/features/admin/local-person-form";
 import { PersonRow } from "@/features/admin/person-row";
 import { usePeople, type Person } from "@/features/admin/people-api";
 
@@ -23,6 +25,7 @@ export function PeoplePanel() {
   const { t } = useTranslation();
   const { data, isLoading, error, refetch } = usePeople();
   const [editing, setEditing] = useState<Person | null>(null);
+  const [adding, setAdding] = useState(false);
 
   const people = data?.items ?? [];
 
@@ -35,7 +38,14 @@ export function PeoplePanel() {
   }
 
   return (
-    <Panel title={t("people.title")}>
+    <Panel
+      title={t("people.title")}
+      action={
+        <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
+          {t("people.addLocal")}
+        </Button>
+      }
+    >
       {isLoading ? (
         <LoadingRows rows={4} />
       ) : error ? (
@@ -55,6 +65,8 @@ export function PeoplePanel() {
           ))}
         </ul>
       )}
+
+      {adding && <LocalPersonForm onClose={() => setAdding(false)} />}
     </Panel>
   );
 }

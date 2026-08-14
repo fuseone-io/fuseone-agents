@@ -1555,6 +1555,96 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /admin/people/local:
+    post:
+      tags: [admin]
+      operationId: createLocalPerson
+      summary: An account that does not need an identity provider
+      description: |
+        Beside the provider, never instead of it. Where a customer has one,
+        the provider is how people arrive: joiners and leavers are handled
+        where they are already handled, and the console never sees a password.
+
+        This is for the installation that has no provider yet, and for the
+        small one that never will. The four roles exist to hold an author and
+        an approver apart, and an installation with a single account cannot
+        show the separation it is sold on — before this, a fresh installation
+        had exactly one account, the one the setup token created.
+
+        The account arrives holding nothing. Granting is a separate act, on
+        the screen that already does it, so creating somebody and deciding
+        what they may do stay two entries in the trail.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                  description: What they type to sign in. Compared without case.
+                password: { type: string }
+                display: { type: string }
+                email: { type: string }
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Person' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: That username is taken.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /admin/people/{principalId}/password:
+    put:
+      tags: [admin]
+      operationId: setPassword
+      summary: Set or replace a local password
+      description: |
+        Sessions already open are left alone: setting a password is
+        ordinarily somebody setting one for the first time, and signing them
+        out of the browser they are typing in would be a surprise. Revoking
+        sessions is a separate act, and the one to reach for when a password
+        leaked.
+      parameters:
+        - name: principalId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: { type: string }
+                username:
+                  type: string
+                  description: >
+                    Given when the account has no handle yet, which is the
+                    case for the administrator the setup token created.
+      responses:
+        '204': { description: Stored. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: That username is taken.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
   /admin/people/{principalId}/grants:
     put:
       tags: [admin]
@@ -3077,6 +3167,12 @@ components:
         provider:
           type: string
           description: Which identity provider vouched for them, if any.
+        username:
+          type: string
+          description: >
+            The handle they sign in with, when they have one. Absent for
+            everybody who arrives through a provider, which is how a screen
+            can tell the two apart without guessing from `provider`.
         grants:
           type: array
           items: { $ref: '#/components/schemas/HeldGrant' }
