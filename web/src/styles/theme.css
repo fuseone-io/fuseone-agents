@@ -104,6 +104,9 @@
   --color-text-secondary: var(--text-secondary);
   --color-text-tertiary: var(--text-tertiary);
   --color-text-accent: var(--text-accent);
+  /* The handoff uses it for a drag handle: present, and not asking to be
+     read. Without a utility every use of it would be a raw value. */
+  --color-text-disabled: var(--text-disabled);
 
   /* Status. Functional only — run status, verdicts, limits. Never decorative. */
   --color-success: var(--status-success);

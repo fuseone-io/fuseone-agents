@@ -1,10 +1,11 @@
 import { useTranslation } from "react-i18next";
-import { Trash2 } from "lucide-react";
+import { Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Mono } from "@/components/shared/mono";
+import { AddToolPopover } from "@/features/agents/add-tool-popover";
 import { StepGuardrails } from "@/features/agents/step-guardrails";
 import type { Policy, Tool } from "@/lib/api/client";
 import type { components } from "@/lib/api/schema.gen";
@@ -21,12 +22,14 @@ type AgentStep = components["schemas"]["AgentStep"];
 export function StepInspector({
   step,
   at,
+  total,
   onChange,
   onRemove,
   tools,
 }: {
   step?: AgentStep;
   at?: number;
+  total: number;
   onChange: (over: Partial<AgentStep>) => void;
   onRemove: () => void;
   /** The pack, the catalogue it came from, and the policies over it. */
@@ -44,18 +47,11 @@ export function StepInspector({
 
   const { pack, catalogue, policies } = tools;
   const reaches = step.reaches ?? [];
-  const toggle = (tool: string) =>
-    onChange({
-      reaches: reaches.includes(tool)
-        ? reaches.filter((one) => one !== tool)
-        : [...reaches, tool],
-    });
-
   return (
     <div className="flex w-[280px] shrink-0 flex-col gap-3 overflow-y-auto border-l border-border p-3">
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="step-name" className="text-2xs uppercase tracking-label">
-          {t("agents.stepNumber", { number: at + 1 })}
+          {t("agents.stepOf", { number: at + 1, total })}
         </Label>
         <Input
           id="step-name"
@@ -69,30 +65,31 @@ export function StepInspector({
         <span className="text-2xs uppercase tracking-label text-muted-foreground">
           {t("agents.mayReach")}
         </span>
-        {/* From the pack, never typed: a step naming a tool the agent does not
-            hold is a permission that reads as granted and is refused. */}
-        <div className="flex flex-wrap gap-1.5">
-          {pack.length === 0 ? (
-            <span className="text-2xs text-muted-foreground">
-              {t("agents.packEmptyForStep")}
-            </span>
-          ) : (
-            pack.map((tool) => (
-              <Button
-                key={tool}
+        {/* Chips and a popover, never a parked catalogue: browsing eighty
+            tools is a task with its own tab, and it was competing for width
+            with the stage being edited. */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {reaches.map((tool) => (
+            <Badge key={tool} variant="outline" className="gap-1 pr-1">
+              <Mono className="text-2xs">{tool}</Mono>
+              <button
                 type="button"
-                variant="ghost"
-                size="sm"
-                className="h-6 px-1"
-                onClick={() => toggle(tool)}
-                aria-pressed={reaches.includes(tool)}
+                onClick={() =>
+                  onChange({ reaches: reaches.filter((one) => one !== tool) })
+                }
+                aria-label={t("agents.stopReaching", { tool })}
+                className="text-muted-foreground hover:text-foreground"
               >
-                <Badge variant={reaches.includes(tool) ? "default" : "outline"}>
-                  <Mono className="text-2xs">{tool}</Mono>
-                </Badge>
-              </Button>
-            ))
-          )}
+                <X className="size-3" aria-hidden />
+              </button>
+            </Badge>
+          ))}
+          <AddToolPopover
+            catalogue={catalogue}
+            pack={pack}
+            reaches={reaches}
+            onPick={(tool) => onChange({ reaches: [...reaches, tool] })}
+          />
         </div>
       </div>
 

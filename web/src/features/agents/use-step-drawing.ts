@@ -61,10 +61,15 @@ export function useStepDrawing(
     setSelected(to);
   };
 
-  const change = (over: Partial<AgentStep>) =>
+  const changeAt = (at: number, over: Partial<AgentStep>) =>
     patch({
-      steps: steps.map((step, i) => (i === selected ? { ...step, ...over } : step)),
+      steps: steps.map((step, i) => (i === at ? { ...step, ...over } : step)),
     });
+
+  // The selected one, which is what the inspector edits. The text view names
+  // the row it is changing instead, because there is no selection in a list.
+  const change = (over: Partial<AgentStep>) =>
+    selected === undefined ? undefined : changeAt(selected, over);
 
   const remove = () => {
     patch({ steps: steps.filter((_, i) => i !== selected) });
@@ -80,6 +85,7 @@ export function useStepDrawing(
     reorder,
     read,
     change,
+    changeAt,
     remove,
     reading,
   };

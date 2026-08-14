@@ -1,15 +1,14 @@
-import { useTranslation } from "react-i18next";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { PAGE_ICONS } from "@/components/layout/nav";
-import { PageHeader } from "@/components/shared/page-header";
 import { ErrorState, LoadingRows } from "@/components/shared/states";
-import { AgentEditorForm } from "@/features/agents/agent-editor-form";
-import { AgentEditorRail } from "@/features/agents/agent-editor-rail";
+import { EditorBody } from "@/features/agents/editor-body";
+import { EditorFooter } from "@/features/agents/editor-footer";
+import { EditorTabBar } from "@/features/agents/editor-tab-bar";
+import { EditorHeader } from "@/features/agents/editor-header";
+import { counts, type EditorTab } from "@/features/agents/editor-tabs";
 import { useAgentDraft } from "@/features/agents/agent-draft";
-import { TemplateGallery } from "@/features/agents/template-gallery";
 import { usePublishAgent } from "@/features/agents/agent-editor-api";
 import { useAgent } from "@/features/agents/agent-detail-api";
 import { useTools } from "@/features/admin/api";
@@ -18,10 +17,14 @@ import { usePolicies } from "@/features/policies/api";
 /**
  * One agent, written or rewritten.
  *
+ * Four tabs rather than one column. The column held six unrelated decisions
+ * and about fifty controls, with the primary action below all of them —
+ * reachable only after scrolling past everything it was about to publish.
+ *
  * Two modes, one screen, because they are one act: the identifier is the
- * agent, and everything else is what it says this time. The primary button
- * names the version it will write, because t("common.save") would hide that editing
- * an agent creates something a run will be pinned to.
+ * agent, and everything else is what it says this time. The button names the
+ * version it writes, because "save" would hide that editing an agent creates
+ * something a run will be pinned to.
  */
 export function AgentEditorPage() {
   const { t } = useTranslation();
@@ -34,6 +37,7 @@ export function AgentEditorPage() {
   const policies = usePolicies();
   const [fromTemplate, setFromTemplate] = useState<string>();
   const [agentId, setAgentId] = useState(creating ? "" : (routeId ?? ""));
+  const [tab, setTab] = useState<EditorTab>("definition");
   const { draft, patch, changes } = useAgentDraft(
     creating ? undefined : loaded.data,
   );
@@ -46,7 +50,10 @@ export function AgentEditorPage() {
     );
   }
 
-  const submit = () => {
+  const ready =
+    agentId !== "" && draft.name !== "" && draft.instructions.trim() !== "";
+
+  const submit = () =>
     publish.mutate(
       { agentId, definition: draft },
       {
@@ -57,101 +64,55 @@ export function AgentEditorPage() {
                   version: result.versionId.slice(0, 9),
                 })
               : t("agents.noChange"),
-            {
-              description: result.created
-                ? result.paused
-                  ? t("agents.pausedStartWhenReady")
-                  : t("agents.appliesNextRun")
-                : t("agents.textAlreadyPublished"),
-            },
           );
-          navigate(`/agents/${agentId}`);
+          void navigate(`/agents/${agentId}`);
         },
-        onError: (e) =>
-          toast.error(t("agents.publishFailed"), {
-            description: e instanceof Error ? e.message : undefined,
-          }),
+        onError: () => toast.error(t("agents.publishFailed")),
       },
     );
-  };
 
-  const ready =
-    agentId !== "" && draft.name !== "" && draft.instructions.trim() !== "";
+  const catalogue = tools.data?.items ?? [];
+  const rules = policies.data?.items ?? [];
 
   return (
-    <>
-      <PageHeader
-        icon={PAGE_ICONS.agents}
-        title={
-          creating
-            ? t("agents.newAgent")
-            : t("agents.editing", { agent: draft.name || routeId })
-        }
-        description={t("agents.publishWritesVersion")}
+    <div className="-m-6 flex h-[calc(100svh-52px)] flex-col">
+      <EditorHeader
+        agentId={agentId}
+        name={draft.name}
+        creating={creating}
+        version={loaded.data?.agent.versionId}
       />
+      <EditorTabBar active={tab} onChange={setTab} counts={counts(draft)} />
 
-      {/* Above the form rather than instead of it: starting from nothing is
-          still legitimate, and a gallery that replaced the form would make an
-          author choose a template in order to delete it (PRD FU-16). */}
-      {creating && (
-        <TemplateGallery
-          chosen={fromTemplate}
-          onChoose={(template) => {
-            patch({
-              name: template.name,
-              area: template.area ?? draft.area,
-              instructions: template.instructions,
-              triggers: template.triggers,
-              budget: template.budget ?? draft.budget,
-            });
-            setAgentId(template.id);
-            setFromTemplate(template.id);
-          }}
-          onClear={() => {
-            // Back to the blank form. Clearing the text without clearing the
-            // choice would leave a card marked as chosen above a form that no
-            // longer holds any of it.
-            patch({ name: "", instructions: "", triggers: [] });
-            setAgentId("");
-            setFromTemplate(undefined);
-          }}
-        />
-      )}
-
-      <div className="grid gap-5 lg:grid-cols-[1fr_316px] lg:items-start">
-        <AgentEditorForm
-          draft={draft}
-          patch={patch}
-          agentId={agentId}
-          creating={creating}
-          onAgentId={setAgentId}
-          catalogue={tools.data?.items ?? []}
-          policies={policies.data?.items ?? []}
-        />
-
-        <AgentEditorRail
-          draft={draft}
-          catalogue={tools.data?.items ?? []}
-          creating={creating}
-          changes={changes}
-        />
-      </div>
-
-      <div className="sticky bottom-0 -mx-6 -mb-6 flex items-center gap-2 border-t border-border bg-card px-6 py-3 shadow-md">
-        {changes.length > 0 && (
-          <span className="text-xs text-warning">
-            {t("agents.unpublishedChanges", { count: changes.length })}
-          </span>
-        )}
-        <div className="ml-auto flex items-center gap-2">
-          <Button variant="outline" onClick={() => navigate("/agents")}>
-            {t("common.cancel")}
-          </Button>
-          <Button onClick={submit} disabled={publish.isPending || !ready}>
-            {creating ? t("agents.createPaused") : t("agents.publishVersion")}
-          </Button>
+      {/* The only scrolling region. The measure belongs to each tab rather
+          than to this container: prose and forms stop at a width somebody can
+          read, and a canvas or a catalogue takes what it is given. */}
+      <div className="flex-1 overflow-y-auto px-5 py-6">
+        <div className="flex w-full flex-col gap-4">
+          <EditorBody
+            tab={tab}
+            draft={draft}
+            patch={patch}
+            editing={{
+              agentId,
+              creating,
+              onAgentId: setAgentId,
+              template: fromTemplate,
+              onTemplate: setFromTemplate,
+            }}
+            tools={{ catalogue, policies: rules }}
+          />
         </div>
       </div>
-    </>
+
+      <EditorFooter
+        changes={changes}
+        creating={creating}
+        publishing={publish.isPending}
+        ready={ready}
+        onPublish={submit}
+        onDiscard={() => void navigate("/agents")}
+      />
+    </div>
   );
 }
