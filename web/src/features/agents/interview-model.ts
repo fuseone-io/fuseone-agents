@@ -56,6 +56,11 @@ export function draftFromInterview(
 ): Partial<AgentDefinition> {
   return {
     tools: translated.tools,
+    // The assistant reads the author's account of the process and answers
+    // with the stages in it. They used to be dropped here, which left the one
+    // part of a definition the Gate is meant to obey coming out of an
+    // interview about exactly that and going nowhere.
+    steps: translated.steps,
     instructions: [answers.steps, answers.goesWrong, answers.closing]
       .filter(Boolean)
       .join("\n\n"),

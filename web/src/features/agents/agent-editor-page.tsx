@@ -6,11 +6,7 @@ import { Button } from "@/components/ui/button";
 import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
 import { ErrorState, LoadingRows } from "@/components/shared/states";
-import { AgentBasicsSection } from "@/features/agents/agent-basics-section";
-import { AgentTriggersSection } from "@/features/agents/agent-triggers-section";
-import { AgentToolsSection } from "@/features/agents/agent-tools-section";
-import { AgentBudgetSection } from "@/features/agents/agent-budget-section";
-import { NarrativeCard } from "@/features/agents/narrative-card";
+import { AgentEditorForm } from "@/features/agents/agent-editor-form";
 import { AgentEditorRail } from "@/features/agents/agent-editor-rail";
 import { useAgentDraft } from "@/features/agents/agent-draft";
 import { TemplateGallery } from "@/features/agents/template-gallery";
@@ -123,29 +119,15 @@ export function AgentEditorPage() {
       )}
 
       <div className="grid gap-5 lg:grid-cols-[1fr_316px] lg:items-start">
-        <div className="flex flex-col gap-4">
-          <AgentBasicsSection
-            draft={draft}
-            patch={patch}
-            agentId={agentId}
-            editable={creating}
-            onAgentId={setAgentId}
-          />
-          <AgentTriggersSection draft={draft} patch={patch} />
-
-          <AgentToolsSection
-            granted={draft.tools ?? []}
-            catalogue={tools.data?.items ?? []}
-            policies={policies.data?.items ?? []}
-            patch={patch}
-          />
-          <AgentBudgetSection draft={draft} patch={patch} />
-
-          {/* Last, deliberately: the author fills the form and then reads back
-              what it amounts to. FU-08 asks for approval of the prose, not of
-              the fields. */}
-          <NarrativeCard draft={draft} />
-        </div>
+        <AgentEditorForm
+          draft={draft}
+          patch={patch}
+          agentId={agentId}
+          creating={creating}
+          onAgentId={setAgentId}
+          catalogue={tools.data?.items ?? []}
+          policies={policies.data?.items ?? []}
+        />
 
         <AgentEditorRail
           draft={draft}
