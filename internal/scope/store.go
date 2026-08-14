@@ -12,6 +12,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/jackc/pgx/v5/pgconn"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/domain"
@@ -50,7 +52,25 @@ func (s *Store) Put(
         returning company_id, area_id, label, created_at, created_by`,
 		string(company), string(area), label, string(by))
 
-	return scan(row)
+	registered, err := scan(row)
+	if isMissingCompany(err) {
+		// The foreign key's own message names a constraint, which tells an
+		// operator nothing they can act on. What happened is that they named a
+		// company nobody has created.
+		return domain.RegisteredScope{}, fmt.Errorf("%w: %s", ErrNoCompany, company)
+	}
+	return registered, err
+}
+
+// ErrNoCompany means the area was to be registered in a company that does not
+// exist. Until there was a foreign key this saved cleanly and then vanished
+// from every listing, because listing is filtered by the scopes a caller holds
+// and nobody holds a company that was never created.
+var ErrNoCompany = errors.New("scope: no such company")
+
+func isMissingCompany(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.ConstraintName == "scopes_company_fk"
 }
 
 // List answers with the areas inside the scopes a caller can reach.

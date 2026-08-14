@@ -35,6 +35,14 @@ func storeFor(t *testing.T) *scope.Store {
 	if _, err := pool.Exec(t.Context(), `delete from scopes where company_id = 'suite'`); err != nil {
 		t.Fatalf("clean: %v", err)
 	}
+	// The company has to exist before an area can be registered in it, which
+	// is the whole point of the key added in 0029. Seeding it here is what a
+	// real installation does through the administration area.
+	if _, err := pool.Exec(t.Context(), `
+		insert into companies (company_id, name) values ('suite', 'suite')
+		on conflict (company_id) do nothing`); err != nil {
+		t.Fatalf("seed company: %v", err)
+	}
 	return scope.NewStore(pool)
 }
 

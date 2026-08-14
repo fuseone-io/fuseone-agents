@@ -38,7 +38,7 @@ func bootstrapFor(t *testing.T) (*auth.Bootstrap, *pgxpool.Pool) {
 		t.Fatalf("migrate: %v", err)
 	}
 	if _, err := pool.Exec(t.Context(),
-		`truncate role_grants, principals, sessions, settings, admin_events, areas, companies cascade`); err != nil {
+		`truncate role_grants, principals, sessions, settings, admin_events, scopes, companies cascade`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	return auth.NewBootstrap(pool, auth.NewPostgres(pool)), pool

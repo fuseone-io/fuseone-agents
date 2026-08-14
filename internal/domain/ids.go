@@ -45,6 +45,11 @@ func (s Scope) String() string {
 // It only ever widens downwards. An area never reaches its siblings, and never
 // reaches the company above it.
 func (s Scope) Contains(other Scope) bool {
+	// The one scope above every company. Checked first and by name, never by
+	// emptiness: the zero scope must go on reaching nothing.
+	if s.Company == Installation {
+		return true
+	}
 	if s.Company != other.Company {
 		return false
 	}
@@ -55,6 +60,12 @@ func (s Scope) Contains(other Scope) bool {
 func ParseScope(v string) (Scope, bool) {
 	company, area, found := strings.Cut(v, "/")
 	if !found || company == "" || area == "" {
+		return Scope{}, false
+	}
+	// Never the scope above every company. This reads what somebody typed or
+	// what arrived in a query string, and a caller who could name the
+	// installation could ask to be checked against it.
+	if CompanyID(company) == Installation {
 		return Scope{}, false
 	}
 	return Scope{Company: CompanyID(company), Area: AreaID(area)}, true

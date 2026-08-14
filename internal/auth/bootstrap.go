@@ -142,8 +142,9 @@ func (b *Bootstrap) Claim(ctx context.Context, secret, display, userAgent, ip st
 		return Token{}, domain.Principal{}, fmt.Errorf("auth: create company: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `
-		insert into areas (company_id, area_id, name) values ($1, $2, $2)
-		on conflict do nothing`,
+		insert into scopes (company_id, area_id, label, created_by)
+		values ($1, $2, $2, 'bootstrap')
+		on conflict (company_id, area_id) do nothing`,
 		string(BootstrapScope.Company), string(BootstrapScope.Area)); err != nil {
 		return Token{}, domain.Principal{}, fmt.Errorf("auth: create area: %w", err)
 	}
