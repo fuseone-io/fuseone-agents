@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { CircleAlert, CircleDot, Wrench } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { AgentCanvas } from "@/features/agents/agent-canvas";
 import { Mono } from "@/components/shared/mono";
 import type { components } from "@/lib/api/schema.gen";
 
@@ -21,7 +22,13 @@ export function AgentFlow({ steps }: { steps: AgentStep[] }) {
   const { t } = useTranslation();
 
   return (
-    <ol className="flex flex-col">
+    <div className="flex flex-col gap-3">
+      {/* The same picture the author drew, derived the same way. Nothing about
+          it was stored, which is what makes an approver and an auditor two
+          years apart certain of seeing one diagram (FU-17, FU-18). */}
+      <AgentCanvas steps={steps} />
+
+      <ol className="flex flex-col">
       {steps.map((step, at) => (
         <li key={`${step.name}-${at}`} className="flex gap-3">
           <Rail last={at === steps.length - 1} index={at + 1} />
@@ -57,7 +64,8 @@ export function AgentFlow({ steps }: { steps: AgentStep[] }) {
           </div>
         </li>
       ))}
-    </ol>
+      </ol>
+    </div>
   );
 }
 

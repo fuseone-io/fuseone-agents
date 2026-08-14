@@ -328,6 +328,7 @@
     "templateNeeds_one": "{{count}} capability",
     "templateNeeds_other": "{{count}} capabilities",
     "textAlreadyPublished": "This text was already the published version.",
+    "thinksOnly": "thinks, calls nothing",
     "toolTally": "{{enabled}} enabled · {{writing}} write · {{denied}} denied by policy",
     "trigger": {
       "cron": "Scheduled",

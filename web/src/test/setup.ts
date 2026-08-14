@@ -30,3 +30,17 @@ if (!window.matchMedia) {
       dispatchEvent: () => false,
     }) as MediaQueryList;
 }
+
+/**
+ * jsdom has no ResizeObserver, and XYFlow measures every node through one —
+ * it keeps them hidden and drops handle-bound edges until it has. A stub that
+ * observes nothing is enough here: these tests assert what a diagram is built
+ * from, never what it measured to.
+ */
+if (!globalThis.ResizeObserver) {
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}

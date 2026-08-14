@@ -28,19 +28,55 @@ export interface Placement {
   y: number;
 }
 
-export function placeGraph(nodes: FlowNode[]): Placement[] {
-  return nodes.map((node, i) => {
-    const row = Math.floor(i / PER_ROW);
-    const column = i % PER_ROW;
-    // Odd rows read right to left, so the eye follows the run instead of
-    // jumping back across the canvas at every wrap.
-    const placed = row % 2 === 0 ? column : PER_ROW - 1 - column;
-    return {
-      id: node.id,
-      x: placed * (NODE_WIDTH + GAP_X),
-      y: row * (NODE_HEIGHT + GAP_Y),
-    };
-  });
+/** The cell a serpentine wraps into. */
+export interface Cell {
+  width: number;
+  height: number;
+  gapX: number;
+  gapY: number;
+  perRow: number;
+}
+
+const RUN_CELL: Cell = {
+  width: NODE_WIDTH,
+  height: NODE_HEIGHT,
+  gapX: GAP_X,
+  gapY: GAP_Y,
+  perRow: PER_ROW,
+};
+
+/**
+ * Where the nth node sits, on its own.
+ *
+ * Exported because a canvas that lets somebody move a card has to answer the
+ * question backwards — which cell did they drop it nearest — and two
+ * implementations of one grid would drift the first time either changed.
+ */
+export function placeAt(index: number, cell: Cell = RUN_CELL): Omit<Placement, "id"> {
+  const row = Math.floor(index / cell.perRow);
+  const column = index % cell.perRow;
+  // Odd rows read right to left, so the eye follows the run instead of
+  // jumping back across the canvas at every wrap.
+  const placed = row % 2 === 0 ? column : cell.perRow - 1 - column;
+  return {
+    x: placed * (cell.width + cell.gapX),
+    y: row * (cell.height + cell.gapY),
+  };
+}
+
+/** Which cell a point falls in, which is how a dropped card finds its place. */
+export function indexAt(x: number, y: number, count: number, cell: Cell = RUN_CELL): number {
+  const row = Math.max(0, Math.round(y / (cell.height + cell.gapY)));
+  const column = Math.max(
+    0,
+    Math.min(cell.perRow - 1, Math.round(x / (cell.width + cell.gapX))),
+  );
+  const placed = row % 2 === 0 ? column : cell.perRow - 1 - column;
+  return Math.max(0, Math.min(count - 1, row * cell.perRow + placed));
+}
+
+export function placeGraph(nodes: FlowNode[], cell: Cell = RUN_CELL): Placement[] {
+  return nodes.map((node, i) => ({ id: node.id, ...placeAt(i, cell) }));
 }
 
 /** The sides an edge should leave and enter by.
@@ -48,9 +84,16 @@ export function placeGraph(nodes: FlowNode[]): Placement[] {
  *  A serpentine reverses every other row, so anchoring every edge left-to-right
  *  makes half of them exit a node, loop around the outside of the canvas and
  *  come back in. The turn between rows drops straight down. */
+/**
+ * Which side each end of an edge leaves and arrives on.
+ *
+ * A point rather than a Placement: the agent canvas asks about cells it has
+ * not built nodes for yet, and an identifier it would have to invent to ask
+ * the question is an identifier that means nothing.
+ */
 export function edgePorts(
-  from: Placement,
-  to: Placement,
+  from: Point,
+  to: Point,
 ): { source: Port; target: Port } {
   if (to.x > from.x) return { source: "right", target: "left" };
   if (to.x < from.x) return { source: "left", target: "right" };
@@ -58,3 +101,9 @@ export function edgePorts(
 }
 
 export type Port = "left" | "right" | "top" | "bottom";
+
+/** Where something sits, without needing to be anything. */
+export interface Point {
+  x: number;
+  y: number;
+}

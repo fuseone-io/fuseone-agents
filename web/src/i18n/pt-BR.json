@@ -328,6 +328,7 @@
     "templateNeeds_one": "{{count}} capacidade",
     "templateNeeds_other": "{{count}} capacidades",
     "textAlreadyPublished": "Este texto já era a versão publicada.",
+    "thinksOnly": "pensa, não chama nada",
     "toolTally": "{{enabled}} habilitadas · {{writing}} escrevem · {{denied}} negadas por política",
     "trigger": {
       "cron": "Agendado",

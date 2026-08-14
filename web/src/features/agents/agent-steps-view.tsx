@@ -2,6 +2,7 @@ import { Plus, Sparkles } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { AgentCanvas } from "@/features/agents/agent-canvas";
 import { StepRow } from "@/features/agents/step-row";
 import { useInterview } from "@/features/agents/interview-api";
 import { problemMessage } from "@/lib/api/problem-message";
@@ -45,6 +46,13 @@ export function AgentStepsView({
   const steps = draft.steps ?? [];
   const pack = draft.tools ?? [];
 
+  const reorder = (from: number, to: number) => {
+    const next = [...steps];
+    const [moved] = next.splice(from, 1);
+    if (moved) next.splice(to, 0, moved);
+    patch({ steps: next });
+  };
+
   const replace = (at: number, over: Partial<AgentStep>) =>
     patch({
       steps: steps.map((step, i) => (i === at ? { ...step, ...over } : step)),
@@ -71,7 +79,12 @@ export function AgentStepsView({
           {t("agents.noStepsMeans")}
         </p>
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-3">
+          {/* Dragging reorders: there is nowhere to keep "the author put this
+              box here", so what a card carries is its place in the sequence
+              and the grid re-derives from it (NT-007 §2.1). */}
+          <AgentCanvas steps={steps} onReorder={reorder} />
+
           {steps.map((step, at) => (
             <StepRow
               key={at}
