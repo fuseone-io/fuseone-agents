@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { GrantEditor } from "@/features/admin/grant-editor";
 import { LocalPersonForm } from "@/features/admin/local-person-form";
+import { PasswordDialog } from "@/features/admin/password-dialog";
 import { PersonRow } from "@/features/admin/person-row";
 import { usePeople, type Person } from "@/features/admin/people-api";
 
@@ -26,6 +27,7 @@ export function PeoplePanel() {
   const { data, isLoading, error, refetch } = usePeople();
   const [editing, setEditing] = useState<Person | null>(null);
   const [adding, setAdding] = useState(false);
+  const [settingPassword, setSettingPassword] = useState<Person | null>(null);
 
   const people = data?.items ?? [];
 
@@ -60,13 +62,23 @@ export function PeoplePanel() {
         <ul className="flex flex-col gap-2">
           {people.map((person) => (
             <li key={person.id}>
-              <PersonRow person={person} onEdit={() => setEditing(person)} />
+              <PersonRow
+                person={person}
+                onEdit={() => setEditing(person)}
+                onSetPassword={() => setSettingPassword(person)}
+              />
             </li>
           ))}
         </ul>
       )}
 
       {adding && <LocalPersonForm onClose={() => setAdding(false)} />}
+      {settingPassword && (
+        <PasswordDialog
+          person={settingPassword}
+          onClose={() => setSettingPassword(null)}
+        />
+      )}
     </Panel>
   );
 }

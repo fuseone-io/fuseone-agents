@@ -16,9 +16,11 @@ import type { Person } from "@/features/admin/people-api";
 export function PersonRow({
   person,
   onEdit,
+  onSetPassword,
 }: {
   person: Person;
   onEdit: () => void;
+  onSetPassword: () => void;
 }) {
   const { t } = useTranslation();
   const grants = person.grants ?? [];
@@ -52,6 +54,20 @@ export function PersonRow({
         <span className="text-xs text-muted-foreground">
           {t("people.lastSeen", { when: formatRelative(person.lastSeen) })}
         </span>
+      )}
+
+      {/* Only where a password is the way in. Somebody a provider vouched
+          for signs in there, and offering to set one here would invite two
+          credentials for one person. */}
+      {person.kind === "user" && !(person.provider ?? "").startsWith("oidc") && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7"
+          onClick={onSetPassword}
+        >
+          {person.username ? t("people.changePassword") : t("people.setPassword")}
+        </Button>
       )}
 
       <Button variant="ghost" size="sm" className="h-7" onClick={onEdit}>
