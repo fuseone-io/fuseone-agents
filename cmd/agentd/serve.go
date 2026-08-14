@@ -96,6 +96,9 @@ func serve(args []string) error {
 			// image.
 			return fmt.Errorf("%s is set but unusable: %w", vault.KeyEnv, err)
 		}
+		// The ledger, held under its own name: `store` below is the settings
+		// store and shadows it, and the battery gate needs the ledger.
+		runs := store
 		store := settings.NewStore(identity.pool, v)
 		// Forgetting health on removal, because this is the process that serves
 		// the delete: without it a removed server stays on the screen as one
@@ -120,8 +123,11 @@ func serve(args []string) error {
 			// against. A set is real customer records and belongs under the
 			// installation's retention like every other bulky payload (AU-04).
 			WithCases(ledger.NewContent(identity.pool)).
-			// The corrections a future version is checked against (FU-12).
+			// The corrections a future version is checked against (FU-12),
+			// and the last battery run against a version — which is what
+			// stands between a broken corpus and somebody starting the agent.
 			WithRegressions(regression.NewStore(identity.pool)).
+			WithBatteries(runs).
 			// How long content is kept, and erasing it on request. Its own
 			// permission: the one act here nobody can undo.
 			// The key exports are signed with, and its public half.

@@ -433,6 +433,12 @@ paths:
 
         Every way a run can start obeys this — the schedule, a webhook, the
         button, and the command line.
+
+        Starting is refused while the corrections this version was last
+        simulated against no longer hold (409). The check is here rather than
+        on publishing because a version's identifier is the digest of its own
+        bytes: it does not exist until it is published, so nothing can have
+        been simulated against it before. Stopping is never refused.
       parameters:
         - name: agentId
           in: path
@@ -452,6 +458,11 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Corrections this version used to hold no longer hold.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
 
   /agents/{agentId}/runs:
     post:

@@ -107,3 +107,19 @@ func (s *Server) agentScope(ctx context.Context, agent domain.AgentID) (domain.S
 	}
 	return versions[0].Scope, true
 }
+
+// currentAgent is the version a new run would be pinned to, which is the one
+// worth asking questions about. Versions come back current-first.
+func (s *Server) currentAgent(ctx context.Context, agent domain.AgentID) (domain.AgentSummary, bool) {
+	if s.agents == nil {
+		return domain.AgentSummary{}, false
+	}
+	versions, err := s.agents.Versions(ctx, agent)
+	if err != nil || len(versions) == 0 {
+		return domain.AgentSummary{}, false
+	}
+	if !readable(versions[0].Scope, auth.VisibleScopes(ctx, domain.PermAgentRead)) {
+		return domain.AgentSummary{}, false
+	}
+	return versions[0], true
+}

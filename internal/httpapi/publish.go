@@ -92,18 +92,32 @@ func (s *Server) PublishAgent(
 func (s *Server) SetAgentPaused(
 	ctx context.Context, req openapi.SetAgentPausedRequestObject,
 ) (openapi.SetAgentPausedResponseObject, error) {
-	scope, ok := s.agentScope(ctx, domain.AgentID(req.AgentId))
+	current, ok := s.currentAgent(ctx, domain.AgentID(req.AgentId))
 	if !ok || s.publisher == nil {
 		return openapi.SetAgentPaused404ApplicationProblemPlusJSONResponse{
 			NotFoundApplicationProblemPlusJSONResponse: notFound(req.AgentId),
 		}, nil
 	}
+	scope := current.Scope
 	// Starting an agent is causing every run it will make, so it needs the
 	// authority to cause runs rather than the one to write definitions.
 	if err := auth.Require(ctx, domain.PermRunTrigger, scope); err != nil {
 		return openapi.SetAgentPaused403ApplicationProblemPlusJSONResponse{
 			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermRunTrigger, scope),
 		}, nil
+	}
+
+	// Only a start is checked. Stopping an agent must always be possible —
+	// a gate that can refuse it is a gate that keeps a broken agent running.
+	if !req.Body.Paused {
+		broken, err := s.brokenCases(ctx, current.ID, current.VersionID)
+		if err != nil {
+			return nil, err
+		}
+		if len(broken) > 0 {
+			return openapi.SetAgentPaused409ApplicationProblemPlusJSONResponse(
+				conflicted(refusedForCorpus(current.ID, broken))), nil
+		}
 	}
 
 	if err := s.publisher.SetPaused(

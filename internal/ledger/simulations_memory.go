@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/fuseone/agents/internal/domain"
 )
@@ -81,4 +82,45 @@ func startedPayload(opening domain.Step) domain.RunStartedPayload {
 		return domain.RunStartedPayload{}
 	}
 	return started
+}
+
+// Latest is the most recent simulation run against one version.
+//
+// The fake enforces the same rule as the store: simulated runs only. A fake
+// that counted a real run would let a suite certify a gate production does not
+// have.
+func (m *Memory) Latest(
+	ctx context.Context, agent domain.AgentID, version domain.VersionID,
+) (string, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return "", false, err
+	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var (
+		newest string
+		at     time.Time
+	)
+	for _, steps := range m.runs {
+		if len(steps) == 0 {
+			continue
+		}
+		first := steps[0]
+		if first.AgentID != agent || first.VersionID != version {
+			continue
+		}
+		var started domain.RunStartedPayload
+		if err := json.Unmarshal(first.Payload, &started); err != nil {
+			continue
+		}
+		if !started.Simulated || started.Simulation == "" {
+			continue
+		}
+		if newest == "" || first.At.After(at) {
+			newest, at = started.Simulation, first.At
+		}
+	}
+	return newest, newest != "", nil
 }

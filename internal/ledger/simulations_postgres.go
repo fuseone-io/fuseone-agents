@@ -2,7 +2,10 @@ package ledger
 
 import (
 	"context"
+	"errors"
 	"fmt"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/fuseone/agents/internal/domain"
 )
@@ -57,4 +60,34 @@ func (p *Postgres) HasSimulation(ctx context.Context, agent domain.AgentID) (boo
 		return false, fmt.Errorf("ledger: read simulations of %s: %w", agent, err)
 	}
 	return exists, nil
+}
+
+/*
+Latest is the most recent simulation run against one version.
+
+Derived from the runs rather than tracked beside them, like everything else
+here: a simulation is exactly the set of runs that name it, so the newest one
+for a version is a question about those runs and a table recording it could
+disagree with them.
+
+Simulated runs only. A real run is not a rehearsal and counting one would let
+an agent be started on the strength of having been used.
+*/
+func (p *Postgres) Latest(
+	ctx context.Context, agent domain.AgentID, version domain.VersionID,
+) (string, bool, error) {
+	var simulation string
+	err := p.pool.QueryRow(ctx, `
+		select simulation from runs
+		where agent_id = $1 and version_id = $2 and simulated and simulation <> ''
+		order by started_at desc
+		limit 1`, string(agent), string(version)).Scan(&simulation)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("latest simulation of %s@%s: %w", agent, version, err)
+	}
+	return simulation, true, nil
 }

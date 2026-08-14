@@ -85,8 +85,10 @@ type Server struct {
 	signIn   SignIn
 	// people is the directory of who exists and what each one holds.
 	people People
-	// regressions is the corpus a future version is checked against.
+	// regressions is the corpus a future version is checked against, and
+	// batteries is where the last run of it against a version is found.
 	regressions Regressions
+	batteries   LastBattery
 	// retention and erasures decide whether content survives.
 	retention      Retention
 	channels       ChannelAdmin

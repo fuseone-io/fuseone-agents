@@ -41,6 +41,7 @@ type Store interface {
 	RunByIdemKey(ctx context.Context, key string) (domain.RunID, error)
 	SpentSince(ctx context.Context, scope domain.Scope, since time.Time) (domain.Consumption, error)
 	SimulationRuns(ctx context.Context, simulation string) ([]domain.RunID, error)
+	Latest(ctx context.Context, agent domain.AgentID, version domain.VersionID) (string, bool, error)
 	Agreement(ctx context.Context, since time.Time) ([]domain.Agreement, error)
 	Simulations() ledger.SimulationQueue
 }
@@ -1528,6 +1529,65 @@ func TestSimulationRunsContract(t *testing.T) {
 		}
 		if len(got) != 0 {
 			t.Errorf("runs = %v, want none", got)
+		}
+	})
+}
+
+/*
+The last battery run against a version.
+
+This is what stands between a corpus that stopped holding and somebody
+starting the agent, so the two ways it could be wrong both matter: reading a
+battery from a different version as though it were this one certifies bytes
+nobody simulated, and reading a real run as a rehearsal lets an agent be
+started on the strength of having been used.
+*/
+func TestLatestBatteryContract(t *testing.T) {
+	base := time.Date(2026, 8, 12, 9, 0, 0, 0, time.UTC)
+
+	opened := func(
+		id domain.RunID, at time.Time, version domain.VersionID, simulation string,
+	) domain.Step {
+		st := startedAt(id, at)
+		st.IdemKey, st.VersionID = string(id), version
+		st.Payload = mustJSON(t, domain.RunStartedPayload{
+			Trigger: "simulation", Simulated: simulation != "", Simulation: simulation,
+		})
+		return st
+	}
+
+	run(t, "the newest battery against this version, not an older one", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		mustAppend(t, s, opened("run-1", base, "v3", "sim-old"))
+		mustAppend(t, s, opened("run-2", base.Add(time.Hour), "v3", "sim-new"))
+
+		got, found, err := s.Latest(ctx, "triage", "v3")
+		if err != nil || !found {
+			t.Fatalf("Latest: %q found=%v err=%v", got, found, err)
+		}
+		if got != "sim-new" {
+			t.Errorf("simulation = %q, want the newest", got)
+		}
+	})
+
+	run(t, "a battery against another version says nothing about this one", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		mustAppend(t, s, opened("run-1", base, "v2", "sim-old"))
+
+		// A version's id is the digest of its own bytes. A green report from
+		// the version before it is a report about different bytes.
+		if got, found, err := s.Latest(ctx, "triage", "v3"); err != nil || found {
+			t.Errorf("Latest = %q found=%v err=%v, want nothing", got, found, err)
+		}
+	})
+
+	run(t, "a real run is not a rehearsal", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		mustAppend(t, s, opened("run-real", base, "v3", ""))
+
+		if got, found, err := s.Latest(ctx, "triage", "v3"); err != nil || found {
+			t.Errorf("Latest = %q found=%v err=%v, want nothing", got, found, err)
 		}
 	})
 }

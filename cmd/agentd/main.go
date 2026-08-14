@@ -83,6 +83,7 @@ usage:
 // Store is what the server and the seeder both need: the ledger plus listing.
 type Store interface {
 	httpapi.Store
+	httpapi.LastBattery
 	engine.Ledger
 	Verify(ctx context.Context, runID domain.RunID) error
 }
