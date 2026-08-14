@@ -1,8 +1,7 @@
-import { ListOrdered, Plus, Sparkles } from "lucide-react";
+import { Plus, Sparkles } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Section } from "@/features/policies/section";
 import { StepRow } from "@/features/agents/step-row";
 import { useInterview } from "@/features/agents/interview-api";
 import { problemMessage } from "@/lib/api/problem-message";
@@ -12,8 +11,12 @@ import type { components } from "@/lib/api/schema.gen";
 type AgentStep = components["schemas"]["AgentStep"];
 
 /**
- * The stages of the process, read out of the instructions rather than typed
- * beside them.
+ * The same instructions, read as the stages they describe.
+ *
+ * A view of the field above rather than a section of its own, which is what it
+ * was and why it read as a second thing to fill in: an author who has written
+ * their process in prose should not find an empty form underneath asking for
+ * it again.
  *
  * Written by hand this was two descriptions of one process, and they drift:
  * the prose says one thing, the fields say another, and nobody can tell which
@@ -30,7 +33,7 @@ type AgentStep = components["schemas"]["AgentStep"];
  * against the catalogue and drops the ones that are not in it, however
  * confidently they were proposed.
  */
-export function AgentStepsSection({
+export function AgentStepsView({
   draft,
   patch,
 }: {
@@ -62,11 +65,7 @@ export function AgentStepsSection({
     );
 
   return (
-    <Section
-      icon={ListOrdered}
-      title={t("agents.steps")}
-      hint={t("agents.stepsHint")}
-    >
+    <div className="flex flex-col gap-3">
       {steps.length === 0 ? (
         <p className="text-xs text-muted-foreground">
           {t("agents.noStepsMeans")}
@@ -113,6 +112,6 @@ export function AgentStepsSection({
           {t("agents.addStep")}
         </Button>
       </div>
-    </Section>
+    </div>
   );
 }

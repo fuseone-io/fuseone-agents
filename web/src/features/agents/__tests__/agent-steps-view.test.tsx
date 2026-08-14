@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { AgentStepsSection } from "@/features/agents/agent-steps-section";
+import { AgentStepsView } from "@/features/agents/agent-steps-view";
 import type { AgentDefinition } from "@/lib/api/client";
 
 /*
@@ -33,7 +33,7 @@ function renderSection(over: Partial<AgentDefinition> = {}, patch = vi.fn()) {
   });
   render(
     <QueryClientProvider client={client}>
-      <AgentStepsSection draft={draft(over)} patch={patch} />
+      <AgentStepsView draft={draft(over)} patch={patch} />
     </QueryClientProvider>,
   );
   return patch;

@@ -131,6 +131,9 @@
     "asFlow": "Steps",
     "asList": "As a list",
     "asProse": "Instructions",
+    "asSteps_one": "Steps ({{count}})",
+    "asSteps_other": "Steps ({{count}})",
+    "asSteps_zero": "See as steps",
     "atLeastOneTool": "At least one tool",
     "beforePublishing": "Before publishing",
     "bringsOutsideData": "brings outside data",
@@ -362,6 +365,7 @@
     "webhooks": "Webhooks",
     "whatStarts": "What starts it",
     "withoutTools": "No tools",
+    "writeIt": "Write",
     "zeroIsNoCeiling": "Zero means no ceiling, which is not the same as a ceiling of zero."
   },
   "approvals": {

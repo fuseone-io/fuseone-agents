@@ -131,6 +131,9 @@
     "asFlow": "Passos",
     "asList": "Em lista",
     "asProse": "Instruções",
+    "asSteps_one": "Passos ({{count}})",
+    "asSteps_other": "Passos ({{count}})",
+    "asSteps_zero": "Ver como passos",
     "atLeastOneTool": "Ao menos uma ferramenta",
     "beforePublishing": "Antes de publicar",
     "bringsOutsideData": "traz dado externo",
@@ -362,6 +365,7 @@
     "webhooks": "Webhooks",
     "whatStarts": "O que inicia",
     "withoutTools": "Sem ferramentas",
+    "writeIt": "Escrever",
     "zeroIsNoCeiling": "Zero é sem teto, o que é diferente de um teto de zero."
   },
   "approvals": {

@@ -10,9 +10,9 @@ import {
 } from "@/components/ui/select";
 import { ModelField, modelsFor } from "@/features/agents/model-field";
 import { useIntegrations } from "@/features/integrations/api";
-import { Textarea } from "@/components/ui/textarea";
 import { Section, Labelled } from "@/features/policies/section";
 import { AgentAreaField } from "@/features/agents/agent-area-field";
+import { AgentInstructionsField } from "@/features/agents/agent-instructions-field";
 import type { AgentDefinition } from "@/lib/api/client";
 
 /** Who this agent is, and what it was told to do. */
@@ -125,21 +125,8 @@ export function AgentBasicsSection({
         </Labelled>
       </div>
 
-      <Labelled label={t("agents.instructions")} htmlFor="agent-instructions">
-        <Textarea
-          id="agent-instructions"
-          rows={8}
-          value={draft.instructions}
-          onChange={(e) => patch({ instructions: e.target.value })}
-          className="font-mono text-xs"
-          placeholder={t("agents.instructionsPlaceholder")}
-        />
-        <p className="text-xs text-muted-foreground">
-          {t("agents.instructionsLength", {
-            count: draft.instructions.trim().length,
-          })}
-        </p>
-      </Labelled>
+      <AgentInstructionsField draft={draft} patch={patch} />
+
     </Section>
   );
 }
