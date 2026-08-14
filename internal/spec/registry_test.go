@@ -453,10 +453,10 @@ func TestPublish_declaredSteps_areReadBack(t *testing.T) {
 	if got.Steps[0].StopsWhen != "não encontrar o cliente" {
 		t.Errorf("stops_when = %q, want the author's own words", got.Steps[0].StopsWhen)
 	}
-	// The envelope is what the Gate is meant to read, and it is the reason
-	// any of this is stored.
-	if reach := got.EnvelopeAt(0); len(reach) != 1 || reach[0] != "crm.lookup" {
-		t.Errorf("envelope at the first step = %v", reach)
+	// What the first step reaches is what the Gate narrows to while a run
+	// sits in it, and it is the reason any of this is stored.
+	if reach := got.Steps[0].Reaches; len(reach) != 1 || reach[0] != "crm.lookup" {
+		t.Errorf("the first step reaches %v", reach)
 	}
 	if got.Steps[1].Model != "gpt-caro" {
 		t.Errorf("model override = %q, want it kept", got.Steps[1].Model)
@@ -480,7 +480,9 @@ func TestPublish_noSteps_readsBackAsNoneRatherThanOne(t *testing.T) {
 	if len(got.Steps) != 0 {
 		t.Errorf("steps = %+v, want none", got.Steps)
 	}
-	if reach := got.EnvelopeAt(0); len(reach) != len(got.Tools) {
-		t.Errorf("envelope = %v, want the whole pack", reach)
+	// With none declared the engine hands the Gate the whole pack, which is
+	// how every agent behaved before steps existed.
+	if len(got.Tools) == 0 {
+		t.Error("the pack came back empty")
 	}
 }

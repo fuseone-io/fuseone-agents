@@ -39,21 +39,15 @@ type Step struct {
 }
 
 /*
-EnvelopeAt reports what a run may reach while it sits at a step.
+What a run may reach at a step is decided in the engine, not here.
 
-With no steps declared there is one envelope holding the whole pack, which is
-exactly today's behaviour and is what lets this land without anybody
-republishing anything.
+There used to be an EnvelopeAt on this type, and it disagreed with the engine:
+it answered with one step's tools, while a run keeps everything from the step
+it has reached onwards, because forbidding an author's second-favourite
+ordering would describe their first draft rather than their process.
 
-Past the last step a run has finished and reaches nothing. Falling back to the
-pack there would quietly make the end of a run the loosest part of it.
+Nothing called it, so nothing was wrong — until somebody read it as the rule
+and wrote down that the Gate ignored steps entirely. Two statements of one
+rule, in the package an author looks in first, with the one that runs living
+somewhere else. See engine.EnvelopeFor.
 */
-func (s Spec) EnvelopeAt(step int) []domain.ToolID {
-	if len(s.Steps) == 0 {
-		return s.Tools
-	}
-	if step < 0 || step >= len(s.Steps) {
-		return nil
-	}
-	return s.Steps[step].Reaches
-}

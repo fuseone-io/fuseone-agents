@@ -80,23 +80,14 @@ Corpo.
 		t.Fatalf("parse: %v", err)
 	}
 
-	// One envelope holding the whole pack is today's behaviour, which is what
-	// lets steps land without anybody republishing anything.
-	env := s.EnvelopeAt(0)
-	if len(env) != 2 {
-		t.Fatalf("got %v, want the whole pack", env)
+	// No steps declared is a real answer and the common one: the engine hands
+	// the Gate the whole pack, which is how every agent behaved before steps
+	// existed. What this asserts is that parsing invents none.
+	if len(s.Steps) != 0 {
+		t.Fatalf("steps = %+v, want none declared", s.Steps)
 	}
-}
-
-func TestEnvelopeAt_pastTheLastStep_reachesNothing(t *testing.T) {
-	t.Parallel()
-
-	s, _ := spec.Parse("t.md", []byte(withSteps))
-
-	// A run that walked off the end has finished. Falling back to the pack
-	// there would make the last step the loosest one in the agent.
-	if got := s.EnvelopeAt(9); len(got) != 0 {
-		t.Errorf("got %v, want nothing", got)
+	if len(s.Tools) != 2 {
+		t.Fatalf("pack = %v, want both tools", s.Tools)
 	}
 }
 

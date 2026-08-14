@@ -96,14 +96,21 @@ process the platform will not follow, on a screen that looks like it will.
 
 ## 5. What this does not settle
 
-**The Gate still does not obey the steps.** `EnvelopeAt` has no caller: today
-the whole pack applies from the first turn to the last. Everything above is
-about authoring a declaration; making it a permission is a separate piece of
-work in the engine, and it needs a run to know which step it is at.
+**The Gate obeys the steps already**, and an earlier draft of this note said
+it did not. The correction is worth keeping rather than quietly replacing: the
+claim came from grepping `spec.EnvelopeAt`, finding no caller, and concluding
+from the wrong module. The engine has its own `envelopeOf`, the resolver fills
+`Start.Steps` from the published specification, and `act.go` hands the Gate
+the narrowed pack on every proposal. `internal/e2e/steps_test.go` states the
+guarantee an operator would recognise: a run that has replied cannot look the
+customer up again.
 
-Until that lands, a canvas draws something true about the definition and
-nothing about what the run will be allowed to do, and the screen should not
-imply otherwise.
+So a canvas draws something that is enforced, and the screen may say so.
+
+What the steps still do not do is judge their own exception. `stops_when` is
+text nobody evaluates: the run advances because a proposal reached a later
+step's tool, never because a condition was met. NT-003 left who decides a
+stage is over open, and it is still open.
 
 **Composition between agents stays out.** The events an agent emits are a
 different graph — which agent triggers which — and it already has a screen. A
