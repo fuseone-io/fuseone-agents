@@ -8,6 +8,7 @@ import {
 } from "@/components/layout/page-actions";
 import { StopBanner } from "@/features/admin/stop-banner";
 import { usePreferences } from "@/features/preferences/use-preferences";
+import { cn } from "@/lib/utils";
 
 /**
  * The sidebar-07 shell: an icon-collapsible sidebar and a flush content area.
@@ -70,7 +71,16 @@ function Shell({ children }: { children: ReactNode }) {
               table came out 197px tall over 2078px of rows, with no scrollbar
               to say so. A page that wants the full height asks with flex-1,
               which is sized from zero and unaffected by this. */}
-          <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-auto p-6 [&>*]:shrink-0">
+          {/* A compact screen brings its own frame: the padding and the gap
+              here would sit outside a header it draws itself, and the height
+              it computes would be wrong by exactly that padding — which is
+              how a footer ends up over the last row of a list. */}
+          <div
+            className={cn(
+              "flex min-h-0 flex-1 flex-col overflow-auto [&>*]:shrink-0",
+              !compact && "gap-6 p-6",
+            )}
+          >
             {/* Above every screen's content, not inside one panel. The
                 question it answers is "why is nothing running", and somebody
                 asking that is looking at stale numbers, not at the

@@ -96,10 +96,12 @@ export function AgentToolsSection({
         </Button>
       </div>
 
-      <div className="grid min-h-0 flex-1 sm:grid-cols-[minmax(0,206px)_minmax(0,1fr)]">
+      <div className="grid min-h-0 flex-1 overflow-hidden sm:grid-cols-[minmax(0,206px)_minmax(0,1fr)]">
         <ToolCatalogueNav entries={nav} chosen={server} onChoose={setServer} />
 
-        <div className="flex min-w-0 flex-col">
+        {/* min-h-0, or the column refuses to shrink below its content and
+            pushes the tally out of the card and under the footer. */}
+        <div className="flex min-h-0 min-w-0 flex-col">
           <div className="flex flex-wrap items-center gap-2 border-b border-border p-3">
             <div className="relative min-w-48 flex-1">
               <Search

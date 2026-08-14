@@ -75,9 +75,10 @@ export function AgentEditorPage() {
   const rules = policies.data?.items ?? [];
 
   return (
-    // The shell's padding is escaped, and the height is what is left under
-    // its header: the tab body is the only thing on this screen that scrolls.
-    <div className="-m-6 flex h-[calc(100svh-52px)] flex-col">
+    // Fills what the shell gives it, which is everything under the header
+    // once this screen has asked for compact chrome. Computing a height from
+    // the viewport instead was wrong by the padding it could not see.
+    <div className="flex h-full min-h-0 flex-col">
       <EditorHeader
         agentId={agentId}
         name={draft.name || t(creating ? "agents.newAgent" : "agents.untitled")}
@@ -86,11 +87,12 @@ export function AgentEditorPage() {
       />
       <EditorTabBar active={tab} onChange={setTab} counts={counts(draft)} />
 
-      {/* The only scrolling region, and unpadded: a tab with a bar of its own
-          needs it to reach both edges, and a tab of cards adds its own
-          measure. Padding here would inset the bar and make it look like one
-          more card. */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+      {/* Unpadded, so a tab with a bar of its own can reach both edges, and
+          not scrolling: whichever tab is open owns its own scrolling. Two
+          scroll containers in one column is how the last row of a filling tab
+          ends up under the footer — it was scrolled by the outer one, which
+          had no idea the footer was there. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <EditorBody
             tab={tab}
             draft={draft}

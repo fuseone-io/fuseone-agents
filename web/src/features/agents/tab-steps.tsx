@@ -123,7 +123,7 @@ export function TabSteps({
       ) : view === "text" ? (
         // Sentences are read left to right and stop at a measure somebody can
         // follow; the canvas is looked at and takes what it is given.
-        <div className="mx-auto w-full max-w-[820px] px-5 pt-4 pb-10">
+        <div className="mx-auto w-full max-w-[820px] overflow-y-auto px-5 pt-4 pb-10">
           <StepsTextView
             steps={steps}
             catalogue={catalogue}
