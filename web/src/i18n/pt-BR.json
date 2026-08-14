@@ -1225,5 +1225,23 @@
     "wantsExplains": "Canal que ouve todo run terminando é canal que as pessoas silenciam.",
     "whoCanDecide": "Quem pode decidir daqui",
     "workspace": "Workspace"
+  },
+  "companies": {
+    "areaCount_one": "{{count}} área",
+    "areaCount_other": "{{count}} áreas",
+    "companies": "Empresas",
+    "explains": "O identificador é fixo; o nome não. Registrar concede acesso a você na mesma ação.",
+    "grantedYou": "Você recebeu acesso a ela.",
+    "idNeverChanges": "Minúsculas, dígitos e hífens. Vai para URL e para todo escopo — não muda depois.",
+    "idShape": "Só minúsculas, dígitos e hífens",
+    "identifier": "Identificador",
+    "needsId": "Informe o identificador",
+    "none": "Nenhuma empresa além da inicial",
+    "noneHint": "Registre uma para separar operações que não compartilham política nem orçamento.",
+    "register": "Registrar empresa",
+    "registered": "Empresa registrada",
+    "restore": "Restaurar",
+    "withdraw": "Retirar",
+    "withdrawn": "retirada"
   }
 }

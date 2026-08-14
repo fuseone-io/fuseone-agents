@@ -1225,5 +1225,23 @@
     "wantsExplains": "A channel that hears every run finish is one people mute.",
     "whoCanDecide": "Who can decide from here",
     "workspace": "Workspace"
+  },
+  "companies": {
+    "areaCount_one": "{{count}} area",
+    "areaCount_other": "{{count}} areas",
+    "companies": "Companies",
+    "explains": "The identifier is fixed; the name is not. Registering grants you inside it, in the same act.",
+    "grantedYou": "You were granted inside it.",
+    "idNeverChanges": "Lowercase, digits and hyphens. It reaches URLs and every scope — it does not change.",
+    "idShape": "Lowercase letters, digits and hyphens only",
+    "identifier": "Identifier",
+    "needsId": "Give it an identifier",
+    "none": "No company beyond the first",
+    "noneHint": "Register one to separate operations that share neither policy nor budget.",
+    "register": "Register a company",
+    "registered": "Company registered",
+    "restore": "Restore",
+    "withdraw": "Withdraw",
+    "withdrawn": "withdrawn"
   }
 }

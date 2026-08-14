@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CompaniesPanel } from "@/features/companies/companies-panel";
 import { useTab } from "@/features/preferences/use-preferences";
 import { ToolsPanel } from "@/features/admin/tools-panel";
 import { EventsPanel } from "@/features/admin/events-panel";
@@ -38,6 +39,9 @@ export function AdminPage() {
         <TabsList className="w-48 shrink-0 self-start">
           <TabsTrigger value="tools">{t("admin.tools")}</TabsTrigger>
           <TabsTrigger value="authoring">{t("admin.authoring")}</TabsTrigger>
+          <TabsTrigger value="companies">
+            {t("companies.companies")}
+          </TabsTrigger>
           <TabsTrigger value="areas">{t("admin.areas")}</TabsTrigger>
           <TabsTrigger value="identity">{t("admin.identity")}</TabsTrigger>
           <TabsTrigger value="people">{t("admin.people")}</TabsTrigger>
@@ -59,6 +63,10 @@ export function AdminPage() {
         <TabsContent value="people" className="min-w-0">
           <PeoplePanel />
         </TabsContent>
+        <TabsContent value="companies" className="min-w-0">
+          <CompaniesPanel />
+        </TabsContent>
+
         <TabsContent value="areas" className="min-w-0">
           <AreasPanel />
         </TabsContent>

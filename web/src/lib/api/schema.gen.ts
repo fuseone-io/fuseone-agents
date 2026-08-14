@@ -1235,6 +1235,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/companies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The companies this installation governs
+         * @description Every one, withdrawn ones included: their runs stay readable and
+         *     somebody looking at those has to be able to find out what that company
+         *     was. A withdrawn one says so rather than being hidden.
+         *
+         *     This is the administrative listing and needs authority over the
+         *     installation. The list a person actually chooses a context from comes
+         *     from their own grants, on `/me`, and shows only what they reach.
+         */
+        get: operations["listCompanies"];
+        put?: never;
+        /**
+         * Register a company
+         * @description Creating one grants the caller inside it, in the same act. Every
+         *     listing here is filtered by the scopes somebody holds, so a company
+         *     created without a grant would report success and then show nothing.
+         *
+         *     Authority over the installation, never over a company: held inside one,
+         *     this would let that company's administrator mint another and grant
+         *     themselves in it.
+         */
+        post: operations["createCompany"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/companies/{company}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Rename a company, or withdraw it
+         * @description Withdrawing archives and never deletes. The runs, decisions and trail
+         *     name the company, and removing it would leave every one of them
+         *     pointing at nothing.
+         */
+        patch: operations["updateCompany"];
+        trace?: never;
+    };
     "/admin/channels": {
         parameters: {
             query?: never;
@@ -1782,6 +1840,10 @@ export interface components {
             settled: components["schemas"]["SimulationSettled"];
             steps: number;
             cost: components["schemas"]["Cost"];
+            /** @description What answered this case. */
+            model?: string;
+            /** @description Whether this case last held against a different model. Neither a pass nor a failure — the reason to read the rest of the row differently. */
+            drifted?: boolean;
             acted?: components["schemas"]["SimulationAct"][];
             outcome?: string;
             reason?: string;
@@ -1793,6 +1855,15 @@ export interface components {
             held?: number;
             /** @description Corrections that stopped standing. */
             broken?: number;
+            /**
+             * @description Cases whose model is no longer the one they last held against.
+             *
+             *     It answers the question a rising broken count cannot: did somebody
+             *     change the agent, or did a provider change the model under a name
+             *     that did not change? The second is the one nobody notices, because
+             *     nothing in this installation moved.
+             */
+            drifted?: number;
             id: string;
             agent?: string;
             version?: string;
@@ -2134,6 +2205,16 @@ export interface components {
             updatedBy?: string;
             /** Format: date-time */
             updatedAt?: string;
+        };
+        Company: {
+            id: string;
+            label: string;
+            /** @description How many areas are registered in it. */
+            areas: number;
+            archived: boolean;
+            /** Format: date-time */
+            createdAt?: string;
+            createdBy?: string;
         };
         Channel: {
             name: string;
@@ -2758,7 +2839,7 @@ export interface components {
     parameters: {
         RunId: string;
         /** @description Company scope. A single value until multi-company (PRD 3.1). */
-        Company: string;
+        CompanyScope: string;
         Area: string;
         /**
          * @description Opaque cursor from the previous page, taken verbatim from that page's
@@ -2783,7 +2864,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Company scope. A single value until multi-company (PRD 3.1). */
-                company?: components["parameters"]["Company"];
+                company?: components["parameters"]["CompanyScope"];
                 area?: components["parameters"]["Area"];
                 /** @description Return the publication history instead of the newest version of each agent. */
                 allVersions?: boolean;
@@ -2813,7 +2894,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Company scope. A single value until multi-company (PRD 3.1). */
-                company?: components["parameters"]["Company"];
+                company?: components["parameters"]["CompanyScope"];
                 area?: components["parameters"]["Area"];
                 agentId?: string;
                 phase?: components["schemas"]["Phase"];
@@ -2858,7 +2939,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Company scope. A single value until multi-company (PRD 3.1). */
-                company?: components["parameters"]["Company"];
+                company?: components["parameters"]["CompanyScope"];
                 area?: components["parameters"]["Area"];
                 agentId?: string;
                 /** @description Only runs started at or after this instant. */
@@ -3448,7 +3529,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Company scope. A single value until multi-company (PRD 3.1). */
-                company?: components["parameters"]["Company"];
+                company?: components["parameters"]["CompanyScope"];
                 area?: components["parameters"]["Area"];
                 agentId?: string;
                 since?: string;
@@ -3477,7 +3558,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Company scope. A single value until multi-company (PRD 3.1). */
-                company?: components["parameters"]["Company"];
+                company?: components["parameters"]["CompanyScope"];
                 area?: components["parameters"]["Area"];
                 agentId?: string;
                 /** @description Only decisions taken at or after this instant. */
@@ -3734,7 +3815,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Company scope. A single value until multi-company (PRD 3.1). */
-                company?: components["parameters"]["Company"];
+                company?: components["parameters"]["CompanyScope"];
                 area?: components["parameters"]["Area"];
                 /**
                  * @description Opaque cursor from the previous page, taken verbatim from that page's
@@ -3808,7 +3889,7 @@ export interface operations {
         parameters: {
             query: {
                 /** @description Company scope. A single value until multi-company (PRD 3.1). */
-                company?: components["parameters"]["Company"];
+                company?: components["parameters"]["CompanyScope"];
                 area?: components["parameters"]["Area"];
                 from: string;
                 to: string;
@@ -3837,7 +3918,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Company scope. A single value until multi-company (PRD 3.1). */
-                company?: components["parameters"]["Company"];
+                company?: components["parameters"]["CompanyScope"];
                 area?: components["parameters"]["Area"];
                 since?: string;
                 until?: string;
@@ -4055,7 +4136,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Company scope. A single value until multi-company (PRD 3.1). */
-                company?: components["parameters"]["Company"];
+                company?: components["parameters"]["CompanyScope"];
                 area?: components["parameters"]["Area"];
             };
             header?: never;
@@ -4497,6 +4578,103 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    listCompanies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The companies. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Company"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    createCompany: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Lowercase letters, digits and hyphens. It reaches a URL, a settings key and every scope written as "company/area", and it never changes. */
+                    id: string;
+                    /** @description What people read. This does change. */
+                    label?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The company, and the grant that came with it. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Company"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description That identifier is taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    updateCompany: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    label?: string;
+                    /** @description True withdraws it from what is offered for new work; false puts it back. */
+                    archived?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description The company is changed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     listChannels: {

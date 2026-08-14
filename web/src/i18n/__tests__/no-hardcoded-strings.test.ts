@@ -51,6 +51,8 @@ const SAMPLES = new Set([
   // teaching somebody the wrong format.
   "C0123ABCDEF",
   "U0123ABCDEF",
+  // An example identifier, shown as the shape of the thing being asked for.
+  "acme",
   "#alertas",
   "https://api.example.com/mcp/",
   "https://api.openai.com/v1",
