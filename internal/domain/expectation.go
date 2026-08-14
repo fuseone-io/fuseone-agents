@@ -88,6 +88,12 @@ type RegressionCase struct {
 	// dependency — the corpus keeps its own copy of the occurrence.
 	FromRun RunID
 	Note    string
+	// Model and Effort are what this case last held against. A battery whose
+	// broken count rises while every case still names the model it always did
+	// is a change somebody made; one where the model moved underneath is
+	// drift, and the difference decides who gets woken up.
+	Model  string
+	Effort string
 
 	CreatedBy UserID
 	CreatedAt time.Time

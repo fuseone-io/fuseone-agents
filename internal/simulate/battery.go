@@ -29,7 +29,7 @@ func Battery(report Report, corpus []domain.RegressionCase) Report {
 
 	out := report
 	out.Cases = append([]Case(nil), report.Cases...)
-	out.Held, out.Broken = 0, 0
+	out.Held, out.Broken, out.Drifted = 0, 0, 0
 
 	for _, corrected := range corpus {
 		at, ran := rows[corrected.ID]
@@ -44,7 +44,16 @@ func Battery(report Report, corpus []domain.RegressionCase) Report {
 		}
 
 		out.Cases[at].Expected = corrected.Expectations
+		// Said whether or not the case broke. A case that still holds against
+		// a model that moved is worth knowing about too: it is the one that
+		// will break next.
+		out.Cases[at].Drifted = corrected.Model != "" &&
+			out.Cases[at].Model != "" &&
+			corrected.Model != out.Cases[at].Model
 		out.Cases[at].Unmet = Check(out.Cases[at], corrected.Expectations)
+		if out.Cases[at].Drifted {
+			out.Drifted++
+		}
 		if len(out.Cases[at].Unmet) == 0 {
 			out.Held++
 		} else {

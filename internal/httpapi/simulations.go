@@ -225,7 +225,7 @@ func firstOr(reasons []string, fallback string) string {
 func toSimulationReport(r simulate.Report) openapi.SimulationReport {
 	out := openapi.SimulationReport{
 		Id: r.ID, Running: r.Running,
-		Held: ptr(r.Held), Broken: ptr(r.Broken),
+		Held: ptr(r.Held), Broken: ptr(r.Broken), Drifted: ptr(r.Drifted),
 		Cases: make([]openapi.SimulationCase, 0, len(r.Cases)),
 	}
 	if r.Agent != "" {
@@ -249,6 +249,10 @@ func toSimulationCase(c simulate.Case) openapi.SimulationCase {
 		RunId:   someString(string(c.RunID)),
 		Outcome: someString(c.Outcome),
 		Reason:  someString(c.Reason),
+		Model:   someString(c.Model),
+	}
+	if c.Drifted {
+		out.Drifted = ptr(true)
 	}
 	if len(c.Expected) > 0 {
 		expected := toExpectations(c.Expected)

@@ -51,15 +51,21 @@ func (s *Store) Record(ctx context.Context, c domain.RegressionCase) error {
 	_, err = s.pool.Exec(ctx, `
 		insert into regression_cases (
 			agent_id, case_id, company_id, area_id,
-			input_ref, expectations, from_run, note, created_by
-		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+			input_ref, expectations, from_run, note, created_by, model, effort
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
 		on conflict (agent_id, case_id) do update set
 			input_ref = excluded.input_ref,
 			expectations = excluded.expectations,
 			from_run = excluded.from_run,
-			note = excluded.note`,
+			note = excluded.note,
+			-- Re-recorded, because a correction made today held against
+			-- today's model. Keeping the old one would report drift for ever
+			-- after somebody deliberately moved.
+			model = excluded.model,
+			effort = excluded.effort`,
 		string(c.Agent), c.ID, string(c.Scope.Company), string(c.Scope.Area),
-		c.InputRef, expectations, string(c.FromRun), c.Note, string(c.CreatedBy))
+		c.InputRef, expectations, string(c.FromRun), c.Note, string(c.CreatedBy),
+		c.Model, c.Effort)
 	if err != nil {
 		return fmt.Errorf("regression: record %s: %w", c.ID, err)
 	}
@@ -74,7 +80,7 @@ func (s *Store) Record(ctx context.Context, c domain.RegressionCase) error {
 func (s *Store) List(ctx context.Context, agent domain.AgentID) ([]domain.RegressionCase, error) {
 	rows, err := s.pool.Query(ctx, `
 		select case_id, company_id, area_id, input_ref, expectations,
-		       from_run, note, created_by, created_at
+		       from_run, note, created_by, created_at, model, effort
 		from regression_cases
 		where agent_id = $1
 		order by created_at, case_id`, string(agent))
@@ -89,7 +95,7 @@ func (s *Store) List(ctx context.Context, agent domain.AgentID) ([]domain.Regres
 		var expectations []byte
 		var company, area, fromRun, by string
 		if err := rows.Scan(&c.ID, &company, &area, &c.InputRef, &expectations,
-			&fromRun, &c.Note, &by, &c.CreatedAt); err != nil {
+			&fromRun, &c.Note, &by, &c.CreatedAt, &c.Model, &c.Effort); err != nil {
 			return nil, fmt.Errorf("regression: scan case: %w", err)
 		}
 		if err := json.Unmarshal(expectations, &c.Expectations); err != nil {

@@ -60,10 +60,14 @@ type Case struct {
 	RunID   domain.RunID `json:"run_id,omitempty"`
 	Settled Settled      `json:"settled"`
 	Steps   int          `json:"steps"`
-	Cost    domain.Cost  `json:"cost"`
-	Acted   []Act        `json:"acted,omitempty"`
-	Outcome string       `json:"outcome,omitempty"`
-	Reason  string       `json:"reason,omitempty"`
+	// Model and Effort are what answered, so a report can say whether a case
+	// broke against the same model it last held against.
+	Model   string      `json:"model,omitempty"`
+	Effort  string      `json:"effort,omitempty"`
+	Cost    domain.Cost `json:"cost"`
+	Acted   []Act       `json:"acted,omitempty"`
+	Outcome string      `json:"outcome,omitempty"`
+	Reason  string      `json:"reason,omitempty"`
 	// Error is set when the case never got a run at all. It is a row rather
 	// than an omission: a report that silently drops what it could not run
 	// tells an author the set was covered when it was not.
@@ -73,6 +77,10 @@ type Case struct {
 	// is what stopped being true. Both empty for an ordinary simulation.
 	Expected []domain.Expectation `json:"expected,omitempty"`
 	Unmet    []domain.Expectation `json:"unmet,omitempty"`
+	// Drifted says this case last held against a different model. It is not a
+	// failure and not a pass: it is the reason a reader should read the rest
+	// of the row differently.
+	Drifted bool `json:"drifted,omitempty"`
 }
 
 // Fold turns one simulated run's steps into its row in the report.
@@ -117,6 +125,11 @@ func (f *folder) apply(step domain.Step) error {
 			return err
 		}
 		f.node = p.Node
+		// Kept, because a case that broke is a different fact depending on
+		// whether the model under it moved.
+		if p.Model != "" {
+			f.c.Model, f.c.Effort = p.Model, p.Effort
+		}
 
 	case domain.StepGateDecided:
 		var p domain.GateDecidedPayload
@@ -203,6 +216,12 @@ type Report struct {
 	// that stopped standing. Zero for a simulation that is not a battery.
 	Held   int `json:"held"`
 	Broken int `json:"broken"`
+	// Drifted counts the cases whose model is not the one they last held
+	// against. It answers the question a rising broken count cannot: did
+	// somebody change the agent, or did a provider change the model under a
+	// name that did not change? The second is the one nobody notices, because
+	// nothing in this installation moved.
+	Drifted int `json:"drifted"`
 
 	// Running is whether any case has yet to settle. Derived rather than
 	// tracked: the runs are the queue, so a simulation is still going exactly

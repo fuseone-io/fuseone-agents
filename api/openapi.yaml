@@ -2765,6 +2765,15 @@ components:
         settled: { $ref: '#/components/schemas/SimulationSettled' }
         steps: { type: integer }
         cost: { $ref: '#/components/schemas/Cost' }
+        model:
+          type: string
+          description: What answered this case.
+        drifted:
+          type: boolean
+          description: >
+            Whether this case last held against a different model. Neither a
+            pass nor a failure — the reason to read the rest of the row
+            differently.
         acted:
           type: array
           items: { $ref: '#/components/schemas/SimulationAct' }
@@ -2784,6 +2793,15 @@ components:
         broken:
           type: integer
           description: Corrections that stopped standing.
+        drifted:
+          type: integer
+          description: |
+            Cases whose model is no longer the one they last held against.
+
+            It answers the question a rising broken count cannot: did somebody
+            change the agent, or did a provider change the model under a name
+            that did not change? The second is the one nobody notices, because
+            nothing in this installation moved.
         id: { type: string }
         agent: { type: string }
         version: { type: string }
