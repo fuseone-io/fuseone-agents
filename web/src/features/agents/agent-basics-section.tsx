@@ -63,7 +63,11 @@ export function AgentBasicsSection({
         />
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-[1fr_1fr_140px]">
+      {/* Every track allowed to shrink below its content. A grid track is
+          auto-sized to its minimum content by default, and a Select cannot
+          shrink its own label — which is how one long option pushed this row
+          out past the card it sits in. */}
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,200px)_minmax(0,1fr)_minmax(0,140px)]">
         {/* Offered from what this installation has actually configured. A
             typed provider name that nothing serves is an agent that publishes
             and fails on its first turn, naming a provider nobody connected. */}
@@ -99,8 +103,11 @@ export function AgentBasicsSection({
               patch({ effort: effort === "none" ? "" : effort })
             }
           >
-            <SelectTrigger id="agent-effort" className="font-mono">
-              <SelectValue />
+            <SelectTrigger id="agent-effort" className="min-w-0 font-mono">
+              {/* Truncating rather than pushing: a select cannot shrink its
+                  own text, and the one long option here was breaking the card
+                  it sits in. */}
+              <SelectValue className="truncate" />
             </SelectTrigger>
             <SelectContent>
               {["none", "low", "medium", "high"].map((level) => (

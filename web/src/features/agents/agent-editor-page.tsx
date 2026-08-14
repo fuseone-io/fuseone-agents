@@ -36,6 +36,7 @@ export function AgentEditorPage() {
   const loaded = useAgent(creating ? "" : (routeId ?? ""), undefined);
   const tools = useTools();
   const policies = usePolicies();
+  const [fromTemplate, setFromTemplate] = useState<string>();
   const [agentId, setAgentId] = useState(creating ? "" : (routeId ?? ""));
   const { draft, patch, changes } = useAgentDraft(
     creating ? undefined : loaded.data,
@@ -98,6 +99,7 @@ export function AgentEditorPage() {
           author choose a template in order to delete it (PRD FU-16). */}
       {creating && (
         <TemplateGallery
+          chosen={fromTemplate}
           onChoose={(template) => {
             patch({
               name: template.name,
@@ -107,6 +109,15 @@ export function AgentEditorPage() {
               budget: template.budget ?? draft.budget,
             });
             setAgentId(template.id);
+            setFromTemplate(template.id);
+          }}
+          onClear={() => {
+            // Back to the blank form. Clearing the text without clearing the
+            // choice would leave a card marked as chosen above a form that no
+            // longer holds any of it.
+            patch({ name: "", instructions: "", triggers: [] });
+            setAgentId("");
+            setFromTemplate(undefined);
           }}
         />
       )}
