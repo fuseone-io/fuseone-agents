@@ -10,7 +10,10 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { PageActionsTarget } from "@/components/layout/page-actions";
+import {
+  PageActionsTarget,
+  PageIdentityTarget,
+} from "@/components/layout/page-actions";
 import { LanguageToggle } from "@/components/shared/language-toggle";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { PAGE_TITLES, SUB_TITLES } from "@/components/layout/nav";
@@ -35,6 +38,9 @@ export function AppHeader() {
       <SidebarTrigger className="-ml-1" aria-label={t("shell.toggleSidebar")} />
       <Separator orientation="vertical" className="mr-1 !h-[18px]" />
       <Crumbs pathname={pathname} />
+      {/* Which record, beside where you are: a screen that repeats the header
+          underneath it has two headers. */}
+      <PageIdentityTarget />
       <div className="flex-1" />
       {/* The screen's own primary action, portalled up from its PageHeader.
           One per screen: the prototype shows a fixed "New agent" here, which

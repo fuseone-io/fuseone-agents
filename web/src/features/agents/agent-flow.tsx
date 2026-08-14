@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { CircleAlert, CircleDot, Wrench } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { AgentCanvas } from "@/features/agents/agent-canvas";
+import { StepStrip } from "@/features/agents/step-strip";
 import { Mono } from "@/components/shared/mono";
 import type { components } from "@/lib/api/schema.gen";
 
@@ -23,10 +23,18 @@ export function AgentFlow({ steps }: { steps: AgentStep[] }) {
 
   return (
     <div className="flex flex-col gap-3">
-      {/* The same picture the author drew, derived the same way. Nothing about
-          it was stored, which is what makes an approver and an auditor two
-          years apart certain of seeing one diagram (FU-17, FU-18). */}
-      <AgentCanvas steps={steps} />
+      {/* The same strip the author arranged, drawn the same way. Nothing
+          about it was stored: a sequence and a rule between its cards, so an
+          approver and an auditor two years apart see one picture (FU-17,
+          FU-18). */}
+      <div className="overflow-hidden rounded-lg border border-border">
+        <StepStrip
+          steps={steps}
+          stops={() => false}
+          onSelect={() => undefined}
+          onAdd={() => undefined}
+        />
+      </div>
 
       <ol className="flex flex-col">
       {steps.map((step, at) => (

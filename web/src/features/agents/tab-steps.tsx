@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { List, Plus, Workflow } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AgentCanvas } from "@/features/agents/agent-canvas";
+import { StepStrip } from "@/features/agents/step-strip";
+import { gateStops } from "@/features/agents/step-gating";
 import { EmptyCanvas } from "@/features/agents/empty-canvas";
 import { ReadAgainButton } from "@/features/agents/read-again-button";
 import { StepInspector } from "@/features/agents/step-inspector";
@@ -38,6 +39,28 @@ export function TabSteps({
   const { steps, pack, selected } = drawing;
 
   const silent = undescribed(steps, draft.instructions);
+
+  /*
+  Read once on arriving here, when there is prose and no stages yet.
+
+  On opening the tab and never on opening the screen: this spends real money
+  at the provider and counts against the assistant's daily ceiling, so it must
+  follow an intention rather than a page load — somebody who came to change a
+  cost ceiling must not pay for a reading they did not ask for. Opening the
+  tab is asking to see the process, and deriving it is what showing it means
+  when none was written down.
+
+  Once, tracked in a ref: a second attempt on every render would charge for
+  the same answer repeatedly, and an assistant that is switched off would be
+  asked for ever.
+  */
+  const asked = useRef(false);
+  useEffect(() => {
+    if (asked.current || steps.length > 0) return;
+    if (draft.instructions.trim() === "") return;
+    asked.current = true;
+    drawing.read();
+  }, [draft.instructions, steps.length, drawing]);
 
   return (
     <div className="flex flex-col gap-3">
@@ -102,18 +125,28 @@ export function TabSteps({
             steps={steps}
             catalogue={catalogue}
             policies={policies}
-            onChange={(at, over) => drawing.changeAt(at, over)}
+            onEdit={(at) => {
+              // Editing a stage is the inspector's job, and the inspector
+              // lives in the strip: the pencil takes you there rather than
+              // opening a second editor beside the first.
+              drawing.setSelected(at);
+              setView("flow");
+            }}
             onAdd={() => drawing.insert("", steps.length)}
+            onMove={drawing.reorder}
           />
         </div>
       ) : (
         <div className="flex h-[440px] overflow-hidden rounded-lg border border-border">
-          <AgentCanvas
+          <StepStrip
             steps={steps}
             selected={selected}
-            onReorder={drawing.reorder}
+            stops={(at) => {
+              const step = steps[at];
+              return step ? gateStops(step, catalogue, policies) : false;
+            }}
             onSelect={drawing.setSelected}
-            onDropTool={drawing.insert}
+            onAdd={() => drawing.insert("", steps.length)}
           />
           <StepInspector
             step={selected === undefined ? undefined : steps[selected]}

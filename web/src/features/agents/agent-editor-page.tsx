@@ -75,12 +75,14 @@ export function AgentEditorPage() {
   const rules = policies.data?.items ?? [];
 
   return (
+    // The shell's padding is escaped, and the height is what is left under
+    // its header: the tab body is the only thing on this screen that scrolls.
     <div className="-m-6 flex h-[calc(100svh-52px)] flex-col">
       <EditorHeader
         agentId={agentId}
-        name={draft.name}
-        creating={creating}
+        name={draft.name || t(creating ? "agents.newAgent" : "agents.untitled")}
         version={loaded.data?.agent.versionId}
+        stage={t(`stage.${loaded.data?.agent.stage ?? "draft"}`)}
       />
       <EditorTabBar active={tab} onChange={setTab} counts={counts(draft)} />
 

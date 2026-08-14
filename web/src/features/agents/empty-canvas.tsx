@@ -23,9 +23,13 @@ export function EmptyCanvas({
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 bg-background p-6 text-center">
       <p className="max-w-sm text-xs text-muted-foreground">
-        {canRead ? t("agents.emptyCanvas") : t("agents.writeFirst")}
+        {reading
+          ? t("agents.readingNow")
+          : canRead
+            ? t("agents.emptyCanvas")
+            : t("agents.writeFirst")}
       </p>
-      {canRead && (
+      {canRead && !reading && (
         <Button type="button" size="sm" disabled={reading} onClick={onRead}>
           <Sparkles className="size-3.5" aria-hidden />
           {t("agents.readTheInstructions")}
