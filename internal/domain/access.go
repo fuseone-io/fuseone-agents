@@ -84,6 +84,15 @@ const (
 	// administrative change can be changed back; this one leaves a tombstone
 	// and a digest, and the bytes are gone.
 	PermDataErase Permission = "data:erase"
+	// PermCompanyWrite creates and withdraws companies, and it is the one
+	// permission that means nothing inside a company.
+	//
+	// Held in a company it would let that company's administrator mint another
+	// and grant themselves in it, which is not a tightening anybody would
+	// notice. So it is only ever checked against the scope above them all
+	// (domain.Installation), and a grant anywhere else does not carry it
+	// however senior the role.
+	PermCompanyWrite Permission = "company:write"
 )
 
 // grants maps each role to what it may do.
@@ -110,6 +119,10 @@ var grants = map[Role][]Permission{
 		PermToolRead, PermToolClassify, PermPackWrite,
 		PermProviderWrite, PermBudgetWrite, PermPolicyRead, PermPolicyWrite,
 		PermIdentityWrite, PermScopeWrite, PermDataErase,
+		// The role says what; the scope says where. A curator of one company
+		// holds this and can use it nowhere, because it is only ever asked
+		// about the installation.
+		PermCompanyWrite,
 	},
 	RoleAuditor: {
 		// Reads everything within scope and changes nothing. An auditor who
