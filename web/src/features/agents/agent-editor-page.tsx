@@ -7,6 +7,7 @@ import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
 import { ErrorState, LoadingRows } from "@/components/shared/states";
 import { AgentBasicsSection } from "@/features/agents/agent-basics-section";
+import { AgentTriggersSection } from "@/features/agents/agent-triggers-section";
 import { AgentToolsSection } from "@/features/agents/agent-tools-section";
 import { AgentBudgetSection } from "@/features/agents/agent-budget-section";
 import { NarrativeCard } from "@/features/agents/narrative-card";
@@ -55,7 +56,9 @@ export function AgentEditorPage() {
         onSuccess: (result) => {
           toast.success(
             result.created
-              ? t("agents.versionPublished", { version: result.versionId.slice(0, 9) })
+              ? t("agents.versionPublished", {
+                  version: result.versionId.slice(0, 9),
+                })
               : t("agents.noChange"),
             {
               description: result.created
@@ -117,6 +120,8 @@ export function AgentEditorPage() {
             editable={creating}
             onAgentId={setAgentId}
           />
+          <AgentTriggersSection draft={draft} patch={patch} />
+
           <AgentToolsSection
             granted={draft.tools ?? []}
             catalogue={tools.data?.items ?? []}

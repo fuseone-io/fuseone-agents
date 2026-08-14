@@ -94,6 +94,16 @@ OPENAI_BASE_URL="http://${MODEL_ADDR}" \
 		--mcp "kb=bin/devstack mcp" &
 track $!
 
+# Publishing does not start an agent, and that is the product working: a
+# specification arrives paused, because an agent nobody has decided about does
+# not run (DE-07). In the console somebody presses Start. Here the stack does
+# it so a fresh `make dev` has a run to look at rather than a first-run step
+# that dies reporting the agent is paused — which is what it did until this
+# existed, on the one command the README tells a newcomer to run first.
+step "started"
+docker compose exec -T postgres psql -U agents -d agents -qc \
+	"update agent_state set paused = false, changed_by = 'make dev'" >/dev/null
+
 step "first run"
 sleep 1
 bin/agentd start --dsn "$DSN" --agent suporte --by "$(whoami)"

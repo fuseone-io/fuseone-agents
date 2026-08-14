@@ -1,16 +1,10 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Mono } from "@/components/shared/mono";
+import { Input } from "@/components/ui/input";
 import { Section } from "@/features/policies/section";
-import { ruleFor } from "@/features/agents/tool-rule";
-import { cn } from "@/lib/utils";
+import { ToolGroupRows } from "@/features/agents/tool-group-rows";
+import { grouped, matching } from "@/features/agents/tool-catalogue";
 import type { Policy, Tool } from "@/lib/api/client";
-
-const RULE_TONE = {
-  allowed: "text-success",
-  asks: "text-warning",
-  blocked: "text-danger",
-};
 
 /**
  * What this agent may call, and what will happen when it does.
@@ -33,12 +27,15 @@ export function AgentToolsSection({
   onChange: (tools: string[]) => void;
 }) {
   const { t } = useTranslation();
+  const [query, setQuery] = useState("");
   const toggle = (tool: string) =>
     onChange(
       granted.includes(tool)
         ? granted.filter((t) => t !== tool)
         : [...granted, tool],
     );
+
+  const groups = grouped(matching(catalogue, query), granted);
 
   return (
     <Section title={t("admin.tools")} hint={t("agents.notHereNotInvokable")}>
@@ -47,54 +44,30 @@ export function AgentToolsSection({
           {t("agents.emptyCatalogue")}
         </p>
       ) : (
-        <ul className="flex flex-col">
-          {catalogue.map((tool) => {
-            const on = granted.includes(tool.toolId);
-            const rule = ruleFor(tool.toolId, tool.effect, policies);
+        <>
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t("agents.searchTools")}
+            aria-label={t("agents.searchTools")}
+          />
 
-            return (
-              <li
-                key={tool.toolId}
-                className={cn(
-                  "grid grid-cols-[24px_1fr_96px_1fr] items-center gap-3 border-b border-border-subtle py-2 last:border-0",
-                  // Visible but unavailable, never hidden: an author has to be
-                  // able to see that a policy denies something rather than
-                  // wonder where it went.
-                  rule.kind === "blocked" && "opacity-55",
-                )}
-              >
-                <Checkbox
-                  checked={on}
-                  onCheckedChange={() => toggle(tool.toolId)}
-                  aria-label={`Conceder ${tool.toolId}`}
-                />
-
-                <div className="min-w-0">
-                  <Mono className="block truncate">{tool.toolId}</Mono>
-                  <span className="block truncate text-2xs text-muted-foreground">
-                    {tool.server}
-                    {tool.description ? ` · ${tool.description}` : ""}
-                  </span>
-                </div>
-
-                <span className="font-mono text-2xs text-muted-foreground">
-                  {tool.effect}
-                </span>
-
-                <div className="min-w-0 text-right">
-                  <span className={cn("text-xs", RULE_TONE[rule.kind])}>
-                    {t(rule.label, rule.labelValues)}
-                  </span>
-                  {rule.because && (
-                    <Mono dim className="ml-1.5 text-2xs">
-                      {rule.because}
-                    </Mono>
-                  )}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+          {groups.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              {t("agents.noToolMatches")}
+            </p>
+          ) : (
+            groups.map((group) => (
+              <ToolGroupRows
+                key={group.server}
+                group={group}
+                granted={granted}
+                policies={policies}
+                onToggle={toggle}
+              />
+            ))
+          )}
+        </>
       )}
 
       <p className="text-xs text-muted-foreground">
