@@ -121,7 +121,7 @@ the same buyer.
 | **N2** | **Operate as SaaS.** No customer data on our infrastructure | Removes data residency, DPAs and an external control plane from scope |
 | **N3** | Compete as an agent framework | The value is in the governed runtime, not in the loop library |
 | **N4** | Move data in volume | A tool is an MCP server, local or remote, and an agent is the orchestrator: mapping a field, choosing a route, transforming a record is what it does by reasoning. What it is bad at is being a pipe — half a million rows every night is not an agent's work, and one driven by a language model is expensive, slow and wrong |
-| **N5** | Drag-and-drop builder as the primary authoring interface | Composing a graph is a technical skill dressed as a friendly UI — it fails precisely with the target audience. The visual exists, generated and read-only |
+| **N5** | Drag-and-drop builder as the **primary** authoring interface | Composing a graph is a technical skill dressed as a friendly UI — it fails precisely with the target audience, so the way in is prose. A builder offered **beside** it, for the author who would rather draw, is not excluded ([§3.2](#32-drawing-as-a-second-way-in)) |
 | **N6** | Free-form conversation between agents as the default | Less predictable, more expensive and not auditable, authored by people who cannot evaluate it. Composition is by event, not by chat |
 | **N7** | Replace the platform team | The role changes from executor to curator — it defines packs and classifies effects, it does not write agents |
 
@@ -193,6 +193,35 @@ phase 1:
   authorisation from both ends and a trail in both.
 
 ---
+
+### 3.2 Drawing as a second way in
+
+N5 refuses a drag-and-drop builder as the *primary* interface, and that refusal
+stands: the way in is describing the process in words, because composing a
+graph is a technical skill and the target audience does not have it. What N5
+does not refuse is offering a builder to somebody who would rather draw. Both
+are ways of saying the same thing, and neither is the record.
+
+Three constraints hold whichever way an author works, and they are the reason
+this is a clarification rather than a reversal.
+
+**The versioned artefact is the specification, never the canvas.** Positions,
+node identifiers and edge handles are a projection and are not persisted
+(FU-18). The layout is re-derived on every read, so the same version draws the
+same picture — an approver and an auditor looking at one version two years
+apart must see one diagram, and a stored `position` is a second artefact that
+can disagree with the text.
+
+**Drawing authors the steps; the prose stays a person's.** The instructions are
+what the model receives and what an auditor reads to understand a run (FU-08),
+and generating them from fields would produce, by machine, the one part of a
+definition that exists to be read by people. So the canvas edits the stages —
+which is what the Gate is meant to obey — and what it proposes about the prose
+is a draft somebody accepts.
+
+**A proposal is never a grant.** Neither direction may widen an agent: a step
+can only narrow the capability pack, and a tool named on the canvas that the
+agent does not hold is dropped, exactly as one proposed by the assistant is.
 
 ## 4. Personas
 
