@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parse, serialise } from "@/features/agents/instruction-blocks";
+import { parse, serialise, split } from "@/features/agents/instruction-blocks";
 
 /*
 Blocks are a way of writing, not a second format.
@@ -57,5 +57,34 @@ describe("instructions, as blocks", () => {
     ];
 
     expect(serialise(blocks, "pt-BR")).toBe("Objetivo\nCompare.");
+  });
+});
+
+describe("splitting an instruction somebody already had", () => {
+  it("breaks it at the blank lines, where the writer changed subject", () => {
+    const block = {
+      kind: "prose" as const,
+      text: "Você atende chamados.\n\nSe não encontrar, avise e pare.",
+    };
+
+    expect(split(block)).toEqual([
+      { kind: "prose", text: "Você atende chamados." },
+      { kind: "prose", text: "Se não encontrar, avise e pare." },
+    ]);
+  });
+
+  it("leaves the label on the part it was written about", () => {
+    const block = {
+      kind: "objective" as const,
+      text: "Compare os dois lados.\n\nDepois responda.",
+    };
+
+    expect(split(block).map((one) => one.kind)).toEqual(["objective", "prose"]);
+  });
+
+  it("leaves a single paragraph alone", () => {
+    const block = { kind: "prose" as const, text: "Uma frase só." };
+
+    expect(split(block)).toEqual([block]);
   });
 });

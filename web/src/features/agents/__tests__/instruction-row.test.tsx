@@ -45,6 +45,8 @@ function renderRow(text: string, policies: Policy[] = [], onChange = vi.fn()) {
         change: onChange,
         remove: vi.fn(),
         keep: vi.fn(),
+        relabel: vi.fn(),
+        split: vi.fn(),
         slash: vi.fn(),
         drag: STILL,
       }}
@@ -99,6 +101,8 @@ describe("a sentence the policy refuses", () => {
           change: onChange,
           remove: vi.fn(),
           keep: vi.fn(),
+          relabel: vi.fn(),
+          split: vi.fn(),
           slash: vi.fn(),
           drag: STILL,
         }}

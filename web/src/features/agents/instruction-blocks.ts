@@ -112,3 +112,26 @@ function kindOf(line: string): Exclude<BlockKind, "prose"> | undefined {
     LABELS[kind].some((label) => label.toLowerCase() === line.toLowerCase()),
   );
 }
+
+/**
+ * One block, split at its blank lines.
+ *
+ * The bridge from a prompt somebody already had to the structure this editor
+ * offers. A paragraph is where a writer already changed subject, so splitting
+ * there gets the divisions right far more often than any rule about sentences
+ * would — and what it produces is unlabelled, because guessing which stage a
+ * paragraph is would put a claim in the payload that nobody made.
+ */
+export function split(block: Block): Block[] {
+  const parts = block.text
+    .split(/\n\s*\n/)
+    .map((part) => part.trim())
+    .filter((part) => part !== "");
+
+  if (parts.length < 2) return [block];
+  // The first keeps the label: it is the one the label was written about.
+  return parts.map((text, at) => ({
+    kind: at === 0 ? block.kind : "prose",
+    text,
+  }));
+}

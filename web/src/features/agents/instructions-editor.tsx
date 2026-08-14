@@ -10,6 +10,7 @@ import { InstructionsPayload } from "@/features/agents/instructions-payload";
 import {
   parse,
   serialise,
+  split,
   type Block,
 } from "@/features/agents/instruction-blocks";
 import { findings } from "@/features/agents/instruction-lint";
@@ -101,6 +102,10 @@ export function InstructionsEditor({
                   write(blocks.map((b, i) => (i === at ? { ...b, text } : b))),
                 remove: () => write(blocks.filter((_, i) => i !== at)),
                 keep: (tool) => setKept([...kept, `${at}:${tool}`]),
+                relabel: (kind) =>
+                  write(blocks.map((b, i) => (i === at ? { ...b, kind } : b))),
+                split: () =>
+                  write(blocks.flatMap((b, i) => (i === at ? split(b) : [b]))),
                 slash: () => setSlashAt(at),
                 drag,
               }}

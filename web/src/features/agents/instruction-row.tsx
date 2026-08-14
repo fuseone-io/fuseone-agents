@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { useTranslation } from "react-i18next";
-import { GripVertical, Trash2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import { labelOf, type Block } from "@/features/agents/instruction-blocks";
+import {
+  type Block,
+  type BlockKind,
+} from "@/features/agents/instruction-blocks";
+import { BlockControls } from "@/features/agents/block-controls";
+import { BlockLabel } from "@/features/agents/block-label";
 import { withoutSentence } from "@/features/agents/without-sentence";
 import { BlockText } from "@/features/agents/block-text";
 import { InstructionFinding } from "@/features/agents/instruction-finding";
@@ -32,6 +33,10 @@ export function InstructionRow({
     change: (text: string) => void;
     remove: () => void;
     keep: (tool: string) => void;
+    /** Saying what this block is, which an older instruction never said. */
+    relabel: (kind: BlockKind) => void;
+    /** Breaking it at its blank lines, into parts that can be labelled. */
+    split: () => void;
     /** `/` typed where a menu is wanted. */
     slash: () => void;
     /** Moving this block, which is moving it in the instruction. */
@@ -44,10 +49,8 @@ export function InstructionRow({
   tools: { catalogue: Tool[]; policies: Policy[] };
   findings: Finding[];
 }) {
-  const { t, i18n } = useTranslation();
   const [writing, setWriting] = useState(false);
   const [citing, setCiting] = useState(false);
-  const label = labelOf(block.kind, i18n.language);
 
   /*
   `@` opens the catalogue, and picking one writes the identifier in place of
@@ -78,14 +81,7 @@ export function InstructionRow({
       }}
       className="group grid grid-cols-[104px_minmax(0,68ch)_auto] items-start gap-x-5 rounded-md py-2.5 transition-colors hover:bg-surface-hover"
     >
-      <span
-        className={cn(
-          "pt-[3px] text-right text-[10px]/5 font-medium uppercase tracking-label",
-          block.kind === "never" ? "text-danger" : "text-muted-foreground",
-        )}
-      >
-        {label || t("agents.blockProse")}
-      </span>
+      <BlockLabel kind={block.kind} onChange={on.relabel} />
 
       {/* Written in a textarea and read as prose, swapped on focus.
 
@@ -102,6 +98,14 @@ export function InstructionRow({
         tools={tools}
         typed={typed}
         cite={{ open: citing, onPick: cite, onClose: () => setCiting(false) }}
+      />
+
+      <BlockControls
+        splittable={block.text.includes("\n\n")}
+        onGrab={() => on.drag.onStart(at)}
+        onDrop={on.drag.onDrop}
+        onSplit={on.split}
+        onRemove={on.remove}
       />
 
       {/* Outside the swap between writing and reading, because it belongs to
@@ -122,31 +126,6 @@ export function InstructionRow({
           ))}
         </div>
       )}
-
-      <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
-        {/* The handle rather than the row: a paragraph you cannot select
-            with the pointer is worse than one you have to grab by its grip. */}
-        <span
-          draggable
-          onDragStart={() => on.drag.onStart(at)}
-          onDragEnd={on.drag.onDrop}
-          aria-label={t("agents.moveBlock")}
-          className="cursor-grab text-text-disabled"
-        >
-          <GripVertical className="size-4" aria-hidden />
-        </span>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="size-7"
-          onClick={on.remove}
-          aria-label={t("agents.removeBlock")}
-        >
-          <Trash2 className="size-3.5" aria-hidden />
-        </Button>
-      </div>
     </div>
   );
 }
-
