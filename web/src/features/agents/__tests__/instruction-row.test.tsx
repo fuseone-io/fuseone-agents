@@ -31,15 +31,23 @@ const DENIES = [
   },
 ] as unknown as Policy[];
 
+/** Nobody is dragging in these: the reordering has its own test. */
+const STILL = { onStart: () => {}, onOver: () => {}, onDrop: () => {} };
+
 function renderRow(text: string, policies: Policy[] = [], onChange = vi.fn()) {
   render(
     <InstructionRow
       block={{ kind: "objective", text }}
-      onChange={onChange}
-      onRemove={vi.fn()}
+      at={0}
       tools={{ catalogue: CATALOGUE, policies }}
       findings={[]}
-      onKeep={vi.fn()}
+      on={{
+        change: onChange,
+        remove: vi.fn(),
+        keep: vi.fn(),
+        slash: vi.fn(),
+        drag: STILL,
+      }}
     />,
   );
   return onChange;
@@ -84,11 +92,16 @@ describe("a sentence the policy refuses", () => {
           kind: "howToAct",
           text: "Compare os dois lados. Se precisar, use erp.refund.",
         }}
-        onChange={onChange}
-        onRemove={vi.fn()}
+        at={0}
         tools={{ catalogue: CATALOGUE, policies: DENIES }}
         findings={[{ at: 0, tool: "erp.refund", because: "POL-114" }]}
-        onKeep={vi.fn()}
+        on={{
+          change: onChange,
+          remove: vi.fn(),
+          keep: vi.fn(),
+          slash: vi.fn(),
+          drag: STILL,
+        }}
       />,
     );
 

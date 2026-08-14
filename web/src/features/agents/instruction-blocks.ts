@@ -28,6 +28,15 @@ const LABELS: Record<Exclude<BlockKind, "prose">, string[]> = {
   howToReply: ["Como responder", "How to reply"],
 };
 
+/** The icon each kind carries, in the menu and in the margin. */
+export const ICONS: Record<Exclude<BlockKind, "prose">, string> = {
+  objective: "target",
+  howToAct: "list-checks",
+  whenToStop: "hand",
+  never: "ban",
+  howToReply: "message-square-quote",
+};
+
 /** The order a block menu offers, and the order they read in. */
 export const KINDS: Exclude<BlockKind, "prose">[] = [
   "objective",

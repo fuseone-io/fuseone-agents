@@ -13,6 +13,9 @@ import {
   type Block,
 } from "@/features/agents/instruction-blocks";
 import { findings } from "@/features/agents/instruction-lint";
+import { InstructionsStrip } from "@/features/agents/instructions-strip";
+import { summarise } from "@/features/agents/instructions-summary";
+import { useListReorder } from "@/features/agents/use-list-reorder";
 
 /**
  * What the model is told, written as prose and read as the payload.
@@ -47,6 +50,14 @@ export function InstructionsEditor({
   // a definition carrying a list of silenced warnings would be a second thing
   // to review beside the text.
   const [kept, setKept] = useState<string[]>([]);
+  // Which block asked for the block menu by typing `/`.
+  const [slashAt, setSlashAt] = useState<number | undefined>(undefined);
+  const drag = useListReorder((from, to) => {
+    const next = [...blocks];
+    const [moved] = next.splice(from, 1);
+    if (moved) next.splice(to, 0, moved);
+    write(next);
+  });
   const found = findings(blocks, tools.catalogue, tools.policies).filter(
     (one) => !kept.includes(`${one.at}:${one.tool}`),
   );
@@ -70,9 +81,7 @@ export function InstructionsEditor({
               </TabsTrigger>
             </TabsList>
           </Tabs>
-          <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
-            {t("agents.instructionsLength", { count: instructions.trim().length })}
-          </span>
+
         </div>
       }
     >
@@ -83,20 +92,51 @@ export function InstructionsEditor({
           {blocks.map((block, at) => (
             <InstructionRow
               key={at}
+              at={at}
               block={block}
-              onChange={(text) =>
-                write(blocks.map((b, i) => (i === at ? { ...b, text } : b)))
-              }
-              onRemove={() => write(blocks.filter((_, i) => i !== at))}
               tools={tools}
               findings={found.filter((one) => one.at === at)}
-              onKeep={(tool) => setKept([...kept, `${at}:${tool}`])}
+              on={{
+                change: (text) =>
+                  write(blocks.map((b, i) => (i === at ? { ...b, text } : b))),
+                remove: () => write(blocks.filter((_, i) => i !== at)),
+                keep: (tool) => setKept([...kept, `${at}:${tool}`]),
+                slash: () => setSlashAt(at),
+                drag,
+              }}
             />
           ))}
 
           <AddBlock
-            onAdd={(kind) => write([...blocks, { kind, text: "" }])}
+            open={slashAt !== undefined}
+            onOpenChange={(open) => !open && setSlashAt(undefined)}
+            onAdd={(kind) => {
+              // Typed `/` becomes the block it asked for: the slash is the
+              // gesture and never reaches the payload.
+              const next = blocks.map((one, i) =>
+                i === slashAt ? { ...one, text: one.text.replace(/\/$/, "") } : one,
+              );
+              write([...next, { kind, text: "" }]);
+              setSlashAt(undefined);
+            }}
+            // Citing from here writes the `@` into the last block and lets
+            // the row take it from there: one gesture, one implementation.
+            onCite={() => {
+              const at = Math.max(0, blocks.length - 1);
+              const block = blocks[at];
+              if (!block) return write([{ kind: "prose", text: "@" }]);
+              write(
+                blocks.map((one, i) =>
+                  i === at ? { ...one, text: `${one.text}@` } : one,
+                ),
+              );
+            }}
             locale={i18n.language}
+          />
+
+          <InstructionsStrip
+            summary={summarise(blocks, tools.catalogue, tools.policies, instructions)}
+            findings={found}
           />
         </div>
       )}
