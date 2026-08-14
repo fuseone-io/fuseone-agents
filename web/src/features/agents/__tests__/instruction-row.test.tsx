@@ -21,9 +21,12 @@ const CATALOGUE: Tool[] = [
 const DENIES = [
   {
     code: "POL-114",
-    scope: { company: "acme", area: "cx" },
-    tools: ["erp.refund"],
-    verdict: "block",
+    name: "Sem estorno automático",
+    resource: "erp.refund",
+    effect: "deny",
+    // Enforcing rather than observing: a rule somebody is only watching
+    // does not refuse anything, so the prose is not promising the impossible.
+    mode: "enforce",
     enabled: true,
   },
 ] as unknown as Policy[];
@@ -35,6 +38,8 @@ function renderRow(text: string, policies: Policy[] = [], onChange = vi.fn()) {
       onChange={onChange}
       onRemove={vi.fn()}
       tools={{ catalogue: CATALOGUE, policies }}
+      findings={[]}
+      onKeep={vi.fn()}
     />,
   );
   return onChange;
@@ -65,5 +70,34 @@ describe("a block of an instruction", () => {
     await userEvent.type(screen.getByRole("textbox"), "!");
 
     expect(onChange).toHaveBeenCalledWith("Compare os dois lados.!");
+  });
+});
+
+describe("a sentence the policy refuses", () => {
+  it("is answered in the block that said it, with two real exits", async () => {
+    // Not a banner on the card: a warning at the top leaves somebody hunting
+    // for the sentence, and by the third visit they stop reading it.
+    const onChange = vi.fn();
+    render(
+      <InstructionRow
+        block={{
+          kind: "howToAct",
+          text: "Compare os dois lados. Se precisar, use erp.refund.",
+        }}
+        onChange={onChange}
+        onRemove={vi.fn()}
+        tools={{ catalogue: CATALOGUE, policies: DENIES }}
+        findings={[{ at: 0, tool: "erp.refund", because: "POL-114" }]}
+        onKeep={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("POL-114")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /Remover a frase/ }));
+
+    // The sentence, and not the block: an author told about one sentence
+    // must not lose the three around it.
+    expect(onChange).toHaveBeenCalledWith("Compare os dois lados.");
   });
 });

@@ -6,6 +6,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { labelOf, type Block } from "@/features/agents/instruction-blocks";
 import { CiteTool } from "@/features/agents/cite-tool";
+import { InstructionFinding } from "@/features/agents/instruction-finding";
+import type { Finding } from "@/features/agents/instruction-lint";
 import { InstructionProse } from "@/features/agents/instruction-prose";
 import type { Policy, Tool } from "@/lib/api/client";
 
@@ -22,11 +24,15 @@ export function InstructionRow({
   onChange,
   onRemove,
   tools,
+  findings,
+  onKeep,
 }: {
   block: Block;
   onChange: (text: string) => void;
   onRemove: () => void;
   tools: { catalogue: Tool[]; policies: Policy[] };
+  findings: Finding[];
+  onKeep: (tool: string) => void;
 }) {
   const { t, i18n } = useTranslation();
   const [writing, setWriting] = useState(false);
@@ -107,6 +113,25 @@ export function InstructionRow({
         </div>
       )}
 
+      {/* Outside the swap between writing and reading, because it belongs to
+          the block rather than to a way of looking at it — and because a
+          button inside the read pane disappears on the focus that clicking it
+          causes, so the click lands on nothing. */}
+      {findings.length > 0 && (
+        <div className="col-start-2">
+          {findings.map((finding) => (
+            <InstructionFinding
+              key={finding.tool}
+              finding={finding}
+              onRemove={() =>
+                onChange(withoutSentence(block.text, finding.tool))
+              }
+              onKeep={() => onKeep(finding.tool)}
+            />
+          ))}
+        </div>
+      )}
+
       <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
         <span className="cursor-grab text-text-disabled" aria-hidden>
           <GripVertical className="size-4" />
@@ -124,4 +149,19 @@ export function InstructionRow({
       </div>
     </div>
   );
+}
+
+/**
+ * The sentence that names a tool, taken out and nothing else.
+ *
+ * Sentence-wise rather than the whole block: an author who wrote four
+ * sentences and is being told about one should not lose the other three, and
+ * "remove the sentence" has to mean what it says.
+ */
+function withoutSentence(text: string, tool: string): string {
+  return text
+    .split(/(?<=[.!?])\s+/)
+    .filter((sentence) => !sentence.includes(tool))
+    .join(" ")
+    .trim();
 }

@@ -18,9 +18,12 @@ const CATALOGUE: Tool[] = [
 const DENIES: Policy[] = [
   {
     code: "POL-114",
-    scope: { company: "acme", area: "cx" },
-    tools: ["erp.refund"],
-    verdict: "block",
+    name: "Sem estorno automático",
+    resource: "erp.refund",
+    effect: "deny",
+    // Enforcing rather than observing: a rule somebody is only watching
+    // does not refuse anything, so the prose is not promising the impossible.
+    mode: "enforce",
     enabled: true,
   } as unknown as Policy,
 ];

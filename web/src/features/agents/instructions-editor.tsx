@@ -12,6 +12,7 @@ import {
   serialise,
   type Block,
 } from "@/features/agents/instruction-blocks";
+import { findings } from "@/features/agents/instruction-lint";
 
 /**
  * What the model is told, written as prose and read as the payload.
@@ -40,6 +41,15 @@ export function InstructionsEditor({
 
   const blocks = useMemo(() => parse(instructions), [instructions]);
   const write = (next: Block[]) => onChange(serialise(next, i18n.language));
+
+  // Answered per block and kept for as long as the screen is open. Nothing is
+  // stored: "keep it, it explains" is a decision about this sentence now, and
+  // a definition carrying a list of silenced warnings would be a second thing
+  // to review beside the text.
+  const [kept, setKept] = useState<string[]>([]);
+  const found = findings(blocks, tools.catalogue, tools.policies).filter(
+    (one) => !kept.includes(`${one.at}:${one.tool}`),
+  );
 
   return (
     <Section
@@ -79,6 +89,8 @@ export function InstructionsEditor({
               }
               onRemove={() => write(blocks.filter((_, i) => i !== at))}
               tools={tools}
+              findings={found.filter((one) => one.at === at)}
+              onKeep={(tool) => setKept([...kept, `${at}:${tool}`])}
             />
           ))}
 
