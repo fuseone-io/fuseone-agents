@@ -2280,10 +2280,16 @@ export interface components {
              */
             micros?: number;
         };
+        /** @description A stage of the process: an envelope with a gate at its exit. The same shape the interview produces and a definition carries, because they are the same thing at two moments. */
         AgentStep: {
             name: string;
+            /** @description What the Gate allows while the run is in this step. Empty is meaningful: a step that calls nothing is the agent thinking. */
             reaches?: string[];
+            /** @description The exception, in the author's own words. Nothing judges it yet — who decides a step is over is a separate decision. */
             stopsWhen?: string;
+            /** @description Overrides the agent's model for this step alone (PRD FO-10). The provider deliberately cannot be overridden: it carries a credential, and a definition able to choose one could route an installation's traffic somewhere its author picked. */
+            model?: string;
+            effort?: string;
         };
         AuthoringChoice: {
             /** @description The name of a provider registered under /admin/integrations. */
@@ -2598,6 +2604,18 @@ export interface components {
              *     definitions.
              */
             emits?: string[];
+            /**
+             * @description The stages of the process, each an envelope with a gate at its
+             *     exit. Absent means one envelope holding the whole capability pack,
+             *     which is what an agent nobody has written steps for gets.
+             *
+             *     This is the half of a definition the Gate obeys: `reaches` is what
+             *     a run may call while it sits at that step, so the pack is the
+             *     ceiling and the step is the actual permission. It is also what a
+             *     correction anchors to (PRD FU-13) — a correction about the reply
+             *     step must not start failing because the lookup step changed.
+             */
+            steps?: components["schemas"]["AgentStep"][];
         };
         AgentPublished: {
             agentId: string;
@@ -2626,6 +2644,13 @@ export interface components {
             instructions?: string;
             /** @description Where the definition came from — a path, a repository. */
             source?: string;
+            /**
+             * @description The stages this version declares, in order. Absent means the agent
+             *     declares none, which is one envelope holding the whole capability
+             *     pack — a different thing from a single step, and worth telling
+             *     apart on a screen.
+             */
+            steps?: components["schemas"]["AgentStep"][];
             /** @description Every published version, newest first. */
             versions: components["schemas"]["AgentVersion"][];
         };

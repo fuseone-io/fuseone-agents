@@ -417,3 +417,70 @@ func TestVersions_currentFirst_soARunPinsToWhatIsHeld(t *testing.T) {
 		t.Errorf("first = %+v, want the current version marked latest", versions[0])
 	}
 }
+
+/*
+The stages survive publishing.
+
+They were parsed, validated and rendered from the beginning and never stored:
+the table had no column, so reading a version back gave a specification with
+no steps — a different agent from the one somebody wrote. What makes it worth
+a test rather than a migration alone is what `reaches` is for: the capability
+pack is the ceiling and the step is the actual permission, so losing them
+widens an agent quietly.
+*/
+func TestPublish_declaredSteps_areReadBack(t *testing.T) {
+	r := openRegistry(t)
+	ctx := context.Background()
+
+	withSteps := published(t, definition)
+	withSteps.Steps = []spec.Step{
+		{Name: "Encontrar o cliente", Reaches: []domain.ToolID{"crm.lookup"},
+			StopsWhen: "não encontrar o cliente"},
+		{Name: "Responder", Reaches: []domain.ToolID{"crm.reply"}, Model: "gpt-caro"},
+	}
+
+	if err := r.Publish(ctx, withSteps, "usr_ana", "acme"); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+	got, err := r.Get(ctx, "triage", withSteps.Version)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+
+	if len(got.Steps) != 2 {
+		t.Fatalf("steps = %+v, want both", got.Steps)
+	}
+	if got.Steps[0].StopsWhen != "não encontrar o cliente" {
+		t.Errorf("stops_when = %q, want the author's own words", got.Steps[0].StopsWhen)
+	}
+	// The envelope is what the Gate is meant to read, and it is the reason
+	// any of this is stored.
+	if reach := got.EnvelopeAt(0); len(reach) != 1 || reach[0] != "crm.lookup" {
+		t.Errorf("envelope at the first step = %v", reach)
+	}
+	if got.Steps[1].Model != "gpt-caro" {
+		t.Errorf("model override = %q, want it kept", got.Steps[1].Model)
+	}
+}
+
+// An agent that declares no steps has one envelope holding the whole pack,
+// which is a different thing from a step that reaches nothing.
+func TestPublish_noSteps_readsBackAsNoneRatherThanOne(t *testing.T) {
+	r := openRegistry(t)
+	ctx := context.Background()
+	plain := published(t, definition)
+
+	if err := r.Publish(ctx, plain, "usr_ana", "acme"); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+	got, err := r.Get(ctx, "triage", plain.Version)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if len(got.Steps) != 0 {
+		t.Errorf("steps = %+v, want none", got.Steps)
+	}
+	if reach := got.EnvelopeAt(0); len(reach) != len(got.Tools) {
+		t.Errorf("envelope = %v, want the whole pack", reach)
+	}
+}

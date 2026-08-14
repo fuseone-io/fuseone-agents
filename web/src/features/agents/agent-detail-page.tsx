@@ -36,7 +36,7 @@ export function AgentDetailPage() {
   }
   if (!agent.data) return null;
 
-  const { agent: published, instructions, source, versions } = agent.data;
+  const { agent: published, instructions, source, steps, versions } = agent.data;
 
   return (
     <div className="flex w-full min-w-0 flex-col gap-5">
@@ -51,7 +51,11 @@ export function AgentDetailPage() {
       <AgentKpis agent={published} />
 
       <div className="grid gap-5 lg:grid-cols-[1fr_320px] lg:items-start">
-        <AgentDefinition instructions={instructions} source={source} />
+        <AgentDefinition
+          instructions={instructions}
+          source={source}
+          steps={steps}
+        />
         <div className="flex flex-col gap-4">
           <AgentCapabilities agent={published} />
           <WebhooksPanel agentId={agentId} />

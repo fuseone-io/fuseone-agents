@@ -3527,13 +3527,32 @@ components:
 
     AgentStep:
       type: object
+      description: >
+        A stage of the process: an envelope with a gate at its exit. The same
+        shape the interview produces and a definition carries, because they
+        are the same thing at two moments.
       required: [name]
       properties:
         name: { type: string }
         reaches:
           type: array
+          description: >
+            What the Gate allows while the run is in this step. Empty is
+            meaningful: a step that calls nothing is the agent thinking.
           items: { type: string }
-        stopsWhen: { type: string }
+        stopsWhen:
+          type: string
+          description: >
+            The exception, in the author's own words. Nothing judges it yet —
+            who decides a step is over is a separate decision.
+        model:
+          type: string
+          description: >
+            Overrides the agent's model for this step alone (PRD FO-10). The
+            provider deliberately cannot be overridden: it carries a
+            credential, and a definition able to choose one could route an
+            installation's traffic somewhere its author picked.
+        effort: { type: string }
 
     AuthoringChoice:
       type: object
@@ -3972,6 +3991,19 @@ components:
             composition graph a fact about the day rather than about the
             definitions.
           items: { type: string }
+        steps:
+          type: array
+          description: |
+            The stages of the process, each an envelope with a gate at its
+            exit. Absent means one envelope holding the whole capability pack,
+            which is what an agent nobody has written steps for gets.
+
+            This is the half of a definition the Gate obeys: `reaches` is what
+            a run may call while it sits at that step, so the pack is the
+            ceiling and the step is the actual permission. It is also what a
+            correction anchors to (PRD FU-13) — a correction about the reply
+            step must not start failing because the lookup step changed.
+          items: { $ref: '#/components/schemas/AgentStep' }
 
     AgentPublished:
       type: object
@@ -4008,6 +4040,14 @@ components:
         source:
           type: string
           description: Where the definition came from — a path, a repository.
+        steps:
+          type: array
+          description: |
+            The stages this version declares, in order. Absent means the agent
+            declares none, which is one envelope holding the whole capability
+            pack — a different thing from a single step, and worth telling
+            apart on a screen.
+          items: { $ref: '#/components/schemas/AgentStep' }
         versions:
           type: array
           description: Every published version, newest first.

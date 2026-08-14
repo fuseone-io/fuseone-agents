@@ -15,16 +15,16 @@ import "github.com/fuseone/agents/internal/domain"
 // forbidding the author's second-favourite ordering would describe their first
 // draft rather than their process.
 type Step struct {
-	Name string `yaml:"name"`
+	Name string `yaml:"name" json:"name"`
 
 	// Reaches is what the Gate will allow while the run is in this step. Empty
 	// is meaningful: a step that calls nothing is the agent thinking.
-	Reaches []domain.ToolID `yaml:"reaches,omitempty"`
+	Reaches []domain.ToolID `yaml:"reaches,omitempty" json:"reaches,omitempty"`
 
 	// StopsWhen is the exception, in the author's own words: "não encontrar o
 	// cliente". Nothing judges it yet — who decides a step is over is a
 	// separate decision, and NT-003 leaves it open on purpose.
-	StopsWhen string `yaml:"stops_when,omitempty"`
+	StopsWhen string `yaml:"stops_when,omitempty" json:"stops_when,omitempty"`
 
 	// Model and Effort override the agent's for this step alone (PRD FO-10,
 	// FO-11). Empty means the agent's, which is what almost every step wants:
@@ -34,8 +34,8 @@ type Step struct {
 	// The provider is deliberately not overridable. It carries a credential
 	// and a client, and letting a step pick one would make a definition able
 	// to route an installation's traffic somewhere its author chose.
-	Model  string `yaml:"model,omitempty"`
-	Effort string `yaml:"effort,omitempty"`
+	Model  string `yaml:"model,omitempty" json:"model,omitempty"`
+	Effort string `yaml:"effort,omitempty" json:"effort,omitempty"`
 }
 
 /*

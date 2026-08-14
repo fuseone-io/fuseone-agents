@@ -221,3 +221,47 @@ func TestSetAgentPaused_needsTheAuthorityToCauseRuns(t *testing.T) {
 		t.Fatalf("response = %T, want 403", resp)
 	}
 }
+
+/*
+Republishing an agent must not quietly drop its steps.
+
+The steps are the half of a definition the Gate obeys: `reaches` is what a run
+may call while it sits at one, so the capability pack is the ceiling and the
+step is the actual permission. A console that rendered a specification without
+them would widen every agent it touched back to the whole pack, silently, on
+an edit somebody made for another reason.
+*/
+func TestPublishAgent_withDeclaredSteps_keepsThem(t *testing.T) {
+	t.Parallel()
+	pub := newPublisher()
+
+	body := definition(nil)
+	body.Steps = &[]openapi.AgentStep{
+		{Name: "Encontrar o cliente", Reaches: ptr([]string{"crm.lookup"}),
+			StopsWhen: ptr("não encontrar o cliente")},
+		{Name: "Responder", Reaches: ptr([]string{"crm.reply"})},
+	}
+
+	if _, err := publishServer(t, pub).PublishAgent(
+		inArea("cx", domain.RoleAuthor),
+		openapi.PublishAgentRequestObject{AgentId: "triage", Body: body},
+	); err != nil {
+		t.Fatalf("PublishAgent: %v", err)
+	}
+
+	if len(pub.published) != 1 {
+		t.Fatalf("published = %d", len(pub.published))
+	}
+	steps := pub.published[0].Steps
+	if len(steps) != 2 {
+		t.Fatalf("steps = %+v, want both", steps)
+	}
+	if steps[0].Name != "Encontrar o cliente" || len(steps[0].Reaches) != 1 {
+		t.Errorf("first step = %+v", steps[0])
+	}
+	// The exception belongs to the step, which is what lets a correction be
+	// localised to where it went wrong (FU-13).
+	if steps[0].StopsWhen != "não encontrar o cliente" {
+		t.Errorf("stops_when = %q, want the author's own words", steps[0].StopsWhen)
+	}
+}

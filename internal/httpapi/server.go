@@ -67,6 +67,7 @@ type Server struct {
 	rates        Rates
 	pauses       Pauses
 	retirements  Retirements
+	definitions  Definitions
 	// stops are the switches wider than one agent (PRD FO-06).
 	stops Stoppers
 	// marks are the budget thresholds each scope has crossed (PRD FO-05).

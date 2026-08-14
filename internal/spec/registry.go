@@ -54,17 +54,28 @@ func (r *Registry) Publish(ctx context.Context, s Spec, by domain.UserID, compan
 	if emits == nil {
 		emits = []string{}
 	}
+	// The stages, for the same reason: an agent that declares none is the
+	// empty list, which is one envelope holding the whole pack — a different
+	// thing from a step that reaches nothing.
+	declared := s.Steps
+	if declared == nil {
+		declared = []Step{}
+	}
+	steps, err := json.Marshal(declared)
+	if err != nil {
+		return fmt.Errorf("spec: encode steps: %w", err)
+	}
 
 	_, err = r.pool.Exec(ctx, `
 		insert into agent_specs (
 			agent_id, version_id, company_id, area_id, name,
 			provider, model, effort, tools, budget, triggers,
-			instructions, source, published_by, emits
-		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+			instructions, source, published_by, emits, steps
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
 		on conflict (agent_id, version_id) do nothing`,
 		string(s.ID), string(s.Version), string(company), string(s.Area), s.Name,
 		s.Provider, s.Model, s.Effort, tools, budget, triggers,
-		s.Instructions, s.Source, string(by), emits)
+		s.Instructions, s.Source, string(by), emits, steps)
 	if err != nil {
 		return fmt.Errorf("spec: publish %s@%s: %w", s.ID, s.Version, err)
 	}
@@ -78,17 +89,18 @@ func (r *Registry) Get(ctx context.Context, agent domain.AgentID, version domain
 		tools    []string
 		budget   []byte
 		triggers []byte
+		steps    []byte
 		company  string
 	)
 	err := r.pool.QueryRow(ctx, `
 		select agent_id, version_id, company_id, area_id, name,
 		       provider, model, effort, tools, budget, triggers, instructions,
-		       source, emits
+		       source, emits, steps
 		from agent_specs where agent_id = $1 and version_id = $2`,
 		string(agent), string(version),
 	).Scan(&s.ID, &s.Version, &company, &s.Area, &s.Name,
 		&s.Provider, &s.Model, &s.Effort, &tools, &budget, &triggers,
-		&s.Instructions, &s.Source, &s.Emits)
+		&s.Instructions, &s.Source, &s.Emits, &steps)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Spec{}, fmt.Errorf("%w: %s@%s", ErrNotPublished, agent, version)
@@ -110,5 +122,35 @@ func (r *Registry) Get(ctx context.Context, agent domain.AgentID, version domain
 	for _, t := range stored {
 		s.Triggers = append(s.Triggers, Trigger{Type: t.Type, Schedule: t.Schedule, Path: t.Path, Event: t.Event})
 	}
+	if err := json.Unmarshal(steps, &s.Steps); err != nil {
+		return Spec{}, fmt.Errorf("spec: decode steps: %w", err)
+	}
 	return s, nil
+}
+
+// Steps reads the stages one published version declares.
+//
+// Its own read rather than a field on the summary: a listing of twenty agents
+// would otherwise carry twenty processes nobody asked to see, which is the
+// same reason the instructions are read one version at a time.
+func (r *Registry) Steps(
+	ctx context.Context, agent domain.AgentID, version domain.VersionID,
+) ([]Step, error) {
+	var raw []byte
+	err := r.pool.QueryRow(ctx,
+		`select steps from agent_specs where agent_id = $1 and version_id = $2`,
+		string(agent), string(version)).Scan(&raw)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("spec: read steps of %s@%s: %w", agent, version, err)
+	}
+
+	var steps []Step
+	if err := json.Unmarshal(raw, &steps); err != nil {
+		return nil, fmt.Errorf("spec: decode steps: %w", err)
+	}
+	return steps, nil
 }

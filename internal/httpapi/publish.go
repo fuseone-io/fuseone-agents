@@ -200,6 +200,7 @@ func renderAndParse(id string, in openapi.AgentDefinition) ([]byte, spec.Spec, e
 			Path: valueOr(t.Path), Event: valueOr(t.Event),
 		})
 	}
+	draft.Steps = stepsOf(in.Steps)
 
 	rendered, err := spec.Render(draft)
 	if err != nil {
@@ -212,4 +213,33 @@ func renderAndParse(id string, in openapi.AgentDefinition) ([]byte, spec.Spec, e
 		return nil, spec.Spec{}, err
 	}
 	return rendered, parsed, nil
+}
+
+/*
+stepsOf carries the declared steps into the specification.
+
+They used to be dropped here, which was not a missing feature but a quiet
+widening: `reaches` is what the Gate allows while a run sits at a step, so a
+definition rendered without them hands every step the whole capability pack —
+on an edit somebody made for an unrelated reason, with nothing on screen
+saying so.
+*/
+func stepsOf(in *[]openapi.AgentStep) []spec.Step {
+	if in == nil {
+		return nil
+	}
+	out := make([]spec.Step, 0, len(*in))
+	for _, step := range *in {
+		next := spec.Step{
+			Name:      step.Name,
+			StopsWhen: valueOr(step.StopsWhen),
+			Model:     valueOr(step.Model),
+			Effort:    valueOr(step.Effort),
+		}
+		for _, tool := range valueOr(step.Reaches) {
+			next.Reaches = append(next.Reaches, domain.ToolID(tool))
+		}
+		out = append(out, next)
+	}
+	return out
 }

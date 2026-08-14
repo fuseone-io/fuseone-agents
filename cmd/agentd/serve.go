@@ -114,6 +114,8 @@ func serve(args []string) error {
 			WithCompanies(admin.NewCompanies(identity.pool)).
 			WithAdministration(curator, curator, integrations).
 			WithAgents(spec.NewRegistry(identity.pool)).
+			// The stages a version declares, read one version at a time.
+			WithDefinitions(spec.NewRegistry(identity.pool)).
 			WithCeilings(admin.NewBudgets(identity.pool, store)).
 			// The same store the worker writes into. Without it the console
 			// can show that an approval is pending but not what it is for,
