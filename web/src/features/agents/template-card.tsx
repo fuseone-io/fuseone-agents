@@ -7,6 +7,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { AgentTemplate } from "@/features/agents/templates-api";
 
@@ -45,12 +46,13 @@ export function TemplateCard({
   const Icon = ICONS[template.id] ?? LayoutTemplate;
 
   return (
-    <button
+    <Button
       type="button"
+      variant="outline"
       onClick={onChoose}
       aria-pressed={chosen}
       className={cn(
-        "flex min-w-0 flex-col gap-2 rounded-xl border bg-card p-3 text-left shadow-sm transition-colors",
+        "h-auto min-w-0 flex-col items-start gap-2 rounded-xl bg-card p-3 text-left shadow-sm",
         "hover:border-border-strong hover:bg-muted",
         chosen && "border-primary bg-accent hover:bg-accent",
       )}
@@ -80,6 +82,6 @@ export function TemplateCard({
           </span>
         )}
       </span>
-    </button>
+    </Button>
   );
 }

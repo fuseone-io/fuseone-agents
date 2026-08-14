@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TemplateCard } from "@/features/agents/template-card";
 import {
@@ -49,13 +50,15 @@ export function TemplateGallery({
           {t("agents.startFromHint")}
         </p>
         {chosen && (
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             onClick={onClear}
-            className="shrink-0 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="shrink-0 text-xs font-normal text-muted-foreground"
           >
             {t("agents.clearTemplate")}
-          </button>
+          </Button>
         )}
       </div>
 

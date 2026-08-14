@@ -1,3 +1,4 @@
+import { Lock } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -53,11 +54,27 @@ export function ToolGroupRows({
                 rule.kind === "blocked" && "opacity-55",
               )}
             >
-              <Checkbox
-                checked={granted.includes(tool.toolId)}
-                onCheckedChange={() => onToggle(tool.toolId)}
-                aria-label={t("agents.grantTool", { tool: tool.toolId })}
-              />
+              {/* A lock where a policy denies it. The checkbox would offer a
+                  choice the platform will not honour, and a tool ticked here
+                  that the Gate refuses is an agent whose first attempt at that
+                  call fails. */}
+              {rule.kind === "blocked" ? (
+                <span
+                  className="flex size-4 items-center justify-center text-muted-foreground"
+                  title={t("agents.deniedByPolicy")}
+                >
+                  <Lock
+                    className="size-3.5"
+                    aria-label={t("agents.deniedByPolicy")}
+                  />
+                </span>
+              ) : (
+                <Checkbox
+                  checked={granted.includes(tool.toolId)}
+                  onCheckedChange={() => onToggle(tool.toolId)}
+                  aria-label={t("agents.grantTool", { tool: tool.toolId })}
+                />
+              )}
 
               <div className="min-w-0">
                 <Mono className="block truncate">{tool.toolId}</Mono>
@@ -69,9 +86,9 @@ export function ToolGroupRows({
               </div>
 
               <div className="flex items-center gap-1.5">
-                <span className="font-mono text-2xs text-muted-foreground">
-                  {tool.effect}
-                </span>
+                <Badge variant="outline" className="text-2xs font-normal">
+                  {t(`agents.effect.${tool.effect}`)}
+                </Badge>
                 {/* Said on the row, because it is what decides whether a write
                     derived from this tool's answer will be stopped — and an
                     author choosing tools is exactly who needs to know. */}

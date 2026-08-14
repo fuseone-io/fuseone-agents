@@ -137,7 +137,7 @@ export function AgentEditorPage() {
             granted={draft.tools ?? []}
             catalogue={tools.data?.items ?? []}
             policies={policies.data?.items ?? []}
-            onChange={(list) => patch({ tools: list })}
+            patch={patch}
           />
           <AgentBudgetSection draft={draft} patch={patch} />
 
