@@ -25,7 +25,10 @@ export function AgentKpis({ agent }: { agent: Agent }) {
       <Kpi
         label={t("runs.finishedPlural")}
         value={successRate(agent)}
-        note={t("common.ofTotal", { count: activity?.finished ?? 0, total: activity?.runs ?? 0 })}
+        note={t("common.ofTotal", {
+          count: activity?.finished ?? 0,
+          total: activity?.runs ?? 0,
+        })}
       />
       <Kpi
         label={t("agents.costPerRun")}

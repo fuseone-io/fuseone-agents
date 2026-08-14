@@ -1,3 +1,4 @@
+import { IdCard } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import {
@@ -34,7 +35,11 @@ export function AgentBasicsSection({
   const presets = integrations?.presets ?? [];
 
   return (
-    <Section title={t("agents.identity")} hint={t("agents.areaIsUnit")}>
+    <Section
+      icon={IdCard}
+      title={t("agents.identity")}
+      hint={t("agents.areaIsUnit")}
+    >
       <div className="grid gap-3 sm:grid-cols-[200px_1fr_160px]">
         <Labelled label={t("agents.identifier")} htmlFor="agent-id">
           {/* Set once: runs reference it forever, and an id that moved would

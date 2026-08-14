@@ -46,7 +46,10 @@ export function FlowCard({ draft }: { draft: AgentDefinition }) {
 
       {paths.length === 0 && unclassified.length === 0 ? (
         <p className="flex items-start gap-2 text-xs text-muted-foreground">
-          <CircleCheck className="mt-px size-3.5 shrink-0 text-success" aria-hidden />
+          <CircleCheck
+            className="mt-px size-3.5 shrink-0 text-success"
+            aria-hidden
+          />
           {t("agents.flowClean")}
         </p>
       ) : (
@@ -56,7 +59,10 @@ export function FlowCard({ draft }: { draft: AgentDefinition }) {
               key={`${path.from}-${path.to}-${path.toStep ?? ""}`}
               className="flex items-start gap-2 text-xs text-muted-foreground"
             >
-              <ShieldAlert className="mt-px size-3.5 shrink-0 text-warning" aria-hidden />
+              <ShieldAlert
+                className="mt-px size-3.5 shrink-0 text-warning"
+                aria-hidden
+              />
               <span className="flex flex-wrap items-center gap-1">
                 <Mono className="text-2xs">{path.from}</Mono>
                 <ArrowRight aria-hidden className="size-3" />
@@ -74,7 +80,9 @@ export function FlowCard({ draft }: { draft: AgentDefinition }) {
         </ul>
       )}
 
-      <p className="mt-2 text-2xs text-muted-foreground">{t("agents.flowHint")}</p>
+      <p className="mt-2 text-2xs text-muted-foreground">
+        {t("agents.flowHint")}
+      </p>
     </div>
   );
 }

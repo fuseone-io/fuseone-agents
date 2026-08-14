@@ -52,7 +52,11 @@ export function ToolCatalogueNav({
         ))}
       </div>
 
-      <p className="mt-auto rounded-md bg-muted/50 p-2 text-2xs text-muted-foreground">
+      {/* Under the entries rather than pinned to the bottom. Pinned, it was
+          measured before it had a width to wrap in and overflowed the card's
+          edge; and with a real catalogue the list is long enough that it lands
+          near the bottom anyway. */}
+      <p className="rounded-md bg-muted/50 p-2 text-2xs text-muted-foreground">
         {t("agents.catalogueIsTheOrgs")}
       </p>
     </div>

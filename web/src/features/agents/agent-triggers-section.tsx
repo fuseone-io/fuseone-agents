@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { Plus, Zap } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Section } from "@/features/policies/section";
@@ -36,7 +36,11 @@ export function AgentTriggersSection({
     });
 
   return (
-    <Section title={t("agents.triggers")} hint={t("agents.triggersHint")}>
+    <Section
+      icon={Zap}
+      title={t("agents.triggers")}
+      hint={t("agents.triggersHint")}
+    >
       {triggers.length === 0 ? (
         <p className="text-xs text-muted-foreground">
           {t("agents.manualOnly")}

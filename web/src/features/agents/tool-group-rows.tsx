@@ -1,17 +1,24 @@
-import { Lock } from "lucide-react";
+import { Lock, ShieldX, UserRoundCheck, type LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Mono } from "@/components/shared/mono";
+import { EffectBadge, UntrustedBadge } from "@/features/agents/effect-badge";
 import { ruleFor } from "@/features/agents/tool-rule";
 import type { ToolGroup } from "@/features/agents/tool-catalogue";
 import { cn } from "@/lib/utils";
 import type { Policy } from "@/lib/api/client";
 
 const RULE_TONE = {
-  allowed: "text-success",
+  allowed: "text-muted-foreground",
   asks: "text-warning",
   blocked: "text-danger",
+};
+
+/** The handoff's glyphs: a person for the queue, a shield for a refusal. */
+const RULE_ICON: Record<string, LucideIcon | undefined> = {
+  allowed: undefined,
+  asks: UserRoundCheck,
+  blocked: ShieldX,
 };
 
 /** One server's tools, under a heading that says how many are already granted. */
@@ -77,7 +84,10 @@ export function ToolGroupRows({
               )}
 
               <div className="min-w-0">
-                <Mono className="block truncate">{tool.toolId}</Mono>
+                <span className="flex items-center gap-1.5">
+                  <Mono className="truncate">{tool.toolId}</Mono>
+                  {tool.untrusted && <UntrustedBadge />}
+                </span>
                 {tool.description && (
                   <span className="block truncate text-2xs text-muted-foreground">
                     {tool.description}
@@ -85,34 +95,34 @@ export function ToolGroupRows({
                 )}
               </div>
 
-              <div className="flex items-center gap-1.5">
-                <Badge variant="outline" className="text-2xs font-normal">
-                  {t(`agents.effect.${tool.effect}`)}
-                </Badge>
-                {/* Said on the row, because it is what decides whether a write
-                    derived from this tool's answer will be stopped — and an
-                    author choosing tools is exactly who needs to know. */}
-                {tool.untrusted && (
-                  <Badge variant="outline" className="text-2xs">
-                    {t("agents.bringsOutsideData")}
-                  </Badge>
-                )}
-              </div>
+              <EffectBadge effect={tool.effect} />
 
-              <div className="min-w-0 text-right">
-                <span className={cn("text-xs", RULE_TONE[rule.kind])}>
-                  {t(rule.label, rule.labelValues)}
-                </span>
+              <div className="flex min-w-0 items-center justify-end gap-1.5">
                 {rule.because && (
-                  <Mono dim className="ml-1.5 text-2xs">
+                  <Mono dim className="truncate text-2xs">
                     {rule.because}
                   </Mono>
                 )}
+                {/* An icon beside the word, never instead of it: the three
+                    outcomes have to be told apart without relying on colour. */}
+                <RuleGlyph kind={rule.kind} />
+                <span className={cn("truncate text-xs", RULE_TONE[rule.kind])}>
+                  {t(rule.label, rule.labelValues)}
+                </span>
               </div>
             </li>
           );
         })}
       </ul>
     </div>
+  );
+}
+
+/** The glyph for one verdict, or nothing where the answer is simply yes. */
+function RuleGlyph({ kind }: { kind: keyof typeof RULE_TONE }) {
+  const Glyph = RULE_ICON[kind];
+  if (!Glyph) return null;
+  return (
+    <Glyph className={cn("size-3.5 shrink-0", RULE_TONE[kind])} aria-hidden />
   );
 }

@@ -52,7 +52,9 @@ export function TemplateCard({
       onClick={onChoose}
       aria-pressed={chosen}
       className={cn(
-        "h-auto min-w-0 flex-col items-start gap-2 rounded-xl bg-card p-3 text-left shadow-sm",
+        // whitespace-normal, because Button sets nowrap: without it the
+        // summary runs on one line and pushes the card open.
+        "h-auto min-w-0 flex-col items-start gap-2 whitespace-normal rounded-xl bg-card p-3 text-left shadow-sm",
         "hover:border-border-strong hover:bg-muted",
         chosen && "border-primary bg-accent hover:bg-accent",
       )}

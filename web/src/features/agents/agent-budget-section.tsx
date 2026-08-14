@@ -1,3 +1,4 @@
+import { ShieldCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Section, Labelled } from "@/features/policies/section";
@@ -24,6 +25,7 @@ export function AgentBudgetSection({
 
   return (
     <Section
+      icon={ShieldCheck}
       title={t("agents.perRunCeiling")}
       hint={t("agents.zeroIsNoCeiling")}
     >

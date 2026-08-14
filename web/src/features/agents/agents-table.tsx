@@ -78,7 +78,9 @@ function Row({ agent }: { agent: Agent }) {
           </Mono>
         </Link>
       </TableCell>
-      <TableCell className="text-muted-foreground">{agent.scope.area}</TableCell>
+      <TableCell className="text-muted-foreground">
+        {agent.scope.area}
+      </TableCell>
       <TableCell>{agent.stage && <StageBadge stage={agent.stage} />}</TableCell>
       <TableCell className="text-right tabular-nums">{runs}</TableCell>
       <TableCell className="text-right tabular-nums">

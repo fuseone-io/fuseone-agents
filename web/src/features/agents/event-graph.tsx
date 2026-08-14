@@ -44,9 +44,15 @@ export function EventGraph() {
               className="flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-xs"
             >
               <Side agent={edge.from} missing={t("agents.nobodyPublishes")} />
-              <ArrowRight aria-hidden className="size-3 text-muted-foreground" />
+              <ArrowRight
+                aria-hidden
+                className="size-3 text-muted-foreground"
+              />
               <Mono className="text-xs">{edge.event}</Mono>
-              <ArrowRight aria-hidden className="size-3 text-muted-foreground" />
+              <ArrowRight
+                aria-hidden
+                className="size-3 text-muted-foreground"
+              />
               <Side agent={edge.to} missing={t("agents.nobodyListens")} />
             </li>
           ))}

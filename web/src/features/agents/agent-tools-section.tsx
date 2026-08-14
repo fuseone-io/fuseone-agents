@@ -5,7 +5,7 @@ import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Section } from "@/features/policies/section";
 import { ToolCatalogueNav } from "@/features/agents/tool-catalogue-nav";
 import { ToolGroupRows } from "@/features/agents/tool-group-rows";
@@ -112,30 +112,31 @@ export function AgentToolsSection({
               </div>
 
               {/* A filter, not navigation: it narrows what is already on the
-                  screen and belongs beside it rather than in the header. */}
-              <ToggleGroup
-                type="single"
-                size="sm"
+                  screen and belongs beside it rather than in the header. Drawn
+                  as a tab track because that is what the design system calls
+                  this shape, and its tokens are literally the tab ones. */}
+              <Tabs
                 value={filter}
-                onValueChange={(next) => next && setFilter(next as ToolFilter)}
+                onValueChange={(next) => setFilter(next as ToolFilter)}
               >
-                {FILTERS.map((option) => (
-                  <ToggleGroupItem
-                    key={option}
-                    value={option}
-                    className="px-2.5 text-xs"
-                  >
-                    {t(`agents.filter.${option}`)}
-                  </ToggleGroupItem>
-                ))}
-              </ToggleGroup>
+                <TabsList>
+                  {FILTERS.map((option) => (
+                    <TabsTrigger key={option} value={option}>
+                      {t(`agents.filter.${option}`)}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
             </div>
 
-            {/* The list scrolls inside the card rather than making it as tall
-                as the catalogue. An installation with a hundred and twenty
-                tools would otherwise push everything below it — the ceilings,
+            {/* A ceiling rather than a height: past it the list scrolls, and
+                short of it the row is as tall as the taller pane — which is
+                what stops the navigation's own note being clipped against the
+                card's edge when the catalogue is small. An installation with a
+                hundred and twenty tools would otherwise push everything below
+                it — the ceilings,
                 the reading, the button — off the screen. */}
-            <ScrollArea className="h-[22rem]">
+            <ScrollArea className="max-h-[22rem]">
               <div className="flex flex-col px-3">
                 {groups.length === 0 ? (
                   <p className="py-4 text-xs text-muted-foreground">
@@ -154,14 +155,19 @@ export function AgentToolsSection({
                 )}
               </div>
             </ScrollArea>
-
-            <div className="mt-auto flex flex-wrap items-baseline gap-x-3 gap-y-1 border-t border-border p-3">
-              <p className="text-xs">{t("agents.toolTally", counted)}</p>
-              <p className="min-w-0 flex-1 text-2xs text-muted-foreground">
-                {t("agents.rightColumnIsPolicy")}
-              </p>
-            </div>
           </div>
+        </div>
+      )}
+
+      {/* Under both panes rather than inside the right one. Sharing a row with
+          the navigation coupled their heights, and the taller of the two
+          clipped the other against the card's edge. */}
+      {catalogue.length > 0 && (
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-t border-border px-4 py-3">
+          <p className="text-xs">{t("agents.toolTally", counted)}</p>
+          <p className="min-w-0 flex-1 text-2xs text-muted-foreground">
+            {t("agents.rightColumnIsPolicy")}
+          </p>
         </div>
       )}
     </Section>
