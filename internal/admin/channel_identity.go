@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/settings"
 )
@@ -148,4 +149,24 @@ func identityFrom(s settings.Setting) (ChannelIdentity, bool) {
 		Channel: v.Channel, Account: v.Account,
 		Principal: domain.UserID(v.Principal), Display: v.Display,
 	}, true
+}
+
+/*
+Secrets hands the verifier what it checks with.
+
+Only the inbound path calls this, and only to verify — never to post. Reading a
+credential out of the vault is a thing to do sparingly and in one place, which
+is why it is a method here rather than a value passed around at start-up: a
+rotated secret takes effect on the next request instead of at the next deploy,
+which matters most in the case where it was rotated because it leaked.
+*/
+func (c *Channels) Secrets(
+	ctx context.Context, name string,
+) (channel.Credentials, bool) {
+	held, err := c.settings.Reveal(ctx,
+		settings.ScopeInstallation, domain.Scope{}, channel.KindChannel, name)
+	if err != nil || !held.Enabled {
+		return channel.Credentials{}, false
+	}
+	return channel.ReadCredentials(held.Secret), true
 }

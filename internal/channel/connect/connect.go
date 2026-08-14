@@ -56,7 +56,7 @@ func (d *Drivers) For(ctx context.Context, name string) (channel.Poster, error) 
 		// should say so, not fail as a notification that never arrives.
 		return nil, fmt.Errorf("connect: channel %q is of an unsupported kind %q", name, conn.Kind)
 	}
-	return build(creds.Token), nil
+	return build(creds), nil
 }
 
 /*
@@ -66,8 +66,14 @@ A table rather than a switch, because the console asks what it may offer and
 the answer has to be the same list that builds the connection. Two places
 saying which vendors exist is one place offering a kind the binary cannot make.
 */
-var drivers = map[string]func(secret string) channel.Poster{
-	"slack": func(secret string) channel.Poster { return slack.New(secret) },
+var drivers = map[string]func(creds channel.Credentials) channel.Poster{
+	"slack": func(creds channel.Credentials) channel.Poster {
+		driver := slack.New(creds.Token)
+		if creds.Signing != "" {
+			driver = driver.Decidable()
+		}
+		return driver
+	},
 }
 
 // Kinds is what this installation can connect, sorted so the console offers

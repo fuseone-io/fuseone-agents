@@ -31,6 +31,11 @@ type identity struct {
 	oidc   *auth.OIDC
 	auth   *auth.Authenticator
 	routes *httpapi.AuthRoutes
+	// dir is the same directory the sign-in path reads, kept because the
+	// channel hook has to turn a bound account into a person with grants —
+	// and it must be the one directory, or a disabled principal would stop
+	// being able to sign in and go on approving through a conversation.
+	dir *auth.Postgres
 	// pool is shared with the administration area: rulings, their trail and
 	// the session store are one database, and opening a second connection
 	// pool to it would only make that less obvious.
@@ -78,6 +83,7 @@ func openIdentity(ctx context.Context, dsn, baseURL string) (*identity, error) {
 		routes: httpapi.NewAuthRoutes(oidc, dir, boot, secure),
 		pool:   pool,
 		oidc:   oidc,
+		dir:    dir,
 	}, nil
 }
 

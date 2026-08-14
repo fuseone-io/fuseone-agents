@@ -49,6 +49,11 @@ type Report struct {
 	Reason string
 	// Tool is the action a parked run is waiting for permission to take.
 	Tool string
+	// AtSeq is the step the run is waiting on, which a decision has to name.
+	// A button carrying only the run would answer whatever the run happens to
+	// be waiting on when it is pressed, and a message keeps its buttons for
+	// ever.
+	AtSeq int64
 }
 
 // Conversation is one place inside a channel, and the scope it speaks for.
@@ -90,8 +95,13 @@ type Message struct {
 	Scope  domain.Scope
 	Reason string
 	Tool   string
+	AtSeq  int64
 	// Link is where somebody goes to act on it.
 	Link string
+	// Decidable is whether an answer given here could reach the platform. A
+	// button on a channel that cannot verify what comes back would promise an
+	// inbound surface that is switched off.
+	Decidable bool
 }
 
 // Delivery records that a message left. One per run, event and conversation.

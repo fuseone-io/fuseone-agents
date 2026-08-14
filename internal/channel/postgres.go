@@ -42,7 +42,8 @@ func (p *Postgres) Unreported(ctx context.Context, since time.Time, limit int) (
 	rows, err := p.pool.Query(ctx, `
 		select runs.run_id, runs.agent_id, runs.company_id, runs.area_id,
 		       `+phases+` as event, runs.updated_at,
-		       coalesce(runs.pending_tool, ''), coalesce(runs.pending_reason, '')
+		       coalesce(runs.pending_tool, ''), coalesce(runs.pending_reason, ''),
+		       coalesce(runs.pending_at_seq, 0)
 		from runs
 		where not runs.simulated
 		  and runs.updated_at >= $1
@@ -62,7 +63,7 @@ func (p *Postgres) Unreported(ctx context.Context, since time.Time, limit int) (
 		var r Report
 		var company, area, event string
 		if err := rows.Scan(&r.RunID, &r.AgentID, &company, &area,
-			&event, &r.At, &r.Tool, &r.Reason); err != nil {
+			&event, &r.At, &r.Tool, &r.Reason, &r.AtSeq); err != nil {
 			return nil, err
 		}
 		r.Scope = domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)}

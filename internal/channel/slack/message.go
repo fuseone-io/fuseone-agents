@@ -36,7 +36,7 @@ func summary(m channel.Message) string {
 	}
 }
 
-func blocks(m channel.Message) []any {
+func blocks(m channel.Message, decidable bool) []any {
 	out := []any{section(summary(m))}
 	if m.RunID == "" {
 		// A test carries no run, and a fact block naming an empty one would be
@@ -59,13 +59,43 @@ func blocks(m channel.Message) []any {
 	}
 	out = append(out, fields(facts))
 
+	// Buttons only where an answer could arrive. Everywhere else a link, which
+	// is honest: a button that does nothing is the worst kind of interface,
+	// and it would be on the message that matters most.
+	if decidable && m.Event == channel.EventParked && m.AtSeq > 0 {
+		out = append(out, decide(m))
+	}
 	if m.Link != "" {
-		// A link rather than a button. A button implies this message can act,
-		// and in this stage nothing a conversation says reaches the platform —
-		// promising otherwise would be the worst kind of interface.
 		out = append(out, context_(fmt.Sprintf("<%s|Open the run>", m.Link)))
 	}
 	return out
+}
+
+// decide is the pair of buttons, each carrying what it answers and about which
+// step. Approving is styled as the primary and refusing is not styled as
+// danger: refusing an agent is the ordinary, safe answer, and dressing it in
+// red would make the cautious choice look like the destructive one.
+func decide(m channel.Message) any {
+	return map[string]any{
+		"type": "actions",
+		"elements": []any{
+			button("Approve", Decision(m.RunID, m.AtSeq, true), "primary"),
+			button("Refuse", Decision(m.RunID, m.AtSeq, false), ""),
+		},
+	}
+}
+
+func button(text, value, style string) any {
+	el := map[string]any{
+		"type":      "button",
+		"text":      map[string]any{"type": "plain_text", "text": text},
+		"value":     value,
+		"action_id": value,
+	}
+	if style != "" {
+		el["style"] = style
+	}
+	return el
 }
 
 func section(text string) any {

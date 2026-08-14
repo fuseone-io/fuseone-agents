@@ -34,9 +34,14 @@ const API = "https://slack.com/api"
 
 // Poster posts as one bot, to whichever conversation it is asked for.
 type Poster struct {
-	token  string
-	base   string
-	client *http.Client
+	token string
+	base  string
+	// decidable is whether this connection can verify what comes back. The
+	// driver is the right thing to know it: it holds the secret that would do
+	// the verifying, and a button on a channel that cannot check an answer
+	// would promise a surface that is switched off.
+	decidable bool
+	client    *http.Client
 }
 
 func New(token string) *Poster {
@@ -47,6 +52,13 @@ func New(token string) *Poster {
 		// still has other conversations to reach.
 		client: &http.Client{Timeout: 10 * time.Second},
 	}
+}
+
+// Decidable says this connection can verify what comes back, which is what
+// lets its messages carry buttons.
+func (p *Poster) Decidable() *Poster {
+	p.decidable = true
+	return p
 }
 
 // WithEndpointBase points every call at another host.
@@ -64,7 +76,7 @@ func (p *Poster) Post(
 		// Fallback text as well as blocks. Notifications and screen readers
 		// read this one, so a message with blocks alone is silent on a phone.
 		Text:   summary(m),
-		Blocks: blocks(m),
+		Blocks: blocks(m, p.decidable),
 	})
 	if err != nil {
 		return "", fmt.Errorf("slack: build message: %w", err)

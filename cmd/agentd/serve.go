@@ -70,6 +70,9 @@ func serve(args []string) error {
 	}
 
 	api := httpapi.NewServer(store, version)
+	// Held outside the block that builds it, because the channel hook is
+	// mounted with the routes rather than with the administration area.
+	var channels *admin.Channels
 	if identity != nil {
 		// The administration area needs a database: it is where rulings and
 		// their trail live. An installation on the in-memory ledger serves
@@ -102,10 +105,9 @@ func serve(args []string) error {
 		// Where runs report, and a way to prove the bot was invited without
 		// waiting for one to park (NT-005 stage 1).
 		drivers := connect.New(store)
-		api = api.WithChannels(
-			admin.NewChannels(identity.pool, store),
-			channel.NewRouter(drivers),
-		).WithChannelListing(drivers).
+		channels = admin.NewChannels(identity.pool, store)
+		api = api.WithChannels(channels, channel.NewRouter(drivers)).
+			WithChannelListing(drivers).
 			WithAdministration(curator, curator, integrations).
 			WithAgents(spec.NewRegistry(identity.pool)).
 			WithCeilings(admin.NewBudgets(identity.pool, store)).
@@ -187,6 +189,15 @@ func serve(args []string) error {
 		root.Handle("GET /api/v1/healthz", apiProblems(apiHandler))
 		root.Handle("GET /api/v1/readyz", apiProblems(apiHandler))
 		identity.routes.Mount(root)
+
+		// What a conversation says back (NT-005 stage 2). Outside /api/v1 and
+		// outside the session middleware on purpose: it is a vendor's webhook,
+		// it carries no cookie, and what authenticates it is a signature this
+		// installation checks rather than anything the API knows about.
+		if channels != nil {
+			httpapi.NewChannelHooks(api, channels, identity.dir, time.Now, slog.Default()).
+				Mount(root)
+		}
 
 		// Webhooks are outside the session middleware on purpose: the caller
 		// is an ERP or a CRM, not a person with a browser. They are
