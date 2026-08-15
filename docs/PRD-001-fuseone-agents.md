@@ -696,8 +696,33 @@ protocol, no proprietary connector format.
 WRITE · DESTRUCTIVE · FINANCIAL. Classification is central and singular — never
 defined by the agent's author.
 
-**DE-13.** A new tool arrives as READ by default and requires explicit
-reclassification to allow writing.
+**DE-13.** A new tool arrives **unclassified** and is refused until the Curator
+records what it does. Refused, not narrowed: there is no effect a tool has
+before somebody says so.
+
+> **As built, and the reason this wording changed.** It read "arrives as READ
+> by default and requires explicit reclassification to allow writing" — which
+> describes a restriction and specifies a permission, because READ is allowed
+> outright. Registering a server with forty tools created forty the Gate would
+> let through, `delete_repository` among them, until somebody ruled on each by
+> name. The sentence was doing the work of a safeguard and none of the
+> safeguard.
+>
+> The argument underneath it survives and points the other way: a server must
+> not grant itself write access by describing a tool as one. Unclassified
+> refuses the server's claim without acting on it in either direction, which is
+> what READ never did.
+>
+> A compensating tool needs its own ruling. Classification is the contract
+> check and it runs before the policy check that lowers the ladder for an undo,
+> so an unclassified compensator is refused at the one moment somebody is
+> relying on it.
+>
+> Where the platform already knows the server, each tool arrives with a
+> suggested classification and the reasoning behind it, so the Curator confirms
+> rather than inventing forty rulings from a list of bare names — which is how
+> a safe default becomes one people work around. A suggestion is never a
+> classification ([DE-22](#94-tool-catalogue)).
 
 **DE-14.** A tool from an untrusted third party can be marked as an untrusted
 data source, propagating a label to everything derived from it.

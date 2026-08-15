@@ -721,7 +721,7 @@
     "editServer": "Edit the server",
     "enabled": "Enabled",
     "known": "known",
-    "mcpExplains": "An MCP server is what gives agents their tools. Everything it offers arrives as a read until somebody classifies it.",
+    "mcpExplains": "An MCP server is what gives agents their tools. Everything it offers arrives unclassified and is refused until somebody says what it does.",
     "mcpServer": "MCP server",
     "modelProvider": "Model provider",
     "nameCharset": "Lowercase, digits, hyphen and underscore.",

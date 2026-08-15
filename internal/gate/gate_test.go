@@ -312,8 +312,10 @@ outright — so registering a server with forty tools created forty the Gate
 would let through, `delete_repository` among them, until somebody ruled on each
 by name. The label was a claim about the tool and nothing verified it.
 
-DE-13 reads as a restriction — "arrives as READ and requires explicit
-reclassification to allow writing" — and the mechanism was a permission.
+DE-13 used to read "arrives as READ by default and requires explicit
+reclassification to allow writing", which describes a restriction and specifies
+a permission. It says unclassified now, and this is the test that holds it
+there.
 */
 func TestEvaluate_toolNobodyClassified_isRefused(t *testing.T) {
 	t.Parallel()

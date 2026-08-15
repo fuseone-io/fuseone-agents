@@ -721,7 +721,7 @@
     "editServer": "Editar servidor",
     "enabled": "Ativo",
     "known": "conhecidos",
-    "mcpExplains": "Um servidor MCP é o que dá ferramentas aos agentes. Tudo que ele oferece chega como leitura até alguém classificar.",
+    "mcpExplains": "Um servidor MCP é o que dá ferramentas aos agentes. Tudo que ele oferece chega sem classificação e é recusado até alguém dizer o que faz.",
     "mcpServer": "servidor MCP",
     "modelProvider": "Provedor de modelo",
     "nameCharset": "Minúsculas, números, hífen e sublinhado.",
