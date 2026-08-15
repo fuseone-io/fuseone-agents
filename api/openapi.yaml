@@ -203,6 +203,43 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
 
+  /agents/instructions/tokens:
+    post:
+      tags: [agents]
+      operationId: countInstructionTokens
+      summary: How large an instruction is, to the model that will read it
+      description: |
+        Tokenisation belongs to the model. It differs between vendors and
+        between generations of the same vendor, so the console cannot compute
+        it: an estimate printed under the word "tokens" would be a wrong
+        number in the one place somebody goes to size a prompt, and it would
+        age with every model released.
+
+        So the count is the provider's own, asked of the model the agent is
+        configured to use, with the instruction sent as the system prompt —
+        which is where it goes at run time. It is the size of what the author
+        wrote, never the size of a turn: a turn also carries the loop
+        contract, the transcript so far and the remaining budget.
+
+        Where the provider has no way to answer, the reply says so and carries
+        no number. That is a state and not a failure — only Anthropic's wire
+        format exposes a counting endpoint — and the console falls back to
+        showing characters, labelled as characters.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InstructionText' }
+      responses:
+        '200':
+          description: The count, or the reason there is none.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InstructionTokens' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /agents/{agentId}:
     get:
       tags: [agents]
@@ -3509,6 +3546,35 @@ components:
         steps: { type: string }
         goesWrong: { type: string }
         notDecide: { type: string }
+
+    InstructionText:
+      type: object
+      required: [provider, model, instructions]
+      properties:
+        provider: { type: string }
+        model:
+          type: string
+          description: >
+            The model the agent is configured to use. It comes back in the
+            reply, so an answer read on its own says what counted it — a
+            token count means nothing without the model that produced it.
+        instructions: { type: string }
+
+    InstructionTokens:
+      type: object
+      required: [counted, model]
+      properties:
+        counted:
+          type: boolean
+          description: >
+            False means this provider has no way to count. It is a state and
+            not an error, and it carries no number rather than a guess.
+          example: true
+        tokens:
+          type: integer
+          format: int64
+          description: Absent whenever counted is false.
+        model: { type: string }
 
     InterviewDraft:
       type: object

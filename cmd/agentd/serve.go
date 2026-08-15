@@ -108,6 +108,9 @@ func serve(args []string) error {
 		// Where runs report, and a way to prove the bot was invited without
 		// waiting for one to park (NT-005 stage 1).
 		drivers := connect.New(store)
+		// The configured providers, built once: the authoring assistant asks
+		// them to write, and the editor asks them how large an instruction is.
+		providers := assistants(ctx, integrations)
 		channels = admin.NewChannels(identity.pool, store)
 		api = api.WithChannels(channels, channel.NewRouter(drivers)).
 			WithChannelListing(drivers).
@@ -146,7 +149,10 @@ func serve(args []string) error {
 			WithAreas(scope.NewStore(identity.pool)).
 			WithRates(integrations).
 			WithAuthoring(authoring.NewStore(identity.pool, store)).
-			WithAssistants(assistants(ctx, integrations), authoring.NewStore(identity.pool, store)).
+			WithAssistants(providers, authoring.NewStore(identity.pool, store)).
+			// What an instruction costs, asked of the model that will read
+			// it. Nothing on this side can compute it.
+			WithTokenisers(providers).
 			WithPauses(spec.NewState(identity.pool)).
 			// Taking an agent out of circulation, which is the only
 			// removal there is: nothing here deletes a version.

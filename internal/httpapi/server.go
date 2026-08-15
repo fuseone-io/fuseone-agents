@@ -63,11 +63,14 @@ type Server struct {
 	areas        Areas
 	authoring    Authoring
 	assistants   Assistants
-	spend        Spend
-	rates        Rates
-	pauses       Pauses
-	retirements  Retirements
-	definitions  Definitions
+	// tokenisers answer how large an instruction is to the model that will
+	// read it, since nothing on this side can compute that.
+	tokenisers  Tokenisers
+	spend       Spend
+	rates       Rates
+	pauses      Pauses
+	retirements Retirements
+	definitions Definitions
 	// stops are the switches wider than one agent (PRD FO-06).
 	stops Stoppers
 	// marks are the budget thresholds each scope has crossed (PRD FO-05).
