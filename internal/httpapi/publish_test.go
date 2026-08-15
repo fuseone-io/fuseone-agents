@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
@@ -264,4 +265,98 @@ func TestPublishAgent_withDeclaredSteps_keepsThem(t *testing.T) {
 	if steps[0].StopsWhen != "não encontrar o cliente" {
 		t.Errorf("stops_when = %q, want the author's own words", steps[0].StopsWhen)
 	}
+}
+
+/*
+A trigger declared in a version is a trigger the platform reaches.
+
+The console let somebody choose a schedule, stored it in the version, printed
+it back on the screen and nothing ever fired: schedules were reconciled from
+specification files at worker start-up, so an agent authored here was never
+reachable by the clock at all. The screen kept a promise the platform had no
+way of keeping, and the only symptom was an agent that never ran.
+
+Reconciled where the version is written, so both ways of publishing —
+committing a file and pressing the button — end at the same table.
+*/
+func TestPublishAgent_declaresACronTrigger_scheduleIsReconciled(t *testing.T) {
+	t.Parallel()
+	moments := &schedules{}
+
+	if _, err := publishServer(t, newPublisher()).WithSchedules(moments).PublishAgent(
+		inArea("cx", domain.RoleAuthor),
+		openapi.PublishAgentRequestObject{
+			AgentId: "triage",
+			Body: definition(func(d *openapi.AgentDefinition) {
+				d.Triggers = &[]openapi.AgentTrigger{
+					{Type: "cron", Schedule: ptr("0 7 * * 1-5")},
+				}
+			}),
+		},
+	); err != nil {
+		t.Fatalf("PublishAgent: %v", err)
+	}
+
+	if got := moments.synced["triage"]; len(got) != 1 || got[0] != "0 7 * * 1-5" {
+		t.Errorf("synced = %v, want the schedule the version declares", got)
+	}
+}
+
+// A version that withdrew its schedule stops firing it, which is the same call
+// with an empty list rather than a second one.
+func TestPublishAgent_declaresNoTrigger_reconcilesToNothing(t *testing.T) {
+	t.Parallel()
+	moments := &schedules{}
+
+	if _, err := publishServer(t, newPublisher()).WithSchedules(moments).PublishAgent(
+		inArea("cx", domain.RoleAuthor),
+		openapi.PublishAgentRequestObject{AgentId: "triage", Body: definition(nil)},
+	); err != nil {
+		t.Fatalf("PublishAgent: %v", err)
+	}
+
+	got, called := moments.synced["triage"]
+	if !called || len(got) != 0 {
+		t.Errorf("synced = %v (called %v), want an empty list", got, called)
+	}
+}
+
+// Refused before the version is written, because a schedule nobody can parse
+// would otherwise be published, reported as saved, and never fire.
+func TestPublishAgent_scheduleNobodyCanParse_isRefusedBeforePublishing(t *testing.T) {
+	t.Parallel()
+	pub := newPublisher()
+
+	resp, err := publishServer(t, pub).WithSchedules(&schedules{}).PublishAgent(
+		inArea("cx", domain.RoleAuthor),
+		openapi.PublishAgentRequestObject{
+			AgentId: "triage",
+			Body: definition(func(d *openapi.AgentDefinition) {
+				d.Triggers = &[]openapi.AgentTrigger{
+					{Type: "cron", Schedule: ptr("toda segunda de manhã")},
+				}
+			}),
+		},
+	)
+	if err != nil {
+		t.Fatalf("PublishAgent: %v", err)
+	}
+	if _, refused := resp.(openapi.PublishAgent400ApplicationProblemPlusJSONResponse); !refused {
+		t.Fatalf("response = %T, want a refusal", resp)
+	}
+	if len(pub.published) != 0 {
+		t.Error("a version was written for a schedule that cannot fire")
+	}
+}
+
+type schedules struct{ synced map[domain.AgentID][]string }
+
+func (s *schedules) Sync(
+	_ context.Context, agent domain.AgentID, list []string, _ time.Time,
+) error {
+	if s.synced == nil {
+		s.synced = map[domain.AgentID][]string{}
+	}
+	s.synced[agent] = list
+	return nil
 }

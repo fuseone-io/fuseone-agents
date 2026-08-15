@@ -57,12 +57,16 @@ type Server struct {
 	ceilings     Ceilings
 	content      Content
 	webhooks     trigger.Webhooks
-	audit        audit.Reader
-	health       Health
-	policies     Policies
-	areas        Areas
-	authoring    Authoring
-	assistants   Assistants
+	// schedules is where a version's cron trigger becomes a moment the worker
+	// will reach. Without it, publishing from the console recorded a trigger
+	// no clock ever knew about.
+	schedules  Schedules
+	audit      audit.Reader
+	health     Health
+	policies   Policies
+	areas      Areas
+	authoring  Authoring
+	assistants Assistants
 	// tokenisers answer how large an instruction is to the model that will
 	// read it, since nothing on this side can compute that.
 	tokenisers  Tokenisers

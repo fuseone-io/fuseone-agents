@@ -143,6 +143,10 @@ func serve(args []string) error {
 					admin.NewRetention(identity.pool, store)),
 			).
 			WithWebhooks(trigger.NewPostgresWebhooks(identity.pool)).
+			// Where a published cron trigger becomes a moment the worker
+			// reaches. Reconciled from files at start-up as well, which is
+			// the path an installation keeping its agents in git takes.
+			WithSchedules(trigger.NewPostgresSchedules(identity.pool)).
 			WithAudit(audit.NewPostgres(identity.pool)).
 			WithHealth(admin.NewHealth(identity.pool)).
 			WithPolicies(policy.NewStore(identity.pool)).

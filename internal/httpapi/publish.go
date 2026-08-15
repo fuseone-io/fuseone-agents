@@ -4,12 +4,34 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/spec"
 )
+
+/*
+Schedules is where a declared cron trigger becomes a moment the worker will
+reach. Declared here by the consumer.
+
+It exists because publishing from this screen did not reach it. Schedules were
+reconciled from specification files at worker start-up, which is the right
+thing for an installation that keeps its agents in git and nothing at all for
+one that presses the button: the version recorded the trigger, the screen
+printed it back, and no clock ever knew. Both ways of publishing end at the
+same table now.
+*/
+type Schedules interface {
+	Sync(ctx context.Context, agent domain.AgentID, schedules []string, from time.Time) error
+}
+
+// WithSchedules wires where a cron trigger is reconciled.
+func (s *Server) WithSchedules(schedules Schedules) *Server {
+	s.schedules = schedules
+	return s
+}
 
 // Publisher writes a version and records whether the agent may run.
 //
@@ -61,6 +83,15 @@ func (s *Server) PublishAgent(
 		}, nil
 	}
 
+	// Before the version is written, because a schedule nobody can parse
+	// would otherwise be published, reported as saved, and never fire.
+	if bad := unparseableSchedule(published, clockOr(s.clock).Now()); bad != "" {
+		return openapi.PublishAgent400ApplicationProblemPlusJSONResponse{
+			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
+				invalid(fmt.Sprintf("the schedule %q is not one this platform can read", bad))),
+		}, nil
+	}
+
 	before, err := s.agentVersions(ctx, domain.AgentID(req.AgentId))
 	if err != nil {
 		return nil, err
@@ -73,6 +104,21 @@ func (s *Server) PublishAgent(
 	// somebody deliberately started must not stop it.
 	if err := s.publisher.EnsurePaused(ctx, published.ID, callerOf(ctx)); err != nil {
 		return nil, err
+	}
+
+	// After the version exists, so what is reconciled is what was published.
+	// An error here is returned rather than swallowed: publishing the same
+	// definition again is a no-op, so a caller retrying reaches the sync.
+	if s.schedules != nil {
+		if err := s.schedules.Sync(ctx, published.ID,
+			spec.CronSchedules(published), clockOr(s.clock).Now()); err != nil {
+			return nil, fmt.Errorf("reconcile the schedules of %s: %w", published.ID, err)
+		}
+	}
+	if s.webhooks != nil {
+		if err := s.webhooks.Sync(ctx, published.ID, scope, spec.WebhookPaths(published)); err != nil {
+			return nil, fmt.Errorf("reconcile the webhooks of %s: %w", published.ID, err)
+		}
 	}
 
 	paused, err := s.publisher.IsPaused(ctx, published.ID)

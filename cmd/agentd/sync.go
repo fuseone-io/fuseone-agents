@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/fuseone/agents/internal/admin"
@@ -48,7 +47,7 @@ func syncSchedules(ctx context.Context, pool *pgxpool.Pool, specDir *string) err
 		if err != nil {
 			return fmt.Errorf("sync schedules: %w", err)
 		}
-		if err := schedules.Sync(ctx, agent, cronSchedulesOf(published), now); err != nil {
+		if err := schedules.Sync(ctx, agent, spec.CronSchedules(published), now); err != nil {
 			return fmt.Errorf("sync schedules for %s: %w", agent, err)
 		}
 	}
@@ -73,7 +72,7 @@ func syncWebhooks(ctx context.Context, pool *pgxpool.Pool, specDir *string) erro
 			return fmt.Errorf("sync webhooks: %w", err)
 		}
 		scope := domain.Scope{Area: domain.AreaID(published.Area)}
-		if err := hooks.Sync(ctx, agent, scope, webhookPathsOf(published)); err != nil {
+		if err := hooks.Sync(ctx, agent, scope, spec.WebhookPaths(published)); err != nil {
 			// A path two agents both declare is a configuration error, and one
 			// of them keeps it. Loud but not fatal: refusing to start would
 			// take the whole installation down over one file, and the path
@@ -90,16 +89,6 @@ func syncWebhooks(ctx context.Context, pool *pgxpool.Pool, specDir *string) erro
 }
 
 // webhookPathsOf picks the paths out of a specification's triggers.
-func webhookPathsOf(s spec.Spec) []string {
-	out := []string{}
-	for _, t := range s.Triggers {
-		if t.Type == "webhook" && t.Path != "" {
-			out = append(out, strings.TrimPrefix(t.Path, "/"))
-		}
-	}
-	return out
-}
-
 // pauseNewAgents records every agent nobody has decided about as paused.
 func pauseNewAgents(ctx context.Context, pool *pgxpool.Pool, specDir *string) error {
 	loaded := spec.NewStore()
@@ -117,16 +106,6 @@ func pauseNewAgents(ctx context.Context, pool *pgxpool.Pool, specDir *string) er
 }
 
 // cronSchedulesOf picks the schedules out of a specification's triggers.
-func cronSchedulesOf(s spec.Spec) []string {
-	out := []string{}
-	for _, t := range s.Triggers {
-		if t.Type == "cron" && t.Schedule != "" {
-			out = append(out, t.Schedule)
-		}
-	}
-	return out
-}
-
 func syncRulings(ctx context.Context, catalog *tools.Catalog, curator *admin.Curator) error {
 	applied, err := catalog.Sync(ctx, curator, domain.Scope{})
 	if err != nil {
