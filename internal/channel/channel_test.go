@@ -3,6 +3,7 @@ package channel_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -142,6 +143,41 @@ func TestSweep_oneConversationRefuses_theOthersStillHear(t *testing.T) {
 	}
 }
 
+/*
+A run one conversation could not hear is not a run that was reported.
+
+The sweep finds candidates by asking which runs have not been said everywhere,
+and a partial success that marked the run done would drop it from that
+question for good: the conversation the bot was removed from is never tried
+again, and the symptom is silence in one channel, which is the hardest failure
+there is to notice.
+
+The other direction has to hold too, or the fix trades one silence for a
+repeat: a run that did reach everywhere must be marked, or every sweep for the
+next day announces it again.
+*/
+func TestSweep_oneConversationRefuses_theRunIsNotMarkedReported(t *testing.T) {
+	t.Parallel()
+	posts := &recorder{failFor: "C07-ops"}
+	reports := &fixedReports{reports: []channel.Report{
+		report("run-1", "acme", "ops", channel.EventParked),
+		report("run-2", "acme", "support", channel.EventParked),
+	}}
+	r := channel.NewReporter(reports, fixedConversations{}, posts,
+		func() time.Time { return noon }, nil).WithDeliveries(&memoryDeliveries{})
+
+	if _, err := r.Sweep(t.Context(), 50); err == nil {
+		t.Fatal("the sweep hid a conversation it could not reach")
+	}
+
+	if slices.Contains(reports.done, domain.RunID("run-1")) {
+		t.Error("a run one conversation never heard was marked as said everywhere")
+	}
+	if !slices.Contains(reports.done, domain.RunID("run-2")) {
+		t.Error("a run every conversation heard was left to be announced again")
+	}
+}
+
 func report(run, company, area string, ev channel.Event) channel.Report {
 	return channel.Report{
 		RunID:   domain.RunID(run),
@@ -163,10 +199,22 @@ func reporterFor(t *testing.T, posts *recorder, reports ...channel.Report) *chan
 	).WithDeliveries(&memoryDeliveries{})
 }
 
-type fixedReports struct{ reports []channel.Report }
+type fixedReports struct {
+	reports []channel.Report
+	// done records what the sweep declared said everywhere, which it must not
+	// do for a run one conversation failed to hear.
+	done []domain.RunID
+}
 
 func (f *fixedReports) Unreported(context.Context, time.Time, int) ([]channel.Report, error) {
 	return f.reports, nil
+}
+
+func (f *fixedReports) Reported(
+	_ context.Context, run domain.RunID, _ channel.Event, _ time.Time,
+) error {
+	f.done = append(f.done, run)
+	return nil
 }
 
 // Two areas have a conversation and one does not, which is the ordinary shape

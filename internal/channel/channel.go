@@ -128,6 +128,10 @@ type Delivery struct {
 // consumer.
 type Reports interface {
 	Unreported(ctx context.Context, since time.Time, limit int) ([]Report, error)
+	// Reported marks a run's event as said everywhere it should be said. The
+	// reporter is the only component that knows what everywhere means, so it
+	// is the one that writes it.
+	Reported(ctx context.Context, run domain.RunID, e Event, at time.Time) error
 }
 
 // Conversations answers which places speak for a scope.

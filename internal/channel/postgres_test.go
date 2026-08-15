@@ -42,12 +42,35 @@ func TestUnreported_runIsWaitingOnSomebody_isListedUntilItIsReported(t *testing.
 		t.Fatalf("record: %v", err)
 	}
 
+	/*
+		One conversation heard, and the run is still not reported.
+
+		A run is announced to every conversation that speaks for its scope, and
+		this projection knows none of them — so a delivery cannot be the thing
+		that clears it. Reading one row as "done" is what left a conversation the
+		bot had been removed from never retried, silently, which is the failure
+		the sweep exists to prevent.
+	*/
 	pending, err = store.Unreported(t.Context(), noon.Add(-channel.Window), 50)
 	if err != nil {
-		t.Fatalf("unreported after recording: %v", err)
+		t.Fatalf("unreported after one conversation heard: %v", err)
+	}
+	if len(pending) != 1 {
+		t.Errorf("dropped after one conversation of several: %+v", pending)
+	}
+
+	// Said everywhere, recorded by the one component that knows what
+	// everywhere means.
+	if err := store.Reported(t.Context(), "run-waiting", channel.EventParked, noon); err != nil {
+		t.Fatalf("reported: %v", err)
+	}
+
+	pending, err = store.Unreported(t.Context(), noon.Add(-channel.Window), 50)
+	if err != nil {
+		t.Fatalf("unreported after being reported: %v", err)
 	}
 	if len(pending) != 0 {
-		t.Errorf("still pending after being reported: %+v", pending)
+		t.Errorf("still pending after every conversation heard: %+v", pending)
 	}
 }
 

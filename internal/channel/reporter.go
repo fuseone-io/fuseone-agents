@@ -85,6 +85,13 @@ func (r *Reporter) Sweep(ctx context.Context, limit int) (int, error) {
 		n, err := r.announce(ctx, report)
 		sent += n
 		if err != nil {
+			// Left unreported on purpose. The next sweep tries the
+			// conversations that did not hear, and the ones that did are
+			// skipped at the post rather than told twice.
+			failures = append(failures, err)
+			continue
+		}
+		if err := r.reports.Reported(ctx, report.RunID, report.Event, r.clock()); err != nil {
 			failures = append(failures, err)
 		}
 	}

@@ -33,11 +33,24 @@ const phases = `
 		when 'finished'          then 'finished'
 	end`
 
-// Unreported lists runs in a state worth announcing that no conversation has
-// been told about.
-//
-// Simulated runs are excluded. Nobody is waiting on one, and an approval
-// request for a rehearsal would teach people to ignore the channel.
+/*
+Unreported lists runs in a state worth announcing that has not been said
+everywhere it should be.
+
+"Everywhere" is not a question this projection can answer: a run is announced
+to every conversation that speaks for its scope, and the map from scope to
+conversations is configuration this query knows nothing about. So a single
+delivery row cannot clear a run — read that way, a conversation the bot had
+been removed from was never retried, silently, which is the exact failure the
+sweep exists to prevent.
+
+What clears it is the reporter saying so, once it has been to every
+conversation without a failure. Dedup per conversation still happens at the
+post, so a retry after a partial success repeats nothing.
+
+Simulated runs are excluded. Nobody is waiting on one, and an approval request
+for a rehearsal would teach people to ignore the channel.
+*/
 func (p *Postgres) Unreported(ctx context.Context, since time.Time, limit int) ([]Report, error) {
 	rows, err := p.pool.Query(ctx, `
 		select runs.run_id, runs.agent_id, runs.company_id, runs.area_id,
@@ -50,7 +63,8 @@ func (p *Postgres) Unreported(ctx context.Context, since time.Time, limit int) (
 		  and `+phases+` is not null
 		  and not exists (
 		      select 1 from channel_deliveries d
-		      where d.run_id = runs.run_id and d.event = `+phases+`)
+		      where d.run_id = runs.run_id and d.event = `+phases+`
+		        and d.conversation = '')
 		order by runs.updated_at desc
 		limit $2`, since.UTC(), limit)
 	if err != nil {
@@ -102,4 +116,22 @@ func (p *Postgres) Delivered(
 		return false, fmt.Errorf("channel: read delivery: %w", err)
 	}
 	return exists, nil
+}
+
+// Reported marks one run's event as said everywhere it should be said.
+//
+// Written by the reporter, which is the only component that knows what
+// everywhere means for a run's scope, and only when it reached all of them
+// without a failure. The empty conversation is what "all of them" is filed
+// under: a delivery belongs to a conversation, and this belongs to none.
+func (p *Postgres) Reported(ctx context.Context, run domain.RunID, e Event, at time.Time) error {
+	_, err := p.pool.Exec(ctx, `
+		insert into channel_deliveries (run_id, event, conversation, ref, posted_at)
+		values ($1, $2, '', '', $3)
+		on conflict (run_id, event, conversation) do nothing`,
+		string(run), string(e), at.UTC())
+	if err != nil {
+		return fmt.Errorf("channel: mark %s reported: %w", run, err)
+	}
+	return nil
 }
