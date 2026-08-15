@@ -95,7 +95,10 @@ var _ engine.Planner = (*Anthropic)(nil)
 // It performs exactly one round trip and never executes anything: the tool the
 // model picks comes back as a Proposal for the Gate to rule on.
 func (a *Anthropic) Plan(ctx context.Context, in engine.PlanInput) (engine.Proposal, error) {
-	tools := a.toolParams(in.Tools)
+	// Built once for this request and used in both directions: the names the
+	// provider is offered, and the identifier a proposal is read back as.
+	offered := namesFor(in.Tools)
+	tools := a.toolParams(in.Tools, offered)
 
 	resp, err := a.client.Messages.New(ctx, anthropic.MessageNewParams{
 		// The step's, when it named one. The provider is not overridable: it
@@ -104,7 +107,7 @@ func (a *Anthropic) Plan(ctx context.Context, in engine.PlanInput) (engine.Propo
 		Model:     anthropic.Model(or(in.Model, a.cfg.Model)),
 		MaxTokens: a.cfg.MaxTokens,
 		System:    a.system(in),
-		Messages:  messagesFrom(in.Transcript),
+		Messages:  messagesFrom(in.Transcript, offered),
 		Tools:     tools,
 		// Adaptive is the only supported mode on current models; a fixed
 		// thinking budget is rejected.
@@ -126,7 +129,7 @@ func (a *Anthropic) Plan(ctx context.Context, in engine.PlanInput) (engine.Propo
 		return engine.Proposal{Cost: a.cost(resp.Usage)}, ErrRefused
 	}
 
-	return a.proposalFrom(resp), nil
+	return a.proposalFrom(resp, offered), nil
 }
 
 // system builds the system prompt.
@@ -192,18 +195,18 @@ that as final for this run and choose another approach rather than retrying.
 Propose one tool call at a time. When the task is complete, reply with a short
 plain-text summary of the outcome and make no tool call; that is how you finish.`
 
-func (a *Anthropic) toolParams(ids []domain.ToolID) []anthropic.ToolUnionParam {
+func (a *Anthropic) toolParams(ids []domain.ToolID, offered names) []anthropic.ToolUnionParam {
 	if a.tools == nil {
 		return nil
 	}
 	out := make([]anthropic.ToolUnionParam, 0, len(ids))
 	for _, id := range ids {
-		name, desc, schema, ok := a.tools.Schema(id)
+		_, desc, schema, ok := a.tools.Schema(id)
 		if !ok {
 			continue
 		}
 		tool := anthropic.ToolParam{
-			Name:        name,
+			Name:        offered.wire[id],
 			Description: anthropic.String(desc),
 			InputSchema: anthropic.ToolInputSchemaParam{Properties: schema},
 		}
@@ -216,7 +219,7 @@ func (a *Anthropic) toolParams(ids []domain.ToolID) []anthropic.ToolUnionParam {
 //
 // A tool_use block is the next action; text alone means the model considers
 // the run finished.
-func (a *Anthropic) proposalFrom(resp *anthropic.Message) engine.Proposal {
+func (a *Anthropic) proposalFrom(resp *anthropic.Message, offered names) engine.Proposal {
 	p := engine.Proposal{Cost: a.cost(resp.Usage)}
 
 	var summary strings.Builder
@@ -225,7 +228,7 @@ func (a *Anthropic) proposalFrom(resp *anthropic.Message) engine.Proposal {
 		case anthropic.TextBlock:
 			summary.WriteString(variant.Text)
 		case anthropic.ToolUseBlock:
-			p.Tool = domain.ToolID(variant.Name)
+			p.Tool = offered.idOf(variant.Name)
 			// Input is raw JSON; never string-match it. Escaping of Unicode
 			// and slashes varies between models.
 			p.Args = []byte(variant.JSON.Input.Raw())
@@ -271,7 +274,7 @@ func formatMicros(m int64) string {
 // Tool calls and their results must pair by identifier, and the transcript
 // derives those identifiers from the run and sequence — so a rebuilt
 // transcript pairs identically to the one the previous worker sent.
-func messagesFrom(turns []engine.Turn) []anthropic.MessageParam {
+func messagesFrom(turns []engine.Turn, offered names) []anthropic.MessageParam {
 	var out []anthropic.MessageParam
 
 	for _, t := range turns {
@@ -288,7 +291,7 @@ func messagesFrom(turns []engine.Turn) []anthropic.MessageParam {
 				_ = json.Unmarshal(t.Args, &input)
 			}
 			out = append(out, anthropic.NewAssistantMessage(
-				anthropic.NewToolUseBlock(t.CallID, input, string(t.Tool)),
+				anthropic.NewToolUseBlock(t.CallID, input, offered.wire[t.Tool]),
 			))
 
 		case engine.TurnToolResult:

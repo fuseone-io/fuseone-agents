@@ -43,10 +43,13 @@ func NewOpenAICompatible(provider Provider, cfg Config, tools ToolSchemas, hc *h
 var _ engine.Planner = (*OpenAICompatible)(nil)
 
 func (o *OpenAICompatible) Plan(ctx context.Context, in engine.PlanInput) (engine.Proposal, error) {
+	// Built once for this request and used in both directions: the names the
+	// provider is offered, and the identifier a proposal is read back as.
+	offered := namesFor(in.Tools)
 	body := chatRequest{
 		Model:     o.cfg.Model,
-		Messages:  o.chatMessages(in),
-		Tools:     o.chatTools(in.Tools),
+		Messages:  o.chatMessages(in, offered),
+		Tools:     o.chatTools(in.Tools, offered),
 		MaxTokens: o.cfg.MaxTokens,
 	}
 	// Only some providers accept a reasoning control, and an unknown field is
@@ -70,15 +73,15 @@ func (o *OpenAICompatible) Plan(ctx context.Context, in engine.PlanInput) (engin
 		return engine.Proposal{Cost: o.cost(out.Usage)}, ErrRefused
 	}
 
-	return o.proposalFrom(choice, out.Usage), nil
+	return o.proposalFrom(choice, out.Usage, offered), nil
 }
 
-func (o *OpenAICompatible) proposalFrom(c chatChoice, u chatUsage) engine.Proposal {
+func (o *OpenAICompatible) proposalFrom(c chatChoice, u chatUsage, offered names) engine.Proposal {
 	p := engine.Proposal{Cost: o.cost(u)}
 
 	if len(c.Message.ToolCalls) > 0 {
 		call := c.Message.ToolCalls[0]
-		p.Tool = domain.ToolID(call.Function.Name)
+		p.Tool = offered.idOf(call.Function.Name)
 		// Arguments arrive as a JSON *string* here, unlike Anthropic's object.
 		// The Gate validates the decoded form, so pass the bytes through.
 		p.Args = []byte(call.Function.Arguments)
@@ -124,7 +127,7 @@ func (o *OpenAICompatible) cost(u chatUsage) domain.Cost {
 	}
 }
 
-func (o *OpenAICompatible) chatMessages(in engine.PlanInput) []chatMessage {
+func (o *OpenAICompatible) chatMessages(in engine.PlanInput, offered names) []chatMessage {
 	system := o.cfg.SystemPrompt + "\n\n" + loopContract
 	if in.Budget.Micros > 0 {
 		system += fmt.Sprintf(
@@ -148,7 +151,7 @@ func (o *OpenAICompatible) chatMessages(in engine.PlanInput) []chatMessage {
 				ToolCalls: []chatToolCall{{
 					ID:       t.CallID,
 					Type:     "function",
-					Function: chatFunctionCall{Name: string(t.Tool), Arguments: argsString(t.Args)},
+					Function: chatFunctionCall{Name: offered.wire[t.Tool], Arguments: argsString(t.Args)},
 				}},
 			})
 
@@ -163,20 +166,20 @@ func (o *OpenAICompatible) chatMessages(in engine.PlanInput) []chatMessage {
 	return msgs
 }
 
-func (o *OpenAICompatible) chatTools(ids []domain.ToolID) []chatTool {
+func (o *OpenAICompatible) chatTools(ids []domain.ToolID, offered names) []chatTool {
 	if o.tools == nil {
 		return nil
 	}
 	out := make([]chatTool, 0, len(ids))
 	for _, id := range ids {
-		name, desc, schema, ok := o.tools.Schema(id)
+		_, desc, schema, ok := o.tools.Schema(id)
 		if !ok {
 			continue
 		}
 		out = append(out, chatTool{
 			Type: "function",
 			Function: chatFunctionDef{
-				Name:        name,
+				Name:        offered.wire[id],
 				Description: desc,
 				Parameters: map[string]any{
 					"type":       "object",
