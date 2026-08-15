@@ -211,3 +211,61 @@ func runOf(t *testing.T, rec *httptest.ResponseRecorder) string {
 	}
 	return body.RunID
 }
+
+/*
+An agent that is not running is a state, not a failure of the platform.
+
+Paused, stopped by a switch, or still a draft: the door answers 500 "Could not
+open the run" with nothing in the detail. The person reading that is the
+sender's integrator, and what they conclude is that this platform is broken —
+while on our side it is logged as an error and pages somebody about a decision
+an operator made on purpose.
+
+The secret was correct, so there is nothing left to protect: a caller who
+authenticated is entitled to know why their delivery did nothing. That is not
+the probing this handler guards against, which is answered identically whether
+a path exists or not, before any of this.
+*/
+func TestHook_agentIsPaused_saysSoRatherThanFailing(t *testing.T) {
+	t.Parallel()
+	mux, store := hookServerPaused(t)
+
+	rec := post(t, mux, "crm/ticket", "s3cret", "d-1", `{"id":1}`)
+
+	if rec.Code != http.StatusConflict {
+		t.Errorf("status = %d, want 409 — the agent is paused, nothing failed", rec.Code)
+	}
+	if runs, _ := store.Runs(context.Background()); len(runs) != 0 {
+		t.Error("a run was opened for a paused agent")
+	}
+}
+
+// Named, because "could not open the run" sends the integrator to us and the
+// answer is a switch on our side that they cannot see.
+func TestHook_agentIsPaused_theReasonReachesTheSender(t *testing.T) {
+	t.Parallel()
+	mux, _ := hookServerPaused(t)
+
+	rec := post(t, mux, "crm/ticket", "s3cret", "d-1", `{"id":1}`)
+
+	if !strings.Contains(rec.Body.String(), "paused") {
+		t.Errorf("body = %s, want it to name the state", rec.Body.String())
+	}
+}
+
+func hookServerPaused(t *testing.T) (*http.ServeMux, *ledger.Memory) {
+	t.Helper()
+	store := ledger.NewMemory()
+	hooks := &fakeHooks{
+		armed:  map[string]string{"crm/ticket": "s3cret"},
+		agents: map[string]domain.AgentID{"crm/ticket": "triage"},
+	}
+	mux := http.NewServeMux()
+	opener := trigger.NewOpener(store, hookRegistry{}, hookClock{}).WithPauses(allPaused{})
+	NewHooks(hooks, opener, slog.New(slog.NewTextHandler(io.Discard, nil))).Mount(mux)
+	return mux, store
+}
+
+type allPaused struct{}
+
+func (allPaused) IsPaused(context.Context, domain.AgentID) (bool, error) { return true, nil }

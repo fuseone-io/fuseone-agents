@@ -88,6 +88,23 @@ func (h *Hooks) receive(w http.ResponseWriter, r *http.Request) {
 		Trigger: "webhook",
 		Input:   body,
 	})
+	/*
+		An agent that is not running is a state, not a failure of the platform.
+
+		Answered 500 with an empty detail, the person reading it is the sender's
+		integrator and what they conclude is that this platform is broken — while
+		on our side it is logged as an error and pages somebody about a decision
+		an operator made on purpose.
+
+		The secret was correct, so there is nothing left to protect: a caller who
+		authenticated is entitled to know why their delivery did nothing. The
+		probing this handler guards against is answered identically whether a path
+		exists or not, and that happened before any of this.
+	*/
+	if notRunning(err) {
+		writeProblemJSON(w, http.StatusConflict, CodeConflict, "The agent is not running", err.Error())
+		return
+	}
 	if err != nil {
 		h.log.Error("could not open a run from a webhook", "path", path, "err", err)
 		writeProblemJSON(w, http.StatusInternalServerError, CodeUnavailable, "Could not open the run", "")
@@ -105,4 +122,15 @@ func (h *Hooks) receive(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]string{"runId": string(opened.RunID)})
+}
+
+// notRunning reports whether the agent declined to start rather than failed to.
+//
+// Three states and one answer, because the sender's question is the same in
+// all three: their delivery arrived, it was accepted as theirs, and nothing
+// happened because of a decision on this side.
+func notRunning(err error) bool {
+	return errors.Is(err, trigger.ErrPaused) ||
+		errors.Is(err, trigger.ErrStopped) ||
+		errors.Is(err, trigger.ErrDraft)
 }
