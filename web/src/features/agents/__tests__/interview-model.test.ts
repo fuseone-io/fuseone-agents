@@ -1,0 +1,50 @@
+import { describe, expect, it } from "vitest";
+import { draftFromInterview } from "@/features/agents/interview-model";
+
+/*
+Seven questions are asked, and what the author answered has to arrive.
+
+The last one — what must never happen — is the reason the set works with this
+audience: somebody in marketing cannot draft a security policy and answers
+"never send to the whole base without a review" without hesitating (FU-07). It
+was collected and dropped, which made the interview ask its most valuable
+question for nothing.
+*/
+
+const TRANSLATED = { tools: ["crm.lookup"], steps: [] };
+
+const ANSWERS = {
+  trigger: "Quando chega um chamado em suporte@.",
+  mustKnow: "Quem é o cliente e qual o plano dele.",
+  steps: "Procuro o cliente, procuro o artigo, respondo.",
+  goesWrong: "Às vezes o e-mail não bate com nenhuma conta.",
+  notDecide: "Reembolso.",
+  closing: "Termina quando a resposta sai.",
+  neverDo: "Nunca responder sem citar o artigo.",
+};
+
+describe("what an interview leaves behind", () => {
+  it("carries what must never happen into the instruction, labelled", () => {
+    const draft = draftFromInterview(ANSWERS, TRANSLATED, "pt-BR");
+
+    expect(draft.instructions).toContain("Nunca responder sem citar o artigo.");
+    // Labelled rather than appended as a sentence: the block is what makes it
+    // legible as a limit rather than as one more paragraph of prose.
+    expect(draft.instructions).toContain("Nunca");
+  });
+
+  it("carries what the agent must know before acting", () => {
+    const draft = draftFromInterview(ANSWERS, TRANSLATED, "pt-BR");
+
+    expect(draft.instructions).toContain("Quem é o cliente e qual o plano dele.");
+  });
+
+  // An agent that starts itself because a wizard defaulted is the worst
+  // default this product could have, so the answer about when it starts sets
+  // no trigger. It is configuration and its home is the field, not the prompt.
+  it("sets no trigger from the answer about when it starts", () => {
+    const draft = draftFromInterview(ANSWERS, TRANSLATED, "pt-BR");
+
+    expect(draft.triggers).toEqual([]);
+  });
+});

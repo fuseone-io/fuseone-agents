@@ -13,6 +13,11 @@ Não decidiria sozinha: {{.Answers.NotDecide}}
 A exceção, para o campo stops_when: "{{.Answers.GoesWrong}}"
 Decida a qual passo ela pertence e escreva-a lá, nas palavras da pessoa.
 {{end}}
+{{if .Answers.NeverDo}}
+O limite que a pessoa declarou: "{{.Answers.NeverDo}}"
+Não proponha ferramenta que torne isso possível. Uma ferramenta que a
+pessoa acabou de proibir é uma ferramenta que ela vai ter de tirar.
+{{end}}
 Responda só com JSON:
 {"tools":["..."],"steps":[{"name":"...","reaches":["..."],"stops_when":"..."}]}
 

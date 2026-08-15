@@ -24,7 +24,7 @@ import {
  * editor means there is one way to publish rather than two.
  */
 export function InterviewPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const translate = useInterview();
 
@@ -41,6 +41,11 @@ export function InterviewPage() {
         steps: answers.steps ?? "",
         goesWrong: answers.goesWrong ?? "",
         notDecide: answers.notDecide ?? "",
+        // The two the assistant was never told, and both bear on what it
+        // answers: a limit the author stated changes which tools it should
+        // propose, and how the author knows it is done changes the stages.
+        neverDo: answers.neverDo ?? "",
+        closing: answers.closing ?? "",
       },
       {
         onSuccess: (draft) => {
@@ -48,7 +53,7 @@ export function InterviewPage() {
           // agent registry without a person having read it back first.
           sessionStorage.setItem(
             "fuseone.draft",
-            JSON.stringify(draftFromInterview(answers, draft)),
+            JSON.stringify(draftFromInterview(answers, draft, i18n.language)),
           );
           navigate("/agents/new?from=interview");
         },

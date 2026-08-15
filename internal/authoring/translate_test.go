@@ -298,3 +298,37 @@ func TestTranslate_bothPasses_areChargedTogether(t *testing.T) {
 		t.Errorf("got %d micros, want both calls", got.Cost.Micros)
 	}
 }
+
+/*
+A limit the author stated reaches the assistant.
+
+The screen asked what must never happen — the one question this audience
+answers without hesitating (FU-07) — and then dropped it. The assistant went
+on proposing tools the author had just forbidden, and the author's first act
+on the draft was to take them away again.
+*/
+func TestOrganise_theLimitTheAuthorStated_reachesThePrompt(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeCompleter{reply: `{"tools":[],"steps":[]}`}
+	if _, err := authoring.Translate(t.Context(), authoring.Job{
+		Completer: fake,
+		Choice:    authoring.Choice{DailyMicros: 1_000_000, Enabled: true},
+		Catalogue: catalogue,
+		Locale:    "pt-BR",
+		Answers: authoring.Answers{
+			MustKnow: "quem é o cliente",
+			Steps:    "procuro e respondo",
+			NeverDo:  "nunca reembolsar sem uma pessoa",
+		},
+	}); err != nil {
+		t.Fatalf("translate: %v", err)
+	}
+
+	if len(fake.prompts) == 0 {
+		t.Fatal("nothing was asked of the assistant")
+	}
+	if !strings.Contains(fake.prompts[0], "nunca reembolsar sem uma pessoa") {
+		t.Errorf("the limit did not reach the assistant:\n%s", fake.prompts[0])
+	}
+}

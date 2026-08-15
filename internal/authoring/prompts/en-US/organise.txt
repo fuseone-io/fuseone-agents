@@ -13,6 +13,11 @@ Would not decide alone: {{.Answers.NotDecide}}
 The exception, for the stops_when field: "{{.Answers.GoesWrong}}"
 Decide which step it belongs to and write it there, in their own words.
 {{end}}
+{{if .Answers.NeverDo}}
+The limit the person stated: "{{.Answers.NeverDo}}"
+Do not propose a tool that makes it possible. A tool the person has just
+forbidden is a tool they will have to take away.
+{{end}}
 Answer with JSON only:
 {"tools":["..."],"steps":[{"name":"...","reaches":["..."],"stops_when":"..."}]}
 

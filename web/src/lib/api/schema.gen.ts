@@ -2300,11 +2300,27 @@ export interface components {
             /** Format: date-time */
             updatedAt?: string;
         };
+        /**
+         * @description The prose half of the interview. Every question that bears on what the
+         *     assistant answers is here: three of the seven were collected by the
+         *     screen and never sent, and the worst omission was the limit the author
+         *     stated — the one question this audience answers without hesitating,
+         *     and the one that most changes which tools should be proposed.
+         *
+         *     The question about when the agent starts is deliberately absent. It is
+         *     configuration, its home is the field, and an agent that starts itself
+         *     because a wizard defaulted is the worst default this product could
+         *     have.
+         */
         InterviewAnswers: {
             mustKnow?: string;
             steps?: string;
             goesWrong?: string;
             notDecide?: string;
+            /** @description What the author says must never happen (FU-07). */
+            neverDo?: string;
+            /** @description How the author knows the work is finished. */
+            closing?: string;
         };
         InstructionText: {
             provider: string;

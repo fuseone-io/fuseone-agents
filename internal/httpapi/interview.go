@@ -133,6 +133,12 @@ func answersFrom(in *openapi.InterviewAgentJSONRequestBody) authoring.Answers {
 		Steps:     valueOr(in.Steps),
 		GoesWrong: valueOr(in.GoesWrong),
 		NotDecide: valueOr(in.NotDecide),
+		// The two the screen collected and never sent. Both bear on what the
+		// assistant answers: a limit the author stated changes which tools it
+		// should propose, and how they know the work is done is the sentence
+		// a step's exception is written from.
+		NeverDo: valueOr(in.NeverDo),
+		Closing: valueOr(in.Closing),
 	}
 }
 
