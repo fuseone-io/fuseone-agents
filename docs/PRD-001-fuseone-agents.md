@@ -792,7 +792,7 @@ capability → contract → data label → policy → reservation → idempotenc
 grant is a release applied after all seven have run — which is the only order
 that holds the property worth having: **a grant releases an action that merely
 needed approving, and can never release one any check blocked.** Placed among
-them it would be a check able to overrule the six above it.
+them it would be an eighth check able to overrule the seven above it.
 
 > Autonomy was added when the stages landed (FU-14), and it runs late on
 > purpose. Placed early it reported "the agent is in Copilot" for calls a taint
