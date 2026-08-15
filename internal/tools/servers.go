@@ -48,7 +48,7 @@ func (c *Catalog) AddServer(ctx context.Context, name string, session Session) e
 			RemoteName:  t.Name,
 			Description: t.Description,
 			Schema:      schemaProperties(t.InputSchema),
-			Effect:      domain.EffectRead,
+			Effect:      domain.EffectUnknown,
 			Untrusted:   true,
 		}
 	}

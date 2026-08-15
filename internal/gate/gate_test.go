@@ -2,6 +2,7 @@ package gate
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/fuseone/agents/internal/domain"
@@ -300,5 +301,42 @@ func TestEvaluate_firstToolCallAgainstACeilingOfOne_isAllowed(t *testing.T) {
 
 	if d := evaluate(t, New(), r); d.Rule == RuleBudget {
 		t.Errorf("decision = %+v, want the first call allowed", d)
+	}
+}
+
+/*
+A tool nobody has classified is not a tool that reads.
+
+Discovery filed everything a server offered as READ, and READ is allowed
+outright — so registering a server with forty tools created forty the Gate
+would let through, `delete_repository` among them, until somebody ruled on each
+by name. The label was a claim about the tool and nothing verified it.
+
+DE-13 reads as a restriction — "arrives as READ and requires explicit
+reclassification to allow writing" — and the mechanism was a permission.
+*/
+func TestEvaluate_toolNobodyClassified_isRefused(t *testing.T) {
+	t.Parallel()
+
+	r := request()
+	r.Effect = domain.EffectUnknown
+
+	if got := evaluate(t, New(), r); got.Verdict != domain.VerdictBlock {
+		t.Errorf("verdict = %v, want a block", got.Verdict)
+	}
+}
+
+// With its own sentence, which the Gate already had. The defect was never
+// here: it was upstream, at discovery, filing every tool a server offered as
+// READ so that this branch was never reached.
+func TestEvaluate_toolNobodyClassified_saysThatIsWhy(t *testing.T) {
+	t.Parallel()
+
+	r := request()
+	r.Effect = domain.EffectUnknown
+
+	got := evaluate(t, New(), r)
+	if !strings.Contains(got.Reason, "no effect classification") {
+		t.Errorf("reason = %q, want it to name the missing classification", got.Reason)
 	}
 }

@@ -36,6 +36,16 @@ func TestAbandon_theUndoReachesTheServer(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("classify: %v", err)
 		}
+		// The compensator needs its own ruling. Classification is the contract
+		// check, which runs before the policy check that lowers the ladder for
+		// a compensating call — so an unclassified undo is refused at the one
+		// moment somebody is relying on it. Discovering that during an
+		// abandonment is discovering it at the worst hour available.
+		if err := p.catalog.Classify(domain.ToolClassification{
+			Tool: "crm.unnote", Effect: domain.EffectWrite,
+		}); err != nil {
+			t.Fatalf("classify the undo: %v", err)
+		}
 		p.gate.allow("crm.note")
 
 		p.open(t, "run-abandon-1")

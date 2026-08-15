@@ -44,9 +44,19 @@ type Entry struct {
 	Description string
 	Schema      map[string]any
 
-	// Effect starts at read and only the Curator changes it (PRD DE-13). A
-	// tool that silently arrived as "write" because its own server said so
-	// would put the classification back in the hands of a third party.
+	/*
+		Effect starts unclassified and only the Curator sets it (PRD DE-13).
+
+		A tool that silently arrived as "write" because its own server said so
+		would put the classification back in the hands of a third party. That
+		argument is right and it does not argue for read: read is *allowed*, so
+		importing a server used to create one permitted tool per name it offered —
+		`delete_repository` among them — until somebody ruled on each. The label
+		read like a restriction and behaved as a permission.
+
+		Unclassified refuses the server's claim without acting on it either way,
+		and the Gate already knows what to do with it.
+	*/
 	Effect domain.Effect
 	// Untrusted marks a source whose output may be attacker-authored. It is
 	// the default for anything registered from outside, and it is what makes

@@ -64,7 +64,19 @@ func lookupServer() *fakeServer {
 	}
 }
 
-func TestAddServer_importedTool_arrivesReadOnlyAndUntrusted(t *testing.T) {
+/*
+An imported tool arrives unclassified, and unclassified does not execute.
+
+It used to arrive as READ, which reads like a restriction and is a permission:
+READ is allowed outright, so a server offering forty tools created forty the
+Gate would let through — `delete_repository` among them — until somebody ruled
+on each by name. The label was a claim about the tool and nothing verified it.
+
+The server still must not be able to grant itself anything by describing a tool
+as one; that argument was always right and it argues for unclassified, which
+refuses the server's claim without acting on it either way.
+*/
+func TestAddServer_importedTool_arrivesUnclassifiedAndUntrusted(t *testing.T) {
 	t.Parallel()
 
 	c, _ := catalogWith(t, lookupServer())
@@ -73,10 +85,8 @@ func TestAddServer_importedTool_arrivesReadOnlyAndUntrusted(t *testing.T) {
 	if !ok {
 		t.Fatal("the imported tool is not in the catalogue")
 	}
-	// A server must not be able to grant itself write access by describing a
-	// tool as one. Everything arrives read-only and the Curator widens it.
-	if effect != domain.EffectRead {
-		t.Errorf("Effect = %v, want read on import", effect)
+	if effect != domain.EffectUnknown {
+		t.Errorf("Effect = %v, want unknown until the Curator rules", effect)
 	}
 }
 
@@ -303,9 +313,9 @@ func TestSync_appliesARecordedRuling_soAPromotionOutlivesTheProcess(t *testing.T
 
 	c, _ := catalogWith(t, noteServer())
 
-	// Imported read-only, as every tool is, whatever its server claims.
-	if effect, _ := c.Effect("crm.note"); effect != domain.EffectRead {
-		t.Fatalf("imported effect = %v, want read", effect)
+	// Imported unclassified, as every tool is, whatever its server claims.
+	if effect, _ := c.Effect("crm.note"); effect != domain.EffectUnknown {
+		t.Fatalf("imported effect = %v, want unknown", effect)
 	}
 
 	applied, err := c.Sync(t.Context(), staticRulings{
