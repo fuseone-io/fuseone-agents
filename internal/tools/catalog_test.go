@@ -9,6 +9,7 @@ import (
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
+	"github.com/fuseone/agents/internal/known"
 	"github.com/fuseone/agents/internal/tools"
 )
 
@@ -48,6 +49,17 @@ func catalogWith(t *testing.T, srv *fakeServer) (*tools.Catalog, *engine.MemoryC
 		t.Fatalf("AddServer: %v", err)
 	}
 	return c, content
+}
+
+func mergeServer() *fakeServer {
+	return &fakeServer{
+		list: []*mcp.Tool{{
+			Name:        "merge_pull_request",
+			Description: "Merge a pull request.",
+			InputSchema: map[string]any{"type": "object"},
+		}},
+		result: text("merged"),
+	}
 }
 
 func lookupServer() *fakeServer {
@@ -405,5 +417,62 @@ func TestRemoveServer_thatWasNeverConnected_isNotAnError(t *testing.T) {
 	// pass log an error nobody can act on.
 	if err := tools.NewCatalog(engine.NewMemoryContent()).RemoveServer("nunca"); err != nil {
 		t.Errorf("RemoveServer: %v", err)
+	}
+}
+
+/*
+A tool the platform already knows something about.
+
+Unclassified is the right default and it is also forty rulings to write by hand
+before a well-known server does anything, which is how a safe default becomes
+one somebody works around. So a shipped suggestion travels with the tool.
+
+It is a suggestion and stays one. Applied on import it would put the decision
+back in a table shipped in a binary — the same mistake as trusting the server,
+one step further away and harder to see.
+*/
+func TestAddServer_aKnownServer_carriesASuggestionAndStaysUnclassified(t *testing.T) {
+	t.Parallel()
+
+	known, err := known.Load()
+	if err != nil {
+		t.Fatalf("catalogue: %v", err)
+	}
+	c, _ := catalogWith(t, mergeServer())
+	c.Knowing(known)
+	if err := c.AddServer(t.Context(), "github", mergeServer()); err != nil {
+		t.Fatalf("AddServer: %v", err)
+	}
+
+	entry, ok := c.Lookup("github.merge_pull_request")
+	if !ok {
+		t.Fatal("the imported tool is not in the catalogue")
+	}
+	if entry.Effect != domain.EffectUnknown {
+		t.Errorf("Effect = %v, want it still unclassified", entry.Effect)
+	}
+	if entry.Suggested == nil || entry.Suggested.Effect != domain.EffectDestructive {
+		t.Errorf("Suggested = %+v, want destructive suggested", entry.Suggested)
+	}
+}
+
+// A server nobody catalogued imports exactly as before. The suggestion is an
+// addition and never a precondition.
+func TestAddServer_anUnknownServer_importsWithNoSuggestion(t *testing.T) {
+	t.Parallel()
+
+	known, err := known.Load()
+	if err != nil {
+		t.Fatalf("catalogue: %v", err)
+	}
+	c, _ := catalogWith(t, lookupServer())
+	c.Knowing(known)
+	if err := c.AddServer(t.Context(), "acme", lookupServer()); err != nil {
+		t.Fatalf("AddServer: %v", err)
+	}
+
+	entry, _ := c.Lookup("acme.lookup")
+	if entry.Suggested != nil {
+		t.Errorf("Suggested = %+v, want nothing for a server nobody catalogued", entry.Suggested)
 	}
 }

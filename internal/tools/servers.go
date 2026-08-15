@@ -50,6 +50,7 @@ func (c *Catalog) AddServer(ctx context.Context, name string, session Session) e
 			Schema:      schemaProperties(t.InputSchema),
 			Effect:      domain.EffectUnknown,
 			Untrusted:   true,
+			Suggested:   c.suggestion(name, t.Name),
 		}
 	}
 	return nil
@@ -98,4 +99,34 @@ func (c *Catalog) Close() error {
 	}
 	clear(c.sessions)
 	return errors.Join(errs...)
+}
+
+// suggestion is what the platform already believes about this tool, if
+// anything.
+//
+// Matched by the name the server answered with, so an entry that has aged
+// degrades into silence rather than into a wrong answer — the worst a stale
+// suggestion can do is leave the Curator where they would have been without
+// one. Called with the lock held.
+func (c *Catalog) suggestion(server, remoteName string) *Suggestion {
+	if c.known == nil {
+		return nil
+	}
+	found, ok := c.known.Suggest(server, remoteName)
+	if !ok {
+		return nil
+	}
+
+	effect, err := domain.ParseEffect(found.Effect)
+	if err != nil {
+		// A shipped effect the domain does not know is a typo in our own data,
+		// and the safe reading of a typo is no opinion at all.
+		return nil
+	}
+	return &Suggestion{
+		Effect:        effect,
+		Untrusted:     found.Untrusted,
+		CompensatedBy: domain.ToolID(found.CompensatedBy),
+		Why:           found.Why,
+	}
 }

@@ -1,0 +1,58 @@
+server: filesystem
+title: Local filesystem
+publisher: Model Context Protocol reference servers
+docs: https://github.com/modelcontextprotocol/servers
+provenance: documentation
+note: >
+  It reaches whatever directories it is started with, and nothing about a
+  classification narrows that — the allowed roots are an argument to the
+  server, decided when it is launched.
+
+  Never as stdio inside the worker. There it would read the worker's own
+  filesystem, which holds the environment it was given (DE-24).
+
+suggestions:
+  - tool: read_file
+    effect: read
+    untrusted: true
+    why: >
+      A file the platform did not write is content somebody else authored, and
+      that is the definition of untrusted here.
+
+  - tool: read_multiple_files
+    effect: read
+    untrusted: true
+    why: As above, in bulk.
+
+  - tool: list_directory
+    effect: read
+    why: Names and sizes. Content is what carries an instruction, not a listing.
+
+  - tool: search_files
+    effect: read
+    why: Matches paths rather than returning content.
+
+  - tool: get_file_info
+    effect: read
+    why: Metadata only.
+
+  - tool: write_file
+    effect: destructive
+    why: >
+      It replaces a file whole. There is no version history underneath, so what
+      was there before is gone — which makes this destructive rather than a
+      write, whatever the verb in its name suggests.
+
+  - tool: edit_file
+    effect: destructive
+    why: The same, in place.
+
+  - tool: move_file
+    effect: destructive
+    why: >
+      A move that lands on an existing path replaces it, and the caller cannot
+      always tell in advance that it will.
+
+  - tool: create_directory
+    effect: write
+    why: Adds without removing.

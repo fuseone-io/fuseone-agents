@@ -1,0 +1,23 @@
+server: postgres
+title: PostgreSQL
+publisher: Model Context Protocol reference servers
+docs: https://github.com/modelcontextprotocol/servers
+provenance: documentation
+note: >
+  The reference server exposes one tool that runs SQL the model wrote. Read-only
+  has to be the *connection* — a role granted SELECT and nothing else — never a
+  belief about the query, because a parser deciding whether some SQL writes is
+  a parser somebody gets past.
+
+  Prefer `sql.readonly` with named queries where the queries are known. This
+  entry is for the case where they are not, and it is the weaker one.
+
+suggestions:
+  - tool: query
+    effect: read
+    untrusted: true
+    why: >
+      Read only insofar as the credential is. Classified read on the
+      understanding that the connection cannot write, and untrusted because
+      what comes back is customer data that somebody outside this company
+      typed.

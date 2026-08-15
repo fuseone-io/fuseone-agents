@@ -18,6 +18,7 @@ import (
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
+	"github.com/fuseone/agents/internal/known"
 )
 
 var (
@@ -58,6 +59,18 @@ type Entry struct {
 		and the Gate already knows what to do with it.
 	*/
 	Effect domain.Effect
+	/*
+		Suggested is what the platform ships about a known server, and it is not a
+		classification.
+
+		Applied on import it would put the decision back in a table shipped in a
+		binary — the same mistake as trusting the server, one step further away and
+		harder to see. What it saves is the Curator inventing forty rulings from a
+		list of bare names, which is how a safe default becomes one people work
+		around. Nil for a server nobody catalogued, and for a tool an entry never
+		heard of.
+	*/
+	Suggested *Suggestion
 	// Untrusted marks a source whose output may be attacker-authored. It is
 	// the default for anything registered from outside, and it is what makes
 	// taint propagate into the run (PRD DE-14, SE-05).
@@ -76,6 +89,40 @@ type Catalog struct {
 
 	content engine.ContentStore
 	timeout time.Duration
+	// known is what the platform ships about servers other people publish.
+	// Optional: without it every tool imports with no suggestion, which is
+	// what happened before there was a catalogue.
+	known Suggester
+}
+
+// Suggester is what the platform already knows about a server's tools,
+// declared here by the consumer.
+type Suggester interface {
+	Suggest(server, remoteName string) (known.Suggestion, bool)
+}
+
+// Suggestion is a shipped opinion about one tool, resolved into domain types.
+type Suggestion struct {
+	Effect        domain.Effect
+	Untrusted     *bool
+	CompensatedBy domain.ToolID
+	Why           string
+}
+
+// Knowing wires the shipped catalogue.
+func (c *Catalog) Knowing(known Suggester) *Catalog {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.known = known
+	return c
+}
+
+// Lookup returns one entry, for the console and for the Curator's screen.
+func (c *Catalog) Lookup(id domain.ToolID) (Entry, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	e, ok := c.entries[id]
+	return e, ok
 }
 
 func NewCatalog(content engine.ContentStore) *Catalog {

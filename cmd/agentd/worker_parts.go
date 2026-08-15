@@ -12,6 +12,7 @@ import (
 	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
+	"github.com/fuseone/agents/internal/known"
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/policy"
 	"github.com/fuseone/agents/internal/settings"
@@ -85,7 +86,14 @@ func openWorkerParts(ctx context.Context, dsn string) (*workerParts, error) {
 		parts.durable = ledger.NewContent(pool)
 		parts.content = parts.durable
 	}
-	parts.catalog = tools.NewCatalog(parts.content)
+	// What the platform already knows about servers other people publish. A
+	// suggestion travels with a discovered tool and never becomes its
+	// classification: that stays the Curator's act.
+	shipped, err := known.Load()
+	if err != nil {
+		return nil, fmt.Errorf("load the known servers: %w", err)
+	}
+	parts.catalog = tools.NewCatalog(parts.content).Knowing(shipped)
 
 	if err := parts.openConfiguration(ctx, dsn); err != nil {
 		return nil, err

@@ -1,0 +1,79 @@
+server: github
+title: GitHub
+publisher: GitHub
+docs: https://github.com/github/github-mcp-server
+provenance: documentation
+note: >
+  Available hosted and as a container. The hosted one needs nothing running;
+  the container is the only option for GitHub Enterprise Server, and running it
+  as stdio inside the worker hands it the worker's network and credentials
+  (DE-24) — give it its own workload and its own token instead.
+
+  Scope the token to the repositories the agent should reach. A classification
+  bounds what a tool may do; it cannot bound where.
+
+suggestions:
+  - tool: create_issue
+    effect: write
+    compensatedBy: update_issue
+    why: >
+      Opens an issue somebody will read. Closing it does not remove it, so the
+      undo is an update saying the agent withdrew it — which is the honest
+      compensation and worth showing as one.
+
+  - tool: add_issue_comment
+    effect: write
+    why: A comment on somebody's issue, visible to everyone who watches it.
+
+  - tool: create_pull_request
+    effect: write
+    why: >
+      Proposes a change and notifies reviewers. It merges nothing on its own,
+      which is why this is a write and not destructive.
+
+  - tool: merge_pull_request
+    effect: destructive
+    why: >
+      Changes the default branch of a repository, which is what builds and
+      deploys from. Reverting is a new commit and not an undo.
+
+  - tool: create_or_update_file
+    effect: write
+    why: Commits to a branch. Recoverable through history, not silently.
+
+  - tool: push_files
+    effect: write
+    why: The same as a commit, in bulk.
+
+  - tool: create_branch
+    effect: write
+    why: Adds a ref. Cheap and visible, and not nothing.
+
+  - tool: get_issue
+    effect: read
+    untrusted: true
+    why: >
+      Issue text is written by anyone who can open one. Treat it as input from
+      a stranger, because on a public repository it is exactly that.
+
+  - tool: list_issues
+    effect: read
+    untrusted: true
+    why: As above, in bulk.
+
+  - tool: get_file_contents
+    effect: read
+    untrusted: true
+    why: >
+      Repository content, including files a contributor added. A file can
+      carry an instruction as easily as a function.
+
+  - tool: search_code
+    effect: read
+    untrusted: true
+    why: Returns repository content, with the same caveat.
+
+  - tool: list_commits
+    effect: read
+    untrusted: true
+    why: Commit messages are free text somebody else wrote.
