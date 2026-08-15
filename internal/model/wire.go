@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/engine"
 )
 
 /*
@@ -27,21 +28,40 @@ type names struct {
 	tool map[string]domain.ToolID
 }
 
-// namesFor assigns each tool a name its provider will accept.
-func namesFor(ids []domain.ToolID) names {
+/*
+namesFor assigns a name to everything this request will mention.
+
+The pack of the step being planned, and then everything the transcript already
+did. The two are not the same set: a call made under step one is still in the
+history when step two is the one being planned, and named from the offered set
+alone it would go out with no name at all — which is the same 400 as the dot,
+arriving precisely when a run has just succeeded at something.
+
+Naming is not offering. What the model may call is still only what this step
+reaches; what it may be reminded of is everything it already did. The pack is
+the Gate's business and the transcript must not widen it by the back door.
+*/
+func namesFor(in engine.PlanInput) names {
 	n := names{
-		wire: make(map[domain.ToolID]string, len(ids)),
-		tool: make(map[string]domain.ToolID, len(ids)),
+		wire: make(map[domain.ToolID]string, len(in.Tools)),
+		tool: make(map[string]domain.ToolID, len(in.Tools)),
 	}
+	n.add(in.Tools...)
+	for _, turn := range in.Transcript {
+		n.add(turn.Tool)
+	}
+	return n
+}
+
+func (n names) add(ids ...domain.ToolID) {
 	for _, id := range ids {
-		if _, taken := n.wire[id]; taken {
+		if _, known := n.wire[id]; known || id == "" {
 			continue
 		}
 		name := n.free(safeName(string(id)))
 		n.wire[id] = name
 		n.tool[name] = id
 	}
-	return n
 }
 
 // free is the first name in this request nothing else answers to.

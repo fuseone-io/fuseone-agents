@@ -45,7 +45,7 @@ var _ engine.Planner = (*OpenAICompatible)(nil)
 func (o *OpenAICompatible) Plan(ctx context.Context, in engine.PlanInput) (engine.Proposal, error) {
 	// Built once for this request and used in both directions: the names the
 	// provider is offered, and the identifier a proposal is read back as.
-	offered := namesFor(in.Tools)
+	offered := namesFor(in)
 	body := chatRequest{
 		Model:     o.cfg.Model,
 		Messages:  o.chatMessages(in, offered),

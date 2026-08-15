@@ -97,7 +97,7 @@ var _ engine.Planner = (*Anthropic)(nil)
 func (a *Anthropic) Plan(ctx context.Context, in engine.PlanInput) (engine.Proposal, error) {
 	// Built once for this request and used in both directions: the names the
 	// provider is offered, and the identifier a proposal is read back as.
-	offered := namesFor(in.Tools)
+	offered := namesFor(in)
 	tools := a.toolParams(in.Tools, offered)
 
 	resp, err := a.client.Messages.New(ctx, anthropic.MessageNewParams{

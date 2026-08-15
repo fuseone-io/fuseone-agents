@@ -266,3 +266,68 @@ func systemTurn(t *testing.T, body map[string]any) string {
 	t.Fatal("no system turn was sent")
 	return ""
 }
+
+/*
+A call replayed from a step the run has left.
+
+The map is built from what this step offers, and the transcript reaches back
+further than that: a call made under step one is still in the history when
+step two is the one being planned. Named from the offered set alone it comes
+back empty, and an empty name is a 400 — so a run died precisely when it
+succeeded at something, which is the worst possible moment to fail.
+
+The transcript widens the naming and never the pack. What the model may call is
+still only what this step offers; what it may be reminded of is everything it
+already did.
+*/
+func TestAnthropic_replayedCall_theStepNoLongerOffersIt_isStillNamed(t *testing.T) {
+	t.Parallel()
+	c := serve(t, anthropicToolUseWireName)
+	p := plannerFor(t, model.KindAnthropic, c.server.URL, model.Config{Model: "claude-opus-5"})
+
+	in := withACallAlreadyMade()
+	// The run has moved on: this step reaches something else entirely.
+	in.Tools = []domain.ToolID{"crm.search"}
+	if _, err := p.Plan(context.Background(), in); err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+
+	if got := replayedName(t, c.body); !accepted.MatchString(got) {
+		t.Errorf("replayed as %q, which the provider refuses", got)
+	}
+}
+
+func TestOpenAICompatible_replayedCall_theStepNoLongerOffersIt_isStillNamed(t *testing.T) {
+	t.Parallel()
+	c := serve(t, openAIToolCallWireName)
+	p := plannerFor(t, model.KindOpenAICompatible, c.server.URL, model.Config{Model: "gpt-test"})
+
+	in := withACallAlreadyMade()
+	in.Tools = []domain.ToolID{"crm.search"}
+	if _, err := p.Plan(context.Background(), in); err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+
+	if got := replayedName(t, c.body); !accepted.MatchString(got) {
+		t.Errorf("replayed as %q, which the provider refuses", got)
+	}
+}
+
+// Naming a tool is not offering it. The pack is the Gate's business and the
+// transcript must not widen it by the back door.
+func TestAnthropic_aToolOnlyTheTranscriptMentions_isNotOffered(t *testing.T) {
+	t.Parallel()
+	c := serve(t, anthropicToolUseWireName)
+	p := plannerFor(t, model.KindAnthropic, c.server.URL, model.Config{Model: "claude-opus-5"})
+
+	in := withACallAlreadyMade()
+	in.Tools = []domain.ToolID{"crm.search"}
+	if _, err := p.Plan(context.Background(), in); err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+
+	tools, _ := c.body["tools"].([]any)
+	if len(tools) != 0 {
+		t.Errorf("offered %d tools, want none — the schema stub serves only crm.lookup", len(tools))
+	}
+}
