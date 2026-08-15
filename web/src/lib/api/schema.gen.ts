@@ -2307,10 +2307,17 @@ export interface components {
          *     stated — the one question this audience answers without hesitating,
          *     and the one that most changes which tools should be proposed.
          *
-         *     The question about when the agent starts is deliberately absent. It is
+         *     Two questions are deliberately absent. When the agent starts is
          *     configuration, its home is the field, and an agent that starts itself
          *     because a wizard defaulted is the worst default this product could
          *     have.
+         *
+         *     How the author knows the work is finished is absent for a sharper
+         *     reason: this call produces `stops_when`, which is the exception that
+         *     ends a step, and a success condition read as an exception makes an
+         *     agent stop at the moment it succeeds. Until the prompt can hold the
+         *     two apart, the answer stays where it is unambiguous — the instruction,
+         *     beside how the work is done.
          */
         InterviewAnswers: {
             mustKnow?: string;
@@ -2319,8 +2326,6 @@ export interface components {
             notDecide?: string;
             /** @description What the author says must never happen (FU-07). */
             neverDo?: string;
-            /** @description How the author knows the work is finished. */
-            closing?: string;
         };
         InstructionText: {
             provider: string;

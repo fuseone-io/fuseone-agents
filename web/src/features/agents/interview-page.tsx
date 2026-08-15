@@ -41,11 +41,10 @@ export function InterviewPage() {
         steps: answers.steps ?? "",
         goesWrong: answers.goesWrong ?? "",
         notDecide: answers.notDecide ?? "",
-        // The two the assistant was never told, and both bear on what it
-        // answers: a limit the author stated changes which tools it should
-        // propose, and how the author knows it is done changes the stages.
+        // The limit the assistant was never told, and it changes what it
+        // should answer: a tool the author has just forbidden is a tool they
+        // will have to take away again.
         neverDo: answers.neverDo ?? "",
-        closing: answers.closing ?? "",
       },
       {
         onSuccess: (draft) => {

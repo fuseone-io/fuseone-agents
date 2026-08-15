@@ -71,8 +71,17 @@ export function draftFromInterview(
 ): Partial<AgentDefinition> {
   const blocks: Block[] = [
     { kind: "objective", text: answers.mustKnow ?? "" },
-    { kind: "howToAct", text: answers.steps ?? "" },
-    { kind: "whenToStop", text: [answers.goesWrong, answers.closing].filter(Boolean).join("\n\n") },
+    // How the work finishes belongs with how it is done, never under "when to
+    // stop". That label is where a step's exception goes, and the platform
+    // tells the model that reaching it means giving up — so "it ends when the
+    // reply goes out", filed there, makes an agent stop at the moment it
+    // succeeds. It is the failure this very question exists to describe,
+    // turned into the failure it causes.
+    {
+      kind: "howToAct",
+      text: [answers.steps, answers.closing].filter(Boolean).join("\n\n"),
+    },
+    { kind: "whenToStop", text: answers.goesWrong ?? "" },
     { kind: "never", text: answers.neverDo ?? "" },
   ];
 
