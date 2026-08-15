@@ -3,6 +3,7 @@ import { FileText } from "lucide-react";
 import { Mono } from "@/components/shared/mono";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AgentFlow } from "@/features/agents/agent-flow";
+import { InstructionsRead } from "@/features/agents/instructions-read";
 import type { components } from "@/lib/api/schema.gen";
 
 /**
@@ -68,6 +69,10 @@ export function AgentDefinition({
  * Kept apart from the steps deliberately: the prose is the instruction and
  * the steps are what the Gate is meant to obey. Showing them as one document
  * would hide that they are two different things with two different readers.
+ *
+ * Laid out the way it was written, labels in the margin. The editor gives a
+ * prompt its own hierarchy and a version rendered as one paragraph throws it
+ * away — at the moment somebody is working out what the agent was told.
  */
 function Prose({ instructions }: { instructions?: string }) {
   const { t } = useTranslation();
@@ -79,7 +84,5 @@ function Prose({ instructions }: { instructions?: string }) {
       </p>
     );
   }
-  return (
-    <p className="whitespace-pre-wrap text-sm leading-relaxed">{instructions}</p>
-  );
+  return <InstructionsRead instructions={instructions} />;
 }
