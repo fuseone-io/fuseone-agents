@@ -35,10 +35,13 @@ export function InstructionsEditor({
   instructions,
   onChange,
   tools,
+  tokens,
 }: {
   instructions: string;
   onChange: (instructions: string) => void;
   tools: { catalogue: Tool[]; policies: Policy[] };
+  /** How large this is to the model that will read it, when it could say. */
+  tokens?: number;
 }) {
   const { t, i18n } = useTranslation();
   const [view, setView] = useState<"write" | "read">("write");
@@ -174,6 +177,7 @@ export function InstructionsEditor({
           <InstructionsStrip
             summary={summarise(blocks, tools.catalogue, tools.policies, instructions)}
             findings={found}
+            tokens={tokens}
           />
         </div>
       )}

@@ -3,6 +3,7 @@ import { ListOrdered } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AgentBasicsSection } from "@/features/agents/agent-basics-section";
 import { InstructionsEditor } from "@/features/agents/instructions-editor";
+import { useInstructionTokens } from "@/features/agents/instruction-tokens-api";
 import type { AgentDefinition, Policy, Tool } from "@/lib/api/client";
 
 /**
@@ -30,6 +31,15 @@ export function TabDefinition({
   /** Opens the tab where this text is read as stages. */
   onSteps: () => void;
 }) {
+  // Asked here rather than inside the editor: how large an instruction is, is
+  // a question about the agent's provider and model, and this is where the
+  // draft holding both lives.
+  const tokens = useInstructionTokens(
+    draft.provider,
+    draft.model,
+    draft.instructions,
+  );
+
   return (
     <>
       <AgentBasicsSection
@@ -44,6 +54,7 @@ export function TabDefinition({
         instructions={draft.instructions}
         onChange={(instructions) => patch({ instructions })}
         tools={tools}
+        tokens={tokens}
       />
 
       <ReadAs steps={(draft.steps ?? []).length} onOpen={onSteps} />

@@ -406,6 +406,8 @@
     "textAlreadyPublished": "This text was already the published version.",
     "textHint": "Write the sequence as sentences. Drag by the grip to reorder.",
     "thinksOnly": "thinks, calls nothing",
+    "tokensCounted_one": "{{count}} token",
+    "tokensCounted_other": "{{count}} tokens",
     "toolTally": "{{enabled}} enabled · {{writing}} write · {{denied}} denied by policy",
     "toolsCited_one": "{{count}} tool cited",
     "toolsCited_other": "{{count}} tools cited",

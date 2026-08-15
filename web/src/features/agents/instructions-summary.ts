@@ -17,10 +17,11 @@ export interface Summary {
  * Derived and never authored, which is the only way a count stays true — a
  * number somebody typed is a number that is wrong by the second edit.
  *
- * Characters rather than tokens, and that is a limitation stated rather than
- * hidden. A token count needs the tokeniser of the model that will read it,
- * and this console has none; printing characters under the word "tokens"
- * would put a wrong number exactly where somebody goes to estimate a cost.
+ * Characters, because that is all this side can measure. A token count needs
+ * the tokeniser of the model that will read the text, so it is asked of the
+ * provider — and where the provider has none, the card shows this and says
+ * characters. Printing these under the word "tokens" would put a wrong number
+ * exactly where somebody goes to estimate a cost.
  */
 export function summarise(
   blocks: Block[],

@@ -91,6 +91,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/instructions/tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * How large an instruction is, to the model that will read it
+         * @description Tokenisation belongs to the model. It differs between vendors and
+         *     between generations of the same vendor, so the console cannot compute
+         *     it: an estimate printed under the word "tokens" would be a wrong
+         *     number in the one place somebody goes to size a prompt, and it would
+         *     age with every model released.
+         *
+         *     So the count is the provider's own, asked of the model the agent is
+         *     configured to use, with the instruction sent as the system prompt —
+         *     which is where it goes at run time. It is the size of what the author
+         *     wrote, never the size of a turn: a turn also carries the loop
+         *     contract, the transcript so far and the remaining budget.
+         *
+         *     Where the provider has no way to answer, the reply says so and carries
+         *     no number. That is a state and not a failure — only Anthropic's wire
+         *     format exposes a counting endpoint — and the console falls back to
+         *     showing characters, labelled as characters.
+         */
+        post: operations["countInstructionTokens"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{agentId}": {
         parameters: {
             query?: never;
@@ -2271,6 +2306,25 @@ export interface components {
             goesWrong?: string;
             notDecide?: string;
         };
+        InstructionText: {
+            provider: string;
+            /** @description The model the agent is configured to use. It comes back in the reply, so an answer read on its own says what counted it — a token count means nothing without the model that produced it. */
+            model: string;
+            instructions: string;
+        };
+        InstructionTokens: {
+            /**
+             * @description False means this provider has no way to count. It is a state and not an error, and it carries no number rather than a guess.
+             * @example true
+             */
+            counted: boolean;
+            /**
+             * Format: int64
+             * @description Absent whenever counted is false.
+             */
+            tokens?: number;
+            model: string;
+        };
         InterviewDraft: {
             tools: string[];
             steps: components["schemas"]["AgentStep"][];
@@ -3220,6 +3274,33 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+        };
+    };
+    countInstructionTokens: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstructionText"];
+            };
+        };
+        responses: {
+            /** @description The count, or the reason there is none. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstructionTokens"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     getAgent: {

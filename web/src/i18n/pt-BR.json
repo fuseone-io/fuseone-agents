@@ -406,6 +406,8 @@
     "textAlreadyPublished": "Este texto já era a versão publicada.",
     "textHint": "Escreva a sequência como frases. Arraste pela alça para reordenar.",
     "thinksOnly": "pensa, não chama nada",
+    "tokensCounted_one": "{{count}} token",
+    "tokensCounted_other": "{{count}} tokens",
     "toolTally": "{{enabled}} habilitadas · {{writing}} escrevem · {{denied}} negadas por política",
     "toolsCited_one": "{{count}} ferramenta citada",
     "toolsCited_other": "{{count}} ferramentas citadas",
