@@ -88,6 +88,8 @@ whether this design fits their problem.
 | [NT-004](docs/NT-004-ledger-volume-and-paging.md) | What the ledger costs at volume, measured, and why it is partitioned on the run's opening time |
 | [NT-005](docs/NT-005-interaction-channels.md) | Channels, and why Slack and WhatsApp are two products |
 | [NT-006](docs/NT-006-evaluating-agents.md) | Evaluating agents, and why not to adopt a harness |
+| [NT-007](docs/NT-007-drawing-a-process.md) | A canvas that authors the stages, without the specification becoming a picture |
+| [NT-008](docs/NT-008-a-catalogue-by-shape.md) | The tool servers to ship, chosen by shape and never by vendor |
 
 Engineering rules are in [CLAUDE.md](CLAUDE.md) for the Go core and
 [web/CLAUDE.md](web/CLAUDE.md) for the console. Everything written down is in
