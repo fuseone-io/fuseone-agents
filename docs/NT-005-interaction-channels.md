@@ -4,6 +4,7 @@
 **References** [PRD-001](PRD-001-fuseone-agents.md) — AU-02, AU-04, AU-05, AU-11, NF-06, NF-09, FO-04, SE-10 · [NT-004](NT-004-ledger-volume-and-paging.md)
 **Outcome** Two families rather than one abstraction, one new domain concept, three stages
 **Revised** 2026-08-14 — §9 the shape of a channel trigger, §10 where email belongs
+**Revised** 2026-08-15 — §12 stage 3 broken down, §13 why the other vendors come after
 
 People do not live in the console. An approval that waits for somebody to open
 a browser tab waits, and a run whose result nobody reads was not worth the
@@ -292,3 +293,64 @@ Two loops that would look like natural extensions and are not:
   engine. This platform sends *its own* notifications and receives *its own*
   approvals. The moment it relays other systems' messages it has become the
   product the PRD said it is not.
+
+---
+
+## 12. Stage 3, broken down
+
+*Added 2026-08-15, after stages 1 and 2 shipped and [PRD DE-18…21](PRD-001-fuseone-agents.md#96-conversation-as-an-origin-of-work)
+made the ask a requirement rather than a proposal.*
+
+Half of it is already standing, which is easy to lose sight of when the note
+reads as though nothing exists.
+
+**Built and in the lab:** Slack signature verification, used today by the
+approval button. The account-to-principal binding and its administrative
+endpoint. `trigger.Opener`, which takes a `Request` and seals `run_started` —
+a channel is a fourth caller and needs no new machinery. The taint check, which
+is what makes text somebody else wrote survivable at all. And the outbound
+half, with delivery recorded per conversation and retried per conversation.
+
+**Missing, smallest first:**
+
+| Piece | Why it is what it is |
+|---|---|
+| Conversation → scope | The map exists in one direction only: `Configured.For(scope)` answers which conversations speak for a scope. Inbound needs the reverse, and it has to be **unique** — a conversation serving two scopes means the ask picks the scope, which [§4](#4-the-conversation-carries-the-scope) forbids |
+| The trigger declaration | A field with no value on the specification ([§9](#9-a-channel-trigger-names-no-conversation)), the parser, the editor, and the intersection: the conversation maps to scope X and the agent lives in scope X |
+| Which agent | The mention names it. Parsing the mention, resolving the name |
+| The events endpoint | URL verification, signature (reuse), dedup by `event_id` — and Slack's **three-second acknowledgement**, which means opening the run cannot happen on that request. Get it wrong and every ask is delivered several times |
+| Reference resolution | [§2.1](#21-the-boundary-of-resolution). The Ledger records the structured ask and not the sentence, which means resolving "this thread" to the alert the platform itself posted there, and refusing to resolve what it did not |
+
+The first three are small. The fourth is medium and fiddly, and its difficulty
+is somebody else's contract rather than ours. **The fifth is the one to spend
+thought on**, and it is not code-shaped: it is deciding what the platform is
+entitled to claim it knows.
+
+And [§8](#8-two-decisions-this-note-does-not-make)'s two open questions block
+the second and fourth. They should be answered before either is built, not
+during.
+
+## 13. The other internal channels come after, not beside
+
+Teams, Discord and Google Chat are the same family as Slack ([§5](#5-where-the-two-families-split)):
+a principal with grants, a conversation carrying a scope, a thread. Nothing in
+the design changes for them, which is exactly why they are tempting to add now.
+
+**Do not.** Slack has stages 1 and 2 and not 3. Adding a second vendor before
+the third stage exists produces two channels that are each two-thirds of a
+product, and the missing third is the one anybody actually asks for. Depth
+finishes something; breadth multiplies an unfinished thing.
+
+What a second vendor costs, once stage 3 is done, is genuinely small and worth
+writing down so the estimate is not re-argued: a driver that posts a message and
+reads an interaction, its signature scheme, its threading model, and its
+account identifier. **The shape is already the product's** — origin, scope,
+subject-versus-principal, reply-to-origin — and none of it is per vendor.
+
+One caveat that is not uniform, and it is the reason "just another driver" is
+not quite true: **the identity binding differs per vendor**, and it is the
+sensitive part. Binding a channel account to a principal is granting a person's
+authority to a messaging identifier, and each vendor's account identifier has
+its own semantics for what happens when somebody leaves, is renamed, or is a
+guest. That question deserves its own answer per vendor rather than one
+inherited from Slack.
