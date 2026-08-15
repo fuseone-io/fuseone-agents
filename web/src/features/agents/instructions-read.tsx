@@ -20,22 +20,33 @@ import { cn } from "@/lib/utils";
  */
 export function InstructionsRead({ instructions }: { instructions: string }) {
   const { i18n } = useTranslation();
+  const blocks = parse(instructions);
+  // An instruction nobody labelled — which most instructions ever written are
+  // — gets no column at all. A gutter reserved and left empty on every row
+  // reads as a defect rather than as an absence.
+  const labelled = blocks.some((block) => block.kind !== "prose");
 
   return (
     <div className="flex flex-col gap-0.5">
-      {parse(instructions).map((block, at) => (
+      {blocks.map((block, at) => (
         <div
           key={at}
-          className="grid grid-cols-[104px_minmax(0,68ch)] items-start gap-x-5 py-2.5"
+          className={cn(
+            "items-start py-2.5",
+            labelled && "grid grid-cols-[104px_minmax(0,68ch)] gap-x-5",
+            !labelled && "max-w-[68ch]",
+          )}
         >
-          <span
-            className={cn(
-              "pt-[3px] text-right text-[10px]/5 font-medium uppercase tracking-label",
-              block.kind === "never" ? "text-danger" : "text-muted-foreground",
-            )}
-          >
-            {labelOf(block.kind, i18n.language)}
-          </span>
+          {labelled && (
+            <span
+              className={cn(
+                "pt-[3px] text-right text-[10px]/5 font-medium uppercase tracking-label",
+                block.kind === "never" ? "text-danger" : "text-muted-foreground",
+              )}
+            >
+              {labelOf(block.kind, i18n.language)}
+            </span>
+          )}
           <p className="text-base/[1.65] whitespace-pre-wrap text-pretty">
             {block.text}
           </p>

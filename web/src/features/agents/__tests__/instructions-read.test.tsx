@@ -24,15 +24,32 @@ describe("a published instruction", () => {
     expect(screen.getByText("Atender chamados.")).toBeInTheDocument();
   });
 
-  it("leaves the margin empty for prose nobody labelled", () => {
-    // Most instructions ever written are one unlabelled paragraph. "No label"
-    // beside it is a word that means nothing to a reader — on the editor it
-    // is a control, and here there is nothing to press.
-    render(<InstructionsRead instructions="Atender chamados que chegam em suporte@." />);
+  it("keeps the labels it has when only some blocks carry one", () => {
+    // Half-labelled is the ordinary state of an instruction somebody is part
+    // way through structuring, and the half that is labelled has to keep it.
+    render(
+      <InstructionsRead
+        instructions={"Atender chamados.\n\nQuando parar\nSe não achar o cliente."}
+      />,
+    );
+
+    expect(screen.getByText("Quando parar")).toBeInTheDocument();
+    expect(screen.getByText("Atender chamados.")).toBeInTheDocument();
+  });
+
+  it("reserves no margin at all when nothing is labelled", () => {
+    // Most instructions ever written are unlabelled prose, and they arrive
+    // here whole. "No label" beside them is a word that means nothing to a
+    // reader — on the editor it is a control, and here there is nothing to
+    // press. An empty column where a label would go reads as a defect, so
+    // there is no column.
+    const { container } = render(
+      <InstructionsRead
+        instructions={"Atender chamados.\n\nParar se não achar o cliente."}
+      />,
+    );
 
     expect(screen.queryByText(/Sem rótulo/)).not.toBeInTheDocument();
-    expect(
-      screen.getByText("Atender chamados que chegam em suporte@."),
-    ).toBeInTheDocument();
+    expect(container.querySelectorAll("span")).toHaveLength(0);
   });
 });
