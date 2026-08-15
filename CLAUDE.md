@@ -22,7 +22,7 @@ cmd/agentd/       Single binary: serve | worker | migrate | verify
 internal/
   domain/         Core types. No I/O, stdlib only
   ledger/         Append-only hash-chained run ledger
-  gate/           The seven checks and four verdicts
+  gate/           The eight checks and four verdicts
   engine/         Loop interpreter: fold the ledger, decide the next action
   spec/           Versioned agent specifications
   tools/          MCP clients, effect classification

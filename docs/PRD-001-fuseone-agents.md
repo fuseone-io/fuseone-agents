@@ -124,6 +124,8 @@ the same buyer.
 | **N5** | Drag-and-drop builder as the **primary** authoring interface | Composing a graph is a technical skill dressed as a friendly UI — it fails precisely with the target audience, so the way in is prose. A builder offered **beside** it, for the author who would rather draw, is not excluded ([§3.2](#32-drawing-as-a-second-way-in)) |
 | **N6** | Free-form conversation between agents as the default | Less predictable, more expensive and not auditable, authored by people who cannot evaluate it. Composition is by event, not by chat |
 | **N7** | Replace the platform team | The role changes from executor to curator — it defines packs and classifies effects, it does not write agents |
+| **N8** | **A catalogue of first-party connectors, one per vendor** | A connector beside MCP is a second way to reach the same capability, and the one that is not MCP is the one that ends up outside the Gate. Every vendor on such a list — Prometheus, Datadog, Sentry, one per logo — is a *tool*, and [DE-11](#94-tool-catalogue) already says how a tool arrives. What we do ship is chosen by **shape** and is still MCP ([DE-22](#94-tool-catalogue)). Vendors may appear as examples or as optional servers, never as a commitment |
+| **N9** | **Become an incident-management product** | A normalised incident model, an evidence graph and MTTA/MTTR are PagerDuty's product and incident.io's, and adopting them is choosing a different company rather than filling a gap in this one. What an operational agent actually lacks here is upstream of all of it — [FO-12](#84-built-in-efficiency) and [§7.6](#76-what-an-agent-remembers-between-runs) — and an evidence graph without those two is a diagram of things the agent cannot afford to read and will not remember |
 
 ### 3.1 Scope model and the path to multi-company
 
@@ -254,7 +256,7 @@ whoever operates the product, not at whoever implements it.
 | **Reservation** | `budget_reservation` | An amount held from the budget before the call, reconciled afterwards against real cost |
 | **Case** | `case` | A real historical occurrence used to simulate the agent before switching it on |
 | **Correction** | `correction` | An adjustment the author makes on a simulated case. Becomes a permanent regression test |
-| **Stage** | `autonomy_stage` | Draft → Shadow → Copilot → Autonomous |
+| **Stage** | `autonomy_stage` | Draft → Copilot → Autonomous. Simulation already covers "does not act" and Copilot covers "acts only when approved", so a stage between them names nothing that is not one of those two |
 | **Company** | `company` | A legal entity within the group. The boundary for allocation, audit and policy. A single value in phase 1 ([§3.1](#31-scope-model-and-the-path-to-multi-company)) |
 | **Area** | `area` | An organisational unit inside a company — CX, marketing, finance. The scope of authoring and budget. Not isolation |
 
@@ -273,7 +275,7 @@ interviewer**.
 | **2 · Read-back** | The system tells back, in plain language, what it understood |
 | **3 · Simulation** | Runs against 50 real cases that already happened |
 | **4 · Correction** | The author fixes the wrong cases, one by one |
-| **5 · Shadow** | Runs without acting, compared against the human |
+| **5 · Copilot** | Does the work for real, and a person approves each effect |
 
 ### 6.1 Structured interview
 
@@ -357,6 +359,18 @@ builds a test suite without knowing that tests exist.
 agent. That is what makes it possible to localise and fix without degrading the
 rest — and it is the technical reason execution is a graph and not a free loop.
 
+**FU-19.** The corpus carries **adversarial cases**, shipped with the platform
+and not left for each author to imagine: a log line carrying an instruction, a
+customer message asking to ignore the previous ones, an alert whose text names
+a tool. They are cases like any other and need no new machinery — a battery
+already re-runs the corpus on every change.
+
+> An author can describe their own process and cannot be expected to invent an
+> attack on it. Injection is not an exception to plan for on a channel carrying
+> text somebody else wrote; it is the ordinary content of one. Left to be
+> imagined, the corpus tests the process working and never tests it being used
+> against the person who wrote it.
+
 ### 6.5 Progressive autonomy
 
 No agent is born autonomous. Promotion is driven by measured evidence, not by a
@@ -365,9 +379,14 @@ calendar decision.
 | Stage | The agent | The human | Promotion criterion |
 |---|---|---|---|
 | **Draft** | Only simulates | Reviews cases | 1 reviewed simulation |
-| **Shadow** | Proposes, does not act | Does the work; the system compares | Agreement ≥ threshold over N cases |
 | **Copilot** | Proposes each action | Approves with one click | Approval rate ≥ threshold |
 | **Autonomous** | Acts inside the envelope | Handles exceptions only | — |
+
+> **Shadow was removed rather than built.** It named "runs without acting and
+> is compared against the human", and both halves already exist: simulation is
+> a run that acts on nothing, and Copilot is a real run where a person decides
+> every effect and the platform measures how often they agreed. A stage between
+> them would be a third thing to explain that behaves as one of the two.
 
 > **As built.** The stage is state beside the specification, not a field in it:
 > a published version is immutable, every run is pinned to one, and promotion
@@ -381,9 +400,11 @@ calendar decision.
 *"This agent agreed with you on 94% of the last 100 cases. Promote to copilot?"*
 The decision is always human.
 
-**FU-15.** Automatic demotion: if the rejection rate in Copilot crosses the
-threshold, the agent returns to Shadow and the owner is notified. This covers
-process drift — the process changes, the agent does not, and nobody notices.
+**FU-15.** Automatic demotion: an Autonomous agent whose rejection rate crosses
+the threshold returns to Copilot and the owner is notified. This covers process
+drift — the process changes, the agent does not, and nobody notices. A person
+may always demote further, and demotion is never refused: the platform demotes
+on its own, and a person must never have less power than the sweep.
 
 ### 6.6 Domain templates
 
@@ -506,6 +527,40 @@ hash chain.
 **AU-13.** LLM observability (traces, latency) is a separate system with its own
 retention, and does not replace the Ledger.
 
+### 7.6 What an agent remembers between runs
+
+A run is a fold of its own Ledger, and until now that was all an agent knew.
+The consequence shows up on the second run, never the first: an agent watching
+for failures files the same issue every three hours, and a reconciliation
+reports yesterday's difference again tomorrow. **An agent with no memory does
+not operate a process — it wakes up each time having never seen one.**
+
+**AU-14.** What an agent remembers is a **fold of the Ledger**, not a mutable
+store beside it. A memory somebody can edit is a memory that cannot explain
+itself, and the whole record here is built the other way.
+
+**AU-15.** What is remembered is the agent's **assertion about the world**,
+structured and scoped — *this error signature was filed as issue 412* — never
+the model's prose. Prose remembered is prose re-read as instruction, and the
+next section says why that is the dangerous case.
+
+**AU-16.** Memory lives under the same retention and the same per-subject
+erasure as any other content ([AU-11](#75-retention-and-export)). An agent that
+remembers a customer must forget them when the customer asks.
+
+**AU-17.** Untrusted labels travel into memory and out of it
+([§10.4](#104-data-labels)). **This is the requirement the others exist to
+protect.** Injection today is bounded by one run: a poisoned log line is
+expensive once. Written into memory unlabelled, the same line poisons every
+run that follows and the trail shows nothing arriving — the platform would
+have built the persistence an attacker cannot. If only one line of this
+subsection survives review, it is this one.
+
+**SE-11.** The Gate's idempotency check spans the **agent**, not only the run
+([§10.1](#101-the-gate) check 6). "This exact call is already recorded" is the
+right question and the run was the wrong scope for it: repeating an effect
+across two runs is the same duplicate, arriving slower.
+
 ---
 
 ## 8. Pillar III — FinOps
@@ -574,6 +629,13 @@ platform's responsibility, not the author's:
 | **FO-09** | Prompt caching | A stable assembly order free of volatile content; tools serialised canonically. A cache read costs a fraction of the input price, and every step of a recurring agent re-sends the same prefix thousands of times a month |
 | **FO-10** | Effort per step | Reasoning level configured per step type, before considering a change of model |
 | **FO-11** | Model tiering | A strong model for the interview and for decision steps; an economical model for classification and high-volume reading |
+| **FO-12** | Perception by reference | A tool result above a threshold reaches the model as a summary and a handle it can query, never inlined whole. Inlined, one answer is re-sent on every turn that follows and is billed again each time — and the agent that most needs to read is the one that can least afford to |
+
+**FO-12 is also a security lever, and that is not a coincidence.** Every byte of
+untrusted text in the context is injection surface. An agent that asks for the
+slice it needs is cheaper *and* smaller to attack than one handed everything
+that came back, so the two properties improve together and neither has to be
+traded for the other ([§10.4](#104-data-labels)).
 
 ---
 
@@ -640,6 +702,28 @@ reclassification to allow writing.
 **DE-14.** A tool from an untrusted third party can be marked as an untrusted
 data source, propagating a label to everything derived from it.
 
+**DE-22.** The platform ships MCP servers of its own, and they are chosen **by
+shape, never by vendor**: an HTTP endpoint called under a declared schema, a
+read-only query against a registered datasource, object and file content, and
+retrieval over content the platform already holds. A shape serves every vendor
+that has it; a vendor serves one, and ages.
+
+> Retrieval over what is already stored is the one on that list nobody else
+> will publish, and the one that matters most: it is [FO-12](#84-built-in-efficiency)
+> expressed as a tool. The agent asks for the slice it needs instead of being
+> handed everything that came back.
+
+**DE-23.** A first-party server is still a tool. It is registered, classified by
+the Curator and bounded by the pack like any other, and nothing about the Gate
+changes because we wrote it.
+
+**DE-24.** An MCP server running inside the worker **inherits the worker's
+network position and credentials**, which an externally configured one does
+not. Anything shipped to run there declares what it reaches and runs with its
+own credential, or it is not shipped. A bundled server holding the worker's
+database access is a larger grant than any tool in the catalogue, made by
+packaging rather than by decision.
+
 ### 9.5 Upgrades and continuity
 
 **DE-15.** A platform upgrade does not interrupt runs in flight; they resume from
@@ -650,6 +734,40 @@ happened — guaranteed by an idempotency key, not by attempted detection.
 
 **DE-17.** Backup and restore are PostgreSQL operations plus object storage. No
 proprietary procedure.
+
+### 9.6 Conversation as an origin of work
+
+People do not live in the console, and until now a channel was only somewhere
+the platform **spoke**: a run reporting, and an approval collected on a button.
+Somebody asking for work from the conversation they are already in was designed
+([NT-005](NT-005-interaction-channels.md) §7 stage 3) and required nowhere, so
+it could be dropped by omission. This is where it stops being optional.
+
+**DE-18.** A conversation is a first-class origin of a run, beside cron, webhook
+and event. **A mention is the ask** — never every message in the channel, which
+would turn ambient conversation into tokens, reach a model nobody asked to
+involve, and fill the record with runs nobody started.
+
+**DE-19.** The declaration carries no conversation. An agent declares that it
+**may** be started by an ask in a conversation of its own scope; which
+conversations belong to which scope is administrative. An author naming a
+conversation would be choosing who may start their agent, and that is the same
+separation that makes classifying a tool the Curator's act and not theirs. An
+agent that does not declare it cannot be started by any message, however the
+conversations are mapped.
+
+**DE-20.** **The criterion for what is a channel and what is a tool is who
+chose the recipient.** The platform, from the run's own provenance or from
+configuration — a channel, bounded by the origin sealed in step 1. The agent,
+from its reasoning — a tool, through the Gate, always. Modelling the second as
+the first hands an agent unbounded outbound reach that never meets the Gate,
+and it is the worst mistake available in this design.
+
+**DE-21.** The replay window preserves runs that had **no eligible recipient
+yet**, so that configuring a conversation does not lose the run somebody is
+waiting on. It is not a general backfill: a conversation configured today
+receives what nobody could be told about, never a replay of what was already
+said elsewhere.
 
 ---
 
@@ -683,7 +801,7 @@ capability → contract → data label → policy → reservation → idempotenc
 | 3 | Data label | Do the arguments derive from untrusted or sensitive data? See [10.4](#104-data-labels) |
 | 4 | Policy | Deterministic, versioned evaluation. Produces one of the four verdicts |
 | 5 | Reservation | Is there budget? Reserves the estimated maximum before spending |
-| 6 | Idempotency | A key derived from the run, sequence, tool and arguments. A repeat returns the previous result |
+| 6 | Idempotency | A key derived from the tool and its arguments, checked across the **agent** and not only the run (SE-11). A repeat returns the previous result |
 | 7 | Autonomy | Is this agent trusted to act alone? A Copilot escalates every effect, including one a written exception allows |
 | 8 | Approval | If required, suspends durably until a human decision or expiry |
 
@@ -762,7 +880,7 @@ semantics, not in the topology.
 | **Registry** | Versioned specifications, capability packs, policies |
 | **Executor** | Durable interpreter of the fixed loop: plan → gate → execute → record |
 | **Ledger** | Append-only, hash-chained. The single source of state, audit, cost, replay and regression |
-| **Gate** | The seven checks and the four verdicts |
+| **Gate** | The eight checks and the four verdicts |
 | **Tools** | MCP clients, effect classification, credential injection from the vault |
 
 ### Technical choices
@@ -770,7 +888,7 @@ semantics, not in the topology.
 | Layer | Choice | Reason |
 |---|---|---|
 | Core | Go, single binary | Interface embedded via `embed`; trivial distribution; adequate concurrency |
-| State | PostgreSQL | Ledger, specifications, cost. Vectors added only when there is long-term memory |
+| State | PostgreSQL | Ledger, specifications, cost — and what an agent remembers ([§7.6](#76-what-an-agent-remembers-between-runs)), which is a fold of the Ledger and needs no second store. Vectors would arrive with retrieval over unstructured content, not with memory |
 | Interface | React + Vite + shadcn/ui + Tailwind | FuseOne's existing design system, producing static assets embeddable in the binary |
 | Diagram | React Flow + automatic layout (ELK) | The graph is generated, not drawn. Layout must be deterministic across renders |
 | Tools | MCP | An open, adopted protocol. No proprietary connector format |
@@ -823,12 +941,12 @@ features.
 | Time to first agent | Entry friction | < 1 h per new author |
 | Autonomous authoring | Did the platform team become a bottleneck? | > 70% of agents created without Curator intervention |
 | Active areas | Reach beyond the pilot team | ≥ 4 distinct areas |
-| Promotion rate | Are agents earning trust? | > 50% of agents in Shadow reach Copilot |
+| Promotion rate | Are agents earning trust? | > 50% of agents in Draft reach Copilot |
 | Time to answer "why" | Does auditability work in practice? | < 30 s, measured in a simulated audit |
 | Duplicated effects | Correctness of the core | Zero. Any occurrence is a severe incident |
 | Attributed cost | Does finance have visibility? | 100% of spend with an identified area |
 | Ceiling overruns | Does the control work? | Zero spend above the configured ceiling |
-| Shadow agents | Is the platform the easiest path? | No known case of AI automation outside the platform |
+| Automation outside the platform | Is this the easiest path? | No known case of AI automation built around it |
 
 ---
 

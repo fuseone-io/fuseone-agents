@@ -9,7 +9,7 @@ BIN     := bin/agentd
 OAPI    := github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.8.0
 GEN_GO  := internal/httpapi/openapi/server.gen.go
 
-.PHONY: volume check check-pg test-pg smoke dev stop reset db run-pg build build-api web console test race cover vet fmt lint tidy clean docs generate verify-generate run
+.PHONY: volume check check-pg test-pg smoke dev stop reset db run-pg build build-api web console test race cover vet fmt lint tidy clean generate verify-generate run
 
 # A database of its own. Sharing one with `make dev` meant a running worker
 # claimed the runs a test had just opened, and a test run wiped the
@@ -148,9 +148,6 @@ lint:
 
 tidy:
 	$(GO) mod tidy
-
-docs:
-	$(MAKE) -C docs pdf
 
 clean:
 	rm -rf bin coverage.out .dev

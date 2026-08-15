@@ -72,7 +72,7 @@ var checkOrder = []check{
 	{RuleAutonomy, checkAutonomy},
 }
 
-// Gate evaluates requests against the seven checks and the authored policies.
+// Gate evaluates requests against the eight checks and the authored policies.
 type Gate struct {
 	policyHash string
 	policies   []domain.Policy
