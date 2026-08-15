@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Eye, FileText, Pencil } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -43,8 +43,32 @@ export function InstructionsEditor({
   const { t, i18n } = useTranslation();
   const [view, setView] = useState<"write" | "read">("write");
 
-  const blocks = useMemo(() => parse(instructions), [instructions]);
-  const write = (next: Block[]) => onChange(serialise(next, i18n.language));
+  /*
+  The blocks are held here while somebody edits, and the text is what leaves.
+
+  Derived from the text on every render they could not hold a block that
+  contributes nothing to it — a stage somebody just added and has not written
+  in yet — so adding one appeared to do nothing at all. The round trip also
+  fought the typist: parsing trims, and a trailing space or a blank line
+  vanished as it was typed.
+
+  So parsing happens when the text arrives from somewhere else — a template, a
+  version loading, the assistant proposing — and not when this screen is the
+  one that changed it.
+  */
+  const [blocks, setBlocks] = useState(() => parse(instructions));
+  const ours = useRef(instructions);
+
+  useEffect(() => {
+    if (instructions !== ours.current) setBlocks(parse(instructions));
+  }, [instructions]);
+
+  const write = (next: Block[]) => {
+    setBlocks(next);
+    const text = serialise(next, i18n.language);
+    ours.current = text;
+    onChange(text);
+  };
 
   // Answered per block and kept for as long as the screen is open. Nothing is
   // stored: "keep it, it explains" is a decision about this sentence now, and

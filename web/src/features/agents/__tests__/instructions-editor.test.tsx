@@ -47,3 +47,47 @@ describe("adding a block", () => {
     expect(onChange).toHaveBeenCalledWith("Você atende chamados.");
   });
 });
+
+describe("writing in a block that was just added", () => {
+  it("shows the block, even though it contributes nothing yet", async () => {
+    // An empty block sends nothing, and it still has to exist: somebody who
+    // asked for one and saw nothing appear concludes the button is broken.
+    render(
+      <InstructionsEditor
+        instructions="Você atende chamados."
+        onChange={vi.fn()}
+        tools={TOOLS}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: /Novo bloco/ }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: /Nunca/ }));
+
+    expect(
+      await screen.findByRole("textbox", { name: "Nunca" }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps what is typed, space by space", async () => {
+    // Every keystroke used to be serialised and parsed back, and parsing
+    // trims: a trailing space vanished as it was typed.
+    const onChange = vi.fn();
+    render(
+      <InstructionsEditor
+        instructions={"Objetivo\nCompare."}
+        onChange={onChange}
+        tools={TOOLS}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("textbox", { name: "Objetivo" }));
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "Objetivo" }),
+      " Depois responda.",
+    );
+
+    expect(screen.getByRole("textbox", { name: "Objetivo" })).toHaveValue(
+      "Compare. Depois responda.",
+    );
+  });
+});
