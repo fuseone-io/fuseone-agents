@@ -5,6 +5,7 @@
 **Outcome** Two families rather than one abstraction, one new domain concept, three stages
 **Revised** 2026-08-14 — §9 the shape of a channel trigger, §10 where email belongs
 **Revised** 2026-08-15 — §12 stage 3 broken down, §13 why the other vendors come after
+**Revised** 2026-08-15 — §12.1 the durable inbox, §12.2 an open channel is an open budget
 
 People do not live in the console. An approval that waits for somebody to open
 a browser tab waits, and a run whose result nobody reads was not worth the
@@ -325,6 +326,44 @@ The first three are small. The fourth is medium and fiddly, and its difficulty
 is somebody else's contract rather than ours. **The fifth is the one to spend
 thought on**, and it is not code-shaped: it is deciding what the platform is
 entitled to claim it knows.
+
+### 12.1 The inbox is durable before the acknowledgement
+
+Slack documents a 2xx within three seconds and retries what it does not get,
+which is why the run cannot open on that request. But moving the work off the
+request only solves the retry: **between acknowledging and opening there is a
+window, and a process that dies inside it has told Slack the ask arrived and
+has no record that it did.** The sender is satisfied and the question is gone,
+which is the worst pair available — a failure that reports success.
+
+So the order is: verify the signature, write the event down, commit, *then*
+acknowledge. The opener consumes afterwards, and it may be a different process
+or a later one.
+
+What is written is `team`, `channel` and `event_id` under a unique key, with
+the payload and its digest and a status. The unique key is what makes a
+redelivery cost nothing: Slack retries, the insert conflicts, the same
+acknowledgement goes back. It is the webhook trigger's `Idempotency-Key`
+(the webhook door already requires one) arriving under somebody else's name, and the reason is the
+same one — without it a redelivery opens a second run, and every sender in
+existence redelivers.
+
+This is the one piece of stage 3 that is infrastructure rather than design, and
+it is the piece most likely to be skipped for looking like plumbing.
+
+### 12.2 An open channel is an open budget
+
+Left unanswered here, and worth answering before the first installation rather
+than after: **a conversation anybody can mention the bot in is a way for
+anybody to open runs.** Not maliciously — a channel with three hundred people
+and a helpful agent is enough.
+
+Today the only thing standing there is the scope ceiling, which is shared with
+everything else in that area: the first busy morning spends the month's budget
+and the agents nobody was talking to stop. [§5.1](#51-what-the-external-family-additionally-needs)
+proposes a per-correspondent ceiling and files it under the external family,
+because that is where it is obviously needed. It is needed here too, and the
+difference is only how obvious it is.
 
 And [§8](#8-two-decisions-this-note-does-not-make)'s two open questions block
 the second and fourth. They should be answered before either is built, not
