@@ -58,9 +58,10 @@ func (p Path) String() string {
 type Finding struct {
 	// Paths are every way untrusted data reaches an effectful tool.
 	Paths []Path
-	// Unclassified are tools the Curator has not ruled on. They read as
-	// read-only and untrusted, which is the safe default and also means this
-	// check cannot say anything useful about them.
+	// Unclassified are tools the Curator has not ruled on. Naming them is
+	// most of what this check does for them: they are refused at run time, so
+	// an agent published holding one is an agent that stops at its first call
+	// — and no taint path through them can be reported either way.
 	Unclassified []domain.ToolID
 }
 

@@ -65,8 +65,8 @@ func TestClassify_survivesTheProcessThatMadeIt(t *testing.T) {
 	ctx := context.Background()
 
 	// The Curator's act is the single point where write access enters the
-	// platform. Holding it in memory meant a worker restart silently demoted
-	// every tool back to read-only.
+	// platform. Holding it in memory meant a worker restart silently returned
+	// every tool to unclassified, and every agent stopped at its first call.
 	if err := admin.NewCurator(pool).Classify(ctx, platform, domain.ToolClassification{
 		Tool: "crm.note", Effect: domain.EffectWrite, By: "usr_ana", Reason: "escreve nota interna",
 	}); err != nil {

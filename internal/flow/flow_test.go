@@ -109,9 +109,9 @@ func TestCheck_theWorstEffectItReaches_isReported(t *testing.T) {
 func TestCheck_aToolNobodyClassified_isSaidRatherThanAssumed(t *testing.T) {
 	t.Parallel()
 
-	// It reads as read-only and untrusted, which is the safe default and also
-	// means this check cannot say anything true about it. Saying nothing would
-	// let an unclassified financial tool publish looking harmless.
+	// It is refused at run time, so an agent published holding one stops at
+	// its first call. Saying nothing here would let that publish looking
+	// healthy, and the author finds out from a parked run instead.
 	got := flow.Check([]domain.ToolID{"crm.lookup", "algo.novo"}, nil, known)
 
 	if len(got.Unclassified) != 1 || got.Unclassified[0] != "algo.novo" {

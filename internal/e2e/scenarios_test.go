@@ -132,8 +132,9 @@ func readThenWrite(turn int) chatReply {
 func TestRun_writeOnDataReadFromOutside_stopsForAHumanBeforeTheWriteHappens(t *testing.T) {
 	eachLedger(t, "a write on untrusted data waits for a person", func(t *testing.T, store Store) {
 		p := newPlatform(t, store, agentFull, readThenWrite)
-		// An imported tool is read-only until the Curator says otherwise; this
-		// is that act. Reading from an outside system marks the run untrusted.
+		// An imported tool does nothing until the Curator says what it does;
+		// this is that act. Reading from an outside system marks the run
+		// untrusted.
 		if err := p.catalog.Classify(domain.ToolClassification{Tool: "crm.lookup", Effect: domain.EffectRead, Untrusted: true}); err != nil {
 			t.Fatalf("classify lookup: %v", err)
 		}

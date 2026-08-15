@@ -169,8 +169,9 @@ func newPlatform(t *testing.T, store Store, agentSource string, reply func(turn 
 	p := &platform{store: store}
 
 	// A real MCP server, discovered the way a configured one is. Tools arrive
-	// classified read-only whatever the server claims; promoting one is the
-	// Curator's separate act, so the test has to perform it explicitly.
+	// unclassified whatever the server claims, and an unclassified tool is
+	// refused — classifying is the Curator's separate act, so the test has to
+	// perform it explicitly.
 	// One content store, shared. The catalogue writes tool results into it and
 	// the engine resolves them back out when building the next transcript;
 	// two instances silently lose every result.

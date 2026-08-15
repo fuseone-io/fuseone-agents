@@ -1000,7 +1000,8 @@ export interface paths {
         };
         /**
          * Every tool the platform knows, and what it is classified as
-         * @description Tools arrive from their servers classified read-only whatever the server claims about itself. Promoting one is a separate, recorded act.
+         * @description Tools arrive from their servers unclassified whatever the server claims about itself, and an unclassified tool is refused at run time. Saying what one does is a separate, recorded act.
+         *     Where the platform already knows the server, each tool carries a suggestion with its reasoning, so that act is a confirmation rather than forty rulings invented from a list of bare names. A suggestion is never a classification.
          */
         get: operations["listTools"];
         put?: never;
@@ -1386,7 +1387,7 @@ export interface paths {
         get?: never;
         /**
          * Configure a tool server
-         * @description Adding a server changes what agents can do, so it is recorded like any other administrative change. The tools it offers still arrive classified read-only; promoting one stays a separate act.
+         * @description Adding a server changes what agents can do, so it is recorded like any other administrative change. The tools it offers arrive unclassified and do nothing until somebody says what they do; that stays a separate act.
          */
         put: operations["putMCPServer"];
         post?: never;
@@ -2942,9 +2943,10 @@ export interface components {
         FlowFinding: {
             paths: components["schemas"]["FlowPath"][];
             /**
-             * @description Tools the Curator has not ruled on. They read as read-only and
-             *     untrusted, which is the safe default and also means this check
-             *     cannot say anything true about them.
+             * @description Tools the Curator has not ruled on. Naming them is most of what
+             *     this check does for them: an unclassified tool is refused at run
+             *     time, so an agent published holding one stops at its first call —
+             *     and no taint path through it can be reported either way.
              */
             unclassified: string[];
         };
