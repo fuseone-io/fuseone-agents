@@ -331,3 +331,68 @@ func TestAnthropic_aToolOnlyTheTranscriptMentions_isNotOffered(t *testing.T) {
 		t.Errorf("offered %d tools, want none — the schema stub serves only crm.lookup", len(tools))
 	}
 }
+
+/*
+A run with nothing said yet still has to say something.
+
+The clock opens a run with no input at all, and both wire formats require at
+least one message. Sent as an empty list it is a 400; sent as an empty text
+block it is a different 400. So the opening turn states the fact — the run was
+opened with nothing said — rather than inventing a request nobody made.
+*/
+func TestAnthropic_nothingSaidYet_stillSendsATurn(t *testing.T) {
+	t.Parallel()
+	c := serve(t, anthropicToolUseWireName)
+	p := plannerFor(t, model.KindAnthropic, c.server.URL, model.Config{Model: "claude-opus-5"})
+
+	in := input()
+	in.Transcript = nil
+	if _, err := p.Plan(context.Background(), in); err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+
+	if text := firstUserText(t, c.body); strings.TrimSpace(text) == "" {
+		t.Error("the opening turn was empty, which every provider refuses")
+	}
+}
+
+func TestOpenAICompatible_nothingSaidYet_stillSendsATurn(t *testing.T) {
+	t.Parallel()
+	c := serve(t, openAIToolCallWireName)
+	p := plannerFor(t, model.KindOpenAICompatible, c.server.URL, model.Config{Model: "gpt-test"})
+
+	in := input()
+	in.Transcript = nil
+	if _, err := p.Plan(context.Background(), in); err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+
+	if text := firstUserText(t, c.body); strings.TrimSpace(text) == "" {
+		t.Error("the opening turn was empty, which every provider refuses")
+	}
+}
+
+// firstUserText reads the first thing said to the model, in either shape.
+func firstUserText(t *testing.T, body map[string]any) string {
+	t.Helper()
+	messages, _ := body["messages"].([]any)
+
+	for _, raw := range messages {
+		message, _ := raw.(map[string]any)
+		if message["role"] != "user" {
+			continue
+		}
+		if text, ok := message["content"].(string); ok {
+			return text
+		}
+		blocks, _ := message["content"].([]any)
+		for _, raw := range blocks {
+			block, _ := raw.(map[string]any)
+			if text, ok := block["text"].(string); ok {
+				return text
+			}
+		}
+	}
+	t.Fatal("nothing was said to the model at all")
+	return ""
+}

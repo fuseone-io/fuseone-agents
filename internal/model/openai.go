@@ -169,6 +169,10 @@ func (o *OpenAICompatible) chatMessages(in engine.PlanInput, offered names) []ch
 			msgs = append(msgs, chatMessage{Role: "tool", ToolCallID: t.CallID, Content: content})
 		}
 	}
+
+	if len(msgs) == 1 {
+		msgs = append(msgs, chatMessage{Role: "user", Content: nothingSaid})
+	}
 	return msgs
 }
 

@@ -114,3 +114,19 @@ func safeName(id string) string {
 	}
 	return b.String()
 }
+
+/*
+nothingSaid opens a run the clock started.
+
+Both wire formats require at least one message, and a run opened by a schedule
+has no input at all: sent as an empty list it is a 400, and sent as an empty
+text block it is a different one. Every scheduled run died here, before its
+first word.
+
+It states the fact rather than inventing a request nobody made. A fabricated
+opening — "the user asks you to begin" — would put words in the trail that
+nobody said, in the one record an auditor reads to find out what the agent was
+asked to do.
+*/
+const nothingSaid = "This run was opened by its schedule. Nobody has said anything: " +
+	"what to do is in your instructions, and there is no message to read."

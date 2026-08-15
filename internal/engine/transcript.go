@@ -73,7 +73,14 @@ func BuildTranscript(ctx context.Context, store ContentStore, steps []domain.Ste
 			if err != nil {
 				return nil, err
 			}
-			turns = append(turns, Turn{Kind: TurnInput, Text: string(text)})
+			// A run the clock opened has no input, and no input is not an
+			// empty message: a turn with nothing in it claims somebody spoke
+			// and then quotes silence. Every provider refuses an empty text
+			// block, so it is also how a scheduled run dies before its first
+			// word.
+			if len(text) > 0 {
+				turns = append(turns, Turn{Kind: TurnInput, Text: string(text)})
+			}
 
 		case domain.StepToolCalled:
 			var p domain.ToolCalledPayload

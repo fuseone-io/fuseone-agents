@@ -311,6 +311,10 @@ func messagesFrom(turns []engine.Turn, offered names) []anthropic.MessageParam {
 			))
 		}
 	}
+
+	if len(out) == 0 {
+		out = append(out, anthropic.NewUserMessage(anthropic.NewTextBlock(nothingSaid)))
+	}
 	return out
 }
 
