@@ -1152,6 +1152,7 @@
     "searchPlaceholder": "Buscar por execução ou agente",
     "showSeals": "Mostrar selos",
     "stillReserved": "{{amount}} ainda reservados",
+    "stoppedByException": "Parou onde o autor disse que pararia — “{{what}}”. {{outcome}}",
     "storyAbandoned": "Encerrada por uma pessoa",
     "storyApprovedBy": "aprovada por {{who}}",
     "storyAwaitingHuman": "Aguardando aprovação humana",

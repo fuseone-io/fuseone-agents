@@ -188,4 +188,12 @@ type ParkedPayload struct {
 
 type RunFinishedPayload struct {
 	Outcome string `json:"outcome"`
+	// StoppedBy is the step's declared exception, when that is why the run
+	// ended here. The author's own words, recorded verbatim.
+	//
+	// It says the agent asserted the exception happened, and never that
+	// anything checked: the condition is a sentence about the world and the
+	// platform has no way to evaluate one. A trail that read as verified
+	// would be claiming more than was done.
+	StoppedBy string `json:"stopped_by,omitempty"`
 }

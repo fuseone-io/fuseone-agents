@@ -102,3 +102,12 @@ func stepOf(steps []Envelope, tool domain.ToolID) (int, bool) {
 	}
 	return 0, false
 }
+
+// stopsWhenAt is the exception the step a run has reached declared, or nothing
+// where it declared none.
+func stopsWhenAt(start Start, at int) string {
+	if at < 0 || at >= len(start.Steps) {
+		return ""
+	}
+	return start.Steps[at].StopsWhen
+}

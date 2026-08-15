@@ -165,8 +165,18 @@ export function detailOf(step: Step): Line {
           : String(payload.code ?? ""),
       };
 
-    case "run_finished":
-      return { key: typeof payload.outcome === "string" ? payload.outcome : "" };
+    case "run_finished": {
+      // The step's own exception, when the agent said that is why it stopped.
+      // Quoted rather than paraphrased: they are the author's words, and the
+      // trail says the agent asserted them rather than that anything checked.
+      const stopped =
+        typeof payload.stopped_by === "string" ? payload.stopped_by : "";
+      const outcome =
+        typeof payload.outcome === "string" ? payload.outcome : "";
+      return stopped
+        ? { key: "runs.stoppedByException", values: { what: stopped, outcome } }
+        : { key: outcome };
+    }
 
     default:
       return NOTHING;

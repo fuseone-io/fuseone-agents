@@ -79,8 +79,11 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 
 	if proposal.Done {
 		state, err = r.append(ctx, state, start, domain.Step{
-			Kind:    domain.StepRunFinished,
-			Payload: mustJSON(domain.RunFinishedPayload{Outcome: proposal.Outcome}),
+			Kind: domain.StepRunFinished,
+			Payload: mustJSON(domain.RunFinishedPayload{
+				Outcome:   proposal.Outcome,
+				StoppedBy: proposal.StoppedBy,
+			}),
 		})
 		return status(state), err
 	}
@@ -106,14 +109,21 @@ func (r *Runner) plan(ctx context.Context, state State, start Start) (Proposal, 
 	// expense (PRD FO-10, FO-11).
 	model, effort := SpendAt(start, state.Called)
 
+	// The envelope rather than the pack, which is what this input has always
+	// said it carries: a tool the step forbids should not be proposable at
+	// all, and offering it spent a turn on a refusal the design promised
+	// could not happen.
+	at := StepAt(start, state.Called)
 	p, err := r.deps.Planner.Plan(ctx, PlanInput{
 		State:      state,
 		Transcript: transcript,
 		Budget:     start.Budget,
 		Remaining:  remaining(start.Budget, state.Committed()),
-		Tools:      start.Pack.Tools(),
+		Tools:      envelopeOf(start, state.Called).Tools(),
 		Model:      model,
 		Effort:     effort,
+		Step:       StepNameAt(start, state.Called),
+		StopsWhen:  stopsWhenAt(start, at),
 	})
 	if err != nil {
 		return Proposal{}, fmt.Errorf("engine: plan: %w", err)

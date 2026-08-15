@@ -107,10 +107,17 @@ customer up again.
 
 So a canvas draws something that is enforced, and the screen may say so.
 
-What the steps still do not do is judge their own exception. `stops_when` is
-text nobody evaluates: the run advances because a proposal reached a later
-step's tool, never because a condition was met. NT-003 left who decides a
-stage is over open, and it is still open.
+Who decides a stage is over is settled for the conservative half. The model is
+told which step it is at and what its author wrote would end it, and may answer
+that it happened; the run then finishes carrying that sentence verbatim.
+
+It is safe to leave there because stopping takes no effect: a run that gives up
+early does nothing a run that carried on would not have, and every effect stays
+the Gate's. What the trail records is that the agent asserted the exception,
+never that anything checked — the condition is a sentence about the world and
+the platform has no way to evaluate one. Nothing is inferred from the summary
+either: the assertion has a form the model was asked for, and its absence means
+only that nothing was claimed.
 
 **Composition between agents stays out.** The events an agent emits are a
 different graph — which agent triggers which — and it already has a screen. A

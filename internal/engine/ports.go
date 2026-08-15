@@ -38,6 +38,18 @@ type PlanInput struct {
 	// cut off mid-thought.
 	Remaining domain.Consumption
 	Tools     []domain.ToolID
+
+	// Step is where the run is, in the author's words, and StopsWhen is the
+	// exception that step declared. Both empty for an agent with no steps.
+	//
+	// The exception is told to the model because somebody has to judge it and
+	// nothing else can: it is a sentence about the world — "não encontrar o
+	// cliente" — and the platform has no way to evaluate one. Stopping takes
+	// no effect, so a run that stops early does nothing a run that carried on
+	// would not have, which is what makes this safe to leave to the model
+	// while every effect stays the Gate's.
+	Step      string
+	StopsWhen string
 }
 
 // Proposal is what the model wants to do next. Nothing here has happened.
@@ -53,6 +65,10 @@ type Proposal struct {
 	Done    bool
 	Outcome string
 	Node    string
+	// StoppedBy is the step's declared exception, when that is why the run is
+	// stopping. Recorded verbatim: the trail says the model asserted it, and
+	// nobody should read it as having been verified.
+	StoppedBy string
 }
 
 // Tools invokes a registered tool, normally an MCP server.
@@ -147,6 +163,11 @@ type Status struct {
 type Envelope struct {
 	Name    string
 	Reaches []domain.ToolID
+
+	// StopsWhen is the exception, in the author's own words: the condition on
+	// which the run gives up here rather than carrying on. Nothing evaluates
+	// it — it is told to the model, which may answer that it happened.
+	StopsWhen string
 
 	// Model and Effort are what this step is worth spending on. Empty means
 	// the agent's own, which is what almost every step uses: the lever exists

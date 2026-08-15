@@ -144,6 +144,12 @@ func (a *Anthropic) system(in engine.PlanInput) []anthropic.TextBlockParam {
 	// below it changes every turn and is deliberately outside the cached span.
 	blocks[len(blocks)-1].CacheControl = anthropic.NewCacheControlEphemeralParam()
 
+	// Where the run is, and the exception the author wrote for it. Outside
+	// the cached prefix because it changes as the run advances.
+	if in.Step != "" {
+		blocks = append(blocks, anthropic.TextBlockParam{Text: stepNote(in)})
+	}
+
 	if in.Budget.Micros > 0 {
 		blocks = append(blocks, anthropic.TextBlockParam{
 			Text: fmt.Sprintf(
@@ -152,6 +158,27 @@ func (a *Anthropic) system(in engine.PlanInput) []anthropic.TextBlockParam {
 		})
 	}
 	return blocks
+}
+
+/*
+stepNote tells the model which stage it is in and what its author said would
+end it.
+
+The convention for answering is stated rather than inferred: a run that stops
+on the declared exception says so in a form that can be recorded verbatim. A
+model that ignores the convention simply produces no assertion, which is the
+right failure — a trail that guessed would be claiming the exception happened
+when nobody said it did.
+*/
+func stepNote(in engine.PlanInput) string {
+	if in.StopsWhen == "" {
+		return fmt.Sprintf("You are at the step called %q.", in.Step)
+	}
+	return fmt.Sprintf(
+		"You are at the step called %q. Its author wrote that it stops when: %s\n"+
+			"If that has happened, finish the run and begin your final message with "+
+			"exactly `STOP: %s` on its own line, then explain in your own words.",
+		in.Step, in.StopsWhen, in.StopsWhen)
 }
 
 // loopContract tells the model how this platform works. It is stable across
@@ -207,7 +234,7 @@ func (a *Anthropic) proposalFrom(resp *anthropic.Message) engine.Proposal {
 
 	if p.Tool == "" {
 		p.Done = true
-		p.Outcome = strings.TrimSpace(summary.String())
+		p.Outcome, p.StoppedBy = readOutcome(summary.String())
 	}
 	return p
 }
@@ -285,3 +312,24 @@ func or(step, agent string) string {
 	}
 	return agent
 }
+
+/*
+readOutcome separates what the run says happened from the exception it says
+stopped it.
+
+The marker is a convention the model was told about in as many words, and its
+absence means only that nothing was asserted. Nothing is inferred from the
+prose: a trail that decided for itself that a summary "sounds like" the
+author's exception would be recording a claim nobody made.
+*/
+func readOutcome(text string) (outcome, stoppedBy string) {
+	trimmed := strings.TrimSpace(text)
+	if !strings.HasPrefix(trimmed, stopMarker) {
+		return trimmed, ""
+	}
+
+	line, rest, _ := strings.Cut(strings.TrimPrefix(trimmed, stopMarker), "\n")
+	return strings.TrimSpace(rest), strings.TrimSpace(line)
+}
+
+const stopMarker = "STOP:"

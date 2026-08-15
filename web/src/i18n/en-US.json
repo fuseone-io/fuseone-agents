@@ -1152,6 +1152,7 @@
     "searchPlaceholder": "Search by run or agent",
     "showSeals": "Show the seals",
     "stillReserved": "{{amount}} still reserved",
+    "stoppedByException": "Stopped where the author said it would — “{{what}}”. {{outcome}}",
     "storyAbandoned": "Ended by a person",
     "storyApprovedBy": "approved by {{who}}",
     "storyAwaitingHuman": "Awaiting a human approval",
