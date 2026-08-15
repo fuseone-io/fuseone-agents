@@ -178,6 +178,35 @@ func TestSweep_oneConversationRefuses_theRunIsNotMarkedReported(t *testing.T) {
 	}
 }
 
+/*
+A run nobody could be told about is not a run that was reported.
+
+The window exists so that turning a conversation on replays the last day into
+it — that is what its comment says it is for. Marking a run said when there was
+nowhere to say it spends that replay on silence: the conversation configured
+five minutes later finds nothing waiting, and the run somebody is waiting on is
+the one it loses.
+*/
+func TestSweep_noConversationWantsIt_leavesTheRunToBeAnnouncedLater(t *testing.T) {
+	t.Parallel()
+	posts := &recorder{}
+	reports := &fixedReports{reports: []channel.Report{
+		// An area with no conversation configured, which is the ordinary
+		// shape of an installation part-way through being set up.
+		report("run-1", "acme", "finance", channel.EventParked),
+	}}
+	r := channel.NewReporter(reports, fixedConversations{}, posts,
+		func() time.Time { return noon }, nil).WithDeliveries(&memoryDeliveries{})
+
+	if _, err := r.Sweep(t.Context(), 50); err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+
+	if len(reports.done) != 0 {
+		t.Errorf("marked as said where there was nobody to say it to: %v", reports.done)
+	}
+}
+
 func report(run, company, area string, ev channel.Event) channel.Report {
 	return channel.Report{
 		RunID:   domain.RunID(run),

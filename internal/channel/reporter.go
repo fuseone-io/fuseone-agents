@@ -82,13 +82,20 @@ func (r *Reporter) Sweep(ctx context.Context, limit int) (int, error) {
 
 	sent, failures := 0, []error{}
 	for _, report := range pending {
-		n, err := r.announce(ctx, report)
+		n, told, err := r.announce(ctx, report)
 		sent += n
 		if err != nil {
 			// Left unreported on purpose. The next sweep tries the
 			// conversations that did not hear, and the ones that did are
 			// skipped at the post rather than told twice.
 			failures = append(failures, err)
+			continue
+		}
+		if told == 0 {
+			// Nowhere to say it. Marking it said would spend the window on
+			// silence: the whole reason the window exists is that turning a
+			// conversation on replays the last day into it, and a run marked
+			// here is a run that conversation never hears about.
 			continue
 		}
 		if err := r.reports.Reported(ctx, report.RunID, report.Event, r.clock()); err != nil {
@@ -100,17 +107,25 @@ func (r *Reporter) Sweep(ctx context.Context, limit int) (int, error) {
 
 // announce tells every conversation that speaks for the run's scope and wants
 // to hear about this.
-func (r *Reporter) announce(ctx context.Context, report Report) (int, error) {
+//
+// It answers how many messages left and how many conversations were owed one
+// at all — which are different questions. Nothing sent because everybody had
+// already heard is finished; nothing sent because nobody was listening is not.
+func (r *Reporter) announce(ctx context.Context, report Report) (sent, told int, err error) {
 	places, err := r.conversations.For(ctx, report.Scope)
 	if err != nil {
-		return 0, fmt.Errorf("channel: conversations for %s: %w", report.Scope, err)
+		return 0, 0, fmt.Errorf("channel: conversations for %s: %w", report.Scope, err)
 	}
 
-	sent, failures := 0, []error{}
+	failures := []error{}
 	for _, place := range places {
 		if !place.wants(report.Event) {
 			continue
 		}
+		// Owed a message, whether or not one goes out now: a conversation
+		// that already heard is one this run has finished with.
+		told++
+
 		posted, err := r.post(ctx, report, place)
 		if err != nil {
 			failures = append(failures, err)
@@ -120,7 +135,7 @@ func (r *Reporter) announce(ctx context.Context, report Report) (int, error) {
 			sent++
 		}
 	}
-	return sent, errors.Join(failures...)
+	return sent, told, errors.Join(failures...)
 }
 
 // post sends one message, unless it has already been sent.
