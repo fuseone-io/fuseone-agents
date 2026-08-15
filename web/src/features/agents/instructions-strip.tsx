@@ -41,7 +41,12 @@ export function InstructionsStrip({
       )}
       {first && (
         <span className="min-w-0 flex-1 truncate text-2xs text-muted-foreground">
-          {first.because ? (
+          {first.why === "notEnabled" ? (
+            <>
+              {t("agents.notEnabledInStrip")}{" "}
+              <Mono className="text-2xs">{first.tool}</Mono>
+            </>
+          ) : first.because ? (
             <>
               <Mono className="text-2xs">{first.because}</Mono>{" "}
               {t("agents.deniesWhatTheTextPromises")}{" "}

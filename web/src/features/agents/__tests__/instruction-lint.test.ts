@@ -36,6 +36,9 @@ const DENIES = [
   },
 ] as unknown as Policy[];
 
+/** What the agent actually holds. A tool it does not hold it cannot call. */
+const HELD = ["crm.lookup", "erp.refund"];
+
 describe("what an instruction promises and the policy refuses", () => {
   it("names the block, the tool and the rule", () => {
     const found = findings(
@@ -45,13 +48,16 @@ describe("what an instruction promises and the policy refuses", () => {
       ],
       CATALOGUE,
       DENIES,
+      HELD,
     );
 
     // The block, because that is where it has to be answered — a banner at
     // the top of the card leaves somebody hunting for the sentence. And the
     // rule by name, because "blocked by policy" tells an author nothing about
     // what to change and cannot tell two rules apart.
-    expect(found).toEqual([{ at: 1, tool: "crm.lookup", because: "POL-114" }]);
+    expect(found).toEqual([
+      { at: 1, tool: "crm.lookup", why: "refused", because: "POL-114" },
+    ]);
   });
 
   it("says nothing about a tool nothing refuses", () => {
@@ -60,6 +66,7 @@ describe("what an instruction promises and the policy refuses", () => {
         [{ kind: "objective", text: "Use crm.lookup." }],
         CATALOGUE,
         [],
+        HELD,
       ),
     ).toEqual([]);
   });
@@ -71,7 +78,50 @@ describe("what an instruction promises and the policy refuses", () => {
     // "blocked by policy" when no policy exists would send somebody looking
     // for one.
     expect(
-      findings([{ kind: "objective", text: "Use erp.refund." }], CATALOGUE, []),
-    ).toEqual([{ at: 0, tool: "erp.refund", because: undefined }]);
+      findings(
+        [{ kind: "objective", text: "Use erp.refund." }],
+        CATALOGUE,
+        [],
+        HELD,
+      ),
+    ).toEqual([{ at: 0, tool: "erp.refund", why: "refused", because: undefined }]);
+  });
+});
+
+/*
+A tool the text names and the agent does not hold.
+
+The same shape as the rule above and a different fix. The pack a run is given
+is the agent's enabled tools, so a tool outside it cannot even be proposed —
+the sentence describes a step that does not happen, and nothing in the trail
+afterwards says why. What it needs is a checkbox, not an edit, so that is the
+exit the card offers.
+*/
+describe("what an instruction cites and the agent does not hold", () => {
+  it("names it, and says the reason is the pack rather than a rule", () => {
+    const found = findings(
+      [{ kind: "howToAct", text: "Se precisar, use crm.lookup." }],
+      CATALOGUE,
+      [],
+      [],
+    );
+
+    expect(found).toEqual([{ at: 0, tool: "crm.lookup", why: "notEnabled" }]);
+  });
+
+  it("reports the refusal rather than the missing checkbox", () => {
+    // Both are true of crm.lookup here, and only one of them is worth saying:
+    // enabling it would change nothing, because the policy refuses it either
+    // way. Offering "enable it" would be an exit that leads nowhere.
+    const found = findings(
+      [{ kind: "howToAct", text: "Se precisar, use crm.lookup." }],
+      CATALOGUE,
+      DENIES,
+      [],
+    );
+
+    expect(found).toEqual([
+      { at: 0, tool: "crm.lookup", why: "refused", because: "POL-114" },
+    ]);
   });
 });

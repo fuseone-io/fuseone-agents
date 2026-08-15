@@ -47,6 +47,10 @@ export function useAgentDraft(loaded?: AgentDetail) {
     draft,
     patch,
     changes: original ? changesBetween(original, draft) : [],
+    // The published prose, so the editor can show what publishing would
+    // change in it. Absent while creating: there is nothing to compare to,
+    // and "everything is new" is not a review.
+    published: original?.instructions,
   };
 }
 
@@ -85,6 +89,14 @@ export interface Change {
   field: string;
   from: string;
   to: string;
+  /**
+   * Whether the two sides are worth printing.
+   *
+   * Prose is not: two paragraphs on a diff line in a side rail is unreadable,
+   * and what actually changed in it is a word-level view of its own. The
+   * summary says the text moved; the card says how.
+   */
+  quiet?: boolean;
 }
 
 /**
@@ -99,10 +111,10 @@ export function changesBetween(
   after: AgentDefinition,
 ): Change[] {
   const changes: Change[] = [];
-  const compare = (field: string, from: unknown, to: unknown) => {
+  const compare = (field: string, from: unknown, to: unknown, quiet = false) => {
     const left = render(from);
     const right = render(to);
-    if (left !== right) changes.push({ field, from: left, to: right });
+    if (left !== right) changes.push({ field, from: left, to: right, quiet });
   };
 
   compare("agents.fieldName", before.name, after.name);
@@ -115,8 +127,9 @@ export function changesBetween(
   compare("agents.fieldEffort", before.effort, after.effort);
   compare(
     "agents.fieldInstructions",
-    summarise(before.instructions),
-    summarise(after.instructions),
+    size(before.instructions),
+    size(after.instructions),
+    true,
   );
   compare("agents.fieldTools", before.tools, after.tools);
   compare("agents.fieldBudget", before.budget, after.budget);
@@ -132,14 +145,12 @@ export function changesBetween(
 /**
  * Instructions are compared by length rather than quoted.
  *
- * A diff line carrying two paragraphs of prose is unreadable in a side rail,
- * and the fact worth surfacing is that the text changed at all — the text
- * itself is on the screen already.
+ * Enough to know the text moved, which is all this summary claims. What moved
+ * in it is the card's word-level view, and the number never reaches a screen —
+ * so it needs no unit and belongs to no language.
  */
-function summarise(instructions: string): string {
-  return instructions.trim() === ""
-    ? "—"
-    : `${instructions.trim().length} caracteres`;
+function size(instructions: string): string {
+  return String(instructions.trim().length);
 }
 
 function render(value: unknown): string {

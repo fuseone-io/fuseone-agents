@@ -26,8 +26,10 @@ export function TabDefinition({
     agentId: string;
     creating: boolean;
     onAgentId: (id: string) => void;
+    /** The instruction as published, which is what a diff is against. */
+    published?: string;
   };
-  tools: { catalogue: Tool[]; policies: Policy[] };
+  tools: { catalogue: Tool[]; policies: Policy[]; enabled: string[] };
   /** Opens the tab where this text is read as stages. */
   onSteps: () => void;
 }) {
@@ -52,9 +54,14 @@ export function TabDefinition({
 
       <InstructionsEditor
         instructions={draft.instructions}
-        onChange={(instructions) => patch({ instructions })}
+        on={{
+          change: (instructions) => patch({ instructions }),
+          enable: (tool) =>
+            patch({ tools: [...new Set([...(draft.tools ?? []), tool])] }),
+        }}
         tools={tools}
         tokens={tokens}
+        was={editing.published}
       />
 
       <ReadAs steps={(draft.steps ?? []).length} onOpen={onSteps} />

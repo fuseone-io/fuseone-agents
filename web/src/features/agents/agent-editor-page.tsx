@@ -38,7 +38,7 @@ export function AgentEditorPage() {
   const [fromTemplate, setFromTemplate] = useState<string>();
   const [agentId, setAgentId] = useState(creating ? "" : (routeId ?? ""));
   const [tab, setTab] = useState<EditorTab>("definition");
-  const { draft, patch, changes } = useAgentDraft(
+  const { draft, patch, changes, published } = useAgentDraft(
     creating ? undefined : loaded.data,
   );
   const publish = usePublishAgent();
@@ -103,8 +103,9 @@ export function AgentEditorPage() {
               onAgentId: setAgentId,
               template: fromTemplate,
               onTemplate: setFromTemplate,
+              published,
             }}
-            tools={{ catalogue, policies: rules }}
+            tools={{ catalogue, policies: rules, enabled: draft.tools ?? [] }}
             onSteps={() => setTab("steps")}
           />
       </div>

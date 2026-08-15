@@ -33,6 +33,8 @@ export function InstructionRow({
     change: (text: string) => void;
     remove: () => void;
     keep: (tool: string) => void;
+    /** Granting a tool the text names and the agent does not hold. */
+    enable: (tool: string) => void;
     /** Saying what this block is, which an older instruction never said. */
     relabel: (kind: BlockKind) => void;
     /** Breaking it at its blank lines, into parts that can be labelled. */
@@ -122,6 +124,7 @@ export function InstructionRow({
                 on.change(withoutSentence(block.text, finding.tool))
               }
               onKeep={() => on.keep(finding.tool)}
+              onEnable={() => on.enable(finding.tool)}
             />
           ))}
         </div>

@@ -30,8 +30,10 @@ export function EditorBody({
     onAgentId: (id: string) => void;
     template?: string;
     onTemplate: (id?: string) => void;
+    /** The instruction as published, which is what a diff is against. */
+    published?: string;
   };
-  tools: { catalogue: Tool[]; policies: Policy[] };
+  tools: { catalogue: Tool[]; policies: Policy[]; enabled: string[] };
   /** Moving to the tab where the instructions are read as stages. */
   onSteps: () => void;
 }) {

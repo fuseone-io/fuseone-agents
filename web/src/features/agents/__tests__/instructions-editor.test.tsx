@@ -12,14 +12,14 @@ state it opened for the slash and ignored the button, which is a button that
 does nothing.
 */
 
-const TOOLS = { catalogue: [], policies: [] };
+const TOOLS = { catalogue: [], policies: [], enabled: [] };
 
 describe("adding a block", () => {
   it("opens the menu from the button", async () => {
     render(
       <InstructionsEditor
         instructions="Você atende chamados."
-        onChange={vi.fn()}
+        on={{ change: vi.fn(), enable: vi.fn() }}
         tools={TOOLS}
       />,
     );
@@ -34,7 +34,7 @@ describe("adding a block", () => {
     render(
       <InstructionsEditor
         instructions="Você atende chamados."
-        onChange={onChange}
+        on={{ change: onChange, enable: vi.fn() }}
         tools={TOOLS}
       />,
     );
@@ -55,7 +55,7 @@ describe("writing in a block that was just added", () => {
     render(
       <InstructionsEditor
         instructions="Você atende chamados."
-        onChange={vi.fn()}
+        on={{ change: vi.fn(), enable: vi.fn() }}
         tools={TOOLS}
       />,
     );
@@ -75,7 +75,7 @@ describe("writing in a block that was just added", () => {
     render(
       <InstructionsEditor
         instructions={"Objetivo\nCompare."}
-        onChange={onChange}
+        on={{ change: onChange, enable: vi.fn() }}
         tools={TOOLS}
       />,
     );
@@ -89,5 +89,47 @@ describe("writing in a block that was just added", () => {
     expect(screen.getByRole("textbox", { name: "Objetivo" })).toHaveValue(
       "Compare. Depois responda.",
     );
+  });
+});
+
+/*
+What publishing would change in the prose.
+
+The publish summary can only say that the instruction changed; a character
+count does not distinguish a sentence tightened from a rule deleted, and
+telling those apart is what a reviewer is for.
+*/
+describe("what changed since the published version", () => {
+  it("is not offered when nothing changed", () => {
+    render(
+      <InstructionsEditor
+        instructions={"Objetivo\nCompare."}
+        on={{ change: vi.fn(), enable: vi.fn() }}
+        tools={TOOLS}
+        was={"Objetivo\nCompare."}
+      />,
+    );
+
+    // A segment that is present and empty teaches people it is never worth
+    // pressing, and by then it is the one they needed.
+    expect(
+      screen.queryByRole("tab", { name: /O que mudou/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("marks the words that went and the words that came", async () => {
+    render(
+      <InstructionsEditor
+        instructions={"Objetivo\nCompare os dois lados."}
+        on={{ change: vi.fn(), enable: vi.fn() }}
+        tools={TOOLS}
+        was={"Objetivo\nCompare os dois pedidos."}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("tab", { name: /O que mudou/ }));
+
+    expect(await screen.findByText("pedidos.")).toBeInTheDocument();
+    expect(screen.getByText("lados.")).toBeInTheDocument();
   });
 });

@@ -51,9 +51,15 @@ export function EditorFooter({
               {changes.map((change) => (
                 <li key={change.field} className="flex flex-col gap-0.5">
                   <span className="text-xs font-medium">{t(change.field)}</span>
-                  <Mono dim className="text-2xs">
-                    {change.from} → {change.to}
-                  </Mono>
+                  {change.quiet ? (
+                    <span className="text-2xs text-muted-foreground">
+                      {t("agents.proseChanged")}
+                    </span>
+                  ) : (
+                    <Mono dim className="text-2xs">
+                      {change.from} → {change.to}
+                    </Mono>
+                  )}
                 </li>
               ))}
             </ul>

@@ -45,6 +45,7 @@ function renderRow(text: string, policies: Policy[] = [], onChange = vi.fn()) {
         change: onChange,
         remove: vi.fn(),
         keep: vi.fn(),
+        enable: vi.fn(),
         relabel: vi.fn(),
         split: vi.fn(),
         slash: vi.fn(),
@@ -96,11 +97,14 @@ describe("a sentence the policy refuses", () => {
         }}
         at={0}
         tools={{ catalogue: CATALOGUE, policies: DENIES }}
-        findings={[{ at: 0, tool: "erp.refund", because: "POL-114" }]}
+        findings={[
+          { at: 0, tool: "erp.refund", why: "refused", because: "POL-114" },
+        ]}
         on={{
           change: onChange,
           remove: vi.fn(),
           keep: vi.fn(),
+          enable: vi.fn(),
           relabel: vi.fn(),
           split: vi.fn(),
           slash: vi.fn(),
@@ -116,5 +120,68 @@ describe("a sentence the policy refuses", () => {
     // The sentence, and not the block: an author told about one sentence
     // must not lose the three around it.
     expect(onChange).toHaveBeenCalledWith("Compare os dois lados.");
+  });
+});
+
+/*
+A tool the text names and the agent does not hold.
+
+The same warning, a different fix. Nothing about the sentence is wrong: what
+is missing is a checkbox, so the first exit is to tick it — and "keep it, it
+explains" is not offered, because a sentence naming a tool nobody granted is
+not explaining a rule to anybody.
+*/
+describe("a tool cited and not enabled", () => {
+  it("offers to enable it, and enables that tool", async () => {
+    const onEnable = vi.fn();
+    render(
+      <InstructionRow
+        block={{ kind: "howToAct", text: "Se precisar, use crm.lookup." }}
+        at={0}
+        tools={{ catalogue: CATALOGUE, policies: [] }}
+        findings={[{ at: 0, tool: "crm.lookup", why: "notEnabled" }]}
+        on={{
+          change: vi.fn(),
+          remove: vi.fn(),
+          keep: vi.fn(),
+          enable: onEnable,
+          relabel: vi.fn(),
+          split: vi.fn(),
+          slash: vi.fn(),
+          drag: STILL,
+        }}
+      />,
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /Habilitar a ferramenta/ }),
+    );
+
+    expect(onEnable).toHaveBeenCalledWith("crm.lookup");
+  });
+
+  it("does not offer to keep a sentence that explains nothing", () => {
+    render(
+      <InstructionRow
+        block={{ kind: "howToAct", text: "Se precisar, use crm.lookup." }}
+        at={0}
+        tools={{ catalogue: CATALOGUE, policies: [] }}
+        findings={[{ at: 0, tool: "crm.lookup", why: "notEnabled" }]}
+        on={{
+          change: vi.fn(),
+          remove: vi.fn(),
+          keep: vi.fn(),
+          enable: vi.fn(),
+          relabel: vi.fn(),
+          split: vi.fn(),
+          slash: vi.fn(),
+          drag: STILL,
+        }}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /Manter, é explicação/ }),
+    ).not.toBeInTheDocument();
   });
 });
