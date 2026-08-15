@@ -22,7 +22,7 @@ needs to be a good interviewer.
 | 2 · Narrative read-back | FU-08 | Prose the author approves |
 | 3 · Simulation | FU-09/10 | What it would have done to real cases |
 | 4 · Correction by example | FU-11/12/13 | A regression battery |
-| 5 · Progressive autonomy | FU-14/15 | Draft → Shadow → Copilot → Autonomous |
+| 5 · Progressive autonomy | FU-14/15 | Draft → Copilot → Autonomous |
 
 Seven questions, each filling one part of the specification:
 
@@ -305,13 +305,20 @@ only job is that field.
 
 ## 10. D1 answered: where the cases come from
 
-A file first, the ledger second, shadow capture third, a connector never.
+A file first, the ledger second, capture from live runs third, a connector
+never.
 
-**Shadow capture cannot be the only source, because it is circular.** FU-10
-says an agent cannot leave Draft without a reviewed simulation; shadow comes
-after Draft. If cases only accumulate in shadow, the first agent can never be
-simulated — and the first agent is exactly when simulation matters most, since
-it is the first time somebody non-technical publishes something.
+> Written when the stage model still had Shadow, and the argument did not
+> depend on it: what it is about is capture from an agent that is already
+> running, which is now Copilot. The stage changed name and lost a step; the
+> circularity did not move.
+
+**Capture cannot be the only source, because it is circular.** FU-10 says an
+agent cannot leave Draft without a reviewed simulation, and an agent only runs
+for real once it is out of Draft. If cases only accumulate from live runs, the
+first agent can never be simulated — and the first agent is exactly when
+simulation matters most, since it is the first time somebody non-technical
+publishes something.
 
 **A connector per system is N4's non-goal**, and it breaks something else on
 the way. The authoring path deliberately does not touch customer data — it is
@@ -330,7 +337,7 @@ sees is real customer records.
 |---|---|---|
 | 1 | An uploaded file (JSONL) | The first agent, which is the hard case |
 | 2 | The run ledger | Rewriting an agent that already runs — its own past inputs |
-| 3 | Shadow capture | FU-12's regression battery, accumulating on its own |
+| 3 | Capture from live runs | FU-12's regression battery, accumulating on its own |
 | 4 | A connector | Somebody's own MCP tool, not a platform feature |
 
 Source 2 is nearly free and was hiding in plain sight: `run_started` already

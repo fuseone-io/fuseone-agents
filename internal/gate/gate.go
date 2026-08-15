@@ -72,7 +72,11 @@ var checkOrder = []check{
 	{RuleAutonomy, checkAutonomy},
 }
 
-// Gate evaluates requests against the eight checks and the authored policies.
+// Gate evaluates requests against the seven checks and the authored policies.
+//
+// Approval is not among them. It is what a check can require, and a human
+// grant is released after all seven have run — the only order in which a
+// grant cannot let through what another check blocked.
 type Gate struct {
 	policyHash string
 	policies   []domain.Policy

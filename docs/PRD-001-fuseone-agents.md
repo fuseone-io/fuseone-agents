@@ -40,7 +40,7 @@ The product rests on four pillars, each with a verifiable target:
 
 | Pillar | Target | What it means |
 |---|---|---|
-| **Ease of use** | < 1 h | A non-technical author puts an agent into shadow mode without help from the platform team |
+| **Ease of use** | < 1 h | A non-technical author puts an agent into copilot without help from the platform team |
 | **Auditability** | < 30 s | Reconstruct any decision, under the policy in force at the time |
 | **FinOps** | cost per run | Cost per run, per agent and per area, with a ceiling that actually cuts |
 | **Deployment** | < 1 day | From a clean installation to the first agent in production |
@@ -229,7 +229,7 @@ agent does not hold is dropped, exactly as one proposed by the assistant is.
 
 | Persona | Who they are | What they need | We know it worked when |
 |---|---|---|---|
-| **Domain author** | CX, marketing, finance, operations. Does not program | To describe the process the way they would describe it to a new colleague | They create an agent and put it into shadow on their own |
+| **Domain author** | CX, marketing, finance, operations. Does not program | To describe the process the way they would describe it to a new colleague | They create an agent and put it into copilot on their own |
 | **Platform curator** | IT / platform team | To define capability packs, classify tool effects, approve a new tool | They stop being a queue and become a catalogue |
 | **Approver** | Business area manager | To decide on risky actions, with enough context and without leaving Slack | They approve or deny in under 2 minutes |
 | **Auditor** | Compliance, risk, internal audit | To reconstruct any past decision and re-evaluate it against a new policy | They extract the trail themselves, without asking for a database query |
@@ -647,7 +647,7 @@ traded for the other ([§10.4](#104-data-labels)).
 infrastructure component — no orchestration cluster, no external queue, no
 time-series database.
 
-**DE-02.** From a clean installation to the first agent in shadow mode: **under
+**DE-02.** From a clean installation to the first agent in copilot: **under
 one day**, including integration with corporate identity.
 
 **DE-03.** Object storage is optional; without it the system degrades gracefully
@@ -785,8 +785,14 @@ the operator actually has to fix.
 
 ```
 capability → contract → data label → policy → reservation → idempotency
-           → autonomy → approval
+           → autonomy
 ```
+
+**Approval is not one of them.** It is what a check can *require*, and a human
+grant is a release applied after all seven have run — which is the only order
+that holds the property worth having: **a grant releases an action that merely
+needed approving, and can never release one any check blocked.** Placed among
+them it would be a check able to overrule the six above it.
 
 > Autonomy was added when the stages landed (FU-14), and it runs late on
 > purpose. Placed early it reported "the agent is in Copilot" for calls a taint
@@ -803,7 +809,10 @@ capability → contract → data label → policy → reservation → idempotenc
 | 5 | Reservation | Is there budget? Reserves the estimated maximum before spending |
 | 6 | Idempotency | A key derived from the tool and its arguments, checked across the **agent** and not only the run (SE-11). A repeat returns the previous result |
 | 7 | Autonomy | Is this agent trusted to act alone? A Copilot escalates every effect, including one a written exception allows |
-| 8 | Approval | If required, suspends durably until a human decision or expiry |
+
+| | Applied after the seven | What it does |
+|---|---|---|
+| — | Approval release | Where the worst verdict is *approve*, suspends durably until a human decision or expiry, and a grant then allows. Never applied over a block |
 
 ### 10.2 Four verdicts
 
@@ -880,7 +889,7 @@ semantics, not in the topology.
 | **Registry** | Versioned specifications, capability packs, policies |
 | **Executor** | Durable interpreter of the fixed loop: plan → gate → execute → record |
 | **Ledger** | Append-only, hash-chained. The single source of state, audit, cost, replay and regression |
-| **Gate** | The eight checks and the four verdicts |
+| **Gate** | The seven checks, the four verdicts, and the approval release |
 | **Tools** | MCP clients, effect classification, credential injection from the vault |
 
 ### Technical choices
@@ -985,7 +994,7 @@ features.
 |---|---|---|
 | **Nobody uses it** — it remains easier to ask the IT team | Fatal | A paved path; domain templates; under 1 h to the first agent. The platform has to be the easiest way to obtain a credential safely |
 | **A process with no history** — there are no cases to simulate | High | The existence of historical truth is a selection criterion for the first use case. Without it, non-technical authoring does not hold up |
-| **An agent breaks production** | High and permanent | Read by default; mandatory simulation; shadow before copilot; the Gate before every effect |
+| **An agent breaks production** | High and permanent | Read by default; mandatory simulation; copilot before autonomous; the Gate before every effect |
 | **Knowledge too tacit** — the interview produces something plausible and wrong | Medium | Simulation reveals it before production. This is why F1 precedes F4 |
 | **Process drift** — the process changes, the agent does not | Medium | A mandatory owner per agent; automatic demotion by rejection rate; periodic review |
 | **Model cost grows faster than value** | Medium | Caching, effort per step and model tiering as the platform's responsibility. The simulator exposes expensive agents before they are switched on |
@@ -998,7 +1007,7 @@ features.
 | # | Question | Must be resolved by |
 |---|---|---|
 | **Q1** | What is the first use case, and does it have historical cases accessible in enough volume to simulate? | Before F0 |
-| **Q2** | How are historical cases imported? A connector per system, a file, or capture in shadow mode? | F1 |
+| **Q2** | How are historical cases imported? A connector per system, a file, or capture from runs already approved in copilot? | F1 |
 | ~~**Q3**~~ | ~~Per-subject erasure can invalidate the hash chain~~ — **answered: both, and by construction.** Personal data was never in the chain: bulky content is segregated into the claim check (AU-04) and the step keeps a reference and a digest, so erasing content never touches a step. Erasure leaves a tombstone rather than a deleted row, because erased and never-stored are different facts and a trail pointing at nothing has to say which | — |
 | **Q4** | Policy language: do declarative rules in the pack solve the foreseen cases, or is a full rules engine needed from the start? | F2 |
 | ~~**Q5**~~ | ~~The agreement threshold for promotion~~ — **answered, and the answer is asymmetric.** Twenty decisions at 95% suggests promotion; five at under 80% performs demotion. Global rather than per pack, because the number describes whether people agree with the agent and not with its tools. Promotion is only ever suggested and demotion is automatic: loosening on thin evidence risks harm, tightening on thin evidence costs somebody a few clicks | — |
