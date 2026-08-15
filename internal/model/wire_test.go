@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/fuseone/agents/internal/domain"
@@ -219,5 +220,49 @@ func replayedName(t *testing.T, body map[string]any) string {
 		}
 	}
 	t.Fatal("no replayed call was sent")
+	return ""
+}
+
+/*
+Where the run is, told the same way by both providers.
+
+A planner is only useful to the engine if swapping the vendor does not change
+what the loop sees, and one of them was not telling the model which step it was
+at or what its author said would end it. The same agent, published once, behaved
+differently by vendor — and the half that stayed silent was the half where
+`stops_when` could never be asserted, so the trail could never record it.
+*/
+func TestOpenAICompatible_atAStep_isToldWhichOneAndWhatEndsIt(t *testing.T) {
+	t.Parallel()
+	c := serve(t, openAIToolCallWireName)
+	p := plannerFor(t, model.KindOpenAICompatible, c.server.URL, model.Config{Model: "gpt-test"})
+
+	in := input()
+	in.Step = "Find who wrote in"
+	in.StopsWhen = "the message does not say which customer it is about"
+	if _, err := p.Plan(context.Background(), in); err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+
+	system := systemTurn(t, c.body)
+	if !strings.Contains(system, in.Step) {
+		t.Errorf("the model was not told which step it is at:\n%s", system)
+	}
+	if !strings.Contains(system, in.StopsWhen) {
+		t.Errorf("the model was not told what ends the step:\n%s", system)
+	}
+}
+
+func systemTurn(t *testing.T, body map[string]any) string {
+	t.Helper()
+	messages, _ := body["messages"].([]any)
+	for _, raw := range messages {
+		message, _ := raw.(map[string]any)
+		if message["role"] == "system" {
+			content, _ := message["content"].(string)
+			return content
+		}
+	}
+	t.Fatal("no system turn was sent")
 	return ""
 }

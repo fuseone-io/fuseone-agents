@@ -192,8 +192,15 @@ Every action you propose passes through a deterministic gate before it happens.
 A refused call is reported back to you with the rule that refused it — treat
 that as final for this run and choose another approach rather than retrying.
 
-Propose one tool call at a time. When the task is complete, reply with a short
-plain-text summary of the outcome and make no tool call; that is how you finish.`
+Propose one tool call at a time. When there is nothing left to do, reply with a
+short plain-text summary and make no tool call; that is how you finish.
+
+When the step you are at names the thing that ends it, and that thing has
+happened, you finish the same way — and the first line of your reply is exactly
+"STOP: " followed by that step's own words, copied. Everything after that line
+is your summary, in your words. The line is how the record says the run ended
+where its author said it would; without it the record says only that you
+stopped, and nobody afterwards can tell the two apart.`
 
 func (a *Anthropic) toolParams(ids []domain.ToolID, offered names) []anthropic.ToolUnionParam {
 	if a.tools == nil {

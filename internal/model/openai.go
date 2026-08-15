@@ -129,6 +129,12 @@ func (o *OpenAICompatible) cost(u chatUsage) domain.Cost {
 
 func (o *OpenAICompatible) chatMessages(in engine.PlanInput, offered names) []chatMessage {
 	system := o.cfg.SystemPrompt + "\n\n" + loopContract
+	// Where the run is, and the exception its author wrote for that step.
+	// After the contract rather than inside it: this changes as the run
+	// advances, and what a provider caches is the prefix that does not.
+	if in.Step != "" {
+		system += "\n\n" + stepNote(in)
+	}
 	if in.Budget.Micros > 0 {
 		system += fmt.Sprintf(
 			"\n\nBudget remaining for this run: %s. Pace yourself and finish cleanly rather than being cut off.",
