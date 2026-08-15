@@ -21,10 +21,10 @@ var ErrNotClassifiable = errors.New("admin: unknown is not a ruling")
 
 // Curator records what tools do to the world.
 //
-// This is the single point where write access enters the platform. A tool
-// arrives from its server classified read-only whatever the server claims
-// about itself, and only this promotes it — which is why the ruling is durable
-// and attributed rather than a flag on a running process.
+// This is the single point where any access enters the platform. A tool
+// arrives from its server unclassified whatever the server claims about
+// itself, and does nothing until this says what it does — which is why the
+// ruling is durable and attributed rather than a flag on a running process.
 type Curator struct {
 	pool *pgxpool.Pool
 }
@@ -129,8 +129,9 @@ func (c *Curator) List(ctx context.Context, scope domain.Scope) ([]domain.ToolCl
 
 		effect, err := domain.ParseEffect(stored.Effect)
 		if err != nil {
-			// A row nobody can read is not silently treated as read-only:
-			// that would turn a corrupt record into a permission.
+			// A row nobody can read is not silently treated as anything:
+			// reading a corrupt record as a classification would turn it into
+			// a permission.
 			return nil, fmt.Errorf("admin: ruling for %s: %w", name, err)
 		}
 
@@ -221,8 +222,12 @@ func (c *Curator) Publish(ctx context.Context, entries []domain.ToolEntry) error
 
 // Tools returns the published catalogue with each ruling applied.
 //
-// A tool with no ruling reads as EffectRead and untrusted, which is exactly
-// what it is: imported, and not yet promoted by anyone.
+// A tool with no ruling reads as unclassified and untrusted, which is exactly
+// what it is: imported, and nobody has said what it does. It used to read as
+// EffectRead here — and the runtime refuses it, so the console, the interview
+// and the flow check all showed "read, allowed" for a call the platform would
+// stop. An author designs against the screen, which makes a permissive screen
+// worse than no screen.
 func (c *Curator) Tools(ctx context.Context) ([]domain.ToolEntry, error) {
 	rows, err := c.pool.Query(ctx, `
 		select name, value from settings
@@ -250,7 +255,7 @@ func (c *Curator) Tools(ctx context.Context) ([]domain.ToolEntry, error) {
 		}
 		entries = append(entries, domain.ToolEntry{
 			ID: domain.ToolID(name), Server: stored.Server, Description: stored.Description,
-			Effect: domain.EffectRead, Untrusted: true,
+			Effect: domain.EffectUnknown, Untrusted: true,
 		})
 	}
 	if err := rows.Err(); err != nil {

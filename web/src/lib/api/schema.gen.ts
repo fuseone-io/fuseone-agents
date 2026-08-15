@@ -1923,10 +1923,35 @@ export interface components {
         /** @enum {string} */
         Verdict: "allow" | "constrain" | "require_approval" | "block";
         /**
-         * @description What a tool does to the world. The domain's `unknown` is deliberately absent: it is the zero value that makes an unclassified tool fail closed, never something a caller may assert.
+         * @description What a tool does to the world, as a caller asserts it. `unknown` is deliberately absent here: it is the zero value that makes an unclassified tool fail closed, and nobody may claim it.
          * @enum {string}
          */
         Effect: "read" | "write" | "destructive" | "financial";
+        /**
+         * @description What the platform ships about a server it already knows, so the Curator
+         *     confirms instead of inventing forty rulings from a list of bare names.
+         *
+         *     It is not a classification and never becomes one on its own. Applied on
+         *     import it would put the decision back in a table shipped in a binary,
+         *     which is the same mistake as trusting the server about itself, one step
+         *     further away and harder to see.
+         *
+         *     `why` is required. A suggested classification with no reasoning is a
+         *     number to click past, and clicking past is precisely the failure a
+         *     suggestion invites: it looks like work somebody already did.
+         */
+        ToolSuggestion: {
+            effect: components["schemas"]["Effect"];
+            untrusted?: boolean;
+            compensatedBy?: string;
+            why: string;
+        };
+        /**
+         * @description What a tool does to the world, as a reader sees it — the same values and `unknown` besides, because a tool nobody has ruled on is a state this platform has and a screen has to be able to show.
+         *     Two schemas rather than one with a note, because the direction is the whole difference: a reader must be able to see "nobody has said", and a caller must never be able to write it. Collapsed into one enum, the API would either emit a value outside its own schema — which it did — or offer `unknown` as something to assert.
+         * @enum {string}
+         */
+        ToolEffect: "unknown" | "read" | "write" | "destructive" | "financial";
         /** @enum {string} */
         StepKind: "run_started" | "planned" | "gate_decided" | "budget_reserved" | "tool_called" | "tool_returned" | "budget_reconciled" | "approval_requested" | "approval_decided" | "resumed" | "abandoned" | "compensated" | "failed" | "parked" | "run_finished";
         Scope: {
@@ -1981,7 +2006,7 @@ export interface components {
             /** @description The declared step it was proposed in, which is what a correction anchors to. */
             step?: string;
             tool: string;
-            effect: components["schemas"]["Effect"];
+            effect: components["schemas"]["ToolEffect"];
             verdict: components["schemas"]["Verdict"];
             /** @description Which check decided. Never "blocked by policy" — that tells an author nothing about what to change. */
             rule?: string;
@@ -2165,10 +2190,11 @@ export interface components {
             toolId: string;
             server: string;
             description?: string;
-            effect: components["schemas"]["Effect"];
+            effect: components["schemas"]["ToolEffect"];
             untrusted: boolean;
             /** @description The tool that undoes this one, when the Curator has said which does. */
             compensatedBy?: string;
+            suggested?: components["schemas"]["ToolSuggestion"];
             /**
              * @description Whether the server that offers this tool answers now.
              *

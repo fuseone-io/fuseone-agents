@@ -275,7 +275,7 @@ func toSimulationCase(c simulate.Case) openapi.SimulationCase {
 func toSimulationAct(a simulate.Act) openapi.SimulationAct {
 	return openapi.SimulationAct{
 		Tool:    string(a.Tool),
-		Effect:  openapi.Effect(a.Effect.String()),
+		Effect:  openapi.ToolEffect(a.Effect.String()),
 		Verdict: openapi.Verdict(a.Verdict.String()),
 		Reached: a.Reached,
 		Step:    someString(a.Step),

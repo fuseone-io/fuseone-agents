@@ -177,7 +177,7 @@ func TestGetSimulation_foldsTheRunsIntoRowsAndNamesTheRuleThatStopped(t *testing
 		t.Fatalf("report = %+v", got)
 	}
 	act := (*got.Cases[0].Acted)[0]
-	if act.Verdict != openapi.VerdictBlock || act.Effect != openapi.Financial || act.Reached {
+	if act.Verdict != openapi.VerdictBlock || act.Effect != openapi.ToolEffectFinancial || act.Reached {
 		t.Errorf("act = %+v", act)
 	}
 	// The rule, never only the verdict: "blocked by policy" tells an author

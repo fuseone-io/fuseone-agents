@@ -159,6 +159,7 @@ func (c *Catalog) Entries() []domain.ToolEntry {
 			ID: e.ID, Server: e.Server, Description: e.Description,
 			Effect: e.Effect, Untrusted: e.Untrusted,
 			CompensatedBy: e.CompensatedBy,
+			Suggested:     suggestionOf(e.Suggested),
 		})
 	}
 	slices.SortFunc(out, func(a, b domain.ToolEntry) int {
@@ -207,4 +208,23 @@ func (c *Catalog) List() []Entry {
 		out = append(out, e)
 	}
 	return out
+}
+
+// suggestionOf carries a shipped opinion into the administration read model.
+//
+// It travels or the catalogue is data nobody reads: the promise is that the
+// Curator sees the reasoning before confirming, and a suggestion the screen
+// never receives keeps none of it.
+func suggestionOf(s *Suggestion) *domain.ToolSuggestion {
+	if s == nil {
+		return nil
+	}
+	untrusted := true
+	if s.Untrusted != nil {
+		untrusted = *s.Untrusted
+	}
+	return &domain.ToolSuggestion{
+		Effect: s.Effect, Untrusted: untrusted,
+		CompensatedBy: s.CompensatedBy, Why: s.Why,
+	}
 }

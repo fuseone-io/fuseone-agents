@@ -29,6 +29,7 @@ import (
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/httpapi"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
+	"github.com/fuseone/agents/internal/known"
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/policy"
 	"github.com/fuseone/agents/internal/regression"
@@ -111,6 +112,10 @@ func serve(args []string) error {
 		// The configured providers, built once: the authoring assistant asks
 		// them to write, and the editor asks them how large an instruction is.
 		providers := assistants(ctx, integrations)
+		shipped, err := known.Load()
+		if err != nil {
+			return fmt.Errorf("load the known servers: %w", err)
+		}
 		channels = admin.NewChannels(identity.pool, store)
 		api = api.WithChannels(channels, channel.NewRouter(drivers)).
 			WithChannelListing(drivers).
@@ -157,6 +162,10 @@ func serve(args []string) error {
 			// What an instruction costs, asked of the model that will read
 			// it. Nothing on this side can compute it.
 			WithTokenisers(providers).
+			// What the platform ships about servers other people publish, so
+			// the Curator confirms a proposal instead of inventing one per
+			// tool name. It never becomes a classification on its own.
+			WithKnown(shipped).
 			WithPauses(spec.NewState(identity.pool)).
 			// Taking an agent out of circulation, which is the only
 			// removal there is: nothing here deletes a version.

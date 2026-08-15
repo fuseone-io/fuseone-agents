@@ -73,6 +73,7 @@
     "people": "People",
     "perDay": "per day",
     "perMonth": "per month",
+    "platformSuggests": "The platform suggests:",
     "prices": "Prices",
     "rateApplies": "Applies to runs started after the workers reload. What is already in the ledger keeps the money it was recorded with.",
     "rateCacheRead": "Cache read / million",
@@ -110,6 +111,7 @@
     "undoColumn": "Undone by",
     "undoTakesTheResult": "The undo is called with what this tool returned. Leave it empty if an act by this tool cannot be taken back by machine — abandoning a run will say so rather than hide it.",
     "untrusted": "Outside data",
+    "useTheSuggestion": "Use the suggestion",
     "whatItDoes": "What this tool does to the world",
     "whatUndoesIt": "What undoes it",
     "wholeInstallation": "The whole installation",
@@ -651,6 +653,7 @@
     "destructive": "destructive",
     "financial": "financial",
     "read": "read",
+    "unknown": "unclassified",
     "write": "write"
   },
   "gate": {

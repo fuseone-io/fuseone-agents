@@ -2971,10 +2971,45 @@ components:
     Effect:
       type: string
       description: >
-        What a tool does to the world. The domain's `unknown` is deliberately
-        absent: it is the zero value that makes an unclassified tool fail
-        closed, never something a caller may assert.
+        What a tool does to the world, as a caller asserts it. `unknown` is
+        deliberately absent here: it is the zero value that makes an
+        unclassified tool fail closed, and nobody may claim it.
       enum: [read, write, destructive, financial]
+
+    ToolSuggestion:
+      type: object
+      description: |
+        What the platform ships about a server it already knows, so the Curator
+        confirms instead of inventing forty rulings from a list of bare names.
+
+        It is not a classification and never becomes one on its own. Applied on
+        import it would put the decision back in a table shipped in a binary,
+        which is the same mistake as trusting the server about itself, one step
+        further away and harder to see.
+
+        `why` is required. A suggested classification with no reasoning is a
+        number to click past, and clicking past is precisely the failure a
+        suggestion invites: it looks like work somebody already did.
+      required: [effect, why]
+      properties:
+        effect: { $ref: '#/components/schemas/Effect' }
+        untrusted: { type: boolean }
+        compensatedBy: { type: string }
+        why: { type: string }
+
+    ToolEffect:
+      type: string
+      description: >
+        What a tool does to the world, as a reader sees it — the same values
+        and `unknown` besides, because a tool nobody has ruled on is a state
+        this platform has and a screen has to be able to show.
+
+        Two schemas rather than one with a note, because the direction is the
+        whole difference: a reader must be able to see "nobody has said", and a
+        caller must never be able to write it. Collapsed into one enum, the API
+        would either emit a value outside its own schema — which it did — or
+        offer `unknown` as something to assert.
+      enum: [unknown, read, write, destructive, financial]
 
     StepKind:
       type: string
@@ -3067,7 +3102,7 @@ components:
           type: string
           description: The declared step it was proposed in, which is what a correction anchors to.
         tool: { type: string }
-        effect: { $ref: '#/components/schemas/Effect' }
+        effect: { $ref: '#/components/schemas/ToolEffect' }
         verdict: { $ref: '#/components/schemas/Verdict' }
         rule:
           type: string
@@ -3371,11 +3406,13 @@ components:
           description: Namespaced by server, because two servers naming a tool "search" must not collide into one capability.
         server: { type: string }
         description: { type: string }
-        effect: { $ref: '#/components/schemas/Effect' }
+        effect: { $ref: '#/components/schemas/ToolEffect' }
         untrusted: { type: boolean }
         compensatedBy:
           type: string
           description: The tool that undoes this one, when the Curator has said which does.
+        suggested:
+          $ref: '#/components/schemas/ToolSuggestion'
         offered:
           type: boolean
           description: |

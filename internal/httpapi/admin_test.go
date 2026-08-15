@@ -9,6 +9,7 @@ import (
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
+	"github.com/fuseone/agents/internal/known"
 	"github.com/fuseone/agents/internal/ledger"
 )
 
@@ -681,5 +682,57 @@ func TestListTools_aStaleObservation_isSilenceRatherThanAYes(t *testing.T) {
 
 	if len(listed.Items) != 1 || (listed.Items[0].Offered != nil && *listed.Items[0].Offered) {
 		t.Errorf("items = %+v, want the stale server's tool unoffered", listed.Items)
+	}
+}
+
+/*
+The Curator reads the reasoning before confirming.
+
+The shipped catalogue exists so that registering a well-known server is one
+confirmation rather than forty rulings invented from a list of bare names. A
+suggestion the screen never receives keeps none of that promise — the data
+would be in the binary and the Curator would still be guessing.
+
+Resolved on read rather than stored. It is derived from a table shipped in the
+binary, and a derived value persisted is one that goes stale against the table
+it came from.
+*/
+func TestListTools_aKnownServer_carriesTheSuggestionAndItsReason(t *testing.T) {
+	t.Parallel()
+	shipped, err := known.Load()
+	if err != nil {
+		t.Fatalf("known: %v", err)
+	}
+
+	s := NewServer(ledger.NewMemory(), "test").
+		WithAdministration(nil, &fakeTools{entries: []domain.ToolEntry{
+			{ID: "github.merge_pull_request", Server: "github", Effect: domain.EffectUnknown},
+		}}, nil).
+		WithKnown(shipped)
+
+	resp, err := s.ListTools(everywhere(domain.RoleCurator), openapi.ListToolsRequestObject{})
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+	page, ok := resp.(openapi.ListTools200JSONResponse)
+	if !ok {
+		t.Fatalf("response = %T, want the catalogue", resp)
+	}
+	if len(page.Items) != 1 {
+		t.Fatalf("items = %+v, want the one tool", page.Items)
+	}
+
+	got := page.Items[0]
+	if got.Effect != openapi.ToolEffectUnknown {
+		t.Errorf("effect = %q, want it still unclassified", got.Effect)
+	}
+	if got.Suggested == nil {
+		t.Fatal("no suggestion reached the screen")
+	}
+	if got.Suggested.Effect != openapi.EffectDestructive {
+		t.Errorf("suggested = %q, want destructive", got.Suggested.Effect)
+	}
+	if got.Suggested.Why == "" {
+		t.Error("a suggestion with no reasoning is a number to click past")
 	}
 }

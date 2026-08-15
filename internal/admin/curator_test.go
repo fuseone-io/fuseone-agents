@@ -173,10 +173,51 @@ func TestTools_carryTheUndoTheCuratorDeclared(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Tools: %v", err)
 	}
-	if len(entries) != 1 {
-		t.Fatalf("Tools = %+v, want the one published tool", entries)
+	// Found rather than counted: these tests share a pool, and a count asserts
+	// about every other test as well as this one.
+	note := find(t, entries, "crm.note")
+	if note.CompensatedBy != "crm.note.delete" {
+		t.Errorf("CompensatedBy = %q, want the tool that undoes it", note.CompensatedBy)
 	}
-	if entries[0].CompensatedBy != "crm.note.delete" {
-		t.Errorf("CompensatedBy = %q, want the tool that undoes it", entries[0].CompensatedBy)
+}
+
+func find(t *testing.T, entries []domain.ToolEntry, id domain.ToolID) domain.ToolEntry {
+	t.Helper()
+	for _, e := range entries {
+		if e.ID == id {
+			return e
+		}
+	}
+	t.Fatalf("%s is not in %+v", id, entries)
+	return domain.ToolEntry{}
+}
+
+/*
+A tool nobody ruled on reads as unclassified, on the screen too.
+
+The runtime already refuses it: discovery files it unclassified and the Gate's
+contract check blocks. This is the other half, and without it the two halves
+disagree — the console, the interview and the flow check all read this, so an
+author would design against a screen saying "read, allowed" for a call the
+platform would stop. Being told at authoring time is the whole point of showing
+an effect at all.
+*/
+func TestTools_withNoRuling_readAsUnclassifiedRatherThanRead(t *testing.T) {
+	pool := freshPool(t)
+	ctx := context.Background()
+	curator := admin.NewCurator(pool)
+
+	if err := curator.Publish(ctx, []domain.ToolEntry{
+		{ID: "github.delete_repository", Server: "github", Description: "remove um repositório"},
+	}); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+
+	entries, err := curator.Tools(ctx)
+	if err != nil {
+		t.Fatalf("Tools: %v", err)
+	}
+	if got := find(t, entries, "github.delete_repository"); got.Effect != domain.EffectUnknown {
+		t.Errorf("Effect = %v, want unknown until somebody rules", got.Effect)
 	}
 }

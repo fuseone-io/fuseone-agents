@@ -15,6 +15,7 @@ import {
   type Ruling,
 } from "@/features/admin/classify-fields";
 import { useClassifyTool, type Tool } from "@/features/admin/api";
+import { SuggestedRuling } from "@/features/admin/suggested-ruling";
 import { problemMessage } from "@/lib/api/problem-message";
 
 const BLANK: Ruling = {
@@ -73,6 +74,23 @@ export function ClassifyDialog({
           </DialogTitle>
           <DialogDescription>{t("admin.recordedInTrail")}</DialogDescription>
         </DialogHeader>
+
+        {tool.suggested && (
+          <SuggestedRuling
+            suggested={tool.suggested}
+            onAccept={() =>
+              setRuling({
+                effect: tool.suggested?.effect ?? "read",
+                untrusted: tool.suggested?.untrusted ?? true,
+                compensatedBy: tool.suggested?.compensatedBy ?? "",
+                // The reason stays theirs. Accepting a suggestion is still a
+                // decision somebody signs, and signing somebody else's
+                // sentence is not the same as writing one.
+                reason: "",
+              })
+            }
+          />
+        )}
 
         <ClassifyFields
           ruling={ruling}

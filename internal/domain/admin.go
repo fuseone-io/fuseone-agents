@@ -27,6 +27,24 @@ type ToolEntry struct {
 	// said which does. Empty means an act by this tool cannot be undone by
 	// machine, which the abandonment screen reports rather than hides.
 	CompensatedBy ToolID
+	// Suggested is what the platform ships about a server it knows, and it is
+	// not a classification: it is the first proposal, with its reasoning, so
+	// the Curator confirms instead of inventing. Nil for a server nobody
+	// catalogued and for a tool an entry never heard of.
+	Suggested *ToolSuggestion
+}
+
+// ToolSuggestion is a shipped opinion about one tool, and the sentence behind
+// it.
+//
+// The sentence is not decoration. A suggested classification with no reasoning
+// is a number to click past, and clicking past is exactly the failure a
+// suggestion invites — it looks like work already done.
+type ToolSuggestion struct {
+	Effect        Effect
+	Untrusted     bool
+	CompensatedBy ToolID
+	Why           string
 }
 
 // MCPServer and ModelProvider are the configured integrations as a reader sees

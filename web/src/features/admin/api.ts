@@ -4,6 +4,12 @@ import type { components } from "@/lib/api/schema.gen";
 
 export type Tool = components["schemas"]["Tool"];
 export type Effect = components["schemas"]["Effect"];
+/**
+ * What a tool does, as a reader sees it — the same values and `unknown`
+ * besides. `Effect` is what a caller may assert and never carries it: a tool
+ * nobody has ruled on is a state to show, never one to claim.
+ */
+export type ToolEffect = components["schemas"]["ToolEffect"];
 export type AdminEvent = components["schemas"]["AdminEvent"];
 export type ScopeBudget = components["schemas"]["ScopeBudget"];
 

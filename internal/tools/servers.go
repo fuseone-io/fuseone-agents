@@ -17,15 +17,20 @@ import (
 /*
 The tool servers this installation is connected to.
 
-Registering is the Curator’s act and it grants nothing: a tool arrives
-read-only whatever its server claims about it, and becomes anything else only
-when somebody rules on it (PRD DE-12, DE-13).
+Registering is the Curator's act and it grants nothing: a tool arrives
+unclassified whatever its server claims about it, and does nothing at all until
+somebody rules on it (PRD DE-12, DE-13).
 */
 // AddServer registers a connected MCP server and imports its tools.
 //
-// Every imported tool arrives classified as read-only and untrusted. Making a
-// tool able to write is a deliberate act by the Curator afterwards — a server
-// cannot grant itself write access by describing a tool as one (PRD DE-13).
+// Every imported tool arrives unclassified and untrusted, and the Gate refuses
+// an unclassified tool at the contract check. It used to arrive read-only,
+// which reads as a restriction and behaves as a permission — read is allowed,
+// so importing a server created one permitted tool per name it offered.
+//
+// A server still cannot grant itself write access by describing a tool as one.
+// That was always the argument, and unclassified is what it argues for:
+// refusing the server's claim without acting on it in either direction.
 func (c *Catalog) AddServer(ctx context.Context, name string, session Session) error {
 	if name == "" {
 		return fmt.Errorf("tools: server needs a name")

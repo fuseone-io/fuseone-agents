@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
+	"github.com/fuseone/agents/internal/known"
 )
 
 // Curator is the administration this server delegates rulings to, declared
@@ -99,10 +101,17 @@ func (s *Server) ListTools(ctx context.Context, _ openapi.ListToolsRequestObject
 		description := e.Description
 		tool := openapi.Tool{
 			ToolId: string(e.ID), Server: e.Server, Description: &description,
-			Effect: openapi.Effect(e.Effect.String()), Untrusted: e.Untrusted,
+			Effect: openapi.ToolEffect(e.Effect.String()), Untrusted: e.Untrusted,
 		}
 		if e.CompensatedBy != "" {
 			tool.CompensatedBy = ptr(string(e.CompensatedBy))
+		}
+		// What the platform already knows about this server, resolved on read
+		// rather than stored. It is derived from a table shipped in the
+		// binary, and a derived value persisted is one that goes stale against
+		// the table it came from.
+		if found := s.suggestionFor(e.ID); found != nil {
+			tool.Suggested = found
 		}
 		// No observations at all means nothing can be said, and everything
 		// reads as offered. With observations, silence about a server is the
@@ -203,4 +212,46 @@ func (s *Server) refuse(ctx context.Context, perm domain.Permission) *openapi.Fo
 		return &body
 	}
 	return nil
+}
+
+// Suggesters is what the platform ships about servers other people publish,
+// declared here by the consumer.
+type Suggesters interface {
+	Suggest(server, remoteName string) (known.Suggestion, bool)
+}
+
+// WithKnown wires the shipped suggestions.
+func (s *Server) WithKnown(k Suggesters) *Server {
+	s.known = k
+	return s
+}
+
+// suggestionFor is what the platform believes about one tool, or nothing.
+//
+// The tool id is `server.remoteName` and it is split on the first dot, which
+// is the same split that made it — a server named with a dot in it would be
+// namespaced ambiguously long before this line saw it.
+func (s *Server) suggestionFor(id domain.ToolID) *openapi.ToolSuggestion {
+	if s.known == nil {
+		return nil
+	}
+	server, remote, ok := strings.Cut(string(id), ".")
+	if !ok {
+		return nil
+	}
+	found, ok := s.known.Suggest(server, remote)
+	if !ok {
+		return nil
+	}
+
+	out := &openapi.ToolSuggestion{
+		Effect: openapi.Effect(found.Effect), Why: found.Why,
+	}
+	if found.Untrusted != nil {
+		out.Untrusted = found.Untrusted
+	}
+	if found.CompensatedBy != "" {
+		out.CompensatedBy = ptr(found.CompensatedBy)
+	}
+	return out
 }

@@ -73,6 +73,7 @@
     "people": "Pessoas",
     "perDay": "por dia",
     "perMonth": "por mês",
+    "platformSuggests": "A plataforma sugere:",
     "prices": "Preços",
     "rateApplies": "Vale para execuções iniciadas depois que os workers recarregarem. O que já está no ledger mantém o valor com que foi registrado.",
     "rateCacheRead": "Leitura de cache / milhão",
@@ -110,6 +111,7 @@
     "undoColumn": "Desfaz com",
     "undoTakesTheResult": "A ferramenta de desfazer é chamada com o que esta devolveu. Deixe vazio se um ato desta ferramenta não pode ser desfeito por máquina — abandonar uma execução vai dizer isso em vez de esconder.",
     "untrusted": "Dado de fora",
+    "useTheSuggestion": "Usar a sugestão",
     "whatItDoes": "O que esta ferramenta faz com o mundo",
     "whatUndoesIt": "O que desfaz",
     "wholeInstallation": "Instalação inteira",
@@ -651,6 +653,7 @@
     "destructive": "destrutivo",
     "financial": "financeiro",
     "read": "leitura",
+    "unknown": "não classificada",
     "write": "escrita"
   },
   "gate": {
