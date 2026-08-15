@@ -51,8 +51,16 @@ export function InstructionsEditor({
   // a definition carrying a list of silenced warnings would be a second thing
   // to review beside the text.
   const [kept, setKept] = useState<string[]>([]);
-  // Which block asked for the block menu by typing `/`.
-  const [slashAt, setSlashAt] = useState<number | undefined>(undefined);
+  /*
+  Who asked for the block menu: a block that had `/` typed in it, the button,
+  or nobody.
+
+  One state rather than two, because the menu is controlled and a controlled
+  menu opens only when the state says so. Held as two — a slash index and the
+  trigger's own — it opened for the slash and ignored the button, which is
+  exactly what happened.
+  */
+  const [menu, setMenu] = useState<{ at?: number } | undefined>(undefined);
   const drag = useListReorder((from, to) => {
     const next = [...blocks];
     const [moved] = next.splice(from, 1);
@@ -106,23 +114,23 @@ export function InstructionsEditor({
                   write(blocks.map((b, i) => (i === at ? { ...b, kind } : b))),
                 split: () =>
                   write(blocks.flatMap((b, i) => (i === at ? split(b) : [b]))),
-                slash: () => setSlashAt(at),
+                slash: () => setMenu({ at }),
                 drag,
               }}
             />
           ))}
 
           <AddBlock
-            open={slashAt !== undefined}
-            onOpenChange={(open) => !open && setSlashAt(undefined)}
+            open={menu !== undefined}
+            onOpenChange={(open) => setMenu(open ? {} : undefined)}
             onAdd={(kind) => {
               // Typed `/` becomes the block it asked for: the slash is the
               // gesture and never reaches the payload.
               const next = blocks.map((one, i) =>
-                i === slashAt ? { ...one, text: one.text.replace(/\/$/, "") } : one,
+                i === menu?.at ? { ...one, text: one.text.replace(/\/$/, "") } : one,
               );
               write([...next, { kind, text: "" }]);
-              setSlashAt(undefined);
+              setMenu(undefined);
             }}
             // Citing from here writes the `@` into the last block and lets
             // the row take it from there: one gesture, one implementation.
