@@ -66,12 +66,10 @@ func transportFor(
 		}, nil
 
 	case domain.TransportStdio:
-		fields := strings.Fields(server.Command)
-		if len(fields) == 0 {
-			return nil, fmt.Errorf("%s: no command to run", server.Name)
+		cmd, err := commandFor(ctx, server)
+		if err != nil {
+			return nil, err
 		}
-		cmd := exec.CommandContext(ctx, fields[0], append(fields[1:], server.Args...)...)
-		cmd.Stderr = os.Stderr
 		return &mcp.CommandTransport{Command: cmd}, nil
 
 	default:
@@ -256,4 +254,60 @@ func (r *reconciler) watch(ctx context.Context, every time.Duration) {
 			r.reconcile(ctx)
 		}
 	}
+}
+
+/*
+commandFor builds the local process, with an environment it was given rather
+than one it inherited.
+
+`exec.Cmd` with a nil `Env` hands the child everything the parent holds. For
+this parent that is `DATABASE_URL` and `FUSEONE_MASTER_KEY`, so a tool server
+somebody configured could open the database and unseal the vault without
+calling a single tool: no Gate decision, no ledger step, nothing to audit. The
+Gate governs what a tool may do and has never governed what a process may read.
+
+Scrubbing does not make stdio safe. The child still runs as the worker, on the
+worker's filesystem, from inside the worker's network — that is what stdio *is*,
+and it is why the form that offers it has to say so. What this removes is the
+platform handing over its own credentials to do it with.
+
+An allowlist and not a denylist. A denylist is correct only until somebody adds
+the next secret to the deployment, and then it is silently wrong.
+*/
+func commandFor(ctx context.Context, server domain.MCPServer) (*exec.Cmd, error) {
+	fields := strings.Fields(server.Command)
+	if len(fields) == 0 {
+		return nil, fmt.Errorf("%s: no command to run", server.Name)
+	}
+	cmd := exec.CommandContext(ctx, fields[0], append(fields[1:], server.Args...)...)
+	cmd.Stderr = os.Stderr
+	cmd.Env = childEnv()
+	return cmd, nil
+}
+
+/*
+carried are the variables a program needs to be a program.
+
+None of them is a credential, and each earns its place: PATH so a runtime can
+start its own children, HOME because npx and pip write caches there and fail
+without it, TMPDIR for the same reason, and the locale and zone so a server
+formats dates the way the rest of the installation does.
+
+HOME deserves the objection it invites — it points at files the child could
+read. It could read them anyway: it runs as the worker's user. HOME tells it
+where they are; it grants nothing it did not already have.
+*/
+var carried = []string{"PATH", "HOME", "TMPDIR", "LANG", "LC_ALL", "TZ"}
+
+// childEnv is never nil, because nil is the inheriting one.
+func childEnv() []string {
+	env := make([]string, 0, len(carried))
+	for _, name := range carried {
+		// Unset stays unset. `PATH=` is not "no PATH" — it is a PATH that
+		// finds nothing, which fails in a way nobody reads as configuration.
+		if value, ok := os.LookupEnv(name); ok {
+			env = append(env, name+"="+value)
+		}
+	}
+	return env
 }
