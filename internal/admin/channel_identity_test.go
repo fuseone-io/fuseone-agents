@@ -212,3 +212,56 @@ func TestIdentities_aBrokenRowClaimingAnotherChannel_isNamedByItsKey(t *testing.
 	}
 	t.Errorf("listed = %+v, want the row under the channel it is stored beneath", listed)
 }
+
+/*
+A working binding is shown under the key that makes it work.
+
+`PrincipalFor` grants by the key, so a row keyed `acme-slack/U505` whose value
+claims `old-slack/U777` gives authority to the first and was shown and removed
+as the second — the console offering to remove a binding that is not the one
+doing anything, while the one that is stays.
+
+The copies inside the value are written from the same inputs as the key, so
+they diverge only by restore or by hand. Which is exactly the moment the screen
+has to agree with the runtime.
+*/
+func TestIdentities_aWorkingBindingWhoseValueDisagrees_isNamedByItsKey(t *testing.T) {
+	channels, store := boundChannels(t)
+	ctx := context.Background()
+
+	if err := store.Put(ctx, settings.Setting{
+		ScopeKind: settings.ScopeInstallation,
+		Kind:      admin.KindChannelIdentity,
+		Name:      "acme-slack/U505",
+		Value: []byte(
+			`{"channel":"old-slack","account":"U777","principal":"usr_ana"}`),
+		Enabled: true, UpdatedBy: "restore",
+	}); err != nil {
+		t.Fatalf("write the disagreeing row: %v", err)
+	}
+
+	listed, err := channels.Identities(ctx)
+	if err != nil {
+		t.Fatalf("Identities: %v", err)
+	}
+
+	var found *admin.ChannelIdentity
+	for i, one := range listed {
+		if one.Principal == "usr_ana" {
+			found = &listed[i]
+		}
+	}
+	if found == nil {
+		t.Fatalf("listed = %+v, want the binding", listed)
+	}
+	if found.Channel != "acme-slack" || found.Account != "U505" {
+		t.Errorf("shown as %s/%s, want the key that grants the authority",
+			found.Channel, found.Account)
+	}
+
+	// And it is the same pair the runtime answers to.
+	who, bound, err := channels.PrincipalFor(ctx, found.Channel, found.Account)
+	if err != nil || !bound || who != "usr_ana" {
+		t.Errorf("the shown binding is not the one that works: %q (%v, %v)", who, bound, err)
+	}
+}

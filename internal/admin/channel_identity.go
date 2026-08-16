@@ -122,6 +122,22 @@ func (c *Channels) Identities(ctx context.Context) ([]ChannelIdentity, error) {
 	for _, s := range stored {
 		id, ok := identityFrom(s)
 		if ok && id.Principal != "" {
+			/*
+				Named by the key, like every row here.
+
+				PrincipalFor looks a binding up by `channel/account`, so the
+				key is what grants the authority — and the same two fields
+				inside the value are a copy that can only ever disagree with
+				it. Published from the value, a row keyed `acme-slack/U505`
+				whose contents say `old-slack/U777` grants under the first and
+				is shown and deleted under the second: the console offers to
+				remove a binding that is not the one doing anything.
+
+				They are written from the same inputs, so they diverge only by
+				restore or by a hand-edited row — which is exactly when the
+				screen has to agree with the runtime.
+			*/
+			id.Channel, id.Account = keyChannel(s.Name), keyAccount(s.Name)
 			out = append(out, id)
 			continue
 		}
@@ -155,14 +171,14 @@ func (c *Channels) Identities(ctx context.Context) ([]ChannelIdentity, error) {
 }
 
 /*
-The key is what names a row whose value cannot be trusted to.
+The key is what names a row, and the value does not get a vote.
 
-Canonical rather than a fallback. A value that kept a channel and lost an
-account would otherwise have the recovered account discarded with it, and a
-value that kept a *wrong* channel would move the row to a card it does not
-belong on — where the console would then delete it by naming a channel it was
-never under. On an unreadable row the value is the broken part; the key is the
-only thing that survived intact, because it is not inside the value.
+PrincipalFor grants authority by `channel/account` from the key, so anything
+else shown beside a binding is a second opinion about the same fact — and a
+second opinion that can be wrong. On a readable row the copies inside the value
+diverge only by restore or by hand; on an unreadable one the value is the
+broken part outright. Either way the key is the thing that survived, because it
+is not inside what broke.
 
 One separator and the first one: a Slack account id has no slash, and the
 channel is the half an operator typed.
