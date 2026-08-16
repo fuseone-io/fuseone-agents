@@ -110,3 +110,26 @@ describe("ruling on a tool from where it was found", () => {
     expect(screen.getByText(/não classificad/i)).toBeInTheDocument();
   });
 });
+
+describe("which act the row offers", () => {
+  /*
+   * A ruling the tool outgrew asks for a third thing.
+   *
+   * Nobody-has-judged is a decision to make; ruled-and-current is a decision
+   * to change; overtaken-by-a-new-definition is a decision to *check* —
+   * somebody already looked, and what they looked at is not what is on offer.
+   * Labelled like the first it reads as an oversight; like the second, as
+   * optional.
+   */
+  it("asks for a review when the definition moved under the ruling", () => {
+    render(
+      <SurfacePicker
+        tools={[{ ...tool("crm.lookup"), stale: true }]}
+        chosen={new Set(["lookup"])}
+        onToggle={vi.fn()}
+        onClassify={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("button", { name: /revisar/i })).toBeInTheDocument();
+  });
+});

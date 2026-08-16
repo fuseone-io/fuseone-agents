@@ -51,6 +51,25 @@ export function SurfacePicker({
   );
 }
 
+/*
+Which of three acts the button offers.
+
+A tool nobody has judged is a decision to make. A tool whose ruling was
+overtaken by a new definition is a decision to *check* — somebody already
+looked, and what they looked at is not what is on offer now. And a tool that is
+ruled and current is a decision to change, which is the rarest and the one that
+should feel deliberate.
+
+All three are refused or allowed by the runtime on their own terms; what
+differs is the work being asked for, and one label for three of them tells the
+Curator the wrong thing twice.
+*/
+function actOn(tool: Tool): "rule" | "review" | "ruleAgain" {
+  if (tool.stale) return "review";
+  if (tool.effect === "unknown") return "rule";
+  return "ruleAgain";
+}
+
 function ToolRow({
   tool,
   chosen,
@@ -111,9 +130,7 @@ function ToolRow({
       <div className="flex shrink-0 items-center gap-2">
         <EffectBadge effect={tool.effect} stale={tool.stale} />
         <Button size="sm" variant="ghost" className="h-7" onClick={() => onClassify(tool)}>
-          {tool.effect === "unknown" || tool.stale
-            ? t("mcp.rule")
-            : t("mcp.ruleAgain")}
+          {t(`mcp.${actOn(tool)}`)}
         </Button>
       </div>
     </li>

@@ -1463,6 +1463,7 @@
     "variablesExample": "GITHUB_TOKEN=ghp_...\nREGION=eu-west-1",
     "rule": "Rule on it",
     "ruleAgain": "Change the ruling",
-    "suggests": "This platform would call it {{effect}} — open it to see why."
+    "suggests": "This platform would call it {{effect}} — open it to see why.",
+    "review": "Review the ruling"
   }
 }

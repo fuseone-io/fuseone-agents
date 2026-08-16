@@ -42,8 +42,29 @@ export function ClassifyDialog({
   onClose: () => void;
 }) {
   const { t } = useTranslation();
-  const [ruling, setRuling] = useState<Ruling>(BLANK);
   const classify = useClassifyTool();
+  /*
+    Reset per tool, and started from what the tool already says.
+
+    The state used to begin blank and stay mounted between tools, which made
+    two failures out of one mistake. Opening "change the ruling" on a
+    destructive tool and filling in only the reason submitted `read` — the
+    dialog's zero value, not anybody's judgement. And what was typed for one
+    tool was still there for the next, so a decision could be signed with
+    another tool's answers.
+
+    Keyed by the digest as well as the id: a tool whose definition moved is a
+    different thing to judge, and carrying the old answers into it is the exact
+    mistake the digest exists to prevent.
+  */
+  const [ruling, setRuling] = useState<Ruling>(BLANK);
+  const [judging, setJudging] = useState<string | null>(null);
+  const identity = tool ? `${tool.toolId}@${tool.digest ?? ""}` : null;
+
+  if (identity !== judging) {
+    setJudging(identity);
+    setRuling(tool ? startFrom(tool) : BLANK);
+  }
 
   if (!tool) return null;
 
@@ -114,4 +135,24 @@ export function ClassifyDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+/*
+startFrom is what a ruling opens on.
+
+A tool nobody has judged opens blank: there is nothing to carry forward, and a
+pre-filled effect would be the platform answering for the Curator.
+
+A tool already ruled on opens on its ruling. The act is "change this", and
+starting from the zero value makes the safest-looking answer — `read` — the one
+a distracted person submits by touching nothing.
+*/
+function startFrom(tool: Tool): Ruling {
+  if (tool.effect === "unknown") return BLANK;
+  return {
+    effect: tool.effect,
+    untrusted: tool.untrusted,
+    reason: "",
+    compensatedBy: tool.compensatedBy ?? "",
+  };
 }

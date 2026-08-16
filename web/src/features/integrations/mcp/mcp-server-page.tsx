@@ -31,8 +31,10 @@ import { useMCPServer } from "@/features/integrations/mcp/use-mcp-server";
 export function MCPServerPage() {
   const { t } = useTranslation();
   const { name } = useParams();
-  const { server, tools, chosen, dirty, toggle, reset, isLoading, error, refetch } =
-    useMCPServer(name);
+  const {
+    server, tools, catalogue, chosen, dirty, toggle, reset,
+    isLoading, error, refetch,
+  } = useMCPServer(name);
   const save = useSetSurface();
   const [ruling, setRuling] = useState<Tool | null>(null);
 
@@ -94,10 +96,14 @@ export function MCPServerPage() {
         </div>
       </Panel>
 
-      {/* The other tools travel with it: a compensator is chosen from what
-          exists, and a list that stopped at this server would offer an undo
-          the platform cannot reach. */}
-      <ClassifyDialog tool={ruling} tools={tools} onClose={() => setRuling(null)} />
+      {/* The whole catalogue travels with it, not this server's share: what
+          undoes a tool may live on another server, and a list that stopped
+          here would hide every compensator the platform actually has. */}
+      <ClassifyDialog
+        tool={ruling}
+        tools={catalogue}
+        onClose={() => setRuling(null)}
+      />
     </div>
   );
 }

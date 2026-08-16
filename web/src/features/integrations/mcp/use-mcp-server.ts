@@ -39,6 +39,13 @@ export function useMCPServer(name: string | undefined) {
   return {
     server,
     tools: its,
+    /*
+      The whole catalogue, for the one question that is not about this server:
+      what undoes a tool may live on another. A compensator list narrowed to
+      the server being looked at offers an undo the platform can reach and
+      hides every other one.
+    */
+    catalogue: tools.data?.items ?? [],
     chosen,
     dirty: edited !== null,
     toggle(remoteName: string, next: boolean) {
