@@ -41,7 +41,7 @@ part of ours.
 // Bindings answers who a channel account speaks for, declared here by the
 // consumer.
 type Bindings interface {
-	PrincipalFor(ctx context.Context, channel, account string) (domain.UserID, bool)
+	PrincipalFor(ctx context.Context, channel, account string) (domain.UserID, bool, error)
 	Secrets(ctx context.Context, channel string) (channel.Credentials, bool)
 }
 
@@ -133,7 +133,14 @@ func (h *ChannelHooks) slackInteraction(w http.ResponseWriter, r *http.Request) 
 func (h *ChannelHooks) decide(
 	ctx context.Context, name string, action slack.Interaction,
 ) slack.Answer {
-	principalID, bound := h.bindings.PrincipalFor(ctx, name, action.User)
+	principalID, bound, err := h.bindings.PrincipalFor(ctx, name, action.User)
+	if err != nil {
+		// Not "unbound". Telling somebody their account is not linked when
+		// the store was away is a sentence they would act on about a state
+		// that was never true.
+		h.log.Error("could not read who pressed", "channel", name, "err", err)
+		return slack.AnswerUnknown
+	}
 	if !bound {
 		// Refused by name. "Something went wrong" would send somebody to
 		// debug a platform that is working exactly as intended.

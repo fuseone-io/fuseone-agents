@@ -119,20 +119,31 @@ Nobody is the ordinary answer and not an error: most people in a workspace have
 never been bound, and a message from one of them is somebody the platform does
 not know rather than something going wrong. What must never happen is guessing
 — an unbound account acts as no one at all.
+
+A failure to look is the third answer, and it used to be folded into the
+second. A store that was away made every account read as unbound, so an ask
+would be closed telling somebody their account is not linked — which is a
+sentence they would act on, about a state that was never true.
 */
 func (c *Channels) PrincipalFor(
 	ctx context.Context, channelName, account string,
-) (domain.UserID, bool) {
+) (domain.UserID, bool, error) {
 	s, err := c.settings.Get(ctx, settings.ScopeInstallation, domain.Scope{},
 		KindChannelIdentity, identityKey(channelName, account))
-	if err != nil || !s.Enabled {
-		return "", false
+	if errors.Is(err, settings.ErrNotFound) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("admin: read the binding for %s: %w", account, err)
+	}
+	if !s.Enabled {
+		return "", false, nil
 	}
 	id, ok := identityFrom(s)
 	if !ok || id.Principal == "" {
-		return "", false
+		return "", false, nil
 	}
-	return id.Principal, true
+	return id.Principal, true, nil
 }
 
 func identityFrom(s settings.Setting) (ChannelIdentity, bool) {

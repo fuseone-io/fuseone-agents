@@ -232,6 +232,7 @@ type consumerParts struct {
 	opener   *openerSpy
 	answers  *answerSpy
 	bound    bool
+	bindErr  error
 	willing  bool
 }
 
@@ -273,8 +274,8 @@ func consumerWith(
 
 	c := channel.NewConsumer(p.inbox, "worker-1", slog.New(slog.NewTextHandler(io.Discard, nil))).
 		With(p.scopes, p, p, p.subjects, p.opener, p.answers).
-		Binding(func(_ context.Context, _, _ string) (domain.UserID, bool) {
-			return "usr_ana", p.bound
+		Binding(func(_ context.Context, _, _ string) (domain.UserID, bool, error) {
+			return "usr_ana", p.bound, p.bindErr
 		})
 	return c, p
 }
@@ -525,5 +526,30 @@ func TestSweep_theOpenerFailed_leavesTheAskPending(t *testing.T) {
 	again, _ := parts.inbox.Claim(t.Context(), "worker-2", time.Minute, 10)
 	if len(again) != 1 {
 		t.Error("an ask was refused because the ledger was away")
+	}
+}
+
+/*
+A store that was away is not an account nobody bound.
+
+Folded together, the refusal would tell somebody their account is not linked —
+a sentence they would act on, about a state that was never true. It is the same
+class the scope lookup had, one call further down.
+*/
+func TestSweep_theBindingCouldNotBeRead_leavesTheAskPending(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT> triagem algo", func(p *consumerParts) {
+		p.bindErr = errors.New("the settings store is away")
+	})
+
+	if _, err := c.Sweep(t.Context(), -time.Minute, 10); err == nil {
+		t.Fatal("a failure was reported as work done")
+	}
+	if len(parts.answers.said) != 0 {
+		t.Errorf("said = %v, want nothing said about our own failure", parts.answers.said)
+	}
+
+	again, _ := parts.inbox.Claim(t.Context(), "worker-2", time.Minute, 10)
+	if len(again) != 1 {
+		t.Error("the ask was closed because the settings store was away")
 	}
 }

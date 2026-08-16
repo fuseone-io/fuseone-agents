@@ -201,11 +201,20 @@ func principal(id string, role domain.Role, company, area string) domain.Princip
 	}
 }
 
-type bindingSpy struct{ bound map[string]domain.UserID }
+type bindingSpy struct {
+	bound map[string]domain.UserID
+	// err is a store that was away, which is not an account nobody bound.
+	err error
+}
 
-func (b *bindingSpy) PrincipalFor(_ context.Context, _, account string) (domain.UserID, bool) {
+func (b *bindingSpy) PrincipalFor(
+	_ context.Context, _, account string,
+) (domain.UserID, bool, error) {
+	if b.err != nil {
+		return "", false, b.err
+	}
 	id, ok := b.bound[account]
-	return id, ok
+	return id, ok, nil
 }
 
 func (b *bindingSpy) Secrets(context.Context, string) (channel.Credentials, bool) {
@@ -386,5 +395,27 @@ func TestSlackEvent_anOrdinaryMessage_isAcknowledgedAndForgotten(t *testing.T) {
 	}
 	if len(inbox.received) != 0 {
 		t.Error("an ordinary message was filed as an ask")
+	}
+}
+
+/*
+A store that was away is not an account nobody bound.
+
+Answered "not linked", somebody goes and asks an administrator to link an
+account that is already linked, and the platform told them to. The two answers
+look alike from here and mean opposite things to the person reading them.
+*/
+func TestSlackInteraction_theBindingCouldNotBeRead_doesNotSayUnbound(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	park(t, store, "run-1")
+
+	hooks, _ := hooksFor(t, store, nil, domain.Principal{})
+	hooks.bindings = &bindingSpy{err: errors.New("the settings store is away")}
+
+	rec := press(t, hooks, "acme-slack", "U9", "run-1:2:approve")
+
+	if strings.Contains(rec.Body.String(), string(slack.AnswerUnbound)) {
+		t.Errorf("body = %s, want it not to claim the account is unlinked", rec.Body.String())
 	}
 }

@@ -65,9 +65,8 @@ now and will not start on a retry either: telling the person and closing the
 ask is the right answer. A database that was away is not that, and must not
 become a refusal somebody reads as final.
 
-Wrapped by whoever wires the opener, because that is the only place that knows
-both this package's contract and the trigger package's sentinels — and it is
-the direction the dependencies already run.
+Wrapped by the adapter in opener.go, which is the only place that knows both
+this package's contract and the trigger package's sentinels.
 */
 var ErrWontStart = errors.New("channel: the agent will not start")
 
@@ -104,7 +103,7 @@ type Consumer struct {
 	subjects  Subjects
 	opener    Opens
 	answers   Answers
-	bindings  func(ctx context.Context, channel, account string) (domain.UserID, bool)
+	bindings  func(ctx context.Context, channel, account string) (domain.UserID, bool, error)
 	clock     func() time.Time
 	owner     string
 	log       *slog.Logger
@@ -159,7 +158,7 @@ func (c *Consumer) With(
 // wrong" would send an operator to debug a platform working exactly as
 // intended.
 func (c *Consumer) Binding(
-	f func(ctx context.Context, channel, account string) (domain.UserID, bool),
+	f func(ctx context.Context, channel, account string) (domain.UserID, bool, error),
 ) *Consumer {
 	c.bindings = f
 	return c
@@ -255,7 +254,13 @@ func (c *Consumer) open(ctx context.Context, a Claimed) (domain.RunID, string, e
 		return "", "", fmt.Errorf("channel: read the scope of %s: %w", a.Conversation, err)
 	}
 
-	asker, bound := c.bindings(ctx, a.Channel, a.AskedBy)
+	asker, bound, err := c.bindings(ctx, a.Channel, a.AskedBy)
+	if err != nil {
+		// A store that was away is not an account nobody bound. Folded
+		// together, the refusal below would tell somebody their account is
+		// not linked about a state that was never true.
+		return "", "", fmt.Errorf("channel: read the binding for %s: %w", a.AskedBy, err)
+	}
 	if !bound {
 		// A run acts on somebody's behalf. An account nobody bound speaks for
 		// nobody, and running as nobody is how an ask acquires authority that
