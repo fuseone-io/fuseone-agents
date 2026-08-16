@@ -135,11 +135,13 @@ func (h *ChannelHooks) decide(
 ) slack.Answer {
 	principalID, bound, err := h.bindings.PrincipalFor(ctx, name, action.User)
 	if err != nil {
-		// Not "unbound". Telling somebody their account is not linked when
-		// the store was away is a sentence they would act on about a state
-		// that was never true.
+		// Neither "unbound" nor "the directory lost them": both are specific
+		// claims a failed lookup did not prove, and this message replaces the
+		// original, so it is the last thing the reader is told. The honest
+		// sentence is that we could not tell and the button is worth pressing
+		// again.
 		h.log.Error("could not read who pressed", "channel", name, "err", err)
-		return slack.AnswerUnknown
+		return slack.AnswerUnverified
 	}
 	if !bound {
 		// Refused by name. "Something went wrong" would send somebody to

@@ -139,9 +139,14 @@ func (c *Channels) PrincipalFor(
 	if !s.Enabled {
 		return "", false, nil
 	}
+	// A row that exists, is enabled and cannot be read is corrupted
+	// configuration, not an ordinary absence. Answered as "nobody", it would
+	// send somebody to link an account that already has a row — and the row
+	// that is wrong would stay wrong, because nothing said it was there.
 	id, ok := identityFrom(s)
 	if !ok || id.Principal == "" {
-		return "", false, nil
+		return "", false, fmt.Errorf(
+			"admin: the binding for %s on %s is stored and unreadable", account, channelName)
 	}
 	return id.Principal, true, nil
 }

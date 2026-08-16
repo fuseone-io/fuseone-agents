@@ -413,9 +413,21 @@ func TestSlackInteraction_theBindingCouldNotBeRead_doesNotSayUnbound(t *testing.
 	hooks, _ := hooksFor(t, store, nil, domain.Principal{})
 	hooks.bindings = &bindingSpy{err: errors.New("the settings store is away")}
 
-	rec := press(t, hooks, "acme-slack", "U9", "run-1:2:approve")
+	rec := press(t, hooks, "acme-slack", "U9", "approve:run-1:2")
 
-	if strings.Contains(rec.Body.String(), string(slack.AnswerUnbound)) {
-		t.Errorf("body = %s, want it not to claim the account is unlinked", rec.Body.String())
+	body := rec.Body.String()
+	// Neither of the two specific claims: not "unlinked", which sends somebody
+	// to link an account that is already linked, and not "the directory lost
+	// them", which the failure did not prove either. This message replaces the
+	// original, so it is the last thing the reader is told.
+	if strings.Contains(body, string(slack.AnswerUnbound)) {
+		t.Errorf("body = %s, want it not to claim the account is unlinked", body)
+	}
+	if strings.Contains(body, string(slack.AnswerUnknown)) {
+		t.Errorf("body = %s, want it not to claim the directory lost them", body)
+	}
+	// And it says the one thing that is true and useful: try again.
+	if !strings.Contains(body, "try again") {
+		t.Errorf("body = %s, want it to say the button is worth pressing again", body)
 	}
 }
