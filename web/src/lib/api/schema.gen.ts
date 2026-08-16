@@ -2392,6 +2392,8 @@ export interface components {
             /** @description The local name this applies to, and what a discovered tool is matched by. */
             server: string;
             title: string;
+            /** @description What the server is for, which is the question somebody browsing is asking. A closed, coarse list: a shelf people argue about is one they stop using. */
+            category: string;
             /** @description Who publishes the server. Never this platform. */
             publisher: string;
             docs?: string;

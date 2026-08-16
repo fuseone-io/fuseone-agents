@@ -1,5 +1,6 @@
 server: git
 title: Git repository
+category: code
 publisher: Model Context Protocol reference servers
 docs: https://github.com/modelcontextprotocol/servers/tree/main/src/git
 docsFrom: publisher

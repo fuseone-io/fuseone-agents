@@ -1,5 +1,6 @@
 server: postgres
 title: PostgreSQL
+category: data
 publisher: Model Context Protocol reference servers
 docs: https://github.com/modelcontextprotocol/servers
 docsFrom: publisher

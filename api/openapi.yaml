@@ -3704,12 +3704,18 @@ components:
 
     ServerRecipe:
       type: object
-      required: [server, title, publisher, docsFrom, provenance]
+      required: [server, title, category, publisher, docsFrom, provenance]
       properties:
         server:
           type: string
           description: The local name this applies to, and what a discovered tool is matched by.
         title: { type: string }
+        category:
+          type: string
+          description: >
+            What the server is for, which is the question somebody browsing is
+            asking. A closed, coarse list: a shelf people argue about is one
+            they stop using.
         publisher:
           type: string
           description: Who publishes the server. Never this platform.

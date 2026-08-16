@@ -103,6 +103,7 @@ func (s *Server) ListRecipes(ctx context.Context, _ openapi.ListRecipesRequestOb
 	for _, e := range entries {
 		recipe := openapi.ServerRecipe{
 			Server: e.Server, Title: e.Title, Publisher: e.Publisher,
+			Category:    e.Category,
 			DocsFrom:    openapi.ServerRecipeDocsFrom(e.DocsFrom),
 			Provenance:  openapi.ServerRecipeProvenance(e.Provenance),
 			Suggestions: ptr(len(e.Suggestions)),

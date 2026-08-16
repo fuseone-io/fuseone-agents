@@ -1,5 +1,6 @@
 server: github
 title: GitHub
+category: code
 publisher: GitHub
 docs: https://github.com/github/github-mcp-server
 docsFrom: publisher

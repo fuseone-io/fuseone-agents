@@ -1,5 +1,6 @@
 server: fetch
 title: Fetch a web page
+category: web
 publisher: Model Context Protocol reference servers
 docs: https://github.com/modelcontextprotocol/servers/tree/main/src/fetch
 docsFrom: publisher

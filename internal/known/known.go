@@ -18,6 +18,7 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
+	"slices"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -87,13 +88,34 @@ const (
 	DocsFromThirdParty DocsSource = "third-party"
 )
 
+/*
+Categories are the shelves, and the list is closed.
+
+Open, every entry invents its own and the rail becomes as long as the
+catalogue. Coarse, because a shelf people argue about is one they stop using —
+these say what a server is *for*, which is the question somebody browsing is
+actually asking.
+*/
+var Categories = []string{
+	"code", "data", "knowledge", "communication", "operations", "web",
+}
+
 // Entry is one server the platform knows about.
 type Entry struct {
 	// Server is the local name this applies to. Matching is by the name the
 	// Curator registered, because it is the only thing both sides share.
-	Server     string     `yaml:"server"`
-	Title      string     `yaml:"title"`
-	Publisher  string     `yaml:"publisher"`
+	Server    string `yaml:"server"`
+	Title     string `yaml:"title"`
+	Publisher string `yaml:"publisher"`
+	/*
+		Category is the shelf it sits on, for a catalogue somebody browses.
+
+		A flat list of every server anybody publishes is a list nobody reads to
+		the end. The shelves are coarse on purpose — what the thing is for, not
+		who sells it — because a taxonomy fine enough to be interesting is one
+		nobody agrees with.
+	*/
+	Category   string     `yaml:"category"`
 	Docs       string     `yaml:"docs"`
 	DocsFrom   DocsSource `yaml:"docsFrom"`
 	Provenance Provenance `yaml:"provenance"`
@@ -170,6 +192,8 @@ func check(path string, entry Entry) error {
 		return fmt.Errorf("known: %s names no server", path)
 	case entry.Title == "" || entry.Publisher == "":
 		return fmt.Errorf("known: %s does not say what it is or who publishes it", path)
+	case !slices.Contains(Categories, entry.Category):
+		return fmt.Errorf("known: %s is on no shelf (%q)", path, entry.Category)
 	case entry.DocsFrom == "":
 		return fmt.Errorf("known: %s does not say whose documentation it points at", path)
 	case entry.DocsFrom == DocsFromPublisher && entry.Docs == "":

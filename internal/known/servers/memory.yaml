@@ -1,5 +1,6 @@
 server: memory
 title: Knowledge graph memory
+category: knowledge
 publisher: Model Context Protocol reference servers
 docs: https://github.com/modelcontextprotocol/servers/tree/main/src/memory
 docsFrom: publisher

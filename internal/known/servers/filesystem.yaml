@@ -1,5 +1,6 @@
 server: filesystem
 title: Local filesystem
+category: data
 publisher: Model Context Protocol reference servers
 docs: https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem
 docsFrom: publisher
