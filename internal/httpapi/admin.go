@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -117,6 +118,15 @@ func (s *Server) ListTools(ctx context.Context, _ openapi.ListToolsRequestObject
 		// reads as offered. With observations, silence about a server is the
 		// answer: it is not answering.
 		tool.Offered = ptr(answering == nil || answering[e.Server])
+		// What is on offer now, so a ruling made on this screen can name the
+		// definition it judged — and whether an existing ruling was already
+		// overtaken by one.
+		if e.Digest != "" {
+			tool.Digest = ptr(e.Digest)
+		}
+		if e.Stale {
+			tool.Stale = ptr(true)
+		}
 		items = append(items, tool)
 	}
 	return openapi.ListTools200JSONResponse{Items: items}, nil
@@ -154,6 +164,19 @@ func (s *Server) ClassifyTool(ctx context.Context, req openapi.ClassifyToolReque
 		ruling.CompensatedBy = domain.ToolID(*req.Body.CompensatedBy)
 	}
 
+	if req.Body.Digest != nil {
+		ruling.Digest = *req.Body.Digest
+	}
+	if changed, err := s.definitionMoved(ctx, ruling); err != nil {
+		return nil, err
+	} else if changed {
+		return openapi.ClassifyTool409ApplicationProblemPlusJSONResponse{
+			Title:  "The tool changed",
+			Detail: ptr("This tool's definition changed while you were reading it. Look again before ruling."),
+			Status: http.StatusConflict,
+		}, nil
+	}
+
 	if err := s.curator.Classify(ctx, adminScope, ruling); err != nil {
 		return openapi.ClassifyTool400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
@@ -161,6 +184,40 @@ func (s *Server) ClassifyTool(ctx context.Context, req openapi.ClassifyToolReque
 		}, nil
 	}
 	return openapi.ClassifyTool204Response{}, nil
+}
+
+/*
+definitionMoved reports that the tool changed while the dialog was open.
+
+The digest comes from the client because that is what makes it mean anything:
+the Curator read a description and a schema, and stamping whatever is current
+at save time would record a judgement of something nobody read. The same reason
+an approval carries the step it approved.
+
+Refused rather than silently re-judged. A conflict sends somebody back to look,
+which is the only outcome that leaves a true record — and a ruling arriving
+with no digest is not this case, it is a caller that named no definition.
+*/
+func (s *Server) definitionMoved(ctx context.Context, ruling domain.ToolClassification) (bool, error) {
+	if ruling.Digest == "" || s.tools == nil {
+		return false, nil
+	}
+	listed, err := s.tools.Tools(ctx)
+	if err != nil {
+		return false, err
+	}
+	for _, tool := range listed {
+		if tool.ID != ruling.Tool {
+			continue
+		}
+		// A tool the catalogue holds with no digest of its own is one no
+		// worker has rediscovered since digests existed. Nothing to compare
+		// against is not a mismatch.
+		return tool.Digest != "" && tool.Digest != ruling.Digest, nil
+	}
+	// Not in the catalogue at all: the Curator may rule ahead of a server
+	// connecting, which is the case the catalogue's own Sync already allows.
+	return false, nil
 }
 
 func (s *Server) ListAdminEvents(ctx context.Context, req openapi.ListAdminEventsRequestObject) (openapi.ListAdminEventsResponseObject, error) {

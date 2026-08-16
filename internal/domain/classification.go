@@ -24,6 +24,26 @@ type ToolClassification struct {
 	// compensation for one would be claiming to undo something it cannot.
 	CompensatedBy ToolID
 
+	/*
+		Digest names the definition that was judged.
+
+		A tool id is a string, and what a Curator read before saying "this only
+		reads" was a description and a schema. A server may change both
+		tomorrow and keep the name, and a ruling keyed by the name alone would
+		carry forward onto a tool nobody has looked at — the one path by which
+		an effect reaches production unjudged.
+
+		The same shape as an approval carrying the step it approved. A decision
+		that does not say what it was about is a decision about whatever is
+		there now.
+
+		Empty means a ruling recorded before this was kept, and it still
+		applies: the honest reading of an absent digest is "we did not write
+		down what was judged", not "it was about something else". Refusing
+		those would stop every agent on an installation to add a check.
+	*/
+	Digest string
+
 	// By and Reason record who ruled and why. Classification is the single
 	// point where write access enters the system, so it is never anonymous.
 	By     UserID

@@ -48,6 +48,24 @@ func (c *Catalog) Sync(ctx context.Context, from Classifier, scope domain.Scope)
 		if !ok || !r.Effect.Valid() {
 			continue
 		}
+		/*
+			The ruling has to be about this definition.
+
+			A server may keep a name and change everything under it, and the
+			ruling that arrives here was made by somebody reading the old
+			description. Applied anyway, an effect reaches production that
+			nobody judged — quietly, on a reconnect, with no screen mentioning
+			it.
+
+			An empty digest is a ruling recorded before this was kept and it
+			still applies, or every installation would upgrade into an outage.
+		*/
+		if r.Digest != "" && r.Digest != entry.Digest {
+			entry.Stale = true
+			c.entries[r.Tool] = entry
+			continue
+		}
+		entry.Stale = false
 		entry.Effect = r.Effect
 		entry.Untrusted = r.Untrusted
 		entry.CompensatedBy = r.CompensatedBy

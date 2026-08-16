@@ -1500,8 +1500,28 @@ paths:
                     what the original call returned. Empty means an act by this
                     tool cannot be undone by machine — which abandoning a run
                     reports rather than hides.
+                digest:
+                  type: string
+                  description: |
+                    The definition being judged, as the screen showed it.
+
+                    Sent by the client rather than stamped by the server, for
+                    the reason an approval carries the step it approved: the
+                    Curator read a description and a schema, and if the server
+                    changed them while the dialog was open, stamping whatever
+                    is current would record a judgement of something nobody
+                    read. Refused when it no longer matches, so they look
+                    again.
+
+                    Omit only when ruling on a tool whose definition is not
+                    known — the ruling then applies until a definition is.
       responses:
         '204': { description: The ruling is recorded. }
+        '409':
+          description: The definition changed since the screen showed it.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -3428,6 +3448,27 @@ components:
           description: The tool that undoes this one, when the Curator has said which does.
         suggested:
           $ref: '#/components/schemas/ToolSuggestion'
+        digest:
+          type: string
+          description: |
+            Names the definition on offer right now — the server, the name, the
+            description and the arguments, hashed.
+
+            It travels to the screen so a ruling made there can say which
+            definition it judged, the way an approval says which step it
+            approved. A ruling that names a definition the server no longer
+            offers is refused rather than applied to whatever answers to that
+            name today.
+        stale:
+          type: boolean
+          description: |
+            That a ruling exists and was overtaken by a new definition.
+
+            Refused exactly like a tool nobody ruled on — the effect reads
+            unclassified and the Gate stops it — and shown differently on
+            purpose. A tool nobody ruled on is a decision to make; a tool that
+            changed under its ruling is a decision to check, and rendering them
+            alike makes the second look like somebody forgot.
         offered:
           type: boolean
           description: |

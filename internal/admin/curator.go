@@ -51,9 +51,13 @@ func (c *Curator) Classify(ctx context.Context, scope domain.Scope, ruling domai
 		Untrusted     bool   `json:"untrusted"`
 		Reason        string `json:"reason,omitempty"`
 		CompensatedBy string `json:"compensated_by,omitempty"`
+		// The definition this was a judgement about. Omitted when the caller
+		// did not name one, which reads as a ruling from before this was kept
+		// rather than as a ruling about nothing.
+		Digest string `json:"digest,omitempty"`
 	}{
 		ruling.Effect.String(), ruling.Untrusted, ruling.Reason,
-		string(ruling.CompensatedBy),
+		string(ruling.CompensatedBy), ruling.Digest,
 	})
 	if err != nil {
 		return fmt.Errorf("admin: encode ruling: %w", err)
@@ -118,6 +122,7 @@ func (c *Curator) List(ctx context.Context, scope domain.Scope) ([]domain.ToolCl
 				Untrusted     bool   `json:"untrusted"`
 				Reason        string `json:"reason"`
 				CompensatedBy string `json:"compensated_by"`
+				Digest        string `json:"digest"`
 			}
 		)
 		if err := rows.Scan(&name, &raw, &by); err != nil {
@@ -139,6 +144,7 @@ func (c *Curator) List(ctx context.Context, scope domain.Scope) ([]domain.ToolCl
 			Tool: domain.ToolID(name), Effect: effect,
 			Untrusted: stored.Untrusted, By: domain.UserID(by), Reason: stored.Reason,
 			CompensatedBy: domain.ToolID(stored.CompensatedBy),
+			Digest:        stored.Digest,
 		})
 	}
 	return out, rows.Err()

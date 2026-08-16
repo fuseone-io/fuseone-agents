@@ -658,7 +658,8 @@
     "financial": "financeiro",
     "read": "leitura",
     "unknown": "não classificada",
-    "write": "escrita"
+    "write": "escrita",
+    "stale": "requer nova revisão"
   },
   "gate": {
     "badArgs": "Os argumentos não batem com o contrato da ferramenta.",

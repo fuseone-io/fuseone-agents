@@ -36,3 +36,18 @@ describe("what the tools panel says about tools nobody has ruled on", () => {
     expect(screen.getByText(/sem classificação/i)).toBeInTheDocument();
   });
 });
+
+describe("what it says about a ruling the tool outgrew", () => {
+  it("counts it as work, because the Gate refuses it exactly as it refuses an unruled one", () => {
+    render(
+      <Waiting
+        tools={[
+          { ...tool("crm.lookup", "read"), stale: true },
+          tool("crm.note", "read"),
+        ]}
+      />,
+    );
+    expect(screen.getByText(/recusada/i)).toBeInTheDocument();
+    expect(screen.getByText(/\b1\b/)).toBeInTheDocument();
+  });
+});

@@ -54,6 +54,16 @@ export function useClassifyTool() {
       untrusted: boolean;
       reason?: string;
       compensatedBy?: string;
+      /**
+       * The definition being judged, as this screen showed it.
+       *
+       * Sent rather than left to the server for the reason an approval carries
+       * the step it approved: what was read is what is being ruled on, and a
+       * server free to change the tool while the dialog is open would have the
+       * ruling recorded against something nobody saw. The API answers 409 when
+       * it no longer matches.
+       */
+      digest?: string;
     }) =>
       unwrap(
         await api.PUT("/admin/tools/{toolId}/classification", {
@@ -63,6 +73,7 @@ export function useClassifyTool() {
             untrusted: input.untrusted,
             reason: input.reason,
             compensatedBy: input.compensatedBy,
+            digest: input.digest,
           },
         }),
       ),

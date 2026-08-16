@@ -8,6 +8,9 @@ package tools
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -53,6 +56,7 @@ func (c *Catalog) AddServer(ctx context.Context, name string, session Session) e
 			RemoteName:  t.Name,
 			Description: t.Description,
 			Schema:      schemaProperties(t.InputSchema),
+			Digest:      digestOf(name, t.Name, t.Description, schemaProperties(t.InputSchema)),
 			Effect:      domain.EffectUnknown,
 			Untrusted:   true,
 			Suggested:   c.suggestion(name, t.Name),
@@ -134,4 +138,35 @@ func (c *Catalog) suggestion(server, remoteName string) *Suggestion {
 		CompensatedBy: domain.ToolID(found.CompensatedBy),
 		Why:           found.Why,
 	}
+}
+
+/*
+digestOf names one tool definition, stably and across processes.
+
+What goes in is what a Curator reads before deciding: which server offers it,
+what it calls itself, the sentence it describes itself with, and the arguments
+it accepts. What stays out is anything that varies without the tool varying —
+the order a server happened to list its tools in, a session id, a timestamp.
+
+Canonical because `encoding/json` sorts map keys: two processes discovering the
+same tool must compute the same digest, or every reconnect would look like a
+change and every ruling would go stale on a restart.
+*/
+func digestOf(server, name, description string, schema map[string]any) string {
+	shape := struct {
+		Server      string         `json:"server"`
+		Name        string         `json:"name"`
+		Description string         `json:"description"`
+		Schema      map[string]any `json:"schema"`
+	}{server, name, description, schema}
+
+	canonical, err := json.Marshal(shape)
+	if err != nil {
+		// A schema that will not encode is one nobody can judge either. Empty
+		// reads as "no digest recorded", which applies the ruling — so it is
+		// refused instead, by never matching a recorded one.
+		return "unencodable"
+	}
+	sum := sha256.Sum256(canonical)
+	return hex.EncodeToString(sum[:])
 }

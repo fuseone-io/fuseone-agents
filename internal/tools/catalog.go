@@ -44,6 +44,26 @@ type Entry struct {
 	RemoteName  string
 	Description string
 	Schema      map[string]any
+	/*
+		Digest is this definition, as offered right now.
+
+		Computed at discovery from what the server said — the name it uses, the
+		sentence it describes itself with, the arguments it accepts — because
+		those are what a Curator reads to decide. It is what a ruling is
+		matched against, so that a ruling applies to the tool it was made about
+		and not to whatever now answers to the same name.
+	*/
+	Digest string
+	/*
+		Stale marks a tool whose ruling was overtaken by a new definition.
+
+		Refused either way — the effect stays unclassified and the Gate already
+		knows what to do with that. It exists because the two refusals are
+		different work: a tool nobody ruled on is a decision to make, and a
+		tool that changed under its ruling is a decision to check. Shown as the
+		same thing, the second reads as somebody having forgotten.
+	*/
+	Stale bool
 
 	/*
 		Effect starts unclassified and only the Curator sets it (PRD DE-13).
@@ -160,6 +180,7 @@ func (c *Catalog) Entries() []domain.ToolEntry {
 			Effect: e.Effect, Untrusted: e.Untrusted,
 			CompensatedBy: e.CompensatedBy,
 			Suggested:     suggestionOf(e.Suggested),
+			Digest:        e.Digest, Stale: e.Stale,
 		})
 	}
 	slices.SortFunc(out, func(a, b domain.ToolEntry) int {

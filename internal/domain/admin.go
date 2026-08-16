@@ -32,6 +32,14 @@ type ToolEntry struct {
 	// the Curator confirms instead of inventing. Nil for a server nobody
 	// catalogued and for a tool an entry never heard of.
 	Suggested *ToolSuggestion
+	// Digest names the definition on offer right now. It travels to the screen
+	// so a ruling made there can say which definition it judged, the way an
+	// approval says which step it approved.
+	Digest string
+	// Stale marks a ruling overtaken by a new definition. Refused like an
+	// unruled tool and shown differently: one is a decision to make, the other
+	// a decision to check.
+	Stale bool
 }
 
 // ToolSuggestion is a shipped opinion about one tool, and the sentence behind

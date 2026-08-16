@@ -2197,6 +2197,27 @@ export interface components {
             compensatedBy?: string;
             suggested?: components["schemas"]["ToolSuggestion"];
             /**
+             * @description Names the definition on offer right now — the server, the name, the
+             *     description and the arguments, hashed.
+             *
+             *     It travels to the screen so a ruling made there can say which
+             *     definition it judged, the way an approval says which step it
+             *     approved. A ruling that names a definition the server no longer
+             *     offers is refused rather than applied to whatever answers to that
+             *     name today.
+             */
+            digest?: string;
+            /**
+             * @description That a ruling exists and was overtaken by a new definition.
+             *
+             *     Refused exactly like a tool nobody ruled on — the effect reads
+             *     unclassified and the Gate stops it — and shown differently on
+             *     purpose. A tool nobody ruled on is a decision to make; a tool that
+             *     changed under its ruling is a decision to check, and rendering them
+             *     alike makes the second look like somebody forgot.
+             */
+            stale?: boolean;
+            /**
              * @description Whether the server that offers this tool answers now.
              *
              *     The list is what this installation has ever offered; whether a tool
@@ -4568,6 +4589,21 @@ export interface operations {
                      *     reports rather than hides.
                      */
                     compensatedBy?: string;
+                    /**
+                     * @description The definition being judged, as the screen showed it.
+                     *
+                     *     Sent by the client rather than stamped by the server, for
+                     *     the reason an approval carries the step it approved: the
+                     *     Curator read a description and a schema, and if the server
+                     *     changed them while the dialog was open, stamping whatever
+                     *     is current would record a judgement of something nobody
+                     *     read. Refused when it no longer matches, so they look
+                     *     again.
+                     *
+                     *     Omit only when ruling on a tool whose definition is not
+                     *     known — the ruling then applies until a definition is.
+                     */
+                    digest?: string;
                 };
             };
         };
@@ -4582,6 +4618,15 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            /** @description The definition changed since the screen showed it. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     listBudgetAlerts: {

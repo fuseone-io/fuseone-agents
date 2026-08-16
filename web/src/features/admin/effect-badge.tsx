@@ -20,17 +20,32 @@ const EFFECTS: Record<ToolEffect, string> = {
   financial: "bg-danger-surface text-danger",
 };
 
-export function EffectBadge({ effect }: { effect: ToolEffect }) {
+/*
+`stale` is a refusal too, and a different job.
+
+A tool nobody ruled on is a decision to make. A tool whose ruling was overtaken
+by a new definition is a decision to *check* — somebody already looked, and
+what they looked at is not what is on offer now. Both are blocked by the Gate;
+rendering them alike makes the second read as an oversight rather than as work
+the platform is asking for.
+*/
+export function EffectBadge({
+  effect,
+  stale = false,
+}: {
+  effect: ToolEffect;
+  stale?: boolean;
+}) {
   const { t } = useTranslation();
   return (
     <Badge
       variant="outline"
       className={cn(
         "rounded-pill border-transparent font-mono text-2xs font-normal",
-        EFFECTS[effect],
+        stale ? "bg-danger-surface text-danger" : EFFECTS[effect],
       )}
     >
-      {t(`effect.${effect}`)}
+      {stale ? t("effect.stale") : t(`effect.${effect}`)}
     </Badge>
   );
 }

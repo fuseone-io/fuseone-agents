@@ -50,7 +50,11 @@ export function ClassifyDialog({
   async function submit() {
     if (!tool) return;
     try {
-      await classify.mutateAsync({ toolId: tool.toolId, ...ruling });
+      await classify.mutateAsync({
+        toolId: tool.toolId,
+        digest: tool.digest,
+        ...ruling,
+      });
       toast.success(
         t("admin.classified", {
           tool: tool.toolId,

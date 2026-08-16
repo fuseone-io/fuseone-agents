@@ -658,7 +658,8 @@
     "financial": "financial",
     "read": "read",
     "unknown": "unclassified",
-    "write": "write"
+    "write": "write",
+    "stale": "needs review"
   },
   "gate": {
     "badArgs": "The arguments do not match the tool's contract.",

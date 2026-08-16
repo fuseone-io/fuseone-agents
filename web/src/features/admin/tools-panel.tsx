@@ -39,7 +39,12 @@ const HEAD =
  */
 export function Waiting({ tools }: { tools: Tool[] }) {
   const { t } = useTranslation();
-  const waiting = tools.filter((tool) => tool.effect === "unknown").length;
+  // Both refusals count. A ruling overtaken by a new definition blocks the
+  // tool exactly as never having ruled does, and a count that left it out
+  // would say the queue was empty while agents were being stopped.
+  const waiting = tools.filter(
+    (tool) => tool.effect === "unknown" || tool.stale,
+  ).length;
   return (
     <span
       className={
@@ -125,7 +130,7 @@ export function ToolsPanel() {
                   </span>
                 </TableCell>
                 <TableCell>
-                  <EffectBadge effect={tool.effect} />
+                  <EffectBadge effect={tool.effect} stale={tool.stale} />
                 </TableCell>
                 <TableCell className="text-muted-foreground">
                   {tool.untrusted ? t("common.yes") : t("common.no")}
