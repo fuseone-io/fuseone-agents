@@ -5,6 +5,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -220,4 +221,125 @@ func (d *directorySpy) PrincipalByID(
 		return domain.Principal{}, fmt.Errorf("no such principal")
 	}
 	return d.who, nil
+}
+
+/*
+The door acknowledges only what it has already written down.
+
+Slack wants a 2xx in three seconds and retries what it does not get, so nothing
+here opens a run. Moving the work off the request solves the retry and not the
+crash: between acknowledging and opening there is a window, and a process that
+dies inside it has told Slack the ask arrived and holds no record that it did.
+The sender is satisfied and the question is gone.
+*/
+func TestSlackEvent_anAsk_isWrittenDownBeforeItIsAcknowledged(t *testing.T) {
+	t.Parallel()
+	hooks, _ := hooksFor(t, ledger.NewMemory(), nil, domain.Principal{})
+	inbox := &inboxSpy{}
+	hooks.WithArrivals(inbox)
+
+	rec := deliver(t, hooks, "acme-slack", mentionEvent("Ev1"))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want the ask acknowledged", rec.Code)
+	}
+	if len(inbox.received) != 1 || inbox.received[0].EventID != "Ev1" {
+		t.Errorf("received = %+v, want the ask written down", inbox.received)
+	}
+}
+
+// A write that did not happen is the one failure where the sender doing it
+// again is what we want, so it is refused rather than acknowledged.
+func TestSlackEvent_theInboxRefusesTheWrite_soDoesTheDoor(t *testing.T) {
+	t.Parallel()
+	hooks, _ := hooksFor(t, ledger.NewMemory(), nil, domain.Principal{})
+	hooks.WithArrivals(&inboxSpy{err: errors.New("the database is away")})
+
+	if rec := deliver(t, hooks, "acme-slack", mentionEvent("Ev2")); rec.Code == http.StatusOK {
+		t.Error("an ask nobody wrote down was acknowledged")
+	}
+}
+
+// And with nowhere to hold it at all. Acknowledging a question the platform
+// will lose is worse than making the sender retry.
+func TestSlackEvent_withNoInbox_refusesRatherThanLosingTheAsk(t *testing.T) {
+	t.Parallel()
+	hooks, _ := hooksFor(t, ledger.NewMemory(), nil, domain.Principal{})
+
+	if rec := deliver(t, hooks, "acme-slack", mentionEvent("Ev3")); rec.Code == http.StatusOK {
+		t.Error("an ask was acknowledged with nowhere to put it")
+	}
+}
+
+// An unsigned delivery writes nothing. The handshake is answered only after
+// the signature checks out, so a caller who guesses the path learns nothing
+// from it either.
+func TestSlackEvent_unsigned_writesNothing(t *testing.T) {
+	t.Parallel()
+	hooks, _ := hooksFor(t, ledger.NewMemory(), nil, domain.Principal{})
+	inbox := &inboxSpy{}
+	hooks.WithArrivals(inbox)
+
+	req := httptest.NewRequest("POST", "/hooks/channel/acme-slack/slack/events",
+		strings.NewReader(mentionEvent("Ev4")))
+	req.SetPathValue("channel", "acme-slack")
+	rec := httptest.NewRecorder()
+	hooks.slackEvent(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want unauthorized", rec.Code)
+	}
+	if len(inbox.received) != 0 {
+		t.Error("an unsigned delivery was written down")
+	}
+}
+
+func TestSlackEvent_theHandshake_isAnsweredAndStoresNothing(t *testing.T) {
+	t.Parallel()
+	hooks, _ := hooksFor(t, ledger.NewMemory(), nil, domain.Principal{})
+	inbox := &inboxSpy{}
+	hooks.WithArrivals(inbox)
+
+	rec := deliver(t, hooks, "acme-slack",
+		`{"type":"url_verification","challenge":"abc123"}`)
+
+	if !strings.Contains(rec.Body.String(), "abc123") {
+		t.Errorf("body = %s, want the challenge echoed", rec.Body.String())
+	}
+	if len(inbox.received) != 0 {
+		t.Error("a handshake was filed as an ask")
+	}
+}
+
+func mentionEvent(id string) string {
+	return fmt.Sprintf(`{"type":"event_callback","event_id":%q,
+	  "event":{"type":"app_mention","channel":"C07-ops","user":"U9",
+	           "text":"<@U07BOT> triagem esse chamado","ts":"1786.1"}}`, id)
+}
+
+func deliver(t *testing.T, hooks *ChannelHooks, name, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	at := time.Now()
+	req := httptest.NewRequest("POST", "/hooks/channel/"+name+"/slack/events",
+		strings.NewReader(body))
+	req.SetPathValue("channel", name)
+	req.Header.Set("X-Slack-Request-Timestamp", fmt.Sprint(at.Unix()))
+	req.Header.Set("X-Slack-Signature", signBody(at, body))
+
+	rec := httptest.NewRecorder()
+	hooks.slackEvent(rec, req)
+	return rec
+}
+
+type inboxSpy struct {
+	received []channel.Arrival
+	err      error
+}
+
+func (i *inboxSpy) Receive(_ context.Context, a channel.Arrival) (bool, error) {
+	if i.err != nil {
+		return false, i.err
+	}
+	i.received = append(i.received, a)
+	return true, nil
 }

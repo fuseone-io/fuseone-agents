@@ -1,0 +1,134 @@
+package channel_test
+
+import (
+	"testing"
+	"time"
+
+	"github.com/fuseone/agents/internal/channel"
+)
+
+/*
+An ask is written down before it is acknowledged.
+
+A channel wants an answer in seconds and retries what it does not get, so the
+run cannot open on the request. Moving the work off the request solves the
+retry and not the crash: between acknowledging and opening there is a window,
+and a process that dies inside it has told the sender the ask arrived and holds
+no record that it did.
+*/
+
+func TestReceive_anAskArrives_andIsWaitingToBeOpened(t *testing.T) {
+	inbox := freshInbox(t)
+	arrival := ask("ev-1")
+
+	fresh, err := inbox.Receive(t.Context(), arrival)
+	if err != nil {
+		t.Fatalf("Receive: %v", err)
+	}
+	if !fresh {
+		t.Error("the first delivery of an ask reported as already seen")
+	}
+
+	waiting, err := inbox.Waiting(t.Context(), 10)
+	if err != nil {
+		t.Fatalf("Waiting: %v", err)
+	}
+	if len(waiting) != 1 || waiting[0].EventID != "ev-1" {
+		t.Errorf("waiting = %+v, want the ask", waiting)
+	}
+}
+
+/*
+A redelivery is not a second ask.
+
+Every sender in existence redelivers, and a channel that opened a second run
+for the same message would be one nobody could use twice. The conflict is the
+mechanism: the caller acknowledges and queues nothing.
+*/
+func TestReceive_theSameDeliveryTwice_isNotASecondAsk(t *testing.T) {
+	inbox := freshInbox(t)
+	arrival := ask("ev-2")
+
+	if _, err := inbox.Receive(t.Context(), arrival); err != nil {
+		t.Fatalf("first Receive: %v", err)
+	}
+	fresh, err := inbox.Receive(t.Context(), arrival)
+	if err != nil {
+		t.Fatalf("second Receive: %v", err)
+	}
+	if fresh {
+		t.Error("a redelivery reported as a new ask")
+	}
+
+	waiting, _ := inbox.Waiting(t.Context(), 10)
+	if len(waiting) != 1 {
+		t.Errorf("waiting = %d asks, want the one", len(waiting))
+	}
+}
+
+func TestOpened_anAskThatBecameARun_stopsWaiting(t *testing.T) {
+	inbox := freshInbox(t)
+	arrival := ask("ev-3")
+	if _, err := inbox.Receive(t.Context(), arrival); err != nil {
+		t.Fatalf("Receive: %v", err)
+	}
+
+	if err := inbox.Opened(t.Context(), arrival, "run_1", time.Now()); err != nil {
+		t.Fatalf("Opened: %v", err)
+	}
+
+	waiting, _ := inbox.Waiting(t.Context(), 10)
+	if len(waiting) != 0 {
+		t.Errorf("waiting = %+v, want nothing left", waiting)
+	}
+}
+
+/*
+An ask that became nothing is kept, and says why.
+
+"Somebody mentioned an agent that cannot be started here" is what an operator
+needs when the person says nothing happened. Deleted on refusal, that
+conversation is unanswerable: the ask is gone and the platform has no memory of
+ever having been asked.
+*/
+func TestRefused_anAskThatBecameNothing_isKeptWithItsReason(t *testing.T) {
+	inbox := freshInbox(t)
+	arrival := ask("ev-4")
+	if _, err := inbox.Receive(t.Context(), arrival); err != nil {
+		t.Fatalf("Receive: %v", err)
+	}
+
+	if err := inbox.Refused(t.Context(), arrival, "names no agent", time.Now()); err != nil {
+		t.Fatalf("Refused: %v", err)
+	}
+
+	waiting, _ := inbox.Waiting(t.Context(), 10)
+	if len(waiting) != 0 {
+		t.Errorf("a refused ask is still waiting: %+v", waiting)
+	}
+	// And a redelivery of it is still not a new ask: the sender retrying does
+	// not get a second chance at an answer the platform already gave.
+	fresh, err := inbox.Receive(t.Context(), arrival)
+	if err != nil {
+		t.Fatalf("Receive after refusal: %v", err)
+	}
+	if fresh {
+		t.Error("a redelivery of a refused ask reported as new")
+	}
+}
+
+func ask(id string) channel.Arrival {
+	return channel.Arrival{
+		Channel: "acme-slack", Conversation: "C07-ops", EventID: id,
+		Payload: []byte(`{"text":"<@U07BOT> triagem esse chamado"}`),
+	}
+}
+
+func freshInbox(t *testing.T) *channel.Inbox {
+	t.Helper()
+	_, pool := channelStore(t)
+	if _, err := pool.Exec(t.Context(), `delete from channel_inbox`); err != nil {
+		t.Fatalf("clear the inbox: %v", err)
+	}
+	return channel.NewInbox(pool)
+}

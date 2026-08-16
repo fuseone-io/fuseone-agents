@@ -229,8 +229,14 @@ func serve(args []string) error {
 		// it carries no cookie, and what authenticates it is a signature this
 		// installation checks rather than anything the API knows about.
 		if channels != nil {
-			httpapi.NewChannelHooks(api, channels, identity.dir, time.Now, slog.Default()).
-				Mount(root)
+			hooks := httpapi.NewChannelHooks(api, channels, identity.dir, time.Now, slog.Default()).
+				// Where an ask waits between arriving and being opened. The
+				// events path acknowledges only what it has already written
+				// down, so a process that dies after answering has not lost
+				// the question.
+				WithArrivals(channel.NewInbox(identity.pool))
+			hooks.Mount(root)
+			hooks.MountEvents(root)
 		}
 
 		// Webhooks are outside the session middleware on purpose: the caller

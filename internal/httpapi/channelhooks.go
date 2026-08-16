@@ -57,6 +57,11 @@ type ChannelHooks struct {
 	directory Directory
 	now       func() time.Time
 	log       *slog.Logger
+	// inbox is where an ask waits between arriving and being opened. Optional:
+	// an installation without one serves the interaction path and refuses
+	// asks, which is honest — acknowledging a question it will lose is worse
+	// than making the sender retry.
+	inbox Arrivals
 }
 
 func NewChannelHooks(
