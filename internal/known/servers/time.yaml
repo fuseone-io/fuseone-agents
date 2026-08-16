@@ -1,0 +1,23 @@
+server: time
+title: Time and time zones
+publisher: Model Context Protocol reference servers
+docs: https://github.com/modelcontextprotocol/servers/tree/main/src/time
+docsFrom: publisher
+provenance: documentation
+transport: stdio
+command: uvx
+args: ["mcp-server-time"]
+auth: None.
+
+note: >
+  Worth having for a reason that is not obvious: a model asked what day it is
+  answers from training, confidently and wrongly, and an agent that schedules
+  from that is wrong every time.
+
+suggestions:
+  - tool: get_current_time
+    effect: read
+    why: Reads the clock. It reaches nothing and changes nothing.
+  - tool: convert_time
+    effect: read
+    why: Arithmetic on a value it was given.

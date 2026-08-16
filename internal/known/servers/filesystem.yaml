@@ -1,7 +1,14 @@
 server: filesystem
 title: Local filesystem
 publisher: Model Context Protocol reference servers
-docs: https://github.com/modelcontextprotocol/servers
+docs: https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem
+docsFrom: publisher
+transport: stdio
+command: npx
+args: ["-y", "@modelcontextprotocol/server-filesystem", "/srv/agent-workspace"]
+auth: >
+  None. The credential is the argument list: the directories it is started with
+  are everything it can reach, and no ruling narrows that afterwards.
 provenance: documentation
 note: >
   It reaches whatever directories it is started with, and nothing about a

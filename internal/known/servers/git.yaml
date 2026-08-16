@@ -1,0 +1,61 @@
+server: git
+title: Git repository
+publisher: Model Context Protocol reference servers
+docs: https://github.com/modelcontextprotocol/servers/tree/main/src/git
+docsFrom: publisher
+provenance: documentation
+transport: stdio
+command: uvx
+args: ["mcp-server-git", "--repository", "/srv/repo"]
+auth: >
+  None of its own. It acts on a checkout on disk, so what it reaches is
+  whichever repository it was started with, and whatever credentials that
+  checkout already carries.
+
+note: >
+  A working copy, not a forge. Nothing here reaches a remote, which is why the
+  writes are recoverable — and why the compensations below are honest ones
+  rather than an undo the platform invented.
+
+suggestions:
+  - tool: git_status
+    effect: read
+    why: Reports what has changed in the working copy.
+  - tool: git_diff_unstaged
+    effect: read
+    untrusted: true
+    why: >
+      Returns file content. A diff carries whatever a contributor wrote,
+      instruction-shaped text included.
+  - tool: git_diff_staged
+    effect: read
+    untrusted: true
+    why: As above, for what is staged.
+  - tool: git_log
+    effect: read
+    untrusted: true
+    why: Commit messages are free text somebody else wrote.
+  - tool: git_add
+    effect: write
+    why: >
+      Stages changes. Nothing is recorded yet, and it still moves the state the
+      next commit will capture.
+  - tool: git_commit
+    effect: write
+    why: >
+      Records a commit in the local repository. Recoverable through history
+      rather than removable, and it reaches no remote.
+  - tool: git_create_branch
+    effect: write
+    why: Adds a ref to the local repository. Cheap, visible, and not nothing.
+  - tool: git_checkout
+    effect: write
+    why: >
+      Moves the working copy. It discards nothing on its own, and it changes
+      what every later step in the run is looking at.
+  - tool: git_reset
+    effect: destructive
+    why: >
+      Unstages, and depending on how it is called throws work away. The reset
+      that loses something and the one that does not look identical from here,
+      so it is judged as the worse of the two.

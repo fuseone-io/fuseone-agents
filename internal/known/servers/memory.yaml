@@ -1,0 +1,23 @@
+server: memory
+title: Knowledge graph memory
+publisher: Model Context Protocol reference servers
+docs: https://github.com/modelcontextprotocol/servers/tree/main/src/memory
+docsFrom: publisher
+provenance: documentation
+transport: stdio
+command: npx
+args: ["-y", "@modelcontextprotocol/server-memory"]
+auth: >
+  None. It keeps a file, and what that file holds is whatever a run put there.
+
+# No suggestions, on purpose.
+#
+# The identity, the link and the note are worth shipping on their own. Effects
+# invented for tool names nobody here verified would not be: a stale entry is
+# supposed to degrade into silence, and one that starts as silence cannot
+# degrade into anything worse.
+note: >
+  It remembers across runs, which is the feature and the thing to think about:
+  text a run read from an untrusted source and wrote here comes back later as
+  though the platform had authored it. Taint does not survive a round trip
+  through somebody's notes.

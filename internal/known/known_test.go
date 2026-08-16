@@ -85,3 +85,73 @@ func load(t *testing.T) *known.Servers {
 	}
 	return servers
 }
+
+/*
+Two questions a recipe has to answer separately.
+
+Where the suggestions came from — somebody ran it, or somebody read the docs —
+and whose documentation the link points at. They are independent: a community
+server we actually ran has trustworthy suggestions and no publisher behind it,
+and a publisher's own server read off their page is the reverse.
+
+Collapsed into one word — "official" — both get worse. The careful entry looks
+like the careless one, and the reader takes the label as a promise of support
+that nobody made.
+*/
+func TestLoad_anEntryPointingAtThePublishersOwnDocs_saysSoWithoutClaimingSupport(t *testing.T) {
+	t.Parallel()
+	servers := load(t)
+
+	for _, entry := range servers.All() {
+		if entry.DocsFrom == known.DocsFromPublisher && entry.Docs == "" {
+			t.Errorf("%s claims the publisher's documentation and links to none", entry.Server)
+		}
+		if entry.DocsFrom == "" {
+			t.Errorf("%s does not say whose documentation it points at", entry.Server)
+		}
+	}
+}
+
+// A recipe fills the form and never submits it. What it proposes has to be
+// something the form can hold, or the console offers a shape the platform
+// cannot make.
+func TestLoad_aSuggestedTransport_isOneThisBinaryCanBuild(t *testing.T) {
+	t.Parallel()
+
+	for _, entry := range load(t).All() {
+		switch entry.Transport {
+		case "stdio":
+			if entry.Command == "" {
+				t.Errorf("%s suggests stdio and no command to run", entry.Server)
+			}
+		case "http":
+			if entry.URL == "" {
+				t.Errorf("%s suggests http and no address to call", entry.Server)
+			}
+		case "":
+			// No opinion is allowed, and honest: several servers ship both,
+			// and picking one for somebody is a recommendation this package
+			// has no basis for.
+		default:
+			t.Errorf("%s suggests %q, which is not a transport", entry.Server, entry.Transport)
+		}
+	}
+}
+
+/*
+An entry may suggest nothing at all.
+
+Identity, a link and a sentence about the credential are worth shipping on
+their own — they fill the form and warn about what the token can reach. Effects
+invented for tools nobody verified would be worse than silence, and silence is
+what a stale entry is supposed to degrade into.
+*/
+func TestLoad_anEntryWithNoSuggestions_isValid(t *testing.T) {
+	t.Parallel()
+
+	for _, entry := range load(t).All() {
+		if entry.Title == "" || entry.Publisher == "" {
+			t.Errorf("%s ships without saying what it is or who publishes it", entry.Server)
+		}
+	}
+}

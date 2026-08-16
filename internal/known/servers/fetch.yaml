@@ -1,0 +1,27 @@
+server: fetch
+title: Fetch a web page
+publisher: Model Context Protocol reference servers
+docs: https://github.com/modelcontextprotocol/servers/tree/main/src/fetch
+docsFrom: publisher
+provenance: documentation
+transport: stdio
+command: uvx
+args: ["mcp-server-fetch"]
+auth: >
+  None, and that is the thing to think about rather than the thing to skip. It
+  will reach whatever the worker can reach, including addresses on the internal
+  network that no token protects.
+
+note: >
+  Everything it returns was written by somebody else. That is the whole point
+  of it and the whole risk: a page can carry an instruction as easily as a
+  paragraph, and the run that reads one is tainted from that step on.
+
+suggestions:
+  - tool: fetch
+    effect: read
+    untrusted: true
+    why: >
+      Retrieves a page and hands its text to the model. It changes nothing, and
+      it is the clearest untrusted source the platform has — the content is
+      authored by whoever controls the address.

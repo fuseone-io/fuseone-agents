@@ -61,6 +61,32 @@ type Suggestion struct {
 	Why string `yaml:"why"`
 }
 
+/*
+DocsSource says whose documentation an entry links to.
+
+Separate from Provenance because they are different questions and collapsing
+them is how a catalogue starts lying. Provenance is where the *suggestions*
+came from — somebody ran the server, or somebody read a page. This is whose
+page. A community server that was actually run has trustworthy suggestions and
+no publisher standing behind it; a publisher's own server read off their site
+is the reverse.
+
+Neither is "official", and the console must never render that word. It is the
+one label a reader takes as a promise of support, and no entry here is one:
+this platform did not write these servers, does not host them, and vouches for
+nothing beyond saying where it read what it read.
+*/
+type DocsSource string
+
+const (
+	// DocsFromPublisher means Docs points at the documentation of whoever
+	// publishes the server.
+	DocsFromPublisher DocsSource = "publisher"
+	// DocsFromThirdParty means somebody else wrote it down — a directory, a
+	// write-up, a fork's README. Useful and further from the source.
+	DocsFromThirdParty DocsSource = "third-party"
+)
+
 // Entry is one server the platform knows about.
 type Entry struct {
 	// Server is the local name this applies to. Matching is by the name the
@@ -69,7 +95,29 @@ type Entry struct {
 	Title      string     `yaml:"title"`
 	Publisher  string     `yaml:"publisher"`
 	Docs       string     `yaml:"docs"`
+	DocsFrom   DocsSource `yaml:"docsFrom"`
 	Provenance Provenance `yaml:"provenance"`
+
+	/*
+		What the recipe proposes for the connection form.
+
+		Filled in, never submitted. A suggested command is a program somebody
+		is one click from running inside the worker, which is exactly why the
+		acceptance stays a separate act — this saves the typing and decides
+		nothing.
+
+		Empty transport is allowed and often honest: several servers ship both
+		a container and a hosted endpoint, and choosing for somebody is a
+		recommendation this package has no basis for.
+	*/
+	Transport string   `yaml:"transport,omitempty"`
+	Command   string   `yaml:"command,omitempty"`
+	Args      []string `yaml:"args,omitempty"`
+	URL       string   `yaml:"url,omitempty"`
+	// Auth is the credential it expects, in words a person reads before going
+	// to fetch one. Not a field name and not a schema: what to get, and what
+	// it will be able to reach.
+	Auth string `yaml:"auth,omitempty"`
 	// Note is what an operator has to know before running it at all — usually
 	// the credential it wants and what that credential can reach.
 	Note        string       `yaml:"note,omitempty"`
@@ -95,8 +143,8 @@ func Load() (*Servers, error) {
 		if err := yaml.Unmarshal(raw, &entry); err != nil {
 			return fmt.Errorf("known: parse %s: %w", path, err)
 		}
-		if entry.Server == "" {
-			return fmt.Errorf("known: %s names no server", path)
+		if err := check(path, entry); err != nil {
+			return err
 		}
 		k.entries[entry.Server] = entry
 		return nil
@@ -105,6 +153,40 @@ func Load() (*Servers, error) {
 		return nil, err
 	}
 	return k, nil
+}
+
+/*
+check refuses a recipe that would mislead rather than help.
+
+Shipped data is still data somebody wrote by hand, and every one of these is a
+sentence the console shows a Curator as though the platform stood behind it.
+The failures worth catching at build time are the ones that read as confidence:
+a link to nowhere presented as the publisher's own, a transport the form cannot
+hold, a suggestion with no reasoning behind it.
+*/
+func check(path string, entry Entry) error {
+	switch {
+	case entry.Server == "":
+		return fmt.Errorf("known: %s names no server", path)
+	case entry.Title == "" || entry.Publisher == "":
+		return fmt.Errorf("known: %s does not say what it is or who publishes it", path)
+	case entry.DocsFrom == "":
+		return fmt.Errorf("known: %s does not say whose documentation it points at", path)
+	case entry.DocsFrom == DocsFromPublisher && entry.Docs == "":
+		return fmt.Errorf("known: %s claims the publisher's documentation and links to none", path)
+	case entry.Transport == "stdio" && entry.Command == "":
+		return fmt.Errorf("known: %s suggests stdio and no command", path)
+	case entry.Transport == "http" && entry.URL == "":
+		return fmt.Errorf("known: %s suggests http and no address", path)
+	case entry.Transport != "" && entry.Transport != "stdio" && entry.Transport != "http":
+		return fmt.Errorf("known: %s suggests %q, which is not a transport", path, entry.Transport)
+	}
+	for _, one := range entry.Suggestions {
+		if one.Why == "" {
+			return fmt.Errorf("known: %s suggests %s with no reasoning", path, one.Tool)
+		}
+	}
+	return nil
 }
 
 /*
