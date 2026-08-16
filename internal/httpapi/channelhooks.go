@@ -88,9 +88,13 @@ func (h *ChannelHooks) slackInteraction(w http.ResponseWriter, r *http.Request) 
 
 	// Read once and verify those exact bytes. A verifier that re-read the body
 	// would check one set and let the handler act on another.
-	body, err := io.ReadAll(io.LimitReader(r.Body, bodyLimit))
+	// MaxBytesReader rather than LimitReader: the second truncates silently,
+	// and a body cut in half fails signature verification with "unauthorized"
+	// — which sends somebody to check a secret that is fine. The pattern the
+	// webhook door already uses.
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, bodyLimit))
 	if err != nil {
-		http.Error(w, "unreadable", http.StatusBadRequest)
+		http.Error(w, "the payload is too large", http.StatusRequestEntityTooLarge)
 		return
 	}
 

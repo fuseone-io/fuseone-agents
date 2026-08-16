@@ -97,6 +97,20 @@ func ReadDelivery(body []byte) (Delivery, error) {
 		return Delivery{}, fmt.Errorf("%w: not a person speaking", ErrNotAnAsk)
 	}
 
+	/*
+		A signed payload missing the parts an ask is made of.
+
+		Slack sends these, so this is not defensiveness about Slack: it is
+		about everything else that can put a signed body on this path — a
+		proxy that rewrote it, a replay of an older API shape, a test fixture
+		somebody copied. Read leniently, a message with no channel becomes an
+		arrival filed under an empty conversation, which resolves to no scope
+		and refuses later, further from the cause.
+	*/
+	if e.Event.Channel == "" || e.Event.TS == "" {
+		return Delivery{}, fmt.Errorf("%w: a mention with no conversation or no timestamp", ErrNotAnAsk)
+	}
+
 	thread := e.Event.ThreadTS
 	if thread == "" {
 		thread = e.Event.TS

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"time"
 
@@ -64,20 +65,42 @@ func (i *Inbox) Receive(ctx context.Context, a Arrival) (fresh bool, err error) 
 	return tag.RowsAffected() == 1, nil
 }
 
-// Waiting is what has arrived and not been opened, oldest first.
-//
-// Oldest first because an ask that arrived earlier was asked earlier, and
-// answering out of order in a conversation reads as the platform ignoring
-// somebody.
-func (i *Inbox) Waiting(ctx context.Context, limit int) ([]Arrival, error) {
+/*
+Claim takes asks nobody else is working on.
+
+Listing what is pending and acting on it is not a claim. Two consumers read the
+same row, both open a run and both reply, and the person who asked is answered
+twice by an agent that ran twice. The opener's idempotency key would catch the
+duplicate *run* — and the second reply, the second refusal and the second entry
+in the record are not runs, and it catches none of them.
+
+A lease with an owner, which is the shape the run queue already uses. An
+expired lease is claimable again: a consumer that dies stops renewing and the
+next sweep picks the ask up, so there is no reaper to write and none to forget.
+
+Oldest first, because an ask that arrived earlier was asked earlier and
+answering out of order in a conversation reads as the platform ignoring
+somebody.
+*/
+func (i *Inbox) Claim(
+	ctx context.Context, owner string, lease time.Duration, limit int,
+) ([]Arrival, error) {
 	rows, err := i.pool.Query(ctx, `
-		select channel, conversation, event_id, payload
-		from channel_inbox
-		where status = 'pending'
-		order by at
-		limit $1`, limit)
+		update channel_inbox set
+			leased_until = now() + $2::interval,
+			lease_owner  = $1
+		where (channel, conversation, event_id) in (
+			select channel, conversation, event_id from channel_inbox
+			where status = 'pending'
+			  and (leased_until is null or leased_until <= now())
+			order by at
+			for update skip locked
+			limit $3
+		)
+		returning channel, conversation, event_id, payload`,
+		owner, lease.String(), limit)
 	if err != nil {
-		return nil, fmt.Errorf("channel: read the inbox: %w", err)
+		return nil, fmt.Errorf("channel: claim from the inbox: %w", err)
 	}
 	defer rows.Close()
 
@@ -97,6 +120,12 @@ func (i *Inbox) Opened(ctx context.Context, a Arrival, run string, at time.Time)
 	return i.settle(ctx, a, "opened", "", run, at)
 }
 
+// ErrNotClaimed means somebody else settled this ask, or the lease expired and
+// another consumer took it. Reported rather than swallowed: a consumer that
+// carries on after losing its claim is the second reply this whole mechanism
+// exists to prevent.
+var ErrNotClaimed = errors.New("channel: this ask is not ours to settle")
+
 /*
 Refused records that an ask became nothing, and why.
 
@@ -109,16 +138,26 @@ func (i *Inbox) Refused(ctx context.Context, a Arrival, why string, at time.Time
 	return i.settle(ctx, a, "refused", why, "", at)
 }
 
+// settle closes an ask, and only one that is still pending.
+//
+// Conditioned on the status and checked afterwards: without the condition a
+// consumer whose lease expired would overwrite the outcome the consumer that
+// took over had already written, and without the check it would not know.
 func (i *Inbox) settle(
 	ctx context.Context, a Arrival, status, detail, run string, at time.Time,
 ) error {
-	_, err := i.pool.Exec(ctx, `
+	tag, err := i.pool.Exec(ctx, `
 		update channel_inbox
-		set status = $4, detail = $5, run_id = $6, at = $7
-		where channel = $1 and conversation = $2 and event_id = $3`,
+		set status = $4, detail = $5, run_id = $6, at = $7,
+		    leased_until = null, lease_owner = ''
+		where channel = $1 and conversation = $2 and event_id = $3
+		  and status = 'pending'`,
 		a.Channel, a.Conversation, a.EventID, status, detail, run, at.UTC())
 	if err != nil {
 		return fmt.Errorf("channel: settle %s: %w", a.EventID, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("%w: %s", ErrNotClaimed, a.EventID)
 	}
 	return nil
 }

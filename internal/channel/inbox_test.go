@@ -1,6 +1,7 @@
 package channel_test
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -29,12 +30,12 @@ func TestReceive_anAskArrives_andIsWaitingToBeOpened(t *testing.T) {
 		t.Error("the first delivery of an ask reported as already seen")
 	}
 
-	waiting, err := inbox.Waiting(t.Context(), 10)
+	waiting, err := inbox.Claim(t.Context(), "worker-1", time.Minute, 10)
 	if err != nil {
-		t.Fatalf("Waiting: %v", err)
+		t.Fatalf("Claim: %v", err)
 	}
 	if len(waiting) != 1 || waiting[0].EventID != "ev-1" {
-		t.Errorf("waiting = %+v, want the ask", waiting)
+		t.Errorf("claimed = %+v, want the ask", waiting)
 	}
 }
 
@@ -60,9 +61,9 @@ func TestReceive_theSameDeliveryTwice_isNotASecondAsk(t *testing.T) {
 		t.Error("a redelivery reported as a new ask")
 	}
 
-	waiting, _ := inbox.Waiting(t.Context(), 10)
+	waiting, _ := inbox.Claim(t.Context(), "worker-1", time.Minute, 10)
 	if len(waiting) != 1 {
-		t.Errorf("waiting = %d asks, want the one", len(waiting))
+		t.Errorf("claimed = %d asks, want the one", len(waiting))
 	}
 }
 
@@ -77,9 +78,9 @@ func TestOpened_anAskThatBecameARun_stopsWaiting(t *testing.T) {
 		t.Fatalf("Opened: %v", err)
 	}
 
-	waiting, _ := inbox.Waiting(t.Context(), 10)
+	waiting, _ := inbox.Claim(t.Context(), "worker-2", time.Minute, 10)
 	if len(waiting) != 0 {
-		t.Errorf("waiting = %+v, want nothing left", waiting)
+		t.Errorf("claimed = %+v, want nothing left", waiting)
 	}
 }
 
@@ -102,9 +103,9 @@ func TestRefused_anAskThatBecameNothing_isKeptWithItsReason(t *testing.T) {
 		t.Fatalf("Refused: %v", err)
 	}
 
-	waiting, _ := inbox.Waiting(t.Context(), 10)
+	waiting, _ := inbox.Claim(t.Context(), "worker-2", time.Minute, 10)
 	if len(waiting) != 0 {
-		t.Errorf("a refused ask is still waiting: %+v", waiting)
+		t.Errorf("a refused ask is still claimable: %+v", waiting)
 	}
 	// And a redelivery of it is still not a new ask: the sender retrying does
 	// not get a second chance at an answer the platform already gave.
@@ -131,4 +132,77 @@ func freshInbox(t *testing.T) *channel.Inbox {
 		t.Fatalf("clear the inbox: %v", err)
 	}
 	return channel.NewInbox(pool)
+}
+
+/*
+Two consumers do not get the same ask.
+
+Listing what is pending and acting on it is not a claim: both open a run and
+both reply, and the person is answered twice by an agent that ran twice. The
+opener's idempotency key catches the duplicate run and nothing catches the
+second reply, because a reply is not a run.
+*/
+func TestClaim_twoConsumers_doNotGetTheSameAsk(t *testing.T) {
+	inbox := freshInbox(t)
+	if _, err := inbox.Receive(t.Context(), ask("ev-race")); err != nil {
+		t.Fatalf("Receive: %v", err)
+	}
+
+	first, err := inbox.Claim(t.Context(), "worker-1", time.Minute, 10)
+	if err != nil {
+		t.Fatalf("first Claim: %v", err)
+	}
+	second, err := inbox.Claim(t.Context(), "worker-2", time.Minute, 10)
+	if err != nil {
+		t.Fatalf("second Claim: %v", err)
+	}
+
+	if len(first) != 1 || len(second) != 0 {
+		t.Errorf("first got %d and second got %d, want one and none", len(first), len(second))
+	}
+}
+
+// A consumer that died stops renewing, and the next sweep picks the ask up.
+// No reaper to write and none to forget.
+func TestClaim_anExpiredLease_isClaimableAgain(t *testing.T) {
+	inbox := freshInbox(t)
+	if _, err := inbox.Receive(t.Context(), ask("ev-lapsed")); err != nil {
+		t.Fatalf("Receive: %v", err)
+	}
+
+	if _, err := inbox.Claim(t.Context(), "worker-dead", -time.Minute, 10); err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+
+	again, err := inbox.Claim(t.Context(), "worker-2", time.Minute, 10)
+	if err != nil {
+		t.Fatalf("second Claim: %v", err)
+	}
+	if len(again) != 1 {
+		t.Errorf("claimed = %d, want the lapsed ask back", len(again))
+	}
+}
+
+/*
+A consumer that lost its claim is told, rather than overwriting the answer.
+
+Without the condition, a consumer whose lease expired would write its outcome
+over the one the consumer that took over had already recorded; without the
+check it would carry on and reply. The reply is the thing: it is what the
+person reads, and there is no idempotency key on somebody's attention.
+*/
+func TestSettle_anAskAlreadySettled_isRefused(t *testing.T) {
+	inbox := freshInbox(t)
+	arrival := ask("ev-twice")
+	if _, err := inbox.Receive(t.Context(), arrival); err != nil {
+		t.Fatalf("Receive: %v", err)
+	}
+	if err := inbox.Opened(t.Context(), arrival, "run_1", time.Now()); err != nil {
+		t.Fatalf("Opened: %v", err)
+	}
+
+	err := inbox.Opened(t.Context(), arrival, "run_2", time.Now())
+	if !errors.Is(err, channel.ErrNotClaimed) {
+		t.Errorf("err = %v, want ErrNotClaimed", err)
+	}
 }

@@ -113,3 +113,36 @@ func TestReadDelivery_theUrlHandshake_comesBackToBeAnswered(t *testing.T) {
 		t.Errorf("challenge = %q, want it echoed", got.Challenge)
 	}
 }
+
+/*
+A signed payload missing what an ask is made of.
+
+Not defensiveness about Slack, which sends these: it is about everything else
+that can put a signed body on this path — a proxy that rewrote it, a replay of
+an older shape, a fixture somebody copied. Read leniently, a mention with no
+channel becomes an arrival filed under an empty conversation, which resolves to
+no scope and refuses later, further from the cause.
+*/
+func TestReadDelivery_aMentionWithNoConversation_isNotAnAsk(t *testing.T) {
+	t.Parallel()
+
+	_, err := slack.ReadDelivery([]byte(`{
+	  "type":"event_callback","event_id":"Ev200",
+	  "event":{"type":"app_mention","user":"U9","text":"<@U07BOT> triagem","ts":"1786.1"}
+	}`))
+	if !errors.Is(err, slack.ErrNotAnAsk) {
+		t.Errorf("err = %v, want ErrNotAnAsk", err)
+	}
+}
+
+func TestReadDelivery_aMentionWithNoTimestamp_isNotAnAsk(t *testing.T) {
+	t.Parallel()
+
+	_, err := slack.ReadDelivery([]byte(`{
+	  "type":"event_callback","event_id":"Ev201",
+	  "event":{"type":"app_mention","channel":"C07-ops","user":"U9","text":"<@U07BOT> triagem"}
+	}`))
+	if !errors.Is(err, slack.ErrNotAnAsk) {
+		t.Errorf("err = %v, want ErrNotAnAsk", err)
+	}
+}
