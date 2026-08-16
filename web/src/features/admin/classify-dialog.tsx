@@ -109,7 +109,13 @@ export function ClassifyDialog({
             suggested={tool.suggested}
             onAccept={() =>
               setRuling({
-                effect: tool.suggested?.effect ?? "read",
+                // No fallback. The contract makes this required, so the
+                // only way `??` fires is a suggestion that arrived without
+                // one — and it would fire into `read`, which is the value
+                // this dialog has just stopped defaulting to everywhere else.
+                // An empty effect leaves the form unanswered, which is the
+                // honest reading of a suggestion that suggests nothing.
+                effect: tool.suggested?.effect ?? "",
                 untrusted: tool.suggested?.untrusted ?? true,
                 compensatedBy: tool.suggested?.compensatedBy ?? "",
                 // The reason stays theirs. Accepting a suggestion is still a
