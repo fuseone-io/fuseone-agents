@@ -17,10 +17,7 @@ knowing all of them.
 package slack
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -71,45 +68,13 @@ func (p *Poster) WithEndpointBase(url string) *Poster {
 func (p *Poster) Post(
 	ctx context.Context, c channel.Conversation, m channel.Message,
 ) (string, error) {
-	body, err := json.Marshal(postMessage{
+	return p.send(ctx, postMessage{
 		Channel: c.ID,
 		// Fallback text as well as blocks. Notifications and screen readers
 		// read this one, so a message with blocks alone is silent on a phone.
 		Text:   summary(m),
 		Blocks: blocks(m, p.decidable),
 	})
-	if err != nil {
-		return "", fmt.Errorf("slack: build message: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		p.base+"/chat.postMessage", bytes.NewReader(body))
-	if err != nil {
-		return "", fmt.Errorf("slack: build request: %w", err)
-	}
-	req.Header.Set("Authorization", "Bearer "+p.token)
-	req.Header.Set("Content-Type", "application/json; charset=utf-8")
-
-	resp, err := p.client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("slack: post: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	var answer struct {
-		OK    bool   `json:"ok"`
-		TS    string `json:"ts"`
-		Error string `json:"error"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&answer); err != nil {
-		return "", fmt.Errorf("slack: read answer (status %d): %w", resp.StatusCode, err)
-	}
-	if !answer.OK {
-		// Slack's own word for it. "not_in_channel" tells an operator what to
-		// do; "post failed" tells them to go and find out.
-		return "", fmt.Errorf("slack: refused: %s", answer.Error)
-	}
-	return answer.TS, nil
 }
 
 type postMessage struct {
