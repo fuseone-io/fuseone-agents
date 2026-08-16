@@ -46,6 +46,21 @@ type ChannelIdentity struct {
 	Principal domain.UserID
 	// Display is who that is, for the screen. A convenience and never the key.
 	Display string
+	/*
+		Unreadable marks a row that is stored and speaks for nobody.
+
+		The column is JSONB, so a value that is not JSON never gets in — the
+		corruption that can actually occur is JSON that parses and carries no
+		principal. Listed as broken rather than shown as a binding with an
+		empty name: the runtime refuses an ask on one of these and says the
+		row is unreadable, so a screen displaying it as ordinary leaves an
+		operator comparing an error against a row that looks fine.
+
+		Channel and Account fall back to the setting's own key, which is
+		outside the value and is what keeps the row removable however little
+		of it survived.
+	*/
+	Unreadable bool
 }
 
 // identityKey names the setting. Both halves, because one Slack account is a
@@ -105,11 +120,32 @@ func (c *Channels) Identities(ctx context.Context) ([]ChannelIdentity, error) {
 
 	out := make([]ChannelIdentity, 0, len(stored))
 	for _, s := range stored {
-		if id, ok := identityFrom(s); ok {
+		id, ok := identityFrom(s)
+		if ok && id.Principal != "" {
 			out = append(out, id)
+			continue
 		}
+		// Shown as what it is. The runtime refuses an ask on this row and says
+		// it is unreadable; a listing that showed it as an ordinary binding
+		// with a blank name would leave an operator comparing that error
+		// against a row that looks fine.
+		channelName, account := splitIdentityKey(s.Name)
+		if id.Channel != "" {
+			channelName, account = id.Channel, id.Account
+		}
+		out = append(out, ChannelIdentity{
+			Channel: channelName, Account: account, Unreadable: true,
+		})
 	}
 	return out, nil
+}
+
+// splitIdentityKey recovers what names a row from the key, for a value that
+// could not be read. One separator and the first one: a Slack account id has
+// no slash, and a channel name is the half an operator typed.
+func splitIdentityKey(key string) (channelName, account string) {
+	channelName, account, _ = strings.Cut(key, "/")
+	return channelName, account
 }
 
 /*

@@ -79,3 +79,52 @@ func boundChannels(t *testing.T) (*admin.Channels, *settings.Store) {
 	store := settings.NewStore(pool, nil)
 	return admin.NewChannels(pool, store), store
 }
+
+/*
+A binding the runtime denounces is a binding the screen shows.
+
+The listing used to skip a row it could not read, so an operator met an error
+naming a binding the console said did not exist — the platform disagreeing with
+itself about the very row they had been sent to fix. What names it is recovered
+from the key, which is outside the value that failed to parse, so it can still
+be removed.
+*/
+func TestIdentities_aStoredBindingNobodyCanRead_isListedAsBroken(t *testing.T) {
+	channels, store := boundChannels(t)
+	ctx := context.Background()
+
+	if err := store.Put(ctx, settings.Setting{
+		ScopeKind: settings.ScopeInstallation,
+		Kind:      admin.KindChannelIdentity,
+		Name:      "acme-slack/U404",
+		// Valid JSON with no principal. The column is JSONB, so a value that
+		// is not JSON never reaches it — the corruption that can occur is a
+		// row that parses and says nothing.
+		Value:   []byte(`{"channel":"acme-slack","account":"U404"}`),
+		Enabled: true, UpdatedBy: "restore",
+	}); err != nil {
+		t.Fatalf("write the broken row: %v", err)
+	}
+
+	listed, err := channels.Identities(ctx)
+	if err != nil {
+		t.Fatalf("Identities: %v", err)
+	}
+
+	var found *admin.ChannelIdentity
+	for i, one := range listed {
+		if one.Account == "U404" {
+			found = &listed[i]
+		}
+	}
+	if found == nil {
+		t.Fatalf("listed = %+v, want the broken row shown", listed)
+	}
+	if !found.Unreadable {
+		t.Error("the broken row is listed as though it were fine")
+	}
+	// Recovered from the key, so the row can be pointed at and removed.
+	if found.Channel != "acme-slack" {
+		t.Errorf("channel = %q, want it recovered from the key", found.Channel)
+	}
+}

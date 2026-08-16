@@ -2466,11 +2466,23 @@ export interface components {
             /** @description The accounts that speak for somebody in this channel. */
             identities?: components["schemas"]["ChannelIdentity"][];
         };
+        /** @description Which platform user a channel account speaks for. */
         ChannelIdentity: {
             account: string;
             principal: string;
             /** @description Who that is, for the screen. Never the key. */
             display?: string;
+            /**
+             * @description The binding is stored and cannot be understood. Listed rather than
+             *     hidden: the runtime refuses an ask on one of these and names it, so
+             *     a screen that dropped it would leave an operator reading an error
+             *     about a binding the console says does not exist.
+             *
+             *     `principal` is empty on one of these. What names it — the channel
+             *     and the account — is recovered from the row's key, which is what
+             *     makes it removable.
+             */
+            unreadable?: boolean;
         };
         ChannelConversation: {
             id: string;

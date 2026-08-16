@@ -230,6 +230,12 @@ func channelFrom(c admin.Channel, bound []admin.ChannelIdentity) openapi.Channel
 		if id.Display != "" {
 			item.Display = ptr(id.Display)
 		}
+		if id.Unreadable {
+			// Shown as broken rather than hidden. The runtime refuses an ask
+			// on this row and names it, and an operator sent to fix it needs
+			// to be able to see it.
+			item.Unreadable = ptr(true)
+		}
 		identities = append(identities, item)
 	}
 	out.Identities = &identities
