@@ -343,3 +343,48 @@ func (i *inboxSpy) Receive(_ context.Context, a channel.Arrival) (bool, error) {
 	i.received = append(i.received, a)
 	return true, nil
 }
+
+/*
+A mention nobody can read is said out loud, not acknowledged quietly.
+
+A message that is legitimately not for us — an ordinary line, a bot, an edit —
+is acknowledged and forgotten, because there is nothing to fix and a retry
+would deliver it forever. One we could not read is different: nobody sends
+these on purpose, so somebody wants to know, and a silent 200 makes it
+invisible to whatever produced it.
+*/
+func TestSlackEvent_aMentionWithNoConversation_isRefusedRatherThanSwallowed(t *testing.T) {
+	t.Parallel()
+	hooks, _ := hooksFor(t, ledger.NewMemory(), nil, domain.Principal{})
+	inbox := &inboxSpy{}
+	hooks.WithArrivals(inbox)
+
+	rec := deliver(t, hooks, "acme-slack", `{"type":"event_callback","event_id":"Ev300",
+	  "event":{"type":"app_mention","user":"U9","text":"<@U07BOT> triagem","ts":"1786.1"}}`)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want it refused", rec.Code)
+	}
+	if len(inbox.received) != 0 {
+		t.Error("a mention with no conversation was filed")
+	}
+}
+
+// And an ordinary message still is. It is not a failure and nothing about it
+// will be different next time.
+func TestSlackEvent_anOrdinaryMessage_isAcknowledgedAndForgotten(t *testing.T) {
+	t.Parallel()
+	hooks, _ := hooksFor(t, ledger.NewMemory(), nil, domain.Principal{})
+	inbox := &inboxSpy{}
+	hooks.WithArrivals(inbox)
+
+	rec := deliver(t, hooks, "acme-slack", `{"type":"event_callback","event_id":"Ev301",
+	  "event":{"type":"message","channel":"C07-ops","user":"U9","text":"bom dia","ts":"1786.2"}}`)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want it acknowledged", rec.Code)
+	}
+	if len(inbox.received) != 0 {
+		t.Error("an ordinary message was filed as an ask")
+	}
+}

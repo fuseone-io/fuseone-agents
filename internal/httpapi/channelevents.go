@@ -79,9 +79,18 @@ func (h *ChannelHooks) slackEvent(w http.ResponseWriter, r *http.Request) {
 	delivery, err := slack.ReadDelivery(body)
 	switch {
 	case errors.Is(err, slack.ErrNotAnAsk):
-		// Well-formed and not for us. Acknowledged, because a retry would
-		// deliver the same non-ask forever.
+		// Well-formed and not for us: an ordinary message, a bot, an edit.
+		// Acknowledged and forgotten, because there is nothing to fix and a
+		// retry would deliver the same non-ask forever.
 		w.WriteHeader(http.StatusOK)
+		return
+	case errors.Is(err, slack.ErrMalformedAsk):
+		// A mention we could not read. Said out loud rather than acknowledged
+		// quietly: nobody sends these on purpose, so somebody wants to know —
+		// and a silent 200 makes it invisible to the proxy or the fixture that
+		// produced it.
+		h.log.Warn("a mention arrived with nothing to act on", "channel", name, "err", err)
+		http.Error(w, "the mention carries no conversation", http.StatusBadRequest)
 		return
 	case err != nil:
 		http.Error(w, "unreadable payload", http.StatusBadRequest)

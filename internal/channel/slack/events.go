@@ -27,6 +27,21 @@ fills with runs nobody started. The mention is the consent, and it is free.
 // type nobody subscribed to on purpose.
 var ErrNotAnAsk = errors.New("slack: nothing here is an ask")
 
+/*
+ErrMalformedAsk means a mention arrived without the parts an ask is made of.
+
+Separate from ErrNotAnAsk because the two deserve different answers. A message
+that is legitimately not for us — an ordinary line, a bot, an edit — is
+acknowledged and forgotten: there is nothing to fix and a retry would deliver
+it forever. A mention with no conversation is something we could not read, and
+answering that with a quiet 200 makes it invisible to everybody, including the
+proxy or the fixture that produced it.
+
+The same distinction the whole platform keeps: a state is answered, a failure
+is reported.
+*/
+var ErrMalformedAsk = errors.New("slack: a mention with nothing to act on")
+
 // Delivery is one thing that arrived on the events path.
 type Delivery struct {
 	// Challenge is set when Slack is verifying the URL. Answered verbatim and
@@ -108,7 +123,7 @@ func ReadDelivery(body []byte) (Delivery, error) {
 		and refuses later, further from the cause.
 	*/
 	if e.Event.Channel == "" || e.Event.TS == "" {
-		return Delivery{}, fmt.Errorf("%w: a mention with no conversation or no timestamp", ErrNotAnAsk)
+		return Delivery{}, fmt.Errorf("%w: no conversation or no timestamp", ErrMalformedAsk)
 	}
 
 	thread := e.Event.ThreadTS

@@ -123,26 +123,28 @@ an older shape, a fixture somebody copied. Read leniently, a mention with no
 channel becomes an arrival filed under an empty conversation, which resolves to
 no scope and refuses later, further from the cause.
 */
-func TestReadDelivery_aMentionWithNoConversation_isNotAnAsk(t *testing.T) {
+func TestReadDelivery_aMentionWithNoConversation_isMalformed(t *testing.T) {
 	t.Parallel()
 
 	_, err := slack.ReadDelivery([]byte(`{
 	  "type":"event_callback","event_id":"Ev200",
 	  "event":{"type":"app_mention","user":"U9","text":"<@U07BOT> triagem","ts":"1786.1"}
 	}`))
-	if !errors.Is(err, slack.ErrNotAnAsk) {
-		t.Errorf("err = %v, want ErrNotAnAsk", err)
+	// Malformed rather than "not an ask": the two deserve different answers,
+	// and a mention nobody can read is not a message that was never for us.
+	if !errors.Is(err, slack.ErrMalformedAsk) {
+		t.Errorf("err = %v, want ErrMalformedAsk", err)
 	}
 }
 
-func TestReadDelivery_aMentionWithNoTimestamp_isNotAnAsk(t *testing.T) {
+func TestReadDelivery_aMentionWithNoTimestamp_isMalformed(t *testing.T) {
 	t.Parallel()
 
 	_, err := slack.ReadDelivery([]byte(`{
 	  "type":"event_callback","event_id":"Ev201",
 	  "event":{"type":"app_mention","channel":"C07-ops","user":"U9","text":"<@U07BOT> triagem"}
 	}`))
-	if !errors.Is(err, slack.ErrNotAnAsk) {
-		t.Errorf("err = %v, want ErrNotAnAsk", err)
+	if !errors.Is(err, slack.ErrMalformedAsk) {
+		t.Errorf("err = %v, want ErrMalformedAsk", err)
 	}
 }

@@ -74,7 +74,11 @@ func TestOpened_anAskThatBecameARun_stopsWaiting(t *testing.T) {
 		t.Fatalf("Receive: %v", err)
 	}
 
-	if err := inbox.Opened(t.Context(), arrival, "run_1", time.Now()); err != nil {
+	held, err := inbox.Claim(t.Context(), "worker-1", time.Minute, 10)
+	if err != nil || len(held) != 1 {
+		t.Fatalf("Claim: %v (%d)", err, len(held))
+	}
+	if err := inbox.Opened(t.Context(), held[0], "run_1", time.Now()); err != nil {
 		t.Fatalf("Opened: %v", err)
 	}
 
@@ -99,7 +103,11 @@ func TestRefused_anAskThatBecameNothing_isKeptWithItsReason(t *testing.T) {
 		t.Fatalf("Receive: %v", err)
 	}
 
-	if err := inbox.Refused(t.Context(), arrival, "names no agent", time.Now()); err != nil {
+	held, err := inbox.Claim(t.Context(), "worker-1", time.Minute, 10)
+	if err != nil || len(held) != 1 {
+		t.Fatalf("Claim: %v (%d)", err, len(held))
+	}
+	if err := inbox.Refused(t.Context(), held[0], "names no agent", time.Now()); err != nil {
 		t.Fatalf("Refused: %v", err)
 	}
 
@@ -197,12 +205,44 @@ func TestSettle_anAskAlreadySettled_isRefused(t *testing.T) {
 	if _, err := inbox.Receive(t.Context(), arrival); err != nil {
 		t.Fatalf("Receive: %v", err)
 	}
-	if err := inbox.Opened(t.Context(), arrival, "run_1", time.Now()); err != nil {
+	held, err := inbox.Claim(t.Context(), "worker-1", time.Minute, 10)
+	if err != nil || len(held) != 1 {
+		t.Fatalf("Claim: %v (%d)", err, len(held))
+	}
+	if err := inbox.Opened(t.Context(), held[0], "run_1", time.Now()); err != nil {
 		t.Fatalf("Opened: %v", err)
 	}
 
-	err := inbox.Opened(t.Context(), arrival, "run_2", time.Now())
-	if !errors.Is(err, channel.ErrNotClaimed) {
+	if err := inbox.Opened(t.Context(), held[0], "run_2", time.Now()); !errors.Is(err, channel.ErrNotClaimed) {
 		t.Errorf("err = %v, want ErrNotClaimed", err)
+	}
+}
+
+/*
+A consumer whose lease lapsed cannot settle the ask somebody else took.
+
+The status alone left this open: a lapsed lease leaves the row pending, so
+worker-1 — still running, still holding what it read — would close the ask
+worker-2 is working on, and then reply. The lease had a holder and nothing at
+the end asked who it was.
+*/
+func TestSettle_afterAnotherWorkerReclaimedIt_isRefused(t *testing.T) {
+	inbox := freshInbox(t)
+	if _, err := inbox.Receive(t.Context(), ask("ev-stolen")); err != nil {
+		t.Fatalf("Receive: %v", err)
+	}
+
+	// Claimed with a lease that is already over, so the next claim takes it.
+	lapsed, err := inbox.Claim(t.Context(), "worker-1", -time.Minute, 10)
+	if err != nil || len(lapsed) != 1 {
+		t.Fatalf("first Claim: %v (%d)", err, len(lapsed))
+	}
+	if _, err := inbox.Claim(t.Context(), "worker-2", time.Minute, 10); err != nil {
+		t.Fatalf("second Claim: %v", err)
+	}
+
+	err = inbox.Opened(t.Context(), lapsed[0], "run_late", time.Now())
+	if !errors.Is(err, channel.ErrNotClaimed) {
+		t.Errorf("err = %v, want the lapsed consumer refused", err)
 	}
 }

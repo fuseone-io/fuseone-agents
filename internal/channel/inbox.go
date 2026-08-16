@@ -37,6 +37,24 @@ type Arrival struct {
 	Payload []byte
 }
 
+/*
+Claimed is an ask this consumer holds, and the proof that it does.
+
+The owner travels with the ask rather than being remembered by the caller,
+because settling is where it matters and a caller that has to pass it
+separately is a caller that will pass the wrong one. A lease with a holder that
+nothing checks at the end is a lease in name: worker-1's lease lapses, worker-2
+takes the ask, and worker-1 — still running, still holding what it read —
+settles it and replies. The row was pending, so it succeeded.
+
+That is the duplicated attention the claim exists to prevent, arriving through
+the claim itself.
+*/
+type Claimed struct {
+	Arrival
+	Owner string
+}
+
 // Inbox is where an ask waits between arriving and being opened.
 type Inbox struct{ pool *pgxpool.Pool }
 
@@ -84,7 +102,7 @@ somebody.
 */
 func (i *Inbox) Claim(
 	ctx context.Context, owner string, lease time.Duration, limit int,
-) ([]Arrival, error) {
+) ([]Claimed, error) {
 	rows, err := i.pool.Query(ctx, `
 		update channel_inbox set
 			leased_until = now() + $2::interval,
@@ -104,26 +122,28 @@ func (i *Inbox) Claim(
 	}
 	defer rows.Close()
 
-	var out []Arrival
+	var out []Claimed
 	for rows.Next() {
 		var a Arrival
 		if err := rows.Scan(&a.Channel, &a.Conversation, &a.EventID, &a.Payload); err != nil {
 			return nil, err
 		}
-		out = append(out, a)
+		out = append(out, Claimed{Arrival: a, Owner: owner})
 	}
 	return out, rows.Err()
 }
 
 // Opened records which run an ask became.
-func (i *Inbox) Opened(ctx context.Context, a Arrival, run string, at time.Time) error {
-	return i.settle(ctx, a, "opened", "", run, at)
+func (i *Inbox) Opened(ctx context.Context, c Claimed, run string, at time.Time) error {
+	return i.settle(ctx, c, "opened", "", run, at)
 }
 
-// ErrNotClaimed means somebody else settled this ask, or the lease expired and
-// another consumer took it. Reported rather than swallowed: a consumer that
-// carries on after losing its claim is the second reply this whole mechanism
-// exists to prevent.
+// ErrNotClaimed means this ask is somebody else's now: already settled, or
+// reclaimed after this consumer's lease lapsed.
+//
+// Reported rather than swallowed. A consumer that carries on after losing its
+// claim is the second reply this whole mechanism exists to prevent, and it is
+// the only warning it will get.
 var ErrNotClaimed = errors.New("channel: this ask is not ours to settle")
 
 /*
@@ -134,30 +154,34 @@ here" is exactly what an operator needs when the person says nothing happened,
 and a row removed on refusal makes that conversation unanswerable — the ask is
 gone and the platform has no memory of ever having been asked.
 */
-func (i *Inbox) Refused(ctx context.Context, a Arrival, why string, at time.Time) error {
-	return i.settle(ctx, a, "refused", why, "", at)
+func (i *Inbox) Refused(ctx context.Context, c Claimed, why string, at time.Time) error {
+	return i.settle(ctx, c, "refused", why, "", at)
 }
 
-// settle closes an ask, and only one that is still pending.
-//
-// Conditioned on the status and checked afterwards: without the condition a
-// consumer whose lease expired would overwrite the outcome the consumer that
-// took over had already written, and without the check it would not know.
+/*
+settle closes an ask, and only one this consumer still holds.
+
+Pending *and* ours. Status alone is not enough: a lease that lapsed leaves the
+row pending, so the consumer that lost it would close the ask the consumer that
+took over is working on — and then reply. Both conditions, and the row count
+checked afterwards, because a settle that quietly did nothing is a consumer
+that believes it finished.
+*/
 func (i *Inbox) settle(
-	ctx context.Context, a Arrival, status, detail, run string, at time.Time,
+	ctx context.Context, c Claimed, status, detail, run string, at time.Time,
 ) error {
 	tag, err := i.pool.Exec(ctx, `
 		update channel_inbox
-		set status = $4, detail = $5, run_id = $6, at = $7,
+		set status = $5, detail = $6, run_id = $7, at = $8,
 		    leased_until = null, lease_owner = ''
 		where channel = $1 and conversation = $2 and event_id = $3
-		  and status = 'pending'`,
-		a.Channel, a.Conversation, a.EventID, status, detail, run, at.UTC())
+		  and status = 'pending' and lease_owner = $4`,
+		c.Channel, c.Conversation, c.EventID, c.Owner, status, detail, run, at.UTC())
 	if err != nil {
-		return fmt.Errorf("channel: settle %s: %w", a.EventID, err)
+		return fmt.Errorf("channel: settle %s: %w", c.EventID, err)
 	}
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("%w: %s", ErrNotClaimed, a.EventID)
+		return fmt.Errorf("%w: %s", ErrNotClaimed, c.EventID)
 	}
 	return nil
 }
