@@ -143,20 +143,41 @@ func (i *Inbox) Claim(
 func (i *Inbox) claim(
 	ctx context.Context, owner string, lease time.Duration, limit int, state string,
 ) ([]Claimed, error) {
+	/*
+		A materialised CTE, and the limit is the reason.
+
+		Written as `where (...) in (select ... limit $3 for update skip
+		locked)`, the limit is not a promise. The planner may run that subquery
+		once per outer row, and with `skip locked` each run returns a different
+		one — so a sweep asked for a single ask claimed every ask that was
+		waiting. It depends on the plan, which depends on the statistics, which
+		is why it passed in isolation and failed in a full suite: the shape
+		that breaks it is the shape a bigger table invites.
+
+		`as materialized` says run it once. The join then updates exactly the
+		rows it picked, and a sweep told to take twenty takes twenty.
+	*/
 	rows, err := i.pool.Query(ctx, `
-		update channel_inbox set
-			leased_until = now() + $2::interval,
-			lease_owner  = $1
-		where (channel, conversation, event_id) in (
+		with picked as materialized (
 			select channel, conversation, event_id from channel_inbox
 			where `+state+`
 			  and (leased_until is null or leased_until <= now())
 			order by at
-			for update skip locked
 			limit $3
+			for update skip locked
 		)
-		returning channel, conversation, event_id, message,
-		          asked_by, text, thread, payload, detail`,
+		update channel_inbox set
+			leased_until = now() + $2::interval,
+			lease_owner  = $1
+		from picked
+		where channel_inbox.channel = picked.channel
+		  and channel_inbox.conversation = picked.conversation
+		  and channel_inbox.event_id = picked.event_id
+		returning channel_inbox.channel, channel_inbox.conversation,
+		          channel_inbox.event_id, channel_inbox.message,
+		          channel_inbox.asked_by, channel_inbox.text,
+		          channel_inbox.thread, channel_inbox.payload,
+		          channel_inbox.detail`,
 		owner, lease.String(), limit)
 	if err != nil {
 		return nil, fmt.Errorf("channel: claim from the inbox: %w", err)
@@ -205,22 +226,6 @@ func (i *Inbox) Refused(ctx context.Context, c Claimed, r Refusal, at time.Time)
 		// operator asking what happened.
 		Answered: r.Silent,
 	}, at)
-}
-
-/*
-Refusal is an ask that became nothing.
-
-Three parts because three readers. The sentence is for the person who asked and
-names what would have worked. The reason is for whoever is counting later, and
-a sentence with somebody's agent name in it counts nothing. And Silent is for
-the conversation itself: the second refusal of the same kind inside the same
-window is recorded and not said, because a limit that answers every message it
-rejects amplifies the flood it exists to stop.
-*/
-type Refusal struct {
-	Why    string
-	Reason string
-	Silent bool
 }
 
 // Answered marks a refusal as said.
