@@ -57,6 +57,20 @@ type Opens interface {
 	Open(ctx context.Context, req Request) (Opened, error)
 }
 
+/*
+ErrWontStart means the opener declined, rather than failed.
+
+An agent that is paused, stopped by a switch or still a draft will not start
+now and will not start on a retry either: telling the person and closing the
+ask is the right answer. A database that was away is not that, and must not
+become a refusal somebody reads as final.
+
+Wrapped by whoever wires the opener, because that is the only place that knows
+both this package's contract and the trigger package's sentinels — and it is
+the direction the dependencies already run.
+*/
+var ErrWontStart = errors.New("channel: the agent will not start")
+
 // Request and Opened mirror the trigger package's shapes, declared here so this
 // package does not depend on it — the dependency runs the other way everywhere
 // else and one edge pointing back would be the cycle.
@@ -199,9 +213,15 @@ second time somebody is ignored they stop asking. What changed is who says it
 and when, not whether.
 */
 func (c *Consumer) handle(ctx context.Context, claimed Claimed) (opened bool, err error) {
-	run, why := c.open(ctx, claimed)
-	if why != "" {
-		return false, c.decline(ctx, claimed, why)
+	run, refusal, err := c.open(ctx, claimed)
+	switch {
+	case err != nil:
+		// Left pending. Something on this side failed and the ask is still a
+		// good ask: closing it would tell somebody their question was refused
+		// when what happened is that a database was away.
+		return false, err
+	case refusal != "":
+		return false, c.decline(ctx, claimed, refusal)
 	}
 	if err := c.inbox.Opened(ctx, claimed, string(run), c.clock()); err != nil {
 		// The run exists and the inbox does not know. Reported rather than
@@ -221,15 +241,18 @@ next may do, and none of them consults the text for anything the platform is
 supposed to decide: the scope comes from the conversation, never from what
 somebody wrote in it.
 */
-func (c *Consumer) open(ctx context.Context, a Claimed) (domain.RunID, string) {
+func (c *Consumer) open(ctx context.Context, a Claimed) (domain.RunID, string, error) {
 	scope, err := c.scopes.ScopeOf(ctx, a.Channel, a.Conversation)
-	if err != nil {
-		// Including ambiguity, which is refused rather than resolved. The
-		// person is told plainly: this conversation is not set up to start
-		// anything, which is an operator's job and not theirs.
+	switch {
+	case errors.Is(err, ErrNoConversation), errors.Is(err, ErrAmbiguousConversation):
+		// Ambiguity is refused rather than resolved, and the person is told
+		// plainly: this conversation is not set up to start anything, which is
+		// an operator's job and not theirs.
 		c.log.Warn("an ask arrived in a conversation that speaks for no scope",
 			"channel", a.Channel, "conversation", a.Conversation, "err", err)
-		return "", "This conversation is not set up to start agents. An administrator maps it to an area."
+		return "", "This conversation is not set up to start agents. An administrator maps it to an area.", nil
+	case err != nil:
+		return "", "", fmt.Errorf("channel: read the scope of %s: %w", a.Conversation, err)
 	}
 
 	asker, bound := c.bindings(ctx, a.Channel, a.AskedBy)
@@ -237,25 +260,25 @@ func (c *Consumer) open(ctx context.Context, a Claimed) (domain.RunID, string) {
 		// A run acts on somebody's behalf. An account nobody bound speaks for
 		// nobody, and running as nobody is how an ask acquires authority that
 		// no person holds.
-		return "", "Your channel account is not linked to a platform user, so nothing can run on your behalf."
+		return "", "Your channel account is not linked to a platform user, so nothing can run on your behalf.", nil
 	}
 
 	startable, err := c.startable(ctx, scope)
 	if err != nil {
-		c.log.Error("could not read what is startable", "scope", scope, "err", err)
-		return "", "Something on this side failed while reading which agents are available."
+		// Not a refusal. The ask is fine and this side is not, so it waits.
+		return "", "", fmt.Errorf("channel: read what is startable in %s: %w", scope, err)
 	}
 
 	ask, err := Read(a.Text, startable)
 	if err != nil {
 		// The refusal already names what would have worked. It is the only
 		// teaching surface a channel has.
-		return "", err.Error()
+		return "", err.Error(), nil
 	}
 
 	input, err := json.Marshal(c.structured(ctx, a, ask, asker))
 	if err != nil {
-		return "", "Something on this side failed while recording the ask."
+		return "", "", fmt.Errorf("channel: record the ask %s: %w", a.EventID, err)
 	}
 
 	opened, err := c.opener.Open(ctx, Request{
@@ -276,12 +299,18 @@ func (c *Consumer) open(ctx context.Context, a Claimed) (domain.RunID, string) {
 			Message: a.Message, Thread: a.Thread,
 		},
 	})
-	if err != nil {
-		c.log.Warn("an ask did not open a run",
-			"agent", ask.Agent, "channel", a.Channel, "err", err)
-		return "", fmt.Sprintf("%s could not be started: %v", ask.Agent, err)
+	switch {
+	case errors.Is(err, ErrWontStart):
+		// Paused, stopped by a switch, still a draft. It will not start on a
+		// retry either, so the person is told and the ask is closed.
+		return "", fmt.Sprintf("%s will not start: %v", ask.Agent, err), nil
+	case err != nil:
+		// Anything else is this side failing, and the ask waits for a sweep
+		// that works. Closing it here would answer a good question with a
+		// refusal that was never about the question.
+		return "", "", fmt.Errorf("channel: open a run for %s: %w", ask.Agent, err)
 	}
-	return opened.RunID, ""
+	return opened.RunID, "", nil
 }
 
 // startable is what an ask in this scope could name.

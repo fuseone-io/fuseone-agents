@@ -221,14 +221,18 @@ func (i *Inbox) Owed(
 		"status = 'refused' and answered_at is null")
 }
 
-// Answered marks a refusal as said. Owner-checked like every other settle: a
-// consumer that lost the debt must not record somebody else's delivery.
+// Answered marks a refusal as said.
+//
+// Owner-checked like every other settle: a consumer that lost the debt must not
+// record somebody else's delivery. And conditioned on the row being a refusal,
+// because Claimed serves both an ask and a debt — the table defends its own
+// shape rather than trusting every caller to have kept the two apart.
 func (i *Inbox) Answered(ctx context.Context, c Claimed, at time.Time) error {
 	tag, err := i.pool.Exec(ctx, `
 		update channel_inbox
 		set answered_at = $5, leased_until = null, lease_owner = ''
 		where channel = $1 and conversation = $2 and event_id = $3
-		  and lease_owner = $4 and answered_at is null`,
+		  and lease_owner = $4 and status = 'refused' and answered_at is null`,
 		c.Channel, c.Conversation, c.EventID, c.Owner, at.UTC())
 	if err != nil {
 		return fmt.Errorf("channel: mark %s answered: %w", c.EventID, err)

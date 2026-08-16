@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"strings"
@@ -139,7 +140,10 @@ func TestSweep_anUnboundAccount_opensNothingAndSaysWhy(t *testing.T) {
 // operator's job rather than left wondering.
 func TestSweep_aConversationSpeakingForNoScope_saysSo(t *testing.T) {
 	c, parts := consumerFor(t, "<@U07BOT> triagem algo")
-	parts.scopes.err = errors.New("no conversation by that id")
+	// The sentinel, not a lookalike: a plain error from this stub now means
+	// the lookup failed, which is a retry rather than something to tell
+	// anybody. That distinction is the point of the test below it.
+	parts.scopes.err = channel.ErrNoConversation
 
 	if _, err := c.Sweep(t.Context(), time.Minute, 10); err != nil {
 		t.Fatalf("Sweep: %v", err)
@@ -315,11 +319,15 @@ func (s *subjectStub) AboutRun(context.Context, string, string, string) (domain.
 type openerSpy struct {
 	calls int
 	last  channel.Request
+	err   error
 }
 
 func (o *openerSpy) Open(_ context.Context, req channel.Request) (channel.Opened, error) {
 	o.calls++
 	o.last = req
+	if o.err != nil {
+		return channel.Opened{}, o.err
+	}
 	return channel.Opened{RunID: "run_new", Created: true}, nil
 }
 
@@ -427,5 +435,95 @@ func TestAskKey_partsThatWouldJoinAlike_keepTheirOwnKeys(t *testing.T) {
 
 	if first == second {
 		t.Errorf("two different asks share the key %s", first)
+	}
+}
+
+/*
+A database that was away is not a refusal.
+
+`open` used to answer with one string for both, so a read that failed closed
+the ask and told the person their question had been refused — definitively, in
+a message they would act on. The ask was fine and this side was not.
+
+Left pending, so a sweep that works picks it up. The person is told nothing,
+which is right: there is nothing to tell them yet.
+*/
+func TestSweep_aFailureOnThisSide_leavesTheAskPending(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT> triagem algo", func(p *consumerParts) {
+		p.scopes.err = errors.New("the database is away")
+	})
+
+	if _, err := c.Sweep(t.Context(), -time.Minute, 10); err == nil {
+		t.Fatal("a failure was reported as work done")
+	}
+	if len(parts.answers.said) != 0 {
+		t.Errorf("said = %v, want nothing said about our own failure", parts.answers.said)
+	}
+
+	again, err := parts.inbox.Claim(t.Context(), "worker-2", time.Minute, 10)
+	if err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	if len(again) != 1 {
+		t.Error("the ask was closed by a failure that had nothing to do with it")
+	}
+}
+
+// And a conversation nobody mapped still is a refusal: it will not resolve on
+// a retry, and the person is the one who can get it fixed.
+func TestSweep_aConversationNobodyMapped_isARefusalAndNotARetry(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT> triagem algo", func(p *consumerParts) {
+		p.scopes.err = channel.ErrNoConversation
+	})
+
+	if _, err := c.Sweep(t.Context(), -time.Minute, 10); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+
+	again, err := parts.inbox.Claim(t.Context(), "worker-2", time.Minute, 10)
+	if err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	if len(again) != 0 {
+		t.Error("a refusal that will never resolve was left to be retried forever")
+	}
+}
+
+/*
+An agent that will not start is told; an opener that failed is retried.
+
+Paused, stopped by a switch or still a draft will be just as true next sweep,
+so closing the ask and saying so is the answer. Anything else is this side
+failing, and answering a good question with a refusal it was never about is
+the failure worth avoiding.
+*/
+func TestSweep_theAgentWillNotStart_isARefusal(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT> triagem algo", func(p *consumerParts) {
+		p.opener.err = fmt.Errorf("%w: it is paused", channel.ErrWontStart)
+	})
+
+	if _, err := c.Sweep(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if _, err := c.Answer(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Answer: %v", err)
+	}
+	if len(parts.answers.said) != 1 || !strings.Contains(parts.answers.said[0], "will not start") {
+		t.Errorf("said = %v, want the person told", parts.answers.said)
+	}
+}
+
+func TestSweep_theOpenerFailed_leavesTheAskPending(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT> triagem algo", func(p *consumerParts) {
+		p.opener.err = errors.New("the ledger is away")
+	})
+
+	if _, err := c.Sweep(t.Context(), -time.Minute, 10); err == nil {
+		t.Fatal("a failed opener was reported as work done")
+	}
+
+	again, _ := parts.inbox.Claim(t.Context(), "worker-2", time.Minute, 10)
+	if len(again) != 1 {
+		t.Error("an ask was refused because the ledger was away")
 	}
 }
