@@ -31,7 +31,7 @@ func TestScopeOf_aConfiguredConversation_answersItsOwnScope(t *testing.T) {
 		t.Fatalf("PutConversation: %v", err)
 	}
 
-	got, err := store.ScopeOf(t.Context(), "C07-ops")
+	got, err := store.ScopeOf(t.Context(), "acme-slack", "C07-ops")
 	if err != nil {
 		t.Fatalf("ScopeOf: %v", err)
 	}
@@ -58,7 +58,7 @@ func TestScopeOf_aConversationSwitchedOff_isRefused(t *testing.T) {
 		t.Fatalf("PutConversation: %v", err)
 	}
 
-	if _, err := store.ScopeOf(t.Context(), "C08-quiet"); !errors.Is(err, channel.ErrNoConversation) {
+	if _, err := store.ScopeOf(t.Context(), "acme-slack", "C08-quiet"); !errors.Is(err, channel.ErrNoConversation) {
 		t.Errorf("err = %v, want ErrNoConversation", err)
 	}
 }
@@ -66,7 +66,7 @@ func TestScopeOf_aConversationSwitchedOff_isRefused(t *testing.T) {
 func TestScopeOf_aConversationNobodyConfigured_isRefused(t *testing.T) {
 	store, _ := configuredChannels(t)
 
-	_, err := store.ScopeOf(t.Context(), "C99-nobody")
+	_, err := store.ScopeOf(t.Context(), "acme-slack", "C99-nobody")
 	if !errors.Is(err, channel.ErrNoConversation) {
 		t.Errorf("err = %v, want ErrNoConversation", err)
 	}
@@ -77,4 +77,82 @@ func configuredChannels(t *testing.T) (*channel.Configured, *admin.Channels) {
 	_, pool := channelStore(t)
 	settingsStore := settings.NewStore(pool, nil)
 	return channel.NewConfigured(settingsStore), admin.NewChannels(pool, settingsStore)
+}
+
+/*
+The same conversation id on two connections is two conversations.
+
+Slack's channel ids and Teams' conversation ids are two namespaces, and nothing
+promises they never collide. Resolved by id alone, a message in one workspace
+would be governed by a scope somebody configured for another.
+*/
+func TestScopeOf_theSameIdOnTwoConnections_resolvesSeparately(t *testing.T) {
+	store, channels := configuredChannels(t)
+
+	for _, one := range []struct {
+		channel string
+		area    domain.AreaID
+	}{{"acme-slack", "ops"}, {"acme-teams", "finance"}} {
+		if err := channels.PutConversation(t.Context(), one.channel, admin.Conversation{
+			ID: "SHARED-ID", Label: "#shared", Enabled: true,
+			Scope: domain.Scope{Company: "acme", Area: one.area},
+		}, "usr_ana"); err != nil {
+			t.Fatalf("PutConversation on %s: %v", one.channel, err)
+		}
+	}
+
+	slack, err := store.ScopeOf(t.Context(), "acme-slack", "SHARED-ID")
+	if err != nil {
+		t.Fatalf("ScopeOf slack: %v", err)
+	}
+	teams, err := store.ScopeOf(t.Context(), "acme-teams", "SHARED-ID")
+	if err != nil {
+		t.Fatalf("ScopeOf teams: %v", err)
+	}
+	if slack.Area != "ops" || teams.Area != "finance" {
+		t.Errorf("slack = %v, teams = %v, want each its own", slack, teams)
+	}
+}
+
+/*
+A conversation mapped into two scopes is refused, on the way in and on the way
+out.
+
+The screen stops the configuration from being made; the reader stops it being
+trusted, because a row can also arrive by restore, by migration, or from a
+version of the screen that did not check. Taking the first row would make the
+governing scope depend on the order a query returned.
+*/
+func TestPutConversation_alreadySpeakingForAnotherScope_isRefused(t *testing.T) {
+	_, channels := configuredChannels(t)
+
+	if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+		ID: "C10-double", Enabled: true,
+		Scope: domain.Scope{Company: "acme", Area: "ops"},
+	}, "usr_ana"); err != nil {
+		t.Fatalf("first PutConversation: %v", err)
+	}
+
+	err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+		ID: "C10-double", Enabled: true,
+		Scope: domain.Scope{Company: "acme", Area: "finance"},
+	}, "usr_ana")
+	if !errors.Is(err, admin.ErrConversationMapped) {
+		t.Errorf("err = %v, want the second mapping refused", err)
+	}
+}
+
+// Pointing it at the scope it already has is how somebody renames it or
+// changes which events it wants, and is not a conflict.
+func TestPutConversation_theSameScopeAgain_isAnEdit(t *testing.T) {
+	_, channels := configuredChannels(t)
+
+	for _, label := range []string{"#ops", "#ops-alertas"} {
+		if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+			ID: "C11-rename", Label: label, Enabled: true,
+			Scope: domain.Scope{Company: "acme", Area: "ops"},
+		}, "usr_ana"); err != nil {
+			t.Fatalf("PutConversation %q: %v", label, err)
+		}
+	}
 }

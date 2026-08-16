@@ -34,26 +34,60 @@ thing in two channels gets two different sets of permitted tools.
 // mapping it.
 var ErrNoConversation = errors.New("channel: no conversation by that id")
 
-// ScopeOf answers which scope an ask in this conversation belongs to.
-func (c *Configured) ScopeOf(ctx context.Context, id string) (domain.Scope, error) {
+/*
+ErrAmbiguousConversation means the same conversation speaks for two scopes.
+
+Refused rather than resolved. §4 says a conversation carries *a* scope, and
+taking the first row would make which one depend on the order a query happened
+to return — so the same message would be governed differently on different
+days, and nobody could answer "who could have asked for this".
+
+Writing it is refused too ([admin.Channels.PutConversation]), so this is the
+second of two locks. The screen stops the configuration from being made and
+this stops it being trusted, because a row can also arrive by restore, by
+migration, or from a version of the screen that did not check.
+*/
+var ErrAmbiguousConversation = errors.New("channel: that conversation speaks for more than one scope")
+
+/*
+ScopeOf answers which scope an ask in this conversation belongs to.
+
+Keyed by the connection as well as the conversation. An id means nothing on its
+own: two workspaces are two namespaces, and an id naming a channel in one may
+name another somewhere else — so a single argument would let a message in one
+installation's Slack resolve to a scope configured for a different Teams.
+*/
+func (c *Configured) ScopeOf(ctx context.Context, channel, id string) (domain.Scope, error) {
 	stored, err := c.store.List(ctx, KindConversation)
 	if err != nil {
 		return domain.Scope{}, fmt.Errorf("channel: list conversations: %w", err)
 	}
 
+	var found []domain.Scope
 	for _, s := range stored {
 		if s.Name != id || !s.Enabled {
 			continue
 		}
-		// The row is read to confirm it is a conversation and not something
-		// else filed under the same kind. Its contents do not decide the
-		// scope: the scope is the row's own, which is administrative and not
-		// something the conversation's configuration can widen.
+		// The row is read for the connection it belongs to. Its contents do
+		// not decide the scope: the scope is the row's own, which is
+		// administrative and not something a conversation's configuration can
+		// widen.
 		var v conversationValue
 		if err := json.Unmarshal(s.Value, &v); err != nil {
 			continue
 		}
-		return s.Scope, nil
+		if v.Channel != channel {
+			continue
+		}
+		found = append(found, s.Scope)
 	}
-	return domain.Scope{}, fmt.Errorf("%w: %s", ErrNoConversation, id)
+
+	switch len(found) {
+	case 0:
+		return domain.Scope{}, fmt.Errorf("%w: %s/%s", ErrNoConversation, channel, id)
+	case 1:
+		return found[0], nil
+	default:
+		return domain.Scope{}, fmt.Errorf("%w: %s/%s", ErrAmbiguousConversation, channel, id)
+	}
 }

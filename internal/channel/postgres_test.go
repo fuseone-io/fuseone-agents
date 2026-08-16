@@ -37,7 +37,7 @@ func TestUnreported_runIsWaitingOnSomebody_isListedUntilItIsReported(t *testing.
 
 	if err := store.Record(t.Context(), channel.Delivery{
 		RunID: "run-waiting", Event: channel.EventParked,
-		Conversation: "C07-ops", Ref: "1.1", PostedAt: time.Now(),
+		Channel: "acme-slack", Conversation: "C07-ops", Ref: "1.1", PostedAt: time.Now(),
 	}); err != nil {
 		t.Fatalf("record: %v", err)
 	}
@@ -174,12 +174,12 @@ func TestAboutRun_aMessageThePlatformPosted_resolvesToItsRun(t *testing.T) {
 
 	if err := store.Record(t.Context(), channel.Delivery{
 		RunID: "run-alerta", Event: channel.EventParked,
-		Conversation: "C07-ops", Ref: "1786.42", PostedAt: noon,
+		Channel: "acme-slack", Conversation: "C07-ops", Ref: "1786.42", PostedAt: noon,
 	}); err != nil {
 		t.Fatalf("Record: %v", err)
 	}
 
-	got, ok, err := store.AboutRun(t.Context(), "C07-ops", "1786.42")
+	got, ok, err := store.AboutRun(t.Context(), "acme-slack", "C07-ops", "1786.42")
 	if err != nil {
 		t.Fatalf("AboutRun: %v", err)
 	}
@@ -191,7 +191,7 @@ func TestAboutRun_aMessageThePlatformPosted_resolvesToItsRun(t *testing.T) {
 func TestAboutRun_aMessageSomebodyElsePosted_resolvesToNothing(t *testing.T) {
 	store, _ := channelStore(t)
 
-	_, ok, err := store.AboutRun(t.Context(), "C07-ops", "9999.11")
+	_, ok, err := store.AboutRun(t.Context(), "acme-slack", "C07-ops", "9999.11")
 	if err != nil {
 		t.Fatalf("AboutRun: %v", err)
 	}
@@ -208,12 +208,34 @@ func TestAboutRun_theSameRefInAnotherConversation_isAnotherMessage(t *testing.T)
 
 	if err := store.Record(t.Context(), channel.Delivery{
 		RunID: "run-outra", Event: channel.EventParked,
-		Conversation: "C08-finance", Ref: "1786.77", PostedAt: noon,
+		Channel: "acme-slack", Conversation: "C08-finance", Ref: "1786.77", PostedAt: noon,
 	}); err != nil {
 		t.Fatalf("Record: %v", err)
 	}
 
-	if _, ok, _ := store.AboutRun(t.Context(), "C07-ops", "1786.77"); ok {
+	if _, ok, _ := store.AboutRun(t.Context(), "acme-slack", "C07-ops", "1786.77"); ok {
 		t.Error("a reference resolved across conversations")
+	}
+}
+
+/*
+The same conversation id and the same ref on two connections do not cross.
+
+Slack's timestamps and another vendor's message ids are two namespaces, and a
+reply in one workspace resolving to a run reported in another would name a run
+the replier cannot read, from a channel they can.
+*/
+func TestAboutRun_theSameRefOnAnotherConnection_isAnotherMessage(t *testing.T) {
+	store, _ := channelStore(t)
+
+	if err := store.Record(t.Context(), channel.Delivery{
+		RunID: "run-teams", Event: channel.EventParked,
+		Channel: "acme-teams", Conversation: "SHARED-ID", Ref: "1786.99", PostedAt: noon,
+	}); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+
+	if _, ok, _ := store.AboutRun(t.Context(), "acme-slack", "SHARED-ID", "1786.99"); ok {
+		t.Error("a reference resolved across connections")
 	}
 }

@@ -297,9 +297,14 @@ func (m *memoryDeliveries) Record(_ context.Context, d channel.Delivery) error {
 	return nil
 }
 
-func (m *memoryDeliveries) Delivered(_ context.Context, run domain.RunID, ev channel.Event, conv string) (bool, error) {
+// The fake keys delivery the way the real store does. A fake that was more
+// permissive about what counts as the same conversation would let a test pass
+// against a namespacing the production table refuses.
+func (m *memoryDeliveries) Delivered(
+	_ context.Context, run domain.RunID, ev channel.Event, ch, conv string,
+) (bool, error) {
 	for _, d := range m.recorded {
-		if d.RunID == run && d.Event == ev && d.Conversation == conv {
+		if d.RunID == run && d.Event == ev && d.Channel == ch && d.Conversation == conv {
 			return true, nil
 		}
 	}

@@ -66,7 +66,7 @@ func (p *Postgres) Unreported(ctx context.Context, since time.Time, limit int) (
 		  and not exists (
 		      select 1 from channel_deliveries d
 		      where d.run_id = runs.run_id and d.event = `+phases+`
-		        and d.conversation = '')
+		        and d.channel = '' and d.conversation = '')
 		order by runs.updated_at desc
 		limit $2`, since.UTC(), limit)
 	if err != nil {
@@ -95,10 +95,10 @@ func (p *Postgres) Unreported(ctx context.Context, since time.Time, limit int) (
 // is already out; refusing here would make the sweep retry it forever.
 func (p *Postgres) Record(ctx context.Context, d Delivery) error {
 	_, err := p.pool.Exec(ctx, `
-		insert into channel_deliveries (run_id, event, conversation, ref, posted_at)
-		values ($1, $2, $3, $4, $5)
-		on conflict (run_id, event, conversation) do nothing`,
-		string(d.RunID), string(d.Event), d.Conversation, d.Ref, d.PostedAt.UTC())
+		insert into channel_deliveries (run_id, event, channel, conversation, ref, posted_at)
+		values ($1, $2, $3, $4, $5, $6)
+		on conflict (run_id, event, channel, conversation) do nothing`,
+		string(d.RunID), string(d.Event), d.Channel, d.Conversation, d.Ref, d.PostedAt.UTC())
 	if err != nil {
 		return fmt.Errorf("channel: record delivery: %w", err)
 	}
@@ -106,14 +106,18 @@ func (p *Postgres) Record(ctx context.Context, d Delivery) error {
 }
 
 // Delivered answers whether this has already been said here.
+//
+// Here is a conversation *on a connection*: two workspaces are two namespaces,
+// and an id that means one channel in Slack may mean another somewhere else.
 func (p *Postgres) Delivered(
-	ctx context.Context, run domain.RunID, e Event, conversation string,
+	ctx context.Context, run domain.RunID, e Event, channel, conversation string,
 ) (bool, error) {
 	var exists bool
 	err := p.pool.QueryRow(ctx, `
 		select exists(select 1 from channel_deliveries
-		              where run_id = $1 and event = $2 and conversation = $3)`,
-		string(run), string(e), conversation).Scan(&exists)
+		              where run_id = $1 and event = $2
+		                and channel = $3 and conversation = $4)`,
+		string(run), string(e), channel, conversation).Scan(&exists)
 	if err != nil {
 		return false, fmt.Errorf("channel: read delivery: %w", err)
 	}
@@ -124,13 +128,16 @@ func (p *Postgres) Delivered(
 //
 // Written by the reporter, which is the only component that knows what
 // everywhere means for a run's scope, and only when it reached all of them
-// without a failure. The empty conversation is what "all of them" is filed
-// under: a delivery belongs to a conversation, and this belongs to none.
+// without a failure. An empty channel *and* an empty conversation is what "all
+// of them" is filed under: a delivery belongs to a conversation on a
+// connection, and this belongs to neither. Both empty, because a real delivery
+// is never both — which is what keeps the two apart now that a channel column
+// exists and old rows carry an empty one.
 func (p *Postgres) Reported(ctx context.Context, run domain.RunID, e Event, at time.Time) error {
 	_, err := p.pool.Exec(ctx, `
-		insert into channel_deliveries (run_id, event, conversation, ref, posted_at)
-		values ($1, $2, '', '', $3)
-		on conflict (run_id, event, conversation) do nothing`,
+		insert into channel_deliveries (run_id, event, channel, conversation, ref, posted_at)
+		values ($1, $2, '', '', '', $3)
+		on conflict (run_id, event, channel, conversation) do nothing`,
 		string(run), string(e), at.UTC())
 	if err != nil {
 		return fmt.Errorf("channel: mark %s reported: %w", run, err)
@@ -156,23 +163,23 @@ is a tool call somebody can audit rather than a guess the edge made silently.
 [NT-005 §2.1]: ../../docs/NT-005-interaction-channels.md
 */
 func (p *Postgres) AboutRun(
-	ctx context.Context, conversation, ref string,
+	ctx context.Context, channel, conversation, ref string,
 ) (domain.RunID, bool, error) {
-	if conversation == "" || ref == "" {
+	if channel == "" || conversation == "" || ref == "" {
 		return "", false, nil
 	}
 
 	var run string
 	err := p.pool.QueryRow(ctx, `
 		select run_id from channel_deliveries
-		where conversation = $1 and ref = $2
+		where channel = $1 and conversation = $2 and ref = $3
 		order by posted_at desc
-		limit 1`, conversation, ref).Scan(&run)
+		limit 1`, channel, conversation, ref).Scan(&run)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", false, nil
 	}
 	if err != nil {
-		return "", false, fmt.Errorf("channel: resolve %s in %s: %w", ref, conversation, err)
+		return "", false, fmt.Errorf("channel: resolve %s in %s/%s: %w", ref, channel, conversation, err)
 	}
 	return domain.RunID(run), true, nil
 }

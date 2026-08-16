@@ -115,8 +115,12 @@ type Message struct {
 
 // Delivery records that a message left. One per run, event and conversation.
 type Delivery struct {
-	RunID        domain.RunID
-	Event        Event
+	RunID domain.RunID
+	Event Event
+	// Channel names the connection the conversation belongs to. A conversation
+	// id means nothing on its own: two workspaces are two namespaces, and an
+	// id that names a channel in one may name another somewhere else.
+	Channel      string
 	Conversation string
 	// Ref is what the channel called the message, so a later stage can reply
 	// in the same thread.
@@ -148,7 +152,7 @@ type Poster interface {
 // Deliveries is what has already been said.
 type Deliveries interface {
 	Record(ctx context.Context, d Delivery) error
-	Delivered(ctx context.Context, run domain.RunID, e Event, conversation string) (bool, error)
+	Delivered(ctx context.Context, run domain.RunID, e Event, channel, conversation string) (bool, error)
 }
 
 // Available is a place a connection could be pointed at, as a person would

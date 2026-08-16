@@ -181,12 +181,27 @@ func (c *Channels) mergeCredentials(
 	return given, nil
 }
 
-// PutConversation points a scope's runs at a conversation.
+/*
+PutConversation points a scope's runs at a conversation.
+
+A conversation speaks for one scope. Mapped into two, an ask arriving in it
+would be governed by whichever row a query returned first — the same message
+judged differently on different days, and nobody able to answer "who could have
+asked for this" (NT-005 §4).
+
+Refused here so the screen cannot make the configuration, and refused again
+when it is read: a row can also arrive by restore, by migration, or from a
+version of this that did not check, and the runtime must not trust a rule it
+only enforces on the way in.
+*/
 func (c *Channels) PutConversation(
 	ctx context.Context, channelName string, conv Conversation, by domain.UserID,
 ) error {
 	if conv.Scope.Company == "" {
 		return ErrNoCompany
+	}
+	if err := c.unmapped(ctx, channelName, conv); err != nil {
+		return err
 	}
 
 	value, err := json.Marshal(map[string]any{
@@ -240,4 +255,26 @@ func (c *Channels) DeleteConversation(
 	}
 	return removeScopedSetting(ctx, c.pool, c.settings, by, at, scope, scope,
 		channel.KindConversation, id, "channel.conversation.removed")
+}
+
+// ErrConversationMapped means this conversation already speaks for another
+// scope on this connection.
+var ErrConversationMapped = errors.New("admin: that conversation already speaks for another scope")
+
+// unmapped refuses a conversation that already belongs to a different scope.
+//
+// The same scope is not a conflict: pointing a conversation at the scope it is
+// already pointed at is how somebody renames it or changes which events it
+// wants.
+func (c *Channels) unmapped(ctx context.Context, channelName string, conv Conversation) error {
+	existing, err := c.settings.List(ctx, channel.KindConversation)
+	if err != nil {
+		return fmt.Errorf("admin: list conversations: %w", err)
+	}
+	for _, one := range conversationsOf(channelName, existing) {
+		if one.ID == conv.ID && one.Scope != conv.Scope {
+			return fmt.Errorf("%w: %s speaks for %s", ErrConversationMapped, conv.ID, one.Scope)
+		}
+	}
+	return nil
 }

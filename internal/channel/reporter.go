@@ -140,7 +140,7 @@ func (r *Reporter) announce(ctx context.Context, report Report) (sent, told int,
 
 // post sends one message, unless it has already been sent.
 func (r *Reporter) post(ctx context.Context, report Report, place Conversation) (bool, error) {
-	said, err := r.deliveries.Delivered(ctx, report.RunID, report.Event, place.ID)
+	said, err := r.deliveries.Delivered(ctx, report.RunID, report.Event, place.Channel, place.ID)
 	if err != nil {
 		return false, fmt.Errorf("channel: read deliveries: %w", err)
 	}
@@ -156,7 +156,8 @@ func (r *Reporter) post(ctx context.Context, report Report, place Conversation) 
 	}
 
 	return true, r.deliveries.Record(ctx, Delivery{
-		RunID: report.RunID, Event: report.Event, Conversation: place.ID,
+		RunID: report.RunID, Event: report.Event,
+		Channel: place.Channel, Conversation: place.ID,
 		Ref: ref, PostedAt: r.clock(),
 	})
 }
@@ -179,6 +180,8 @@ func (r *Reporter) message(report Report) Message {
 type noDeliveries struct{}
 
 func (noDeliveries) Record(context.Context, Delivery) error { return nil }
-func (noDeliveries) Delivered(context.Context, domain.RunID, Event, string) (bool, error) {
+func (noDeliveries) Delivered(
+	context.Context, domain.RunID, Event, string, string,
+) (bool, error) {
 	return false, nil
 }
