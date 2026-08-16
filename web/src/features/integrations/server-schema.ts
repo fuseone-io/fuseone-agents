@@ -19,6 +19,7 @@ export const serverSchema = z
     args: z.string(),
     url: z.string(),
     token: z.string(),
+    acceptsLocalExecution: z.boolean(),
     enabled: z.boolean(),
   })
   .refine((v) => v.transport !== "stdio" || v.command.trim() !== "", {
@@ -28,6 +29,15 @@ export const serverSchema = z
   .refine((v) => v.transport !== "http" || v.url.trim() !== "", {
     path: ["url"],
     message: "integrations.sayWhereToCall",
+  })
+  /*
+   * A local server is a program this installation starts inside the worker.
+   * The server refuses one nobody accepted; this says so before the round
+   * trip, and beside the box rather than in a toast afterwards.
+   */
+  .refine((v) => v.transport !== "stdio" || v.acceptsLocalExecution, {
+    path: ["acceptsLocalExecution"],
+    message: "integrations.acceptLocalExecutionRequired",
   });
 
 export type ServerFormValues = z.infer<typeof serverSchema>;

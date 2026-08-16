@@ -38,6 +38,10 @@ export function ServerForm({
       args: (server?.args ?? []).join(" "),
       url: server?.url ?? "",
       token: "",
+      // Never carried forward from the transport. A server nobody has
+      // accepted must show as not accepted, or the box would tick itself on
+      // the screen where the decision is supposed to be made.
+      acceptsLocalExecution: server?.acceptsLocalExecution ?? false,
       enabled: server?.enabled ?? true,
     },
   });
@@ -51,6 +55,7 @@ export function ServerForm({
         args: values.args.split(/\s+/).filter(Boolean),
         url: values.url,
         token: values.token,
+        acceptsLocalExecution: values.acceptsLocalExecution,
         enabled: values.enabled,
       });
       toast.success(t("integrations.serverConfigured", { name: values.name }), {

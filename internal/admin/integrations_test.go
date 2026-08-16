@@ -127,7 +127,10 @@ func TestDeleteMCPServer_isRecorded(t *testing.T) {
 	ctx := context.Background()
 
 	if err := i.PutMCPServer(ctx, "usr_ana", platform,
-		domain.MCPServer{Name: "crm", Command: "/usr/local/bin/crm-mcp", Enabled: true}, ""); err != nil {
+		domain.MCPServer{
+			Name: "crm", Command: "/usr/local/bin/crm-mcp", Enabled: true,
+			AcceptsLocalExecution: true,
+		}, ""); err != nil {
 		t.Fatalf("PutMCPServer: %v", err)
 	}
 	if err := i.DeleteMCPServer(ctx, "usr_ana", platform, "crm"); err != nil {
@@ -246,8 +249,12 @@ func TestPutMCPServer_storedBeforeTransportsExisted_readsAsLocal(t *testing.T) {
 	// Rows written before the field existed carry no transport. They are the
 	// commands they always were, and defaulting them to anything else would
 	// silently stop an installation's tools from connecting on upgrade.
+	// Accepted here because this test is about how an absent transport reads,
+	// not about who agreed to local execution. The two are separate rules and
+	// a fixture that conflated them would fail for the wrong reason.
 	if err := i.PutMCPServer(ctx, "usr_ana", platform, domain.MCPServer{
 		Name: "crm", Command: "bin/devstack", Args: []string{"mcp"}, Enabled: true,
+		AcceptsLocalExecution: true,
 	}, ""); err != nil {
 		t.Fatalf("PutMCPServer: %v", err)
 	}
@@ -258,5 +265,75 @@ func TestPutMCPServer_storedBeforeTransportsExisted_readsAsLocal(t *testing.T) {
 	}
 	if servers[0].Transport != domain.TransportStdio {
 		t.Errorf("transport = %q, want it read as a local command", servers[0].Transport)
+	}
+}
+
+/*
+A local server is not configured by accident.
+
+stdio is a program this installation starts inside the worker: it runs as the
+worker, on its filesystem, from inside its network. Nothing about the transport
+field says that, and a form that offered it beside a URL as if the two were the
+same kind of choice would be the platform failing to mention the difference.
+
+Refused rather than warned. A warning is read by whoever was already careful.
+*/
+func TestPutMCPServer_aLocalServerNobodyAccepted_isRefused(t *testing.T) {
+	store := newIntegrations(t)
+
+	err := store.PutMCPServer(context.Background(), "usr_ana", domain.Scope{},
+		domain.MCPServer{
+			Name: "local-tools", Transport: domain.TransportStdio,
+			Command: "/usr/bin/mcp-server", Enabled: true,
+		}, "")
+	if !errors.Is(err, admin.ErrLocalExecutionNotAccepted) {
+		t.Fatalf("err = %v, want the acceptance to be required", err)
+	}
+}
+
+// And accepted, it is recorded — with who accepted, because the acceptance is
+// a person's and not a checkbox's.
+func TestPutMCPServer_anAcceptedLocalServer_recordsWhoAcceptedIt(t *testing.T) {
+	store := newIntegrations(t)
+	ctx := context.Background()
+
+	if err := store.PutMCPServer(ctx, "usr_ana", domain.Scope{}, domain.MCPServer{
+		Name: "local-tools", Transport: domain.TransportStdio,
+		Command: "/usr/bin/mcp-server", Enabled: true,
+		AcceptsLocalExecution: true,
+	}, ""); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+
+	servers, err := store.MCPServers(ctx)
+	if err != nil {
+		t.Fatalf("MCPServers: %v", err)
+	}
+	var found *domain.MCPServer
+	for i := range servers {
+		if servers[i].Name == "local-tools" {
+			found = &servers[i]
+		}
+	}
+	if found == nil {
+		t.Fatalf("servers = %+v, want the one just written", servers)
+	}
+	if !found.AcceptsLocalExecution {
+		t.Error("read back unaccepted; the worker would refuse to start a server the screen shows as configured")
+	}
+}
+
+// An HTTP server needs no such acceptance. The platform sends it a request; it
+// starts nothing, and demanding a decision about local execution for a URL
+// would teach people to tick the box without reading it.
+func TestPutMCPServer_aRemoteServer_needsNoAcceptance(t *testing.T) {
+	store := newIntegrations(t)
+
+	if err := store.PutMCPServer(context.Background(), "usr_ana", domain.Scope{},
+		domain.MCPServer{
+			Name: "remote-tools", Transport: domain.TransportHTTP,
+			URL: "https://tools.example.com/mcp", Enabled: true,
+		}, "tok"); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
 	}
 }

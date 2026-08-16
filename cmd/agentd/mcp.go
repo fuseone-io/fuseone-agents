@@ -275,6 +275,15 @@ An allowlist and not a denylist. A denylist is correct only until somebody adds
 the next secret to the deployment, and then it is silently wrong.
 */
 func commandFor(ctx context.Context, server domain.MCPServer) (*exec.Cmd, error) {
+	if !server.AcceptsLocalExecution {
+		// Checked again here, and not only where it is written. A row can
+		// arrive by restore, by migration, or from a version of this that did
+		// not ask — and the moment a program is about to be started is the
+		// moment the answer matters.
+		return nil, fmt.Errorf(
+			"%s: a local server runs code inside the worker, and nobody has accepted that for this one",
+			server.Name)
+	}
 	fields := strings.Fields(server.Command)
 	if len(fields) == 0 {
 		return nil, fmt.Errorf("%s: no command to run", server.Name)

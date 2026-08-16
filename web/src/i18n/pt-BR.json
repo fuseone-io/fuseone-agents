@@ -765,7 +765,10 @@
     "transportHTTP": "Endereço remoto (HTTP)",
     "transportHint": "Processo local é código executado dentro do contêiner do worker. Endereço remoto é uma requisição — bem menos coisa para entregar a alguém.",
     "transportStdio": "Processo local (stdio)",
-    "url": "Endereço"
+    "url": "Endereço",
+    "acceptLocalExecution": "Este servidor executa código dentro do worker",
+    "acceptLocalExecutionWhy": "Um servidor local é um programa que esta instalação inicia. Roda como o worker, no sistema de ficheiros dele, e alcança tudo o que o worker alcança — o Gate decide o que uma ferramenta pode fazer e não decide nada sobre o que um processo pode ler. O seu nome fica registado nesta decisão.",
+    "acceptLocalExecutionRequired": "Aceite o que é um servidor local, ou use HTTP para alcançar este."
   },
   "interview": {
     "assistantFailed": "O assistente não conseguiu responder",

@@ -28,9 +28,7 @@ func TestCommandFor_aStdioServer_doesNotInheritTheWorkersEnvironment(t *testing.
 	t.Setenv("DATABASE_URL", "postgres://must-not-travel")
 	t.Setenv("PATH", "/usr/bin:/bin")
 
-	cmd, err := commandFor(t.Context(), domain.MCPServer{
-		Name: "local", Transport: "stdio", Command: "/bin/true",
-	})
+	cmd, err := commandFor(t.Context(), accepted())
 	if err != nil {
 		t.Fatalf("commandFor: %v", err)
 	}
@@ -70,9 +68,7 @@ func TestCommandFor_aVariableTheWorkerDoesNotHold_isNotPassedEmpty(t *testing.T)
 		t.Fatalf("unset: %v", err)
 	}
 
-	cmd, err := commandFor(t.Context(), domain.MCPServer{
-		Name: "local", Transport: "stdio", Command: "/bin/true",
-	})
+	cmd, err := commandFor(t.Context(), accepted())
 	if err != nil {
 		t.Fatalf("commandFor: %v", err)
 	}
@@ -80,5 +76,32 @@ func TestCommandFor_aVariableTheWorkerDoesNotHold_isNotPassedEmpty(t *testing.T)
 		return strings.HasPrefix(v, "TMPDIR=")
 	}) {
 		t.Errorf("Env = %v, want an unset variable left unset", cmd.Env)
+	}
+}
+
+// accepted is a local server somebody has explicitly agreed to run.
+func accepted() domain.MCPServer {
+	return domain.MCPServer{
+		Name: "local", Transport: "stdio", Command: "/bin/true",
+		AcceptsLocalExecution: true,
+	}
+}
+
+/*
+A local server nobody accepted is not started.
+
+Refused here as well as where it is written, because a row can arrive by
+restore, by migration, or from a version of the console that did not ask. The
+door checking a rule the runtime does not is a rule that holds until the first
+time it matters.
+*/
+func TestCommandFor_aLocalServerNobodyAccepted_isNotStarted(t *testing.T) {
+	server := accepted()
+	server.AcceptsLocalExecution = false
+
+	if _, err := commandFor(t.Context(), server); err == nil {
+		t.Fatal("no error; a program nobody agreed to would have been started")
+	} else if !strings.Contains(err.Error(), "local") {
+		t.Errorf("err = %v, want a sentence naming what was not accepted", err)
 	}
 }

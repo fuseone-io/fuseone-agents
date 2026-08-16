@@ -45,6 +45,9 @@ func (s *Server) PutMCPServer(ctx context.Context, req openapi.PutMCPServerReque
 	if req.Body.Enabled != nil {
 		server.Enabled = *req.Body.Enabled
 	}
+	if req.Body.AcceptsLocalExecution != nil {
+		server.AcceptsLocalExecution = *req.Body.AcceptsLocalExecution
+	}
 	token := ""
 	if req.Body.Token != nil {
 		token = *req.Body.Token

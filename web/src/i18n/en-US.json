@@ -765,7 +765,10 @@
     "transportHTTP": "Remote address (HTTP)",
     "transportHint": "A local process is code executed inside the worker's container. A remote address is a request — a far smaller thing to hand somebody.",
     "transportStdio": "Local process (stdio)",
-    "url": "Address"
+    "url": "Address",
+    "acceptLocalExecution": "This server runs code inside the worker",
+    "acceptLocalExecutionWhy": "A local server is a program this installation starts. It runs as the worker, on its filesystem, and reaches whatever the worker reaches — the Gate decides what a tool may do, and decides nothing about what a process may read. Your name is recorded against this.",
+    "acceptLocalExecutionRequired": "Accept what a local server is, or reach this one over HTTP instead."
   },
   "interview": {
     "assistantFailed": "The assistant could not answer",

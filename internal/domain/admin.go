@@ -79,6 +79,17 @@ type MCPServer struct {
 	// HasSecret reports that a bearer token is stored, never what it is.
 	HasSecret bool
 
+	// AcceptsLocalExecution records that somebody accepted what stdio is.
+	//
+	// A local server is a program this installation starts inside the worker,
+	// running as the worker, on its filesystem, from inside its network. The
+	// Gate decides what a tool may do and decides nothing about what a process
+	// may read — so this is not a control against a hostile administrator, and
+	// claiming it were would be worse than not having it. It is informed
+	// consent and a record of who gave it, which is what an installation can
+	// honestly offer for a decision only a person can make.
+	AcceptsLocalExecution bool
+
 	Enabled   bool
 	UpdatedBy string
 	UpdatedAt time.Time

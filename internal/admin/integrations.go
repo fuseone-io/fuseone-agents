@@ -17,6 +17,14 @@ var (
 	ErrNoName    = errors.New("admin: an integration needs a name")
 	ErrNoURL     = errors.New("admin: a remote tool server needs an address")
 	ErrNoCommand = errors.New("admin: an MCP server needs a command to run")
+	// ErrLocalExecutionNotAccepted means a local server was configured without
+	// anybody saying they accept what a local server is.
+	//
+	// Refused on the way in and refused again when it is reached. A row can
+	// arrive by restore or by a version of this that did not check, and the
+	// runtime must not trust a rule it only enforces at the door.
+	ErrLocalExecutionNotAccepted = errors.New(
+		"admin: a local server runs code inside the worker, and that has to be accepted explicitly")
 	ErrNoBaseURL = errors.New("admin: a provider needs a base URL")
 )
 
@@ -29,6 +37,10 @@ type storedServer struct {
 	Command   string   `json:"command,omitempty"`
 	Args      []string `json:"args,omitempty"`
 	URL       string   `json:"url,omitempty"`
+	// AcceptsLocalExecution is stored rather than assumed from the transport.
+	// A row written before this existed has not been accepted by anybody, and
+	// reading it as accepted would grant on upgrade what nobody granted.
+	AcceptsLocalExecution bool `json:"acceptsLocalExecution,omitempty"`
 }
 
 type storedProvider struct {
@@ -63,7 +75,8 @@ func (i *Integrations) MCPServers(ctx context.Context) ([]domain.MCPServer, erro
 		server := domain.MCPServer{
 			Name: row.Name, Transport: stored.Transport,
 			Command: stored.Command, Args: stored.Args, URL: stored.URL,
-			HasSecret: row.HasSecret, Enabled: row.Enabled,
+			AcceptsLocalExecution: stored.AcceptsLocalExecution,
+			HasSecret:             row.HasSecret, Enabled: row.Enabled,
 			UpdatedBy: row.UpdatedBy, UpdatedAt: row.UpdatedAt,
 		}
 		server.Transport = server.TransportOf()
@@ -87,12 +100,15 @@ func (i *Integrations) PutMCPServer(
 		return ErrNoName
 	case transport == domain.TransportStdio && strings.TrimSpace(server.Command) == "":
 		return ErrNoCommand
+	case transport == domain.TransportStdio && !server.AcceptsLocalExecution:
+		return ErrLocalExecutionNotAccepted
 	case transport == domain.TransportHTTP && strings.TrimSpace(server.URL) == "":
 		return ErrNoURL
 	}
 
 	value, err := json.Marshal(storedServer{
 		Transport: transport, Command: server.Command, Args: server.Args, URL: server.URL,
+		AcceptsLocalExecution: server.AcceptsLocalExecution,
 	})
 	if err != nil {
 		return fmt.Errorf("admin: encode MCP server: %w", err)
@@ -110,6 +126,9 @@ func (i *Integrations) PutMCPServer(
 		// Never the token, only that one arrived.
 		"transport": transport, "command": server.Command, "url": server.URL,
 		"enabled": server.Enabled, "tokenChanged": token != "",
+		// Who accepted local execution, and when, is the whole point of
+		// recording it: the acceptance is a person's, not a checkbox's.
+		"acceptsLocalExecution": server.AcceptsLocalExecution,
 	})
 }
 

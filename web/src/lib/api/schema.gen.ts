@@ -2279,6 +2279,18 @@ export interface components {
             url?: string;
             /** @description That a bearer token is stored, never what it is. */
             hasSecret?: boolean;
+            /**
+             * @description That somebody accepted what stdio is. A local server is a program
+             *     this installation starts inside the worker: it runs as the worker,
+             *     on its filesystem, from inside its network. The Gate governs what a
+             *     tool may do and governs nothing about what a process may read, so
+             *     this is not a control against a hostile administrator — it is
+             *     informed consent, and a record of who gave it.
+             *
+             *     Required for stdio and meaningless for http, where the platform
+             *     sends a request rather than starting a program.
+             */
+            acceptsLocalExecution?: boolean;
             enabled: boolean;
             /**
              * @description Whether this server is configured from the console. False for one
@@ -5063,6 +5075,8 @@ export interface operations {
                     url?: string;
                     /** @description Bearer token for a remote server. Omit to keep the stored one — correcting a URL must not demand re-entering a secret nobody has to hand. */
                     token?: string;
+                    /** @description Required for stdio, and refused without it. A local server is a program this installation starts inside the worker, running as the worker and reaching whatever the worker can reach. That is a decision a person makes, not one a transport implies, and it is recorded with their name. */
+                    acceptsLocalExecution?: boolean;
                     /** @default true */
                     enabled?: boolean;
                 };

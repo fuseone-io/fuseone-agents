@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import type { UseFormReturn } from "react-hook-form";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   FormControl,
   FormDescription,
@@ -66,7 +67,57 @@ export function ServerFields({
         label={t("integrations.arguments")}
         placeholder="--config /etc/crm.yaml"
       />
+      <AcceptLocalExecution form={form} />
     </>
+  );
+}
+
+/**
+ * What a local server is, said where the decision is made.
+ *
+ * Not a warning under the heading. A local server is a program this
+ * installation starts inside the worker: it runs as the worker, on its
+ * filesystem, from inside its network, and the Gate decides what a tool may do
+ * while deciding nothing about what a process may read.
+ *
+ * A checkbox does not stop an administrator who means it, and pretending
+ * otherwise would be worse than having none. What it does is make the
+ * difference between the two transports impossible to pass without reading,
+ * and put a name against the answer.
+ */
+function AcceptLocalExecution({
+  form,
+}: {
+  form: UseFormReturn<ServerFormValues>;
+}) {
+  const { t } = useTranslation();
+  return (
+    <FormField
+      control={form.control}
+      name="acceptsLocalExecution"
+      render={({ field }) => (
+        <FormItem className="rounded-lg border border-destructive/40 bg-destructive/5 p-3">
+          <div className="flex items-start gap-3">
+            <FormControl>
+              <Checkbox
+                checked={field.value}
+                onCheckedChange={field.onChange}
+                className="mt-0.5"
+              />
+            </FormControl>
+            <div className="space-y-1">
+              <FormLabel className="m-0">
+                {t("integrations.acceptLocalExecution")}
+              </FormLabel>
+              <FormDescription>
+                {t("integrations.acceptLocalExecutionWhy")}
+              </FormDescription>
+            </div>
+          </div>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
   );
 }
 

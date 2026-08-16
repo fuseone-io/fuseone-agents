@@ -28,6 +28,7 @@ export function usePutMCPServer() {
       args: string[];
       url: string;
       token: string;
+      acceptsLocalExecution: boolean;
       enabled: boolean;
     }) =>
       unwrap(
@@ -41,6 +42,7 @@ export function usePutMCPServer() {
             // Omitted rather than emptied: an empty one would read as
             // "clear it", and correcting a URL must not drop the token.
             token: input.token || undefined,
+            acceptsLocalExecution: input.acceptsLocalExecution,
             enabled: input.enabled,
           },
         }),
