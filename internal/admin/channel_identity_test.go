@@ -128,3 +128,42 @@ func TestIdentities_aStoredBindingNobodyCanRead_isListedAsBroken(t *testing.T) {
 		t.Errorf("channel = %q, want it recovered from the key", found.Channel)
 	}
 }
+
+/*
+A row that kept half of itself is still removable.
+
+Recovered as a pair, a value that held its channel and lost its account had the
+recovered account thrown away with it — and the account is the half the console
+removes a row by, so the row became unremovable by exactly the screen sent to
+remove it.
+*/
+func TestIdentities_aBrokenRowMissingItsAccount_recoversItFromTheKey(t *testing.T) {
+	channels, store := boundChannels(t)
+	ctx := context.Background()
+
+	if err := store.Put(ctx, settings.Setting{
+		ScopeKind: settings.ScopeInstallation,
+		Kind:      admin.KindChannelIdentity,
+		Name:      "acme-slack/U505",
+		// It kept the channel and lost everything else.
+		Value:   []byte(`{"channel":"acme-slack"}`),
+		Enabled: true, UpdatedBy: "restore",
+	}); err != nil {
+		t.Fatalf("write the half-broken row: %v", err)
+	}
+
+	listed, err := channels.Identities(ctx)
+	if err != nil {
+		t.Fatalf("Identities: %v", err)
+	}
+
+	for _, one := range listed {
+		if one.Channel == "acme-slack" && one.Account == "U505" {
+			if !one.Unreadable {
+				t.Error("the row is listed as though it were fine")
+			}
+			return
+		}
+	}
+	t.Errorf("listed = %+v, want the row nameable enough to remove", listed)
+}

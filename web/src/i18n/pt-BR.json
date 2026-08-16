@@ -1358,6 +1358,7 @@
     "account": "Conta no canal",
     "addConversation": "Adicionar conversa",
     "bind": "Vincular",
+    "bindingUnreadable": "Vínculo ilegível — remova e refaça",
     "botToken": "Token do bot",
     "bound": "Conta vinculada",
     "channels": "Canais",

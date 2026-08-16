@@ -1,4 +1,4 @@
-import { Trash2, UserRoundCheck } from "lucide-react";
+import { Trash2, TriangleAlert, UserRoundCheck } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -14,6 +14,7 @@ import {
 import { useBindIdentity, useUnbindIdentity } from "@/features/channels/api";
 import { usePeople } from "@/features/admin/people-api";
 import { problemMessage } from "@/lib/api/problem-message";
+import { cn } from "@/lib/utils";
 import { Mono } from "@/components/shared/mono";
 import type { components } from "@/lib/api/schema.gen";
 
@@ -74,12 +75,30 @@ export function IdentityRows({
             key={id.account}
             className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50"
           >
-            <UserRoundCheck
-              className="size-3.5 shrink-0 text-muted-foreground"
-              aria-hidden
-            />
-            <span className="min-w-0 flex-1 truncate text-sm">
-              {id.display || id.principal}
+            {/* A binding the runtime refuses is shown as refused. Rendered
+                as an ordinary row it reads as somebody with a blank name, and
+                the operator sent here by an error compares it against a line
+                that looks fine. */}
+            {id.unreadable ? (
+              <TriangleAlert
+                className="size-3.5 shrink-0 text-danger"
+                aria-hidden
+              />
+            ) : (
+              <UserRoundCheck
+                className="size-3.5 shrink-0 text-muted-foreground"
+                aria-hidden
+              />
+            )}
+            <span
+              className={cn(
+                "min-w-0 flex-1 truncate text-sm",
+                id.unreadable && "text-danger",
+              )}
+            >
+              {id.unreadable
+                ? t("channels.bindingUnreadable")
+                : id.display || id.principal}
             </span>
             <Mono dim className="shrink-0 text-2xs">
               {id.account}

@@ -129,23 +129,48 @@ func (c *Channels) Identities(ctx context.Context) ([]ChannelIdentity, error) {
 		// it is unreadable; a listing that showed it as an ordinary binding
 		// with a blank name would leave an operator comparing that error
 		// against a row that looks fine.
-		channelName, account := splitIdentityKey(s.Name)
-		if id.Channel != "" {
-			channelName, account = id.Channel, id.Account
-		}
 		out = append(out, ChannelIdentity{
-			Channel: channelName, Account: account, Unreadable: true,
+			Channel: firstOf(id.Channel, keyChannel(s.Name)),
+			Account: firstOf(id.Account, keyAccount(s.Name)),
+			// Whatever it managed to say about who it is, kept: a display
+			// name is a hint about which binding this was, and an operator
+			// deciding whether to remove one wants every hint there is.
+			Display:    id.Display,
+			Unreadable: true,
 		})
 	}
 	return out, nil
 }
 
-// splitIdentityKey recovers what names a row from the key, for a value that
-// could not be read. One separator and the first one: a Slack account id has
-// no slash, and a channel name is the half an operator typed.
-func splitIdentityKey(key string) (channelName, account string) {
-	channelName, account, _ = strings.Cut(key, "/")
-	return channelName, account
+/*
+The key is what names a row when its value cannot say.
+
+Recovered field by field rather than as a pair. Taken together, a value that
+kept its channel and lost its account would have the recovered account thrown
+away with it — and the account is the half the console removes a row by, so the
+row becomes unremovable by exactly the screen sent to remove it.
+
+One separator and the first one: a Slack account id has no slash, and the
+channel is the half an operator typed.
+*/
+func keyChannel(key string) string {
+	channelName, _, _ := strings.Cut(key, "/")
+	return channelName
+}
+
+func keyAccount(key string) string {
+	_, account, _ := strings.Cut(key, "/")
+	return account
+}
+
+// firstOf is the first of these that says anything.
+func firstOf(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 /*
