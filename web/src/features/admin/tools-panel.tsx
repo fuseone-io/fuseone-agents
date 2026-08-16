@@ -25,6 +25,34 @@ import { Badge } from "@/components/ui/badge";
 const HEAD =
   "h-[30px] bg-muted text-2xs uppercase tracking-label text-muted-foreground";
 
+/**
+ * How many tools are waiting for a ruling, and what that means for them.
+ *
+ * The panel used to say tools "arrive as reads", which stopped being true when
+ * they started arriving unclassified and refused. A screen still describing
+ * the behaviour it had before is worse than one saying nothing: somebody reads
+ * it, believes the tool is usable, and goes looking for the fault somewhere
+ * else.
+ *
+ * A count rather than a note, because the number is the work. Zero says the
+ * queue is empty, which is also worth being able to see.
+ */
+export function Waiting({ tools }: { tools: Tool[] }) {
+  const { t } = useTranslation();
+  const waiting = tools.filter((tool) => tool.effect === "unknown").length;
+  return (
+    <span
+      className={
+        waiting > 0 ? "text-xs text-danger" : "text-xs text-muted-foreground"
+      }
+    >
+      {waiting > 0
+        ? t("admin.waitingForARuling", { count: waiting })
+        : t("admin.arriveUnclassified")}
+    </span>
+  );
+}
+
 export function ToolsPanel() {
   const { t } = useTranslation();
   const { data, isLoading, error, refetch } = useTools();
@@ -34,11 +62,7 @@ export function ToolsPanel() {
   return (
     <Panel
       title={t("admin.tools")}
-      action={
-        <span className="text-xs text-muted-foreground">
-          {t("admin.arriveAsRead")}
-        </span>
-      }
+      action={<Waiting tools={tools} />}
       flush
     >
       {isLoading ? (

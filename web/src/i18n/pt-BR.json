@@ -14,7 +14,6 @@
     "areaNeedsName": "Uma área precisa de um nome.",
     "areaWithdrawn": "Área retirada",
     "areas": "Áreas",
-    "arriveAsRead": "chegam como leitura",
     "assistantEffort": "Esforço do assistente",
     "assistantEffortHint": "Quanto ele pensa antes de responder. Organizar um texto em campos não pede muito; suba só se as leituras vierem rasas.",
     "authoring": "Assistente de autoria",
@@ -118,7 +117,10 @@
     "why": "Por quê",
     "window": "Janela",
     "withdrawArea": "Ela deixa de ser oferecida para trabalho novo. Os agentes, tetos e políticas já arquivados nela continuam apontando para ela e continuam valendo — retirar uma área e reescrever o passado são atos diferentes.",
-    "withdrawFailed": "Não foi possível retirar"
+    "withdrawFailed": "Não foi possível retirar",
+    "arriveUnclassified": "ferramentas chegam sem classificação e são recusadas até serem julgadas",
+    "waitingForARuling_one": "{{count}} ferramenta está recusada até alguém julgá-la",
+    "waitingForARuling_other": "{{count}} ferramentas estão recusadas até alguém julgá-las"
   },
   "agents": {
     "aCostOrStepCeiling": "Um teto de custo ou de passos",

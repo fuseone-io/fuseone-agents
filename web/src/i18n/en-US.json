@@ -14,7 +14,6 @@
     "areaNeedsName": "An area needs a name.",
     "areaWithdrawn": "Area withdrawn",
     "areas": "Areas",
-    "arriveAsRead": "arrive as reads",
     "assistantEffort": "Assistant effort",
     "assistantEffortHint": "How hard it thinks before answering. Organising text into fields does not ask for much; raise it only if the readings come back shallow.",
     "authoring": "Authoring assistant",
@@ -118,7 +117,10 @@
     "why": "Why",
     "window": "Window",
     "withdrawArea": "It stops being offered for new work. The agents, ceilings and policies already filed under it keep pointing at it and keep applying — withdrawing an area and rewriting the past are different acts.",
-    "withdrawFailed": "Could not withdraw"
+    "withdrawFailed": "Could not withdraw",
+    "arriveUnclassified": "tools arrive unclassified and are refused until ruled",
+    "waitingForARuling_one": "{{count}} tool is refused until somebody rules on it",
+    "waitingForARuling_other": "{{count}} tools are refused until somebody rules on them"
   },
   "agents": {
     "aCostOrStepCeiling": "A cost or step ceiling",
