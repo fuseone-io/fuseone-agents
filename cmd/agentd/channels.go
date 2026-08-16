@@ -85,6 +85,14 @@ Longer than opening takes and far shorter than a person's patience. Too short
 and two workers open the same ask — which the idempotency key survives, and
 which still costs two of everything. Too long and an ask claimed by a process
 that died waits out the lease before anybody else may try.
+
+It bounds a second thing now, and the second is the one to be careful with: a
+correspondent's reserved ceiling slot lives exactly as long as the lease on the
+ask holding it. That is deliberate — one expiry rather than two answers to "is
+anybody still working on this" — but it means a lease shorter than the time to
+open a run releases the slot while the run is still being opened, and the
+ceiling admits one more than it should. Bounded, self-correcting and still
+wrong, so the rule is: this stays comfortably above how long opening takes.
 */
 const askLease = time.Minute
 

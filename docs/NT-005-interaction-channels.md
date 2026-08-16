@@ -385,7 +385,10 @@ worth stating, because each had a plausible alternative:
   a decision, and between them is every other worker: two see nobody has spent
   anything, both open, and a ceiling of one admits as many runs as there are
   processes sweeping. The reservation goes with the ask's lease, so a worker
-  that dies frees the slot in a lease rather than in a window.
+  that dies frees the slot in a lease rather than in a window — which couples
+  the two numbers: a lease shorter than the time to open a run releases the
+  slot while the run is still opening, and the ceiling admits one more than it
+  should.
 
 It is not yet a setting. A number nobody can change is a poor knob and a real
 rail, and a setting with no screen would be configuration written straight into
