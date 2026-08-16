@@ -34,6 +34,11 @@ type Arrival struct {
 	// ours, because the sender is the only party who knows that two deliveries
 	// are the same delivery.
 	EventID string
+	// Message is what the channel calls the message somebody typed. Separate
+	// from EventID because they are separate things: one names a delivery and
+	// repeats on retry, the other names what was said and is what a thread is
+	// keyed by.
+	Message string
 
 	/*
 		The ask as the platform understands it, read by the door.
@@ -92,10 +97,11 @@ func (i *Inbox) Receive(ctx context.Context, a Arrival) (fresh bool, err error) 
 
 	tag, err := i.pool.Exec(ctx, `
 		insert into channel_inbox
-			(channel, conversation, event_id, asked_by, text, thread, payload, digest)
-		values ($1, $2, $3, $4, $5, $6, $7, $8)
+			(channel, conversation, event_id, message, asked_by, text, thread, payload, digest)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		on conflict (channel, conversation, event_id) do nothing`,
-		a.Channel, a.Conversation, a.EventID, a.AskedBy, a.Text, a.Thread, a.Payload,
+		a.Channel, a.Conversation, a.EventID, a.Message,
+		a.AskedBy, a.Text, a.Thread, a.Payload,
 		"sha256:"+hex.EncodeToString(sum[:8]))
 	if err != nil {
 		return false, fmt.Errorf("channel: receive %s: %w", a.EventID, err)
@@ -135,7 +141,7 @@ func (i *Inbox) Claim(
 			for update skip locked
 			limit $3
 		)
-		returning channel, conversation, event_id, asked_by, text, thread, payload`,
+		returning channel, conversation, event_id, message, asked_by, text, thread, payload`,
 		owner, lease.String(), limit)
 	if err != nil {
 		return nil, fmt.Errorf("channel: claim from the inbox: %w", err)
@@ -145,7 +151,7 @@ func (i *Inbox) Claim(
 	var out []Claimed
 	for rows.Next() {
 		var a Arrival
-		if err := rows.Scan(&a.Channel, &a.Conversation, &a.EventID,
+		if err := rows.Scan(&a.Channel, &a.Conversation, &a.EventID, &a.Message,
 			&a.AskedBy, &a.Text, &a.Thread, &a.Payload); err != nil {
 			return nil, err
 		}

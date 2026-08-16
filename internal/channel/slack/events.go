@@ -48,8 +48,13 @@ type Delivery struct {
 	// nothing else happens.
 	Challenge string
 	// EventID is Slack's own identifier for this delivery, repeated on every
-	// retry of it. It is what makes a redelivery cost nothing.
+	// retry of it. It is what makes a redelivery cost nothing, and it is not
+	// the message: two retries of one message share it, and it appears in no
+	// thread.
 	EventID string
+	// Message is what the channel calls the message somebody typed. This is
+	// what a thread is keyed by and what an origin points at.
+	Message string
 
 	Conversation string
 	User         string
@@ -132,6 +137,7 @@ func ReadDelivery(body []byte) (Delivery, error) {
 	}
 	return Delivery{
 		EventID:      e.EventID,
+		Message:      e.Event.TS,
 		Conversation: e.Event.Channel,
 		User:         e.Event.User,
 		Text:         e.Event.Text,

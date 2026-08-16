@@ -116,7 +116,7 @@ func (h *ChannelHooks) slackEvent(w http.ResponseWriter, r *http.Request) {
 
 	fresh, err := h.inbox.Receive(r.Context(), channel.Arrival{
 		Channel: name, Conversation: delivery.Conversation,
-		EventID: delivery.EventID,
+		EventID: delivery.EventID, Message: delivery.Message,
 		// Read here, where the vendor's shape is known, and stored as the
 		// platform's own. The consumer never learns what Slack looks like.
 		AskedBy: delivery.User, Text: delivery.Text, Thread: delivery.Thread,

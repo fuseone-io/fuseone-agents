@@ -50,7 +50,12 @@ func TestSweep_anAskInAMappedConversation_opensARun(t *testing.T) {
 	// The reply belongs to the message that asked, and nowhere else is a
 	// recipient the platform would be choosing.
 	if req.Origin == nil || req.Origin.Conversation != "C07-ops" {
-		t.Errorf("origin = %+v, want the conversation sealed", req.Origin)
+		t.Fatalf("origin = %+v, want the conversation sealed", req.Origin)
+	}
+	// The message somebody typed, never the delivery that carried it: a retry
+	// is the same message, and a thread is keyed by the one and not the other.
+	if req.Origin.Message != "1786.1" {
+		t.Errorf("origin message = %q, want what was typed", req.Origin.Message)
 	}
 	if req.By != "usr_ana" {
 		t.Errorf("on behalf of %q, want the person who asked", req.By)
@@ -166,7 +171,9 @@ can audit rather than a guess this edge made silently.
 */
 func TestSweep_aReplyInOurOwnThread_carriesTheSubject(t *testing.T) {
 	c, parts := consumerWith(t, "<@U07BOT> triagem investiga isso", func(p *consumerParts) {
-		p.arrival.Thread = "1786.1"
+		// A reply inside a thread the platform started: the thread is another
+		// message, not this one.
+		p.arrival.Thread = "1700.0"
 		p.subjects.run = "run-alerta"
 	})
 
@@ -236,8 +243,13 @@ func consumerWith(
 		bound:    true,
 		willing:  true,
 		arrival: channel.Arrival{
-			Channel: "acme-slack", Conversation: "C07-ops", EventID: "Ev1",
-			AskedBy: "U9", Text: said, Thread: "Ev1",
+			// A delivery id and a message id that are not the same string,
+			// because in a real channel they never are. They were, in the
+			// first version of this fixture, and it hid the origin sealing a
+			// retry rather than what somebody typed.
+			Channel: "acme-slack", Conversation: "C07-ops",
+			EventID: "Ev123", Message: "1786.1",
+			AskedBy: "U9", Text: said, Thread: "1786.1",
 			Payload: []byte(`{}`),
 		},
 	}
@@ -302,9 +314,76 @@ func (o *openerSpy) Open(_ context.Context, req channel.Request) (channel.Opened
 	return channel.Opened{RunID: "run_new", Created: true}, nil
 }
 
-type answerSpy struct{ said []string }
+type answerSpy struct {
+	said []string
+	err  error
+}
 
 func (a *answerSpy) Reply(_ context.Context, _, _, _, text string) error {
+	if a.err != nil {
+		return a.err
+	}
 	a.said = append(a.said, text)
 	return nil
+}
+
+/*
+An ask whose refusal could not be delivered stays waiting.
+
+Recording first and replying second leaves the ask out of `pending` with nobody
+told, which breaks the rule the refusal exists to keep. Answering first can
+repeat a message if the record then fails, and between the two failures
+available this takes the one that is noise — the same choice the delivery table
+already makes for approval requests.
+*/
+func TestSweep_theAnswerCannotBeDelivered_theAskStaysWaiting(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT> alguém aí?", func(p *consumerParts) {
+		p.answers.err = errors.New("slack is away")
+	})
+
+	// Swept with a lease that is already over, so the assertion is about the
+	// ask still being pending rather than about how long it stays reserved.
+	if _, err := c.Sweep(t.Context(), -time.Minute, 10); err == nil {
+		t.Fatal("a refusal nobody received was reported as handled")
+	}
+
+	// Still claimable, so the next sweep tries to answer again.
+	again, err := parts.inbox.Claim(t.Context(), "worker-2", time.Minute, 10)
+	if err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	if len(again) != 1 {
+		t.Error("the ask was closed without anybody being told")
+	}
+}
+
+// A consumer missing something it cannot work without says so, and says all of
+// it: an operator fixing configuration one error at a time restarts a worker
+// once per thing they could have been told at the start.
+func TestSweep_missingItsWiring_saysWhatIsMissing(t *testing.T) {
+	c := channel.NewConsumer(nil, "worker-1", slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	_, err := c.Sweep(t.Context(), time.Minute, 10)
+	if !errors.Is(err, channel.ErrNotWired) {
+		t.Fatalf("err = %v, want ErrNotWired", err)
+	}
+	for _, part := range []string{"an inbox", "an opener", "a way to answer"} {
+		if !strings.Contains(err.Error(), part) {
+			t.Errorf("err = %v, want it to name %q", err, part)
+		}
+	}
+}
+
+// Two asks that differ only in a separator are two asks. A channel is a name
+// somebody typed into a form, so a key joined with punctuation is a key two
+// different asks can share — and the run it names is somebody else's.
+func TestAskKey_partsThatWouldJoinAlike_keepTheirOwnKeys(t *testing.T) {
+	t.Parallel()
+
+	first := channel.AskKey(channel.Arrival{Channel: "acme:slack", Conversation: "C1", EventID: "Ev1"})
+	second := channel.AskKey(channel.Arrival{Channel: "acme", Conversation: "slack:C1", EventID: "Ev1"})
+
+	if first == second {
+		t.Errorf("two different asks share the key %s", first)
+	}
 }

@@ -2,10 +2,14 @@ package channel
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/fuseone/agents/internal/domain"
@@ -147,8 +151,19 @@ func (c *Consumer) Binding(
 	return c
 }
 
+// ErrNotWired means a consumer is missing something it cannot work without.
+//
+// Reported rather than left to panic in a worker sweep. A nil dereference in a
+// background loop is a crash with a stack trace pointing at the line that
+// found the gap, not at the wiring that left it.
+var ErrNotWired = errors.New("channel: the consumer is missing a dependency")
+
 // Sweep opens what has arrived, and answers what it cannot.
 func (c *Consumer) Sweep(ctx context.Context, lease time.Duration, limit int) (int, error) {
+	if err := c.wired(); err != nil {
+		return 0, err
+	}
+
 	claimed, err := c.inbox.Claim(ctx, c.owner, lease, limit)
 	if err != nil {
 		return 0, err
@@ -241,7 +256,7 @@ func (c *Consumer) open(ctx context.Context, a Claimed) (domain.RunID, string) {
 
 	opened, err := c.opener.Open(ctx, Request{
 		Agent:   ask.Agent,
-		IdemKey: "channel:" + a.Channel + ":" + a.Conversation + ":" + a.EventID,
+		IdemKey: AskKey(a.Arrival),
 		Trigger: "channel",
 		By:      asker,
 		Input:   input,
@@ -251,7 +266,10 @@ func (c *Consumer) open(ctx context.Context, a Claimed) (domain.RunID, string) {
 		Labels: domain.NewLabels(domain.LabelUntrusted),
 		Origin: &domain.RunOrigin{
 			Channel: a.Channel, Conversation: a.Conversation,
-			Message: a.EventID, Thread: a.Thread,
+			// The message somebody typed, never the delivery that carried it.
+			// A retry is the same message and the origin has to point at what
+			// was said, which is also what a thread is keyed by.
+			Message: a.Message, Thread: a.Thread,
 		},
 	})
 	if err != nil {
@@ -303,7 +321,11 @@ func (c *Consumer) structured(
 ) structuredAsk {
 	out := structuredAsk{Text: ask.Text, AskedBy: string(asker)}
 
-	if a.Thread == "" || a.Thread == a.EventID {
+	// An ask that started its own thread is its own parent, and has no subject
+	// to resolve. Compared against the message and not the delivery: those are
+	// never the same string in a real channel, and comparing them meant this
+	// branch never fired.
+	if a.Thread == "" || a.Thread == a.Message {
 		return out
 	}
 	run, found, err := c.subjects.AboutRun(ctx, a.Channel, a.Conversation, a.Thread)
@@ -324,12 +346,66 @@ func (c *Consumer) structured(
 // Both, and in that order. The record is for the operator who is asked why
 // nothing happened; the reply is for the person who asked and is the only one
 // who will notice.
+/*
+decline says why an ask became nothing, and then records it.
+
+Answer first. Recording first and replying second means a driver that fails
+after the write leaves the ask out of `pending` with nobody ever told — which
+breaks the rule this function exists to keep. Answering first can repeat a
+message if the record then fails, and between the two failures available this
+takes the one that is noise: the same choice the delivery table already makes
+for approval requests, and for the same reason. A repeated refusal is an
+irritation; a refusal nobody sees is the thing that makes people stop asking.
+*/
 func (c *Consumer) decline(ctx context.Context, a Claimed, why string) error {
-	if err := c.inbox.Refused(ctx, a, why, c.clock()); err != nil {
-		return err
-	}
 	if err := c.answers.Reply(ctx, a.Channel, a.Conversation, a.Thread, why); err != nil {
+		// Left pending on purpose, so the next sweep tries again. The person
+		// has not been told and that is the failure worth retrying.
 		return fmt.Errorf("channel: answer %s: %w", a.EventID, err)
 	}
-	return nil
+	return c.inbox.Refused(ctx, a, why, c.clock())
+}
+
+/*
+AskKey names the intention an ask represents, for idempotency.
+
+Hashed rather than joined. A channel is a name somebody typed into a form and a
+conversation id is a vendor's, so a separator that appears in either makes two
+different asks produce one key — and the run that key names is somebody else's.
+The digest cannot collide by punctuation, and the parts are length-prefixed so
+they cannot collide by rearrangement either.
+*/
+func AskKey(a Arrival) string {
+	sum := sha256.New()
+	for _, part := range []string{a.Channel, a.Conversation, a.EventID} {
+		fmt.Fprintf(sum, "%d:%s", len(part), part)
+	}
+	return "channel:" + hex.EncodeToString(sum.Sum(nil)[:16])
+}
+
+// wired names what is missing, all of it, rather than failing on the first gap.
+//
+// An operator fixing configuration one error at a time is an operator
+// restarting a worker five times to learn five things.
+func (c *Consumer) wired() error {
+	missing := []string{}
+	for name, present := range map[string]bool{
+		"an inbox":            c.inbox != nil,
+		"a scope map":         c.scopes != nil,
+		"a published listing": c.published != nil,
+		"a willingness check": c.willing != nil,
+		"a subject resolver":  c.subjects != nil,
+		"an opener":           c.opener != nil,
+		"a way to answer":     c.answers != nil,
+		"an account binding":  c.bindings != nil,
+	} {
+		if !present {
+			missing = append(missing, name)
+		}
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	sort.Strings(missing)
+	return fmt.Errorf("%w: %s", ErrNotWired, strings.Join(missing, ", "))
 }
