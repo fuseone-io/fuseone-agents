@@ -32,6 +32,34 @@ type RunStartedPayload struct {
 	// case one's correction reports a failure nobody can act on while hiding
 	// a real one.
 	Case string `json:"case,omitempty"`
+
+	// Origin is where the ask came from, when it came from a conversation.
+	Origin *RunOrigin `json:"origin,omitempty"`
+}
+
+/*
+RunOrigin is the conversation an ask arrived in, sealed on the opening step.
+
+It is here and not in the content because it is what the run *is*, not what the
+run is about: a reply belongs to the message that asked, and a reply addressed
+from anywhere else is the platform choosing a recipient. Sealed once, at the
+start, so the reach of a reply is fixed by provenance rather than by a rule
+somebody has to remember to write (NT-005 §3).
+
+Without it the answer to "why did this agent do that" is a screenshot. With it
+the trail names the conversation, the message and the thread, and an auditor
+reading it a year later can go and find what somebody typed — or find that it
+was erased, which is also an answer.
+*/
+type RunOrigin struct {
+	// Channel is the configured connection, never the vendor.
+	Channel      string `json:"channel"`
+	Conversation string `json:"conversation"`
+	// Message is what the channel called the message that asked.
+	Message string `json:"message,omitempty"`
+	// Thread is where a reply belongs: the parent when the ask came inside
+	// one, and the message itself when it started one.
+	Thread string `json:"thread,omitempty"`
 }
 
 type PlannedPayload struct {

@@ -55,6 +55,11 @@ type Request struct {
 		carries none, because nobody outside said anything to it.
 	*/
 	Labels domain.Labels
+	// Origin is the conversation this ask arrived in, when one did. Sealed on
+	// the opening step, which is what bounds where a reply may go: the run
+	// answers where it was asked, and nowhere else is a decision the platform
+	// would be making.
+	Origin *domain.RunOrigin
 	// Simulation names the batch this run belongs to, and opening a run under
 	// one is what marks it simulated: never claimed by a worker, never
 	// counted as production. One field rather than a name beside a flag,
@@ -161,7 +166,7 @@ func (o *Opener) Open(ctx context.Context, req Request) (Result, error) {
 		Payload: mustJSON(domain.RunStartedPayload{
 			Trigger: req.Trigger, InputRef: inputRef,
 			Simulated: req.Simulation != "", Simulation: req.Simulation,
-			Case: req.Case,
+			Case: req.Case, Origin: req.Origin,
 		}),
 	})
 	if err != nil {

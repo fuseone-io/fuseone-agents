@@ -34,6 +34,25 @@ type Arrival struct {
 	// ours, because the sender is the only party who knows that two deliveries
 	// are the same delivery.
 	EventID string
+
+	/*
+		The ask as the platform understands it, read by the door.
+
+		The door is the only layer that knows a vendor's shape and it has
+		already read the message by the time it writes the row. Leaving the
+		consumer to parse the payload again would give Slack's format a second
+		reader, and a second reader of a format is where the two readings start
+		to disagree.
+	*/
+	AskedBy string
+	Text    string
+	// Thread is where an answer belongs: the parent when the ask came inside
+	// one, the message itself when it started one.
+	Thread string
+
+	// Payload is what actually arrived. It is what the digest is of, and what
+	// an auditor reads when they want the thing itself rather than what we
+	// made of it.
 	Payload []byte
 }
 
@@ -72,10 +91,11 @@ func (i *Inbox) Receive(ctx context.Context, a Arrival) (fresh bool, err error) 
 	sum := sha256.Sum256(a.Payload)
 
 	tag, err := i.pool.Exec(ctx, `
-		insert into channel_inbox (channel, conversation, event_id, payload, digest)
-		values ($1, $2, $3, $4, $5)
+		insert into channel_inbox
+			(channel, conversation, event_id, asked_by, text, thread, payload, digest)
+		values ($1, $2, $3, $4, $5, $6, $7, $8)
 		on conflict (channel, conversation, event_id) do nothing`,
-		a.Channel, a.Conversation, a.EventID, a.Payload,
+		a.Channel, a.Conversation, a.EventID, a.AskedBy, a.Text, a.Thread, a.Payload,
 		"sha256:"+hex.EncodeToString(sum[:8]))
 	if err != nil {
 		return false, fmt.Errorf("channel: receive %s: %w", a.EventID, err)
@@ -115,7 +135,7 @@ func (i *Inbox) Claim(
 			for update skip locked
 			limit $3
 		)
-		returning channel, conversation, event_id, payload`,
+		returning channel, conversation, event_id, asked_by, text, thread, payload`,
 		owner, lease.String(), limit)
 	if err != nil {
 		return nil, fmt.Errorf("channel: claim from the inbox: %w", err)
@@ -125,7 +145,8 @@ func (i *Inbox) Claim(
 	var out []Claimed
 	for rows.Next() {
 		var a Arrival
-		if err := rows.Scan(&a.Channel, &a.Conversation, &a.EventID, &a.Payload); err != nil {
+		if err := rows.Scan(&a.Channel, &a.Conversation, &a.EventID,
+			&a.AskedBy, &a.Text, &a.Thread, &a.Payload); err != nil {
 			return nil, err
 		}
 		out = append(out, Claimed{Arrival: a, Owner: owner})
