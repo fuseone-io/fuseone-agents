@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
@@ -40,6 +41,7 @@ type Editing =
  */
 export function IntegrationsPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { data, isLoading, error, refetch } = useIntegrations();
   const [editing, setEditing] = useState<Editing | null>(null);
   const tab = useTab("integrations", "servers");
@@ -54,7 +56,17 @@ export function IntegrationsPage() {
         title={t("nav.integrations")}
         description={t("integrations.subtitle")}
       >
-        <ConnectMenu onConnect={(kind) => setEditing({ kind, value: null })} />
+        {/* Connecting a tool server is a page of its own: the catalogue is
+            read before anything is decided, and reading needs somewhere to
+            stand. Editing one that exists stays a dialog — there is nothing
+            to read, only a field to correct. */}
+        <ConnectMenu
+          onConnect={(kind) =>
+            kind === "server"
+              ? void navigate("/integrations/mcp/new")
+              : setEditing({ kind, value: null })
+          }
+        />
       </PageHeader>
 
       {isLoading ? (
@@ -89,7 +101,7 @@ export function IntegrationsPage() {
           <TabsContent value="servers" className="mt-4">
             <IntegrationsSection
               title={t("integrations.servers")}
-              onAdd={() => setEditing({ kind: "server", value: null })}
+              onAdd={() => void navigate("/integrations/mcp/new")}
               empty={
                 servers.length === 0 && (
                   <EmptyState

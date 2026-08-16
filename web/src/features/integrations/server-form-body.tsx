@@ -18,7 +18,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { ServerFields } from "@/features/integrations/server-fields";
-import { Recipes } from "@/features/integrations/mcp/recipes";
 import type { ServerFormValues } from "@/features/integrations/server-schema";
 
 /** Everything a tool server is, in the order somebody fills it: what it is
@@ -82,8 +81,6 @@ export function ServerFormBody({
           </FormItem>
         )}
       />
-
-      <Recipes form={form} />
 
       <ServerFields form={form} hasSecret={hasSecret} />
 

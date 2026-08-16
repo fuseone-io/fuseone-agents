@@ -2,8 +2,6 @@ import { useTranslation } from "react-i18next";
 import { BookOpen } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import type { ServerRecipe } from "@/features/integrations/mcp/api";
 
 /**
@@ -27,14 +25,11 @@ export function RecipePicker({
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">{t("mcp.recipesAre")}</p>
-      <ScrollArea className="max-h-[320px]">
-        <div className="grid gap-2 pr-3 sm:grid-cols-2">
-          {recipes.map((recipe) => (
-            <RecipeCard key={recipe.server} recipe={recipe} onChoose={onChoose} />
-          ))}
-        </div>
-      </ScrollArea>
-      <Separator />
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {recipes.map((recipe) => (
+          <RecipeCard key={recipe.server} recipe={recipe} onChoose={onChoose} />
+        ))}
+      </div>
     </div>
   );
 }

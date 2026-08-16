@@ -1465,6 +1465,8 @@
     "rule": "Julgar",
     "ruleAgain": "Mudar a decisão",
     "suggests": "Esta plataforma chamaria de {{effect}} — abra para ver por quê.",
-    "review": "Revisar decisão"
+    "review": "Revisar decisão",
+    "connectAServer": "Conectar um servidor de ferramentas",
+    "connectDescription": "O que ele oferece chega sem classificação e recusado até alguém dizer o que faz."
   }
 }

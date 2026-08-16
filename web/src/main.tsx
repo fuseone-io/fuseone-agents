@@ -26,6 +26,7 @@ import { CostPage } from "@/features/cost/cost-page";
 import { AdminPage } from "@/features/admin/admin-page";
 import { IntegrationsPage } from "@/features/integrations/integrations-page";
 import { MCPServerPage } from "@/features/integrations/mcp/mcp-server-page";
+import { NewServerPage } from "@/features/integrations/mcp/new-server-page";
 import "./index.css";
 
 const queryClient = new QueryClient({
@@ -70,6 +71,10 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="/policies/:code" element={<PolicyEditorPage />} />
                 <Route path="/audit" element={<AuditPage />} />
                 <Route path="/integrations" element={<IntegrationsPage />} />
+                <Route
+                  path="/integrations/mcp/new"
+                  element={<NewServerPage />}
+                />
                 <Route
                   path="/integrations/mcp/:name"
                   element={<MCPServerPage />}
