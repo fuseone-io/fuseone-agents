@@ -2,9 +2,11 @@ package channel
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/domain"
@@ -134,4 +136,43 @@ func (p *Postgres) Reported(ctx context.Context, run domain.RunID, e Event, at t
 		return fmt.Errorf("channel: mark %s reported: %w", run, err)
 	}
 	return nil
+}
+
+/*
+AboutRun answers which run the platform posted a message about, or nothing.
+
+This is [NT-005 §2.1]'s boundary of resolution, and it turns out to already
+exist in the table: **the platform resolves references to what it put there.**
+A message somebody replies to in a thread is resolvable exactly when this
+installation is the one that posted it, and `channel_deliveries` is the record
+of every message it did.
+
+Anything else — a third-party bot's alert, "that problem from yesterday" — does
+not resolve, and must not pretend to. It becomes an ask with no subject,
+tainted, and the Gate treats it as what it is: untrusted input asking for an
+effect. An agent that needs a specific alert can go and search for one, which
+is a tool call somebody can audit rather than a guess the edge made silently.
+
+[NT-005 §2.1]: ../../docs/NT-005-interaction-channels.md
+*/
+func (p *Postgres) AboutRun(
+	ctx context.Context, conversation, ref string,
+) (domain.RunID, bool, error) {
+	if conversation == "" || ref == "" {
+		return "", false, nil
+	}
+
+	var run string
+	err := p.pool.QueryRow(ctx, `
+		select run_id from channel_deliveries
+		where conversation = $1 and ref = $2
+		order by posted_at desc
+		limit 1`, conversation, ref).Scan(&run)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("channel: resolve %s in %s: %w", ref, conversation, err)
+	}
+	return domain.RunID(run), true, nil
 }

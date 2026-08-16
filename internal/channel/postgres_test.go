@@ -154,3 +154,66 @@ func simulate(t *testing.T, pool *pgxpool.Pool, run string) {
 	appendStep(t, pool, run, domain.StepApprovalRequested,
 		[]byte(`{"tool":"erp.transfer","rule":"financial"}`))
 }
+
+/*
+Which run the platform posted a message about.
+
+NT-005 §2.1's boundary of resolution, and it already lived in this table: the
+platform resolves references to what it put there. A thread somebody replies to
+is resolvable exactly when this installation posted the message that started
+it.
+
+Anything else — another bot's alert, "that problem from yesterday" — does not
+resolve and must not pretend to. It becomes an ask with no subject, tainted,
+and the Gate treats it as what it is. An agent that needs a specific alert can
+go and search for one, which is a tool call somebody can audit rather than a
+guess the edge made silently.
+*/
+func TestAboutRun_aMessageThePlatformPosted_resolvesToItsRun(t *testing.T) {
+	store, _ := channelStore(t)
+
+	if err := store.Record(t.Context(), channel.Delivery{
+		RunID: "run-alerta", Event: channel.EventParked,
+		Conversation: "C07-ops", Ref: "1786.42", PostedAt: noon,
+	}); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+
+	got, ok, err := store.AboutRun(t.Context(), "C07-ops", "1786.42")
+	if err != nil {
+		t.Fatalf("AboutRun: %v", err)
+	}
+	if !ok || got != "run-alerta" {
+		t.Errorf("resolved to %q (%v), want run-alerta", got, ok)
+	}
+}
+
+func TestAboutRun_aMessageSomebodyElsePosted_resolvesToNothing(t *testing.T) {
+	store, _ := channelStore(t)
+
+	_, ok, err := store.AboutRun(t.Context(), "C07-ops", "9999.11")
+	if err != nil {
+		t.Fatalf("AboutRun: %v", err)
+	}
+	if ok {
+		t.Error("a message this installation never posted resolved to a run")
+	}
+}
+
+// The same message id in another conversation is another message. Resolving
+// across conversations would let a reply in one channel name a run reported in
+// a channel the replier cannot see.
+func TestAboutRun_theSameRefInAnotherConversation_isAnotherMessage(t *testing.T) {
+	store, _ := channelStore(t)
+
+	if err := store.Record(t.Context(), channel.Delivery{
+		RunID: "run-outra", Event: channel.EventParked,
+		Conversation: "C08-finance", Ref: "1786.77", PostedAt: noon,
+	}); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+
+	if _, ok, _ := store.AboutRun(t.Context(), "C07-ops", "1786.77"); ok {
+		t.Error("a reference resolved across conversations")
+	}
+}
