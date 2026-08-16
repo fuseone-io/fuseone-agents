@@ -644,3 +644,38 @@ func TestPutMCPServer_twoWritersAtOnce_doNotRestoreEachOthersOldValues(t *testin
 		t.Errorf("token = %q; a concurrent surface write restored the old one", creds.Token)
 	}
 }
+
+/*
+The trail keeps the shape it has always had.
+
+An administrative record is read by queries written against the field names it
+used at the time. Renaming one does not break a runtime and does break the
+trail: the older half stops answering the query that reads the newer half, and
+nobody notices until somebody is trying to establish what happened.
+
+`transport` and not `kind`, because `kind` is the provider's word for a
+different thing entirely.
+*/
+func TestPutMCPServer_recordsTheTransportUnderTheNameTheTrailAlwaysUsed(t *testing.T) {
+	i := newIntegrations(t)
+	pool := openPool(t)
+	ctx := context.Background()
+
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, domain.MCPServer{
+		Name: "crm", Transport: domain.TransportHTTP,
+		URL: "https://tools.example.com/mcp", Enabled: true,
+	}, domain.MCPCredentialPatch{}); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+
+	var detail map[string]any
+	if err := pool.QueryRow(ctx, `
+		select detail from admin_events
+		where action = 'mcp_server.configured' and target = 'crm'
+		order by at desc limit 1`).Scan(&detail); err != nil {
+		t.Fatalf("read the trail: %v", err)
+	}
+	if detail["transport"] != "http" {
+		t.Errorf("detail = %v, want the transport under its own name", detail)
+	}
+}

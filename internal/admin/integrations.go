@@ -172,7 +172,12 @@ func (i *Integrations) PutMCPServer(
 					Enabled:     server.Enabled, UpdatedBy: string(by),
 				}, map[string]any{
 					// Never a credential, only which of them are now held.
-					"kind": transport, "command": server.Command, "url": server.URL,
+					//
+					// `transport`, not `kind`: `kind` is the provider's word,
+					// and an administrative trail that renames a field is a
+					// trail whose older half no longer answers the query that
+					// reads its newer half.
+					"transport": transport, "command": server.Command, "url": server.URL,
 					"enabled": server.Enabled, "tokenChanged": given.Token != nil,
 					"acceptsLocalExecution": server.AcceptsLocalExecution,
 					"variables":             len(merged.Env),
