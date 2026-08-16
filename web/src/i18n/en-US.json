@@ -1428,5 +1428,38 @@
     "restore": "Restore",
     "withdraw": "Withdraw",
     "withdrawn": "withdrawn"
+  },
+  "mcp": {
+    "subtitle": "What this server offers, what we brought in, and what each tool may do.",
+    "surface": "What we brought in",
+    "surfaceIs": "Of what this server offers, these are the tools this installation took. Outside the surface a tool is not restricted — it is not here: no agent is told about it and no call reaches it. Bringing one in does not say what it does; that stays the Curator's separate ruling.",
+    "broughtIn": "{{chosen}} of {{of}}",
+    "saveSurface": "Save what we brought in",
+    "surfaceSaved": "Saved.",
+    "noToolsYet": "No tools yet. They appear once a worker has reached this server.",
+    "noSuchServer": "No server by that name is configured.",
+    "leavingAffects_one": "Leaving this out stops {{agents}}, which still names it.",
+    "leavingAffects_other": "Leaving this out stops {{count}} agents that still name it: {{agents}}.",
+    "recipesAre": "What this platform has read about servers other people publish. Choosing one fills the form below — none of them is hosted, supported or endorsed here.",
+    "publishedBy": "Published by {{publisher}}",
+    "useRecipe": "Use",
+    "readTheDocs": "Documentation",
+    "docsFrom": {
+      "publisher": "the publisher's own page",
+      "third-party": "somebody else's write-up"
+    },
+    "provenance": {
+      "server": "checked against a running server",
+      "documentation": "read from documentation"
+    },
+    "variables": "Variables",
+    "variablesHint": "One NAME=value per line. Given to this server's process and to nothing else — it no longer inherits anything from the worker. Kept in the vault, like a token, because the reason a server needs a variable is usually that the variable is a key.",
+    "revoke": "Remove the stored credential",
+    "connection": "Connection",
+    "credentialSaved": "Credential updated.",
+    "saveCredential": "Save the credential",
+    "openServer": "Tools and surface",
+    "startFromARecipe": "Start from something we know about",
+    "variablesExample": "GITHUB_TOKEN=ghp_...\nREGION=eu-west-1"
   }
 }

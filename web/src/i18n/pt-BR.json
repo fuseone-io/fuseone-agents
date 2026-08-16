@@ -1428,5 +1428,38 @@
     "restore": "Restaurar",
     "withdraw": "Retirar",
     "withdrawn": "retirada"
+  },
+  "mcp": {
+    "subtitle": "O que este servidor oferece, o que trouxemos, e o que cada ferramenta pode fazer.",
+    "surface": "O que trouxemos",
+    "surfaceIs": "Do que este servidor oferece, estas são as ferramentas que esta instalação trouxe. Fora da superfície uma ferramenta não fica restrita — ela não está aqui: nenhum agente sabe dela e nenhuma chamada a alcança. Trazer uma não diz o que ela faz; isso continua sendo a decisão separada do Curador.",
+    "broughtIn": "{{chosen}} de {{of}}",
+    "saveSurface": "Salvar o que trouxemos",
+    "surfaceSaved": "Salvo.",
+    "noToolsYet": "Nenhuma ferramenta ainda. Elas aparecem quando um worker alcançar este servidor.",
+    "noSuchServer": "Nenhum servidor com esse nome está configurado.",
+    "leavingAffects_one": "Deixar esta de fora para {{agents}}, que ainda a declara.",
+    "leavingAffects_other": "Deixar esta de fora para {{count}} agentes que ainda a declaram: {{agents}}.",
+    "recipesAre": "O que esta plataforma leu sobre servidores publicados por outros. Escolher um preenche o formulário abaixo — nenhum deles é hospedado, suportado ou endossado aqui.",
+    "publishedBy": "Publicado por {{publisher}}",
+    "useRecipe": "Usar",
+    "readTheDocs": "Documentação",
+    "docsFrom": {
+      "publisher": "página do próprio publisher",
+      "third-party": "texto de terceiros"
+    },
+    "provenance": {
+      "server": "conferido contra um servidor rodando",
+      "documentation": "lido da documentação"
+    },
+    "variables": "Variáveis",
+    "variablesHint": "Uma NOME=valor por linha. Entregues ao processo deste servidor e a mais nada — ele não herda mais nada do worker. Guardadas no cofre, como um token, porque o motivo de um servidor precisar de uma variável costuma ser que a variável é uma chave.",
+    "revoke": "Remover a credencial guardada",
+    "connection": "Conexão",
+    "credentialSaved": "Credencial atualizada.",
+    "saveCredential": "Salvar a credencial",
+    "openServer": "Ferramentas e superfície",
+    "startFromARecipe": "Começar de algo que conhecemos",
+    "variablesExample": "GITHUB_TOKEN=ghp_...\nREGION=eu-west-1"
   }
 }

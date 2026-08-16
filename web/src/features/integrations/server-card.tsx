@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { IntegrationCard } from "@/features/integrations/integration-card";
 import { RemoveButton } from "@/components/shared/remove-button";
@@ -38,6 +39,15 @@ export function ServerCard({
         // cannot do.
         server.managed === false ? undefined : (
           <div className="flex items-center gap-1">
+            {/* The tools, the surface and the rulings live on their own
+                page: three decisions with different consequences, and a
+                dialog that disappears takes the record of what was chosen
+                with it. */}
+            <Button variant="ghost" size="sm" className="h-7" asChild>
+              <Link to={`/integrations/mcp/${server.name}`}>
+                {t("mcp.openServer")}
+              </Link>
+            </Button>
             <Button variant="ghost" size="sm" className="h-7" onClick={onEdit}>
               {t("agents.edit")}
             </Button>
