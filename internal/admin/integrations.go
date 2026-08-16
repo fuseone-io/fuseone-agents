@@ -115,9 +115,27 @@ func (i *Integrations) PutMCPServer(
 		return ErrNoURL
 	}
 
+	/*
+		A write that says nothing about the surface is not a request to forget
+		it.
+
+		Forgotten, it reads as "nobody has chosen", which the runtime treats as
+		every tool the server offers — so saving a token or correcting a
+		command would silently widen what agents can reach. That is the one
+		direction this must never fail in, and it is reached by the two
+		commonest edits there are.
+
+		The same rule the credential already follows, for the same reason:
+		absent is unchanged, and a chosen-and-empty surface stays chosen.
+	*/
+	surface, err := i.keptSurface(ctx, server)
+	if err != nil {
+		return err
+	}
+
 	value, err := json.Marshal(storedServer{
 		Transport: transport, Command: server.Command, Args: server.Args, URL: server.URL,
-		Surface:               server.Surface,
+		Surface:               surface,
 		AcceptsLocalExecution: server.AcceptsLocalExecution,
 	})
 	if err != nil {
@@ -162,7 +180,7 @@ func (i *Integrations) PutMCPServer(
 		"acceptsLocalExecution": server.AcceptsLocalExecution,
 		// How many were brought in, never which: the list belongs on the
 		// screen and the count is what an auditor reads as "this narrowed".
-		"surface": surfaceSize(server.Surface),
+		"surface": surfaceSize(surface),
 	})
 }
 
@@ -293,6 +311,31 @@ func (i *Integrations) Credential(ctx context.Context, name string) (string, err
 		return "", err
 	}
 	return set.Secret, nil
+}
+
+// keptSurface answers what this write leaves the surface as. Only "no such
+// setting" reads as nothing stored — every other failure is a read that did
+// not happen, and treating one as an empty choice would open a server on the
+// strength of a database being away.
+func (i *Integrations) keptSurface(
+	ctx context.Context, server domain.MCPServer,
+) (*[]string, error) {
+	if server.Surface != nil {
+		return server.Surface, nil
+	}
+	stored, err := i.settings.Get(ctx,
+		settings.ScopeInstallation, domain.Scope{}, settings.KindMCPServer, server.Name)
+	switch {
+	case errors.Is(err, settings.ErrNotFound):
+		return nil, nil
+	case err != nil:
+		return nil, fmt.Errorf("admin: read the stored surface for %s: %w", server.Name, err)
+	}
+	var was storedServer
+	if err := json.Unmarshal(stored.Value, &was); err != nil {
+		return nil, fmt.Errorf("admin: read the stored surface for %s: %w", server.Name, err)
+	}
+	return was.Surface, nil
 }
 
 // surfaceSize reports how many tools were brought in, or -1 for a server

@@ -482,3 +482,94 @@ func TestPutMCPServer_switchingToLocal_dropsTheBearerItCanNoLongerSend(t *testin
 		t.Errorf("token = %q survived a switch to a shape that cannot send it", creds.Token)
 	}
 }
+
+/*
+Editing anything else does not reopen the tools.
+
+A write that says nothing about the surface is not a request to forget it, and
+forgetting reads as "nobody has chosen" — which the runtime treats as every
+tool this server offers. So saving a token, correcting a command or switching a
+server off would silently widen what agents can reach, which is the one
+direction this must never fail in.
+
+Both stored shapes, because the empty one is the one a careless merge loses:
+"chosen, and none of it" is a decision, and turning it into "nobody has chosen"
+turns a closed server into an open one.
+*/
+func TestPutMCPServer_aWriteThatOmitsTheSurface_keepsTheStoredOne(t *testing.T) {
+	for _, one := range []struct {
+		name    string
+		surface []string
+	}{
+		{name: "narrowed", surface: []string{"lookup"}},
+		{name: "emptied", surface: []string{}},
+	} {
+		t.Run(one.name, func(t *testing.T) {
+			i := newIntegrations(t)
+			ctx := context.Background()
+			server := domain.MCPServer{
+				Name: one.name, Transport: domain.TransportHTTP,
+				URL: "https://tools.example.com/mcp", Enabled: true,
+				Surface: &one.surface,
+			}
+
+			if err := i.PutMCPServer(ctx, "usr_ana", platform, server,
+				domain.MCPCredentialPatch{Token: ptr("tok")}); err != nil {
+				t.Fatalf("PutMCPServer: %v", err)
+			}
+
+			// The same server again, saying nothing about the surface — which
+			// is what saving a credential looks like from here.
+			server.Surface = nil
+			if err := i.PutMCPServer(ctx, "usr_ana", platform, server,
+				domain.MCPCredentialPatch{Token: ptr("rotated")}); err != nil {
+				t.Fatalf("PutMCPServer again: %v", err)
+			}
+
+			servers, err := i.MCPServers(ctx)
+			if err != nil {
+				t.Fatalf("MCPServers: %v", err)
+			}
+			var found *domain.MCPServer
+			for k := range servers {
+				if servers[k].Name == one.name {
+					found = &servers[k]
+				}
+			}
+			if found == nil || found.Surface == nil {
+				t.Fatalf("surface = %v; a credential edit reopened every tool", found)
+			}
+			if len(*found.Surface) != len(one.surface) {
+				t.Errorf("surface = %v, want the stored %v", *found.Surface, one.surface)
+			}
+		})
+	}
+}
+
+// And a write that names one replaces it, empty included: this is the field
+// the page exists to set.
+func TestPutMCPServer_aWriteThatNamesTheSurface_replacesIt(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+	wide := []string{"lookup", "delete_account"}
+	server := domain.MCPServer{
+		Name: "crm", Transport: domain.TransportHTTP,
+		URL: "https://tools.example.com/mcp", Enabled: true, Surface: &wide,
+	}
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, server,
+		domain.MCPCredentialPatch{}); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+
+	narrow := []string{"lookup"}
+	server.Surface = &narrow
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, server,
+		domain.MCPCredentialPatch{}); err != nil {
+		t.Fatalf("PutMCPServer again: %v", err)
+	}
+
+	servers, _ := i.MCPServers(ctx)
+	if servers[0].Surface == nil || len(*servers[0].Surface) != 1 {
+		t.Errorf("surface = %v, want the narrowed choice", servers[0].Surface)
+	}
+}
