@@ -269,3 +269,30 @@ func hookServerPaused(t *testing.T) (*http.ServeMux, *ledger.Memory) {
 type allPaused struct{}
 
 func (allPaused) IsPaused(context.Context, domain.AgentID) (bool, error) { return true, nil }
+
+/*
+A body somebody outside sent arrives tainted.
+
+The secret proves who sent it and says nothing about what is inside. Until the
+label was sealed on the opening step, a run started by a webhook met the taint
+check only after an untrusted tool had answered — so an agent that read the
+body and wrote straight from it was never escalated, which is the one case the
+check exists for.
+*/
+func TestHook_theBody_opensTheRunTainted(t *testing.T) {
+	t.Parallel()
+	mux, store := hookServer(t)
+
+	if rec := post(t, mux, "crm/ticket", "s3cret", "d-taint", `{"x":1}`); rec.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want the run opened", rec.Code)
+	}
+
+	runs, _ := store.Runs(context.Background())
+	if len(runs) != 1 {
+		t.Fatalf("runs = %v, want one", runs)
+	}
+	steps, _ := store.Read(context.Background(), runs[0], domain.FirstSeq)
+	if !steps[0].Labels.Has(domain.LabelUntrusted) {
+		t.Errorf("labels = %v, want the body marked untrusted", steps[0].Labels)
+	}
+}

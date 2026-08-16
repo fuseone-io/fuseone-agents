@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/trigger"
 )
 
@@ -87,6 +88,11 @@ func (h *Hooks) receive(w http.ResponseWriter, r *http.Request) {
 		IdemKey: trigger.DeliveryKey(path, delivery),
 		Trigger: "webhook",
 		Input:   body,
+		// A body somebody outside sent. On a good day it is an ERP's JSON and
+		// on a bad one it is whatever they posted, and the difference is not
+		// visible from here — the secret proves who sent it and says nothing
+		// about what is inside.
+		Labels: domain.NewLabels(domain.LabelUntrusted),
 	})
 	/*
 		An agent that is not running is a state, not a failure of the platform.

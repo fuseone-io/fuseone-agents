@@ -42,6 +42,19 @@ type Request struct {
 	By domain.UserID
 	// Input is what the run is about. Stored outside the ledger.
 	Input []byte
+	/*
+		Labels are what is true about where the input came from.
+
+		Sealed on `run_started`, which the fold unions into the run, so a run
+		opened from outside meets the taint check on its very first proposal
+		rather than only after an untrusted tool has answered. Without it an
+		agent that read a webhook body and wrote straight from it passed the
+		check that exists for exactly that.
+
+		A fact about provenance and never a posture: a run the clock opened
+		carries none, because nobody outside said anything to it.
+	*/
+	Labels domain.Labels
 	// Simulation names the batch this run belongs to, and opening a run under
 	// one is what marks it simulated: never claimed by a worker, never
 	// counted as production. One field rather than a name beside a flag,
@@ -144,6 +157,7 @@ func (o *Opener) Open(ctx context.Context, req Request) (Result, error) {
 		OnBehalfOf: req.By,
 		IdemKey:    req.IdemKey,
 		At:         o.clock.Now(),
+		Labels:     req.Labels,
 		Payload: mustJSON(domain.RunStartedPayload{
 			Trigger: req.Trigger, InputRef: inputRef,
 			Simulated: req.Simulation != "", Simulation: req.Simulation,
