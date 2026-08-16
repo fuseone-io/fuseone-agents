@@ -20,7 +20,7 @@ same copy in two packages is how they stop agreeing.
 func CronSchedules(s Spec) []string {
 	out := []string{}
 	for _, t := range s.Triggers {
-		if t.Type == "cron" && t.Schedule != "" {
+		if t.Type == TriggerCron && t.Schedule != "" {
 			out = append(out, t.Schedule)
 		}
 	}
@@ -31,9 +31,51 @@ func CronSchedules(s Spec) []string {
 func WebhookPaths(s Spec) []string {
 	out := []string{}
 	for _, t := range s.Triggers {
-		if t.Type == "webhook" && t.Path != "" {
+		if t.Type == TriggerWebhook && t.Path != "" {
 			out = append(out, strings.TrimPrefix(t.Path, "/"))
 		}
 	}
 	return out
 }
+
+/*
+StartableFromConversation reports whether an ask in a conversation may start
+this agent.
+
+A bare declaration with no field, and deliberately so. The other three triggers
+are self-contained — cron carries its expression, webhook its path, event its
+name — and a channel cannot close that way, because a conversation carries a
+scope and the conversation-to-scope map is administrative. An author writing
+`conversation: C07-ops` would be choosing which conversation may start their
+agent, and the author is precisely the person who does not govern which
+conversations belong to which area (NT-005 §9).
+
+The agent declares willingness; the administration declares reach. That is the
+shape tools already have — the author asks for one, the Curator decides what it
+may do — and it exists for the same reason: describing a process must not grant
+any power.
+
+It earns its place in the other direction too. An agent that does not declare
+it cannot be started by any message at all, however the conversations are
+mapped, and being able to say "this one is internal, never startable by text"
+is a property worth being able to state.
+*/
+func StartableFromConversation(s Spec) bool {
+	for _, t := range s.Triggers {
+		if t.Type == TriggerChannel {
+			return true
+		}
+	}
+	return false
+}
+
+// The trigger types this platform serves. A type outside this set is refused
+// rather than ignored: every reader filters for what it knows, so an
+// unrecognised one publishes, prints back on the screen as configured, and
+// fires nothing — with no error state that describes it.
+const (
+	TriggerCron    = "cron"
+	TriggerWebhook = "webhook"
+	TriggerEvent   = "event"
+	TriggerChannel = "channel"
+)

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import ptBR from "@/i18n/pt-BR.json";
 import enUS from "@/i18n/en-US.json";
-import { TRIGGER_KINDS } from "@/features/agents/trigger-kinds";
+import { fieldOf, TRIGGER_KINDS } from "@/features/agents/trigger-kinds";
 
 /**
  * Every trigger kind has the four strings the screen asks it for.
@@ -14,6 +14,12 @@ import { TRIGGER_KINDS } from "@/features/agents/trigger-kinds";
  *
  * So the list of kinds is the test: add one and this fails until it can be
  * read in both languages.
+ *
+ * A kind that carries no field asks for one string rather than four. There is
+ * no field to label, no example to give and nothing that can be left unfilled
+ * — inventing the three to satisfy a loop would put words on a screen that
+ * never shows them, which is how a catalogue fills up with strings nobody can
+ * find or delete.
  */
 type Catalogue = { agents: Record<string, Record<string, string>> };
 
@@ -28,12 +34,12 @@ describe("what a trigger kind is called", () => {
 
     for (const [locale, catalogue] of Object.entries(CATALOGUES)) {
       for (const kind of TRIGGER_KINDS) {
-        for (const group of [
-          "trigger",
-          "triggerField",
-          "triggerExample",
-          "triggerNeeds",
-        ]) {
+        const groups =
+          fieldOf(kind) === undefined
+            ? ["trigger"]
+            : ["trigger", "triggerField", "triggerExample", "triggerNeeds"];
+
+        for (const group of groups) {
           if (!catalogue.agents[group]?.[kind]) {
             missing.push(`${locale}: agents.${group}.${kind}`);
           }

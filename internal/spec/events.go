@@ -41,7 +41,7 @@ func (r *Registry) Listeners(ctx context.Context) (map[string][]domain.AgentID, 
 	out := map[string][]domain.AgentID{}
 	for _, s := range specs {
 		for _, t := range s.Triggers {
-			if t.Type == "event" && t.Event != "" {
+			if t.Type == TriggerEvent && t.Event != "" {
 				out[t.Event] = append(out[t.Event], s.ID)
 			}
 		}

@@ -2783,9 +2783,26 @@ export interface components {
             /** Format: date-time */
             rotatedAt?: string | null;
         };
+        /**
+         * @description How a run starts. A type outside this list is refused rather than
+         *     ignored: every reader filters for the types it knows, so an
+         *     unrecognised one publishes, prints back on the screen as configured,
+         *     and fires nothing — with no error state that describes it.
+         */
         AgentTrigger: {
-            /** @enum {string} */
-            type: "cron" | "webhook" | "event";
+            /**
+             * @description `channel` names no conversation and carries no other field. The
+             *     agent declares that it *may* be started by an ask in a conversation
+             *     of its own scope; which conversations belong to which scope is
+             *     administrative. An author naming one would be choosing who may
+             *     start their agent, and that is the same separation that makes
+             *     classifying a tool the Curator's act and not theirs.
+             *
+             *     An agent that does not declare it cannot be started by any message,
+             *     however the conversations are mapped.
+             * @enum {string}
+             */
+            type: "cron" | "webhook" | "event" | "channel";
             schedule?: string;
             path?: string;
             event?: string;

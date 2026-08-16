@@ -420,10 +420,12 @@
     "toolsCited_one": "{{count}} tool cited",
     "toolsCited_other": "{{count}} tools cited",
     "trigger": {
+      "channel": "Conversation",
       "cron": "Scheduled",
-      "webhook": "Webhook",
-      "event": "Event"
+      "event": "Event",
+      "webhook": "Webhook"
     },
+    "triggerChannelExplains": "Starts when somebody mentions the agent in a conversation of its own area. Which conversations those are is decided in Integrations.",
     "triggerExample": {
       "cron": "0 9 * * 1-5",
       "webhook": "/hooks/ticket-opened",

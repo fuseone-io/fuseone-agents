@@ -282,3 +282,72 @@ func TestRender_emits_survivesTheRoundTrip(t *testing.T) {
 		t.Errorf("Emits = %v after the round trip, want the declared event", again.Emits)
 	}
 }
+
+/*
+A conversation is a fourth way in, and it names nothing.
+
+The three that exist are self-contained: cron carries its expression, webhook
+its path, event its name. A channel cannot close that way, because a
+conversation carries a scope and the conversation-to-scope map is
+administrative — an author writing `conversation: C07-ops` would be choosing
+which conversation may start their agent, and the author is precisely the
+person who does not govern that (NT-005 §9).
+
+So the agent declares willingness and the administration declares reach, which
+is the shape tools already have and exists for the same reason: describing a
+process must not grant any power.
+*/
+func TestParse_channelTrigger_declaresWillingnessAndNamesNothing(t *testing.T) {
+	t.Parallel()
+
+	s := parse(t, strings.Replace(valid,
+		`  - { type: cron, schedule: "*/15 * * * *" }`,
+		`  - { type: channel }`, 1))
+
+	if !spec.StartableFromConversation(s) {
+		t.Error("the agent declared a channel trigger and is not startable from one")
+	}
+}
+
+// And an agent that does not declare it cannot be started by any message,
+// however the conversations are mapped. Being able to say "this one is
+// internal, never startable by text" is a safety property worth declaring.
+func TestParse_noChannelTrigger_isNotStartableByAnyMessage(t *testing.T) {
+	t.Parallel()
+
+	if spec.StartableFromConversation(parse(t, valid)) {
+		t.Error("an agent that declared no channel trigger is startable from one")
+	}
+}
+
+func TestParse_channelTriggerNamingAConversation_isRefused(t *testing.T) {
+	t.Parallel()
+
+	_, err := spec.Parse("test.agent.md", []byte(strings.Replace(valid,
+		`  - { type: cron, schedule: "*/15 * * * *" }`,
+		`  - { type: channel, path: "C07-ops" }`, 1)))
+
+	if !errors.Is(err, spec.ErrInvalid) {
+		t.Fatalf("err = %v, want the definition refused", err)
+	}
+}
+
+/*
+A trigger type nobody serves is refused rather than ignored.
+
+Every reader filters for the types it knows, so `type: chanel` parsed,
+published, printed back on the screen as configured, and fired nothing. It is
+the same defect as an unreadable cron expression: a declaration that looks like
+configuration and reaches no clock, with no error state that describes it.
+*/
+func TestParse_aTriggerTypeNobodyServes_isRefused(t *testing.T) {
+	t.Parallel()
+
+	_, err := spec.Parse("test.agent.md", []byte(strings.Replace(valid,
+		`  - { type: cron, schedule: "*/15 * * * *" }`,
+		`  - { type: chanel }`, 1)))
+
+	if !errors.Is(err, spec.ErrInvalid) {
+		t.Fatalf("err = %v, want the typo refused", err)
+	}
+}

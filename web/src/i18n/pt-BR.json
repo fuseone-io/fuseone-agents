@@ -420,10 +420,12 @@
     "toolsCited_one": "{{count}} ferramenta citada",
     "toolsCited_other": "{{count}} ferramentas citadas",
     "trigger": {
+      "channel": "Conversa",
       "cron": "Agendado",
-      "webhook": "Webhook",
-      "event": "Evento"
+      "event": "Evento",
+      "webhook": "Webhook"
     },
+    "triggerChannelExplains": "Começa quando alguém menciona o agente numa conversa da área dele. Quais conversas são essas se decide em Integrações.",
     "triggerExample": {
       "cron": "0 9 * * 1-5",
       "webhook": "/hooks/chamado-aberto",

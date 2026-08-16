@@ -55,18 +55,30 @@ export function TriggerRow({
         </SelectContent>
       </Select>
 
+      {/* A channel trigger has no field: the author declares that an ask in a
+          conversation of this agent's scope may start it, and which
+          conversations belong to which scope is administrative. An input here
+          would be the author choosing who may start their own agent. */}
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <Input
-          className="font-mono"
-          aria-label={t(`agents.triggerField.${kind}`)}
-          placeholder={t(`agents.triggerExample.${kind}`)}
-          value={String(trigger[field] ?? "")}
-          onChange={(e) => onChange({ [field]: e.target.value })}
-        />
-        {incomplete(trigger) && (
-          <p className="text-2xs text-warning">
-            {t(`agents.triggerNeeds.${kind}`)}
+        {field === undefined ? (
+          <p className="text-xs text-muted-foreground">
+            {t("agents.triggerChannelExplains")}
           </p>
+        ) : (
+          <>
+            <Input
+              className="font-mono"
+              aria-label={t(`agents.triggerField.${kind}`)}
+              placeholder={t(`agents.triggerExample.${kind}`)}
+              value={String(trigger[field] ?? "")}
+              onChange={(e) => onChange({ [field]: e.target.value })}
+            />
+            {incomplete(trigger) && (
+              <p className="text-2xs text-warning">
+                {t(`agents.triggerNeeds.${kind}`)}
+              </p>
+            )}
+          </>
         )}
       </div>
 
