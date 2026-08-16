@@ -54,7 +54,10 @@ export function ServerForm({
         command: values.command,
         args: values.args.split(/\s+/).filter(Boolean),
         url: values.url,
-        token: values.token,
+        // Left empty means "leave what is stored", which is this form's whole
+        // reason for not demanding a secret to correct an address. Removing
+        // one is a separate gesture, on the server's own page.
+        token: values.token || undefined,
         acceptsLocalExecution: values.acceptsLocalExecution,
         enabled: values.enabled,
       });

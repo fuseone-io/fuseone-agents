@@ -2,8 +2,10 @@ package httpapi
 
 import (
 	"context"
+	"slices"
 	"testing"
 
+	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/known"
@@ -209,4 +211,131 @@ func TestListRecipes_withoutThePermission_isRefused(t *testing.T) {
 	if _, refused := resp.(openapi.ListRecipes403ApplicationProblemPlusJSONResponse); !refused {
 		t.Fatalf("response = %T, want 403", resp)
 	}
+}
+
+/*
+What the console is told about a server it has already narrowed.
+
+The surface is stored and the read model did not carry it, so a server somebody
+had cut down to three tools read back as all-in — and the page, which starts
+from what it is told, would have offered to save the wider list. The screen
+disagreeing with the server, in the direction that widens.
+
+An empty surface is the case worth naming: "chosen, and none of it" has to
+survive the round trip as itself and not as "nobody has chosen".
+*/
+func TestListIntegrations_carriesTheSurfaceThatWasChosen(t *testing.T) {
+	t.Parallel()
+	none := []string{}
+	admin := &fakeAdmin{servers: []domain.MCPServer{
+		{Name: "narrowed", Transport: domain.TransportHTTP, URL: "https://x/mcp",
+			Enabled: true, Surface: &[]string{"lookup"}},
+		{Name: "emptied", Transport: domain.TransportHTTP, URL: "https://y/mcp",
+			Enabled: true, Surface: &none},
+		{Name: "unchosen", Transport: domain.TransportHTTP, URL: "https://z/mcp",
+			Enabled: true},
+	}}
+
+	resp, err := serverWith(t, admin).ListIntegrations(as(domain.RoleCurator),
+		openapi.ListIntegrationsRequestObject{})
+	if err != nil {
+		t.Fatalf("ListIntegrations: %v", err)
+	}
+	listed, ok := resp.(openapi.ListIntegrations200JSONResponse)
+	if !ok {
+		t.Fatalf("response = %T", resp)
+	}
+
+	by := map[string]openapi.MCPServer{}
+	for _, s := range listed.McpServers {
+		by[s.Name] = s
+	}
+	if got := by["narrowed"].Surface; got == nil || len(*got) != 1 {
+		t.Errorf("narrowed surface = %v, want the one tool that was chosen", got)
+	}
+	if got := by["emptied"].Surface; got == nil || len(*got) != 0 {
+		t.Errorf("emptied surface = %v, want a chosen-and-empty surface", got)
+	}
+	if got := by["unchosen"].Surface; got != nil {
+		t.Errorf("unchosen surface = %v, want absent to stay absent", got)
+	}
+}
+
+/*
+The warning asks about the areas the caller can see, not about the
+administration area.
+
+It used to ask for agents in `adminScope` — one company and one area, the
+platform's own — so an installation whose agents live in `acme/cx` was told
+nobody would be affected by removing anything. A warning that undercounts is
+worse than none: it is read as an all-clear.
+
+Scoped to the caller rather than read wholesale, because the answer names
+agents. Somebody who may classify tools in one area has no business learning
+what runs in another.
+*/
+func TestListTools_theImpactWarning_asksAboutTheCallersScopesNotTheAdminArea(t *testing.T) {
+	t.Parallel()
+	one := &judging{tools: []domain.ToolEntry{
+		{ID: "crm.lookup", Server: "crm", OnSurface: true},
+	}}
+	agents := &agentsAsked{listed: []domain.AgentSummary{
+		{ID: "triagem", Tools: []domain.ToolID{"crm.lookup"}},
+	}}
+	server := NewServer(ledger.NewMemory(), "test").
+		WithAdministration(one, one, nil).
+		WithAgents(agents)
+
+	// An installation-wide curator: the grant contains every scope, which is
+	// what the person who classifies tools actually holds.
+	resp, err := server.ListTools(installationWide(domain.RoleCurator),
+		openapi.ListToolsRequestObject{})
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+	listed, ok := resp.(openapi.ListTools200JSONResponse)
+	if !ok {
+		t.Fatalf("response = %T", resp)
+	}
+
+	if slices.Contains(agents.asked, adminScope) {
+		t.Error("asked about the administration area, where an installation keeps no agents")
+	}
+	// And not about the scope above every company as though it were one: that
+	// filters for a company literally named "installation" and finds nobody,
+	// which looks exactly like the bug it replaced.
+	if slices.Contains(agents.asked, domain.Scope{Company: domain.Installation}) {
+		t.Error("asked about the installation scope as though it were a company")
+	}
+	named := listed.Items[0].DeclaredBy
+	if named == nil || len(*named) != 1 || (*named)[0] != "triagem" {
+		t.Errorf("declaredBy = %v, want the agent that would stop", named)
+	}
+}
+
+func installationWide(role domain.Role) context.Context {
+	return auth.WithPrincipal(context.Background(), domain.Principal{
+		ID: "usr_ana", Kind: domain.PrincipalUser,
+		Grants: []domain.Grant{{Scope: domain.Scope{Company: domain.Installation}, Role: role}},
+	})
+}
+
+// agentsAsked records which scopes it was asked about, which is the thing that
+// was wrong rather than the answer it gave.
+type agentsAsked struct {
+	listed []domain.AgentSummary
+	asked  []domain.Scope
+}
+
+func (a *agentsAsked) List(_ context.Context, scope domain.Scope, _ bool) ([]domain.AgentSummary, error) {
+	a.asked = append(a.asked, scope)
+	return a.listed, nil
+}
+
+func (a *agentsAsked) Versions(context.Context, domain.AgentID) ([]domain.AgentSummary, error) {
+	return nil, nil
+}
+
+func (a *agentsAsked) Instructions(context.Context, domain.AgentID, domain.VersionID) (string, string, error) {
+	return "", "", nil
 }

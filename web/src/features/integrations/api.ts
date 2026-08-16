@@ -27,7 +27,15 @@ export function usePutMCPServer() {
       command: string;
       args: string[];
       url: string;
-      token: string;
+      /**
+       * Absent leaves the stored one; an empty string removes it.
+       *
+       * Two different requests that a truthiness check collapses into one —
+       * which is how the page grew a revoke button that did not revoke: it
+       * sent an empty token, the client dropped it as falsy, and the server
+       * read the silence as "keep what you have".
+       */
+      token?: string;
       /**
        * Variables a local server is given. Omitted when the field was left
        * alone, because an empty object means "clear them" and an absent one
@@ -48,7 +56,7 @@ export function usePutMCPServer() {
             url: input.url,
             // Omitted rather than emptied: an empty one would read as
             // "clear it", and correcting a URL must not drop the token.
-            token: input.token || undefined,
+            token: input.token,
             env: input.env,
             acceptsLocalExecution: input.acceptsLocalExecution,
             enabled: input.enabled,

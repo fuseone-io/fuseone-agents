@@ -28,6 +28,9 @@ export function ConnectionPanel({ server }: { server: MCPServer }) {
   const local = (server.transport ?? "stdio") === "stdio";
 
   async function write(credential: { token?: string; env?: Record<string, string> }) {
+    // Passed through exactly as given. An undefined token means this write is
+    // not about the token, and an empty one means somebody is removing it —
+    // collapsing the two is how a revoke button stops revoking.
     try {
       await put.mutateAsync({
         name: server.name,
@@ -37,7 +40,7 @@ export function ConnectionPanel({ server }: { server: MCPServer }) {
         url: server.url ?? "",
         enabled: server.enabled,
         acceptsLocalExecution: server.acceptsLocalExecution ?? false,
-        token: credential.token ?? "",
+        token: credential.token,
         env: credential.env,
       });
       setValue({ token: "", env: "" });

@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 )
@@ -21,14 +22,57 @@ func (s *Server) declaringTools(ctx context.Context) (map[domain.ToolID][]string
 	if s.agents == nil {
 		return nil, nil
 	}
-	current, err := s.agents.List(ctx, adminScope, false)
-	if err != nil {
-		return nil, err
+
+	/*
+		Where the caller may read agents, not where the administration area
+		lives.
+
+		`adminScope` is one company and one area — the platform's own — so
+		asking for agents there answered with almost nothing: an installation's
+		real agents live in `acme/cx` and the warning quietly said nobody would
+		be affected. A warning that undercounts is worse than none, because it
+		is read as an all-clear.
+
+		Scoped to the caller rather than read wholesale, because the answer
+		names agents. Somebody who may classify tools in one area has no
+		business learning what runs in another.
+	*/
+	/*
+		An installation-wide grant is not a scope to filter by.
+
+		`{Company: Installation}` is the scope above every company, and passed
+		to the listing as though it were one it filters for a company literally
+		named "installation" and matches nothing. The unfiltered read is what
+		it means, and getting this wrong looks exactly like getting the old
+		version right: an empty warning either way.
+	*/
+	visible := auth.VisibleScopes(ctx, domain.PermAgentRead)
+	for _, scope := range visible {
+		if scope.Company == domain.Installation {
+			visible = []domain.Scope{{}}
+			break
+		}
 	}
-	out := map[domain.ToolID][]string{}
-	for _, agent := range current {
-		for _, tool := range agent.Tools {
-			out[tool] = append(out[tool], string(agent.ID))
+
+	var (
+		out  = map[domain.ToolID][]string{}
+		seen = map[domain.AgentID]bool{}
+	)
+	for _, scope := range visible {
+		current, err := s.agents.List(ctx, scope, false)
+		if err != nil {
+			return nil, err
+		}
+		for _, agent := range current {
+			// A grant on a company and one on an area inside it both answer,
+			// and an agent counted twice would read as two agents stopping.
+			if seen[agent.ID] {
+				continue
+			}
+			seen[agent.ID] = true
+			for _, tool := range agent.Tools {
+				out[tool] = append(out[tool], string(agent.ID))
+			}
 		}
 	}
 	return out, nil

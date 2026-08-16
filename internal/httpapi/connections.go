@@ -83,6 +83,15 @@ func (s *Server) ListIntegrations(ctx context.Context, _ openapi.ListIntegration
 			HasSecret: ptr(srv.HasSecret),
 			Managed:   ptr(true),
 			UpdatedBy: ptr(srv.UpdatedBy), UpdatedAt: ptr(srv.UpdatedAt),
+			// What was brought in, and who accepted running it. Both are
+			// stored and neither reached the screen, so a server somebody had
+			// narrowed read back as all-in — and saving anything from that
+			// screen would have widened it back.
+			//
+			// The pointer is the whole point: nil is "nobody has chosen", and
+			// an empty list is "chosen, and none of it".
+			Surface:               srv.Surface,
+			AcceptsLocalExecution: ptr(srv.AcceptsLocalExecution),
 		}
 		server.Command = someString(srv.Command)
 		server.Url = someString(srv.URL)
