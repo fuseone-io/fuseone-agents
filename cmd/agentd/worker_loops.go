@@ -43,10 +43,21 @@ func (p *workerParts) startLoops(ctx context.Context, cfg workerFlags, sim *work
 	// it later.
 	go keepMonthsAhead(ctx, ledger.NewPartitions(p.configPool, time.Now))
 
-	// What the people waiting on a run get told (NT-005 stage 1). Outbound
-	// only: nothing a conversation says reaches this process.
+	// What the people waiting on a run get told (NT-005 stage 1).
 	if p.settings != nil {
 		go reportToChannels(ctx, p.settings, channel.NewPostgres(p.configPool), cfg.baseURL)
+	}
+
+	// And what they ask back (NT-005 stage 3). The door writes an ask down and
+	// acknowledges; this is what turns it into a run, so a process that died
+	// between the two finds it on the next pass instead of losing the question
+	// it already told Slack it had.
+	//
+	// Its own owner name. Two leases over two tables held by one process is
+	// two things to tell apart in a log at three in the morning, and the run
+	// queue already earned that name for the runs it holds.
+	if p.settings != nil && p.registry != nil {
+		p.consumeAsks(ctx, cfg.owner+"-asks")
 	}
 
 	// Retention. It reads the configured window on every pass, so shortening
