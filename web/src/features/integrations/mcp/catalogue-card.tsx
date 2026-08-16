@@ -27,7 +27,7 @@ export function CatalogueCard({
 
   return (
     <article className="flex flex-col gap-2 rounded-xl border p-3 shadow-sm">
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="truncate text-sm font-medium">{entry.title}</p>
           <p className="truncate text-xs text-muted-foreground">
@@ -36,7 +36,12 @@ export function CatalogueCard({
               : t("mcp.publisherUnknown")}
           </p>
         </div>
-        <Button size="sm" variant={entry.configured ? "outline" : "default"} onClick={onOpen}>
+        <Button
+          size="sm"
+          variant={entry.configured ? "outline" : "default"}
+          onClick={onOpen}
+          className="self-start"
+        >
           {entry.configured ? t("mcp.open") : t("mcp.connectIt")}
         </Button>
       </div>

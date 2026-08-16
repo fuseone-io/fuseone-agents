@@ -35,8 +35,12 @@ export function AdminPage() {
           laptop and reads as a paragraph of links rather than as navigation.
           Down the side they are a list, they have room for their full names,
           and the one in force is obvious without counting. */}
-      <Tabs {...tab} orientation="vertical" className="min-h-0 flex-1 gap-6">
-        <TabsList className="w-48 shrink-0 self-start">
+      <Tabs
+        {...tab}
+        orientation="vertical"
+        className="min-h-0 flex-1 flex-col gap-6 lg:flex-row"
+      >
+        <TabsList className="w-full shrink-0 self-stretch lg:w-48 lg:self-start">
           <TabsTrigger value="tools">{t("admin.toolsWaiting")}</TabsTrigger>
           <TabsTrigger value="authoring">{t("admin.authoring")}</TabsTrigger>
           <TabsTrigger value="companies">

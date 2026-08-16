@@ -89,7 +89,7 @@ export function CataloguePage() {
               hint={t("mcp.nothingHereHint")}
             />
           ) : (
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))] gap-3">
               {shown.map((entry) => (
                 <CatalogueCard
                   key={entry.name}

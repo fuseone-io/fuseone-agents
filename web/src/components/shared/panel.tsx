@@ -31,10 +31,10 @@ export function Panel({
       )}
     >
       {title && (
-        <header className="flex items-center gap-3 border-b px-4 py-3">
-          <h2 className="flex-1 text-base font-medium">{title}</h2>
+        <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-4 py-3">
+          <h2 className="min-w-0 flex-1 text-base font-medium">{title}</h2>
           {action && (
-            <div className="flex shrink-0 items-center gap-2">{action}</div>
+            <div className="flex min-w-0 items-center gap-2">{action}</div>
           )}
         </header>
       )}

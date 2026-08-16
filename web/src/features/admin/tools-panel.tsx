@@ -110,7 +110,7 @@ export function ToolsPanel() {
           />
         </div>
       ) : (
-        <Table>
+        <Table className="min-w-[760px]">
           <TableHeader>
             <TableRow className="hover:bg-transparent">
               <TableHead className={HEAD}>{t("admin.tool")}</TableHead>
