@@ -1460,6 +1460,9 @@
     "saveCredential": "Salvar a credencial",
     "openServer": "Ferramentas e superfície",
     "startFromARecipe": "Começar de algo que conhecemos",
-    "variablesExample": "GITHUB_TOKEN=ghp_...\nREGION=eu-west-1"
+    "variablesExample": "GITHUB_TOKEN=ghp_...\nREGION=eu-west-1",
+    "rule": "Julgar",
+    "ruleAgain": "Mudar a decisão",
+    "suggests": "Esta plataforma chamaria de {{effect}} — abra para ver por quê."
   }
 }

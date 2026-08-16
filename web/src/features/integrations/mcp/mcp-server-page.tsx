@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useParams } from "react-router-dom";
 import { Server } from "lucide-react";
@@ -9,6 +10,8 @@ import { ErrorState, LoadingRows } from "@/components/shared/states";
 import { problemMessage } from "@/lib/api/problem-message";
 import { SurfacePicker } from "@/features/integrations/mcp/surface-picker";
 import { ConnectionPanel } from "@/features/integrations/mcp/connection-panel";
+import { ClassifyDialog } from "@/features/admin/classify-dialog";
+import type { Tool } from "@/features/admin/api";
 import { useSetSurface } from "@/features/integrations/mcp/api";
 import { useMCPServer } from "@/features/integrations/mcp/use-mcp-server";
 
@@ -31,6 +34,7 @@ export function MCPServerPage() {
   const { server, tools, chosen, dirty, toggle, reset, isLoading, error, refetch } =
     useMCPServer(name);
   const save = useSetSurface();
+  const [ruling, setRuling] = useState<Tool | null>(null);
 
   async function saveSurface() {
     if (!server) return;
@@ -73,7 +77,12 @@ export function MCPServerPage() {
       <Panel title={t("mcp.surface")} action={<Counted chosen={chosen.size} of={tools.length} />}>
         <div className="space-y-3">
           <p className="text-xs text-muted-foreground">{t("mcp.surfaceIs")}</p>
-          <SurfacePicker tools={tools} chosen={chosen} onToggle={toggle} />
+          <SurfacePicker
+            tools={tools}
+            chosen={chosen}
+            onToggle={toggle}
+            onClassify={setRuling}
+          />
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={reset} disabled={!dirty}>
               {t("common.cancel")}
@@ -84,6 +93,11 @@ export function MCPServerPage() {
           </div>
         </div>
       </Panel>
+
+      {/* The other tools travel with it: a compensator is chosen from what
+          exists, and a list that stopped at this server would offer an undo
+          the platform cannot reach. */}
+      <ClassifyDialog tool={ruling} tools={tools} onClose={() => setRuling(null)} />
     </div>
   );
 }

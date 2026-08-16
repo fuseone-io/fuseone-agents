@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Mono } from "@/components/shared/mono";
@@ -22,10 +23,12 @@ export function SurfacePicker({
   tools,
   chosen,
   onToggle,
+  onClassify,
 }: {
   tools: Tool[];
   chosen: Set<string>;
   onToggle: (remoteName: string, next: boolean) => void;
+  onClassify: (tool: Tool) => void;
 }) {
   const { t } = useTranslation();
 
@@ -41,6 +44,7 @@ export function SurfacePicker({
           tool={tool}
           chosen={chosen.has(remoteNameOf(tool))}
           onToggle={onToggle}
+          onClassify={onClassify}
         />
       ))}
     </ul>
@@ -51,10 +55,12 @@ function ToolRow({
   tool,
   chosen,
   onToggle,
+  onClassify,
 }: {
   tool: Tool;
   chosen: boolean;
   onToggle: (remoteName: string, next: boolean) => void;
+  onClassify: (tool: Tool) => void;
 }) {
   const { t } = useTranslation();
   const declaredBy = tool.declaredBy ?? [];
@@ -80,6 +86,15 @@ function ToolRow({
         {/* Said where the choice is made, not discovered in production. Off
             the surface the tool is not a capability this installation has, and
             an agent that still names it stops at the Gate. */}
+        {/* What the platform believes, with where the belief came from.
+            Shown before the dialog is opened so the Curator meets a proposal
+            rather than a blank form — and never applied, which is the line
+            between a recipe and a connector. */}
+        {tool.effect === "unknown" && tool.suggested && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            {t("mcp.suggests", { effect: t(`effect.${tool.suggested.effect}`) })}
+          </p>
+        )}
         {leaving && (
           <p className="mt-1 text-xs text-danger">
             {t("mcp.leavingAffects", {
@@ -89,7 +104,18 @@ function ToolRow({
           </p>
         )}
       </div>
-      <EffectBadge effect={tool.effect} stale={tool.stale} />
+      {/* Ruled from here, because the two questions are asked in the same
+          breath and a Curator sent to another screen to answer the second
+          comes back having lost the first. Bringing a tool in is not saying
+          what it does, and the button says which act this is. */}
+      <div className="flex shrink-0 items-center gap-2">
+        <EffectBadge effect={tool.effect} stale={tool.stale} />
+        <Button size="sm" variant="ghost" className="h-7" onClick={() => onClassify(tool)}>
+          {tool.effect === "unknown" || tool.stale
+            ? t("mcp.rule")
+            : t("mcp.ruleAgain")}
+        </Button>
+      </div>
     </li>
   );
 }
