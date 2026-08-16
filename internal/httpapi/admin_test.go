@@ -21,6 +21,7 @@ type fakeAdmin struct {
 
 	putServer   domain.MCPServer
 	putToken    string
+	putEnv      map[string]string
 	token       string
 	putProvider domain.ModelProvider
 	putKey      string
@@ -36,13 +37,16 @@ func (f *fakeAdmin) Providers(context.Context) ([]domain.ModelProvider, error) {
 	return f.providers, f.err
 }
 func (f *fakeAdmin) PutMCPServer(
-	_ context.Context, by domain.UserID, _ domain.Scope, s domain.MCPServer, token string,
+	_ context.Context, by domain.UserID, _ domain.Scope, s domain.MCPServer,
+	creds domain.MCPCredentials,
 ) error {
-	f.putServer, f.putBy, f.putToken = s, by, token
+	f.putServer, f.putBy, f.putToken, f.putEnv = s, by, creds.Token, creds.Env
 	return f.err
 }
 
-func (f *fakeAdmin) MCPToken(context.Context, string) (string, error) { return f.token, nil }
+func (f *fakeAdmin) MCPCredentials(context.Context, string) (domain.MCPCredentials, error) {
+	return domain.MCPCredentials{Token: f.token}, nil
+}
 func (f *fakeAdmin) DeleteMCPServer(_ context.Context, by domain.UserID, _ domain.Scope, name string) error {
 	f.deleted, f.putBy = name, by
 	return f.err

@@ -92,7 +92,7 @@ func (i *Integrations) MCPServers(ctx context.Context) ([]domain.MCPServer, erro
 // hand.
 func (i *Integrations) PutMCPServer(
 	ctx context.Context, by domain.UserID, scope domain.Scope,
-	server domain.MCPServer, token string,
+	server domain.MCPServer, creds domain.MCPCredentials,
 ) error {
 	transport := server.TransportOf()
 	switch {
@@ -114,32 +114,65 @@ func (i *Integrations) PutMCPServer(
 		return fmt.Errorf("admin: encode MCP server: %w", err)
 	}
 
+	/*
+		Whichever half this write left out stays.
+
+		Correcting an address must not demand re-entering a token nobody has to
+		hand, and adding a variable must not drop one silently. The way to
+		remove something is to send it empty, which is a different request from
+		not sending it at all.
+	*/
+	merged, err := i.mergedCredentials(ctx, server.Name, creds)
+	if err != nil {
+		return err
+	}
+
 	return writeSetting(ctx, i.pool, i.settings, by, scope, settings.Setting{
 		ScopeKind: settings.ScopeInstallation,
 		Kind:      settings.KindMCPServer,
 		Name:      server.Name,
 		Value:     value,
-		Secret:    token,
+		Secret:    merged.Sealed(),
 		Enabled:   server.Enabled,
 		UpdatedBy: string(by),
 	}, "mcp_server.configured", server.Name, map[string]any{
 		// Never the token, only that one arrived.
 		"transport": transport, "command": server.Command, "url": server.URL,
-		"enabled": server.Enabled, "tokenChanged": token != "",
+		"enabled": server.Enabled, "tokenChanged": creds.Token != "",
+		// Which variables, never their values. That a server was given a
+		// credential is a fact an auditor may need; the credential is not.
+		"variables": len(merged.Env),
 		// Who accepted local execution, and when, is the whole point of
 		// recording it: the acceptance is a person's, not a checkbox's.
 		"acceptsLocalExecution": server.AcceptsLocalExecution,
 	})
 }
 
-// MCPToken opens a remote server's bearer token. Separate and explicit:
+// MCPCredentials opens what a server was given. Separate and explicit:
 // reading configuration is routine, reading a credential is not.
-func (i *Integrations) MCPToken(ctx context.Context, name string) (string, error) {
+func (i *Integrations) MCPCredentials(
+	ctx context.Context, name string,
+) (domain.MCPCredentials, error) {
 	set, err := i.settings.Reveal(ctx, settings.ScopeInstallation, domain.Scope{}, settings.KindMCPServer, name)
 	if err != nil {
-		return "", err
+		return domain.MCPCredentials{}, err
 	}
-	return set.Secret, nil
+	return domain.ReadMCPCredentials(set.Secret), nil
+}
+
+// mergedCredentials folds a write onto what is stored. A server nobody has
+// configured yet reads as nothing, which merges to exactly what arrived.
+func (i *Integrations) mergedCredentials(
+	ctx context.Context, name string, given domain.MCPCredentials,
+) (domain.MCPCredentials, error) {
+	stored, err := i.MCPCredentials(ctx, name)
+	if err != nil {
+		// Not found is not a failure here: this is how the first write to a
+		// new server looks, and refusing it would make a server impossible to
+		// create.
+		return given, nil //nolint:nilerr // absent reads as nothing stored
+	}
+	return stored.Merge(given), nil
 }
 
 // ForgettingHealth wires where observations are dropped when a server is

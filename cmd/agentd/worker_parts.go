@@ -157,9 +157,18 @@ func (p *workerParts) connectTools(ctx context.Context, servers []string) error 
 
 	for _, entry := range servers {
 		name, command, _ := strings.Cut(entry, "=")
+		// Accepted by having been typed. A server named on the command line
+		// was put there by whoever starts this process, which is the same
+		// decision the console asks for in a checkbox — asking again would be
+		// asking the person who wrote the flag to confirm the flag.
+		//
+		// It carries no variables of its own: those live in the vault, and a
+		// flag has no vault entry. A local server that needs a credential is
+		// configured through the console.
 		if err := connectServer(ctx, p.catalog, domain.MCPServer{
 			Name: name, Transport: domain.TransportStdio, Command: command,
-		}, ""); err != nil {
+			AcceptsLocalExecution: true,
+		}, domain.MCPCredentials{}); err != nil {
 			slog.Error("tool server did not answer; its tools are unavailable",
 				"server", name, "err", err)
 			observe(ctx, p.health, name, false, 0, err.Error())

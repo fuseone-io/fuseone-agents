@@ -48,12 +48,23 @@ func (s *Server) PutMCPServer(ctx context.Context, req openapi.PutMCPServerReque
 	if req.Body.AcceptsLocalExecution != nil {
 		server.AcceptsLocalExecution = *req.Body.AcceptsLocalExecution
 	}
-	token := ""
+	/*
+		Only what this request named.
+
+		An omitted token means "keep the stored one" and an omitted set of
+		variables means the same, which is what lets somebody correct an
+		address without re-entering a secret they do not have. Defaulting
+		either to empty here would turn every edit into a quiet erasure.
+	*/
+	var creds domain.MCPCredentials
 	if req.Body.Token != nil {
-		token = *req.Body.Token
+		creds.Token = *req.Body.Token
+	}
+	if req.Body.Env != nil {
+		creds.Env = *req.Body.Env
 	}
 
-	if err := s.integrations.PutMCPServer(ctx, caller, adminScope, server, token); err != nil {
+	if err := s.integrations.PutMCPServer(ctx, caller, adminScope, server, creds); err != nil {
 		return openapi.PutMCPServer400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
 				upstreamRefused(err.Error())),

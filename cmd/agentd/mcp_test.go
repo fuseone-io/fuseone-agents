@@ -28,7 +28,7 @@ func TestCommandFor_aStdioServer_doesNotInheritTheWorkersEnvironment(t *testing.
 	t.Setenv("DATABASE_URL", "postgres://must-not-travel")
 	t.Setenv("PATH", "/usr/bin:/bin")
 
-	cmd, err := commandFor(t.Context(), accepted())
+	cmd, err := commandFor(t.Context(), accepted(), domain.MCPCredentials{})
 	if err != nil {
 		t.Fatalf("commandFor: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestCommandFor_aVariableTheWorkerDoesNotHold_isNotPassedEmpty(t *testing.T)
 		t.Fatalf("unset: %v", err)
 	}
 
-	cmd, err := commandFor(t.Context(), accepted())
+	cmd, err := commandFor(t.Context(), accepted(), domain.MCPCredentials{})
 	if err != nil {
 		t.Fatalf("commandFor: %v", err)
 	}
@@ -99,9 +99,66 @@ func TestCommandFor_aLocalServerNobodyAccepted_isNotStarted(t *testing.T) {
 	server := accepted()
 	server.AcceptsLocalExecution = false
 
-	if _, err := commandFor(t.Context(), server); err == nil {
+	if _, err := commandFor(t.Context(), server, domain.MCPCredentials{}); err == nil {
 		t.Fatal("no error; a program nobody agreed to would have been started")
 	} else if !strings.Contains(err.Error(), "local") {
 		t.Errorf("err = %v, want a sentence naming what was not accepted", err)
+	}
+}
+
+/*
+A local server's own variables reach it, and only its own.
+
+The allowlist closed the hole and took the capability with it: before this,
+inheritance was how a local server ever got a token. So it receives them
+explicitly, from the vault, per server — and the worker's own secrets still do
+not travel, which is the property the whole change exists for.
+*/
+func TestCommandFor_theServersOwnVariables_areGivenWithoutReopeningInheritance(t *testing.T) {
+	t.Setenv("FUSEONE_MASTER_KEY", "must-not-travel")
+	t.Setenv("PATH", "/usr/bin:/bin")
+
+	cmd, err := commandFor(t.Context(), accepted(), domain.MCPCredentials{
+		Env: map[string]string{"GITHUB_TOKEN": "ghp_configured"},
+	})
+	if err != nil {
+		t.Fatalf("commandFor: %v", err)
+	}
+
+	if !slices.Contains(cmd.Env, "GITHUB_TOKEN=ghp_configured") {
+		t.Errorf("Env = %v, want the configured variable", cmd.Env)
+	}
+	if !slices.Contains(cmd.Env, "PATH=/usr/bin:/bin") {
+		t.Errorf("Env = %v, want the allowlist as well", cmd.Env)
+	}
+	if slices.ContainsFunc(cmd.Env, func(v string) bool {
+		return strings.HasPrefix(v, "FUSEONE_MASTER_KEY=")
+	}) {
+		t.Error("configuring a variable reopened inheritance")
+	}
+}
+
+// A server that names a variable the allowlist also carries means the one it
+// named. Its own configuration is the more specific statement.
+func TestCommandFor_aConfiguredVariable_winsOverTheOneCopiedThrough(t *testing.T) {
+	t.Setenv("PATH", "/usr/bin")
+
+	cmd, err := commandFor(t.Context(), accepted(), domain.MCPCredentials{
+		Env: map[string]string{"PATH": "/opt/tools/bin"},
+	})
+	if err != nil {
+		t.Fatalf("commandFor: %v", err)
+	}
+
+	// Both are present and the configured one is last, which is what an
+	// exec environment resolves to.
+	last := ""
+	for _, v := range cmd.Env {
+		if strings.HasPrefix(v, "PATH=") {
+			last = v
+		}
+	}
+	if last != "PATH=/opt/tools/bin" {
+		t.Errorf("PATH resolves to %q, want the configured one", last)
 	}
 }

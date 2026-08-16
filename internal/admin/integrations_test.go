@@ -115,7 +115,7 @@ func TestPutMCPServer_withoutACommand_isRefused(t *testing.T) {
 
 	// A server row with nothing to run is a tool source that silently offers
 	// nothing, which reads as "no tools" rather than "misconfigured".
-	err := i.PutMCPServer(context.Background(), "usr_ana", platform, domain.MCPServer{Name: "crm"}, "")
+	err := i.PutMCPServer(context.Background(), "usr_ana", platform, domain.MCPServer{Name: "crm"}, domain.MCPCredentials{})
 	if err == nil {
 		t.Fatal("PutMCPServer accepted a server with no command")
 	}
@@ -130,7 +130,7 @@ func TestDeleteMCPServer_isRecorded(t *testing.T) {
 		domain.MCPServer{
 			Name: "crm", Command: "/usr/local/bin/crm-mcp", Enabled: true,
 			AcceptsLocalExecution: true,
-		}, ""); err != nil {
+		}, domain.MCPCredentials{}); err != nil {
 		t.Fatalf("PutMCPServer: %v", err)
 	}
 	if err := i.DeleteMCPServer(ctx, "usr_ana", platform, "crm"); err != nil {
@@ -193,7 +193,7 @@ func TestPutMCPServer_remote_needsAnAddressRatherThanACommand(t *testing.T) {
 
 	err := i.PutMCPServer(context.Background(), "usr_ana", platform, domain.MCPServer{
 		Name: "github", Transport: domain.TransportHTTP, Enabled: true,
-	}, "")
+	}, domain.MCPCredentials{})
 	if !errors.Is(err, admin.ErrNoURL) {
 		t.Fatalf("PutMCPServer = %v, want a refusal naming the missing address", err)
 	}
@@ -204,7 +204,7 @@ func TestPutMCPServer_local_stillNeedsACommand(t *testing.T) {
 
 	err := i.PutMCPServer(context.Background(), "usr_ana", platform, domain.MCPServer{
 		Name: "crm", Transport: domain.TransportStdio, Enabled: true,
-	}, "")
+	}, domain.MCPCredentials{})
 	if !errors.Is(err, admin.ErrNoCommand) {
 		t.Fatalf("PutMCPServer = %v", err)
 	}
@@ -217,7 +217,7 @@ func TestPutMCPServer_remote_sealsItsTokenAndNeverListsIt(t *testing.T) {
 	if err := i.PutMCPServer(ctx, "usr_ana", platform, domain.MCPServer{
 		Name: "github", Transport: domain.TransportHTTP,
 		URL: "https://api.githubcopilot.com/mcp/", Enabled: true,
-	}, "ghp_secret"); err != nil {
+	}, domain.MCPCredentials{Token: "ghp_secret"}); err != nil {
 		t.Fatalf("PutMCPServer: %v", err)
 	}
 
@@ -233,12 +233,12 @@ func TestPutMCPServer_remote_sealsItsTokenAndNeverListsIt(t *testing.T) {
 	if !servers[0].HasSecret {
 		t.Error("the listing does not say a token is stored")
 	}
-	token, err := i.MCPToken(ctx, "github")
+	creds, err := i.MCPCredentials(ctx, "github")
 	if err != nil {
-		t.Fatalf("MCPToken: %v", err)
+		t.Fatalf("MCPCredentials: %v", err)
 	}
-	if token != "ghp_secret" {
-		t.Errorf("token = %q", token)
+	if creds.Token != "ghp_secret" {
+		t.Errorf("token = %q", creds.Token)
 	}
 }
 
@@ -255,7 +255,7 @@ func TestPutMCPServer_storedBeforeTransportsExisted_readsAsLocal(t *testing.T) {
 	if err := i.PutMCPServer(ctx, "usr_ana", platform, domain.MCPServer{
 		Name: "crm", Command: "bin/devstack", Args: []string{"mcp"}, Enabled: true,
 		AcceptsLocalExecution: true,
-	}, ""); err != nil {
+	}, domain.MCPCredentials{}); err != nil {
 		t.Fatalf("PutMCPServer: %v", err)
 	}
 
@@ -285,7 +285,7 @@ func TestPutMCPServer_aLocalServerNobodyAccepted_isRefused(t *testing.T) {
 		domain.MCPServer{
 			Name: "local-tools", Transport: domain.TransportStdio,
 			Command: "/usr/bin/mcp-server", Enabled: true,
-		}, "")
+		}, domain.MCPCredentials{})
 	if !errors.Is(err, admin.ErrLocalExecutionNotAccepted) {
 		t.Fatalf("err = %v, want the acceptance to be required", err)
 	}
@@ -301,7 +301,7 @@ func TestPutMCPServer_anAcceptedLocalServer_recordsWhoAcceptedIt(t *testing.T) {
 		Name: "local-tools", Transport: domain.TransportStdio,
 		Command: "/usr/bin/mcp-server", Enabled: true,
 		AcceptsLocalExecution: true,
-	}, ""); err != nil {
+	}, domain.MCPCredentials{}); err != nil {
 		t.Fatalf("PutMCPServer: %v", err)
 	}
 
@@ -333,7 +333,76 @@ func TestPutMCPServer_aRemoteServer_needsNoAcceptance(t *testing.T) {
 		domain.MCPServer{
 			Name: "remote-tools", Transport: domain.TransportHTTP,
 			URL: "https://tools.example.com/mcp", Enabled: true,
-		}, "tok"); err != nil {
+		}, domain.MCPCredentials{Token: "tok"}); err != nil {
 		t.Fatalf("PutMCPServer: %v", err)
+	}
+}
+
+/*
+A local server receives its credential explicitly, or not at all.
+
+The worker stopped handing children its own environment, which closed a hole
+and removed the only way a local server ever got a token. This is the
+replacement: variables of its own, sealed in the vault beside the bearer, given
+to the process and to nothing else.
+*/
+func TestPutMCPServer_local_sealsItsVariablesAndNeverListsThem(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, domain.MCPServer{
+		Name: "local-github", Transport: domain.TransportStdio,
+		Command: "/usr/bin/mcp-github", Enabled: true, AcceptsLocalExecution: true,
+	}, domain.MCPCredentials{Env: map[string]string{"GITHUB_TOKEN": "ghp_secret"}}); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+
+	servers, err := i.MCPServers(ctx)
+	if err != nil {
+		t.Fatalf("MCPServers: %v", err)
+	}
+	if !servers[0].HasSecret {
+		t.Error("the listing does not say a credential is stored")
+	}
+	creds, err := i.MCPCredentials(ctx, "local-github")
+	if err != nil {
+		t.Fatalf("MCPCredentials: %v", err)
+	}
+	if creds.Env["GITHUB_TOKEN"] != "ghp_secret" {
+		t.Errorf("env = %v, want the variable back from the vault", creds.Env)
+	}
+}
+
+/*
+Correcting one thing does not erase another.
+
+The failure is quiet and expensive: somebody fixes a command, the token they
+never had to hand goes with it, and the server stops answering for a reason
+nothing on the screen mentions.
+*/
+func TestPutMCPServer_aWriteThatOmitsTheCredential_keepsTheStoredOne(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+	server := domain.MCPServer{
+		Name: "local-github", Transport: domain.TransportStdio,
+		Command: "/usr/bin/mcp-github", Enabled: true, AcceptsLocalExecution: true,
+	}
+
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, server,
+		domain.MCPCredentials{Env: map[string]string{"GITHUB_TOKEN": "ghp_secret"}}); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+	server.Args = []string{"--verbose"}
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, server,
+		domain.MCPCredentials{}); err != nil {
+		t.Fatalf("PutMCPServer again: %v", err)
+	}
+
+	creds, err := i.MCPCredentials(ctx, "local-github")
+	if err != nil {
+		t.Fatalf("MCPCredentials: %v", err)
+	}
+	if creds.Env["GITHUB_TOKEN"] != "ghp_secret" {
+		t.Errorf("env = %v; editing the arguments dropped the credential", creds.Env)
 	}
 }

@@ -5120,6 +5120,14 @@ export interface operations {
                     url?: string;
                     /** @description Bearer token for a remote server. Omit to keep the stored one — correcting a URL must not demand re-entering a secret nobody has to hand. */
                     token?: string;
+                    /**
+                     * @description Variables handed to a local server, and only to one. A program started inside the worker no longer inherits the worker's environment, so this is how it receives the credential it needs — explicitly, per server, from the vault.
+                     *     Sealed like the token, because the reason a server needs a variable is nearly always that the variable is a key, and a field that is sometimes a secret is stored as one always.
+                     *     Omit to keep what is stored. Send an empty object to clear it: not sending something and sending nothing are different requests, and only one of them can be an erasure.
+                     */
+                    env?: {
+                        [key: string]: string;
+                    };
                     /** @description Required for stdio, and refused without it. A local server is a program this installation starts inside the worker, running as the worker and reaching whatever the worker can reach. That is a decision a person makes, not one a transport implies, and it is recorded with their name. */
                     acceptsLocalExecution?: boolean;
                     /** @default true */

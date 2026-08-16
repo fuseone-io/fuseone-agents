@@ -2048,6 +2048,23 @@ paths:
                     Bearer token for a remote server. Omit to keep the stored
                     one — correcting a URL must not demand re-entering a secret
                     nobody has to hand.
+                env:
+                  type: object
+                  additionalProperties: { type: string }
+                  description: >
+                    Variables handed to a local server, and only to one. A
+                    program started inside the worker no longer inherits the
+                    worker's environment, so this is how it receives the
+                    credential it needs — explicitly, per server, from the
+                    vault.
+
+                    Sealed like the token, because the reason a server needs a
+                    variable is nearly always that the variable is a key, and a
+                    field that is sometimes a secret is stored as one always.
+
+                    Omit to keep what is stored. Send an empty object to clear
+                    it: not sending something and sending nothing are different
+                    requests, and only one of them can be an erasure.
                 acceptsLocalExecution:
                   type: boolean
                   description: >

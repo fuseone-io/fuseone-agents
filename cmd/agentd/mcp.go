@@ -36,11 +36,12 @@ const toolRefresh = 30 * time.Second
 // tool once it is here — but only one of them is remote code execution by
 // configuration, and the form that offers them says so.
 func connectServer(
-	ctx context.Context, catalog *tools.Catalog, server domain.MCPServer, token string,
+	ctx context.Context, catalog *tools.Catalog, server domain.MCPServer,
+	creds domain.MCPCredentials,
 ) error {
 	client := mcp.NewClient(&mcp.Implementation{Name: "fuseone-agents", Version: version}, nil)
 
-	transport, err := transportFor(ctx, server, token)
+	transport, err := transportFor(ctx, server, creds)
 	if err != nil {
 		return err
 	}
@@ -56,17 +57,17 @@ func connectServer(
 }
 
 func transportFor(
-	ctx context.Context, server domain.MCPServer, token string,
+	ctx context.Context, server domain.MCPServer, creds domain.MCPCredentials,
 ) (mcp.Transport, error) {
 	switch server.TransportOf() {
 	case domain.TransportHTTP:
 		return &mcp.StreamableClientTransport{
 			Endpoint:   server.URL,
-			HTTPClient: bearerClient(token),
+			HTTPClient: bearerClient(creds.Token),
 		}, nil
 
 	case domain.TransportStdio:
-		cmd, err := commandFor(ctx, server)
+		cmd, err := commandFor(ctx, server, creds)
 		if err != nil {
 			return nil, err
 		}
@@ -77,7 +78,9 @@ func transportFor(
 	}
 }
 
-// bearerClient carries the token on every request to a remote server.
+// bearerClient carries the token on every request to a remote server. A local
+// server never sees it: it is a bearer for an address, and a program started
+// inside the worker has no address to be a bearer for.
 //
 // A client of its own rather than the shared default: the token belongs to one
 // server, and a transport installed on http.DefaultClient would send it to
@@ -114,7 +117,7 @@ func fingerprint(server domain.MCPServer) string {
 // consumer.
 type Servers interface {
 	MCPServers(ctx context.Context) ([]domain.MCPServer, error)
-	MCPToken(ctx context.Context, name string) (string, error)
+	MCPCredentials(ctx context.Context, name string) (domain.MCPCredentials, error)
 }
 
 // Publisher records what the installation now offers, so the administration
@@ -218,13 +221,13 @@ func (r *reconciler) refreshHealth(ctx context.Context) {
 }
 
 func (r *reconciler) connect(ctx context.Context, server domain.MCPServer) {
-	token, err := r.servers.MCPToken(ctx, server.Name)
+	creds, err := r.servers.MCPCredentials(ctx, server.Name)
 	if err != nil {
-		slog.Error("tool server has no readable token", "server", server.Name, "err", err)
+		slog.Error("tool server has no readable credential", "server", server.Name, "err", err)
 		return
 	}
 
-	if err := connectServer(ctx, r.catalog, server, token); err != nil {
+	if err := connectServer(ctx, r.catalog, server, creds); err != nil {
 		// Recorded and skipped, never fatal. One broken integration used to
 		// mean nothing on the installation ran, including every agent that
 		// never touches it.
@@ -274,7 +277,9 @@ platform handing over its own credentials to do it with.
 An allowlist and not a denylist. A denylist is correct only until somebody adds
 the next secret to the deployment, and then it is silently wrong.
 */
-func commandFor(ctx context.Context, server domain.MCPServer) (*exec.Cmd, error) {
+func commandFor(
+	ctx context.Context, server domain.MCPServer, creds domain.MCPCredentials,
+) (*exec.Cmd, error) {
 	if !server.AcceptsLocalExecution {
 		// Checked again here, and not only where it is written. A row can
 		// arrive by restore, by migration, or from a version of this that did
@@ -290,7 +295,20 @@ func commandFor(ctx context.Context, server domain.MCPServer) (*exec.Cmd, error)
 	}
 	cmd := exec.CommandContext(ctx, fields[0], append(fields[1:], server.Args...)...)
 	cmd.Stderr = os.Stderr
-	cmd.Env = childEnv()
+	/*
+		The allowlist, and then what this server was configured with.
+
+		Its own variables last so they win a collision: a server told to use a
+		particular PATH means it. What this never does is reopen inheritance —
+		a variable in neither list does not reach the child, however much the
+		worker holds.
+
+		They come from the vault rather than from the settings value, because
+		the reason a server needs a variable is almost always that the variable
+		is a key, and a field that is sometimes a secret is stored as one
+		always.
+	*/
+	cmd.Env = append(childEnv(), creds.Environ()...)
 	return cmd, nil
 }
 

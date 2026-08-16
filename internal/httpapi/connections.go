@@ -23,8 +23,8 @@ needs the absence answered as plainly as the presence.
 type Integrations interface {
 	MCPServers(ctx context.Context) ([]domain.MCPServer, error)
 	Providers(ctx context.Context) ([]domain.ModelProvider, error)
-	PutMCPServer(ctx context.Context, by domain.UserID, scope domain.Scope, server domain.MCPServer, token string) error
-	MCPToken(ctx context.Context, name string) (string, error)
+	PutMCPServer(ctx context.Context, by domain.UserID, scope domain.Scope, server domain.MCPServer, creds domain.MCPCredentials) error
+	MCPCredentials(ctx context.Context, name string) (domain.MCPCredentials, error)
 	DeleteMCPServer(ctx context.Context, by domain.UserID, scope domain.Scope, name string) error
 	PutProvider(ctx context.Context, by domain.UserID, scope domain.Scope, provider domain.ModelProvider, apiKey string) error
 	DeleteProvider(ctx context.Context, by domain.UserID, scope domain.Scope, name string) error

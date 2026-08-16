@@ -28,6 +28,13 @@ export function usePutMCPServer() {
       args: string[];
       url: string;
       token: string;
+      /**
+       * Variables a local server is given. Omitted when the field was left
+       * alone, because an empty object means "clear them" and an absent one
+       * means "leave what is stored" — an edit to a command must not silently
+       * drop a credential.
+       */
+      env?: Record<string, string>;
       acceptsLocalExecution: boolean;
       enabled: boolean;
     }) =>
@@ -42,6 +49,7 @@ export function usePutMCPServer() {
             // Omitted rather than emptied: an empty one would read as
             // "clear it", and correcting a URL must not drop the token.
             token: input.token || undefined,
+            env: input.env,
             acceptsLocalExecution: input.acceptsLocalExecution,
             enabled: input.enabled,
           },
