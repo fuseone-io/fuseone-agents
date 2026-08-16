@@ -102,13 +102,27 @@ func (b bearer) RoundTrip(r *http.Request) (*http.Response, error) {
 	return http.DefaultTransport.RoundTrip(out)
 }
 
-// fingerprint is what makes a change detectable without storing the config
-// twice. Two servers with the same name and different addresses are different
-// servers, and the one that is connected has to be replaced.
+/*
+fingerprint is what makes a change detectable without storing the config twice.
+
+Two servers with the same name and different addresses are different servers,
+and the one connected has to be replaced.
+
+When it was last written counts too, and it is the part that is easy to leave
+out because it is not part of the address. A rotated token changes nothing this
+can see — same command, same URL, same flags — so the session in hand kept
+being used with the credential that was replaced, until a restart or an
+unrelated edit. A credential is rotated most urgently when it has leaked, which
+is exactly when "it takes effect at the next deploy" is the wrong answer.
+
+The timestamp rather than the credential itself. Reading every server's secret
+on every reconcile pass would unseal the vault on a timer to answer a question
+the row already answers.
+*/
 func fingerprint(server domain.MCPServer) string {
 	sum := sha256.Sum256([]byte(strings.Join([]string{
 		server.TransportOf(), server.Command, strings.Join(server.Args, " "), server.URL,
-		fmt.Sprint(server.Enabled),
+		fmt.Sprint(server.Enabled), server.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}, "\x00")))
 	return hex.EncodeToString(sum[:8])
 }

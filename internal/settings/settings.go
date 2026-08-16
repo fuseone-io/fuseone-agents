@@ -77,6 +77,20 @@ type Setting struct {
 	Secret string
 	// HasSecret reports whether a credential is stored, without exposing it.
 	HasSecret bool
+	/*
+		ClearSecret removes the stored credential.
+
+		Separate from writing an empty one, because an omitted secret has to go
+		on meaning "keep what is there" — re-entering a key to change an
+		unrelated field is how operators end up pasting credentials into chat
+		to look them up. With only that rule, though, a credential could be
+		written and never taken back: the coalesce below preserves whatever is
+		stored, so "clear it" and "do not mention it" were the same request.
+
+		They are not. One of them is somebody removing a token from a server
+		that no longer uses it.
+	*/
+	ClearSecret bool
 
 	Enabled   bool
 	UpdatedBy string
@@ -137,13 +151,14 @@ func (s *Store) PutTx(ctx context.Context, conn DB, set Setting) error {
 		values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,now())
 		on conflict (scope_kind, company_id, area_id, kind, name) do update set
 			value        = excluded.value,
-			secret       = coalesce(excluded.secret, settings.secret),
-			secret_nonce = coalesce(excluded.secret_nonce, settings.secret_nonce),
+			secret       = case when $11 then null else coalesce(excluded.secret, settings.secret) end,
+			secret_nonce = case when $11 then null else coalesce(excluded.secret_nonce, settings.secret_nonce) end,
 			enabled      = excluded.enabled,
 			updated_by   = excluded.updated_by,
 			updated_at   = now()`,
 		string(set.ScopeKind), string(set.Scope.Company), string(set.Scope.Area),
-		string(set.Kind), set.Name, value, ciphertext, nonce, set.Enabled, set.UpdatedBy)
+		string(set.Kind), set.Name, value, ciphertext, nonce, set.Enabled, set.UpdatedBy,
+		set.ClearSecret)
 	if err != nil {
 		return fmt.Errorf("settings: write %s/%s: %w", set.Kind, set.Name, err)
 	}

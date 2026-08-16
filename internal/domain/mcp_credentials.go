@@ -72,24 +72,57 @@ func ReadMCPCredentials(sealed string) MCPCredentials {
 }
 
 /*
-Merge keeps whichever half a write left out.
+MCPCredentialPatch is what one write says about a server's credentials,
+including saying nothing.
 
-Correcting an address must not demand re-entering a token nobody has to hand,
-and adding a variable must not silently drop one. Absent means unchanged; the
-way to remove something is to send it empty, which is a different request from
-not sending it.
+Presence and value are different facts and a string cannot hold both. An
+omitted token has to mean "keep what is stored" — re-entering a key to correct
+an address is how people end up pasting credentials into chat to look them up —
+and with only that rule a token could be written and never taken back. So the
+token is a pointer: nil is silence, and empty is somebody removing it.
+
+The map needs no pointer, because Go already tells the two apart: nil is
+absent, and an empty non-nil map is a removal.
 */
-func (c MCPCredentials) Merge(given MCPCredentials) MCPCredentials {
-	merged := MCPCredentials{Token: c.Token}
-	if given.Token != "" {
-		merged.Token = given.Token
+type MCPCredentialPatch struct {
+	Token *string
+	Env   map[string]string
+}
+
+// Apply folds a write onto what is stored.
+func (p MCPCredentialPatch) Apply(stored MCPCredentials) MCPCredentials {
+	out := stored
+	if p.Token != nil {
+		out.Token = *p.Token
 	}
-	if given.Env == nil {
-		merged.Env = c.Env
-		return merged
+	if p.Env != nil {
+		out.Env = maps.Clone(p.Env)
 	}
-	merged.Env = maps.Clone(given.Env)
-	return merged
+	return out
+}
+
+// Empty reports that nothing is left to keep — which is a removal to be
+// carried out, not a write to be skipped.
+func (c MCPCredentials) Empty() bool { return c.Token == "" && len(c.Env) == 0 }
+
+/*
+ForTransport drops the half this shape cannot use.
+
+A bearer token belongs to an address, and a program the worker starts has no
+address to be a bearer for. Variables belong to a process, and there is no
+process when the platform is calling a URL.
+
+Dropped rather than kept quietly. A server switched from http to stdio would
+otherwise leave a live token sealed in the vault for a shape that can never
+send it: material nobody can see, nobody can use, and nobody remembers to
+revoke. The cost is re-entering a credential after switching back, which is
+visible and asks for itself.
+*/
+func (c MCPCredentials) ForTransport(transport string) MCPCredentials {
+	if transport == TransportStdio {
+		return MCPCredentials{Env: c.Env}
+	}
+	return MCPCredentials{Token: c.Token}
 }
 
 /*

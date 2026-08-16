@@ -56,10 +56,7 @@ func (s *Server) PutMCPServer(ctx context.Context, req openapi.PutMCPServerReque
 		address without re-entering a secret they do not have. Defaulting
 		either to empty here would turn every edit into a quiet erasure.
 	*/
-	var creds domain.MCPCredentials
-	if req.Body.Token != nil {
-		creds.Token = *req.Body.Token
-	}
+	creds := domain.MCPCredentialPatch{Token: req.Body.Token}
 	if req.Body.Env != nil {
 		creds.Env = *req.Body.Env
 	}

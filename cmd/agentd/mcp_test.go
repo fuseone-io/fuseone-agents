@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/fuseone/agents/internal/domain"
 )
@@ -160,5 +161,48 @@ func TestCommandFor_aConfiguredVariable_winsOverTheOneCopiedThrough(t *testing.T
 	}
 	if last != "PATH=/opt/tools/bin" {
 		t.Errorf("PATH resolves to %q, want the configured one", last)
+	}
+}
+
+/*
+A rotated credential takes effect on the next pass, not the next deploy.
+
+The reconciler keeps a session while the fingerprint holds, and the fingerprint
+saw the address and not the secret — same command, same URL, same flags — so a
+replaced token left the old session in use until a restart or an unrelated
+edit. A credential is rotated most urgently when it has leaked, which is
+exactly when "at the next deploy" is the wrong answer.
+
+The timestamp stands in for the secret. Reading every server's credential on
+every pass would unseal the vault on a timer to answer what the row answers.
+*/
+func TestFingerprint_aServerWrittenAgain_isNotTheOneInHand(t *testing.T) {
+	t.Parallel()
+
+	before := domain.MCPServer{
+		Name: "github", Transport: domain.TransportHTTP,
+		URL: "https://api.example.com/mcp", Enabled: true,
+		UpdatedAt: time.Date(2026, 8, 16, 9, 0, 0, 0, time.UTC),
+	}
+	rotated := before
+	rotated.UpdatedAt = before.UpdatedAt.Add(time.Minute)
+
+	if fingerprint(before) == fingerprint(rotated) {
+		t.Error("unchanged; the worker would go on using the credential that was replaced")
+	}
+}
+
+// And a pass that changed nothing keeps the session. Reconnecting every server
+// on every sweep would make a tool call fail whenever a pass landed on it.
+func TestFingerprint_aServerNobodyTouched_keepsItsSession(t *testing.T) {
+	t.Parallel()
+
+	server := domain.MCPServer{
+		Name: "github", Transport: domain.TransportHTTP,
+		URL: "https://api.example.com/mcp", Enabled: true,
+		UpdatedAt: time.Date(2026, 8, 16, 9, 0, 0, 0, time.UTC),
+	}
+	if fingerprint(server) != fingerprint(server) {
+		t.Error("a server reconnects on every pass")
 	}
 }

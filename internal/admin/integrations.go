@@ -92,7 +92,7 @@ func (i *Integrations) MCPServers(ctx context.Context) ([]domain.MCPServer, erro
 // hand.
 func (i *Integrations) PutMCPServer(
 	ctx context.Context, by domain.UserID, scope domain.Scope,
-	server domain.MCPServer, creds domain.MCPCredentials,
+	server domain.MCPServer, given domain.MCPCredentialPatch,
 ) error {
 	transport := server.TransportOf()
 	switch {
@@ -122,7 +122,7 @@ func (i *Integrations) PutMCPServer(
 		remove something is to send it empty, which is a different request from
 		not sending it at all.
 	*/
-	merged, err := i.mergedCredentials(ctx, server.Name, creds)
+	merged, err := i.mergedCredentials(ctx, server.Name, given, transport)
 	if err != nil {
 		return err
 	}
@@ -133,12 +133,17 @@ func (i *Integrations) PutMCPServer(
 		Name:      server.Name,
 		Value:     value,
 		Secret:    merged.Sealed(),
-		Enabled:   server.Enabled,
-		UpdatedBy: string(by),
+		// Nothing left to keep is a removal to carry out, not a write to skip.
+		// Without saying so, the store's own rule — an omitted secret keeps
+		// the stored one — makes "clear it" and "do not mention it" the same
+		// request, and one of those is somebody taking a token back.
+		ClearSecret: merged.Empty(),
+		Enabled:     server.Enabled,
+		UpdatedBy:   string(by),
 	}, "mcp_server.configured", server.Name, map[string]any{
 		// Never the token, only that one arrived.
 		"transport": transport, "command": server.Command, "url": server.URL,
-		"enabled": server.Enabled, "tokenChanged": creds.Token != "",
+		"enabled": server.Enabled, "tokenChanged": given.Token != nil,
 		// Which variables, never their values. That a server was given a
 		// credential is a fact an auditor may need; the credential is not.
 		"variables": len(merged.Env),
@@ -160,19 +165,30 @@ func (i *Integrations) MCPCredentials(
 	return domain.ReadMCPCredentials(set.Secret), nil
 }
 
-// mergedCredentials folds a write onto what is stored. A server nobody has
-// configured yet reads as nothing, which merges to exactly what arrived.
+/*
+mergedCredentials folds a write onto what is stored, and shapes it to the
+transport.
+
+Only "no such setting" reads as nothing stored. Every other failure — a vault
+that will not open, a key that is wrong, a database that is away — used to read
+the same way, so an edit made during any of them silently replaced a credential
+the platform had simply failed to look at. A read that did not happen is not a
+credential that does not exist.
+*/
 func (i *Integrations) mergedCredentials(
-	ctx context.Context, name string, given domain.MCPCredentials,
+	ctx context.Context, name string, given domain.MCPCredentialPatch, transport string,
 ) (domain.MCPCredentials, error) {
 	stored, err := i.MCPCredentials(ctx, name)
-	if err != nil {
-		// Not found is not a failure here: this is how the first write to a
-		// new server looks, and refusing it would make a server impossible to
-		// create.
-		return given, nil //nolint:nilerr // absent reads as nothing stored
+	switch {
+	case errors.Is(err, settings.ErrNotFound):
+		// The first write to a new server. Nothing stored is exactly what it
+		// looks like here.
+		stored = domain.MCPCredentials{}
+	case err != nil:
+		return domain.MCPCredentials{}, fmt.Errorf(
+			"admin: read the stored credential for %s: %w", name, err)
 	}
-	return stored.Merge(given), nil
+	return given.Apply(stored).ForTransport(transport), nil
 }
 
 // ForgettingHealth wires where observations are dropped when a server is

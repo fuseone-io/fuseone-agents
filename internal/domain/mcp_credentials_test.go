@@ -53,7 +53,7 @@ func TestMerge_aWriteThatOmitsTheToken_keepsTheStoredOne(t *testing.T) {
 	stored := domain.MCPCredentials{
 		Token: "ghp_stored", Env: map[string]string{"REGION": "eu"},
 	}
-	merged := stored.Merge(domain.MCPCredentials{Env: map[string]string{"REGION": "us"}})
+	merged := domain.MCPCredentialPatch{Env: map[string]string{"REGION": "us"}}.Apply(stored)
 
 	if merged.Token != "ghp_stored" {
 		t.Errorf("token = %q, want the stored one kept", merged.Token)
@@ -69,10 +69,10 @@ func TestMerge_anEmptyEnvIsARemoval_andAnAbsentOneIsNot(t *testing.T) {
 	t.Parallel()
 	stored := domain.MCPCredentials{Env: map[string]string{"REGION": "eu"}}
 
-	if kept := stored.Merge(domain.MCPCredentials{Token: "t"}); kept.Env["REGION"] != "eu" {
+	if kept := (domain.MCPCredentialPatch{Token: ptr("t")}).Apply(stored); kept.Env["REGION"] != "eu" {
 		t.Errorf("env = %v, want an omitted map to leave the stored one", kept.Env)
 	}
-	cleared := stored.Merge(domain.MCPCredentials{Env: map[string]string{}})
+	cleared := domain.MCPCredentialPatch{Env: map[string]string{}}.Apply(stored)
 	if len(cleared.Env) != 0 {
 		t.Errorf("env = %v, want an empty map to clear it", cleared.Env)
 	}
@@ -102,3 +102,47 @@ func TestEnviron_isTheSameOrderEveryTime(t *testing.T) {
 		}
 	}
 }
+
+/*
+An omitted token keeps what is stored; an empty one takes it back.
+
+A string cannot hold both facts. With only "empty means keep", a credential
+could be written and never removed — and "I am not mentioning the token" is a
+different sentence from "there is no longer a token", said by different people
+for different reasons.
+*/
+func TestApply_anEmptyTokenClearsIt_andAnAbsentOneDoesNot(t *testing.T) {
+	t.Parallel()
+	stored := domain.MCPCredentials{Token: "ghp_stored"}
+
+	if kept := (domain.MCPCredentialPatch{}).Apply(stored); kept.Token != "ghp_stored" {
+		t.Errorf("token = %q, want an unmentioned one kept", kept.Token)
+	}
+	if cleared := (domain.MCPCredentialPatch{Token: ptr("")}).Apply(stored); cleared.Token != "" {
+		t.Errorf("token = %q, want it removable", cleared.Token)
+	}
+}
+
+/*
+A credential is shaped to the transport that can use it.
+
+A bearer belongs to an address and a program the worker starts has none;
+variables belong to a process and there is none when the platform calls a URL.
+Switching transport and keeping both leaves live material sealed for a shape
+that can never send it — invisible, unusable, and never revoked.
+*/
+func TestForTransport_switchingShape_dropsTheHalfThatCannotBeUsed(t *testing.T) {
+	t.Parallel()
+	both := domain.MCPCredentials{
+		Token: "ghp_stored", Env: map[string]string{"GITHUB_TOKEN": "ghp_other"},
+	}
+
+	if local := both.ForTransport(domain.TransportStdio); local.Token != "" {
+		t.Errorf("a local server kept a bearer token: %+v", local)
+	}
+	if remote := both.ForTransport(domain.TransportHTTP); len(remote.Env) != 0 {
+		t.Errorf("a remote server kept process variables: %+v", remote)
+	}
+}
+
+func ptr[T any](v T) *T { return &v }

@@ -38,9 +38,12 @@ func (f *fakeAdmin) Providers(context.Context) ([]domain.ModelProvider, error) {
 }
 func (f *fakeAdmin) PutMCPServer(
 	_ context.Context, by domain.UserID, _ domain.Scope, s domain.MCPServer,
-	creds domain.MCPCredentials,
+	creds domain.MCPCredentialPatch,
 ) error {
-	f.putServer, f.putBy, f.putToken, f.putEnv = s, by, creds.Token, creds.Env
+	f.putServer, f.putBy, f.putEnv = s, by, creds.Env
+	if creds.Token != nil {
+		f.putToken = *creds.Token
+	}
 	return f.err
 }
 
