@@ -234,7 +234,7 @@ func TestIdentities_aWorkingBindingWhoseValueDisagrees_isNamedByItsKey(t *testin
 		Kind:      admin.KindChannelIdentity,
 		Name:      "acme-slack/U505",
 		Value: []byte(
-			`{"channel":"old-slack","account":"U777","principal":"usr_ana"}`),
+			`{"channel":"old-slack","account":"U777","principal":"usr_disagree"}`),
 		Enabled: true, UpdatedBy: "restore",
 	}); err != nil {
 		t.Fatalf("write the disagreeing row: %v", err)
@@ -247,7 +247,7 @@ func TestIdentities_aWorkingBindingWhoseValueDisagrees_isNamedByItsKey(t *testin
 
 	var found *admin.ChannelIdentity
 	for i, one := range listed {
-		if one.Principal == "usr_ana" {
+		if one.Principal == "usr_disagree" {
 			found = &listed[i]
 		}
 	}
@@ -261,7 +261,7 @@ func TestIdentities_aWorkingBindingWhoseValueDisagrees_isNamedByItsKey(t *testin
 
 	// And it is the same pair the runtime answers to.
 	who, bound, err := channels.PrincipalFor(ctx, found.Channel, found.Account)
-	if err != nil || !bound || who != "usr_ana" {
+	if err != nil || !bound || who != "usr_disagree" {
 		t.Errorf("the shown binding is not the one that works: %q (%v, %v)", who, bound, err)
 	}
 }
