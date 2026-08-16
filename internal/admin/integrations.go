@@ -94,11 +94,15 @@ func (i *Integrations) MCPServers(ctx context.Context) ([]domain.MCPServer, erro
 	return out, nil
 }
 
-// PutMCPServer records a server and who configured it.
-//
-// An empty token keeps whichever one is stored, like every other credential
-// here: correcting a URL must not demand re-entering a secret nobody has to
-// hand.
+/*
+PutMCPServer records a server and who configured it.
+
+A field the request does not mention is left as it is: a token nobody
+re-entered, a surface this write was not about. What removes something is
+sending it empty, which is a different request from not sending it — and both
+folds happen inside the write's transaction, so "as it is" means as it is when
+the write happens rather than when the request was read.
+*/
 func (i *Integrations) PutMCPServer(
 	ctx context.Context, by domain.UserID, scope domain.Scope,
 	server domain.MCPServer, given domain.MCPCredentialPatch,
@@ -116,71 +120,65 @@ func (i *Integrations) PutMCPServer(
 	}
 
 	/*
-		A write that says nothing about the surface is not a request to forget
-		it.
+		Both folds happen inside the write's own transaction, under the row's
+		lock.
 
-		Forgotten, it reads as "nobody has chosen", which the runtime treats as
-		every tool the server offers — so saving a token or correcting a
-		command would silently widen what agents can reach. That is the one
-		direction this must never fail in, and it is reached by the two
-		commonest edits there are.
-
-		The same rule the credential already follows, for the same reason:
-		absent is unchanged, and a chosen-and-empty surface stays chosen.
+		Read before it, either one is a lost update waiting for two people: one
+		narrows the server's surface, the other saves a token having read the
+		older value, and whichever commits second puts the older value back.
+		The dangerous direction is the same for both — a surface restored to
+		"nobody chose" reopens every tool, and a credential restored is one
+		somebody believes they revoked.
 	*/
-	surface, err := i.keptSurface(ctx, server)
-	if err != nil {
-		return err
-	}
+	return writeFolded(ctx, i.pool, i.settings, folded{
+		by: by, scope: scope, action: "mcp_server.configured", target: server.Name,
+		set: settings.Setting{
+			ScopeKind: settings.ScopeInstallation,
+			Kind:      settings.KindMCPServer, Name: server.Name,
+			Enabled: server.Enabled, UpdatedBy: string(by),
+		},
+		fold: func(stored settings.Setting) (settings.Setting, any, error) {
+			surface := server.Surface
+			if surface == nil {
+				var was storedServer
+				if len(stored.Value) > 0 {
+					if err := json.Unmarshal(stored.Value, &was); err != nil {
+						return settings.Setting{}, nil, fmt.Errorf(
+							"admin: read the stored surface for %s: %w", server.Name, err)
+					}
+				}
+				surface = was.Surface
+			}
 
-	value, err := json.Marshal(storedServer{
-		Transport: transport, Command: server.Command, Args: server.Args, URL: server.URL,
-		Surface:               surface,
-		AcceptsLocalExecution: server.AcceptsLocalExecution,
-	})
-	if err != nil {
-		return fmt.Errorf("admin: encode MCP server: %w", err)
-	}
+			value, err := json.Marshal(storedServer{
+				Transport: transport, Command: server.Command,
+				Args: server.Args, URL: server.URL, Surface: surface,
+				AcceptsLocalExecution: server.AcceptsLocalExecution,
+			})
+			if err != nil {
+				return settings.Setting{}, nil, fmt.Errorf("admin: encode MCP server: %w", err)
+			}
 
-	/*
-		Whichever half this write left out stays.
-
-		Correcting an address must not demand re-entering a token nobody has to
-		hand, and adding a variable must not drop one silently. The way to
-		remove something is to send it empty, which is a different request from
-		not sending it at all.
-	*/
-	merged, err := i.mergedCredentials(ctx, server.Name, given, transport)
-	if err != nil {
-		return err
-	}
-
-	return writeSetting(ctx, i.pool, i.settings, by, scope, settings.Setting{
-		ScopeKind: settings.ScopeInstallation,
-		Kind:      settings.KindMCPServer,
-		Name:      server.Name,
-		Value:     value,
-		Secret:    merged.Sealed(),
-		// Nothing left to keep is a removal to carry out, not a write to skip.
-		// Without saying so, the store's own rule — an omitted secret keeps
-		// the stored one — makes "clear it" and "do not mention it" the same
-		// request, and one of those is somebody taking a token back.
-		ClearSecret: merged.Empty(),
-		Enabled:     server.Enabled,
-		UpdatedBy:   string(by),
-	}, "mcp_server.configured", server.Name, map[string]any{
-		// Never the token, only that one arrived.
-		"transport": transport, "command": server.Command, "url": server.URL,
-		"enabled": server.Enabled, "tokenChanged": given.Token != nil,
-		// Which variables, never their values. That a server was given a
-		// credential is a fact an auditor may need; the credential is not.
-		"variables": len(merged.Env),
-		// Who accepted local execution, and when, is the whole point of
-		// recording it: the acceptance is a person's, not a checkbox's.
-		"acceptsLocalExecution": server.AcceptsLocalExecution,
-		// How many were brought in, never which: the list belongs on the
-		// screen and the count is what an auditor reads as "this narrowed".
-		"surface": surfaceSize(surface),
+			merged := given.Apply(domain.ReadMCPCredentials(stored.Secret)).ForTransport(transport)
+			return settings.Setting{
+					ScopeKind: settings.ScopeInstallation,
+					Kind:      settings.KindMCPServer, Name: server.Name,
+					Value: value, Secret: merged.Sealed(),
+					// Nothing left to keep is a removal to carry out, not a
+					// write to skip: the store's own rule makes "clear it" and
+					// "do not mention it" the same request otherwise, and one
+					// of those is somebody revoking.
+					ClearSecret: merged.Empty(),
+					Enabled:     server.Enabled, UpdatedBy: string(by),
+				}, map[string]any{
+					// Never a credential, only which of them are now held.
+					"kind": transport, "command": server.Command, "url": server.URL,
+					"enabled": server.Enabled, "tokenChanged": given.Token != nil,
+					"acceptsLocalExecution": server.AcceptsLocalExecution,
+					"variables":             len(merged.Env),
+					"surface":               surfaceSize(surface),
+				}, nil
+		},
 	})
 }
 
@@ -194,32 +192,6 @@ func (i *Integrations) MCPCredentials(
 		return domain.MCPCredentials{}, err
 	}
 	return domain.ReadMCPCredentials(set.Secret), nil
-}
-
-/*
-mergedCredentials folds a write onto what is stored, and shapes it to the
-transport.
-
-Only "no such setting" reads as nothing stored. Every other failure — a vault
-that will not open, a key that is wrong, a database that is away — used to read
-the same way, so an edit made during any of them silently replaced a credential
-the platform had simply failed to look at. A read that did not happen is not a
-credential that does not exist.
-*/
-func (i *Integrations) mergedCredentials(
-	ctx context.Context, name string, given domain.MCPCredentialPatch, transport string,
-) (domain.MCPCredentials, error) {
-	stored, err := i.MCPCredentials(ctx, name)
-	switch {
-	case errors.Is(err, settings.ErrNotFound):
-		// The first write to a new server. Nothing stored is exactly what it
-		// looks like here.
-		stored = domain.MCPCredentials{}
-	case err != nil:
-		return domain.MCPCredentials{}, fmt.Errorf(
-			"admin: read the stored credential for %s: %w", name, err)
-	}
-	return given.Apply(stored).ForTransport(transport), nil
 }
 
 // ForgettingHealth wires where observations are dropped when a server is
@@ -311,31 +283,6 @@ func (i *Integrations) Credential(ctx context.Context, name string) (string, err
 		return "", err
 	}
 	return set.Secret, nil
-}
-
-// keptSurface answers what this write leaves the surface as. Only "no such
-// setting" reads as nothing stored — every other failure is a read that did
-// not happen, and treating one as an empty choice would open a server on the
-// strength of a database being away.
-func (i *Integrations) keptSurface(
-	ctx context.Context, server domain.MCPServer,
-) (*[]string, error) {
-	if server.Surface != nil {
-		return server.Surface, nil
-	}
-	stored, err := i.settings.Get(ctx,
-		settings.ScopeInstallation, domain.Scope{}, settings.KindMCPServer, server.Name)
-	switch {
-	case errors.Is(err, settings.ErrNotFound):
-		return nil, nil
-	case err != nil:
-		return nil, fmt.Errorf("admin: read the stored surface for %s: %w", server.Name, err)
-	}
-	var was storedServer
-	if err := json.Unmarshal(stored.Value, &was); err != nil {
-		return nil, fmt.Errorf("admin: read the stored surface for %s: %w", server.Name, err)
-	}
-	return was.Surface, nil
 }
 
 // surfaceSize reports how many tools were brought in, or -1 for a server

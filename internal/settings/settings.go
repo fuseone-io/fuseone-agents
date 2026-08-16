@@ -218,6 +218,55 @@ func (s *Store) Reveal(ctx context.Context, scopeKind ScopeKind, scope domain.Sc
 	return set, nil
 }
 
+/*
+RevealTx is Reveal inside a caller's transaction, holding the row.
+
+For a write that folds onto what is stored — keeping a credential a request did
+not mention, or a choice it said nothing about. Read outside the transaction,
+that fold is a lost update waiting for two people: one narrows a server, the
+other saves a token having read the older value, and the second commit puts the
+older value back. The row lock is what makes "keep what is there" mean what is
+there when the write happens.
+
+A row that does not exist locks nothing, and two concurrent creations of the
+same name then serialise on the unique index instead — one wins wholesale,
+which is the honest outcome when neither had anything to fold onto.
+*/
+func (s *Store) RevealTx(
+	ctx context.Context, conn DB,
+	scopeKind ScopeKind, scope domain.Scope, kind Kind, name string,
+) (Setting, error) {
+	out := Setting{ScopeKind: scopeKind, Scope: scope, Kind: kind, Name: name}
+	var ciphertext, nonce []byte
+	err := conn.QueryRow(ctx, `
+		select value, secret, secret_nonce, enabled, updated_by, updated_at
+		from settings
+		where scope_kind = $1 and company_id = $2 and area_id = $3 and kind = $4 and name = $5
+		for update`,
+		string(scopeKind), string(scope.Company), string(scope.Area), string(kind), name,
+	).Scan(&out.Value, &ciphertext, &nonce, &out.Enabled, &out.UpdatedBy, &out.UpdatedAt)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Setting{}, fmt.Errorf("%w: %s/%s", ErrNotFound, kind, name)
+	}
+	if err != nil {
+		return Setting{}, fmt.Errorf("settings: read %s/%s: %w", kind, name, err)
+	}
+	out.HasSecret = len(ciphertext) > 0
+	if !out.HasSecret {
+		return out, nil
+	}
+	if s.vault == nil {
+		return Setting{}, ErrNoVault
+	}
+	plain, err := s.vault.Open(ciphertext, nonce, contextFor(out))
+	if err != nil {
+		return Setting{}, err
+	}
+	out.Secret = string(plain)
+	return out, nil
+}
+
 // List returns every setting of a kind, without credentials.
 func (s *Store) List(ctx context.Context, kind Kind) ([]Setting, error) {
 	rows, err := s.pool.Query(ctx, `

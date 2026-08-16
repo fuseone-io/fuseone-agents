@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/fuseone/agents/internal/admin"
@@ -571,5 +572,75 @@ func TestPutMCPServer_aWriteThatNamesTheSurface_replacesIt(t *testing.T) {
 	servers, _ := i.MCPServers(ctx)
 	if servers[0].Surface == nil || len(*servers[0].Surface) != 1 {
 		t.Errorf("surface = %v, want the narrowed choice", servers[0].Surface)
+	}
+}
+
+/*
+Two people editing one server do not undo each other.
+
+Reading what is stored before the transaction is a lost update waiting for
+exactly this: one narrows the surface, the other saves a token having read the
+older value, and whichever commits second writes the older value back. The
+sequential case passes either way, which is what makes this worth its own test.
+
+The direction is what matters. A surface restored to "nobody has chosen"
+reopens every tool the server offers, and it happens on the most ordinary edit
+there is.
+*/
+func TestPutMCPServer_twoWritersAtOnce_doNotRestoreEachOthersOldValues(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+	wide := []string{"lookup", "delete_account"}
+	server := domain.MCPServer{
+		Name: "crm", Transport: domain.TransportHTTP,
+		URL: "https://tools.example.com/mcp", Enabled: true, Surface: &wide,
+	}
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, server,
+		domain.MCPCredentialPatch{Token: ptr("first")}); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+
+	// One narrows the surface and says nothing about the token; the other
+	// rotates the token and says nothing about the surface.
+	narrow := []string{"lookup"}
+	narrowing := server
+	narrowing.Surface = &narrow
+	rotating := server
+	rotating.Surface = nil
+
+	var wg sync.WaitGroup
+	errs := make([]error, 2)
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		errs[0] = i.PutMCPServer(ctx, "usr_ana", platform, narrowing,
+			domain.MCPCredentialPatch{})
+	}()
+	go func() {
+		defer wg.Done()
+		errs[1] = i.PutMCPServer(ctx, "usr_bob", platform, rotating,
+			domain.MCPCredentialPatch{Token: ptr("rotated")})
+	}()
+	wg.Wait()
+	for _, err := range errs {
+		if err != nil {
+			t.Fatalf("PutMCPServer: %v", err)
+		}
+	}
+
+	servers, err := i.MCPServers(ctx)
+	if err != nil {
+		t.Fatalf("MCPServers: %v", err)
+	}
+	if servers[0].Surface == nil || len(*servers[0].Surface) != 1 {
+		t.Errorf("surface = %v; a concurrent token write reopened the tools",
+			servers[0].Surface)
+	}
+	creds, err := i.MCPCredentials(ctx, "crm")
+	if err != nil {
+		t.Fatalf("MCPCredentials: %v", err)
+	}
+	if creds.Token != "rotated" {
+		t.Errorf("token = %q; a concurrent surface write restored the old one", creds.Token)
 	}
 }
