@@ -157,3 +157,50 @@ type rulings []domain.ToolClassification
 func (r rulings) List(context.Context, domain.Scope) ([]domain.ToolClassification, error) {
 	return r, nil
 }
+
+/*
+The envelope counts, not only the properties.
+
+`required`, `additionalProperties` and `oneOf` change what a call may contain
+while every property keeps its name and its type. A tool that grows a required
+`force` is not the tool that was allowed, and a digest over the properties
+alone would carry the old ruling straight onto it — the check passing while
+missing the change it exists for.
+*/
+func TestSync_aNewRequiredArgument_doesNotInheritTheOldRuling(t *testing.T) {
+	catalog := tools.NewCatalog(engine.NewMemoryContent())
+	optional := &fakeServer{list: []*mcp.Tool{{
+		Name: "lookup", Description: "Look a customer up",
+		InputSchema: map[string]any{
+			"type":       "object",
+			"properties": map[string]any{"id": "string", "force": "boolean"},
+		},
+	}}}
+	if err := catalog.AddServer(context.Background(), "crm", optional); err != nil {
+		t.Fatalf("AddServer: %v", err)
+	}
+	judged := digestOf(t, catalog)
+
+	// Same properties, and `force` is now required.
+	demanding := &fakeServer{list: []*mcp.Tool{{
+		Name: "lookup", Description: "Look a customer up",
+		InputSchema: map[string]any{
+			"type":       "object",
+			"properties": map[string]any{"id": "string", "force": "boolean"},
+			"required":   []any{"id", "force"},
+		},
+	}}}
+	now := tools.NewCatalog(engine.NewMemoryContent())
+	if err := now.AddServer(context.Background(), "crm", demanding); err != nil {
+		t.Fatalf("AddServer: %v", err)
+	}
+
+	if _, err := now.Sync(context.Background(),
+		rulings{{Tool: "crm.lookup", Effect: domain.EffectRead, Digest: judged}},
+		domain.Scope{}); err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	if effect, _ := now.Effect("crm.lookup"); effect != domain.EffectUnknown {
+		t.Errorf("effect = %v, want the ruling refused against a wider call", effect)
+	}
+}

@@ -61,6 +61,18 @@ func freshPool(t *testing.T) *pgxpool.Pool {
 
 var platform = domain.Scope{Company: "default", Area: "platform"}
 
+// freshCurator is a Curator over an empty catalogue and an empty set of
+// rulings, so a test counts only what it wrote.
+func freshCurator(t *testing.T) *admin.Curator {
+	t.Helper()
+	pool := freshPool(t)
+	if _, err := pool.Exec(context.Background(),
+		`delete from settings where kind = 'tool'`); err != nil {
+		t.Fatalf("clean: %v", err)
+	}
+	return admin.NewCurator(pool)
+}
+
 func TestClassify_survivesTheProcessThatMadeIt(t *testing.T) {
 	pool := freshPool(t)
 	ctx := context.Background()
@@ -221,4 +233,115 @@ func TestTools_withNoRuling_readAsUnclassifiedRatherThanRead(t *testing.T) {
 	if got := find(t, entries, "github.delete_repository"); got.Effect != domain.EffectUnknown {
 		t.Errorf("Effect = %v, want unknown until somebody rules", got.Effect)
 	}
+}
+
+/*
+The published catalogue is where the Curator actually works.
+
+The in-process catalogue applies a ruling only to the definition it was made
+about. This one is the settings-backed copy the console reads and the API rules
+against, and it had none of that: a redefined tool kept showing the effect
+somebody granted its predecessor, and the API had nothing to answer 409 with.
+
+Two catalogues with one property between them is the property missing.
+*/
+func TestTools_aRulingOvertakenByANewDefinition_readsAsUnclassified(t *testing.T) {
+	curator := freshCurator(t)
+	ctx := context.Background()
+
+	// Discovered, judged, and then the server changes what the tool is.
+	if err := curator.Publish(ctx, []domain.ToolEntry{{
+		ID: "crm.lookup", Server: "crm", Description: "Look a customer up",
+		Digest: "sha-of-the-old-one",
+	}}); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+	if err := curator.Classify(ctx, domain.Scope{}, domain.ToolClassification{
+		Tool: "crm.lookup", Effect: domain.EffectRead,
+		By: "usr_ana", Digest: "sha-of-the-old-one",
+	}); err != nil {
+		t.Fatalf("Classify: %v", err)
+	}
+	if err := curator.Publish(ctx, []domain.ToolEntry{{
+		ID: "crm.lookup", Server: "crm", Description: "Look up and close the account",
+		Digest: "sha-of-the-new-one",
+	}}); err != nil {
+		t.Fatalf("Publish again: %v", err)
+	}
+
+	found := toolNamed(t, curator, "crm.lookup")
+	if found.Effect != domain.EffectUnknown {
+		t.Errorf("effect = %v, want it refused until somebody looks again", found.Effect)
+	}
+	if !found.Stale {
+		t.Error("not marked as overtaken; the console would show it as a tool nobody got to")
+	}
+	if found.Digest != "sha-of-the-new-one" {
+		t.Errorf("digest = %q, want the definition on offer now", found.Digest)
+	}
+}
+
+// A ruling made about the definition that is published still stands. The check
+// has to let the ordinary case through or it is an outage, not a control.
+func TestTools_aRulingOnThePublishedDefinition_stillApplies(t *testing.T) {
+	curator := freshCurator(t)
+	ctx := context.Background()
+
+	if err := curator.Publish(ctx, []domain.ToolEntry{{
+		ID: "crm.lookup", Server: "crm", Digest: "sha-1",
+	}}); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+	if err := curator.Classify(ctx, domain.Scope{}, domain.ToolClassification{
+		Tool: "crm.lookup", Effect: domain.EffectRead, By: "usr_ana", Digest: "sha-1",
+	}); err != nil {
+		t.Fatalf("Classify: %v", err)
+	}
+
+	found := toolNamed(t, curator, "crm.lookup")
+	if found.Effect != domain.EffectRead || found.Stale {
+		t.Errorf("effect = %v stale = %v, want the ruling honoured", found.Effect, found.Stale)
+	}
+}
+
+/*
+A ruling from before digests were recorded still applies.
+
+Every installation upgrading holds these, against tools that have not changed.
+Reading their silence as "made about something else" would stop every agent on
+the platform to introduce a check.
+*/
+func TestTools_aRulingFromBeforeDigestsExisted_stillApplies(t *testing.T) {
+	curator := freshCurator(t)
+	ctx := context.Background()
+
+	if err := curator.Publish(ctx, []domain.ToolEntry{{
+		ID: "crm.lookup", Server: "crm", Digest: "sha-1",
+	}}); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+	if err := curator.Classify(ctx, domain.Scope{}, domain.ToolClassification{
+		Tool: "crm.lookup", Effect: domain.EffectRead, By: "usr_ana",
+	}); err != nil {
+		t.Fatalf("Classify: %v", err)
+	}
+
+	if found := toolNamed(t, curator, "crm.lookup"); found.Effect != domain.EffectRead {
+		t.Errorf("effect = %v; an upgrade would have stopped every agent", found.Effect)
+	}
+}
+
+func toolNamed(t *testing.T, curator *admin.Curator, id domain.ToolID) domain.ToolEntry {
+	t.Helper()
+	entries, err := curator.Tools(context.Background())
+	if err != nil {
+		t.Fatalf("Tools: %v", err)
+	}
+	for _, e := range entries {
+		if e.ID == id {
+			return e
+		}
+	}
+	t.Fatalf("entries = %+v, want %s", entries, id)
+	return domain.ToolEntry{}
 }

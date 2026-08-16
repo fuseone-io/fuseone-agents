@@ -44,6 +44,26 @@ func (c *Catalog) AddServer(ctx context.Context, name string, session Session) e
 		return fmt.Errorf("tools: list tools from %s: %w", name, err)
 	}
 
+	/*
+		Digested before anything is stored, so a definition nobody can hash
+		fails discovery rather than entering the catalogue.
+
+		The alternative was a sentinel digest that matches nothing. It refuses,
+		which is the safe direction, and it refuses silently in a value that
+		travels to the screen and back — where a client echoing it would make
+		it match. A hash that cannot be computed is not a state to encode; it
+		is a server this platform cannot describe, and saying so out loud is
+		the only answer that stays true when the value moves.
+	*/
+	digests := make(map[string]string, len(listed.Tools))
+	for _, t := range listed.Tools {
+		digest, err := digestOf(name, t.Name, t.Description, t.InputSchema)
+		if err != nil {
+			return fmt.Errorf("tools: describe %s.%s: %w", name, t.Name, err)
+		}
+		digests[t.Name] = digest
+	}
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -56,7 +76,7 @@ func (c *Catalog) AddServer(ctx context.Context, name string, session Session) e
 			RemoteName:  t.Name,
 			Description: t.Description,
 			Schema:      schemaProperties(t.InputSchema),
-			Digest:      digestOf(name, t.Name, t.Description, schemaProperties(t.InputSchema)),
+			Digest:      digests[t.Name],
 			Effect:      domain.EffectUnknown,
 			Untrusted:   true,
 			Suggested:   c.suggestion(name, t.Name),
@@ -148,25 +168,28 @@ what it calls itself, the sentence it describes itself with, and the arguments
 it accepts. What stays out is anything that varies without the tool varying —
 the order a server happened to list its tools in, a session id, a timestamp.
 
+The whole input schema, not the properties the model is handed. `required`,
+`additionalProperties` and `oneOf` all change what a call may contain while
+every property keeps its name and type, and a tool that grows a required
+`force` is not the tool that was allowed. Narrowing this to properties is how
+the check passes while missing the change it exists for.
+
 Canonical because `encoding/json` sorts map keys: two processes discovering the
 same tool must compute the same digest, or every reconnect would look like a
 change and every ruling would go stale on a restart.
 */
-func digestOf(server, name, description string, schema map[string]any) string {
+func digestOf(server, name, description string, schema any) (string, error) {
 	shape := struct {
-		Server      string         `json:"server"`
-		Name        string         `json:"name"`
-		Description string         `json:"description"`
-		Schema      map[string]any `json:"schema"`
+		Server      string `json:"server"`
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		Schema      any    `json:"schema"`
 	}{server, name, description, schema}
 
 	canonical, err := json.Marshal(shape)
 	if err != nil {
-		// A schema that will not encode is one nobody can judge either. Empty
-		// reads as "no digest recorded", which applies the ruling — so it is
-		// refused instead, by never matching a recorded one.
-		return "unencodable"
+		return "", fmt.Errorf("its definition cannot be encoded: %w", err)
 	}
 	sum := sha256.Sum256(canonical)
-	return hex.EncodeToString(sum[:])
+	return hex.EncodeToString(sum[:]), nil
 }

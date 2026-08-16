@@ -167,9 +167,19 @@ func (s *Server) ClassifyTool(ctx context.Context, req openapi.ClassifyToolReque
 	if req.Body.Digest != nil {
 		ruling.Digest = *req.Body.Digest
 	}
-	if changed, err := s.definitionMoved(ctx, ruling); err != nil {
+	switch known, err := s.judged(ctx, ruling); {
+	case err != nil:
 		return nil, err
-	} else if changed {
+	case known == judgedNothing:
+		// A ruling that names no definition, for a tool whose definition we
+		// hold. Refused rather than stored: an empty digest is how a ruling
+		// from before this existed keeps working, so accepting one now would
+		// hand any caller a way back to classification by name.
+		return openapi.ClassifyTool400ApplicationProblemPlusJSONResponse{
+			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
+				invalid("this tool has a definition, so a ruling has to say which one it judged")),
+		}, nil
+	case known == judgedSomethingElse:
 		return openapi.ClassifyTool409ApplicationProblemPlusJSONResponse{
 			Title:  "The tool changed",
 			Detail: ptr("This tool's definition changed while you were reading it. Look again before ruling."),
@@ -187,37 +197,56 @@ func (s *Server) ClassifyTool(ctx context.Context, req openapi.ClassifyToolReque
 }
 
 /*
-definitionMoved reports that the tool changed while the dialog was open.
+What a ruling was made about, against what the catalogue holds.
 
 The digest comes from the client because that is what makes it mean anything:
 the Curator read a description and a schema, and stamping whatever is current
-at save time would record a judgement of something nobody read. The same reason
-an approval carries the step it approved.
+at save time would record a judgement of something nobody read. The same shape
+as an approval carrying the step it approved.
 
-Refused rather than silently re-judged. A conflict sends somebody back to look,
-which is the only outcome that leaves a true record — and a ruling arriving
-with no digest is not this case, it is a caller that named no definition.
+Three answers rather than two. A ruling that names the current definition is
+recorded; one that names another is refused so somebody looks again; and one
+that names *nothing*, for a tool whose definition we hold, is refused as well.
+That third case is the one worth being strict about: an empty digest is how a
+ruling recorded before any of this existed keeps working, so a caller allowed
+to send one now — an old console, a script, a curl — walks straight back into
+classification by name, which is the thing this replaced.
 */
-func (s *Server) definitionMoved(ctx context.Context, ruling domain.ToolClassification) (bool, error) {
-	if ruling.Digest == "" || s.tools == nil {
-		return false, nil
+type judgement int
+
+const (
+	judgedTheCurrentDefinition judgement = iota
+	judgedSomethingElse
+	judgedNothing
+)
+
+func (s *Server) judged(ctx context.Context, ruling domain.ToolClassification) (judgement, error) {
+	if s.tools == nil {
+		return judgedTheCurrentDefinition, nil
 	}
 	listed, err := s.tools.Tools(ctx)
 	if err != nil {
-		return false, err
+		return judgedTheCurrentDefinition, err
 	}
 	for _, tool := range listed {
 		if tool.ID != ruling.Tool {
 			continue
 		}
-		// A tool the catalogue holds with no digest of its own is one no
-		// worker has rediscovered since digests existed. Nothing to compare
-		// against is not a mismatch.
-		return tool.Digest != "" && tool.Digest != ruling.Digest, nil
+		switch {
+		case tool.Digest == "":
+			// Held with no digest of its own: published before this existed,
+			// and nothing to compare against is not a mismatch.
+			return judgedTheCurrentDefinition, nil
+		case ruling.Digest == "":
+			return judgedNothing, nil
+		case ruling.Digest != tool.Digest:
+			return judgedSomethingElse, nil
+		}
+		return judgedTheCurrentDefinition, nil
 	}
-	// Not in the catalogue at all: the Curator may rule ahead of a server
-	// connecting, which is the case the catalogue's own Sync already allows.
-	return false, nil
+	// Not in the catalogue at all. The Curator may rule ahead of a server
+	// connecting, which the catalogue's own Sync already allows.
+	return judgedTheCurrentDefinition, nil
 }
 
 func (s *Server) ListAdminEvents(ctx context.Context, req openapi.ListAdminEventsRequestObject) (openapi.ListAdminEventsResponseObject, error) {

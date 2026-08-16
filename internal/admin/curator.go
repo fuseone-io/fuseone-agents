@@ -195,9 +195,15 @@ const toolKind = "tool"
 // rather than something each process rediscovers.
 //
 // Discovery and ruling are kept apart on purpose: publishing never changes an
-// effect. A server that renames itself a write tool tomorrow still arrives as
-// a read, and the ruling that promotes it stays the separate, attributed act
-// it has to be.
+// effect. A server that calls itself a write tool tomorrow still arrives
+// unclassified, and the ruling that promotes it stays the separate, attributed
+// act it has to be.
+//
+// What publishing does carry is the digest of the definition it found, because
+// that is what a recorded ruling is matched against below. Without it this
+// copy of the catalogue would apply rulings by name while the in-process one
+// applied them by definition, and the two would disagree about the row a
+// Curator is looking at.
 func (c *Curator) Publish(ctx context.Context, entries []domain.ToolEntry) error {
 	if len(entries) == 0 {
 		return nil
@@ -208,7 +214,8 @@ func (c *Curator) Publish(ctx context.Context, entries []domain.ToolEntry) error
 		value, err := json.Marshal(struct {
 			Server      string `json:"server"`
 			Description string `json:"description,omitempty"`
-		}{e.Server, e.Description})
+			Digest      string `json:"digest,omitempty"`
+		}{e.Server, e.Description, e.Digest})
 		if err != nil {
 			return fmt.Errorf("admin: encode tool %s: %w", e.ID, err)
 		}
@@ -229,8 +236,11 @@ func (c *Curator) Publish(ctx context.Context, entries []domain.ToolEntry) error
 // Tools returns the published catalogue with each ruling applied.
 //
 // A tool with no ruling reads as unclassified and untrusted, which is exactly
-// what it is: imported, and nobody has said what it does. It used to read as
-// EffectRead here — and the runtime refuses it, so the console, the interview
+// what it is: imported, and nobody has said what it does. So does one whose
+// ruling was overtaken by a new definition, and that one says so — refused for
+// the same reason, but a decision to check rather than a decision to make.
+//
+// It used to read as EffectRead here — and the runtime refuses it, so the console, the interview
 // and the flow check all showed "read, allowed" for a call the platform would
 // stop. An author designs against the screen, which makes a permissive screen
 // worse than no screen.
@@ -251,6 +261,7 @@ func (c *Curator) Tools(ctx context.Context) ([]domain.ToolEntry, error) {
 			stored struct {
 				Server      string `json:"server"`
 				Description string `json:"description"`
+				Digest      string `json:"digest"`
 			}
 		)
 		if err := rows.Scan(&name, &raw); err != nil {
@@ -261,7 +272,7 @@ func (c *Curator) Tools(ctx context.Context) ([]domain.ToolEntry, error) {
 		}
 		entries = append(entries, domain.ToolEntry{
 			ID: domain.ToolID(name), Server: stored.Server, Description: stored.Description,
-			Effect: domain.EffectUnknown, Untrusted: true,
+			Effect: domain.EffectUnknown, Untrusted: true, Digest: stored.Digest,
 		})
 	}
 	if err := rows.Err(); err != nil {
@@ -277,11 +288,26 @@ func (c *Curator) Tools(ctx context.Context) ([]domain.ToolEntry, error) {
 		byTool[r.Tool] = r
 	}
 	for i, e := range entries {
-		if r, ok := byTool[e.ID]; ok {
-			entries[i].Effect = r.Effect
-			entries[i].Untrusted = r.Untrusted
-			entries[i].CompensatedBy = r.CompensatedBy
+		r, ok := byTool[e.ID]
+		if !ok {
+			continue
 		}
+		/*
+			The ruling has to be about the definition on offer.
+
+			Both sides have to be able to answer. A ruling with no digest was
+			recorded before this was kept, and a published tool with no digest
+			has not been rediscovered since — neither is evidence of a change,
+			and reading either as one would refuse every tool on an
+			installation the day it upgrades.
+		*/
+		if r.Digest != "" && e.Digest != "" && r.Digest != e.Digest {
+			entries[i].Stale = true
+			continue
+		}
+		entries[i].Effect = r.Effect
+		entries[i].Untrusted = r.Untrusted
+		entries[i].CompensatedBy = r.CompensatedBy
 	}
 	return entries, nil
 }
