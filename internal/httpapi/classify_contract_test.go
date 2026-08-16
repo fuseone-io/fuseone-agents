@@ -6,6 +6,7 @@ import (
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
+	"github.com/fuseone/agents/internal/known"
 	"github.com/fuseone/agents/internal/ledger"
 )
 
@@ -142,5 +143,70 @@ func TestClassifyTool_forAToolPublishedBeforeDigests_isRecorded(t *testing.T) {
 	}
 	if curator.stored.Effect != domain.EffectRead {
 		t.Errorf("stored = %+v, want the ruling recorded", curator.stored)
+	}
+}
+
+/*
+What the console is told about the servers this platform has read about.
+
+A recipe fills a form and decides nothing. What it must carry is enough for a
+reader to judge it themselves: who publishes the server, whose page this was
+read from, and whether anybody ran it. Shipped without those, a suggestion is
+an anonymous opinion with the platform's name on it.
+*/
+func TestListRecipes_carryWhoPublishesAndWhoseDocumentationWasRead(t *testing.T) {
+	t.Parallel()
+	shipped, err := known.Load()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	server := NewServer(ledger.NewMemory(), "test").WithKnown(shipped)
+
+	resp, err := server.ListRecipes(as(domain.RoleCurator), openapi.ListRecipesRequestObject{})
+	if err != nil {
+		t.Fatalf("ListRecipes: %v", err)
+	}
+	listed, ok := resp.(openapi.ListRecipes200JSONResponse)
+	if !ok {
+		t.Fatalf("response = %T, want the listing", resp)
+	}
+	if len(listed.Items) == 0 {
+		t.Fatal("no recipes; the screen would offer nothing to start from")
+	}
+	for _, recipe := range listed.Items {
+		if recipe.Publisher == "" || recipe.DocsFrom == "" {
+			t.Errorf("%s ships without saying who publishes it or whose page was read", recipe.Server)
+		}
+	}
+}
+
+// An installation shipping none is a real mode, and an empty list is the
+// honest answer to "what do you know".
+func TestListRecipes_withNothingShipped_isAnEmptyListAndNotAFailure(t *testing.T) {
+	t.Parallel()
+
+	resp, err := NewServer(ledger.NewMemory(), "test").
+		ListRecipes(as(domain.RoleCurator), openapi.ListRecipesRequestObject{})
+	if err != nil {
+		t.Fatalf("ListRecipes: %v", err)
+	}
+	if listed, ok := resp.(openapi.ListRecipes200JSONResponse); !ok || listed.Items == nil {
+		t.Fatalf("response = %T, want an empty listing", resp)
+	}
+}
+
+// An auditor reads everything and changes nothing, and a recipe is a step
+// towards a connection: the same permission that governs the act governs the
+// screen that starts it.
+func TestListRecipes_withoutThePermission_isRefused(t *testing.T) {
+	t.Parallel()
+
+	resp, err := NewServer(ledger.NewMemory(), "test").
+		ListRecipes(as(domain.RoleAuditor), openapi.ListRecipesRequestObject{})
+	if err != nil {
+		t.Fatalf("ListRecipes: %v", err)
+	}
+	if _, refused := resp.(openapi.ListRecipes403ApplicationProblemPlusJSONResponse); !refused {
+		t.Fatalf("response = %T, want 403", resp)
 	}
 }

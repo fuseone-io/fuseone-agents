@@ -1377,6 +1377,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/integrations/recipes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tool servers this platform knows about
+         * @description What the platform has read about servers other people publish: who publishes one, where it is documented, how it is usually reached, and the credential it expects.
+         *     A recipe fills the connection form and decides nothing. It is not a supported connector, not a hosted service and not an endorsement — this platform did not write these servers and vouches for nothing beyond saying where it read what it read. Its suggestions about what a tool does are proposals a Curator confirms, never classifications.
+         */
+        get: operations["listRecipes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/integrations/mcp-servers/{name}": {
         parameters: {
             query?: never;
@@ -2208,6 +2229,19 @@ export interface components {
              */
             digest?: string;
             /**
+             * @description The agents whose current version names this tool.
+             *
+             *     Read before taking a tool off a server's surface. Off it the tool
+             *     is not a capability this installation has, and an agent that still
+             *     names it stops at the Gate with an unknown capability — correct,
+             *     and the worst possible place to find out. The screen offering the
+             *     choice says what the choice costs.
+             *
+             *     Current versions only: an older one that names the tool is pinned
+             *     to runs already recorded and cannot be started again.
+             */
+            declaredBy?: string[];
+            /**
              * @description Whether this installation brought the tool in. A tool discovered
              *     and not brought in is listed here and nowhere else — it reaches no
              *     model and answers no call — because "discovered and not taken" is a
@@ -2353,6 +2387,41 @@ export interface components {
              *     thing from a server that failed.
              */
             health?: components["schemas"]["IntegrationHealth"] | null;
+        };
+        ServerRecipe: {
+            /** @description The local name this applies to, and what a discovered tool is matched by. */
+            server: string;
+            title: string;
+            /** @description Who publishes the server. Never this platform. */
+            publisher: string;
+            docs?: string;
+            /**
+             * @description Whose documentation `docs` points at.
+             *
+             *     Separate from `provenance` because they are different questions. A
+             *     community server somebody actually ran has trustworthy suggestions
+             *     and nobody standing behind it; a publisher's own server read off
+             *     their site is the reverse. Neither is "official", and that word is
+             *     not to be rendered: it is the one a reader takes as a promise of
+             *     support that nobody made.
+             * @enum {string}
+             */
+            docsFrom: "publisher" | "third-party";
+            /**
+             * @description Where the suggestions came from — somebody ran this server, or somebody read a page.
+             * @enum {string}
+             */
+            provenance: "server" | "documentation";
+            transport?: components["schemas"]["Transport"];
+            command?: string;
+            args?: string[];
+            url?: string;
+            /** @description The credential it expects, in words somebody reads before going to fetch one: what to get, and what it will be able to reach. */
+            auth?: string;
+            /** @description What an operator has to know before running it at all. */
+            note?: string;
+            /** @description How many of its tools this platform has an opinion about. A recipe with none is still worth having — identity, a link and a warning about the credential — and effects invented for unverified names would not be. */
+            suggestions?: number;
         };
         IntegrationHealth: {
             reachable: boolean;
@@ -5117,6 +5186,30 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listRecipes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What is known. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ServerRecipe"][];
+                    };
+                };
             };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
