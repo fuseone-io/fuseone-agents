@@ -280,6 +280,18 @@ func consumerWith(
 	return c, p
 }
 
+// consumerLike is a second consumer over the same inbox and the same stubs,
+// with an owner of its own. Two workers on one installation, which is the
+// arrangement every claim and every ceiling has to survive.
+func consumerLike(t *testing.T, p *consumerParts, owner string) *channel.Consumer {
+	t.Helper()
+	return channel.NewConsumer(p.inbox, owner, slog.New(slog.NewTextHandler(io.Discard, nil))).
+		With(p.scopes, p, p, p.subjects, p.opener, p.answers).
+		Binding(func(_ context.Context, _, _ string) (domain.UserID, bool, error) {
+			return "usr_ana", p.bound, p.bindErr
+		})
+}
+
 func reseed(t *testing.T, p *consumerParts) {
 	t.Helper()
 	if _, err := p.inbox.Receive(t.Context(), p.arrival); err != nil {

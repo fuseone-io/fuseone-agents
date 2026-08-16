@@ -380,6 +380,12 @@ worth stating, because each had a plausible alternative:
   flood it exists to stop. The rest are recorded with a reason code and not
   said, so an operator asking why a conversation went quiet can still count
   them.
+- **Taken, not read.** The slot is reserved before the run is opened, under a
+  lock held per correspondent. Counting and then opening is a check followed by
+  a decision, and between them is every other worker: two see nobody has spent
+  anything, both open, and a ceiling of one admits as many runs as there are
+  processes sweeping. The reservation goes with the ask's lease, so a worker
+  that dies frees the slot in a lease rather than in a window.
 
 It is not yet a setting. A number nobody can change is a poor knob and a real
 rail, and a setting with no screen would be configuration written straight into

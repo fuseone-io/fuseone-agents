@@ -188,3 +188,19 @@ func (c *Consumer) structured(
 	out.Subject = &askSubject{Kind: "run", Run: string(run)}
 	return out
 }
+
+/*
+Refusal is an ask that became nothing.
+
+Three parts because three readers. The sentence is for the person who asked and
+names what would have worked. The reason is for whoever is counting later, and
+a sentence with somebody's agent name in it counts nothing. And Silent is for
+the conversation itself: the second refusal of the same kind inside the same
+window is recorded and not said, because a limit that answers every message it
+rejects amplifies the flood it exists to stop.
+*/
+type Refusal struct {
+	Why    string
+	Reason string
+	Silent bool
+}

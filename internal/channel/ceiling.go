@@ -31,6 +31,16 @@ type Ceiling struct {
 	Per  time.Duration
 }
 
+// Quota is one ceiling resolved against a clock: how many, and since when.
+//
+// Resolved by the caller because the clock is the caller's. The store is asked
+// a question about an instant it is given, never about `now`, or the window
+// would move under a test standing still.
+type Quota struct {
+	Runs  int
+	Since time.Time
+}
+
 /*
 DefaultCeiling is what an installation gets without saying anything.
 
@@ -72,32 +82,35 @@ func (c *Consumer) overCeiling(ctx context.Context, a Claimed) (*Refusal, error)
 	if c.ceiling.Runs <= 0 {
 		return nil, nil
 	}
-	who := Correspondent{Channel: a.Channel, Account: a.AskedBy}
 	since := c.clock().Add(-c.ceiling.Per)
 
-	opened, err := c.inbox.OpenedSince(ctx, who, since)
+	// Taken, not read. The slot is held before the run is opened, so the next
+	// worker to decide counts it — which is the whole difference between a
+	// ceiling and a suggestion.
+	spent, granted, err := c.inbox.Reserve(ctx, a, Quota{Runs: c.ceiling.Runs, Since: since})
 	if err != nil {
-		// Not a refusal. A count that failed is this side failing, and
+		// Not a refusal. A reservation that failed is this side failing, and
 		// refusing on it would tell somebody they had asked too much on the
 		// evidence of a database that was away.
 		return nil, err
 	}
-	if opened < c.ceiling.Runs {
+	if granted {
 		return nil, nil
 	}
 
+	who := Correspondent{Channel: a.Channel, Account: a.AskedBy}
 	told, err := c.inbox.ToldSince(ctx, who, reasonCeiling, since)
 	if err != nil {
 		return nil, err
 	}
 	c.log.Info("an ask was over the correspondent ceiling",
-		"channel", a.Channel, "opened", opened, "ceiling", c.ceiling.Runs, "told", told)
+		"channel", a.Channel, "spent", spent, "ceiling", c.ceiling.Runs, "told", told)
 
 	return &Refusal{
 		Why: fmt.Sprintf(
 			"You have started too many runs here recently — %d in the last %s, which is the limit. "+
 				"Try again once the oldest of them falls outside that window.",
-			opened, c.ceiling.Per),
+			spent, c.ceiling.Per),
 		Reason: reasonCeiling,
 		Silent: told,
 	}, nil
@@ -114,23 +127,73 @@ type Correspondent struct {
 	Account string
 }
 
-// OpenedSince counts the runs one correspondent has already opened.
-//
-// From `at`, which a settle overwrites — so this counts when the run was
-// opened rather than when the message arrived. A backlog cleared at nine does
-// not read as a quiet morning.
-func (i *Inbox) OpenedSince(
-	ctx context.Context, who Correspondent, since time.Time,
-) (int, error) {
-	var n int
-	err := i.pool.QueryRow(ctx, `
-		select count(*) from channel_inbox
-		where channel = $1 and asked_by = $2 and status = 'opened' and at > $3`,
-		who.Channel, who.Account, since.UTC()).Scan(&n)
+/*
+Reserve takes a slot against the correspondent's ceiling, or says it is full.
+
+One transaction and one lock, because the alternative is a count that was true
+when it was read. The lock is per correspondent rather than per table: two
+people asking at once are not competing for anything, and serialising them
+would make a busy conversation queue behind itself.
+
+What counts as spent is a run already opened inside the window, plus a slot
+another worker is holding right now. Holding, not merely claimed: an ask being
+looked at has not been granted anything yet, and counting it would refuse a
+person because somebody was thinking about their earlier message.
+
+A reservation goes with the lease. A worker that dies stops renewing, the ask
+becomes claimable, and the slot comes back with it — one expiry for both, so
+there is no second thing to get wrong.
+*/
+func (i *Inbox) Reserve(ctx context.Context, a Claimed, q Quota) (int, bool, error) {
+	tx, err := i.pool.Begin(ctx)
 	if err != nil {
-		return 0, fmt.Errorf("channel: count what %s opened: %w", who.Account, err)
+		return 0, false, fmt.Errorf("channel: reserve a slot: %w", err)
 	}
-	return n, nil
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	// Serialised on this correspondent alone, for the length of this
+	// transaction. Everybody else in the conversation decides in parallel.
+	if _, err := tx.Exec(ctx,
+		`select pg_advisory_xact_lock(hashtextextended($1, 0))`,
+		a.Channel+"/"+a.AskedBy); err != nil {
+		return 0, false, fmt.Errorf("channel: hold the ceiling for %s: %w", a.AskedBy, err)
+	}
+
+	var spent int
+	err = tx.QueryRow(ctx, `
+		select count(*) from channel_inbox
+		where channel = $1 and asked_by = $2
+		  and not (conversation = $4 and event_id = $5)
+		  and (
+		        (status = 'opened' and at > $3)
+		     or (status = 'pending' and reserved_at is not null and leased_until > now())
+		      )`,
+		a.Channel, a.AskedBy, q.Since.UTC(), a.Conversation, a.EventID).Scan(&spent)
+	if err != nil {
+		return 0, false, fmt.Errorf("channel: count what %s has spent: %w", a.AskedBy, err)
+	}
+	if spent >= q.Runs {
+		return spent, false, nil
+	}
+
+	// Ours to take, and only while we still hold the ask. A consumer whose
+	// lease lapsed must not reserve against a ceiling on behalf of the
+	// consumer that replaced it.
+	tag, err := tx.Exec(ctx, `
+		update channel_inbox set reserved_at = now()
+		where channel = $1 and conversation = $2 and event_id = $3
+		  and lease_owner = $4 and status = 'pending'`,
+		a.Channel, a.Conversation, a.EventID, a.Owner)
+	if err != nil {
+		return spent, false, fmt.Errorf("channel: take a slot for %s: %w", a.EventID, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return spent, false, fmt.Errorf("%w: %s", ErrNotClaimed, a.EventID)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return spent, false, fmt.Errorf("channel: reserve a slot: %w", err)
+	}
+	return spent, true, nil
 }
 
 // ToldSince reports whether this correspondent has already been refused for
