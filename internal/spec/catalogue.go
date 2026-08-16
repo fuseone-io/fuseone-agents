@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -66,6 +67,38 @@ func (r *Registry) List(ctx context.Context, scope domain.Scope, allVersions boo
 		out = append(out, summary)
 	}
 	return out, rows.Err()
+}
+
+/*
+Declaring answers which agents name a tool, of the versions that would run.
+
+Asked before a tool is taken off a server's surface. Off it, the tool is not a
+capability this installation has, and an agent that still names it stops at the
+Gate with an unknown capability — correct, and the worst possible place to find
+out. The screen that offers the choice can say what the choice costs.
+
+Current versions only. An older one that names the tool is pinned to runs
+already recorded and cannot be started again, so counting it would warn
+somebody about an agent they replaced last month.
+*/
+func (r *Registry) Declaring(
+	ctx context.Context, tool domain.ToolID,
+) ([]domain.AgentSummary, error) {
+	current, err := r.List(ctx, domain.Scope{}, false)
+	if err != nil {
+		return nil, err
+	}
+
+	// Filtered here rather than in SQL. The listing already picks one row per
+	// agent by a rule with three parts — the chosen version, then the newest —
+	// and a second query restating it is a second rule to keep in step.
+	var out []domain.AgentSummary
+	for _, agent := range current {
+		if slices.Contains(agent.Tools, tool) {
+			out = append(out, agent)
+		}
+	}
+	return out, nil
 }
 
 // Versions returns every published version of one agent, newest first.
