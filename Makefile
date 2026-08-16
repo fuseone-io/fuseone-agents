@@ -28,14 +28,21 @@ db:
 		docker compose exec -T postgres createdb -U agents agents_test
 	@echo "postgres ready on 5433 (dev: agents, tests: agents_test)"
 
-# The suites that need a real database, named once.
+# The suites that need a real database, asked rather than remembered.
 #
 # CI used to carry its own copy of this list and had fallen three packages
 # behind, so `make check-pg` locally and the postgres job in CI were running
-# different suites — and the ones CI was missing were the newest.
-PG_PKGS = ./internal/ledger/ ./internal/e2e/ ./internal/admin/ ./internal/spec/ \
-          ./internal/auth/ ./internal/trigger/ ./internal/audit/ ./internal/policy/ \
-          ./internal/scope/ ./internal/authoring/ ./internal/regression/
+# different suites. Naming it once fixed the disagreement and not the drift:
+# the single list then fell a whole package behind on its own, and the suites
+# it left out skipped in `check` for want of a DSN and were never reached by
+# `check-pg` at all — thirty-nine tests reported green by two targets, neither
+# of which had run them.
+#
+# So it is derived. A suite needs a database exactly when it reads the variable
+# that points at one, which is a fact in the files rather than a note somebody
+# has to remember to update.
+PG_PKGS = $(shell grep -rl TEST_DATABASE_URL --include='*_test.go' internal \
+            | xargs -n1 dirname | sort -u | sed 's|^|./|')
 
 ## check-pg: the contract suite against a real database as well as the fake.
 ## A fake that is more permissive than the store is how green tests become
