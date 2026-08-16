@@ -104,9 +104,20 @@ func aConversation(t *testing.T) *conversing {
 	if err := ledger.Migrate(ctx, pool); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
+	/*
+		The runs go too, and that is not tidiness.
+
+		An ask's idempotency key is derived from the delivery, and these
+		deliveries have fixed identifiers. Left behind, the second run of this
+		file finds the run the first one opened and answers with it: the sweep
+		still reports one, the inbox still says opened, and every assertion
+		here still passes — while what was exercised is replay, not opening.
+		A test that proves a different thing on its second run proves neither.
+	*/
 	if _, err := pool.Exec(ctx, `delete from channel_inbox;
 		delete from settings where kind like 'channel%';
-		truncate agent_specs; truncate agent_state`); err != nil {
+		truncate agent_specs; truncate agent_state;
+		truncate run_steps, runs, run_content`); err != nil {
 		t.Fatalf("clean: %v", err)
 	}
 
@@ -231,6 +242,18 @@ func (c *conversing) opened(t *testing.T, eventID string) (status, runID, detail
 	return status, runID, detail
 }
 
+// runs is how many the ledger holds, which is how this tells opening a run
+// apart from being handed one that was already there.
+func (c *conversing) runs(t *testing.T) int {
+	t.Helper()
+	var n int
+	if err := c.pool.QueryRow(context.Background(),
+		`select count(*) from runs`).Scan(&n); err != nil {
+		t.Fatalf("count the runs: %v", err)
+	}
+	return n
+}
+
 func TestAsk_aMentionInAMappedConversation_becomesARunForWhoeverAsked(t *testing.T) {
 	c := aConversation(t)
 
@@ -243,12 +266,19 @@ func TestAsk_aMentionInAMappedConversation_becomesARunForWhoeverAsked(t *testing
 		t.Fatalf("status = %q before any sweep, want the ask waiting", status)
 	}
 
+	before := c.runs(t)
 	n, err := c.consumer.Sweep(context.Background(), time.Minute, 10)
 	if err != nil {
 		t.Fatalf("sweep: %v", err)
 	}
 	if n != 1 {
 		t.Fatalf("opened %d, want the one ask that arrived", n)
+	}
+	// Opened, not found. The sweep counts asks it settled, and an ask settled
+	// by the opener handing back a run it already had counts the same — which
+	// is the whole of what this test would silently stop proving.
+	if got := c.runs(t); got != before+1 {
+		t.Fatalf("runs went %d to %d; the ask did not open one", before, got)
 	}
 
 	status, runID, detail := c.opened(t, "Ev1")
@@ -340,5 +370,8 @@ func TestAsk_theSameDeliveryTwice_opensOneRun(t *testing.T) {
 	}
 	if n != 1 {
 		t.Fatalf("opened %d, want one run for one question asked once", n)
+	}
+	if got := c.runs(t); got != 1 {
+		t.Fatalf("runs = %d, want the single run the retried question became", got)
 	}
 }
