@@ -56,14 +56,15 @@ export function IntegrationsPage() {
         title={t("nav.integrations")}
         description={t("integrations.subtitle")}
       >
-        {/* Connecting a tool server is a page of its own: the catalogue is
-            read before anything is decided, and reading needs somewhere to
-            stand. Editing one that exists stays a dialog — there is nothing
-            to read, only a field to correct. */}
+        {/* Connecting a tool server starts at the catalogue: what this
+            installation reaches and what it knows how to reach are one
+            question, and answering it needs a page rather than a form.
+            Editing one that exists stays a dialog — there is nothing to read
+            there, only a field to correct. */}
         <ConnectMenu
           onConnect={(kind) =>
             kind === "server"
-              ? void navigate("/integrations/mcp/new")
+              ? void navigate("/integrations/mcp")
               : setEditing({ kind, value: null })
           }
         />
@@ -101,7 +102,7 @@ export function IntegrationsPage() {
           <TabsContent value="servers" className="mt-4">
             <IntegrationsSection
               title={t("integrations.servers")}
-              onAdd={() => void navigate("/integrations/mcp/new")}
+              onAdd={() => void navigate("/integrations/mcp")}
               empty={
                 servers.length === 0 && (
                   <EmptyState

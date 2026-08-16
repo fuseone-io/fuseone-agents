@@ -1467,6 +1467,27 @@
     "suggests": "Esta plataforma chamaria de {{effect}} — abra para ver por quê.",
     "review": "Revisar decisão",
     "connectAServer": "Conectar um servidor de ferramentas",
-    "connectDescription": "O que ele oferece chega sem classificação e recusado até alguém dizer o que faz."
+    "connectDescription": "O que ele oferece chega sem classificação e recusado até alguém dizer o que faz.",
+    "catalogue": "Servidores de ferramentas",
+    "catalogueDescription": "O que esta instalação alcança, e o que ela sabe alcançar. Conectar um descobre as ferramentas dele; cada uma chega sem classificação e recusada até alguém dizer o que faz.",
+    "everything": "Tudo",
+    "railCaveat": "Nenhum destes é escrito, hospedado ou suportado aqui. O que esta plataforma traz é o que leu sobre eles — uma receita preenche um formulário e não decide nada.",
+    "category": {
+      "code": "Código",
+      "data": "Dados",
+      "knowledge": "Conhecimento",
+      "communication": "Comunicação",
+      "operations": "Operação",
+      "web": "Web"
+    },
+    "searchServers": "Buscar por nome ou publisher",
+    "nothingHere": "Nada nesta prateleira",
+    "nothingHereHint": "Tente o catálogo inteiro, ou conecte um servidor por endereço — esta plataforma não precisa conhecê-lo antes.",
+    "publisherUnknown": "Configurado aqui, sem receita",
+    "open": "Ferramentas e superfície",
+    "connectIt": "Conectar",
+    "connectedWith_one": "Conectado · {{count}} ferramenta",
+    "connectedWith_other": "Conectado · {{count}} ferramentas",
+    "notConnected": "Não conectado"
   }
 }

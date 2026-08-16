@@ -1467,6 +1467,27 @@
     "suggests": "This platform would call it {{effect}} — open it to see why.",
     "review": "Review the ruling",
     "connectAServer": "Connect a tool server",
-    "connectDescription": "What it offers arrives unclassified and refused until somebody says what it does."
+    "connectDescription": "What it offers arrives unclassified and refused until somebody says what it does.",
+    "catalogue": "Tool servers",
+    "catalogueDescription": "What this installation reaches, and what it knows how to reach. Connecting one discovers its tools; every one arrives unclassified and refused until somebody says what it does.",
+    "everything": "Everything",
+    "railCaveat": "None of these is written, hosted or supported here. What this platform ships is what it has read about them — a recipe fills a form and decides nothing.",
+    "category": {
+      "code": "Code",
+      "data": "Data",
+      "knowledge": "Knowledge",
+      "communication": "Communication",
+      "operations": "Operations",
+      "web": "Web"
+    },
+    "searchServers": "Search by name or publisher",
+    "nothingHere": "Nothing on this shelf",
+    "nothingHereHint": "Try the whole catalogue, or connect a server by address — this platform does not have to know about it first.",
+    "publisherUnknown": "Configured here, with no recipe",
+    "open": "Tools and surface",
+    "connectIt": "Connect",
+    "connectedWith_one": "Connected · {{count}} tool",
+    "connectedWith_other": "Connected · {{count}} tools",
+    "notConnected": "Not connected"
   }
 }

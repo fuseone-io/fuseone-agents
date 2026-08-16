@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Server } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { Panel } from "@/components/shared/panel";
@@ -25,6 +25,7 @@ import { useServerForm } from "@/features/integrations/mcp/use-server-form";
 export function NewServerPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const { form, submit, saving } = useServerForm(null, () =>
     void navigate("/integrations"),
   );
@@ -37,8 +38,11 @@ export function NewServerPage() {
         description={t("mcp.connectDescription")}
       />
 
+      {/* Arriving from a card means the choice is already made; the
+          catalogue is behind, not in front. Arriving without one, the
+          recipes are the first thing worth reading. */}
       <Panel title={t("mcp.startFromARecipe")}>
-        <Recipes form={form} />
+        <Recipes form={form} chosen={params.get("recipe")} />
       </Panel>
 
       <Panel title={t("mcp.connection")}>
