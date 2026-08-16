@@ -120,7 +120,8 @@
     "withdrawFailed": "Não foi possível retirar",
     "arriveUnclassified": "ferramentas chegam sem classificação e são recusadas até serem julgadas",
     "waitingForARuling_one": "{{count}} ferramenta está recusada até alguém julgá-la",
-    "waitingForARuling_other": "{{count}} ferramentas estão recusadas até alguém julgá-las"
+    "waitingForARuling_other": "{{count}} ferramentas estão recusadas até alguém julgá-las",
+    "chooseAnEffect": "Diga o que ela faz"
   },
   "agents": {
     "aCostOrStepCeiling": "Um teto de custo ou de passos",

@@ -19,7 +19,9 @@ import { SuggestedRuling } from "@/features/admin/suggested-ruling";
 import { problemMessage } from "@/lib/api/problem-message";
 
 const BLANK: Ruling = {
-  effect: "read",
+  // Not one of the four. See Ruling: `read` is a permission, so starting
+  // there would make the untouched form a grant.
+  effect: "",
   untrusted: true,
   reason: "",
   compensatedBy: "",
@@ -71,10 +73,12 @@ export function ClassifyDialog({
   async function submit() {
     if (!tool) return;
     try {
+      if (ruling.effect === "") return;
       await classify.mutateAsync({
         toolId: tool.toolId,
         digest: tool.digest,
         ...ruling,
+        effect: ruling.effect,
       });
       toast.success(
         t("admin.classified", {
@@ -128,7 +132,13 @@ export function ClassifyDialog({
           <Button variant="outline" onClick={onClose}>
             {t("common.cancel")}
           </Button>
-          <Button onClick={() => void submit()} disabled={classify.isPending}>
+          {/* Refused until an effect is chosen, rather than defaulted to one.
+              A disabled button asks the question again; a default answers it
+              with whatever the form happened to hold. */}
+          <Button
+            onClick={() => void submit()}
+            disabled={classify.isPending || ruling.effect === ""}
+          >
             {t("admin.recordClassification")}
           </Button>
         </DialogFooter>

@@ -37,9 +37,26 @@ describe("what a ruling opens on", () => {
     expect(screen.getByLabelText("O que esta ferramenta faz com o mundo")).toHaveTextContent(/destrutiv/i);
   });
 
-  it("starts a tool nobody has judged on nothing, rather than answering for the Curator", () => {
+  /*
+   * Asserting it is not destructive proved nothing: the value it used to open
+   * on was `read`, which is the permissive one and the one this had to catch.
+   * A test written as "not the dangerous answer" passes on the answer that
+   * grants.
+   */
+  it("starts a tool nobody has judged with no effect at all", () => {
     open(tool({ effect: "unknown" }));
-    expect(screen.getByLabelText("O que esta ferramenta faz com o mundo")).not.toHaveTextContent(/destrutiv/i);
+    const chooser = screen.getByLabelText("O que esta ferramenta faz com o mundo");
+    expect(chooser).toHaveTextContent(/diga o que ela faz/i);
+    for (const named of [/leitura/i, /escrita/i, /destrutiv/i, /financeir/i]) {
+      expect(chooser).not.toHaveTextContent(named);
+    }
+  });
+
+  // And it cannot be recorded until somebody says. A disabled button asks the
+  // question again; a default answers it with whatever the form held.
+  it("will not record a ruling that names no effect", () => {
+    open(tool({ effect: "unknown" }));
+    expect(screen.getByRole("button", { name: /registrar|gravar|classificar/i })).toBeDisabled();
   });
 
   /*

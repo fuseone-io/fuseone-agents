@@ -16,7 +16,15 @@ import type { Effect, Tool } from "@/features/admin/api";
 const EFFECTS: Effect[] = ["read", "write", "destructive", "financial"];
 
 export type Ruling = {
-  effect: Effect;
+  /*
+    Unchosen is its own value, and not one of the four.
+
+    A form whose effect starts at `read` is a form that answers for the Curator
+    with the most permissive answer available — and `read` is *allowed*, so the
+    zero value of the control was a grant. The empty string is not a
+    classification anybody can submit; it is the state before there is one.
+  */
+  effect: Effect | "";
   untrusted: boolean;
   reason: string;
   compensatedBy: string;
@@ -52,7 +60,8 @@ export function ClassifyFields({
           onValueChange={(v) => onChange({ ...ruling, effect: v as Effect })}
         >
           <SelectTrigger id="effect">
-            <SelectValue />
+            {/* A real placeholder, so an unchosen effect looks unchosen. */}
+            <SelectValue placeholder={t("admin.chooseAnEffect")} />
           </SelectTrigger>
           <SelectContent>
             {EFFECTS.map((effect) => (

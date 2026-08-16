@@ -120,7 +120,8 @@
     "withdrawFailed": "Could not withdraw",
     "arriveUnclassified": "tools arrive unclassified and are refused until ruled",
     "waitingForARuling_one": "{{count}} tool is refused until somebody rules on it",
-    "waitingForARuling_other": "{{count}} tools are refused until somebody rules on them"
+    "waitingForARuling_other": "{{count}} tools are refused until somebody rules on them",
+    "chooseAnEffect": "Say what it does"
   },
   "agents": {
     "aCostOrStepCeiling": "A cost or step ceiling",
