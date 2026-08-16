@@ -6,7 +6,6 @@ import { PageHeader } from "@/components/shared/page-header";
 import { Input } from "@/components/ui/input";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/shared/states";
 import { useIntegrations } from "@/features/integrations/api";
-import { useTools } from "@/features/admin/api";
 import { useRecipes } from "@/features/integrations/mcp/api";
 import { CatalogueRail } from "@/features/integrations/mcp/catalogue-rail";
 import { CatalogueCard } from "@/features/integrations/mcp/catalogue-card";
@@ -30,21 +29,13 @@ export function CataloguePage() {
   const navigate = useNavigate();
   const integrations = useIntegrations();
   const recipes = useRecipes();
-  const tools = useTools();
   const [shelf, setShelf] = useState<string | null>(null);
   const [query, setQuery] = useState("");
 
-  const entries = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const tool of tools.data?.items ?? []) {
-      counts[tool.server] = (counts[tool.server] ?? 0) + 1;
-    }
-    return listing(
-      integrations.data?.mcpServers ?? [],
-      recipes.data?.items ?? [],
-      counts,
-    );
-  }, [integrations.data, recipes.data, tools.data]);
+  const entries = useMemo(
+    () => listing(integrations.data?.mcpServers ?? [], recipes.data?.items ?? []),
+    [integrations.data, recipes.data],
+  );
 
   const shown = matching(
     shelf === null ? entries : entries.filter((one) => one.category === shelf),
@@ -52,11 +43,22 @@ export function CataloguePage() {
   );
 
   if (integrations.isLoading || recipes.isLoading) return <LoadingRows rows={4} />;
-  if (integrations.error) {
+  /*
+    Either read failing is an error, and neither is an empty list.
+
+    A recipes call that failed used to render as "we know about nothing",
+    which is a claim rather than a failure — and the one thing a catalogue must
+    never say when it simply could not look.
+  */
+  const failed = integrations.error ?? recipes.error;
+  if (failed) {
     return (
       <ErrorState
-        error={integrations.error}
-        onRetry={() => void integrations.refetch()}
+        error={failed}
+        onRetry={() => {
+          void integrations.refetch();
+          void recipes.refetch();
+        }}
       />
     );
   }
@@ -94,7 +96,7 @@ export function CataloguePage() {
                   entry={entry}
                   onOpen={() =>
                     void navigate(
-                      entry.connected
+                      entry.configured
                         ? `/integrations/mcp/${entry.name}`
                         : `/integrations/mcp/new?recipe=${entry.name}`,
                     )

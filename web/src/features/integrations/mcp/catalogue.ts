@@ -1,4 +1,4 @@
-import type { MCPServer } from "@/features/integrations/api";
+import type { IntegrationHealth, MCPServer } from "@/features/integrations/api";
 import type { ServerRecipe } from "@/features/integrations/mcp/api";
 
 /**
@@ -20,19 +20,31 @@ export type Listing = {
   category: string;
   publisher: string | null;
   description: string | null;
-  connected: boolean;
-  /** How many tools it offers now. Null when nothing has reached it. */
+  /** Configured here at all. Not the same as answering, or even switched on. */
+  configured: boolean;
+  enabled: boolean;
+  /*
+    What was observed the last time anybody tried, and null when nobody has.
+
+    Four states hide behind "connected" — off, never reached, refusing,
+    answering — and the card has to tell them apart. Collapsing them drew a
+    switched-off server in the colour of a healthy one.
+  */
+  health: IntegrationHealth | null;
+  /*
+    How many tools it offers *now*, from the observation rather than from the
+    catalogue.
+
+    The catalogue is what this installation has ever been offered and never
+    shrinks, so counting it reports tools a server stopped offering last week.
+  */
   tools: number | null;
   recipe: ServerRecipe | null;
 };
 
 const UNSHELVED = "operations";
 
-export function listing(
-  servers: MCPServer[],
-  recipes: ServerRecipe[],
-  toolCounts: Record<string, number>,
-): Listing[] {
+export function listing(servers: MCPServer[], recipes: ServerRecipe[]): Listing[] {
   const byName = new Map<string, Listing>();
 
   for (const recipe of recipes) {
@@ -42,7 +54,9 @@ export function listing(
       category: recipe.category,
       publisher: recipe.publisher,
       description: recipe.note ?? null,
-      connected: false,
+      configured: false,
+      enabled: false,
+      health: null,
       tools: null,
       recipe,
     });
@@ -58,15 +72,18 @@ export function listing(
       category: known?.category ?? UNSHELVED,
       publisher: known?.publisher ?? null,
       description: known?.description ?? null,
-      connected: true,
-      tools: toolCounts[server.name] ?? 0,
+      configured: true,
+      enabled: server.enabled,
+      health: server.health ?? null,
+      tools: server.health?.toolCount ?? null,
       recipe: known?.recipe ?? null,
     });
   }
 
   return [...byName.values()].sort((a, b) => {
-    // What is running comes first. It is what somebody is here to check.
-    if (a.connected !== b.connected) return a.connected ? -1 : 1;
+    // What the installation runs comes first. It is what somebody is here to
+    // check, whether or not it is answering — a broken one most of all.
+    if (a.configured !== b.configured) return a.configured ? -1 : 1;
     return a.title.localeCompare(b.title);
   });
 }

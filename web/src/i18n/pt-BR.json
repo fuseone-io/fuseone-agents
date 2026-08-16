@@ -1489,8 +1489,8 @@
     "publisherUnknown": "Configurado aqui, sem receita",
     "open": "Ferramentas e superfície",
     "connectIt": "Conectar",
-    "connectedWith_one": "Conectado · {{count}} ferramenta",
-    "connectedWith_other": "Conectado · {{count}} ferramentas",
-    "notConnected": "Não conectado"
+    "notConnected": "Não conectado",
+    "offering_one": "{{count}} ferramenta",
+    "offering_other": "{{count}} ferramentas"
   }
 }

@@ -1489,8 +1489,8 @@
     "publisherUnknown": "Configured here, with no recipe",
     "open": "Tools and surface",
     "connectIt": "Connect",
-    "connectedWith_one": "Connected · {{count}} tool",
-    "connectedWith_other": "Connected · {{count}} tools",
-    "notConnected": "Not connected"
+    "notConnected": "Not connected",
+    "offering_one": "{{count}} tool",
+    "offering_other": "{{count}} tools"
   }
 }
