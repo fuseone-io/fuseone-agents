@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { Waiting } from "@/features/admin/tools-panel";
+import { Waiting, waitingFor } from "@/features/admin/tools-panel";
 import type { Tool } from "@/features/admin/api";
 
 function tool(toolId: string, effect: Tool["effect"]): Tool {
@@ -49,5 +49,25 @@ describe("what it says about a ruling the tool outgrew", () => {
     );
     expect(screen.getByText(/recusada/i)).toBeInTheDocument();
     expect(screen.getByText(/\b1\b/)).toBeInTheDocument();
+  });
+});
+
+describe("what the queue holds", () => {
+  /*
+   * Not a second catalogue. Every tool with its ruling lives on the server
+   * that offers it, where the surrounding facts are; listing them all again
+   * here was the same rows in two places.
+   *
+   * What it answers is the question no per-server page can: across the whole
+   * installation, what is waiting. Ten servers is ten visits to find out
+   * there is nothing to do.
+   */
+  it("keeps only what the Gate is refusing", () => {
+    const held = waitingFor([
+      tool("crm.lookup", "read"),
+      tool("crm.new", "unknown"),
+      { ...tool("crm.changed", "write"), stale: true },
+    ]);
+    expect(held.map((one) => one.toolId)).toEqual(["crm.new", "crm.changed"]);
   });
 });

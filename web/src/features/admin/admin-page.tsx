@@ -37,7 +37,7 @@ export function AdminPage() {
           and the one in force is obvious without counting. */}
       <Tabs {...tab} orientation="vertical" className="min-h-0 flex-1 gap-6">
         <TabsList className="w-48 shrink-0 self-start">
-          <TabsTrigger value="tools">{t("admin.tools")}</TabsTrigger>
+          <TabsTrigger value="tools">{t("admin.toolsWaiting")}</TabsTrigger>
           <TabsTrigger value="authoring">{t("admin.authoring")}</TabsTrigger>
           <TabsTrigger value="companies">
             {t("companies.companies")}

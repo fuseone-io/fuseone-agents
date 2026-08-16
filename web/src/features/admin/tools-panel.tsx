@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
 import { useState } from "react";
 import { Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -37,14 +38,20 @@ const HEAD =
  * A count rather than a note, because the number is the work. Zero says the
  * queue is empty, which is also worth being able to see.
  */
+/*
+What is waiting, named once.
+
+Both refusals count. A tool nobody ruled on and a tool whose ruling was
+overtaken are stopped by the Gate alike, and a count that left the second out
+would say the queue was empty while agents were being stopped.
+*/
+export function waitingFor(tools: Tool[]): Tool[] {
+  return tools.filter((tool) => tool.effect === "unknown" || tool.stale === true);
+}
+
 export function Waiting({ tools }: { tools: Tool[] }) {
   const { t } = useTranslation();
-  // Both refusals count. A ruling overtaken by a new definition blocks the
-  // tool exactly as never having ruled does, and a count that left it out
-  // would say the queue was empty while agents were being stopped.
-  const waiting = tools.filter(
-    (tool) => tool.effect === "unknown" || tool.stale,
-  ).length;
+  const waiting = waitingFor(tools).length;
   return (
     <span
       className={
@@ -58,15 +65,31 @@ export function Waiting({ tools }: { tools: Tool[] }) {
   );
 }
 
+/*
+The Curator's queue, and not a second catalogue.
+
+Every tool with its ruling now lives on the server that offers it, which is
+where the surrounding facts are: what else that server brought in, who declares
+it, what the recipe suggested. Listing them all again here was the same rows in
+two places.
+
+What this answers instead is the question no per-server page can: across the
+whole installation, what is waiting. Ten servers is ten visits to discover
+there is nothing to do, and a queue that is empty says so at a glance.
+
+Waiting means refused. A tool nobody ruled on and a tool whose ruling was
+overtaken are both stopped by the Gate, and they are different work — one is a
+decision to make, the other a decision to check.
+*/
 export function ToolsPanel() {
   const { t } = useTranslation();
   const { data, isLoading, error, refetch } = useTools();
   const [classifying, setClassifying] = useState<Tool | null>(null);
-  const tools = data?.items ?? [];
+  const tools = waitingFor(data?.items ?? []);
 
   return (
     <Panel
-      title={t("admin.tools")}
+      title={t("admin.toolsWaiting")}
       action={<Waiting tools={tools} />}
       flush
     >
@@ -82,8 +105,8 @@ export function ToolsPanel() {
         <div className="p-4">
           <EmptyState
             icon={<Wrench className="size-6" />}
-            title={t("admin.noToolsFound")}
-            hint={t("admin.toolsEmptyHint")}
+            title={t("admin.nothingWaiting")}
+            hint={t("admin.nothingWaitingHint")}
           />
         </div>
       ) : (
@@ -116,9 +139,17 @@ export function ToolsPanel() {
                     would delete each other's rows if it did. Whether a tool
                     can be called now is a fact about its server, said here
                     rather than left for somebody to infer from silence. */}
+                {/* Where the decision belongs. The queue says what is
+                    waiting; the server's own page is where the rest of the
+                    context is. */}
                 <TableCell className="text-muted-foreground">
                   <span className="flex items-center gap-1.5">
-                    {tool.server}
+                    <Link
+                      to={`/integrations/mcp/${tool.server}`}
+                      className="underline underline-offset-2"
+                    >
+                      {tool.server}
+                    </Link>
                     {tool.offered === false && (
                       <Badge
                         variant="outline"

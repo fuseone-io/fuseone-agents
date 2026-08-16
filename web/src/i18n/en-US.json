@@ -121,7 +121,10 @@
     "arriveUnclassified": "tools arrive unclassified and are refused until ruled",
     "waitingForARuling_one": "{{count}} tool is refused until somebody rules on it",
     "waitingForARuling_other": "{{count}} tools are refused until somebody rules on them",
-    "chooseAnEffect": "Say what it does"
+    "chooseAnEffect": "Say what it does",
+    "toolsWaiting": "Tools waiting",
+    "nothingWaiting": "Nothing is waiting",
+    "nothingWaitingHint": "Every tool this installation brought in has been ruled on. New ones appear here when a server offers them, and when one changes under a ruling somebody made."
   },
   "agents": {
     "aCostOrStepCeiling": "A cost or step ceiling",

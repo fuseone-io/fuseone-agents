@@ -121,7 +121,10 @@
     "arriveUnclassified": "ferramentas chegam sem classificação e são recusadas até serem julgadas",
     "waitingForARuling_one": "{{count}} ferramenta está recusada até alguém julgá-la",
     "waitingForARuling_other": "{{count}} ferramentas estão recusadas até alguém julgá-las",
-    "chooseAnEffect": "Diga o que ela faz"
+    "chooseAnEffect": "Diga o que ela faz",
+    "toolsWaiting": "Ferramentas à espera",
+    "nothingWaiting": "Nada à espera",
+    "nothingWaitingHint": "Toda ferramenta que esta instalação trouxe já foi julgada. Novas aparecem aqui quando um servidor as oferece, e quando uma muda por baixo de uma decisão que alguém tomou."
   },
   "agents": {
     "aCostOrStepCeiling": "Um teto de custo ou de passos",
