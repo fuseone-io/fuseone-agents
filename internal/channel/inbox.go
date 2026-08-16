@@ -77,6 +77,9 @@ the claim itself.
 type Claimed struct {
 	Arrival
 	Owner string
+	// Detail is what was decided about this ask, for a debt being delivered.
+	// Empty while the ask is still pending: there is nothing decided yet.
+	Detail string
 }
 
 // Inbox is where an ask waits between arriving and being opened.
@@ -129,19 +132,31 @@ somebody.
 func (i *Inbox) Claim(
 	ctx context.Context, owner string, lease time.Duration, limit int,
 ) ([]Claimed, error) {
+	return i.claim(ctx, owner, lease, limit, "status = 'pending'")
+}
+
+// claim takes rows matching a state, leases them, and hands them back.
+//
+// The state is a literal in the two callers above and never a caller's string:
+// this builds SQL, and a predicate that could arrive from anywhere is an
+// injection with a comment explaining that it cannot be.
+func (i *Inbox) claim(
+	ctx context.Context, owner string, lease time.Duration, limit int, state string,
+) ([]Claimed, error) {
 	rows, err := i.pool.Query(ctx, `
 		update channel_inbox set
 			leased_until = now() + $2::interval,
 			lease_owner  = $1
 		where (channel, conversation, event_id) in (
 			select channel, conversation, event_id from channel_inbox
-			where status = 'pending'
+			where `+state+`
 			  and (leased_until is null or leased_until <= now())
 			order by at
 			for update skip locked
 			limit $3
 		)
-		returning channel, conversation, event_id, message, asked_by, text, thread, payload`,
+		returning channel, conversation, event_id, message,
+		          asked_by, text, thread, payload, detail`,
 		owner, lease.String(), limit)
 	if err != nil {
 		return nil, fmt.Errorf("channel: claim from the inbox: %w", err)
@@ -151,11 +166,12 @@ func (i *Inbox) Claim(
 	var out []Claimed
 	for rows.Next() {
 		var a Arrival
+		var detail string
 		if err := rows.Scan(&a.Channel, &a.Conversation, &a.EventID, &a.Message,
-			&a.AskedBy, &a.Text, &a.Thread, &a.Payload); err != nil {
+			&a.AskedBy, &a.Text, &a.Thread, &a.Payload, &detail); err != nil {
 			return nil, err
 		}
-		out = append(out, Claimed{Arrival: a, Owner: owner})
+		out = append(out, Claimed{Arrival: a, Owner: owner, Detail: detail})
 	}
 	return out, rows.Err()
 }
@@ -183,6 +199,44 @@ gone and the platform has no memory of ever having been asked.
 */
 func (i *Inbox) Refused(ctx context.Context, c Claimed, why string, at time.Time) error {
 	return i.settle(ctx, c, "refused", why, "", at)
+}
+
+/*
+Owed claims refusals that have been recorded and not yet said.
+
+Saying it is work of its own, and this is what makes it survivable. Recorded
+and delivered in one step, the two rules pull against each other: record first
+and a driver failure closes the ask with nobody told; deliver first and the
+message goes out before ownership is proven, so a worker whose lease lapsed
+posts a refusal the worker that replaced it posts again.
+
+Separated, each is simple. The holder of the ask records the refusal — proving
+ownership before anything is said — and whoever picks the debt up afterwards
+delivers it, once, under a claim of its own.
+*/
+func (i *Inbox) Owed(
+	ctx context.Context, owner string, lease time.Duration, limit int,
+) ([]Claimed, error) {
+	return i.claim(ctx, owner, lease, limit,
+		"status = 'refused' and answered_at is null")
+}
+
+// Answered marks a refusal as said. Owner-checked like every other settle: a
+// consumer that lost the debt must not record somebody else's delivery.
+func (i *Inbox) Answered(ctx context.Context, c Claimed, at time.Time) error {
+	tag, err := i.pool.Exec(ctx, `
+		update channel_inbox
+		set answered_at = $5, leased_until = null, lease_owner = ''
+		where channel = $1 and conversation = $2 and event_id = $3
+		  and lease_owner = $4 and answered_at is null`,
+		c.Channel, c.Conversation, c.EventID, c.Owner, at.UTC())
+	if err != nil {
+		return fmt.Errorf("channel: mark %s answered: %w", c.EventID, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("%w: %s", ErrNotClaimed, c.EventID)
+	}
+	return nil
 }
 
 /*

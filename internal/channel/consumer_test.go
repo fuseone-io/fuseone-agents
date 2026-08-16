@@ -97,6 +97,9 @@ func TestSweep_anAskNamingNoAgent_isAnsweredInTheConversation(t *testing.T) {
 	if parts.opener.calls != 0 {
 		t.Error("a run opened for an ask that named no agent")
 	}
+	if _, err := c.Answer(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Answer: %v", err)
+	}
 	if len(parts.answers.said) != 1 {
 		t.Fatalf("said = %v, want one answer", parts.answers.said)
 	}
@@ -124,6 +127,9 @@ func TestSweep_anUnboundAccount_opensNothingAndSaysWhy(t *testing.T) {
 	if parts.opener.calls != 0 {
 		t.Error("a run opened on behalf of nobody")
 	}
+	if _, err := c.Answer(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Answer: %v", err)
+	}
 	if len(parts.answers.said) != 1 || !strings.Contains(parts.answers.said[0], "not linked") {
 		t.Errorf("said = %v, want the reason named", parts.answers.said)
 	}
@@ -141,6 +147,9 @@ func TestSweep_aConversationSpeakingForNoScope_saysSo(t *testing.T) {
 
 	if parts.opener.calls != 0 {
 		t.Error("a run opened from an unmapped conversation")
+	}
+	if _, err := c.Answer(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Answer: %v", err)
 	}
 	if len(parts.answers.said) != 1 {
 		t.Errorf("said = %v, want the person told", parts.answers.said)
@@ -328,32 +337,65 @@ func (a *answerSpy) Reply(_ context.Context, _, _, _, text string) error {
 }
 
 /*
-An ask whose refusal could not be delivered stays waiting.
+A refusal nobody could deliver stays owed.
 
-Recording first and replying second leaves the ask out of `pending` with nobody
-told, which breaks the rule the refusal exists to keep. Answering first can
-repeat a message if the record then fails, and between the two failures
-available this takes the one that is noise — the same choice the delivery table
-already makes for approval requests.
+Both orderings of "record" and "reply" are wrong, and this is the shape that
+needs neither to give: recording proves ownership and leaves a debt, and the
+debt is claimed and delivered on its own. A driver that was away does not turn
+a refusal into silence.
 */
-func TestSweep_theAnswerCannotBeDelivered_theAskStaysWaiting(t *testing.T) {
+func TestAnswer_theDriverIsAway_theRefusalStaysOwed(t *testing.T) {
 	c, parts := consumerWith(t, "<@U07BOT> alguém aí?", func(p *consumerParts) {
 		p.answers.err = errors.New("slack is away")
 	})
 
-	// Swept with a lease that is already over, so the assertion is about the
-	// ask still being pending rather than about how long it stays reserved.
-	if _, err := c.Sweep(t.Context(), -time.Minute, 10); err == nil {
-		t.Fatal("a refusal nobody received was reported as handled")
+	if _, err := c.Sweep(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	// Claimed with a lease already over, so what is asserted is the debt
+	// surviving rather than how long it stays reserved.
+	if _, err := c.Answer(t.Context(), -time.Minute, 10); err == nil {
+		t.Fatal("a refusal nobody received was reported as said")
 	}
 
-	// Still claimable, so the next sweep tries to answer again.
-	again, err := parts.inbox.Claim(t.Context(), "worker-2", time.Minute, 10)
+	owed, err := parts.inbox.Owed(t.Context(), "worker-2", time.Minute, 10)
 	if err != nil {
-		t.Fatalf("Claim: %v", err)
+		t.Fatalf("Owed: %v", err)
 	}
-	if len(again) != 1 {
-		t.Error("the ask was closed without anybody being told")
+	if len(owed) != 1 {
+		t.Error("the debt was cleared without anybody being told")
+	}
+	if owed[0].Detail == "" {
+		t.Error("the debt carries no reason, so nothing can be said")
+	}
+}
+
+/*
+The sweep does not talk.
+
+This is the property that closes the window. A reply sent while deciding goes
+out before ownership is proven, so a worker whose lease lapsed posts a refusal
+the worker that replaced it posts again. Deciding now only records — which only
+its holder can do — and saying is claimed separately, so there is no arrangement
+in which a lapsed worker speaks.
+*/
+func TestSweep_decidingARefusal_saysNothingYet(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT> alguém aí?", nil)
+
+	if _, err := c.Sweep(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+
+	if len(parts.answers.said) != 0 {
+		t.Errorf("said = %v, want the sweep silent", parts.answers.said)
+	}
+
+	// And the debt is there to be delivered by whoever picks it up.
+	if _, err := c.Answer(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Answer: %v", err)
+	}
+	if len(parts.answers.said) != 1 {
+		t.Errorf("said = %v, want the refusal delivered", parts.answers.said)
 	}
 }
 

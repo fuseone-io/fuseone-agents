@@ -187,12 +187,16 @@ func (c *Consumer) Sweep(ctx context.Context, lease time.Duration, limit int) (i
 }
 
 /*
-handle takes one ask as far as it can go, and says so where it was asked.
+handle takes one ask as far as it can go and records what became of it.
 
-A refusal is answered in the conversation and recorded in the inbox, never only
-logged. The person who asked is the one who needs to know, and a channel that
-goes quiet is indistinguishable from a channel that is broken — the second time
-somebody is ignored, they stop asking.
+It says nothing. A refusal is recorded here — which only the holder of the ask
+can do — and delivering it is claimed separately by Answer, because a reply
+sent while deciding goes out before ownership is proven.
+
+It is still answered. The person who asked is the one who needs to know, and a
+channel that goes quiet is indistinguishable from a channel that is broken: the
+second time somebody is ignored they stop asking. What changed is who says it
+and when, not whether.
 */
 func (c *Consumer) handle(ctx context.Context, claimed Claimed) (opened bool, err error) {
 	run, why := c.open(ctx, claimed)
@@ -341,29 +345,57 @@ func (c *Consumer) structured(
 	return out
 }
 
-// decline records why an ask became nothing, and says so where it was asked.
-//
-// Both, and in that order. The record is for the operator who is asked why
-// nothing happened; the reply is for the person who asked and is the only one
-// who will notice.
 /*
-decline says why an ask became nothing, and then records it.
+decline records why an ask became nothing. Saying it is separate work.
 
-Answer first. Recording first and replying second means a driver that fails
-after the write leaves the ask out of `pending` with nobody ever told — which
-breaks the rule this function exists to keep. Answering first can repeat a
-message if the record then fails, and between the two failures available this
-takes the one that is noise: the same choice the delivery table already makes
-for approval requests, and for the same reason. A repeated refusal is an
-irritation; a refusal nobody sees is the thing that makes people stop asking.
+Both orderings of "record" and "reply" are wrong, which is what took three
+attempts to see. Record first and a driver failure closes the ask with nobody
+told. Reply first and the message goes out before ownership is proven, so a
+worker whose lease lapsed posts a refusal the worker that replaced it posts
+again — the duplicated attention the claim exists to prevent, one step earlier.
+
+So this does the half that proves ownership, and leaves a debt. The debt is
+claimed and delivered on its own, which is the only arrangement where neither
+rule has to give.
 */
 func (c *Consumer) decline(ctx context.Context, a Claimed, why string) error {
-	if err := c.answers.Reply(ctx, a.Channel, a.Conversation, a.Thread, why); err != nil {
-		// Left pending on purpose, so the next sweep tries again. The person
-		// has not been told and that is the failure worth retrying.
-		return fmt.Errorf("channel: answer %s: %w", a.EventID, err)
-	}
 	return c.inbox.Refused(ctx, a, why, c.clock())
+}
+
+/*
+Answer says the refusals that were recorded and not yet delivered.
+
+Its own claim, so two consumers do not both say it, and its own retry, so a
+driver that was away does not turn a refusal into silence. A reply repeated
+because the process died between saying and recording is the failure this
+accepts, and it is the one that is noise — the same choice the delivery table
+makes for approval requests.
+*/
+func (c *Consumer) Answer(ctx context.Context, lease time.Duration, limit int) (int, error) {
+	if err := c.wired(); err != nil {
+		return 0, err
+	}
+
+	owed, err := c.inbox.Owed(ctx, c.owner, lease, limit)
+	if err != nil {
+		return 0, err
+	}
+
+	said, failures := 0, []error{}
+	for _, one := range owed {
+		if err := c.answers.Reply(ctx, one.Channel, one.Conversation, one.Thread, one.Detail); err != nil {
+			// Left owed, so somebody tries again. The person has not been
+			// told and that is exactly the failure worth retrying.
+			failures = append(failures, fmt.Errorf("channel: answer %s: %w", one.EventID, err))
+			continue
+		}
+		if err := c.inbox.Answered(ctx, one, c.clock()); err != nil {
+			failures = append(failures, err)
+			continue
+		}
+		said++
+	}
+	return said, errors.Join(failures...)
 }
 
 /*
