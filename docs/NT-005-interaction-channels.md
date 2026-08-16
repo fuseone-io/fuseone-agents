@@ -5,7 +5,7 @@
 **Outcome** Two families rather than one abstraction, one new domain concept, three stages
 **Revised** 2026-08-14 — §9 the shape of a channel trigger, §10 where email belongs
 **Revised** 2026-08-15 — §12 stage 3 broken down, §13 why the other vendors come after
-**Revised** 2026-08-15 — §12.1 the durable inbox, §12.2 an open channel is an open budget
+**Revised** 2026-08-16 — §12.2 the per-correspondent ceiling, built
 
 People do not live in the console. An approval that waits for somebody to open
 a browser tab waits, and a run whose result nobody reads was not worth the
@@ -364,6 +364,26 @@ and the agents nobody was talking to stop. [§5.1](#51-what-the-external-family-
 proposes a per-correspondent ceiling and files it under the external family,
 because that is where it is obviously needed. It is needed here too, and the
 difference is only how obvious it is.
+
+**Built.** A correspondent may open a bounded number of runs in a rolling
+window, counted from what the inbox already records. Three choices in it are
+worth stating, because each had a plausible alternative:
+
+- **Runs, not money.** A run's cost is known when it ends, and by then the next
+  twenty have started. Each run already has a ceiling of its own, so bounding
+  how many bounds the spend — late enough to be useless is worse than
+  approximate.
+- **The account, not the person.** The binding may not resolve, and the flood
+  arrives before it does. One person with two accounts gets two ceilings; that
+  is the price of a question answerable from what arrived.
+- **Said once.** A limit that answers every message it rejects amplifies the
+  flood it exists to stop. The rest are recorded with a reason code and not
+  said, so an operator asking why a conversation went quiet can still count
+  them.
+
+It is not yet a setting. A number nobody can change is a poor knob and a real
+rail, and a setting with no screen would be configuration written straight into
+the database. The screen comes with the setting.
 
 And [§8](#8-two-decisions-this-note-does-not-make)'s two open questions block
 the second and fourth. They should be answered before either is built, not

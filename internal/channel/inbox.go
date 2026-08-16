@@ -178,7 +178,7 @@ func (i *Inbox) claim(
 
 // Opened records which run an ask became.
 func (i *Inbox) Opened(ctx context.Context, c Claimed, run string, at time.Time) error {
-	return i.settle(ctx, c, "opened", "", run, at)
+	return i.settle(ctx, c, settled{Status: "opened", Run: run}, at)
 }
 
 // ErrNotClaimed means this ask is somebody else's now: already settled, or
@@ -197,28 +197,30 @@ here" is exactly what an operator needs when the person says nothing happened,
 and a row removed on refusal makes that conversation unanswerable — the ask is
 gone and the platform has no memory of ever having been asked.
 */
-func (i *Inbox) Refused(ctx context.Context, c Claimed, why string, at time.Time) error {
-	return i.settle(ctx, c, "refused", why, "", at)
+func (i *Inbox) Refused(ctx context.Context, c Claimed, r Refusal, at time.Time) error {
+	return i.settle(ctx, c, settled{
+		Status: "refused", Detail: r.Why, Reason: r.Reason,
+		// A silent refusal is recorded as already said. It is not owed to
+		// anybody, so it is never claimed, and the row still answers an
+		// operator asking what happened.
+		Answered: r.Silent,
+	}, at)
 }
 
 /*
-Owed claims refusals that have been recorded and not yet said.
+Refusal is an ask that became nothing.
 
-Saying it is work of its own, and this is what makes it survivable. Recorded
-and delivered in one step, the two rules pull against each other: record first
-and a driver failure closes the ask with nobody told; deliver first and the
-message goes out before ownership is proven, so a worker whose lease lapsed
-posts a refusal the worker that replaced it posts again.
-
-Separated, each is simple. The holder of the ask records the refusal — proving
-ownership before anything is said — and whoever picks the debt up afterwards
-delivers it, once, under a claim of its own.
+Three parts because three readers. The sentence is for the person who asked and
+names what would have worked. The reason is for whoever is counting later, and
+a sentence with somebody's agent name in it counts nothing. And Silent is for
+the conversation itself: the second refusal of the same kind inside the same
+window is recorded and not said, because a limit that answers every message it
+rejects amplifies the flood it exists to stop.
 */
-func (i *Inbox) Owed(
-	ctx context.Context, owner string, lease time.Duration, limit int,
-) ([]Claimed, error) {
-	return i.claim(ctx, owner, lease, limit,
-		"status = 'refused' and answered_at is null")
+type Refusal struct {
+	Why    string
+	Reason string
+	Silent bool
 }
 
 // Answered marks a refusal as said.
@@ -243,6 +245,18 @@ func (i *Inbox) Answered(ctx context.Context, c Claimed, at time.Time) error {
 	return nil
 }
 
+// settled is what a settle writes. A struct because the row has more parts
+// than a parameter list should carry, and because two of them are easy to
+// swap: `detail` and `reason` are both strings, and a caller that transposed
+// them would tell the person a code and the operator a sentence.
+type settled struct {
+	Status   string
+	Detail   string
+	Reason   string
+	Run      string
+	Answered bool
+}
+
 /*
 settle closes an ask, and only one this consumer still holds.
 
@@ -252,16 +266,20 @@ took over is working on — and then reply. Both conditions, and the row count
 checked afterwards, because a settle that quietly did nothing is a consumer
 that believes it finished.
 */
-func (i *Inbox) settle(
-	ctx context.Context, c Claimed, status, detail, run string, at time.Time,
-) error {
+func (i *Inbox) settle(ctx context.Context, c Claimed, s settled, at time.Time) error {
+	var answered *time.Time
+	if s.Answered {
+		when := at.UTC()
+		answered = &when
+	}
 	tag, err := i.pool.Exec(ctx, `
 		update channel_inbox
-		set status = $5, detail = $6, run_id = $7, at = $8,
-		    leased_until = null, lease_owner = ''
+		set status = $5, detail = $6, run_id = $7, at = $8, reason = $9,
+		    answered_at = $10, leased_until = null, lease_owner = ''
 		where channel = $1 and conversation = $2 and event_id = $3
 		  and status = 'pending' and lease_owner = $4`,
-		c.Channel, c.Conversation, c.EventID, c.Owner, status, detail, run, at.UTC())
+		c.Channel, c.Conversation, c.EventID, c.Owner,
+		s.Status, s.Detail, s.Run, at.UTC(), s.Reason, answered)
 	if err != nil {
 		return fmt.Errorf("channel: settle %s: %w", c.EventID, err)
 	}

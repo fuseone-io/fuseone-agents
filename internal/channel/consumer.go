@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -32,69 +31,6 @@ broken, and the second time somebody is ignored they stop asking.
 
 // Scopes answers which scope a conversation speaks for, declared here by the
 // consumer.
-type Scopes interface {
-	ScopeOf(ctx context.Context, channel, conversation string) (domain.Scope, error)
-}
-
-// Published lists what an ask in a scope could start.
-type Published interface {
-	List(ctx context.Context, scope domain.Scope, allVersions bool) ([]domain.AgentSummary, error)
-}
-
-// Willing answers whether an agent declared that a conversation may start it.
-type Willing interface {
-	StartableFromConversation(ctx context.Context, agent domain.AgentID, version domain.VersionID) (bool, error)
-}
-
-// Subjects resolves a reference to what the platform itself put in the
-// conversation.
-type Subjects interface {
-	AboutRun(ctx context.Context, channel, conversation, ref string) (domain.RunID, bool, error)
-}
-
-// Opens turns an intention into a run.
-type Opens interface {
-	Open(ctx context.Context, req Request) (Opened, error)
-}
-
-/*
-ErrWontStart means the opener declined, rather than failed.
-
-An agent that is paused, stopped by a switch or still a draft will not start
-now and will not start on a retry either: telling the person and closing the
-ask is the right answer. A database that was away is not that, and must not
-become a refusal somebody reads as final.
-
-Wrapped by the adapter in opener.go, which is the only place that knows both
-this package's contract and the trigger package's sentinels.
-*/
-var ErrWontStart = errors.New("channel: the agent will not start")
-
-// Request and Opened mirror the trigger package's shapes, declared here so this
-// package does not depend on it — the dependency runs the other way everywhere
-// else and one edge pointing back would be the cycle.
-type Request struct {
-	Agent   domain.AgentID
-	IdemKey string
-	Trigger string
-	By      domain.UserID
-	Input   []byte
-	Labels  domain.Labels
-	Origin  *domain.RunOrigin
-}
-
-// Opened is the run an ask became.
-type Opened struct {
-	RunID   domain.RunID
-	Created bool
-}
-
-// Answers says something back where the ask was made.
-type Answers interface {
-	Reply(ctx context.Context, channel, conversation, thread, text string) error
-}
-
-// Consumer opens the runs that asks became.
 type Consumer struct {
 	inbox     *Inbox
 	scopes    Scopes
@@ -104,6 +40,7 @@ type Consumer struct {
 	opener    Opens
 	answers   Answers
 	bindings  func(ctx context.Context, channel, account string) (domain.UserID, bool, error)
+	ceiling   Ceiling
 	clock     func() time.Time
 	owner     string
 	log       *slog.Logger
@@ -138,7 +75,10 @@ func NewConsumer(inbox *Inbox, owner string, log *slog.Logger) *Consumer {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Consumer{inbox: inbox, owner: owner, clock: time.Now, log: log}
+	return &Consumer{
+		inbox: inbox, owner: owner,
+		ceiling: DefaultCeiling, clock: time.Now, log: log,
+	}
 }
 
 // With wires what the consumer reads and what it can do.
@@ -219,7 +159,7 @@ func (c *Consumer) handle(ctx context.Context, claimed Claimed) (opened bool, er
 		// good ask: closing it would tell somebody their question was refused
 		// when what happened is that a database was away.
 		return false, err
-	case refusal != "":
+	case refusal.Why != "":
 		return false, c.decline(ctx, claimed, refusal)
 	}
 	if err := c.inbox.Opened(ctx, claimed, string(run), c.clock()); err != nil {
@@ -230,153 +170,6 @@ func (c *Consumer) handle(ctx context.Context, claimed Claimed) (opened bool, er
 		return false, err
 	}
 	return true, nil
-}
-
-/*
-open takes an ask through the narrowing and returns the run, or why not.
-
-Scope before agent, agent before ask, ask before run. Each step bounds what the
-next may do, and none of them consults the text for anything the platform is
-supposed to decide: the scope comes from the conversation, never from what
-somebody wrote in it.
-*/
-func (c *Consumer) open(ctx context.Context, a Claimed) (domain.RunID, string, error) {
-	scope, err := c.scopes.ScopeOf(ctx, a.Channel, a.Conversation)
-	switch {
-	case errors.Is(err, ErrNoConversation), errors.Is(err, ErrAmbiguousConversation):
-		// Ambiguity is refused rather than resolved, and the person is told
-		// plainly: this conversation is not set up to start anything, which is
-		// an operator's job and not theirs.
-		c.log.Warn("an ask arrived in a conversation that speaks for no scope",
-			"channel", a.Channel, "conversation", a.Conversation, "err", err)
-		return "", "This conversation is not set up to start agents. An administrator maps it to an area.", nil
-	case err != nil:
-		return "", "", fmt.Errorf("channel: read the scope of %s: %w", a.Conversation, err)
-	}
-
-	asker, bound, err := c.bindings(ctx, a.Channel, a.AskedBy)
-	if err != nil {
-		// A store that was away is not an account nobody bound. Folded
-		// together, the refusal below would tell somebody their account is
-		// not linked about a state that was never true.
-		return "", "", fmt.Errorf("channel: read the binding for %s: %w", a.AskedBy, err)
-	}
-	if !bound {
-		// A run acts on somebody's behalf. An account nobody bound speaks for
-		// nobody, and running as nobody is how an ask acquires authority that
-		// no person holds.
-		return "", "Your channel account is not linked to a platform user, so nothing can run on your behalf.", nil
-	}
-
-	startable, err := c.startable(ctx, scope)
-	if err != nil {
-		// Not a refusal. The ask is fine and this side is not, so it waits.
-		return "", "", fmt.Errorf("channel: read what is startable in %s: %w", scope, err)
-	}
-
-	ask, err := Read(a.Text, startable)
-	if err != nil {
-		// The refusal already names what would have worked. It is the only
-		// teaching surface a channel has.
-		return "", err.Error(), nil
-	}
-
-	input, err := json.Marshal(c.structured(ctx, a, ask, asker))
-	if err != nil {
-		return "", "", fmt.Errorf("channel: record the ask %s: %w", a.EventID, err)
-	}
-
-	opened, err := c.opener.Open(ctx, Request{
-		Agent:   ask.Agent,
-		IdemKey: AskKey(a.Arrival),
-		Trigger: "channel",
-		By:      asker,
-		Input:   input,
-		// Somebody outside the platform typed this. On an internal channel
-		// they are a colleague and the text is still theirs, not ours — and
-		// the taint check is what stands between a sentence and an effect.
-		Labels: domain.NewLabels(domain.LabelUntrusted),
-		Origin: &domain.RunOrigin{
-			Channel: a.Channel, Conversation: a.Conversation,
-			// The message somebody typed, never the delivery that carried it.
-			// A retry is the same message and the origin has to point at what
-			// was said, which is also what a thread is keyed by.
-			Message: a.Message, Thread: a.Thread,
-		},
-	})
-	switch {
-	case errors.Is(err, ErrWontStart):
-		// Paused, stopped by a switch, still a draft. It will not start on a
-		// retry either, so the person is told and the ask is closed.
-		return "", fmt.Sprintf("%s will not start: %v", ask.Agent, err), nil
-	case err != nil:
-		// Anything else is this side failing, and the ask waits for a sweep
-		// that works. Closing it here would answer a good question with a
-		// refusal that was never about the question.
-		return "", "", fmt.Errorf("channel: open a run for %s: %w", ask.Agent, err)
-	}
-	return opened.RunID, "", nil
-}
-
-// startable is what an ask in this scope could name.
-//
-// The intersection of two facts that already exist: the agent lives here, and
-// it declared that a conversation may start it. Neither is the author choosing
-// who may ask, and neither is an administrator choosing what an agent does.
-func (c *Consumer) startable(ctx context.Context, scope domain.Scope) ([]Startable, error) {
-	published, err := c.published.List(ctx, scope, false)
-	if err != nil {
-		return nil, err
-	}
-
-	var out []Startable
-	for _, one := range published {
-		willing, err := c.willing.StartableFromConversation(ctx, one.ID, one.VersionID)
-		if err != nil {
-			return nil, err
-		}
-		if willing {
-			out = append(out, Startable{ID: one.ID, Name: one.Name})
-		}
-	}
-	return out, nil
-}
-
-/*
-structured is what the ledger holds about the ask.
-
-Not the sentence. A run whose explanation a year later is *somebody typed
-"investiga isso aí" in a thread* is a screenshot, and the subject is what makes
-it a record. Resolved only against what the platform itself posted: anything
-else stays absent, which is the honest answer and leaves the agent to go and
-search — a tool call somebody can audit rather than a guess made here.
-
-The sentence travels too. Dropping it would make the record dishonest about
-what was actually said.
-*/
-func (c *Consumer) structured(
-	ctx context.Context, a Claimed, ask Ask, asker domain.UserID,
-) structuredAsk {
-	out := structuredAsk{Text: ask.Text, AskedBy: string(asker)}
-
-	// An ask that started its own thread is its own parent, and has no subject
-	// to resolve. Compared against the message and not the delivery: those are
-	// never the same string in a real channel, and comparing them meant this
-	// branch never fired.
-	if a.Thread == "" || a.Thread == a.Message {
-		return out
-	}
-	run, found, err := c.subjects.AboutRun(ctx, a.Channel, a.Conversation, a.Thread)
-	if err != nil {
-		c.log.Warn("could not resolve what a thread is about",
-			"channel", a.Channel, "thread", a.Thread, "err", err)
-		return out
-	}
-	if !found {
-		return out
-	}
-	out.Subject = &askSubject{Kind: "run", Run: string(run)}
-	return out
 }
 
 /*
@@ -392,8 +185,8 @@ So this does the half that proves ownership, and leaves a debt. The debt is
 claimed and delivered on its own, which is the only arrangement where neither
 rule has to give.
 */
-func (c *Consumer) decline(ctx context.Context, a Claimed, why string) error {
-	return c.inbox.Refused(ctx, a, why, c.clock())
+func (c *Consumer) decline(ctx context.Context, a Claimed, r Refusal) error {
+	return c.inbox.Refused(ctx, a, r, c.clock())
 }
 
 /*

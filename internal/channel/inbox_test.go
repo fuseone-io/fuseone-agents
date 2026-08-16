@@ -107,7 +107,7 @@ func TestRefused_anAskThatBecameNothing_isKeptWithItsReason(t *testing.T) {
 	if err != nil || len(held) != 1 {
 		t.Fatalf("Claim: %v (%d)", err, len(held))
 	}
-	if err := inbox.Refused(t.Context(), held[0], "names no agent", time.Now()); err != nil {
+	if err := inbox.Refused(t.Context(), held[0], channel.Refusal{Why: "names no agent", Reason: "no_agent"}, time.Now()); err != nil {
 		t.Fatalf("Refused: %v", err)
 	}
 
