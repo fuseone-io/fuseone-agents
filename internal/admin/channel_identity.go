@@ -129,12 +129,24 @@ func (c *Channels) Identities(ctx context.Context) ([]ChannelIdentity, error) {
 		// it is unreadable; a listing that showed it as an ordinary binding
 		// with a blank name would leave an operator comparing that error
 		// against a row that looks fine.
+		/*
+			The key names it, and the value does not get a vote.
+
+			Falling back to the key only where the value said nothing was
+			still trusting the value: a row keyed `acme-slack/U505` whose
+			corrupted contents claim `old-slack` would be listed under a
+			channel it does not belong to — filed on the wrong card, and
+			deleted by a request naming a channel the row was never under. The
+			value is the part that is broken, so on this path it is not
+			evidence of anything.
+
+			Display survives as a hint. It changes nothing and names nothing,
+			and an operator deciding whether to remove a row wants every hint
+			there is.
+		*/
 		out = append(out, ChannelIdentity{
-			Channel: firstOf(id.Channel, keyChannel(s.Name)),
-			Account: firstOf(id.Account, keyAccount(s.Name)),
-			// Whatever it managed to say about who it is, kept: a display
-			// name is a hint about which binding this was, and an operator
-			// deciding whether to remove one wants every hint there is.
+			Channel:    keyChannel(s.Name),
+			Account:    keyAccount(s.Name),
 			Display:    id.Display,
 			Unreadable: true,
 		})
@@ -143,12 +155,14 @@ func (c *Channels) Identities(ctx context.Context) ([]ChannelIdentity, error) {
 }
 
 /*
-The key is what names a row when its value cannot say.
+The key is what names a row whose value cannot be trusted to.
 
-Recovered field by field rather than as a pair. Taken together, a value that
-kept its channel and lost its account would have the recovered account thrown
-away with it — and the account is the half the console removes a row by, so the
-row becomes unremovable by exactly the screen sent to remove it.
+Canonical rather than a fallback. A value that kept a channel and lost an
+account would otherwise have the recovered account discarded with it, and a
+value that kept a *wrong* channel would move the row to a card it does not
+belong on — where the console would then delete it by naming a channel it was
+never under. On an unreadable row the value is the broken part; the key is the
+only thing that survived intact, because it is not inside the value.
 
 One separator and the first one: a Slack account id has no slash, and the
 channel is the half an operator typed.
@@ -161,16 +175,6 @@ func keyChannel(key string) string {
 func keyAccount(key string) string {
 	_, account, _ := strings.Cut(key, "/")
 	return account
-}
-
-// firstOf is the first of these that says anything.
-func firstOf(values ...string) string {
-	for _, v := range values {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
 }
 
 /*

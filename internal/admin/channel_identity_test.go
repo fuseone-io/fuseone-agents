@@ -167,3 +167,48 @@ func TestIdentities_aBrokenRowMissingItsAccount_recoversItFromTheKey(t *testing.
 	}
 	t.Errorf("listed = %+v, want the row nameable enough to remove", listed)
 }
+
+/*
+A corrupted value does not get to say where its row lives.
+
+Preferring the value where it said something was still trusting the part that
+is broken: a row keyed under one channel whose contents claim another would be
+listed on the wrong card, and then deleted by a request naming a channel it was
+never under — so the row survives every attempt to remove it, from the one
+screen that offers to.
+*/
+func TestIdentities_aBrokenRowClaimingAnotherChannel_isNamedByItsKey(t *testing.T) {
+	channels, store := boundChannels(t)
+	ctx := context.Background()
+
+	if err := store.Put(ctx, settings.Setting{
+		ScopeKind: settings.ScopeInstallation,
+		Kind:      admin.KindChannelIdentity,
+		Name:      "acme-slack/U505",
+		Value:     []byte(`{"channel":"old-slack","display":"Ana"}`),
+		Enabled:   true, UpdatedBy: "restore",
+	}); err != nil {
+		t.Fatalf("write the lying row: %v", err)
+	}
+
+	listed, err := channels.Identities(ctx)
+	if err != nil {
+		t.Fatalf("Identities: %v", err)
+	}
+
+	for _, one := range listed {
+		if one.Account != "U505" {
+			continue
+		}
+		if one.Channel != "acme-slack" {
+			t.Errorf("channel = %q, want the one the key says", one.Channel)
+		}
+		// The hint survives, because it names nothing and helps somebody
+		// decide whether to remove the row.
+		if one.Display != "Ana" {
+			t.Errorf("display = %q, want the hint kept", one.Display)
+		}
+		return
+	}
+	t.Errorf("listed = %+v, want the row under the channel it is stored beneath", listed)
+}
