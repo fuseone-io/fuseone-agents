@@ -1,6 +1,11 @@
 package spec
 
-import "strings"
+import (
+	"context"
+	"strings"
+
+	"github.com/fuseone/agents/internal/domain"
+)
 
 /*
 What a version's triggers amount to for the two tables that make them happen.
@@ -67,6 +72,30 @@ func StartableFromConversation(s Spec) bool {
 		}
 	}
 	return false
+}
+
+/*
+StartableFromConversation, asked of a published version.
+
+The same predicate over what the registry holds, which is what the channel
+consumer needs: it has an agent and the version pinned to the ask, and no
+business knowing how a spec is stored. A method here rather than an adapter
+beside the consumer because the reading is this package's, and the consumer
+declares only the shape it calls.
+
+A version nobody published comes back as an error and never as "not willing".
+The two are said to different people — unwilling is a sentence about somebody's
+agent, a failed read is a sentence about us — and confusing them sends an
+author to add a trigger to a spec that already has one.
+*/
+func (r *Registry) StartableFromConversation(
+	ctx context.Context, agent domain.AgentID, version domain.VersionID,
+) (bool, error) {
+	s, err := r.Get(ctx, agent, version)
+	if err != nil {
+		return false, err
+	}
+	return StartableFromConversation(s), nil
 }
 
 // The trigger types this platform serves. A type outside this set is refused
