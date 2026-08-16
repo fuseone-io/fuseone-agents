@@ -90,6 +90,19 @@ type Entry struct {
 		around. Nil for a server nobody catalogued, and for a tool an entry never
 		heard of.
 	*/
+	/*
+		OnSurface is whether this installation brought the tool in.
+
+		Not a permission and not a policy. A tool outside the surface is not
+		"allowed with conditions" — it is not here: no model is told about it,
+		no call reaches it, and the Gate is never asked, because the Gate
+		decides between an agent and a capability this installation has.
+
+		It exists because a server with two hundred tools is otherwise two
+		hundred decisions, most of them about tools nobody wants. Choosing the
+		surface is choosing what goes to the Curator at all.
+	*/
+	OnSurface bool
 	Suggested *Suggestion
 	// Untrusted marks a source whose output may be attacker-authored. It is
 	// the default for anything registered from outside, and it is what makes
@@ -180,7 +193,7 @@ func (c *Catalog) Entries() []domain.ToolEntry {
 			Effect: e.Effect, Untrusted: e.Untrusted,
 			CompensatedBy: e.CompensatedBy,
 			Suggested:     suggestionOf(e.Suggested),
-			Digest:        e.Digest, Stale: e.Stale,
+			Digest:        e.Digest, Stale: e.Stale, OnSurface: e.OnSurface,
 		})
 	}
 	slices.SortFunc(out, func(a, b domain.ToolEntry) int {
@@ -214,6 +227,11 @@ func (c *Catalog) Schema(id domain.ToolID) (string, string, map[string]any, bool
 
 	entry, ok := c.entries[id]
 	if !ok {
+		return "", "", nil, false
+	}
+	if !entry.OnSurface {
+		// Never described. A schema for a tool that cannot be called is an
+		// invitation to call it, and the model will take it.
 		return "", "", nil, false
 	}
 	return string(entry.ID), entry.Description, entry.Schema, true

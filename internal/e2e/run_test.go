@@ -178,7 +178,7 @@ func newPlatform(t *testing.T, store Store, agentSource string, reply func(turn 
 	content := engine.NewMemoryContent()
 	p.content = content
 	p.catalog = tools.NewCatalog(content)
-	if err := p.catalog.AddServer(t.Context(), "crm", mcpSession(t, &p.server)); err != nil {
+	if err := p.catalog.AddServer(t.Context(), "crm", mcpSession(t, &p.server), nil); err != nil {
 		t.Fatalf("add MCP server: %v", err)
 	}
 

@@ -49,7 +49,7 @@ func connectServer(
 	if err != nil {
 		return fmt.Errorf("connect %s: %w", server.Name, err)
 	}
-	if err := catalog.AddServer(ctx, server.Name, session); err != nil {
+	if err := catalog.AddServer(ctx, server.Name, session, server.Surface); err != nil {
 		_ = session.Close()
 		return fmt.Errorf("import tools from %s: %w", server.Name, err)
 	}

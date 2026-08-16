@@ -127,6 +127,7 @@ func (s *Server) ListTools(ctx context.Context, _ openapi.ListToolsRequestObject
 		if e.Stale {
 			tool.Stale = ptr(true)
 		}
+		tool.OnSurface = ptr(e.OnSurface)
 		items = append(items, tool)
 	}
 	return openapi.ListTools200JSONResponse{Items: items}, nil

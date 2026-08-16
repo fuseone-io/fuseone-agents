@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/fuseone/agents/internal/domain"
 )
@@ -34,7 +35,9 @@ somebody rules on it (PRD DE-12, DE-13).
 // A server still cannot grant itself write access by describing a tool as one.
 // That was always the argument, and unclassified is what it argues for:
 // refusing the server's claim without acting on it in either direction.
-func (c *Catalog) AddServer(ctx context.Context, name string, session Session) error {
+func (c *Catalog) AddServer(
+	ctx context.Context, name string, session Session, surface *[]string,
+) error {
 	if name == "" {
 		return fmt.Errorf("tools: server needs a name")
 	}
@@ -73,6 +76,7 @@ func (c *Catalog) AddServer(ctx context.Context, name string, session Session) e
 		c.entries[id] = Entry{
 			ID:          id,
 			Server:      name,
+			OnSurface:   chosen(surface, t.Name),
 			RemoteName:  t.Name,
 			Description: t.Description,
 			Schema:      schemaProperties(t.InputSchema),
@@ -192,4 +196,23 @@ func digestOf(server, name, description string, schema any) (string, error) {
 	}
 	sum := sha256.Sum256(canonical)
 	return hex.EncodeToString(sum[:]), nil
+}
+
+/*
+chosen reports whether this installation brought a tool in.
+
+Absent is not empty, and the difference is an upgrade. A server whose surface
+nobody has ever picked goes on offering what it always did; one picked as empty
+offers nothing. Reading the first as the second would stop every agent on the
+platform the day it upgrades, which is the same mistake as reading an absent
+digest as a mismatch.
+
+A new tool on a server with a chosen surface arrives outside it, for the reason
+a new tool arrives unclassified: nobody has said.
+*/
+func chosen(surface *[]string, remoteName string) bool {
+	if surface == nil {
+		return true
+	}
+	return slices.Contains(*surface, remoteName)
 }

@@ -39,7 +39,11 @@ func (c *Catalog) Invoke(ctx context.Context, call engine.Call) (engine.ToolResu
 	timeout := c.timeout
 	c.mu.RUnlock()
 
-	if !known {
+	if !known || !entry.OnSurface {
+		// The model is not the only caller. A resumed run replays a call the
+		// ledger holds and a specification names tools by hand, so a surface
+		// enforced only where the schemas are written is a surface with a way
+		// round it.
 		return engine.ToolResult{}, fmt.Errorf("%w: %s", ErrUnknownTool, call.Tool)
 	}
 	if !connected {

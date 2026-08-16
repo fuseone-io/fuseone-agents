@@ -36,6 +36,10 @@ type ToolEntry struct {
 	// so a ruling made there can say which definition it judged, the way an
 	// approval says which step it approved.
 	Digest string
+	// OnSurface is whether this installation brought the tool in. Off it, the
+	// tool is not a capability here — the administration area still lists it,
+	// because "discovered and not taken" is a state somebody chose.
+	OnSurface bool
 	// Stale marks a ruling overtaken by a new definition. Refused like an
 	// unruled tool and shown differently: one is a decision to make, the other
 	// a decision to check.
@@ -86,6 +90,20 @@ type MCPServer struct {
 	URL string
 	// HasSecret reports that a bearer token is stored, never what it is.
 	HasSecret bool
+
+	/*
+		Surface is which of the server's tools this installation brought in.
+
+		Remote names, as the server calls them, because that is what survives a
+		reconnect — the platform's own identifier is derived from it.
+
+		Nil is not empty, and the difference is an upgrade: a server whose
+		surface nobody has chosen goes on offering what it always did, and one
+		chosen as empty offers nothing. A tool appearing later on a server with
+		a chosen surface arrives outside it, for the reason a new tool arrives
+		unclassified.
+	*/
+	Surface *[]string
 
 	// AcceptsLocalExecution records that somebody accepted what stdio is.
 	//

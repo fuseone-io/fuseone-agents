@@ -45,6 +45,12 @@ func (s *Server) PutMCPServer(ctx context.Context, req openapi.PutMCPServerReque
 	if req.Body.Enabled != nil {
 		server.Enabled = *req.Body.Enabled
 	}
+	// Absent leaves the choice as it stands; present replaces it, empty array
+	// included. The same rule as the credential, for the same reason: not
+	// mentioning something is not a request to remove it.
+	if req.Body.Surface != nil {
+		server.Surface = req.Body.Surface
+	}
 	if req.Body.AcceptsLocalExecution != nil {
 		server.AcceptsLocalExecution = *req.Body.AcceptsLocalExecution
 	}

@@ -2208,6 +2208,14 @@ export interface components {
              */
             digest?: string;
             /**
+             * @description Whether this installation brought the tool in. A tool discovered
+             *     and not brought in is listed here and nowhere else — it reaches no
+             *     model and answers no call — because "discovered and not taken" is a
+             *     state somebody chose and the screen that offers the choice has to
+             *     show it.
+             */
+            onSurface?: boolean;
+            /**
              * @description That a ruling exists and was overtaken by a new definition.
              *
              *     Refused exactly like a tool nobody ruled on — the effect reads
@@ -2300,6 +2308,22 @@ export interface components {
             url?: string;
             /** @description That a bearer token is stored, never what it is. */
             hasSecret?: boolean;
+            /**
+             * @description Which of the server's tools this installation brought in, by the
+             *     names the server uses.
+             *
+             *     Absent is not empty. A server whose surface nobody has chosen goes
+             *     on offering what it always did — an upgrade must not silently take
+             *     every tool away — and one chosen as empty offers nothing. A tool
+             *     that appears later on a server with a chosen surface arrives
+             *     outside it, for the reason a new tool arrives unclassified: nobody
+             *     has said.
+             *
+             *     It is not a permission. Outside the surface a tool is not "allowed
+             *     with conditions"; it is not here. No model is told about it, no
+             *     call reaches it, and the Gate is never asked.
+             */
+            surface?: string[] | null;
             /**
              * @description That somebody accepted what stdio is. A local server is a program
              *     this installation starts inside the worker: it runs as the worker,
@@ -5128,6 +5152,8 @@ export interface operations {
                     env?: {
                         [key: string]: string;
                     };
+                    /** @description Which of the server's tools to bring in, by the names the server uses. Omit to leave the choice as it stands, which for a server nobody has chosen one for means everything it offers. Send an empty array to bring in nothing. */
+                    surface?: string[];
                     /** @description Required for stdio, and refused without it. A local server is a program this installation starts inside the worker, running as the worker and reaching whatever the worker can reach. That is a decision a person makes, not one a transport implies, and it is recorded with their name. */
                     acceptsLocalExecution?: boolean;
                     /** @default true */

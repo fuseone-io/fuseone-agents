@@ -2065,6 +2065,14 @@ paths:
                     Omit to keep what is stored. Send an empty object to clear
                     it: not sending something and sending nothing are different
                     requests, and only one of them can be an erasure.
+                surface:
+                  type: array
+                  items: { type: string }
+                  description: >
+                    Which of the server's tools to bring in, by the names the
+                    server uses. Omit to leave the choice as it stands, which
+                    for a server nobody has chosen one for means everything it
+                    offers. Send an empty array to bring in nothing.
                 acceptsLocalExecution:
                   type: boolean
                   description: >
@@ -3476,6 +3484,14 @@ components:
             approved. A ruling that names a definition the server no longer
             offers is refused rather than applied to whatever answers to that
             name today.
+        onSurface:
+          type: boolean
+          description: |
+            Whether this installation brought the tool in. A tool discovered
+            and not brought in is listed here and nowhere else — it reaches no
+            model and answers no call — because "discovered and not taken" is a
+            state somebody chose and the screen that offers the choice has to
+            show it.
         stale:
           type: boolean
           description: |
@@ -3594,6 +3610,24 @@ components:
         hasSecret:
           type: boolean
           description: That a bearer token is stored, never what it is.
+        surface:
+          type: array
+          items: { type: string }
+          nullable: true
+          description: |
+            Which of the server's tools this installation brought in, by the
+            names the server uses.
+
+            Absent is not empty. A server whose surface nobody has chosen goes
+            on offering what it always did — an upgrade must not silently take
+            every tool away — and one chosen as empty offers nothing. A tool
+            that appears later on a server with a chosen surface arrives
+            outside it, for the reason a new tool arrives unclassified: nobody
+            has said.
+
+            It is not a permission. Outside the surface a tool is not "allowed
+            with conditions"; it is not here. No model is told about it, no
+            call reaches it, and the Gate is never asked.
         acceptsLocalExecution:
           type: boolean
           description: |

@@ -31,7 +31,7 @@ func serving(t *testing.T, description string, schema map[string]any) *tools.Cat
 		Name: "lookup", Description: description,
 		InputSchema: map[string]any{"type": "object", "properties": schema},
 	}}}
-	if err := catalog.AddServer(context.Background(), "crm", server); err != nil {
+	if err := catalog.AddServer(context.Background(), "crm", server, nil); err != nil {
 		t.Fatalf("AddServer: %v", err)
 	}
 	return catalog
@@ -176,7 +176,7 @@ func TestSync_aNewRequiredArgument_doesNotInheritTheOldRuling(t *testing.T) {
 			"properties": map[string]any{"id": "string", "force": "boolean"},
 		},
 	}}}
-	if err := catalog.AddServer(context.Background(), "crm", optional); err != nil {
+	if err := catalog.AddServer(context.Background(), "crm", optional, nil); err != nil {
 		t.Fatalf("AddServer: %v", err)
 	}
 	judged := digestOf(t, catalog)
@@ -191,7 +191,7 @@ func TestSync_aNewRequiredArgument_doesNotInheritTheOldRuling(t *testing.T) {
 		},
 	}}}
 	now := tools.NewCatalog(engine.NewMemoryContent())
-	if err := now.AddServer(context.Background(), "crm", demanding); err != nil {
+	if err := now.AddServer(context.Background(), "crm", demanding, nil); err != nil {
 		t.Fatalf("AddServer: %v", err)
 	}
 

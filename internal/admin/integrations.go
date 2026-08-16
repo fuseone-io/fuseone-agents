@@ -37,6 +37,14 @@ type storedServer struct {
 	Command   string   `json:"command,omitempty"`
 	Args      []string `json:"args,omitempty"`
 	URL       string   `json:"url,omitempty"`
+	/*
+		Surface is which of the server's tools this installation brought in.
+
+		A pointer, because absent and empty are different answers and the
+		difference is an upgrade. A server nobody has chosen a surface for goes
+		on offering what it always did; one chosen as empty offers nothing.
+	*/
+	Surface *[]string `json:"surface,omitempty"`
 	// AcceptsLocalExecution is stored rather than assumed from the transport.
 	// A row written before this existed has not been accepted by anybody, and
 	// reading it as accepted would grant on upgrade what nobody granted.
@@ -75,6 +83,7 @@ func (i *Integrations) MCPServers(ctx context.Context) ([]domain.MCPServer, erro
 		server := domain.MCPServer{
 			Name: row.Name, Transport: stored.Transport,
 			Command: stored.Command, Args: stored.Args, URL: stored.URL,
+			Surface:               stored.Surface,
 			AcceptsLocalExecution: stored.AcceptsLocalExecution,
 			HasSecret:             row.HasSecret, Enabled: row.Enabled,
 			UpdatedBy: row.UpdatedBy, UpdatedAt: row.UpdatedAt,
@@ -108,6 +117,7 @@ func (i *Integrations) PutMCPServer(
 
 	value, err := json.Marshal(storedServer{
 		Transport: transport, Command: server.Command, Args: server.Args, URL: server.URL,
+		Surface:               server.Surface,
 		AcceptsLocalExecution: server.AcceptsLocalExecution,
 	})
 	if err != nil {
@@ -150,6 +160,9 @@ func (i *Integrations) PutMCPServer(
 		// Who accepted local execution, and when, is the whole point of
 		// recording it: the acceptance is a person's, not a checkbox's.
 		"acceptsLocalExecution": server.AcceptsLocalExecution,
+		// How many were brought in, never which: the list belongs on the
+		// screen and the count is what an auditor reads as "this narrowed".
+		"surface": surfaceSize(server.Surface),
 	})
 }
 
@@ -280,4 +293,15 @@ func (i *Integrations) Credential(ctx context.Context, name string) (string, err
 		return "", err
 	}
 	return set.Secret, nil
+}
+
+// surfaceSize reports how many tools were brought in, or -1 for a server
+// nobody has chosen a surface for. The two are different facts and an
+// administrative record that showed both as zero would be recording the
+// opposite of what happened for one of them.
+func surfaceSize(surface *[]string) int {
+	if surface == nil {
+		return -1
+	}
+	return len(*surface)
 }

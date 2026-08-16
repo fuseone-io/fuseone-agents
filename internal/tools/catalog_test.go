@@ -45,7 +45,7 @@ func catalogWith(t *testing.T, srv *fakeServer) (*tools.Catalog, *engine.MemoryC
 
 	content := engine.NewMemoryContent()
 	c := tools.NewCatalog(content)
-	if err := c.AddServer(context.Background(), "crm", srv); err != nil {
+	if err := c.AddServer(context.Background(), "crm", srv, nil); err != nil {
 		t.Fatalf("AddServer: %v", err)
 	}
 	return c, content
@@ -123,10 +123,10 @@ func TestAddServer_toolsAreNamespacedByServer(t *testing.T) {
 
 	// Two servers both offering "lookup" must not collapse into one
 	// capability — a pack granting one would silently grant the other.
-	if err := c.AddServer(ctx, "crm", lookupServer()); err != nil {
+	if err := c.AddServer(ctx, "crm", lookupServer(), nil); err != nil {
 		t.Fatalf("AddServer(crm): %v", err)
 	}
-	if err := c.AddServer(ctx, "erp", lookupServer()); err != nil {
+	if err := c.AddServer(ctx, "erp", lookupServer(), nil); err != nil {
 		t.Fatalf("AddServer(erp): %v", err)
 	}
 
@@ -382,10 +382,10 @@ func TestRemoveServer_takesItsToolsWithIt(t *testing.T) {
 
 	catalog := tools.NewCatalog(engine.NewMemoryContent())
 	crm := &fakeServer{list: []*mcp.Tool{{Name: "lookup"}, {Name: "note"}}}
-	if err := catalog.AddServer(t.Context(), "crm", crm); err != nil {
+	if err := catalog.AddServer(t.Context(), "crm", crm, nil); err != nil {
 		t.Fatalf("AddServer: %v", err)
 	}
-	if err := catalog.AddServer(t.Context(), "kb", &fakeServer{list: []*mcp.Tool{{Name: "search"}}}); err != nil {
+	if err := catalog.AddServer(t.Context(), "kb", &fakeServer{list: []*mcp.Tool{{Name: "search"}}}, nil); err != nil {
 		t.Fatalf("AddServer: %v", err)
 	}
 
@@ -440,7 +440,7 @@ func TestAddServer_aKnownServer_carriesASuggestionAndStaysUnclassified(t *testin
 	}
 	c, _ := catalogWith(t, mergeServer())
 	c.Knowing(known)
-	if err := c.AddServer(t.Context(), "github", mergeServer()); err != nil {
+	if err := c.AddServer(t.Context(), "github", mergeServer(), nil); err != nil {
 		t.Fatalf("AddServer: %v", err)
 	}
 
@@ -467,7 +467,7 @@ func TestAddServer_anUnknownServer_importsWithNoSuggestion(t *testing.T) {
 	}
 	c, _ := catalogWith(t, lookupServer())
 	c.Knowing(known)
-	if err := c.AddServer(t.Context(), "acme", lookupServer()); err != nil {
+	if err := c.AddServer(t.Context(), "acme", lookupServer(), nil); err != nil {
 		t.Fatalf("AddServer: %v", err)
 	}
 

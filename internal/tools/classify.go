@@ -114,13 +114,18 @@ func (c *Catalog) CompensatedBy(id domain.ToolID) (domain.ToolID, bool) {
 // Effect answers the Gate's first question about a tool.
 //
 // An unknown tool returns false, and the Gate blocks: a tool nobody classified
-// never executes (PRD DE-12).
+// never executes (PRD DE-12). So does one outside this installation's surface,
+// which is not a refusal but an absence — the Gate is never asked about a
+// capability the platform does not have.
 func (c *Catalog) Effect(id domain.ToolID) (domain.Effect, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
 	entry, ok := c.entries[id]
-	if !ok {
+	if !ok || !entry.OnSurface {
+		// Off the surface answers the same as absent, and that is the honest
+		// shape: the Gate decides between an agent and a capability this
+		// installation has, and a tool nobody brought in is not one.
 		return domain.EffectUnknown, false
 	}
 	return entry.Effect, true

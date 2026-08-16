@@ -215,7 +215,12 @@ func (c *Curator) Publish(ctx context.Context, entries []domain.ToolEntry) error
 			Server      string `json:"server"`
 			Description string `json:"description,omitempty"`
 			Digest      string `json:"digest,omitempty"`
-		}{e.Server, e.Description, e.Digest})
+			// Whether this installation brought it in. Published rather than
+			// derived, because the console reads this copy and a screen that
+			// showed every discovered tool as taken would be offering the
+			// choice while hiding the answer.
+			OnSurface bool `json:"onSurface"`
+		}{e.Server, e.Description, e.Digest, e.OnSurface})
 		if err != nil {
 			return fmt.Errorf("admin: encode tool %s: %w", e.ID, err)
 		}
@@ -262,6 +267,7 @@ func (c *Curator) Tools(ctx context.Context) ([]domain.ToolEntry, error) {
 				Server      string `json:"server"`
 				Description string `json:"description"`
 				Digest      string `json:"digest"`
+				OnSurface   bool   `json:"onSurface"`
 			}
 		)
 		if err := rows.Scan(&name, &raw); err != nil {
@@ -273,6 +279,7 @@ func (c *Curator) Tools(ctx context.Context) ([]domain.ToolEntry, error) {
 		entries = append(entries, domain.ToolEntry{
 			ID: domain.ToolID(name), Server: stored.Server, Description: stored.Description,
 			Effect: domain.EffectUnknown, Untrusted: true, Digest: stored.Digest,
+			OnSurface: stored.OnSurface,
 		})
 	}
 	if err := rows.Err(); err != nil {

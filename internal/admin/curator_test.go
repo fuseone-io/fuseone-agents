@@ -345,3 +345,32 @@ func toolNamed(t *testing.T, curator *admin.Curator, id domain.ToolID) domain.To
 	t.Fatalf("entries = %+v, want %s", entries, id)
 	return domain.ToolEntry{}
 }
+
+/*
+The published catalogue says what was brought in, not only what was found.
+
+Both catalogues have to agree about this or the screen offers a choice while
+hiding the answer: the in-process one refuses an off-surface tool, and this one
+is what the console lists. The last time these two disagreed about a property
+it was the digest, and the half nobody looks at was the half that had it.
+*/
+func TestTools_carryWhetherTheInstallationBroughtThemIn(t *testing.T) {
+	curator := freshCurator(t)
+	ctx := context.Background()
+
+	if err := curator.Publish(ctx, []domain.ToolEntry{
+		{ID: "crm.lookup", Server: "crm", OnSurface: true},
+		{ID: "crm.delete_account", Server: "crm", OnSurface: false},
+	}); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+
+	if !toolNamed(t, curator, "crm.lookup").OnSurface {
+		t.Error("a tool that was brought in reads as left out")
+	}
+	// Listed, and listed as not taken. Hiding it would make the choice
+	// invisible on the only screen that offers it.
+	if toolNamed(t, curator, "crm.delete_account").OnSurface {
+		t.Error("a tool nobody brought in reads as available")
+	}
+}
