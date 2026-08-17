@@ -1,0 +1,37 @@
+server: datadog
+title: Datadog
+category: operations
+publisher: Datadog
+docs: https://docs.datadoghq.com/mcp_server/
+docsFrom: publisher
+provenance: documentation
+transport: http
+url: https://mcp.datadoghq.com/api/unstable/mcp-server/mcp
+auth: >
+  A bearer token, from a service account scoped to only what the agent needs.
+  Datadog also accepts DD_API_KEY and DD_APPLICATION_KEY as headers, and
+  prefers OAuth where the client can do it.
+
+  The address above is for one Datadog site. An installation on another region
+  has its own, and the documentation's site selector gives it — check it before
+  connecting rather than after the first call fails.
+
+# No suggestions, and this is the honest state of it.
+#
+# The documentation describes the toolsets — APM, logs, metrics, monitors,
+# dashboards, security signals, cases — without naming the tools, and the
+# reference lives on a page this entry has not read. Effects invented for names
+# nobody verified are worse than the silence a stale entry is supposed to
+# degrade into: they reach a Curator as this platform's opinion.
+#
+# Everything it offers still arrives unclassified and refused, so the cost of
+# the gap is the Curator writing each ruling from what the handshake returned
+# rather than confirming a proposal.
+note: >
+  Hosted by Datadog rather than run here, which is the shape to prefer: nothing
+  starts inside the worker and the credential is a bearer for an address.
+
+  A token scoped to everything is a token that reads every log line, every APM
+  trace and every security signal your organisation has. A classification
+  bounds what a tool may do and cannot bound what it can see, so the scoping
+  belongs in Datadog, before the token is pasted here.

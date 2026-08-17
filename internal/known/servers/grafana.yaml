@@ -1,0 +1,118 @@
+server: grafana
+title: Grafana
+category: operations
+publisher: Grafana Labs
+docs: https://github.com/grafana/mcp-grafana
+docsFrom: publisher
+provenance: documentation
+transport: stdio
+command: uvx
+args: ["mcp-grafana"]
+auth: >
+  A Grafana service account token, and the address of the instance —
+  GRAFANA_URL and GRAFANA_SERVICE_ACCOUNT_TOKEN. Scope the service account to
+  what the agent should reach: a classification bounds what a tool may do and
+  cannot bound which dashboards, datasources or alert rules it sees.
+
+note: >
+  One server for several systems. It reaches Prometheus and Loki through
+  Grafana's own datasources, so connecting this covers metrics and logs without
+  a second server and a second credential — and it also means the token's reach
+  is the union of everything that Grafana can see.
+
+  It ships far more tools than are listed below; the rest arrive unclassified
+  like anything else, and the platform simply has no opinion about them yet.
+
+suggestions:
+  - tool: search_dashboards
+    effect: read
+    untrusted: true
+    why: >
+      Dashboard titles and descriptions are written by whoever built them.
+      Ordinary text, and text somebody else authored is still input from
+      somebody else.
+
+  - tool: get_dashboard_by_uid
+    effect: read
+    untrusted: true
+    why: The whole dashboard, panels and queries included, as somebody wrote it.
+
+  - tool: get_dashboard_summary
+    effect: read
+    untrusted: true
+    why: As above, condensed. The condensing is done by the server, not by us.
+
+  - tool: get_dashboard_panel_queries
+    effect: read
+    untrusted: true
+    why: >
+      The queries a panel runs. Useful for understanding what is being watched,
+      and authored by whoever built the panel.
+
+  - tool: update_dashboard
+    effect: write
+    why: >
+      Changes what a team looks at every morning. Recoverable through version
+      history rather than removable, and visible to everyone who opens it.
+
+  - tool: list_datasources
+    effect: read
+    why: Names the systems this Grafana can reach. It changes nothing.
+
+  - tool: get_datasource
+    effect: read
+    why: One datasource's configuration, without its credential.
+
+  - tool: query_prometheus
+    effect: read
+    why: >
+      Runs a PromQL query. It reads metrics and writes nothing — the cost is
+      the query itself, which a range wide enough can make considerable.
+
+  - tool: list_prometheus_metric_names
+    effect: read
+    why: Names what is being measured. Cheap, and changes nothing.
+
+  - tool: query_loki_logs
+    effect: read
+    untrusted: true
+    why: >
+      Log lines, which are the least trustworthy text in any installation:
+      whatever wrote the log chose what it said, including anything a user
+      typed into a field that got logged. Treat every line as authored by a
+      stranger.
+
+  - tool: query_loki_patterns
+    effect: read
+    untrusted: true
+    why: Log content again, grouped. The grouping does not launder it.
+
+  - tool: create_incident
+    effect: write
+    why: >
+      Declares an incident, which pages people. Nothing is undone by closing
+      it, so the compensation is honesty rather than deletion.
+
+  - tool: add_activity_to_incident
+    effect: write
+    why: Writes into an incident's timeline, which is somebody's record of what happened.
+
+  - tool: create_annotation
+    effect: write
+    why: >
+      Marks a moment on a dashboard. Small, permanent enough to matter, and
+      read later by people reconstructing an outage.
+
+  - tool: alerting_manage_rules
+    effect: destructive
+    why: >
+      Manages alert rules, which includes removing them. A rule that stops
+      existing is a page that never arrives, and nobody notices an alert that
+      does not fire. Judged as the worse of what "manage" covers, because from
+      here the safe call and the destructive one look the same.
+
+  - tool: alerting_manage_routing
+    effect: destructive
+    why: >
+      Decides who is told. Silencing a route is invisible until an incident
+      goes unanswered, which is the worst possible moment to discover it.
