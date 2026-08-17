@@ -1,0 +1,24 @@
+server: aws
+title: AWS
+category: operations
+publisher: Amazon Web Services
+docs: https://github.com/awslabs/mcp
+docsFrom: publisher
+provenance: documentation
+auth: >
+  AWS credentials, and the scoping that matters happens in IAM rather than
+  here. A role that can read everything is a role the agent can read everything
+  with — the Gate decides what a tool may do and decides nothing about what an
+  identity may reach.
+
+# No transport, and that is the honest answer rather than a gap.
+#
+# `awslabs/mcp` is many servers, not one: documentation, Lambda, CDK, cost, and
+# more, each with its own command. Naming a single one here would recommend a
+# choice this entry has no basis for. Pick the server you need from the
+# repository, and its own README gives the command.
+note: >
+  Several of these run locally, which means a program starting inside the
+  worker with whatever AWS credentials the worker holds. Prefer the hosted one
+  where it fits, and where it does not, give the process its own credential
+  rather than the platform's.

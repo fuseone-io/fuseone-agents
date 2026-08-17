@@ -1,0 +1,18 @@
+server: gcloud
+title: Google Cloud
+category: operations
+publisher: Google
+docs: https://github.com/googleapis/gcloud-mcp
+docsFrom: publisher
+provenance: documentation
+auth: >
+  The gcloud credentials on the machine it runs on. That is the part to think
+  about: it inherits an identity somebody already authenticated, so what it can
+  reach is whatever that identity can — scope the service account before, not
+  after.
+note: >
+  Google publishes more than one. This is the gcloud one; `googleapis/mcp-toolbox`
+  is the database side (BigQuery, Cloud SQL, AlloyDB, Spanner, Firestore) and
+  `GoogleCloudPlatform/cloud-run-mcp` deploys to Cloud Run. They are separate
+  connections with separate credentials, which is the right shape — one server
+  that could do all three would be one token that could.

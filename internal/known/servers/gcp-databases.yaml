@@ -1,0 +1,15 @@
+server: gcp-databases
+title: Google Cloud databases
+category: data
+publisher: Google
+docs: https://github.com/googleapis/mcp-toolbox
+docsFrom: publisher
+provenance: documentation
+auth: >
+  A database connection, configured in the toolbox rather than chosen by the
+  model. Read-only belongs in the grant the connection uses — a server that
+  promises read-only is still a server making the promise.
+note: >
+  BigQuery, Cloud SQL, AlloyDB, Spanner and Firestore behind one server. It
+  runs queries somebody's model wrote, so what it can reach is the connection's
+  own grant and nothing narrower.

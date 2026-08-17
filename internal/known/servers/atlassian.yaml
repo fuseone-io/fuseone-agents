@@ -1,0 +1,25 @@
+server: atlassian
+title: Jira, Confluence and Bitbucket
+category: knowledge
+publisher: Atlassian
+docs: https://github.com/atlassian/atlassian-mcp-server
+docsFrom: publisher
+provenance: documentation
+transport: http
+url: https://mcp.atlassian.com/v1/mcp/authv2
+auth: >
+  OAuth 2.1 where the client can do it, an API token otherwise. Bitbucket
+  Cloud's tools are API-token only for now.
+
+# Identity, address and credential, read from the publisher's own repository.
+# The tool names are not here because this entry has not read them, and a
+# suggestion invented for a name nobody verified reaches a Curator as this
+# platform's opinion.
+note: >
+  One connection reaching Jira, Confluence, Jira Service Management, Bitbucket
+  and Compass — which is convenient and is also the thing to weigh. The token's
+  reach is every one of those products, and a classification bounds what a tool
+  may do without bounding what it can see.
+
+  Hosted by Atlassian rather than run here: nothing starts inside the worker,
+  and the credential is a bearer for an address.
