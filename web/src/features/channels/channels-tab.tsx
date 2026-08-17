@@ -6,11 +6,13 @@ import {
   ErrorState,
   LoadingRows,
 } from "@/components/shared/states";
+import { LoadMore } from "@/components/shared/load-more";
 import { useChannels } from "@/features/channels/api";
 import { ChannelCard } from "@/features/channels/channel-card";
 import { ChannelForm } from "@/features/channels/channel-form";
 import { ConversationForm } from "@/features/channels/conversation-form";
 import { IntegrationsSection } from "@/features/integrations/integrations-section";
+import { useVisibleItems } from "@/hooks/use-visible-items";
 import type { components } from "@/lib/api/schema.gen";
 
 type Channel = components["schemas"]["Channel"];
@@ -30,6 +32,7 @@ export function ChannelsTab() {
   const [addingTo, setAddingTo] = useState<string | null>(null);
 
   const channels = data?.items ?? [];
+  const page = useVisibleItems(channels, 50);
 
   if (isLoading) return <LoadingRows rows={3} />;
   if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
@@ -48,8 +51,17 @@ export function ChannelsTab() {
             />
           )
         }
+        footer={
+          <LoadMore
+            loaded={page.loaded}
+            total={page.total}
+            hasMore={page.hasMore}
+            isLoading={false}
+            onLoad={page.loadMore}
+          />
+        }
       >
-        {channels.map((channel) => (
+        {page.visible.map((channel) => (
           <ChannelCard
             key={channel.name}
             channel={channel}

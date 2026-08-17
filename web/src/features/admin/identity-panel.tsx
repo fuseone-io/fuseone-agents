@@ -9,6 +9,7 @@ import {
   ErrorState,
   LoadingRows,
 } from "@/components/shared/states";
+import { LoadMore } from "@/components/shared/load-more";
 import { IdentityProviderForm } from "@/features/admin/provider-identity-form";
 import { IdentityProviderRow } from "@/features/admin/identity-provider-row";
 import {
@@ -16,6 +17,7 @@ import {
   useIdentityProviders,
   type IdentityProvider,
 } from "@/features/admin/identity-api";
+import { useVisibleItems } from "@/hooks/use-visible-items";
 
 /**
  * How people sign in.
@@ -34,6 +36,7 @@ export function IdentityPanel() {
   const [adding, setAdding] = useState(false);
 
   const providers = data?.items ?? [];
+  const page = useVisibleItems(providers, 50);
 
   if (adding || editing) {
     return (
@@ -70,30 +73,39 @@ export function IdentityPanel() {
           hint={t("identity.emptyHint")}
         />
       ) : (
-        <ul className="flex flex-col gap-3">
-          {providers.map((provider) => (
-            <li key={provider.id}>
-              <IdentityProviderRow
-                provider={provider}
-                onEdit={() => setEditing(provider)}
-                onRemove={() =>
-                  remove.mutate(provider.id, {
-                    onSuccess: () =>
-                      toast.success(
-                        t("identity.removed", { name: provider.id }),
-                      ),
-                    onError: (e) =>
-                      toast.error(
-                        e instanceof Error
-                          ? e.message
-                          : t("common.removeFailed"),
-                      ),
-                  })
-                }
-              />
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul className="flex flex-col gap-3">
+            {page.visible.map((provider) => (
+              <li key={provider.id}>
+                <IdentityProviderRow
+                  provider={provider}
+                  onEdit={() => setEditing(provider)}
+                  onRemove={() =>
+                    remove.mutate(provider.id, {
+                      onSuccess: () =>
+                        toast.success(
+                          t("identity.removed", { name: provider.id }),
+                        ),
+                      onError: (e) =>
+                        toast.error(
+                          e instanceof Error
+                            ? e.message
+                            : t("common.removeFailed"),
+                        ),
+                    })
+                  }
+                />
+              </li>
+            ))}
+          </ul>
+          <LoadMore
+            loaded={page.loaded}
+            total={page.total}
+            hasMore={page.hasMore}
+            isLoading={false}
+            onLoad={page.loadMore}
+          />
+        </>
       )}
     </Panel>
   );

@@ -99,6 +99,45 @@ func TestClassify_survivesTheProcessThatMadeIt(t *testing.T) {
 	}
 }
 
+func TestEvents_cursorContinuesAfterThePreviousPage(t *testing.T) {
+	pool := freshPool(t)
+	ctx := context.Background()
+	curator := admin.NewCurator(pool)
+
+	for _, target := range []string{"first", "second", "third"} {
+		if err := admin.Record(ctx, pool, admin.Event{
+			Principal: "usr_ana",
+			Scope:     platform,
+			Action:    "test.changed",
+			Target:    target,
+		}); err != nil {
+			t.Fatalf("record %s: %v", target, err)
+		}
+	}
+
+	first, cursor, err := curator.Events(ctx, "", "", 2)
+	if err != nil {
+		t.Fatalf("Events first page: %v", err)
+	}
+	if len(first) != 2 || first[0].Target != "third" || first[1].Target != "second" {
+		t.Fatalf("first page = %+v, want third then second", first)
+	}
+	if cursor == "" {
+		t.Fatal("first page returned no cursor")
+	}
+
+	second, next, err := curator.Events(ctx, "", cursor, 2)
+	if err != nil {
+		t.Fatalf("Events second page: %v", err)
+	}
+	if len(second) != 1 || second[0].Target != "first" {
+		t.Fatalf("second page = %+v, want first", second)
+	}
+	if next != "" {
+		t.Fatalf("next cursor = %q, want the trail to end", next)
+	}
+}
+
 func TestClassify_recordsWhoRuledInTheSameTransaction(t *testing.T) {
 	pool := freshPool(t)
 	ctx := context.Background()

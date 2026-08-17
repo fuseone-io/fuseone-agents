@@ -88,8 +88,8 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
 }
 
 function usePendingCount(to: string): number {
-  const { data } = useApprovals();
-  return to === "/approvals" ? (data?.items.length ?? 0) : 0;
+  const { items } = useApprovals();
+  return to === "/approvals" ? items.length : 0;
 }
 
 /**

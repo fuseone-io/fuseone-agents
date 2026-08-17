@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { Plus, Scale } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PAGE_ICONS } from "@/components/layout/nav";
+import { LoadMore } from "@/components/shared/load-more";
 import { PageHeader } from "@/components/shared/page-header";
 import { Panel } from "@/components/shared/panel";
 import { Mono } from "@/components/shared/mono";
@@ -16,6 +17,7 @@ import { PoliciesTable } from "@/features/policies/policies-table";
 import { tallyOf } from "@/features/policies/policy-tally";
 import { usePolicies } from "@/features/policies/api";
 import { sinceFor } from "@/features/runs/runs-filters";
+import { useVisibleItems } from "@/hooks/use-visible-items";
 
 /**
  * Every rule the installation runs under.
@@ -32,6 +34,7 @@ export function PoliciesPage() {
 
   const policies = data?.items ?? [];
   const tally = tallyOf(policies);
+  const page = useVisibleItems(policies, 50);
 
   return (
     <>
@@ -102,7 +105,18 @@ export function PoliciesPage() {
             />
           </div>
         ) : (
-          <PoliciesTable policies={policies} />
+          <>
+            <PoliciesTable policies={page.visible} />
+            <div className="px-4 pb-3">
+              <LoadMore
+                loaded={page.loaded}
+                total={page.total}
+                hasMore={page.hasMore}
+                isLoading={false}
+                onLoad={page.loadMore}
+              />
+            </div>
+          </>
         )}
       </Panel>
     </>

@@ -2813,6 +2813,10 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        AdminEventPage: {
+            items: components["schemas"]["AdminEvent"][];
+            nextCursor?: string | null;
+        };
         Agent: {
             agentId: string;
             /** @description Absent on an older reading. A client that does not find one should assume draft, which is what the platform assumes. */
@@ -6082,6 +6086,17 @@ export interface operations {
             query?: {
                 /** @description Read the trail backwards from one object. */
                 target?: string;
+                /**
+                 * @description Opaque cursor from the previous page, taken verbatim from that page's
+                 *     `nextCursor`. It carries a position and no authority: the caller's
+                 *     scopes are applied to the resumed page exactly as they were to the one
+                 *     before it, so a cursor obtained under a wide grant reaches nothing
+                 *     under a narrow one.
+                 *
+                 *     Absent starts at the most recent entry. A page that answers fewer rows
+                 *     than the limit is the last one and returns no cursor.
+                 */
+                cursor?: components["parameters"]["Cursor"];
                 limit?: components["parameters"]["Limit"];
             };
             header?: never;
@@ -6096,9 +6111,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        items: components["schemas"]["AdminEvent"][];
-                    };
+                    "application/json": components["schemas"]["AdminEventPage"];
                 };
             };
             401: components["responses"]["Unauthorized"];

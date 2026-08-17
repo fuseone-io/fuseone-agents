@@ -60,7 +60,7 @@ func TestStops_started_leavesTheTrailShowingBoth(t *testing.T) {
 
 	// Starting again is not the same as never having stopped. An area that
 	// was quiet for an hour is the explanation for an hour of no runs.
-	events, err := admin.NewCurator(pool).Events(ctx, "", 10)
+	events, _, err := admin.NewCurator(pool).Events(ctx, "", "", 10)
 	if err != nil {
 		t.Fatalf("Events: %v", err)
 	}

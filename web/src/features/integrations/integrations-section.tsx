@@ -9,11 +9,13 @@ export function IntegrationsSection({
   title,
   onAdd,
   empty,
+  footer,
   children,
 }: {
   title: string;
   onAdd: () => void;
   empty: ReactNode;
+  footer?: ReactNode;
   children: ReactNode;
 }) {
   const { t } = useTranslation();
@@ -33,9 +35,12 @@ export function IntegrationsSection({
       </div>
 
       {empty || (
-        <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]">
-          {children}
-        </div>
+        <>
+          <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]">
+            {children}
+          </div>
+          {footer}
+        </>
       )}
     </section>
   );

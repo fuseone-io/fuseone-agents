@@ -2,11 +2,13 @@ import { useTranslation } from "react-i18next";
 import { BookOpen } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { LoadMore } from "@/components/shared/load-more";
 import type { ServerRecipe } from "@/features/integrations/mcp/api";
 import {
   ConfigRequirementBadges,
   RecipeStatusBadge,
 } from "@/features/integrations/mcp/recipe-badges";
+import { useVisibleItems } from "@/hooks/use-visible-items";
 
 /**
  * What the platform has read about servers other people publish.
@@ -25,15 +27,23 @@ export function RecipePicker({
   onChoose: (recipe: ServerRecipe) => void;
 }) {
   const { t } = useTranslation();
+  const page = useVisibleItems(recipes, 50);
 
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">{t("mcp.recipesAre")}</p>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {recipes.map((recipe) => (
+        {page.visible.map((recipe) => (
           <RecipeCard key={recipe.server} recipe={recipe} onChoose={onChoose} />
         ))}
       </div>
+      <LoadMore
+        loaded={page.loaded}
+        total={page.total}
+        hasMore={page.hasMore}
+        isLoading={false}
+        onLoad={page.loadMore}
+      />
     </div>
   );
 }

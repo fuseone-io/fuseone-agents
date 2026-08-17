@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import { MessagesSquare, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PAGE_ICONS } from "@/components/layout/nav";
+import { LoadMore } from "@/components/shared/load-more";
 import { PageHeader } from "@/components/shared/page-header";
 import {
   EmptyState,
@@ -28,6 +29,7 @@ import {
 import { EventGraph } from "@/features/agents/event-graph";
 import { useAgents, type Agent } from "@/features/agents/api";
 import { stateOfAgent, type AgentState } from "@/lib/agent-state";
+import { useVisibleItems } from "@/hooks/use-visible-items";
 
 export function AgentsPage() {
   const { t } = useTranslation();
@@ -59,6 +61,7 @@ export function AgentsPage() {
     () => agents.filter(matcher(search, area, state)),
     [agents, search, area, state],
   );
+  const page = useVisibleItems(shown, 50);
 
   return (
     <>
@@ -137,17 +140,35 @@ export function AgentsPage() {
           }
         />
       ) : view === "cards" ? (
-        <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(268px,1fr))]">
-          {shown.map((agent) => (
-            <AgentCard
-              key={`${agent.agentId}@${agent.versionId}`}
-              agent={agent}
-            />
-          ))}
-        </div>
+        <>
+          <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(268px,1fr))]">
+            {page.visible.map((agent) => (
+              <AgentCard
+                key={`${agent.agentId}@${agent.versionId}`}
+                agent={agent}
+              />
+            ))}
+          </div>
+          <LoadMore
+            loaded={page.loaded}
+            total={page.total}
+            hasMore={page.hasMore}
+            isLoading={false}
+            onLoad={page.loadMore}
+          />
+        </>
       ) : (
         <Panel flush>
-          <AgentsTable agents={shown} />
+          <AgentsTable agents={page.visible} />
+          <div className="px-4 pb-3">
+            <LoadMore
+              loaded={page.loaded}
+              total={page.total}
+              hasMore={page.hasMore}
+              isLoading={false}
+              onLoad={page.loadMore}
+            />
+          </div>
         </Panel>
       )}
 

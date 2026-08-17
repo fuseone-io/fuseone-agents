@@ -18,7 +18,7 @@ import (
 type Curator interface {
 	Classify(ctx context.Context, scope domain.Scope, ruling domain.ToolClassification) error
 	List(ctx context.Context, scope domain.Scope) ([]domain.ToolClassification, error)
-	Events(ctx context.Context, target string, limit int) ([]domain.AdminEvent, error)
+	Events(ctx context.Context, target, cursor string, limit int) ([]domain.AdminEvent, string, error)
 }
 
 // Tools is the published catalogue as the administration area reads it.
@@ -157,12 +157,16 @@ func (s *Server) ListAdminEvents(ctx context.Context, req openapi.ListAdminEvent
 		target = *req.Params.Target
 	}
 
-	events, err := s.curator.Events(ctx, target, limitOf(req.Params.Limit))
+	var cursor string
+	if req.Params.Cursor != nil {
+		cursor = *req.Params.Cursor
+	}
+	events, next, err := s.curator.Events(ctx, target, cursor, limitOf(req.Params.Limit))
 	if err != nil {
 		return nil, fmt.Errorf("list admin events: %w", err)
 	}
 
-	items := make([]openapi.AdminEvent, 0, len(events))
+	page := openapi.ListAdminEvents200JSONResponse{Items: make([]openapi.AdminEvent, 0, len(events))}
 	for _, e := range events {
 		event := openapi.AdminEvent{
 			At: e.At, PrincipalId: string(e.Principal),
@@ -175,9 +179,12 @@ func (s *Server) ListAdminEvents(ctx context.Context, req openapi.ListAdminEvent
 				event.Detail = &detail
 			}
 		}
-		items = append(items, event)
+		page.Items = append(page.Items, event)
 	}
-	return openapi.ListAdminEvents200JSONResponse{Items: items}, nil
+	if next != "" {
+		page.NextCursor = &next
+	}
+	return page, nil
 }
 
 // refuse checks a permission and renders the refusal, or returns nil.

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { BookOpen, Plug, Plus, Server, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/shared/states";
+import { LoadMore } from "@/components/shared/load-more";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form } from "@/components/ui/form";
@@ -17,6 +18,7 @@ import {
 import { CatalogueRail } from "@/features/integrations/mcp/catalogue-rail";
 import { ServerFormBody } from "@/features/integrations/server-form-body";
 import { useServerForm } from "@/features/integrations/mcp/use-server-form";
+import { useVisibleItems } from "@/hooks/use-visible-items";
 import {
   availableEntries,
   listing,
@@ -62,6 +64,7 @@ export function AvailableServersPanel({
     shelf === null ? entries : entries.filter((one) => one.category === shelf),
     query,
   );
+  const page = useVisibleItems(shown, 50);
 
   if (isLoading) return <LoadingRows rows={4} />;
   if (error) return <ErrorState error={error} onRetry={onRetry} />;
@@ -96,16 +99,25 @@ export function AvailableServersPanel({
               hint={t("mcp.nothingAvailableHint")}
             />
           ) : (
-            <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))] gap-3">
-              {shown.map((entry) => (
-                <CatalogueCard
-                  key={entry.name}
-                  entry={entry}
-                  selected={panel === entry.name}
-                  onOpen={() => setPanel(entry.name)}
-                />
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))] gap-3">
+                {page.visible.map((entry) => (
+                  <CatalogueCard
+                    key={entry.name}
+                    entry={entry}
+                    selected={panel === entry.name}
+                    onOpen={() => setPanel(entry.name)}
+                  />
+                ))}
+              </div>
+              <LoadMore
+                loaded={page.loaded}
+                total={page.total}
+                hasMore={page.hasMore}
+                isLoading={false}
+                onLoad={page.loadMore}
+              />
+            </>
           )}
         </div>
       </div>

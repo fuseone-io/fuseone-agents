@@ -11,6 +11,7 @@ import {
   ErrorState,
   LoadingRows,
 } from "@/components/shared/states";
+import { LoadMore } from "@/components/shared/load-more";
 import { RemoveButton } from "@/components/shared/remove-button";
 import { BudgetForm } from "@/features/admin/budget-form";
 import { scopeLabel, scopePath } from "@/features/admin/budget-scope";
@@ -19,6 +20,7 @@ import {
   useDeleteBudget,
   type ScopeBudget,
 } from "@/features/admin/api";
+import { useVisibleItems } from "@/hooks/use-visible-items";
 import { formatMicros } from "@/lib/format";
 
 const PERIOD: Record<string, string> = {
@@ -31,6 +33,7 @@ export function BudgetsPanel() {
   const { data, isLoading, error, refetch } = useBudgets();
   const [editing, setEditing] = useState<ScopeBudget | null | undefined>();
   const budgets = data?.items ?? [];
+  const page = useVisibleItems(budgets, 50);
 
   return (
     <Panel
@@ -53,15 +56,24 @@ export function BudgetsPanel() {
           hint={t("admin.noCeilingHint")}
         />
       ) : (
-        <ul className="flex flex-col gap-2">
-          {budgets.map((budget) => (
-            <BudgetRow
-              key={scopePath(budget)}
-              budget={budget}
-              onEdit={() => setEditing(budget)}
-            />
-          ))}
-        </ul>
+        <>
+          <ul className="flex flex-col gap-2">
+            {page.visible.map((budget) => (
+              <BudgetRow
+                key={scopePath(budget)}
+                budget={budget}
+                onEdit={() => setEditing(budget)}
+              />
+            ))}
+          </ul>
+          <LoadMore
+            loaded={page.loaded}
+            total={page.total}
+            hasMore={page.hasMore}
+            isLoading={false}
+            onLoad={page.loadMore}
+          />
+        </>
       )}
 
       {editing !== undefined && (

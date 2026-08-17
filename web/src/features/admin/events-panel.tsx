@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { ScrollText } from "lucide-react";
 import { Panel } from "@/components/shared/panel";
 import { Mono } from "@/components/shared/mono";
+import { LoadMore } from "@/components/shared/load-more";
 import {
   EmptyState,
   ErrorState,
@@ -18,8 +19,15 @@ import { useAdminEvents } from "@/features/admin/api";
  */
 export function EventsPanel() {
   const { t } = useTranslation();
-  const { data, isLoading, error, refetch } = useAdminEvents();
-  const events = data?.items ?? [];
+  const {
+    items: events,
+    isLoading,
+    error,
+    refetch,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useAdminEvents();
 
   return (
     <Panel
@@ -41,21 +49,29 @@ export function EventsPanel() {
           hint={t("admin.eventsHint")}
         />
       ) : (
-        <ul className="flex flex-col">
-          {events.map((event, i) => (
-            <li
-              key={i}
-              className="flex items-baseline gap-3 border-b py-2 last:border-b-0"
-            >
-              <Mono dim>{formatInstant(event.at)}</Mono>
-              <Mono>{event.action}</Mono>
-              <span className="min-w-0 flex-1 truncate text-sm">
-                {event.target}
-              </span>
-              <Mono dim>{event.principalId}</Mono>
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul className="flex flex-col">
+            {events.map((event, i) => (
+              <li
+                key={`${event.at}-${event.action}-${event.target}-${i}`}
+                className="flex items-baseline gap-3 border-b py-2 last:border-b-0"
+              >
+                <Mono dim>{formatInstant(event.at)}</Mono>
+                <Mono>{event.action}</Mono>
+                <span className="min-w-0 flex-1 truncate text-sm">
+                  {event.target}
+                </span>
+                <Mono dim>{event.principalId}</Mono>
+              </li>
+            ))}
+          </ul>
+          <LoadMore
+            loaded={events.length}
+            hasMore={hasNextPage}
+            isLoading={isFetchingNextPage}
+            onLoad={() => void fetchNextPage()}
+          />
+        </>
       )}
     </Panel>
   );

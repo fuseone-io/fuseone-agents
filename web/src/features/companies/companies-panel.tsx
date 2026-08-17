@@ -9,10 +9,12 @@ import {
   ErrorState,
   LoadingRows,
 } from "@/components/shared/states";
+import { LoadMore } from "@/components/shared/load-more";
 import { Mono } from "@/components/shared/mono";
 import { Panel } from "@/components/shared/panel";
 import { CompanyForm } from "@/features/companies/company-form";
 import { useCompanies, useUpdateCompany } from "@/features/companies/api";
+import { useVisibleItems } from "@/hooks/use-visible-items";
 import { problemMessage } from "@/lib/api/problem-message";
 
 /**
@@ -33,6 +35,7 @@ export function CompaniesPanel() {
   const update = useUpdateCompany();
 
   const companies = data?.items ?? [];
+  const page = useVisibleItems(companies, 50);
 
   return (
     <Panel
@@ -61,54 +64,65 @@ export function CompaniesPanel() {
           />
         </div>
       ) : (
-        <ul className="flex flex-col">
-          {companies.map((company) => (
-            <li
-              key={company.id}
-              className="flex items-center gap-3 border-b border-border-subtle px-4 py-2.5 last:border-0"
-            >
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{company.label}</p>
-                <Mono dim className="block truncate text-2xs">
-                  {company.id}
-                </Mono>
-              </div>
+        <>
+          <ul className="flex flex-col">
+            {page.visible.map((company) => (
+              <li
+                key={company.id}
+                className="flex items-center gap-3 border-b border-border-subtle px-4 py-2.5 last:border-0"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{company.label}</p>
+                  <Mono dim className="block truncate text-2xs">
+                    {company.id}
+                  </Mono>
+                </div>
 
-              <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">
-                {t("companies.areaCount", { count: company.areas })}
-              </span>
+                <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">
+                  {t("companies.areaCount", { count: company.areas })}
+                </span>
 
-              {company.archived ? (
-                <>
-                  <Badge variant="outline">{t("companies.withdrawn")}</Badge>
+                {company.archived ? (
+                  <>
+                    <Badge variant="outline">{t("companies.withdrawn")}</Badge>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        update.mutate({ company: company.id, archived: false })
+                      }
+                    >
+                      <RotateCcw className="size-3.5" aria-hidden />
+                      {t("companies.restore")}
+                    </Button>
+                  </>
+                ) : (
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() =>
-                      update.mutate({ company: company.id, archived: false })
+                      update.mutate(
+                        { company: company.id, archived: true },
+                        { onError: (e) => toast.error(problemMessage(e, t)) },
+                      )
                     }
                   >
-                    <RotateCcw className="size-3.5" aria-hidden />
-                    {t("companies.restore")}
+                    {t("companies.withdraw")}
                   </Button>
-                </>
-              ) : (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() =>
-                    update.mutate(
-                      { company: company.id, archived: true },
-                      { onError: (e) => toast.error(problemMessage(e, t)) },
-                    )
-                  }
-                >
-                  {t("companies.withdraw")}
-                </Button>
-              )}
-            </li>
-          ))}
-        </ul>
+                )}
+              </li>
+            ))}
+          </ul>
+          <div className="px-4 pb-3">
+            <LoadMore
+              loaded={page.loaded}
+              total={page.total}
+              hasMore={page.hasMore}
+              isLoading={false}
+              onLoad={page.loadMore}
+            />
+          </div>
+        </>
       )}
 
       {adding && <CompanyForm onClose={() => setAdding(false)} />}

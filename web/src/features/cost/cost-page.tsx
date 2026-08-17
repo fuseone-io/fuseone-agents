@@ -4,6 +4,7 @@ import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
 import { Panel } from "@/components/shared/panel";
 import { BarChart } from "@/components/shared/bar-chart";
+import { LoadMore } from "@/components/shared/load-more";
 import { Mono } from "@/components/shared/mono";
 import {
   EmptyState,
@@ -24,6 +25,7 @@ import { CostKpis } from "@/features/cost/cost-kpis";
 import { CostDrivers } from "@/features/cost/cost-drivers";
 import { CostCaps } from "@/features/cost/cost-caps";
 import { useCostRollup, useCostWindow } from "@/features/cost/api";
+import { useVisibleItems } from "@/hooks/use-visible-items";
 
 const HEAD =
   "h-[30px] bg-muted text-2xs uppercase tracking-label text-muted-foreground";
@@ -39,6 +41,7 @@ export function CostPage() {
   const error = daily.error ?? byAgent.error;
   const isLoading = daily.isLoading || byAgent.isLoading;
   const buckets = byAgent.data?.buckets ?? [];
+  const page = useVisibleItems(buckets, 50);
 
   return (
     <>
@@ -120,7 +123,7 @@ export function CostPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {buckets.map((b) => (
+                {page.visible.map((b) => (
                   <TableRow key={b.key} className="h-10 border-border-subtle">
                     <TableCell className="font-medium">{b.key}</TableCell>
                     <TableCell className={NUM}>{b.runs}</TableCell>
@@ -144,6 +147,15 @@ export function CostPage() {
                 ))}
               </TableBody>
             </Table>
+            <div className="px-4 pb-3">
+              <LoadMore
+                loaded={page.loaded}
+                total={page.total}
+                hasMore={page.hasMore}
+                isLoading={false}
+                onLoad={page.loadMore}
+              />
+            </div>
           </Panel>
         </>
       )}

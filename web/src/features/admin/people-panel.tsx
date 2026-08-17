@@ -7,12 +7,14 @@ import {
   ErrorState,
   LoadingRows,
 } from "@/components/shared/states";
+import { LoadMore } from "@/components/shared/load-more";
 import { Button } from "@/components/ui/button";
 import { GrantEditor } from "@/features/admin/grant-editor";
 import { LocalPersonForm } from "@/features/admin/local-person-form";
 import { PasswordDialog } from "@/features/admin/password-dialog";
 import { PersonRow } from "@/features/admin/person-row";
 import { usePeople, type Person } from "@/features/admin/people-api";
+import { useVisibleItems } from "@/hooks/use-visible-items";
 
 /**
  * Who exists here, and what each one may do.
@@ -30,6 +32,7 @@ export function PeoplePanel() {
   const [settingPassword, setSettingPassword] = useState<Person | null>(null);
 
   const people = data?.items ?? [];
+  const page = useVisibleItems(people, 50);
 
   if (editing) {
     return (
@@ -59,17 +62,26 @@ export function PeoplePanel() {
           hint={t("people.emptyHint")}
         />
       ) : (
-        <ul className="flex flex-col gap-2">
-          {people.map((person) => (
-            <li key={person.id}>
-              <PersonRow
-                person={person}
-                onEdit={() => setEditing(person)}
-                onSetPassword={() => setSettingPassword(person)}
-              />
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul className="flex flex-col gap-2">
+            {page.visible.map((person) => (
+              <li key={person.id}>
+                <PersonRow
+                  person={person}
+                  onEdit={() => setEditing(person)}
+                  onSetPassword={() => setSettingPassword(person)}
+                />
+              </li>
+            ))}
+          </ul>
+          <LoadMore
+            loaded={page.loaded}
+            total={page.total}
+            hasMore={page.hasMore}
+            isLoading={false}
+            onLoad={page.loadMore}
+          />
+        </>
       )}
 
       {adding && <LocalPersonForm onClose={() => setAdding(false)} />}

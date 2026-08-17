@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import { CheckCheck } from "lucide-react";
 import { PAGE_ICONS } from "@/components/layout/nav";
+import { LoadMore } from "@/components/shared/load-more";
 import { PageHeader } from "@/components/shared/page-header";
 import {
   EmptyState,
@@ -14,8 +15,15 @@ import { useApprovals } from "@/features/approvals/api";
 
 export function ApprovalsPage() {
   const { t } = useTranslation();
-  const { data, isLoading, error, refetch } = useApprovals();
-  const items = data?.items ?? [];
+  const {
+    items,
+    isLoading,
+    error,
+    refetch,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useApprovals();
   const [selectedRun, setSelectedRun] = useState<string>();
 
   // Derived, not synchronised: the state holds what somebody clicked, and the
@@ -53,6 +61,12 @@ export function ApprovalsPage() {
                 onSelect={() => setSelectedRun(item.runId)}
               />
             ))}
+            <LoadMore
+              loaded={items.length}
+              hasMore={hasNextPage}
+              isLoading={isFetchingNextPage}
+              onLoad={() => void fetchNextPage()}
+            />
           </div>
 
           {selected && (

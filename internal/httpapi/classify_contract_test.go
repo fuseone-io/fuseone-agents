@@ -38,8 +38,8 @@ func (j *judging) List(context.Context, domain.Scope) ([]domain.ToolClassificati
 	return nil, nil
 }
 
-func (j *judging) Events(context.Context, string, int) ([]domain.AdminEvent, error) {
-	return nil, nil
+func (j *judging) Events(context.Context, string, string, int) ([]domain.AdminEvent, string, error) {
+	return nil, "", nil
 }
 
 func (j *judging) Tools(context.Context) ([]domain.ToolEntry, error) { return j.tools, nil }

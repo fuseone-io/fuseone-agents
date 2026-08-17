@@ -68,6 +68,25 @@ func serverWith(t *testing.T, admin *fakeAdmin) *Server {
 	return NewServer(ledger.NewMemory(), "test").WithAdministration(nil, nil, admin)
 }
 
+type eventAdmin struct {
+	askedCursor string
+	next        string
+	events      []domain.AdminEvent
+}
+
+func (e *eventAdmin) Classify(context.Context, domain.Scope, domain.ToolClassification) error {
+	return nil
+}
+
+func (e *eventAdmin) List(context.Context, domain.Scope) ([]domain.ToolClassification, error) {
+	return nil, nil
+}
+
+func (e *eventAdmin) Events(_ context.Context, _ string, cursor string, _ int) ([]domain.AdminEvent, string, error) {
+	e.askedCursor = cursor
+	return e.events, e.next, nil
+}
+
 // inArea returns a caller holding a role in one area of acme.
 func inArea(area string, role domain.Role) context.Context {
 	return auth.WithPrincipal(context.Background(), domain.Principal{
@@ -102,6 +121,37 @@ func TestPutMCPServer_withoutThePermission_isRefused(t *testing.T) {
 	}
 	if admin.putServer.Command != "" {
 		t.Error("a refused request still reached the administration store")
+	}
+}
+
+func TestListAdminEvents_cursorReachesTheStoreAndTheAnswerCarriesTheNext(t *testing.T) {
+	t.Parallel()
+
+	admin := &eventAdmin{
+		next: "next-page",
+		events: []domain.AdminEvent{{
+			At:        time.Date(2026, 8, 17, 12, 0, 0, 0, time.UTC),
+			Principal: "usr_ana",
+			Action:    "tool.classified",
+			Target:    "crm.lookup",
+		}},
+	}
+	resp, err := NewServer(ledger.NewMemory(), "test").WithAdministration(admin, nil, nil).
+		ListAdminEvents(as(domain.RoleAuditor), openapi.ListAdminEventsRequestObject{
+			Params: openapi.ListAdminEventsParams{Cursor: ptr("from-page-one")},
+		})
+	if err != nil {
+		t.Fatalf("ListAdminEvents: %v", err)
+	}
+	if admin.askedCursor != "from-page-one" {
+		t.Errorf("store cursor = %q, want the cursor from the request", admin.askedCursor)
+	}
+	page, ok := resp.(openapi.ListAdminEvents200JSONResponse)
+	if !ok {
+		t.Fatalf("response = %T, want 200", resp)
+	}
+	if page.NextCursor == nil || *page.NextCursor != "next-page" {
+		t.Errorf("nextCursor = %v, want the one the store returned", page.NextCursor)
 	}
 }
 

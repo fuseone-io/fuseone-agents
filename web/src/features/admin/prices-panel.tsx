@@ -10,6 +10,7 @@ import {
   ErrorState,
   LoadingRows,
 } from "@/components/shared/states";
+import { LoadMore } from "@/components/shared/load-more";
 import { RemoveButton } from "@/components/shared/remove-button";
 import { PriceForm } from "@/features/admin/price-form";
 import {
@@ -17,6 +18,7 @@ import {
   usePrices,
   type ModelPrice,
 } from "@/features/admin/prices-api";
+import { useVisibleItems } from "@/hooks/use-visible-items";
 import { formatMicros } from "@/lib/format";
 
 /**
@@ -33,6 +35,7 @@ export function PricesPanel() {
   const { data, isLoading, error, refetch } = usePrices();
   const [editing, setEditing] = useState<ModelPrice | null | undefined>();
   const prices = data?.items ?? [];
+  const page = useVisibleItems(prices, 50);
 
   return (
     <Panel
@@ -55,15 +58,24 @@ export function PricesPanel() {
           hint={t("admin.noPricesHint")}
         />
       ) : (
-        <ul className="flex flex-col gap-2">
-          {prices.map((price) => (
-            <PriceRow
-              key={`${price.provider}/${price.model}`}
-              price={price}
-              onEdit={() => setEditing(price)}
-            />
-          ))}
-        </ul>
+        <>
+          <ul className="flex flex-col gap-2">
+            {page.visible.map((price) => (
+              <PriceRow
+                key={`${price.provider}/${price.model}`}
+                price={price}
+                onEdit={() => setEditing(price)}
+              />
+            ))}
+          </ul>
+          <LoadMore
+            loaded={page.loaded}
+            total={page.total}
+            hasMore={page.hasMore}
+            isLoading={false}
+            onLoad={page.loadMore}
+          />
+        </>
       )}
 
       {editing !== undefined && (

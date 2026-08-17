@@ -28,6 +28,8 @@ import {
 } from "@/features/integrations/api";
 import { useRecipes } from "@/features/integrations/mcp/api";
 import { AvailableServersPanel } from "@/features/integrations/mcp/available-servers-panel";
+import { LoadMore } from "@/components/shared/load-more";
+import { useVisibleItems } from "@/hooks/use-visible-items";
 import {
   availableEntries,
   listing,
@@ -62,6 +64,8 @@ export function IntegrationsPage({
 
   const servers = integrations.data?.mcpServers ?? [];
   const providers = integrations.data?.providers ?? [];
+  const serverPage = useVisibleItems(servers, 50);
+  const providerPage = useVisibleItems(providers, 50);
   const available = availableEntries(listing(servers, recipes.data?.items ?? []));
   const counts = {
     connected: integrations.data ? servers.length : undefined,
@@ -115,8 +119,17 @@ export function IntegrationsPage({
                   />
                 )
               }
+              footer={
+                <LoadMore
+                  loaded={serverPage.loaded}
+                  total={serverPage.total}
+                  hasMore={serverPage.hasMore}
+                  isLoading={false}
+                  onLoad={serverPage.loadMore}
+                />
+              }
             >
-              {servers.map((server) => (
+              {serverPage.visible.map((server) => (
                 <ServerCard
                   key={server.name}
                   server={server}
@@ -139,8 +152,17 @@ export function IntegrationsPage({
                   />
                 )
               }
+              footer={
+                <LoadMore
+                  loaded={providerPage.loaded}
+                  total={providerPage.total}
+                  hasMore={providerPage.hasMore}
+                  isLoading={false}
+                  onLoad={providerPage.loadMore}
+                />
+              }
             >
-              {providers.map((p) => (
+              {providerPage.visible.map((p) => (
                 <ProviderCard
                   key={p.name}
                   provider={p}

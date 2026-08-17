@@ -7,6 +7,9 @@ import (
 
 // AdminEvent is one recorded change to the platform itself.
 type AdminEvent struct {
+	// ID is the append-only row position. It never leaves the API; it exists so
+	// the administrative trail can page without offset drift.
+	ID        int64
 	At        time.Time
 	Principal UserID
 	Scope     Scope

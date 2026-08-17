@@ -155,19 +155,21 @@ func (c *Curator) List(ctx context.Context, scope domain.Scope) ([]domain.ToolCl
 // Append-only by construction: nothing in this package updates or deletes a
 // row in admin_events, and a correction is a new event rather than an
 // amendment to the one it corrects.
-func (c *Curator) Events(ctx context.Context, target string, limit int) ([]domain.AdminEvent, error) {
+func (c *Curator) Events(ctx context.Context, target, cursor string, limit int) ([]domain.AdminEvent, string, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
+	after := decodeEventCursor(cursor)
 
 	rows, err := c.pool.Query(ctx, `
-		select at, principal_id, company_id, area_id, action, target, detail
+		select event_id, at, principal_id, company_id, area_id, action, target, detail
 		from admin_events
 		where ($1 = '' or target = $1)
+		  and ($2::bigint = 0 or event_id < $2)
 		order by event_id desc
-		limit $2`, target, limit)
+		limit $3`, target, after, limit+1)
 	if err != nil {
-		return nil, fmt.Errorf("admin: list events: %w", err)
+		return nil, "", fmt.Errorf("admin: list events: %w", err)
 	}
 	defer rows.Close()
 
@@ -178,14 +180,21 @@ func (c *Curator) Events(ctx context.Context, target string, limit int) ([]domai
 			principal     string
 			company, area string
 		)
-		if err := rows.Scan(&e.At, &principal, &company, &area, &e.Action, &e.Target, &e.Detail); err != nil {
-			return nil, err
+		if err := rows.Scan(&e.ID, &e.At, &principal, &company, &area, &e.Action, &e.Target, &e.Detail); err != nil {
+			return nil, "", err
 		}
 		e.Principal = domain.UserID(principal)
 		e.Scope = domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)}
 		out = append(out, e)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, "", err
+	}
+	if len(out) <= limit {
+		return out, "", nil
+	}
+	next := encodeEventCursor(out[limit-1].ID)
+	return out[:limit], next, nil
 }
 
 // toolKind is the settings row a discovered tool is published as.

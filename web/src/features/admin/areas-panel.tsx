@@ -4,6 +4,7 @@ import { Layers, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Panel } from "@/components/shared/panel";
 import { Mono } from "@/components/shared/mono";
+import { LoadMore } from "@/components/shared/load-more";
 import { Button } from "@/components/ui/button";
 import {
   EmptyState,
@@ -17,6 +18,7 @@ import {
   useScopes,
   type RegisteredScope,
 } from "@/features/scope/api";
+import { useVisibleItems } from "@/hooks/use-visible-items";
 
 /**
  * The areas work is filed under.
@@ -31,6 +33,7 @@ export function AreasPanel() {
   const { data, isLoading, error, refetch } = useScopes();
   const [adding, setAdding] = useState(false);
   const areas = data?.items ?? [];
+  const page = useVisibleItems(areas, 50);
 
   return (
     <Panel
@@ -53,11 +56,20 @@ export function AreasPanel() {
           hint={t("admin.areaHint")}
         />
       ) : (
-        <ul className="flex flex-col gap-2">
-          {areas.map((area) => (
-            <AreaRow key={`${area.company}/${area.area}`} area={area} />
-          ))}
-        </ul>
+        <>
+          <ul className="flex flex-col gap-2">
+            {page.visible.map((area) => (
+              <AreaRow key={`${area.company}/${area.area}`} area={area} />
+            ))}
+          </ul>
+          <LoadMore
+            loaded={page.loaded}
+            total={page.total}
+            hasMore={page.hasMore}
+            isLoading={false}
+            onLoad={page.loadMore}
+          />
+        </>
       )}
 
       {adding && <AreaForm onClose={() => setAdding(false)} />}

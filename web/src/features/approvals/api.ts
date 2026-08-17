@@ -1,6 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
 import { api, unwrap } from "@/lib/api/client";
 import { useScopeFilter } from "@/features/scope/use-scope-filter";
+import { usePagedQuery } from "@/features/runs/use-paged";
 
 export const approvalKeys = {
   all: ["approvals"] as const,
@@ -9,12 +9,18 @@ export const approvalKeys = {
 
 export function useApprovals() {
   const scope = useScopeFilter();
-  return useQuery({
-    queryKey: approvalKeys.inbox(scope.key),
-    queryFn: async () =>
-      unwrap(await api.GET("/approvals", { params: { query: scope.params } })),
-    // The inbox is what a manager keeps open; a short interval keeps it honest
-    // without needing a live stream for a list this small.
-    refetchInterval: 15_000,
-  });
+  return usePagedQuery(
+    approvalKeys.inbox(scope.key),
+    async (cursor) =>
+      unwrap(
+        await api.GET("/approvals", {
+          params: { query: { ...scope.params, limit: 50, cursor } },
+        }),
+      ),
+    {
+      // The inbox is what a manager keeps open; a short interval keeps it honest
+      // without needing a live stream for a list this small.
+      refetchInterval: 15_000,
+    },
+  );
 }

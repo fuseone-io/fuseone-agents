@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap } from "@/lib/api/client";
+import { usePagedQuery } from "@/features/runs/use-paged";
 import type { components } from "@/lib/api/schema.gen";
 
 export type Tool = components["schemas"]["Tool"];
@@ -29,15 +30,13 @@ export function useTools() {
 }
 
 export function useAdminEvents(target?: string) {
-  return useQuery({
-    queryKey: adminKeys.events(target),
-    queryFn: async () =>
-      unwrap(
-        await api.GET("/admin/events", {
-          params: { query: { target, limit: 50 } },
-        }),
-      ),
-  });
+  return usePagedQuery(adminKeys.events(target), async (cursor) =>
+    unwrap(
+      await api.GET("/admin/events", {
+        params: { query: { target, limit: 50, cursor } },
+      }),
+    ),
+  );
 }
 
 /**

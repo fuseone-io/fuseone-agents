@@ -2907,19 +2907,14 @@ paths:
           in: query
           description: Read the trail backwards from one object.
           schema: { type: string }
+        - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Limit'
       responses:
         '200':
           description: Administrative events, newest first.
           content:
             application/json:
-              schema:
-                type: object
-                required: [items]
-                properties:
-                  items:
-                    type: array
-                    items: { $ref: '#/components/schemas/AdminEvent' }
+              schema: { $ref: '#/components/schemas/AdminEventPage' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
@@ -4308,6 +4303,15 @@ components:
           description: Past tense, namespaced by what it touched — tool.classified, provider.created.
         target: { type: string }
         detail: { type: object, additionalProperties: true }
+
+    AdminEventPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AdminEvent' }
+        nextCursor: { type: string, nullable: true }
 
     Agent:
       type: object
