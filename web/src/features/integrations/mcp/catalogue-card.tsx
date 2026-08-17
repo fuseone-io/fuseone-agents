@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import type { Listing } from "@/features/integrations/mcp/catalogue";
+import { cn } from "@/lib/utils";
 
 /**
  * One recipe on the available shelf.
@@ -11,14 +12,21 @@ import type { Listing } from "@/features/integrations/mcp/catalogue";
 export function CatalogueCard({
   entry,
   onOpen,
+  selected,
 }: {
   entry: Listing;
   onOpen: () => void;
+  selected?: boolean;
 }) {
   const { t } = useTranslation();
 
   return (
-    <article className="flex flex-col gap-2 rounded-xl border p-3 shadow-sm">
+    <article
+      className={cn(
+        "flex flex-col gap-2 rounded-xl border p-3 shadow-sm",
+        selected && "border-primary ring-1 ring-primary/30",
+      )}
+    >
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="truncate text-sm font-medium">{entry.title}</p>
@@ -33,6 +41,7 @@ export function CatalogueCard({
           variant="default"
           onClick={onOpen}
           className="self-start"
+          aria-label={t("mcp.connectNamed", { name: entry.title })}
         >
           {t("mcp.connectIt")}
         </Button>

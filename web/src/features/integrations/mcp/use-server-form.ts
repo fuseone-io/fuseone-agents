@@ -17,7 +17,10 @@ import { problemMessage } from "@/lib/api/problem-message";
  * refuses the same mistakes and the write means the same thing. Two copies of
  * "an empty token leaves the stored one" is one copy that eventually revokes.
  */
-export function useServerForm(server: MCPServer | null, onDone: () => void) {
+export function useServerForm(
+  server: MCPServer | null,
+  onDone: (name: string) => void,
+) {
   const { t } = useTranslation();
   const put = usePutMCPServer();
 
@@ -58,7 +61,7 @@ export function useServerForm(server: MCPServer | null, onDone: () => void) {
         // next restart, which is a wait with an end somebody can be told.
         description: t("integrations.toolsAppearHint"),
       });
-      onDone();
+      onDone(values.name);
     } catch (error) {
       toast.error(problemMessage(error, t));
     }
