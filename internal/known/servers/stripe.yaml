@@ -1,0 +1,72 @@
+server: stripe
+title: Stripe
+category: operations
+publisher: Stripe
+docs: https://docs.stripe.com/mcp
+docsFrom: publisher
+provenance: documentation
+transport: http
+url: https://mcp.stripe.com
+auth: >
+  OAuth where the client can do it, or a restricted Stripe API key sent as a
+  bearer token. Use restricted keys for autonomous agents and separate sandbox
+  from live mode deliberately.
+
+note: >
+  Stripe is the clearest case for the financial effect: a small-looking tool
+  can create refunds, subscriptions, invoices or payment links depending on
+  arguments and API method. Classify the generic write tool by what it can do,
+  not by the safest call it can make.
+
+suggestions:
+  - tool: stripe_api_search
+    effect: read
+    why: Searches Stripe API method metadata and changes nothing.
+
+  - tool: stripe_api_details
+    effect: read
+    why: Reads parameter details for one Stripe API method.
+
+  - tool: stripe_api_read
+    effect: read
+    untrusted: true
+    why: >
+      Reads customer, product, invoice or payment data. Much of that data is
+      entered by customers or operators and must be treated as untrusted text.
+
+  - tool: stripe_api_write
+    effect: financial
+    why: >
+      Can call POST, PATCH, PUT and DELETE methods across supported Stripe API
+      surfaces. Some calls create or alter financial obligations, so the broad
+      tool is financial.
+
+  - tool: get_stripe_account_info
+    effect: read
+    why: Retrieves account metadata and changes nothing.
+
+  - tool: create_refund
+    effect: financial
+    why: Moves money back to a customer. That is a financial action even when intended.
+
+  - tool: get_balance_summary
+    effect: read
+    why: Reads Stripe balance and Treasury account summaries.
+
+  - tool: search_stripe_documentation
+    effect: read
+    why: Searches Stripe documentation and support articles.
+
+  - tool: stripe_implementation_planner
+    effect: read
+    why: Produces implementation guidance and changes no Stripe resource.
+
+  - tool: send_stripe_mcp_feedback
+    effect: write
+    why: Sends feedback outside this installation to Stripe.
+
+  - tool: stripe_report
+    effect: write
+    why: >
+      The documented tool can search, retrieve and create reports/report runs.
+      The creation path makes it a write, even when many calls are reads.

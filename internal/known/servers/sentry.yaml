@@ -1,0 +1,23 @@
+server: sentry
+title: Sentry
+category: code
+publisher: Sentry
+docs: https://github.com/getsentry/sentry-mcp
+docsFrom: publisher
+provenance: documentation
+transport: http
+url: https://mcp.sentry.dev/mcp
+auth: >
+  OAuth with the hosted Sentry MCP server, or an explicit Sentry bearer token
+  where the client supports custom headers. Scope it to the organization and
+  project the agent should debug.
+
+# No broad suggestions yet. Sentry documents example tool names, and the remote
+# server can vary by organization/project path and available skills. Let the
+# discovered tool list drive the Curator's decision.
+note: >
+  Sentry describes this MCP service as focused on human-in-the-loop coding
+  agents and debugging workflows rather than a general-purpose Sentry surface.
+  That is a good fit for agents that read an issue, trace or stack frame and
+  propose a code change; keep write/remediation tools outside the surface until
+  they have a concrete case.

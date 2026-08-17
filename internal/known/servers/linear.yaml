@@ -1,0 +1,22 @@
+server: linear
+title: Linear
+category: operations
+publisher: Linear
+docs: https://linear.app/docs/mcp
+docsFrom: publisher
+provenance: documentation
+transport: http
+url: https://mcp.linear.app/mcp
+auth: >
+  OAuth 2.1 where the client can do it, or a bearer token / Linear API key.
+  Linear also offers a read-only endpoint at
+  https://mcp.linear.app/mcp/readonly; use that for agents that should never
+  create or update issues.
+
+# No suggestions yet: Linear documents the classes of objects the server can
+# find, create and update, but not a stable tool table on the page this entry
+# read. The handshake will provide exact names and the Curator judges those.
+note: >
+  Remote and centrally hosted by Linear. A read-write connection can create and
+  update issues, projects and comments; a read-only endpoint is available and
+  should be the default for reporting agents.

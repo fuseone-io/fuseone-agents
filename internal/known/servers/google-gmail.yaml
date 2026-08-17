@@ -1,0 +1,62 @@
+server: google-gmail
+title: Gmail
+category: communication
+publisher: Google
+docs: https://developers.google.com/workspace/gmail/api/reference/mcp
+docsFrom: publisher
+provenance: documentation
+transport: http
+url: https://gmailmcp.googleapis.com/mcp/v1
+auth: >
+  OAuth 2.0 access token for Gmail scopes. Use read-only for triage and add
+  compose only for agents whose job is to draft replies.
+
+note: >
+  Mail is untrusted by construction: the sender chose the body, the subject and
+  often the attachments. A draft is not sent mail, but it is still a visible
+  object in a mailbox and should be a write.
+
+suggestions:
+  - tool: search_threads
+    effect: read
+    untrusted: true
+    why: Searches message subjects and bodies written by external senders.
+
+  - tool: get_thread
+    effect: read
+    untrusted: true
+    why: Returns email content from other people.
+
+  - tool: get_message
+    effect: read
+    untrusted: true
+    why: Returns one email message and any instruction-shaped text in it.
+
+  - tool: list_drafts
+    effect: read
+    untrusted: true
+    why: Draft bodies are user-authored text.
+
+  - tool: list_labels
+    effect: read
+    why: Lists mailbox labels and changes nothing.
+
+  - tool: create_draft
+    effect: write
+    why: Creates a draft in the user's mailbox. It is not sent, and it is not nothing.
+
+  - tool: label_message
+    effect: write
+    why: Changes mailbox state for one message.
+
+  - tool: label_thread
+    effect: write
+    why: Changes mailbox state for a thread.
+
+  - tool: unlabel_message
+    effect: write
+    why: Removes a label from one message.
+
+  - tool: unlabel_thread
+    effect: write
+    why: Removes a label from a thread.

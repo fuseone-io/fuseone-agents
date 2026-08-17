@@ -1,0 +1,48 @@
+server: google-sheets
+title: Google Sheets
+category: data
+publisher: Google
+docs: https://developers.google.com/workspace/sheets/api/reference/mcp
+docsFrom: publisher
+provenance: documentation
+transport: http
+url: https://sheetsmcp.googleapis.com/mcp/v1
+auth: >
+  OAuth 2.0 access token for Sheets and any Drive scopes needed to find the
+  spreadsheet. Use spreadsheets.readonly for auditors and spreadsheets only for
+  agents meant to change cells.
+
+note: >
+  This is the clean spreadsheet case: no custom connector is needed if the
+  Google remote MCP fits. A sheet cell is still user-authored text, and formulas
+  can carry surprising behavior, so reads are marked untrusted.
+
+suggestions:
+  - tool: get_values
+    effect: read
+    untrusted: true
+    why: Reads cell values written by spreadsheet users.
+
+  - tool: get_spreadsheet
+    effect: read
+    untrusted: true
+    why: Reads spreadsheet structure and cell data.
+
+  - tool: update_values
+    effect: write
+    why: Updates cells. Version history may recover it, but the sheet is changed.
+
+  - tool: update_formulas
+    effect: write
+    why: Changes formulas that later readers and automations depend on.
+
+  - tool: insert_dimension
+    effect: write
+    why: Inserts rows or columns and changes the spreadsheet structure.
+
+  - tool: update_spreadsheet
+    effect: destructive
+    why: >
+      Batch spreadsheet updates can cover structural changes that remove or
+      replace content. The broad MCP name is judged by the most severe action
+      it can express.

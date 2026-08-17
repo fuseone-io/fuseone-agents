@@ -1,0 +1,56 @@
+server: google-drive
+title: Google Drive
+category: knowledge
+publisher: Google
+docs: https://developers.google.com/workspace/drive/api/reference/mcp
+docsFrom: publisher
+provenance: documentation
+transport: http
+url: https://drivemcp.googleapis.com/mcp/v1
+auth: >
+  OAuth 2.0 access token for Drive scopes. Prefer drive.file or read-only
+  scopes where they fit; a broad Drive token can read a large part of a user's
+  working life before a tool call is even classified.
+
+note: >
+  Drive is a content source first. Treat filenames, descriptions, snippets and
+  file bodies as untrusted input, and keep upload/create tools outside the
+  surface unless the agent explicitly needs to write files.
+
+suggestions:
+  - tool: search_files
+    effect: read
+    untrusted: true
+    why: Searches names, descriptions and snippets that people authored.
+
+  - tool: list_recent_files
+    effect: read
+    untrusted: true
+    why: Returns recent file metadata and snippets, both human-authored.
+
+  - tool: get_file_metadata
+    effect: read
+    untrusted: true
+    why: File names and descriptions are ordinary text written by people.
+
+  - tool: get_file_permissions
+    effect: read
+    why: Reports sharing state and changes nothing.
+
+  - tool: read_file_content
+    effect: read
+    untrusted: true
+    why: Reads file content, the exact untrusted payload the agent is being handed.
+
+  - tool: download_file_content
+    effect: read
+    untrusted: true
+    why: Downloads file content, so the result carries the file's authorship.
+
+  - tool: copy_file
+    effect: write
+    why: Creates a new file from an existing one.
+
+  - tool: create_file
+    effect: write
+    why: Creates or uploads content into Drive.

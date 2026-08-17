@@ -151,13 +151,17 @@ type Servers struct{ entries map[string]Entry }
 
 // Load reads the shipped entries.
 func Load() (*Servers, error) {
+	return load(files)
+}
+
+func load(fsys fs.FS) (*Servers, error) {
 	k := &Servers{entries: map[string]Entry{}}
 
-	err := fs.WalkDir(files, ".", func(path string, d fs.DirEntry, err error) error {
+	err := fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".yaml") {
 			return err
 		}
-		raw, err := files.ReadFile(path)
+		raw, err := fs.ReadFile(fsys, path)
 		if err != nil {
 			return fmt.Errorf("known: read %s: %w", path, err)
 		}
@@ -167,6 +171,9 @@ func Load() (*Servers, error) {
 		}
 		if err := check(path, entry); err != nil {
 			return err
+		}
+		if _, exists := k.entries[entry.Server]; exists {
+			return fmt.Errorf("known: %s duplicates server %q", path, entry.Server)
 		}
 		k.entries[entry.Server] = entry
 		return nil

@@ -1,0 +1,73 @@
+server: google-cloud-observability
+title: Google Cloud Observability
+category: operations
+publisher: Google
+docs: https://github.com/googleapis/gcloud-mcp
+docsFrom: publisher
+provenance: documentation
+transport: stdio
+command: npx
+args: ["-y", "@google-cloud/observability-mcp"]
+auth: >
+  The Google Cloud identity visible to the process, typically from gcloud
+  application default credentials or a service account configured in this
+  server's sealed environment. Scope project and IAM before connecting.
+
+note: >
+  Separate from the generic gcloud server. This one reads logs, metrics, alert
+  policies and traces; keep it as its own connection so an operational agent
+  does not inherit a general command runner by accident.
+
+suggestions:
+  - tool: list_log_entries
+    effect: read
+    untrusted: true
+    why: Reads log lines, which often contain user-controlled text.
+
+  - tool: list_log_names
+    effect: read
+    why: Lists log names and changes nothing.
+
+  - tool: list_buckets
+    effect: read
+    why: Lists log buckets.
+
+  - tool: list_views
+    effect: read
+    why: Lists log views.
+
+  - tool: list_sinks
+    effect: read
+    why: Lists log sinks.
+
+  - tool: list_log_scopes
+    effect: read
+    why: Lists log scopes.
+
+  - tool: list_metric_descriptors
+    effect: read
+    why: Lists metric descriptors.
+
+  - tool: list_time_series
+    effect: read
+    why: Reads metric time series.
+
+  - tool: list_alert_policies
+    effect: read
+    untrusted: true
+    why: Alert policy names, labels and documentation can include human-authored text.
+
+  - tool: list_traces
+    effect: read
+    untrusted: true
+    why: Trace attributes can contain user-controlled request data.
+
+  - tool: get_trace
+    effect: read
+    untrusted: true
+    why: Reads one trace and its attributes.
+
+  - tool: list_group_stats
+    effect: read
+    untrusted: true
+    why: Error group messages and service labels may include application/user text.

@@ -1,0 +1,21 @@
+server: slack
+title: Slack
+category: communication
+publisher: Slack
+docs: https://docs.slack.dev/ai/slack-mcp-server/
+docsFrom: publisher
+provenance: documentation
+transport: http
+url: https://mcp.slack.com/mcp
+auth: >
+  OAuth user token with the Slack scopes for the tools this agent needs.
+  Search, history, canvas, profile and send-message scopes are separate in
+  Slack; request the smallest group the surface actually uses.
+
+# No suggestions yet: Slack documents actions and rate limits by action class,
+# while exact tool names may be returned by discovery. The distinction matters
+# because send-message and search-message are not the same ruling.
+note: >
+  This is not the Slack channel trigger. A channel lets people start runs in
+  Slack; this MCP server lets an agent search Slack or post there after the
+  Gate has ruled on a tool call. Keep the wording separate in the UI and docs.

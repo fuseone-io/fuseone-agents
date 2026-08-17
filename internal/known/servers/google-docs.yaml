@@ -1,0 +1,30 @@
+server: google-docs
+title: Google Docs
+category: knowledge
+publisher: Google
+docs: https://developers.google.com/workspace/docs/api/reference/mcp
+docsFrom: publisher
+provenance: documentation
+transport: http
+url: https://docsmcp.googleapis.com/mcp/v1
+auth: >
+  OAuth 2.0 access token for Google Docs and the Drive scopes needed to find
+  documents. Scope it to the files this agent should reach before connecting.
+
+note: >
+  Google Docs content is high-density untrusted text. Use the surface to bring
+  in only the tools a case needs; the broad update tool can perform many
+  document mutations behind one MCP name.
+
+suggestions:
+  - tool: read_doc
+    effect: read
+    untrusted: true
+    why: Reads document text and structure that collaborators authored.
+
+  - tool: update_doc
+    effect: destructive
+    why: >
+      The documented batch update shape includes deletion, suggestion handling,
+      comments, images, tables and styles. Some calls are mild writes, but the
+      tool name covers destructive document changes and must be judged as that.

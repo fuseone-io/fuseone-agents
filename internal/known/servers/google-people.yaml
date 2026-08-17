@@ -1,0 +1,37 @@
+server: google-people
+title: Google People
+category: knowledge
+publisher: Google
+docs: https://developers.google.com/people/api/mcp/tools_list/search_directory_people
+docsFrom: publisher
+provenance: documentation
+transport: http
+url: https://people.googleapis.com/mcp/v1
+auth: >
+  OAuth 2.0 access token for directory/profile/contact scopes. Directory lookup
+  is read-only, but the output can decide who receives a later action, so scope
+  and confirmation matter.
+
+note: >
+  Google documents a special safety rule for directory search: do not feed a
+  found person directly into another tool without explicit confirmation. The
+  Gate can classify the lookup as read; the workflow still has to treat
+  identity resolution as a high-trust step.
+
+suggestions:
+  - tool: get_user_profile
+    effect: read
+    untrusted: true
+    why: Profile fields are text controlled by a user or directory admin.
+
+  - tool: search_contacts
+    effect: read
+    untrusted: true
+    why: Contact names, notes and addresses are human-authored data.
+
+  - tool: search_directory_people
+    effect: read
+    untrusted: true
+    why: >
+      Reads directory people. It changes nothing, but its output must not be
+      used as a recipient or actor without a separate confirmation.

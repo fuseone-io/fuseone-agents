@@ -1,0 +1,28 @@
+server: google-slides
+title: Google Slides
+category: knowledge
+publisher: Google
+docs: https://developers.google.com/workspace/guides/configure-mcp-servers
+docsFrom: publisher
+provenance: documentation
+transport: http
+url: https://slidesmcp.googleapis.com/mcp/v1
+auth: >
+  OAuth 2.0 access token for Slides and any Drive scopes needed to find the
+  presentation. Keep write scopes out unless the agent should edit decks.
+
+note: >
+  A slide deck is presentation content, often copied to customers or boards.
+  Reading it is untrusted context; updating it changes what people will show.
+
+suggestions:
+  - tool: read_presentation
+    effect: read
+    untrusted: true
+    why: Reads presentation text and layout authored by collaborators.
+
+  - tool: update_presentation
+    effect: destructive
+    why: >
+      The update endpoint can perform broad batch mutations to a presentation.
+      The tool name covers deletions and replacements, not only small edits.

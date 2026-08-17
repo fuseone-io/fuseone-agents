@@ -1,0 +1,41 @@
+server: aws-knowledge
+title: AWS Knowledge
+category: knowledge
+publisher: Amazon Web Services
+docs: https://github.com/awslabs/mcp/tree/main/src/aws-knowledge-mcp-server
+docsFrom: publisher
+provenance: documentation
+transport: http
+url: https://knowledge-mcp.global.api.aws
+auth: >
+  None for public AWS knowledge, unless the deployment adds a proxy in front of
+  the remote server.
+
+note: >
+  Hosted by AWS and focused on AWS documentation, API references, regional
+  availability, Well-Architected guidance and agent skills. This is knowledge,
+  not an AWS account control plane.
+
+suggestions:
+  - tool: search_documentation
+    effect: read
+    untrusted: true
+    why: Searches external documentation and guidance text.
+
+  - tool: read_documentation
+    effect: read
+    untrusted: true
+    why: Reads documentation pages as markdown.
+
+  - tool: list_regions
+    effect: read
+    why: Lists AWS regions and changes nothing.
+
+  - tool: get_regional_availability
+    effect: read
+    why: Reads availability facts for AWS services and resources.
+
+  - tool: retrieve_skill
+    effect: read
+    untrusted: true
+    why: Retrieves guidance text that will influence later agent behavior.

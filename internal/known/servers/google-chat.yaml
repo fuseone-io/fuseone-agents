@@ -1,0 +1,38 @@
+server: google-chat
+title: Google Chat
+category: communication
+publisher: Google
+docs: https://developers.google.com/workspace/guides/configure-mcp-servers
+docsFrom: publisher
+provenance: documentation
+transport: http
+url: https://chatmcp.googleapis.com/mcp/v1
+auth: >
+  OAuth 2.0 access token for Google Chat scopes. Keep read and write scopes
+  separate where possible: a token that can search spaces does not need to
+  send messages unless the agent's job is to speak.
+
+note: >
+  This is a tool server for Google Chat, not a FuseOne channel. A channel is
+  where a person can start a run; this is what an agent can choose to query or
+  write after the Gate rules on the call.
+
+suggestions:
+  - tool: search_conversations
+    effect: read
+    untrusted: true
+    why: Conversation names and descriptions are human-authored context.
+
+  - tool: list_messages
+    effect: read
+    untrusted: true
+    why: Chat messages are text other people wrote, including instructions.
+
+  - tool: search_messages
+    effect: read
+    untrusted: true
+    why: Searches message content, so the output is untrusted for the same reason.
+
+  - tool: send_message
+    effect: write
+    why: Posts into a conversation as the authenticated identity.

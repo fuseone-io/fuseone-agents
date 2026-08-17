@@ -1,0 +1,40 @@
+server: aws-prometheus
+title: AWS Managed Prometheus
+category: operations
+publisher: Amazon Web Services
+docs: https://github.com/awslabs/mcp/tree/main/src/prometheus-mcp-server
+docsFrom: publisher
+provenance: documentation
+transport: stdio
+command: uvx
+args: ["awslabs.prometheus-mcp-server@latest"]
+auth: >
+  AWS credentials for the Managed Prometheus workspace, usually with AWS_REGION
+  and either AWS_PROFILE or explicit temporary credentials. Narrow IAM and the
+  workspace URL before connecting.
+
+note: >
+  Focused Prometheus shape for AWS Managed Prometheus. It is better than a
+  generic observability abstraction because PromQL remains PromQL instead of
+  being squeezed through a lowest-common-denominator query language.
+
+suggestions:
+  - tool: GetAvailableWorkspaces
+    effect: read
+    why: Lists available Managed Prometheus workspaces.
+
+  - tool: ExecuteQuery
+    effect: read
+    why: Executes an instant PromQL query and changes nothing.
+
+  - tool: ExecuteRangeQuery
+    effect: read
+    why: Executes a range PromQL query and changes nothing.
+
+  - tool: ListMetrics
+    effect: read
+    why: Lists metric names in a workspace.
+
+  - tool: GetServerInfo
+    effect: read
+    why: Reads server configuration details.

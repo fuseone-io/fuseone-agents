@@ -1,0 +1,93 @@
+server: aws-cloudwatch
+title: Amazon CloudWatch
+category: operations
+publisher: Amazon Web Services
+docs: https://github.com/awslabs/mcp/tree/main/src/cloudwatch-mcp-server
+docsFrom: publisher
+provenance: documentation
+transport: stdio
+command: uvx
+args: ["awslabs.cloudwatch-mcp-server@latest"]
+auth: >
+  AWS credentials via AWS_PROFILE, AWS_REGION or explicit temporary credentials
+  in this server's sealed environment. Scope IAM to the CloudWatch and Logs
+  actions the agent needs before starting the process.
+
+note: >
+  Local stdio only in the AWS Labs repository. Running it here starts code in
+  the worker's container with the worker's network position; give it its own
+  AWS profile or temporary credentials, never the platform's.
+
+suggestions:
+  - tool: get_metric_data
+    effect: read
+    why: Reads CloudWatch metric datapoints.
+
+  - tool: get_metric_metadata
+    effect: read
+    why: Reads metadata about a metric.
+
+  - tool: get_recommended_metric_alarms
+    effect: read
+    why: Computes alarm recommendations and changes no AWS resource.
+
+  - tool: analyze_metric
+    effect: read
+    why: Analyzes metric data and changes no AWS resource.
+
+  - tool: execute_promql_query
+    effect: read
+    why: Runs an instant PromQL query against CloudWatch metrics.
+
+  - tool: execute_promql_range_query
+    effect: read
+    why: Runs a range PromQL query against CloudWatch metrics.
+
+  - tool: get_promql_label_values
+    effect: read
+    why: Reads label values for metric discovery.
+
+  - tool: get_promql_series
+    effect: read
+    why: Reads matching time series labels.
+
+  - tool: get_promql_labels
+    effect: read
+    why: Lists label names and changes nothing.
+
+  - tool: get_active_alarms
+    effect: read
+    why: Lists active alarms.
+
+  - tool: get_alarm_history
+    effect: read
+    untrusted: true
+    why: Alarm history can include human-authored reason strings and resource names.
+
+  - tool: describe_log_groups
+    effect: read
+    why: Lists log group metadata.
+
+  - tool: analyze_log_group
+    effect: read
+    untrusted: true
+    why: Reads and analyzes log lines, which are attacker-authored text in practice.
+
+  - tool: execute_log_insights_query
+    effect: read
+    untrusted: true
+    why: Starts a Logs Insights read query whose result is log content.
+
+  - tool: execute_cwl_insights_batch
+    effect: read
+    untrusted: true
+    why: Runs Logs Insights across log groups and returns log-derived content.
+
+  - tool: get_logs_insight_query_results
+    effect: read
+    untrusted: true
+    why: Retrieves log query results.
+
+  - tool: cancel_logs_insight_query
+    effect: write
+    why: Cancels an in-progress query. It does not change resources, but it changes running work.

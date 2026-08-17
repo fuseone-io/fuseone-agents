@@ -1,0 +1,21 @@
+server: aws-pricing
+title: AWS Pricing
+category: operations
+publisher: Amazon Web Services
+docs: https://github.com/awslabs/mcp/tree/main/src/aws-pricing-mcp-server
+docsFrom: publisher
+provenance: documentation
+transport: stdio
+command: uvx
+args: ["awslabs.aws-pricing-mcp-server@latest"]
+auth: >
+  AWS credentials with pricing permissions, usually AWS_PROFILE and AWS_REGION
+  in this server's sealed environment. The repository says pricing API calls
+  are free and generally available, but the process still receives AWS identity.
+
+# No suggestions: the README describes capabilities and one output-writing
+# tool, but the concise tool table was not present on the page read here.
+note: >
+  Useful for cost analysis and estimates, but still a local stdio process. If
+  reports are written to files, configure AWS_PRICING_MCP_OUTPUT_DIR so output
+  stays in an intended directory.

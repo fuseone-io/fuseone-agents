@@ -1,0 +1,121 @@
+server: notion
+title: Notion
+category: knowledge
+publisher: Notion
+docs: https://developers.notion.com/guides/mcp/get-started-with-mcp
+docsFrom: publisher
+provenance: documentation
+transport: http
+url: https://mcp.notion.com/mcp
+auth: >
+  OAuth with Notion's hosted remote MCP server. Notion currently requires an
+  interactive authorization flow for the hosted server; use the open-source
+  local server only when that tradeoff is explicit.
+
+note: >
+  Notion MCP can read, create and update workspace content using the
+  authenticated user's permissions. It may also search connected sources,
+  depending on the workspace plan and Notion AI access, so scope and surface
+  are not cosmetic.
+
+suggestions:
+  - tool: notion-search
+    effect: read
+    untrusted: true
+    why: Searches workspace and connected-source text authored by other people.
+
+  - tool: notion-fetch
+    effect: read
+    untrusted: true
+    why: Fetches page, database or data-source content from a workspace.
+
+  - tool: notion-create-file-upload
+    effect: write
+    why: Creates a short-lived upload target for adding a file to Notion.
+
+  - tool: notion-create-attachment
+    effect: write
+    why: Creates an attachment object that can later be added to pages or comments.
+
+  - tool: notion-download-attachment
+    effect: read
+    untrusted: true
+    why: Reads text content from an attachment.
+
+  - tool: notion-create-pages
+    effect: write
+    why: Creates pages people will read and workflows may depend on.
+
+  - tool: notion-update-page
+    effect: destructive
+    why: >
+      Updates page content and properties. The command can replace content, so
+      the broad tool is judged by the destructive mutation it can perform.
+
+  - tool: notion-convert-page-to-skill
+    effect: destructive
+    why: >
+      Marks a page as an AI skill. That changes future agent behavior, which is
+      a larger effect than an ordinary content edit.
+
+  - tool: notion-move-pages
+    effect: destructive
+    why: Rehomes pages or databases and can hide them from the people who expect them.
+
+  - tool: notion-duplicate-page
+    effect: write
+    why: Creates a copy of a page in the workspace.
+
+  - tool: notion-create-database
+    effect: write
+    why: Creates a database and initial view.
+
+  - tool: notion-create-folder
+    effect: write
+    why: Adds a folder under a page.
+
+  - tool: notion-update-data-source
+    effect: destructive
+    why: >
+      Changes a data source schema. That can break views, automations and
+      people's data entry habits, so it is more than a small write.
+
+  - tool: notion-create-view
+    effect: write
+    why: Adds a view to an existing database.
+
+  - tool: notion-update-view
+    effect: write
+    why: Changes how a database is presented without changing its records.
+
+  - tool: notion-query-data-sources
+    effect: read
+    untrusted: true
+    why: Queries workspace data sources and returns user-authored records.
+
+  - tool: notion-query-meeting-notes
+    effect: read
+    untrusted: true
+    why: Reads meeting-note content written by people.
+
+  - tool: notion-create-comment
+    effect: write
+    why: Adds a comment visible in the workspace.
+
+  - tool: notion-get-comments
+    effect: read
+    untrusted: true
+    why: Reads discussion text authored by users.
+
+  - tool: notion-get-teams
+    effect: read
+    why: Lists teams and changes nothing.
+
+  - tool: notion-get-users
+    effect: read
+    untrusted: true
+    why: User names and profile fields are text controlled outside this platform.
+
+  - tool: notion-get-async-task
+    effect: read
+    why: Polls the status of a task that another tool already started.
