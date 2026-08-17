@@ -12,6 +12,15 @@ url: https://slidesmcp.googleapis.com/mcp/v1
 auth: >
   OAuth 2.0 access token for Slides and any Drive scopes needed to find the
   presentation. Keep write scopes out unless the agent should edit decks.
+authModes:
+  - type: oauth2
+    principal: user
+    label: Google OAuth 2.0
+    scopes:
+      - https://www.googleapis.com/auth/presentations.readonly
+      - https://www.googleapis.com/auth/presentations
+      - https://www.googleapis.com/auth/drive.file
+    note: Requires an OAuth client ID and secret; write scopes should track whether update_presentation is in surface.
 
 note: >
   A slide deck is presentation content, often copied to customers or boards.

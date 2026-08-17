@@ -6,11 +6,29 @@ docs: https://github.com/atlassian/atlassian-mcp-server
 docsFrom: publisher
 provenance: documentation
 status: published
+config: [credential]
 transport: http
 url: https://mcp.atlassian.com/v1/mcp/authv2
 auth: >
   OAuth 2.1 where the client can do it, an API token otherwise. Bitbucket
   Cloud's tools are API-token only for now.
+authModes:
+  - type: oauth2
+    principal: user
+    label: Atlassian OAuth 2.1
+    note: Interactive user authorization for the hosted Atlassian MCP endpoint.
+  - type: basic
+    principal: user
+    label: Personal API token
+    header: Authorization
+    prefix: Basic
+    note: Base64 of email:api_token, for organizations that enable API-token auth.
+  - type: bearer
+    principal: service
+    label: Service account API key
+    header: Authorization
+    prefix: Bearer
+    note: Service account API key accepted by Atlassian's API-token auth path.
 
 # Identity, address and credential, read from the publisher's own repository.
 # The tool names are not here because this entry has not read them, and a

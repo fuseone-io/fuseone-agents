@@ -9,6 +9,11 @@ config: [credential]
 auth: >
   A connection string. Make read-only the role's own grant rather than a flag —
   a server that promises read-only is still a server making the promise.
+authModes:
+  - type: dsn
+    principal: service
+    label: PostgreSQL connection string
+    note: The DSN must point at a role whose grants already enforce read-only behavior.
 provenance: documentation
 note: >
   The reference server exposes one tool that runs SQL the model wrote. Read-only

@@ -17,6 +17,21 @@ auth: >
   The address above is for one Datadog site. An installation on another region
   has its own, and the documentation's site selector gives it — check it before
   connecting rather than after the first call fails.
+authModes:
+  - type: oauth2
+    principal: user
+    label: Datadog OAuth 2.0
+    note: Recommended by Datadog for ordinary interactive MCP setup.
+  - type: bearer
+    principal: service
+    label: Personal or service access token
+    header: Authorization
+    prefix: Bearer
+    note: PAT or SAT for headless/server contexts; scope it in Datadog first.
+  - type: headers
+    principal: service
+    label: API and application key headers
+    note: Datadog also documents DD_API_KEY and DD_APPLICATION_KEY headers, which this runtime does not model as a single bearer token.
 
 # No suggestions, and this is the honest state of it.
 #

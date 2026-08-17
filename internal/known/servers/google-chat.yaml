@@ -13,6 +13,17 @@ auth: >
   OAuth 2.0 access token for Google Chat scopes. Keep read and write scopes
   separate where possible: a token that can search spaces does not need to
   send messages unless the agent's job is to speak.
+authModes:
+  - type: oauth2
+    principal: user
+    label: Google OAuth 2.0
+    scopes:
+      - https://www.googleapis.com/auth/chat.spaces.readonly
+      - https://www.googleapis.com/auth/chat.memberships.readonly
+      - https://www.googleapis.com/auth/chat.messages.readonly
+      - https://www.googleapis.com/auth/chat.messages.create
+      - https://www.googleapis.com/auth/chat.users.readstate.readonly
+    note: Requires a configured Google Chat app and an OAuth client ID/secret.
 
 note: >
   This is a tool server for Google Chat, not a FuseOne channel. A channel is

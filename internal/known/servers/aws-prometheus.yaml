@@ -14,6 +14,11 @@ auth: >
   AWS credentials for the Managed Prometheus workspace, usually with AWS_REGION
   and either AWS_PROFILE or explicit temporary credentials. Narrow IAM and the
   workspace URL before connecting.
+authModes:
+  - type: env
+    principal: service
+    label: AWS environment or profile
+    note: AWS_REGION plus AWS_PROFILE or temporary credentials for the Managed Prometheus workspace.
 
 note: >
   Focused Prometheus shape for AWS Managed Prometheus. It is better than a

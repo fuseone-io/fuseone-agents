@@ -13,6 +13,14 @@ auth: >
   OAuth 2.0 access token for Drive scopes. Prefer drive.file or read-only
   scopes where they fit; a broad Drive token can read a large part of a user's
   working life before a tool call is even classified.
+authModes:
+  - type: oauth2
+    principal: user
+    label: Google OAuth 2.0
+    scopes:
+      - https://www.googleapis.com/auth/drive.readonly
+      - https://www.googleapis.com/auth/drive.file
+    note: Requires an OAuth client ID and secret; prefer file-scoped grants over broad Drive access.
 
 note: >
   Drive is a content source first. Treat filenames, descriptions, snippets and

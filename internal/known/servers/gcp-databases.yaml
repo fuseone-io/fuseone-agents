@@ -11,6 +11,11 @@ auth: >
   A database connection, configured in the toolbox rather than chosen by the
   model. Read-only belongs in the grant the connection uses — a server that
   promises read-only is still a server making the promise.
+authModes:
+  - type: config_file
+    principal: service
+    label: MCP Toolbox config file
+    note: The sealed file names database sources and credentials; grants must enforce read-only where required.
 note: >
   BigQuery, Cloud SQL, AlloyDB, Spanner and Firestore behind one server. It
   runs queries somebody's model wrote, so what it can reach is the connection's

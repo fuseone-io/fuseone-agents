@@ -104,6 +104,7 @@ func (s *Server) ListRecipes(ctx context.Context, _ openapi.ListRecipesRequestOb
 	for _, e := range entries {
 		recipe := openapi.ServerRecipe{
 			Server: e.Server, Title: e.Title, Publisher: e.Publisher,
+			AuthModes:          authModes(e.AuthModes),
 			Category:           e.Category,
 			ConfigRequirements: configRequirements(e.Config),
 			DocsFrom:           openapi.ServerRecipeDocsFrom(e.DocsFrom),
@@ -111,13 +112,20 @@ func (s *Server) ListRecipes(ctx context.Context, _ openapi.ListRecipesRequestOb
 			Status:             openapi.ServerRecipeStatus(e.Status),
 			Suggestions:        ptr(len(e.Suggestions)),
 		}
-		for value, into := range map[string]**string{
-			e.Docs: &recipe.Docs, e.Auth: &recipe.Auth,
-			e.Note: &recipe.Note, e.Command: &recipe.Command, e.URL: &recipe.Url,
-		} {
-			if value != "" {
-				*into = ptr(value)
-			}
+		if e.Docs != "" {
+			recipe.Docs = ptr(e.Docs)
+		}
+		if e.Auth != "" {
+			recipe.Auth = ptr(e.Auth)
+		}
+		if e.Note != "" {
+			recipe.Note = ptr(e.Note)
+		}
+		if e.Command != "" {
+			recipe.Command = ptr(e.Command)
+		}
+		if e.URL != "" {
+			recipe.Url = ptr(e.URL)
 		}
 		if e.Transport != "" {
 			recipe.Transport = ptr(openapi.Transport(e.Transport))
@@ -131,6 +139,36 @@ func (s *Server) ListRecipes(ctx context.Context, _ openapi.ListRecipesRequestOb
 		return strings.Compare(a.Title, b.Title)
 	})
 	return openapi.ListRecipes200JSONResponse{Items: items}, nil
+}
+
+func authModes(in []known.AuthMode) *[]openapi.ServerRecipeAuthMode {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]openapi.ServerRecipeAuthMode, 0, len(in))
+	for _, one := range in {
+		mode := openapi.ServerRecipeAuthMode{
+			Type:      openapi.ServerRecipeAuthModeType(one.Type),
+			Principal: openapi.ServerRecipeAuthModePrincipal(one.Principal),
+		}
+		if one.Header != "" {
+			mode.Header = ptr(one.Header)
+		}
+		if one.Label != "" {
+			mode.Label = ptr(one.Label)
+		}
+		if one.Note != "" {
+			mode.Note = ptr(one.Note)
+		}
+		if one.Prefix != "" {
+			mode.Prefix = ptr(one.Prefix)
+		}
+		if len(one.Scopes) > 0 {
+			mode.Scopes = ptr(one.Scopes)
+		}
+		out = append(out, mode)
+	}
+	return &out
 }
 
 func configRequirements(in []known.ConfigRequirement) []openapi.ServerRecipeConfigRequirements {

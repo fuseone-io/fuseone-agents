@@ -38,6 +38,7 @@ export type Listing = {
   tools: number | null;
   status: ServerRecipe["status"] | null;
   configRequirements: ServerRecipe["configRequirements"];
+  authModes: NonNullable<ServerRecipe["authModes"]>;
   auth: string | null;
   transport: MCPServer["transport"] | ServerRecipe["transport"] | null;
   command: string | null;
@@ -65,6 +66,7 @@ export function listing(servers: MCPServer[], recipes: ServerRecipe[]): Listing[
       tools: null,
       status: recipe.status,
       configRequirements: recipe.configRequirements,
+      authModes: recipe.authModes ?? [],
       auth: recipe.auth ?? null,
       transport: recipe.transport ?? null,
       command: recipe.command ?? null,
@@ -90,6 +92,7 @@ export function listing(servers: MCPServer[], recipes: ServerRecipe[]): Listing[
       tools: server.health?.toolCount ?? null,
       status: known?.status ?? null,
       configRequirements: known?.configRequirements ?? [],
+      authModes: known?.authModes ?? [],
       auth: known?.auth ?? null,
       transport: server.transport ?? known?.transport ?? null,
       command: server.command ?? known?.command ?? null,

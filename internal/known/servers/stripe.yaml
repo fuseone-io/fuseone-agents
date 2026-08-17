@@ -13,6 +13,17 @@ auth: >
   OAuth where the client can do it, or a restricted Stripe API key sent as a
   bearer token. Use restricted keys for autonomous agents and separate sandbox
   from live mode deliberately.
+authModes:
+  - type: oauth2
+    principal: user
+    label: Stripe OAuth
+    note: Preferred interactive MCP setup; grants can be managed in Stripe.
+  - type: bearer
+    principal: service
+    label: Restricted Stripe API key
+    header: Authorization
+    prefix: Bearer
+    note: Use restricted keys for autonomous agents and keep sandbox/live keys separate.
 
 note: >
   Stripe is the clearest case for the financial effect: a small-looking tool

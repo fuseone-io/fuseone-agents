@@ -44,6 +44,40 @@ func TestLoad_anEntryWithoutStatus_isRefused(t *testing.T) {
 	}
 }
 
+/*
+A credential is not a shape.
+
+OAuth, bearer tokens, Basic auth, DSNs and generated config files fail in
+different places and carry different authority. The catalogue must not reduce
+all of them to a single "paste token" hint by omitting the structured auth
+facts.
+*/
+func TestLoad_anEntryWithCredentialAndNoAuthMode_isRefused(t *testing.T) {
+	t.Parallel()
+
+	_, err := load(fstest.MapFS{
+		"servers/crm.yaml": {Data: []byte(minimal("crm", "CRM") + "config: [credential]\n")},
+	})
+	if err == nil || !strings.Contains(err.Error(), "does not say what kind") {
+		t.Fatalf("load = %v, want missing auth mode refusal", err)
+	}
+}
+
+func TestLoad_anEntryWithCredentialAndOnlyNonCredentialAuthModes_isRefused(t *testing.T) {
+	t.Parallel()
+
+	_, err := load(fstest.MapFS{
+		"servers/crm.yaml": {Data: []byte(minimal("crm", "CRM") + `config: [credential]
+authModes:
+  - type: none
+    principal: none
+`)},
+	})
+	if err == nil || !strings.Contains(err.Error(), "only names non-credential") {
+		t.Fatalf("load = %v, want contradictory auth mode refusal", err)
+	}
+}
+
 func minimal(server, title string) string {
 	return "server: " + server + `
 title: ` + title + `

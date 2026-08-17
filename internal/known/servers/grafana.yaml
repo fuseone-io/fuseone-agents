@@ -15,6 +15,11 @@ auth: >
   GRAFANA_URL and GRAFANA_SERVICE_ACCOUNT_TOKEN. Scope the service account to
   what the agent should reach: a classification bounds what a tool may do and
   cannot bound which dashboards, datasources or alert rules it sees.
+authModes:
+  - type: env
+    principal: service
+    label: Grafana URL and service account token
+    note: GRAFANA_URL and GRAFANA_SERVICE_ACCOUNT_TOKEN in this server's sealed environment.
 
 note: >
   One server for several systems. It reaches Prometheus and Loki through

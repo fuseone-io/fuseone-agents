@@ -13,6 +13,16 @@ auth: >
   OAuth 2.0 access token for the Google Calendar scopes this agent needs.
   Prefer the narrow event/calendar scopes and a dedicated OAuth client; the
   token reaches the user's calendars before the Gate sees any individual tool.
+authModes:
+  - type: oauth2
+    principal: user
+    label: Google OAuth 2.0
+    scopes:
+      - https://www.googleapis.com/auth/calendar.calendarlist.readonly
+      - https://www.googleapis.com/auth/calendar.events.freebusy
+      - https://www.googleapis.com/auth/calendar.events.readonly
+      - https://www.googleapis.com/auth/calendar.events
+    note: Requires an OAuth client ID and secret; scopes decide which calendars and event operations the user can grant.
 
 note: >
   Google Workspace MCP servers are in Developer Preview and are split per

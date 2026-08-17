@@ -11,6 +11,10 @@ command: npx
 args: ["-y", "@modelcontextprotocol/server-memory"]
 auth: >
   None. It keeps a file, and what that file holds is whatever a run put there.
+authModes:
+  - type: none
+    principal: none
+    label: No credential
 
 # No suggestions, on purpose.
 #

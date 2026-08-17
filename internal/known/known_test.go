@@ -66,6 +66,9 @@ func TestEntries_everySuggestionIsRealAndExplained(t *testing.T) {
 		if entry.Status == "" {
 			t.Errorf("%s does not say whether it is published, reference or archived", entry.Server)
 		}
+		if containsCredential(entry.Config) && len(entry.AuthModes) == 0 {
+			t.Errorf("%s asks for a credential without naming the authentication shape", entry.Server)
+		}
 		if entry.Docs == "" {
 			t.Errorf("%s points nowhere an operator can read", entry.Server)
 		}
@@ -78,6 +81,15 @@ func TestEntries_everySuggestionIsRealAndExplained(t *testing.T) {
 			}
 		}
 	}
+}
+
+func containsCredential(config []known.ConfigRequirement) bool {
+	for _, one := range config {
+		if one == known.ConfigCredential {
+			return true
+		}
+	}
+	return false
 }
 
 func load(t *testing.T) *known.Servers {

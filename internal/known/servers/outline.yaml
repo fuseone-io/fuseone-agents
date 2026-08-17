@@ -13,6 +13,17 @@ auth: >
   OAuth by default, or an Outline API key sent as a bearer token. Scope the key
   to the workspace and permissions the agent should actually use; the MCP
   server can search, read, create and edit documents inside that workspace.
+authModes:
+  - type: oauth2
+    principal: user
+    label: Outline OAuth
+    note: Preferred when the client can complete the hosted workspace OAuth flow.
+  - type: bearer
+    principal: user
+    label: Outline API key
+    header: Authorization
+    prefix: Bearer
+    note: API key scoped to the workspace and permissions the agent should use.
 
 note: >
   Outline ships a built-in Streamable HTTP MCP endpoint. The public guide names

@@ -25,6 +25,7 @@ import type { ServerRecipe } from "@/features/integrations/mcp/api";
 import { CatalogueCard } from "@/features/integrations/mcp/catalogue-card";
 import { CatalogueIcon } from "@/features/integrations/mcp/catalogue-icons";
 import {
+  AuthModeBadges,
   ConfigRequirementBadges,
   RecipeStatusBadge,
 } from "@/features/integrations/mcp/recipe-badges";
@@ -321,6 +322,9 @@ function ConnectedServerPanel({
               {t(state.label)}
             </span>
           </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <AuthModeBadges modes={entry.authModes} />
+          </div>
         </div>
 
         <div className="space-y-2">
@@ -459,6 +463,7 @@ function ConnectServerPanel({
             tools: null,
             status: null,
             configRequirements: [],
+            authModes: [],
             auth: null,
             transport: null,
             command: null,
@@ -479,6 +484,7 @@ function ConnectServerPanel({
             <div className="flex flex-wrap items-center gap-2 text-2xs text-muted-foreground">
               <RecipeStatusBadge status={recipe.status} />
               <ConfigRequirementBadges requirements={recipe.configRequirements} />
+              <AuthModeBadges modes={recipe.authModes ?? []} />
               <span className="rounded-md bg-muted px-2 py-1">
                 {t(`mcp.docsFrom.${recipe.docsFrom}`)}
               </span>

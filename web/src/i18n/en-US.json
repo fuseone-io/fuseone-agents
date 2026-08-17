@@ -1470,6 +1470,17 @@
       "file": "file",
       "path": "path"
     },
+    "authMode": {
+      "none": "no auth",
+      "oauth2": "OAuth",
+      "bearer": "bearer token",
+      "basic": "Basic auth",
+      "headers": "custom headers",
+      "env": "env auth",
+      "config_file": "config file",
+      "path": "path access",
+      "dsn": "DSN"
+    },
     "archivedRecipeWarning": "This recipe's source marks this server as archived or not current. Treat it as a reference, not the recommended path.",
     "configFileWarning": "This recipe expects a configuration file. Paste the content into the dedicated field; the worker creates a temporary file and passes its path through the configured variable.",
     "variables": "Variables",

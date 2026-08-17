@@ -10,6 +10,10 @@ transport: stdio
 command: uvx
 args: ["mcp-server-time"]
 auth: None.
+authModes:
+  - type: none
+    principal: none
+    label: No credential
 
 note: >
   Worth having for a reason that is not obvious: a model asked what day it is

@@ -5,9 +5,22 @@ publisher: GitHub
 docs: https://github.com/github/github-mcp-server
 docsFrom: publisher
 config: [credential]
+transport: http
+url: https://api.githubcopilot.com/mcp/
 auth: >
   A GitHub token, scoped to the repositories the agent should reach. A
   classification bounds what a tool may do and cannot bound where.
+authModes:
+  - type: oauth2
+    principal: user
+    label: GitHub OAuth
+    note: Supported by clients that can complete GitHub's remote MCP OAuth flow.
+  - type: bearer
+    principal: user
+    label: GitHub personal access token
+    header: Authorization
+    prefix: Bearer
+    note: PAT for the repositories and toolsets the agent should reach.
 provenance: documentation
 status: published
 note: >

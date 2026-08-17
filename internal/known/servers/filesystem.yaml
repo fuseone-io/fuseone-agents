@@ -12,6 +12,11 @@ args: ["-y", "@modelcontextprotocol/server-filesystem", "/srv/agent-workspace"]
 auth: >
   None. The credential is the argument list: the directories it is started with
   are everything it can reach, and no ruling narrows that afterwards.
+authModes:
+  - type: path
+    principal: installation
+    label: Allowed filesystem roots
+    note: The root paths in args are the capability; no external token narrows them later.
 provenance: documentation
 note: >
   It reaches whatever directories it is started with, and nothing about a

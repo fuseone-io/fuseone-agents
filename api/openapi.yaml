@@ -3787,6 +3787,18 @@ components:
             path is a filesystem/repository root the worker must be able to
             see. A path typed into args is not the same thing as a file the
             platform owns.
+        authModes:
+          type: array
+          items: { $ref: '#/components/schemas/ServerRecipeAuthMode' }
+          description: |
+            Structured authentication facts for this recipe.
+
+            This is not a support promise from the runtime. It is what the
+            publisher or referenced docs say the server expects: OAuth, bearer
+            token, Basic auth, custom headers, DSN, sealed environment
+            variables, generated config file, path access, or no auth at all.
+            Keeping this separate from the prose prevents every provider from
+            collapsing into "paste a token here".
         transport: { $ref: '#/components/schemas/Transport' }
         command: { type: string }
         args:
@@ -3808,6 +3820,35 @@ components:
             with none is still worth having — identity, a link and a warning
             about the credential — and effects invented for unverified names
             would not be.
+
+    ServerRecipeAuthMode:
+      type: object
+      required: [type, principal]
+      properties:
+        type:
+          type: string
+          enum: [none, oauth2, bearer, basic, headers, env, config_file, path, dsn]
+          description: How the credential is presented to the MCP server.
+        principal:
+          type: string
+          enum: [none, user, installation, service]
+          description: Whose authority this credential carries.
+        label:
+          type: string
+          description: Short human label for the credential shape.
+        header:
+          type: string
+          description: HTTP header used by header-based auth modes.
+        prefix:
+          type: string
+          description: Header prefix, such as Bearer or Basic.
+        scopes:
+          type: array
+          items: { type: string }
+          description: OAuth scopes or provider permissions named by the recipe.
+        note:
+          type: string
+          description: Provider-specific caveat about this auth mode.
 
     IntegrationHealth:
       type: object

@@ -14,6 +14,11 @@ auth: >
   Environment variables for the Redash instance and API key: REDASH_URL and
   REDASH_API_KEY. Optional REDASH_TIMEOUT, REDASH_MAX_RESULTS and
   REDASH_EXTRA_HEADERS tune request behavior.
+authModes:
+  - type: env
+    principal: service
+    label: Redash URL and API key
+    note: REDASH_URL and REDASH_API_KEY in this server's sealed environment.
 
 note: >
   This is a community Redash MCP recipe, not a Redash-published integration.

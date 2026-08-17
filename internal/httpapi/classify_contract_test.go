@@ -185,6 +185,9 @@ func TestListRecipes_carryWhoPublishesAndWhoseDocumentationWasRead(t *testing.T)
 		if recipe.ConfigRequirements == nil {
 			t.Errorf("%s ships with nil configuration requirements", recipe.Server)
 		}
+		if slices.Contains(recipe.ConfigRequirements, openapi.ServerRecipeConfigRequirementsCredential) && (recipe.AuthModes == nil || len(*recipe.AuthModes) == 0) {
+			t.Errorf("%s asks for a credential without telling the console what kind", recipe.Server)
+		}
 	}
 }
 

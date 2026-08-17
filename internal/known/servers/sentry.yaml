@@ -13,6 +13,17 @@ auth: >
   OAuth with the hosted Sentry MCP server, or an explicit Sentry bearer token
   where the client supports custom headers. Scope it to the organization and
   project the agent should debug.
+authModes:
+  - type: oauth2
+    principal: user
+    label: Sentry MCP OAuth
+    note: Hosted MCP issues a downstream MCP token while storing upstream Sentry OAuth credentials server-side.
+  - type: bearer
+    principal: user
+    label: Sentry bearer token
+    header: Authorization
+    prefix: Bearer
+    note: Explicit token for clients or constrained paths that support custom headers.
 
 # No broad suggestions yet. Sentry documents example tool names, and the remote
 # server can vary by organization/project path and available skills. Let the

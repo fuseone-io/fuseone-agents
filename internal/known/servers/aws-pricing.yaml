@@ -14,6 +14,11 @@ auth: >
   AWS credentials with pricing permissions, usually AWS_PROFILE and AWS_REGION
   in this server's sealed environment. The repository says pricing API calls
   are free and generally available, but the process still receives AWS identity.
+authModes:
+  - type: env
+    principal: service
+    label: AWS environment or profile
+    note: AWS_PROFILE/AWS_REGION or temporary credentials in this server's sealed environment.
 
 # No suggestions: the README describes capabilities and one output-writing
 # tool, but the concise tool table was not present on the page read here.

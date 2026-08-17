@@ -14,6 +14,11 @@ auth: >
   The Google Cloud identity visible to the process, typically from gcloud
   application default credentials or a service account configured in this
   server's sealed environment. Scope project and IAM before connecting.
+authModes:
+  - type: env
+    principal: service
+    label: Google ADC or service account environment
+    note: Application Default Credentials or service account material supplied to this stdio process only.
 
 note: >
   Separate from the generic gcloud server. This one reads logs, metrics, alert

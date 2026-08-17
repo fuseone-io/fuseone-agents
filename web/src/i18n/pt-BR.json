@@ -1470,6 +1470,17 @@
       "file": "arquivo",
       "path": "caminho"
     },
+    "authMode": {
+      "none": "sem auth",
+      "oauth2": "OAuth",
+      "bearer": "token bearer",
+      "basic": "Basic auth",
+      "headers": "headers customizados",
+      "env": "auth por env",
+      "config_file": "arquivo de config",
+      "path": "acesso por caminho",
+      "dsn": "DSN"
+    },
     "archivedRecipeWarning": "A fonte desta receita marcou este servidor como arquivado ou não atual. Use como referência, não como caminho recomendado.",
     "configFileWarning": "Esta receita espera um arquivo de configuração. Cole o conteúdo no campo próprio; o worker cria um arquivo temporário e passa o caminho pela variável configurada.",
     "variables": "Variáveis",

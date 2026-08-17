@@ -14,6 +14,17 @@ auth: >
   Linear also offers a read-only endpoint at
   https://mcp.linear.app/mcp/readonly; use that for agents that should never
   create or update issues.
+authModes:
+  - type: oauth2
+    principal: user
+    label: Linear OAuth 2.1
+    note: Primary authenticated remote MCP flow, with read scope available for read-only access.
+  - type: bearer
+    principal: user
+    label: Linear API key or OAuth token
+    header: Authorization
+    prefix: Bearer
+    note: Direct bearer header supported for headless clients and existing OAuth applications.
 
 # No suggestions yet: Linear documents the classes of objects the server can
 # find, create and update, but not a stable tool table on the page this entry

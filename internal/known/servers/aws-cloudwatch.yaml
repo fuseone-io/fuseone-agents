@@ -14,6 +14,11 @@ auth: >
   AWS credentials via AWS_PROFILE, AWS_REGION or explicit temporary credentials
   in this server's sealed environment. Scope IAM to the CloudWatch and Logs
   actions the agent needs before starting the process.
+authModes:
+  - type: env
+    principal: service
+    label: AWS environment or profile
+    note: Give the stdio process AWS_PROFILE/AWS_REGION or temporary credentials scoped to CloudWatch and Logs.
 
 note: >
   Local stdio only in the AWS Labs repository. Running it here starts code in

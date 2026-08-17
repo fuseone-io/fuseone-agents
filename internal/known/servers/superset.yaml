@@ -13,6 +13,17 @@ auth: >
   A Superset-authenticated MCP endpoint. Local development can run the built-in
   server with Superset's CLI; production should use Superset's JWT bearer
   authentication and the same RBAC boundaries the web UI uses.
+authModes:
+  - type: bearer
+    principal: user
+    label: Superset JWT bearer
+    header: Authorization
+    prefix: Bearer
+    note: Production MCP validates JWT claims and maps the subject to a Superset user.
+  - type: none
+    principal: none
+    label: Development mode
+    note: Only when Superset disables MCP auth and pins a development username; never for internet-facing deployment.
 
 note: >
   Superset's MCP server is built into Superset 5.0 and later. It exposes BI

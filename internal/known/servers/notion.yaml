@@ -13,6 +13,11 @@ auth: >
   OAuth with Notion's hosted remote MCP server. Notion currently requires an
   interactive authorization flow for the hosted server; use the open-source
   local server only when that tradeoff is explicit.
+authModes:
+  - type: oauth2
+    principal: user
+    label: Notion OAuth 2.0 with PKCE
+    note: Hosted Notion MCP uses OAuth discovery and token refresh; not a static bearer-token setup.
 
 note: >
   Notion MCP can read, create and update workspace content using the

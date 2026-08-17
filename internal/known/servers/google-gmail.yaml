@@ -12,6 +12,14 @@ url: https://gmailmcp.googleapis.com/mcp/v1
 auth: >
   OAuth 2.0 access token for Gmail scopes. Use read-only for triage and add
   compose only for agents whose job is to draft replies.
+authModes:
+  - type: oauth2
+    principal: user
+    label: Google OAuth 2.0
+    scopes:
+      - https://www.googleapis.com/auth/gmail.readonly
+      - https://www.googleapis.com/auth/gmail.compose
+    note: Requires an OAuth client ID and secret; add compose only when the surface includes draft creation.
 
 note: >
   Mail is untrusted by construction: the sender chose the body, the subject and

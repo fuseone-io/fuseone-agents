@@ -65,6 +65,42 @@ const (
 	ConfigPath       ConfigRequirement = "path"
 )
 
+// AuthType says how a credential is presented to the server.
+type AuthType string
+
+const (
+	AuthNone       AuthType = "none"
+	AuthOAuth2     AuthType = "oauth2"
+	AuthBearer     AuthType = "bearer"
+	AuthBasic      AuthType = "basic"
+	AuthHeaders    AuthType = "headers"
+	AuthEnv        AuthType = "env"
+	AuthConfigFile AuthType = "config_file"
+	AuthPath       AuthType = "path"
+	AuthDSN        AuthType = "dsn"
+)
+
+// AuthPrincipal says whose authority the credential carries.
+type AuthPrincipal string
+
+const (
+	AuthPrincipalNone         AuthPrincipal = "none"
+	AuthPrincipalUser         AuthPrincipal = "user"
+	AuthPrincipalInstallation AuthPrincipal = "installation"
+	AuthPrincipalService      AuthPrincipal = "service"
+)
+
+// AuthMode is one authentication shape documented for a recipe.
+type AuthMode struct {
+	Type      AuthType      `yaml:"type"`
+	Principal AuthPrincipal `yaml:"principal"`
+	Label     string        `yaml:"label,omitempty"`
+	Header    string        `yaml:"header,omitempty"`
+	Prefix    string        `yaml:"prefix,omitempty"`
+	Scopes    []string      `yaml:"scopes,omitempty"`
+	Note      string        `yaml:"note,omitempty"`
+}
+
 // Suggestion is what the platform believes one tool does.
 type Suggestion struct {
 	Tool string `yaml:"tool"`
@@ -166,6 +202,16 @@ type Entry struct {
 	// to fetch one. Not a field name and not a schema: what to get, and what
 	// it will be able to reach.
 	Auth string `yaml:"auth,omitempty"`
+	/*
+		AuthModes are the structured facts behind Auth.
+
+		The connection runtime does not implement every one of these today. That
+		is exactly why the field exists: a recipe that needs OAuth, Basic auth,
+		a DSN or a generated config file must not be flattened into "paste a
+		token here" merely because the first runtime path happens to know bearer
+		tokens.
+	*/
+	AuthModes []AuthMode `yaml:"authModes,omitempty"`
 	// Note is what an operator has to know before running it at all — usually
 	// the credential it wants and what that credential can reach.
 	Note        string       `yaml:"note,omitempty"`
@@ -254,7 +300,43 @@ func check(path string, entry Entry) error {
 			return fmt.Errorf("known: %s asks for unknown configuration %q", path, one)
 		}
 	}
+	if err := checkAuthModes(path, entry); err != nil {
+		return err
+	}
 	return nil
+}
+
+func checkAuthModes(path string, entry Entry) error {
+	for _, one := range entry.AuthModes {
+		switch one.Type {
+		case AuthNone, AuthOAuth2, AuthBearer, AuthBasic, AuthHeaders, AuthEnv, AuthConfigFile, AuthPath, AuthDSN:
+		default:
+			return fmt.Errorf("known: %s names unknown auth type %q", path, one.Type)
+		}
+		switch one.Principal {
+		case AuthPrincipalNone, AuthPrincipalUser, AuthPrincipalInstallation, AuthPrincipalService:
+		default:
+			return fmt.Errorf("known: %s names unknown auth principal %q", path, one.Principal)
+		}
+		if one.Type == AuthNone && one.Principal != AuthPrincipalNone {
+			return fmt.Errorf("known: %s says auth is none but gives principal %q", path, one.Principal)
+		}
+	}
+
+	hasCredential := slices.Contains(entry.Config, ConfigCredential)
+	if !hasCredential {
+		return nil
+	}
+	if len(entry.AuthModes) == 0 {
+		return fmt.Errorf("known: %s asks for a credential but does not say what kind", path)
+	}
+	for _, one := range entry.AuthModes {
+		switch one.Type {
+		case AuthOAuth2, AuthBearer, AuthBasic, AuthHeaders, AuthConfigFile, AuthDSN:
+			return nil
+		}
+	}
+	return fmt.Errorf("known: %s asks for a credential but only names non-credential auth modes", path)
 }
 
 /*

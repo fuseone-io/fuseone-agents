@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import type { Listing } from "@/features/integrations/mcp/catalogue";
 import { CatalogueIcon } from "@/features/integrations/mcp/catalogue-icons";
 import {
+  AuthModeBadges,
   ConfigRequirementBadges,
   RecipeStatusBadge,
 } from "@/features/integrations/mcp/recipe-badges";
@@ -67,6 +68,7 @@ export function CatalogueCard({
         </span>
         {entry.status && <RecipeStatusBadge status={entry.status} />}
         <ConfigRequirementBadges requirements={entry.configRequirements} />
+        <AuthModeBadges modes={entry.authModes} />
       </div>
 
       <div className="mt-auto flex items-center gap-2 border-t border-border-subtle pt-2">

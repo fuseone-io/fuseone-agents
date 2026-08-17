@@ -12,6 +12,11 @@ auth: >
   about: it inherits an identity somebody already authenticated, so what it can
   reach is whatever that identity can — scope the service account before, not
   after.
+authModes:
+  - type: env
+    principal: service
+    label: gcloud or ADC environment
+    note: Application Default Credentials, gcloud auth state or service account environment selected before the process starts.
 note: >
   Google publishes more than one. This is the gcloud one; `googleapis/mcp-toolbox`
   is the database side (BigQuery, Cloud SQL, AlloyDB, Spanner, Firestore) and

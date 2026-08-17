@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { LoadMore } from "@/components/shared/load-more";
 import type { ServerRecipe } from "@/features/integrations/mcp/api";
 import {
+  AuthModeBadges,
   ConfigRequirementBadges,
   RecipeStatusBadge,
 } from "@/features/integrations/mcp/recipe-badges";
@@ -75,6 +76,7 @@ function RecipeCard({
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         <RecipeStatusBadge status={recipe.status} />
         <ConfigRequirementBadges requirements={recipe.configRequirements} />
+        <AuthModeBadges modes={recipe.authModes ?? []} />
         <Badge
           variant="outline"
           className="rounded-pill border-transparent bg-muted text-2xs font-normal text-muted-foreground"

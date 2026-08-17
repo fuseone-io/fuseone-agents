@@ -11,6 +11,10 @@ url: https://knowledge-mcp.global.api.aws
 auth: >
   None for public AWS knowledge, unless the deployment adds a proxy in front of
   the remote server.
+authModes:
+  - type: none
+    principal: none
+    label: Public endpoint
 
 note: >
   Hosted by AWS and focused on AWS documentation, API references, regional

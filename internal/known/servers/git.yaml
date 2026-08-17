@@ -14,6 +14,11 @@ auth: >
   None of its own. It acts on a checkout on disk, so what it reaches is
   whichever repository it was started with, and whatever credentials that
   checkout already carries.
+authModes:
+  - type: path
+    principal: installation
+    label: Repository path
+    note: The checkout path and any credentials already present in that checkout are the reach.
 
 note: >
   A working copy, not a forge. Nothing here reaches a remote, which is why the

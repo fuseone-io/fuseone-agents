@@ -2444,6 +2444,17 @@ export interface components {
              *     platform owns.
              */
             configRequirements: ("credential" | "env" | "file" | "path")[];
+            /**
+             * @description Structured authentication facts for this recipe.
+             *
+             *     This is not a support promise from the runtime. It is what the
+             *     publisher or referenced docs say the server expects: OAuth, bearer
+             *     token, Basic auth, custom headers, DSN, sealed environment
+             *     variables, generated config file, path access, or no auth at all.
+             *     Keeping this separate from the prose prevents every provider from
+             *     collapsing into "paste a token here".
+             */
+            authModes?: components["schemas"]["ServerRecipeAuthMode"][];
             transport?: components["schemas"]["Transport"];
             command?: string;
             args?: string[];
@@ -2454,6 +2465,28 @@ export interface components {
             note?: string;
             /** @description How many of its tools this platform has an opinion about. A recipe with none is still worth having — identity, a link and a warning about the credential — and effects invented for unverified names would not be. */
             suggestions?: number;
+        };
+        ServerRecipeAuthMode: {
+            /**
+             * @description How the credential is presented to the MCP server.
+             * @enum {string}
+             */
+            type: "none" | "oauth2" | "bearer" | "basic" | "headers" | "env" | "config_file" | "path" | "dsn";
+            /**
+             * @description Whose authority this credential carries.
+             * @enum {string}
+             */
+            principal: "none" | "user" | "installation" | "service";
+            /** @description Short human label for the credential shape. */
+            label?: string;
+            /** @description HTTP header used by header-based auth modes. */
+            header?: string;
+            /** @description Header prefix, such as Bearer or Basic. */
+            prefix?: string;
+            /** @description OAuth scopes or provider permissions named by the recipe. */
+            scopes?: string[];
+            /** @description Provider-specific caveat about this auth mode. */
+            note?: string;
         };
         IntegrationHealth: {
             reachable: boolean;

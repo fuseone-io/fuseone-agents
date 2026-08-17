@@ -15,6 +15,7 @@ const stripe: ServerRecipe = {
   provenance: "documentation",
   status: "published",
   configRequirements: ["credential"],
+  authModes: [{ type: "oauth2", principal: "user", label: "Stripe OAuth" }],
   transport: "http",
   url: "https://mcp.stripe.com",
   docs: "https://docs.stripe.com/",
@@ -30,6 +31,7 @@ const postgres: ServerRecipe = {
   provenance: "documentation",
   status: "archived",
   configRequirements: ["credential"],
+  authModes: [{ type: "dsn", principal: "service", label: "PostgreSQL DSN" }],
   note: "Read-only database access.",
 };
 
@@ -73,6 +75,7 @@ describe("available MCP servers", () => {
     );
 
     expect(screen.getByRole("heading", { name: "Stripe" })).toBeInTheDocument();
+    expect(screen.getAllByText("Stripe OAuth").length).toBeGreaterThan(0);
     expect(screen.getByDisplayValue("stripe")).toBeInTheDocument();
     expect(screen.getByDisplayValue("https://mcp.stripe.com")).toBeInTheDocument();
   });

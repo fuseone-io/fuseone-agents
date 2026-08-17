@@ -13,6 +13,15 @@ auth: >
   OAuth 2.0 access token for Sheets and any Drive scopes needed to find the
   spreadsheet. Use spreadsheets.readonly for auditors and spreadsheets only for
   agents meant to change cells.
+authModes:
+  - type: oauth2
+    principal: user
+    label: Google OAuth 2.0
+    scopes:
+      - https://www.googleapis.com/auth/spreadsheets.readonly
+      - https://www.googleapis.com/auth/spreadsheets
+      - https://www.googleapis.com/auth/drive.file
+    note: Requires an OAuth client ID and secret; Sheets write scopes should only be granted when update tools enter the surface.
 
 note: >
   This is the clean spreadsheet case: no custom connector is needed if the

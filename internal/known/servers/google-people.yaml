@@ -13,6 +13,15 @@ auth: >
   OAuth 2.0 access token for directory/profile/contact scopes. Directory lookup
   is read-only, but the output can decide who receives a later action, so scope
   and confirmation matter.
+authModes:
+  - type: oauth2
+    principal: user
+    label: Google OAuth 2.0
+    scopes:
+      - https://www.googleapis.com/auth/directory.readonly
+      - https://www.googleapis.com/auth/userinfo.profile
+      - https://www.googleapis.com/auth/contacts.readonly
+    note: Requires an OAuth client ID and secret; identity lookups still need confirmation before being used as recipients.
 
 note: >
   Google documents a special safety rule for directory search: do not feed a

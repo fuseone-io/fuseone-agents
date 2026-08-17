@@ -13,6 +13,10 @@ auth: >
   None, and that is the thing to think about rather than the thing to skip. It
   will reach whatever the worker can reach, including addresses on the internal
   network that no token protects.
+authModes:
+  - type: none
+    principal: none
+    label: No credential
 
 note: >
   Everything it returns was written by somebody else. That is the whole point
