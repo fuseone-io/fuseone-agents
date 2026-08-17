@@ -236,7 +236,12 @@ function ConnectServerPanel({
             onSubmit={form.handleSubmit(submit)}
             className="flex flex-col gap-4"
           >
-            <ServerFormBody form={form} editing={false} hasSecret={false} />
+            <ServerFormBody
+              form={form}
+              editing={false}
+              hasSecret={false}
+              hasConfigFile={false}
+            />
             <div className="flex justify-end gap-2 border-t pt-4">
               <Button type="button" variant="ghost" onClick={onClose}>
                 {t("common.cancel")}

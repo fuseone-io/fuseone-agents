@@ -33,6 +33,8 @@ export function useServerForm(
       args: (server?.args ?? []).join(" "),
       url: server?.url ?? "",
       token: "",
+      configFile: "",
+      configFileEnv: server?.configFileEnv ?? "",
       // Never carried forward from the transport. A server nobody has accepted
       // must show as not accepted, or the box would tick itself on the screen
       // where the decision is supposed to be made.
@@ -53,6 +55,8 @@ export function useServerForm(
         // reason for not demanding a secret to correct an address. Removing
         // one is a separate gesture, on the server's own page.
         token: values.token || undefined,
+        configFile: values.configFile || undefined,
+        configFileEnv: values.configFileEnv,
         acceptsLocalExecution: values.acceptsLocalExecution,
         enabled: values.enabled,
       });

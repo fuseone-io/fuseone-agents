@@ -42,6 +42,9 @@ func (s *Server) PutMCPServer(ctx context.Context, req openapi.PutMCPServerReque
 	if req.Body.Url != nil {
 		server.URL = *req.Body.Url
 	}
+	if req.Body.ConfigFileEnv != nil {
+		server.ConfigFileEnv = req.Body.ConfigFileEnv
+	}
 	if req.Body.Enabled != nil {
 		server.Enabled = *req.Body.Enabled
 	}
@@ -65,6 +68,9 @@ func (s *Server) PutMCPServer(ctx context.Context, req openapi.PutMCPServerReque
 	creds := domain.MCPCredentialPatch{Token: req.Body.Token}
 	if req.Body.Env != nil {
 		creds.Env = *req.Body.Env
+	}
+	if req.Body.ConfigFile != nil {
+		creds.ConfigFile = req.Body.ConfigFile
 	}
 
 	if err := s.integrations.PutMCPServer(ctx, caller, adminScope, server, creds); err != nil {

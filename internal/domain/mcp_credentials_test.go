@@ -10,9 +10,9 @@ import (
 /*
 What a tool server is given, and what a write leaves alone.
 
-The document is a credential in both halves. A token is obviously one; a
-variable is one nearly always, because the reason a server needs a variable is
-usually that the variable is a key.
+The document is a credential in every shape. A token is obviously one; a
+variable or config file is one often enough, because the reason a server needs
+either is usually that it contains a key, DSN or grant.
 */
 
 // An installation configured before this existed holds a bare token. Refusing
@@ -30,13 +30,16 @@ func TestMCPCredentials_survivesTheVaultAndComesBackWhole(t *testing.T) {
 	t.Parallel()
 
 	sealed := domain.MCPCredentials{
-		Token: "ghp_something",
-		Env:   map[string]string{"GITHUB_TOKEN": "ghp_other"},
+		Token:      "ghp_something",
+		Env:        map[string]string{"GITHUB_TOKEN": "ghp_other"},
+		ConfigFile: "sources: []\n",
 	}.Sealed()
 
 	got := domain.ReadMCPCredentials(sealed)
-	if got.Token != "ghp_something" || got.Env["GITHUB_TOKEN"] != "ghp_other" {
-		t.Errorf("got %+v, want both halves back", got)
+	if got.Token != "ghp_something" ||
+		got.Env["GITHUB_TOKEN"] != "ghp_other" ||
+		got.ConfigFile != "sources: []\n" {
+		t.Errorf("got %+v, want every sealed shape back", got)
 	}
 }
 
@@ -75,6 +78,18 @@ func TestMerge_anEmptyEnvIsARemoval_andAnAbsentOneIsNot(t *testing.T) {
 	cleared := domain.MCPCredentialPatch{Env: map[string]string{}}.Apply(stored)
 	if len(cleared.Env) != 0 {
 		t.Errorf("env = %v, want an empty map to clear it", cleared.Env)
+	}
+}
+
+func TestApply_anEmptyConfigFileClearsIt_andAnAbsentOneDoesNot(t *testing.T) {
+	t.Parallel()
+	stored := domain.MCPCredentials{ConfigFile: "sources: []\n"}
+
+	if kept := (domain.MCPCredentialPatch{}).Apply(stored); kept.ConfigFile != "sources: []\n" {
+		t.Errorf("config file = %q, want an unmentioned one kept", kept.ConfigFile)
+	}
+	if cleared := (domain.MCPCredentialPatch{ConfigFile: ptr("")}).Apply(stored); cleared.ConfigFile != "" {
+		t.Errorf("config file = %q, want it removable", cleared.ConfigFile)
 	}
 }
 
@@ -135,13 +150,18 @@ func TestForTransport_switchingShape_dropsTheHalfThatCannotBeUsed(t *testing.T) 
 	t.Parallel()
 	both := domain.MCPCredentials{
 		Token: "ghp_stored", Env: map[string]string{"GITHUB_TOKEN": "ghp_other"},
+		ConfigFile: "sources: []\n",
 	}
 
 	if local := both.ForTransport(domain.TransportStdio); local.Token != "" {
 		t.Errorf("a local server kept a bearer token: %+v", local)
+	} else if local.ConfigFile == "" {
+		t.Errorf("a local server dropped its managed config file: %+v", local)
 	}
 	if remote := both.ForTransport(domain.TransportHTTP); len(remote.Env) != 0 {
 		t.Errorf("a remote server kept process variables: %+v", remote)
+	} else if remote.ConfigFile != "" {
+		t.Errorf("a remote server kept a local config file: %+v", remote)
 	}
 }
 

@@ -24,10 +24,21 @@ import {
 export function ConnectionPanel({ server }: { server: MCPServer }) {
   const { t } = useTranslation();
   const put = usePutMCPServer();
-  const [value, setValue] = useState({ token: "", env: "" });
+  const [value, setValue] = useState({
+    token: "",
+    env: "",
+    configFile: "",
+    configFileEnv: server.configFileEnv ?? "",
+  });
   const local = (server.transport ?? "stdio") === "stdio";
+  const storedConfigEnv = server.configFileEnv ?? "";
 
-  async function write(credential: { token?: string; env?: Record<string, string> }) {
+  async function write(credential: {
+    token?: string;
+    env?: Record<string, string>;
+    configFile?: string;
+    configFileEnv?: string;
+  }) {
     // Passed through exactly as given. An undefined token means this write is
     // not about the token, and an empty one means somebody is removing it —
     // collapsing the two is how a revoke button stops revoking.
@@ -42,8 +53,15 @@ export function ConnectionPanel({ server }: { server: MCPServer }) {
         acceptsLocalExecution: server.acceptsLocalExecution ?? false,
         token: credential.token,
         env: credential.env,
+        configFile: credential.configFile,
+        configFileEnv: credential.configFileEnv,
       });
-      setValue({ token: "", env: "" });
+      setValue({
+        token: "",
+        env: "",
+        configFile: "",
+        configFileEnv: credential.configFileEnv ?? storedConfigEnv,
+      });
       toast.success(t("mcp.credentialSaved"));
     } catch (problem) {
       toast.error(problemMessage(problem, t));
@@ -64,7 +82,8 @@ export function ConnectionPanel({ server }: { server: MCPServer }) {
 
         <CredentialFields
           local={local}
-          hasSecret={server.hasSecret ?? false}
+          hasSecret={local ? server.hasVariables === true : server.hasSecret === true}
+          hasConfigFile={server.hasConfigFile === true}
           value={value}
           onChange={setValue}
           onRevoke={() =>
@@ -72,16 +91,32 @@ export function ConnectionPanel({ server }: { server: MCPServer }) {
             // requests and only one of them is somebody revoking.
             void write(local ? { env: {} } : { token: "" })
           }
+          onRevokeConfigFile={() => void write({ configFile: "" })}
         />
 
         <div className="flex justify-end">
           <Button
             onClick={() =>
               void write(
-                local ? { env: readVariables(value.env) } : { token: value.token },
+                local
+                  ? {
+                      ...(value.env === "" ? {} : { env: readVariables(value.env) }),
+                      ...(value.configFile === ""
+                        ? {}
+                        : { configFile: value.configFile }),
+                      configFileEnv: value.configFileEnv,
+                    }
+                  : { token: value.token },
               )
             }
-            disabled={put.isPending || (local ? value.env === "" : value.token === "")}
+            disabled={
+              put.isPending ||
+              (local
+                ? value.env === "" &&
+                  value.configFile === "" &&
+                  value.configFileEnv === storedConfigEnv
+                : value.token === "")
+            }
           >
             {t("mcp.saveCredential")}
           </Button>

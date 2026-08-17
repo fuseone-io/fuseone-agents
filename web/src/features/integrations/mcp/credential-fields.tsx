@@ -20,34 +20,76 @@ import { Textarea } from "@/components/ui/textarea";
 export function CredentialFields({
   local,
   hasSecret,
+  hasConfigFile,
   value,
   onChange,
   onRevoke,
+  onRevokeConfigFile,
 }: {
   local: boolean;
   hasSecret: boolean;
-  value: { token: string; env: string };
-  onChange: (next: { token: string; env: string }) => void;
+  hasConfigFile: boolean;
+  value: { token: string; env: string; configFile: string; configFileEnv: string };
+  onChange: (next: {
+    token: string;
+    env: string;
+    configFile: string;
+    configFileEnv: string;
+  }) => void;
   onRevoke: () => void;
+  onRevokeConfigFile: () => void;
 }) {
   const { t } = useTranslation();
 
   return (
     <div className="space-y-3">
       {local ? (
-        <div className="space-y-1.5">
-          <Label htmlFor="env">{t("mcp.variables")}</Label>
-          <Textarea
-            id="env"
-            rows={4}
-            className="font-mono text-xs"
-            placeholder={t("mcp.variablesExample")}
-            value={value.env}
-            onChange={(e) => onChange({ ...value, env: e.target.value })}
-          />
-          <p className="text-xs text-muted-foreground">
-            {t("mcp.variablesHint")}
-          </p>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="env">{t("mcp.variables")}</Label>
+            <Textarea
+              id="env"
+              rows={4}
+              className="font-mono text-xs"
+              placeholder={t("mcp.variablesExample")}
+              value={value.env}
+              onChange={(e) => onChange({ ...value, env: e.target.value })}
+            />
+            <p className="text-xs text-muted-foreground">
+              {hasSecret ? t("mcp.variablesKept") : t("mcp.variablesHint")}
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="config-file-env">{t("mcp.configFileEnv")}</Label>
+            <Input
+              id="config-file-env"
+              className="font-mono"
+              placeholder="FUSEONE_MCP_CONFIG_FILE"
+              value={value.configFileEnv}
+              onChange={(e) =>
+                onChange({ ...value, configFileEnv: e.target.value })
+              }
+            />
+            <p className="text-xs text-muted-foreground">
+              {t("mcp.configFileEnvHint")}
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="config-file">{t("mcp.configFile")}</Label>
+            <Textarea
+              id="config-file"
+              rows={6}
+              className="font-mono text-xs"
+              placeholder={t("mcp.configFileExample")}
+              value={value.configFile}
+              onChange={(e) =>
+                onChange({ ...value, configFile: e.target.value })
+              }
+            />
+            <p className="text-xs text-muted-foreground">
+              {hasConfigFile ? t("mcp.configFileKept") : t("mcp.configFileHint")}
+            </p>
+          </div>
         </div>
       ) : (
         <div className="space-y-1.5">
@@ -77,7 +119,19 @@ export function CredentialFields({
           className="text-danger"
         >
           <Trash2 className="size-3.5" />
-          {t("mcp.revoke")}
+          {local ? t("mcp.revokeVariables") : t("mcp.revoke")}
+        </Button>
+      )}
+      {local && hasConfigFile && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onRevokeConfigFile}
+          className="text-danger"
+        >
+          <Trash2 className="size-3.5" />
+          {t("mcp.revokeConfigFile")}
         </Button>
       )}
     </div>

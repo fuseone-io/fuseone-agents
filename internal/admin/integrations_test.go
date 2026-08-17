@@ -365,12 +365,56 @@ func TestPutMCPServer_local_sealsItsVariablesAndNeverListsThem(t *testing.T) {
 	if !servers[0].HasSecret {
 		t.Error("the listing does not say a credential is stored")
 	}
+	if !servers[0].HasVariables {
+		t.Error("the listing does not say variables are stored")
+	}
 	creds, err := i.MCPCredentials(ctx, "local-github")
 	if err != nil {
 		t.Fatalf("MCPCredentials: %v", err)
 	}
 	if creds.Env["GITHUB_TOKEN"] != "ghp_secret" {
 		t.Errorf("env = %v, want the variable back from the vault", creds.Env)
+	}
+}
+
+/*
+A managed config file is stored like a credential and listed only by presence.
+
+The content may be a DSN, service-account grant or connection profile, so the
+screen gets enough to offer "remove it" and never enough to print it back.
+*/
+func TestPutMCPServer_local_sealsAConfigFileAndOnlyListsPresence(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+	env := "TOOLBOX_CONFIG"
+
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, domain.MCPServer{
+		Name: "toolbox", Transport: domain.TransportStdio,
+		Command: "/usr/bin/toolbox", Enabled: true, AcceptsLocalExecution: true,
+		ConfigFileEnv: &env,
+	}, domain.MCPCredentialPatch{ConfigFile: ptr("sources:\n- kind: postgres\n")}); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+
+	servers, err := i.MCPServers(ctx)
+	if err != nil {
+		t.Fatalf("MCPServers: %v", err)
+	}
+	if !servers[0].HasSecret || !servers[0].HasConfigFile {
+		t.Fatalf("server = %+v, want a sealed document and config-file presence", servers[0])
+	}
+	if servers[0].HasVariables {
+		t.Fatalf("server = %+v, a config file alone should not read as variables", servers[0])
+	}
+	if servers[0].ConfigFileEnv == nil || *servers[0].ConfigFileEnv != "TOOLBOX_CONFIG" {
+		t.Fatalf("config env = %v, want the public path variable returned", servers[0].ConfigFileEnv)
+	}
+	creds, err := i.MCPCredentials(ctx, "toolbox")
+	if err != nil {
+		t.Fatalf("MCPCredentials: %v", err)
+	}
+	if creds.ConfigFile != "sources:\n- kind: postgres\n" {
+		t.Errorf("config file = %q, want it back only through the credential reader", creds.ConfigFile)
 	}
 }
 
@@ -405,6 +449,33 @@ func TestPutMCPServer_aWriteThatOmitsTheCredential_keepsTheStoredOne(t *testing.
 	}
 	if creds.Env["GITHUB_TOKEN"] != "ghp_secret" {
 		t.Errorf("env = %v; editing the arguments dropped the credential", creds.Env)
+	}
+}
+
+func TestPutMCPServer_aWriteThatOmitsTheConfigFile_keepsTheStoredOne(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+	server := domain.MCPServer{
+		Name: "toolbox", Transport: domain.TransportStdio,
+		Command: "/usr/bin/toolbox", Enabled: true, AcceptsLocalExecution: true,
+	}
+
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, server,
+		domain.MCPCredentialPatch{ConfigFile: ptr("sources: []\n")}); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+	server.Args = []string{"serve"}
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, server,
+		domain.MCPCredentialPatch{}); err != nil {
+		t.Fatalf("PutMCPServer again: %v", err)
+	}
+
+	creds, err := i.MCPCredentials(ctx, "toolbox")
+	if err != nil {
+		t.Fatalf("MCPCredentials: %v", err)
+	}
+	if creds.ConfigFile != "sources: []\n" {
+		t.Errorf("config file = %q; editing arguments dropped it", creds.ConfigFile)
 	}
 }
 
@@ -451,6 +522,63 @@ func TestPutMCPServer_clearingTheToken_actuallyRemovesIt(t *testing.T) {
 	}
 }
 
+func TestPutMCPServer_clearingTheConfigFile_removesOnlyThatFile(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+	server := domain.MCPServer{
+		Name: "toolbox", Transport: domain.TransportStdio,
+		Command: "/usr/bin/toolbox", Enabled: true, AcceptsLocalExecution: true,
+	}
+
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, server,
+		domain.MCPCredentialPatch{
+			Env:        map[string]string{"TOKEN": "still-needed"},
+			ConfigFile: ptr("sources: []\n"),
+		}); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, server,
+		domain.MCPCredentialPatch{ConfigFile: ptr("")}); err != nil {
+		t.Fatalf("PutMCPServer clearing: %v", err)
+	}
+
+	creds, err := i.MCPCredentials(ctx, "toolbox")
+	if err != nil {
+		t.Fatalf("MCPCredentials: %v", err)
+	}
+	if creds.ConfigFile != "" {
+		t.Errorf("config file = %q; a revoked file is still in the vault", creds.ConfigFile)
+	}
+	if creds.Env["TOKEN"] != "still-needed" {
+		t.Errorf("env = %v; clearing the file dropped the variables", creds.Env)
+	}
+	servers, err := i.MCPServers(ctx)
+	if err != nil {
+		t.Fatalf("MCPServers: %v", err)
+	}
+	if servers[0].HasConfigFile {
+		t.Error("the listing still says a config file is stored")
+	}
+	if !servers[0].HasSecret {
+		t.Error("the listing forgot the remaining variables")
+	}
+}
+
+func TestPutMCPServer_badConfigFileEnv_isRefused(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+	env := "not a variable"
+
+	err := i.PutMCPServer(ctx, "usr_ana", platform, domain.MCPServer{
+		Name: "toolbox", Transport: domain.TransportStdio,
+		Command: "/usr/bin/toolbox", Enabled: true, AcceptsLocalExecution: true,
+		ConfigFileEnv: &env,
+	}, domain.MCPCredentialPatch{ConfigFile: ptr("sources: []\n")})
+	if !errors.Is(err, admin.ErrBadConfigFileEnv) {
+		t.Fatalf("PutMCPServer = %v, want config-file env refusal", err)
+	}
+}
+
 /*
 Switching transport leaves nothing behind for the shape that cannot use it.
 
@@ -481,6 +609,40 @@ func TestPutMCPServer_switchingToLocal_dropsTheBearerItCanNoLongerSend(t *testin
 	}
 	if creds.Token != "" {
 		t.Errorf("token = %q survived a switch to a shape that cannot send it", creds.Token)
+	}
+}
+
+func TestPutMCPServer_switchingToRemote_dropsTheConfigFileItCanNoLongerMaterialize(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, domain.MCPServer{
+		Name: "toolbox", Transport: domain.TransportStdio,
+		Command: "/usr/bin/toolbox", Enabled: true, AcceptsLocalExecution: true,
+	}, domain.MCPCredentialPatch{ConfigFile: ptr("sources: []\n")}); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, domain.MCPServer{
+		Name: "toolbox", Transport: domain.TransportHTTP,
+		URL: "https://tools.example.com/mcp", Enabled: true,
+	}, domain.MCPCredentialPatch{}); err != nil {
+		t.Fatalf("PutMCPServer switching: %v", err)
+	}
+
+	creds, err := i.MCPCredentials(ctx, "toolbox")
+	if err != nil {
+		t.Fatalf("MCPCredentials: %v", err)
+	}
+	if creds.ConfigFile != "" {
+		t.Errorf("config file survived a switch to a shape that cannot use it: %q", creds.ConfigFile)
+	}
+	servers, err := i.MCPServers(ctx)
+	if err != nil {
+		t.Fatalf("MCPServers: %v", err)
+	}
+	if servers[0].HasConfigFile || servers[0].ConfigFileEnv != nil {
+		t.Errorf("server = %+v, want no config-file metadata after switching to HTTP", servers[0])
 	}
 }
 

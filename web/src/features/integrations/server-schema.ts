@@ -19,6 +19,10 @@ export const serverSchema = z
     args: z.string(),
     url: z.string(),
     token: z.string(),
+    configFile: z.string(),
+    configFileEnv: z
+      .string()
+      .regex(/^[A-Za-z_][A-Za-z0-9_]*$|^$/, "mcp.configFileEnvInvalid"),
     acceptsLocalExecution: z.boolean(),
     enabled: z.boolean(),
   })

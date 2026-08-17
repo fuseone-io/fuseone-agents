@@ -44,6 +44,7 @@ export function ServerForm({
               form={form}
               editing={server !== null}
               hasSecret={server?.hasSecret === true}
+              hasConfigFile={server?.hasConfigFile === true}
             />
 
             <DialogFooter>

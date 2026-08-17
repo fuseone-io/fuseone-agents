@@ -2340,8 +2340,14 @@ export interface components {
             args?: string[];
             /** @description The endpoint, for http. */
             url?: string;
-            /** @description That a bearer token is stored, never what it is. */
+            /** @description That a credential document is stored, never what it is. */
             hasSecret?: boolean;
+            /** @description The sealed credential document includes environment variables for a local process. The values never come back through this API. */
+            hasVariables?: boolean;
+            /** @description The sealed credential document includes a platform-managed configuration file. The content never comes back through this API. */
+            hasConfigFile?: boolean;
+            /** @description The environment variable that receives the managed configuration file path for a local server. Absent means the platform default. */
+            configFileEnv?: string;
             /**
              * @description Which of the server's tools this installation brought in, by the
              *     names the server uses.
@@ -5271,6 +5277,10 @@ export interface operations {
                     env?: {
                         [key: string]: string;
                     };
+                    /** @description Configuration content to seal and materialise as a file for a local server. Omit to keep the stored file. Send an empty string to remove it. */
+                    configFile?: string;
+                    /** @description Environment variable that receives the managed file path. Omit to keep the stored variable; send an empty string to use the platform default. Meaningless for http. */
+                    configFileEnv?: string;
                     /** @description Which of the server's tools to bring in, by the names the server uses. Omit to leave the choice as it stands, which for a server nobody has chosen one for means everything it offers. Send an empty array to bring in nothing. */
                     surface?: string[];
                     /** @description Required for stdio, and refused without it. A local server is a program this installation starts inside the worker, running as the worker and reaching whatever the worker can reach. That is a decision a person makes, not one a transport implies, and it is recorded with their name. */

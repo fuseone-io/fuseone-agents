@@ -29,10 +29,11 @@ func TestCommandFor_aStdioServer_doesNotInheritTheWorkersEnvironment(t *testing.
 	t.Setenv("DATABASE_URL", "postgres://must-not-travel")
 	t.Setenv("PATH", "/usr/bin:/bin")
 
-	cmd, err := commandFor(t.Context(), accepted(), domain.MCPCredentials{})
+	cmd, cleanup, err := commandFor(t.Context(), accepted(), domain.MCPCredentials{})
 	if err != nil {
 		t.Fatalf("commandFor: %v", err)
 	}
+	t.Cleanup(cleanup)
 
 	if cmd.Env == nil {
 		t.Fatal("Env is nil, which is how the child inherits everything")
@@ -69,10 +70,11 @@ func TestCommandFor_aVariableTheWorkerDoesNotHold_isNotPassedEmpty(t *testing.T)
 		t.Fatalf("unset: %v", err)
 	}
 
-	cmd, err := commandFor(t.Context(), accepted(), domain.MCPCredentials{})
+	cmd, cleanup, err := commandFor(t.Context(), accepted(), domain.MCPCredentials{})
 	if err != nil {
 		t.Fatalf("commandFor: %v", err)
 	}
+	t.Cleanup(cleanup)
 	if slices.ContainsFunc(cmd.Env, func(v string) bool {
 		return strings.HasPrefix(v, "TMPDIR=")
 	}) {
@@ -100,7 +102,7 @@ func TestCommandFor_aLocalServerNobodyAccepted_isNotStarted(t *testing.T) {
 	server := accepted()
 	server.AcceptsLocalExecution = false
 
-	if _, err := commandFor(t.Context(), server, domain.MCPCredentials{}); err == nil {
+	if _, _, err := commandFor(t.Context(), server, domain.MCPCredentials{}); err == nil {
 		t.Fatal("no error; a program nobody agreed to would have been started")
 	} else if !strings.Contains(err.Error(), "local") {
 		t.Errorf("err = %v, want a sentence naming what was not accepted", err)
@@ -119,12 +121,13 @@ func TestCommandFor_theServersOwnVariables_areGivenWithoutReopeningInheritance(t
 	t.Setenv("FUSEONE_MASTER_KEY", "must-not-travel")
 	t.Setenv("PATH", "/usr/bin:/bin")
 
-	cmd, err := commandFor(t.Context(), accepted(), domain.MCPCredentials{
+	cmd, cleanup, err := commandFor(t.Context(), accepted(), domain.MCPCredentials{
 		Env: map[string]string{"GITHUB_TOKEN": "ghp_configured"},
 	})
 	if err != nil {
 		t.Fatalf("commandFor: %v", err)
 	}
+	t.Cleanup(cleanup)
 
 	if !slices.Contains(cmd.Env, "GITHUB_TOKEN=ghp_configured") {
 		t.Errorf("Env = %v, want the configured variable", cmd.Env)
@@ -144,12 +147,13 @@ func TestCommandFor_theServersOwnVariables_areGivenWithoutReopeningInheritance(t
 func TestCommandFor_aConfiguredVariable_winsOverTheOneCopiedThrough(t *testing.T) {
 	t.Setenv("PATH", "/usr/bin")
 
-	cmd, err := commandFor(t.Context(), accepted(), domain.MCPCredentials{
+	cmd, cleanup, err := commandFor(t.Context(), accepted(), domain.MCPCredentials{
 		Env: map[string]string{"PATH": "/opt/tools/bin"},
 	})
 	if err != nil {
 		t.Fatalf("commandFor: %v", err)
 	}
+	t.Cleanup(cleanup)
 
 	// Both are present and the configured one is last, which is what an
 	// exec environment resolves to.
@@ -162,6 +166,92 @@ func TestCommandFor_aConfiguredVariable_winsOverTheOneCopiedThrough(t *testing.T
 	if last != "PATH=/opt/tools/bin" {
 		t.Errorf("PATH resolves to %q, want the configured one", last)
 	}
+}
+
+/*
+A managed config file is content, not a path typed into args.
+
+The platform owns the file it creates: it writes it in a private temporary
+directory, hands the path to the local process by environment, and removes it
+when the MCP session is closed. That keeps the operator from having to place a
+secret file on the worker's filesystem by hand.
+*/
+func TestCommandFor_aConfigFile_isMaterializedAndNamedByEnvironment(t *testing.T) {
+	server := accepted()
+	cmd, cleanup, err := commandFor(t.Context(), server, domain.MCPCredentials{
+		ConfigFile: "dsn: postgres://agent:secret@db/app\n",
+	})
+	if err != nil {
+		t.Fatalf("commandFor: %v", err)
+	}
+
+	path := envValue(cmd.Env, domain.DefaultMCPConfigFileEnv)
+	if path == "" {
+		t.Fatalf("Env = %v, want the managed config path", cmd.Env)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read materialized config: %v", err)
+	}
+	if string(body) != "dsn: postgres://agent:secret@db/app\n" {
+		t.Errorf("config body = %q", body)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat materialized config: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Errorf("mode = %v, want 0600", got)
+	}
+
+	cleanup()
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("after cleanup stat = %v, want file gone", err)
+	}
+}
+
+func TestCommandFor_aConfigFile_canUseACustomEnvironmentName(t *testing.T) {
+	name := "TOOLBOX_CONFIG"
+	server := accepted()
+	server.ConfigFileEnv = &name
+
+	cmd, cleanup, err := commandFor(t.Context(), server, domain.MCPCredentials{
+		ConfigFile: "sources: []\n",
+	})
+	if err != nil {
+		t.Fatalf("commandFor: %v", err)
+	}
+	t.Cleanup(cleanup)
+
+	if envValue(cmd.Env, "TOOLBOX_CONFIG") == "" {
+		t.Fatalf("Env = %v, want TOOLBOX_CONFIG to name the materialized file", cmd.Env)
+	}
+}
+
+func TestCommandFor_aManagedConfigPathWinsOverAHandWrittenVariable(t *testing.T) {
+	cmd, cleanup, err := commandFor(t.Context(), accepted(), domain.MCPCredentials{
+		Env:        map[string]string{domain.DefaultMCPConfigFileEnv: "/tmp/hand-written.yaml"},
+		ConfigFile: "managed: true\n",
+	})
+	if err != nil {
+		t.Fatalf("commandFor: %v", err)
+	}
+	t.Cleanup(cleanup)
+
+	if got := envValue(cmd.Env, domain.DefaultMCPConfigFileEnv); got == "/tmp/hand-written.yaml" || got == "" {
+		t.Fatalf("config env resolves to %q, want the managed path to win", got)
+	}
+}
+
+func envValue(env []string, name string) string {
+	prefix := name + "="
+	out := ""
+	for _, one := range env {
+		if strings.HasPrefix(one, prefix) {
+			out = strings.TrimPrefix(one, prefix)
+		}
+	}
+	return out
 }
 
 /*

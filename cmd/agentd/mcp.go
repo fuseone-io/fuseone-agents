@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -41,16 +43,21 @@ func connectServer(
 ) error {
 	client := mcp.NewClient(&mcp.Implementation{Name: "fuseone-agents", Version: version}, nil)
 
-	transport, err := transportFor(ctx, server, creds)
+	transport, cleanup, err := transportFor(ctx, server, creds)
 	if err != nil {
 		return err
 	}
 	session, err := client.Connect(ctx, transport, nil)
 	if err != nil {
+		cleanup()
 		return fmt.Errorf("connect %s: %w", server.Name, err)
 	}
-	if err := catalog.AddServer(ctx, server.Name, session, server.Surface); err != nil {
-		_ = session.Close()
+	managed := tools.Session(session)
+	if cleanup != nil {
+		managed = cleanupSession{Session: session, cleanup: cleanup}
+	}
+	if err := catalog.AddServer(ctx, server.Name, managed, server.Surface); err != nil {
+		_ = managed.Close()
 		return fmt.Errorf("import tools from %s: %w", server.Name, err)
 	}
 	return nil
@@ -58,24 +65,37 @@ func connectServer(
 
 func transportFor(
 	ctx context.Context, server domain.MCPServer, creds domain.MCPCredentials,
-) (mcp.Transport, error) {
+) (mcp.Transport, func(), error) {
 	switch server.TransportOf() {
 	case domain.TransportHTTP:
 		return &mcp.StreamableClientTransport{
 			Endpoint:   server.URL,
 			HTTPClient: bearerClient(creds.Token),
-		}, nil
+		}, noop, nil
 
 	case domain.TransportStdio:
-		cmd, err := commandFor(ctx, server, creds)
+		cmd, cleanup, err := commandFor(ctx, server, creds)
 		if err != nil {
-			return nil, err
+			return nil, noop, err
 		}
-		return &mcp.CommandTransport{Command: cmd}, nil
+		return &mcp.CommandTransport{Command: cmd}, cleanup, nil
 
 	default:
-		return nil, fmt.Errorf("%s: unknown transport %q", server.Name, server.Transport)
+		return nil, noop, fmt.Errorf("%s: unknown transport %q", server.Name, server.Transport)
 	}
+}
+
+func noop() {}
+
+type cleanupSession struct {
+	tools.Session
+	cleanup func()
+}
+
+func (s cleanupSession) Close() error {
+	err := s.Session.Close()
+	s.cleanup()
+	return err
 }
 
 // bearerClient carries the token on every request to a remote server. A local
@@ -122,6 +142,7 @@ the row already answers.
 func fingerprint(server domain.MCPServer) string {
 	sum := sha256.Sum256([]byte(strings.Join([]string{
 		server.TransportOf(), server.Command, strings.Join(server.Args, " "), server.URL,
+		server.ConfigFileEnvName(),
 		fmt.Sprint(server.Enabled), server.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}, "\x00")))
 	return hex.EncodeToString(sum[:8])
@@ -293,19 +314,19 @@ the next secret to the deployment, and then it is silently wrong.
 */
 func commandFor(
 	ctx context.Context, server domain.MCPServer, creds domain.MCPCredentials,
-) (*exec.Cmd, error) {
+) (*exec.Cmd, func(), error) {
 	if !server.AcceptsLocalExecution {
 		// Checked again here, and not only where it is written. A row can
 		// arrive by restore, by migration, or from a version of this that did
 		// not ask — and the moment a program is about to be started is the
 		// moment the answer matters.
-		return nil, fmt.Errorf(
+		return nil, noop, fmt.Errorf(
 			"%s: a local server runs code inside the worker, and nobody has accepted that for this one",
 			server.Name)
 	}
 	fields := strings.Fields(server.Command)
 	if len(fields) == 0 {
-		return nil, fmt.Errorf("%s: no command to run", server.Name)
+		return nil, noop, fmt.Errorf("%s: no command to run", server.Name)
 	}
 	cmd := exec.CommandContext(ctx, fields[0], append(fields[1:], server.Args...)...)
 	cmd.Stderr = os.Stderr
@@ -323,7 +344,117 @@ func commandFor(
 		always.
 	*/
 	cmd.Env = append(childEnv(), creds.Environ()...)
-	return cmd, nil
+	cleanup := noop
+	if creds.ConfigFile != "" {
+		path, remove, err := materializeConfigFile(server.Name, creds.ConfigFile)
+		if err != nil {
+			return nil, noop, err
+		}
+		cleanup = remove
+		// The platform-managed path is more specific than a hand-written env
+		// variable. If both name the same variable, the generated path wins.
+		cmd.Env = append(cmd.Env, server.ConfigFileEnvName()+"="+path)
+	}
+	return cmd, cleanup, nil
+}
+
+const configTempPrefix = "fuseone-mcp-config-"
+
+func materializeConfigFile(server, content string) (string, func(), error) {
+	root, err := os.MkdirTemp("", fmt.Sprintf("%s%d-%s-", configTempPrefix, os.Getpid(), safeTempPart(server)))
+	if err != nil {
+		return "", noop, fmt.Errorf("%s: create managed config directory: %w", server, err)
+	}
+	path := filepath.Join(root, "config")
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		_ = os.RemoveAll(root)
+		return "", noop, fmt.Errorf("%s: write managed config file: %w", server, err)
+	}
+	return path, func() {
+		if err := os.RemoveAll(root); err != nil {
+			slog.Warn("could not remove managed MCP config file", "server", server, "path", root, "err", err)
+		}
+	}, nil
+}
+
+func safeTempPart(name string) string {
+	var b strings.Builder
+	for _, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == '-', r == '_':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('_')
+		}
+	}
+	if b.Len() == 0 {
+		return "server"
+	}
+	return b.String()
+}
+
+func cleanupStaleConfigFiles() {
+	/*
+		This cleanup assumes the worker is the sole owner of the temp directory it
+		can see. That is true for the Kubernetes pod-local /tmp this code runs in:
+		a directory tagged with a dead PID belongs to a process that can no longer
+		read it.
+
+		If a deployment later shares /tmp between workers, sidecars, hostPath
+		mounts, or PID namespaces, this stops being a safe inference. A PID that is
+		absent here may still be alive in the namespace that created the file, and
+		deleting the directory would remove a config file from a running MCP
+		server. In that shape, cleanup needs an ownership marker stronger than
+		"this PID is not visible from this process."
+	*/
+	entries, err := os.ReadDir(os.TempDir())
+	if err != nil {
+		slog.Warn("could not list temp directory for managed MCP config cleanup", "err", err)
+		return
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() || !strings.HasPrefix(entry.Name(), configTempPrefix) {
+			continue
+		}
+		pid, ok := configTempPID(entry.Name())
+		if ok && processExists(pid) {
+			continue
+		}
+		path := filepath.Join(os.TempDir(), entry.Name())
+		if err := os.RemoveAll(path); err != nil {
+			slog.Warn("could not remove stale managed MCP config directory", "path", path, "err", err)
+		}
+	}
+}
+
+func configTempPID(name string) (int, bool) {
+	rest := strings.TrimPrefix(name, configTempPrefix)
+	pidText, _, ok := strings.Cut(rest, "-")
+	if !ok {
+		return 0, false
+	}
+	pid, err := strconv.Atoi(pidText)
+	return pid, err == nil
+}
+
+func processExists(pid int) bool {
+	if pid <= 0 {
+		return false
+	}
+	if pid == os.Getpid() {
+		return true
+	}
+	if _, err := os.Stat(filepath.Join("/proc", strconv.Itoa(pid))); err == nil {
+		return true
+	}
+	if _, err := os.Stat("/proc"); err != nil {
+		// Outside Linux, do not guess. A stale file is better than deleting a
+		// config file that another live worker still needs.
+		return true
+	}
+	return false
 }
 
 /*

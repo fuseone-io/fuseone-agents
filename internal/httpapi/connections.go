@@ -79,10 +79,12 @@ func (s *Server) ListIntegrations(ctx context.Context, _ openapi.ListIntegration
 		configured[srv.Name] = true
 		server := openapi.MCPServer{
 			Name: srv.Name, Args: &srv.Args, Enabled: srv.Enabled,
-			Transport: ptr(openapi.Transport(srv.TransportOf())),
-			HasSecret: ptr(srv.HasSecret),
-			Managed:   ptr(true),
-			UpdatedBy: ptr(srv.UpdatedBy), UpdatedAt: ptr(srv.UpdatedAt),
+			Transport:     ptr(openapi.Transport(srv.TransportOf())),
+			HasSecret:     ptr(srv.HasSecret),
+			HasVariables:  ptr(srv.HasVariables),
+			HasConfigFile: ptr(srv.HasConfigFile),
+			Managed:       ptr(true),
+			UpdatedBy:     ptr(srv.UpdatedBy), UpdatedAt: ptr(srv.UpdatedAt),
 			// What was brought in, and who accepted running it. Both are
 			// stored and neither reached the screen, so a server somebody had
 			// narrowed read back as all-in — and saving anything from that
@@ -95,6 +97,9 @@ func (s *Server) ListIntegrations(ctx context.Context, _ openapi.ListIntegration
 		}
 		server.Command = someString(srv.Command)
 		server.Url = someString(srv.URL)
+		if srv.ConfigFileEnv != nil {
+			server.ConfigFileEnv = someString(*srv.ConfigFileEnv)
+		}
 		// Absent when no worker has tried yet, which is a different thing from
 		// a server that failed — and the screen has to be able to say so.
 		if seen, tried := observed[srv.Name]; tried {

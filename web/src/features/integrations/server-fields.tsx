@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import type { UseFormReturn } from "react-hook-form";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   FormControl,
@@ -22,9 +23,11 @@ import type { ServerFormValues } from "@/features/integrations/server-schema";
 export function ServerFields({
   form,
   hasSecret,
+  hasConfigFile,
 }: {
   form: UseFormReturn<ServerFormValues>;
   hasSecret: boolean;
+  hasConfigFile: boolean;
 }) {
   const { t } = useTranslation();
 
@@ -66,6 +69,22 @@ export function ServerFields({
         name="args"
         label={t("integrations.arguments")}
         placeholder="--config /etc/crm.yaml"
+      />
+      <Field
+        form={form}
+        name="configFileEnv"
+        label={t("mcp.configFileEnv")}
+        placeholder="FUSEONE_MCP_CONFIG_FILE"
+        hint={t("mcp.configFileEnvHint")}
+      />
+      <TextAreaField
+        form={form}
+        name="configFile"
+        label={t("mcp.configFile")}
+        placeholder={t("mcp.configFileExample")}
+        hint={
+          hasConfigFile ? t("mcp.configFileKept") : t("mcp.configFileHint")
+        }
       />
       <AcceptLocalExecution form={form} />
     </>
@@ -129,7 +148,7 @@ function Field({
   hint,
 }: {
   form: UseFormReturn<ServerFormValues>;
-  name: "url" | "token" | "command" | "args";
+  name: "url" | "token" | "command" | "args" | "configFileEnv";
   label: string;
   placeholder: string;
   hint?: string;
@@ -148,6 +167,43 @@ function Field({
               placeholder={placeholder}
               autoComplete="off"
               type={name === "token" ? "password" : undefined}
+            />
+          </FormControl>
+          {hint && <FormDescription>{hint}</FormDescription>}
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  );
+}
+
+function TextAreaField({
+  form,
+  name,
+  label,
+  placeholder,
+  hint,
+}: {
+  form: UseFormReturn<ServerFormValues>;
+  name: "configFile";
+  label: string;
+  placeholder: string;
+  hint?: string;
+}) {
+  return (
+    <FormField
+      control={form.control}
+      name={name}
+      render={({ field }) => (
+        <FormItem>
+          <FormLabel>{label}</FormLabel>
+          <FormControl>
+            <Textarea
+              {...field}
+              className="font-mono text-xs"
+              placeholder={placeholder}
+              rows={5}
+              autoComplete="off"
             />
           </FormControl>
           {hint && <FormDescription>{hint}</FormDescription>}

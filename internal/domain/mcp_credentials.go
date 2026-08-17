@@ -9,19 +9,20 @@ import (
 /*
 What a tool server is given, sealed as one document.
 
-Two things that are not interchangeable, kept apart for the reason the two
+Three things that are not interchangeable, kept apart for the reason the two
 transports are kept apart. Token is a bearer this installation *sends* to a
-remote address. Env is a set of variables handed to a program it *starts*, and
-it exists only because a local server was left with no way to receive a
-credential once the worker stopped handing over its own environment.
+remote address. Env is a set of variables handed to a program it *starts*.
+ConfigFile is content the worker writes to a temporary file and then names by
+path to that same local program.
 
 Sealed together because a setting holds one secret. Split across two, an
 installation could exist holding a token for a server it starts and variables
 for one it calls — a shape that means nothing and that nothing would refuse.
 
-The whole document is a credential. Env is not configuration: the reason a
-server needs a variable is almost always that the variable is a key, and a
-field that is *sometimes* a secret has to be stored as though it always is.
+The whole document is a credential. Env and config files are not "settings":
+the reason a server needs either is often that it contains a key, a DSN or a
+service-account grant, and a field that is *sometimes* a secret has to be
+stored as though it always is.
 */
 type MCPCredentials struct {
 	// Token is the bearer sent to a remote server. Meaningless for stdio,
@@ -37,13 +38,22 @@ type MCPCredentials struct {
 		much the worker holds it.
 	*/
 	Env map[string]string `json:"env,omitempty"`
+	/*
+		ConfigFile is configuration content the platform writes to a temporary
+		file for a local server and then passes by path.
+
+		It is sealed with credentials because it commonly contains DSNs, service
+		account material or connection profiles. Even when it does not, a field
+		that sometimes carries secrets has to be stored as though it always does.
+	*/
+	ConfigFile string `json:"configFile,omitempty"`
 }
 
 // Sealed renders the document for the vault, or empty when there is nothing to
 // keep. Empty matters: it is how a write that omits credentials says "leave
 // what is stored" rather than "clear it".
 func (c MCPCredentials) Sealed() string {
-	if len(c.Env) == 0 && c.Token == "" {
+	if c.Empty() {
 		return ""
 	}
 	raw, err := json.Marshal(c)
@@ -65,7 +75,7 @@ func ReadMCPCredentials(sealed string) MCPCredentials {
 		return MCPCredentials{}
 	}
 	var c MCPCredentials
-	if err := json.Unmarshal([]byte(sealed), &c); err != nil || (c.Token == "" && len(c.Env) == 0) {
+	if err := json.Unmarshal([]byte(sealed), &c); err != nil || c.Empty() {
 		return MCPCredentials{Token: sealed}
 	}
 	return c
@@ -85,8 +95,9 @@ The map needs no pointer, because Go already tells the two apart: nil is
 absent, and an empty non-nil map is a removal.
 */
 type MCPCredentialPatch struct {
-	Token *string
-	Env   map[string]string
+	Token      *string
+	Env        map[string]string
+	ConfigFile *string
 }
 
 // Apply folds a write onto what is stored.
@@ -98,12 +109,17 @@ func (p MCPCredentialPatch) Apply(stored MCPCredentials) MCPCredentials {
 	if p.Env != nil {
 		out.Env = maps.Clone(p.Env)
 	}
+	if p.ConfigFile != nil {
+		out.ConfigFile = *p.ConfigFile
+	}
 	return out
 }
 
 // Empty reports that nothing is left to keep — which is a removal to be
 // carried out, not a write to be skipped.
-func (c MCPCredentials) Empty() bool { return c.Token == "" && len(c.Env) == 0 }
+func (c MCPCredentials) Empty() bool {
+	return c.Token == "" && len(c.Env) == 0 && c.ConfigFile == ""
+}
 
 /*
 ForTransport drops the half this shape cannot use.
@@ -120,7 +136,7 @@ visible and asks for itself.
 */
 func (c MCPCredentials) ForTransport(transport string) MCPCredentials {
 	if transport == TransportStdio {
-		return MCPCredentials{Env: c.Env}
+		return MCPCredentials{Env: c.Env, ConfigFile: c.ConfigFile}
 	}
 	return MCPCredentials{Token: c.Token}
 }

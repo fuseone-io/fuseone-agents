@@ -74,6 +74,11 @@ const (
 	TransportHTTP  = "http"
 )
 
+// DefaultMCPConfigFileEnv is where a local server receives the path of a
+// platform-managed configuration file unless an operator names a different
+// variable for that server.
+const DefaultMCPConfigFileEnv = "FUSEONE_MCP_CONFIG_FILE"
+
 type MCPServer struct {
 	Name string
 	// Transport is stdio or http. Empty reads as stdio: rows written before
@@ -88,8 +93,17 @@ type MCPServer struct {
 
 	// URL is the endpoint, for http.
 	URL string
-	// HasSecret reports that a bearer token is stored, never what it is.
+	// HasSecret reports that a credential document is stored, never what it is.
 	HasSecret bool
+	// HasVariables reports that the credential document includes environment
+	// variables for a local process.
+	HasVariables bool
+	// HasConfigFile reports that the credential document includes a managed
+	// configuration file. The content never comes back through the API.
+	HasConfigFile bool
+	// ConfigFileEnv is the environment variable that receives the managed
+	// configuration file path. Nil means the default variable.
+	ConfigFileEnv *string
 
 	/*
 		Surface is which of the server's tools this installation brought in.
@@ -127,6 +141,14 @@ func (s MCPServer) TransportOf() string {
 		return TransportStdio
 	}
 	return s.Transport
+}
+
+// ConfigFileEnvName returns the variable that receives the managed config path.
+func (s MCPServer) ConfigFileEnvName() string {
+	if s.ConfigFileEnv != nil && *s.ConfigFileEnv != "" {
+		return *s.ConfigFileEnv
+	}
+	return DefaultMCPConfigFileEnv
 }
 
 // IdentityProvider is one configured way of signing in.

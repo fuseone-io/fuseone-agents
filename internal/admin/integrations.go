@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -14,9 +15,11 @@ import (
 )
 
 var (
-	ErrNoName    = errors.New("admin: an integration needs a name")
-	ErrNoURL     = errors.New("admin: a remote tool server needs an address")
-	ErrNoCommand = errors.New("admin: an MCP server needs a command to run")
+	ErrNoName           = errors.New("admin: an integration needs a name")
+	ErrNoURL            = errors.New("admin: a remote tool server needs an address")
+	ErrNoCommand        = errors.New("admin: an MCP server needs a command to run")
+	ErrBadConfigFileEnv = errors.New(
+		"admin: the managed config file environment variable must be a shell variable name")
 	// ErrLocalExecutionNotAccepted means a local server was configured without
 	// anybody saying they accept what a local server is.
 	//
@@ -37,6 +40,14 @@ type storedServer struct {
 	Command   string   `json:"command,omitempty"`
 	Args      []string `json:"args,omitempty"`
 	URL       string   `json:"url,omitempty"`
+	// ConfigFileEnv is metadata about a sealed config file, not the file
+	// itself. Empty means the platform default.
+	ConfigFileEnv string `json:"configFileEnv,omitempty"`
+	// HasConfigFile mirrors the sealed document without exposing it, so a
+	// read-model can offer the revoke gesture without opening the vault.
+	HasConfigFile bool `json:"hasConfigFile,omitempty"`
+	// HasVariables is the same read-model hint for local process variables.
+	HasVariables bool `json:"hasVariables,omitempty"`
 	/*
 		Surface is which of the server's tools this installation brought in.
 
@@ -80,13 +91,29 @@ func (i *Integrations) MCPServers(ctx context.Context) ([]domain.MCPServer, erro
 		if err := json.Unmarshal(row.Value, &stored); err != nil {
 			return nil, fmt.Errorf("admin: decode MCP server %s: %w", row.Name, err)
 		}
+		transport := stored.Transport
+		if transport == "" {
+			transport = domain.TransportStdio
+		}
+		hasVariables := stored.HasVariables
+		if !hasVariables && row.HasSecret && transport == domain.TransportStdio && !stored.HasConfigFile {
+			// Rows written after per-server env existed but before this
+			// read-model bit have a sealed document and no way to say which
+			// half. Config files did not exist then, so keep the old revoke
+			// affordance for local variables instead of hiding it on upgrade.
+			hasVariables = true
+		}
 		server := domain.MCPServer{
 			Name: row.Name, Transport: stored.Transport,
 			Command: stored.Command, Args: stored.Args, URL: stored.URL,
 			Surface:               stored.Surface,
 			AcceptsLocalExecution: stored.AcceptsLocalExecution,
-			HasSecret:             row.HasSecret, Enabled: row.Enabled,
-			UpdatedBy: row.UpdatedBy, UpdatedAt: row.UpdatedAt,
+			HasSecret:             row.HasSecret,
+			HasVariables:          hasVariables,
+			HasConfigFile:         stored.HasConfigFile,
+			ConfigFileEnv:         configFileEnv(stored.ConfigFileEnv),
+			Enabled:               row.Enabled,
+			UpdatedBy:             row.UpdatedBy, UpdatedAt: row.UpdatedAt,
 		}
 		server.Transport = server.TransportOf()
 		out = append(out, server)
@@ -117,6 +144,8 @@ func (i *Integrations) PutMCPServer(
 		return ErrLocalExecutionNotAccepted
 	case transport == domain.TransportHTTP && strings.TrimSpace(server.URL) == "":
 		return ErrNoURL
+	case server.ConfigFileEnv != nil && !validConfigFileEnv(*server.ConfigFileEnv):
+		return ErrBadConfigFileEnv
 	}
 
 	/*
@@ -138,28 +167,39 @@ func (i *Integrations) PutMCPServer(
 			Enabled: server.Enabled, UpdatedBy: string(by),
 		},
 		fold: func(stored settings.Setting) (settings.Setting, any, error) {
-			surface := server.Surface
-			if surface == nil {
-				var was storedServer
-				if len(stored.Value) > 0 {
-					if err := json.Unmarshal(stored.Value, &was); err != nil {
-						return settings.Setting{}, nil, fmt.Errorf(
-							"admin: read the stored surface for %s: %w", server.Name, err)
-					}
+			var was storedServer
+			if len(stored.Value) > 0 {
+				if err := json.Unmarshal(stored.Value, &was); err != nil {
+					return settings.Setting{}, nil, fmt.Errorf(
+						"admin: read the stored server for %s: %w", server.Name, err)
 				}
-				surface = was.Surface
 			}
 
+			surface := server.Surface
+			if surface == nil {
+				surface = was.Surface
+			}
+			configEnv := was.ConfigFileEnv
+			if server.ConfigFileEnv != nil {
+				configEnv = *server.ConfigFileEnv
+			}
+
+			merged := given.Apply(domain.ReadMCPCredentials(stored.Secret)).ForTransport(transport)
+			if transport != domain.TransportStdio {
+				configEnv = ""
+			}
 			value, err := json.Marshal(storedServer{
 				Transport: transport, Command: server.Command,
 				Args: server.Args, URL: server.URL, Surface: surface,
+				ConfigFileEnv:         configEnv,
+				HasVariables:          len(merged.Env) > 0,
+				HasConfigFile:         merged.ConfigFile != "",
 				AcceptsLocalExecution: server.AcceptsLocalExecution,
 			})
 			if err != nil {
 				return settings.Setting{}, nil, fmt.Errorf("admin: encode MCP server: %w", err)
 			}
 
-			merged := given.Apply(domain.ReadMCPCredentials(stored.Secret)).ForTransport(transport)
 			return settings.Setting{
 					ScopeKind: settings.ScopeInstallation,
 					Kind:      settings.KindMCPServer, Name: server.Name,
@@ -181,10 +221,26 @@ func (i *Integrations) PutMCPServer(
 					"enabled": server.Enabled, "tokenChanged": given.Token != nil,
 					"acceptsLocalExecution": server.AcceptsLocalExecution,
 					"variables":             len(merged.Env),
+					"configFileChanged":     given.ConfigFile != nil,
+					"hasConfigFile":         merged.ConfigFile != "",
+					"configFileEnv":         configEnv,
 					"surface":               surfaceSize(surface),
 				}, nil
 		},
 	})
+}
+
+func configFileEnv(name string) *string {
+	if name == "" {
+		return nil
+	}
+	return &name
+}
+
+var configFileEnvPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+func validConfigFileEnv(name string) bool {
+	return name == "" || configFileEnvPattern.MatchString(name)
 }
 
 // MCPCredentials opens what a server was given. Separate and explicit:

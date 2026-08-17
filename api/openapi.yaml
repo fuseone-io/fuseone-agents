@@ -2095,6 +2095,18 @@ paths:
                     Omit to keep what is stored. Send an empty object to clear
                     it: not sending something and sending nothing are different
                     requests, and only one of them can be an erasure.
+                configFile:
+                  type: string
+                  description: >
+                    Configuration content to seal and materialise as a file for
+                    a local server. Omit to keep the stored file. Send an empty
+                    string to remove it.
+                configFileEnv:
+                  type: string
+                  description: >
+                    Environment variable that receives the managed file path.
+                    Omit to keep the stored variable; send an empty string to
+                    use the platform default. Meaningless for http.
                 surface:
                   type: array
                   items: { type: string }
@@ -3653,7 +3665,22 @@ components:
           description: The endpoint, for http.
         hasSecret:
           type: boolean
-          description: That a bearer token is stored, never what it is.
+          description: That a credential document is stored, never what it is.
+        hasVariables:
+          type: boolean
+          description: >
+            The sealed credential document includes environment variables for
+            a local process. The values never come back through this API.
+        hasConfigFile:
+          type: boolean
+          description: >
+            The sealed credential document includes a platform-managed
+            configuration file. The content never comes back through this API.
+        configFileEnv:
+          type: string
+          description: >
+            The environment variable that receives the managed configuration
+            file path for a local server. Absent means the platform default.
         surface:
           type: array
           items: { type: string }

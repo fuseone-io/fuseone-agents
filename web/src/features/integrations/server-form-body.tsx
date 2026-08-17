@@ -26,10 +26,12 @@ export function ServerFormBody({
   form,
   editing,
   hasSecret,
+  hasConfigFile,
 }: {
   form: UseFormReturn<ServerFormValues>;
   editing: boolean;
   hasSecret: boolean;
+  hasConfigFile: boolean;
 }) {
   const { t } = useTranslation();
 
@@ -82,7 +84,11 @@ export function ServerFormBody({
         )}
       />
 
-      <ServerFields form={form} hasSecret={hasSecret} />
+      <ServerFields
+        form={form}
+        hasSecret={hasSecret}
+        hasConfigFile={hasConfigFile}
+      />
 
       <FormField
         control={form.control}

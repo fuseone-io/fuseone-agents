@@ -150,6 +150,8 @@ an administrator to configure one, and the reconciler must not disconnect what
 it did not connect.
 */
 func (p *workerParts) connectTools(ctx context.Context, servers []string) error {
+	cleanupStaleConfigFiles()
+
 	reconcile := newReconciler(p.catalog, p.integrations, p.health)
 	if p.curator != nil {
 		reconcile = reconcile.publishingTo(p.curator)

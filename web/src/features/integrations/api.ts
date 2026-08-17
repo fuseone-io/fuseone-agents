@@ -43,6 +43,16 @@ export function usePutMCPServer() {
        * drop a credential.
        */
       env?: Record<string, string>;
+      /**
+       * Managed configuration content for a local server. Omitted keeps the
+       * stored file; an empty string removes it.
+       */
+      configFile?: string;
+      /**
+       * Variable that receives the managed config file path. Empty means the
+       * platform default; omitted leaves the stored choice alone.
+       */
+      configFileEnv?: string;
       acceptsLocalExecution: boolean;
       enabled: boolean;
     }) =>
@@ -58,6 +68,8 @@ export function usePutMCPServer() {
             // "clear it", and correcting a URL must not drop the token.
             token: input.token,
             env: input.env,
+            configFile: input.configFile,
+            configFileEnv: input.configFileEnv,
             acceptsLocalExecution: input.acceptsLocalExecution,
             enabled: input.enabled,
           },

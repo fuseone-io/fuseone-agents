@@ -18,9 +18,11 @@ describe("the credential fields", () => {
       <CredentialFields
         local={false}
         hasSecret
-        value={{ token: "", env: "" }}
+        hasConfigFile={false}
+        value={{ token: "", env: "", configFile: "", configFileEnv: "" }}
         onChange={vi.fn()}
         onRevoke={revoke}
+        onRevokeConfigFile={vi.fn()}
       />,
     );
 
@@ -33,9 +35,11 @@ describe("the credential fields", () => {
       <CredentialFields
         local={false}
         hasSecret={false}
-        value={{ token: "", env: "" }}
+        hasConfigFile={false}
+        value={{ token: "", env: "", configFile: "", configFileEnv: "" }}
         onChange={vi.fn()}
         onRevoke={vi.fn()}
+        onRevokeConfigFile={vi.fn()}
       />,
     );
     expect(screen.queryByRole("button", { name: /remover/i })).not.toBeInTheDocument();
@@ -46,22 +50,49 @@ describe("the credential fields", () => {
       <CredentialFields
         local
         hasSecret={false}
-        value={{ token: "", env: "" }}
+        hasConfigFile={false}
+        value={{ token: "", env: "", configFile: "", configFileEnv: "" }}
         onChange={vi.fn()}
         onRevoke={vi.fn()}
+        onRevokeConfigFile={vi.fn()}
       />,
     );
     expect(screen.getByLabelText(/variáveis/i)).toBeInTheDocument();
+    expect(
+      screen.getByLabelText(/^arquivo de configuração$/i),
+    ).toBeInTheDocument();
 
     rerender(
       <CredentialFields
         local={false}
         hasSecret={false}
-        value={{ token: "", env: "" }}
+        hasConfigFile={false}
+        value={{ token: "", env: "", configFile: "", configFileEnv: "" }}
         onChange={vi.fn()}
         onRevoke={vi.fn()}
+        onRevokeConfigFile={vi.fn()}
       />,
     );
     expect(screen.queryByLabelText(/variáveis/i)).not.toBeInTheDocument();
+  });
+
+  it("removes a managed config file separately from variables", async () => {
+    const revokeFile = vi.fn();
+    render(
+      <CredentialFields
+        local
+        hasSecret={false}
+        hasConfigFile
+        value={{ token: "", env: "", configFile: "", configFileEnv: "" }}
+        onChange={vi.fn()}
+        onRevoke={vi.fn()}
+        onRevokeConfigFile={revokeFile}
+      />,
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /arquivo de configuração/i }),
+    );
+    expect(revokeFile).toHaveBeenCalledOnce();
   });
 });
