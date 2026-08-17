@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { listing, matching, shelves } from "@/features/integrations/mcp/catalogue";
+import {
+  availableEntries,
+  listing,
+  matching,
+  shelves,
+} from "@/features/integrations/mcp/catalogue";
 import type { MCPServer } from "@/features/integrations/api";
 import type { ServerRecipe } from "@/features/integrations/mcp/api";
 
@@ -20,8 +25,9 @@ const connected = (name: string, tools = 0): MCPServer => ({
 
 describe("what the catalogue shows", () => {
   /*
-   * One list, because "what can we reach" is one question. Two lists make
-   * somebody check both to find that a server they already run is running.
+   * One join, because a server that is both known and configured is still one
+   * system. The side rail may split connected from available, but the split
+   * cannot duplicate a thing the installation already runs.
    */
   it("merges a connected server with the recipe for it, rather than listing it twice", () => {
     const shown = listing([connected("github", 12)], [recipe("github", "code")]);
@@ -57,6 +63,14 @@ describe("what the catalogue shows", () => {
     const shown = listing([], [recipe("x", "code")]);
     expect(matching(shown, "somebody")).toHaveLength(1);
     expect(matching(shown, "nobody")).toHaveLength(0);
+  });
+
+  it("keeps already configured servers out of the available shelf", () => {
+    const shown = listing(
+      [connected("github", 12)],
+      [recipe("github", "code"), recipe("stripe", "finance")],
+    );
+    expect(availableEntries(shown).map((one) => one.name)).toEqual(["stripe"]);
   });
 });
 

@@ -4,10 +4,13 @@ import { useState } from "react";
 import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
 import { Plug, Server } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ChannelsTab } from "@/features/channels/channels-tab";
-import { useTab } from "@/features/preferences/use-preferences";
+import { useChannels } from "@/features/channels/api";
 import { ConnectMenu } from "@/features/integrations/connect-menu";
+import {
+  IntegrationsShell,
+  type IntegrationSection,
+} from "@/features/integrations/integrations-shell";
 import { IntegrationsSection } from "@/features/integrations/integrations-section";
 import {
   EmptyState,
@@ -23,6 +26,12 @@ import {
   type MCPServer,
   type ModelProvider,
 } from "@/features/integrations/api";
+import { useRecipes } from "@/features/integrations/mcp/api";
+import { AvailableServersPanel } from "@/features/integrations/mcp/available-servers-panel";
+import {
+  availableEntries,
+  listing,
+} from "@/features/integrations/mcp/catalogue";
 
 type Editing =
   | { kind: "server"; value: MCPServer | null }
@@ -39,15 +48,29 @@ type Editing =
  * table makes every system look equally fine until somebody reads the column
  * on the right.
  */
-export function IntegrationsPage() {
+export function IntegrationsPage({
+  section = "connected",
+}: {
+  section?: IntegrationSection;
+}) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { data, isLoading, error, refetch } = useIntegrations();
+  const integrations = useIntegrations();
+  const recipes = useRecipes();
+  const channels = useChannels();
   const [editing, setEditing] = useState<Editing | null>(null);
-  const tab = useTab("integrations", "servers");
 
-  const servers = data?.mcpServers ?? [];
-  const providers = data?.providers ?? [];
+  const servers = integrations.data?.mcpServers ?? [];
+  const providers = integrations.data?.providers ?? [];
+  const available = availableEntries(listing(servers, recipes.data?.items ?? []));
+  const counts = {
+    connected: integrations.data ? servers.length : undefined,
+    available:
+      integrations.data && recipes.data ? available.length : undefined,
+    providers: integrations.data ? providers.length : undefined,
+    channels: channels.data ? channels.data.items.length : undefined,
+  };
+  const needsIntegrations = section === "connected" || section === "providers";
 
   return (
     <>
@@ -70,38 +93,18 @@ export function IntegrationsPage() {
         />
       </PageHeader>
 
-      {isLoading ? (
-        <LoadingRows rows={3} />
-      ) : error ? (
-        <ErrorState error={error} onRetry={() => void refetch()} />
-      ) : (
-        // Two tabs rather than two stacked sections: connecting a tool server
-        // and connecting a model are different jobs, done by the same person
-        // on different days. The cost is that the page no longer answers
-        // "what are we connected to" in one glance, so each tab says how many
-        // it holds without being opened.
-        <Tabs {...tab}>
-          <TabsList>
-            <TabsTrigger value="servers">
-              {t("integrations.servers")}
-              <span className="ml-1.5 font-mono text-2xs tabular-nums opacity-60">
-                {servers.length}
-              </span>
-            </TabsTrigger>
-            <TabsTrigger value="providers">
-              {t("integrations.providers")}
-              <span className="ml-1.5 font-mono text-2xs tabular-nums opacity-60">
-                {providers.length}
-              </span>
-            </TabsTrigger>
-            {/* Same job — what this installation is connected to — and unlike
-                the other two, nothing here grants an agent any ability. */}
-            <TabsTrigger value="channels">{t("channels.channels")}</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="servers" className="mt-4">
+      <IntegrationsShell active={section} counts={counts}>
+        {needsIntegrations && integrations.isLoading ? (
+          <LoadingRows rows={3} />
+        ) : needsIntegrations && integrations.error ? (
+          <ErrorState
+            error={integrations.error}
+            onRetry={() => void integrations.refetch()}
+          />
+        ) : section === "connected" ? (
+          <>
             <IntegrationsSection
-              title={t("integrations.servers")}
+              title={t("integrations.connected")}
               onAdd={() => void navigate("/integrations/mcp")}
               empty={
                 servers.length === 0 && (
@@ -121,13 +124,9 @@ export function IntegrationsPage() {
                 />
               ))}
             </IntegrationsSection>
-          </TabsContent>
-
-          <TabsContent value="channels" className="mt-4">
-            <ChannelsTab />
-          </TabsContent>
-
-          <TabsContent value="providers" className="mt-4">
+          </>
+        ) : section === "providers" ? (
+          <>
             <IntegrationsSection
               title={t("integrations.providers")}
               onAdd={() => setEditing({ kind: "provider", value: null })}
@@ -149,9 +148,22 @@ export function IntegrationsPage() {
                 />
               ))}
             </IntegrationsSection>
-          </TabsContent>
-        </Tabs>
-      )}
+          </>
+        ) : section === "available" ? (
+          <AvailableServersPanel
+            servers={servers}
+            recipes={recipes.data?.items ?? []}
+            isLoading={integrations.isLoading || recipes.isLoading}
+            error={integrations.error ?? recipes.error}
+            onRetry={() => {
+              void integrations.refetch();
+              void recipes.refetch();
+            }}
+          />
+        ) : (
+          <ChannelsTab />
+        )}
+      </IntegrationsShell>
 
       {editing?.kind === "server" && (
         <ServerForm server={editing.value} onClose={() => setEditing(null)} />

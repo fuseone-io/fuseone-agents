@@ -2,17 +2,14 @@ import type { IntegrationHealth, MCPServer } from "@/features/integrations/api";
 import type { ServerRecipe } from "@/features/integrations/mcp/api";
 
 /**
- * One shelf holds two kinds of thing, and the reader is asking one question.
+ * A joined read-model for recipes and configured servers.
  *
- * "What can this installation reach?" is answered by the servers it is
- * connected to and the ones it knows how to connect, and separating them into
- * two lists makes somebody look in both to find out that a server they already
- * run is already running.
- *
- * So they are one list, and connectedness is a state on the entry rather than
- * a section heading. A connected server the platform has no recipe for is
- * still here — the installation talks to it, which is the more important fact
- * than whether we happen to have read about it.
+ * The page now splits connected from available, but the join still has to be
+ * one rule: a recipe for a server that is already configured is the same
+ * thing wearing catalogue context, not a second thing the operator can connect
+ * again. A configured server with no recipe still survives the join because
+ * the installation talks to it, which matters more than whether we wrote a
+ * recipe for it.
  */
 export type Listing = {
   name: string;
@@ -106,4 +103,8 @@ export function matching(entries: Listing[], query: string): Listing[] {
       field.toLowerCase().includes(needle),
     ),
   );
+}
+
+export function availableEntries(entries: Listing[]): Listing[] {
+  return entries.filter((one) => !one.configured);
 }

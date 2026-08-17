@@ -72,6 +72,14 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="/policies/:code" element={<PolicyEditorPage />} />
                 <Route path="/audit" element={<AuditPage />} />
                 <Route path="/integrations" element={<IntegrationsPage />} />
+                <Route
+                  path="/integrations/providers"
+                  element={<IntegrationsPage section="providers" />}
+                />
+                <Route
+                  path="/integrations/channels"
+                  element={<IntegrationsPage section="channels" />}
+                />
                 <Route path="/integrations/mcp" element={<CataloguePage />} />
                 <Route
                   path="/integrations/mcp/new"
