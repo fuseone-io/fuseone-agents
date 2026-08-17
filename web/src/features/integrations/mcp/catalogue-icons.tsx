@@ -62,10 +62,13 @@ const SERVER_ICONS: Record<string, LucideIcon> = {
   linear: SquareKanban,
   memory: Brain,
   notion: BookOpen,
+  outline: BookOpen,
   postgres: Database,
+  redash: ChartNoAxesCombined,
   sentry: Bug,
   slack: MessageSquare,
   stripe: CreditCard,
+  superset: ChartNoAxesCombined,
   time: Clock,
 };
 

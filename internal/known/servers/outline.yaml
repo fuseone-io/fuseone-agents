@@ -1,0 +1,21 @@
+server: outline
+title: Outline
+category: knowledge
+publisher: Outline
+docs: https://docs.getoutline.com/s/guide/doc/mcp-6j9jtENNKL
+docsFrom: publisher
+provenance: documentation
+status: published
+config: [credential]
+transport: http
+url: https://<workspace>.getoutline.com/mcp
+auth: >
+  OAuth by default, or an Outline API key sent as a bearer token. Scope the key
+  to the workspace and permissions the agent should actually use; the MCP
+  server can search, read, create and edit documents inside that workspace.
+
+note: >
+  Outline ships a built-in Streamable HTTP MCP endpoint. The public guide names
+  the capability family but does not publish stable tool names here, so this
+  recipe intentionally suggests no classifications until the server is
+  discovered and the Curator can judge the concrete tools it returns.

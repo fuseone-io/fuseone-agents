@@ -38,10 +38,16 @@ export type Listing = {
   tools: number | null;
   status: ServerRecipe["status"] | null;
   configRequirements: ServerRecipe["configRequirements"];
+  auth: string | null;
+  transport: MCPServer["transport"] | ServerRecipe["transport"] | null;
+  command: string | null;
+  args: string[];
+  url: string | null;
   recipe: ServerRecipe | null;
 };
 
 const UNSHELVED = "operations";
+export const CONNECTED_SHELF = "__connected";
 
 export function listing(servers: MCPServer[], recipes: ServerRecipe[]): Listing[] {
   const byName = new Map<string, Listing>();
@@ -59,6 +65,11 @@ export function listing(servers: MCPServer[], recipes: ServerRecipe[]): Listing[
       tools: null,
       status: recipe.status,
       configRequirements: recipe.configRequirements,
+      auth: recipe.auth ?? null,
+      transport: recipe.transport ?? null,
+      command: recipe.command ?? null,
+      args: recipe.args ?? [],
+      url: recipe.url ?? null,
       recipe,
     });
   }
@@ -79,6 +90,11 @@ export function listing(servers: MCPServer[], recipes: ServerRecipe[]): Listing[
       tools: server.health?.toolCount ?? null,
       status: known?.status ?? null,
       configRequirements: known?.configRequirements ?? [],
+      auth: known?.auth ?? null,
+      transport: server.transport ?? known?.transport ?? null,
+      command: server.command ?? known?.command ?? null,
+      args: server.args ?? known?.args ?? [],
+      url: server.url ?? known?.url ?? null,
       recipe: known?.recipe ?? null,
     });
   }
@@ -101,11 +117,21 @@ export function shelves(entries: Listing[]): { category: string; count: number }
     .sort((a, b) => a.category.localeCompare(b.category));
 }
 
-export function matching(entries: Listing[], query: string): Listing[] {
+export function matching(
+  entries: Listing[],
+  query: string,
+  toolNames: Map<string, string[]> = new Map(),
+): Listing[] {
   const needle = query.trim().toLowerCase();
   if (needle === "") return entries;
   return entries.filter((one) =>
-    [one.name, one.title, one.publisher ?? ""].some((field) =>
+    [
+      one.name,
+      one.title,
+      one.publisher ?? "",
+      one.description ?? "",
+      ...(toolNames.get(one.name) ?? []),
+    ].some((field) =>
       field.toLowerCase().includes(needle),
     ),
   );

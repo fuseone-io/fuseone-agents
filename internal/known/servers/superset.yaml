@@ -1,0 +1,129 @@
+server: superset
+title: Apache Superset
+category: data
+publisher: Apache Superset
+docs: https://superset.apache.org/admin-docs/configuration/mcp-server/
+docsFrom: publisher
+provenance: documentation
+status: published
+config: [credential]
+transport: http
+url: http://localhost:5008/mcp
+auth: >
+  A Superset-authenticated MCP endpoint. Local development can run the built-in
+  server with Superset's CLI; production should use Superset's JWT bearer
+  authentication and the same RBAC boundaries the web UI uses.
+
+note: >
+  Superset's MCP server is built into Superset 5.0 and later. It exposes BI
+  metadata, dashboards, charts and SQL actions. SQL execution is classified by
+  the broadest thing the tool can express; read-only enforcement belongs in the
+  Superset role and database grants.
+
+suggestions:
+  - tool: health_check
+    effect: read
+    why: Checks the MCP service health and changes nothing.
+
+  - tool: get_instance_info
+    effect: read
+    why: Reads Superset instance metadata.
+
+  - tool: get_schema
+    effect: read
+    why: Reads the MCP schema exposed by Superset.
+
+  - tool: list_datasets
+    effect: read
+    untrusted: true
+    why: Dataset names and descriptions are authored in Superset.
+
+  - tool: get_dataset_info
+    effect: read
+    untrusted: true
+    why: Reads dataset metadata and expressions written by Superset users.
+
+  - tool: create_virtual_dataset
+    effect: write
+    why: Creates a dataset object other users can query and build charts from.
+
+  - tool: list_charts
+    effect: read
+    untrusted: true
+    why: Chart titles and metadata are user-authored.
+
+  - tool: get_chart_info
+    effect: read
+    untrusted: true
+    why: Reads chart configuration written by Superset users.
+
+  - tool: get_chart_data
+    effect: read
+    untrusted: true
+    why: Returns chart data from underlying databases.
+
+  - tool: get_chart_preview
+    effect: read
+    untrusted: true
+    why: Returns rendered chart content derived from database data and user-authored chart settings.
+
+  - tool: get_chart_type_schema
+    effect: read
+    why: Reads the schema for a chart type and changes nothing.
+
+  - tool: generate_chart
+    effect: write
+    why: Creates chart configuration from a prompt or specification.
+
+  - tool: update_chart
+    effect: destructive
+    why: Changes an existing chart other dashboards or users may depend on.
+
+  - tool: update_chart_preview
+    effect: write
+    why: Updates preview state for a chart without deleting the chart.
+
+  - tool: generate_explore_link
+    effect: read
+    why: Generates a link to explore existing Superset state.
+
+  - tool: list_dashboards
+    effect: read
+    untrusted: true
+    why: Dashboard names and descriptions are user-authored.
+
+  - tool: get_dashboard_info
+    effect: read
+    untrusted: true
+    why: Reads dashboard layout and metadata authored in Superset.
+
+  - tool: generate_dashboard
+    effect: write
+    why: Creates a dashboard object in Superset.
+
+  - tool: add_chart_to_existing_dashboard
+    effect: write
+    why: Modifies an existing dashboard by adding content to it.
+
+  - tool: execute_sql
+    effect: destructive
+    why: >
+      Executes SQL text. A SELECT and a mutation reach the platform through the
+      same MCP tool name, so the suggestion is judged by the most severe action
+      the connected database grant may allow.
+
+  - tool: save_sql_query
+    effect: write
+    why: Saves a SQL query for later use in Superset.
+
+  - tool: open_sql_lab_with_context
+    effect: read
+    why: Opens SQL Lab with context and changes no Superset object by itself.
+
+  - tool: list_databases
+    effect: read
+    why: Lists databases Superset can reach.
+
+  - tool: get_database_info
+    effect: read
+    why: Reads metadata about one configured database.

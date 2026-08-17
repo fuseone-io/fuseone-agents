@@ -1,0 +1,90 @@
+server: redash
+title: Redash
+category: data
+publisher: suthio
+docs: https://hexmos.com/freedevtools/mcp/cloud-services/suthio--redash-mcp/
+docsFrom: third-party
+provenance: documentation
+status: published
+config: [env]
+transport: stdio
+command: npx
+args: ["-y", "@suthio/redash-mcp"]
+auth: >
+  Environment variables for the Redash instance and API key: REDASH_URL and
+  REDASH_API_KEY. Optional REDASH_TIMEOUT, REDASH_MAX_RESULTS and
+  REDASH_EXTRA_HEADERS tune request behavior.
+
+note: >
+  This is a community Redash MCP recipe, not a Redash-published integration.
+  Query results, dashboard text and SQL are treated as untrusted because they
+  are authored by users or returned by databases the platform does not control.
+
+suggestions:
+  - tool: list-queries
+    effect: read
+    untrusted: true
+    why: Reads query names and metadata written by Redash users.
+
+  - tool: get-query
+    effect: read
+    untrusted: true
+    why: Reads SQL and query descriptions authored by Redash users.
+
+  - tool: list-data-sources
+    effect: read
+    why: Lists configured data sources without changing them.
+
+  - tool: execute-query
+    effect: read
+    untrusted: true
+    why: Reads database results through a saved Redash query.
+
+  - tool: execute-adhoc-query
+    effect: read
+    untrusted: true
+    why: Runs SQL and returns database rows. The read-only guarantee belongs in the Redash datasource grant.
+
+  - tool: get-query-results-csv
+    effect: read
+    untrusted: true
+    why: Returns query results as CSV, including user or database supplied text.
+
+  - tool: list-dashboards
+    effect: read
+    untrusted: true
+    why: Dashboard names and descriptions are user-authored.
+
+  - tool: get-dashboard
+    effect: read
+    untrusted: true
+    why: Reads dashboard layout and widget text authored in Redash.
+
+  - tool: get-visualization
+    effect: read
+    untrusted: true
+    why: Reads visualization configuration and labels authored by Redash users.
+
+  - tool: create-query
+    effect: write
+    why: Creates a saved query visible to other Redash users.
+
+  - tool: update-query
+    effect: destructive
+    why: Changes an existing saved query, including the SQL other people may run.
+
+  - tool: archive-query
+    effect: destructive
+    why: Removes a query from ordinary use. From here, archive and delete are both loss of availability.
+
+  - tool: create-visualization
+    effect: write
+    why: Creates a visualization attached to Redash content.
+
+  - tool: update-visualization
+    effect: destructive
+    why: Replaces how an existing visualization is defined and read.
+
+  - tool: delete-visualization
+    effect: destructive
+    why: Deletes a visualization other users may depend on.
