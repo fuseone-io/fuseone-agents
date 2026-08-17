@@ -897,7 +897,12 @@ closing criterion.
 
 **SE-10.** Composition between agents is by **event**: one agent publishes a typed
 event, another consumes it as a trigger. No free conversation, no direct call.
-The graph of who triggers whom is static and inspectable.
+The graph of who triggers whom is static and inspectable. An event may carry a
+small context contract — the shared work context kind and artifact kinds a
+listener may retrieve by reference — but it never carries another agent's prose
+as prompt. A listener opened by an event inherits the source run's delegating
+person and data labels; composition cannot wash taint or acquire authority that
+the source run did not have.
 
 ---
 

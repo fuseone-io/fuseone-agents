@@ -2,6 +2,7 @@ package trigger
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -33,7 +34,7 @@ first one already opened.
 // consumer and read from the published specifications.
 type Subscriptions interface {
 	// Emitters maps an agent to the events it publishes.
-	Emitters(ctx context.Context) (map[domain.AgentID][]string, error)
+	Emitters(ctx context.Context) (map[domain.AgentID][]domain.AgentEvent, error)
 	// Listeners maps an event to the agents it starts.
 	Listeners(ctx context.Context) (map[string][]domain.AgentID, error)
 }
@@ -90,7 +91,7 @@ func (d *Dispatcher) Sweep(ctx context.Context, limit int) (int, error) {
 	opened := 0
 	for _, run := range finished {
 		for _, event := range emitters[run.AgentID] {
-			n, err := d.publish(ctx, run, event, listeners[event])
+			n, err := d.publish(ctx, run, event, listeners[event.Event])
 			if err != nil {
 				return opened, err
 			}
@@ -102,7 +103,7 @@ func (d *Dispatcher) Sweep(ctx context.Context, limit int) (int, error) {
 
 // publish opens one run per listener.
 func (d *Dispatcher) publish(
-	ctx context.Context, source domain.RunSummary, event string, listeners []domain.AgentID,
+	ctx context.Context, source domain.RunSummary, event domain.AgentEvent, listeners []domain.AgentID,
 ) (int, error) {
 	opened := 0
 	for _, agent := range listeners {
@@ -116,9 +117,11 @@ func (d *Dispatcher) publish(
 
 		result, err := d.opener.Open(ctx, Request{
 			Agent:   agent,
-			IdemKey: fmt.Sprintf("event:%s:%s:%s", source.RunID, event, agent),
+			IdemKey: fmt.Sprintf("event:%s:%s:%s", source.RunID, event.Event, agent),
 			Trigger: "event",
+			By:      source.OnBehalfOf,
 			Input:   inputFor(source, event),
+			Labels:  source.Labels.Clone(),
 		})
 		if err != nil {
 			// A listener that is paused, stopped or still a draft is not an
@@ -126,15 +129,15 @@ func (d *Dispatcher) publish(
 			// else stops the sweep, because it will be the same next time.
 			if isRefusal(err) {
 				d.log.Debug("event listener did not start",
-					"event", event, "agent", agent, "why", err)
+					"event", event.Event, "agent", agent, "why", err)
 				continue
 			}
-			return opened, fmt.Errorf("trigger: publish %s to %s: %w", event, agent, err)
+			return opened, fmt.Errorf("trigger: publish %s to %s: %w", event.Event, agent, err)
 		}
 		if result.Created {
 			opened++
 			d.log.Info("event opened a run",
-				"event", event, "from", source.RunID, "agent", agent, "run", result.RunID)
+				"event", event.Event, "from", source.RunID, "agent", agent, "run", result.RunID)
 		}
 	}
 	return opened, nil
@@ -144,10 +147,25 @@ func (d *Dispatcher) publish(
 // from. Deliberately not the source run's output — an agent that read another
 // agent's result would be coupled to its wording, and the trail already links
 // the two runs.
-func inputFor(source domain.RunSummary, event string) []byte {
-	return []byte(fmt.Sprintf(
-		`{"event":%q,"from_run":%q,"from_agent":%q}`,
-		event, source.RunID, source.AgentID))
+func inputFor(source domain.RunSummary, event domain.AgentEvent) []byte {
+	input := struct {
+		Event     string   `json:"event"`
+		FromRun   string   `json:"from_run"`
+		FromAgent string   `json:"from_agent"`
+		Context   string   `json:"context,omitempty"`
+		Artifacts []string `json:"artifacts,omitempty"`
+	}{
+		Event:     event.Event,
+		FromRun:   string(source.RunID),
+		FromAgent: string(source.AgentID),
+		Context:   event.Context,
+		Artifacts: event.Artifacts,
+	}
+	data, err := json.Marshal(input)
+	if err != nil {
+		panic(fmt.Sprintf("trigger: encode event input: %v", err))
+	}
+	return data
 }
 
 // isRefusal reports whether the opener declined for a configured reason.

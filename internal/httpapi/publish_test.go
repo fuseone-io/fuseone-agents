@@ -95,6 +95,33 @@ func TestPublishAgent_writesTheVersionAndRecordsItPaused(t *testing.T) {
 	}
 }
 
+func TestPublishAgent_eventContextSurvivesTheConsolePath(t *testing.T) {
+	t.Parallel()
+	pub := newPublisher()
+
+	_, err := publishServer(t, pub).PublishAgent(
+		inArea("cx", domain.RoleAuthor),
+		openapi.PublishAgentRequestObject{AgentId: "triage", Body: definition(func(d *openapi.AgentDefinition) {
+			d.Emits = &[]openapi.AgentEvent{{
+				Event: "incident.triaged", Context: ptr("incident"),
+				Artifacts: &[]string{"triage_summary", "suspected_cause"},
+			}}
+		})},
+	)
+	if err != nil {
+		t.Fatalf("PublishAgent: %v", err)
+	}
+
+	if len(pub.published) != 1 || len(pub.published[0].Emits) != 1 {
+		t.Fatalf("published emits = %+v, want the event declaration", pub.published)
+	}
+	got := pub.published[0].Emits[0]
+	if got.Event != "incident.triaged" || got.Context != "incident" ||
+		len(got.Artifacts) != 2 || got.Artifacts[1] != "suspected_cause" {
+		t.Errorf("published event = %+v, want the context-carrying declaration", got)
+	}
+}
+
 func TestPublishAgent_returnsTheFileItPublished(t *testing.T) {
 	t.Parallel()
 

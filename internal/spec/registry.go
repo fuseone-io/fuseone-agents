@@ -52,7 +52,11 @@ func (r *Registry) Publish(ctx context.Context, s Spec, by domain.UserID, compan
 	// null because "declares no events" is the empty list rather than unknown.
 	emits := s.Emits
 	if emits == nil {
-		emits = []string{}
+		emits = Emits{}
+	}
+	encodedEmits, err := json.Marshal(emits)
+	if err != nil {
+		return fmt.Errorf("spec: encode emits: %w", err)
 	}
 	// The stages, for the same reason: an agent that declares none is the
 	// empty list, which is one envelope holding the whole pack — a different
@@ -75,7 +79,7 @@ func (r *Registry) Publish(ctx context.Context, s Spec, by domain.UserID, compan
 		on conflict (agent_id, version_id) do nothing`,
 		string(s.ID), string(s.Version), string(company), string(s.Area), s.Name,
 		s.Provider, s.Model, s.Effort, tools, budget, triggers,
-		s.Instructions, s.Source, string(by), emits, steps)
+		s.Instructions, s.Source, string(by), encodedEmits, steps)
 	if err != nil {
 		return fmt.Errorf("spec: publish %s@%s: %w", s.ID, s.Version, err)
 	}
@@ -89,6 +93,7 @@ func (r *Registry) Get(ctx context.Context, agent domain.AgentID, version domain
 		tools    []string
 		budget   []byte
 		triggers []byte
+		emits    []byte
 		steps    []byte
 		company  string
 	)
@@ -100,7 +105,7 @@ func (r *Registry) Get(ctx context.Context, agent domain.AgentID, version domain
 		string(agent), string(version),
 	).Scan(&s.ID, &s.Version, &company, &s.Area, &s.Name,
 		&s.Provider, &s.Model, &s.Effort, &tools, &budget, &triggers,
-		&s.Instructions, &s.Source, &s.Emits, &steps)
+		&s.Instructions, &s.Source, &emits, &steps)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Spec{}, fmt.Errorf("%w: %s@%s", ErrNotPublished, agent, version)
@@ -122,6 +127,9 @@ func (r *Registry) Get(ctx context.Context, agent domain.AgentID, version domain
 	for _, t := range stored {
 		s.Triggers = append(s.Triggers, Trigger{Type: t.Type, Schedule: t.Schedule, Path: t.Path, Event: t.Event})
 	}
+	if err := json.Unmarshal(emits, &s.Emits); err != nil {
+		return Spec{}, fmt.Errorf("spec: decode emits: %w", err)
+	}
 	if err := json.Unmarshal(steps, &s.Steps); err != nil {
 		return Spec{}, fmt.Errorf("spec: decode steps: %w", err)
 	}
@@ -137,10 +145,10 @@ func (r *Registry) Get(ctx context.Context, agent domain.AgentID, version domain
 // deletes it.
 func (r *Registry) Declared(
 	ctx context.Context, agent domain.AgentID, version domain.VersionID,
-) ([]Step, []string, error) {
+) ([]Step, Emits, error) {
 	var (
 		raw   []byte
-		emits []string
+		emits []byte
 	)
 	err := r.pool.QueryRow(ctx,
 		`select steps, emits from agent_specs where agent_id = $1 and version_id = $2`,
@@ -157,5 +165,9 @@ func (r *Registry) Declared(
 	if err := json.Unmarshal(raw, &steps); err != nil {
 		return nil, nil, fmt.Errorf("spec: decode steps: %w", err)
 	}
-	return steps, emits, nil
+	var decoded Emits
+	if err := json.Unmarshal(emits, &decoded); err != nil {
+		return nil, nil, fmt.Errorf("spec: decode emits: %w", err)
+	}
+	return steps, decoded, nil
 }

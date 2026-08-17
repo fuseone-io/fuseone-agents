@@ -104,7 +104,7 @@ func (s *Server) GetAgent(ctx context.Context, req openapi.GetAgentRequestObject
 			out.Steps = ptr(stepsFrom(declared))
 		}
 		if len(emits) > 0 {
-			out.Emits = &emits
+			out.Emits = ptr(eventsFrom(emits))
 		}
 	}
 	for _, v := range versions {

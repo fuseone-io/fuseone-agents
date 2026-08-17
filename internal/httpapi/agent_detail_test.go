@@ -8,6 +8,7 @@ import (
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/spec"
 )
 
 // Reading one agent is reading what somebody told it to do, in the exact
@@ -137,6 +138,42 @@ func (f *fakeDetail) Instructions(
 	_ context.Context, _ domain.AgentID, version domain.VersionID,
 ) (text, source string, err error) {
 	return f.instructions[version], "dev/agents/triage.agent.md", nil
+}
+
+type declaredDetail struct {
+	steps []spec.Step
+	emits spec.Emits
+}
+
+func (d declaredDetail) Declared(
+	context.Context, domain.AgentID, domain.VersionID,
+) ([]spec.Step, spec.Emits, error) {
+	return d.steps, d.emits, nil
+}
+
+func TestGetAgent_eventContextIsReturnedWithTheVersion(t *testing.T) {
+	t.Parallel()
+
+	resp, err := NewServer(ledger.NewMemory(), "test").
+		WithAgents(publishedVersions(t)).
+		WithDefinitions(declaredDetail{emits: spec.Emits{{
+			Event: "incident.triaged", Context: "incident",
+			Artifacts: []string{"triage_summary"},
+		}}}).
+		GetAgent(inArea("cx", domain.RoleAuthor), openapi.GetAgentRequestObject{AgentId: "triage"})
+	if err != nil {
+		t.Fatalf("GetAgent: %v", err)
+	}
+
+	got := resp.(openapi.GetAgent200JSONResponse)
+	if got.Emits == nil || len(*got.Emits) != 1 {
+		t.Fatalf("emits = %+v, want the declared event", got.Emits)
+	}
+	event := (*got.Emits)[0]
+	if event.Event != "incident.triaged" || event.Context == nil || *event.Context != "incident" ||
+		event.Artifacts == nil || len(*event.Artifacts) != 1 || (*event.Artifacts)[0] != "triage_summary" {
+		t.Errorf("event = %+v, want the context-carrying declaration", event)
+	}
 }
 
 /*

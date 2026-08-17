@@ -312,7 +312,7 @@ func TestPublish_emits_survivesTheRegistry(t *testing.T) {
 		ID: "triagem", Name: "Triagem", Area: "cx", Version: "v1",
 		Provider: "openai", Model: "gpt-4o-mini",
 		Tools:  []domain.ToolID{"crm.lookup"},
-		Emits:  []string{"ticket.triado"},
+		Emits:  spec.Emits{{Event: "ticket.triado"}},
 		Budget: domain.Budget{Micros: 100_000},
 	}
 	if err := registry.Publish(ctx, source, "usr_ana", "acme"); err != nil {
@@ -323,8 +323,37 @@ func TestPublish_emits_survivesTheRegistry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	if len(again.Emits) != 1 || again.Emits[0] != "ticket.triado" {
+	if len(again.Emits) != 1 || again.Emits[0].Event != "ticket.triado" {
 		t.Errorf("Emits = %v, want the declared event", again.Emits)
+	}
+}
+
+func TestPublish_emitContext_survivesTheRegistry(t *testing.T) {
+	registry := openRegistry(t)
+	ctx := context.Background()
+
+	source := spec.Spec{
+		ID: "triagem", Name: "Triagem", Area: "cx", Version: "v1",
+		Provider: "openai", Model: "gpt-4o-mini",
+		Tools: []domain.ToolID{"crm.lookup"},
+		Emits: spec.Emits{{
+			Event: "incident.triaged", Context: "incident",
+			Artifacts: []string{"triage_summary", "suspected_cause"},
+		}},
+		Budget: domain.Budget{Micros: 100_000},
+	}
+	if err := registry.Publish(ctx, source, "usr_ana", "acme"); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+
+	again, err := registry.Get(ctx, "triagem", "v1")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	got := again.Emits[0]
+	if got.Event != "incident.triaged" || got.Context != "incident" ||
+		strings.Join(got.Artifacts, ",") != "triage_summary,suspected_cause" {
+		t.Errorf("Emits[0] = %+v, want the context-carrying event", got)
 	}
 }
 

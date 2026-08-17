@@ -232,7 +232,7 @@ func renderAndParse(id string, in openapi.AgentDefinition) ([]byte, spec.Spec, e
 	for _, t := range valueOr(in.Tools) {
 		draft.Tools = append(draft.Tools, domain.ToolID(t))
 	}
-	draft.Emits = valueOr(in.Emits)
+	draft.Emits = emitsOf(in.Emits)
 	if in.Budget != nil {
 		draft.Budget = domain.Budget{
 			Micros: valueOr(in.Budget.Micros), Tokens: valueOr(in.Budget.Tokens),
@@ -259,6 +259,24 @@ func renderAndParse(id string, in openapi.AgentDefinition) ([]byte, spec.Spec, e
 		return nil, spec.Spec{}, err
 	}
 	return rendered, parsed, nil
+}
+
+func emitsOf(in *[]openapi.AgentEvent) spec.Emits {
+	if in == nil {
+		return nil
+	}
+	out := make(spec.Emits, 0, len(*in))
+	for _, event := range *in {
+		next := domain.AgentEvent{
+			Event:   event.Event,
+			Context: valueOr(event.Context),
+		}
+		if event.Artifacts != nil {
+			next.Artifacts = append([]string(nil), *event.Artifacts...)
+		}
+		out = append(out, next)
+	}
+	return out
 }
 
 /*

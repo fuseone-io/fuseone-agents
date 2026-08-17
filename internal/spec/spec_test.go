@@ -250,8 +250,43 @@ Triar o ticket.
 		t.Fatalf("Parse: %v", err)
 	}
 
-	if len(parsed.Emits) != 1 || parsed.Emits[0] != "ticket.triado" {
+	if len(parsed.Emits) != 1 || parsed.Emits[0].Event != "ticket.triado" {
 		t.Errorf("Emits = %v, want the declared event", parsed.Emits)
+	}
+}
+
+func TestParse_emitWithContext_isReadFromTheDefinition(t *testing.T) {
+	t.Parallel()
+
+	parsed, err := spec.Parse("triagem.agent.md", []byte(`---
+id: triagem
+name: Triagem
+area: cx
+provider: openai
+model: gpt-4o-mini
+tools:
+  - crm.lookup
+budget:
+  micros: 100000
+emits:
+  - event: incident.triaged
+    context: incident
+    artifacts: [triage_summary, suspected_cause]
+---
+
+Triar o incidente.
+`))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	if len(parsed.Emits) != 1 {
+		t.Fatalf("Emits = %v, want one declared event", parsed.Emits)
+	}
+	got := parsed.Emits[0]
+	if got.Event != "incident.triaged" || got.Context != "incident" ||
+		strings.Join(got.Artifacts, ",") != "triage_summary,suspected_cause" {
+		t.Errorf("Emits[0] = %+v, want the context-carrying event", got)
 	}
 }
 
@@ -265,7 +300,7 @@ func TestRender_emits_survivesTheRoundTrip(t *testing.T) {
 		ID: "triagem", Name: "Triagem", Area: "cx",
 		Provider: "openai", Model: "gpt-4o-mini",
 		Tools:        []domain.ToolID{"crm.lookup"},
-		Emits:        []string{"ticket.triado"},
+		Emits:        spec.Emits{{Event: "ticket.triado"}},
 		Budget:       domain.Budget{Micros: 100_000},
 		Instructions: "Triar o ticket.",
 	}
@@ -278,8 +313,37 @@ func TestRender_emits_survivesTheRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
-	if len(again.Emits) != 1 || again.Emits[0] != "ticket.triado" {
+	if len(again.Emits) != 1 || again.Emits[0].Event != "ticket.triado" {
 		t.Errorf("Emits = %v after the round trip, want the declared event", again.Emits)
+	}
+}
+
+func TestRender_emitContext_survivesTheRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	source := spec.Spec{
+		ID: "triagem", Name: "Triagem", Area: "cx",
+		Provider: "openai", Model: "gpt-4o-mini",
+		Tools: []domain.ToolID{"crm.lookup"},
+		Emits: spec.Emits{{
+			Event: "incident.triaged", Context: "incident",
+			Artifacts: []string{"triage_summary"},
+		}},
+		Budget:       domain.Budget{Micros: 100_000},
+		Instructions: "Triar o incidente.",
+	}
+
+	rendered, err := spec.Render(source)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	again, err := spec.Parse("triagem.agent.md", rendered)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if len(again.Emits) != 1 || again.Emits[0].Context != "incident" ||
+		len(again.Emits[0].Artifacts) != 1 || again.Emits[0].Artifacts[0] != "triage_summary" {
+		t.Errorf("Emits = %+v after the round trip, want the declared context", again.Emits)
 	}
 }
 

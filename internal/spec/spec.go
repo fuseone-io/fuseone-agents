@@ -54,7 +54,7 @@ type Spec struct {
 	// the day, and the requirement is that it is static and inspectable. An
 	// agent names an event and never an agent: it does not know who listens,
 	// which is what keeps this composition rather than a phone call.
-	Emits []string
+	Emits Emits
 
 	// Steps narrow what is reachable as a run advances. Absent means one
 	// envelope holding the whole pack, which is how every agent behaved
@@ -87,7 +87,7 @@ type frontmatter struct {
 	Effort   string    `yaml:"effort"`
 	Tools    []string  `yaml:"tools"`
 	Triggers []Trigger `yaml:"triggers"`
-	Emits    []string  `yaml:"emits,omitempty"`
+	Emits    Emits     `yaml:"emits,omitempty"`
 	Steps    []Step    `yaml:"steps,omitempty"`
 	Budget   struct {
 		Micros      int64 `yaml:"micros"`
@@ -169,6 +169,7 @@ func (s Spec) validate() error {
 		problems = append(problems, "provider is required")
 	}
 	problems = append(problems, triggerProblems(s.Triggers)...)
+	problems = append(problems, emitProblems(s.Emits)...)
 
 	if len(problems) > 0 {
 		return fmt.Errorf("%w: %s", ErrInvalid, strings.Join(problems, "; "))

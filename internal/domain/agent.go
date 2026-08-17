@@ -54,6 +54,19 @@ type AgentTrigger struct {
 	Event    string `json:"event,omitempty"`
 }
 
+/*
+AgentEvent is one event a finished run publishes for composition.
+
+The event name is what starts listeners. Context and artifacts are small
+declarations about what the listener may ask for by reference; they are not a
+blob of another agent's prose and not a direct call to another agent.
+*/
+type AgentEvent struct {
+	Event     string   `json:"event" yaml:"event"`
+	Context   string   `json:"context,omitempty" yaml:"context,omitempty"`
+	Artifacts []string `json:"artifacts,omitempty" yaml:"artifacts,omitempty"`
+}
+
 // AgentActivity is how an agent has been doing, aggregated from its runs.
 //
 // An agent has no state of its own to report — the platform has no autonomy

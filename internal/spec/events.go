@@ -18,15 +18,15 @@ the same act.
 */
 
 // Emitters maps each agent to the events its finished runs publish.
-func (r *Registry) Emitters(ctx context.Context) (map[domain.AgentID][]string, error) {
+func (r *Registry) Emitters(ctx context.Context) (map[domain.AgentID][]domain.AgentEvent, error) {
 	specs, err := r.latest(ctx)
 	if err != nil {
 		return nil, err
 	}
-	out := map[domain.AgentID][]string{}
+	out := map[domain.AgentID][]domain.AgentEvent{}
 	for _, s := range specs {
 		if len(s.Emits) > 0 {
-			out[s.ID] = s.Emits
+			out[s.ID] = []domain.AgentEvent(s.Emits)
 		}
 	}
 	return out, nil
@@ -67,7 +67,8 @@ func (r *Registry) Edges(ctx context.Context) ([]domain.EventEdge, error) {
 	var edges []domain.EventEdge
 	published := map[string]bool{}
 	for agent, events := range emitters {
-		for _, event := range events {
+		for _, declared := range events {
+			event := declared.Event
 			published[event] = true
 			if len(listeners[event]) == 0 {
 				edges = append(edges, domain.EventEdge{From: agent, Event: event})

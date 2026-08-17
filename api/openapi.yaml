@@ -4401,8 +4401,9 @@ components:
             Events a finished run of this agent publishes (PRD SE-10). Declared
             rather than called: an agent that chose when to emit would make the
             composition graph a fact about the day rather than about the
-            definitions.
-          items: { type: string }
+            definitions. Context and artifacts are declarations carried by
+            reference to listeners, never a blob of another agent's prose.
+          items: { $ref: '#/components/schemas/AgentEvent' }
         steps:
           type: array
           description: |
@@ -4468,7 +4469,7 @@ components:
             same version: a client that could not see them would drop them on
             every edit, and an agent that quietly stopped emitting takes every
             agent composed onto it down with it.
-          items: { type: string }
+          items: { $ref: '#/components/schemas/AgentEvent' }
         versions:
           type: array
           description: Every published version, newest first.
@@ -4522,6 +4523,24 @@ components:
         schedule: { type: string }
         path: { type: string }
         event: { type: string }
+
+    AgentEvent:
+      type: object
+      required: [event]
+      description: |
+        One event this agent publishes when a run finishes. The event name is
+        what starts listeners. Context and artifacts are small declarations
+        about what the listener may ask for by reference; they are not a direct
+        call to another agent and not another agent's prompt or prose.
+      properties:
+        event: { type: string }
+        context:
+          type: string
+          description: The shared work context kind this event belongs to.
+        artifacts:
+          type: array
+          description: Artifact kinds the listener may retrieve by reference.
+          items: { type: string }
 
     Budget:
       type: object

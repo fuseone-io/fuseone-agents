@@ -22,13 +22,29 @@ stages are read one version at a time, beside the instructions they belong to.
 // what a read does not return, an editor cannot put back, and publishing
 // again deletes it. Two calls would be two chances to forget one.
 type Definitions interface {
-	Declared(ctx context.Context, agent domain.AgentID, version domain.VersionID) (steps []spec.Step, emits []string, err error)
+	Declared(ctx context.Context, agent domain.AgentID, version domain.VersionID) (steps []spec.Step, emits spec.Emits, err error)
 }
 
 // WithDefinitions wires reading a published version's declared stages.
 func (s *Server) WithDefinitions(definitions Definitions) *Server {
 	s.definitions = definitions
 	return s
+}
+
+func eventsFrom(declared spec.Emits) []openapi.AgentEvent {
+	out := make([]openapi.AgentEvent, 0, len(declared))
+	for _, event := range declared {
+		one := openapi.AgentEvent{Event: event.Event}
+		if event.Context != "" {
+			one.Context = ptr(event.Context)
+		}
+		if len(event.Artifacts) > 0 {
+			artifacts := append([]string(nil), event.Artifacts...)
+			one.Artifacts = &artifacts
+		}
+		out = append(out, one)
+	}
+	return out
 }
 
 func stepsFrom(declared []spec.Step) []openapi.AgentStep {

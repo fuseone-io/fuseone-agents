@@ -2873,9 +2873,10 @@ export interface components {
              * @description Events a finished run of this agent publishes (PRD SE-10). Declared
              *     rather than called: an agent that chose when to emit would make the
              *     composition graph a fact about the day rather than about the
-             *     definitions.
+             *     definitions. Context and artifacts are declarations carried by
+             *     reference to listeners, never a blob of another agent's prose.
              */
-            emits?: string[];
+            emits?: components["schemas"]["AgentEvent"][];
             /**
              * @description The stages of the process, each an envelope with a gate at its
              *     exit. Absent means one envelope holding the whole capability pack,
@@ -2930,7 +2931,7 @@ export interface components {
              *     every edit, and an agent that quietly stopped emitting takes every
              *     agent composed onto it down with it.
              */
-            emits?: string[];
+            emits?: components["schemas"]["AgentEvent"][];
             /** @description Every published version, newest first. */
             versions: components["schemas"]["AgentVersion"][];
         };
@@ -2976,6 +2977,19 @@ export interface components {
             schedule?: string;
             path?: string;
             event?: string;
+        };
+        /**
+         * @description One event this agent publishes when a run finishes. The event name is
+         *     what starts listeners. Context and artifacts are small declarations
+         *     about what the listener may ask for by reference; they are not a direct
+         *     call to another agent and not another agent's prompt or prose.
+         */
+        AgentEvent: {
+            event: string;
+            /** @description The shared work context kind this event belongs to. */
+            context?: string;
+            /** @description Artifact kinds the listener may retrieve by reference. */
+            artifacts?: string[];
         };
         /** @description The ceilings a run is checked against. Every dimension is enforced at the Gate. */
         Budget: {
