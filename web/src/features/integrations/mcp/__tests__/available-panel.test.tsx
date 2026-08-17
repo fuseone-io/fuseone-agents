@@ -48,7 +48,11 @@ the connection act for exactly that server.
 */
 describe("available MCP servers", () => {
   it("opens the selected recipe in the side configuration panel", async () => {
-    open();
+    const { container } = open();
+
+    expect(
+      container.querySelector('[data-mcp-icon="stripe"] svg'),
+    ).toBeInTheDocument();
 
     await userEvent.click(
       screen.getByRole("button", { name: "Conectar Stripe" }),

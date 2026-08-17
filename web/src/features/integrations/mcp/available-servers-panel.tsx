@@ -9,6 +9,7 @@ import { Form } from "@/components/ui/form";
 import type { MCPServer } from "@/features/integrations/api";
 import type { ServerRecipe } from "@/features/integrations/mcp/api";
 import { CatalogueCard } from "@/features/integrations/mcp/catalogue-card";
+import { CatalogueIcon } from "@/features/integrations/mcp/catalogue-icons";
 import { CatalogueRail } from "@/features/integrations/mcp/catalogue-rail";
 import { ServerFormBody } from "@/features/integrations/server-form-body";
 import { useServerForm } from "@/features/integrations/mcp/use-server-form";
@@ -157,9 +158,13 @@ function ConnectServerPanel({
   return (
     <aside className="overflow-hidden rounded-xl border bg-card shadow-sm xl:sticky xl:top-4 xl:self-start">
       <header className="flex items-start gap-3 border-b p-4">
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted">
-          <Server className="size-4" aria-hidden />
-        </div>
+        <CatalogueIcon
+          entry={{
+            name: recipe?.server ?? "custom",
+            category: recipe?.category ?? "operations",
+          }}
+          className="size-9"
+        />
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-base font-medium">
             {t("mcp.connectionFor", { name: title })}
