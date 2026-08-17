@@ -4,6 +4,8 @@ category: data
 publisher: Model Context Protocol reference servers
 docs: https://github.com/modelcontextprotocol/servers
 docsFrom: publisher
+status: archived
+config: [credential]
 auth: >
   A connection string. Make read-only the role's own grant rather than a flag —
   a server that promises read-only is still a server making the promise.

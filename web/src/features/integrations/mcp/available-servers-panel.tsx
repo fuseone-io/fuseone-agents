@@ -10,6 +10,10 @@ import type { MCPServer } from "@/features/integrations/api";
 import type { ServerRecipe } from "@/features/integrations/mcp/api";
 import { CatalogueCard } from "@/features/integrations/mcp/catalogue-card";
 import { CatalogueIcon } from "@/features/integrations/mcp/catalogue-icons";
+import {
+  ConfigRequirementBadges,
+  RecipeStatusBadge,
+} from "@/features/integrations/mcp/recipe-badges";
 import { CatalogueRail } from "@/features/integrations/mcp/catalogue-rail";
 import { ServerFormBody } from "@/features/integrations/server-form-body";
 import { useServerForm } from "@/features/integrations/mcp/use-server-form";
@@ -194,6 +198,8 @@ function ConnectServerPanel({
           </p>
           {recipe && (
             <div className="flex flex-wrap items-center gap-2 text-2xs text-muted-foreground">
+              <RecipeStatusBadge status={recipe.status} />
+              <ConfigRequirementBadges requirements={recipe.configRequirements} />
               <span className="rounded-md bg-muted px-2 py-1">
                 {t(`mcp.docsFrom.${recipe.docsFrom}`)}
               </span>
@@ -212,6 +218,16 @@ function ConnectServerPanel({
                 </a>
               )}
             </div>
+          )}
+          {recipe?.status === "archived" && (
+            <p className="rounded-lg border border-danger/30 bg-danger-surface px-3 py-2 text-xs text-danger">
+              {t("mcp.archivedRecipeWarning")}
+            </p>
+          )}
+          {recipe?.configRequirements.includes("file") && (
+            <p className="rounded-lg border border-warning/30 bg-warning-surface px-3 py-2 text-xs text-warning">
+              {t("mcp.configFileWarning")}
+            </p>
           )}
         </div>
 

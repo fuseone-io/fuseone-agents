@@ -5,6 +5,8 @@ publisher: Google
 docs: https://developers.google.com/workspace/guides/configure-mcp-servers
 docsFrom: publisher
 provenance: documentation
+status: published
+config: [credential]
 transport: http
 url: https://chatmcp.googleapis.com/mcp/v1
 auth: >

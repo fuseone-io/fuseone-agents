@@ -5,6 +5,7 @@ publisher: Model Context Protocol reference servers
 docs: https://github.com/modelcontextprotocol/servers/tree/main/src/memory
 docsFrom: publisher
 provenance: documentation
+status: reference
 transport: stdio
 command: npx
 args: ["-y", "@modelcontextprotocol/server-memory"]

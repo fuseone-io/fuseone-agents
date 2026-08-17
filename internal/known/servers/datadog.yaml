@@ -5,6 +5,8 @@ publisher: Datadog
 docs: https://docs.datadoghq.com/mcp_server/
 docsFrom: publisher
 provenance: documentation
+status: published
+config: [credential]
 transport: http
 url: https://mcp.datadoghq.com/api/unstable/mcp-server/mcp
 auth: >

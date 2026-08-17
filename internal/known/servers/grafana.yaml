@@ -5,6 +5,8 @@ publisher: Grafana Labs
 docs: https://github.com/grafana/mcp-grafana
 docsFrom: publisher
 provenance: documentation
+status: published
+config: [env]
 transport: stdio
 command: uvx
 args: ["mcp-grafana"]

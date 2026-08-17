@@ -5,6 +5,8 @@ publisher: Google
 docs: https://developers.google.com/workspace/gmail/api/reference/mcp
 docsFrom: publisher
 provenance: documentation
+status: published
+config: [credential]
 transport: http
 url: https://gmailmcp.googleapis.com/mcp/v1
 auth: >

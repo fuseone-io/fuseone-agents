@@ -5,6 +5,8 @@ publisher: Amazon Web Services
 docs: https://github.com/awslabs/mcp
 docsFrom: publisher
 provenance: documentation
+status: published
+config: [env]
 auth: >
   AWS credentials, and the scoping that matters happens in IAM rather than
   here. A role that can read everything is a role the agent can read everything

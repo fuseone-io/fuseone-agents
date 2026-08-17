@@ -5,6 +5,8 @@ publisher: Amazon Web Services
 docs: https://github.com/awslabs/mcp/tree/main/src/aws-pricing-mcp-server
 docsFrom: publisher
 provenance: documentation
+status: published
+config: [env]
 transport: stdio
 command: uvx
 args: ["awslabs.aws-pricing-mcp-server@latest"]

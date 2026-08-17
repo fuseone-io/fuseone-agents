@@ -5,6 +5,8 @@ publisher: Sentry
 docs: https://github.com/getsentry/sentry-mcp
 docsFrom: publisher
 provenance: documentation
+status: published
+config: [credential]
 transport: http
 url: https://mcp.sentry.dev/mcp
 auth: >

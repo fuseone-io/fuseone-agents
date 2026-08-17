@@ -36,6 +36,8 @@ export type Listing = {
     shrinks, so counting it reports tools a server stopped offering last week.
   */
   tools: number | null;
+  status: ServerRecipe["status"] | null;
+  configRequirements: ServerRecipe["configRequirements"];
   recipe: ServerRecipe | null;
 };
 
@@ -55,6 +57,8 @@ export function listing(servers: MCPServer[], recipes: ServerRecipe[]): Listing[
       enabled: false,
       health: null,
       tools: null,
+      status: recipe.status,
+      configRequirements: recipe.configRequirements,
       recipe,
     });
   }
@@ -73,6 +77,8 @@ export function listing(servers: MCPServer[], recipes: ServerRecipe[]): Listing[
       enabled: server.enabled,
       health: server.health ?? null,
       tools: server.health?.toolCount ?? null,
+      status: known?.status ?? null,
+      configRequirements: known?.configRequirements ?? [],
       recipe: known?.recipe ?? null,
     });
   }

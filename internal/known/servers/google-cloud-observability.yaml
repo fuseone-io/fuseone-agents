@@ -5,6 +5,8 @@ publisher: Google
 docs: https://github.com/googleapis/gcloud-mcp
 docsFrom: publisher
 provenance: documentation
+status: published
+config: [env]
 transport: stdio
 command: npx
 args: ["-y", "@google-cloud/observability-mcp"]

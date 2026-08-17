@@ -5,6 +5,8 @@ publisher: Google
 docs: https://github.com/googleapis/gcloud-mcp
 docsFrom: publisher
 provenance: documentation
+status: published
+config: [env]
 auth: >
   The gcloud credentials on the machine it runs on. That is the part to think
   about: it inherits an identity somebody already authenticated, so what it can

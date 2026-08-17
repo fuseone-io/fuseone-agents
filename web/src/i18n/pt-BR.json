@@ -1459,6 +1459,19 @@
       "server": "conferido contra um servidor rodando",
       "documentation": "lido da documentação"
     },
+    "recipeStatus": {
+      "published": "publicado pelo fornecedor",
+      "reference": "referência",
+      "archived": "arquivado"
+    },
+    "configRequirement": {
+      "credential": "credencial",
+      "env": "variáveis",
+      "file": "arquivo",
+      "path": "caminho"
+    },
+    "archivedRecipeWarning": "A fonte desta receita marcou este servidor como arquivado ou não atual. Use como referência, não como caminho recomendado.",
+    "configFileWarning": "Esta receita espera um arquivo de configuração. Hoje o formulário só passa comando, argumentos e variáveis; informar um caminho em argumentos exige que esse arquivo já exista onde o worker roda.",
     "variables": "Variáveis",
     "variablesHint": "Uma NOME=valor por linha. Entregues ao processo deste servidor e a mais nada — ele não herda mais nada do worker. Guardadas no cofre, como um token, porque o motivo de um servidor precisar de uma variável costuma ser que a variável é uma chave.",
     "revoke": "Remover a credencial guardada",

@@ -4,6 +4,8 @@ category: data
 publisher: Model Context Protocol reference servers
 docs: https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem
 docsFrom: publisher
+status: reference
+config: [path]
 transport: stdio
 command: npx
 args: ["-y", "@modelcontextprotocol/server-filesystem", "/srv/agent-workspace"]

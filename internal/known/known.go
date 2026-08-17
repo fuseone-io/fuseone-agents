@@ -46,6 +46,25 @@ const (
 	FromDocumentation Provenance = "documentation"
 )
 
+// Status says what kind of recipe this is.
+type Status string
+
+const (
+	StatusPublished Status = "published"
+	StatusReference Status = "reference"
+	StatusArchived  Status = "archived"
+)
+
+// ConfigRequirement says what an operator must bring for this recipe to run.
+type ConfigRequirement string
+
+const (
+	ConfigCredential ConfigRequirement = "credential"
+	ConfigEnv        ConfigRequirement = "env"
+	ConfigFile       ConfigRequirement = "file"
+	ConfigPath       ConfigRequirement = "path"
+)
+
 // Suggestion is what the platform believes one tool does.
 type Suggestion struct {
 	Tool string `yaml:"tool"`
@@ -119,6 +138,13 @@ type Entry struct {
 	Docs       string     `yaml:"docs"`
 	DocsFrom   DocsSource `yaml:"docsFrom"`
 	Provenance Provenance `yaml:"provenance"`
+	// Status tells the console whether this is a current published server, a
+	// reference implementation, or a recipe whose source says it is archived.
+	// Required: "published" is an assertion, not the zero value.
+	Status Status `yaml:"status"`
+	// Config is the shape of what the operator must bring: a credential, env
+	// vars, a config file, or a path the worker can see.
+	Config []ConfigRequirement `yaml:"config,omitempty"`
 
 	/*
 		What the recipe proposes for the connection form.
@@ -205,6 +231,10 @@ func check(path string, entry Entry) error {
 		return fmt.Errorf("known: %s does not say whose documentation it points at", path)
 	case entry.DocsFrom == DocsFromPublisher && entry.Docs == "":
 		return fmt.Errorf("known: %s claims the publisher's documentation and links to none", path)
+	case entry.Status == "":
+		return fmt.Errorf("known: %s does not say whether the recipe is published, reference or archived", path)
+	case entry.Status != StatusPublished && entry.Status != StatusReference && entry.Status != StatusArchived:
+		return fmt.Errorf("known: %s has unknown status %q", path, entry.Status)
 	case entry.Transport == "stdio" && entry.Command == "":
 		return fmt.Errorf("known: %s suggests stdio and no command", path)
 	case entry.Transport == "http" && entry.URL == "":
@@ -215,6 +245,13 @@ func check(path string, entry Entry) error {
 	for _, one := range entry.Suggestions {
 		if one.Why == "" {
 			return fmt.Errorf("known: %s suggests %s with no reasoning", path, one.Tool)
+		}
+	}
+	for _, one := range entry.Config {
+		switch one {
+		case ConfigCredential, ConfigEnv, ConfigFile, ConfigPath:
+		default:
+			return fmt.Errorf("known: %s asks for unknown configuration %q", path, one)
 		}
 	}
 	return nil

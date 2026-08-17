@@ -5,6 +5,8 @@ publisher: Google
 docs: https://github.com/googleapis/mcp-toolbox
 docsFrom: publisher
 provenance: documentation
+status: published
+config: [credential, file]
 auth: >
   A database connection, configured in the toolbox rather than chosen by the
   model. Read-only belongs in the grant the connection uses — a server that

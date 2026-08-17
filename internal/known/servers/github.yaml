@@ -4,10 +4,12 @@ category: code
 publisher: GitHub
 docs: https://github.com/github/github-mcp-server
 docsFrom: publisher
+config: [credential]
 auth: >
   A GitHub token, scoped to the repositories the agent should reach. A
   classification bounds what a tool may do and cannot bound where.
 provenance: documentation
+status: published
 note: >
   Available hosted and as a container. The hosted one needs nothing running;
   the container is the only option for GitHub Enterprise Server, and running it

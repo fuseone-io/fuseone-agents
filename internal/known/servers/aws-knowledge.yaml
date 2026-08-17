@@ -5,6 +5,7 @@ publisher: Amazon Web Services
 docs: https://github.com/awslabs/mcp/tree/main/src/aws-knowledge-mcp-server
 docsFrom: publisher
 provenance: documentation
+status: published
 transport: http
 url: https://knowledge-mcp.global.api.aws
 auth: >

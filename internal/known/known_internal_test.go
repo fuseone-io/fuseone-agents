@@ -26,6 +26,24 @@ func TestLoad_twoEntriesWithTheSameServer_areRefused(t *testing.T) {
 	}
 }
 
+/*
+Published is an assertion, not a default.
+
+Missing status used to render as a maintained publisher recipe, which is the
+same class of bug as a missing tool classification rendering as read. Silence
+is not a judgement the console can show to an operator.
+*/
+func TestLoad_anEntryWithoutStatus_isRefused(t *testing.T) {
+	t.Parallel()
+
+	_, err := load(fstest.MapFS{
+		"servers/crm.yaml": {Data: []byte(strings.ReplaceAll(minimal("crm", "CRM"), "status: published\n", ""))},
+	})
+	if err == nil || !strings.Contains(err.Error(), "does not say whether") {
+		t.Fatalf("load = %v, want missing status refusal", err)
+	}
+}
+
 func minimal(server, title string) string {
 	return "server: " + server + `
 title: ` + title + `
@@ -34,6 +52,7 @@ publisher: Example
 docs: https://example.com
 docsFrom: publisher
 provenance: documentation
+status: published
 note: test
 `
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
+	"github.com/fuseone/agents/internal/known"
 )
 
 /*
@@ -103,10 +104,12 @@ func (s *Server) ListRecipes(ctx context.Context, _ openapi.ListRecipesRequestOb
 	for _, e := range entries {
 		recipe := openapi.ServerRecipe{
 			Server: e.Server, Title: e.Title, Publisher: e.Publisher,
-			Category:    e.Category,
-			DocsFrom:    openapi.ServerRecipeDocsFrom(e.DocsFrom),
-			Provenance:  openapi.ServerRecipeProvenance(e.Provenance),
-			Suggestions: ptr(len(e.Suggestions)),
+			Category:           e.Category,
+			ConfigRequirements: configRequirements(e.Config),
+			DocsFrom:           openapi.ServerRecipeDocsFrom(e.DocsFrom),
+			Provenance:         openapi.ServerRecipeProvenance(e.Provenance),
+			Status:             openapi.ServerRecipeStatus(e.Status),
+			Suggestions:        ptr(len(e.Suggestions)),
 		}
 		for value, into := range map[string]**string{
 			e.Docs: &recipe.Docs, e.Auth: &recipe.Auth,
@@ -128,4 +131,12 @@ func (s *Server) ListRecipes(ctx context.Context, _ openapi.ListRecipesRequestOb
 		return strings.Compare(a.Title, b.Title)
 	})
 	return openapi.ListRecipes200JSONResponse{Items: items}, nil
+}
+
+func configRequirements(in []known.ConfigRequirement) []openapi.ServerRecipeConfigRequirements {
+	out := make([]openapi.ServerRecipeConfigRequirements, 0, len(in))
+	for _, one := range in {
+		out = append(out, openapi.ServerRecipeConfigRequirements(one))
+	}
+	return out
 }

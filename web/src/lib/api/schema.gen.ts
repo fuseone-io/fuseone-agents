@@ -2414,6 +2414,30 @@ export interface components {
              * @enum {string}
              */
             provenance: "server" | "documentation";
+            /**
+             * @description The kind of recipe this is, not an endorsement.
+             *
+             *     Published means the publisher currently documents this server.
+             *     Reference means the protocol or SDK repository presents it as an
+             *     example/reference implementation. Archived means the source says
+             *     the implementation moved, aged out or should no longer be treated
+             *     as the current path. The console renders these differently because
+             *     a reference or archived server must not read like a maintained
+             *     vendor integration.
+             * @enum {string}
+             */
+            status: "published" | "reference" | "archived";
+            /**
+             * @description What the operator must bring before this recipe can really run.
+             *
+             *     Credential is an access token, DSN, key or OAuth grant. Env is a
+             *     sealed environment variable given only to this local process. File
+             *     is configuration content the platform should store and materialise;
+             *     path is a filesystem/repository root the worker must be able to
+             *     see. A path typed into args is not the same thing as a file the
+             *     platform owns.
+             */
+            configRequirements: ("credential" | "env" | "file" | "path")[];
             transport?: components["schemas"]["Transport"];
             command?: string;
             args?: string[];

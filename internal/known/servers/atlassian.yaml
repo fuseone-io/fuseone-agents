@@ -5,6 +5,7 @@ publisher: Atlassian
 docs: https://github.com/atlassian/atlassian-mcp-server
 docsFrom: publisher
 provenance: documentation
+status: published
 transport: http
 url: https://mcp.atlassian.com/v1/mcp/authv2
 auth: >

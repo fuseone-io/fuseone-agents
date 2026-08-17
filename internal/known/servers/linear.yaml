@@ -5,6 +5,8 @@ publisher: Linear
 docs: https://linear.app/docs/mcp
 docsFrom: publisher
 provenance: documentation
+status: published
+config: [credential]
 transport: http
 url: https://mcp.linear.app/mcp
 auth: >

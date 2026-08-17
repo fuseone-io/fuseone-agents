@@ -63,6 +63,9 @@ func TestEntries_everySuggestionIsRealAndExplained(t *testing.T) {
 		if entry.Provenance == "" {
 			t.Errorf("%s does not say how far it should be trusted", entry.Server)
 		}
+		if entry.Status == "" {
+			t.Errorf("%s does not say whether it is published, reference or archived", entry.Server)
+		}
 		if entry.Docs == "" {
 			t.Errorf("%s points nowhere an operator can read", entry.Server)
 		}
@@ -153,5 +156,28 @@ func TestLoad_anEntryWithNoSuggestions_isValid(t *testing.T) {
 		if entry.Title == "" || entry.Publisher == "" {
 			t.Errorf("%s ships without saying what it is or who publishes it", entry.Server)
 		}
+	}
+}
+
+/*
+Reference implementations are not vendor integrations.
+
+The upstream repository now points readers to the MCP Registry for the broad
+list, keeps only a small reference set, and marks PostgreSQL as archived. If
+that entry reads like a current published recipe again, the console will put
+too much confidence on the weakest database option.
+*/
+func TestLoad_archivedReferenceIsNotPresentedAsPublished(t *testing.T) {
+	t.Parallel()
+
+	entry, ok := load(t).For("postgres")
+	if !ok {
+		t.Fatal("postgres recipe missing")
+	}
+	if entry.Status != known.StatusArchived {
+		t.Fatalf("postgres status = %q, want archived", entry.Status)
+	}
+	if len(entry.Config) != 1 || entry.Config[0] != known.ConfigCredential {
+		t.Fatalf("postgres config = %+v, want the database credential named", entry.Config)
 	}
 }

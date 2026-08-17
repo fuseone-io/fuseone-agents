@@ -5,6 +5,8 @@ publisher: Slack
 docs: https://docs.slack.dev/ai/slack-mcp-server/
 docsFrom: publisher
 provenance: documentation
+status: published
+config: [credential]
 transport: http
 url: https://mcp.slack.com/mcp
 auth: >

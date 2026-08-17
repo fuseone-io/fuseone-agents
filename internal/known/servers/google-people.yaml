@@ -5,6 +5,8 @@ publisher: Google
 docs: https://developers.google.com/people/api/mcp/tools_list/search_directory_people
 docsFrom: publisher
 provenance: documentation
+status: published
+config: [credential]
 transport: http
 url: https://people.googleapis.com/mcp/v1
 auth: >

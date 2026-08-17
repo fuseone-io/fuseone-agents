@@ -15,6 +15,8 @@ const recipe = (server: string, category: string): ServerRecipe => ({
   publisher: "Somebody Else",
   docsFrom: "publisher",
   provenance: "documentation",
+  status: "published",
+  configRequirements: [],
 });
 
 const connected = (name: string, tools = 0): MCPServer => ({
@@ -32,7 +34,13 @@ describe("what the catalogue shows", () => {
   it("merges a connected server with the recipe for it, rather than listing it twice", () => {
     const shown = listing([connected("github", 12)], [recipe("github", "code")]);
     expect(shown).toHaveLength(1);
-    expect(shown[0]).toMatchObject({ configured: true, tools: 12, title: "GITHUB" });
+    expect(shown[0]).toMatchObject({
+      configured: true,
+      tools: 12,
+      title: "GITHUB",
+      status: "published",
+      configRequirements: [],
+    });
   });
 
   // The installation talks to it, which matters more than whether we happen
@@ -41,6 +49,7 @@ describe("what the catalogue shows", () => {
     const shown = listing([connected("in-house")], []);
     expect(shown.map((s) => s.name)).toEqual(["in-house"]);
     expect(shown[0]?.publisher).toBeNull();
+    expect(shown[0]?.status).toBeNull();
   });
 
   it("puts what is running first, because that is what somebody came to check", () => {

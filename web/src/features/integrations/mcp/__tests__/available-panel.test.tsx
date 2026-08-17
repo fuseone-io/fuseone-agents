@@ -13,13 +13,27 @@ const stripe: ServerRecipe = {
   publisher: "Stripe",
   docsFrom: "publisher",
   provenance: "documentation",
+  status: "published",
+  configRequirements: ["credential"],
   transport: "http",
   url: "https://mcp.stripe.com",
   docs: "https://docs.stripe.com/",
   note: "Payments and billing.",
 };
 
-function open() {
+const postgres: ServerRecipe = {
+  server: "postgres",
+  title: "PostgreSQL",
+  category: "data",
+  publisher: "Model Context Protocol reference servers",
+  docsFrom: "publisher",
+  provenance: "documentation",
+  status: "archived",
+  configRequirements: ["credential"],
+  note: "Read-only database access.",
+};
+
+function open(recipes: ServerRecipe[] = [stripe]) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -28,7 +42,7 @@ function open() {
       <MemoryRouter>
         <AvailableServersPanel
           servers={[]}
-          recipes={[stripe]}
+          recipes={recipes}
           isLoading={false}
           error={null}
           onRetry={vi.fn()}
@@ -61,5 +75,21 @@ describe("available MCP servers", () => {
     expect(screen.getByRole("heading", { name: "Stripe" })).toBeInTheDocument();
     expect(screen.getByDisplayValue("stripe")).toBeInTheDocument();
     expect(screen.getByDisplayValue("https://mcp.stripe.com")).toBeInTheDocument();
+  });
+
+  it("does not let an archived reference recipe look current", async () => {
+    open([postgres]);
+
+    expect(screen.getByText("arquivado")).toBeInTheDocument();
+    expect(screen.getByText("credencial")).toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Conectar PostgreSQL" }),
+    );
+
+    expect(screen.getAllByText("Read-only database access.")).toHaveLength(2);
+    expect(
+      screen.getByText(/marcou este servidor como arquivado/),
+    ).toBeInTheDocument();
   });
 });

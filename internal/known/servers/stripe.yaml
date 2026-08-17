@@ -5,6 +5,8 @@ publisher: Stripe
 docs: https://docs.stripe.com/mcp
 docsFrom: publisher
 provenance: documentation
+status: published
+config: [credential]
 transport: http
 url: https://mcp.stripe.com
 auth: >

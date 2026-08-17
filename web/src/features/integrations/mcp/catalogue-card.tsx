@@ -2,6 +2,10 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import type { Listing } from "@/features/integrations/mcp/catalogue";
 import { CatalogueIcon } from "@/features/integrations/mcp/catalogue-icons";
+import {
+  ConfigRequirementBadges,
+  RecipeStatusBadge,
+} from "@/features/integrations/mcp/recipe-badges";
 import { cn } from "@/lib/utils";
 
 /**
@@ -54,6 +58,8 @@ export function CatalogueCard({
       </div>
 
       <div className="flex flex-wrap items-center gap-2 text-xs">
+        {entry.status && <RecipeStatusBadge status={entry.status} />}
+        <ConfigRequirementBadges requirements={entry.configRequirements} />
         <span className="text-muted-foreground">{t("mcp.notConnected")}</span>
       </div>
 

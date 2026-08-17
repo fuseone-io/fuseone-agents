@@ -1459,6 +1459,19 @@
       "server": "checked against a running server",
       "documentation": "read from documentation"
     },
+    "recipeStatus": {
+      "published": "published by vendor",
+      "reference": "reference",
+      "archived": "archived"
+    },
+    "configRequirement": {
+      "credential": "credential",
+      "env": "variables",
+      "file": "file",
+      "path": "path"
+    },
+    "archivedRecipeWarning": "This recipe's source marks this server as archived or not current. Treat it as a reference, not the recommended path.",
+    "configFileWarning": "This recipe expects a configuration file. Today the form only passes command, arguments and variables; putting a path in arguments requires that file to already exist where the worker runs.",
     "variables": "Variables",
     "variablesHint": "One NAME=value per line. Given to this server's process and to nothing else — it no longer inherits anything from the worker. Kept in the vault, like a token, because the reason a server needs a variable is usually that the variable is a key.",
     "revoke": "Remove the stored credential",

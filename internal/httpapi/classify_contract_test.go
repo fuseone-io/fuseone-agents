@@ -179,6 +179,12 @@ func TestListRecipes_carryWhoPublishesAndWhoseDocumentationWasRead(t *testing.T)
 		if recipe.Publisher == "" || recipe.DocsFrom == "" {
 			t.Errorf("%s ships without saying who publishes it or whose page was read", recipe.Server)
 		}
+		if recipe.Status == "" {
+			t.Errorf("%s ships without a recipe status", recipe.Server)
+		}
+		if recipe.ConfigRequirements == nil {
+			t.Errorf("%s ships with nil configuration requirements", recipe.Server)
+		}
 	}
 }
 
