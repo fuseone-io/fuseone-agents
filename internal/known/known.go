@@ -97,7 +97,7 @@ these say what a server is *for*, which is the question somebody browsing is
 actually asking.
 */
 var Categories = []string{
-	"code", "data", "knowledge", "communication", "operations", "web",
+	"code", "data", "finance", "knowledge", "communication", "operations", "web",
 }
 
 // Entry is one server the platform knows about.

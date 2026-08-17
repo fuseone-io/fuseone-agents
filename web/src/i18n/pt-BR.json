@@ -1478,6 +1478,7 @@
     "category": {
       "code": "Código",
       "data": "Dados",
+      "finance": "Financeiro",
       "knowledge": "Conhecimento",
       "communication": "Comunicação",
       "operations": "Operação",

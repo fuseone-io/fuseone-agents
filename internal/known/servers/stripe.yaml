@@ -1,6 +1,6 @@
 server: stripe
 title: Stripe
-category: operations
+category: finance
 publisher: Stripe
 docs: https://docs.stripe.com/mcp
 docsFrom: publisher
