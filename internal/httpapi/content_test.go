@@ -76,6 +76,50 @@ func TestGetStepContent_pendingApproval_returnsTheProposedArguments(t *testing.T
 	}
 }
 
+func TestGetStepContent_finishedRun_returnsTheClosingAnswer(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, content := ledger.NewMemory(), engine.NewMemoryContent()
+	answer := "Refunded R$ 88,21 to Maria Silva."
+	ref, err := content.Put(ctx, "run-cx", 2, []byte(answer))
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	for _, step := range []domain.Step{
+		{RunID: "run-cx", Kind: domain.StepRunStarted, Scope: domain.Scope{Company: "acme", Area: "cx"},
+			AgentID: "triage", VersionID: "v1", At: time.Date(2026, 8, 11, 12, 0, 0, 0, time.UTC)},
+		{RunID: "run-cx", Kind: domain.StepRunFinished, Scope: domain.Scope{Company: "acme", Area: "cx"},
+			AgentID: "triage", VersionID: "v1", At: time.Date(2026, 8, 11, 12, 0, 1, 0, time.UTC),
+			Payload: mustPayload(t, domain.RunFinishedPayload{
+				OutcomeRef: ref, OutcomeDigest: "sha256:answer",
+			})},
+	} {
+		if _, err := store.Append(ctx, step); err != nil {
+			t.Fatalf("seed %s: %v", step.Kind, err)
+		}
+	}
+
+	resp, err := NewServer(store, "test").WithContent(content).
+		GetStepContent(inArea("cx", domain.RoleAuthor),
+			openapi.GetStepContentRequestObject{RunId: "run-cx", Seq: 2})
+	if err != nil {
+		t.Fatalf("GetStepContent: %v", err)
+	}
+
+	got, ok := resp.(openapi.GetStepContent200JSONResponse)
+	if !ok {
+		t.Fatalf("response = %T, want the answer content", resp)
+	}
+	if got.Content != answer {
+		t.Errorf("content = %q, want %q", got.Content, answer)
+	}
+	if got.Digest != "sha256:answer" {
+		t.Errorf("digest = %q, want the one the chain sealed", got.Digest)
+	}
+}
+
 func TestGetStepContent_inAnotherArea_readsAsAbsent(t *testing.T) {
 	t.Parallel()
 

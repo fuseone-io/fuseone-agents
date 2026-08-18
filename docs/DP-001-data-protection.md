@@ -43,21 +43,18 @@ because neither touches `run_steps`. It is permanent.
 
 | Written into the step | Where it comes from |
 |---|---|
-| `RunFinishedPayload.Outcome` | **The model's final answer, verbatim** |
+| `RunFinishedPayload.Outcome` on older runs | **The model's final answer, verbatim** |
 | `ApprovalDecidedPayload` note | Typed by the person approving |
 | `AbandonedPayload.Reason` | Typed by the person abandoning the run |
 | Resume note | Typed by the person resuming |
 
-The first row is the one a reviewer must weigh. An agent's closing answer is
-free text produced by the model, and it can restate anything the agent read on
-the way — a name, an address, the body of a ticket. It is written into a table
-that has no `UPDATE` and no `DELETE`, and an erasure request does not reach it.
-
-**This is a defect, not a design.** The outcome belongs in the content store
-behind a reference like everything else of its kind, and until it is moved this
-installation cannot promise that erasure removes the personal data a run
-handled. A customer weighing that risk should assume the model's final answer
-is permanent.
+The first row is the one a reviewer must weigh. It was a defect: an agent's
+closing answer is free text produced by the model, and it can restate anything
+the agent read on the way — a name, an address, the body of a ticket. New runs
+store that answer in `run_content` behind `OutcomeRef` and `OutcomeDigest`.
+Older runs cannot be rewritten without breaking the hash chain, so their inline
+answers remain permanent. A customer with historical runs should assume those
+old model answers survive erasure.
 
 ---
 
@@ -149,9 +146,10 @@ tool, what the Gate decided, and the digest of content that no longer exists.
 That much is the deliberate trade — a record of processing is what the platform
 is for.
 
-**And, today, more than that.** The free text of section 1 survives too,
-including the model's final answer. That part is not a trade anybody chose; it
-is a defect, and it is stated here rather than left for a reviewer to find.
+**And, for older runs, more than that.** The free text of section 1 survives too,
+including model answers recorded before `OutcomeRef` existed. That part was not
+a trade anybody chose; it is historical behaviour that cannot be repaired by
+rewriting the chain.
 
 If a regulator requires that no trace of the processing survive, this platform
 does not meet that requirement, and no configuration changes it.
@@ -227,8 +225,10 @@ Stated plainly, because each of these gets assumed:
 - **Erasure has not been rehearsed at volume.** The mechanism is tested; a
   subject request across a large installation has not been carried out.
 - **No certification is claimed.** Not ISO 27001, not SOC 2, not any other.
-- **The permanence in section 1 has not been fixed.** It is recorded here as a
-  known defect; a reviewer should read it as current behaviour, not as a plan.
+- **Historical inline outcomes have not been erased.** New runs store the model's
+  closing answer where retention and erasure reach it. Old runs that already
+  wrote that answer into `run_steps` keep it there, because rewriting the chain
+  would destroy the audit property the platform depends on.
 - **The provider list may drift.** Section 3 names what the built-in list
   carries today. An installation's configuration is what actually governs where
   data goes, and it is the customer's to read.

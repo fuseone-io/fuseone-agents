@@ -97,6 +97,10 @@ func referenceOf(step domain.Step) (ref, digest string) {
 		var p domain.ToolReturnedPayload
 		decodePayload(step.Payload, &p)
 		return p.ResultRef, ""
+	case domain.StepRunFinished:
+		var p domain.RunFinishedPayload
+		decodePayload(step.Payload, &p)
+		return p.OutcomeRef, p.OutcomeDigest
 	}
 	return "", ""
 }
