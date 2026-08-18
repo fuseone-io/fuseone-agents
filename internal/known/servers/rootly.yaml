@@ -1,0 +1,165 @@
+server: rootly
+title: Rootly
+category: operations
+publisher: Rootly
+docs: https://docs.rootly.com/integrations/mcp-server
+docsFrom: publisher
+provenance: documentation
+status: published
+config: [credential]
+transport: http
+url: https://mcp.rootly.com/mcp
+auth: >
+  OAuth 2.0 with the hosted Rootly MCP service, or an explicit Rootly API
+  token as an Authorization bearer token for headless contexts. Prefer OAuth
+  where the client can complete the sign-in flow; the resulting token is
+  scoped and short-lived.
+authModes:
+  - type: oauth2
+    principal: user
+    label: Rootly OAuth 2.0
+    note: Recommended by Rootly for the hosted MCP service; the token cannot exceed the authorizing user's permissions.
+  - type: bearer
+    principal: user
+    label: Personal Rootly API token
+    header: Authorization
+    prefix: Bearer
+    note: Direct API token path for clients or deployments that cannot complete OAuth yet; carries the user who created it.
+  - type: bearer
+    principal: service
+    label: Team or global Rootly API token
+    header: Authorization
+    prefix: Bearer
+    note: Headless Rootly token for team-scoped or organization-wide workflows; choose the narrowest token type that fits the agent.
+
+note: >
+  Hosted Rootly MCP is the preferred shape here: the worker calls an address
+  instead of running Rootly code locally. Rootly also documents local and
+  self-hosted deployments with uv or Docker, but those belong in development or
+  owned infrastructure, not in a FuseOne worker image.
+
+  Rootly is an incident and on-call system. Connecting it does not make this
+  platform an incident-management product; it gives an agent governed tool
+  access to Rootly records. Keep the surface narrow. A full Rootly token can
+  see incidents, alerts, schedules, services, workflows and post-incident
+  reviews, and write tools can notify people or change the operational record.
+
+suggestions:
+  - tool: get_server_version
+    effect: read
+    why: Reports the Rootly MCP server version. It changes nothing and carries no customer incident text.
+
+  - tool: list_endpoints
+    effect: read
+    why: Lists the Rootly API endpoints exposed through the server. It changes nothing.
+
+  - tool: list_incidents
+    effect: read
+    untrusted: true
+    why: >
+      Incident titles, summaries, labels and custom fields are written by
+      responders or imported from other tools. Reading them is safe as an
+      effect, but the text is not trusted input.
+
+  - tool: getIncident
+    effect: read
+    untrusted: true
+    why: >
+      Reads one incident, including fields and retrospective context that other
+      people wrote during an outage.
+
+  - tool: get_incident
+    effect: read
+    untrusted: true
+    why: >
+      Reads one incident, including fields and retrospective context that other
+      people wrote during an outage.
+
+  - tool: collect_incidents
+    effect: read
+    untrusted: true
+    why: Aggregates incident records. The aggregation does not launder the incident text it returns.
+
+  - tool: search_incidents
+    effect: read
+    untrusted: true
+    why: Searches incident records and returns human-authored incident content.
+
+  - tool: find_related_incidents
+    effect: read
+    untrusted: true
+    why: Compares against historical incidents and returns their authored descriptions and resolutions.
+
+  - tool: get_shift_incidents
+    effect: read
+    untrusted: true
+    why: Reads incidents tied to an on-call shift, including titles and summaries authored during response.
+
+  - tool: get_alert_by_short_id
+    effect: read
+    untrusted: true
+    why: >
+      Alert payloads often originate in monitoring tools, webhooks or tickets.
+      Treat alert text like log text: somebody else chose what it says.
+
+  - tool: get_oncall_schedule_summary
+    effect: read
+    why: Summarizes on-call schedules and shifts. It changes no routing or paging state.
+
+  - tool: list_shifts
+    effect: read
+    why: Lists on-call shifts. It reads schedule data and writes nothing.
+
+  - tool: get_oncall_shift_metrics
+    effect: read
+    why: Reads shift analytics. It changes no schedule or escalation policy.
+
+  - tool: check_responder_availability
+    effect: read
+    why: Checks whether responders appear available. It should not page or mutate the schedule.
+
+  - tool: check_oncall_health_risk
+    effect: read
+    why: Reads on-call workload signals to flag risk. It changes no Rootly record.
+
+  - tool: get_oncall_handoff_summary
+    effect: read
+    untrusted: true
+    why: Handoff summaries include responder-authored operational notes.
+
+  - tool: suggest_solutions
+    effect: read
+    untrusted: true
+    why: >
+      Mines past resolutions for suggestions. Useful, but the source material
+      is human-authored incident history and must remain tainted.
+
+  - tool: createIncident
+    effect: write
+    why: >
+      Creates an incident record and may trigger response workflows or notify
+      people. Closing it later does not undo the operational noise it created.
+
+  - tool: create_incident
+    effect: write
+    why: >
+      Creates an incident record and may trigger response workflows or notify
+      people. Closing it later does not undo the operational noise it created.
+
+  - tool: updateIncident
+    effect: write
+    why: >
+      Changes the incident record people use during response and after-action
+      review. It is visible and auditable, but it is still an operational write.
+
+  - tool: update_incident
+    effect: write
+    why: >
+      Changes the incident record people use during response and after-action
+      review. It is visible and auditable, but it is still an operational write.
+
+  - tool: create_override_recommendation
+    effect: write
+    why: >
+      Creates an on-call override recommendation. Even if a person applies it
+      later, it writes into the operational decision trail.

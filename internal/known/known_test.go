@@ -193,3 +193,39 @@ func TestLoad_archivedReferenceIsNotPresentedAsPublished(t *testing.T) {
 		t.Fatalf("postgres config = %+v, want the database credential named", entry.Config)
 	}
 }
+
+func TestLoad_rootlyIsRemoteFirstAndKeepsIncidentTextTainted(t *testing.T) {
+	t.Parallel()
+
+	entry, ok := load(t).For("rootly")
+	if !ok {
+		t.Fatal("rootly recipe missing")
+	}
+	if entry.Transport != "http" || entry.URL != "https://mcp.rootly.com/mcp" {
+		t.Fatalf("rootly connection = %s %s, want hosted HTTP MCP", entry.Transport, entry.URL)
+	}
+	if entry.Status != known.StatusPublished || entry.DocsFrom != known.DocsFromPublisher {
+		t.Fatalf("rootly status/docs = %s/%s, want published publisher recipe", entry.Status, entry.DocsFrom)
+	}
+	if !hasAuthMode(entry.AuthModes, known.AuthOAuth2) || !hasAuthMode(entry.AuthModes, known.AuthBearer) {
+		t.Fatalf("rootly auth modes = %+v, want OAuth and bearer documented", entry.AuthModes)
+	}
+
+	read, ok := load(t).Suggest("rootly", "get_alert_by_short_id")
+	if !ok || read.Effect != domain.EffectRead.String() || read.Untrusted == nil || !*read.Untrusted {
+		t.Fatalf("get_alert_by_short_id suggestion = %+v, want tainted read", read)
+	}
+	write, ok := load(t).Suggest("rootly", "createIncident")
+	if !ok || write.Effect != domain.EffectWrite.String() {
+		t.Fatalf("createIncident suggestion = %+v, want write", write)
+	}
+}
+
+func hasAuthMode(modes []known.AuthMode, typ known.AuthType) bool {
+	for _, one := range modes {
+		if one.Type == typ {
+			return true
+		}
+	}
+	return false
+}
