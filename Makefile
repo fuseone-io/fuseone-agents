@@ -9,7 +9,7 @@ BIN     := bin/agentd
 OAPI    := github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.8.0
 GEN_GO  := internal/httpapi/openapi/server.gen.go
 
-.PHONY: volume check check-pg test-pg smoke dev stop reset db run-pg build build-api web console test race cover vet fmt lint tidy clean generate verify-generate run
+.PHONY: release volume check check-pg test-pg smoke dev stop reset db run-pg build build-api web console test race cover vet fmt lint tidy clean generate verify-generate run
 
 # A database of its own. Sharing one with `make dev` meant a running worker
 # claimed the runs a test had just opened, and a test run wiped the
@@ -172,3 +172,21 @@ volume: db
 		$(GO) run ./cmd/agentd migrate
 	@docker compose exec -T postgres psql -U agents -d agents_vol -q \
 		-v steps=$(STEPS) < scripts/volume.sql
+
+## release: tag a version, which is what publishes it.
+## Nothing is released by merging: the tag is the act, and CI builds the image
+## and chart that carry its version. Refuses a dirty tree, an unreleased
+## changelog and a tag that already exists — each of the three has shipped
+## somebody a version that does not match what they can read.
+release:
+	@test -n "$(V)" || { echo "usage: make release V=0.2.0"; exit 1; }
+	@git diff --quiet || { echo "the tree is dirty; a tag must name a commit somebody can check out"; exit 1; }
+	@git rev-parse "v$(V)" >/dev/null 2>&1 && { echo "v$(V) already exists"; exit 1; } || true
+	@grep -q "^## \[$(V)\]" CHANGELOG.md || { \
+		echo "CHANGELOG.md has no '## [$(V)]' section."; \
+		echo "Rename [Unreleased] to [$(V)] and say what an operator has to do before upgrading."; \
+		exit 1; }
+	@$(MAKE) --no-print-directory check
+	git tag -a "v$(V)" -m "$(V)"
+	git push origin "v$(V)"
+	@echo "tagged. CI publishes ghcr.io/fuseone-io/fuseone-agents:$(V) and :latest"
