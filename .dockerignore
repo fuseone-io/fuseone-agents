@@ -11,3 +11,11 @@ internal/web/dist
 docs
 *.md
 !README.md
+
+# The binary imports github.com/fuseone/agents/docs, and that package embeds
+# only docs/manual. Keep the rest of docs/ out of the image context while still
+# letting the package compile inside Docker.
+!docs/
+!docs/*.go
+!docs/manual/
+!docs/manual/**
