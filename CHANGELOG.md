@@ -25,38 +25,27 @@ field" is a commit message.
 
 ---
 
-## [Unreleased]
-
-### Added
-
-- Runtime health shows the worker queue, current run phases and typed model
-  provider failures, including overloaded and rate-limited providers.
-- Runs parked after a provider failure show the stable cause and provider
-  request id on the execution page.
-
-### Changed
-
-- Runtime health counts terminal phases only inside its requested window, so
-  opening the page during an incident does not scan the full run history.
-- Non-retryable model provider failures park immediately instead of spending
-  every configured retry attempt on a request the classifier already knows will
-  fail again.
-
-### Security
-
-- Classified model provider failures write only their stable code to
-  `runs.last_error`; provider response bodies stay out of the run projection.
+## [0.4.1] — 2026-08-18
 
 ### Fixed
 
-- OIDC sign-in no longer depends on the `serve` replica that handled the
-  identity-provider configuration. Each sign-in start and callback reconciles
-  the local registry with the durable provider settings, so a callback routed
-  to another pod does not fail with "no such identity provider".
-- OIDC reconciliation on the sign-in path now reuses unchanged providers and
-  keeps the last live provider when the database, vault or identity-provider
-  discovery has a transient failure, instead of rediscovering and evicting on
-  every unauthenticated request.
+- **Signing in no longer depends on which `serve` replica answers.** The OIDC
+  registry is per process, so a provider configured through one replica was
+  invisible to the other: sign-in succeeded or failed depending on where the
+  request landed, with `no such identity provider` one time and `none of your
+  groups map to a role` the next. Every sign-in start and callback now
+  reconciles against the durable configuration before deciding anything.
+
+  It reconciles **by revision**, so an unchanged provider costs one read and
+  nothing else — no vault open, no rediscovery of the issuer. Doing that work
+  per request would have put an outbound call to the customer's identity
+  provider behind an endpoint that takes no credential to reach.
+
+  A transient failure of the database, the vault or discovery keeps the live
+  provider rather than evicting it, because a login path that goes down with
+  the database is a worse trade than the staleness it was fixing. A provider
+  disabled or deleted is still evicted — that half is what the reconciliation
+  is for.
 
 ## [0.4.0] — 2026-08-18
 
