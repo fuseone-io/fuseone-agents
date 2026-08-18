@@ -1419,6 +1419,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/integrations/mcp-servers/{name}/probe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask a worker to reach a tool server now
+         * @description Records an explicit connection test for a configured server. The API process does not connect to MCP servers itself: for stdio that would start code in the API pod instead of in the worker that offers tools to agents. A worker consumes this request and records the same health observation ordinary reconciliation writes.
+         */
+        post: operations["probeMCPServer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/companies": {
         parameters: {
             query?: never;
@@ -5342,6 +5362,10 @@ export interface operations {
                     url?: string;
                     /** @description Bearer token for a remote server. Omit to keep the stored one — correcting a URL must not demand re-entering a secret nobody has to hand. */
                     token?: string;
+                    /** @description Exact HTTP headers for a remote server whose credential is not a bearer token, such as Api-Key or Authorization: Basic. Omit to keep stored headers. Send an empty object to remove them. A non-empty object becomes the active HTTP credential and replaces stored bearer or OAuth material. */
+                    headers?: {
+                        [key: string]: string;
+                    };
                     /** @description OAuth grant for a remote server. Omit to keep the stored grant. Send an empty object to clear it. A non-empty grant becomes the active HTTP credential and replaces a stored bearer token. */
                     oauth?: components["schemas"]["MCPOAuthGrant"];
                     /**
@@ -5396,6 +5420,29 @@ export interface operations {
                 };
                 content?: never;
             };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    probeMCPServer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The probe was queued for a worker. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
         };

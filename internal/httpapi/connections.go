@@ -25,6 +25,7 @@ type Integrations interface {
 	Providers(ctx context.Context) ([]domain.ModelProvider, error)
 	PutMCPServer(ctx context.Context, by domain.UserID, scope domain.Scope, server domain.MCPServer, creds domain.MCPCredentialPatch) error
 	MCPCredentials(ctx context.Context, name string) (domain.MCPCredentials, error)
+	RequestMCPProbe(ctx context.Context, by domain.UserID, scope domain.Scope, name string) error
 	DeleteMCPServer(ctx context.Context, by domain.UserID, scope domain.Scope, name string) error
 	PutProvider(ctx context.Context, by domain.UserID, scope domain.Scope, provider domain.ModelProvider, apiKey string) error
 	DeleteProvider(ctx context.Context, by domain.UserID, scope domain.Scope, name string) error

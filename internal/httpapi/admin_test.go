@@ -21,6 +21,7 @@ type fakeAdmin struct {
 
 	putServer   domain.MCPServer
 	putToken    string
+	putHeaders  map[string]string
 	putOAuth    *domain.MCPOAuthGrant
 	putEnv      map[string]string
 	token       string
@@ -28,6 +29,7 @@ type fakeAdmin struct {
 	putKey      string
 	putBy       domain.UserID
 	deleted     string
+	probed      string
 	err         error
 }
 
@@ -41,7 +43,7 @@ func (f *fakeAdmin) PutMCPServer(
 	_ context.Context, by domain.UserID, _ domain.Scope, s domain.MCPServer,
 	creds domain.MCPCredentialPatch,
 ) error {
-	f.putServer, f.putBy, f.putEnv = s, by, creds.Env
+	f.putServer, f.putBy, f.putEnv, f.putHeaders = s, by, creds.Env, creds.Headers
 	if creds.Token != nil {
 		f.putToken = *creds.Token
 	}
@@ -54,6 +56,10 @@ func (f *fakeAdmin) PutMCPServer(
 
 func (f *fakeAdmin) MCPCredentials(context.Context, string) (domain.MCPCredentials, error) {
 	return domain.MCPCredentials{Token: f.token}, nil
+}
+func (f *fakeAdmin) RequestMCPProbe(_ context.Context, by domain.UserID, _ domain.Scope, name string) error {
+	f.probed, f.putBy = name, by
+	return f.err
 }
 func (f *fakeAdmin) DeleteMCPServer(_ context.Context, by domain.UserID, _ domain.Scope, name string) error {
 	f.deleted, f.putBy = name, by
@@ -234,6 +240,67 @@ func TestPutMCPServer_passesOAuthGrantToTheStore(t *testing.T) {
 		admin.putOAuth.ExpiresAtUnix != expires ||
 		admin.putOAuth.Scopes[0] != "sheets.readonly" {
 		t.Fatalf("oauth = %+v, want the request grant passed to admin", admin.putOAuth)
+	}
+}
+
+func TestPutMCPServer_passesHeaderCredentialsToTheStore(t *testing.T) {
+	t.Parallel()
+
+	admin := &fakeAdmin{}
+	headers := map[string]string{"Api-Key": "nr_secret"}
+	resp, err := serverWith(t, admin).PutMCPServer(as(domain.RoleCurator), openapi.PutMCPServerRequestObject{
+		Name: "newrelic",
+		Body: &openapi.PutMCPServerJSONRequestBody{
+			Transport: ptr(openapi.Http),
+			Url:       ptr("https://mcp.newrelic.com/mcp/"),
+			Headers:   &headers,
+		},
+	})
+	if err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+	if _, ok := resp.(openapi.PutMCPServer204Response); !ok {
+		t.Fatalf("response = %T, want 204", resp)
+	}
+	if admin.putToken != "" {
+		t.Fatalf("token = %q, want no bearer token", admin.putToken)
+	}
+	if admin.putHeaders["Api-Key"] != "nr_secret" {
+		t.Fatalf("headers = %+v, want the request headers passed to admin", admin.putHeaders)
+	}
+}
+
+func TestProbeMCPServer_recordsWhoAskedForTheWorkerCheck(t *testing.T) {
+	t.Parallel()
+
+	admin := &fakeAdmin{}
+	resp, err := serverWith(t, admin).ProbeMCPServer(as(domain.RoleCurator),
+		openapi.ProbeMCPServerRequestObject{Name: "stripe"})
+	if err != nil {
+		t.Fatalf("ProbeMCPServer: %v", err)
+	}
+	if _, ok := resp.(openapi.ProbeMCPServer202Response); !ok {
+		t.Fatalf("response = %T, want 202", resp)
+	}
+	if admin.probed != "stripe" || admin.putBy != "usr_ana" {
+		t.Errorf("probe = %q by %q, want stripe by the caller", admin.probed, admin.putBy)
+	}
+}
+
+func TestProbeMCPServer_withoutThePermission_isRefused(t *testing.T) {
+	t.Parallel()
+
+	admin := &fakeAdmin{}
+	resp, err := serverWith(t, admin).ProbeMCPServer(as(domain.RoleAuditor),
+		openapi.ProbeMCPServerRequestObject{Name: "stripe"})
+	if err != nil {
+		t.Fatalf("ProbeMCPServer: %v", err)
+	}
+	if _, refused := resp.(openapi.ProbeMCPServer403ApplicationProblemPlusJSONResponse); !refused {
+		t.Fatalf("response = %T, want a refusal", resp)
+	}
+	if admin.probed != "" {
+		t.Fatalf("probe was recorded despite the refusal: %q", admin.probed)
 	}
 }
 

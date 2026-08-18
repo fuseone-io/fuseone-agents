@@ -66,8 +66,9 @@ func (s *Server) PutMCPServer(ctx context.Context, req openapi.PutMCPServerReque
 		either to empty here would turn every edit into a quiet erasure.
 	*/
 	creds := domain.MCPCredentialPatch{
-		Token: req.Body.Token,
-		OAuth: oauthGrantFromRequest(req.Body.Oauth),
+		Token:   req.Body.Token,
+		Headers: stringMapOrNil(req.Body.Headers),
+		OAuth:   oauthGrantFromRequest(req.Body.Oauth),
 	}
 	if req.Body.Env != nil {
 		creds.Env = *req.Body.Env
@@ -83,6 +84,26 @@ func (s *Server) PutMCPServer(ctx context.Context, req openapi.PutMCPServerReque
 		}, nil
 	}
 	return openapi.PutMCPServer204Response{}, nil
+}
+
+func (s *Server) ProbeMCPServer(ctx context.Context, req openapi.ProbeMCPServerRequestObject) (openapi.ProbeMCPServerResponseObject, error) {
+	caller, forbidden := s.configurer(ctx)
+	if forbidden != nil {
+		return openapi.ProbeMCPServer403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: *forbidden,
+		}, nil
+	}
+	if s.integrations == nil {
+		return nil, errNoAdministration
+	}
+
+	if err := s.integrations.RequestMCPProbe(ctx, caller, adminScope, req.Name); err != nil {
+		return openapi.ProbeMCPServer400ApplicationProblemPlusJSONResponse{
+			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
+				upstreamRefused(err.Error())),
+		}, nil
+	}
+	return openapi.ProbeMCPServer202Response{}, nil
 }
 
 func oauthGrantFromRequest(in *openapi.MCPOAuthGrant) *domain.MCPOAuthGrant {

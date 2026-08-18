@@ -78,3 +78,14 @@ func valueOr[T any](p *T) T {
 	}
 	return *p
 }
+
+func stringMapOrNil(p *map[string]string) map[string]string {
+	if p == nil {
+		return nil
+	}
+	out := make(map[string]string, len(*p))
+	for k, v := range *p {
+		out[k] = v
+	}
+	return out
+}

@@ -2078,6 +2078,15 @@ paths:
                     Bearer token for a remote server. Omit to keep the stored
                     one — correcting a URL must not demand re-entering a secret
                     nobody has to hand.
+                headers:
+                  type: object
+                  additionalProperties: { type: string }
+                  description: >
+                    Exact HTTP headers for a remote server whose credential is
+                    not a bearer token, such as Api-Key or Authorization:
+                    Basic. Omit to keep stored headers. Send an empty object
+                    to remove them. A non-empty object becomes the active HTTP
+                    credential and replaces stored bearer or OAuth material.
                 oauth:
                   allOf: [{ $ref: '#/components/schemas/MCPOAuthGrant' }]
                   description: >
@@ -2147,6 +2156,28 @@ paths:
           schema: { type: string }
       responses:
         '204': { description: The server is removed. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/integrations/mcp-servers/{name}/probe:
+    post:
+      tags: [admin]
+      operationId: probeMCPServer
+      summary: Ask a worker to reach a tool server now
+      description: >
+        Records an explicit connection test for a configured server. The API
+        process does not connect to MCP servers itself: for stdio that would
+        start code in the API pod instead of in the worker that offers tools
+        to agents. A worker consumes this request and records the same health
+        observation ordinary reconciliation writes.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '202': { description: The probe was queued for a worker. }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 

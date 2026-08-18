@@ -38,6 +38,11 @@ export function usePutMCPServer() {
        */
       token?: string;
       /**
+       * Exact HTTP headers for remote credentials that are not bearer tokens.
+       * Absent leaves stored headers alone; an empty object revokes them.
+       */
+      headers?: Record<string, string>;
+      /**
        * Absent leaves the stored OAuth grant; an empty object removes it.
        * A non-empty grant becomes the active HTTP credential and replaces a
        * stored bearer.
@@ -74,6 +79,7 @@ export function usePutMCPServer() {
             // Omitted rather than emptied: an empty one would read as
             // "clear it", and correcting a URL must not drop the token.
             token: input.token,
+            headers: input.headers,
             oauth: input.oauth,
             env: input.env,
             configFile: input.configFile,
@@ -89,11 +95,25 @@ export function usePutMCPServer() {
 }
 
 export function useDeleteMCPServer() {
+	const queryClient = useQueryClient();
+	return useMutation({
+    mutationFn: async (name: string) =>
+      unwrap(
+        await api.DELETE("/admin/integrations/mcp-servers/{name}", {
+          params: { path: { name } },
+        }),
+      ),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({ queryKey: integrationKeys.all }),
+	  });
+}
+
+export function useProbeMCPServer() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (name: string) =>
       unwrap(
-        await api.DELETE("/admin/integrations/mcp-servers/{name}", {
+        await api.POST("/admin/integrations/mcp-servers/{name}/probe", {
           params: { path: { name } },
         }),
       ),

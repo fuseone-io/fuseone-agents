@@ -35,11 +35,11 @@ const postgres: ServerRecipe = {
   note: "Read-only database access.",
 };
 
-const newrelic: ServerRecipe = {
-  server: "newrelic",
-  title: "New Relic",
+const datadog: ServerRecipe = {
+  server: "datadog",
+  title: "Datadog",
   category: "operations",
-  publisher: "New Relic",
+  publisher: "Datadog",
   docsFrom: "publisher",
   provenance: "documentation",
   status: "published",
@@ -48,12 +48,11 @@ const newrelic: ServerRecipe = {
     {
       type: "headers",
       principal: "service",
-      label: "New Relic API key",
-      header: "Api-Key",
+      label: "API and application key headers",
     },
   ],
   transport: "http",
-  url: "https://mcp.newrelic.com/mcp",
+  url: "https://mcp.datadoghq.com/api/unstable/mcp-server/mcp",
   note: "Observability.",
 };
 
@@ -123,11 +122,11 @@ describe("available MCP servers", () => {
     expect(screen.queryByLabelText(/token bearer/i)).not.toBeInTheDocument();
   });
 
-  it("does not turn a custom-header recipe into a token field", async () => {
-    const { container } = open([newrelic]);
+  it("does not turn a multi-header recipe into one token field", async () => {
+    const { container } = open([datadog]);
 
     await userEvent.click(
-      screen.getByRole("button", { name: "Conectar New Relic" }),
+      screen.getByRole("button", { name: "Conectar Datadog" }),
     );
 
     expect(container.querySelector("#token")).not.toBeInTheDocument();

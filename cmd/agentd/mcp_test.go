@@ -12,7 +12,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/engine"
+	"github.com/fuseone/agents/internal/tools"
 )
 
 /*
@@ -185,6 +189,33 @@ func TestAuthenticatedClient_sendsBearerTokensToRemoteServers(t *testing.T) {
 	t.Cleanup(remote.Close)
 
 	client, err := authenticatedClient("github", domain.MCPCredentials{Token: "ghp_secret"}, nil)
+	if err != nil {
+		t.Fatalf("authenticatedClient: %v", err)
+	}
+	resp, err := client.Get(remote.URL)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	_ = resp.Body.Close()
+}
+
+func TestAuthenticatedClient_sendsConfiguredHeaderCredentialsToRemoteServers(t *testing.T) {
+	t.Parallel()
+
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Api-Key"); got != "nr_secret" {
+			t.Errorf("Api-Key = %q, want the configured header", got)
+		}
+		if got := r.Header.Get("Authorization"); got != "" {
+			t.Errorf("Authorization = %q, want no invented bearer header", got)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(remote.Close)
+
+	client, err := authenticatedClient("newrelic", domain.MCPCredentials{
+		Headers: map[string]string{"Api-Key": "nr_secret"},
+	}, nil)
 	if err != nil {
 		t.Fatalf("authenticatedClient: %v", err)
 	}
@@ -515,4 +546,149 @@ func TestFingerprint_aServerNobodyTouched_keepsItsSession(t *testing.T) {
 	if fingerprint(server) != fingerprint(server) {
 		t.Error("a server reconnects on every pass")
 	}
+}
+
+func TestReconciler_aProbeRequestReconnectsThroughTheWorkerPath(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	server := domain.MCPServer{
+		Name: "crm", Transport: domain.TransportHTTP, URL: "https://tools.example.com/mcp",
+		Enabled: true, UpdatedAt: time.Date(2026, 8, 17, 10, 0, 0, 0, time.UTC),
+	}
+	configured := &probeServers{servers: []domain.MCPServer{server}, probes: []string{"crm"}}
+	catalog := tools.NewCatalog(engine.NewMemoryContent())
+	old := &testSession{tools: []*mcp.Tool{{Name: "old"}}}
+	if err := catalog.AddServer(ctx, "crm", old, nil); err != nil {
+		t.Fatalf("seed catalog: %v", err)
+	}
+	health := recordingHealth{}
+	publisher := &recordingPublisher{}
+	r := newReconciler(catalog, configured, health).publishingTo(publisher)
+	r.connected["crm"] = fingerprint(server)
+	r.connectTo = func(
+		ctx context.Context, catalog *tools.Catalog, server domain.MCPServer,
+		_ domain.MCPCredentials, _ OAuthGrantStore,
+	) error {
+		return catalog.AddServer(ctx, server.Name, &testSession{tools: []*mcp.Tool{{
+			Name:        "lookup",
+			Description: "Look a customer up.",
+			InputSchema: map[string]any{"type": "object"},
+		}}}, server.Surface)
+	}
+
+	r.reconcile(ctx)
+
+	if !old.closed {
+		t.Error("the successful probe did not replace the old session")
+	}
+	if _, known := catalog.Effect("crm.old"); known {
+		t.Error("the old tool survived the probe replacement")
+	}
+	if _, known := catalog.Effect("crm.lookup"); !known {
+		t.Error("the probed tool was not published into the runtime catalogue")
+	}
+	if len(configured.probes) != 0 {
+		t.Fatalf("probe was not consumed: %v", configured.probes)
+	}
+	if len(publisher.entries) == 0 {
+		t.Fatal("the changed catalogue was not published")
+	}
+	if seen := health["crm"]; !seen.Reachable || seen.ToolCount != 1 {
+		t.Fatalf("health = %+v, want the successful probe observation", seen)
+	}
+}
+
+func TestReconciler_aFailedProbeKeepsTheCurrentSession(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	server := domain.MCPServer{
+		Name: "crm", Transport: domain.TransportHTTP, URL: "https://tools.example.com/mcp",
+		Enabled: true, UpdatedAt: time.Date(2026, 8, 17, 10, 0, 0, 0, time.UTC),
+	}
+	configured := &probeServers{servers: []domain.MCPServer{server}, probes: []string{"crm"}}
+	catalog := tools.NewCatalog(engine.NewMemoryContent())
+	old := &testSession{tools: []*mcp.Tool{{Name: "lookup"}}}
+	if err := catalog.AddServer(ctx, "crm", old, nil); err != nil {
+		t.Fatalf("seed catalog: %v", err)
+	}
+	health := recordingHealth{}
+	publisher := &recordingPublisher{}
+	r := newReconciler(catalog, configured, health).publishingTo(publisher)
+	r.connected["crm"] = fingerprint(server)
+	r.connectTo = func(
+		context.Context, *tools.Catalog, domain.MCPServer, domain.MCPCredentials, OAuthGrantStore,
+	) error {
+		return errors.New("dial timeout")
+	}
+
+	r.reconcile(ctx)
+
+	if old.closed {
+		t.Error("a failed probe closed the live session")
+	}
+	if _, known := catalog.Effect("crm.lookup"); !known {
+		t.Error("the current tool disappeared after a failed probe")
+	}
+	if len(publisher.entries) != 0 {
+		t.Fatalf("published after a failed probe: %+v", publisher.entries)
+	}
+	if seen := health["crm"]; seen.Reachable || !strings.Contains(seen.Detail, "dial timeout") {
+		t.Fatalf("health = %+v, want the failed probe observation", seen)
+	}
+}
+
+type probeServers struct {
+	servers []domain.MCPServer
+	probes  []string
+}
+
+func (p *probeServers) MCPServers(context.Context) ([]domain.MCPServer, error) {
+	return append([]domain.MCPServer(nil), p.servers...), nil
+}
+
+func (p *probeServers) MCPCredentials(context.Context, string) (domain.MCPCredentials, error) {
+	return domain.MCPCredentials{}, nil
+}
+
+func (p *probeServers) ClaimMCPProbes(_ context.Context, limit int) ([]string, error) {
+	if limit > len(p.probes) {
+		limit = len(p.probes)
+	}
+	out := append([]string(nil), p.probes[:limit]...)
+	p.probes = p.probes[limit:]
+	return out, nil
+}
+
+type testSession struct {
+	tools  []*mcp.Tool
+	closed bool
+}
+
+func (s *testSession) ListTools(context.Context, *mcp.ListToolsParams) (*mcp.ListToolsResult, error) {
+	return &mcp.ListToolsResult{Tools: s.tools}, nil
+}
+
+func (s *testSession) CallTool(context.Context, *mcp.CallToolParams) (*mcp.CallToolResult, error) {
+	return nil, errors.New("not called")
+}
+
+func (s *testSession) Close() error {
+	s.closed = true
+	return nil
+}
+
+type recordingHealth map[string]domain.IntegrationHealth
+
+func (r recordingHealth) Record(_ context.Context, h domain.IntegrationHealth) error {
+	r[h.Name] = h
+	return nil
+}
+
+type recordingPublisher struct {
+	entries []domain.ToolEntry
+}
+
+func (r *recordingPublisher) Publish(_ context.Context, entries []domain.ToolEntry) error {
+	r.entries = append([]domain.ToolEntry(nil), entries...)
+	return nil
 }

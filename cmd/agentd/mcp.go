@@ -126,6 +126,9 @@ func authenticatedClient(
 			Timeout:   60 * time.Second,
 		}, nil
 	}
+	if len(creds.Headers) > 0 {
+		return &http.Client{Transport: headerAuth{headers: creds.Headers}, Timeout: 60 * time.Second}, nil
+	}
 	if creds.Token == "" {
 		return nil, nil
 	}
@@ -139,6 +142,16 @@ func (b bearer) RoundTrip(r *http.Request) (*http.Response, error) {
 	// request is retried by the transport underneath.
 	out := r.Clone(r.Context())
 	out.Header.Set("Authorization", "Bearer "+b.token)
+	return http.DefaultTransport.RoundTrip(out)
+}
+
+type headerAuth struct{ headers map[string]string }
+
+func (h headerAuth) RoundTrip(r *http.Request) (*http.Response, error) {
+	out := r.Clone(r.Context())
+	for name, value := range h.headers {
+		out.Header.Set(name, value)
+	}
 	return http.DefaultTransport.RoundTrip(out)
 }
 
@@ -338,12 +351,24 @@ type Publisher interface {
 	Publish(ctx context.Context, entries []domain.ToolEntry) error
 }
 
+type connector func(
+	ctx context.Context, catalog *tools.Catalog, server domain.MCPServer,
+	creds domain.MCPCredentials, oauth OAuthGrantStore,
+) error
+
+type probeClaimer interface {
+	ClaimMCPProbes(ctx context.Context, limit int) ([]string, error)
+}
+
+const probeBatch = 20
+
 // reconciler keeps the connected servers matching the configured ones.
 type reconciler struct {
 	catalog   *tools.Catalog
 	servers   Servers
 	health    healthRecorder
 	publisher Publisher
+	connectTo connector
 	// connected maps a server name to the fingerprint of what was connected
 	// under it, so a changed address is noticed rather than assumed stable.
 	connected map[string]string
@@ -352,6 +377,7 @@ type reconciler struct {
 func newReconciler(catalog *tools.Catalog, servers Servers, health healthRecorder) *reconciler {
 	return &reconciler{
 		catalog: catalog, servers: servers, health: health,
+		connectTo: connectServer,
 		connected: make(map[string]string),
 	}
 }
@@ -407,6 +433,9 @@ func (r *reconciler) reconcile(ctx context.Context) {
 	}
 
 	r.refreshHealth(ctx)
+	if r.consumeProbes(ctx, wanted) {
+		changed = true
+	}
 
 	// Published after the pass rather than only at start-up. Without this a
 	// server that connected later offered its tools to every agent and
@@ -431,25 +460,52 @@ func (r *reconciler) refreshHealth(ctx context.Context) {
 	}
 }
 
-func (r *reconciler) connect(ctx context.Context, server domain.MCPServer) {
+func (r *reconciler) consumeProbes(ctx context.Context, wanted map[string]domain.MCPServer) bool {
+	claimer, ok := r.servers.(probeClaimer)
+	if !ok {
+		return false
+	}
+	names, err := claimer.ClaimMCPProbes(ctx, probeBatch)
+	if err != nil {
+		slog.Error("could not claim MCP probe requests", "err", err)
+		return false
+	}
+
+	changed := false
+	for _, name := range names {
+		server, ok := wanted[name]
+		if !ok {
+			// The server was deleted or disabled after the operator clicked.
+			// There is no configured integration left for a worker to reach.
+			continue
+		}
+		if r.connect(ctx, server) {
+			changed = true
+		}
+	}
+	return changed
+}
+
+func (r *reconciler) connect(ctx context.Context, server domain.MCPServer) bool {
 	creds, err := r.servers.MCPCredentials(ctx, server.Name)
 	if err != nil {
 		slog.Error("tool server has no readable credential", "server", server.Name, "err", err)
-		return
+		observe(ctx, r.health, server.Name, false, 0, err.Error())
+		return false
 	}
 
 	var oauth OAuthGrantStore
 	if store, ok := r.servers.(OAuthGrantStore); ok {
 		oauth = store
 	}
-	if err := connectServer(ctx, r.catalog, server, creds, oauth); err != nil {
+	if err := r.connectTo(ctx, r.catalog, server, creds, oauth); err != nil {
 		// Recorded and skipped, never fatal. One broken integration used to
 		// mean nothing on the installation ran, including every agent that
 		// never touches it.
 		slog.Error("tool server did not answer; its tools are unavailable",
 			"server", server.Name, "transport", server.TransportOf(), "err", err)
 		observe(ctx, r.health, server.Name, false, 0, err.Error())
-		return
+		return false
 	}
 
 	r.connected[server.Name] = fingerprint(server)
@@ -457,6 +513,7 @@ func (r *reconciler) connect(ctx context.Context, server domain.MCPServer) {
 	slog.Info("tool server connected",
 		"server", server.Name, "transport", server.TransportOf(), "tools", count)
 	observe(ctx, r.health, server.Name, true, count, "")
+	return true
 }
 
 // watch keeps reconciling until ctx is cancelled. Its caller owns it.

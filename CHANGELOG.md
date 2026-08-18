@@ -27,7 +27,12 @@ field" is a commit message.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **Try now** on a tool server: the worker reconnects it on request instead of
+  waiting for the next sweep, and says what it found.
+- Remote servers can authenticate with a single custom header or with Basic
+  credentials rendered as one.
 
 ## [0.2.0] — 2026-08-17
 

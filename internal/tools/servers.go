@@ -70,7 +70,13 @@ func (c *Catalog) AddServer(
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	old := c.sessions[name]
 	c.sessions[name] = session
+	for id, entry := range c.entries {
+		if entry.Server == name {
+			delete(c.entries, id)
+		}
+	}
 	for _, t := range listed.Tools {
 		id := domain.ToolID(name + "." + t.Name)
 		c.entries[id] = Entry{
@@ -85,6 +91,12 @@ func (c *Catalog) AddServer(
 			Untrusted:   true,
 			Suggested:   c.suggestion(name, t.Name),
 		}
+	}
+	if old != nil {
+		// The new session is already live. A stale session that resists close
+		// is a cleanup problem, not a failed import that should make the caller
+		// close the replacement it just installed.
+		_ = old.Close()
 	}
 	return nil
 }

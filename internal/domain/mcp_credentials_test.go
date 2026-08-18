@@ -31,6 +31,7 @@ func TestMCPCredentials_survivesTheVaultAndComesBackWhole(t *testing.T) {
 
 	sealed := domain.MCPCredentials{
 		Token:      "ghp_something",
+		Headers:    map[string]string{"Api-Key": "nr_secret"},
 		OAuth:      &domain.MCPOAuthGrant{AccessToken: "oauth_access", RefreshToken: "oauth_refresh", TokenURL: "https://issuer.example/token", ClientID: "client", ClientSecret: "secret", Scopes: []string{"sheets.readonly"}},
 		Env:        map[string]string{"GITHUB_TOKEN": "ghp_other"},
 		ConfigFile: "sources: []\n",
@@ -38,6 +39,7 @@ func TestMCPCredentials_survivesTheVaultAndComesBackWhole(t *testing.T) {
 
 	got := domain.ReadMCPCredentials(sealed)
 	if got.Token != "ghp_something" ||
+		got.Headers["Api-Key"] != "nr_secret" ||
 		got.OAuth == nil ||
 		got.OAuth.AccessToken != "oauth_access" ||
 		got.OAuth.RefreshToken != "oauth_refresh" ||
@@ -169,6 +171,37 @@ func TestApply_bearerAndOAuthReplaceEachOtherWhenWritten(t *testing.T) {
 	}
 }
 
+func TestApply_headersReplaceOtherRemoteCredentialsWhenWritten(t *testing.T) {
+	t.Parallel()
+
+	oauth := &domain.MCPOAuthGrant{AccessToken: "access"}
+	withHeaders := (domain.MCPCredentialPatch{
+		Headers: map[string]string{"Api-Key": "nr_secret"},
+	}).Apply(domain.MCPCredentials{Token: "old", OAuth: oauth})
+
+	if withHeaders.Token != "" || withHeaders.OAuth != nil ||
+		withHeaders.Headers["Api-Key"] != "nr_secret" {
+		t.Fatalf("headers write = %+v, want it to replace bearer and oauth", withHeaders)
+	}
+
+	withBearer := (domain.MCPCredentialPatch{Token: ptr("new")}).Apply(withHeaders)
+	if withBearer.Token != "new" || len(withBearer.Headers) != 0 {
+		t.Fatalf("bearer write = %+v, want it to replace headers", withBearer)
+	}
+}
+
+func TestApply_emptyHeadersClearThemAndAbsentHeadersDoNot(t *testing.T) {
+	t.Parallel()
+	stored := domain.MCPCredentials{Headers: map[string]string{"Api-Key": "nr_secret"}}
+
+	if kept := (domain.MCPCredentialPatch{}).Apply(stored); kept.Headers["Api-Key"] != "nr_secret" {
+		t.Fatalf("omitted headers = %+v, want the stored header kept", kept)
+	}
+	if cleared := (domain.MCPCredentialPatch{Headers: map[string]string{}}).Apply(stored); len(cleared.Headers) != 0 {
+		t.Fatalf("headers = %+v, want an empty map to clear them", cleared.Headers)
+	}
+}
+
 func TestApply_anEmptyOAuthGrantClearsIt_andAnAbsentOneDoesNot(t *testing.T) {
 	t.Parallel()
 	stored := domain.MCPCredentials{OAuth: &domain.MCPOAuthGrant{AccessToken: "access"}}
@@ -192,12 +225,13 @@ that can never send it — invisible, unusable, and never revoked.
 func TestForTransport_switchingShape_dropsTheHalfThatCannotBeUsed(t *testing.T) {
 	t.Parallel()
 	both := domain.MCPCredentials{
-		Token: "ghp_stored", OAuth: &domain.MCPOAuthGrant{AccessToken: "access"},
+		Token: "ghp_stored", Headers: map[string]string{"Api-Key": "nr_secret"},
+		OAuth:      &domain.MCPOAuthGrant{AccessToken: "access"},
 		Env:        map[string]string{"GITHUB_TOKEN": "ghp_other"},
 		ConfigFile: "sources: []\n",
 	}
 
-	if local := both.ForTransport(domain.TransportStdio); local.Token != "" || local.OAuth != nil {
+	if local := both.ForTransport(domain.TransportStdio); local.Token != "" || local.OAuth != nil || len(local.Headers) != 0 {
 		t.Errorf("a local server kept a remote credential: %+v", local)
 	} else if local.ConfigFile == "" {
 		t.Errorf("a local server dropped its managed config file: %+v", local)
@@ -208,6 +242,8 @@ func TestForTransport_switchingShape_dropsTheHalfThatCannotBeUsed(t *testing.T) 
 		t.Errorf("a remote server kept a local config file: %+v", remote)
 	} else if remote.OAuth == nil {
 		t.Errorf("a remote server dropped its oauth grant: %+v", remote)
+	} else if remote.Headers["Api-Key"] != "nr_secret" {
+		t.Errorf("a remote server dropped its headers: %+v", remote)
 	}
 }
 

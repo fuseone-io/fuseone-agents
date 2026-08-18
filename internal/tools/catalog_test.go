@@ -15,14 +15,18 @@ import (
 
 // fakeServer stands in for a connected MCP server.
 type fakeServer struct {
-	list   []*mcp.Tool
-	result *mcp.CallToolResult
-	err    error
-	calls  []string
-	closed bool
+	list    []*mcp.Tool
+	listErr error
+	result  *mcp.CallToolResult
+	err     error
+	calls   []string
+	closed  bool
 }
 
 func (f *fakeServer) ListTools(context.Context, *mcp.ListToolsParams) (*mcp.ListToolsResult, error) {
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
 	return &mcp.ListToolsResult{Tools: f.list}, nil
 }
 
@@ -417,6 +421,65 @@ func TestRemoveServer_thatWasNeverConnected_isNotAnError(t *testing.T) {
 	// pass log an error nobody can act on.
 	if err := tools.NewCatalog(engine.NewMemoryContent()).RemoveServer("nunca"); err != nil {
 		t.Errorf("RemoveServer: %v", err)
+	}
+}
+
+func TestAddServer_replacingAServerRemovesToolsItNoLongerOffers(t *testing.T) {
+	t.Parallel()
+
+	catalog := tools.NewCatalog(engine.NewMemoryContent())
+	first := &fakeServer{list: []*mcp.Tool{{
+		Name:        "lookup",
+		Description: "Look a customer up.",
+		InputSchema: map[string]any{"type": "object"},
+	}}}
+	if err := catalog.AddServer(t.Context(), "crm", first, nil); err != nil {
+		t.Fatalf("AddServer(first): %v", err)
+	}
+
+	second := &fakeServer{list: []*mcp.Tool{{
+		Name:        "search",
+		Description: "Search customers.",
+		InputSchema: map[string]any{"type": "object"},
+	}}}
+	if err := catalog.AddServer(t.Context(), "crm", second, nil); err != nil {
+		t.Fatalf("AddServer(second): %v", err)
+	}
+
+	if !first.closed {
+		t.Error("the replaced session was not closed")
+	}
+	if _, known := catalog.Effect("crm.lookup"); known {
+		t.Error("the old tool survived the replacement")
+	}
+	if _, known := catalog.Effect("crm.search"); !known {
+		t.Error("the new tool was not imported")
+	}
+}
+
+func TestAddServer_aFailedReplacementKeepsTheCurrentServer(t *testing.T) {
+	t.Parallel()
+
+	catalog := tools.NewCatalog(engine.NewMemoryContent())
+	first := &fakeServer{list: []*mcp.Tool{{
+		Name:        "lookup",
+		Description: "Look a customer up.",
+		InputSchema: map[string]any{"type": "object"},
+	}}}
+	if err := catalog.AddServer(t.Context(), "crm", first, nil); err != nil {
+		t.Fatalf("AddServer(first): %v", err)
+	}
+
+	second := &fakeServer{listErr: errors.New("server is waking up")}
+	if err := catalog.AddServer(t.Context(), "crm", second, nil); err == nil {
+		t.Fatal("AddServer(second) succeeded, want the discovery error")
+	}
+
+	if first.closed {
+		t.Error("the live session was closed by a failed replacement")
+	}
+	if _, known := catalog.Effect("crm.lookup"); !known {
+		t.Error("the live tool disappeared after a failed replacement")
 	}
 }
 

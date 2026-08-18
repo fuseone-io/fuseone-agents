@@ -18,7 +18,7 @@ func newIntegrations(t *testing.T) *admin.Integrations {
 
 	pool := openPool(t)
 	if _, err := pool.Exec(context.Background(),
-		`delete from settings where kind in ('mcp_server', 'model_provider', 'model_price')`); err != nil {
+		`delete from settings where kind in ('mcp_server', 'mcp_probe', 'model_provider', 'model_price')`); err != nil {
 		t.Fatalf("clean: %v", err)
 	}
 
@@ -155,6 +155,68 @@ func TestDeleteMCPServer_isRecorded(t *testing.T) {
 	}
 }
 
+func TestRequestMCPProbe_recordsAWorkerRequestForAnEnabledServer(t *testing.T) {
+	i := newIntegrations(t)
+	pool := openPool(t)
+	ctx := context.Background()
+
+	if err := i.PutMCPServer(ctx, "usr_ana", platform,
+		domain.MCPServer{
+			Name: "crm", Command: "/usr/local/bin/crm-mcp", Enabled: true,
+			AcceptsLocalExecution: true,
+		}, domain.MCPCredentialPatch{}); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+	if err := i.RequestMCPProbe(ctx, "usr_bia", platform, "crm"); err != nil {
+		t.Fatalf("RequestMCPProbe: %v", err)
+	}
+
+	claimed, err := i.ClaimMCPProbes(ctx, 1)
+	if err != nil {
+		t.Fatalf("ClaimMCPProbes: %v", err)
+	}
+	if len(claimed) != 1 || claimed[0] != "crm" {
+		t.Fatalf("claimed = %v, want crm", claimed)
+	}
+	again, err := i.ClaimMCPProbes(ctx, 1)
+	if err != nil {
+		t.Fatalf("ClaimMCPProbes again: %v", err)
+	}
+	if len(again) != 0 {
+		t.Fatalf("claimed again = %v, want the request consumed once", again)
+	}
+
+	var action, by string
+	if err := pool.QueryRow(ctx,
+		`select action, principal_id from admin_events where target = 'crm' order by event_id desc limit 1`,
+	).Scan(&action, &by); err != nil {
+		t.Fatalf("read event: %v", err)
+	}
+	if action != "mcp_server.probe_requested" || by != "usr_bia" {
+		t.Errorf("event = %s by %s, want the probe request by usr_bia", action, by)
+	}
+}
+
+func TestRequestMCPProbe_refusesDisabledAndUnknownServers(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+
+	if err := i.PutMCPServer(ctx, "usr_ana", platform,
+		domain.MCPServer{
+			Name: "crm", Command: "/usr/local/bin/crm-mcp", Enabled: false,
+			AcceptsLocalExecution: true,
+		}, domain.MCPCredentialPatch{}); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+
+	if err := i.RequestMCPProbe(ctx, "usr_bia", platform, "crm"); !errors.Is(err, admin.ErrMCPServerDisabled) {
+		t.Fatalf("disabled probe = %v, want %v", err, admin.ErrMCPServerDisabled)
+	}
+	if err := i.RequestMCPProbe(ctx, "usr_bia", platform, "missing"); !errors.Is(err, admin.ErrMCPServerUnknown) {
+		t.Fatalf("unknown probe = %v, want %v", err, admin.ErrMCPServerUnknown)
+	}
+}
+
 func contains(haystack, needle string) bool {
 	return strings.Contains(haystack, needle)
 }
@@ -274,6 +336,49 @@ func TestPutMCPServer_remote_sealsOAuthAndNeverListsIt(t *testing.T) {
 		creds.OAuth.RefreshToken != "refresh" ||
 		creds.OAuth.ClientSecret != "secret" {
 		t.Fatalf("oauth = %+v, want it back only through the credential reader", creds.OAuth)
+	}
+}
+
+func TestPutMCPServer_remote_sealsHeadersAndNeverListsThem(t *testing.T) {
+	i := newIntegrations(t)
+	pool := openPool(t)
+	ctx := context.Background()
+
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, domain.MCPServer{
+		Name: "newrelic", Transport: domain.TransportHTTP,
+		URL: "https://mcp.newrelic.com/mcp/", Enabled: true,
+	}, domain.MCPCredentialPatch{
+		Headers: map[string]string{"Api-Key": "nr_secret"},
+	}); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+
+	servers, err := i.MCPServers(ctx)
+	if err != nil {
+		t.Fatalf("MCPServers: %v", err)
+	}
+	if !servers[0].HasSecret || servers[0].HasOAuth {
+		t.Fatalf("server = %+v, want only presence of a sealed remote credential", servers[0])
+	}
+	creds, err := i.MCPCredentials(ctx, "newrelic")
+	if err != nil {
+		t.Fatalf("MCPCredentials: %v", err)
+	}
+	if creds.Headers["Api-Key"] != "nr_secret" || creds.Token != "" || creds.OAuth != nil {
+		t.Fatalf("credentials = %+v, want only the custom header", creds)
+	}
+
+	var detail string
+	if err := pool.QueryRow(ctx,
+		`select detail::text from admin_events where target = 'newrelic' order by event_id desc limit 1`,
+	).Scan(&detail); err != nil {
+		t.Fatalf("read event: %v", err)
+	}
+	if !contains(detail, "headersChanged") {
+		t.Errorf("detail = %s, want it to record that header credentials changed", detail)
+	}
+	if contains(detail, "nr_secret") {
+		t.Errorf("the administrative trail contains the header credential: %s", detail)
 	}
 }
 

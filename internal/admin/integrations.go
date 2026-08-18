@@ -32,7 +32,11 @@ var (
 	ErrNoBaseURL         = errors.New("admin: a provider needs a base URL")
 	ErrOAuthGrantChanged = errors.New(
 		"admin: the stored OAuth grant changed before the refresh could be saved")
+	ErrMCPServerUnknown  = errors.New("admin: no such MCP server")
+	ErrMCPServerDisabled = errors.New("admin: the MCP server is disabled")
 )
+
+const kindMCPProbe settings.Kind = "mcp_probe"
 
 // The configured shapes are domain types: the API renders them and this
 // package writes them, and neither imports the other. What lives here is only
@@ -226,6 +230,7 @@ func (i *Integrations) PutMCPServer(
 					// reads its newer half.
 					"transport": transport, "command": server.Command, "url": server.URL,
 					"enabled": server.Enabled, "tokenChanged": given.Token != nil,
+					"headersChanged":        given.Headers != nil,
 					"oauthChanged":          given.OAuth != nil,
 					"acceptsLocalExecution": server.AcceptsLocalExecution,
 					"variables":             len(merged.Env),
@@ -262,6 +267,79 @@ func (i *Integrations) MCPCredentials(
 		return domain.MCPCredentials{}, err
 	}
 	return domain.ReadMCPCredentials(set.Secret), nil
+}
+
+// RequestMCPProbe records that an operator asked a worker to reach a server.
+//
+// The API process must not do this itself. For stdio it would start code in
+// the API pod, not in the worker that will later offer the tools to agents.
+// The request is therefore a small durable queue item: the worker consumes it
+// and runs the same connection path ordinary reconciliation uses.
+func (i *Integrations) RequestMCPProbe(
+	ctx context.Context, by domain.UserID, scope domain.Scope, name string,
+) error {
+	if strings.TrimSpace(name) == "" {
+		return ErrNoName
+	}
+	server, err := i.settings.Get(ctx,
+		settings.ScopeInstallation, domain.Scope{}, settings.KindMCPServer, name)
+	switch {
+	case errors.Is(err, settings.ErrNotFound):
+		return ErrMCPServerUnknown
+	case err != nil:
+		return err
+	case !server.Enabled:
+		return ErrMCPServerDisabled
+	}
+
+	return writeSetting(ctx, i.pool, i.settings, by, scope, settings.Setting{
+		ScopeKind: settings.ScopeInstallation,
+		Kind:      kindMCPProbe,
+		Name:      name,
+		Value:     json.RawMessage(`{}`),
+		Enabled:   true,
+		UpdatedBy: string(by),
+	}, "mcp_server.probe_requested", name, map[string]any{"server": name})
+}
+
+// ClaimMCPProbes returns server names whose explicit probe requests this worker
+// owns now, removing the request rows in the same statement.
+func (i *Integrations) ClaimMCPProbes(ctx context.Context, limit int) ([]string, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	rows, err := i.pool.Query(ctx, `
+		with picked as materialized (
+			select scope_kind, company_id, area_id, kind, name
+			from settings
+			where scope_kind = $1 and company_id = '' and area_id = '' and kind = $2
+			order by updated_at
+			for update skip locked
+			limit $3
+		)
+		delete from settings s
+		using picked p
+		where s.scope_kind = p.scope_kind
+		  and s.company_id = p.company_id
+		  and s.area_id = p.area_id
+		  and s.kind = p.kind
+		  and s.name = p.name
+		returning s.name`,
+		string(settings.ScopeInstallation), string(kindMCPProbe), limit)
+	if err != nil {
+		return nil, fmt.Errorf("admin: claim MCP probes: %w", err)
+	}
+	defer rows.Close()
+
+	var out []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		out = append(out, name)
+	}
+	return out, rows.Err()
 }
 
 /*

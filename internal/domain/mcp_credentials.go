@@ -30,6 +30,17 @@ type MCPCredentials struct {
 	// which starts a program rather than calling an address.
 	Token string `json:"token,omitempty"`
 	/*
+		Headers are exact HTTP headers sent to a remote server.
+
+		They exist for providers whose credential is not a bearer token:
+		Api-Key, Authorization: Basic, Authorization: Token token=... and the
+		like. Stored as the rendered header value rather than as a provider
+		shape, because the runtime's job at call time is only to present the
+		credential the Curator configured; the recipe is what explained how to
+		get it.
+	*/
+	Headers map[string]string `json:"headers,omitempty"`
+	/*
 		OAuth is a grant for a remote HTTP server.
 
 		It is not a dressed-up bearer. A bearer token is already the thing to
@@ -164,6 +175,7 @@ absent, and an empty non-nil map is a removal.
 */
 type MCPCredentialPatch struct {
 	Token      *string
+	Headers    map[string]string
 	OAuth      *MCPOAuthGrant
 	Env        map[string]string
 	ConfigFile *string
@@ -176,12 +188,21 @@ func (p MCPCredentialPatch) Apply(stored MCPCredentials) MCPCredentials {
 		out.Token = *p.Token
 		if *p.Token != "" {
 			out.OAuth = nil
+			out.Headers = nil
+		}
+	}
+	if p.Headers != nil {
+		out.Headers = maps.Clone(p.Headers)
+		if len(out.Headers) > 0 {
+			out.Token = ""
+			out.OAuth = nil
 		}
 	}
 	if p.OAuth != nil {
 		out.OAuth = cloneOAuth(p.OAuth)
 		if out.OAuth != nil {
 			out.Token = ""
+			out.Headers = nil
 		}
 	}
 	if p.Env != nil {
@@ -197,7 +218,7 @@ func (p MCPCredentialPatch) Apply(stored MCPCredentials) MCPCredentials {
 // carried out, not a write to be skipped.
 func (c MCPCredentials) Empty() bool {
 	return c.Token == "" && (c.OAuth == nil || c.OAuth.Empty()) &&
-		len(c.Env) == 0 && c.ConfigFile == ""
+		len(c.Headers) == 0 && len(c.Env) == 0 && c.ConfigFile == ""
 }
 
 /*
@@ -217,7 +238,7 @@ func (c MCPCredentials) ForTransport(transport string) MCPCredentials {
 	if transport == TransportStdio {
 		return MCPCredentials{Env: maps.Clone(c.Env), ConfigFile: c.ConfigFile}
 	}
-	return MCPCredentials{Token: c.Token, OAuth: cloneOAuth(c.OAuth)}
+	return MCPCredentials{Token: c.Token, Headers: maps.Clone(c.Headers), OAuth: cloneOAuth(c.OAuth)}
 }
 
 /*

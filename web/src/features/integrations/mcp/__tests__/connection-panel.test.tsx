@@ -7,6 +7,7 @@ import type { ServerRecipe } from "@/features/integrations/mcp/api";
 
 const api = vi.hoisted(() => ({
   mutateAsync: vi.fn(),
+  probeAsync: vi.fn(),
 }));
 
 vi.mock("@/features/integrations/api", async (importOriginal) => {
@@ -15,6 +16,7 @@ vi.mock("@/features/integrations/api", async (importOriginal) => {
   return {
     ...actual,
     usePutMCPServer: () => ({ mutateAsync: api.mutateAsync, isPending: false }),
+    useProbeMCPServer: () => ({ mutateAsync: api.probeAsync, isPending: false }),
   };
 });
 
@@ -54,6 +56,23 @@ describe("the MCP connection panel", () => {
   beforeEach(() => {
     api.mutateAsync.mockReset();
     api.mutateAsync.mockResolvedValue(undefined);
+    api.probeAsync.mockReset();
+    api.probeAsync.mockResolvedValue(undefined);
+  });
+
+  it("asks the worker to try the connection without rewriting credentials", async () => {
+    render(<ConnectionPanel server={remote({ name: "stripe" })} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Tentar agora" }));
+
+    expect(api.probeAsync).toHaveBeenCalledWith("stripe");
+    expect(api.mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("does not offer a worker check for a disabled connection", () => {
+    render(<ConnectionPanel server={remote({ enabled: false })} />);
+
+    expect(screen.getByRole("button", { name: "Tentar agora" })).toBeDisabled();
   });
 
   it("saves a manual OAuth grant as oauth rather than a bearer token", async () => {
@@ -139,8 +158,8 @@ describe("the MCP connection panel", () => {
     );
   });
 
-  it("does not pretend custom headers are a bearer token", () => {
-    const { container } = render(
+  it("stores a named custom header as headers rather than a bearer token", async () => {
+    render(
       <ConnectionPanel
         server={remote({ name: "newrelic" })}
         recipe={recipe([
@@ -154,10 +173,66 @@ describe("the MCP connection panel", () => {
       />,
     );
 
+    await userEvent.type(screen.getByLabelText(/new relic api key/i), "nr_secret");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Salvar a credencial" }),
+    );
+
+    expect(api.mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        token: undefined,
+        headers: { "Api-Key": "nr_secret" },
+      }),
+    );
+  });
+
+  it("stores Basic auth as the Authorization header value", async () => {
+    render(
+      <ConnectionPanel
+        server={remote({ name: "atlassian" })}
+        recipe={recipe([
+          {
+            type: "basic",
+            principal: "user",
+            label: "Personal API token",
+            header: "Authorization",
+            prefix: "Basic",
+          },
+        ])}
+      />,
+    );
+
+    await userEvent.type(screen.getByLabelText(/personal api token/i), "encoded");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Salvar a credencial" }),
+    );
+
+    expect(api.mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        token: undefined,
+        headers: { Authorization: "Basic encoded" },
+      }),
+    );
+  });
+
+  it("does not pretend multi-header auth is one editable token", () => {
+    const { container } = render(
+      <ConnectionPanel
+        server={remote({ name: "datadog" })}
+        recipe={recipe([
+          {
+            type: "headers",
+            principal: "service",
+            label: "API and application key headers",
+          },
+        ])}
+      />,
+    );
+
     expect(container.querySelector("#token")).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/token bearer/i)).not.toBeInTheDocument();
     expect(
-      screen.getByText(/espera New Relic API key/i),
+      screen.getByText(/espera API and application key headers/i),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Salvar a credencial" }),

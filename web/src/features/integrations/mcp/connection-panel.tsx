@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Trash2 } from "lucide-react";
+import { RefreshCw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Panel } from "@/components/shared/panel";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,7 @@ import {
 import { readVariables } from "@/features/integrations/mcp/variables";
 import {
   usePutMCPServer,
+  useProbeMCPServer,
   type MCPOAuthGrant,
   type MCPServer,
 } from "@/features/integrations/api";
@@ -46,20 +47,22 @@ export function ConnectionPanel({
 }) {
   const { t } = useTranslation();
   const put = usePutMCPServer();
+  const probe = useProbeMCPServer();
   const local = (server.transport ?? "stdio") === "stdio";
   const remotePlan = remoteAuthPlan(recipe?.authModes, recipe !== undefined && recipe !== null);
   const storedConfigEnv = server.configFileEnv ?? "";
   const [value, setValue] = useState(() => blankCredential(storedConfigEnv));
   const oauthChanged = oauthHasValue(value);
-  const bearerChanged = remotePlan.bearer !== null && value.token !== "";
+  const secretChanged = remotePlan.secret !== null && value.token !== "";
   const remoteConflict =
-    !local && remotePlan.oauth !== null && oauthChanged && bearerChanged;
+    !local && remotePlan.oauth !== null && oauthChanged && secretChanged;
   const oauthExpiryInvalid =
     !local && remotePlan.oauth !== null && !oauthExpiryIsValid(value);
-  const canWriteRemote = remotePlan.bearer !== null || remotePlan.oauth !== null;
+  const canWriteRemote = remotePlan.secret !== null || remotePlan.oauth !== null;
 
   async function write(credential: {
     token?: string;
+    headers?: Record<string, string>;
     oauth?: MCPOAuthGrant;
     env?: Record<string, string>;
     configFile?: string;
@@ -78,6 +81,7 @@ export function ConnectionPanel({
         enabled: server.enabled,
         acceptsLocalExecution: server.acceptsLocalExecution ?? false,
         token: credential.token,
+        headers: credential.headers,
         oauth: credential.oauth,
         env: credential.env,
         configFile: credential.configFile,
@@ -85,6 +89,15 @@ export function ConnectionPanel({
       });
       setValue(blankCredential(credential.configFileEnv ?? storedConfigEnv));
       toast.success(t("mcp.credentialSaved"));
+    } catch (problem) {
+      toast.error(problemMessage(problem, t));
+    }
+  }
+
+  async function probeNow() {
+    try {
+      await probe.mutateAsync(server.name);
+      toast.success(t("mcp.probeRequested"));
     } catch (problem) {
       toast.error(problemMessage(problem, t));
     }
@@ -108,15 +121,15 @@ export function ConnectionPanel({
           local={local}
           hasSecret={local ? server.hasVariables === true : server.hasSecret === true && server.hasOAuth !== true}
           hasConfigFile={server.hasConfigFile === true}
-          showRemoteToken={remotePlan.bearer !== null}
-          remoteTokenLabel={remoteTokenLabel(remotePlan.bearer, t)}
-          remoteTokenHint={remoteTokenHint(remotePlan.bearer, t)}
+          showRemoteToken={remotePlan.secret !== null}
+          remoteTokenLabel={remoteTokenLabel(remotePlan.secret, t)}
+          remoteTokenHint={remoteTokenHint(remotePlan.secret, t)}
           value={value}
           onChange={(next) => setValue((current) => ({ ...current, ...next }))}
           onRevoke={() =>
             // Explicit, and empty rather than absent: the two are different
             // requests and only one of them is somebody revoking.
-            void write(local ? { env: {} } : { token: "" })
+            void write(local ? { env: {} } : { token: "", headers: {} })
           }
           onRevokeConfigFile={() => void write({ configFile: "" })}
         />
@@ -134,7 +147,16 @@ export function ConnectionPanel({
           <StoredOAuthOnly onRevoke={() => void write({ oauth: {} })} />
         )}
 
-        <div className="flex justify-end">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void probeNow()}
+            disabled={probe.isPending || !server.enabled}
+          >
+            <RefreshCw className="size-3.5" />
+            {t("mcp.probe")}
+          </Button>
           <Button
             onClick={() =>
               void write(
@@ -148,7 +170,11 @@ export function ConnectionPanel({
                     }
                   : remotePlan.oauth !== null && oauthChanged
                     ? { oauth: oauthFromValue(value) }
-                    : { token: value.token },
+                    : remotePlan.secret?.type === "bearer"
+                      ? { token: value.token }
+                      : remotePlan.secret
+                        ? { headers: headerCredential(remotePlan.secret, value.token) }
+                        : {},
               )
             }
             disabled={
@@ -160,7 +186,7 @@ export function ConnectionPanel({
                   value.configFile === "" &&
                   value.configFileEnv === storedConfigEnv
                 : !canWriteRemote ||
-                  ((remotePlan.bearer === null || value.token === "") &&
+                  ((remotePlan.secret === null || value.token === "") &&
                     (remotePlan.oauth === null || !oauthChanged)))
             }
           >
@@ -217,8 +243,21 @@ function remoteTokenHint(
 ) {
   if (!mode) return undefined;
   const header = mode.header ?? "Authorization";
-  const prefix = mode.prefix ?? "Bearer";
+  const prefix = mode.prefix;
+  if (!prefix) return t("mcp.remoteHeaderHint", { header });
   return t("mcp.remoteBearerHint", { header, prefix });
+}
+
+function headerCredential(mode: AuthMode, secret: string): Record<string, string> {
+  const header = mode.header?.trim();
+  if (!header) return {};
+  return { [header]: headerValue(mode, secret) };
+}
+
+function headerValue(mode: AuthMode, secret: string) {
+  const prefix = mode.prefix?.trim();
+  if (!prefix) return secret;
+  return `${prefix}${prefix.endsWith("=") ? "" : " "}${secret}`;
 }
 
 function RemoteAuthSummary({ plan }: { plan: RemoteAuthPlan }) {
@@ -231,7 +270,7 @@ function RemoteAuthSummary({ plan }: { plan: RemoteAuthPlan }) {
     );
   }
 
-  if (plan.noAuth !== null && plan.bearer === null && plan.oauth === null) {
+  if (plan.noAuth !== null && plan.secret === null && plan.oauth === null) {
     return (
       <p className="rounded-lg border bg-muted px-3 py-2 text-xs text-muted-foreground">
         {t("mcp.authNoCredential")}
