@@ -115,7 +115,8 @@ func registerProviders(ctx context.Context, store *admin.Identity, live *auth.OI
 		}
 		if err := live.Add(ctx, &auth.OIDCProvider{
 			ID: p.ID, Display: p.Display, Issuer: p.Issuer, ClientID: p.ClientID,
-			ClientSecret: secret, GroupsClaim: p.GroupsClaim, Mappings: p.Mappings,
+			Revision: auth.IdentityProviderRevision(p), ClientSecret: secret,
+			GroupsClaim: p.GroupsClaim, Mappings: p.Mappings,
 		}); err != nil {
 			slog.Error("identity provider did not answer; nobody can sign in with it",
 				"provider", p.ID, "issuer", p.Issuer, "err", err)

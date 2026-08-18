@@ -2,6 +2,8 @@ package auth
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -33,6 +35,11 @@ type OIDCProvider struct {
 	Display  string
 	Issuer   string
 	ClientID string
+	// Revision names the durable configuration this live provider represents.
+	// It lets a serve replica avoid rediscovering an unchanged provider on the
+	// public sign-in path while still noticing a mapping saved by another
+	// replica.
+	Revision string
 	// ClientSecret comes from the vault, never from the provider record.
 	ClientSecret string
 	// GroupsClaim names the claim carrying group membership. Providers differ:
@@ -49,10 +56,12 @@ type OIDC struct {
 	// mu guards providers. The administration area writes this map while
 	// sign-in requests read it: configuring a provider is no longer something
 	// that only happens before the server starts serving.
-	mu        sync.RWMutex
-	providers map[string]*OIDCProvider
-	baseURL   string
-	secure    bool
+	mu          sync.RWMutex
+	providers   map[string]*OIDCProvider
+	discoveryMu sync.Mutex
+	discovered  map[string]*oidc.Provider
+	baseURL     string
+	secure      bool
 }
 
 // lookup returns a configured provider by id.
@@ -60,15 +69,67 @@ func (o *OIDC) lookup(id string) (*OIDCProvider, bool) {
 	o.mu.RLock()
 	defer o.mu.RUnlock()
 	p, ok := o.providers[id]
-	return p, ok
+	if !ok {
+		return nil, false
+	}
+	return cloneOIDCProvider(p), true
 }
 
 func NewOIDC(baseURL string, secure bool) *OIDC {
 	return &OIDC{
-		providers: make(map[string]*OIDCProvider),
-		baseURL:   strings.TrimSuffix(baseURL, "/"),
-		secure:    secure,
+		providers:  make(map[string]*OIDCProvider),
+		discovered: make(map[string]*oidc.Provider),
+		baseURL:    strings.TrimSuffix(baseURL, "/"),
+		secure:     secure,
 	}
+}
+
+// IdentityProviderRevision turns the durable provider row into a cheap change
+// detector for the per-process sign-in registry.
+func IdentityProviderRevision(p domain.IdentityProvider) string {
+	if !p.UpdatedAt.IsZero() {
+		return "updated_at:" + p.UpdatedAt.UTC().Format("2006-01-02T15:04:05.000000000Z07:00")
+	}
+	// Tests and bootstrap-only stores may not carry timestamps. Fall back to a
+	// content digest so the invariant still holds there without inventing a
+	// database-only requirement for callers.
+	body, _ := json.Marshal(struct {
+		ID          string                `json:"id"`
+		Display     string                `json:"display"`
+		Issuer      string                `json:"issuer"`
+		ClientID    string                `json:"clientId"`
+		GroupsClaim string                `json:"groupsClaim"`
+		Mappings    []domain.GroupMapping `json:"mappings"`
+		Enabled     bool                  `json:"enabled"`
+	}{
+		ID: p.ID, Display: p.Display, Issuer: p.Issuer, ClientID: p.ClientID,
+		GroupsClaim: p.GroupsClaim, Mappings: p.Mappings, Enabled: p.Enabled,
+	})
+	sum := sha256.Sum256(body)
+	return fmt.Sprintf("definition:%x", sum[:])
+}
+
+func cloneOIDCProvider(p *OIDCProvider) *OIDCProvider {
+	if p == nil {
+		return nil
+	}
+	out := *p
+	out.Mappings = slices.Clone(p.Mappings)
+	return &out
+}
+
+func (o *OIDC) discover(ctx context.Context, issuer string) (*oidc.Provider, error) {
+	o.discoveryMu.Lock()
+	defer o.discoveryMu.Unlock()
+	if found := o.discovered[issuer]; found != nil {
+		return found, nil
+	}
+	discovered, err := oidc.NewProvider(ctx, issuer)
+	if err != nil {
+		return nil, err
+	}
+	o.discovered[issuer] = discovered
+	return discovered, nil
 }
 
 // Add discovers a provider's endpoints and registers it.
@@ -77,7 +138,7 @@ func NewOIDC(baseURL string, secure bool) *OIDC {
 // provider should fail when an operator configures it, not for the first
 // person who tries to sign in on Monday morning.
 func (o *OIDC) Add(ctx context.Context, p *OIDCProvider) error {
-	discovered, err := oidc.NewProvider(ctx, p.Issuer)
+	discovered, err := o.discover(ctx, p.Issuer)
 	if err != nil {
 		return fmt.Errorf("auth: discover %s at %s: %w", p.ID, p.Issuer, err)
 	}
@@ -96,7 +157,7 @@ func (o *OIDC) Add(ctx context.Context, p *OIDCProvider) error {
 
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	o.providers[p.ID] = p
+	o.providers[p.ID] = cloneOIDCProvider(p)
 	return nil
 }
 
@@ -117,10 +178,15 @@ func (o *OIDC) Providers() []*OIDCProvider {
 
 	out := make([]*OIDCProvider, 0, len(o.providers))
 	for _, p := range o.providers {
-		out = append(out, p)
+		out = append(out, cloneOIDCProvider(p))
 	}
 	slices.SortFunc(out, func(a, b *OIDCProvider) int { return strings.Compare(a.ID, b.ID) })
 	return out
+}
+
+// Provider returns the currently live provider by id.
+func (o *OIDC) Provider(id string) (*OIDCProvider, bool) {
+	return o.lookup(id)
 }
 
 // flowCookie carries the one-time values that tie a callback to the browser

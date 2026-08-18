@@ -127,11 +127,12 @@ func (a *AuthRoutes) providers(w http.ResponseWriter, r *http.Request) {
 
 func (a *AuthRoutes) start(w http.ResponseWriter, r *http.Request) {
 	provider := r.PathValue("provider")
-	if err := a.syncProvider(r.Context(), provider); err != nil {
+	live, err := a.syncProvider(r.Context(), provider)
+	if err != nil {
 		writeProblemJSON(w, http.StatusBadRequest, CodeInvalidInput, "Cannot start sign-in", err.Error())
 		return
 	}
-	if err := a.oidc.Start(w, r, provider, r.URL.Query().Get("returnTo")); err != nil {
+	if err := a.oidc.StartWithProvider(w, r, live, r.URL.Query().Get("returnTo")); err != nil {
 		writeProblemJSON(w, http.StatusBadRequest, CodeInvalidInput, "Cannot start sign-in", err.Error())
 	}
 }
@@ -140,25 +141,14 @@ func (a *AuthRoutes) start(w http.ResponseWriter, r *http.Request) {
 func (a *AuthRoutes) callback(w http.ResponseWriter, r *http.Request) {
 	providerID := r.PathValue("provider")
 
-	if err := a.syncProvider(r.Context(), providerID); err != nil {
-		writeProblemJSON(w, http.StatusUnauthorized, CodeSignInFailed, "Sign-in failed", err.Error())
-		return
-	}
-	identity, err := a.oidc.Complete(r.Context(), w, r, providerID)
+	provider, err := a.syncProvider(r.Context(), providerID)
 	if err != nil {
 		writeProblemJSON(w, http.StatusUnauthorized, CodeSignInFailed, "Sign-in failed", err.Error())
 		return
 	}
-
-	var provider *auth.OIDCProvider
-	for _, p := range a.oidc.Providers() {
-		if p.ID == providerID {
-			provider = p
-			break
-		}
-	}
-	if provider == nil {
-		writeProblemJSON(w, http.StatusBadRequest, CodeInvalidInput, "Unknown provider", providerID)
+	identity, err := a.oidc.CompleteWithProvider(r.Context(), w, r, provider)
+	if err != nil {
+		writeProblemJSON(w, http.StatusUnauthorized, CodeSignInFailed, "Sign-in failed", err.Error())
 		return
 	}
 
@@ -217,13 +207,16 @@ func (a *AuthRoutes) providerOptions(ctx context.Context) ([]authProviderOption,
 	return out, nil
 }
 
-func (a *AuthRoutes) syncProvider(ctx context.Context, providerID string) error {
+func (a *AuthRoutes) syncProvider(ctx context.Context, providerID string) (*auth.OIDCProvider, error) {
 	if a.providerStore == nil {
-		return nil
+		return a.liveProvider(providerID)
 	}
 	found, err := a.providerStore.IdentityProviders(ctx)
 	if err != nil {
-		return fmt.Errorf("auth: read identity providers: %w", err)
+		if live, ok := a.oidc.Provider(providerID); ok {
+			return live, nil
+		}
+		return nil, fmt.Errorf("auth: read identity providers: %w", err)
 	}
 	for _, p := range found {
 		if p.ID != providerID {
@@ -231,24 +224,41 @@ func (a *AuthRoutes) syncProvider(ctx context.Context, providerID string) error 
 		}
 		if !p.Enabled {
 			a.oidc.Remove(providerID)
-			return nil
+			return nil, fmt.Errorf("%w: %s", auth.ErrNoProvider, providerID)
+		}
+		revision := auth.IdentityProviderRevision(p)
+		if live, ok := a.oidc.Provider(providerID); ok && live.Revision == revision {
+			return live, nil
 		}
 		secret, err := a.providerStore.IdentitySecret(ctx, p.ID)
 		if err != nil {
-			a.oidc.Remove(providerID)
-			return fmt.Errorf("auth: read identity provider secret: %w", err)
+			if live, ok := a.oidc.Provider(providerID); ok {
+				return live, nil
+			}
+			return nil, fmt.Errorf("auth: read identity provider secret: %w", err)
 		}
-		if err := a.oidc.Add(ctx, &auth.OIDCProvider{
+		next := &auth.OIDCProvider{
 			ID: p.ID, Display: p.Display, Issuer: p.Issuer, ClientID: p.ClientID,
-			ClientSecret: secret, GroupsClaim: p.GroupsClaim, Mappings: p.Mappings,
-		}); err != nil {
-			a.oidc.Remove(providerID)
-			return err
+			Revision: revision, ClientSecret: secret, GroupsClaim: p.GroupsClaim, Mappings: p.Mappings,
 		}
-		return nil
+		if err := a.oidc.Add(ctx, next); err != nil {
+			if live, ok := a.oidc.Provider(providerID); ok {
+				return live, nil
+			}
+			return nil, err
+		}
+		return next, nil
 	}
 	a.oidc.Remove(providerID)
-	return nil
+	return nil, fmt.Errorf("%w: %s", auth.ErrNoProvider, providerID)
+}
+
+func (a *AuthRoutes) liveProvider(providerID string) (*auth.OIDCProvider, error) {
+	live, ok := a.oidc.Provider(providerID)
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", auth.ErrNoProvider, providerID)
+	}
+	return live, nil
 }
 
 // claimBootstrap exchanges the first-run token for the first administrator.

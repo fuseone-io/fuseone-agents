@@ -32,6 +32,15 @@ func (o *OIDC) Start(w http.ResponseWriter, r *http.Request, providerID, returnT
 	if !ok {
 		return fmt.Errorf("%w: %s", ErrNoProvider, providerID)
 	}
+	return o.StartWithProvider(w, r, p, returnTo)
+}
+
+// StartWithProvider begins sign-in using the provider snapshot the caller just
+// reconciled.
+func (o *OIDC) StartWithProvider(w http.ResponseWriter, r *http.Request, p *OIDCProvider, returnTo string) error {
+	if p == nil {
+		return ErrNoProvider
+	}
 
 	state, err := randomString()
 	if err != nil {
@@ -79,6 +88,15 @@ func (o *OIDC) Complete(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	p, ok := o.lookup(providerID)
 	if !ok {
 		return Identity{}, fmt.Errorf("%w: %s", ErrNoProvider, providerID)
+	}
+	return o.CompleteWithProvider(ctx, w, r, p)
+}
+
+// CompleteWithProvider verifies the callback using the provider snapshot the
+// sign-in route reconciled for this request.
+func (o *OIDC) CompleteWithProvider(ctx context.Context, w http.ResponseWriter, r *http.Request, p *OIDCProvider) (Identity, error) {
+	if p == nil {
+		return Identity{}, ErrNoProvider
 	}
 
 	cookie, err := r.Cookie(flowCookie)

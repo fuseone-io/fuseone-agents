@@ -2,10 +2,13 @@ package httpapi
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
@@ -77,27 +80,74 @@ func TestAuthStart_loadsTheProviderFromTheDurableStoreBeforeRedirecting(t *testi
 	}
 }
 
+func TestAuthStart_reusesAnUnchangedLiveProviderWithoutOpeningTheSecret(t *testing.T) {
+	t.Parallel()
+
+	issuer, discoveryHits := countingOIDCIssuer(t)
+	updated := time.Date(2026, 8, 18, 12, 0, 0, 0, time.UTC)
+	stored := domain.IdentityProvider{
+		ID: "keycloak", Display: "Keycloak", Issuer: issuer,
+		ClientID: "fuseone", Enabled: true, UpdatedAt: updated,
+		Mappings: []domain.GroupMapping{{
+			Group: "devops", Company: "acme", Area: "platform", Role: "curator",
+		}},
+	}
+	oidc := auth.NewOIDC("https://console.example", true)
+	if err := oidc.Add(t.Context(), &auth.OIDCProvider{
+		ID: "keycloak", Display: "Keycloak", Issuer: issuer, ClientID: "fuseone",
+		ClientSecret: "client-secret", Revision: auth.IdentityProviderRevision(stored),
+		Mappings: stored.Mappings,
+	}); err != nil {
+		t.Fatalf("seed live provider: %v", err)
+	}
+	store := &fakeIdentity{secret: "client-secret", stored: []domain.IdentityProvider{stored}}
+	routes := NewAuthRoutes(oidc, nil, nil, true).WithIdentityProviders(store)
+	mux := http.NewServeMux()
+	routes.Mount(mux)
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/auth/start/keycloak", nil))
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	if store.secretReads != 0 {
+		t.Fatalf("secret reads = %d, want unchanged provider to avoid the vault", store.secretReads)
+	}
+	if got := discoveryHits.Load(); got != 1 {
+		t.Fatalf("discovery hits = %d, want only the initial registration", got)
+	}
+}
+
 func TestAuthStart_refreshesMappingsAnotherReplicaStored(t *testing.T) {
 	t.Parallel()
 
 	issuer := fakeOIDCIssuer(t)
+	before := time.Date(2026, 8, 18, 11, 0, 0, 0, time.UTC)
+	after := before.Add(time.Minute)
+	old := domain.IdentityProvider{
+		ID: "keycloak", Display: "Keycloak", Issuer: issuer,
+		ClientID: "fuseone", Enabled: true, UpdatedAt: before,
+	}
 	oidc := auth.NewOIDC("https://console.example", true)
 	if err := oidc.Add(t.Context(), &auth.OIDCProvider{
 		ID: "keycloak", Issuer: issuer, ClientID: "fuseone", ClientSecret: "old-secret",
+		Revision: auth.IdentityProviderRevision(old),
 	}); err != nil {
 		t.Fatalf("seed live provider: %v", err)
 	}
-	routes := NewAuthRoutes(oidc, nil, nil, true).
-		WithIdentityProviders(&fakeIdentity{
-			secret: "client-secret",
-			stored: []domain.IdentityProvider{{
-				ID: "keycloak", Display: "Keycloak", Issuer: issuer,
-				ClientID: "fuseone", Enabled: true,
-				Mappings: []domain.GroupMapping{{
-					Group: "devops", Company: "acme", Area: "platform", Role: "curator",
-				}},
+	store := &fakeIdentity{
+		secret: "client-secret",
+		stored: []domain.IdentityProvider{{
+			ID: "keycloak", Display: "Keycloak", Issuer: issuer,
+			ClientID: "fuseone", Enabled: true, UpdatedAt: after,
+			Mappings: []domain.GroupMapping{{
+				Group: "devops", Company: "acme", Area: "platform", Role: "curator",
 			}},
-		})
+		}},
+	}
+	routes := NewAuthRoutes(oidc, nil, nil, true).
+		WithIdentityProviders(store)
 	mux := http.NewServeMux()
 	routes.Mount(mux)
 
@@ -113,6 +163,78 @@ func TestAuthStart_refreshesMappingsAnotherReplicaStored(t *testing.T) {
 	}
 	if got := providers[0].Mappings[0]; got.Group != "devops" || got.Role != "curator" {
 		t.Fatalf("mapping = %+v, want the mapping another replica stored", got)
+	}
+	if store.secretReads != 1 {
+		t.Fatalf("secret reads = %d, want one refresh for the changed durable definition", store.secretReads)
+	}
+}
+
+func TestAuthStart_keepsTheLiveProviderWhenTheDurableStoreIsUnavailable(t *testing.T) {
+	t.Parallel()
+
+	issuer := fakeOIDCIssuer(t)
+	oidc := auth.NewOIDC("https://console.example", true)
+	if err := oidc.Add(t.Context(), &auth.OIDCProvider{
+		ID: "keycloak", Issuer: issuer, ClientID: "fuseone", ClientSecret: "client-secret",
+	}); err != nil {
+		t.Fatalf("seed live provider: %v", err)
+	}
+	routes := NewAuthRoutes(oidc, nil, nil, true).
+		WithIdentityProviders(&fakeIdentity{providersErr: errors.New("postgres is restarting")})
+	mux := http.NewServeMux()
+	routes.Mount(mux)
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/auth/start/keycloak", nil))
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	if _, ok := oidc.Provider("keycloak"); !ok {
+		t.Fatal("transient store failure evicted the live provider")
+	}
+}
+
+func TestAuthStart_keepsTheLiveProviderWhenTheSecretCannotBeRead(t *testing.T) {
+	t.Parallel()
+
+	issuer := fakeOIDCIssuer(t)
+	before := time.Date(2026, 8, 18, 11, 0, 0, 0, time.UTC)
+	after := before.Add(time.Minute)
+	old := domain.IdentityProvider{
+		ID: "keycloak", Display: "Keycloak", Issuer: issuer,
+		ClientID: "fuseone", Enabled: true, UpdatedAt: before,
+	}
+	oidc := auth.NewOIDC("https://console.example", true)
+	if err := oidc.Add(t.Context(), &auth.OIDCProvider{
+		ID: "keycloak", Issuer: issuer, ClientID: "fuseone", ClientSecret: "old-secret",
+		Revision: auth.IdentityProviderRevision(old),
+	}); err != nil {
+		t.Fatalf("seed live provider: %v", err)
+	}
+	routes := NewAuthRoutes(oidc, nil, nil, true).
+		WithIdentityProviders(&fakeIdentity{
+			secretErr: errors.New("vault is unavailable"),
+			stored: []domain.IdentityProvider{{
+				ID: "keycloak", Display: "Keycloak", Issuer: issuer,
+				ClientID: "fuseone", Enabled: true, UpdatedAt: after,
+				Mappings: []domain.GroupMapping{{
+					Group: "devops", Company: "acme", Area: "platform", Role: "curator",
+				}},
+			}},
+		})
+	mux := http.NewServeMux()
+	routes.Mount(mux)
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/auth/start/keycloak", nil))
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	providers := oidc.Providers()
+	if len(providers) != 1 || providers[0].Revision != auth.IdentityProviderRevision(old) {
+		t.Fatalf("provider = %+v, want the last live revision preserved", providers)
 	}
 }
 
@@ -145,10 +267,19 @@ func TestAuthStart_removesAProviderThatOnlyThisProcessStillRemembers(t *testing.
 func fakeOIDCIssuer(t *testing.T) string {
 	t.Helper()
 
+	issuer, _ := countingOIDCIssuer(t)
+	return issuer
+}
+
+func countingOIDCIssuer(t *testing.T) (string, *atomic.Int64) {
+	t.Helper()
+
 	var issuer string
+	var hits atomic.Int64
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/.well-known/openid-configuration":
+			hits.Add(1)
 			writeJSON(w, http.StatusOK, map[string]any{
 				"issuer":                                issuer,
 				"authorization_endpoint":                issuer + "/authorize",
@@ -165,5 +296,5 @@ func fakeOIDCIssuer(t *testing.T) string {
 	}))
 	issuer = server.URL
 	t.Cleanup(server.Close)
-	return issuer
+	return issuer, &hits
 }

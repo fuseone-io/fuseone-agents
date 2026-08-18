@@ -53,6 +53,10 @@ field" is a commit message.
   identity-provider configuration. Each sign-in start and callback reconciles
   the local registry with the durable provider settings, so a callback routed
   to another pod does not fail with "no such identity provider".
+- OIDC reconciliation on the sign-in path now reuses unchanged providers and
+  keeps the last live provider when the database, vault or identity-provider
+  discovery has a transient failure, instead of rediscovering and evicting on
+  every unauthenticated request.
 
 ## [0.4.0] — 2026-08-18
 

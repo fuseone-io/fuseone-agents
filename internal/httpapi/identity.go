@@ -142,7 +142,7 @@ func (s *Server) register(ctx context.Context, provider domain.IdentityProvider,
 
 	return s.signIn.Add(ctx, &auth.OIDCProvider{
 		ID: provider.ID, Display: provider.Display, Issuer: provider.Issuer,
-		ClientID: provider.ClientID, ClientSecret: secret,
+		ClientID: provider.ClientID, Revision: auth.IdentityProviderRevision(provider), ClientSecret: secret,
 		GroupsClaim: provider.GroupsClaim, Mappings: provider.Mappings,
 	})
 }

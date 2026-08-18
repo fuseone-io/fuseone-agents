@@ -17,14 +17,20 @@ import (
 // configuration that needs a restart to take effect is one nobody trusts.
 
 type fakeIdentity struct {
-	stored  []domain.IdentityProvider
-	secret  string
-	putWith string
-	deleted string
-	err     error
+	stored       []domain.IdentityProvider
+	secret       string
+	putWith      string
+	deleted      string
+	err          error
+	providersErr error
+	secretErr    error
+	secretReads  int
 }
 
 func (f *fakeIdentity) IdentityProviders(context.Context) ([]domain.IdentityProvider, error) {
+	if f.providersErr != nil {
+		return nil, f.providersErr
+	}
 	return f.stored, nil
 }
 
@@ -47,6 +53,10 @@ func (f *fakeIdentity) DeleteIdentityProvider(
 }
 
 func (f *fakeIdentity) IdentitySecret(context.Context, string) (string, error) {
+	f.secretReads++
+	if f.secretErr != nil {
+		return "", f.secretErr
+	}
 	return f.secret, nil
 }
 

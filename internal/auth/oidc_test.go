@@ -1,8 +1,10 @@
 package auth_test
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/fuseone/agents/internal/auth"
@@ -99,6 +101,36 @@ func TestStart_unknownProvider_isRejected(t *testing.T) {
 	}
 }
 
+func TestStartWithProvider_usesTheReconciledSnapshot(t *testing.T) {
+	t.Parallel()
+
+	issuer := fakeOIDCIssuer(t)
+	o := auth.NewOIDC("https://console.example", true)
+	if err := o.Add(t.Context(), &auth.OIDCProvider{
+		ID: "keycloak", Issuer: issuer, ClientID: "fuseone", ClientSecret: "secret",
+	}); err != nil {
+		t.Fatalf("add provider: %v", err)
+	}
+	provider, ok := o.Provider("keycloak")
+	if !ok {
+		t.Fatal("provider was not registered")
+	}
+	o.Remove("keycloak")
+	rec := httptest.NewRecorder()
+
+	err := o.StartWithProvider(rec, httptest.NewRequest(http.MethodGet, "/auth/start/keycloak", nil), provider, "/")
+
+	if err != nil {
+		t.Fatalf("StartWithProvider = %v, want the snapshot to remain usable", err)
+	}
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status = %d, want redirect", rec.Code)
+	}
+	if location := rec.Header().Get("Location"); !strings.HasPrefix(location, issuer+"/authorize?") {
+		t.Fatalf("redirect = %q, want the reconciled provider endpoint", location)
+	}
+}
+
 func TestComplete_withoutTheFlowCookie_isRejected(t *testing.T) {
 	t.Parallel()
 
@@ -112,4 +144,31 @@ func TestComplete_withoutTheFlowCookie_isRejected(t *testing.T) {
 	if err == nil {
 		t.Fatal("Complete accepted a callback with no flow in progress")
 	}
+}
+
+func fakeOIDCIssuer(t *testing.T) string {
+	t.Helper()
+
+	var issuer string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/.well-known/openid-configuration":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"issuer":                                issuer,
+				"authorization_endpoint":                issuer + "/authorize",
+				"token_endpoint":                        issuer + "/token",
+				"jwks_uri":                              issuer + "/jwks",
+				"response_types_supported":              []string{"code"},
+				"subject_types_supported":               []string{"public"},
+				"id_token_signing_alg_values_supported": []string{"RS256"},
+				"code_challenge_methods_supported":      []string{"S256"},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	issuer = server.URL
+	t.Cleanup(server.Close)
+	return issuer
 }
