@@ -29,6 +29,10 @@ field" is a commit message.
 
 ### Added
 
+- The connection form asks for the credential the server actually takes. A
+  recipe that authenticates by OAuth no longer offers a bearer field, and a
+  shape the runtime cannot yet send — custom headers, basic auth, a connection
+  string — is shown as documented rather than dressed up as a token.
 - The chart declares a pod and container security context, so a cluster
   enforcing Pod Security Standards `restricted` will run it. The root
   filesystem is read-only, with a writable `/tmp` for the config file a local

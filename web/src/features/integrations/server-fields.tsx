@@ -12,6 +12,12 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import type { ServerFormValues } from "@/features/integrations/server-schema";
+import {
+  remoteAuthPlan,
+  type AuthMode,
+  type RemoteAuthPlan,
+} from "@/features/integrations/mcp/auth-plan";
+import type { ServerRecipe } from "@/features/integrations/mcp/api";
 
 /**
  * The half of the form that depends on how the server is reached.
@@ -24,14 +30,17 @@ export function ServerFields({
   form,
   hasSecret,
   hasConfigFile,
+  recipe,
 }: {
   form: UseFormReturn<ServerFormValues>;
   hasSecret: boolean;
   hasConfigFile: boolean;
+  recipe?: ServerRecipe | null;
 }) {
   const { t } = useTranslation();
 
   if (form.watch("transport") === "http") {
+    const auth = remoteAuthPlan(recipe?.authModes, recipe !== undefined && recipe !== null);
     return (
       <>
         <Field
@@ -40,17 +49,21 @@ export function ServerFields({
           label={t("integrations.url")}
           placeholder="https://api.example.com/mcp/"
         />
-        <Field
-          form={form}
-          name="token"
-          label={t("integrations.token")}
-          placeholder=""
-          hint={
-            hasSecret
-              ? t("integrations.tokenKept")
-              : t("integrations.tokenHint")
-          }
-        />
+        <RemoteAuthNotice plan={auth} />
+        {auth.bearer !== null && (
+          <Field
+            form={form}
+            name="token"
+            label={auth.bearer.label ?? t("mcp.remoteBearerToken")}
+            placeholder=""
+            hint={
+              hasSecret
+                ? t("integrations.tokenKept")
+                : remoteTokenHint(auth.bearer, t)
+            }
+          />
+        )}
+        {auth.oauth !== null && <OAuthFormFields form={form} />}
       </>
     );
   }
@@ -88,6 +101,104 @@ export function ServerFields({
       />
       <AcceptLocalExecution form={form} />
     </>
+  );
+}
+
+function remoteTokenHint(
+  mode: AuthMode,
+  t: ReturnType<typeof useTranslation>["t"],
+) {
+  const header = mode.header ?? "Authorization";
+  const prefix = mode.prefix ?? "Bearer";
+  return t("mcp.remoteBearerHint", { header, prefix });
+}
+
+function RemoteAuthNotice({ plan }: { plan: RemoteAuthPlan }) {
+  const { t } = useTranslation();
+  if (!plan.known) {
+    return (
+      <p className="rounded-lg border bg-muted px-3 py-2 text-xs text-muted-foreground">
+        {t("mcp.authUnknownShape")}
+      </p>
+    );
+  }
+  if (plan.noAuth !== null && plan.bearer === null && plan.oauth === null) {
+    return (
+      <p className="rounded-lg border bg-muted px-3 py-2 text-xs text-muted-foreground">
+        {t("mcp.authNoCredential")}
+      </p>
+    );
+  }
+  if (plan.unsupported.length === 0) return null;
+  const modes = plan.unsupported
+    .map((mode) => mode.label ?? t(`mcp.authMode.${mode.type}`))
+    .join(", ");
+  return (
+    <p className="rounded-lg border border-warning/30 bg-warning-surface px-3 py-2 text-xs text-warning">
+      {t("mcp.authShapeUnsupported", { modes })}
+    </p>
+  );
+}
+
+function OAuthFormFields({ form }: { form: UseFormReturn<ServerFormValues> }) {
+  const { t } = useTranslation();
+  return (
+    <div className="space-y-3 rounded-lg border p-3">
+      <p className="text-xs text-muted-foreground">{t("mcp.oauthHint")}</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field
+          form={form}
+          name="oauthAccessToken"
+          label={t("mcp.oauthAccessToken")}
+          placeholder=""
+          password
+        />
+        <Field
+          form={form}
+          name="oauthRefreshToken"
+          label={t("mcp.oauthRefreshToken")}
+          placeholder=""
+          password
+        />
+        <Field
+          form={form}
+          name="oauthTokenURL"
+          label={t("mcp.oauthTokenURL")}
+          placeholder={t("mcp.oauthTokenURLPlaceholder")}
+        />
+        <Field
+          form={form}
+          name="oauthClientID"
+          label={t("mcp.oauthClientID")}
+          placeholder=""
+        />
+        <Field
+          form={form}
+          name="oauthClientSecret"
+          label={t("mcp.oauthClientSecret")}
+          placeholder=""
+          password
+        />
+        <Field
+          form={form}
+          name="oauthTokenType"
+          label={t("mcp.oauthTokenType")}
+          placeholder={t("mcp.oauthTokenTypePlaceholder")}
+        />
+        <Field
+          form={form}
+          name="oauthExpiresAtUnix"
+          label={t("mcp.oauthExpiresAtUnix")}
+          placeholder=""
+        />
+        <TextAreaField
+          form={form}
+          name="oauthScopes"
+          label={t("mcp.oauthScopes")}
+          placeholder={t("mcp.oauthScopesPlaceholder")}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -146,12 +257,26 @@ function Field({
   label,
   placeholder,
   hint,
+  password = false,
 }: {
   form: UseFormReturn<ServerFormValues>;
-  name: "url" | "token" | "command" | "args" | "configFileEnv";
+  name:
+    | "url"
+    | "token"
+    | "command"
+    | "args"
+    | "configFileEnv"
+    | "oauthAccessToken"
+    | "oauthRefreshToken"
+    | "oauthTokenURL"
+    | "oauthClientID"
+    | "oauthClientSecret"
+    | "oauthTokenType"
+    | "oauthExpiresAtUnix";
   label: string;
   placeholder: string;
   hint?: string;
+  password?: boolean;
 }) {
   return (
     <FormField
@@ -166,7 +291,7 @@ function Field({
               className="font-mono"
               placeholder={placeholder}
               autoComplete="off"
-              type={name === "token" ? "password" : undefined}
+              type={password || name === "token" ? "password" : undefined}
             />
           </FormControl>
           {hint && <FormDescription>{hint}</FormDescription>}
@@ -185,7 +310,7 @@ function TextAreaField({
   hint,
 }: {
   form: UseFormReturn<ServerFormValues>;
-  name: "configFile";
+  name: "configFile" | "oauthScopes";
   label: string;
   placeholder: string;
   hint?: string;

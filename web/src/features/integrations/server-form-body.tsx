@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/form";
 import { ServerFields } from "@/features/integrations/server-fields";
 import type { ServerFormValues } from "@/features/integrations/server-schema";
+import type { ServerRecipe } from "@/features/integrations/mcp/api";
 
 /** Everything a tool server is, in the order somebody fills it: what it is
  *  called, how it is reached, and then whichever half that answer needs. */
@@ -27,11 +28,13 @@ export function ServerFormBody({
   editing,
   hasSecret,
   hasConfigFile,
+  recipe,
 }: {
   form: UseFormReturn<ServerFormValues>;
   editing: boolean;
   hasSecret: boolean;
   hasConfigFile: boolean;
+  recipe?: ServerRecipe | null;
 }) {
   const { t } = useTranslation();
 
@@ -88,6 +91,7 @@ export function ServerFormBody({
         form={form}
         hasSecret={hasSecret}
         hasConfigFile={hasConfigFile}
+        recipe={recipe}
       />
 
       <FormField

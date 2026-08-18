@@ -21,6 +21,9 @@ export function CredentialFields({
   local,
   hasSecret,
   hasConfigFile,
+  showRemoteToken = true,
+  remoteTokenLabel,
+  remoteTokenHint,
   value,
   onChange,
   onRevoke,
@@ -29,6 +32,9 @@ export function CredentialFields({
   local: boolean;
   hasSecret: boolean;
   hasConfigFile: boolean;
+  showRemoteToken?: boolean;
+  remoteTokenLabel?: string;
+  remoteTokenHint?: string;
   value: { token: string; env: string; configFile: string; configFileEnv: string };
   onChange: (next: {
     token: string;
@@ -91,9 +97,9 @@ export function CredentialFields({
             </p>
           </div>
         </div>
-      ) : (
+      ) : showRemoteToken ? (
         <div className="space-y-1.5">
-          <Label htmlFor="token">{t("integrations.token")}</Label>
+          <Label htmlFor="token">{remoteTokenLabel ?? t("integrations.token")}</Label>
           <Input
             id="token"
             type="password"
@@ -105,9 +111,17 @@ export function CredentialFields({
           <p className="text-xs text-muted-foreground">
             {hasSecret
               ? t("integrations.tokenKept")
-              : t("integrations.tokenHint")}
+              : remoteTokenHint ?? t("integrations.tokenHint")}
           </p>
         </div>
+      ) : hasSecret ? (
+        <p className="rounded-lg border border-warning/30 bg-warning-surface px-3 py-2 text-xs text-warning">
+          {t("mcp.storedBearerOutsideRecipe")}
+        </p>
+      ) : (
+        <p className="rounded-lg border bg-muted px-3 py-2 text-xs text-muted-foreground">
+          {t("mcp.noBearerFieldForRecipe")}
+        </p>
       )}
 
       {hasSecret && (

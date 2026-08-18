@@ -10,6 +10,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { Mono } from "@/components/shared/mono";
 import { problemMessage } from "@/lib/api/problem-message";
 import { CredentialFields } from "@/features/integrations/mcp/credential-fields";
+import {
+  remoteAuthPlan,
+  type AuthMode,
+  type RemoteAuthPlan,
+} from "@/features/integrations/mcp/auth-plan";
+import type { ServerRecipe } from "@/features/integrations/mcp/api";
+import {
+  oauthExpiryIsValid,
+  oauthFromValue,
+  oauthHasValue,
+} from "@/features/integrations/mcp/oauth-credential";
 import { readVariables } from "@/features/integrations/mcp/variables";
 import {
   usePutMCPServer,
@@ -26,16 +37,26 @@ import {
  * credential could be written and never taken back, which is the half that
  * matters on the day it leaks.
  */
-export function ConnectionPanel({ server }: { server: MCPServer }) {
+export function ConnectionPanel({
+  server,
+  recipe,
+}: {
+  server: MCPServer;
+  recipe?: ServerRecipe | null;
+}) {
   const { t } = useTranslation();
   const put = usePutMCPServer();
   const local = (server.transport ?? "stdio") === "stdio";
+  const remotePlan = remoteAuthPlan(recipe?.authModes, recipe !== undefined && recipe !== null);
   const storedConfigEnv = server.configFileEnv ?? "";
   const [value, setValue] = useState(() => blankCredential(storedConfigEnv));
   const oauthChanged = oauthHasValue(value);
-  const bearerChanged = value.token !== "";
-  const remoteConflict = !local && oauthChanged && bearerChanged;
-  const oauthExpiryInvalid = !local && !oauthExpiryIsValid(value);
+  const bearerChanged = remotePlan.bearer !== null && value.token !== "";
+  const remoteConflict =
+    !local && remotePlan.oauth !== null && oauthChanged && bearerChanged;
+  const oauthExpiryInvalid =
+    !local && remotePlan.oauth !== null && !oauthExpiryIsValid(value);
+  const canWriteRemote = remotePlan.bearer !== null || remotePlan.oauth !== null;
 
   async function write(credential: {
     token?: string;
@@ -81,10 +102,15 @@ export function ConnectionPanel({ server }: { server: MCPServer }) {
           )}
         </dl>
 
+        {!local && <RemoteAuthSummary plan={remotePlan} />}
+
         <CredentialFields
           local={local}
           hasSecret={local ? server.hasVariables === true : server.hasSecret === true && server.hasOAuth !== true}
           hasConfigFile={server.hasConfigFile === true}
+          showRemoteToken={remotePlan.bearer !== null}
+          remoteTokenLabel={remoteTokenLabel(remotePlan.bearer, t)}
+          remoteTokenHint={remoteTokenHint(remotePlan.bearer, t)}
           value={value}
           onChange={(next) => setValue((current) => ({ ...current, ...next }))}
           onRevoke={() =>
@@ -94,7 +120,7 @@ export function ConnectionPanel({ server }: { server: MCPServer }) {
           }
           onRevokeConfigFile={() => void write({ configFile: "" })}
         />
-        {!local && (
+        {!local && remotePlan.oauth !== null && (
           <OAuthFields
             value={value}
             hasOAuth={server.hasOAuth === true}
@@ -103,6 +129,9 @@ export function ConnectionPanel({ server }: { server: MCPServer }) {
             onChange={setValue}
             onRevoke={() => void write({ oauth: {} })}
           />
+        )}
+        {!local && remotePlan.oauth === null && server.hasOAuth === true && (
+          <StoredOAuthOnly onRevoke={() => void write({ oauth: {} })} />
         )}
 
         <div className="flex justify-end">
@@ -117,7 +146,7 @@ export function ConnectionPanel({ server }: { server: MCPServer }) {
                         : { configFile: value.configFile }),
                       configFileEnv: value.configFileEnv,
                     }
-                  : oauthChanged
+                  : remotePlan.oauth !== null && oauthChanged
                     ? { oauth: oauthFromValue(value) }
                     : { token: value.token },
               )
@@ -130,7 +159,9 @@ export function ConnectionPanel({ server }: { server: MCPServer }) {
                 ? value.env === "" &&
                   value.configFile === "" &&
                   value.configFileEnv === storedConfigEnv
-                : value.token === "" && !oauthChanged)
+                : !canWriteRemote ||
+                  ((remotePlan.bearer === null || value.token === "") &&
+                    (remotePlan.oauth === null || !oauthChanged)))
             }
           >
             {t("mcp.saveCredential")}
@@ -173,45 +204,50 @@ function blankCredential(configFileEnv: string): CredentialValue {
   };
 }
 
-function oauthHasValue(value: CredentialValue) {
-  return [
-    value.oauthAccessToken,
-    value.oauthRefreshToken,
-    value.oauthTokenURL,
-    value.oauthClientID,
-    value.oauthClientSecret,
-    value.oauthTokenType,
-    value.oauthExpiresAtUnix,
-    value.oauthScopes,
-  ].some((part) => part.trim() !== "");
+function remoteTokenLabel(
+  mode: AuthMode | null,
+  t: ReturnType<typeof useTranslation>["t"],
+) {
+  return mode?.label ?? t("mcp.remoteBearerToken");
 }
 
-function oauthExpiryIsValid(value: CredentialValue) {
-  const raw = value.oauthExpiresAtUnix.trim();
-  return raw === "" || /^\d+$/.test(raw);
+function remoteTokenHint(
+  mode: AuthMode | null,
+  t: ReturnType<typeof useTranslation>["t"],
+) {
+  if (!mode) return undefined;
+  const header = mode.header ?? "Authorization";
+  const prefix = mode.prefix ?? "Bearer";
+  return t("mcp.remoteBearerHint", { header, prefix });
 }
 
-function oauthFromValue(value: CredentialValue): MCPOAuthGrant {
-  const expires = value.oauthExpiresAtUnix.trim();
-  const scopes = value.oauthScopes
-    .split(/\s+/)
-    .map((scope) => scope.trim())
-    .filter(Boolean);
-  return {
-    accessToken: emptyAsUndefined(value.oauthAccessToken),
-    refreshToken: emptyAsUndefined(value.oauthRefreshToken),
-    tokenURL: emptyAsUndefined(value.oauthTokenURL),
-    clientID: emptyAsUndefined(value.oauthClientID),
-    clientSecret: emptyAsUndefined(value.oauthClientSecret),
-    tokenType: emptyAsUndefined(value.oauthTokenType),
-    expiresAtUnix: expires === "" ? undefined : Number.parseInt(expires, 10),
-    scopes: scopes.length === 0 ? undefined : scopes,
-  };
-}
+function RemoteAuthSummary({ plan }: { plan: RemoteAuthPlan }) {
+  const { t } = useTranslation();
+  if (!plan.known) {
+    return (
+      <p className="rounded-lg border bg-muted px-3 py-2 text-xs text-muted-foreground">
+        {t("mcp.authUnknownShape")}
+      </p>
+    );
+  }
 
-function emptyAsUndefined(value: string) {
-  const trimmed = value.trim();
-  return trimmed === "" ? undefined : trimmed;
+  if (plan.noAuth !== null && plan.bearer === null && plan.oauth === null) {
+    return (
+      <p className="rounded-lg border bg-muted px-3 py-2 text-xs text-muted-foreground">
+        {t("mcp.authNoCredential")}
+      </p>
+    );
+  }
+
+  if (plan.unsupported.length === 0) return null;
+  const modes = plan.unsupported
+    .map((mode) => mode.label ?? t(`mcp.authMode.${mode.type}`))
+    .join(", ");
+  return (
+    <p className="rounded-lg border border-warning/30 bg-warning-surface px-3 py-2 text-xs text-warning">
+      {t("mcp.authShapeUnsupported", { modes })}
+    </p>
+  );
 }
 
 function OAuthFields({
@@ -311,6 +347,27 @@ function OAuthFields({
           {t("mcp.revokeOAuth")}
         </Button>
       )}
+    </div>
+  );
+}
+
+function StoredOAuthOnly({ onRevoke }: { onRevoke: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <div className="space-y-3 border-t pt-3">
+      <p className="rounded-lg border border-warning/30 bg-warning-surface px-3 py-2 text-xs text-warning">
+        {t("mcp.storedOAuthOutsideRecipe")}
+      </p>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={onRevoke}
+        className="text-danger"
+      >
+        <Trash2 className="size-3.5" />
+        {t("mcp.revokeOAuth")}
+      </Button>
     </div>
   );
 }

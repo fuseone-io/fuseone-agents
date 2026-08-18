@@ -35,6 +35,28 @@ const postgres: ServerRecipe = {
   note: "Read-only database access.",
 };
 
+const newrelic: ServerRecipe = {
+  server: "newrelic",
+  title: "New Relic",
+  category: "operations",
+  publisher: "New Relic",
+  docsFrom: "publisher",
+  provenance: "documentation",
+  status: "published",
+  configRequirements: ["credential"],
+  authModes: [
+    {
+      type: "headers",
+      principal: "service",
+      label: "New Relic API key",
+      header: "Api-Key",
+    },
+  ],
+  transport: "http",
+  url: "https://mcp.newrelic.com/mcp",
+  note: "Observability.",
+};
+
 function open(recipes: ServerRecipe[] = [stripe]) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -78,10 +100,13 @@ describe("available MCP servers", () => {
     expect(screen.getAllByText("Stripe OAuth").length).toBeGreaterThan(0);
     expect(screen.getByDisplayValue("stripe")).toBeInTheDocument();
     expect(screen.getByDisplayValue("https://mcp.stripe.com")).toBeInTheDocument();
+    expect(container.querySelector("#token")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/token bearer/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/access token oauth/i)).toBeInTheDocument();
   });
 
   it("does not let an archived reference recipe look current", async () => {
-    open([postgres]);
+    const { container } = open([postgres]);
 
     expect(screen.getByText("arquivado")).toBeInTheDocument();
     expect(screen.getByText("credencial")).toBeInTheDocument();
@@ -93,6 +118,22 @@ describe("available MCP servers", () => {
     expect(screen.getAllByText("Read-only database access.")).toHaveLength(2);
     expect(
       screen.getByText(/marcou este servidor como arquivado/),
+    ).toBeInTheDocument();
+    expect(container.querySelector("#token")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/token bearer/i)).not.toBeInTheDocument();
+  });
+
+  it("does not turn a custom-header recipe into a token field", async () => {
+    const { container } = open([newrelic]);
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Conectar New Relic" }),
+    );
+
+    expect(container.querySelector("#token")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/token bearer/i)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/runtime não configura essa forma/i),
     ).toBeInTheDocument();
   });
 });

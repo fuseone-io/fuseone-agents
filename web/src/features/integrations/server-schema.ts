@@ -19,6 +19,14 @@ export const serverSchema = z
     args: z.string(),
     url: z.string(),
     token: z.string(),
+    oauthAccessToken: z.string(),
+    oauthRefreshToken: z.string(),
+    oauthTokenURL: z.string(),
+    oauthClientID: z.string(),
+    oauthClientSecret: z.string(),
+    oauthTokenType: z.string(),
+    oauthExpiresAtUnix: z.string(),
+    oauthScopes: z.string(),
     configFile: z.string(),
     configFileEnv: z
       .string()
@@ -34,6 +42,35 @@ export const serverSchema = z
     path: ["url"],
     message: "integrations.sayWhereToCall",
   })
+  .refine(
+    (v) =>
+      v.transport !== "http" ||
+      v.oauthExpiresAtUnix.trim() === "" ||
+      /^\d+$/.test(v.oauthExpiresAtUnix.trim()),
+    {
+      path: ["oauthExpiresAtUnix"],
+      message: "mcp.oauthExpiryInvalid",
+    },
+  )
+  .refine(
+    (v) =>
+      v.transport !== "http" ||
+      v.token.trim() === "" ||
+      [
+        v.oauthAccessToken,
+        v.oauthRefreshToken,
+        v.oauthTokenURL,
+        v.oauthClientID,
+        v.oauthClientSecret,
+        v.oauthTokenType,
+        v.oauthExpiresAtUnix,
+        v.oauthScopes,
+      ].every((part) => part.trim() === ""),
+    {
+      path: ["token"],
+      message: "mcp.oauthBearerConflict",
+    },
+  )
   /*
    * A local server is a program this installation starts inside the worker.
    * The server refuses one nobody accepted; this says so before the round

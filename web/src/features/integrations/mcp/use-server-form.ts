@@ -7,6 +7,10 @@ import {
   type ServerFormValues,
 } from "@/features/integrations/server-schema";
 import { usePutMCPServer, type MCPServer } from "@/features/integrations/api";
+import {
+  oauthFromValue,
+  oauthHasValue,
+} from "@/features/integrations/mcp/oauth-credential";
 import { problemMessage } from "@/lib/api/problem-message";
 
 /**
@@ -33,6 +37,14 @@ export function useServerForm(
       args: (server?.args ?? []).join(" "),
       url: server?.url ?? "",
       token: "",
+      oauthAccessToken: "",
+      oauthRefreshToken: "",
+      oauthTokenURL: "",
+      oauthClientID: "",
+      oauthClientSecret: "",
+      oauthTokenType: "",
+      oauthExpiresAtUnix: "",
+      oauthScopes: "",
       configFile: "",
       configFileEnv: server?.configFileEnv ?? "",
       // Never carried forward from the transport. A server nobody has accepted
@@ -55,6 +67,7 @@ export function useServerForm(
         // reason for not demanding a secret to correct an address. Removing
         // one is a separate gesture, on the server's own page.
         token: values.token || undefined,
+        oauth: oauthHasValue(values) ? oauthFromValue(values) : undefined,
         configFile: values.configFile || undefined,
         configFileEnv: values.configFileEnv,
         acceptsLocalExecution: values.acceptsLocalExecution,

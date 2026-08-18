@@ -527,6 +527,7 @@ function ConnectServerPanel({
               editing={false}
               hasSecret={false}
               hasConfigFile={false}
+              recipe={recipe}
             />
           </form>
         </Form>

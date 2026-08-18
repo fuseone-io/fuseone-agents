@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, beforeEach, vi } from "vitest";
 import { ConnectionPanel } from "@/features/integrations/mcp/connection-panel";
 import type { MCPServer } from "@/features/integrations/api";
+import type { ServerRecipe } from "@/features/integrations/mcp/api";
 
 const api = vi.hoisted(() => ({
   mutateAsync: vi.fn(),
@@ -28,6 +29,24 @@ function remote(overrides: Partial<MCPServer> = {}): MCPServer {
     url: "https://mcp.example.com/google",
     enabled: true,
     ...overrides,
+  };
+}
+
+function recipe(
+  authModes: NonNullable<ServerRecipe["authModes"]>,
+): ServerRecipe {
+  return {
+    server: "google-sheets",
+    title: "Google Sheets",
+    category: "data",
+    publisher: "Google",
+    docsFrom: "publisher",
+    provenance: "documentation",
+    status: "published",
+    configRequirements: ["credential"],
+    authModes,
+    transport: "http",
+    url: "https://mcp.example.com/google",
   };
 }
 
@@ -72,7 +91,7 @@ describe("the MCP connection panel", () => {
   it("does not choose between bearer and OAuth on behalf of the operator", async () => {
     render(<ConnectionPanel server={remote()} />);
 
-    await userEvent.type(screen.getByLabelText(/^token$/i), "bearer");
+    await userEvent.type(screen.getByLabelText(/token bearer/i), "bearer");
     await userEvent.type(screen.getByLabelText(/access token oauth/i), "access");
 
     expect(
@@ -93,5 +112,55 @@ describe("the MCP connection panel", () => {
     expect(api.mutateAsync).toHaveBeenCalledWith(
       expect.objectContaining({ oauth: {}, token: undefined }),
     );
+  });
+
+  it("does not render a bearer token field for an OAuth-only recipe", async () => {
+    const { container } = render(
+      <ConnectionPanel
+        server={remote()}
+        recipe={recipe([{ type: "oauth2", principal: "user", label: "Google OAuth" }])}
+      />,
+    );
+
+    expect(container.querySelector("#token")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/token bearer/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/access token oauth/i)).toBeInTheDocument();
+
+    await userEvent.type(screen.getByLabelText(/access token oauth/i), "access");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Salvar a credencial" }),
+    );
+
+    expect(api.mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        token: undefined,
+        oauth: expect.objectContaining({ accessToken: "access" }),
+      }),
+    );
+  });
+
+  it("does not pretend custom headers are a bearer token", () => {
+    const { container } = render(
+      <ConnectionPanel
+        server={remote({ name: "newrelic" })}
+        recipe={recipe([
+          {
+            type: "headers",
+            principal: "service",
+            label: "New Relic API key",
+            header: "Api-Key",
+          },
+        ])}
+      />,
+    );
+
+    expect(container.querySelector("#token")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/token bearer/i)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/espera New Relic API key/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Salvar a credencial" }),
+    ).toBeDisabled();
   });
 });
