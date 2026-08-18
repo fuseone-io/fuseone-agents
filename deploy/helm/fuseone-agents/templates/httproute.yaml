@@ -1,4 +1,4 @@
-{{- if .Values.gateway.enabled }}
+{{- if (.Values.gateway).enabled }}
 {{- if .Values.ingress.enabled }}
 {{- fail "gateway.enabled and ingress.enabled are both set: two objects claiming one hostname is a routing conflict somebody debugs at the wrong layer. Pick one." }}
 {{- end }}

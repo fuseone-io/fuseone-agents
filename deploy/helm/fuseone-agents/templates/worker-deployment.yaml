@@ -88,19 +88,28 @@ spec:
           # a listener for the benefit of the probe.
           securityContext: {{- toYaml .Values.containerSecurityContext | nindent 12 }}
           resources: {{- toYaml .Values.worker.resources | nindent 12 }}
-      {{- if .Values.worker.specs.configMap }}
       volumes:
+        # Always, because the container always mounts it. Rendered inside the
+        # specs conditional, an installation without a specs ConfigMap got a
+        # volumeMount pointing at a volume that did not exist — which schema
+        # validation accepts, because it checks shape rather than whether a
+        # mount resolves.
         - name: tmp
           emptyDir: {}
+      {{- if .Values.worker.specs.configMap }}
         - name: specs
           configMap:
             name: {{ .Values.worker.specs.configMap }}
       {{- end }}
-      {{- if .Values.topologySpread.enabled }}
+      {{/* Parenthesised so a release upgraded with --reuse-values, whose
+           stored values predate this key, renders instead of failing on a nil
+           map. An operator upgrading across the version that added a value is
+           the ordinary path, not an edge case. */}}
+      {{- if (.Values.topologySpread).enabled }}
       topologySpreadConstraints:
-        - maxSkew: {{ .Values.topologySpread.maxSkew }}
-          topologyKey: {{ .Values.topologySpread.topologyKey }}
-          whenUnsatisfiable: {{ .Values.topologySpread.whenUnsatisfiable }}
+        - maxSkew: {{ (.Values.topologySpread).maxSkew }}
+          topologyKey: {{ (.Values.topologySpread).topologyKey }}
+          whenUnsatisfiable: {{ (.Values.topologySpread).whenUnsatisfiable }}
           labelSelector:
             matchLabels:
               app.kubernetes.io/name: {{ include "fuseone.name" . }}

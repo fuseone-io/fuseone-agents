@@ -1,4 +1,4 @@
-{{- if .Values.networkPolicy.enabled }}
+{{- if (.Values.networkPolicy).enabled }}
 {{/*
 The Gate's rule, one layer down.
 

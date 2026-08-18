@@ -76,11 +76,15 @@ spec:
       volumes:
         - name: tmp
           emptyDir: {}
-      {{- if .Values.topologySpread.enabled }}
+      {{/* Parenthesised so a release upgraded with --reuse-values, whose
+           stored values predate this key, renders instead of failing on a nil
+           map. An operator upgrading across the version that added a value is
+           the ordinary path, not an edge case. */}}
+      {{- if (.Values.topologySpread).enabled }}
       topologySpreadConstraints:
-        - maxSkew: {{ .Values.topologySpread.maxSkew }}
-          topologyKey: {{ .Values.topologySpread.topologyKey }}
-          whenUnsatisfiable: {{ .Values.topologySpread.whenUnsatisfiable }}
+        - maxSkew: {{ (.Values.topologySpread).maxSkew }}
+          topologyKey: {{ (.Values.topologySpread).topologyKey }}
+          whenUnsatisfiable: {{ (.Values.topologySpread).whenUnsatisfiable }}
           labelSelector:
             matchLabels:
               app.kubernetes.io/name: {{ include "fuseone.name" . }}
