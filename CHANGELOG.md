@@ -27,6 +27,14 @@ field" is a commit message.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.1.0] — 2026-08-17
+
+The first tagged release. Installations before it ran untagged builds pinned by
+commit, so the notes below apply to them: this is an upgrade, not a first
+install, for anyone already running one.
+
 ### Upgrade notes
 
 - **Local (stdio) tool servers stop until somebody accepts them.** A local
