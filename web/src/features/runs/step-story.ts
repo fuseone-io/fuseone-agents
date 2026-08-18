@@ -171,11 +171,19 @@ export function detailOf(step: Step): Line {
       // trail says the agent asserted them rather than that anything checked.
       const stopped =
         typeof payload.stopped_by === "string" ? payload.stopped_by : "";
-      const outcome =
+      // Two eras. A run recorded before the answer moved carries it inline; one
+      // recorded since carries a reference, because the answer restates what
+      // the agent read and had to live where an erasure can reach it. Rendering
+      // the second as an empty line would report that the agent finished
+      // silently.
+      const inline =
         typeof payload.outcome === "string" ? payload.outcome : "";
-      return stopped
-        ? { key: "runs.stoppedByException", values: { what: stopped, outcome } }
-        : { key: outcome };
+      const held = typeof payload.outcome_ref === "string" && payload.outcome_ref;
+      if (stopped) {
+        const outcome = inline;
+        return { key: "runs.stoppedByException", values: { what: stopped, outcome } };
+      }
+      return inline ? { key: inline } : held ? { key: "runs.outcomeStored" } : NOTHING;
     }
 
     default:

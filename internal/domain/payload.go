@@ -215,7 +215,20 @@ type ParkedPayload struct {
 }
 
 type RunFinishedPayload struct {
-	Outcome string `json:"outcome"`
+	// Outcome is the model's closing answer, and is written only by runs
+	// recorded before it moved to the content store. The chain is immutable,
+	// so those runs keep it inline for ever; nothing writes it now.
+	//
+	// It restates whatever the agent read on the way — a name, an address, the
+	// body of a ticket — and run_steps has no UPDATE and no DELETE, so an
+	// erasure request could never reach it. That is why it moved.
+	Outcome string `json:"outcome,omitempty"`
+	// OutcomeRef and OutcomeDigest are where it lives now: the bytes in the
+	// content store, under the same retention and the same erasure as a tool's
+	// arguments, and a digest so an auditor can prove which answer was given
+	// without the answer surviving to prove it.
+	OutcomeRef    string `json:"outcome_ref,omitempty"`
+	OutcomeDigest string `json:"outcome_digest,omitempty"`
 	// StoppedBy is the step's declared exception, when that is why the run
 	// ended here. The author's own words, recorded verbatim.
 	//

@@ -1498,7 +1498,8 @@
     "wantsToRun": "O agente quer executar",
     "whatChanged": "O que mudou",
     "whatChangedPlaceholder": "teto mensal da área erguido para R$ 500",
-    "wholePeriod": "Todo o período"
+    "wholePeriod": "Todo o período",
+    "outcomeStored": "A resposta final ficou no armazenamento de conteúdo, sujeita à retenção e ao apagamento."
   },
   "scope": {
     "everything": "Tudo o que eu alcanço",

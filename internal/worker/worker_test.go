@@ -107,7 +107,10 @@ func newSetup(t *testing.T, cfg Config, planner *flakyPlanner, specErr error) *s
 	// The worker builds a runner per claim so the spec's own planner is used;
 	// what it needs from us is the collaborators that do not vary by run.
 	deps := engine.Deps{
-		Ledger:  store,
+		Ledger: store,
+		// A run's closing answer goes to the content store, and the runner
+		// refuses to finish without one rather than writing it into the chain.
+		Content: engine.NewMemoryContent(),
 		Gate:    gate.New(),
 		Planner: planner,
 		Tools:   noTools{},

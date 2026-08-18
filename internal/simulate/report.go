@@ -67,6 +67,10 @@ type Case struct {
 	Cost    domain.Cost `json:"cost"`
 	Acted   []Act       `json:"acted,omitempty"`
 	Outcome string      `json:"outcome,omitempty"`
+	// OutcomeRef is where the answer lives for a run recorded since it moved to
+	// the content store. Fold is pure — no context, no store — so it carries
+	// the reference out and whoever has both resolves it.
+	OutcomeRef string `json:"outcomeRef,omitempty"`
 	Reason  string      `json:"reason,omitempty"`
 	// Error is set when the case never got a run at all. It is a row rather
 	// than an omission: a report that silently drops what it could not run
@@ -177,7 +181,9 @@ func (f *folder) ending(step domain.Step) error {
 		if err := decodeInto(step, &p); err != nil {
 			return err
 		}
-		f.c.Outcome = p.Outcome
+		// Both, and only one is ever set: an old run answers inline, a new one
+		// by reference. Dropping either would blank one era of runs.
+		f.c.Outcome, f.c.OutcomeRef = p.Outcome, p.OutcomeRef
 	}
 	return nil
 }

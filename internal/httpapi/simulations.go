@@ -9,6 +9,7 @@ import (
 
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/simulate"
 )
@@ -175,7 +176,7 @@ func (s *Server) GetSimulation(
 		}
 		report = simulate.Battery(report, corpus)
 	}
-	return openapi.GetSimulation200JSONResponse(toSimulationReport(report)), nil
+	return openapi.GetSimulation200JSONResponse(s.simulationReport(ctx, report)), nil
 }
 
 // publishedAgent resolves the newest published version this caller may see.
@@ -222,7 +223,7 @@ func firstOr(reasons []string, fallback string) string {
 
 // --- rendering -------------------------------------------------------------
 
-func toSimulationReport(r simulate.Report) openapi.SimulationReport {
+func (s *Server) simulationReport(ctx context.Context, r simulate.Report) openapi.SimulationReport {
 	out := openapi.SimulationReport{
 		Id: r.ID, Running: r.Running,
 		Held: ptr(r.Held), Broken: ptr(r.Broken), Drifted: ptr(r.Drifted),
@@ -235,19 +236,48 @@ func toSimulationReport(r simulate.Report) openapi.SimulationReport {
 		out.Version = ptr(string(r.Version))
 	}
 	for _, c := range r.Cases {
-		out.Cases = append(out.Cases, toSimulationCase(c))
+		out.Cases = append(out.Cases, s.simulationCase(ctx, c))
 	}
 	return out
 }
 
-func toSimulationCase(c simulate.Case) openapi.SimulationCase {
+/*
+simulationCase renders one case, resolving the answer wherever it lives.
+
+A case from a run recorded before the answer moved carries it inline; one
+recorded since carries a reference. An answer that was erased is reported as
+erased rather than as an empty string, because a report that blanks it says the
+agent finished silently — which is a different result, and the one a reader
+would act on.
+*/
+func (s *Server) simulationCase(ctx context.Context, c simulate.Case) openapi.SimulationCase {
+	outcome := c.Outcome
+	if c.OutcomeRef != "" {
+		resolved, err := engine.OutcomeOf(ctx, s.content, domain.RunFinishedPayload{
+			OutcomeRef: c.OutcomeRef,
+		})
+		if err != nil {
+			outcome = outcomeUnavailable
+		} else {
+			outcome = resolved
+		}
+	}
+	return s.caseOut(c, outcome)
+}
+
+// outcomeUnavailable is what a reader sees where an answer no longer is. Not a
+// sentence to render: the console maps it, and anything showing it raw is
+// showing a code where it should show a translation.
+const outcomeUnavailable = "fuseone:outcome-unavailable"
+
+func (s *Server) caseOut(c simulate.Case, outcome string) openapi.SimulationCase {
 	out := openapi.SimulationCase{
 		Id:      someString(c.ID),
 		Settled: openapi.SimulationSettled(c.Settled),
 		Steps:   c.Steps,
 		Cost:    toCost(c.Cost),
 		RunId:   someString(string(c.RunID)),
-		Outcome: someString(c.Outcome),
+		Outcome: someString(outcome),
 		Reason:  someString(c.Reason),
 		Model:   someString(c.Model),
 	}

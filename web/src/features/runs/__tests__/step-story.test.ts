@@ -39,3 +39,19 @@ describe("a run that stopped where the author said it would", () => {
     expect(line.key).toBe("Respondi e encerrei.");
   });
 });
+
+describe("a run finished since the answer moved", () => {
+  it("says the answer is held rather than reading as silence", () => {
+    // Blank would be the story of an agent that finished saying nothing, which
+    // is a different run from one whose answer is in the content store.
+    expect(
+      detailOf({
+        seq: 4,
+        kind: "run_finished",
+        at: "2026-08-18T12:00:00Z",
+        hash: "h",
+        payload: { outcome_ref: "content:run-1:4" },
+      } as Step),
+    ).toEqual({ key: "runs.outcomeStored" });
+  });
+});

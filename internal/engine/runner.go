@@ -78,17 +78,52 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 	}
 
 	if proposal.Done {
+		// The answer goes where an erasure can reach it. Same sequence
+		// arithmetic as a tool's arguments: the reference points at the step
+		// about to be appended, so retention works per run.
+		ref, err := r.storeOutcome(ctx, start.RunID, state.Seq+1, proposal.Outcome)
+		if err != nil {
+			return Status{}, err
+		}
 		state, err = r.append(ctx, state, start, domain.Step{
 			Kind: domain.StepRunFinished,
 			Payload: mustJSON(domain.RunFinishedPayload{
-				Outcome:   proposal.Outcome,
-				StoppedBy: proposal.StoppedBy,
+				OutcomeRef:    ref,
+				OutcomeDigest: digest([]byte(proposal.Outcome)),
+				StoppedBy:     proposal.StoppedBy,
 			}),
 		})
 		return status(state), err
 	}
 
 	return r.act(ctx, state, start, proposal)
+}
+
+/*
+storeOutcome puts the model's closing answer in the content store.
+
+It refuses rather than falling back to writing the text into the step. A
+missing content store is a misconfigured installation, and the quiet fallback
+would be the platform recording personal data in the one table an erasure
+request cannot reach — the exact defect this exists to close.
+
+An empty answer stores nothing: there is no content to erase, and a reference
+to zero bytes would only be a reference that fails to resolve later.
+*/
+func (r *Runner) storeOutcome(
+	ctx context.Context, runID domain.RunID, seq int64, outcome string,
+) (string, error) {
+	if outcome == "" {
+		return "", nil
+	}
+	if r.deps.Content == nil {
+		return "", fmt.Errorf("engine: no content store to hold the outcome of %s", runID)
+	}
+	ref, err := r.deps.Content.Put(ctx, runID, seq, []byte(outcome))
+	if err != nil {
+		return "", fmt.Errorf("engine: store outcome: %w", err)
+	}
+	return ref, nil
 }
 
 func (r *Runner) plan(ctx context.Context, state State, start Start) (Proposal, error) {
