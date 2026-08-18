@@ -42,8 +42,13 @@ export function EditorBody({
   // canvas and a catalogue are not read that way and take the width.
   // Reading tabs scroll their own column; filling tabs scroll the list
   // inside them. Either way exactly one thing on the screen scrolls.
+  // `[&>*]:shrink-0` because a flex column shrinks its children before it
+  // scrolls: with enough instruction text the identity card was compressed
+  // until its middle row was sliced in half, which reads as a broken screen
+  // rather than as a column that needed scrolling. Cards keep their height and
+  // the column scrolls, which is what the comment above always claimed.
   const column =
-    "mx-auto flex w-full max-w-[820px] flex-col gap-4 overflow-y-auto px-5 pt-6 pb-10";
+    "mx-auto flex w-full max-w-[820px] flex-col gap-4 overflow-y-auto px-5 pt-6 pb-10 [&>*]:shrink-0";
 
   return (
     <>
