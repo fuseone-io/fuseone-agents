@@ -19,9 +19,7 @@ func (m *Memory) RuntimeHealth(ctx context.Context, filter domain.RunFilter) (do
 	defer m.mu.RUnlock()
 
 	now := m.now()
-	if filter.Since.IsZero() {
-		filter.Since = now.Add(-24 * time.Hour)
-	}
+	since := runtimeWindowSince(filter.Since, now)
 	current := filter
 	current.Since = time.Time{}
 	current.Until = time.Time{}
@@ -35,7 +33,10 @@ func (m *Memory) RuntimeHealth(ctx context.Context, filter domain.RunFilter) (do
 			continue
 		}
 		summary := summarise(steps)
-		out.ByPhase[summary.Phase]++
+		if runtimeActivePhase(summary.Phase) ||
+			(runtimeTerminalPhase(summary.Phase) && !summary.UpdatedAt.Before(since)) {
+			out.ByPhase[summary.Phase]++
+		}
 		st := m.leases[id]
 		if claimable(summary.Phase) {
 			switch {
@@ -65,7 +66,7 @@ func (m *Memory) RuntimeHealth(ctx context.Context, filter domain.RunFilter) (do
 				failureAt = m.lastFailureAt[id]
 			}
 		}
-		if failure == nil || failureAt.Before(filter.Since) {
+		if failure == nil || failureAt.Before(since) {
 			continue
 		}
 		key := runtimeFailureKey(*failure)
@@ -95,6 +96,19 @@ func (m *Memory) RuntimeHealth(ctx context.Context, filter domain.RunFilter) (do
 		return strings.Compare(a.Code, b.Code)
 	})
 	return out, nil
+}
+
+func runtimeActivePhase(phase string) bool {
+	switch phase {
+	case "running", "awaiting_tool", "awaiting_approval", "parked", "compensating":
+		return true
+	default:
+		return false
+	}
+}
+
+func runtimeTerminalPhase(phase string) bool {
+	return phase == "finished" || phase == "failed"
 }
 
 func runtimeFailureKey(f domain.FailureSummary) string {

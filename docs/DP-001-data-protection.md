@@ -66,6 +66,7 @@ Roughly twenty-five tables. The ones that can hold personal data:
 |---|---|
 | `run_content` | Everything an agent read or wrote: ticket text, email bodies, tool arguments, model replies |
 | `run_steps` | Who asked, which agent, which tool, what the Gate decided; references and digests for bulk content — **and the free text listed in section 1**, permanently |
+| `runs.last_error` | Operational error text for the latest failed turn; classified model provider failures store only a stable code, but unclassified local or integration failures can still carry free text |
 | `principals`, `sessions`, `role_grants` | The people who use the console: identity from the customer's own provider |
 | `channel_inbox`, `channel_deliveries` | Messages exchanged on a connected channel, and what was sent back |
 | `admin_events`, `audit` records | Who changed what configuration, and when |
@@ -73,6 +74,14 @@ Roughly twenty-five tables. The ones that can hold personal data:
 `agent_specs`, `policies`, `areas`, `scopes`, `settings` and the trigger tables
 hold configuration written by the customer's own staff. They can hold personal
 data only if somebody writes it into an instruction.
+
+The `runs` row is a projection, not the audit chain and not the content store.
+Runtime dashboards read it because folding the chain during an outage would
+make the database do archival work at the worst possible time. That projection
+therefore has to stay low-cardinality where it can: typed model provider
+failures write codes such as `model_auth_failed`, not the provider's response
+body. Errors the platform has not classified can still leave their text in
+`runs.last_error`, outside content retention and erasure.
 
 Everything is in the customer's PostgreSQL, in the customer's environment.
 Nothing is stored by the vendor, because there is no vendor-side component.

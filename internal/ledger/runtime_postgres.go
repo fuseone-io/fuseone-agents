@@ -17,32 +17,38 @@ func (p *Postgres) RuntimeHealth(ctx context.Context, filter domain.RunFilter) (
 	current.Until = time.Time{}
 	current.After = nil
 	current.Search = ""
+	since := runtimeWindowSince(filter.Since, time.Now().UTC())
 
 	out := domain.RuntimeHealth{ByPhase: map[string]int64{}}
 
 	where, args := runFilterSQL(current)
 	where = whereAnd(where, realRuns)
+
+	activeWhere := whereAnd(where, "phase in "+runtimeActivePhases)
 	rows, err := p.pool.Query(ctx, `
 		select phase, count(*)
-		from runs `+where+`
+		from runs `+activeWhere+`
 		group by phase`, args...)
 	if err != nil {
 		return domain.RuntimeHealth{}, fmt.Errorf("runtime phases: %w", err)
 	}
-	for rows.Next() {
-		var phase string
-		var count int64
-		if err := rows.Scan(&phase, &count); err != nil {
-			rows.Close()
-			return domain.RuntimeHealth{}, err
-		}
-		out.ByPhase[phase] = count
-	}
-	if err := rows.Err(); err != nil {
-		rows.Close()
+	if err := scanPhaseCounts(rows, out.ByPhase); err != nil {
 		return domain.RuntimeHealth{}, err
 	}
-	rows.Close()
+
+	terminalWhere := whereAnd(where, "phase in "+runtimeTerminalPhases)
+	terminalWhere = whereAnd(terminalWhere, fmt.Sprintf("updated_at >= $%d", len(args)+1))
+	terminalArgs := append(append([]any{}, args...), since)
+	rows, err = p.pool.Query(ctx, `
+		select phase, count(*)
+		from runs `+terminalWhere+`
+		group by phase`, terminalArgs...)
+	if err != nil {
+		return domain.RuntimeHealth{}, fmt.Errorf("runtime recent phases: %w", err)
+	}
+	if err := scanPhaseCounts(rows, out.ByPhase); err != nil {
+		return domain.RuntimeHealth{}, err
+	}
 
 	var oldest *time.Time
 	if err := p.pool.QueryRow(ctx, `
@@ -80,17 +86,13 @@ func (p *Postgres) RuntimeHealth(ctx context.Context, filter domain.RunFilter) (
 	}
 
 	recent := filter
-	failureSince := recent.Since
 	recent.After = nil
 	recent.Search = ""
 	recent.Since = time.Time{}
-	if failureSince.IsZero() {
-		failureSince = time.Now().UTC().Add(-24 * time.Hour)
-	}
 	where, args = runFilterSQL(recent)
 	where = whereAnd(whereAnd(where, realRuns), "failure_code is not null")
 	where = whereAnd(where, fmt.Sprintf("updated_at >= $%d", len(args)+1))
-	args = append(args, failureSince)
+	args = append(args, since)
 	rows, err = p.pool.Query(ctx, `
 		select failure_code, coalesce(failure_provider, ''), coalesce(failure_status, 0),
 		       coalesce(failure_retryable, false), count(*), max(updated_at)
@@ -112,4 +114,36 @@ func (p *Postgres) RuntimeHealth(ctx context.Context, filter domain.RunFilter) (
 		out.Failures = append(out.Failures, one)
 	}
 	return out, rows.Err()
+}
+
+const (
+	runtimeActivePhases   = "('running', 'awaiting_tool', 'awaiting_approval', 'parked', 'compensating')"
+	runtimeTerminalPhases = "('finished', 'failed')"
+)
+
+func runtimeWindowSince(since, now time.Time) time.Time {
+	if since.IsZero() {
+		return now.Add(-24 * time.Hour)
+	}
+	return since
+}
+
+func scanPhaseCounts(rows pgxRows, into map[string]int64) error {
+	defer rows.Close()
+	for rows.Next() {
+		var phase string
+		var count int64
+		if err := rows.Scan(&phase, &count); err != nil {
+			return err
+		}
+		into[phase] += count
+	}
+	return rows.Err()
+}
+
+type pgxRows interface {
+	Close()
+	Next() bool
+	Scan(...any) error
+	Err() error
 }

@@ -33,9 +33,9 @@ type RunSummary struct {
 	// PendingApproval is set while the run waits on a person.
 	PendingApproval *PendingApprovalSummary
 
-	// Failure is set when the supervisor parked the run for a typed cause.
-	// The raw last_error remains in the queue projection, but a screen or
-	// metric reads this instead: stable code, provider, status and request id.
+	// Failure is set when the supervisor saw a typed cause. A screen or metric
+	// reads this instead of provider error text: stable code, provider, status
+	// and request id.
 	Failure *FailureSummary
 }
 

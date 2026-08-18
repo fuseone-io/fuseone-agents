@@ -140,7 +140,7 @@ export interface paths {
         };
         /**
          * Worker queue and recent runtime failures
-         * @description Operational health for the runtime. It is read from the run projection, not from raw logs: codes and provider names are low-cardinality facts, while provider bodies stay out of aggregate views.
+         * @description Operational health for the runtime. It is read from the run projection, not from raw logs: codes and provider names are low-cardinality facts, while provider bodies stay out of aggregate views. Active phases are counted as current work; terminal phases and failures are bounded by `since`.
          */
         get: operations["getRuntimeHealth"];
         put?: never;
@@ -3290,7 +3290,7 @@ export interface components {
             p95DurationMs?: number | null;
         };
         RuntimeHealth: {
-            /** @description Current runs per phase, scoped to what the caller may read. */
+            /** @description Active runs per phase, plus terminal runs last seen in the requested window. */
             byPhase: {
                 [key: string]: number;
             };

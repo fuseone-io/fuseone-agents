@@ -21,6 +21,10 @@ func (w *Worker) failure(claim domain.Claim, err error) domain.ClaimOutcome {
 	outcome := domain.ClaimOutcome{Err: err}
 	if failure, ok := model.FailureSummaryOf(err); ok {
 		outcome.Failure = &failure
+		if !failure.Retryable {
+			outcome.Parked = true
+			return outcome
+		}
 	}
 	if attempts >= w.cfg.MaxAttempts {
 		outcome.Parked = true

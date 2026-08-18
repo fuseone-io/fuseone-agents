@@ -34,6 +34,19 @@ field" is a commit message.
 - Runs parked after a provider failure show the stable cause and provider
   request id on the execution page.
 
+### Changed
+
+- Runtime health counts terminal phases only inside its requested window, so
+  opening the page during an incident does not scan the full run history.
+- Non-retryable model provider failures park immediately instead of spending
+  every configured retry attempt on a request the classifier already knows will
+  fail again.
+
+### Security
+
+- Classified model provider failures write only their stable code to
+  `runs.last_error`; provider response bodies stay out of the run projection.
+
 ## [0.3.4] — 2026-08-18
 
 ### Security

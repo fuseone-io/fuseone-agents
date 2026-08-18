@@ -161,6 +161,9 @@ function PhasePanel({ health }: { health: RuntimeHealth }) {
           </div>
         ))}
       </div>
+      <p className="mt-3 text-xs text-muted-foreground">
+        {t("runtime.phaseWindowHint")}
+      </p>
     </Panel>
   );
 }

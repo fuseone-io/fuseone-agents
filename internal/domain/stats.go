@@ -60,9 +60,11 @@ type RunStats struct {
 // Count returns the tally for a phase, or zero.
 func (s RunStats) Count(phase string) int64 { return s.ByPhase[phase] }
 
-// RuntimeHealth is the operational view of the worker queue and recent
-// failure causes. It deliberately carries low-cardinality facts: provider,
-// code and status, never run ids, request ids or provider bodies.
+// RuntimeHealth is the operational view of the worker queue and recent failure
+// causes. Active phases are current; terminal phases and failure buckets are
+// bounded by the requested window. It deliberately carries low-cardinality
+// facts: provider, code and status, never run ids, request ids or provider
+// bodies.
 type RuntimeHealth struct {
 	ByPhase  map[string]int64
 	Queue    RuntimeQueue

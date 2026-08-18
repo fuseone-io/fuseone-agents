@@ -1526,6 +1526,7 @@
     "noStatus": "no status",
     "notRetryable": "not retryable",
     "oldestReady": "The oldest ready run became claimable {{seen}}.",
+    "phaseWindowHint": "Active phases are current. Finished and failed runs are from the last 24 hours.",
     "phases": "Runs by phase",
     "provider": "Provider",
     "providerFailures": "Provider failures · last 24 hours",

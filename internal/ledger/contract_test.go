@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -659,6 +660,29 @@ func TestStatsContract(t *testing.T) {
 		}
 	})
 
+	run(t, "runtime health counts current work and recent terminal phases only", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		mustAppend(t, s, startedAt("run-active-old", base.Add(-48*time.Hour)))
+
+		mustAppend(t, s, startedAt("run-finished-old", base.Add(-48*time.Hour)))
+		mustAppend(t, s, finishedAt("run-finished-old", base.Add(-47*time.Hour)))
+
+		mustAppend(t, s, startedAt("run-finished-new", base.Add(-48*time.Hour)))
+		mustAppend(t, s, finishedAt("run-finished-new", base))
+
+		health, err := s.RuntimeHealth(ctx, domain.RunFilter{Since: base.Add(-time.Hour)})
+		if err != nil {
+			t.Fatalf("RuntimeHealth: %v", err)
+		}
+		if got := health.ByPhase["running"]; got != 1 {
+			t.Errorf("running = %d, want old active work still counted", got)
+		}
+		if got := health.ByPhase["finished"]; got != 1 {
+			t.Errorf("finished = %d, want only terminal work updated in the window", got)
+		}
+	})
+
 	run(t, "an even number of runs gives the same median in both stores", func(t *testing.T, s Store) {
 		ctx := context.Background()
 
@@ -742,6 +766,55 @@ func TestStatsContract(t *testing.T) {
 			t.Errorf("Total = %d, want only the run in cx", got.Total)
 		}
 	})
+}
+
+func TestPostgresRelease_classifiedProviderFailureStoresOnlyStableCodeInLastError(t *testing.T) {
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	requireDatabase(t, dsn)
+	if dsn == "" {
+		t.Skip("TEST_DATABASE_URL is unset; skipping the Postgres implementation")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	if err := ledger.Migrate(ctx, pool); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `truncate run_steps, runs`); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+
+	store := ledger.NewPostgres(pool)
+	mustAppend(t, store, startedAt("run-1", time.Now()))
+	if _, err := store.Claim(ctx, "w1", time.Minute); err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	if err := store.Release(ctx, "run-1", domain.ClaimOutcome{
+		Err: errors.New(`{"error":{"message":"Authorization header contained prompt text"}}`),
+		Failure: &domain.FailureSummary{
+			Code:      "model_auth_failed",
+			Provider:  "anthropic",
+			Status:    401,
+			RequestID: "req_auth",
+			Retryable: false,
+		},
+	}); err != nil {
+		t.Fatalf("Release: %v", err)
+	}
+
+	var lastError string
+	if err := pool.QueryRow(ctx, `select last_error from runs where run_id = 'run-1'`).Scan(&lastError); err != nil {
+		t.Fatalf("read last_error: %v", err)
+	}
+	if lastError != "model_auth_failed" {
+		t.Fatalf("last_error = %q, want the stable failure code", lastError)
+	}
+	if strings.Contains(lastError, "Authorization") || strings.Contains(lastError, "prompt text") {
+		t.Fatalf("last_error kept provider text: %q", lastError)
+	}
 }
 
 func mustJSON(t *testing.T, v any) []byte {

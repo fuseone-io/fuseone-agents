@@ -396,6 +396,45 @@ func TestTurn_providerFailure_parksWithTheStableProviderSummary(t *testing.T) {
 	}
 }
 
+func TestTurn_nonRetryableProviderFailureParksWithoutBurningAttempts(t *testing.T) {
+	t.Parallel()
+
+	planner := &flakyPlanner{
+		failures: 99,
+		err: &model.ProviderError{
+			Provider:  "anthropic",
+			Code:      model.CodeAuthFailed,
+			Status:    401,
+			RequestID: "req_auth",
+			Retryable: false,
+		},
+	}
+	s := newSetup(t, Config{MaxAttempts: 5}, planner, nil)
+	openRun(t, s.store)
+
+	if _, err := s.worker.turn(context.Background(), slog.New(slog.DiscardHandler)); err != nil {
+		t.Fatalf("turn: %v", err)
+	}
+
+	if planner.calls != 1 {
+		t.Fatalf("planner calls = %d, want one failed attempt", planner.calls)
+	}
+	if got := phaseOf(t, s.store); got != engine.PhaseParked {
+		t.Fatalf("phase = %s, want parked on a definitive provider failure", got)
+	}
+	p := parkPayload(t, s.store)
+	if p.Reason != model.CodeAuthFailed || p.Attempts != 1 {
+		t.Fatalf("parked = %+v, want auth failure parked after one attempt", p)
+	}
+	if p.Failure == nil || p.Failure.Retryable ||
+		p.Failure.Code != model.CodeAuthFailed || p.Failure.Provider != "anthropic" {
+		t.Fatalf("failure = %+v, want the non-retryable provider summary", p.Failure)
+	}
+	if _, err := s.store.Claim(context.Background(), "other", time.Minute); !errors.Is(err, domain.ErrNoClaimableRun) {
+		t.Fatalf("Claim after non-retryable provider failure = %v, want no retry queued", err)
+	}
+}
+
 // staticCeilings stands in for the configured scope budgets.
 type staticCeilings struct {
 	ceiling domain.Budget

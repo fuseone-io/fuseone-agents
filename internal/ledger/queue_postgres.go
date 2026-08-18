@@ -134,7 +134,7 @@ func (p *Postgres) Release(ctx context.Context, runID domain.RunID, outcome doma
 			failure_request_id = $9,
 			failure_retryable  = $10
 		where run_id = $1`,
-		string(runID), nextAttempt, outcome.Failed(), outcome.Reason(), outcome.Parked,
+		string(runID), nextAttempt, outcome.Failed(), outcomeReason(outcome), outcome.Parked,
 		outcomeFailureCode(outcome), outcomeFailureProvider(outcome), outcomeFailureStatus(outcome),
 		outcomeFailureRequestID(outcome), outcomeFailureRetryable(outcome))
 	if err != nil {

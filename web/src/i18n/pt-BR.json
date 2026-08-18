@@ -1526,6 +1526,7 @@
     "noStatus": "sem status",
     "notRetryable": "não tenta de novo",
     "oldestReady": "A execução pronta mais antiga ficou disponível {{seen}}.",
+    "phaseWindowHint": "Fases ativas são atuais. Execuções concluídas e falhas vêm das últimas 24 horas.",
     "phases": "Execuções por fase",
     "provider": "Provedor",
     "providerFailures": "Falhas de provedor · últimas 24 horas",
