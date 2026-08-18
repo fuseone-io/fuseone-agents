@@ -85,6 +85,9 @@ func parse(raw string) (Page, error) {
 	}
 
 	var page Page
+	// Tracked rather than inferred from the value: 0 is a position somebody can
+	// legitimately choose, so "is it zero" cannot answer "did they say".
+	var ordered bool
 	for _, line := range strings.Split(strings.TrimSpace(head), "\n") {
 		key, value, ok := strings.Cut(line, ":")
 		if !ok {
@@ -101,7 +104,7 @@ func parse(raw string) (Page, error) {
 			if err != nil {
 				return Page{}, fmt.Errorf("order %q is not a number: %w", value, err)
 			}
-			page.Order = n
+			page.Order, ordered = n, true
 		default:
 			return Page{}, fmt.Errorf("front matter key %q is not one the console reads", key)
 		}
@@ -109,6 +112,12 @@ func parse(raw string) (Page, error) {
 
 	if page.Title == "" || page.Summary == "" {
 		return Page{}, fmt.Errorf("title and summary are both required")
+	}
+	// The contract declares order required, and a page that omits it does not
+	// fail — it takes position zero and quietly becomes the first thing anybody
+	// reads. Uniqueness cannot catch that while only one page forgets.
+	if !ordered {
+		return Page{}, fmt.Errorf("order is required: it decides where the index puts this page")
 	}
 	page.Body = strings.TrimLeft(body, "\n")
 	return page, nil
