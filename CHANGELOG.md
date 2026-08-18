@@ -27,7 +27,11 @@ field" is a commit message.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- Six more servers in the catalogue, all incident response and observability:
+  PagerDuty, incident.io, New Relic, Honeycomb, ServiceNow and Elastic Agent
+  Builder. Forty-one in total.
 
 ## [0.1.0] — 2026-08-17
 

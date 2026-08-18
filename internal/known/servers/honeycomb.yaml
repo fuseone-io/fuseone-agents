@@ -1,0 +1,84 @@
+server: honeycomb
+title: Honeycomb
+category: operations
+publisher: Honeycomb
+docs: https://docs.honeycomb.io/integrations/mcp
+docsFrom: publisher
+provenance: documentation
+status: published
+config: [credential]
+transport: http
+url: https://mcp.honeycomb.io/mcp
+auth: >
+  OAuth 2.1 is recommended for interactive use. API key authentication uses a
+  Honeycomb Management API key formatted as KEY_ID:SECRET_KEY and sent as an
+  Authorization bearer value. EU teams use the EU MCP endpoint.
+authModes:
+  - type: oauth2
+    principal: user
+    label: Honeycomb OAuth
+    note: Recommended interactive setup; the user chooses environment and read/write access during consent.
+  - type: bearer
+    principal: service
+    label: Honeycomb Management API key
+    header: Authorization
+    prefix: Bearer
+    note: KEY_ID:SECRET_KEY bearer value for headless agents; grant MCP and Environments scopes explicitly.
+
+note: >
+  Honeycomb MCP lets agents query observability data, traces, SLOs and triggers
+  and can create Boards when write permission is granted. The US endpoint is
+  https://mcp.honeycomb.io/mcp; EU teams use https://mcp.eu1.honeycomb.io/mcp.
+
+  Most tools are reads, but read output can contain trace attributes, span
+  fields, logs and other telemetry text. That data is useful precisely because
+  it comes from running systems, and it must stay tainted.
+
+suggestions:
+  - tool: run__query
+    effect: read
+    untrusted: true
+    why: Runs a Honeycomb query and returns telemetry rows that can include user-controlled attributes.
+
+  - tool: run_bubbleup
+    effect: read
+    untrusted: true
+    why: Identifies outliers in query results; the returned attributes still come from telemetry.
+
+  - tool: find_columns
+    effect: read
+    why: Discovers relevant fields using metadata. It changes nothing.
+
+  - tool: get_trace
+    effect: read
+    untrusted: true
+    why: Fetches a trace whose spans and attributes can include user-controlled request data.
+
+  - tool: get_service_map
+    effect: read
+    untrusted: true
+    why: Builds a service map from telemetry. Names and edges are derived from running-system data.
+
+  - tool: create_board
+    effect: write
+    why: Creates a Honeycomb Board that other people can use during investigations.
+
+  - tool: update_board
+    effect: write
+    why: Changes a shared Board and the queries or context people read from it.
+
+  - tool: create_trigger
+    effect: write
+    why: Creates a trigger that can become an alerting signal.
+
+  - tool: update_slo
+    effect: write
+    why: Changes an SLO definition, which changes how reliability is measured and reported.
+
+  - tool: create_recipient
+    effect: write
+    why: Creates a recipient used by notification workflows.
+
+  - tool: feedback
+    effect: write
+    why: Sends feedback to Honeycomb. Small, but still an external write.

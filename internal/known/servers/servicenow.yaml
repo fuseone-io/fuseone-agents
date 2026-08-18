@@ -1,0 +1,34 @@
+server: servicenow
+title: ServiceNow MCP Server Console
+category: operations
+publisher: ServiceNow
+docs: https://www.servicenow.com/docs/r/intelligent-experiences/enable-ai-experiences/connect-mcp-server-client.html
+docsFrom: publisher
+provenance: documentation
+status: published
+config: [credential]
+auth: >
+  ServiceNow MCP Server Console exposes an MCP endpoint from a customer's own
+  ServiceNow instance. Authentication is OAuth 2.0 authorization code through
+  an inbound integration registered by an administrator.
+authModes:
+  - type: oauth2
+    principal: user
+    label: ServiceNow OAuth user
+    note: Human users authenticate through ServiceNow and tool calls execute under their existing roles and ACLs.
+  - type: oauth2
+    principal: service
+    label: ServiceNow OAuth integration user
+    note: Autonomous agents use a dedicated integration user that an administrator authorizes during setup.
+
+note: >
+  There is no universal ServiceNow MCP URL to prefill. Each instance creates or
+  uses a server in MCP Server Console and exposes an endpoint shaped like
+  https://<instance>.service-now.com/sncapps/mcp-server/mcp/<server-name>.
+
+  ServiceNow tools are chosen by the administrator who configures that MCP
+  server. A generic catalogue entry must therefore make no tool suggestions:
+  the handshake and the Curator's review are the first trustworthy description
+  of what this specific instance exposes.
+
+suggestions: []

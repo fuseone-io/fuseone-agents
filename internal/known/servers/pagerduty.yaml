@@ -1,0 +1,155 @@
+server: pagerduty
+title: PagerDuty
+category: operations
+publisher: PagerDuty
+docs: https://pagerduty.github.io/pagerduty-mcp-server/docs/remote-server/setup
+docsFrom: publisher
+provenance: documentation
+status: published
+config: [credential]
+transport: http
+url: https://mcp.pagerduty.com/mcp
+auth: >
+  OAuth with the PagerDuty-hosted MCP service, or a PagerDuty API token when
+  the MCP client can provide the required Authorization header. EU accounts use
+  a regional endpoint, so confirm the service region before connecting.
+authModes:
+  - type: oauth2
+    principal: user
+    label: PagerDuty OAuth
+    note: Hosted remote MCP flow. Some tools and filters require user-level authentication.
+  - type: headers
+    principal: user
+    label: PagerDuty User API token
+    header: Authorization
+    prefix: "Token token="
+    note: PagerDuty API key header shape; this runtime does not model it as a bearer token.
+  - type: bearer
+    principal: service
+    label: PagerDuty OAuth bearer token
+    header: Authorization
+    prefix: Bearer
+    note: App OAuth token path for headless or enterprise deployments that issue one outside this form.
+
+note: >
+  PagerDuty offers both hosted and self-hosted MCP. Prefer the hosted endpoint
+  here: nothing starts inside the worker, and the credential belongs to a
+  service address. For EU service-region accounts, use
+  https://mcp.eu.pagerduty.com/mcp instead of the US endpoint.
+
+  The server exposes incident, schedule, escalation, service, status-page and
+  event-orchestration tools. PagerDuty write tools can page people, alter
+  routing and publish customer-facing status updates, so keep the surface
+  smaller than the account token.
+
+suggestions:
+  - tool: get_user_data
+    effect: read
+    why: Reads the authenticated PagerDuty user. It changes nothing.
+
+  - tool: list_incidents
+    effect: read
+    untrusted: true
+    why: Incident titles, summaries and metadata are responder-authored operational text.
+
+  - tool: get_incident
+    effect: read
+    untrusted: true
+    why: Reads one incident and the human-authored details around it.
+
+  - tool: list_incident_notes
+    effect: read
+    untrusted: true
+    why: Incident notes are written during response and must remain untrusted input.
+
+  - tool: list_alerts_from_incident
+    effect: read
+    untrusted: true
+    why: Alert payloads often originate in monitoring tools or webhooks and may contain arbitrary text.
+
+  - tool: get_alert_from_incident
+    effect: read
+    untrusted: true
+    why: Reads an alert payload associated with an incident; alert text is not trusted.
+
+  - tool: get_past_incidents
+    effect: read
+    untrusted: true
+    why: Returns historical incident text and resolution notes.
+
+  - tool: get_related_incidents
+    effect: read
+    untrusted: true
+    why: Returns related incident records with responder-authored text.
+
+  - tool: list_oncalls
+    effect: read
+    why: Reads current on-call assignments and changes nothing.
+
+  - tool: list_schedules
+    effect: read
+    why: Lists on-call schedules without changing who is paged.
+
+  - tool: get_schedule
+    effect: read
+    why: Reads one schedule and its layers. It changes no routing state.
+
+  - tool: list_schedule_users
+    effect: read
+    why: Reads users on a schedule for a time range. It writes nothing.
+
+  - tool: list_services
+    effect: read
+    why: Lists PagerDuty services. It changes nothing.
+
+  - tool: get_service
+    effect: read
+    why: Reads one service configuration. It writes nothing.
+
+  - tool: list_escalation_policies
+    effect: read
+    why: Lists escalation policies. It changes no paging route.
+
+  - tool: create_incident
+    effect: write
+    why: Creates an incident and can notify responders. Closing it later does not undo the page.
+
+  - tool: manage_incidents
+    effect: write
+    why: Updates incident status, priority or assignees, which changes the operational record.
+
+  - tool: add_responders
+    effect: write
+    why: Pages or requests responders. That human interruption cannot be undone by removing the request.
+
+  - tool: add_note_to_incident
+    effect: write
+    why: Writes into the incident timeline people later use to reconstruct the event.
+
+  - tool: start_incident_workflow
+    effect: write
+    why: Starts a response workflow. The workflow may fan out into notifications or other actions.
+
+  - tool: create_schedule_override
+    effect: write
+    why: Changes who is on call for a period. It affects future paging.
+
+  - tool: update_event_orchestration_router
+    effect: destructive
+    why: >
+      Changes event routing. A bad route can suppress or misdirect pages, and
+      the damage is discovered only when an incident is missed.
+
+  - tool: delete_alert_grouping_setting
+    effect: destructive
+    why: >
+      Removes alert grouping configuration. That can change alert volume and
+      incident creation behavior across services.
+
+  - tool: create_status_page_post
+    effect: write
+    why: Publishes a status page post customers or stakeholders may read.
+
+  - tool: create_status_page_post_update
+    effect: write
+    why: Publishes an update to an existing status page post.

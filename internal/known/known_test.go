@@ -221,6 +221,93 @@ func TestLoad_rootlyIsRemoteFirstAndKeepsIncidentTextTainted(t *testing.T) {
 	}
 }
 
+func TestLoad_operationsPackKeepsRemoteAndInstanceDefinedShapesSeparate(t *testing.T) {
+	t.Parallel()
+
+	servers := load(t)
+	for _, want := range []struct {
+		server string
+		url    string
+		auth   []known.AuthType
+	}{
+		{server: "pagerduty", url: "https://mcp.pagerduty.com/mcp", auth: []known.AuthType{known.AuthOAuth2, known.AuthHeaders}},
+		{server: "incident-io", url: "https://mcp.incident.io/mcp", auth: []known.AuthType{known.AuthOAuth2, known.AuthBearer}},
+		{server: "newrelic", url: "https://mcp.newrelic.com/mcp/", auth: []known.AuthType{known.AuthOAuth2, known.AuthHeaders}},
+		{server: "honeycomb", url: "https://mcp.honeycomb.io/mcp", auth: []known.AuthType{known.AuthOAuth2, known.AuthBearer}},
+	} {
+		entry, ok := servers.For(want.server)
+		if !ok {
+			t.Fatalf("%s recipe missing", want.server)
+		}
+		if entry.Transport != "http" || entry.URL != want.url {
+			t.Fatalf("%s connection = %s %s, want hosted HTTP MCP at %s",
+				want.server, entry.Transport, entry.URL, want.url)
+		}
+		for _, auth := range want.auth {
+			if !hasAuthMode(entry.AuthModes, auth) {
+				t.Fatalf("%s auth modes = %+v, missing %s", want.server, entry.AuthModes, auth)
+			}
+		}
+	}
+
+	for _, server := range []string{"servicenow", "elastic-agent-builder"} {
+		entry, ok := servers.For(server)
+		if !ok {
+			t.Fatalf("%s recipe missing", server)
+		}
+		if entry.Transport != "" || entry.URL != "" {
+			t.Fatalf("%s connection = %s %s, want no universal URL invented",
+				server, entry.Transport, entry.URL)
+		}
+		if len(entry.Suggestions) != 0 {
+			t.Fatalf("%s suggests %d tools for an instance-defined tool catalog",
+				server, len(entry.Suggestions))
+		}
+	}
+}
+
+func TestSuggest_operationsPackKeepsOperationalTextTainted(t *testing.T) {
+	t.Parallel()
+
+	servers := load(t)
+	for _, want := range []struct {
+		server string
+		tool   string
+		effect string
+	}{
+		{server: "pagerduty", tool: "list_alerts_from_incident", effect: domain.EffectRead.String()},
+		{server: "incident-io", tool: "incident_show", effect: domain.EffectRead.String()},
+		{server: "newrelic", tool: "list_recent_logs", effect: domain.EffectRead.String()},
+		{server: "honeycomb", tool: "get_trace", effect: domain.EffectRead.String()},
+	} {
+		got, ok := servers.Suggest(want.server, want.tool)
+		if !ok {
+			t.Fatalf("%s/%s suggestion missing", want.server, want.tool)
+		}
+		if got.Effect != want.effect || got.Untrusted == nil || !*got.Untrusted {
+			t.Fatalf("%s/%s = %+v, want tainted %s", want.server, want.tool, got, want.effect)
+		}
+	}
+
+	for _, want := range []struct {
+		server string
+		tool   string
+		effect string
+	}{
+		{server: "pagerduty", tool: "update_event_orchestration_router", effect: domain.EffectDestructive.String()},
+		{server: "incident-io", tool: "incident_create", effect: domain.EffectWrite.String()},
+		{server: "honeycomb", tool: "create_trigger", effect: domain.EffectWrite.String()},
+	} {
+		got, ok := servers.Suggest(want.server, want.tool)
+		if !ok {
+			t.Fatalf("%s/%s suggestion missing", want.server, want.tool)
+		}
+		if got.Effect != want.effect {
+			t.Fatalf("%s/%s effect = %s, want %s", want.server, want.tool, got.Effect, want.effect)
+		}
+	}
+}
+
 func hasAuthMode(modes []known.AuthMode, typ known.AuthType) bool {
 	for _, one := range modes {
 		if one.Type == typ {

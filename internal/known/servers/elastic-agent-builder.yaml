@@ -1,0 +1,38 @@
+server: elastic-agent-builder
+title: Elastic Agent Builder
+category: operations
+publisher: Elastic
+docs: https://www.elastic.co/docs/explore-analyze/ai-features/agent-builder/mcp-server
+docsFrom: publisher
+provenance: documentation
+status: published
+config: [credential]
+auth: >
+  Elastic Agent Builder exposes an MCP endpoint from a customer's Kibana or
+  Elastic Cloud project. API keys work for Stack deployments and Serverless;
+  OAuth 2.1 is documented for Serverless projects and interactive MCP hosts.
+authModes:
+  - type: oauth2
+    principal: user
+    label: Elastic OAuth 2.1
+    note: Serverless interactive flow where tool calls act with the consenting user's permissions.
+  - type: headers
+    principal: service
+    label: Elastic API key
+    header: Authorization
+    prefix: ApiKey
+    note: >
+      Automation path using Authorization: ApiKey; this runtime does not model
+      it as a bearer token.
+
+note: >
+  There is no single hosted URL for every Elastic deployment. The MCP endpoint
+  is copied from Elastic Agent Builder and is shaped like
+  {KIBANA_URL}/api/agent_builder/mcp, or
+  {KIBANA_URL}/s/{SPACE_NAME}/api/agent_builder/mcp for a custom Kibana Space.
+
+  The tools are the Elastic Agent Builder tools configured in that project.
+  Because the tool catalog is project-defined, this recipe intentionally ships
+  no suggested classifications.
+
+suggestions: []

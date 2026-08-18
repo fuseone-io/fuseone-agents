@@ -1,0 +1,142 @@
+server: newrelic
+title: New Relic
+category: operations
+publisher: New Relic
+docs: https://docs.newrelic.com/docs/agentic-ai/mcp/setup/
+docsFrom: publisher
+provenance: documentation
+status: published
+config: [credential]
+transport: http
+url: https://mcp.newrelic.com/mcp/
+auth: >
+  OAuth is recommended by New Relic for interactive clients. API key
+  authentication uses a New Relic-specific Api-Key header, optionally with
+  include-tags to reduce the tool corpus. EU accounts use the regional MCP
+  endpoint.
+authModes:
+  - type: oauth2
+    principal: user
+    label: New Relic OAuth
+    note: Recommended interactive setup; tokens act with the New Relic user's RBAC permissions.
+  - type: headers
+    principal: service
+    label: New Relic API key headers
+    header: Api-Key
+    note: API key path for headless contexts; this runtime does not model Api-Key as a bearer token.
+
+note: >
+  New Relic documents this MCP server as preview. The US endpoint is
+  https://mcp.newrelic.com/mcp/ and EU accounts use
+  https://mcp.eu.newrelic.com/mcp/. New Relic also supports include-tags headers
+  such as discovery, data-access, alerting and incident-response; use the
+  FuseOne surface for the same narrowing inside this platform.
+
+  The token can reach observability data, logs, dashboards, alert policies,
+  issues and entity metadata allowed by New Relic RBAC. Log and alert text is
+  untrusted even when the transport and token are valid.
+
+suggestions:
+  - tool: list_available_new_relic_accounts
+    effect: read
+    why: Lists account IDs available to the authenticated user.
+
+  - tool: get_entity
+    effect: read
+    why: Reads New Relic entity metadata and related health data.
+
+  - tool: list_related_entities
+    effect: read
+    why: Lists entities related to a New Relic entity. It writes nothing.
+
+  - tool: search_entity_with_tag
+    effect: read
+    why: Searches entities by tag. It changes nothing.
+
+  - tool: list_dashboards
+    effect: read
+    untrusted: true
+    why: Dashboard titles, descriptions and embedded queries are authored by users.
+
+  - tool: get_dashboard
+    effect: read
+    untrusted: true
+    why: Reads dashboard widgets and embedded queries written by users.
+
+  - tool: execute_nrql_query
+    effect: read
+    untrusted: true
+    why: Executes NRQL and returns telemetry, log or event data that can contain user-controlled text.
+
+  - tool: natural_language_to_nrql_query
+    effect: read
+    untrusted: true
+    why: Generates and executes NRQL, returning the same untrusted telemetry data as direct queries.
+
+  - tool: list_alert_conditions
+    effect: read
+    untrusted: true
+    why: Alert condition names, descriptions and NRQL are user-authored operational text.
+
+  - tool: search_incident
+    effect: read
+    untrusted: true
+    why: Lists alert events with incident text and metadata from monitoring data.
+
+  - tool: list_alert_policies
+    effect: read
+    untrusted: true
+    why: Alert policy names and conditions are user-authored operational configuration.
+
+  - tool: list_recent_issues
+    effect: read
+    untrusted: true
+    why: Reads open issues and their summaries. Issue text is operational input.
+
+  - tool: list_synthetic_monitors
+    effect: read
+    why: Lists synthetic monitors and changes nothing.
+
+  - tool: analyze_deployment_impact
+    effect: read
+    untrusted: true
+    why: Analyzes deployment impact using telemetry and change event data.
+
+  - tool: generate_alert_insights_report
+    effect: read
+    untrusted: true
+    why: Generates a report from alert and issue data; the derived text remains tainted by its sources.
+
+  - tool: generate_user_impact_report
+    effect: read
+    untrusted: true
+    why: Generates a report from telemetry and issue data. The output is derived from untrusted records.
+
+  - tool: list_entity_error_groups
+    effect: read
+    untrusted: true
+    why: Reads error groups and stack or occurrence data that may contain user-controlled strings.
+
+  - tool: list_change_events
+    effect: read
+    untrusted: true
+    why: Change event descriptions are authored operational data.
+
+  - tool: analyze_entity_logs
+    effect: read
+    untrusted: true
+    why: Reads and analyzes logs, which are attacker-controllable wherever user input is logged.
+
+  - tool: list_recent_logs
+    effect: read
+    untrusted: true
+    why: Returns recent log lines. Treat every log line as authored by a stranger.
+
+  - tool: analyze_golden_metrics
+    effect: read
+    why: Reads and analyzes golden metrics. It writes nothing.
+
+  - tool: analyze_transactions
+    effect: read
+    untrusted: true
+    why: Reads transaction traces and attributes that can include user-controlled request data.

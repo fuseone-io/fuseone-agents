@@ -1,0 +1,172 @@
+server: incident-io
+title: incident.io
+category: operations
+publisher: incident.io
+docs: https://docs.incident.io/ai/remote-mcp
+docsFrom: publisher
+provenance: documentation
+status: published
+config: [credential]
+transport: http
+url: https://mcp.incident.io/mcp
+auth: >
+  OAuth for interactive use, or an incident.io API key sent as an Authorization
+  bearer token for automated systems. The remote MCP service is documented as
+  public beta, so expect tool coverage to move faster than a stable API.
+authModes:
+  - type: oauth2
+    principal: user
+    label: incident.io OAuth
+    note: Interactive connection where actions are attributed to the authorizing incident.io user.
+  - type: bearer
+    principal: service
+    label: incident.io API key
+    header: Authorization
+    prefix: Bearer
+    note: Service actor for automated systems; scope the API key before connecting it here.
+
+note: >
+  incident.io's remote MCP server covers alerts, incidents, escalations,
+  schedules, teams, catalog entries and operational analysis. It can also query
+  telemetry through the observability systems connected to incident.io.
+
+  This is a tool path into an incident platform, not a second incident product
+  inside FuseOne. Keep broad assistant tools outside the surface until a
+  Curator has decided whether they can write, page or only read.
+
+suggestions:
+  - tool: resource_show
+    effect: read
+    why: Reads organisation configuration, playbooks or telemetry datasource metadata.
+
+  - tool: alert_list
+    effect: read
+    untrusted: true
+    why: Searches alert records; alert payloads can contain text from monitoring systems and webhooks.
+
+  - tool: alert_show
+    effect: read
+    untrusted: true
+    why: Reads full alert details and linked incident context. Alert text is untrusted input.
+
+  - tool: alert_source_list
+    effect: read
+    why: Lists configured alert sources. It changes nothing.
+
+  - tool: alert_stats
+    effect: read
+    untrusted: true
+    why: Aggregates alert records whose source text remains untrusted.
+
+  - tool: incident_list
+    effect: read
+    untrusted: true
+    why: Searches incident records and returns responder-authored titles and fields.
+
+  - tool: incident_show
+    effect: read
+    untrusted: true
+    why: Reads full incident details, optionally including investigation and post-mortem text.
+
+  - tool: incident_stats
+    effect: read
+    untrusted: true
+    why: Aggregates incident records. Aggregation does not launder the underlying authored text.
+
+  - tool: incident_update_list
+    effect: read
+    untrusted: true
+    why: Reads the status update history written by responders during the incident.
+
+  - tool: investigation_sync
+    effect: read
+    untrusted: true
+    why: Downloads investigation material for analysis, including evidence and human-authored findings.
+
+  - tool: analysis_start
+    effect: read
+    untrusted: true
+    why: Starts a structured analysis workspace over operational records and returns derived report material.
+
+  - tool: ask_telemetry
+    effect: read
+    untrusted: true
+    why: Queries logs, metrics, traces and dashboards through incident.io-connected telemetry sources.
+
+  - tool: schedule_list
+    effect: read
+    why: Lists on-call schedules and changes nothing.
+
+  - tool: schedule_show
+    effect: read
+    why: Reads schedule details and upcoming shifts. It writes nothing.
+
+  - tool: escalation_list
+    effect: read
+    why: Searches escalations and pages. It changes no state.
+
+  - tool: escalation_show
+    effect: read
+    untrusted: true
+    why: Reads full escalation details, including transition history and operational text.
+
+  - tool: escalation_path_list
+    effect: read
+    why: Lists escalation paths. It changes no paging route.
+
+  - tool: escalation_path_show
+    effect: read
+    why: Shows who would be paged at each level. It changes nothing.
+
+  - tool: escalation_stats
+    effect: read
+    why: Aggregates paging counts by path, priority and time. It writes nothing.
+
+  - tool: team_list
+    effect: read
+    why: Lists teams. It changes nothing.
+
+  - tool: team_show
+    effect: read
+    why: Reads team details, owned escalation paths, alert sources and schedules.
+
+  - tool: catalog_type_list
+    effect: read
+    why: Lists catalog types. It changes nothing.
+
+  - tool: catalog_entry_list
+    effect: read
+    why: Browses catalog entries. It changes nothing.
+
+  - tool: catalog_entry_show
+    effect: read
+    untrusted: true
+    why: Catalog descriptions and attributes are authored operational data.
+
+  - tool: ask
+    effect: write
+    why: Broad assistant tool for on-call queries and schedule management; judge by the widest documented capability.
+
+  - tool: ask_incident
+    effect: write
+    why: Broad incident assistant that can perform incident investigation and management actions.
+
+  - tool: escalation_respond
+    effect: write
+    why: Acknowledges or declines a page, changing the paging state people depend on.
+
+  - tool: follow_up_create
+    effect: write
+    why: Creates post-incident follow-up work.
+
+  - tool: incident_create
+    effect: write
+    why: Creates a new incident and may trigger incident response workflows.
+
+  - tool: incident_update
+    effect: write
+    why: Updates incident status, severity, roles or custom fields in the operational record.
+
+  - tool: feedback
+    effect: write
+    why: Sends feedback to incident.io. Small, but still an external write.
