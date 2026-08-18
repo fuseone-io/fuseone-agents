@@ -33,13 +33,17 @@ const step: Step = {
   },
 };
 
-function renderCard() {
+function renderCard(over: Partial<PendingApproval> = {}) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
     <QueryClientProvider client={client}>
-      <PendingDecision runId="run-1" approval={approval} step={step} />
+      <PendingDecision
+        runId="run-1"
+        approval={{ ...approval, ...over }}
+        step={step}
+      />
     </QueryClientProvider>,
   );
 }
@@ -86,6 +90,23 @@ describe("the pending decision", () => {
     expect(argument).toBeInTheDocument();
     const block = argument.closest("pre");
     expect(block).toHaveClass("max-w-full", "overflow-auto", "whitespace-pre-wrap", "break-words");
+  });
+
+  it("keeps a tool name with no spaces from widening the card past the screen", async () => {
+    // The track, not the block. A `1fr` column takes its minimum from the
+    // widest thing inside it, so the unbreakable tool name in the sentence
+    // above stretched the whole card while the arguments below it scrolled
+    // correctly — which is why fixing only the block left the screenshot
+    // looking unfixed.
+    stubEndpoints();
+    const tool = "github.add_issue_comment_on_behalf_of_the_requesting_user";
+    renderCard({ tool });
+
+    expect(await screen.findByText(tool)).toHaveClass("break-all");
+    const column = (await screen.findByText(/88213/)).closest("pre")
+      ?.parentElement;
+    expect(column).toHaveClass("min-w-0");
+    expect(column?.parentElement).toHaveClass("md:grid-cols-[minmax(0,1fr)_288px]");
   });
 
   it("says where the arguments came from, which is why a human was asked", async () => {
