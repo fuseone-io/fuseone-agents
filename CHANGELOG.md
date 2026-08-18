@@ -47,6 +47,47 @@ field" is a commit message.
 - Classified model provider failures write only their stable code to
   `runs.last_error`; provider response bodies stay out of the run projection.
 
+## [0.4.0] — 2026-08-18
+
+### Upgrade notes
+
+- **A provider failure that cannot succeed now parks the run on the first
+  turn.** Model failures are classified, and one classified as not retryable —
+  a rejected key, a malformed request, a refusal — stops immediately instead of
+  spending five attempts with exponential backoff first. Runs will be seen
+  parking sooner than before, and that is the fix rather than a regression: the
+  attempts it used to spend were spent on a call the classification already
+  knew would fail again. Anything known to be transient — network, 429, 529,
+  5xx — still retries as before.
+- **An unclassified provider failure also parks rather than retrying.** The
+  conservative side during an incident is to stop consuming the queue rather
+  than to keep a worker slot busy on something nobody could name.
+- **Migration `0045` adds five columns and an index to `runs`.** It runs before
+  the new pods, as every migration does. On an installation with a large runs
+  table, `add column` is metadata-only in modern PostgreSQL, but the partial
+  index is built at that moment.
+
+### Added
+
+- A **Runtime** screen: the worker queue, what each phase is holding, and the
+  provider failures of the last day, so provider saturation is visible without
+  opening a pod log.
+- Model failures carry a stable code — `model_provider_overloaded`,
+  `model_rate_limited`, `model_auth_failed`, and others — with the provider,
+  status, retryability and request id beside it. The code appears while the run
+  is still backing off, not only once it parks.
+- The run screen says plainly when a run stopped because of a provider rather
+  than because of anything the agent or its policy did.
+
+### Changed
+
+- `runs.last_error` stores the stable code for a classified provider failure
+  instead of the provider's raw response body. The body could carry text
+  derived from what the agent read, and `runs` is a projection that neither
+  retention nor erasure reaches. The provider's message stays in the worker log
+  for diagnosis. DP-001 names the exception that remains: an unclassified local
+  or integration failure can still put free text there.
+
 ## [0.3.4] — 2026-08-18
 
 ### Security
