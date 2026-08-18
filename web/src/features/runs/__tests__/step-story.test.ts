@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { detailOf } from "@/features/runs/step-story";
+import type { Step } from "@/lib/api/client";
 
 /*
 What a finished run says in the trail.

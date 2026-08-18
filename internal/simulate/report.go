@@ -71,7 +71,7 @@ type Case struct {
 	// the content store. Fold is pure — no context, no store — so it carries
 	// the reference out and whoever has both resolves it.
 	OutcomeRef string `json:"outcomeRef,omitempty"`
-	Reason  string      `json:"reason,omitempty"`
+	Reason     string `json:"reason,omitempty"`
 	// Error is set when the case never got a run at all. It is a row rather
 	// than an omission: a report that silently drops what it could not run
 	// tells an author the set was covered when it was not.
