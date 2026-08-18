@@ -37,6 +37,7 @@ const (
 	KindPack          Kind = "capability_pack"
 	KindBudget        Kind = "budget"
 	KindRetention     Kind = "retention"
+	KindBranding      Kind = "branding"
 	KindPolicy        Kind = "policy"
 	// KindIdentityProvider holds who may sign in and what signing in grants.
 	// Here rather than in a table of its own because the vault, the trail and

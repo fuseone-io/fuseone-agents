@@ -31,7 +31,7 @@ func TestRoles_curatorIsTheOnlyOneThatCanWidenWhatAgentsMayDo(t *testing.T) {
 	for _, perm := range []domain.Permission{
 		domain.PermToolClassify, domain.PermPackWrite,
 		domain.PermBudgetWrite, domain.PermPolicyWrite,
-		domain.PermProviderWrite, domain.PermIdentityWrite,
+		domain.PermProviderWrite, domain.PermIdentityWrite, domain.PermBrandWrite,
 	} {
 		for _, role := range domain.Roles() {
 			allowed := role.Allows(perm)
@@ -69,7 +69,7 @@ func TestRoles_authorNeverTouchesAGuardrail(t *testing.T) {
 	// process and owns the outcome; the envelope is drawn by someone else.
 	for _, perm := range []domain.Permission{
 		domain.PermToolClassify, domain.PermPackWrite, domain.PermBudgetWrite,
-		domain.PermPolicyWrite, domain.PermScopeWrite,
+		domain.PermPolicyWrite, domain.PermScopeWrite, domain.PermBrandWrite,
 	} {
 		if domain.RoleAuthor.Allows(perm) {
 			t.Errorf("author can %s", perm)

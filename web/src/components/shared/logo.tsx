@@ -12,11 +12,13 @@ export function LogoMark({
   size = 24,
   mono,
   className,
+  ariaLabel = "FuseOne Agents",
 }: {
   size?: number;
   /** Paints in currentColor, for a surface that supplies its own colour. */
   mono?: boolean;
   className?: string;
+  ariaLabel?: string;
 }) {
   const stroke = strokeFor(size, mono);
 
@@ -36,7 +38,7 @@ export function LogoMark({
       height={size}
       fill="none"
       role="img"
-      aria-label="FuseOne Agents"
+      aria-label={ariaLabel}
       className={cn("shrink-0", className)}
     >
       <g transform="translate(0 5)">

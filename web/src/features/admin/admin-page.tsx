@@ -13,6 +13,7 @@ import { PeoplePanel } from "@/features/admin/people-panel";
 import { RetentionPanel } from "@/features/admin/retention-panel";
 import { AreasPanel } from "@/features/admin/areas-panel";
 import { BudgetsPanel } from "@/features/admin/budgets-panel";
+import { BrandingPanel } from "@/features/admin/branding-panel";
 
 /**
  * Everything an operator configures lives here, and every change made here is
@@ -42,6 +43,7 @@ export function AdminPage() {
       >
         <TabsList className="w-full shrink-0 self-stretch lg:w-48 lg:self-start">
           <TabsTrigger value="tools">{t("admin.toolsWaiting")}</TabsTrigger>
+          <TabsTrigger value="branding">{t("admin.branding")}</TabsTrigger>
           <TabsTrigger value="authoring">{t("admin.authoring")}</TabsTrigger>
           <TabsTrigger value="companies">
             {t("companies.companies")}
@@ -57,6 +59,9 @@ export function AdminPage() {
 
         <TabsContent value="tools" className="min-w-0">
           <ToolsPanel />
+        </TabsContent>
+        <TabsContent value="branding" className="min-w-0">
+          <BrandingPanel />
         </TabsContent>
         <TabsContent value="authoring" className="min-w-0">
           <AuthoringPanel />

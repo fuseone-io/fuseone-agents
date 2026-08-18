@@ -8,6 +8,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/shared/theme-provider";
 import { AppShell } from "@/components/layout/app-shell";
+import { BrandingProvider } from "@/features/branding/branding-provider";
 import { SessionGate } from "@/features/session/session-gate";
 import { OverviewPage } from "@/features/overview/overview-page";
 import { PoliciesPage } from "@/features/policies/policies-page";
@@ -46,56 +47,58 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
-          <SessionGate>
-            <AppShell>
-              <Routes>
-                <Route path="/" element={<Navigate to="/overview" replace />} />
-                <Route path="/overview" element={<OverviewPage />} />
-                <Route path="/agents" element={<AgentsPage />} />
-                <Route path="/agents/interview" element={<InterviewPage />} />
-                <Route path="/agents/new" element={<AgentEditorPage />} />
-                <Route path="/agents/:agentId" element={<AgentDetailPage />} />
-                <Route
-                  path="/agents/:agentId/edit"
-                  element={<AgentEditorPage />}
-                />
-                <Route
-                  path="/agents/:agentId/simulate"
-                  element={<SimulationPage />}
-                />
-                <Route path="/runs" element={<RunsPage />} />
-                <Route path="/runs/:runId" element={<RunDetailPage />} />
-                <Route path="/approvals" element={<ApprovalsPage />} />
-                <Route path="/cost" element={<CostPage />} />
-                <Route path="/policies" element={<PoliciesPage />} />
-                <Route path="/policies/:code" element={<PolicyEditorPage />} />
-                <Route path="/audit" element={<AuditPage />} />
-                <Route path="/integrations" element={<IntegrationsPage />} />
-                <Route
-                  path="/integrations/providers"
-                  element={<IntegrationsPage section="providers" />}
-                />
-                <Route
-                  path="/integrations/channels"
-                  element={<IntegrationsPage section="channels" />}
-                />
-                <Route path="/integrations/mcp" element={<CataloguePage />} />
-                <Route
-                  path="/integrations/mcp/new"
-                  element={<NewServerPage />}
-                />
-                <Route
-                  path="/integrations/mcp/:name"
-                  element={<MCPServerPage />}
-                />
-                <Route path="/admin" element={<AdminPage />} />
-                <Route path="*" element={<NotFoundPage />} />
-              </Routes>
-            </AppShell>
-          </SessionGate>
-        </BrowserRouter>
-        <Toaster richColors closeButton />
+        <BrandingProvider>
+          <BrowserRouter>
+            <SessionGate>
+              <AppShell>
+                <Routes>
+                  <Route path="/" element={<Navigate to="/overview" replace />} />
+                  <Route path="/overview" element={<OverviewPage />} />
+                  <Route path="/agents" element={<AgentsPage />} />
+                  <Route path="/agents/interview" element={<InterviewPage />} />
+                  <Route path="/agents/new" element={<AgentEditorPage />} />
+                  <Route path="/agents/:agentId" element={<AgentDetailPage />} />
+                  <Route
+                    path="/agents/:agentId/edit"
+                    element={<AgentEditorPage />}
+                  />
+                  <Route
+                    path="/agents/:agentId/simulate"
+                    element={<SimulationPage />}
+                  />
+                  <Route path="/runs" element={<RunsPage />} />
+                  <Route path="/runs/:runId" element={<RunDetailPage />} />
+                  <Route path="/approvals" element={<ApprovalsPage />} />
+                  <Route path="/cost" element={<CostPage />} />
+                  <Route path="/policies" element={<PoliciesPage />} />
+                  <Route path="/policies/:code" element={<PolicyEditorPage />} />
+                  <Route path="/audit" element={<AuditPage />} />
+                  <Route path="/integrations" element={<IntegrationsPage />} />
+                  <Route
+                    path="/integrations/providers"
+                    element={<IntegrationsPage section="providers" />}
+                  />
+                  <Route
+                    path="/integrations/channels"
+                    element={<IntegrationsPage section="channels" />}
+                  />
+                  <Route path="/integrations/mcp" element={<CataloguePage />} />
+                  <Route
+                    path="/integrations/mcp/new"
+                    element={<NewServerPage />}
+                  />
+                  <Route
+                    path="/integrations/mcp/:name"
+                    element={<MCPServerPage />}
+                  />
+                  <Route path="/admin" element={<AdminPage />} />
+                  <Route path="*" element={<NotFoundPage />} />
+                </Routes>
+              </AppShell>
+            </SessionGate>
+          </BrowserRouter>
+          <Toaster richColors closeButton />
+        </BrandingProvider>
       </QueryClientProvider>
     </ThemeProvider>
   </StrictMode>,

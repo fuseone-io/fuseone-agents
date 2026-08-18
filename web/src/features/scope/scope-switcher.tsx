@@ -8,7 +8,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SidebarMenuButton, useSidebar } from "@/components/ui/sidebar";
-import { LogoLockup, LogoMark } from "@/components/shared/logo";
+import {
+  BrandLogoLockup,
+  BrandLogoMark,
+} from "@/features/branding/branding-provider";
 import { useActiveScope } from "@/features/scope/active-scope";
 import { useScopes, type RegisteredScope } from "@/features/scope/api";
 import { ScopeChoice } from "@/features/scope/scope-choice";
@@ -44,10 +47,10 @@ export function ScopeSwitcher() {
       <DropdownMenuTrigger asChild>
         <SidebarMenuButton size="lg" className="h-[46px] gap-[9px]">
           <span className="flex size-8 shrink-0 items-center justify-center">
-            <LogoMark size={26} />
+            <BrandLogoMark size={26} />
           </span>
           <div className="grid flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
-            <LogoLockup className="text-base text-sidebar-accent-foreground" />
+            <BrandLogoLockup className="text-base text-sidebar-accent-foreground" />
             <span className="truncate text-xs text-muted-foreground">
               {currentLabel({ company, area }, areas, t)}
             </span>

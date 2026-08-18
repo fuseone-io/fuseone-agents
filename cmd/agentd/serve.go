@@ -142,6 +142,7 @@ func serve(args []string) error {
 			// permission: the one act here nobody can undo.
 			// The key exports are signed with, and its public half.
 			WithSigning(admin.NewSigning(identity.pool, store)).
+			WithBranding(admin.NewBranding(identity.pool, store)).
 			WithRetention(
 				admin.NewRetention(identity.pool, store),
 				admin.NewErasures(identity.pool, ledger.NewContent(identity.pool),
@@ -214,6 +215,7 @@ func serve(args []string) error {
 	// caller becomes authenticated — and the console's static assets carry
 	// nothing worth protecting.
 	if identity != nil {
+		root.Handle("GET /api/v1/branding", apiProblems(apiHandler))
 		root.Handle("/api/", apiProblems(identity.auth.Middleware(apiHandler)))
 		root.Handle("GET /api/v1/me", identity.auth.Middleware(http.HandlerFunc(httpapi.MeHandler)))
 		// Both probes are reachable without a credential. A probe cannot hold

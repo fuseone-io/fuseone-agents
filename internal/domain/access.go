@@ -68,6 +68,7 @@ const (
 	PermPackWrite     Permission = "pack:write"
 	PermProviderWrite Permission = "provider:write"
 	PermBudgetWrite   Permission = "budget:write"
+	PermBrandWrite    Permission = "brand:write"
 	// PermPolicyRead is separate from writing because a policy constrains
 	// people who must not be able to change it. An author needs to read the
 	// rule that stopped their agent; letting them edit it would make the rule
@@ -117,7 +118,7 @@ var grants = map[Role][]Permission{
 		PermAgentRead, PermAgentPublish,
 		PermCostRead, PermAuditRead,
 		PermToolRead, PermToolClassify, PermPackWrite,
-		PermProviderWrite, PermBudgetWrite, PermPolicyRead, PermPolicyWrite,
+		PermProviderWrite, PermBudgetWrite, PermBrandWrite, PermPolicyRead, PermPolicyWrite,
 		PermIdentityWrite, PermScopeWrite, PermDataErase,
 		// The role says what; the scope says where. A curator of one company
 		// holds this and can use it nowhere, because it is only ever asked

@@ -4,6 +4,28 @@
  */
 
 export interface paths {
+    "/branding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Installation branding
+         * @description Public by design: the sign-in and setup screens need to know what
+         *     installation they belong to before there is a session. It carries no
+         *     authority, only the name, images and colour the installation presents.
+         */
+        get: operations["getBranding"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents": {
         parameters: {
             query?: never;
@@ -1244,6 +1266,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/branding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Installation branding as configured
+         * @description The same shape as `/branding`, behind administration so the console can
+         *     show this beside the rest of the installation settings and record who
+         *     changes it.
+         */
+        get: operations["getAdminBranding"];
+        /**
+         * Change the installation brand
+         * @description Stores display name, image URLs and the primary colour. Image content is
+         *     referenced, not uploaded: binary asset storage is a separate concern and
+         *     a URL keeps this setting auditable like the rest of administration.
+         */
+        put: operations["setAdminBranding"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/audit/export": {
         parameters: {
             query?: never;
@@ -1934,6 +1984,19 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * @description What this installation presents as itself. Empty URLs mean "use the
+         *     built-in mark"; an empty primary colour means "use the built-in palette".
+         */
+        Branding: {
+            displayName: string;
+            /** @description Full wordmark or logo image. Empty falls back to the built-in wordmark. */
+            logoUrl?: string;
+            /** @description Compact mark used in the collapsed sidebar. Empty falls back to the built-in mark. */
+            iconUrl?: string;
+            /** @description Hex colour applied to primary actions and the built-in mark. Empty falls back to Fuse Aqua. */
+            primaryColor?: string;
+        };
         /**
          * @description RFC 9457 problem detail.
          *
@@ -3445,6 +3508,26 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    getBranding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The branding in force, falling back to the product mark. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Branding"];
+                };
+            };
+        };
+    };
     listAgents: {
         parameters: {
             query?: {
@@ -5147,6 +5230,53 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getAdminBranding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The branding in force. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Branding"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    setAdminBranding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Branding"];
+            };
+        };
+        responses: {
+            /** @description Stored. New pages apply it immediately. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
         };

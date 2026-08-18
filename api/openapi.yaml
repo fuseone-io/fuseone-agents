@@ -39,6 +39,23 @@ tags:
   - name: system
 
 paths:
+  /branding:
+    get:
+      tags: [system]
+      operationId: getBranding
+      summary: Installation branding
+      description: |
+        Public by design: the sign-in and setup screens need to know what
+        installation they belong to before there is a session. It carries no
+        authority, only the name, images and colour the installation presents.
+      security: []
+      responses:
+        '200':
+          description: The branding in force, falling back to the product mark.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Branding' }
+
   /agents:
     get:
       tags: [agents]
@@ -1831,6 +1848,42 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /admin/branding:
+    get:
+      tags: [admin]
+      operationId: getAdminBranding
+      summary: Installation branding as configured
+      description: |
+        The same shape as `/branding`, behind administration so the console can
+        show this beside the rest of the installation settings and record who
+        changes it.
+      responses:
+        '200':
+          description: The branding in force.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Branding' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    put:
+      tags: [admin]
+      operationId: setAdminBranding
+      summary: Change the installation brand
+      description: |
+        Stores display name, image URLs and the primary colour. Image content is
+        referenced, not uploaded: binary asset storage is a separate concern and
+        a URL keeps this setting auditable like the rest of administration.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Branding' }
+      responses:
+        '204': { description: Stored. New pages apply it immediately. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /audit/export:
     get:
       tags: [audit]
@@ -3068,6 +3121,30 @@ components:
           schema: { $ref: '#/components/schemas/Problem' }
 
   schemas:
+    Branding:
+      type: object
+      description: |
+        What this installation presents as itself. Empty URLs mean "use the
+        built-in mark"; an empty primary colour means "use the built-in palette".
+      required: [displayName]
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 80
+        logoUrl:
+          type: string
+          maxLength: 4096
+          description: Full wordmark or logo image. Empty falls back to the built-in wordmark.
+        iconUrl:
+          type: string
+          maxLength: 4096
+          description: Compact mark used in the collapsed sidebar. Empty falls back to the built-in mark.
+        primaryColor:
+          type: string
+          pattern: '^#[0-9A-Fa-f]{6}$'
+          description: Hex colour applied to primary actions and the built-in mark. Empty falls back to Fuse Aqua.
+
     Problem:
       type: object
       description: |

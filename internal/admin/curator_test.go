@@ -52,7 +52,7 @@ func freshPool(t *testing.T) *pgxpool.Pool {
 	// between tests and fails whichever one happens to run second.
 	if _, err := pool.Exec(context.Background(),
 		`delete from settings where kind in ('tool_classification', 'stop',
-		           'channel', 'channel_conversation', 'channel_identity');
+		           'channel', 'channel_conversation', 'channel_identity', 'branding');
 		 delete from admin_events`); err != nil {
 		t.Fatalf("clean: %v", err)
 	}
