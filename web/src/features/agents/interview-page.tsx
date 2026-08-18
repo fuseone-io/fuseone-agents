@@ -11,6 +11,7 @@ import {
   QUESTIONS,
   draftFromInterview,
 } from "@/features/agents/interview-model";
+import { problemMessage } from "@/lib/api/problem-message";
 
 /**
  * The interview: seven questions, one at a time (PRD §6.1).
@@ -56,10 +57,7 @@ export function InterviewPage() {
           );
           navigate("/agents/new?from=interview");
         },
-        onError: (e) =>
-          toast.error(
-            e instanceof Error ? e.message : t("interview.assistantFailed"),
-          ),
+        onError: (e) => toast.error(problemMessage(e, t)),
       },
     );
 
