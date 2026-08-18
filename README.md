@@ -1,10 +1,48 @@
 # FuseOne Agents
 
-A governed platform for running AI agents inside real business operations:
-agents that act across CRM, ERP and legacy systems under explicit rules, with a
-traceable record of every decision and hard ceilings on what they can spend.
+FuseOne Agents is a control plane for AI agents that work inside real business
+operations: reading systems, proposing actions, asking for approval when the
+risk calls for it, and leaving a traceable record of what happened.
 
-It installs into the customer's own environment. One binary, one PostgreSQL.
+It is built for agents that touch CRM, ERP, support queues, observability
+systems, internal APIs and legacy tools. The product is not a connector suite
+and not a generic chat shell: MCP servers are tools, channels are how people
+talk to agents, and the Gate is the boundary every external effect crosses.
+
+It installs into the customer's own environment. One binary, one PostgreSQL,
+one Helm chart.
+
+## What it does
+
+- Runs authored agents from manual starts, webhooks, events and channels.
+- Connects MCP tool servers, discovers their tools, lets an operator choose
+  the surface area, and requires a Curator to classify what each tool can do.
+- Evaluates every tool call through a deterministic Gate before anything
+  reaches the outside world.
+- Carries untrusted labels from inputs, logs, tool results and agent-to-agent
+  events so a later write cannot quietly launder risky context.
+- Records runs in an append-only, hash-chained ledger for replay, audit,
+  budget accounting and incident review.
+- Stores large or sensitive run content behind references, so retention and
+  erasure can remove what a run carried without rewriting the audit chain.
+- Ships with a console for authoring, approvals, run inspection, MCP
+  governance, audit trail, data retention, branding and the in-product manual.
+
+## Why it is different
+
+Most automation platforms ask whether an integration can call an API. FuseOne
+asks a different question first: who decided this agent may do this thing, with
+this input, in this scope, at this cost?
+
+Everything important is a projection of the same ledger. The audit trail, a
+run's current state, cost accounting, replay and simulation are reads over one
+record, not parallel systems that have to stay in sync. The Gate's ruling is
+written before the effect happens, and a grant can release an action that only
+needed approval; it cannot override a check that blocked it.
+
+Functional reference: [docs/PRD-001-fuseone-agents.md](docs/PRD-001-fuseone-agents.md).
+
+## Installing
 
 ```sh
 helm install agents oci://ghcr.io/fuseone-io/charts/fuseone-agents \
@@ -19,7 +57,7 @@ This runs inside your network where you cannot watch it build, so check it
 before it does:
 
 ```sh
-cosign verify ghcr.io/fuseone-io/fuseone-agents:0.1.0 \
+cosign verify ghcr.io/fuseone-io/fuseone-agents:0.3.3 \
   --certificate-identity-regexp '^https://github.com/fuseone-io/fuseone-agents/' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
@@ -27,15 +65,12 @@ cosign verify ghcr.io/fuseone-io/fuseone-agents:0.1.0 \
 Installing, operating and proving it to an auditor:
 [deploy/helm/fuseone-agents/README.md](deploy/helm/fuseone-agents/README.md).
 
-## The idea in one paragraph
+## Releases
 
-Everything is a projection of an append-only, hash-chained ledger. The audit
-trail, the cost accounting, a run's state, and the ability to replay a run are
-all reads over the same record — not four systems that have to agree. No effect
-reaches the outside world without passing a deterministic Gate, and the Gate's
-ruling is written down before the effect happens.
-
-Functional reference: [docs/PRD-001-fuseone-agents.md](docs/PRD-001-fuseone-agents.md).
+A release is a `v`-prefixed tag. `make release V=x.y.z` refuses a dirty tree,
+runs the full local gate, creates the tag, and lets CI publish the versioned
+image, `latest`, the OCI Helm chart, and a GitHub Release whose notes come from
+the matching `CHANGELOG.md` section.
 
 ## Running it locally
 

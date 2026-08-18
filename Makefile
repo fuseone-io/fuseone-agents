@@ -183,9 +183,10 @@ chart:
 
 ## release: tag a version, which is what publishes it.
 ## Nothing is released by merging: the tag is the act, and CI builds the image
-## and chart that carry its version. Refuses a dirty tree, an unreleased
-## changelog and a tag that already exists — each of the three has shipped
-## somebody a version that does not match what they can read.
+## and chart that carry its version, then creates the GitHub Release from the
+## changelog. Refuses a dirty tree, an unreleased changelog and a tag that
+## already exists — each of the three has shipped somebody a version that does
+## not match what they can read.
 release:
 	@test -n "$(V)" || { echo "usage: make release V=0.2.0"; exit 1; }
 	@git diff --quiet || { echo "the tree is dirty; a tag must name a commit somebody can check out"; exit 1; }
@@ -197,4 +198,4 @@ release:
 	@$(MAKE) --no-print-directory check
 	git tag -a "v$(V)" -m "$(V)"
 	git push origin "v$(V)"
-	@echo "tagged. CI publishes ghcr.io/fuseone-io/fuseone-agents:$(V) and :latest"
+	@echo "tagged. CI publishes ghcr.io/fuseone-io/fuseone-agents:$(V), :latest, the chart, and the GitHub Release"

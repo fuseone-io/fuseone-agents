@@ -1,6 +1,6 @@
 # OP-001 — Running an installation
 
-**Written** 2026-08-18, against 0.3.2.
+**Written** 2026-08-18, against 0.3.3.
 
 For whoever installs this in a customer's environment and keeps it running.
 The PRD says what the platform is for and the NTs argue about how it works;
@@ -27,6 +27,13 @@ Concretely, on a fresh install and after several upgrades:
   reaching what the worker reaches. That is a decision with a name attached to
   it, and a stored server carries no acceptance until an administrator gives
   one.
+- **A run will not finish without somewhere to put its answer.** From 0.3.3 the
+  worker writes a run's closing answer to the content store, behind a
+  reference, so retention and erasure reach it like everything else. It refuses
+  to finish rather than falling back to writing the text into the chain, where
+  no erasure request could ever reach it. An installation deployed by this
+  chart always has that store; a run failing on it means the worker was wired
+  by hand and the wiring is incomplete.
 - **A published agent is paused and in draft.** Draft cannot open a real run.
   It can be simulated, which is how it earns its way out.
 - **A tool whose definition changed waits for a fresh ruling.** A ruling names
@@ -45,7 +52,7 @@ bytes, base64** — `agentd keygen` prints one.
 ```
 helm upgrade --install fuseone-agents deploy/helm/fuseone-agents \
   -n <namespace> --create-namespace \
-  --set image.tag=0.3.2 \
+  --set image.tag=0.3.3 \
   --set secret.existingSecret=<secret> \
   --set ingress.enabled=true --set ingress.host=<host> \
   --set baseUrl=https://<host>
@@ -121,6 +128,11 @@ Known, and learned the hard way:
 
 - **0.2.0 and 0.3.0 cannot deploy** unless `worker.specs.configMap` is set. Go
   to 0.3.1 or later.
+- **Before 0.3.3, a run's closing answer was written into the immutable chain**
+  and no erasure request could reach it. Upgrading stops that for new runs;
+  runs already recorded keep their answer inline for ever, because the chain is
+  not rewritten. An installation with a data subject request covering
+  historical runs should read DP-001 before answering it.
 - **Before 0.3.1, `--reuse-values` failed** when the target version had added a
   chart value.
 - **Before 0.3.2, `worker.specs.configMap` never worked** at all.

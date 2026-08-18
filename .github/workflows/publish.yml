@@ -150,3 +150,32 @@ jobs:
 
       - name: push
         run: helm push "$CHART" oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/charts
+
+  release:
+    name: github release
+    needs: chart
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: extract notes
+        run: |
+          bash scripts/release-notes.sh "${GITHUB_REF_NAME#v}" > /tmp/release-notes.md
+
+      - name: create or update the GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" \
+              --title "$GITHUB_REF_NAME" \
+              --notes-file /tmp/release-notes.md
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --title "$GITHUB_REF_NAME" \
+              --notes-file /tmp/release-notes.md \
+              --verify-tag
+          fi
