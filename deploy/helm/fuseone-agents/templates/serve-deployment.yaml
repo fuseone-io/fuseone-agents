@@ -72,23 +72,10 @@ spec:
             # every stdio server that needs one — far from the cause.
             - name: tmp
               mountPath: /tmp
-          {{- with .Values.securityContext }}
-          securityContext:
-            allowPrivilegeEscalation: {{ .allowPrivilegeEscalation }}
-            readOnlyRootFilesystem: {{ .readOnlyRootFilesystem }}
-            capabilities: {{- toYaml .capabilities | nindent 14 }}
-          {{- end }}
           resources: {{- toYaml .Values.serve.resources | nindent 12 }}
       volumes:
         - name: tmp
           emptyDir: {}
-      {{- with .Values.securityContext }}
-      securityContext:
-        runAsNonRoot: {{ .runAsNonRoot }}
-        runAsUser: {{ .runAsUser }}
-        runAsGroup: {{ .runAsGroup }}
-        seccompProfile: {{- toYaml .seccompProfile | nindent 10 }}
-      {{- end }}
       {{- if .Values.topologySpread.enabled }}
       topologySpreadConstraints:
         - maxSkew: {{ .Values.topologySpread.maxSkew }}

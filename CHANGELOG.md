@@ -33,13 +33,11 @@ Nothing yet.
 
 ### Upgrade notes
 
-- **Pods restart with a read-only root filesystem.** The chart now declares the
-  security context the image already satisfied, which is what lets a cluster
-  enforcing Pod Security Standards `restricted` run it at all. `/tmp` is
-  mounted writable because a local tool server's sealed config file is
-  materialised there. An installation running a modified image that writes
-  elsewhere should set `securityContext.readOnlyRootFilesystem: false` before
-  upgrading, or move those writes.
+- **A writable `/tmp` is mounted.** The chart already ran with a read-only root
+  filesystem, and a local tool server's sealed configuration file is
+  materialised under the system temp directory — so that feature could not
+  work in any installation until now. Nothing to do before upgrading; this
+  fixes a shape that was already broken.
 - **Replicas are spread across nodes where the cluster allows it.** Scheduling
   never refuses over it — `ScheduleAnyway` — so nothing goes Pending, but pods
   may land on different nodes than before.

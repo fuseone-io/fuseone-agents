@@ -87,12 +87,6 @@ spec:
           # answering. Giving it an HTTP server to be probed on would be adding
           # a listener for the benefit of the probe.
           securityContext: {{- toYaml .Values.containerSecurityContext | nindent 12 }}
-          {{- with .Values.securityContext }}
-          securityContext:
-            allowPrivilegeEscalation: {{ .allowPrivilegeEscalation }}
-            readOnlyRootFilesystem: {{ .readOnlyRootFilesystem }}
-            capabilities: {{- toYaml .capabilities | nindent 14 }}
-          {{- end }}
           resources: {{- toYaml .Values.worker.resources | nindent 12 }}
       {{- if .Values.worker.specs.configMap }}
       volumes:
@@ -101,13 +95,6 @@ spec:
         - name: specs
           configMap:
             name: {{ .Values.worker.specs.configMap }}
-      {{- end }}
-      {{- with .Values.securityContext }}
-      securityContext:
-        runAsNonRoot: {{ .runAsNonRoot }}
-        runAsUser: {{ .runAsUser }}
-        runAsGroup: {{ .runAsGroup }}
-        seccompProfile: {{- toYaml .seccompProfile | nindent 10 }}
       {{- end }}
       {{- if .Values.topologySpread.enabled }}
       topologySpreadConstraints:

@@ -91,24 +91,6 @@ containerSecurityContext:
   readOnlyRootFilesystem: true
   capabilities: { drop: ["ALL"] }
 
-# What a hardened cluster checks before it will run this at all.
-#
-# The image is distroless and its USER is nonroot already, so none of this
-# changes what the process can do. What it changes is whether an admission
-# policy — Pod Security Standards `restricted`, Kyverno, Gatekeeper — lets the
-# pod exist: those judge the manifest, not the image, and a chart that does not
-# say these things is refused by a cluster where they are true.
-securityContext:
-  runAsNonRoot: true
-  runAsUser: 65532
-  runAsGroup: 65532
-  allowPrivilegeEscalation: false
-  readOnlyRootFilesystem: true
-  capabilities:
-    drop: ["ALL"]
-  seccompProfile:
-    type: RuntimeDefault
-
 # Spread replicas across nodes without refusing to schedule.
 #
 # `ScheduleAnyway`, deliberately: two replicas on one node is worse than one
