@@ -77,6 +77,45 @@ func TestAuthStart_loadsTheProviderFromTheDurableStoreBeforeRedirecting(t *testi
 	}
 }
 
+func TestAuthStart_refreshesMappingsAnotherReplicaStored(t *testing.T) {
+	t.Parallel()
+
+	issuer := fakeOIDCIssuer(t)
+	oidc := auth.NewOIDC("https://console.example", true)
+	if err := oidc.Add(t.Context(), &auth.OIDCProvider{
+		ID: "keycloak", Issuer: issuer, ClientID: "fuseone", ClientSecret: "old-secret",
+	}); err != nil {
+		t.Fatalf("seed live provider: %v", err)
+	}
+	routes := NewAuthRoutes(oidc, nil, nil, true).
+		WithIdentityProviders(&fakeIdentity{
+			secret: "client-secret",
+			stored: []domain.IdentityProvider{{
+				ID: "keycloak", Display: "Keycloak", Issuer: issuer,
+				ClientID: "fuseone", Enabled: true,
+				Mappings: []domain.GroupMapping{{
+					Group: "devops", Company: "acme", Area: "platform", Role: "curator",
+				}},
+			}},
+		})
+	mux := http.NewServeMux()
+	routes.Mount(mux)
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/auth/start/keycloak", nil))
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	providers := oidc.Providers()
+	if len(providers) != 1 || len(providers[0].Mappings) != 1 {
+		t.Fatalf("mappings = %+v, want the durable mapping loaded before sign-in", providers)
+	}
+	if got := providers[0].Mappings[0]; got.Group != "devops" || got.Role != "curator" {
+		t.Fatalf("mapping = %+v, want the mapping another replica stored", got)
+	}
+}
+
 func TestAuthStart_removesAProviderThatOnlyThisProcessStillRemembers(t *testing.T) {
 	t.Parallel()
 
