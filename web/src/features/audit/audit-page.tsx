@@ -1,10 +1,11 @@
 import { useTranslation } from "react-i18next";
 import { useDeferredValue, useMemo, useState } from "react";
-import { ScrollText } from "lucide-react";
+import { ChevronLeft, ChevronRight, ScrollText } from "lucide-react";
 import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
 import { Panel } from "@/components/shared/panel";
 import { Toolbar } from "@/components/shared/toolbar";
+import { Button } from "@/components/ui/button";
 import {
   FilterSelect,
   type FilterOption,
@@ -14,10 +15,9 @@ import {
   ErrorState,
   LoadingRows,
 } from "@/components/shared/states";
-import { LoadMore } from "@/components/shared/load-more";
 import { AuditTable } from "@/features/audit/audit-table";
 import { IntegrityBanner } from "@/features/audit/integrity-banner";
-import { useAudit } from "@/features/audit/api";
+import { useAuditPage, type AuditFilters } from "@/features/audit/api";
 import { sinceFor } from "@/features/runs/runs-filters";
 
 const SOURCES: FilterOption[] = [
@@ -32,6 +32,16 @@ const PERIODS: FilterOption[] = [
   { value: "30", label: "audit.last30d" },
   { value: "all", label: "audit.sinceBeginning" },
 ];
+
+interface AuditPageState {
+  filterKey: string;
+  index: number;
+  cursors: Array<string | undefined>;
+}
+
+function emptyPageState(filterKey: string): AuditPageState {
+  return { filterKey, index: 0, cursors: [undefined] };
+}
 
 /**
  * Everything that happened, from both records that keep it.
@@ -48,19 +58,45 @@ export function AuditPage() {
   const query = useDeferredValue(actor.trim());
 
   const since = useMemo(() => sinceFor(period), [period]);
-  const {
-    items: entries,
-    isLoading,
-    error,
-    refetch,
-    hasNextPage,
-    fetchNextPage,
-    isFetchingNextPage,
-  } = useAudit({
-    since,
-    actor: query || undefined,
-    source: source === "all" ? undefined : (source as "ledger" | "admin"),
-  });
+  const filterKey = `${source}\u0000${since ?? ""}\u0000${query}`;
+  const [page, setPage] = useState<AuditPageState>(() =>
+    emptyPageState(filterKey),
+  );
+  const activePage =
+    page.filterKey === filterKey ? page : emptyPageState(filterKey);
+  const filters = useMemo<AuditFilters>(
+    () => ({
+      since,
+      actor: query || undefined,
+      source: source === "all" ? undefined : (source as "ledger" | "admin"),
+    }),
+    [query, since, source],
+  );
+  const cursor = activePage.cursors[activePage.index];
+  const { data, isLoading, error, refetch } = useAuditPage(filters, cursor);
+  const entries = data?.items ?? [];
+  const nextCursor = data?.nextCursor ?? null;
+
+  function nextPage() {
+    if (!nextCursor) return;
+    setPage((current) => {
+      const base =
+        current.filterKey === filterKey ? current : emptyPageState(filterKey);
+      return {
+        filterKey,
+        index: base.index + 1,
+        cursors: [...base.cursors.slice(0, base.index + 1), nextCursor],
+      };
+    });
+  }
+
+  function previousPage() {
+    setPage((current) => {
+      const base =
+        current.filterKey === filterKey ? current : emptyPageState(filterKey);
+      return { ...base, index: Math.max(0, base.index - 1) };
+    });
+  }
 
   return (
     <>
@@ -121,17 +157,57 @@ export function AuditPage() {
         ) : (
           <>
             <AuditTable entries={entries} />
-            <div className="px-4 pb-3">
-              <LoadMore
-                loaded={entries.length}
-                hasMore={hasNextPage}
-                isLoading={isFetchingNextPage}
-                onLoad={() => void fetchNextPage()}
-              />
-            </div>
+            <AuditPager
+              page={activePage.index + 1}
+              rows={entries.length}
+              hasPrevious={activePage.index > 0}
+              hasNext={Boolean(nextCursor)}
+              onPrevious={previousPage}
+              onNext={nextPage}
+            />
           </>
         )}
       </Panel>
     </>
+  );
+}
+
+function AuditPager({
+  page,
+  rows,
+  hasPrevious,
+  hasNext,
+  onPrevious,
+  onNext,
+}: {
+  page: number;
+  rows: number;
+  hasPrevious: boolean;
+  hasNext: boolean;
+  onPrevious: () => void;
+  onNext: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 px-4 pb-3 pt-2">
+      <p className="text-xs text-muted-foreground tabular-nums">
+        {t("audit.pageRows", { page, rows })}
+      </p>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onPrevious}
+          disabled={!hasPrevious}
+        >
+          <ChevronLeft className="size-4" aria-hidden />
+          {t("common.previous")}
+        </Button>
+        <Button variant="outline" size="sm" onClick={onNext} disabled={!hasNext}>
+          {t("common.next")}
+          <ChevronRight className="size-4" aria-hidden />
+        </Button>
+      </div>
+    </div>
   );
 }
