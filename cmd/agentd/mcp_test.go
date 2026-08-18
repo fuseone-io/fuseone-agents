@@ -199,6 +199,53 @@ func TestAuthenticatedClient_sendsBearerTokensToRemoteServers(t *testing.T) {
 	_ = resp.Body.Close()
 }
 
+func TestAuthenticatedClient_doesNotShareTheDefaultTransport(t *testing.T) {
+	t.Parallel()
+
+	bearerClient, err := authenticatedClient("github", domain.MCPCredentials{Token: "ghp_secret"}, nil)
+	if err != nil {
+		t.Fatalf("authenticatedClient bearer: %v", err)
+	}
+	bearerTransport, ok := bearerClient.Transport.(bearer)
+	if !ok {
+		t.Fatalf("bearer transport = %T, want bearer", bearerClient.Transport)
+	}
+	if bearerTransport.base == http.DefaultTransport {
+		t.Fatal("bearer client shares http.DefaultTransport")
+	}
+
+	headerClient, err := authenticatedClient("newrelic", domain.MCPCredentials{
+		Headers: map[string]string{"Api-Key": "nr_secret"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("authenticatedClient headers: %v", err)
+	}
+	headerTransport, ok := headerClient.Transport.(headerAuth)
+	if !ok {
+		t.Fatalf("header transport = %T, want headerAuth", headerClient.Transport)
+	}
+	if headerTransport.base == http.DefaultTransport {
+		t.Fatal("header client shares http.DefaultTransport")
+	}
+
+	oauthClient, err := authenticatedClient("google", domain.MCPCredentials{
+		OAuth: &domain.MCPOAuthGrant{AccessToken: "oauth_access"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("authenticatedClient oauth: %v", err)
+	}
+	oauthTransport, ok := oauthClient.Transport.(*oauthTransport)
+	if !ok {
+		t.Fatalf("oauth transport = %T, want *oauthTransport", oauthClient.Transport)
+	}
+	if oauthTransport.base == http.DefaultTransport {
+		t.Fatal("oauth client shares http.DefaultTransport")
+	}
+	if oauthTransport.refresh.Transport == http.DefaultTransport {
+		t.Fatal("oauth refresh client shares http.DefaultTransport")
+	}
+}
+
 func TestAuthenticatedClient_sendsConfiguredHeaderCredentialsToRemoteServers(t *testing.T) {
 	t.Parallel()
 

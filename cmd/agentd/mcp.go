@@ -117,42 +117,56 @@ func (s cleanupSession) Close() error {
 func authenticatedClient(
 	server string, creds domain.MCPCredentials, oauth OAuthGrantStore,
 ) (*http.Client, error) {
+	base := baseHTTPTransport()
 	if creds.OAuth != nil && !creds.OAuth.Empty() {
 		if creds.OAuth.AccessToken == "" && !creds.OAuth.CanRefresh() {
 			return nil, fmt.Errorf("oauth grant has no access token and cannot refresh")
 		}
 		return &http.Client{
-			Transport: newOAuthTransport(server, *creds.OAuth, oauth),
+			Transport: newOAuthTransport(server, *creds.OAuth, oauth, base),
 			Timeout:   60 * time.Second,
 		}, nil
 	}
 	if len(creds.Headers) > 0 {
-		return &http.Client{Transport: headerAuth{headers: creds.Headers}, Timeout: 60 * time.Second}, nil
+		return &http.Client{Transport: headerAuth{headers: creds.Headers, base: base}, Timeout: 60 * time.Second}, nil
 	}
 	if creds.Token == "" {
 		return nil, nil
 	}
-	return &http.Client{Transport: bearer{token: creds.Token}, Timeout: 60 * time.Second}, nil
+	return &http.Client{Transport: bearer{token: creds.Token, base: base}, Timeout: 60 * time.Second}, nil
 }
 
-type bearer struct{ token string }
+func baseHTTPTransport() http.RoundTripper {
+	if transport, ok := http.DefaultTransport.(*http.Transport); ok {
+		return transport.Clone()
+	}
+	return http.DefaultTransport
+}
+
+type bearer struct {
+	token string
+	base  http.RoundTripper
+}
 
 func (b bearer) RoundTrip(r *http.Request) (*http.Response, error) {
 	// Cloned: RoundTrip must not modify the request it is given, and the same
 	// request is retried by the transport underneath.
 	out := r.Clone(r.Context())
 	out.Header.Set("Authorization", "Bearer "+b.token)
-	return http.DefaultTransport.RoundTrip(out)
+	return b.base.RoundTrip(out)
 }
 
-type headerAuth struct{ headers map[string]string }
+type headerAuth struct {
+	headers map[string]string
+	base    http.RoundTripper
+}
 
 func (h headerAuth) RoundTrip(r *http.Request) (*http.Response, error) {
 	out := r.Clone(r.Context())
 	for name, value := range h.headers {
 		out.Header.Set(name, value)
 	}
-	return http.DefaultTransport.RoundTrip(out)
+	return h.base.RoundTrip(out)
 }
 
 type oauthTransport struct {
@@ -166,14 +180,17 @@ type oauthTransport struct {
 	dirtyFrom domain.MCPOAuthGrant
 }
 
-func newOAuthTransport(server string, grant domain.MCPOAuthGrant, store OAuthGrantStore) *oauthTransport {
+func newOAuthTransport(
+	server string, grant domain.MCPOAuthGrant, store OAuthGrantStore, base http.RoundTripper,
+) *oauthTransport {
 	return &oauthTransport{
 		server: server,
 		grant:  grant,
-		base:   http.DefaultTransport,
+		base:   base,
 		store:  store,
 		refresh: &http.Client{
-			Timeout: 30 * time.Second,
+			Transport: baseHTTPTransport(),
+			Timeout:   30 * time.Second,
 		},
 	}
 }
