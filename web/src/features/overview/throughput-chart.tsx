@@ -5,8 +5,12 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { SEGMENTS, type Column } from "@/features/overview/throughput-model";
-import { STATE_DOT, type AgentState } from "@/lib/agent-state";
+import {
+  SEGMENT_LABELS,
+  SEGMENTS,
+  type Column,
+} from "@/features/overview/throughput-model";
+import { STATE_DOT } from "@/lib/agent-state";
 import { formatCost } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -16,11 +20,6 @@ import { cn } from "@/lib/utils";
 const PLOT = 132;
 const AXIS = 20;
 const GRIDLINES = 4;
-const LABEL: Partial<Record<AgentState, string>> = {
-  done: "overview.doneLegend",
-  waiting: "em curso",
-  blocked: "paradas",
-};
 
 /**
  * The day's runs, stacked by what became of them.
@@ -212,7 +211,7 @@ function Bar({
                 aria-hidden
                 className={cn("size-1.5 rounded-[2px]", STATE_DOT[state])}
               />
-              {t(LABEL[state] ?? "")}
+              {t(SEGMENT_LABELS[state])}
               <span className="ml-auto font-mono tabular-nums">
                 {column.byState[state]}
               </span>

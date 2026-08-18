@@ -10,7 +10,14 @@ import { stateOfPhase, type AgentState } from "@/lib/agent-state";
  */
 
 /** The three columns a bar stacks, in the order they stack. */
-export const SEGMENTS: AgentState[] = ["done", "waiting", "blocked"];
+export const SEGMENTS = ["done", "waiting", "blocked"] as const satisfies AgentState[];
+export type ThroughputSegment = (typeof SEGMENTS)[number];
+
+export const SEGMENT_LABELS: Record<ThroughputSegment, string> = {
+  done: "overview.doneLegend",
+  waiting: "overview.inProgressLegend",
+  blocked: "overview.stoppedLegend",
+};
 
 export interface Column {
   /** The hour, 0–23, as it appears on the axis. */

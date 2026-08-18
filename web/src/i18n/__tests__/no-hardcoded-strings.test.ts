@@ -83,7 +83,7 @@ const SAMPLES = new Set([
  * silence.
  */
 const PORTUGUESE =
-  /[ãõçáéíóúâêôà]|\b(não|uma|para|com|sem|que|este|esta|isso|aqui|onde|quando|todos|nada|ainda|foi|será|está|estão|têm|pelo|pela|dos|das|nos|nas)\b/i;
+  /[ãõçáéíóúâêôà]|\b(em curso|paradas|não|uma|para|com|sem|que|este|esta|isso|aqui|onde|quando|todos|nada|ainda|foi|será|está|estão|têm|pelo|pela|dos|das|nos|nas)\b/i;
 
 const NOT_PROSE = new RegExp(
   "^[a-z][\\w]*([./:@#-][\\w*]+)+$" + // crm.reply, /etc/x

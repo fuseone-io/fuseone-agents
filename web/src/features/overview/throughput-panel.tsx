@@ -1,21 +1,16 @@
 import { useTranslation } from "react-i18next";
 import { useMemo } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { STATE_DOT, type AgentState } from "@/lib/agent-state";
+import { STATE_DOT } from "@/lib/agent-state";
 import { cn } from "@/lib/utils";
 import {
   ceilingOf,
   columnsFor,
+  SEGMENT_LABELS,
   SEGMENTS,
 } from "@/features/overview/throughput-model";
 import { ThroughputChart } from "@/features/overview/throughput-chart";
 import { useThroughput } from "@/features/overview/api";
-
-const LEGEND: Partial<Record<AgentState, string>> = {
-  done: "overview.doneLegend",
-  waiting: "em curso",
-  blocked: "paradas",
-};
 
 /**
  * How today went, hour by hour.
@@ -47,7 +42,7 @@ export function ThroughputPanel({ since }: { since: string }) {
                 aria-hidden
                 className={cn("size-[7px] rounded-[2px]", STATE_DOT[state])}
               />
-              {t(LEGEND[state] ?? "")}
+              {t(SEGMENT_LABELS[state])}
             </span>
           ))}
         </div>
