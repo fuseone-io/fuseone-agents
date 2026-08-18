@@ -2331,6 +2331,26 @@ export interface components {
          * @enum {string}
          */
         Transport: "stdio" | "http";
+        MCPOAuthGrant: {
+            /** @description Current OAuth access token. Never returned by a listing. */
+            accessToken?: string;
+            /** @description Refresh token used by the worker when the access token expires. */
+            refreshToken?: string;
+            /** @description OAuth token endpoint. */
+            tokenURL?: string;
+            /** @description Client identifier for refresh requests. */
+            clientID?: string;
+            /** @description Client secret for refresh requests. Never returned by a listing. */
+            clientSecret?: string;
+            /** @description Authorization scheme. Defaults to Bearer. */
+            tokenType?: string;
+            /**
+             * Format: int64
+             * @description Unix second when the access token expires. Zero means unknown.
+             */
+            expiresAtUnix?: number;
+            scopes?: string[];
+        };
         MCPServer: {
             /** @description Namespaces the tools it offers, so two servers naming a tool "search" do not collide. */
             name: string;
@@ -2342,6 +2362,8 @@ export interface components {
             url?: string;
             /** @description That a credential document is stored, never what it is. */
             hasSecret?: boolean;
+            /** @description The sealed credential document includes an OAuth grant for a remote server. The grant never comes back through this API. */
+            hasOAuth?: boolean;
             /** @description The sealed credential document includes environment variables for a local process. The values never come back through this API. */
             hasVariables?: boolean;
             /** @description The sealed credential document includes a platform-managed configuration file. The content never comes back through this API. */
@@ -5320,6 +5342,8 @@ export interface operations {
                     url?: string;
                     /** @description Bearer token for a remote server. Omit to keep the stored one — correcting a URL must not demand re-entering a secret nobody has to hand. */
                     token?: string;
+                    /** @description OAuth grant for a remote server. Omit to keep the stored grant. Send an empty object to clear it. A non-empty grant becomes the active HTTP credential and replaces a stored bearer token. */
+                    oauth?: components["schemas"]["MCPOAuthGrant"];
                     /**
                      * @description Variables handed to a local server, and only to one. A program started inside the worker no longer inherits the worker's environment, so this is how it receives the credential it needs — explicitly, per server, from the vault.
                      *     Sealed like the token, because the reason a server needs a variable is nearly always that the variable is a key, and a field that is sometimes a secret is stored as one always.

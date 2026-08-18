@@ -29,6 +29,16 @@ type MCPCredentials struct {
 	// which starts a program rather than calling an address.
 	Token string `json:"token,omitempty"`
 	/*
+		OAuth is a grant for a remote HTTP server.
+
+		It is not a dressed-up bearer. A bearer token is already the thing to
+		send; an OAuth grant also carries how a worker may get a fresh access
+		token. Kept apart so a screen can say which kind of credential exists
+		without leaking either, and so switching mode drops the other one
+		instead of leaving live material nobody sees.
+	*/
+	OAuth *MCPOAuthGrant `json:"oauth,omitempty"`
+	/*
 		Env is what a local server is given, and nothing else is.
 
 		It is added to the small allowlist the worker copies through, and it
@@ -47,6 +57,51 @@ type MCPCredentials struct {
 		that sometimes carries secrets has to be stored as though it always does.
 	*/
 	ConfigFile string `json:"configFile,omitempty"`
+}
+
+// MCPOAuthGrant is the remote credential an MCP server receives through the
+// HTTP client that reaches it. ExpiresAtUnix is a Unix second so the sealed
+// document stays stable and language-neutral.
+type MCPOAuthGrant struct {
+	AccessToken   string   `json:"accessToken,omitempty"`
+	RefreshToken  string   `json:"refreshToken,omitempty"`
+	TokenURL      string   `json:"tokenURL,omitempty"`
+	ClientID      string   `json:"clientID,omitempty"`
+	ClientSecret  string   `json:"clientSecret,omitempty"`
+	TokenType     string   `json:"tokenType,omitempty"`
+	ExpiresAtUnix int64    `json:"expiresAtUnix,omitempty"`
+	Scopes        []string `json:"scopes,omitempty"`
+}
+
+func (g MCPOAuthGrant) Empty() bool {
+	return g.AccessToken == "" &&
+		g.RefreshToken == "" &&
+		g.TokenURL == "" &&
+		g.ClientID == "" &&
+		g.ClientSecret == "" &&
+		g.TokenType == "" &&
+		g.ExpiresAtUnix == 0 &&
+		len(g.Scopes) == 0
+}
+
+func (g MCPOAuthGrant) CanRefresh() bool {
+	return g.RefreshToken != "" && g.TokenURL != ""
+}
+
+func (g MCPOAuthGrant) AuthorizationScheme() string {
+	if g.TokenType != "" {
+		return g.TokenType
+	}
+	return "Bearer"
+}
+
+func cloneOAuth(g *MCPOAuthGrant) *MCPOAuthGrant {
+	if g == nil || g.Empty() {
+		return nil
+	}
+	out := *g
+	out.Scopes = append([]string(nil), g.Scopes...)
+	return &out
 }
 
 // Sealed renders the document for the vault, or empty when there is nothing to
@@ -78,6 +133,7 @@ func ReadMCPCredentials(sealed string) MCPCredentials {
 	if err := json.Unmarshal([]byte(sealed), &c); err != nil || c.Empty() {
 		return MCPCredentials{Token: sealed}
 	}
+	c.OAuth = cloneOAuth(c.OAuth)
 	return c
 }
 
@@ -96,6 +152,7 @@ absent, and an empty non-nil map is a removal.
 */
 type MCPCredentialPatch struct {
 	Token      *string
+	OAuth      *MCPOAuthGrant
 	Env        map[string]string
 	ConfigFile *string
 }
@@ -105,6 +162,15 @@ func (p MCPCredentialPatch) Apply(stored MCPCredentials) MCPCredentials {
 	out := stored
 	if p.Token != nil {
 		out.Token = *p.Token
+		if *p.Token != "" {
+			out.OAuth = nil
+		}
+	}
+	if p.OAuth != nil {
+		out.OAuth = cloneOAuth(p.OAuth)
+		if out.OAuth != nil {
+			out.Token = ""
+		}
 	}
 	if p.Env != nil {
 		out.Env = maps.Clone(p.Env)
@@ -118,7 +184,8 @@ func (p MCPCredentialPatch) Apply(stored MCPCredentials) MCPCredentials {
 // Empty reports that nothing is left to keep — which is a removal to be
 // carried out, not a write to be skipped.
 func (c MCPCredentials) Empty() bool {
-	return c.Token == "" && len(c.Env) == 0 && c.ConfigFile == ""
+	return c.Token == "" && (c.OAuth == nil || c.OAuth.Empty()) &&
+		len(c.Env) == 0 && c.ConfigFile == ""
 }
 
 /*
@@ -136,9 +203,9 @@ visible and asks for itself.
 */
 func (c MCPCredentials) ForTransport(transport string) MCPCredentials {
 	if transport == TransportStdio {
-		return MCPCredentials{Env: c.Env, ConfigFile: c.ConfigFile}
+		return MCPCredentials{Env: maps.Clone(c.Env), ConfigFile: c.ConfigFile}
 	}
-	return MCPCredentials{Token: c.Token}
+	return MCPCredentials{Token: c.Token, OAuth: cloneOAuth(c.OAuth)}
 }
 
 /*

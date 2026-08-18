@@ -65,7 +65,10 @@ func (s *Server) PutMCPServer(ctx context.Context, req openapi.PutMCPServerReque
 		address without re-entering a secret they do not have. Defaulting
 		either to empty here would turn every edit into a quiet erasure.
 	*/
-	creds := domain.MCPCredentialPatch{Token: req.Body.Token}
+	creds := domain.MCPCredentialPatch{
+		Token: req.Body.Token,
+		OAuth: oauthGrantFromRequest(req.Body.Oauth),
+	}
 	if req.Body.Env != nil {
 		creds.Env = *req.Body.Env
 	}
@@ -80,6 +83,25 @@ func (s *Server) PutMCPServer(ctx context.Context, req openapi.PutMCPServerReque
 		}, nil
 	}
 	return openapi.PutMCPServer204Response{}, nil
+}
+
+func oauthGrantFromRequest(in *openapi.MCPOAuthGrant) *domain.MCPOAuthGrant {
+	if in == nil {
+		return nil
+	}
+	grant := domain.MCPOAuthGrant{
+		AccessToken:   valueOr(in.AccessToken),
+		RefreshToken:  valueOr(in.RefreshToken),
+		TokenURL:      valueOr(in.TokenURL),
+		ClientID:      valueOr(in.ClientID),
+		ClientSecret:  valueOr(in.ClientSecret),
+		TokenType:     valueOr(in.TokenType),
+		ExpiresAtUnix: valueOr(in.ExpiresAtUnix),
+	}
+	if in.Scopes != nil {
+		grant.Scopes = append([]string(nil), (*in.Scopes)...)
+	}
+	return &grant
 }
 
 func (s *Server) DeleteMCPServer(ctx context.Context, req openapi.DeleteMCPServerRequestObject) (openapi.DeleteMCPServerResponseObject, error) {

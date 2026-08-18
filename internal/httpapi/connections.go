@@ -81,6 +81,7 @@ func (s *Server) ListIntegrations(ctx context.Context, _ openapi.ListIntegration
 			Name: srv.Name, Args: &srv.Args, Enabled: srv.Enabled,
 			Transport:     ptr(openapi.Transport(srv.TransportOf())),
 			HasSecret:     ptr(srv.HasSecret),
+			HasOAuth:      ptr(srv.HasOAuth),
 			HasVariables:  ptr(srv.HasVariables),
 			HasConfigFile: ptr(srv.HasConfigFile),
 			Managed:       ptr(true),

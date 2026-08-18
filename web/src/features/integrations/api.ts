@@ -3,6 +3,7 @@ import { api, unwrap } from "@/lib/api/client";
 import type { components } from "@/lib/api/schema.gen";
 
 export type MCPServer = components["schemas"]["MCPServer"];
+export type MCPOAuthGrant = components["schemas"]["MCPOAuthGrant"];
 export type ModelProvider = components["schemas"]["ModelProvider"];
 export type IntegrationHealth = components["schemas"]["IntegrationHealth"];
 
@@ -37,6 +38,12 @@ export function usePutMCPServer() {
        */
       token?: string;
       /**
+       * Absent leaves the stored OAuth grant; an empty object removes it.
+       * A non-empty grant becomes the active HTTP credential and replaces a
+       * stored bearer.
+       */
+      oauth?: MCPOAuthGrant;
+      /**
        * Variables a local server is given. Omitted when the field was left
        * alone, because an empty object means "clear them" and an absent one
        * means "leave what is stored" — an edit to a command must not silently
@@ -67,6 +74,7 @@ export function usePutMCPServer() {
             // Omitted rather than emptied: an empty one would read as
             // "clear it", and correcting a URL must not drop the token.
             token: input.token,
+            oauth: input.oauth,
             env: input.env,
             configFile: input.configFile,
             configFileEnv: input.configFileEnv,

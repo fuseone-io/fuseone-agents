@@ -2078,6 +2078,13 @@ paths:
                     Bearer token for a remote server. Omit to keep the stored
                     one — correcting a URL must not demand re-entering a secret
                     nobody has to hand.
+                oauth:
+                  allOf: [{ $ref: '#/components/schemas/MCPOAuthGrant' }]
+                  description: >
+                    OAuth grant for a remote server. Omit to keep the stored
+                    grant. Send an empty object to clear it. A non-empty grant
+                    becomes the active HTTP credential and replaces a stored
+                    bearer token.
                 env:
                   type: object
                   additionalProperties: { type: string }
@@ -3641,6 +3648,35 @@ components:
         which is a far larger thing to hand somebody than a URL.
       enum: [stdio, http]
 
+    MCPOAuthGrant:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: Current OAuth access token. Never returned by a listing.
+        refreshToken:
+          type: string
+          description: Refresh token used by the worker when the access token expires.
+        tokenURL:
+          type: string
+          description: OAuth token endpoint.
+        clientID:
+          type: string
+          description: Client identifier for refresh requests.
+        clientSecret:
+          type: string
+          description: Client secret for refresh requests. Never returned by a listing.
+        tokenType:
+          type: string
+          description: Authorization scheme. Defaults to Bearer.
+        expiresAtUnix:
+          type: integer
+          format: int64
+          description: Unix second when the access token expires. Zero means unknown.
+        scopes:
+          type: array
+          items: { type: string }
+
     MCPServer:
       type: object
       required: [name, enabled]
@@ -3661,6 +3697,11 @@ components:
         hasSecret:
           type: boolean
           description: That a credential document is stored, never what it is.
+        hasOAuth:
+          type: boolean
+          description: >
+            The sealed credential document includes an OAuth grant for a
+            remote server. The grant never comes back through this API.
         hasVariables:
           type: boolean
           description: >

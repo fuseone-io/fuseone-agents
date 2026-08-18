@@ -48,6 +48,8 @@ type storedServer struct {
 	HasConfigFile bool `json:"hasConfigFile,omitempty"`
 	// HasVariables is the same read-model hint for local process variables.
 	HasVariables bool `json:"hasVariables,omitempty"`
+	// HasOAuth is the same read-model hint for a remote OAuth grant.
+	HasOAuth bool `json:"hasOAuth,omitempty"`
 	/*
 		Surface is which of the server's tools this installation brought in.
 
@@ -109,6 +111,7 @@ func (i *Integrations) MCPServers(ctx context.Context) ([]domain.MCPServer, erro
 			Surface:               stored.Surface,
 			AcceptsLocalExecution: stored.AcceptsLocalExecution,
 			HasSecret:             row.HasSecret,
+			HasOAuth:              stored.HasOAuth,
 			HasVariables:          hasVariables,
 			HasConfigFile:         stored.HasConfigFile,
 			ConfigFileEnv:         configFileEnv(stored.ConfigFileEnv),
@@ -193,6 +196,7 @@ func (i *Integrations) PutMCPServer(
 				Args: server.Args, URL: server.URL, Surface: surface,
 				ConfigFileEnv:         configEnv,
 				HasVariables:          len(merged.Env) > 0,
+				HasOAuth:              merged.OAuth != nil && !merged.OAuth.Empty(),
 				HasConfigFile:         merged.ConfigFile != "",
 				AcceptsLocalExecution: server.AcceptsLocalExecution,
 			})
@@ -219,8 +223,10 @@ func (i *Integrations) PutMCPServer(
 					// reads its newer half.
 					"transport": transport, "command": server.Command, "url": server.URL,
 					"enabled": server.Enabled, "tokenChanged": given.Token != nil,
+					"oauthChanged":          given.OAuth != nil,
 					"acceptsLocalExecution": server.AcceptsLocalExecution,
 					"variables":             len(merged.Env),
+					"hasOAuth":              merged.OAuth != nil && !merged.OAuth.Empty(),
 					"configFileChanged":     given.ConfigFile != nil,
 					"hasConfigFile":         merged.ConfigFile != "",
 					"configFileEnv":         configEnv,

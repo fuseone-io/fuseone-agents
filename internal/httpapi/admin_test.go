@@ -21,6 +21,7 @@ type fakeAdmin struct {
 
 	putServer   domain.MCPServer
 	putToken    string
+	putOAuth    *domain.MCPOAuthGrant
 	putEnv      map[string]string
 	token       string
 	putProvider domain.ModelProvider
@@ -43,6 +44,10 @@ func (f *fakeAdmin) PutMCPServer(
 	f.putServer, f.putBy, f.putEnv = s, by, creds.Env
 	if creds.Token != nil {
 		f.putToken = *creds.Token
+	}
+	if creds.OAuth != nil {
+		copy := *creds.OAuth
+		f.putOAuth = &copy
 	}
 	return f.err
 }
@@ -190,6 +195,45 @@ func TestPutMCPServer_attributesTheChangeToTheCaller(t *testing.T) {
 	}
 	if admin.putServer.Command != "bin/devstack" || len(admin.putServer.Args) != 1 {
 		t.Errorf("stored = %+v, want the command and its arguments", admin.putServer)
+	}
+}
+
+func TestPutMCPServer_passesOAuthGrantToTheStore(t *testing.T) {
+	t.Parallel()
+
+	admin := &fakeAdmin{}
+	scopes := []string{"sheets.readonly"}
+	expires := int64(1893456000)
+	resp, err := serverWith(t, admin).PutMCPServer(as(domain.RoleCurator), openapi.PutMCPServerRequestObject{
+		Name: "google-workspace",
+		Body: &openapi.PutMCPServerJSONRequestBody{
+			Transport: ptr(openapi.Http),
+			Url:       ptr("https://mcp.example.com/google"),
+			Oauth: &openapi.MCPOAuthGrant{
+				AccessToken:   ptr("access"),
+				RefreshToken:  ptr("refresh"),
+				TokenURL:      ptr("https://issuer.example/token"),
+				ClientID:      ptr("client"),
+				ClientSecret:  ptr("secret"),
+				TokenType:     ptr("Bearer"),
+				ExpiresAtUnix: ptr(expires),
+				Scopes:        &scopes,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+	if _, ok := resp.(openapi.PutMCPServer204Response); !ok {
+		t.Fatalf("response = %T, want 204", resp)
+	}
+	if admin.putOAuth == nil ||
+		admin.putOAuth.AccessToken != "access" ||
+		admin.putOAuth.RefreshToken != "refresh" ||
+		admin.putOAuth.ClientSecret != "secret" ||
+		admin.putOAuth.ExpiresAtUnix != expires ||
+		admin.putOAuth.Scopes[0] != "sheets.readonly" {
+		t.Fatalf("oauth = %+v, want the request grant passed to admin", admin.putOAuth)
 	}
 }
 

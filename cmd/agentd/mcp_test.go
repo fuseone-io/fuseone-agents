@@ -1,6 +1,9 @@
 package main
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"slices"
 	"strings"
@@ -165,6 +168,137 @@ func TestCommandFor_aConfiguredVariable_winsOverTheOneCopiedThrough(t *testing.T
 	}
 	if last != "PATH=/opt/tools/bin" {
 		t.Errorf("PATH resolves to %q, want the configured one", last)
+	}
+}
+
+func TestAuthenticatedClient_sendsBearerTokensToRemoteServers(t *testing.T) {
+	t.Parallel()
+
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "Bearer ghp_secret" {
+			t.Errorf("Authorization = %q, want the bearer token", got)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(remote.Close)
+
+	client, err := authenticatedClient(domain.MCPCredentials{Token: "ghp_secret"})
+	if err != nil {
+		t.Fatalf("authenticatedClient: %v", err)
+	}
+	resp, err := client.Get(remote.URL)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	_ = resp.Body.Close()
+}
+
+func TestAuthenticatedClient_oauthWinsOverABearerLeftBehind(t *testing.T) {
+	t.Parallel()
+
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "Bearer oauth_access" {
+			t.Errorf("Authorization = %q, want the oauth access token", got)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(remote.Close)
+
+	client, err := authenticatedClient(domain.MCPCredentials{
+		Token: "ghp_stale",
+		OAuth: &domain.MCPOAuthGrant{
+			AccessToken: "oauth_access",
+		},
+	})
+	if err != nil {
+		t.Fatalf("authenticatedClient: %v", err)
+	}
+	resp, err := client.Get(remote.URL)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	_ = resp.Body.Close()
+}
+
+func TestAuthenticatedClient_refreshesAnExpiredOAuthGrant(t *testing.T) {
+	t.Parallel()
+
+	var refreshed bool
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/token":
+			refreshed = true
+			if err := r.ParseForm(); err != nil {
+				t.Fatalf("ParseForm: %v", err)
+			}
+			if r.Form.Get("grant_type") != "refresh_token" ||
+				r.Form.Get("refresh_token") != "refresh" ||
+				r.Form.Get("client_id") != "client" ||
+				r.Form.Get("client_secret") != "secret" {
+				t.Fatalf("refresh form = %v, want the stored grant", r.Form)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"access_token":  "fresh",
+				"refresh_token": "new-refresh",
+				"token_type":    "Bearer",
+				"expires_in":    3600,
+				"scope":         "read write",
+			})
+		case "/resource":
+			if got := r.Header.Get("Authorization"); got != "Bearer fresh" {
+				t.Errorf("Authorization = %q, want the refreshed token", got)
+			}
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(remote.Close)
+
+	client, err := authenticatedClient(domain.MCPCredentials{
+		OAuth: &domain.MCPOAuthGrant{
+			AccessToken:   "expired",
+			RefreshToken:  "refresh",
+			TokenURL:      remote.URL + "/token",
+			ClientID:      "client",
+			ClientSecret:  "secret",
+			ExpiresAtUnix: time.Now().Add(-time.Minute).Unix(),
+		},
+	})
+	if err != nil {
+		t.Fatalf("authenticatedClient: %v", err)
+	}
+	resp, err := client.Get(remote.URL + "/resource")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	_ = resp.Body.Close()
+	if !refreshed {
+		t.Fatal("expired oauth grant was used without refresh")
+	}
+}
+
+func TestAuthenticatedClient_refusesAnExpiredOAuthGrantItCannotRefresh(t *testing.T) {
+	t.Parallel()
+
+	remote := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("request reached the server with an expired unrefreshable grant")
+	}))
+	t.Cleanup(remote.Close)
+
+	client, err := authenticatedClient(domain.MCPCredentials{
+		OAuth: &domain.MCPOAuthGrant{
+			AccessToken:   "expired",
+			ExpiresAtUnix: time.Now().Add(-time.Minute).Unix(),
+		},
+	})
+	if err != nil {
+		t.Fatalf("authenticatedClient: %v", err)
+	}
+	if _, err := client.Get(remote.URL); err == nil {
+		t.Fatal("Get succeeded with an expired grant that cannot refresh")
+	} else if !strings.Contains(err.Error(), "expired") {
+		t.Fatalf("Get error = %v, want the expired grant named", err)
 	}
 }
 

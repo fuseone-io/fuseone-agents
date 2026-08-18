@@ -243,6 +243,99 @@ func TestPutMCPServer_remote_sealsItsTokenAndNeverListsIt(t *testing.T) {
 	}
 }
 
+func TestPutMCPServer_remote_sealsOAuthAndNeverListsIt(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+
+	grant := domain.MCPOAuthGrant{
+		AccessToken: "access", RefreshToken: "refresh",
+		TokenURL: "https://issuer.example/token", ClientID: "client",
+		ClientSecret: "secret", Scopes: []string{"sheets.readonly"},
+	}
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, domain.MCPServer{
+		Name: "google-workspace", Transport: domain.TransportHTTP,
+		URL: "https://mcp.example.com/google", Enabled: true,
+	}, domain.MCPCredentialPatch{OAuth: &grant}); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+
+	servers, err := i.MCPServers(ctx)
+	if err != nil {
+		t.Fatalf("MCPServers: %v", err)
+	}
+	if !servers[0].HasSecret || !servers[0].HasOAuth {
+		t.Fatalf("server = %+v, want only presence of the oauth grant", servers[0])
+	}
+	creds, err := i.MCPCredentials(ctx, "google-workspace")
+	if err != nil {
+		t.Fatalf("MCPCredentials: %v", err)
+	}
+	if creds.OAuth == nil || creds.OAuth.AccessToken != "access" ||
+		creds.OAuth.RefreshToken != "refresh" ||
+		creds.OAuth.ClientSecret != "secret" {
+		t.Fatalf("oauth = %+v, want it back only through the credential reader", creds.OAuth)
+	}
+}
+
+func TestPutMCPServer_writingOAuthReplacesStoredBearer(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+	server := domain.MCPServer{
+		Name: "remote", Transport: domain.TransportHTTP,
+		URL: "https://tools.example.com/mcp", Enabled: true,
+	}
+
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, server,
+		domain.MCPCredentialPatch{Token: ptr("ghp_stale")}); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, server,
+		domain.MCPCredentialPatch{OAuth: &domain.MCPOAuthGrant{AccessToken: "access"}}); err != nil {
+		t.Fatalf("PutMCPServer oauth: %v", err)
+	}
+
+	creds, err := i.MCPCredentials(ctx, "remote")
+	if err != nil {
+		t.Fatalf("MCPCredentials: %v", err)
+	}
+	if creds.Token != "" || creds.OAuth == nil {
+		t.Fatalf("creds = %+v, want oauth to replace the bearer", creds)
+	}
+}
+
+func TestPutMCPServer_writingBearerReplacesStoredOAuth(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+	server := domain.MCPServer{
+		Name: "remote", Transport: domain.TransportHTTP,
+		URL: "https://tools.example.com/mcp", Enabled: true,
+	}
+
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, server,
+		domain.MCPCredentialPatch{OAuth: &domain.MCPOAuthGrant{AccessToken: "access"}}); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, server,
+		domain.MCPCredentialPatch{Token: ptr("ghp_new")}); err != nil {
+		t.Fatalf("PutMCPServer bearer: %v", err)
+	}
+
+	creds, err := i.MCPCredentials(ctx, "remote")
+	if err != nil {
+		t.Fatalf("MCPCredentials: %v", err)
+	}
+	if creds.Token != "ghp_new" || creds.OAuth != nil {
+		t.Fatalf("creds = %+v, want bearer to replace oauth", creds)
+	}
+	servers, err := i.MCPServers(ctx)
+	if err != nil {
+		t.Fatalf("MCPServers: %v", err)
+	}
+	if servers[0].HasOAuth {
+		t.Fatalf("server = %+v, want oauth presence cleared", servers[0])
+	}
+}
+
 func TestPutMCPServer_storedBeforeTransportsExisted_readsAsLocal(t *testing.T) {
 	i := newIntegrations(t)
 	ctx := context.Background()
@@ -522,6 +615,39 @@ func TestPutMCPServer_clearingTheToken_actuallyRemovesIt(t *testing.T) {
 	}
 }
 
+func TestPutMCPServer_clearingOAuth_actuallyRemovesIt(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+	server := domain.MCPServer{
+		Name: "remote", Transport: domain.TransportHTTP,
+		URL: "https://tools.example.com/mcp", Enabled: true,
+	}
+
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, server,
+		domain.MCPCredentialPatch{OAuth: &domain.MCPOAuthGrant{AccessToken: "access"}}); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, server,
+		domain.MCPCredentialPatch{OAuth: &domain.MCPOAuthGrant{}}); err != nil {
+		t.Fatalf("PutMCPServer clearing: %v", err)
+	}
+
+	creds, err := i.MCPCredentials(ctx, "remote")
+	if err != nil {
+		t.Fatalf("MCPCredentials: %v", err)
+	}
+	if creds.OAuth != nil {
+		t.Fatalf("oauth = %+v; a revoked grant is still in the vault", creds.OAuth)
+	}
+	servers, err := i.MCPServers(ctx)
+	if err != nil {
+		t.Fatalf("MCPServers: %v", err)
+	}
+	if servers[0].HasSecret || servers[0].HasOAuth {
+		t.Fatalf("server = %+v, want no stored credential", servers[0])
+	}
+}
+
 func TestPutMCPServer_clearingTheConfigFile_removesOnlyThatFile(t *testing.T) {
 	i := newIntegrations(t)
 	ctx := context.Background()
@@ -609,6 +735,40 @@ func TestPutMCPServer_switchingToLocal_dropsTheBearerItCanNoLongerSend(t *testin
 	}
 	if creds.Token != "" {
 		t.Errorf("token = %q survived a switch to a shape that cannot send it", creds.Token)
+	}
+}
+
+func TestPutMCPServer_switchingToLocal_dropsOAuthItCanNoLongerSend(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, domain.MCPServer{
+		Name: "github", Transport: domain.TransportHTTP,
+		URL: "https://api.example.com/mcp", Enabled: true,
+	}, domain.MCPCredentialPatch{OAuth: &domain.MCPOAuthGrant{AccessToken: "access"}}); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, domain.MCPServer{
+		Name: "github", Transport: domain.TransportStdio,
+		Command: "/usr/bin/mcp-github", Enabled: true, AcceptsLocalExecution: true,
+	}, domain.MCPCredentialPatch{}); err != nil {
+		t.Fatalf("PutMCPServer switching: %v", err)
+	}
+
+	creds, err := i.MCPCredentials(ctx, "github")
+	if err != nil {
+		t.Fatalf("MCPCredentials: %v", err)
+	}
+	if creds.OAuth != nil {
+		t.Fatalf("oauth = %+v survived a switch to a shape that cannot send it", creds.OAuth)
+	}
+	servers, err := i.MCPServers(ctx)
+	if err != nil {
+		t.Fatalf("MCPServers: %v", err)
+	}
+	if servers[0].HasOAuth {
+		t.Fatalf("server = %+v, want oauth presence cleared", servers[0])
 	}
 }
 

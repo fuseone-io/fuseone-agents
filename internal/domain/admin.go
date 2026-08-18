@@ -98,6 +98,9 @@ type MCPServer struct {
 	URL string
 	// HasSecret reports that a credential document is stored, never what it is.
 	HasSecret bool
+	// HasOAuth reports that the credential document includes an OAuth grant
+	// for a remote server. The grant itself never comes back through the API.
+	HasOAuth bool
 	// HasVariables reports that the credential document includes environment
 	// variables for a local process.
 	HasVariables bool

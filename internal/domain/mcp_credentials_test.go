@@ -31,12 +31,17 @@ func TestMCPCredentials_survivesTheVaultAndComesBackWhole(t *testing.T) {
 
 	sealed := domain.MCPCredentials{
 		Token:      "ghp_something",
+		OAuth:      &domain.MCPOAuthGrant{AccessToken: "oauth_access", RefreshToken: "oauth_refresh", TokenURL: "https://issuer.example/token", ClientID: "client", ClientSecret: "secret", Scopes: []string{"sheets.readonly"}},
 		Env:        map[string]string{"GITHUB_TOKEN": "ghp_other"},
 		ConfigFile: "sources: []\n",
 	}.Sealed()
 
 	got := domain.ReadMCPCredentials(sealed)
 	if got.Token != "ghp_something" ||
+		got.OAuth == nil ||
+		got.OAuth.AccessToken != "oauth_access" ||
+		got.OAuth.RefreshToken != "oauth_refresh" ||
+		got.OAuth.Scopes[0] != "sheets.readonly" ||
 		got.Env["GITHUB_TOKEN"] != "ghp_other" ||
 		got.ConfigFile != "sources: []\n" {
 		t.Errorf("got %+v, want every sealed shape back", got)
@@ -139,6 +144,44 @@ func TestApply_anEmptyTokenClearsIt_andAnAbsentOneDoesNot(t *testing.T) {
 }
 
 /*
+Bearer and OAuth are two HTTP credential modes, not two credentials to send.
+
+Keeping both after a rotation leaves old material sealed and invisible. The
+active mode is the one the write names; removing one mode does not remove the
+other by accident, because revocation also has to say what it revokes.
+*/
+func TestApply_bearerAndOAuthReplaceEachOtherWhenWritten(t *testing.T) {
+	t.Parallel()
+
+	oauth := domain.MCPOAuthGrant{
+		AccessToken: "access", RefreshToken: "refresh",
+		TokenURL: "https://issuer.example/token",
+	}
+	withOAuth := (domain.MCPCredentialPatch{OAuth: &oauth}).Apply(
+		domain.MCPCredentials{Token: "ghp_stored"})
+	if withOAuth.Token != "" || withOAuth.OAuth == nil || withOAuth.OAuth.AccessToken != "access" {
+		t.Fatalf("oauth write = %+v, want it to replace the bearer", withOAuth)
+	}
+
+	withBearer := (domain.MCPCredentialPatch{Token: ptr("ghp_new")}).Apply(withOAuth)
+	if withBearer.Token != "ghp_new" || withBearer.OAuth != nil {
+		t.Fatalf("bearer write = %+v, want it to replace oauth", withBearer)
+	}
+}
+
+func TestApply_anEmptyOAuthGrantClearsIt_andAnAbsentOneDoesNot(t *testing.T) {
+	t.Parallel()
+	stored := domain.MCPCredentials{OAuth: &domain.MCPOAuthGrant{AccessToken: "access"}}
+
+	if kept := (domain.MCPCredentialPatch{}).Apply(stored); kept.OAuth == nil {
+		t.Fatal("omitted oauth cleared the stored grant")
+	}
+	if cleared := (domain.MCPCredentialPatch{OAuth: &domain.MCPOAuthGrant{}}).Apply(stored); cleared.OAuth != nil {
+		t.Fatalf("oauth = %+v, want an empty grant to clear it", cleared.OAuth)
+	}
+}
+
+/*
 A credential is shaped to the transport that can use it.
 
 A bearer belongs to an address and a program the worker starts has none;
@@ -149,12 +192,13 @@ that can never send it — invisible, unusable, and never revoked.
 func TestForTransport_switchingShape_dropsTheHalfThatCannotBeUsed(t *testing.T) {
 	t.Parallel()
 	both := domain.MCPCredentials{
-		Token: "ghp_stored", Env: map[string]string{"GITHUB_TOKEN": "ghp_other"},
+		Token: "ghp_stored", OAuth: &domain.MCPOAuthGrant{AccessToken: "access"},
+		Env:        map[string]string{"GITHUB_TOKEN": "ghp_other"},
 		ConfigFile: "sources: []\n",
 	}
 
-	if local := both.ForTransport(domain.TransportStdio); local.Token != "" {
-		t.Errorf("a local server kept a bearer token: %+v", local)
+	if local := both.ForTransport(domain.TransportStdio); local.Token != "" || local.OAuth != nil {
+		t.Errorf("a local server kept a remote credential: %+v", local)
 	} else if local.ConfigFile == "" {
 		t.Errorf("a local server dropped its managed config file: %+v", local)
 	}
@@ -162,6 +206,8 @@ func TestForTransport_switchingShape_dropsTheHalfThatCannotBeUsed(t *testing.T) 
 		t.Errorf("a remote server kept process variables: %+v", remote)
 	} else if remote.ConfigFile != "" {
 		t.Errorf("a remote server kept a local config file: %+v", remote)
+	} else if remote.OAuth == nil {
+		t.Errorf("a remote server dropped its oauth grant: %+v", remote)
 	}
 }
 

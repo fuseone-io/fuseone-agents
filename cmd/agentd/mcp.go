@@ -4,14 +4,18 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -68,9 +72,13 @@ func transportFor(
 ) (mcp.Transport, func(), error) {
 	switch server.TransportOf() {
 	case domain.TransportHTTP:
+		client, err := authenticatedClient(creds)
+		if err != nil {
+			return nil, noop, fmt.Errorf("%s: prepare HTTP credential: %w", server.Name, err)
+		}
 		return &mcp.StreamableClientTransport{
 			Endpoint:   server.URL,
-			HTTPClient: bearerClient(creds.Token),
+			HTTPClient: client,
 		}, noop, nil
 
 	case domain.TransportStdio:
@@ -98,18 +106,27 @@ func (s cleanupSession) Close() error {
 	return err
 }
 
-// bearerClient carries the token on every request to a remote server. A local
-// server never sees it: it is a bearer for an address, and a program started
-// inside the worker has no address to be a bearer for.
+// authenticatedClient carries the server's remote credential on every request.
+// A local server never sees it: it is a credential for an address, and a
+// program started inside the worker has no address to receive it for.
 //
 // A client of its own rather than the shared default: the token belongs to one
 // server, and a transport installed on http.DefaultClient would send it to
 // everything this process talks to.
-func bearerClient(token string) *http.Client {
-	if token == "" {
-		return nil
+func authenticatedClient(creds domain.MCPCredentials) (*http.Client, error) {
+	if creds.OAuth != nil && !creds.OAuth.Empty() {
+		if creds.OAuth.AccessToken == "" && !creds.OAuth.CanRefresh() {
+			return nil, fmt.Errorf("oauth grant has no access token and cannot refresh")
+		}
+		return &http.Client{
+			Transport: newOAuthTransport(*creds.OAuth),
+			Timeout:   60 * time.Second,
+		}, nil
 	}
-	return &http.Client{Transport: bearer{token: token}, Timeout: 60 * time.Second}
+	if creds.Token == "" {
+		return nil, nil
+	}
+	return &http.Client{Transport: bearer{token: creds.Token}, Timeout: 60 * time.Second}, nil
 }
 
 type bearer struct{ token string }
@@ -120,6 +137,132 @@ func (b bearer) RoundTrip(r *http.Request) (*http.Response, error) {
 	out := r.Clone(r.Context())
 	out.Header.Set("Authorization", "Bearer "+b.token)
 	return http.DefaultTransport.RoundTrip(out)
+}
+
+type oauthTransport struct {
+	mu      sync.Mutex
+	grant   domain.MCPOAuthGrant
+	base    http.RoundTripper
+	refresh *http.Client
+}
+
+func newOAuthTransport(grant domain.MCPOAuthGrant) *oauthTransport {
+	return &oauthTransport{
+		grant: grant,
+		base:  http.DefaultTransport,
+		refresh: &http.Client{
+			Timeout: 30 * time.Second,
+		},
+	}
+}
+
+func (t *oauthTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	token, scheme, err := t.token(r.Context())
+	if err != nil {
+		return nil, err
+	}
+	out := r.Clone(r.Context())
+	out.Header.Set("Authorization", scheme+" "+token)
+	return t.base.RoundTrip(out)
+}
+
+func (t *oauthTransport) token(ctx context.Context) (string, string, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if t.grant.AccessToken != "" && !oauthExpired(t.grant) {
+		return t.grant.AccessToken, t.grant.AuthorizationScheme(), nil
+	}
+	if !t.grant.CanRefresh() {
+		return "", "", fmt.Errorf("oauth access token expired and no refresh token is configured")
+	}
+	next, err := refreshOAuthGrant(ctx, t.refresh, t.grant)
+	if err != nil {
+		return "", "", err
+	}
+	t.grant = next
+	return t.grant.AccessToken, t.grant.AuthorizationScheme(), nil
+}
+
+func oauthExpired(grant domain.MCPOAuthGrant) bool {
+	if grant.ExpiresAtUnix == 0 {
+		return false
+	}
+	return time.Now().Add(time.Minute).Unix() >= grant.ExpiresAtUnix
+}
+
+func refreshOAuthGrant(
+	ctx context.Context, client *http.Client, grant domain.MCPOAuthGrant,
+) (domain.MCPOAuthGrant, error) {
+	form := url.Values{}
+	form.Set("grant_type", "refresh_token")
+	form.Set("refresh_token", grant.RefreshToken)
+	if grant.ClientID != "" {
+		form.Set("client_id", grant.ClientID)
+	}
+	if grant.ClientSecret != "" {
+		form.Set("client_secret", grant.ClientSecret)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, grant.TokenURL, strings.NewReader(form.Encode()))
+	if err != nil {
+		return domain.MCPOAuthGrant{}, fmt.Errorf("oauth refresh request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return domain.MCPOAuthGrant{}, fmt.Errorf("oauth refresh: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return domain.MCPOAuthGrant{}, fmt.Errorf("oauth refresh: %s", resp.Status)
+	}
+
+	var body struct {
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+		TokenType    string `json:"token_type"`
+		ExpiresIn    int64  `json:"expires_in"`
+		Scope        string `json:"scope"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&body); err != nil {
+		return domain.MCPOAuthGrant{}, fmt.Errorf("oauth refresh response: %w", err)
+	}
+	if body.AccessToken == "" {
+		return domain.MCPOAuthGrant{}, fmt.Errorf("oauth refresh response omitted access_token")
+	}
+
+	/*
+		What comes back lives in this process and nowhere else.
+
+		A provider that rotates refresh tokens hands back a new one here, and
+		the old one is spent the moment it is used. This keeps the new one in
+		memory; the vault still holds the old. So a worker restart sends a
+		consumed token, and the honest expectation is not "one refresh fails" —
+		OAuth 2.1 tells providers to read a reused refresh token as theft and
+		revoke the whole grant family. Google, Microsoft, Slack and Atlassian
+		all rotate, and all four are declared oauth2 in this catalogue.
+
+		Persisting it is not a nicety to add later: it is what makes this safe
+		against the providers it was built for. It needs the worker to write to
+		the vault and to leave a record of having done so, which is a design
+		this slice deliberately did not make up on the way past.
+	*/
+	next := grant
+	next.AccessToken = body.AccessToken
+	if body.RefreshToken != "" {
+		next.RefreshToken = body.RefreshToken
+	}
+	if strings.TrimSpace(body.TokenType) != "" {
+		next.TokenType = strings.TrimSpace(body.TokenType)
+	}
+	if body.ExpiresIn > 0 {
+		next.ExpiresAtUnix = time.Now().Add(time.Duration(body.ExpiresIn) * time.Second).Unix()
+	}
+	if strings.TrimSpace(body.Scope) != "" {
+		next.Scopes = strings.Fields(body.Scope)
+	}
+	return next, nil
 }
 
 /*
