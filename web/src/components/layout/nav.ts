@@ -1,4 +1,5 @@
 import {
+  BookOpen,
   Activity,
   Bot,
   Hand,
@@ -89,6 +90,7 @@ export const NAV: NavGroup[] = [
         icon: Plug,
         permission: "tool:read",
       },
+      { to: "/manual", label: "nav.manual", icon: BookOpen },
       {
         to: "/admin",
         label: "nav.admin",
@@ -107,6 +109,7 @@ export const NAV: NavGroup[] = [
  * same thing.
  */
 export const PAGE_ICONS: Record<string, LucideIcon> = {
+  manual: BookOpen,
   overview: LayoutDashboard,
   agents: Bot,
   runs: Activity,
@@ -122,6 +125,7 @@ export const PAGE_ICONS: Record<string, LucideIcon> = {
  *  navigation cannot drift into calling one screen two things. */
 export const PAGE_TITLES: Record<string, string> = {
   overview: "nav.overview",
+  manual: "nav.manual",
   agents: "nav.agents",
   runs: "nav.runs",
   approvals: "nav.approvals",

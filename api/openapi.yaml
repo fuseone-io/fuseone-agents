@@ -56,6 +56,55 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Branding' }
 
+  /manual:
+    get:
+      tags: [system]
+      operationId: getManual
+      summary: The manual's index
+      description: |
+        The pages the console can show, in the order it shows them.
+
+        Authenticated, unlike branding. Branding is public because a sign-in
+        screen needs it before there is a session; the manual is read from
+        inside the console by somebody who already signed in, so an anonymous
+        endpoint would be surface nobody asked for. That the same text is
+        public on GitHub is not a reason to serve it here without a session.
+      parameters:
+        - $ref: '#/components/parameters/ManualLocale'
+      responses:
+        '200':
+          description: Every page, ordered.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ManualIndex' }
+
+  /manual/{slug}:
+    get:
+      tags: [system]
+      operationId: getManualPage
+      summary: One page of the manual
+      description: |
+        Markdown, not HTML. Rendering belongs to the reader: a server that
+        hands out HTML has to be trusted about what it put in it, and the
+        console would have no way to tell content from markup.
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string, maxLength: 120 }
+        - $ref: '#/components/parameters/ManualLocale'
+      responses:
+        '200':
+          description: The page, as it was written.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ManualPage' }
+        '404':
+          description: No page by that slug in this locale.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
   /agents:
     get:
       tags: [agents]
@@ -3066,6 +3115,18 @@ components:
         of a human rather than the human alone.
 
   parameters:
+    ManualLocale:
+      name: locale
+      in: query
+      required: false
+      description: |
+        Which translation to read. An unknown locale falls back rather than
+        failing: a reader whose browser asks for something the manual does not
+        have should get the manual, not an error.
+      schema:
+        type: string
+        enum: [pt-BR, en-US]
+
     RunId:
       name: runId
       in: path
@@ -3121,6 +3182,40 @@ components:
           schema: { $ref: '#/components/schemas/Problem' }
 
   schemas:
+    ManualIndex:
+      type: object
+      description: What the manual offers, in the locale that was asked for.
+      required: [locale, pages]
+      properties:
+        locale:
+          type: string
+          description: The locale actually served, which may not be the one asked for.
+        pages:
+          type: array
+          items: { $ref: '#/components/schemas/ManualEntry' }
+
+    ManualEntry:
+      type: object
+      required: [slug, title, summary, order]
+      properties:
+        slug: { type: string }
+        title: { type: string }
+        summary: { type: string }
+        order: { type: integer }
+
+    ManualPage:
+      type: object
+      description: |
+        One page. `body` is Markdown; an internal link in it names another
+        slug of this manual and never a path in the repository.
+      required: [slug, title, summary, order, body]
+      properties:
+        slug: { type: string }
+        title: { type: string }
+        summary: { type: string }
+        order: { type: integer }
+        body: { type: string }
+
     Branding:
       type: object
       description: |

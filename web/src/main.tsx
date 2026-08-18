@@ -24,6 +24,8 @@ import { RunsPage } from "@/features/runs/runs-page";
 import { RunDetailPage } from "@/features/runs/run-detail-page";
 import { ApprovalsPage } from "@/features/approvals/approvals-page";
 import { CostPage } from "@/features/cost/cost-page";
+import { ManualIndexPage } from "@/features/manual/manual-index-page";
+import { ManualReadPage } from "@/features/manual/manual-page";
 import { AdminPage } from "@/features/admin/admin-page";
 import { IntegrationsPage } from "@/features/integrations/integrations-page";
 import { MCPServerPage } from "@/features/integrations/mcp/mcp-server-page";
@@ -91,6 +93,8 @@ createRoot(document.getElementById("root")!).render(
                     path="/integrations/mcp/:name"
                     element={<MCPServerPage />}
                   />
+                  <Route path="/manual" element={<ManualIndexPage />} />
+                  <Route path="/manual/:slug" element={<ManualReadPage />} />
                   <Route path="/admin" element={<AdminPage />} />
                   <Route path="*" element={<NotFoundPage />} />
                 </Routes>

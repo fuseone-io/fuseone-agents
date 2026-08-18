@@ -26,6 +26,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/manual": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The manual's index
+         * @description The pages the console can show, in the order it shows them.
+         *
+         *     Authenticated, unlike branding. Branding is public because a sign-in
+         *     screen needs it before there is a session; the manual is read from
+         *     inside the console by somebody who already signed in, so an anonymous
+         *     endpoint would be surface nobody asked for. That the same text is
+         *     public on GitHub is not a reason to serve it here without a session.
+         */
+        get: operations["getManual"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/manual/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One page of the manual
+         * @description Markdown, not HTML. Rendering belongs to the reader: a server that
+         *     hands out HTML has to be trusted about what it put in it, and the
+         *     console would have no way to tell content from markup.
+         */
+        get: operations["getManualPage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents": {
         parameters: {
             query?: never;
@@ -1984,6 +2032,29 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description What the manual offers, in the locale that was asked for. */
+        ManualIndex: {
+            /** @description The locale actually served, which may not be the one asked for. */
+            locale: string;
+            pages: components["schemas"]["ManualEntry"][];
+        };
+        ManualEntry: {
+            slug: string;
+            title: string;
+            summary: string;
+            order: number;
+        };
+        /**
+         * @description One page. `body` is Markdown; an internal link in it names another
+         *     slug of this manual and never a path in the repository.
+         */
+        ManualPage: {
+            slug: string;
+            title: string;
+            summary: string;
+            order: number;
+            body: string;
+        };
         /**
          * @description What this installation presents as itself. Empty URLs mean "use the
          *     built-in mark"; an empty primary colour means "use the built-in palette".
@@ -3485,6 +3556,12 @@ export interface components {
         };
     };
     parameters: {
+        /**
+         * @description Which translation to read. An unknown locale falls back rather than
+         *     failing: a reader whose browser asks for something the manual does not
+         *     have should get the manual, not an error.
+         */
+        ManualLocale: "pt-BR" | "en-US";
         RunId: string;
         /** @description Company scope. A single value until multi-company (PRD 3.1). */
         CompanyScope: string;
@@ -3524,6 +3601,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Branding"];
+                };
+            };
+        };
+    };
+    getManual: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Which translation to read. An unknown locale falls back rather than
+                 *     failing: a reader whose browser asks for something the manual does not
+                 *     have should get the manual, not an error.
+                 */
+                locale?: components["parameters"]["ManualLocale"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every page, ordered. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualIndex"];
+                };
+            };
+        };
+    };
+    getManualPage: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Which translation to read. An unknown locale falls back rather than
+                 *     failing: a reader whose browser asks for something the manual does not
+                 *     have should get the manual, not an error.
+                 */
+                locale?: components["parameters"]["ManualLocale"];
+            };
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The page, as it was written. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualPage"];
+                };
+            };
+            /** @description No page by that slug in this locale. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };
