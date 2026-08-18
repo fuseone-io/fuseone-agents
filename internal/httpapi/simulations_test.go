@@ -10,6 +10,7 @@ import (
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/simulate"
 )
 
 // Simulating is how an agent earns its way out of Draft (FU-10). The two
@@ -201,6 +202,34 @@ func TestGetSimulation_withoutTheAgent_isNotFound(t *testing.T) {
 	}
 	if _, ok := resp.(openapi.GetSimulation404ApplicationProblemPlusJSONResponse); !ok {
 		t.Fatalf("response = %T, want not found", resp)
+	}
+}
+
+func TestSimulationCase_whenTheStoredOutcomeWasErased_omitsItAndNamesTheState(t *testing.T) {
+	t.Parallel()
+
+	ctx := gocontext.Background()
+	content := engine.NewMemoryContent()
+	ref, err := content.Put(ctx, "run-1", 2, []byte("The customer was refunded."))
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	if _, err := content.Erase(ctx, "run-1", "retention"); err != nil {
+		t.Fatalf("Erase: %v", err)
+	}
+
+	got := NewServer(ledger.NewMemory(), "test").
+		WithContent(content).
+		simulationCase(ctx, simulate.Case{
+			RunID: "run-1", Settled: simulate.SettledFinished,
+			Steps: 2, OutcomeRef: ref,
+		})
+
+	if got.Outcome != nil {
+		t.Fatalf("outcome = %q, want it absent instead of a sentinel", *got.Outcome)
+	}
+	if got.OutcomeState == nil || *got.OutcomeState != openapi.SimulationOutcomeUnavailable {
+		t.Fatalf("outcomeState = %v, want unavailable", got.OutcomeState)
 	}
 }
 

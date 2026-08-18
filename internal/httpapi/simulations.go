@@ -252,34 +252,34 @@ would act on.
 */
 func (s *Server) simulationCase(ctx context.Context, c simulate.Case) openapi.SimulationCase {
 	outcome := c.Outcome
+	var outcomeState *openapi.SimulationOutcomeState
 	if c.OutcomeRef != "" {
 		resolved, err := engine.OutcomeOf(ctx, s.content, domain.RunFinishedPayload{
 			OutcomeRef: c.OutcomeRef,
 		})
 		if err != nil {
-			outcome = outcomeUnavailable
+			unavailable := openapi.SimulationOutcomeUnavailable
+			outcome, outcomeState = "", &unavailable
 		} else {
 			outcome = resolved
 		}
 	}
-	return s.caseOut(c, outcome)
+	return s.caseOut(c, outcome, outcomeState)
 }
 
-// outcomeUnavailable is what a reader sees where an answer no longer is. Not a
-// sentence to render: the console maps it, and anything showing it raw is
-// showing a code where it should show a translation.
-const outcomeUnavailable = "fuseone:outcome-unavailable"
-
-func (s *Server) caseOut(c simulate.Case, outcome string) openapi.SimulationCase {
+func (s *Server) caseOut(
+	c simulate.Case, outcome string, outcomeState *openapi.SimulationOutcomeState,
+) openapi.SimulationCase {
 	out := openapi.SimulationCase{
-		Id:      someString(c.ID),
-		Settled: openapi.SimulationSettled(c.Settled),
-		Steps:   c.Steps,
-		Cost:    toCost(c.Cost),
-		RunId:   someString(string(c.RunID)),
-		Outcome: someString(outcome),
-		Reason:  someString(c.Reason),
-		Model:   someString(c.Model),
+		Id:           someString(c.ID),
+		Settled:      openapi.SimulationSettled(c.Settled),
+		Steps:        c.Steps,
+		Cost:         toCost(c.Cost),
+		RunId:        someString(string(c.RunID)),
+		Outcome:      someString(outcome),
+		OutcomeState: outcomeState,
+		Reason:       someString(c.Reason),
+		Model:        someString(c.Model),
 	}
 	if c.Drifted {
 		out.Drifted = ptr(true)

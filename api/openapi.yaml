@@ -3459,11 +3459,28 @@ components:
         acted:
           type: array
           items: { $ref: '#/components/schemas/SimulationAct' }
-        outcome: { type: string }
+        outcome:
+          type: string
+          description: >
+            The model's final answer when it is still readable. Absent is not
+            itself a state: a running case may not have one yet, and an erased
+            answer is named by outcomeState instead.
+        outcomeState:
+          $ref: '#/components/schemas/SimulationOutcomeState'
         reason: { type: string }
         error:
           type: string
           description: Why this case did not run, when it did not.
+
+    SimulationOutcomeState:
+      type: string
+      description: >
+        Why outcome is absent when the case did finish with one. This is a
+        protocol field rather than a sentinel in outcome: outcome is user text,
+        and a stable code inside it would be rendered as though the model said
+        it.
+      enum: [unavailable]
+      x-enum-varnames: [SimulationOutcomeUnavailable]
 
     SimulationReport:
       type: object

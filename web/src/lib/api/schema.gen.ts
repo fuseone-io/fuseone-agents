@@ -2208,11 +2208,18 @@ export interface components {
             /** @description Whether this case last held against a different model. Neither a pass nor a failure — the reason to read the rest of the row differently. */
             drifted?: boolean;
             acted?: components["schemas"]["SimulationAct"][];
+            /** @description The model's final answer when it is still readable. Absent is not itself a state: a running case may not have one yet, and an erased answer is named by outcomeState instead. */
             outcome?: string;
+            outcomeState?: components["schemas"]["SimulationOutcomeState"];
             reason?: string;
             /** @description Why this case did not run, when it did not. */
             error?: string;
         };
+        /**
+         * @description Why outcome is absent when the case did finish with one. This is a protocol field rather than a sentinel in outcome: outcome is user text, and a stable code inside it would be rendered as though the model said it.
+         * @enum {string}
+         */
+        SimulationOutcomeState: "unavailable";
         SimulationReport: {
             /** @description Corrections that still stand. Zero for a simulation that is not a battery. */
             held?: number;
