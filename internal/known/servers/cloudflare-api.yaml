@@ -1,0 +1,49 @@
+server: cloudflare-api
+title: Cloudflare API
+category: operations
+publisher: Cloudflare
+docs: https://developers.cloudflare.com/agents/model-context-protocol/cloudflare/servers-for-cloudflare/
+docsFrom: publisher
+provenance: documentation
+status: published
+config: [credential]
+transport: http
+url: https://mcp.cloudflare.com/mcp
+auth: >
+  OAuth with Cloudflare's managed remote MCP server, or a Cloudflare API token
+  sent as an Authorization bearer token for automation. Cloudflare documents
+  both user tokens and account tokens for this server.
+authModes:
+  - type: oauth2
+    principal: user
+    label: Cloudflare OAuth
+    note: Interactive connection where the user chooses the permissions granted to the agent.
+  - type: bearer
+    principal: service
+    label: Cloudflare API token
+    header: Authorization
+    prefix: Bearer
+    note: Automation token scoped in Cloudflare before it is pasted here.
+
+note: >
+  This server fronts the whole Cloudflare API through a small Code Mode surface:
+  `search` finds API operations and `execute` runs generated code against the
+  typed API client. That is efficient, but it makes `execute` the broadest
+  possible tool: DNS, Workers, R2, Zero Trust, security and account resources
+  can all be in reach if the token permits them.
+
+  Prefer product-specific Cloudflare MCP servers when the job is narrow. If
+  this server is connected, keep `execute` outside the surface until the Curator
+  has decided the package that really needs it.
+
+suggestions:
+  - tool: search
+    effect: read
+    why: Searches the Cloudflare API surface so the agent can find an operation. It changes nothing.
+
+  - tool: execute
+    effect: destructive
+    why: >
+      Executes code against the Cloudflare API. The same tool can read, write
+      or delete resources depending on the generated operation, so classify it
+      by the worst effect the token can authorize.

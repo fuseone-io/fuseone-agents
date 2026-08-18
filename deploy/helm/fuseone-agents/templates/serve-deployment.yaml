@@ -65,7 +65,41 @@ spec:
             periodSeconds: 3
             failureThreshold: 30
           securityContext: {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          volumeMounts:
+            # The one writable path, and the config file a local MCP server
+            # reads is why it exists: the worker materialises it under the
+            # system temp directory, so a read-only root without this breaks
+            # every stdio server that needs one — far from the cause.
+            - name: tmp
+              mountPath: /tmp
+          {{- with .Values.securityContext }}
+          securityContext:
+            allowPrivilegeEscalation: {{ .allowPrivilegeEscalation }}
+            readOnlyRootFilesystem: {{ .readOnlyRootFilesystem }}
+            capabilities: {{- toYaml .capabilities | nindent 14 }}
+          {{- end }}
           resources: {{- toYaml .Values.serve.resources | nindent 12 }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      {{- with .Values.securityContext }}
+      securityContext:
+        runAsNonRoot: {{ .runAsNonRoot }}
+        runAsUser: {{ .runAsUser }}
+        runAsGroup: {{ .runAsGroup }}
+        seccompProfile: {{- toYaml .seccompProfile | nindent 10 }}
+      {{- end }}
+      {{- if .Values.topologySpread.enabled }}
+      topologySpreadConstraints:
+        - maxSkew: {{ .Values.topologySpread.maxSkew }}
+          topologyKey: {{ .Values.topologySpread.topologyKey }}
+          whenUnsatisfiable: {{ .Values.topologySpread.whenUnsatisfiable }}
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ include "fuseone.name" . }}
+              app.kubernetes.io/instance: {{ .Release.Name }}
+              app.kubernetes.io/component: serve
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector: {{- toYaml . | nindent 8 }}
       {{- end }}

@@ -1,0 +1,35 @@
+{{- if .Values.networkPolicy.enabled }}
+{{/*
+The Gate's rule, one layer down.
+
+The Gate decides which tool a run may call. This decides which addresses the
+process may open at all, and that is the half that still holds when a tool
+server is compromised or when something reaches the worker that never passed
+through a tool at all.
+
+Deny by default, allow what the installation names. DNS is added here rather
+than left to the operator because a deny-all that forgets it does not fail as
+"egress is blocked" — it fails as "the model provider is down", and somebody
+spends an afternoon on the wrong system.
+*/}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "fuseone.fullname" . }}-egress
+  labels: {{- include "fuseone.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "fuseone.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes: [Egress]
+  egress:
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    {{- with .Values.networkPolicy.egress }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- end }}

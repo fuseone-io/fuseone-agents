@@ -91,6 +91,67 @@ containerSecurityContext:
   readOnlyRootFilesystem: true
   capabilities: { drop: ["ALL"] }
 
+# What a hardened cluster checks before it will run this at all.
+#
+# The image is distroless and its USER is nonroot already, so none of this
+# changes what the process can do. What it changes is whether an admission
+# policy — Pod Security Standards `restricted`, Kyverno, Gatekeeper — lets the
+# pod exist: those judge the manifest, not the image, and a chart that does not
+# say these things is refused by a cluster where they are true.
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+  seccompProfile:
+    type: RuntimeDefault
+
+# Spread replicas across nodes without refusing to schedule.
+#
+# `ScheduleAnyway`, deliberately: two replicas on one node is worse than one
+# replica, and both are far better than a pod that stays Pending because the
+# cluster has nowhere ideal to put it. A lab with two workers spent two days
+# proving the second half of that.
+topologySpread:
+  enabled: true
+  maxSkew: 1
+  topologyKey: kubernetes.io/hostname
+  whenUnsatisfiable: ScheduleAnyway
+
+# The Gateway API instead of an Ingress.
+#
+# Ingress is frozen and Gateway API is the successor, but a chart that switched
+# would strand every installation whose cluster has no Gateway controller. Both
+# exist; enabling this one and `ingress.enabled` together is refused rather than
+# resolved, because two objects claiming one hostname is a routing conflict
+# somebody debugs at the wrong layer.
+gateway:
+  enabled: false
+  parentRefs: []
+    # - name: public
+    #   namespace: gateway-system
+  hostnames: []
+
+# Refuse egress the platform has no reason to make.
+#
+# Off by default and worth turning on. This platform exists to bound what an
+# agent can reach, and a NetworkPolicy is that same rule one layer down: the
+# Gate decides which tool may be called, and this decides which addresses the
+# process may open at all — which is the half that still holds when a tool
+# server is compromised.
+#
+# It is off because turning it on blind breaks an installation: every model
+# provider, every remote MCP server and the database have to be reachable, and
+# only the installation knows where those are.
+networkPolicy:
+  enabled: false
+  # Egress rules as the Kubernetes API expects them. DNS is added
+  # automatically, because a deny-all that forgets it fails as "the model
+  # provider is down".
+  egress: []
 nodeSelector: {}
 tolerations: []
 affinity: {}

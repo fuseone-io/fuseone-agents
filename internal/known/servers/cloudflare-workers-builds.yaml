@@ -1,0 +1,27 @@
+server: cloudflare-workers-builds
+title: Cloudflare Workers Builds
+category: code
+publisher: Cloudflare
+docs: https://developers.cloudflare.com/agents/model-context-protocol/cloudflare/servers-for-cloudflare/
+docsFrom: publisher
+provenance: documentation
+status: published
+config: [credential]
+transport: http
+url: https://builds.mcp.cloudflare.com/mcp
+auth: >
+  OAuth with Cloudflare's managed remote MCP service. Grant only the Workers
+  Builds scope needed by the agent.
+authModes:
+  - type: oauth2
+    principal: user
+    label: Cloudflare OAuth
+    note: Remote MCP OAuth flow for Cloudflare Workers Builds.
+
+note: >
+  Cloudflare describes this server as a way to get insights and manage Workers
+  Builds. Managing builds can affect deployed code, but the page does not
+  publish exact tool names here, so suggestions intentionally stay empty and
+  discovered tools must be judged by the Curator.
+
+suggestions: []

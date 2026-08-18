@@ -29,9 +29,20 @@ field" is a commit message.
 
 ### Added
 
+- The chart declares a pod and container security context, so a cluster
+  enforcing Pod Security Standards `restricted` will run it. The root
+  filesystem is read-only, with a writable `/tmp` for the config file a local
+  tool server reads.
+- Replicas spread across nodes where the cluster allows it, and schedule anyway
+  where it does not.
+- Optional Gateway API routing as an alternative to Ingress, and an optional
+  egress NetworkPolicy, both off by default.
 - Six more servers in the catalogue, all incident response and observability:
   PagerDuty, incident.io, New Relic, Honeycomb, ServiceNow and Elastic Agent
   Builder. Forty-one in total.
+- Six more remote-first servers in the catalogue, focused on Cloudflare and
+  Vercel: Cloudflare API, Documentation, Observability, Audit Logs and Workers
+  Builds, plus Vercel. Forty-seven in total.
 
 ## [0.1.0] — 2026-08-17
 

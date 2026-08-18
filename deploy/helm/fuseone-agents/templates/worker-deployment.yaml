@@ -69,8 +69,14 @@ spec:
             - name: HOSTNAME
               valueFrom:
                 fieldRef: { fieldPath: metadata.name }
-          {{- if .Values.worker.specs.configMap }}
           volumeMounts:
+            # The one writable path, and the config file a local MCP server
+            # reads is why it exists: the worker materialises it under the
+            # system temp directory, so a read-only root without this breaks
+            # every stdio server that needs one — far from the cause.
+            - name: tmp
+              mountPath: /tmp
+          {{- if .Values.worker.specs.configMap }}
             - name: specs
               mountPath: /agents
               readOnly: true
@@ -81,12 +87,38 @@ spec:
           # answering. Giving it an HTTP server to be probed on would be adding
           # a listener for the benefit of the probe.
           securityContext: {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          {{- with .Values.securityContext }}
+          securityContext:
+            allowPrivilegeEscalation: {{ .allowPrivilegeEscalation }}
+            readOnlyRootFilesystem: {{ .readOnlyRootFilesystem }}
+            capabilities: {{- toYaml .capabilities | nindent 14 }}
+          {{- end }}
           resources: {{- toYaml .Values.worker.resources | nindent 12 }}
       {{- if .Values.worker.specs.configMap }}
       volumes:
+        - name: tmp
+          emptyDir: {}
         - name: specs
           configMap:
             name: {{ .Values.worker.specs.configMap }}
+      {{- end }}
+      {{- with .Values.securityContext }}
+      securityContext:
+        runAsNonRoot: {{ .runAsNonRoot }}
+        runAsUser: {{ .runAsUser }}
+        runAsGroup: {{ .runAsGroup }}
+        seccompProfile: {{- toYaml .seccompProfile | nindent 10 }}
+      {{- end }}
+      {{- if .Values.topologySpread.enabled }}
+      topologySpreadConstraints:
+        - maxSkew: {{ .Values.topologySpread.maxSkew }}
+          topologyKey: {{ .Values.topologySpread.topologyKey }}
+          whenUnsatisfiable: {{ .Values.topologySpread.whenUnsatisfiable }}
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ include "fuseone.name" . }}
+              app.kubernetes.io/instance: {{ .Release.Name }}
+              app.kubernetes.io/component: worker
       {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector: {{- toYaml . | nindent 8 }}

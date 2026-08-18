@@ -1,0 +1,26 @@
+server: cloudflare-docs
+title: Cloudflare Documentation
+category: knowledge
+publisher: Cloudflare
+docs: https://developers.cloudflare.com/agents/model-context-protocol/cloudflare/servers-for-cloudflare/
+docsFrom: publisher
+provenance: documentation
+status: published
+config: [credential]
+transport: http
+url: https://docs.mcp.cloudflare.com/mcp
+auth: >
+  OAuth with Cloudflare's managed remote MCP service. This recipe knows the
+  endpoint and purpose; it does not infer tool names from the description.
+authModes:
+  - type: oauth2
+    principal: user
+    label: Cloudflare OAuth
+    note: Remote MCP OAuth flow for Cloudflare's documentation server.
+
+note: >
+  Cloudflare describes this server as a way to get up-to-date Cloudflare
+  reference information. The page publishes the endpoint and purpose, not the
+  exact tool names, so suggestions intentionally stay empty until discovery.
+
+suggestions: []

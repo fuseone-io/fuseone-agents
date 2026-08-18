@@ -308,6 +308,78 @@ func TestSuggest_operationsPackKeepsOperationalTextTainted(t *testing.T) {
 	}
 }
 
+func TestLoad_cloudflareRecipesDoNotInventProductSpecificToolNames(t *testing.T) {
+	t.Parallel()
+
+	servers := load(t)
+	api, ok := servers.For("cloudflare-api")
+	if !ok {
+		t.Fatal("cloudflare-api recipe missing")
+	}
+	if api.Transport != "http" || api.URL != "https://mcp.cloudflare.com/mcp" {
+		t.Fatalf("cloudflare-api connection = %s %s, want hosted HTTP MCP",
+			api.Transport, api.URL)
+	}
+	if !hasAuthMode(api.AuthModes, known.AuthOAuth2) || !hasAuthMode(api.AuthModes, known.AuthBearer) {
+		t.Fatalf("cloudflare-api auth modes = %+v, want OAuth and bearer token", api.AuthModes)
+	}
+	execute, ok := servers.Suggest("cloudflare-api", "execute")
+	if !ok || execute.Effect != domain.EffectDestructive.String() {
+		t.Fatalf("cloudflare-api execute = %+v, want destructive", execute)
+	}
+
+	for server, url := range map[string]string{
+		"cloudflare-docs":           "https://docs.mcp.cloudflare.com/mcp",
+		"cloudflare-observability":  "https://observability.mcp.cloudflare.com/mcp",
+		"cloudflare-auditlogs":      "https://auditlogs.mcp.cloudflare.com/mcp",
+		"cloudflare-workers-builds": "https://builds.mcp.cloudflare.com/mcp",
+	} {
+		entry, ok := servers.For(server)
+		if !ok {
+			t.Fatalf("%s recipe missing", server)
+		}
+		if entry.Transport != "http" || entry.URL != url {
+			t.Fatalf("%s connection = %s %s, want %s", server, entry.Transport, entry.URL, url)
+		}
+		if !hasAuthMode(entry.AuthModes, known.AuthOAuth2) {
+			t.Fatalf("%s auth modes = %+v, want OAuth", server, entry.AuthModes)
+		}
+		if len(entry.Suggestions) != 0 {
+			t.Fatalf("%s suggests %d tools even though the source only names the server purpose",
+				server, len(entry.Suggestions))
+		}
+	}
+}
+
+func TestSuggest_vercelKeepsMoneyAndLogsInTheRightBoxes(t *testing.T) {
+	t.Parallel()
+
+	servers := load(t)
+	entry, ok := servers.For("vercel")
+	if !ok {
+		t.Fatal("vercel recipe missing")
+	}
+	if entry.Transport != "http" || entry.URL != "https://mcp.vercel.com" {
+		t.Fatalf("vercel connection = %s %s, want hosted HTTP MCP", entry.Transport, entry.URL)
+	}
+	if !hasAuthMode(entry.AuthModes, known.AuthOAuth2) {
+		t.Fatalf("vercel auth modes = %+v, want OAuth", entry.AuthModes)
+	}
+
+	buy, ok := servers.Suggest("vercel", "buy_domain")
+	if !ok || buy.Effect != domain.EffectFinancial.String() {
+		t.Fatalf("vercel buy_domain = %+v, want financial", buy)
+	}
+	logs, ok := servers.Suggest("vercel", "get_runtime_logs")
+	if !ok || logs.Effect != domain.EffectRead.String() || logs.Untrusted == nil || !*logs.Untrusted {
+		t.Fatalf("vercel get_runtime_logs = %+v, want tainted read", logs)
+	}
+	deploy, ok := servers.Suggest("vercel", "deploy_to_vercel")
+	if !ok || deploy.Effect != domain.EffectWrite.String() {
+		t.Fatalf("vercel deploy_to_vercel = %+v, want write", deploy)
+	}
+}
+
 func hasAuthMode(modes []known.AuthMode, typ known.AuthType) bool {
 	for _, one := range modes {
 		if one.Type == typ {

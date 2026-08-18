@@ -1,0 +1,90 @@
+server: vercel
+title: Vercel
+category: code
+publisher: Vercel
+docs: https://vercel.com/docs/agent-resources/vercel-mcp
+docsFrom: publisher
+provenance: documentation
+status: published
+config: [credential]
+transport: http
+url: https://mcp.vercel.com
+auth: >
+  OAuth with Vercel's remote MCP server. Vercel documents this MCP service as
+  beta and recommends human confirmation for tool execution, especially when
+  using it beside other MCP servers.
+authModes:
+  - type: oauth2
+    principal: user
+    label: Vercel OAuth
+    note: Remote MCP OAuth flow for the Vercel user and teams the user can reach.
+
+note: >
+  Vercel MCP can search documentation, read projects and deployments, inspect
+  build and runtime logs, buy domains, create access links and deploy the
+  current project. The credential's reach is the user's Vercel teams and
+  projects; the tool surface should usually be narrower.
+
+  Build and runtime logs are untrusted text. They can contain request data,
+  error messages, environment-derived output and anything an application wrote
+  under load.
+
+suggestions:
+  - tool: search_documentation
+    effect: read
+    why: Searches Vercel documentation. It changes nothing.
+
+  - tool: list_teams
+    effect: read
+    why: Lists teams the authenticated Vercel user belongs to.
+
+  - tool: list_projects
+    effect: read
+    why: Lists projects in a Vercel team. It writes nothing.
+
+  - tool: get_project
+    effect: read
+    why: Reads project metadata, domains and latest deployment summary.
+
+  - tool: list_deployments
+    effect: read
+    why: Lists deployments for a project. It changes no deployment state.
+
+  - tool: get_deployment
+    effect: read
+    why: Reads one deployment's status, regions and metadata.
+
+  - tool: get_deployment_build_logs
+    effect: read
+    untrusted: true
+    why: Build logs are application and build output, and can include arbitrary text from dependencies or scripts.
+
+  - tool: get_runtime_logs
+    effect: read
+    untrusted: true
+    why: Runtime logs are application output and request-derived text. Treat every log line as untrusted input.
+
+  - tool: check_domain_availability_and_price
+    effect: read
+    why: Checks domain availability and price. It buys nothing.
+
+  - tool: buy_domain
+    effect: financial
+    why: Purchases a domain and creates a financial obligation.
+
+  - tool: get_access_to_vercel_url
+    effect: write
+    why: Creates a temporary shareable link that grants access to a protected deployment.
+
+  - tool: web_fetch_vercel_url
+    effect: read
+    untrusted: true
+    why: Fetches content from a deployment URL; the content is whatever that application serves.
+
+  - tool: use_vercel_cli
+    effect: write
+    why: Broad CLI helper whose documented purpose is to accomplish Vercel CLI actions, so judge by more than read.
+
+  - tool: deploy_to_vercel
+    effect: write
+    why: Deploys the current project to Vercel. It changes externally visible deployment state.

@@ -1,0 +1,28 @@
+server: cloudflare-observability
+title: Cloudflare Observability
+category: operations
+publisher: Cloudflare
+docs: https://developers.cloudflare.com/agents/model-context-protocol/cloudflare/servers-for-cloudflare/
+docsFrom: publisher
+provenance: documentation
+status: published
+config: [credential]
+transport: http
+url: https://observability.mcp.cloudflare.com/mcp
+auth: >
+  OAuth with Cloudflare's managed remote MCP service. Grant only the accounts
+  and observability permissions the agent needs.
+authModes:
+  - type: oauth2
+    principal: user
+    label: Cloudflare OAuth
+    note: Remote MCP OAuth flow for Cloudflare observability data.
+
+note: >
+  Cloudflare describes this server as a way to debug and get insight into an
+  application's logs and analytics. Log and analytics output is useful because
+  it is production data, and it must remain tainted when a discovered tool
+  returns it. The page publishes the endpoint and purpose, not exact tool names,
+  so suggestions intentionally stay empty.
+
+suggestions: []

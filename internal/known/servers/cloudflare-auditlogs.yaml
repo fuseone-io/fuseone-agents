@@ -1,0 +1,27 @@
+server: cloudflare-auditlogs
+title: Cloudflare Audit Logs
+category: operations
+publisher: Cloudflare
+docs: https://developers.cloudflare.com/agents/model-context-protocol/cloudflare/servers-for-cloudflare/
+docsFrom: publisher
+provenance: documentation
+status: published
+config: [credential]
+transport: http
+url: https://auditlogs.mcp.cloudflare.com/mcp
+auth: >
+  OAuth with Cloudflare's managed remote MCP service. Grant audit-log access
+  only to agents that need to reconstruct account changes.
+authModes:
+  - type: oauth2
+    principal: user
+    label: Cloudflare OAuth
+    note: Remote MCP OAuth flow for Cloudflare audit log access.
+
+note: >
+  Cloudflare describes this server as a way to query audit logs and generate
+  reports. Audit logs are read-only evidence, but report text and event
+  metadata still come from operational records. The page publishes the endpoint
+  and purpose, not exact tool names, so suggestions intentionally stay empty.
+
+suggestions: []
