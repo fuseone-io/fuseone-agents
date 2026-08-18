@@ -29,6 +29,25 @@ field" is a commit message.
 
 Nothing yet.
 
+## [0.3.4] — 2026-08-18
+
+### Security
+
+- **Each authenticated MCP server gets its own HTTP transport.** Bearer, header
+  and OAuth transports all wrapped the process-wide `http.DefaultTransport`, so
+  every configured tool server shared one connection pool. Sharing a pool
+  across servers holding different credentials means a connection opened for
+  one can be handed to a request for another whenever they resolve to the same
+  host — the credential still travels on the right request, but the isolation a
+  reviewer would assume between two tool servers was not there. Each now clones
+  its own.
+
+### Fixed
+
+- The overview's status labels go through i18n. They were English literals on a
+  screen the rest of which was translated, which is the failure the string
+  check exists to catch and did not, because the check itself allowed them.
+
 ## [0.3.3] — 2026-08-18
 
 ### Upgrade notes
