@@ -43,11 +43,11 @@ const toolRefresh = 30 * time.Second
 // configuration, and the form that offers them says so.
 func connectServer(
 	ctx context.Context, catalog *tools.Catalog, server domain.MCPServer,
-	creds domain.MCPCredentials,
+	creds domain.MCPCredentials, oauth OAuthGrantStore,
 ) error {
 	client := mcp.NewClient(&mcp.Implementation{Name: "fuseone-agents", Version: version}, nil)
 
-	transport, cleanup, err := transportFor(ctx, server, creds)
+	transport, cleanup, err := transportFor(ctx, server, creds, oauth)
 	if err != nil {
 		return err
 	}
@@ -69,10 +69,11 @@ func connectServer(
 
 func transportFor(
 	ctx context.Context, server domain.MCPServer, creds domain.MCPCredentials,
+	oauth OAuthGrantStore,
 ) (mcp.Transport, func(), error) {
 	switch server.TransportOf() {
 	case domain.TransportHTTP:
-		client, err := authenticatedClient(creds)
+		client, err := authenticatedClient(server.Name, creds, oauth)
 		if err != nil {
 			return nil, noop, fmt.Errorf("%s: prepare HTTP credential: %w", server.Name, err)
 		}
@@ -113,13 +114,15 @@ func (s cleanupSession) Close() error {
 // A client of its own rather than the shared default: the token belongs to one
 // server, and a transport installed on http.DefaultClient would send it to
 // everything this process talks to.
-func authenticatedClient(creds domain.MCPCredentials) (*http.Client, error) {
+func authenticatedClient(
+	server string, creds domain.MCPCredentials, oauth OAuthGrantStore,
+) (*http.Client, error) {
 	if creds.OAuth != nil && !creds.OAuth.Empty() {
 		if creds.OAuth.AccessToken == "" && !creds.OAuth.CanRefresh() {
 			return nil, fmt.Errorf("oauth grant has no access token and cannot refresh")
 		}
 		return &http.Client{
-			Transport: newOAuthTransport(*creds.OAuth),
+			Transport: newOAuthTransport(server, *creds.OAuth, oauth),
 			Timeout:   60 * time.Second,
 		}, nil
 	}
@@ -140,16 +143,22 @@ func (b bearer) RoundTrip(r *http.Request) (*http.Response, error) {
 }
 
 type oauthTransport struct {
-	mu      sync.Mutex
-	grant   domain.MCPOAuthGrant
-	base    http.RoundTripper
-	refresh *http.Client
+	mu        sync.Mutex
+	server    string
+	grant     domain.MCPOAuthGrant
+	base      http.RoundTripper
+	refresh   *http.Client
+	store     OAuthGrantStore
+	dirty     bool
+	dirtyFrom domain.MCPOAuthGrant
 }
 
-func newOAuthTransport(grant domain.MCPOAuthGrant) *oauthTransport {
+func newOAuthTransport(server string, grant domain.MCPOAuthGrant, store OAuthGrantStore) *oauthTransport {
 	return &oauthTransport{
-		grant: grant,
-		base:  http.DefaultTransport,
+		server: server,
+		grant:  grant,
+		base:   http.DefaultTransport,
+		store:  store,
 		refresh: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -170,18 +179,44 @@ func (t *oauthTransport) token(ctx context.Context) (string, string, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
+	if err := t.persist(ctx); err != nil {
+		return "", "", err
+	}
 	if t.grant.AccessToken != "" && !oauthExpired(t.grant) {
 		return t.grant.AccessToken, t.grant.AuthorizationScheme(), nil
 	}
 	if !t.grant.CanRefresh() {
 		return "", "", fmt.Errorf("oauth access token expired and no refresh token is configured")
 	}
+	was := t.grant
 	next, err := refreshOAuthGrant(ctx, t.refresh, t.grant)
 	if err != nil {
 		return "", "", err
 	}
 	t.grant = next
+	t.dirty = true
+	t.dirtyFrom = was
+	if err := t.persist(ctx); err != nil {
+		return "", "", err
+	}
 	return t.grant.AccessToken, t.grant.AuthorizationScheme(), nil
+}
+
+func (t *oauthTransport) persist(ctx context.Context) error {
+	if !t.dirty {
+		return nil
+	}
+	if t.store == nil {
+		t.dirty = false
+		t.dirtyFrom = domain.MCPOAuthGrant{}
+		return nil
+	}
+	if err := t.store.RefreshMCPServerOAuth(ctx, t.server, t.dirtyFrom, t.grant); err != nil {
+		return fmt.Errorf("persist refreshed oauth grant: %w", err)
+	}
+	t.dirty = false
+	t.dirtyFrom = domain.MCPOAuthGrant{}
+	return nil
 }
 
 func oauthExpired(grant domain.MCPOAuthGrant) bool {
@@ -233,20 +268,10 @@ func refreshOAuthGrant(
 	}
 
 	/*
-		What comes back lives in this process and nowhere else.
-
-		A provider that rotates refresh tokens hands back a new one here, and
-		the old one is spent the moment it is used. This keeps the new one in
-		memory; the vault still holds the old. So a worker restart sends a
-		consumed token, and the honest expectation is not "one refresh fails" —
-		OAuth 2.1 tells providers to read a reused refresh token as theft and
-		revoke the whole grant family. Google, Microsoft, Slack and Atlassian
-		all rotate, and all four are declared oauth2 in this catalogue.
-
-		Persisting it is not a nicety to add later: it is what makes this safe
-		against the providers it was built for. It needs the worker to write to
-		the vault and to leave a record of having done so, which is a design
-		this slice deliberately did not make up on the way past.
+		A provider that rotates refresh tokens spends the old one here. The
+		caller must persist this result before sending a request with it: a
+		worker restart that reuses the spent token can make OAuth providers
+		revoke the whole grant family.
 	*/
 	next := grant
 	next.AccessToken = body.AccessToken
@@ -258,6 +283,8 @@ func refreshOAuthGrant(
 	}
 	if body.ExpiresIn > 0 {
 		next.ExpiresAtUnix = time.Now().Add(time.Duration(body.ExpiresIn) * time.Second).Unix()
+	} else {
+		next.ExpiresAtUnix = 0
 	}
 	if strings.TrimSpace(body.Scope) != "" {
 		next.Scopes = strings.Fields(body.Scope)
@@ -296,6 +323,12 @@ func fingerprint(server domain.MCPServer) string {
 type Servers interface {
 	MCPServers(ctx context.Context) ([]domain.MCPServer, error)
 	MCPCredentials(ctx context.Context, name string) (domain.MCPCredentials, error)
+}
+
+// OAuthGrantStore persists refresh-token rotation before a request is sent
+// with a grant that only exists in memory.
+type OAuthGrantStore interface {
+	RefreshMCPServerOAuth(ctx context.Context, name string, was, next domain.MCPOAuthGrant) error
 }
 
 // Publisher records what the installation now offers, so the administration
@@ -405,7 +438,11 @@ func (r *reconciler) connect(ctx context.Context, server domain.MCPServer) {
 		return
 	}
 
-	if err := connectServer(ctx, r.catalog, server, creds); err != nil {
+	var oauth OAuthGrantStore
+	if store, ok := r.servers.(OAuthGrantStore); ok {
+		oauth = store
+	}
+	if err := connectServer(ctx, r.catalog, server, creds, oauth); err != nil {
 		// Recorded and skipped, never fatal. One broken integration used to
 		// mean nothing on the installation ran, including every agent that
 		// never touches it.

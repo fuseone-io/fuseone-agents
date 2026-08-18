@@ -14,6 +14,11 @@ type (
 	UserID    string
 )
 
+// SystemWorker is the principal used for automatic maintenance the worker
+// performs on stored configuration. It is not a user and should only appear
+// where the platform is preserving an operator's previous decision.
+const SystemWorker UserID = "system:worker"
+
 // Scope locates any record within the installation hierarchy.
 //
 // The hierarchy is Installation -> Company -> Area -> Agent (PRD 3.1). Company

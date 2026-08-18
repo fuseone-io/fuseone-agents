@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -28,7 +29,9 @@ var (
 	// runtime must not trust a rule it only enforces at the door.
 	ErrLocalExecutionNotAccepted = errors.New(
 		"admin: a local server runs code inside the worker, and that has to be accepted explicitly")
-	ErrNoBaseURL = errors.New("admin: a provider needs a base URL")
+	ErrNoBaseURL         = errors.New("admin: a provider needs a base URL")
+	ErrOAuthGrantChanged = errors.New(
+		"admin: the stored OAuth grant changed before the refresh could be saved")
 )
 
 // The configured shapes are domain types: the API renders them and this
@@ -259,6 +262,83 @@ func (i *Integrations) MCPCredentials(
 		return domain.MCPCredentials{}, err
 	}
 	return domain.ReadMCPCredentials(set.Secret), nil
+}
+
+/*
+RefreshMCPServerOAuth persists the grant a worker received from an OAuth
+refresh.
+
+It is deliberately not PutMCPServer with a different caller. Refresh is the
+worker preserving an operator's earlier credential decision, not a new
+configuration act by a person. It still takes the one configuration write path:
+the stored secret and the event that explains it commit together.
+*/
+func (i *Integrations) RefreshMCPServerOAuth(
+	ctx context.Context, name string, was, next domain.MCPOAuthGrant,
+) error {
+	if strings.TrimSpace(name) == "" {
+		return ErrNoName
+	}
+	if next.Empty() {
+		return ErrOAuthGrantChanged
+	}
+	return writeFolded(ctx, i.pool, i.settings, folded{
+		by:     domain.SystemWorker,
+		scope:  domain.Scope{Company: domain.Installation},
+		action: "mcp_oauth.refreshed",
+		target: name,
+		set: settings.Setting{
+			ScopeKind: settings.ScopeInstallation,
+			Kind:      settings.KindMCPServer, Name: name,
+			UpdatedBy: string(domain.SystemWorker),
+		},
+		fold: func(stored settings.Setting) (settings.Setting, any, error) {
+			if stored.Kind == "" {
+				return settings.Setting{}, nil, ErrOAuthGrantChanged
+			}
+			var server storedServer
+			if len(stored.Value) > 0 {
+				if err := json.Unmarshal(stored.Value, &server); err != nil {
+					return settings.Setting{}, nil, fmt.Errorf(
+						"admin: read the stored server for %s: %w", name, err)
+				}
+			}
+			transport := server.Transport
+			if transport == "" {
+				transport = domain.TransportStdio
+			}
+			if transport != domain.TransportHTTP {
+				return settings.Setting{}, nil, ErrOAuthGrantChanged
+			}
+
+			creds := domain.ReadMCPCredentials(stored.Secret).ForTransport(domain.TransportHTTP)
+			if creds.OAuth == nil || !creds.OAuth.Equal(was) {
+				return settings.Setting{}, nil, ErrOAuthGrantChanged
+			}
+			merged := domain.MCPCredentialPatch{OAuth: &next}.Apply(creds).ForTransport(domain.TransportHTTP)
+			server.HasOAuth = merged.OAuth != nil && !merged.OAuth.Empty()
+			value, err := json.Marshal(server)
+			if err != nil {
+				return settings.Setting{}, nil, fmt.Errorf("admin: encode MCP server: %w", err)
+			}
+
+			return settings.Setting{
+					ScopeKind: settings.ScopeInstallation,
+					Kind:      settings.KindMCPServer, Name: name,
+					Value: value, Secret: merged.Sealed(),
+					ClearSecret: merged.Empty(),
+					Enabled:     stored.Enabled, UpdatedBy: string(domain.SystemWorker),
+				}, map[string]any{
+					"accessTokenChanged":  was.AccessToken != next.AccessToken,
+					"refreshTokenChanged": was.RefreshToken != next.RefreshToken,
+					"tokenTypeChanged":    was.TokenType != next.TokenType,
+					"expiresAtChanged":    was.ExpiresAtUnix != next.ExpiresAtUnix,
+					"scopesChanged":       !slices.Equal(was.Scopes, next.Scopes),
+					"hasRefreshToken":     next.RefreshToken != "",
+					"scopeCount":          len(next.Scopes),
+				}, nil
+		},
+	})
 }
 
 // ForgettingHealth wires where observations are dropped when a server is

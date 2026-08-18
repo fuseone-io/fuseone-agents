@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -182,7 +184,7 @@ func TestAuthenticatedClient_sendsBearerTokensToRemoteServers(t *testing.T) {
 	}))
 	t.Cleanup(remote.Close)
 
-	client, err := authenticatedClient(domain.MCPCredentials{Token: "ghp_secret"})
+	client, err := authenticatedClient("github", domain.MCPCredentials{Token: "ghp_secret"}, nil)
 	if err != nil {
 		t.Fatalf("authenticatedClient: %v", err)
 	}
@@ -204,12 +206,12 @@ func TestAuthenticatedClient_oauthWinsOverABearerLeftBehind(t *testing.T) {
 	}))
 	t.Cleanup(remote.Close)
 
-	client, err := authenticatedClient(domain.MCPCredentials{
+	client, err := authenticatedClient("google", domain.MCPCredentials{
 		Token: "ghp_stale",
 		OAuth: &domain.MCPOAuthGrant{
 			AccessToken: "oauth_access",
 		},
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("authenticatedClient: %v", err)
 	}
@@ -255,7 +257,8 @@ func TestAuthenticatedClient_refreshesAnExpiredOAuthGrant(t *testing.T) {
 	}))
 	t.Cleanup(remote.Close)
 
-	client, err := authenticatedClient(domain.MCPCredentials{
+	store := &recordingOAuthStore{}
+	client, err := authenticatedClient("google", domain.MCPCredentials{
 		OAuth: &domain.MCPOAuthGrant{
 			AccessToken:   "expired",
 			RefreshToken:  "refresh",
@@ -264,7 +267,7 @@ func TestAuthenticatedClient_refreshesAnExpiredOAuthGrant(t *testing.T) {
 			ClientSecret:  "secret",
 			ExpiresAtUnix: time.Now().Add(-time.Minute).Unix(),
 		},
-	})
+	}, store)
 	if err != nil {
 		t.Fatalf("authenticatedClient: %v", err)
 	}
@@ -276,6 +279,13 @@ func TestAuthenticatedClient_refreshesAnExpiredOAuthGrant(t *testing.T) {
 	if !refreshed {
 		t.Fatal("expired oauth grant was used without refresh")
 	}
+	if store.name != "google" ||
+		store.was.RefreshToken != "refresh" ||
+		store.next.AccessToken != "fresh" ||
+		store.next.RefreshToken != "new-refresh" ||
+		store.next.Scopes[0] != "read" {
+		t.Fatalf("persisted = %s %+v -> %+v, want the refreshed grant", store.name, store.was, store.next)
+	}
 }
 
 func TestAuthenticatedClient_refusesAnExpiredOAuthGrantItCannotRefresh(t *testing.T) {
@@ -286,12 +296,12 @@ func TestAuthenticatedClient_refusesAnExpiredOAuthGrantItCannotRefresh(t *testin
 	}))
 	t.Cleanup(remote.Close)
 
-	client, err := authenticatedClient(domain.MCPCredentials{
+	client, err := authenticatedClient("google", domain.MCPCredentials{
 		OAuth: &domain.MCPOAuthGrant{
 			AccessToken:   "expired",
 			ExpiresAtUnix: time.Now().Add(-time.Minute).Unix(),
 		},
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("authenticatedClient: %v", err)
 	}
@@ -300,6 +310,82 @@ func TestAuthenticatedClient_refusesAnExpiredOAuthGrantItCannotRefresh(t *testin
 	} else if !strings.Contains(err.Error(), "expired") {
 		t.Fatalf("Get error = %v, want the expired grant named", err)
 	}
+}
+
+func TestAuthenticatedClient_aRefreshThatCannotBePersistedIsNotSent(t *testing.T) {
+	t.Parallel()
+
+	store := &recordingOAuthStore{err: errors.New("vault unavailable")}
+	var resourceCalled bool
+	tokenCalls := 0
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/token":
+			tokenCalls++
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"access_token":  "fresh",
+				"refresh_token": "new-refresh",
+				"expires_in":    3600,
+			})
+		case "/resource":
+			resourceCalled = true
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(remote.Close)
+
+	client, err := authenticatedClient("google", domain.MCPCredentials{
+		OAuth: &domain.MCPOAuthGrant{
+			AccessToken:   "expired",
+			RefreshToken:  "refresh",
+			TokenURL:      remote.URL + "/token",
+			ExpiresAtUnix: time.Now().Add(-time.Minute).Unix(),
+		},
+	}, store)
+	if err != nil {
+		t.Fatalf("authenticatedClient: %v", err)
+	}
+	if _, err := client.Get(remote.URL + "/resource"); err == nil {
+		t.Fatal("Get succeeded even though the refreshed grant was not persisted")
+	} else if !strings.Contains(err.Error(), "persist refreshed oauth grant") {
+		t.Fatalf("Get error = %v, want persistence failure named", err)
+	}
+	if resourceCalled {
+		t.Fatal("request reached the MCP server before the refreshed grant was persisted")
+	}
+	if store.next.RefreshToken != "new-refresh" {
+		t.Fatalf("persisted = %+v, want the rotated refresh token attempted", store.next)
+	}
+
+	store.err = nil
+	resourceCalled = false
+	resp, err := client.Get(remote.URL + "/resource")
+	if err != nil {
+		t.Fatalf("second Get after the vault recovered: %v", err)
+	}
+	_ = resp.Body.Close()
+	if !resourceCalled {
+		t.Fatal("request did not reach the MCP server after the pending grant was persisted")
+	}
+	if tokenCalls != 1 {
+		t.Fatalf("token endpoint called %d times, want the pending grant saved before another refresh", tokenCalls)
+	}
+}
+
+type recordingOAuthStore struct {
+	name string
+	was  domain.MCPOAuthGrant
+	next domain.MCPOAuthGrant
+	err  error
+}
+
+func (s *recordingOAuthStore) RefreshMCPServerOAuth(
+	_ context.Context, name string, was, next domain.MCPOAuthGrant,
+) error {
+	s.name, s.was, s.next = name, was, next
+	return s.err
 }
 
 /*

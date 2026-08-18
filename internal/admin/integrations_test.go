@@ -336,6 +336,111 @@ func TestPutMCPServer_writingBearerReplacesStoredOAuth(t *testing.T) {
 	}
 }
 
+func TestRefreshMCPServerOAuth_persistsTheRotatedGrantAndRecordsNoSecret(t *testing.T) {
+	i := newIntegrations(t)
+	pool := openPool(t)
+	ctx := context.Background()
+	surface := []string{"read_sheet"}
+	server := domain.MCPServer{
+		Name: "google-sheets", Transport: domain.TransportHTTP,
+		URL: "https://mcp.example.com/google", Enabled: true,
+		Surface: &surface,
+	}
+	was := domain.MCPOAuthGrant{
+		AccessToken: "old-access", RefreshToken: "old-refresh",
+		TokenURL: "https://issuer.example/token", ClientID: "client",
+		ClientSecret: "secret", ExpiresAtUnix: 100, Scopes: []string{"old"},
+	}
+	next := was
+	next.AccessToken = "new-access"
+	next.RefreshToken = "new-refresh"
+	next.ExpiresAtUnix = 200
+	next.Scopes = []string{"new"}
+
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, server,
+		domain.MCPCredentialPatch{OAuth: &was}); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+	if err := i.RefreshMCPServerOAuth(ctx, "google-sheets", was, next); err != nil {
+		t.Fatalf("RefreshMCPServerOAuth: %v", err)
+	}
+
+	creds, err := i.MCPCredentials(ctx, "google-sheets")
+	if err != nil {
+		t.Fatalf("MCPCredentials: %v", err)
+	}
+	if creds.OAuth == nil ||
+		creds.OAuth.AccessToken != "new-access" ||
+		creds.OAuth.RefreshToken != "new-refresh" ||
+		creds.OAuth.ClientSecret != "secret" ||
+		creds.OAuth.Scopes[0] != "new" {
+		t.Fatalf("oauth = %+v, want the refreshed grant persisted", creds.OAuth)
+	}
+	servers, err := i.MCPServers(ctx)
+	if err != nil {
+		t.Fatalf("MCPServers: %v", err)
+	}
+	if servers[0].Surface == nil || len(*servers[0].Surface) != 1 || (*servers[0].Surface)[0] != "read_sheet" {
+		t.Fatalf("surface = %v; persisting oauth rewrote the server value", servers[0].Surface)
+	}
+
+	var principal, detail string
+	if err := pool.QueryRow(ctx, `
+		select principal_id, detail::text from admin_events
+		where action = 'mcp_oauth.refreshed' and target = 'google-sheets'
+		order by event_id desc limit 1`).Scan(&principal, &detail); err != nil {
+		t.Fatalf("read the trail: %v", err)
+	}
+	if principal != string(domain.SystemWorker) {
+		t.Fatalf("principal = %q, want the worker principal", principal)
+	}
+	for _, secret := range []string{"old-access", "new-access", "old-refresh", "new-refresh", "secret"} {
+		if strings.Contains(detail, secret) {
+			t.Fatalf("detail leaked %q: %s", secret, detail)
+		}
+	}
+	for _, flag := range []string{"accessTokenChanged", "refreshTokenChanged", "expiresAtChanged", "scopesChanged"} {
+		if !strings.Contains(detail, flag) {
+			t.Fatalf("detail = %s, want %s recorded", detail, flag)
+		}
+	}
+}
+
+func TestRefreshMCPServerOAuth_refusesToOverwriteAChangedGrant(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+	server := domain.MCPServer{
+		Name: "google-sheets", Transport: domain.TransportHTTP,
+		URL: "https://mcp.example.com/google", Enabled: true,
+	}
+	was := domain.MCPOAuthGrant{AccessToken: "old-access", RefreshToken: "old-refresh", TokenURL: "https://issuer.example/token"}
+	replaced := domain.MCPOAuthGrant{AccessToken: "operator-access", RefreshToken: "operator-refresh", TokenURL: "https://issuer.example/token"}
+	next := was
+	next.AccessToken = "new-access"
+	next.RefreshToken = "new-refresh"
+
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, server,
+		domain.MCPCredentialPatch{OAuth: &was}); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, server,
+		domain.MCPCredentialPatch{OAuth: &replaced}); err != nil {
+		t.Fatalf("PutMCPServer replacing: %v", err)
+	}
+
+	err := i.RefreshMCPServerOAuth(ctx, "google-sheets", was, next)
+	if !errors.Is(err, admin.ErrOAuthGrantChanged) {
+		t.Fatalf("RefreshMCPServerOAuth = %v, want the changed grant refused", err)
+	}
+	creds, err := i.MCPCredentials(ctx, "google-sheets")
+	if err != nil {
+		t.Fatalf("MCPCredentials: %v", err)
+	}
+	if creds.OAuth == nil || creds.OAuth.RefreshToken != "operator-refresh" {
+		t.Fatalf("oauth = %+v, want the operator's newer grant preserved", creds.OAuth)
+	}
+}
+
 func TestPutMCPServer_storedBeforeTransportsExisted_readsAsLocal(t *testing.T) {
 	i := newIntegrations(t)
 	ctx := context.Background()

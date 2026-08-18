@@ -3,6 +3,7 @@ package domain
 import (
 	"encoding/json"
 	"maps"
+	"slices"
 	"sort"
 )
 
@@ -93,6 +94,17 @@ func (g MCPOAuthGrant) AuthorizationScheme() string {
 		return g.TokenType
 	}
 	return "Bearer"
+}
+
+func (g MCPOAuthGrant) Equal(other MCPOAuthGrant) bool {
+	return g.AccessToken == other.AccessToken &&
+		g.RefreshToken == other.RefreshToken &&
+		g.TokenURL == other.TokenURL &&
+		g.ClientID == other.ClientID &&
+		g.ClientSecret == other.ClientSecret &&
+		g.TokenType == other.TokenType &&
+		g.ExpiresAtUnix == other.ExpiresAtUnix &&
+		slices.Equal(g.Scopes, other.Scopes)
 }
 
 func cloneOAuth(g *MCPOAuthGrant) *MCPOAuthGrant {
