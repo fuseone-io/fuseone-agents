@@ -8,8 +8,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/fuseone/agents/internal/admin"
@@ -35,7 +37,7 @@ import (
 // version of each agent declares.
 func syncSchedules(ctx context.Context, pool *pgxpool.Pool, specDir *string) error {
 	loaded := spec.NewStore()
-	if _, err := loaded.LoadDir(ctx, os.DirFS("."), *specDir); err != nil {
+	if _, err := loaded.LoadDir(ctx, specsRoot(*specDir), specsPath(*specDir)); err != nil {
 		return fmt.Errorf("sync schedules: load %s: %w", *specDir, err)
 	}
 
@@ -60,7 +62,7 @@ func syncSchedules(ctx context.Context, pool *pgxpool.Pool, specDir *string) err
 // security event.
 func syncWebhooks(ctx context.Context, pool *pgxpool.Pool, specDir *string) error {
 	loaded := spec.NewStore()
-	if _, err := loaded.LoadDir(ctx, os.DirFS("."), *specDir); err != nil {
+	if _, err := loaded.LoadDir(ctx, specsRoot(*specDir), specsPath(*specDir)); err != nil {
 		return fmt.Errorf("sync webhooks: load %s: %w", *specDir, err)
 	}
 
@@ -92,7 +94,7 @@ func syncWebhooks(ctx context.Context, pool *pgxpool.Pool, specDir *string) erro
 // pauseNewAgents records every agent nobody has decided about as paused.
 func pauseNewAgents(ctx context.Context, pool *pgxpool.Pool, specDir *string) error {
 	loaded := spec.NewStore()
-	if _, err := loaded.LoadDir(ctx, os.DirFS("."), *specDir); err != nil {
+	if _, err := loaded.LoadDir(ctx, specsRoot(*specDir), specsPath(*specDir)); err != nil {
 		return fmt.Errorf("record new agents as paused: load %s: %w", *specDir, err)
 	}
 
@@ -124,7 +126,7 @@ func syncRulings(ctx context.Context, catalog *tools.Catalog, curator *admin.Cur
 // installation reads, so the two never disagree about what is published.
 func publishSpecs(ctx context.Context, registry *spec.Registry, dir string) (int, error) {
 	store := spec.NewStore()
-	if _, err := store.LoadDir(ctx, os.DirFS("."), dir); err != nil {
+	if _, err := store.LoadDir(ctx, specsRoot(dir), specsPath(dir)); err != nil {
 		return 0, fmt.Errorf("load agent definitions from %s: %w", dir, err)
 	}
 
@@ -180,7 +182,7 @@ func loadSpecs(
 	var definitions spec.Definitions = registry
 
 	store := spec.NewStore()
-	loaded, err := store.LoadDir(ctx, os.DirFS("."), dir)
+	loaded, err := store.LoadDir(ctx, specsRoot(dir), specsPath(dir))
 	if err != nil {
 		return nil, fmt.Errorf("load agent definitions from %s: %w", dir, err)
 	}
@@ -201,4 +203,31 @@ func loadSpecs(
 	}
 
 	return spec.NewResolver(definitions, providers, catalog), nil
+}
+
+/*
+specsRoot and specsPath turn a directory into the pair io/fs wants.
+
+`io/fs` paths are unrooted by contract — a leading slash is invalid, not
+absolute — so `os.DirFS(".")` with `/agents` fails with "invalid argument"
+rather than reading anything. Which is what an installation mounting its agents
+at an absolute path got, and the only kind of path a Kubernetes volumeMount
+produces: the specs ConfigMap the chart offers could never have worked.
+
+An absolute directory becomes its own root. A relative one keeps resolving
+against the working directory, so a developer running `agentd worker` in a
+checkout still gets `agents/`.
+*/
+func specsRoot(dir string) fs.FS {
+	if filepath.IsAbs(dir) {
+		return os.DirFS(dir)
+	}
+	return os.DirFS(".")
+}
+
+func specsPath(dir string) string {
+	if filepath.IsAbs(dir) {
+		return "."
+	}
+	return dir
 }
