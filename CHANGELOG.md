@@ -29,6 +29,16 @@ field" is a commit message.
 
 Nothing yet.
 
+## [0.3.2] — 2026-08-18
+
+### Fixed
+
+- **An agents directory mounted at an absolute path is readable.** The chart
+  has always offered `worker.specs.configMap`, mounted it at `/agents` and
+  passed that path to the worker — which refused to start, because `io/fs`
+  treats a leading slash as invalid rather than absolute. Setting that value
+  took the worker down; it now works, which is the first time it ever has.
+
 ## [0.3.1] — 2026-08-18
 
 ### Upgrade notes
