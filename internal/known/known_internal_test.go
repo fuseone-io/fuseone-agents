@@ -78,6 +78,38 @@ authModes:
 	}
 }
 
+func TestLoad_headerAuthWithoutAnyHeaderName_isRefused(t *testing.T) {
+	t.Parallel()
+
+	_, err := load(fstest.MapFS{
+		"servers/crm.yaml": {Data: []byte(minimal("crm", "CRM") + `config: [credential]
+authModes:
+  - type: headers
+    principal: service
+    label: Custom headers
+`)},
+	})
+	if err == nil || !strings.Contains(err.Error(), "names no header") {
+		t.Fatalf("load = %v, want missing header refusal", err)
+	}
+}
+
+func TestLoad_envTargetBelongsOnlyToDSNAuth(t *testing.T) {
+	t.Parallel()
+
+	_, err := load(fstest.MapFS{
+		"servers/crm.yaml": {Data: []byte(minimal("crm", "CRM") + `config: [credential]
+authModes:
+  - type: bearer
+    principal: service
+    env: DATABASE_URL
+`)},
+	})
+	if err == nil || !strings.Contains(err.Error(), "names an env target") {
+		t.Fatalf("load = %v, want misplaced env refusal", err)
+	}
+}
+
 func minimal(server, title string) string {
 	return "server: " + server + `
 title: ` + title + `

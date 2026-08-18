@@ -2523,6 +2523,10 @@ export interface components {
             label?: string;
             /** @description HTTP header used by header-based auth modes. */
             header?: string;
+            /** @description HTTP headers required together by a header-based auth mode. A single header may use `header`; multiple headers use this list so the console asks for each value rather than flattening them into a bearer token. */
+            headers?: string[];
+            /** @description Environment variable that receives this credential when the server is local. Used for DSNs whose runtime path is a sealed env var. */
+            env?: string;
             /** @description Header prefix, such as Bearer or Basic. */
             prefix?: string;
             /** @description OAuth scopes or provider permissions named by the recipe. */

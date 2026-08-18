@@ -13,7 +13,25 @@ describe("remote MCP auth planning", () => {
     expect(plan.unsupported).toHaveLength(0);
   });
 
-  it("keeps multi-header auth unsupported until the recipe names a single header", () => {
+  it("treats named multi-header auth as editable without pretending it is one secret", () => {
+    const plan = remoteAuthPlan(
+      [
+        {
+          type: "headers",
+          principal: "service",
+          label: "API and app keys",
+          headers: ["DD_API_KEY", "DD_APPLICATION_KEY"],
+        },
+      ],
+      true,
+    );
+
+    expect(plan.secret).toBeNull();
+    expect(plan.multiHeaders?.headers).toEqual(["DD_API_KEY", "DD_APPLICATION_KEY"]);
+    expect(plan.unsupported).toHaveLength(0);
+  });
+
+  it("keeps unshaped header auth unsupported until the recipe names the headers", () => {
     const plan = remoteAuthPlan(
       [{ type: "headers", principal: "service", label: "API and app keys" }],
       true,

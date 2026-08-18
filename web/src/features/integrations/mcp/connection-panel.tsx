@@ -11,6 +11,10 @@ import { Mono } from "@/components/shared/mono";
 import { problemMessage } from "@/lib/api/problem-message";
 import { CredentialFields } from "@/features/integrations/mcp/credential-fields";
 import {
+  dsnEnvMode,
+  headerCredential,
+  headerNames,
+  multiHeaderCredential,
   remoteAuthPlan,
   type AuthMode,
   type RemoteAuthPlan,
@@ -50,15 +54,27 @@ export function ConnectionPanel({
   const probe = useProbeMCPServer();
   const local = (server.transport ?? "stdio") === "stdio";
   const remotePlan = remoteAuthPlan(recipe?.authModes, recipe !== undefined && recipe !== null);
+  const dsnMode = local ? dsnEnvMode(recipe?.authModes) : null;
+  const remoteHeaders = headerNames(remotePlan.multiHeaders);
   const storedConfigEnv = server.configFileEnv ?? "";
   const [value, setValue] = useState(() => blankCredential(storedConfigEnv));
   const oauthChanged = oauthHasValue(value);
   const secretChanged = remotePlan.secret !== null && value.token !== "";
+  const headersChanged = remoteHeaders.some((header) => value.headers[header] !== "");
+  const headersComplete =
+    remoteHeaders.length > 0 &&
+    remoteHeaders.every((header) => value.headers[header]?.trim() !== "");
+  const dsnChanged = dsnMode !== null && value.dsn !== "";
+  const remoteSecretConflict = !local && secretChanged && headersChanged;
   const remoteConflict =
-    !local && remotePlan.oauth !== null && oauthChanged && secretChanged;
+    !local &&
+    remotePlan.oauth !== null &&
+    oauthChanged &&
+    (secretChanged || headersChanged);
   const oauthExpiryInvalid =
     !local && remotePlan.oauth !== null && !oauthExpiryIsValid(value);
-  const canWriteRemote = remotePlan.secret !== null || remotePlan.oauth !== null;
+  const canWriteRemote =
+    remotePlan.secret !== null || remoteHeaders.length > 0 || remotePlan.oauth !== null;
 
   async function write(credential: {
     token?: string;
@@ -124,6 +140,14 @@ export function ConnectionPanel({
           showRemoteToken={remotePlan.secret !== null}
           remoteTokenLabel={remoteTokenLabel(remotePlan.secret, t)}
           remoteTokenHint={remoteTokenHint(remotePlan.secret, t)}
+          remoteHeaders={remoteHeaders}
+          remoteHeadersHint={t("mcp.remoteHeadersHint")}
+          dsnLabel={dsnMode ? (dsnMode.label ?? t("mcp.dsn")) : undefined}
+          dsnHint={
+            dsnMode
+              ? t("mcp.dsnHint", { env: dsnMode.env ?? "DATABASE_URL" })
+              : undefined
+          }
           value={value}
           onChange={(next) => setValue((current) => ({ ...current, ...next }))}
           onRevoke={() =>
@@ -142,6 +166,9 @@ export function ConnectionPanel({
             onChange={setValue}
             onRevoke={() => void write({ oauth: {} })}
           />
+        )}
+        {remoteSecretConflict && (
+          <p className="text-xs text-danger">{t("mcp.remoteCredentialConflict")}</p>
         )}
         {!local && remotePlan.oauth === null && server.hasOAuth === true && (
           <StoredOAuthOnly onRevoke={() => void write({ oauth: {} })} />
@@ -162,7 +189,7 @@ export function ConnectionPanel({
               void write(
                 local
                   ? {
-                      ...(value.env === "" ? {} : { env: readVariables(value.env) }),
+                      ...localCredential(value, dsnMode),
                       ...(value.configFile === ""
                         ? {}
                         : { configFile: value.configFile }),
@@ -170,23 +197,22 @@ export function ConnectionPanel({
                     }
                   : remotePlan.oauth !== null && oauthChanged
                     ? { oauth: oauthFromValue(value) }
-                    : remotePlan.secret?.type === "bearer"
-                      ? { token: value.token }
-                      : remotePlan.secret
-                        ? { headers: headerCredential(remotePlan.secret, value.token) }
-                        : {},
+                    : remoteCredential(value, remotePlan, remoteHeaders),
               )
             }
             disabled={
               put.isPending ||
+              remoteSecretConflict ||
               remoteConflict ||
               oauthExpiryInvalid ||
               (local
                 ? value.env === "" &&
+                  !dsnChanged &&
                   value.configFile === "" &&
                   value.configFileEnv === storedConfigEnv
                 : !canWriteRemote ||
                   ((remotePlan.secret === null || value.token === "") &&
+                    (remoteHeaders.length === 0 || !headersComplete) &&
                     (remotePlan.oauth === null || !oauthChanged)))
             }
           >
@@ -200,6 +226,8 @@ export function ConnectionPanel({
 
 type CredentialValue = {
   token: string;
+  headers: Record<string, string>;
+  dsn: string;
   env: string;
   configFile: string;
   configFileEnv: string;
@@ -216,6 +244,8 @@ type CredentialValue = {
 function blankCredential(configFileEnv: string): CredentialValue {
   return {
     token: "",
+    headers: {},
+    dsn: "",
     env: "",
     configFile: "",
     configFileEnv,
@@ -248,16 +278,32 @@ function remoteTokenHint(
   return t("mcp.remoteBearerHint", { header, prefix });
 }
 
-function headerCredential(mode: AuthMode, secret: string): Record<string, string> {
-  const header = mode.header?.trim();
-  if (!header) return {};
-  return { [header]: headerValue(mode, secret) };
+function remoteCredential(
+  value: CredentialValue,
+  plan: RemoteAuthPlan,
+  headers: string[],
+) {
+  if (value.token !== "" && plan.secret?.type === "bearer") {
+    return { token: value.token };
+  }
+  if (value.token !== "" && plan.secret) {
+    return { headers: headerCredential(plan.secret, value.token) };
+  }
+  if (headers.length > 0) {
+    return { headers: multiHeaderCredential(headers, value.headers) };
+  }
+  return {};
 }
 
-function headerValue(mode: AuthMode, secret: string) {
-  const prefix = mode.prefix?.trim();
-  if (!prefix) return secret;
-  return `${prefix}${prefix.endsWith("=") ? "" : " "}${secret}`;
+function localCredential(value: CredentialValue, dsnMode: AuthMode | null) {
+  if (value.env === "" && (dsnMode === null || value.dsn === "")) {
+    return {};
+  }
+  const env = value.env === "" ? {} : readVariables(value.env);
+  if (dsnMode?.env && value.dsn !== "") {
+    env[dsnMode.env] = value.dsn;
+  }
+  return { env };
 }
 
 function RemoteAuthSummary({ plan }: { plan: RemoteAuthPlan }) {

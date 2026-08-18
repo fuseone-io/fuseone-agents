@@ -96,6 +96,8 @@ type AuthMode struct {
 	Principal AuthPrincipal `yaml:"principal"`
 	Label     string        `yaml:"label,omitempty"`
 	Header    string        `yaml:"header,omitempty"`
+	Headers   []string      `yaml:"headers,omitempty"`
+	Env       string        `yaml:"env,omitempty"`
 	Prefix    string        `yaml:"prefix,omitempty"`
 	Scopes    []string      `yaml:"scopes,omitempty"`
 	Note      string        `yaml:"note,omitempty"`
@@ -320,6 +322,15 @@ func checkAuthModes(path string, entry Entry) error {
 		}
 		if one.Type == AuthNone && one.Principal != AuthPrincipalNone {
 			return fmt.Errorf("known: %s says auth is none but gives principal %q", path, one.Principal)
+		}
+		if one.Type == AuthHeaders && one.Header == "" && len(one.Headers) == 0 {
+			return fmt.Errorf("known: %s says header auth but names no header", path)
+		}
+		if one.Type != AuthHeaders && len(one.Headers) > 0 {
+			return fmt.Errorf("known: %s names multiple headers for %s auth", path, one.Type)
+		}
+		if one.Type != AuthDSN && one.Env != "" {
+			return fmt.Errorf("known: %s names an env target for %s auth", path, one.Type)
 		}
 	}
 

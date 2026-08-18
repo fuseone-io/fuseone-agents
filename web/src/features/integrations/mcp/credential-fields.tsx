@@ -24,6 +24,10 @@ export function CredentialFields({
   showRemoteToken = true,
   remoteTokenLabel,
   remoteTokenHint,
+  remoteHeaders = [],
+  remoteHeadersHint,
+  dsnLabel,
+  dsnHint,
   value,
   onChange,
   onRevoke,
@@ -35,9 +39,22 @@ export function CredentialFields({
   showRemoteToken?: boolean;
   remoteTokenLabel?: string;
   remoteTokenHint?: string;
-  value: { token: string; env: string; configFile: string; configFileEnv: string };
+  remoteHeaders?: string[];
+  remoteHeadersHint?: string;
+  dsnLabel?: string;
+  dsnHint?: string;
+  value: {
+    token: string;
+    headers: Record<string, string>;
+    dsn: string;
+    env: string;
+    configFile: string;
+    configFileEnv: string;
+  };
   onChange: (next: {
     token: string;
+    headers: Record<string, string>;
+    dsn: string;
     env: string;
     configFile: string;
     configFileEnv: string;
@@ -51,6 +68,22 @@ export function CredentialFields({
     <div className="space-y-3">
       {local ? (
         <div className="space-y-4">
+          {dsnLabel !== undefined && (
+            <div className="space-y-1.5">
+              <Label htmlFor="dsn">{dsnLabel}</Label>
+              <Input
+                id="dsn"
+                type="password"
+                autoComplete="off"
+                className="font-mono"
+                value={value.dsn}
+                onChange={(e) => onChange({ ...value, dsn: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">
+                {hasSecret ? t("mcp.variablesKept") : dsnHint}
+              </p>
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label htmlFor="env">{t("mcp.variables")}</Label>
             <Textarea
@@ -97,22 +130,55 @@ export function CredentialFields({
             </p>
           </div>
         </div>
-      ) : showRemoteToken ? (
-        <div className="space-y-1.5">
-          <Label htmlFor="token">{remoteTokenLabel ?? t("integrations.token")}</Label>
-          <Input
-            id="token"
-            type="password"
-            autoComplete="off"
-            className="font-mono"
-            value={value.token}
-            onChange={(e) => onChange({ ...value, token: e.target.value })}
-          />
-          <p className="text-xs text-muted-foreground">
-            {hasSecret
-              ? t("integrations.tokenKept")
-              : remoteTokenHint ?? t("integrations.tokenHint")}
-          </p>
+      ) : showRemoteToken || remoteHeaders.length > 0 ? (
+        <div className="space-y-4">
+          {showRemoteToken && (
+            <div className="space-y-1.5">
+              <Label htmlFor="token">{remoteTokenLabel ?? t("integrations.token")}</Label>
+              <Input
+                id="token"
+                type="password"
+                autoComplete="off"
+                className="font-mono"
+                value={value.token}
+                onChange={(e) => onChange({ ...value, token: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">
+                {hasSecret
+                  ? t("integrations.tokenKept")
+                  : remoteTokenHint ?? t("integrations.tokenHint")}
+              </p>
+            </div>
+          )}
+          {remoteHeaders.length > 0 && (
+            <div className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                {remoteHeaders.map((header) => (
+                  <div key={header} className="space-y-1.5">
+                    <Label htmlFor={headerInputID(header)}>{header}</Label>
+                    <Input
+                      id={headerInputID(header)}
+                      type="password"
+                      autoComplete="off"
+                      className="font-mono"
+                      value={value.headers[header] ?? ""}
+                      onChange={(e) =>
+                        onChange({
+                          ...value,
+                          headers: { ...value.headers, [header]: e.target.value },
+                        })
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {hasSecret
+                  ? t("integrations.tokenKept")
+                  : remoteHeadersHint ?? t("mcp.remoteHeadersHint")}
+              </p>
+            </div>
+          )}
         </div>
       ) : hasSecret ? (
         <p className="rounded-lg border border-warning/30 bg-warning-surface px-3 py-2 text-xs text-warning">
@@ -150,4 +216,8 @@ export function CredentialFields({
       )}
     </div>
   );
+}
+
+function headerInputID(header: string) {
+  return `header-${header.replace(/[^A-Za-z0-9_-]/g, "-")}`;
 }

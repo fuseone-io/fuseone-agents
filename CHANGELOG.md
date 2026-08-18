@@ -33,6 +33,9 @@ field" is a commit message.
   waiting for the next sweep, and says what it found.
 - Remote servers can authenticate with a single custom header or with Basic
   credentials rendered as one.
+- Recipes may name several required HTTP headers, and the console asks for
+  each one instead of pretending they are one bearer token. Local DSN recipes
+  may name the environment variable that receives the sealed connection string.
 
 ## [0.2.0] — 2026-08-17
 

@@ -9,10 +9,11 @@ import {
   FormField,
   FormItem,
   FormLabel,
-  FormMessage,
 } from "@/components/ui/form";
 import type { ServerFormValues } from "@/features/integrations/server-schema";
 import {
+  dsnEnvMode,
+  headerNames,
   remoteAuthPlan,
   type AuthMode,
   type RemoteAuthPlan,
@@ -41,6 +42,7 @@ export function ServerFields({
 
   if (form.watch("transport") === "http") {
     const auth = remoteAuthPlan(recipe?.authModes, recipe !== undefined && recipe !== null);
+    const headers = headerNames(auth.multiHeaders);
     return (
       <>
         <Field
@@ -50,23 +52,27 @@ export function ServerFields({
           placeholder="https://api.example.com/mcp/"
         />
         <RemoteAuthNotice plan={auth} />
-        {auth.bearer !== null && (
+        {auth.secret !== null && (
           <Field
             form={form}
             name="token"
-            label={auth.bearer.label ?? t("mcp.remoteBearerToken")}
+            label={auth.secret.label ?? t("mcp.remoteBearerToken")}
             placeholder=""
             hint={
               hasSecret
                 ? t("integrations.tokenKept")
-                : remoteTokenHint(auth.bearer, t)
+                : remoteTokenHint(auth.secret, t)
             }
           />
+        )}
+        {headers.length > 0 && (
+          <HeaderFields form={form} headers={headers} hasSecret={hasSecret} />
         )}
         {auth.oauth !== null && <OAuthFormFields form={form} />}
       </>
     );
   }
+  const dsnMode = dsnEnvMode(recipe?.authModes);
 
   return (
     <>
@@ -82,6 +88,23 @@ export function ServerFields({
         name="args"
         label={t("integrations.arguments")}
         placeholder="--config /etc/crm.yaml"
+      />
+      {dsnMode && (
+        <Field
+          form={form}
+          name="dsn"
+          label={dsnMode.label ?? t("mcp.dsn")}
+          placeholder={t("mcp.dsnPlaceholder")}
+          hint={t("mcp.dsnHint", { env: dsnMode.env ?? "DATABASE_URL" })}
+          password
+        />
+      )}
+      <TextAreaField
+        form={form}
+        name="env"
+        label={t("mcp.variables")}
+        placeholder={t("mcp.variablesExample")}
+        hint={hasSecret ? t("mcp.variablesKept") : t("mcp.variablesHint")}
       />
       <Field
         form={form}
@@ -109,7 +132,8 @@ function remoteTokenHint(
   t: ReturnType<typeof useTranslation>["t"],
 ) {
   const header = mode.header ?? "Authorization";
-  const prefix = mode.prefix ?? "Bearer";
+  const prefix = mode.prefix;
+  if (!prefix) return t("mcp.remoteHeaderHint", { header });
   return t("mcp.remoteBearerHint", { header, prefix });
 }
 
@@ -122,7 +146,12 @@ function RemoteAuthNotice({ plan }: { plan: RemoteAuthPlan }) {
       </p>
     );
   }
-  if (plan.noAuth !== null && plan.bearer === null && plan.oauth === null) {
+  if (
+    plan.noAuth !== null &&
+    plan.secret === null &&
+    plan.multiHeaders === null &&
+    plan.oauth === null
+  ) {
     return (
       <p className="rounded-lg border bg-muted px-3 py-2 text-xs text-muted-foreground">
         {t("mcp.authNoCredential")}
@@ -137,6 +166,49 @@ function RemoteAuthNotice({ plan }: { plan: RemoteAuthPlan }) {
     <p className="rounded-lg border border-warning/30 bg-warning-surface px-3 py-2 text-xs text-warning">
       {t("mcp.authShapeUnsupported", { modes })}
     </p>
+  );
+}
+
+function HeaderFields({
+  form,
+  headers,
+  hasSecret,
+}: {
+  form: UseFormReturn<ServerFormValues>;
+  headers: string[];
+  hasSecret: boolean;
+}) {
+  const { t } = useTranslation();
+  const error = form.formState.errors.headers;
+  const message = typeof error?.message === "string" ? error.message : undefined;
+  return (
+    <div className="space-y-3 rounded-lg border p-3">
+      <div className="grid gap-3 sm:grid-cols-2">
+        {headers.map((header) => (
+          <div key={header} className="space-y-1.5">
+            <FormLabel htmlFor={headerInputID(header)}>{header}</FormLabel>
+            <Input
+              id={headerInputID(header)}
+              type="password"
+              autoComplete="off"
+              className="font-mono"
+              value={(form.watch("headers") ?? {})[header] ?? ""}
+              onChange={(event) =>
+                form.setValue(
+                  "headers",
+                  { ...(form.getValues("headers") ?? {}), [header]: event.target.value },
+                  { shouldDirty: true, shouldValidate: true },
+                )
+              }
+            />
+          </div>
+        ))}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {hasSecret ? t("integrations.tokenKept") : t("mcp.remoteHeadersHint")}
+      </p>
+      {message && <p className="text-xs text-danger">{t(message)}</p>}
+    </div>
   );
 }
 
@@ -225,7 +297,7 @@ function AcceptLocalExecution({
     <FormField
       control={form.control}
       name="acceptsLocalExecution"
-      render={({ field }) => (
+      render={({ field, fieldState }) => (
         <FormItem className="rounded-lg border border-destructive/40 bg-destructive/5 p-3">
           <div className="flex items-start gap-3">
             <FormControl>
@@ -244,7 +316,7 @@ function AcceptLocalExecution({
               </FormDescription>
             </div>
           </div>
-          <FormMessage />
+          <TranslatedMessage message={fieldState.error?.message} />
         </FormItem>
       )}
     />
@@ -263,6 +335,7 @@ function Field({
   name:
     | "url"
     | "token"
+    | "dsn"
     | "command"
     | "args"
     | "configFileEnv"
@@ -278,11 +351,12 @@ function Field({
   hint?: string;
   password?: boolean;
 }) {
+  const { t } = useTranslation();
   return (
     <FormField
       control={form.control}
       name={name}
-      render={({ field }) => (
+      render={({ field, fieldState }) => (
         <FormItem>
           <FormLabel>{label}</FormLabel>
           <FormControl>
@@ -295,7 +369,7 @@ function Field({
             />
           </FormControl>
           {hint && <FormDescription>{hint}</FormDescription>}
-          <FormMessage />
+          <TranslatedMessage message={fieldState.error?.message} t={t} />
         </FormItem>
       )}
     />
@@ -310,16 +384,17 @@ function TextAreaField({
   hint,
 }: {
   form: UseFormReturn<ServerFormValues>;
-  name: "configFile" | "oauthScopes";
+  name: "configFile" | "oauthScopes" | "env";
   label: string;
   placeholder: string;
   hint?: string;
 }) {
+  const { t } = useTranslation();
   return (
     <FormField
       control={form.control}
       name={name}
-      render={({ field }) => (
+      render={({ field, fieldState }) => (
         <FormItem>
           <FormLabel>{label}</FormLabel>
           <FormControl>
@@ -332,9 +407,25 @@ function TextAreaField({
             />
           </FormControl>
           {hint && <FormDescription>{hint}</FormDescription>}
-          <FormMessage />
+          <TranslatedMessage message={fieldState.error?.message} t={t} />
         </FormItem>
       )}
     />
   );
+}
+
+function TranslatedMessage({
+  message,
+  t,
+}: {
+  message?: string;
+  t?: ReturnType<typeof useTranslation>["t"];
+}) {
+  const fallback = useTranslation().t;
+  if (!message) return null;
+  return <p className="text-sm text-destructive">{(t ?? fallback)(message)}</p>;
+}
+
+function headerInputID(header: string) {
+  return `header-${header.replace(/[^A-Za-z0-9_-]/g, "-")}`;
 }

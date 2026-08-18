@@ -215,7 +215,115 @@ describe("the MCP connection panel", () => {
     );
   });
 
-  it("does not pretend multi-header auth is one editable token", () => {
+  it("stores a named multi-header credential as exact headers", async () => {
+    const { container } = render(
+      <ConnectionPanel
+        server={remote({ name: "datadog" })}
+        recipe={recipe([
+          {
+            type: "headers",
+            principal: "service",
+            label: "API and application key headers",
+            headers: ["DD_API_KEY", "DD_APPLICATION_KEY"],
+          },
+        ])}
+      />,
+    );
+
+    expect(container.querySelector("#token")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/token bearer/i)).not.toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText("DD_API_KEY"), "api_secret");
+    await userEvent.type(
+      screen.getByLabelText("DD_APPLICATION_KEY"),
+      "app_secret",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Salvar a credencial" }),
+    );
+
+    expect(api.mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        token: undefined,
+        headers: {
+          DD_API_KEY: "api_secret",
+          DD_APPLICATION_KEY: "app_secret",
+        },
+      }),
+    );
+  });
+
+  it("saves multi-header auth when a bearer alternative is also documented", async () => {
+    render(
+      <ConnectionPanel
+        server={remote({ name: "datadog" })}
+        recipe={recipe([
+          {
+            type: "bearer",
+            principal: "service",
+            label: "Service access token",
+          },
+          {
+            type: "headers",
+            principal: "service",
+            label: "API and application key headers",
+            headers: ["DD_API_KEY", "DD_APPLICATION_KEY"],
+          },
+        ])}
+      />,
+    );
+
+    await userEvent.type(screen.getByLabelText("DD_API_KEY"), "api_secret");
+    await userEvent.type(
+      screen.getByLabelText("DD_APPLICATION_KEY"),
+      "app_secret",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Salvar a credencial" }),
+    );
+
+    expect(api.mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        token: undefined,
+        headers: {
+          DD_API_KEY: "api_secret",
+          DD_APPLICATION_KEY: "app_secret",
+        },
+      }),
+    );
+  });
+
+  it("does not choose between bearer and multi-header auth on behalf of the operator", async () => {
+    render(
+      <ConnectionPanel
+        server={remote({ name: "datadog" })}
+        recipe={recipe([
+          {
+            type: "bearer",
+            principal: "service",
+            label: "Service access token",
+          },
+          {
+            type: "headers",
+            principal: "service",
+            label: "API and application key headers",
+            headers: ["DD_API_KEY", "DD_APPLICATION_KEY"],
+          },
+        ])}
+      />,
+    );
+
+    await userEvent.type(screen.getByLabelText(/service access token/i), "sat");
+    await userEvent.type(screen.getByLabelText("DD_API_KEY"), "api_secret");
+
+    expect(
+      screen.getByText(/preencha só uma forma de credencial/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Salvar a credencial" }),
+    ).toBeDisabled();
+  });
+
+  it("does not pretend unshaped header auth is editable", () => {
     const { container } = render(
       <ConnectionPanel
         server={remote({ name: "datadog" })}
@@ -230,12 +338,53 @@ describe("the MCP connection panel", () => {
     );
 
     expect(container.querySelector("#token")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/token bearer/i)).not.toBeInTheDocument();
     expect(
       screen.getByText(/espera API and application key headers/i),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Salvar a credencial" }),
     ).toBeDisabled();
+  });
+
+  it("stores a local DSN in the env variable the recipe names", async () => {
+    render(
+      <ConnectionPanel
+        server={remote({
+          name: "postgres",
+          transport: "stdio",
+          command: "postgres-mcp",
+          url: undefined,
+        })}
+        recipe={{
+          ...recipe([
+            {
+              type: "dsn",
+              principal: "service",
+              label: "PostgreSQL connection string",
+              env: "DATABASE_URL",
+            },
+          ]),
+          server: "postgres",
+          title: "PostgreSQL",
+          transport: "stdio",
+          command: "postgres-mcp",
+          url: undefined,
+        }}
+      />,
+    );
+
+    await userEvent.type(
+      screen.getByLabelText(/postgresql connection string/i),
+      "postgres://readonly@example/db",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Salvar a credencial" }),
+    );
+
+    expect(api.mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        env: { DATABASE_URL: "postgres://readonly@example/db" },
+      }),
+    );
   });
 });

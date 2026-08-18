@@ -189,6 +189,44 @@ func TestListRecipes_carryWhoPublishesAndWhoseDocumentationWasRead(t *testing.T)
 			t.Errorf("%s asks for a credential without telling the console what kind", recipe.Server)
 		}
 	}
+
+	datadog, ok := recipeNamed(listed.Items, "datadog")
+	if !ok {
+		t.Fatal("Datadog recipe missing")
+	}
+	if mode, ok := authMode(*datadog.AuthModes, openapi.ServerRecipeAuthModeTypeHeaders); !ok || mode.Headers == nil ||
+		!slices.Equal(*mode.Headers, []string{"DD_API_KEY", "DD_APPLICATION_KEY"}) {
+		t.Fatalf("Datadog headers auth = %+v, want both header names delivered to the console", mode)
+	}
+	postgres, ok := recipeNamed(listed.Items, "postgres")
+	if !ok {
+		t.Fatal("PostgreSQL recipe missing")
+	}
+	if mode, ok := authMode(*postgres.AuthModes, openapi.ServerRecipeAuthModeTypeDsn); !ok || mode.Env == nil ||
+		*mode.Env != "DATABASE_URL" {
+		t.Fatalf("PostgreSQL DSN auth = %+v, want the env variable delivered to the console", mode)
+	}
+}
+
+func recipeNamed(in []openapi.ServerRecipe, name string) (openapi.ServerRecipe, bool) {
+	for _, one := range in {
+		if one.Server == name {
+			return one, true
+		}
+	}
+	return openapi.ServerRecipe{}, false
+}
+
+func authMode(
+	in []openapi.ServerRecipeAuthMode,
+	typ openapi.ServerRecipeAuthModeType,
+) (openapi.ServerRecipeAuthMode, bool) {
+	for _, one := range in {
+		if one.Type == typ {
+			return one, true
+		}
+	}
+	return openapi.ServerRecipeAuthMode{}, false
 }
 
 // An installation shipping none is a real mode, and an empty list is the

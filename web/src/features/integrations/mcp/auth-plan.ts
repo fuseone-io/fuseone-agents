@@ -8,6 +8,8 @@ export type RemoteAuthPlan = {
   secret: AuthMode | null;
   bearer: AuthMode | null;
   header: AuthMode | null;
+  multiHeaders: AuthMode | null;
+  dsn: AuthMode | null;
   oauth: AuthMode | null;
   noAuth: AuthMode | null;
   unsupported: AuthMode[];
@@ -31,6 +33,8 @@ export function remoteAuthPlan(
       secret: { type: "bearer", principal: "service" },
       bearer: { type: "bearer", principal: "service" },
       header: null,
+      multiHeaders: null,
+      dsn: null,
       oauth: { type: "oauth2", principal: "user" },
       noAuth: null,
       unsupported: [],
@@ -41,6 +45,8 @@ export function remoteAuthPlan(
   const secret = all.find(isEditableSecret) ?? null;
   const bearer = all.find(isPlainBearer) ?? null;
   const header = all.find(isSingleHeaderCredential) ?? null;
+  const multiHeaders = all.find(isMultiHeaderCredential) ?? null;
+  const dsn = all.find((mode) => mode.type === "dsn") ?? null;
   const oauth = all.find((mode) => mode.type === "oauth2") ?? null;
   const noAuth = all.find((mode) => mode.type === "none") ?? null;
   return {
@@ -49,6 +55,8 @@ export function remoteAuthPlan(
     secret,
     bearer,
     header,
+    multiHeaders,
+    dsn,
     oauth,
     noAuth,
     unsupported: all.filter(
@@ -56,7 +64,8 @@ export function remoteAuthPlan(
         mode.type !== "none" &&
         mode.type !== "oauth2" &&
         !isPlainBearer(mode) &&
-        !isSingleHeaderCredential(mode),
+        !isSingleHeaderCredential(mode) &&
+        !isMultiHeaderCredential(mode),
     ),
   };
 }
@@ -75,6 +84,40 @@ function isSingleHeaderCredential(mode: AuthMode) {
   return (mode.type === "headers" || mode.type === "basic") && Boolean(mode.header?.trim());
 }
 
+function isMultiHeaderCredential(mode: AuthMode) {
+  return mode.type === "headers" && (mode.headers ?? []).some((header) => header.trim() !== "");
+}
+
 function isEditableSecret(mode: AuthMode) {
   return isPlainBearer(mode) || isSingleHeaderCredential(mode);
+}
+
+export function headerNames(mode: AuthMode | null) {
+  if (!mode) return [];
+  return Array.from(
+    new Set((mode.headers ?? []).map((header) => header.trim()).filter(Boolean)),
+  );
+}
+
+export function dsnEnvMode(modes: AuthMode[] | null | undefined) {
+  return modes?.find((mode) => mode.type === "dsn" && mode.env?.trim()) ?? null;
+}
+
+export function headerCredential(mode: AuthMode, secret: string): Record<string, string> {
+  const header = mode.header?.trim();
+  if (!header) return {};
+  return { [header]: headerValue(mode, secret) };
+}
+
+export function multiHeaderCredential(
+  headers: string[],
+  values: Record<string, string>,
+): Record<string, string> {
+  return Object.fromEntries(headers.map((header) => [header, values[header] ?? ""]));
+}
+
+function headerValue(mode: AuthMode, secret: string) {
+  const prefix = mode.prefix?.trim();
+  if (!prefix) return secret;
+  return `${prefix}${prefix.endsWith("=") ? "" : " "}${secret}`;
 }

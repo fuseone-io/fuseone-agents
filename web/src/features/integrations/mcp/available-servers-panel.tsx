@@ -429,7 +429,7 @@ function ConnectServerPanel({
         enabled: true,
       }
     : null;
-  const { form, submit, saving } = useServerForm(initial, onConnected);
+  const { form, submit, saving } = useServerForm(initial, onConnected, recipe);
 
   if (!open) {
     return (

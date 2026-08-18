@@ -31,7 +31,8 @@ authModes:
   - type: headers
     principal: service
     label: API and application key headers
-    note: Datadog also documents DD_API_KEY and DD_APPLICATION_KEY headers, which this runtime does not model as a single bearer token.
+    headers: [DD_API_KEY, DD_APPLICATION_KEY]
+    note: Datadog also documents DD_API_KEY and DD_APPLICATION_KEY headers, which must be presented together.
 
 # No suggestions, and this is the honest state of it.
 #

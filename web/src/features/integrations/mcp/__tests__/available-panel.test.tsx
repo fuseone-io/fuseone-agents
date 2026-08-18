@@ -2,9 +2,26 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AvailableServersPanel } from "@/features/integrations/mcp/available-servers-panel";
 import type { ServerRecipe } from "@/features/integrations/mcp/api";
+
+const api = vi.hoisted(() => ({
+  mutateAsync: vi.fn(),
+}));
+
+vi.mock("@/features/integrations/api", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/features/integrations/api")>();
+  return {
+    ...actual,
+    usePutMCPServer: () => ({ mutateAsync: api.mutateAsync, isPending: false }),
+  };
+});
+
+vi.mock("sonner", () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
+}));
 
 const stripe: ServerRecipe = {
   server: "stripe",
@@ -31,7 +48,14 @@ const postgres: ServerRecipe = {
   provenance: "documentation",
   status: "archived",
   configRequirements: ["credential"],
-  authModes: [{ type: "dsn", principal: "service", label: "PostgreSQL DSN" }],
+  authModes: [
+    {
+      type: "dsn",
+      principal: "service",
+      label: "PostgreSQL DSN",
+      env: "DATABASE_URL",
+    },
+  ],
   note: "Read-only database access.",
 };
 
@@ -49,11 +73,24 @@ const datadog: ServerRecipe = {
       type: "headers",
       principal: "service",
       label: "API and application key headers",
+      headers: ["DD_API_KEY", "DD_APPLICATION_KEY"],
     },
   ],
   transport: "http",
   url: "https://mcp.datadoghq.com/api/unstable/mcp-server/mcp",
   note: "Observability.",
+};
+
+const datadogWithBearer: ServerRecipe = {
+  ...datadog,
+  authModes: [
+    {
+      type: "bearer",
+      principal: "service",
+      label: "Service access token",
+    },
+    ...(datadog.authModes ?? []),
+  ],
 };
 
 function open(recipes: ServerRecipe[] = [stripe]) {
@@ -84,6 +121,11 @@ is more specific: the selected server stays in view and the right panel holds
 the connection act for exactly that server.
 */
 describe("available MCP servers", () => {
+  beforeEach(() => {
+    api.mutateAsync.mockReset();
+    api.mutateAsync.mockResolvedValue(undefined);
+  });
+
   it("opens the selected recipe in the side configuration panel", async () => {
     const { container } = open();
 
@@ -120,9 +162,10 @@ describe("available MCP servers", () => {
     ).toBeInTheDocument();
     expect(container.querySelector("#token")).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/token bearer/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/postgresql dsn/i)).toBeInTheDocument();
   });
 
-  it("does not turn a multi-header recipe into one token field", async () => {
+  it("opens a multi-header recipe as separate header fields", async () => {
     const { container } = open([datadog]);
 
     await userEvent.click(
@@ -131,8 +174,53 @@ describe("available MCP servers", () => {
 
     expect(container.querySelector("#token")).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/token bearer/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText("DD_API_KEY")).toBeInTheDocument();
+    expect(screen.getByLabelText("DD_APPLICATION_KEY")).toBeInTheDocument();
+  });
+
+  it("connects a multi-header recipe by storing exact headers", async () => {
+    open([datadog]);
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Conectar Datadog" }),
+    );
+    await userEvent.type(screen.getByLabelText("DD_API_KEY"), "api_secret");
+    await userEvent.type(
+      screen.getByLabelText("DD_APPLICATION_KEY"),
+      "app_secret",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Conectar sistema" }),
+    );
+
+    expect(api.mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "datadog",
+        headers: {
+          DD_API_KEY: "api_secret",
+          DD_APPLICATION_KEY: "app_secret",
+        },
+      }),
+    );
+    expect(api.mutateAsync.mock.calls[0]?.[0].token).toBeUndefined();
+  });
+
+  it("refuses the initial-connect credential conflict instead of choosing one", async () => {
+    open([datadogWithBearer]);
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Conectar Datadog" }),
+    );
+    await userEvent.type(screen.getByLabelText(/service access token/i), "sat");
+    await userEvent.type(screen.getByLabelText("DD_API_KEY"), "api_secret");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Conectar sistema" }),
+    );
+
+    expect(api.mutateAsync).not.toHaveBeenCalled();
     expect(
-      screen.getByText(/runtime não configura essa forma/i),
+      await screen.findByText(/preencha só uma forma de credencial/i),
     ).toBeInTheDocument();
+    expect(api.mutateAsync).not.toHaveBeenCalled();
   });
 });

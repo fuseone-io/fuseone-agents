@@ -13,6 +13,7 @@ authModes:
   - type: dsn
     principal: service
     label: PostgreSQL connection string
+    env: DATABASE_URL
     note: The DSN must point at a role whose grants already enforce read-only behavior.
 provenance: documentation
 note: >

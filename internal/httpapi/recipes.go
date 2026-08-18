@@ -154,6 +154,12 @@ func authModes(in []known.AuthMode) *[]openapi.ServerRecipeAuthMode {
 		if one.Header != "" {
 			mode.Header = ptr(one.Header)
 		}
+		if len(one.Headers) > 0 {
+			mode.Headers = ptr(one.Headers)
+		}
+		if one.Env != "" {
+			mode.Env = ptr(one.Env)
+		}
 		if one.Label != "" {
 			mode.Label = ptr(one.Label)
 		}

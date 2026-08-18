@@ -19,6 +19,9 @@ export const serverSchema = z
     args: z.string(),
     url: z.string(),
     token: z.string(),
+    headers: z.record(z.string(), z.string()),
+    env: z.string(),
+    dsn: z.string(),
     oauthAccessToken: z.string(),
     oauthRefreshToken: z.string(),
     oauthTokenURL: z.string(),
@@ -56,6 +59,16 @@ export const serverSchema = z
     (v) =>
       v.transport !== "http" ||
       v.token.trim() === "" ||
+      Object.values(v.headers).every((part) => part.trim() === ""),
+    {
+      path: ["token"],
+      message: "mcp.remoteCredentialConflict",
+    },
+  )
+  .refine(
+    (v) =>
+      v.transport !== "http" ||
+      (v.token.trim() === "" && Object.values(v.headers).every((part) => part.trim() === "")) ||
       [
         v.oauthAccessToken,
         v.oauthRefreshToken,

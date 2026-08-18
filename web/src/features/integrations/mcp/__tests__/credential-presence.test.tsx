@@ -3,6 +3,15 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CredentialFields } from "@/features/integrations/mcp/credential-fields";
 
+const blank = {
+  token: "",
+  headers: {},
+  dsn: "",
+  env: "",
+  configFile: "",
+  configFileEnv: "",
+};
+
 /*
 Removing a credential is a gesture of its own.
 
@@ -19,7 +28,7 @@ describe("the credential fields", () => {
         local={false}
         hasSecret
         hasConfigFile={false}
-        value={{ token: "", env: "", configFile: "", configFileEnv: "" }}
+        value={blank}
         onChange={vi.fn()}
         onRevoke={revoke}
         onRevokeConfigFile={vi.fn()}
@@ -36,7 +45,7 @@ describe("the credential fields", () => {
         local={false}
         hasSecret={false}
         hasConfigFile={false}
-        value={{ token: "", env: "", configFile: "", configFileEnv: "" }}
+        value={blank}
         onChange={vi.fn()}
         onRevoke={vi.fn()}
         onRevokeConfigFile={vi.fn()}
@@ -51,7 +60,7 @@ describe("the credential fields", () => {
         local
         hasSecret={false}
         hasConfigFile={false}
-        value={{ token: "", env: "", configFile: "", configFileEnv: "" }}
+        value={blank}
         onChange={vi.fn()}
         onRevoke={vi.fn()}
         onRevokeConfigFile={vi.fn()}
@@ -67,7 +76,7 @@ describe("the credential fields", () => {
         local={false}
         hasSecret={false}
         hasConfigFile={false}
-        value={{ token: "", env: "", configFile: "", configFileEnv: "" }}
+        value={blank}
         onChange={vi.fn()}
         onRevoke={vi.fn()}
         onRevokeConfigFile={vi.fn()}
@@ -83,7 +92,7 @@ describe("the credential fields", () => {
         local
         hasSecret={false}
         hasConfigFile
-        value={{ token: "", env: "", configFile: "", configFileEnv: "" }}
+        value={blank}
         onChange={vi.fn()}
         onRevoke={vi.fn()}
         onRevokeConfigFile={revokeFile}
