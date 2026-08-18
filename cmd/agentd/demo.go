@@ -67,7 +67,7 @@ func seedDemo(ctx context.Context, store Store, content engine.ContentStore) err
 			Content: content,
 			Gate:    gate.New(),
 			Planner: &stubPlanner{proposals: sc.proposals},
-			Tools:   stubTools{},
+			Tools:   stubTools{content: content, runID: sc.runID},
 			Catalog: demoCatalog,
 			Clock:   &stubClock{at: base.Add(time.Duration(i) * 7 * time.Minute)},
 		})
@@ -125,11 +125,26 @@ func (p *stubPlanner) Plan(context.Context, engine.PlanInput) (engine.Proposal, 
 	return p.proposals[p.turn-1], nil
 }
 
-type stubTools struct{}
+// stubTools answers every call with a fixed body, put in the same content
+// store the run's own steps reference.
+//
+// It used to mint a `memory://` reference and store nothing, which worked only
+// while the demo runner had no content store to check it against. A reference
+// that resolves to nothing is exactly what an erased one looks like, so a demo
+// built on them would teach the console to render every finished run as erased.
+type stubTools struct {
+	content engine.ContentStore
+	runID   domain.RunID
+}
 
-func (stubTools) Invoke(_ context.Context, call engine.Call) (engine.ToolResult, error) {
+func (s stubTools) Invoke(ctx context.Context, call engine.Call) (engine.ToolResult, error) {
+	ref, err := s.content.Put(ctx, s.runID, int64(len(call.Tool)),
+		[]byte(`{"demo":"`+string(call.Tool)+`"}`))
+	if err != nil {
+		return engine.ToolResult{}, fmt.Errorf("demo: store result: %w", err)
+	}
 	return engine.ToolResult{
-		ResultRef: "memory://demo/" + string(call.Tool),
+		ResultRef: ref,
 		// Everything a tool returns from outside the platform is untrusted by
 		// default; the label propagates from here through the run.
 		Labels: domain.NewLabels(domain.LabelUntrusted),
