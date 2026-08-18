@@ -83,6 +83,7 @@ whether this design fits their problem.
 | | |
 |---|---|
 | [PRD-001](docs/PRD-001-fuseone-agents.md) | What the product is, requirement by requirement |
+| [OP-001](docs/OP-001-running-an-installation.md) | Installing it, the decisions an operator owns, and what to expect when something is wrong |
 | [NT-001](docs/NT-001-integration-boundary-and-execution-model.md) | Where MCP ends and integration begins |
 | [NT-003](docs/NT-003-conversational-authoring.md) | Authoring an agent by conversation |
 | [NT-004](docs/NT-004-ledger-volume-and-paging.md) | What the ledger costs at volume, measured, and why it is partitioned on the run's opening time |
