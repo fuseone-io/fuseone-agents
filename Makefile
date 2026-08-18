@@ -9,7 +9,7 @@ BIN     := bin/agentd
 OAPI    := github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.8.0
 GEN_GO  := internal/httpapi/openapi/server.gen.go
 
-.PHONY: release volume check check-pg test-pg smoke dev stop reset db run-pg build build-api web console test race cover vet fmt lint tidy clean generate verify-generate run
+.PHONY: chart release volume check check-pg test-pg smoke dev stop reset db run-pg build build-api web console test race cover vet fmt lint tidy clean generate verify-generate run
 
 # A database of its own. Sharing one with `make dev` meant a running worker
 # claimed the runs a test had just opened, and a test run wiped the
@@ -17,7 +17,7 @@ GEN_GO  := internal/httpapi/openapi/server.gen.go
 TEST_DSN ?= postgres://agents:agents@127.0.0.1:5433/agents_test
 
 ## check: everything CI runs. Keep this green.
-check: fmt vet verify-generate test race console
+check: fmt vet verify-generate test race console chart
 
 ## db: development Postgres. Data lives in tmpfs and is meant to be thrown away.
 db:
@@ -172,6 +172,14 @@ volume: db
 		$(GO) run ./cmd/agentd migrate
 	@docker compose exec -T postgres psql -U agents -d agents_vol -q \
 		-v steps=$(STEPS) < scripts/volume.sql
+
+## chart: what renders and still will not run.
+## kubeconform proves a manifest has the right shape and not that a volumeMount
+## resolves to a volume that exists — which is how a Deployment the API server
+## refuses passed CI, lint and review, and reached two published versions.
+chart:
+	@helm lint deploy/helm/fuseone-agents >/dev/null
+	@python3 scripts/chartcheck.py
 
 ## release: tag a version, which is what publishes it.
 ## Nothing is released by merging: the tag is the act, and CI builds the image
