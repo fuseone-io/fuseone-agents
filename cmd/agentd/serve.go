@@ -64,7 +64,11 @@ func serve(args []string) error {
 		return err
 	}
 	if *demo {
-		if err := seedDemo(ctx, store); err != nil {
+		// The real content store, not an in-memory one: a run's closing answer
+		// goes behind a reference, and a demo whose answers lived in a store
+		// that dies with the seeding would show every finished run as an
+		// answer that cannot be resolved.
+		if err := seedDemo(ctx, store, ledger.NewContent(identity.pool)); err != nil {
 			return fmt.Errorf("seed demo: %w", err)
 		}
 		slog.Info("seeded demo ledger")

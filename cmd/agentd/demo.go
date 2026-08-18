@@ -13,7 +13,7 @@ import (
 // seedDemo drives the real loop against stub collaborators so the development
 // server has runs to serve. Nothing here is a fixture: every step goes through
 // the Gate and lands in the ledger exactly as production would write it.
-func seedDemo(ctx context.Context, store Store) error {
+func seedDemo(ctx context.Context, store Store, content engine.ContentStore) error {
 	// Anchored a few hours in the past rather than at a fixed date: the console
 	// shows relative times, and a hardcoded instant reads as "in 6 hours" the
 	// moment the wall clock passes it. Still deterministic within a process,
@@ -64,6 +64,7 @@ func seedDemo(ctx context.Context, store Store) error {
 
 		runner := engine.NewRunner(engine.Deps{
 			Ledger:  store,
+			Content: content,
 			Gate:    gate.New(),
 			Planner: &stubPlanner{proposals: sc.proposals},
 			Tools:   stubTools{},
