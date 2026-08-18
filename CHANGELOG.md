@@ -29,6 +29,39 @@ field" is a commit message.
 
 Nothing yet.
 
+## [0.3.3] — 2026-08-18
+
+### Upgrade notes
+
+- **New runs keep the model's final answer in the content store.** Retention
+  and erasure can now reach the closing answer the same way they reach run
+  input, tool arguments and tool results. Runs recorded before this release may
+  still carry an inline final answer in the immutable chain; those historical
+  bytes are not rewritten.
+
+### Added
+
+- The console serves the manual from the same `docs/manual` files reviewed in
+  the repository.
+- A data protection note describes what the platform stores, what can be
+  erased, and which provider endpoints a default installation may call.
+
+### Changed
+
+- Simulation reports no longer put a `fuseone:` sentinel inside `outcome` when
+  a stored answer is gone. `outcome` is now only model text; `outcomeState`
+  carries `unavailable` when the answer was erased or otherwise unreadable.
+
+### Fixed
+
+- The run trail can open a finished run's stored final answer.
+- Long tool names, arguments, modals and instruction text stop stretching the
+  console layout beyond the viewport.
+- Demo seeding writes the content its stub tools return references to, so the
+  seeded runs do not look erased.
+- The published Docker image includes the embedded manual package, so the image
+  build passes after adding `/manual`.
+
 ## [0.3.2] — 2026-08-18
 
 ### Fixed
