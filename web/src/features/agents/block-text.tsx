@@ -41,7 +41,7 @@ export function BlockText({
         aria-label={label}
         onFocus={() => onWriting(true)}
         onClick={() => onWriting(true)}
-        className="cursor-text rounded-sm focus-visible:outline-2 focus-visible:outline-ring"
+        className="min-w-0 cursor-text rounded-sm focus-visible:outline-2 focus-visible:outline-ring"
       >
         {block.text.trim() === "" ? (
           <p className="text-base/[1.65] text-muted-foreground">
@@ -73,7 +73,7 @@ export function BlockText({
         placeholder={t("agents.blockPlaceholder")}
         aria-label={label}
         rows={Math.max(2, block.text.split("\n").length + 1)}
-        className="resize-none border-0 bg-transparent p-0 text-base/[1.65] shadow-none text-pretty focus-visible:ring-0"
+        className="min-w-0 resize-none border-0 bg-transparent p-0 text-base/[1.65] break-words shadow-none text-pretty focus-visible:ring-0"
       />
     </CiteTool>
   );

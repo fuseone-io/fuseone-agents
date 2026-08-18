@@ -185,7 +185,7 @@ function HeaderFields({
     <div className="space-y-3 rounded-lg border p-3">
       <div className="grid gap-3 sm:grid-cols-2">
         {headers.map((header) => (
-          <div key={header} className="space-y-1.5">
+          <div key={header} className="min-w-0 space-y-1.5">
             <FormLabel htmlFor={headerInputID(header)}>{header}</FormLabel>
             <Input
               id={headerInputID(header)}
@@ -357,7 +357,7 @@ function Field({
       control={form.control}
       name={name}
       render={({ field, fieldState }) => (
-        <FormItem>
+        <FormItem className="min-w-0">
           <FormLabel>{label}</FormLabel>
           <FormControl>
             <Input

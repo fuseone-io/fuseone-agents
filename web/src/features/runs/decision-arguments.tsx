@@ -17,7 +17,7 @@ export function DecisionArguments({ body }: { body?: string }) {
     );
   }
   return (
-    <pre className="overflow-x-auto rounded-lg border border-border bg-muted p-3 font-mono text-xs">
+    <pre className="max-h-[min(48vh,28rem)] max-w-full overflow-auto rounded-lg border border-border bg-muted p-3 font-mono text-xs whitespace-pre-wrap break-words">
       {pretty(body)}
     </pre>
   );

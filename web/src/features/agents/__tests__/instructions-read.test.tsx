@@ -24,6 +24,19 @@ describe("a published instruction", () => {
     expect(screen.getByText("Atender chamados.")).toBeInTheDocument();
   });
 
+  it("wraps long prose inside the instruction column", () => {
+    const longWord = "documentacao".repeat(24);
+    render(
+      <InstructionsRead
+        instructions={`Objetivo\nLer ${longWord} antes de responder.`}
+      />,
+    );
+
+    const prose = screen.getByText(new RegExp(longWord));
+    expect(prose).toHaveClass("min-w-0", "break-words");
+    expect(prose.closest("div")).toHaveClass("min-w-0");
+  });
+
   it("keeps the labels it has when only some blocks carry one", () => {
     // Half-labelled is the ordinary state of an instruction somebody is part
     // way through structuring, and the half that is labelled has to keep it.

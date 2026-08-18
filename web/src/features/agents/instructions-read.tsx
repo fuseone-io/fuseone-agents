@@ -27,13 +27,13 @@ export function InstructionsRead({ instructions }: { instructions: string }) {
   const labelled = blocks.some((block) => block.kind !== "prose");
 
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className="min-w-0 flex flex-col gap-0.5">
       {blocks.map((block, at) => (
         <div
           key={at}
           className={cn(
-            "items-start py-2.5",
-            labelled && "grid grid-cols-[104px_minmax(0,68ch)] gap-x-5",
+            "min-w-0 items-start py-2.5",
+            labelled && "grid grid-cols-[72px_minmax(0,1fr)] gap-x-3 sm:grid-cols-[104px_minmax(0,1fr)] sm:gap-x-5",
             !labelled && "max-w-[68ch]",
           )}
         >
@@ -47,7 +47,7 @@ export function InstructionsRead({ instructions }: { instructions: string }) {
               {labelOf(block.kind, i18n.language)}
             </span>
           )}
-          <p className="text-base/[1.65] whitespace-pre-wrap text-pretty">
+          <p className="min-w-0 text-base/[1.65] whitespace-pre-wrap break-words text-pretty">
             {block.text}
           </p>
         </div>

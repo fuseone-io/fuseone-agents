@@ -24,7 +24,7 @@ export function InstructionProse({
   policies: Policy[];
 }) {
   return (
-    <p className="text-base/[1.65] whitespace-pre-wrap text-pretty">
+    <p className="min-w-0 text-base/[1.65] whitespace-pre-wrap break-words text-pretty">
       {segments(text, catalogue, policies).map((segment, at) => {
         if (segment.kind === "text") return <span key={at}>{segment.text}</span>;
 
@@ -32,7 +32,7 @@ export function InstructionProse({
           return (
             <span
               key={at}
-              className="rounded-sm bg-warning-surface px-1 font-mono text-xs text-warning"
+              className="rounded-sm bg-warning-surface px-1 font-mono text-xs break-all text-warning"
             >
               {segment.text}
             </span>
@@ -45,8 +45,8 @@ export function InstructionProse({
             key={at}
             className={
               denied
-                ? "inline-flex items-baseline gap-1 rounded-sm bg-danger-surface px-1.5 font-mono text-xs text-danger [text-decoration-line:underline] [text-decoration-style:wavy] [text-underline-offset:3px]"
-                : "inline-flex items-baseline gap-1 rounded-sm border border-border bg-muted px-1.5 font-mono text-xs text-text-secondary"
+                ? "inline-flex max-w-full flex-wrap items-baseline gap-1 rounded-sm bg-danger-surface px-1.5 font-mono text-xs break-all text-danger [text-decoration-line:underline] [text-decoration-style:wavy] [text-underline-offset:3px]"
+                : "inline-flex max-w-full flex-wrap items-baseline gap-1 rounded-sm border border-border bg-muted px-1.5 font-mono text-xs break-all text-text-secondary"
             }
           >
             {denied ? (

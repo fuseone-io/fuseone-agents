@@ -25,8 +25,8 @@ export function ServerForm({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
-        <DialogHeader>
+      <DialogContent className="grid max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0 sm:max-w-xl">
+        <DialogHeader className="px-6 pt-6 pb-4">
           <DialogTitle>
             {server
               ? t("integrations.editServer")
@@ -38,16 +38,21 @@ export function ServerForm({
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit(submit)}
-            className="flex flex-col gap-4"
+            className="min-h-0 overflow-hidden"
           >
-            <ServerFormBody
-              form={form}
-              editing={server !== null}
-              hasSecret={server?.hasSecret === true}
-              hasConfigFile={server?.hasConfigFile === true}
-            />
+            <div
+              data-testid="server-form-scroll"
+              className="max-h-[calc(100dvh-11rem)] space-y-4 overflow-y-auto px-6 pb-4"
+            >
+              <ServerFormBody
+                form={form}
+                editing={server !== null}
+                hasSecret={server?.hasSecret === true}
+                hasConfigFile={server?.hasConfigFile === true}
+              />
+            </div>
 
-            <DialogFooter>
+            <DialogFooter className="border-t px-6 py-4">
               <Button type="button" variant="outline" onClick={onClose}>
                 {t("common.cancel")}
               </Button>

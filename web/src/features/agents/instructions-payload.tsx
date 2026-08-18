@@ -13,7 +13,7 @@ export function InstructionsPayload({ instructions }: { instructions: string }) 
 
   return (
     <div className="flex flex-col gap-2">
-      <pre className="max-w-[78ch] rounded-lg bg-muted p-4 font-mono text-xs/[1.75] whitespace-pre-wrap">
+      <pre className="max-w-full rounded-lg bg-muted p-4 font-mono text-xs/[1.75] whitespace-pre-wrap break-words sm:max-w-[78ch]">
         {instructions.trim() || t("agents.nothingWritten")}
       </pre>
       <p className="text-2xs text-muted-foreground">{t("agents.payloadIsThis")}</p>

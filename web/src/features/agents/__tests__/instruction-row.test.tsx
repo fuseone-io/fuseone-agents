@@ -57,6 +57,34 @@ function renderRow(text: string, policies: Policy[] = [], onChange = vi.fn()) {
 }
 
 describe("a block of an instruction", () => {
+  it("keeps long prose inside the editable row", () => {
+    const longWord = "github_issue_comment_body_".repeat(12);
+    const { container } = render(
+      <InstructionRow
+        block={{ kind: "objective", text: longWord }}
+        at={0}
+        tools={{ catalogue: CATALOGUE, policies: [] }}
+        findings={[]}
+        on={{
+          change: vi.fn(),
+          remove: vi.fn(),
+          keep: vi.fn(),
+          enable: vi.fn(),
+          relabel: vi.fn(),
+          split: vi.fn(),
+          slash: vi.fn(),
+          drag: STILL,
+        }}
+      />,
+    );
+
+    expect(container.firstElementChild).toHaveClass("min-w-0");
+    expect(screen.getByText(longWord).closest("p")).toHaveClass(
+      "min-w-0",
+      "break-words",
+    );
+  });
+
   it("shows the tools the sentence names", () => {
     renderRow("Use crm.lookup para achar o cliente.");
 

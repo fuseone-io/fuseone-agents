@@ -80,7 +80,7 @@ export function PendingDecision({
           >
             {t("runs.awaitingYou", { seq: approval.atSeq })}
           </h2>
-          <p className="mt-0.5 text-sm">
+          <p className="mt-0.5 min-w-0 text-sm break-words">
             <Trans
               i18nKey="runs.agentWantsToRun"
               values={{
@@ -91,7 +91,7 @@ export function PendingDecision({
               }}
               components={{
                 tool: (
-                  <Mono className="rounded-md border border-border bg-card px-1.5 py-px" />
+                  <Mono className="rounded-md border border-border bg-card px-1.5 py-px break-all" />
                 ),
               }}
             />
@@ -105,8 +105,8 @@ export function PendingDecision({
         </div>
       </div>
 
-      <div className="grid border-t border-border md:grid-cols-[1fr_288px]">
-        <div className="border-border p-4 md:border-r">
+      <div className="grid border-t border-border md:grid-cols-[minmax(0,1fr)_288px]">
+        <div className="min-w-0 border-border p-4 md:border-r">
           <h3 className="mb-2 text-2xs uppercase tracking-label text-muted-foreground">
             {t("runs.proposedArguments")}
           </h3>

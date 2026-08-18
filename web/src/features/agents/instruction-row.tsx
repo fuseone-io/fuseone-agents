@@ -81,7 +81,7 @@ export function InstructionRow({
         e.preventDefault();
         on.drag.onDrop();
       }}
-      className="group grid grid-cols-[104px_minmax(0,68ch)_auto] items-start gap-x-5 rounded-md py-2.5 transition-colors hover:bg-surface-hover"
+      className="group grid min-w-0 grid-cols-[72px_minmax(0,1fr)_auto] items-start gap-x-3 rounded-md py-2.5 transition-colors hover:bg-surface-hover sm:grid-cols-[104px_minmax(0,1fr)_auto] sm:gap-x-5"
     >
       <BlockLabel kind={block.kind} onChange={on.relabel} />
 

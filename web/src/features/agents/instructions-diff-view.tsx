@@ -49,7 +49,7 @@ function DiffRow({ block }: { block: BlockDiff }) {
   const label = labelOf(block.kind, i18n.language) || t("agents.blockProse");
 
   return (
-    <div className="grid grid-cols-[104px_minmax(0,68ch)] items-start gap-x-5 rounded-md py-2.5">
+    <div className="grid min-w-0 grid-cols-[72px_minmax(0,1fr)] items-start gap-x-3 rounded-md py-2.5 sm:grid-cols-[104px_minmax(0,1fr)] sm:gap-x-5">
       <span
         className={cn(
           "pt-[3px] text-right text-[10px]/5 font-medium uppercase tracking-label",
@@ -60,7 +60,7 @@ function DiffRow({ block }: { block: BlockDiff }) {
         {label}
       </span>
 
-      <p className="text-base/[1.65] whitespace-pre-wrap text-pretty">
+      <p className="min-w-0 text-base/[1.65] whitespace-pre-wrap break-words text-pretty">
         {block.pieces.map((piece, at) => {
           if (piece.kind === "added") {
             return (

@@ -82,7 +82,10 @@ describe("the pending decision", () => {
     stubEndpoints();
     renderCard();
 
-    expect(await screen.findByText(/88213/)).toBeInTheDocument();
+    const argument = await screen.findByText(/88213/);
+    expect(argument).toBeInTheDocument();
+    const block = argument.closest("pre");
+    expect(block).toHaveClass("max-w-full", "overflow-auto", "whitespace-pre-wrap", "break-words");
   });
 
   it("says where the arguments came from, which is why a human was asked", async () => {

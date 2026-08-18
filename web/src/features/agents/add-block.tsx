@@ -48,7 +48,7 @@ export function AddBlock({
   const { t } = useTranslation();
 
   return (
-    <div className="grid grid-cols-[104px_minmax(0,68ch)] gap-x-5">
+    <div className="grid min-w-0 grid-cols-[72px_minmax(0,1fr)] gap-x-3 sm:grid-cols-[104px_minmax(0,1fr)] sm:gap-x-5">
       <span />
       <DropdownMenu open={open} onOpenChange={onOpenChange}>
         <DropdownMenuTrigger asChild>
