@@ -1337,7 +1337,9 @@
     "verdictApproval": "Would ask approval",
     "verdictBlock": "Would block",
     "verdictConstrain": "Would constrain",
-    "wouldHaveCalled": "would call here"
+    "wouldHaveCalled": "would call here",
+    "casesHint": "One case per line, each a JSON object with what would arrive as the run's input. A single line is a single run — enough to see what an agent does before it does it for real.",
+    "casesExample": "{\"text\": \"read issue 14 and comment on it\"}"
   },
   "stage": {
     "autonomous": "Autonomous",

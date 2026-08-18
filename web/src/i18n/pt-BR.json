@@ -1337,7 +1337,9 @@
     "verdictApproval": "Pediria aprovação",
     "verdictBlock": "Bloquearia",
     "verdictConstrain": "Restringiria",
-    "wouldHaveCalled": "chamaria aqui"
+    "wouldHaveCalled": "chamaria aqui",
+    "casesHint": "Um caso por linha, cada um um objeto JSON com o que chegaria como entrada da run. Uma linha só é uma run só — o bastante para ver o que o agente faz antes de ele fazer de verdade.",
+    "casesExample": "{\"text\": \"leia a issue 14 e comente nela\"}"
   },
   "stage": {
     "autonomous": "Autônomo",

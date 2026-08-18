@@ -9,7 +9,7 @@ triggers:
   - { type: channel }
 tools:
   - github.list_issues
-  - github.get_issue
+  - github.issue_read
   - github.add_issue_comment
 budget:
   micros: 300000
