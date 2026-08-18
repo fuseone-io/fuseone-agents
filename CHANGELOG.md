@@ -27,6 +27,19 @@ field" is a commit message.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.3.0] — 2026-08-18
+
+### Upgrade notes
+
+- **The connection form may ask for different fields than before.** It now
+  follows what the recipe declares, so a server documented as taking two
+  headers stops offering a bearer field. A credential already stored in the
+  older shape is still shown, with its own button to remove it — nothing is
+  hidden and nothing is sent that was not configured. No action is needed
+  unless you want to move a credential to the shape the server documents.
+
 ### Added
 
 - **Try now** on a tool server: the worker reconnects it on request instead of
