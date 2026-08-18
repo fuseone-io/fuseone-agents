@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -19,15 +21,36 @@ import (
 // contract describes what a machine can do; this describes how a person
 // arrives.
 type AuthRoutes struct {
-	oidc      *auth.OIDC
-	dir       *auth.Postgres
-	bootstrap *auth.Bootstrap
-	local     *auth.Local
-	secure    bool
+	oidc          *auth.OIDC
+	providerStore IdentityProviderStore
+	dir           *auth.Postgres
+	bootstrap     *auth.Bootstrap
+	local         *auth.Local
+	secure        bool
+}
+
+type authProviderOption struct {
+	ID      string `json:"id"`
+	Display string `json:"display"`
 }
 
 func NewAuthRoutes(oidc *auth.OIDC, dir *auth.Postgres, bootstrap *auth.Bootstrap, secure bool) *AuthRoutes {
 	return &AuthRoutes{oidc: oidc, dir: dir, bootstrap: bootstrap, secure: secure}
+}
+
+// IdentityProviderStore is the durable source of sign-in provider
+// configuration. The live OIDC registry is per process; the store is what lets
+// another serve replica complete a flow for a provider it did not configure.
+type IdentityProviderStore interface {
+	IdentityProviders(ctx context.Context) ([]domain.IdentityProvider, error)
+	IdentitySecret(ctx context.Context, id string) (string, error)
+}
+
+// WithIdentityProviders lets sign-in routes reconcile the per-process OIDC
+// registry with the durable configuration before a redirect or callback.
+func (a *AuthRoutes) WithIdentityProviders(store IdentityProviderStore) *AuthRoutes {
+	a.providerStore = store
+	return a
 }
 
 // WithLocal wires signing in with a password, for the installation that has
@@ -53,13 +76,9 @@ func (a *AuthRoutes) Mount(mux *http.ServeMux) {
 // It also reports whether setup is still pending, so a fresh installation
 // shows the setup screen instead of a login form with no providers on it.
 func (a *AuthRoutes) providers(w http.ResponseWriter, r *http.Request) {
-	type option struct {
-		ID      string `json:"id"`
-		Display string `json:"display"`
-	}
 	out := struct {
-		Providers        []option `json:"providers"`
-		BootstrapPending bool     `json:"bootstrapPending"`
+		Providers        []authProviderOption `json:"providers"`
+		BootstrapPending bool                 `json:"bootstrapPending"`
 		// AuthRequired tells the console whether there is anything to sign in
 		// to. An installation with no identity configured is not protecting
 		// anything, and a sign-in screen in front of it is a lock on an open
@@ -69,11 +88,14 @@ func (a *AuthRoutes) providers(w http.ResponseWriter, r *http.Request) {
 		// on an installation whose people all come from a provider, and the
 		// difference between showing a password form and not.
 		LocalSignIn bool `json:"localSignIn"`
-	}{Providers: []option{}, AuthRequired: true}
+	}{Providers: []authProviderOption{}, AuthRequired: true}
 
-	for _, p := range a.oidc.Providers() {
-		out.Providers = append(out.Providers, option{ID: p.ID, Display: p.Display})
+	providers, err := a.providerOptions(r.Context())
+	if err != nil {
+		writeProblemJSON(w, http.StatusInternalServerError, CodeUnavailable, "Could not read identity providers", err.Error())
+		return
 	}
+	out.Providers = providers
 
 	if a.bootstrap != nil {
 		// Whether a token can be claimed, not whether an administrator is
@@ -105,6 +127,10 @@ func (a *AuthRoutes) providers(w http.ResponseWriter, r *http.Request) {
 
 func (a *AuthRoutes) start(w http.ResponseWriter, r *http.Request) {
 	provider := r.PathValue("provider")
+	if err := a.syncProvider(r.Context(), provider); err != nil {
+		writeProblemJSON(w, http.StatusBadRequest, CodeInvalidInput, "Cannot start sign-in", err.Error())
+		return
+	}
 	if err := a.oidc.Start(w, r, provider, r.URL.Query().Get("returnTo")); err != nil {
 		writeProblemJSON(w, http.StatusBadRequest, CodeInvalidInput, "Cannot start sign-in", err.Error())
 	}
@@ -114,6 +140,10 @@ func (a *AuthRoutes) start(w http.ResponseWriter, r *http.Request) {
 func (a *AuthRoutes) callback(w http.ResponseWriter, r *http.Request) {
 	providerID := r.PathValue("provider")
 
+	if err := a.syncProvider(r.Context(), providerID); err != nil {
+		writeProblemJSON(w, http.StatusUnauthorized, CodeSignInFailed, "Sign-in failed", err.Error())
+		return
+	}
 	identity, err := a.oidc.Complete(r.Context(), w, r, providerID)
 	if err != nil {
 		writeProblemJSON(w, http.StatusUnauthorized, CodeSignInFailed, "Sign-in failed", err.Error())
@@ -162,6 +192,63 @@ func (a *AuthRoutes) callback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, identity.ReturnTo, http.StatusFound)
+}
+
+func (a *AuthRoutes) providerOptions(ctx context.Context) ([]authProviderOption, error) {
+	if a.providerStore == nil {
+		live := a.oidc.Providers()
+		out := make([]authProviderOption, 0, len(live))
+		for _, p := range live {
+			out = append(out, authProviderOption{ID: p.ID, Display: p.Display})
+		}
+		return out, nil
+	}
+	found, err := a.providerStore.IdentityProviders(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]authProviderOption, 0, len(found))
+	for _, p := range found {
+		if p.Enabled {
+			out = append(out, authProviderOption{ID: p.ID, Display: p.Display})
+		}
+	}
+	slices.SortFunc(out, func(a, b authProviderOption) int { return strings.Compare(a.ID, b.ID) })
+	return out, nil
+}
+
+func (a *AuthRoutes) syncProvider(ctx context.Context, providerID string) error {
+	if a.providerStore == nil {
+		return nil
+	}
+	found, err := a.providerStore.IdentityProviders(ctx)
+	if err != nil {
+		return fmt.Errorf("auth: read identity providers: %w", err)
+	}
+	for _, p := range found {
+		if p.ID != providerID {
+			continue
+		}
+		if !p.Enabled {
+			a.oidc.Remove(providerID)
+			return nil
+		}
+		secret, err := a.providerStore.IdentitySecret(ctx, p.ID)
+		if err != nil {
+			a.oidc.Remove(providerID)
+			return fmt.Errorf("auth: read identity provider secret: %w", err)
+		}
+		if err := a.oidc.Add(ctx, &auth.OIDCProvider{
+			ID: p.ID, Display: p.Display, Issuer: p.Issuer, ClientID: p.ClientID,
+			ClientSecret: secret, GroupsClaim: p.GroupsClaim, Mappings: p.Mappings,
+		}); err != nil {
+			a.oidc.Remove(providerID)
+			return err
+		}
+		return nil
+	}
+	a.oidc.Remove(providerID)
+	return nil
 }
 
 // claimBootstrap exchanges the first-run token for the first administrator.

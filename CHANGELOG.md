@@ -47,6 +47,13 @@ field" is a commit message.
 - Classified model provider failures write only their stable code to
   `runs.last_error`; provider response bodies stay out of the run projection.
 
+### Fixed
+
+- OIDC sign-in no longer depends on the `serve` replica that handled the
+  identity-provider configuration. Each sign-in start and callback reconciles
+  the local registry with the durable provider settings, so a callback routed
+  to another pod does not fail with "no such identity provider".
+
 ## [0.4.0] — 2026-08-18
 
 ### Upgrade notes
