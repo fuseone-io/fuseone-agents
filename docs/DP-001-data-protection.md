@@ -26,17 +26,38 @@ makes erasure possible at all.
 sealed against the one before it by a hash. It is append-only and the database
 enforces it: there is no `UPDATE` and no `DELETE`. A correction is a new step.
 
-**The content.** `run_content` holds the bytes a step refers to — the text of a
-ticket the agent read, the arguments a tool was called with, a model's reply. A
-step carries a **reference and a digest**, never the bytes.
+**The content.** `run_content` holds the bulk of what a run touched — the text
+of a ticket the agent read, the arguments a tool was called with, a tool's
+result. For these, the step carries a **reference and a digest**, and the bytes
+live where they can be erased.
 
-This is why an erasure does not break anything. Deleting content leaves the
-chain untouched and still verifiable: every hash still checks, because no hash
-ever covered the bytes — it covered the reference to them.
+This is why an erasure does not break anything. Deleting that content leaves
+the chain untouched and still verifiable: every hash still checks, because no
+hash covered the bytes — it covered the reference to them.
 
-An installation that had recorded the content inside the steps would face a
-choice between honouring an erasure request and keeping an auditable record.
-This one does not have that choice to make.
+### The split is not absolute, and the exception matters
+
+Some text is written **into the step itself**, and therefore into the
+append-only table. It is not covered by erasure and not covered by retention,
+because neither touches `run_steps`. It is permanent.
+
+| Written into the step | Where it comes from |
+|---|---|
+| `RunFinishedPayload.Outcome` | **The model's final answer, verbatim** |
+| `ApprovalDecidedPayload` note | Typed by the person approving |
+| `AbandonedPayload.Reason` | Typed by the person abandoning the run |
+| Resume note | Typed by the person resuming |
+
+The first row is the one a reviewer must weigh. An agent's closing answer is
+free text produced by the model, and it can restate anything the agent read on
+the way — a name, an address, the body of a ticket. It is written into a table
+that has no `UPDATE` and no `DELETE`, and an erasure request does not reach it.
+
+**This is a defect, not a design.** The outcome belongs in the content store
+behind a reference like everything else of its kind, and until it is moved this
+installation cannot promise that erasure removes the personal data a run
+handled. A customer weighing that risk should assume the model's final answer
+is permanent.
 
 ---
 
@@ -47,7 +68,7 @@ Roughly twenty-five tables. The ones that can hold personal data:
 | Where | What it can hold |
 |---|---|
 | `run_content` | Everything an agent read or wrote: ticket text, email bodies, tool arguments, model replies |
-| `run_steps` | References and digests, never the bytes; plus who asked, which agent, which tool, what the Gate decided |
+| `run_steps` | Who asked, which agent, which tool, what the Gate decided; references and digests for bulk content — **and the free text listed in section 1**, permanently |
 | `principals`, `sessions`, `role_grants` | The people who use the console: identity from the customer's own provider |
 | `channel_inbox`, `channel_deliveries` | Messages exchanged on a connected channel, and what was sent back |
 | `admin_events`, `audit` records | Who changed what configuration, and when |
@@ -70,14 +91,17 @@ leave — deliberately, to places the customer chooses.
 model. That text is whatever the agent has read. The providers this platform
 can be pointed at are configured by the customer, and the built-in list spans
 several jurisdictions — `api.openai.com`, `api.anthropic.com`,
-`api.mistral.ai`, `api.groq.com`, `api.x.ai`, `api.deepseek.com`,
-`api.moonshot.cn`. **The last two are outside the EU and the US**, which is a
-fact a DPO needs before choosing, not after.
+`api.mistral.ai`, `api.groq.com`, `api.x.ai`, `api.together.xyz`,
+`api.deepseek.com`, `api.moonshot.cn`. **The last two are outside the EU and
+the US**, which is a fact a DPO needs before choosing, not after.
 
-There is no built-in provider that runs inside the installation. If model
-inference must not leave the customer's network, the platform must be pointed
-at a compatible endpoint the customer hosts. That is supported by
-configuration; it is not the default.
+Two further presets — `vllm` and `ollama` — carry no vendor endpoint. They
+exist for the customer that cannot let prompts leave its network at all: the
+base URL is the installation's own, and nothing goes to a third party.
+
+FuseOne bundles no inference runtime of its own, so running a model locally
+means the customer runs it. The path is supported and configured; it is not the
+default, and choosing it is the decision that settles this section.
 
 **Remote MCP servers.** A tool server reached over HTTP is a third party the
 customer connected, and tool arguments go to it. A tool server run locally over
@@ -88,9 +112,15 @@ environment: the child receives an allowlist (`PATH`, `HOME`, `TMPDIR`, `LANG`,
 **Channels.** A connected channel — Slack, for instance — carries messages to
 that provider under the customer's own workspace agreement.
 
-Nothing else opens an outbound connection. There is no telemetry to the vendor,
-no usage reporting, no phone-home. An installation with no model provider and
-no remote tool server configured makes no outbound requests at all.
+**Sign-in.** OIDC reaches the customer's own identity provider: it fetches the
+issuer's discovery document, and exchanges an authorisation code for a token on
+every sign-in. The destination is whichever provider the customer configured.
+
+There is no telemetry to the vendor, no usage reporting, no phone-home — the
+vendor receives nothing, because there is no vendor-side component to receive
+it. But "no outbound at all" is not something this platform can claim: a
+signed-in console has already talked to an identity provider, and a connected
+channel talks to its own.
 
 ---
 
@@ -116,9 +146,15 @@ not by whose data it touched.
 
 **What survives an erasure.** The chain: that a run happened, which agent, which
 tool, what the Gate decided, and the digest of content that no longer exists.
-This is the deliberate trade. If a regulator requires that no trace of the
-processing survive, this platform does not meet that requirement, and no
-configuration changes it.
+That much is the deliberate trade — a record of processing is what the platform
+is for.
+
+**And, today, more than that.** The free text of section 1 survives too,
+including the model's final answer. That part is not a trade anybody chose; it
+is a defect, and it is stated here rather than left for a reviewer to find.
+
+If a regulator requires that no trace of the processing survive, this platform
+does not meet that requirement, and no configuration changes it.
 
 ---
 
@@ -169,9 +205,13 @@ Stated plainly, because each of these gets assumed:
 - **It does not classify personal data.** It does not know which field is a
   name. The taint mechanism marks content by **origin**, not by sensitivity.
 - **It does not index by data subject.** See section 4.
-- **It does not log tool arguments.** The tool execution path emits no log
-  lines at all, so there is no second copy of the content in a log aggregator
-  outside the retention window.
+- **It does not log tool arguments — and cannot speak for what it runs.**
+  FuseOne's own tool execution path emits no log lines at all. But a local MCP
+  server is a separate process whose standard error is wired to the worker's,
+  so anything that integration chooses to print lands in the worker's log,
+  outside the retention window and outside this platform's control. A remote
+  MCP server logs whatever its operator decided. **What a tool server logs is
+  the integration's responsibility, and has to be assessed per server.**
 - **It does not anonymise or pseudonymise.** What an agent reads is stored as
   it was read, until erased.
 
@@ -187,6 +227,8 @@ Stated plainly, because each of these gets assumed:
 - **Erasure has not been rehearsed at volume.** The mechanism is tested; a
   subject request across a large installation has not been carried out.
 - **No certification is claimed.** Not ISO 27001, not SOC 2, not any other.
+- **The permanence in section 1 has not been fixed.** It is recorded here as a
+  known defect; a reviewer should read it as current behaviour, not as a plan.
 - **The provider list may drift.** Section 3 names what the built-in list
   carries today. An installation's configuration is what actually governs where
   data goes, and it is the customer's to read.
