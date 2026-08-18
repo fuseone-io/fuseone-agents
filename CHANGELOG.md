@@ -27,6 +27,23 @@ field" is a commit message.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.2.0] — 2026-08-17
+
+### Upgrade notes
+
+- **Pods restart with a read-only root filesystem.** The chart now declares the
+  security context the image already satisfied, which is what lets a cluster
+  enforcing Pod Security Standards `restricted` run it at all. `/tmp` is
+  mounted writable because a local tool server's sealed config file is
+  materialised there. An installation running a modified image that writes
+  elsewhere should set `securityContext.readOnlyRootFilesystem: false` before
+  upgrading, or move those writes.
+- **Replicas are spread across nodes where the cluster allows it.** Scheduling
+  never refuses over it — `ScheduleAnyway` — so nothing goes Pending, but pods
+  may land on different nodes than before.
+
 ### Added
 
 - The connection form asks for the credential the server actually takes. A
