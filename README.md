@@ -83,6 +83,7 @@ whether this design fits their problem.
 | | |
 |---|---|
 | [PRD-001](docs/PRD-001-fuseone-agents.md) | What the product is, requirement by requirement |
+| [DP-001](docs/DP-001-data-protection.md) | What is stored, what leaves the installation, and what can be erased |
 | [OP-001](docs/OP-001-running-an-installation.md) | Installing it, the decisions an operator owns, and what to expect when something is wrong |
 | [NT-001](docs/NT-001-integration-boundary-and-execution-model.md) | Where MCP ends and integration begins |
 | [NT-003](docs/NT-003-conversational-authoring.md) | Authoring an agent by conversation |
