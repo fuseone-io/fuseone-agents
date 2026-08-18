@@ -14,6 +14,7 @@ import (
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
+	"github.com/fuseone/agents/internal/model"
 )
 
 /*
@@ -89,13 +90,20 @@ func (w *Worker) turn(ctx context.Context, log *slog.Logger) (bool, error) {
 		log.Warn("advance failed",
 			"attempt", claim.Attempts+1, "parked", outcome.Parked, "err", advErr)
 		if outcome.Parked {
-			return true, w.park(ctx, claim, advErr, "attempts_exhausted")
+			return true, w.park(ctx, claim, advErr, parkedReasonFor(advErr))
 		}
 		return true, w.release(ctx, claim, outcome)
 	}
 
 	log.Debug("advanced", "phase", status.Phase.String(), "seq", status.Seq)
 	return true, w.release(ctx, claim, domain.ClaimOutcome{})
+}
+
+func parkedReasonFor(err error) string {
+	if failure, ok := model.FailureSummaryOf(err); ok {
+		return failure.Code
+	}
+	return "attempts_exhausted"
 }
 
 // scopedBudget narrows a run's ceiling by what its scope has left.

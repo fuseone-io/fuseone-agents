@@ -189,7 +189,7 @@ func (r *Registry) Planner(providerName string, cfg Config, tools ToolSchemas) (
 		if r.http != nil {
 			opts = append(opts, option.WithHTTPClient(r.http))
 		}
-		return New(anthropic.NewClient(opts...), cfg, tools), nil
+		return New(anthropic.NewClient(opts...), p.Name, cfg, tools), nil
 
 	case KindOpenAICompatible:
 		return NewOpenAICompatible(p, cfg, tools, r.http), nil

@@ -67,6 +67,15 @@ func runFromSummary(s domain.RunSummary) openapi.Run {
 			AtSeq:   s.PendingApproval.AtSeq,
 		}
 	}
+	if s.Failure != nil {
+		run.Failure = &openapi.RunFailure{
+			Code:      s.Failure.Code,
+			Provider:  stringPtr(s.Failure.Provider),
+			Status:    intPtr(s.Failure.Status),
+			RequestId: stringPtr(s.Failure.RequestID),
+			Retryable: ptr(s.Failure.Retryable),
+		}
+	}
 	return run
 }
 

@@ -22,6 +22,7 @@ import { AgentEditorPage } from "@/features/agents/agent-editor-page";
 import { SimulationPage } from "@/features/agents/simulation-page";
 import { RunsPage } from "@/features/runs/runs-page";
 import { RunDetailPage } from "@/features/runs/run-detail-page";
+import { RuntimePage } from "@/features/runtime/runtime-page";
 import { ApprovalsPage } from "@/features/approvals/approvals-page";
 import { CostPage } from "@/features/cost/cost-page";
 import { ManualIndexPage } from "@/features/manual/manual-index-page";
@@ -70,6 +71,7 @@ createRoot(document.getElementById("root")!).render(
                   />
                   <Route path="/runs" element={<RunsPage />} />
                   <Route path="/runs/:runId" element={<RunDetailPage />} />
+                  <Route path="/runtime" element={<RuntimePage />} />
                   <Route path="/approvals" element={<ApprovalsPage />} />
                   <Route path="/cost" element={<CostPage />} />
                   <Route path="/policies" element={<PoliciesPage />} />

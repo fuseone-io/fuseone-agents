@@ -301,6 +301,36 @@ func TestOpenAICompatible_upstreamError_carriesTheProviderMessage(t *testing.T) 
 	}
 }
 
+func TestOpenAICompatible_overloadBecomesAStableProviderFailure(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("x-request-id", "req_529")
+		w.WriteHeader(529)
+		_, _ = io.WriteString(w, `{"error":{"type":"overloaded_error","message":"Overloaded"}}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	_, err := plannerFor(t, model.KindOpenAICompatible, srv.URL, model.Config{}).
+		Plan(context.Background(), input())
+
+	var provider *model.ProviderError
+	if !errors.As(err, &provider) {
+		t.Fatalf("Plan = %v, want a provider error", err)
+	}
+	if provider.Code != model.CodeProviderOverloaded || provider.Provider != "under-test" ||
+		provider.Status != 529 || provider.RequestID != "req_529" || !provider.Retryable {
+		t.Errorf("provider error = %+v, want a typed overload", *provider)
+	}
+	got, ok := model.FailureSummaryOf(err)
+	if !ok {
+		t.Fatal("FailureSummaryOf did not read the provider error")
+	}
+	if got.Code != model.CodeProviderOverloaded || got.RequestID != "req_529" {
+		t.Errorf("summary = %+v, want the low-cardinality failure plus request id", got)
+	}
+}
+
 // --- registry ---------------------------------------------------------------
 
 func TestRegistry_unknownProvider_saysWhatIsAvailable(t *testing.T) {

@@ -13,14 +13,21 @@ import (
 	"time"
 
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/model"
 )
 
 func (w *Worker) failure(claim domain.Claim, err error) domain.ClaimOutcome {
 	attempts := claim.Attempts + 1
-	if attempts >= w.cfg.MaxAttempts {
-		return domain.ClaimOutcome{Err: err, Parked: true}
+	outcome := domain.ClaimOutcome{Err: err}
+	if failure, ok := model.FailureSummaryOf(err); ok {
+		outcome.Failure = &failure
 	}
-	return domain.ClaimOutcome{Err: err, NextAttemptAt: w.clock.Now().Add(backoff(w.cfg, attempts))}
+	if attempts >= w.cfg.MaxAttempts {
+		outcome.Parked = true
+		return outcome
+	}
+	outcome.NextAttemptAt = w.clock.Now().Add(backoff(w.cfg, attempts))
+	return outcome
 }
 
 /*
@@ -43,10 +50,18 @@ func (w *Worker) park(ctx context.Context, claim domain.Claim, reason error, cod
 	if err == nil && head.Kind.Terminal() {
 		// The runner already recorded it — a budget ceiling, most often. A
 		// second parking would be a correction of something that is not wrong.
-		return w.release(ctx, claim, domain.ClaimOutcome{Err: reason, Parked: true})
+		outcome := domain.ClaimOutcome{Err: reason, Parked: true}
+		if failure, ok := model.FailureSummaryOf(reason); ok {
+			outcome.Failure = &failure
+		}
+		return w.release(ctx, claim, outcome)
 	}
 
-	payload, err := json.Marshal(domain.ParkedPayload{Reason: code, Attempts: claim.Attempts + 1})
+	parked := domain.ParkedPayload{Reason: code, Attempts: claim.Attempts + 1}
+	if failure, ok := model.FailureSummaryOf(reason); ok {
+		parked.Failure = &failure
+	}
+	payload, err := json.Marshal(parked)
 	if err != nil {
 		return fmt.Errorf("encode parking of %s: %w", claim.RunID, err)
 	}
@@ -66,7 +81,11 @@ func (w *Worker) park(ctx context.Context, claim domain.Claim, reason error, cod
 		// ledger does.
 		w.log.Error("could not record the parking", "run", claim.RunID, "err", err)
 	}
-	return w.release(ctx, claim, domain.ClaimOutcome{Err: reason, Parked: true})
+	outcome := domain.ClaimOutcome{Err: reason, Parked: true}
+	if failure, ok := model.FailureSummaryOf(reason); ok {
+		outcome.Failure = &failure
+	}
+	return w.release(ctx, claim, outcome)
 }
 
 func (w *Worker) release(ctx context.Context, claim domain.Claim, outcome domain.ClaimOutcome) error {

@@ -3,6 +3,7 @@ import { ErrorState, LoadingRows } from "@/components/shared/states";
 import { PendingDecision } from "@/features/runs/pending-decision";
 import { RunIdentity } from "@/features/runs/run-identity";
 import { RunKpis } from "@/features/runs/run-kpis";
+import { RunFailureNotice } from "@/features/runs/run-failure-notice";
 import { RunSideRail } from "@/features/runs/run-side-rail";
 import { TrailPanel } from "@/features/runs/trail-panel";
 import { useRun, useRunSteps } from "@/features/runs/api";
@@ -37,6 +38,7 @@ export function RunDetailPage() {
   return (
     <div className="flex w-full min-w-0 flex-col gap-5">
       <RunIdentity run={data} trigger={triggerOf(items)} />
+      <RunFailureNotice run={data} />
 
       {pending && (
         <PendingDecision

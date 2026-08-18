@@ -27,7 +27,12 @@ field" is a commit message.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- Runtime health shows the worker queue, current run phases and typed model
+  provider failures, including overloaded and rate-limited providers.
+- Runs parked after a provider failure show the stable cause and provider
+  request id on the execution page.
 
 ## [0.3.4] — 2026-08-18
 

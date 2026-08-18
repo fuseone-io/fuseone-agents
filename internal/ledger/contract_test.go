@@ -33,6 +33,7 @@ type Store interface {
 	Claim(ctx context.Context, owner string, lease time.Duration) (domain.Claim, error)
 	Release(ctx context.Context, runID domain.RunID, outcome domain.ClaimOutcome) error
 	Stats(ctx context.Context, filter domain.RunFilter) (domain.RunStats, error)
+	RuntimeHealth(ctx context.Context, filter domain.RunFilter) (domain.RuntimeHealth, error)
 	ListRuns(ctx context.Context, filter domain.RunFilter, phase string, limit int) ([]domain.RunSummary, error)
 	CostRollup(ctx context.Context, filter domain.RunFilter, groupBy string) ([]domain.CostBucket, error)
 	AgentActivity(ctx context.Context, filter domain.RunFilter) ([]domain.AgentActivity, error)
@@ -417,6 +418,45 @@ func TestQueueContract(t *testing.T) {
 
 		if _, err := s.Claim(ctx, "w1", lease); !errors.Is(err, domain.ErrNoClaimableRun) {
 			t.Errorf("Claim during backoff = %v, want %v", err, domain.ErrNoClaimableRun)
+		}
+	})
+
+	run(t, "a provider failure in backoff is visible before the run parks", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		openRun(t, s, "run-1")
+
+		if _, err := s.Claim(ctx, "w1", lease); err != nil {
+			t.Fatalf("Claim: %v", err)
+		}
+		since := time.Now().Add(-time.Minute)
+		if err := s.Release(ctx, "run-1", domain.ClaimOutcome{
+			Err:           errors.New("provider overloaded"),
+			NextAttemptAt: time.Now().Add(time.Hour),
+			Failure: &domain.FailureSummary{
+				Code:      "model_provider_overloaded",
+				Provider:  "anthropic",
+				Status:    529,
+				RequestID: "req_backoff",
+				Retryable: true,
+			},
+		}); err != nil {
+			t.Fatalf("Release: %v", err)
+		}
+
+		health, err := s.RuntimeHealth(ctx, domain.RunFilter{Since: since})
+		if err != nil {
+			t.Fatalf("RuntimeHealth: %v", err)
+		}
+		if health.Queue.BackingOff != 1 {
+			t.Fatalf("backingOff = %d, want the failed run waiting for retry", health.Queue.BackingOff)
+		}
+		if len(health.Failures) != 1 {
+			t.Fatalf("failures = %+v, want one provider bucket", health.Failures)
+		}
+		got := health.Failures[0]
+		if got.Code != "model_provider_overloaded" || got.Provider != "anthropic" ||
+			got.Status != 529 || got.Runs != 1 || !got.Retryable {
+			t.Errorf("failure bucket = %+v, want the backoff provider failure", got)
 		}
 	})
 
@@ -808,6 +848,48 @@ func TestListContract(t *testing.T) {
 		}
 		if page[0].PendingApproval.Tool != "crm.note" {
 			t.Errorf("pending tool = %q, want crm.note", page[0].PendingApproval.Tool)
+		}
+	})
+
+	run(t, "a parked provider failure carries the stable failure summary", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		mustAppend(t, s, startedAt("run-1", base.Add(-48*time.Hour)))
+		parked := step("run-1", domain.StepParked)
+		parked.At = base.Add(time.Second)
+		parked.Payload = mustJSON(t, domain.ParkedPayload{
+			Reason:   "model_provider_overloaded",
+			Attempts: 5,
+			Failure: &domain.FailureSummary{
+				Code:      "model_provider_overloaded",
+				Provider:  "anthropic",
+				Status:    529,
+				RequestID: "req_529",
+				Retryable: true,
+			},
+		})
+		mustAppend(t, s, parked)
+
+		page, err := s.ListRuns(ctx, domain.RunFilter{}, "parked", 50)
+		if err != nil {
+			t.Fatalf("ListRuns: %v", err)
+		}
+		if len(page) != 1 || page[0].Failure == nil {
+			t.Fatalf("ListRuns = %+v, want the typed provider failure", page)
+		}
+		got := page[0].Failure
+		if got.Code != "model_provider_overloaded" || got.Provider != "anthropic" ||
+			got.Status != 529 || got.RequestID != "req_529" || !got.Retryable {
+			t.Errorf("failure = %+v, want what the parked step recorded", *got)
+		}
+
+		health, err := s.RuntimeHealth(ctx, domain.RunFilter{Since: base.Add(-time.Minute)})
+		if err != nil {
+			t.Fatalf("RuntimeHealth: %v", err)
+		}
+		if len(health.Failures) != 1 || health.Failures[0].Code != "model_provider_overloaded" ||
+			health.Failures[0].Runs != 1 {
+			t.Fatalf("RuntimeHealth failures = %+v, want one overload bucket", health.Failures)
 		}
 	})
 

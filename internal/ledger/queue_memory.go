@@ -126,6 +126,13 @@ func (m *Memory) Release(ctx context.Context, runID domain.RunID, outcome domain
 	m.leases[runID] = st
 	delete(m.owners, runID)
 	m.lastError[runID] = outcome.Reason()
+	if outcome.Failure != nil {
+		m.lastFailure[runID] = *outcome.Failure
+		m.lastFailureAt[runID] = m.now()
+	} else {
+		delete(m.lastFailure, runID)
+		delete(m.lastFailureAt, runID)
+	}
 	return nil
 }
 

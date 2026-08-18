@@ -206,12 +206,24 @@ type FailedPayload struct {
 	Retryable bool   `json:"retryable"`
 }
 
+// FailureSummary is the small, stable part of a failure that an operator can
+// act on. The raw error text stays out of the ledger payload: provider bodies
+// are diagnostic material, not an audit field to render forever.
+type FailureSummary struct {
+	Code      string `json:"code"`
+	Provider  string `json:"provider,omitempty"`
+	Status    int    `json:"status,omitempty"`
+	RequestID string `json:"request_id,omitempty"`
+	Retryable bool   `json:"retryable,omitempty"`
+}
+
 // ParkedPayload records a run stopped awaiting human intervention. Parking is
 // resumable by design: a budget ceiling raise or a fixed upstream continues
 // the run from the exact step it stopped at (PRD FO-04, NF-14).
 type ParkedPayload struct {
-	Reason   string `json:"reason"`
-	Attempts int    `json:"attempts,omitempty"`
+	Reason   string          `json:"reason"`
+	Attempts int             `json:"attempts,omitempty"`
+	Failure  *FailureSummary `json:"failure,omitempty"`
 }
 
 type RunFinishedPayload struct {

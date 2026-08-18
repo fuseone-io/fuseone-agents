@@ -12,6 +12,7 @@ import (
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/gate"
 	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/model"
 )
 
 // --- collaborators ----------------------------------------------------------
@@ -19,6 +20,7 @@ import (
 type flakyPlanner struct {
 	failures int
 	calls    int
+	err      error
 	// proposal, when set, is what the planner asks for instead of finishing.
 	// A run that finishes on its first turn never reaches the Gate, which is
 	// where a ceiling is enforced.
@@ -28,6 +30,9 @@ type flakyPlanner struct {
 func (p *flakyPlanner) Plan(context.Context, engine.PlanInput) (engine.Proposal, error) {
 	p.calls++
 	if p.calls <= p.failures {
+		if p.err != nil {
+			return engine.Proposal{}, p.err
+		}
 		return engine.Proposal{}, errors.New("model unreachable")
 	}
 	if p.proposal != nil {
@@ -319,7 +324,7 @@ func TestTurn_resolutionCarriesNoPlanner_runIsParkedRatherThanCrashed(t *testing
 	}
 }
 
-func parkReason(t *testing.T, store *ledger.Memory) string {
+func parkPayload(t *testing.T, store *ledger.Memory) domain.ParkedPayload {
 	t.Helper()
 	steps, err := store.Read(context.Background(), "run-1", domain.FirstSeq)
 	if err != nil {
@@ -333,7 +338,12 @@ func parkReason(t *testing.T, store *ledger.Memory) string {
 	if err := json.Unmarshal(last.Payload, &p); err != nil {
 		t.Fatalf("payload: %v", err)
 	}
-	return p.Reason
+	return p
+}
+
+func parkReason(t *testing.T, store *ledger.Memory) string {
+	t.Helper()
+	return parkPayload(t, store).Reason
 }
 
 func TestTurn_attemptsExhausted_parksTheRunInTheLedgerToo(t *testing.T) {
@@ -350,6 +360,39 @@ func TestTurn_attemptsExhausted_parksTheRunInTheLedgerToo(t *testing.T) {
 	}
 	if got := parkReason(t, s.store); got != "attempts_exhausted" {
 		t.Errorf("reason = %q", got)
+	}
+}
+
+func TestTurn_providerFailure_parksWithTheStableProviderSummary(t *testing.T) {
+	t.Parallel()
+
+	planner := &flakyPlanner{
+		failures: 99,
+		err: &model.ProviderError{
+			Provider:  "anthropic",
+			Code:      model.CodeProviderOverloaded,
+			Status:    529,
+			RequestID: "req_011CeAaYZkdUe63yaSu5CxCX",
+			Retryable: true,
+		},
+	}
+	s := newSetup(t, Config{MaxAttempts: 1}, planner, nil)
+	openRun(t, s.store)
+
+	if _, err := s.worker.turn(context.Background(), slog.New(slog.DiscardHandler)); err != nil {
+		t.Fatalf("turn: %v", err)
+	}
+
+	p := parkPayload(t, s.store)
+	if p.Reason != model.CodeProviderOverloaded {
+		t.Fatalf("reason = %q, want the typed provider code", p.Reason)
+	}
+	if p.Failure == nil {
+		t.Fatal("parked payload has no provider failure summary")
+	}
+	if p.Failure.Provider != "anthropic" || p.Failure.Status != 529 ||
+		p.Failure.RequestID != "req_011CeAaYZkdUe63yaSu5CxCX" || !p.Failure.Retryable {
+		t.Errorf("failure = %+v, want the stable provider summary", *p.Failure)
 	}
 }
 

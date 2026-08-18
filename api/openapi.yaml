@@ -217,6 +217,34 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /runtime:
+    get:
+      tags: [runs]
+      operationId: getRuntimeHealth
+      summary: Worker queue and recent runtime failures
+      description: >
+        Operational health for the runtime. It is read from the run projection,
+        not from raw logs: codes and provider names are low-cardinality facts,
+        while provider bodies stay out of aggregate views.
+      parameters:
+        - $ref: '#/components/parameters/CompanyScope'
+        - $ref: '#/components/parameters/Area'
+        - name: agentId
+          in: query
+          schema: { type: string }
+        - name: since
+          in: query
+          description: Only failure buckets last seen at or after this instant. Defaults to the last 24 hours.
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Runtime health.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeHealth' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /agents/interview:
     post:
       tags: [agents]
@@ -3720,6 +3748,32 @@ components:
         pendingApproval:
           allOf: [{ $ref: '#/components/schemas/PendingApproval' }]
           nullable: true
+        failure:
+          allOf: [{ $ref: '#/components/schemas/RunFailure' }]
+          nullable: true
+
+    RunFailure:
+      type: object
+      required: [code]
+      description: >
+        Stable, low-cardinality failure detail for a run parked by the
+        supervisor. The raw provider text is not part of this object.
+      properties:
+        code:
+          type: string
+          description: Stable reason code, such as model_provider_overloaded.
+        provider:
+          type: string
+          description: Model provider that failed, when the cause came from one.
+        status:
+          type: integer
+          description: HTTP status returned by the provider, when there was one.
+        requestId:
+          type: string
+          description: Provider request id. It is shown on a run, never used as an aggregate label.
+        retryable:
+          type: boolean
+          description: Whether trying later is expected to help.
 
     Tool:
       type: object
@@ -4899,6 +4953,56 @@ components:
           description: |
             The slow tail, over the same runs as the median. On its own a
             median says nothing about the runs people complain about.
+
+    RuntimeHealth:
+      type: object
+      required: [byPhase, queue, failures]
+      properties:
+        byPhase:
+          type: object
+          additionalProperties: { type: integer, format: int64 }
+          description: Current runs per phase, scoped to what the caller may read.
+        queue: { $ref: '#/components/schemas/RuntimeQueue' }
+        failures:
+          type: array
+          items: { $ref: '#/components/schemas/RuntimeFailureBucket' }
+
+    RuntimeQueue:
+      type: object
+      required: [ready, leased, backingOff, expiredLeases]
+      properties:
+        ready:
+          type: integer
+          format: int64
+          description: Claimable runs ready for a worker now.
+        leased:
+          type: integer
+          format: int64
+          description: Claimable runs currently held by workers.
+        backingOff:
+          type: integer
+          format: int64
+          description: Claimable runs waiting for their retry time.
+        expiredLeases:
+          type: integer
+          format: int64
+          description: Runs whose worker lease expired before release.
+        oldestReadyAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Oldest retry time among runs ready for a worker.
+
+    RuntimeFailureBucket:
+      type: object
+      required: [code, runs, lastAt]
+      properties:
+        code: { type: string }
+        provider: { type: string }
+        status: { type: integer }
+        retryable: { type: boolean }
+        runs: { type: integer, format: int64 }
+        lastAt: { type: string, format: date-time }
 
     DecisionPage:
       type: object

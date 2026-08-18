@@ -28,9 +28,10 @@ var ErrRefused = errors.New("model: the request was refused by the provider")
 
 // Anthropic implements engine.Planner.
 type Anthropic struct {
-	client anthropic.Client
-	cfg    Config
-	tools  ToolSchemas
+	client   anthropic.Client
+	provider string
+	cfg      Config
+	tools    ToolSchemas
 }
 
 // ToolSchemas resolves the JSON Schema a tool accepts. The model is only ever
@@ -83,9 +84,9 @@ func (c *Config) withDefaults() {
 	}
 }
 
-func New(client anthropic.Client, cfg Config, tools ToolSchemas) *Anthropic {
+func New(client anthropic.Client, provider string, cfg Config, tools ToolSchemas) *Anthropic {
 	cfg.withDefaults()
-	return &Anthropic{client: client, cfg: cfg, tools: tools}
+	return &Anthropic{client: client, provider: provider, cfg: cfg, tools: tools}
 }
 
 var _ engine.Planner = (*Anthropic)(nil)
@@ -119,14 +120,14 @@ func (a *Anthropic) Plan(ctx context.Context, in engine.PlanInput) (engine.Propo
 		},
 	})
 	if err != nil {
-		return engine.Proposal{}, fmt.Errorf("model: %w", err)
+		return engine.Proposal{}, classifyAnthropic(a.provider, err)
 	}
 
 	// Check the stop reason before reading content. A refusal returns HTTP 200
 	// with an empty or partial content list, so indexing straight into
 	// content[0] turns a policy decision into a nil dereference.
 	if resp.StopReason == anthropic.StopReasonRefusal {
-		return engine.Proposal{Cost: a.cost(resp.Usage)}, ErrRefused
+		return engine.Proposal{Cost: a.cost(resp.Usage)}, providerRefused(a.provider)
 	}
 
 	return a.proposalFrom(resp, offered), nil

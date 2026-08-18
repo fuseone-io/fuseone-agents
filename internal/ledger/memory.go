@@ -36,9 +36,11 @@ type Memory struct {
 	idems map[string]struct{}
 
 	// Worker coordination, mirroring the columns migration 0003 adds.
-	leases    map[domain.RunID]leaseState
-	owners    map[domain.RunID]string
-	lastError map[domain.RunID]string
+	leases        map[domain.RunID]leaseState
+	owners        map[domain.RunID]string
+	lastError     map[domain.RunID]string
+	lastFailure   map[domain.RunID]domain.FailureSummary
+	lastFailureAt map[domain.RunID]time.Time
 
 	// Clock is injectable so lease expiry is testable without sleeping.
 	Clock func() time.Time
@@ -46,11 +48,13 @@ type Memory struct {
 
 func NewMemory() *Memory {
 	return &Memory{
-		runs:      make(map[domain.RunID][]domain.Step),
-		idems:     make(map[string]struct{}),
-		leases:    make(map[domain.RunID]leaseState),
-		owners:    make(map[domain.RunID]string),
-		lastError: make(map[domain.RunID]string),
+		runs:          make(map[domain.RunID][]domain.Step),
+		idems:         make(map[string]struct{}),
+		leases:        make(map[domain.RunID]leaseState),
+		owners:        make(map[domain.RunID]string),
+		lastError:     make(map[domain.RunID]string),
+		lastFailure:   make(map[domain.RunID]domain.FailureSummary),
+		lastFailureAt: make(map[domain.RunID]time.Time),
 	}
 }
 
@@ -86,6 +90,10 @@ func (m *Memory) Append(ctx context.Context, s domain.Step) (domain.Step, error)
 	m.runs[s.RunID] = append(steps, sealed)
 	if sealed.IdemKey != "" {
 		m.idems[sealed.IdemKey] = struct{}{}
+	}
+	if sealed.Kind != domain.StepParked {
+		delete(m.lastFailure, sealed.RunID)
+		delete(m.lastFailureAt, sealed.RunID)
 	}
 	return sealed, nil
 }

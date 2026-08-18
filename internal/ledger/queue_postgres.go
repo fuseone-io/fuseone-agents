@@ -126,11 +126,54 @@ func (p *Postgres) Release(ctx context.Context, runID domain.RunID, outcome doma
 			attempts        = case when $3 then attempts + 1 else 0 end,
 			next_attempt_at = $2,
 			last_error      = nullif($4, ''),
-			phase           = case when $5 then 'parked' else phase end
+			phase           = case when $5 then 'parked' else phase end,
+			updated_at      = now(),
+			failure_code       = $6,
+			failure_provider   = $7,
+			failure_status     = $8,
+			failure_request_id = $9,
+			failure_retryable  = $10
 		where run_id = $1`,
-		string(runID), nextAttempt, outcome.Failed(), outcome.Reason(), outcome.Parked)
+		string(runID), nextAttempt, outcome.Failed(), outcome.Reason(), outcome.Parked,
+		outcomeFailureCode(outcome), outcomeFailureProvider(outcome), outcomeFailureStatus(outcome),
+		outcomeFailureRequestID(outcome), outcomeFailureRetryable(outcome))
 	if err != nil {
 		return fmt.Errorf("release lease: %w", err)
+	}
+	return nil
+}
+
+func outcomeFailureCode(outcome domain.ClaimOutcome) *string {
+	if outcome.Failure != nil && outcome.Failure.Code != "" {
+		return &outcome.Failure.Code
+	}
+	return nil
+}
+
+func outcomeFailureProvider(outcome domain.ClaimOutcome) *string {
+	if outcome.Failure != nil && outcome.Failure.Provider != "" {
+		return &outcome.Failure.Provider
+	}
+	return nil
+}
+
+func outcomeFailureStatus(outcome domain.ClaimOutcome) *int {
+	if outcome.Failure != nil && outcome.Failure.Status != 0 {
+		return &outcome.Failure.Status
+	}
+	return nil
+}
+
+func outcomeFailureRequestID(outcome domain.ClaimOutcome) *string {
+	if outcome.Failure != nil && outcome.Failure.RequestID != "" {
+		return &outcome.Failure.RequestID
+	}
+	return nil
+}
+
+func outcomeFailureRetryable(outcome domain.ClaimOutcome) *bool {
+	if outcome.Failure != nil {
+		return &outcome.Failure.Retryable
 	}
 	return nil
 }

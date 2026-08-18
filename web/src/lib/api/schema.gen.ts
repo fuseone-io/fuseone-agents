@@ -131,6 +131,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/runtime": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Worker queue and recent runtime failures
+         * @description Operational health for the runtime. It is read from the run projection, not from raw logs: codes and provider names are low-cardinality facts, while provider bodies stay out of aggregate views.
+         */
+        get: operations["getRuntimeHealth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/interview": {
         parameters: {
             query?: never;
@@ -2367,6 +2387,20 @@ export interface components {
             /** @description Accumulated data-flow labels of the run context. */
             labels?: string[];
             pendingApproval?: components["schemas"]["PendingApproval"] | null;
+            failure?: components["schemas"]["RunFailure"] | null;
+        };
+        /** @description Stable, low-cardinality failure detail for a run parked by the supervisor. The raw provider text is not part of this object. */
+        RunFailure: {
+            /** @description Stable reason code, such as model_provider_overloaded. */
+            code: string;
+            /** @description Model provider that failed, when the cause came from one. */
+            provider?: string;
+            /** @description HTTP status returned by the provider, when there was one. */
+            status?: number;
+            /** @description Provider request id. It is shown on a run, never used as an aggregate label. */
+            requestId?: string;
+            /** @description Whether trying later is expected to help. */
+            retryable?: boolean;
         };
         Tool: {
             /** @description Namespaced by server, because two servers naming a tool "search" must not collide into one capability. */
@@ -3255,6 +3289,51 @@ export interface components {
              */
             p95DurationMs?: number | null;
         };
+        RuntimeHealth: {
+            /** @description Current runs per phase, scoped to what the caller may read. */
+            byPhase: {
+                [key: string]: number;
+            };
+            queue: components["schemas"]["RuntimeQueue"];
+            failures: components["schemas"]["RuntimeFailureBucket"][];
+        };
+        RuntimeQueue: {
+            /**
+             * Format: int64
+             * @description Claimable runs ready for a worker now.
+             */
+            ready: number;
+            /**
+             * Format: int64
+             * @description Claimable runs currently held by workers.
+             */
+            leased: number;
+            /**
+             * Format: int64
+             * @description Claimable runs waiting for their retry time.
+             */
+            backingOff: number;
+            /**
+             * Format: int64
+             * @description Runs whose worker lease expired before release.
+             */
+            expiredLeases: number;
+            /**
+             * Format: date-time
+             * @description Oldest retry time among runs ready for a worker.
+             */
+            oldestReadyAt?: string | null;
+        };
+        RuntimeFailureBucket: {
+            code: string;
+            provider?: string;
+            status?: number;
+            retryable?: boolean;
+            /** Format: int64 */
+            runs: number;
+            /** Format: date-time */
+            lastAt: string;
+        };
         DecisionPage: {
             items: components["schemas"]["RecordedDecision"][];
         };
@@ -3786,6 +3865,35 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getRuntimeHealth: {
+        parameters: {
+            query?: {
+                /** @description Company scope. A single value until multi-company (PRD 3.1). */
+                company?: components["parameters"]["CompanyScope"];
+                area?: components["parameters"]["Area"];
+                agentId?: string;
+                /** @description Only failure buckets last seen at or after this instant. Defaults to the last 24 hours. */
+                since?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Runtime health. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuntimeHealth"];
+                };
+            };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
         };

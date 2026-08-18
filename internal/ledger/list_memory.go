@@ -146,6 +146,11 @@ func summarise(steps []domain.Step) domain.RunSummary {
 		if step.Kind == domain.StepRunFinished {
 			s.EndedAt = step.At
 		}
+		if step.Kind == domain.StepParked {
+			var p domain.ParkedPayload
+			decodePayload(step, &p)
+			s.Failure = p.Failure
+		}
 	}
 	s.Labels = labels
 	return s

@@ -77,6 +77,11 @@ func scanRunSummary(row rowScanner) (domain.RunSummary, error) {
 		pendingReason            *string
 		pendingAtSeq             *int64
 		endedAt                  *time.Time
+		failureCode              *string
+		failureProvider          *string
+		failureStatus            *int
+		failureRequestID         *string
+		failureRetryable         *bool
 	)
 
 	if err := row.Scan(&runID, &company, &area, &agent, &version, &onBehalf,
@@ -85,7 +90,8 @@ func scanRunSummary(row rowScanner) (domain.RunSummary, error) {
 		&s.Cost.CacheReadTokens, &s.Cost.CacheWriteTokens,
 		&s.ReservedMicros, &s.ToolCalls, &labels,
 		&pendingTool, &pendingRule, &pendingReason, &pendingAtSeq,
-		&s.StartedAt, &endedAt, &s.UpdatedAt); err != nil {
+		&s.StartedAt, &endedAt, &s.UpdatedAt,
+		&failureCode, &failureProvider, &failureStatus, &failureRequestID, &failureRetryable); err != nil {
 		return domain.RunSummary{}, err
 	}
 
@@ -105,6 +111,15 @@ func scanRunSummary(row rowScanner) (domain.RunSummary, error) {
 			Rule: derefString(pendingRule), Reason: derefString(pendingReason),
 		}
 	}
+	if failureCode != nil {
+		s.Failure = &domain.FailureSummary{
+			Code:      derefString(failureCode),
+			Provider:  derefString(failureProvider),
+			Status:    derefInt(failureStatus),
+			RequestID: derefString(failureRequestID),
+			Retryable: derefBool(failureRetryable),
+		}
+	}
 	return s, nil
 }
 
@@ -118,6 +133,20 @@ func derefString(v *string) string {
 func derefInt64(v *int64) int64 {
 	if v == nil {
 		return 0
+	}
+	return *v
+}
+
+func derefInt(v *int) int {
+	if v == nil {
+		return 0
+	}
+	return *v
+}
+
+func derefBool(v *bool) bool {
+	if v == nil {
+		return false
 	}
 	return *v
 }

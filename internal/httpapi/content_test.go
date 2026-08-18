@@ -195,3 +195,47 @@ func TestGetRun_awaitingApproval_saysWhenItStoppedAndWhatItWillDo(t *testing.T) 
 		t.Errorf("effect = %v, want write — an approver decides on what it does to the world", pending.Effect)
 	}
 }
+
+func TestGetRun_parkedProviderFailureCarriesTheStableCause(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := ledger.NewMemory()
+
+	at := time.Date(2026, 8, 18, 17, 6, 13, 0, time.UTC)
+	for _, step := range []domain.Step{
+		{RunID: "run-cx", Kind: domain.StepRunStarted, Scope: domain.Scope{Company: "acme", Area: "cx"},
+			AgentID: "triage", VersionID: "v1", At: at.Add(-time.Minute)},
+		{RunID: "run-cx", Kind: domain.StepParked, Scope: domain.Scope{Company: "acme", Area: "cx"},
+			AgentID: "triage", VersionID: "v1", At: at,
+			Payload: mustPayload(t, domain.ParkedPayload{
+				Reason:   "model_provider_overloaded",
+				Attempts: 5,
+				Failure: &domain.FailureSummary{
+					Code:      "model_provider_overloaded",
+					Provider:  "anthropic",
+					Status:    529,
+					RequestID: "req_011CeAaYZkdUe63yaSu5CxCX",
+					Retryable: true,
+				},
+			})},
+	} {
+		if _, err := store.Append(ctx, step); err != nil {
+			t.Fatalf("seed %s: %v", step.Kind, err)
+		}
+	}
+
+	resp, err := NewServer(store, "test").
+		GetRun(inArea("cx", domain.RoleAuthor), openapi.GetRunRequestObject{RunId: "run-cx"})
+	if err != nil {
+		t.Fatalf("GetRun: %v", err)
+	}
+	run := resp.(openapi.GetRun200JSONResponse)
+	if run.Failure == nil {
+		t.Fatal("run has no failure summary")
+	}
+	if run.Failure.Code != "model_provider_overloaded" || valueOr(run.Failure.Provider) != "anthropic" ||
+		valueOr(run.Failure.Status) != 529 || valueOr(run.Failure.RequestId) != "req_011CeAaYZkdUe63yaSu5CxCX" ||
+		valueOr(run.Failure.Retryable) != true {
+		t.Errorf("failure = %+v, want the stable parked provider cause", *run.Failure)
+	}
+}

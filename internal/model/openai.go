@@ -70,7 +70,7 @@ func (o *OpenAICompatible) Plan(ctx context.Context, in engine.PlanInput) (engin
 	// Providers spell a policy stop differently; treat them all as a refusal
 	// so the caller has one condition to handle across every provider.
 	if choice.FinishReason == "content_filter" {
-		return engine.Proposal{Cost: o.cost(out.Usage)}, ErrRefused
+		return engine.Proposal{Cost: o.cost(out.Usage)}, providerRefused(o.provider.Name)
 	}
 
 	return o.proposalFrom(choice, out.Usage, offered), nil
@@ -222,7 +222,7 @@ func (o *OpenAICompatible) post(ctx context.Context, path string, body, into any
 
 	resp, err := o.http.Do(req)
 	if err != nil {
-		return fmt.Errorf("model: %s: %w", o.provider.Name, err)
+		return networkFailure(o.provider.Name, err)
 	}
 	defer resp.Body.Close()
 
@@ -233,8 +233,7 @@ func (o *OpenAICompatible) post(ctx context.Context, path string, body, into any
 	if resp.StatusCode != http.StatusOK {
 		// The body carries the provider's own error text, which is the only
 		// thing that makes a 400 from an unfamiliar provider diagnosable.
-		return fmt.Errorf("model: %s returned %d: %s",
-			o.provider.Name, resp.StatusCode, strings.TrimSpace(string(raw)))
+		return openAIHTTPFailure(o.provider.Name, resp.StatusCode, requestIDFrom(resp.Header), string(raw))
 	}
 	if err := json.Unmarshal(raw, into); err != nil {
 		return fmt.Errorf("model: decode %s response: %w", o.provider.Name, err)

@@ -14,7 +14,8 @@ const runColumns = `
 	cost_micros, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
 	reserved_micros, tool_calls, labels,
 	pending_tool, pending_rule, pending_reason, pending_at_seq,
-	started_at, ended_at, updated_at`
+	started_at, ended_at, updated_at,
+	failure_code, failure_provider, failure_status, failure_request_id, failure_retryable`
 
 // ListRuns reads a page from the projection.
 //

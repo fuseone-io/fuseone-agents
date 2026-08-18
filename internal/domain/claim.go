@@ -41,6 +41,10 @@ type ClaimOutcome struct {
 	// Err is set when the turn failed. A non-nil Err increments the attempt
 	// count; success resets it.
 	Err error
+	// Failure is the stable, low-cardinality part of Err, when the caller can
+	// classify it. It feeds operational views; raw error text stays out of
+	// dashboards and aggregate labels.
+	Failure *FailureSummary
 	// Parked withdraws the run from the queue until a human intervenes. The
 	// alternative — retrying for ever — burns budget and hides the fault
 	// (PRD NF-14).

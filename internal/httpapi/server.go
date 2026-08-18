@@ -29,6 +29,7 @@ type Store interface {
 	// and an append-only record is guaranteed to have one.
 	Stats(ctx context.Context, filter domain.RunFilter) (domain.RunStats, error)
 	Throughput(ctx context.Context, filter domain.RunFilter) ([]domain.ThroughputBucket, error)
+	RuntimeHealth(ctx context.Context, filter domain.RunFilter) (domain.RuntimeHealth, error)
 	Decisions(ctx context.Context, filter domain.RunFilter, limit int) ([]domain.RecordedDecision, error)
 	// RunByIdemKey answers what a caller retrying a start already started.
 	RunByIdemKey(ctx context.Context, key string) (domain.RunID, error)

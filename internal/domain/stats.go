@@ -60,6 +60,32 @@ type RunStats struct {
 // Count returns the tally for a phase, or zero.
 func (s RunStats) Count(phase string) int64 { return s.ByPhase[phase] }
 
+// RuntimeHealth is the operational view of the worker queue and recent
+// failure causes. It deliberately carries low-cardinality facts: provider,
+// code and status, never run ids, request ids or provider bodies.
+type RuntimeHealth struct {
+	ByPhase  map[string]int64
+	Queue    RuntimeQueue
+	Failures []RuntimeFailureBucket
+}
+
+type RuntimeQueue struct {
+	Ready         int64
+	Leased        int64
+	BackingOff    int64
+	ExpiredLeases int64
+	OldestReadyAt time.Time
+}
+
+type RuntimeFailureBucket struct {
+	Code      string
+	Provider  string
+	Status    int
+	Retryable bool
+	Runs      int64
+	LastAt    time.Time
+}
+
 // ThroughputBucket is one interval of a run count, split by what became of the
 // runs that started in it.
 //

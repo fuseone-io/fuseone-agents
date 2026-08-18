@@ -43,7 +43,30 @@ func toRun(runID domain.RunID, s engine.State, steps []domain.Step) openapi.Run 
 	if s.PendingApproval != nil {
 		out.PendingApproval = ptr(toPendingApproval(runID, s))
 	}
+	if failure := parkedFailure(steps); failure != nil {
+		out.Failure = &openapi.RunFailure{
+			Code:      failure.Code,
+			Provider:  stringPtr(failure.Provider),
+			Status:    intPtr(failure.Status),
+			RequestId: stringPtr(failure.RequestID),
+			Retryable: ptr(failure.Retryable),
+		}
+	}
 	return out
+}
+
+func parkedFailure(steps []domain.Step) *domain.FailureSummary {
+	for i := len(steps) - 1; i >= 0; i-- {
+		if steps[i].Kind != domain.StepParked {
+			continue
+		}
+		var p domain.ParkedPayload
+		if err := json.Unmarshal(steps[i].Payload, &p); err != nil {
+			return nil
+		}
+		return p.Failure
+	}
+	return nil
 }
 
 func toPendingApproval(runID domain.RunID, s engine.State) openapi.PendingApproval {
@@ -119,3 +142,17 @@ func groupByString(g *openapi.GetCostRollupParamsGroupBy) string {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+func stringPtr(v string) *string {
+	if v == "" {
+		return nil
+	}
+	return &v
+}
+
+func intPtr(v int) *int {
+	if v == 0 {
+		return nil
+	}
+	return &v
+}
