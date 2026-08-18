@@ -29,6 +29,37 @@ field" is a commit message.
 
 Nothing yet.
 
+## [0.3.1] — 2026-08-18
+
+### Upgrade notes
+
+- **Upgrade to this from 0.2.0 or 0.3.0.** Both carry a chart defect that makes
+  the worker Deployment invalid unless `worker.specs.configMap` is set: the
+  container mounted a `/tmp` volume the chart did not render. An installation
+  that never set that value could not deploy either version at all. Nothing to
+  do beyond upgrading.
+- **`--reuse-values` works again.** Upgrading with it across a version that
+  added a chart value failed to render, which is the ordinary path for an
+  installation somebody runs rather than an edge case.
+
+### Added
+
+- Branding: an installation carries its own name, logo, compact mark and accent
+  colour, on the sidebar and on the sign-in screen. An external image URL says
+  what it costs — it does not load without a route to the internet, and it
+  tells that host whenever the sign-in screen opens.
+
+### Fixed
+
+- The audit trail shows one page at a time instead of appending every page
+  fetched so far.
+
+### Changed
+
+- `make check` renders the chart and refuses a volumeMount that resolves to no
+  volume — the defect above passed schema validation, which checks shape rather
+  than whether a mount can be satisfied.
+
 ## [0.3.0] — 2026-08-18
 
 ### Upgrade notes
