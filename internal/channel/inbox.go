@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/fuseone/agents/internal/domain"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -54,6 +55,12 @@ type Arrival struct {
 	// Thread is where an answer belongs: the parent when the ask came inside
 	// one, the message itself when it started one.
 	Thread string
+	// Agent and RunAs are set only for a watched message. A mention leaves
+	// them empty because the person chose the agent in the text and authority
+	// comes from the account binding.
+	Agent  domain.AgentID
+	RunAs  domain.UserID
+	Source Source
 
 	// Payload is what actually arrived. It is what the digest is of, and what
 	// an auditor reads when they want the thing itself rather than what we
@@ -100,11 +107,12 @@ func (i *Inbox) Receive(ctx context.Context, a Arrival) (fresh bool, err error) 
 
 	tag, err := i.pool.Exec(ctx, `
 		insert into channel_inbox
-			(channel, conversation, event_id, message, asked_by, text, thread, payload, digest)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			(channel, conversation, event_id, message, asked_by, text, thread,
+			 agent, run_as, source, payload, digest)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		on conflict (channel, conversation, event_id) do nothing`,
 		a.Channel, a.Conversation, a.EventID, a.Message,
-		a.AskedBy, a.Text, a.Thread, a.Payload,
+		a.AskedBy, a.Text, a.Thread, a.Agent, a.RunAs, a.Source, a.Payload,
 		"sha256:"+hex.EncodeToString(sum[:8]))
 	if err != nil {
 		return false, fmt.Errorf("channel: receive %s: %w", a.EventID, err)
@@ -176,7 +184,9 @@ func (i *Inbox) claim(
 		returning channel_inbox.channel, channel_inbox.conversation,
 		          channel_inbox.event_id, channel_inbox.message,
 		          channel_inbox.asked_by, channel_inbox.text,
-		          channel_inbox.thread, channel_inbox.payload,
+		          channel_inbox.thread, channel_inbox.agent,
+		          channel_inbox.run_as, channel_inbox.source,
+		          channel_inbox.payload,
 		          channel_inbox.detail`,
 		owner, lease.String(), limit)
 	if err != nil {
@@ -189,7 +199,8 @@ func (i *Inbox) claim(
 		var a Arrival
 		var detail string
 		if err := rows.Scan(&a.Channel, &a.Conversation, &a.EventID, &a.Message,
-			&a.AskedBy, &a.Text, &a.Thread, &a.Payload, &detail); err != nil {
+			&a.AskedBy, &a.Text, &a.Thread, &a.Agent, &a.RunAs, &a.Source,
+			&a.Payload, &detail); err != nil {
 			return nil, err
 		}
 		out = append(out, Claimed{Arrival: a, Owner: owner, Detail: detail})

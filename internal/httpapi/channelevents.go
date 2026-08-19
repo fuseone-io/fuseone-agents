@@ -40,6 +40,12 @@ func (h *ChannelHooks) WithArrivals(inbox Arrivals) *ChannelHooks {
 	return h
 }
 
+// WithWatchRules wires the explicit automation rules for ordinary messages.
+func (h *ChannelHooks) WithWatchRules(rules slack.WatchRules) *ChannelHooks {
+	h.rules = rules
+	return h
+}
+
 // MountEvents wires the path a channel delivers asks to.
 //
 // Separate from the interaction path on purpose: one carries a decision
@@ -76,7 +82,7 @@ func (h *ChannelHooks) slackEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	delivery, err := slack.ReadDelivery(body)
+	delivery, err := slack.ReadAnyDelivery(body)
 	switch {
 	case errors.Is(err, slack.ErrNotAnAsk):
 		// Well-formed and not for us: an ordinary message, a bot, an edit.
@@ -105,6 +111,9 @@ func (h *ChannelHooks) slackEvent(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]string{"challenge": delivery.Challenge})
 		return
 	}
+	if delivery.Kind == slack.DeliveryMention {
+		h.markAccountSeen(r.Context(), name, delivery.User, delivery.Conversation)
+	}
 
 	if h.inbox == nil {
 		// No inbox is a platform that cannot promise to remember the ask, and
@@ -114,14 +123,39 @@ func (h *ChannelHooks) slackEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fresh, err := h.inbox.Receive(r.Context(), channel.Arrival{
+	arrival := channel.Arrival{
 		Channel: name, Conversation: delivery.Conversation,
 		EventID: delivery.EventID, Message: delivery.Message,
 		// Read here, where the vendor's shape is known, and stored as the
 		// platform's own. The consumer never learns what Slack looks like.
 		AskedBy: delivery.User, Text: delivery.Text, Thread: delivery.Thread,
-		Payload: body,
-	})
+		Source: delivery.Source, Payload: body,
+	}
+	if delivery.Kind == slack.DeliveryMessage {
+		if h.rules == nil {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		rule, ok, err := h.rules.WatchFor(r.Context(), name, delivery.Conversation, delivery.Source)
+		if err != nil {
+			h.log.Error("could not read a watch rule", "channel", name, "err", err)
+			http.Error(w, "unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		if !ok {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		arrival.Agent = rule.Agent
+		arrival.RunAs = rule.RunAs
+		arrival.AskedBy = delivery.Source.Key()
+	}
+	if arrival.AskedBy == "" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	fresh, err := h.inbox.Receive(r.Context(), arrival)
 	if err != nil {
 		// Refused rather than acknowledged. Slack retrying is the correct
 		// outcome of a write that did not happen — this is the one failure

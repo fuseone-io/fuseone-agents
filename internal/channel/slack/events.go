@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/fuseone/agents/internal/channel"
 )
 
 /*
@@ -14,12 +16,9 @@ A URL verification handshake, which is answered and nothing else, and an event
 wrapper carrying the message somebody typed. They arrive on the same path with
 the same signature, and telling them apart is the first thing the door does.
 
-Only a mention is read. NT-005 §1: a trigger is a deliberate ask — a mention, a
-command, a reply to a thread — never every message in the channel. The
-listening version sounds more capable and is worse in three directions at once:
-cost, because ambient conversation becomes tokens; privacy, because people's
-conversations reach a model nobody asked to involve; and the record, which
-fills with runs nobody started. The mention is the consent, and it is free.
+Only a mention is read by default. A watched message is a separate
+configuration on a conversation: the source is filtered first, and the
+authority comes from the rule, never from whoever wrote the Slack line.
 */
 
 // ErrNotAnAsk means the delivery was well-formed and is not something to act
@@ -44,6 +43,7 @@ var ErrMalformedAsk = errors.New("slack: a mention with nothing to act on")
 
 // Delivery is one thing that arrived on the events path.
 type Delivery struct {
+	Kind string
 	// Challenge is set when Slack is verifying the URL. Answered verbatim and
 	// nothing else happens.
 	Challenge string
@@ -58,11 +58,17 @@ type Delivery struct {
 
 	Conversation string
 	User         string
+	Source       channel.Source
 	Text         string
 	// Thread is where a reply belongs: the parent when the ask came inside a
 	// thread, and the message itself when it started one.
 	Thread string
 }
+
+const (
+	DeliveryMention = "mention"
+	DeliveryMessage = "message"
+)
 
 type envelope struct {
 	Type      string `json:"type"`
@@ -74,6 +80,7 @@ type envelope struct {
 		Channel  string `json:"channel"`
 		User     string `json:"user"`
 		BotID    string `json:"bot_id"`
+		AppID    string `json:"app_id"`
 		Text     string `json:"text"`
 		TS       string `json:"ts"`
 		ThreadTS string `json:"thread_ts"`
@@ -82,6 +89,17 @@ type envelope struct {
 
 // ReadDelivery reads what arrived, or says it is not an ask.
 func ReadDelivery(body []byte) (Delivery, error) {
+	return readDelivery(body, false)
+}
+
+// ReadAnyDelivery reads mentions and ordinary messages. The caller is
+// responsible for checking the ordinary message against a configured watch
+// rule before writing it to the inbox.
+func ReadAnyDelivery(body []byte) (Delivery, error) {
+	return readDelivery(body, true)
+}
+
+func readDelivery(body []byte, allowMessages bool) (Delivery, error) {
 	var e envelope
 	if err := json.Unmarshal(body, &e); err != nil {
 		return Delivery{}, fmt.Errorf("slack: unreadable delivery: %w", err)
@@ -97,15 +115,9 @@ func ReadDelivery(body []byte) (Delivery, error) {
 		return Delivery{}, fmt.Errorf("%w: %q", ErrNotAnAsk, e.Type)
 	}
 
-	/*
-		A mention and nothing else.
-
-		`app_mention` is the event Slack sends when somebody addresses the bot,
-		and subscribing to `message.channels` instead would deliver every word
-		typed in every channel the bot is in. That is the difference between a
-		platform people invite and one they discover reading their
-		conversations.
-	*/
+	if e.Event.Type == "message" && allowMessages {
+		return ordinaryMessage(e)
+	}
 	if e.Event.Type != "app_mention" {
 		return Delivery{}, fmt.Errorf("%w: %q", ErrNotAnAsk, e.Event.Type)
 	}
@@ -136,11 +148,47 @@ func ReadDelivery(body []byte) (Delivery, error) {
 		thread = e.Event.TS
 	}
 	return Delivery{
+		Kind:         DeliveryMention,
 		EventID:      e.EventID,
 		Message:      e.Event.TS,
 		Conversation: e.Event.Channel,
 		User:         e.Event.User,
+		Source:       sourceOf(e),
 		Text:         e.Event.Text,
 		Thread:       thread,
 	}, nil
+}
+
+func ordinaryMessage(e envelope) (Delivery, error) {
+	// Edits, deletes, joins and file shares are not a new alert. Bot messages
+	// are the ordinary form an alerting system posts, so they are allowed
+	// through to the watch-rule filter.
+	if e.Event.Subtype != "" && e.Event.Subtype != "bot_message" {
+		return Delivery{}, fmt.Errorf("%w: not a plain message", ErrNotAnAsk)
+	}
+	source := sourceOf(e)
+	if source.Key() == "" {
+		return Delivery{}, fmt.Errorf("%w: no source", ErrNotAnAsk)
+	}
+	if e.Event.Channel == "" || e.Event.TS == "" {
+		return Delivery{}, fmt.Errorf("%w: no conversation or no timestamp", ErrMalformedAsk)
+	}
+	thread := e.Event.ThreadTS
+	if thread == "" {
+		thread = e.Event.TS
+	}
+	return Delivery{
+		Kind:         DeliveryMessage,
+		EventID:      e.EventID,
+		Message:      e.Event.TS,
+		Conversation: e.Event.Channel,
+		User:         e.Event.User,
+		Source:       source,
+		Text:         e.Event.Text,
+		Thread:       thread,
+	}, nil
+}
+
+func sourceOf(e envelope) channel.Source {
+	return channel.Source{User: e.Event.User, Bot: e.Event.BotID, App: e.Event.AppID}
 }

@@ -78,6 +78,7 @@ func serve(args []string) error {
 	// Held outside the block that builds it, because the channel hook is
 	// mounted with the routes rather than with the administration area.
 	var channels *admin.Channels
+	var settingsStore *settings.Store
 	if identity != nil {
 		// The administration area needs a database: it is where rulings and
 		// their trail live. An installation on the in-memory ledger serves
@@ -104,7 +105,8 @@ func serve(args []string) error {
 		// The ledger, held under its own name: `store` below is the settings
 		// store and shadows it, and the battery gate needs the ledger.
 		runs := store
-		store := settings.NewStore(identity.pool, v)
+		settingsStore = settings.NewStore(identity.pool, v)
+		store := settingsStore
 		// Forgetting health on removal, because this is the process that serves
 		// the delete: without it a removed server stays on the screen as one
 		// nobody configured, which cannot be edited or removed.
@@ -241,7 +243,9 @@ func serve(args []string) error {
 				// events path acknowledges only what it has already written
 				// down, so a process that dies after answering has not lost
 				// the question.
-				WithArrivals(channel.NewInbox(identity.pool))
+				WithArrivals(channel.NewInbox(identity.pool)).
+				WithWatchRules(channel.NewConfigured(settingsStore)).
+				WithSeenAccounts(channels)
 			hooks.Mount(root)
 			hooks.MountEvents(root)
 		}

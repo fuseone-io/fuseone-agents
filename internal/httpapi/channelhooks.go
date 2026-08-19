@@ -50,6 +50,12 @@ type Directory interface {
 	PrincipalByID(ctx context.Context, id domain.UserID) (domain.Principal, error)
 }
 
+// SeenChannelAccounts records Slack accounts that interacted with this
+// installation. It is a hint for binding, not a condition for accepting an ask.
+type SeenChannelAccounts interface {
+	MarkAccountSeen(ctx context.Context, channelName, account, conversation string, at time.Time) error
+}
+
 // ChannelHooks receives what conversations send back.
 type ChannelHooks struct {
 	api       *Server
@@ -62,6 +68,8 @@ type ChannelHooks struct {
 	// asks, which is honest — acknowledging a question it will lose is worse
 	// than making the sender retry.
 	inbox Arrivals
+	rules slack.WatchRules
+	seen  SeenChannelAccounts
 }
 
 func NewChannelHooks(
@@ -72,6 +80,25 @@ func NewChannelHooks(
 		log = slog.Default()
 	}
 	return &ChannelHooks{api: api, bindings: bindings, directory: directory, now: now, log: log}
+}
+
+// WithSeenAccounts wires the advisory list that helps administrators bind
+// channel accounts. Failure to write this hint never blocks the ask path.
+func (h *ChannelHooks) WithSeenAccounts(seen SeenChannelAccounts) *ChannelHooks {
+	h.seen = seen
+	return h
+}
+
+func (h *ChannelHooks) markAccountSeen(
+	ctx context.Context, channelName, account, conversation string,
+) {
+	if h.seen == nil || strings.TrimSpace(account) == "" {
+		return
+	}
+	if err := h.seen.MarkAccountSeen(ctx, channelName, account, conversation, h.now()); err != nil {
+		h.log.Warn("a channel account could not be marked as seen",
+			"channel", channelName, "account", account, "err", err)
+	}
 }
 
 // Mount wires the one path a channel posts to.
@@ -118,6 +145,7 @@ func (h *ChannelHooks) slackInteraction(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "unreadable payload", http.StatusBadRequest)
 		return
 	}
+	h.markAccountSeen(r.Context(), name, action.User, "")
 
 	answer := h.decide(r.Context(), name, action)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")

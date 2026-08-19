@@ -3,6 +3,7 @@ package admin_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/settings"
@@ -26,6 +27,34 @@ func TestPrincipalFor_anAccountNobodyBound_isNobodyAndNotAnError(t *testing.T) {
 	}
 	if bound || who != "" {
 		t.Errorf("got %q (%v), want nobody", who, bound)
+	}
+}
+
+func TestSeenAccounts_areHintsUpdatedByChannelAndAccount(t *testing.T) {
+	channels, _ := boundChannels(t)
+	ctx := context.Background()
+	first := time.Date(2026, 8, 19, 10, 0, 0, 0, time.UTC)
+	later := first.Add(2 * time.Hour)
+
+	if err := channels.MarkAccountSeen(ctx, "acme-slack", "U024", "C-old", first); err != nil {
+		t.Fatalf("MarkAccountSeen: %v", err)
+	}
+	if err := channels.MarkAccountSeen(ctx, "acme-slack", "U024", "C-alerts", later); err != nil {
+		t.Fatalf("MarkAccountSeen again: %v", err)
+	}
+	if err := channels.MarkAccountSeen(ctx, "acme-slack", "U024", "C-old-retry", first); err != nil {
+		t.Fatalf("MarkAccountSeen old retry: %v", err)
+	}
+
+	seen, err := channels.SeenAccounts(ctx)
+	if err != nil {
+		t.Fatalf("SeenAccounts: %v", err)
+	}
+	if len(seen) != 1 {
+		t.Fatalf("seen = %+v, want one row updated in place", seen)
+	}
+	if seen[0].Conversation != "C-alerts" || !seen[0].LastSeen.Equal(later) {
+		t.Fatalf("seen = %+v, want the last observation", seen[0])
 	}
 }
 

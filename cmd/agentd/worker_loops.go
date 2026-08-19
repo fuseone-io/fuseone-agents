@@ -58,6 +58,7 @@ func (p *workerParts) startLoops(ctx context.Context, cfg workerFlags, sim *work
 	// queue already earned that name for the runs it holds.
 	if p.settings != nil && p.registry != nil {
 		p.consumeAsks(ctx, cfg.owner+"-asks")
+		go p.receiveSlackSockets(ctx)
 	}
 
 	// Retention. It reads the configured window on every pass, so shortening

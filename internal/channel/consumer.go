@@ -61,6 +61,7 @@ type structuredAsk struct {
 	Subject *askSubject `json:"subject,omitempty"`
 	Text    string      `json:"text"`
 	AskedBy string      `json:"asked_by,omitempty"`
+	Source  string      `json:"source,omitempty"`
 }
 
 type askSubject struct {

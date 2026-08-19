@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/settings"
@@ -26,6 +27,26 @@ const (
 	KindConversation settings.Kind = "channel_conversation"
 )
 
+const (
+	// DeliveryHTTP means Slack reaches this installation through the public
+	// webhook path. Empty stored values read as HTTP because that was the only
+	// mode before Socket Mode existed.
+	DeliveryHTTP = "http"
+	// DeliverySocket means the worker opens Slack Socket Mode outbound and
+	// receives Events API payloads there.
+	DeliverySocket = "socket"
+)
+
+const (
+	// ConversationMentions means only a deliberate mention of the channel bot
+	// may start an agent. Empty stored values read this way for compatibility
+	// with conversations configured before watched messages existed.
+	ConversationMentions = "mentions"
+	// ConversationWatch means selected ordinary messages from configured
+	// sources may start one configured agent under one configured principal.
+	ConversationWatch = "watch"
+)
+
 // Connection is the non-secret half of a channel: which vendor, and anything
 // an operator needs to recognise it. Building a driver from one lives in
 // internal/channel/connect: a vendor package imports these types, so this
@@ -35,13 +56,75 @@ type Connection struct {
 	Kind string `json:"kind"`
 	// Workspace is what a person calls it. Never used to address anything.
 	Workspace string `json:"workspace,omitempty"`
+	// DeliveryMode is how asks reach this installation. Empty is HTTP for
+	// compatibility with channels configured before Socket Mode existed.
+	DeliveryMode string `json:"deliveryMode,omitempty"`
+}
+
+func DeliveryMode(mode string) string {
+	if mode == DeliverySocket {
+		return DeliverySocket
+	}
+	return DeliveryHTTP
+}
+
+func ConversationMode(mode string) string {
+	if mode == ConversationWatch {
+		return ConversationWatch
+	}
+	return ConversationMentions
+}
+
+// Source is who wrote a channel event as the vendor names it.
+//
+// It is not authority. Authority comes from a configured RunAs principal on a
+// watched conversation, or from a person binding on a mention.
+type Source struct {
+	User string `json:"user,omitempty"`
+	Bot  string `json:"bot,omitempty"`
+	App  string `json:"app,omitempty"`
+}
+
+// Key is the stable correspondent used for ceilings and the record.
+func (s Source) Key() string {
+	switch {
+	case s.Bot != "":
+		return "bot:" + s.Bot
+	case s.App != "":
+		return "app:" + s.App
+	case s.User != "":
+		return "user:" + s.User
+	default:
+		return ""
+	}
+}
+
+func (s Source) Matches(allowed []string) bool {
+	for _, one := range allowed {
+		needle := strings.TrimSpace(one)
+		if needle == "" {
+			continue
+		}
+		if strings.EqualFold(needle, s.User) ||
+			strings.EqualFold(needle, s.Bot) ||
+			strings.EqualFold(needle, s.App) {
+			return true
+		}
+	}
+	return false
 }
 
 // conversationValue is a conversation as stored.
 type conversationValue struct {
-	Channel string  `json:"channel"`
-	Label   string  `json:"label,omitempty"`
-	Wants   []Event `json:"wants,omitempty"`
+	Channel string `json:"channel"`
+	Label   string `json:"label,omitempty"`
+	// Mode governs inbound starts. Wants governs outbound announcements; they
+	// are deliberately separate decisions.
+	Mode    string         `json:"mode,omitempty"`
+	Sources []string       `json:"sources,omitempty"`
+	Agent   domain.AgentID `json:"agent,omitempty"`
+	RunAs   domain.UserID  `json:"runAs,omitempty"`
+	Wants   []Event        `json:"wants,omitempty"`
 }
 
 // Configured reads channels and conversations from the administration area.
@@ -74,4 +157,42 @@ func (c *Configured) For(ctx context.Context, scope domain.Scope) ([]Conversatio
 		})
 	}
 	return out, nil
+}
+
+// WatchRule is the explicit automation a watched message may start.
+type WatchRule struct {
+	Agent   domain.AgentID
+	RunAs   domain.UserID
+	Sources []string
+}
+
+// WatchFor returns the automation rule for this source in this conversation.
+//
+// The source is a filter, not authority. The returned RunAs is the principal a
+// person configured beforehand; a Slack bot id never becomes a FuseOne user.
+func (c *Configured) WatchFor(
+	ctx context.Context, channelName, id string, source Source,
+) (WatchRule, bool, error) {
+	stored, err := c.store.List(ctx, KindConversation)
+	if err != nil {
+		return WatchRule{}, false, fmt.Errorf("channel: list conversations: %w", err)
+	}
+
+	for _, s := range stored {
+		if s.Name != id || !s.Enabled {
+			continue
+		}
+		var v conversationValue
+		if err := json.Unmarshal(s.Value, &v); err != nil {
+			continue
+		}
+		if v.Channel != channelName || ConversationMode(v.Mode) != ConversationWatch {
+			continue
+		}
+		if v.Agent == "" || v.RunAs == "" || !source.Matches(v.Sources) {
+			return WatchRule{}, false, nil
+		}
+		return WatchRule{Agent: v.Agent, RunAs: v.RunAs, Sources: v.Sources}, true, nil
+	}
+	return WatchRule{}, false, nil
 }

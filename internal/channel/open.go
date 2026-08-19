@@ -47,34 +47,15 @@ func (c *Consumer) open(ctx context.Context, a Claimed) (domain.RunID, Refusal, 
 		return "", Refusal{}, fmt.Errorf("channel: read the scope of %s: %w", a.Conversation, err)
 	}
 
-	asker, bound, err := c.bindings(ctx, a.Channel, a.AskedBy)
-	if err != nil {
-		// A store that was away is not an account nobody bound. Folded
-		// together, the refusal below would tell somebody their account is
-		// not linked about a state that was never true.
-		return "", Refusal{}, fmt.Errorf("channel: read the binding for %s: %w", a.AskedBy, err)
-	}
-	if !bound {
-		// A run acts on somebody's behalf. An account nobody bound speaks for
-		// nobody, and running as nobody is how an ask acquires authority that
-		// no person holds.
-		return "", Refusal{
-			Why:    "Your channel account is not linked to a platform user, so nothing can run on your behalf.",
-			Reason: "unbound",
-		}, nil
-	}
-
 	startable, err := c.startable(ctx, scope)
 	if err != nil {
 		// Not a refusal. The ask is fine and this side is not, so it waits.
 		return "", Refusal{}, fmt.Errorf("channel: read what is startable in %s: %w", scope, err)
 	}
 
-	ask, err := Read(a.Text, startable)
-	if err != nil {
-		// The refusal already names what would have worked. It is the only
-		// teaching surface a channel has.
-		return "", Refusal{Why: err.Error(), Reason: "no_agent"}, nil
+	asker, ask, refusal, err := c.resolveAsk(ctx, a, startable)
+	if err != nil || refusal.Why != "" {
+		return "", refusal, err
 	}
 
 	// The share this person has already had. Last of the narrowing on
@@ -152,6 +133,53 @@ func (c *Consumer) startable(ctx context.Context, scope domain.Scope) ([]Startab
 	return out, nil
 }
 
+func (c *Consumer) resolveAsk(
+	ctx context.Context, a Claimed, startable []Startable,
+) (domain.UserID, Ask, Refusal, error) {
+	if a.Agent != "" {
+		if a.RunAs == "" {
+			return "", Ask{}, Refusal{
+				Why:    "This conversation is configured to watch messages, but no platform principal was chosen to run them.",
+				Reason: "misconfigured",
+			}, nil
+		}
+		for _, one := range startable {
+			if one.ID == a.Agent {
+				return a.RunAs, Ask{Agent: a.Agent, Text: a.Text}, Refusal{}, nil
+			}
+		}
+		return "", Ask{}, Refusal{
+			Why:    fmt.Sprintf("This conversation is configured to start %s, but that agent cannot start here.", a.Agent),
+			Reason: "no_agent",
+		}, nil
+	}
+
+	asker, bound, err := c.bindings(ctx, a.Channel, a.AskedBy)
+	if err != nil {
+		// A store that was away is not an account nobody bound. Folded
+		// together, the refusal below would tell somebody their account is
+		// not linked about a state that was never true.
+		return "", Ask{}, Refusal{}, fmt.Errorf("channel: read the binding for %s: %w", a.AskedBy, err)
+	}
+	if !bound {
+		// A run acts on somebody's behalf. An account nobody bound speaks for
+		// nobody, and running as nobody is how an ask acquires authority that
+		// no person holds.
+		return "", Ask{}, Refusal{
+			Why:    "Your channel account is not linked to a platform user, so nothing can run on your behalf.",
+			Reason: "unbound",
+		}, nil
+	}
+
+	ask, err := Read(a.Text, startable)
+	if err != nil {
+		// The refusal already names what would have worked. It is the only
+		// teaching surface a channel has.
+		return "", Ask{}, Refusal{Why: err.Error(), Reason: "no_agent"}, nil
+	}
+	return asker, ask, Refusal{}, nil
+}
+
 /*
 structured is what the ledger holds about the ask.
 
@@ -168,6 +196,9 @@ func (c *Consumer) structured(
 	ctx context.Context, a Claimed, ask Ask, asker domain.UserID,
 ) structuredAsk {
 	out := structuredAsk{Text: ask.Text, AskedBy: string(asker)}
+	if a.Source.Key() != "" {
+		out.Source = a.Source.Key()
+	}
 
 	// An ask that started its own thread is its own parent, and has no subject
 	// to resolve. Compared against the message and not the delivery: those are

@@ -2555,9 +2555,11 @@ paths:
         The connections this installation can post through, and the
         conversations mapped onto scopes inside them.
 
-        Outbound only. Nothing a conversation says reaches this platform, so a
-        connection here grants no ability to start anything — it is a place
-        runs speak to (NT-005 stage 1).
+        A channel is where runs report, and — when inbound delivery is
+        configured — where a deliberate mention can ask an agent to start.
+        The two halves share one connection but not one secret: posting uses
+        the bot token, HTTP inbound uses the signing secret, and Socket Mode
+        uses an app-level token (NT-005 stage 1 and stage 3).
       responses:
         '200':
           description: The channels, with their conversations.
@@ -2603,12 +2605,31 @@ paths:
                 workspace:
                   type: string
                   description: What a person calls it. Never used to address anything.
+                deliveryMode:
+                  type: string
+                  enum: [http, socket]
+                  default: http
+                  description: |
+                    How Slack asks reach this installation.
+
+                    `http` means Slack calls this installation's Request URL
+                    and the signing secret verifies each request. `socket`
+                    means a worker opens Slack Socket Mode outbound with an
+                    app-level token, so no public callback URL is required for
+                    Events API payloads.
                 token:
                   type: string
                   description: >
                     The bot credential, sealed by the vault. Omit to keep the
                     stored one — renaming a workspace must not demand
                     re-entering a secret nobody has to hand.
+                appToken:
+                  type: string
+                  description: |
+                    Slack app-level token (`xapp-...`) used to open Socket
+                    Mode. Omit to keep the stored one. It is not the bot token:
+                    it cannot post messages, and it exists only so the worker
+                    can receive Events API payloads over an outbound WebSocket.
                 signingSecret:
                   type: string
                   description: |
@@ -2723,6 +2744,28 @@ paths:
                 label:
                   type: string
                   description: What a person calls it, for the console and the logs.
+                mode:
+                  type: string
+                  enum: [mentions, watch]
+                  default: mentions
+                  description: |
+                    `mentions` starts only when a person mentions the channel
+                    bot and names an agent. `watch` starts one configured
+                    agent from ordinary messages written by configured
+                    sources, under the configured principal.
+                sources:
+                  type: array
+                  description: |
+                    Slack user, bot or app ids allowed to trigger watched
+                    messages. They filter the source; they never grant
+                    authority.
+                  items: { type: string }
+                agent:
+                  type: string
+                  description: The agent started by watched messages.
+                runAs:
+                  type: string
+                  description: The platform principal watched messages run on behalf of.
                 wants:
                   type: array
                   description: >
@@ -4600,15 +4643,22 @@ components:
         name: { type: string }
         kind: { type: string }
         workspace: { type: string }
+        deliveryMode:
+          type: string
+          enum: [http, socket]
+          description: How Slack asks reach this installation. Empty legacy rows read as http.
         enabled: { type: boolean }
         hasCredential:
           type: boolean
-          description: Whether a credential is stored, never what it is.
+          description: Whether the bot token used for posting is stored, never what it is.
         hasSigning:
           type: boolean
           description: >
             Whether this channel can verify what arrives. A channel posts long
             before anybody switches the inbound half on.
+        hasAppToken:
+          type: boolean
+          description: Whether the Socket Mode app-level token is stored, never what it is.
         conversations:
           type: array
           items: { $ref: '#/components/schemas/ChannelConversation' }
@@ -4616,6 +4666,12 @@ components:
           type: array
           description: The accounts that speak for somebody in this channel.
           items: { $ref: '#/components/schemas/ChannelIdentity' }
+        seenAccounts:
+          type: array
+          description: >
+            Channel accounts this installation has seen interact with it.
+            Convenience for binding only; it grants nothing.
+          items: { $ref: '#/components/schemas/ChannelSeenAccount' }
 
     ChannelIdentity:
       type: object
@@ -4640,6 +4696,19 @@ components:
             and the account — is recovered from the row's key, which is what
             makes it removable.
 
+    ChannelSeenAccount:
+      type: object
+      description: |
+        A channel account seen in a signed event, but not necessarily bound.
+        This is a hint for an administrator, not authority.
+      required: [account, lastSeen]
+      properties:
+        account: { type: string }
+        conversation: { type: string }
+        lastSeen:
+          type: string
+          format: date-time
+
     ChannelConversation:
       type: object
       required: [id, scope, enabled]
@@ -4647,6 +4716,15 @@ components:
         id: { type: string }
         label: { type: string }
         scope: { $ref: '#/components/schemas/Scope' }
+        mode:
+          type: string
+          enum: [mentions, watch]
+          description: How inbound Slack messages may start runs. Empty legacy rows read as mentions.
+        sources:
+          type: array
+          items: { type: string }
+        agent: { type: string }
+        runAs: { type: string }
         wants:
           type: array
           items: { type: string }

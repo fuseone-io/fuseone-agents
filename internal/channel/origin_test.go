@@ -72,6 +72,52 @@ func TestScopeOf_aConversationNobodyConfigured_isRefused(t *testing.T) {
 	}
 }
 
+func TestWatchFor_aConfiguredSourceAnswersTheAutomation(t *testing.T) {
+	store, channels := configuredChannels(t)
+
+	if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+		ID: "C07-ops", Label: "#ops", Enabled: true,
+		Scope:   domain.Scope{Company: "acme", Area: "ops"},
+		Mode:    channel.ConversationWatch,
+		Sources: []string{"B-alerts"},
+		Agent:   "triagem", RunAs: "usr_opsbot",
+	}, "usr_ana"); err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+
+	rule, ok, err := store.WatchFor(t.Context(), "acme-slack", "C07-ops",
+		channel.Source{Bot: "B-alerts"})
+	if err != nil {
+		t.Fatalf("WatchFor: %v", err)
+	}
+	if !ok || rule.Agent != "triagem" || rule.RunAs != "usr_opsbot" {
+		t.Fatalf("rule = %+v, ok = %v, want the configured automation", rule, ok)
+	}
+
+	_, ok, err = store.WatchFor(t.Context(), "acme-slack", "C07-ops",
+		channel.Source{Bot: "B-other"})
+	if err != nil {
+		t.Fatalf("WatchFor other: %v", err)
+	}
+	if ok {
+		t.Fatal("a message from an unconfigured source matched the watch rule")
+	}
+}
+
+func TestPutConversation_watchModeRequiresAuthorityAndSource(t *testing.T) {
+	_, channels := configuredChannels(t)
+
+	err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+		ID: "C07-ops", Enabled: true,
+		Scope: domain.Scope{Company: "acme", Area: "ops"},
+		Mode:  channel.ConversationWatch,
+		Agent: "triagem", RunAs: "usr_opsbot",
+	}, "usr_ana")
+	if !errors.Is(err, admin.ErrNoWatchSource) {
+		t.Fatalf("err = %v, want missing source refused", err)
+	}
+}
+
 func configuredChannels(t *testing.T) (*channel.Configured, *admin.Channels) {
 	t.Helper()
 	_, pool := channelStore(t)

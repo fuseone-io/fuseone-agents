@@ -5,18 +5,19 @@ import (
 	"fmt"
 
 	"github.com/fuseone/agents/internal/admin"
+	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 )
 
 /*
-Where runs report, configured.
+Where runs report, and where deliberate asks can arrive.
 
-Outbound only, and the endpoints say so: there is nothing here that lets a
-conversation start anything. What a connection grants is the ability to be
-spoken to, which is why configuring one needs the same permission as
-configuring a model provider and no more.
+The two halves share the connection and not the authority. Posting uses the bot
+credential, HTTP inbound uses the signing secret, and Socket Mode uses an
+app-level token. What still stays true is that a conversation grants nothing
+to an agent: the Gate decides effects after the run starts.
 */
 
 // ChannelAdmin is channel configuration, declared here by the consumer.
@@ -27,6 +28,7 @@ type ChannelAdmin interface {
 	PutConversation(ctx context.Context, channelName string, conv admin.Conversation, by domain.UserID) error
 	DeleteConversation(ctx context.Context, id string, scope domain.Scope, by domain.UserID) error
 	Identities(ctx context.Context) ([]admin.ChannelIdentity, error)
+	SeenAccounts(ctx context.Context) ([]admin.ChannelAccountSeen, error)
 	BindIdentity(ctx context.Context, id admin.ChannelIdentity, by domain.UserID) error
 	UnbindIdentity(ctx context.Context, channelName, account string, by domain.UserID) error
 }
@@ -76,10 +78,14 @@ func (s *Server) ListChannels(
 	if err != nil {
 		return nil, fmt.Errorf("list channel identities: %w", err)
 	}
+	seen, err := s.channels.SeenAccounts(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list seen channel accounts: %w", err)
+	}
 
 	items := make([]openapi.Channel, 0, len(configured))
 	for _, c := range configured {
-		items = append(items, channelFrom(c, bound))
+		items = append(items, channelFrom(c, bound, seen))
 	}
 	return openapi.ListChannels200JSONResponse{Items: items, Kinds: kinds}, nil
 }
@@ -97,14 +103,21 @@ func (s *Server) PutChannel(
 		return nil, errNoAdministration
 	}
 
+	delivery := channel.DeliveryHTTP
+	if req.Body.DeliveryMode != nil {
+		delivery = string(*req.Body.DeliveryMode)
+	}
+
 	err := s.channels.PutChannel(ctx, admin.Channel{
-		Name:      req.Name,
-		Kind:      string(req.Body.Kind),
-		Workspace: valueOr(req.Body.Workspace),
-		Enabled:   orDefault(req.Body.Enabled, true),
+		Name:         req.Name,
+		Kind:         string(req.Body.Kind),
+		Workspace:    valueOr(req.Body.Workspace),
+		DeliveryMode: delivery,
+		Enabled:      orDefault(req.Body.Enabled, true),
 	}, channel.Credentials{
-		Token:   valueOr(req.Body.Token),
-		Signing: valueOr(req.Body.SigningSecret),
+		Token:    valueOr(req.Body.Token),
+		AppToken: valueOr(req.Body.AppToken),
+		Signing:  valueOr(req.Body.SigningSecret),
 	}, caller)
 	if err != nil {
 		return openapi.PutChannel400ApplicationProblemPlusJSONResponse{
@@ -145,14 +158,44 @@ func (s *Server) PutConversation(
 	if s.channels == nil || req.Body == nil {
 		return nil, errNoAdministration
 	}
+	scope := domain.Scope{
+		Company: domain.CompanyID(req.Body.Company),
+		Area:    domain.AreaID(valueOr(req.Body.Area)),
+	}
+	mode := conversationMode(req.Body.Mode)
+	runAs := domain.UserID(valueOr(req.Body.RunAs))
+	if mode == channel.ConversationWatch {
+		if runAs == "" {
+			return openapi.PutConversation400ApplicationProblemPlusJSONResponse{
+				BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
+					invalid("runAs is required")),
+			}, nil
+		}
+		if resp := s.refuseRunAsDelegation(ctx, caller, runAs); resp != nil {
+			return openapi.PutConversation403ApplicationProblemPlusJSONResponse{
+				ForbiddenApplicationProblemPlusJSONResponse: *resp,
+			}, nil
+		}
+		reason, err := s.refuseRunAsPrincipal(ctx, runAs, scope)
+		if err != nil {
+			return nil, err
+		}
+		if reason != "" {
+			return openapi.PutConversation400ApplicationProblemPlusJSONResponse{
+				BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
+					invalid(reason)),
+			}, nil
+		}
+	}
 
 	err := s.channels.PutConversation(ctx, req.Name, admin.Conversation{
-		ID:    req.Conversation,
-		Label: valueOr(req.Body.Label),
-		Scope: domain.Scope{
-			Company: domain.CompanyID(req.Body.Company),
-			Area:    domain.AreaID(valueOr(req.Body.Area)),
-		},
+		ID:      req.Conversation,
+		Label:   valueOr(req.Body.Label),
+		Scope:   scope,
+		Mode:    mode,
+		Sources: valueOrSlice(req.Body.Sources),
+		Agent:   domain.AgentID(valueOr(req.Body.Agent)),
+		RunAs:   runAs,
 		Wants:   wantsOf(req.Body.Wants),
 		Enabled: orDefault(req.Body.Enabled, true),
 	}, caller)
@@ -163,6 +206,55 @@ func (s *Server) PutConversation(
 		}, nil
 	}
 	return openapi.PutConversation204Response{}, nil
+}
+
+func (s *Server) refuseRunAsDelegation(
+	ctx context.Context, caller, runAs domain.UserID,
+) *openapi.ForbiddenApplicationProblemPlusJSONResponse {
+	if runAs == "" || runAs == caller {
+		return nil
+	}
+	/*
+		Naming somebody else here is delegation.
+
+		For watched messages that principal becomes OnBehalfOf, and personal MCP
+		credentials are keyed by that exact principal. A channel configurer may
+		configure where messages arrive, but they may not turn another person's
+		GitHub, Google or Slack credential into the identity of an automated run.
+		That is identity administration, so it uses the same installation-wide
+		scope as People and identity-provider mappings.
+	*/
+	if err := auth.Require(ctx, domain.PermIdentityWrite, identityScope); err != nil {
+		body := forbidden(domain.PermIdentityWrite, identityScope)
+		return &body
+	}
+	return nil
+}
+
+func (s *Server) refuseRunAsPrincipal(
+	ctx context.Context, runAs domain.UserID, scope domain.Scope,
+) (string, error) {
+	if runAs == "" || s.people == nil {
+		return "", nil
+	}
+	found, err := s.people.People(ctx)
+	if err != nil {
+		return "", fmt.Errorf("list people for runAs: %w", err)
+	}
+	for _, person := range found {
+		if person.ID == string(runAs) {
+			if person.Disabled {
+				return "runAs principal is not known or is disabled", nil
+			}
+			for _, grant := range person.Grants {
+				if grant.Scope.Contains(scope) {
+					return "", nil
+				}
+			}
+			return "runAs principal has no grant in this scope", nil
+		}
+	}
+	return "runAs principal is not known or is disabled", nil
 }
 
 func (s *Server) DeleteConversation(
@@ -210,10 +302,15 @@ func (s *Server) scopeOfConversation(
 	return domain.Scope{}, false
 }
 
-func channelFrom(c admin.Channel, bound []admin.ChannelIdentity) openapi.Channel {
+func channelFrom(
+	c admin.Channel, bound []admin.ChannelIdentity, seen []admin.ChannelAccountSeen,
+) openapi.Channel {
+	delivery := openapi.ChannelDeliveryMode(channel.DeliveryMode(c.DeliveryMode))
 	out := openapi.Channel{
 		Name: c.Name, Kind: c.Kind, Enabled: c.Enabled,
+		DeliveryMode:  &delivery,
 		HasCredential: c.HasCredential, HasSigning: ptr(c.HasSigning),
+		HasAppToken:   ptr(c.HasAppToken),
 		Conversations: make([]openapi.ChannelConversation, 0, len(c.Conversations)),
 	}
 	if c.Workspace != "" {
@@ -239,6 +336,27 @@ func channelFrom(c admin.Channel, bound []admin.ChannelIdentity) openapi.Channel
 		identities = append(identities, item)
 	}
 	out.Identities = &identities
+	boundHere := make(map[string]struct{}, len(identities))
+	for _, id := range identities {
+		boundHere[id.Account] = struct{}{}
+	}
+	seenAccounts := make([]openapi.ChannelSeenAccount, 0)
+	for _, account := range seen {
+		if account.Channel != c.Name {
+			continue
+		}
+		if _, alreadyBound := boundHere[account.Account]; alreadyBound {
+			continue
+		}
+		item := openapi.ChannelSeenAccount{
+			Account: account.Account, LastSeen: account.LastSeen,
+		}
+		if account.Conversation != "" {
+			item.Conversation = ptr(account.Conversation)
+		}
+		seenAccounts = append(seenAccounts, item)
+	}
+	out.SeenAccounts = &seenAccounts
 
 	for _, conv := range c.Conversations {
 		item := openapi.ChannelConversation{
@@ -250,12 +368,37 @@ func channelFrom(c admin.Channel, bound []admin.ChannelIdentity) openapi.Channel
 		if conv.Label != "" {
 			item.Label = ptr(conv.Label)
 		}
+		mode := openapi.ChannelConversationMode(channel.ConversationMode(conv.Mode))
+		item.Mode = &mode
+		if len(conv.Sources) > 0 {
+			item.Sources = &conv.Sources
+		}
+		if conv.Agent != "" {
+			item.Agent = ptr(string(conv.Agent))
+		}
+		if conv.RunAs != "" {
+			item.RunAs = ptr(string(conv.RunAs))
+		}
 		if len(conv.Wants) > 0 {
 			item.Wants = &conv.Wants
 		}
 		out.Conversations = append(out.Conversations, item)
 	}
 	return out
+}
+
+func conversationMode(mode *openapi.PutConversationJSONBodyMode) string {
+	if mode == nil {
+		return channel.ConversationMentions
+	}
+	return string(*mode)
+}
+
+func valueOrSlice(v *[]string) []string {
+	if v == nil {
+		return nil
+	}
+	return *v
 }
 
 func wantsOf(wants *[]openapi.PutConversationJSONBodyWants) []string {

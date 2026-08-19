@@ -18,6 +18,9 @@ with a token and no way to trust what comes back.
 type Credentials struct {
 	// Token is what this installation sends: Slack's xoxb- bot token.
 	Token string `json:"token,omitempty"`
+	// AppToken is Slack's xapp- app-level token, used only for Socket Mode.
+	// It opens the WebSocket that replaces a public Request URL.
+	AppToken string `json:"appToken,omitempty"`
 	// Signing is what it checks with. Absent means the inbound surface is
 	// closed for this channel, which is the safe reading of "not configured".
 	Signing string `json:"signing,omitempty"`

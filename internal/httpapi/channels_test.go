@@ -127,6 +127,8 @@ func TestTestConversation_conversationIsNotConfigured_refusesRatherThanPosting(t
 type channelSpy struct {
 	listed       []admin.Channel
 	bound        []admin.ChannelIdentity
+	seen         []admin.ChannelAccountSeen
+	putConv      admin.Conversation
 	deletedScope domain.Scope
 }
 
@@ -141,8 +143,9 @@ func (c *channelSpy) PutChannel(
 func (c *channelSpy) DeleteChannel(context.Context, string, domain.UserID) error { return nil }
 
 func (c *channelSpy) PutConversation(
-	context.Context, string, admin.Conversation, domain.UserID,
+	_ context.Context, _ string, conv admin.Conversation, _ domain.UserID,
 ) error {
+	c.putConv = conv
 	return nil
 }
 
@@ -172,6 +175,10 @@ func (c *channelSpy) Identities(context.Context) ([]admin.ChannelIdentity, error
 	return c.bound, nil
 }
 
+func (c *channelSpy) SeenAccounts(context.Context) ([]admin.ChannelAccountSeen, error) {
+	return c.seen, nil
+}
+
 func (c *channelSpy) BindIdentity(
 	_ context.Context, id admin.ChannelIdentity, _ domain.UserID,
 ) error {
@@ -181,6 +188,174 @@ func (c *channelSpy) BindIdentity(
 
 func (c *channelSpy) UnbindIdentity(context.Context, string, string, domain.UserID) error {
 	return nil
+}
+
+func watchConversation(runAs string) openapi.PutConversationRequestObject {
+	mode := openapi.PutConversationJSONBodyModeWatch
+	sources := []string{"B-alerts"}
+	return openapi.PutConversationRequestObject{
+		Name: "acme-slack", Conversation: "C-alerts",
+		Body: &openapi.PutConversationJSONRequestBody{
+			Company: "acme", Area: ptr("ops"),
+			Mode: &mode, Sources: &sources,
+			Agent: ptr("troubleshooting-sre"), RunAs: ptr(runAs),
+		},
+	}
+}
+
+func TestPutConversation_watchModeRunsAsTheConfigurerByDefault(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{}
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, nil)
+
+	resp, err := s.PutConversation(as(domain.RoleCurator), watchConversation("usr_ana"))
+	if err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+	if _, ok := resp.(openapi.PutConversation204Response); !ok {
+		t.Fatalf("response = %T, want accepted", resp)
+	}
+	if spy.putConv.RunAs != "usr_ana" {
+		t.Fatalf("runAs = %q, want the configurer", spy.putConv.RunAs)
+	}
+}
+
+func TestPutConversation_watchModeCannotDelegateRunAsWithoutIdentityAdministration(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{}
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, nil)
+
+	resp, err := s.PutConversation(as(domain.RoleCurator), watchConversation("usr_bob"))
+	if err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+	if _, ok := resp.(openapi.PutConversation403ApplicationProblemPlusJSONResponse); !ok {
+		t.Fatalf("response = %T, want forbidden", resp)
+	}
+	if spy.putConv.RunAs != "" {
+		t.Fatalf("conversation reached the store with runAs = %q", spy.putConv.RunAs)
+	}
+}
+
+func TestPutConversation_installationAdministratorCanDelegateRunAs(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{}
+	s := NewServer(ledger.NewMemory(), "test").
+		WithChannels(spy, nil).
+		WithPeople(&fakePeople{listed: []domain.Person{{
+			ID: "usr_bob", Display: "Bob",
+			Grants: []domain.HeldGrant{{
+				Grant: domain.Grant{
+					Scope: domain.Scope{Company: "acme", Area: "ops"},
+					Role:  domain.RoleAuthor,
+				},
+			}},
+		}}})
+
+	resp, err := s.PutConversation(asInstallation(domain.RoleAdmin), watchConversation("usr_bob"))
+	if err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+	if _, ok := resp.(openapi.PutConversation204Response); !ok {
+		t.Fatalf("response = %T, want accepted", resp)
+	}
+	if spy.putConv.RunAs != "usr_bob" {
+		t.Fatalf("runAs = %q, want delegated principal", spy.putConv.RunAs)
+	}
+}
+
+func TestPutConversation_watchModeRefusesRunAsWithoutAGrantInTheScope(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{}
+	s := NewServer(ledger.NewMemory(), "test").
+		WithChannels(spy, nil).
+		WithPeople(&fakePeople{listed: []domain.Person{{
+			ID: "usr_bob", Display: "Bob",
+			Grants: []domain.HeldGrant{{
+				Grant: domain.Grant{
+					Scope: domain.Scope{Company: "other", Area: "ops"},
+					Role:  domain.RoleAuthor,
+				},
+			}},
+		}}})
+
+	resp, err := s.PutConversation(asInstallation(domain.RoleAdmin), watchConversation("usr_bob"))
+	if err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+	if _, ok := resp.(openapi.PutConversation400ApplicationProblemPlusJSONResponse); !ok {
+		t.Fatalf("response = %T, want bad request", resp)
+	}
+	if spy.putConv.RunAs != "" {
+		t.Fatalf("conversation reached the store with runAs = %q", spy.putConv.RunAs)
+	}
+}
+
+func TestPutConversation_watchModeRefusesUnknownRunAsPrincipal(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{}
+	s := NewServer(ledger.NewMemory(), "test").
+		WithChannels(spy, nil).
+		WithPeople(&fakePeople{listed: []domain.Person{{ID: "usr_bob", Display: "Bob"}}})
+
+	resp, err := s.PutConversation(asInstallation(domain.RoleAdmin), watchConversation("usr_ghost"))
+	if err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+	if _, ok := resp.(openapi.PutConversation400ApplicationProblemPlusJSONResponse); !ok {
+		t.Fatalf("response = %T, want bad request", resp)
+	}
+	if spy.putConv.RunAs != "" {
+		t.Fatalf("conversation reached the store with runAs = %q", spy.putConv.RunAs)
+	}
+}
+
+func TestPutConversation_watchModeRequiresRunAs(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{}
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, nil)
+
+	resp, err := s.PutConversation(as(domain.RoleCurator), watchConversation(""))
+	if err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+	if _, ok := resp.(openapi.PutConversation400ApplicationProblemPlusJSONResponse); !ok {
+		t.Fatalf("response = %T, want bad request", resp)
+	}
+	if spy.putConv.RunAs != "" {
+		t.Fatalf("conversation reached the store with runAs = %q", spy.putConv.RunAs)
+	}
+}
+
+func TestListChannels_showsUnboundSeenAccountsAsBindingHints(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{
+		listed: []admin.Channel{{Name: "acme-slack", Kind: "slack"}},
+		bound: []admin.ChannelIdentity{
+			{Channel: "acme-slack", Account: "U024", Principal: "usr_ana", Display: "Ana"},
+		},
+		seen: []admin.ChannelAccountSeen{
+			{Channel: "acme-slack", Account: "U024"},
+			{Channel: "acme-slack", Account: "U777", Conversation: "C-alerts"},
+			{Channel: "other", Account: "U999"},
+		},
+	}
+	s := NewServer(ledger.NewMemory(), "test").
+		WithChannels(spy, nil).
+		WithChannelListing(&listerSpy{})
+
+	resp, err := s.ListChannels(as(domain.RoleCurator), openapi.ListChannelsRequestObject{})
+	if err != nil {
+		t.Fatalf("ListChannels: %v", err)
+	}
+	page := resp.(openapi.ListChannels200JSONResponse)
+	seen := page.Items[0].SeenAccounts
+	if seen == nil || len(*seen) != 1 {
+		t.Fatalf("seen = %+v, want one unbound account for this channel", seen)
+	}
+	if (*seen)[0].Account != "U777" || valueOr((*seen)[0].Conversation) != "C-alerts" {
+		t.Fatalf("seen = %+v, want the unbound account with its last conversation", (*seen)[0])
+	}
 }
 
 // Binding is what turns a Slack account into somebody's authority, so the list

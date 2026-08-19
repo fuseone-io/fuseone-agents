@@ -15,10 +15,12 @@ itself, and there is no reading it back out of a hash.
 */
 func TestCredentials_roundTrip_keepsBothApart(t *testing.T) {
 	t.Parallel()
-	sealed := channel.Credentials{Token: "xoxb-1", Signing: "s3cr3t"}.Sealed()
+	sealed := channel.Credentials{
+		Token: "xoxb-1", Signing: "s3cr3t", AppToken: "xapp-1",
+	}.Sealed()
 
 	back := channel.ReadCredentials(sealed)
-	if back.Token != "xoxb-1" || back.Signing != "s3cr3t" {
+	if back.Token != "xoxb-1" || back.Signing != "s3cr3t" || back.AppToken != "xapp-1" {
 		t.Fatalf("read back %+v", back)
 	}
 }
@@ -35,6 +37,9 @@ func TestReadCredentials_aBareToken_isStillATokan(t *testing.T) {
 	}
 	if back.Signing != "" {
 		t.Errorf("signing = %q, want none — the inbound surface stays closed", back.Signing)
+	}
+	if back.AppToken != "" {
+		t.Errorf("app token = %q, want none — Socket Mode stays closed", back.AppToken)
 	}
 }
 

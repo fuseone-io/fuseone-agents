@@ -86,8 +86,8 @@ func configure(t *testing.T, s *settings.Store, name string) {
 // spies builds the drivers under a table that records who was reached.
 func spies(store *settings.Store) (*Drivers, map[string]*spoke) {
 	reached := map[string]*spoke{}
-	return newWith(store, map[string]func(channel.Credentials) Driver{
-		"slack": func(creds channel.Credentials) Driver {
+	return newWith(store, map[string]func(channel.Connection, channel.Credentials) Driver{
+		"slack": func(_ channel.Connection, creds channel.Credentials) Driver {
 			one := &spoke{token: creds.Token}
 			reached[creds.Token] = one
 			return one

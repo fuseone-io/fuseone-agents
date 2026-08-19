@@ -38,7 +38,7 @@ type Driver interface {
 // Drivers resolves a configured connection to something that can post.
 type Drivers struct {
 	store *settings.Store
-	build map[string]func(channel.Credentials) Driver
+	build map[string]func(channel.Connection, channel.Credentials) Driver
 }
 
 func New(store *settings.Store) *Drivers { return newWith(store, drivers) }
@@ -46,7 +46,7 @@ func New(store *settings.Store) *Drivers { return newWith(store, drivers) }
 // newWith is the same thing over another table, so a test can see which
 // credential a name resolved to without a fake vendor over HTTP.
 func newWith(
-	store *settings.Store, table map[string]func(channel.Credentials) Driver,
+	store *settings.Store, table map[string]func(channel.Connection, channel.Credentials) Driver,
 ) *Drivers {
 	return &Drivers{store: store, build: table}
 }
@@ -105,7 +105,7 @@ func (d *Drivers) driver(ctx context.Context, name string) (Driver, error) {
 		// should say so, not fail as a notification that never arrives.
 		return nil, fmt.Errorf("connect: channel %q is of an unsupported kind %q", name, conn.Kind)
 	}
-	return build(creds), nil
+	return build(conn, creds), nil
 }
 
 /*
@@ -115,10 +115,10 @@ A table rather than a switch, because the console asks what it may offer and
 the answer has to be the same list that builds the connection. Two places
 saying which vendors exist is one place offering a kind the binary cannot make.
 */
-var drivers = map[string]func(creds channel.Credentials) Driver{
-	"slack": func(creds channel.Credentials) Driver {
+var drivers = map[string]func(conn channel.Connection, creds channel.Credentials) Driver{
+	"slack": func(conn channel.Connection, creds channel.Credentials) Driver {
 		driver := slack.New(creds.Token)
-		if creds.Signing != "" {
+		if channel.DeliveryMode(conn.DeliveryMode) == channel.DeliveryHTTP && creds.Signing != "" {
 			driver = driver.Decidable()
 		}
 		return driver

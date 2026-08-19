@@ -170,6 +170,21 @@ existing session alone.
 reason is worth reading: "this writes" and "this writes in a run that read
 somebody else's text" are different sentences and different risks.
 
+**A Slack mention does not open a run.** Check which delivery mode the channel
+uses. In HTTP mode, Slack must reach `/hooks/channel/<name>/slack/events` and
+the signing secret must verify the request. In Socket Mode, no public URL is
+called: a worker must be running, the channel must hold an `xapp-` app-level
+token with `connections:write`, and the app still needs `app_mention`
+subscribed in Slack.
+
+**An alert posted in Slack does not open a run.** Mention mode ignores ordinary
+messages by design. To turn alert posts into runs, edit the conversation and
+choose "watch selected messages"; then configure the Slack source id
+(`bot_id`, `app_id` or user id), the agent to start, and the platform principal
+the run acts as. The Slack app must also subscribe to message events for the
+conversation type, such as `message.channels`, and the bot must be in the
+channel.
+
 **The queue stops draining.** A worker has no HTTP surface to probe, so a
 wedged one shows as work not moving rather than as a port not answering. Look
 at the worker's log and the run's last step.

@@ -244,7 +244,7 @@ func TestPutMCPServer_passesOAuthGrantToTheStore(t *testing.T) {
 	resp, err := serverWith(t, admin).PutMCPServer(as(domain.RoleCurator), openapi.PutMCPServerRequestObject{
 		Name: "google-workspace",
 		Body: &openapi.PutMCPServerJSONRequestBody{
-			Transport: ptr(openapi.Http),
+			Transport: ptr(openapi.TransportHttp),
 			Url:       ptr("https://mcp.example.com/google"),
 			Oauth: &openapi.MCPOAuthGrant{
 				AccessToken:   ptr("access"),
@@ -282,7 +282,7 @@ func TestPutMCPServer_passesHeaderCredentialsToTheStore(t *testing.T) {
 	resp, err := serverWith(t, admin).PutMCPServer(as(domain.RoleCurator), openapi.PutMCPServerRequestObject{
 		Name: "newrelic",
 		Body: &openapi.PutMCPServerJSONRequestBody{
-			Transport: ptr(openapi.Http),
+			Transport: ptr(openapi.TransportHttp),
 			Url:       ptr("https://mcp.newrelic.com/mcp/"),
 			Headers:   &headers,
 		},

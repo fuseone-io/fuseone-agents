@@ -88,6 +88,40 @@ func TestSweep_theInput_carriesTheAskAndWhoMadeIt(t *testing.T) {
 	}
 }
 
+func TestSweep_aWatchedMessage_runsAsTheConfiguredPrincipal(t *testing.T) {
+	c, parts := consumerWith(t, "firing alertGatewayRTMInterfaceErrors", func(p *consumerParts) {
+		p.arrival.Agent = "triagem"
+		p.arrival.RunAs = "usr_opsbot"
+		p.arrival.AskedBy = "bot:B-alerts"
+		p.arrival.Source = channel.Source{Bot: "B-alerts"}
+		p.bindErr = errors.New("a watched message must not read a Slack account binding")
+	})
+
+	opened, err := c.Sweep(t.Context(), time.Minute, 10)
+	if err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if opened != 1 {
+		t.Fatalf("opened = %d, want the watched alert", opened)
+	}
+	if parts.opener.last.Agent != "triagem" || parts.opener.last.By != "usr_opsbot" {
+		t.Fatalf("request = %+v, want configured agent and principal", parts.opener.last)
+	}
+	if !parts.opener.last.Labels.Has(domain.LabelUntrusted) {
+		t.Errorf("labels = %v, want the alert text tainted", parts.opener.last.Labels)
+	}
+	var ask struct {
+		Text   string `json:"text"`
+		Source string `json:"source"`
+	}
+	if err := json.Unmarshal(parts.opener.last.Input, &ask); err != nil {
+		t.Fatalf("input: %v", err)
+	}
+	if ask.Source != "bot:B-alerts" || ask.Text == "" {
+		t.Errorf("input = %+v, want the watched source and text", ask)
+	}
+}
+
 func TestSweep_anAskNamingNoAgent_isAnsweredInTheConversation(t *testing.T) {
 	c, parts := consumerFor(t, "<@U07BOT> alguém aí?")
 

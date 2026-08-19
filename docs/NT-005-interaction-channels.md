@@ -305,8 +305,9 @@ made the ask a requirement rather than a proposal.*
 Half of it is already standing, which is easy to lose sight of when the note
 reads as though nothing exists.
 
-**Built and in the lab:** Slack signature verification, used today by the
-approval button. The account-to-principal binding and its administrative
+**Built:** Slack signature verification, used by the HTTP event path and the
+approval button. Slack Socket Mode for installations that cannot expose a
+public Request URL. The account-to-principal binding and its administrative
 endpoint. `trigger.Opener`, which takes a `Request` and seals `run_started` —
 a channel is a fourth caller and needs no new machinery. The taint check, which
 is what makes text somebody else wrote survivable at all. And the outbound
@@ -350,6 +351,40 @@ existence redelivers.
 
 This is the one piece of stage 3 that is infrastructure rather than design, and
 it is the piece most likely to be skipped for looking like plumbing.
+
+### 12.1.1 HTTP and Socket Mode are two doors into the same inbox
+
+Slack offers two delivery contracts. HTTP is the simpler production shape when
+the installation can expose a Request URL: Slack calls the door, the signing
+secret verifies every request, and the response is the acknowledgement. Socket
+Mode is the internal/on-premise shape: a worker opens an outbound WebSocket
+using Slack's app-level token, and Slack sends the same Events API payloads
+there instead.
+
+Those two paths are not two triggers. Both parse the same Events API payload
+and both write `channel_inbox` before acknowledging. That is the property that
+matters: changing the transport does not change dedupe, taint, origin, or the
+per-correspondent ceiling.
+
+Socket Mode changes the secret and the operational cost. It removes the public
+inbound URL, but it adds a long-lived connection the worker must maintain and
+an `xapp-` token sealed beside the channel's other credentials. It receives
+Events API asks in this platform. Approval buttons remain on the HTTP
+interaction path until Socket Mode interactions are built deliberately; a
+button shown when no path can receive the answer is worse than no button.
+
+### 12.1.2 Watching selected messages is configured automation
+
+A watched conversation is not a bot reading the room and deciding what to do.
+It is a rule an operator wrote: *messages in this conversation, from these
+Slack user/bot/app ids, start this agent, running as this platform principal*.
+The Slack source filters the event; it grants nothing. The text never chooses
+the agent and never chooses authority.
+
+The message is still untrusted input. It enters the same inbox, carries the
+same taint, and counts against the same correspondent ceiling, keyed by the
+Slack source. The only thing the watch rule adds is the part a mention used to
+provide: which agent to start and who authorised the run.
 
 ### 12.2 An open channel is an open budget
 

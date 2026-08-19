@@ -257,6 +257,26 @@ func TestSlackEvent_anAsk_isWrittenDownBeforeItIsAcknowledged(t *testing.T) {
 	}
 }
 
+func TestSlackEvent_aMentionMarksTheSlackAccountAsSeen(t *testing.T) {
+	t.Parallel()
+	hooks, _ := hooksFor(t, ledger.NewMemory(), nil, domain.Principal{})
+	inbox := &inboxSpy{}
+	seen := &seenSpy{}
+	hooks.WithArrivals(inbox).WithSeenAccounts(seen)
+
+	rec := deliver(t, hooks, "acme-slack", mentionEvent("Ev-seen"))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	if seen.channel != "acme-slack" || seen.account != "U9" || seen.conversation != "C07-ops" {
+		t.Fatalf("seen = %s/%s/%s, want the signed Slack account", seen.channel, seen.account, seen.conversation)
+	}
+	if len(inbox.received) != 1 {
+		t.Fatalf("received = %+v, want the ask still written", inbox.received)
+	}
+}
+
 // A write that did not happen is the one failure where the sender doing it
 // again is what we want, so it is refused rather than acknowledged.
 func TestSlackEvent_theInboxRefusesTheWrite_soDoesTheDoor(t *testing.T) {
@@ -353,6 +373,19 @@ func (i *inboxSpy) Receive(_ context.Context, a channel.Arrival) (bool, error) {
 	return true, nil
 }
 
+type seenSpy struct {
+	channel      string
+	account      string
+	conversation string
+}
+
+func (s *seenSpy) MarkAccountSeen(
+	_ context.Context, channelName, account, conversation string, _ time.Time,
+) error {
+	s.channel, s.account, s.conversation = channelName, account, conversation
+	return nil
+}
+
 /*
 A mention nobody can read is said out loud, not acknowledged quietly.
 
@@ -385,7 +418,8 @@ func TestSlackEvent_anOrdinaryMessage_isAcknowledgedAndForgotten(t *testing.T) {
 	t.Parallel()
 	hooks, _ := hooksFor(t, ledger.NewMemory(), nil, domain.Principal{})
 	inbox := &inboxSpy{}
-	hooks.WithArrivals(inbox)
+	seen := &seenSpy{}
+	hooks.WithArrivals(inbox).WithSeenAccounts(seen)
 
 	rec := deliver(t, hooks, "acme-slack", `{"type":"event_callback","event_id":"Ev301",
 	  "event":{"type":"message","channel":"C07-ops","user":"U9","text":"bom dia","ts":"1786.2"}}`)
@@ -395,6 +429,9 @@ func TestSlackEvent_anOrdinaryMessage_isAcknowledgedAndForgotten(t *testing.T) {
 	}
 	if len(inbox.received) != 0 {
 		t.Error("an ordinary message was filed as an ask")
+	}
+	if seen.account != "" {
+		t.Fatalf("seen = %s, want ordinary channel chatter not recorded", seen.account)
 	}
 }
 

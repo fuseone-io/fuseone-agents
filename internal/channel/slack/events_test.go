@@ -72,6 +72,24 @@ func TestReadDelivery_anOrdinaryMessage_isNotAnAsk(t *testing.T) {
 	}
 }
 
+func TestReadAnyDelivery_aBotMessageCanBeAWatchCandidate(t *testing.T) {
+	t.Parallel()
+
+	got, err := slack.ReadAnyDelivery([]byte(`{
+	  "type":"event_callback","event_id":"Ev300",
+	  "event":{"type":"message","subtype":"bot_message","channel":"C07-ops",
+	           "bot_id":"B-alerts","app_id":"A-alerts",
+	           "text":"firing alertGatewayRTMInterfaceErrors","ts":"1786.5"}
+	}`))
+	if err != nil {
+		t.Fatalf("ReadAnyDelivery: %v", err)
+	}
+	if got.Kind != slack.DeliveryMessage || got.Source.Bot != "B-alerts" ||
+		got.Source.App != "A-alerts" || got.Text == "" {
+		t.Fatalf("delivery = %+v, want the watched-message candidate", got)
+	}
+}
+
 // A bot's own mention is how two bots discover each other and never stop.
 func TestReadDelivery_aBotSpeaking_isNotAnAsk(t *testing.T) {
 	t.Parallel()

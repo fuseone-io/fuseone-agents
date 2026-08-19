@@ -27,6 +27,9 @@ declared without one.
 var (
 	ErrNoChannelKind = errors.New("admin: a channel needs a kind")
 	ErrNoCompany     = errors.New("admin: a conversation belongs to a scope")
+	ErrNoWatchSource = errors.New("admin: watched messages need at least one source")
+	ErrNoWatchAgent  = errors.New("admin: watched messages need an agent to start")
+	ErrNoWatchRunAs  = errors.New("admin: watched messages need a principal to run as")
 )
 
 // Channels reads and writes channel configuration, recording each change.
@@ -44,11 +47,15 @@ type Channel struct {
 	Name          string
 	Kind          string
 	Workspace     string
+	DeliveryMode  string
 	Enabled       bool
 	HasCredential bool
 	// HasSigning reports whether the inbound half is configured, without
 	// exposing it. A channel can post long before it can be answered.
-	HasSigning    bool
+	HasSigning bool
+	// HasAppToken reports whether Slack Socket Mode can be opened without
+	// revealing the app-level token that opens it.
+	HasAppToken   bool
 	Conversations []Conversation
 }
 
@@ -57,6 +64,10 @@ type Conversation struct {
 	ID      string
 	Label   string
 	Scope   domain.Scope
+	Mode    string
+	Sources []string
+	Agent   domain.AgentID
+	RunAs   domain.UserID
 	Wants   []string
 	Enabled bool
 }
@@ -78,24 +89,39 @@ func (c *Channels) List(ctx context.Context) ([]Channel, error) {
 		_ = json.Unmarshal(s.Value, &conn)
 		// Whether the inbound half is on, without revealing either secret. It
 		// needs the sealed value, so it is read here rather than inferred.
-		signing := c.hasSigning(ctx, s.Name)
+		secret := c.channelSecretState(ctx, s.Name)
 		out = append(out, Channel{
 			Name: s.Name, Kind: conn.Kind, Workspace: conn.Workspace,
-			Enabled: s.Enabled, HasCredential: s.HasSecret, HasSigning: signing,
+			DeliveryMode: channel.DeliveryMode(conn.DeliveryMode),
+			Enabled:      s.Enabled, HasCredential: secret.BotToken,
+			HasSigning: secret.Signing, HasAppToken: secret.AppToken,
 			Conversations: conversationsOf(s.Name, conversations),
 		})
 	}
 	return out, nil
 }
 
-// hasSigning answers whether this channel can verify what arrives.
-func (c *Channels) hasSigning(ctx context.Context, name string) bool {
+type channelSecretState struct {
+	BotToken bool
+	Signing  bool
+	AppToken bool
+}
+
+// channelSecretState answers which sealed pieces exist, without exposing any
+// of them. A single HasSecret bit is no longer enough: posting, HTTP inbound
+// and Socket Mode are three different capabilities.
+func (c *Channels) channelSecretState(ctx context.Context, name string) channelSecretState {
 	held, err := c.settings.Reveal(ctx,
 		settings.ScopeInstallation, domain.Scope{}, channel.KindChannel, name)
 	if err != nil {
-		return false
+		return channelSecretState{}
 	}
-	return channel.ReadCredentials(held.Secret).Signing != ""
+	creds := channel.ReadCredentials(held.Secret)
+	return channelSecretState{
+		BotToken: creds.Token != "",
+		Signing:  creds.Signing != "",
+		AppToken: creds.AppToken != "",
+	}
 }
 
 func conversationsOf(channelName string, stored []settings.Setting) []Conversation {
@@ -104,6 +130,10 @@ func conversationsOf(channelName string, stored []settings.Setting) []Conversati
 		var v struct {
 			Channel string   `json:"channel"`
 			Label   string   `json:"label"`
+			Mode    string   `json:"mode"`
+			Sources []string `json:"sources"`
+			Agent   string   `json:"agent"`
+			RunAs   string   `json:"runAs"`
 			Wants   []string `json:"wants"`
 		}
 		if err := json.Unmarshal(s.Value, &v); err != nil || v.Channel != channelName {
@@ -111,6 +141,9 @@ func conversationsOf(channelName string, stored []settings.Setting) []Conversati
 		}
 		out = append(out, Conversation{
 			ID: s.Name, Label: v.Label, Scope: s.Scope,
+			Mode:    channel.ConversationMode(v.Mode),
+			Sources: compactStrings(v.Sources),
+			Agent:   domain.AgentID(v.Agent), RunAs: domain.UserID(v.RunAs),
 			Wants: v.Wants, Enabled: s.Enabled,
 		})
 	}
@@ -120,10 +153,10 @@ func conversationsOf(channelName string, stored []settings.Setting) []Conversati
 /*
 PutChannel configures a connection, sealing its credentials.
 
-Either secret may be omitted to keep the stored one. They are configured at
-different moments — a workspace is connected to receive notifications long
-before anybody switches the inbound half on — and demanding both on every save
-would mean re-pasting a token to add a signing secret.
+The bot token may be omitted to keep the stored one. The inbound secret belongs
+to the selected delivery mode: HTTP keeps a signing secret, Socket Mode keeps
+an app-level token, and switching modes drops the other one rather than hiding
+an unused credential in the vault.
 */
 func (c *Channels) PutChannel(
 	ctx context.Context, ch Channel, creds channel.Credentials, by domain.UserID,
@@ -132,12 +165,16 @@ func (c *Channels) PutChannel(
 		return ErrNoChannelKind
 	}
 
-	value, err := json.Marshal(channel.Connection{Kind: ch.Kind, Workspace: ch.Workspace})
+	mode := channel.DeliveryMode(ch.DeliveryMode)
+	value, err := json.Marshal(channel.Connection{
+		Kind: ch.Kind, Workspace: ch.Workspace,
+		DeliveryMode: mode,
+	})
 	if err != nil {
 		return err
 	}
 
-	merged, err := c.mergeCredentials(ctx, ch.Name, creds)
+	merged, err := c.mergeCredentials(ctx, ch.Name, creds, mode)
 	if err != nil {
 		return err
 	}
@@ -151,34 +188,50 @@ func (c *Channels) PutChannel(
 		// installation can be spoken to is a fact an auditor may need; the
 		// secret is not.
 		"kind": ch.Kind, "workspace": ch.Workspace,
-		"token": merged.Token != "", "signing": merged.Signing != "",
+		"deliveryMode": mode,
+		"token":        merged.Token != "", "signing": merged.Signing != "",
+		"appToken": merged.AppToken != "",
 	})
 }
 
 // mergeCredentials keeps whichever half this write left out.
 func (c *Channels) mergeCredentials(
-	ctx context.Context, name string, given channel.Credentials,
+	ctx context.Context, name string, given channel.Credentials, mode string,
 ) (channel.Credentials, error) {
-	if given.Token != "" && given.Signing != "" {
-		return given, nil
-	}
-
 	held, err := c.settings.Reveal(ctx,
 		settings.ScopeInstallation, domain.Scope{}, channel.KindChannel, name)
 	if err != nil {
 		// No such channel yet: this write is the first, and what it carries is
 		// all there is.
-		return given, nil //nolint:nilerr // absent is not a failure here
+		return channelCredentialsForMode(given, mode), nil //nolint:nilerr // absent is not a failure here
 	}
 
 	stored := channel.ReadCredentials(held.Secret)
 	if given.Token == "" {
 		given.Token = stored.Token
 	}
-	if given.Signing == "" {
-		given.Signing = stored.Signing
+	switch mode {
+	case channel.DeliverySocket:
+		if given.AppToken == "" {
+			given.AppToken = stored.AppToken
+		}
+		given.Signing = ""
+	default:
+		if given.Signing == "" {
+			given.Signing = stored.Signing
+		}
+		given.AppToken = ""
 	}
 	return given, nil
+}
+
+func channelCredentialsForMode(creds channel.Credentials, mode string) channel.Credentials {
+	if mode == channel.DeliverySocket {
+		creds.Signing = ""
+		return creds
+	}
+	creds.AppToken = ""
+	return creds
 }
 
 /*
@@ -200,12 +253,30 @@ func (c *Channels) PutConversation(
 	if conv.Scope.Company == "" {
 		return ErrNoCompany
 	}
+	mode := channel.ConversationMode(conv.Mode)
+	sources := compactStrings(conv.Sources)
+	if mode == channel.ConversationWatch {
+		switch {
+		case len(sources) == 0:
+			return ErrNoWatchSource
+		case strings.TrimSpace(string(conv.Agent)) == "":
+			return ErrNoWatchAgent
+		case strings.TrimSpace(string(conv.RunAs)) == "":
+			return ErrNoWatchRunAs
+		}
+	} else {
+		sources = nil
+		conv.Agent = ""
+		conv.RunAs = ""
+	}
 	if err := c.unmapped(ctx, channelName, conv); err != nil {
 		return err
 	}
 
 	value, err := json.Marshal(map[string]any{
 		"channel": channelName, "label": conv.Label, "wants": conv.Wants,
+		"mode": mode, "sources": sources,
+		"agent": string(conv.Agent), "runAs": string(conv.RunAs),
 	})
 	if err != nil {
 		return err
@@ -222,7 +293,20 @@ func (c *Channels) PutConversation(
 		Value: value, Enabled: conv.Enabled, UpdatedBy: string(by),
 	}, "channel.conversation.configured", conv.ID, map[string]any{
 		"channel": channelName, "scope": conv.Scope.String(), "wants": conv.Wants,
+		"mode": mode, "sources": sources,
+		"agent": string(conv.Agent), "runAs": string(conv.RunAs),
 	})
+}
+
+func compactStrings(in []string) []string {
+	out := make([]string, 0, len(in))
+	for _, one := range in {
+		one = strings.TrimSpace(one)
+		if one != "" {
+			out = append(out, one)
+		}
+	}
+	return out
 }
 
 // DeleteChannel removes a connection and everything mapped into it.
