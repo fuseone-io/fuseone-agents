@@ -6,11 +6,15 @@ import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
 import { InterviewCapture } from "@/features/agents/interview-capture";
 import { InterviewChecklist } from "@/features/agents/interview-checklist";
-import { useInterview } from "@/features/agents/interview-api";
+import {
+  useInterview,
+  useInterviewSuggestions,
+} from "@/features/agents/interview-api";
 import { InterviewReview } from "@/features/agents/interview-review";
 import {
   EMPTY_INTERVIEW_ANSWERS,
   draftFromInterview,
+  mergeSuggestedAnswers,
   type InterviewAnswerKey,
   type InterviewAnswersState,
 } from "@/features/agents/interview-model";
@@ -32,6 +36,7 @@ export function InterviewPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const translate = useInterview();
+  const suggest = useInterviewSuggestions();
 
   const [capture, setCapture] = useState("");
   const [reviewing, setReviewing] = useState(false);
@@ -49,6 +54,20 @@ export function InterviewPage() {
 
   const changeAnswer = (field: InterviewAnswerKey, value: string) =>
     setAnswers((current) => ({ ...current, [field]: value }));
+
+  const suggestAnswers = () =>
+    suggest.mutate(
+      { text: capture },
+      {
+        onSuccess: (result) => {
+          setAnswers((current) =>
+            mergeSuggestedAnswers(current, result.answers),
+          );
+          setReviewing(true);
+        },
+        onError: (e) => toast.error(problemMessage(e, t)),
+      },
+    );
 
   const finish = () =>
     translate.mutate(
@@ -90,6 +109,8 @@ export function InterviewPage() {
             value={capture}
             onChange={setCapture}
             onReview={review}
+            onSuggest={suggestAnswers}
+            suggesting={suggest.isPending}
           />
           {reviewing && (
             <InterviewReview

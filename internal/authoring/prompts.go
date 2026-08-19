@@ -41,6 +41,14 @@ func organisePrompt(locale string, a Answers, catalogue []domain.ToolID) (string
 	}{a, catalogue})
 }
 
+// suggestPrompt asks the assistant to fit a free description into the fixed
+// interview fields. The model does not decide what the interview asks.
+func suggestPrompt(locale, text string) (string, error) {
+	return render(locale, "suggest.txt", struct {
+		Text string
+	}{text})
+}
+
 // placePrompt asks, on its own, which step the exception belongs to.
 func placePrompt(locale, exception string, steps []spec.Step) (string, error) {
 	return render(locale, "place.txt", struct {

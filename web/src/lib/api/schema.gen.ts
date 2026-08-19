@@ -181,6 +181,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/interview/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Suggest answers from a free description
+         * @description Reads the author's free description and proposes values for the fixed
+         *     interview fields. The model does not choose questions, tools or steps
+         *     here: it only fills the schema the platform already owns, and the
+         *     author still reviews the answers before the draft is generated.
+         *
+         *     The daily authoring ceiling is checked before the request leaves, and
+         *     the cost is appended to the administrative trail whether or not the
+         *     answer was usable.
+         */
+        post: operations["suggestInterviewAnswers"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/instructions/tokens": {
         parameters: {
             query?: never;
@@ -2839,6 +2866,32 @@ export interface components {
             /** @description What the author says must never happen (FU-07). */
             neverDo?: string;
         };
+        /**
+         * @description The author's free description of the work. It is input to extraction
+         *     only: the model may propose values for the fixed fields, but it never
+         *     chooses the fields themselves.
+         */
+        InterviewCapture: {
+            text: string;
+        };
+        InterviewSuggestedAnswers: {
+            trigger: string;
+            mustKnow: string;
+            steps: string;
+            goesWrong: string;
+            notDecide: string;
+            closing: string;
+            /** @description What the author says must never happen (FU-07). */
+            neverDo: string;
+        };
+        InterviewSuggestions: {
+            answers: components["schemas"]["InterviewSuggestedAnswers"];
+            /**
+             * Format: int64
+             * @description What this suggestion call cost, appended to the trail as well.
+             */
+            micros?: number;
+        };
         InstructionText: {
             provider: string;
             /** @description The model the agent is configured to use. It comes back in the reply, so an answer read on its own says what counted it — a token count means nothing without the model that produced it. */
@@ -4023,6 +4076,62 @@ export interface operations {
             /**
              * @description The model provider refused in a way that can clear without the
              *     author changing the interview, such as overload, rate limiting or
+             *     a network failure.
+             */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    suggestInterviewAnswers: {
+        parameters: {
+            query?: {
+                /**
+                 * @description The language the author is writing in, so the assistant is
+                 *     instructed in it. An unknown language falls back to the
+                 *     installation's default.
+                 */
+                locale?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InterviewCapture"];
+            };
+        };
+        responses: {
+            /** @description Suggested answers for the fixed interview fields. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewSuggestions"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description The assistant is switched off, or its daily ceiling is reached. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /**
+             * @description The model provider refused in a way that can clear without the
+             *     author changing the description, such as overload, rate limiting or
              *     a network failure.
              */
             503: {

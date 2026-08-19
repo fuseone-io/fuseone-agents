@@ -4,7 +4,11 @@ import { api, unwrap } from "@/lib/api/client";
 import type { components } from "@/lib/api/schema.gen";
 
 export type InterviewAnswers = components["schemas"]["InterviewAnswers"];
+export type InterviewCapture = components["schemas"]["InterviewCapture"];
 export type InterviewDraft = components["schemas"]["InterviewDraft"];
+export type InterviewSuggestedAnswers =
+  components["schemas"]["InterviewSuggestedAnswers"];
+export type InterviewSuggestions = components["schemas"]["InterviewSuggestions"];
 
 /**
  * The prose half of the interview, translated by the model Administração
@@ -26,6 +30,20 @@ export function useInterview() {
         await api.POST("/agents/interview", {
           params: { query: { locale: i18n.language } },
           body: answers,
+        }),
+      ),
+  });
+}
+
+export function useInterviewSuggestions() {
+  const { i18n } = useTranslation();
+
+  return useMutation({
+    mutationFn: async (capture: InterviewCapture) =>
+      unwrap(
+        await api.POST("/agents/interview/suggestions", {
+          params: { query: { locale: i18n.language } },
+          body: capture,
         }),
       ),
   });

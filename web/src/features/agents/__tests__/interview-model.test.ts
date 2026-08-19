@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { draftFromInterview } from "@/features/agents/interview-model";
+import {
+  EMPTY_INTERVIEW_ANSWERS,
+  draftFromInterview,
+  mergeSuggestedAnswers,
+} from "@/features/agents/interview-model";
 
 /*
 Seven questions are asked, and what the author answered has to arrive.
@@ -70,5 +74,23 @@ describe("what an interview leaves behind", () => {
     const draft = draftFromInterview(ANSWERS, TRANSLATED, "pt-BR");
 
     expect(draft.triggers).toEqual([]);
+  });
+
+  it("uses suggestions to fill blanks without overwriting the author", () => {
+    const got = mergeSuggestedAnswers(
+      { ...EMPTY_INTERVIEW_ANSWERS, steps: "Eu já corrigi os passos." },
+      {
+        trigger: "Quando chega um alerta.",
+        mustKnow: "Métricas.",
+        steps: "Passos sugeridos pelo modelo.",
+        goesWrong: "",
+        notDecide: "Acionar alguém.",
+        closing: "Resumo pronto.",
+        neverDo: "Fechar incidente.",
+      },
+    );
+
+    expect(got.trigger).toBe("Quando chega um alerta.");
+    expect(got.steps).toBe("Eu já corrigi os passos.");
   });
 });

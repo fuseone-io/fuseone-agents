@@ -1,5 +1,8 @@
 import { serialise, type Block } from "@/features/agents/instruction-blocks";
-import type { InterviewDraft } from "@/features/agents/interview-api";
+import type {
+  InterviewDraft,
+  InterviewSuggestedAnswers,
+} from "@/features/agents/interview-api";
 import type { AgentDefinition } from "@/lib/api/client";
 
 /** The seven questions, in the order the PRD asks them (FU-01…07). */
@@ -59,6 +62,22 @@ export const EMPTY_INTERVIEW_ANSWERS: InterviewAnswersState = {
 
 export function filledAnswers(answers: InterviewAnswersState) {
   return QUESTIONS.filter((question) => answers[question.fills].trim() !== "");
+}
+
+export function mergeSuggestedAnswers(
+  current: InterviewAnswersState,
+  suggested: InterviewSuggestedAnswers,
+): InterviewAnswersState {
+  return QUESTIONS.reduce<InterviewAnswersState>(
+    (next, question) => ({
+      ...next,
+      [question.fills]:
+        current[question.fills].trim() === ""
+          ? suggested[question.fills]
+          : current[question.fills],
+    }),
+    { ...current },
+  );
 }
 
 /**

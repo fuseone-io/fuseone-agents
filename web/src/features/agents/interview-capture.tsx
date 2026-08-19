@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { ClipboardPenLine } from "lucide-react";
+import { ClipboardPenLine, WandSparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,12 +10,17 @@ export function InterviewCapture({
   value,
   onChange,
   onReview,
+  onSuggest,
+  suggesting,
 }: {
   value: string;
   onChange: (value: string) => void;
   onReview: () => void;
+  onSuggest: () => void;
+  suggesting: boolean;
 }) {
   const { t } = useTranslation();
+  const empty = value.trim() === "";
   return (
     <section className="rounded-xl border bg-card shadow-sm">
       <div className="flex items-center gap-3 border-b border-border-subtle px-4 py-3">
@@ -47,9 +52,15 @@ export function InterviewCapture({
               max: MAX_CAPTURE_CHARS,
             })}
           </p>
-          <Button onClick={onReview} disabled={value.trim() === ""}>
-            {t("interview.reviewAnswers")}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={onReview} disabled={empty}>
+              {t("interview.reviewWithoutSuggestions")}
+            </Button>
+            <Button onClick={onSuggest} disabled={empty || suggesting}>
+              <WandSparkles className="size-4" aria-hidden />
+              {t(suggesting ? "interview.suggesting" : "interview.suggestAnswers")}
+            </Button>
+          </div>
         </div>
       </div>
     </section>

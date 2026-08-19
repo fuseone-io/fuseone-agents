@@ -307,6 +307,57 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
 
+  /agents/interview/suggestions:
+    post:
+      operationId: suggestInterviewAnswers
+      tags: [agents]
+      summary: Suggest answers from a free description
+      description: |
+        Reads the author's free description and proposes values for the fixed
+        interview fields. The model does not choose questions, tools or steps
+        here: it only fills the schema the platform already owns, and the
+        author still reviews the answers before the draft is generated.
+
+        The daily authoring ceiling is checked before the request leaves, and
+        the cost is appended to the administrative trail whether or not the
+        answer was usable.
+      parameters:
+        - name: locale
+          in: query
+          description: |
+            The language the author is writing in, so the assistant is
+            instructed in it. An unknown language falls back to the
+            installation's default.
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InterviewCapture' }
+      responses:
+        '200':
+          description: Suggested answers for the fixed interview fields.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InterviewSuggestions' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: |
+            The assistant is switched off, or its daily ceiling is reached.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '503':
+          description: |
+            The model provider refused in a way that can clear without the
+            author changing the description, such as overload, rate limiting or
+            a network failure.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
   /agents/instructions/tokens:
     post:
       tags: [agents]
@@ -4362,6 +4413,42 @@ components:
         neverDo:
           type: string
           description: What the author says must never happen (FU-07).
+
+    InterviewCapture:
+      type: object
+      required: [text]
+      description: |
+        The author's free description of the work. It is input to extraction
+        only: the model may propose values for the fixed fields, but it never
+        chooses the fields themselves.
+      properties:
+        text:
+          type: string
+          maxLength: 12000
+
+    InterviewSuggestedAnswers:
+      type: object
+      required: [trigger, mustKnow, steps, goesWrong, notDecide, closing, neverDo]
+      properties:
+        trigger: { type: string }
+        mustKnow: { type: string }
+        steps: { type: string }
+        goesWrong: { type: string }
+        notDecide: { type: string }
+        closing: { type: string }
+        neverDo:
+          type: string
+          description: What the author says must never happen (FU-07).
+
+    InterviewSuggestions:
+      type: object
+      required: [answers]
+      properties:
+        answers: { $ref: '#/components/schemas/InterviewSuggestedAnswers' }
+        micros:
+          type: integer
+          format: int64
+          description: What this suggestion call cost, appended to the trail as well.
 
     InstructionText:
       type: object

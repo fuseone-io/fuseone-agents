@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/authoring"
@@ -10,6 +11,8 @@ import (
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/model"
 )
+
+const maxInterviewCaptureBytes = 12_000
 
 // Assistants builds a completer for the provider Administração points at.
 // Declared here by the consumer, so the httpapi does not depend on how a
@@ -45,38 +48,19 @@ func (s *Server) InterviewAgent(
 		return nil, errNoAdministration
 	}
 
-	choice, err := s.authoring.Current(ctx)
+	assistant, err := s.authoringAssistant(ctx, req.Params.Locale)
 	if err != nil {
+		if unavailable, ok := asAuthoringUnavailable(err); ok {
+			return assistantUnavailable(unavailable), nil
+		}
 		return nil, err
-	}
-	// Asked before a provider is looked up. A fresh installation has no
-	// assistant, and answering that with "no provider named \"\"" describes
-	// the plumbing instead of the state somebody is actually in.
-	if !choice.Enabled {
-		return assistantUnavailable(authoring.ErrDisabled), nil
-	}
-
-	spentToday, err := s.spend.SpentToday(ctx)
-	if err != nil {
-		return nil, err
-	}
-	completer, err := s.assistants.Completer(choice.Provider, model.Config{
-		Model: choice.Model, Effort: authoring.EffortFor(choice.Effort),
-	})
-	if err != nil {
-		return assistantUnavailable(err), nil
-	}
-
-	locale := ""
-	if req.Params.Locale != nil {
-		locale = *req.Params.Locale
 	}
 
 	result, err := authoring.Translate(ctx, authoring.Job{
-		Locale:     locale,
-		Completer:  completer,
-		Choice:     choice,
-		SpentToday: spentToday,
+		Locale:     assistant.locale,
+		Completer:  assistant.completer,
+		Choice:     assistant.choice,
+		SpentToday: assistant.spentToday,
 		Answers:    answersFrom(req.Body),
 		Catalogue:  s.catalogue(ctx),
 	})
@@ -96,6 +80,107 @@ func (s *Server) InterviewAgent(
 	return openapi.InterviewAgent200JSONResponse(draftFrom(result)), nil
 }
 
+// SuggestInterviewAnswers turns one free description into the seven fixed
+// interview fields. It does not generate a draft; the author still reads and
+// edits the fields before the translation endpoint may run.
+func (s *Server) SuggestInterviewAnswers(
+	ctx context.Context, req openapi.SuggestInterviewAnswersRequestObject,
+) (openapi.SuggestInterviewAnswersResponseObject, error) {
+	if len(auth.VisibleScopes(ctx, domain.PermAgentPublish)) == 0 {
+		return openapi.SuggestInterviewAnswers403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermAgentPublish, domain.Scope{}),
+		}, nil
+	}
+	if s.assistants == nil || s.spend == nil || s.authoring == nil || req.Body == nil {
+		return nil, errNoAdministration
+	}
+	text := strings.TrimSpace(req.Body.Text)
+	switch {
+	case text == "":
+		return openapi.SuggestInterviewAnswers400ApplicationProblemPlusJSONResponse{
+			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
+				invalid("authoring: describe the work before asking for suggestions")),
+		}, nil
+	case len(req.Body.Text) > maxInterviewCaptureBytes:
+		return openapi.SuggestInterviewAnswers400ApplicationProblemPlusJSONResponse{
+			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
+				invalid("authoring: the description is too large")),
+		}, nil
+	}
+
+	assistant, err := s.authoringAssistant(ctx, req.Params.Locale)
+	if err != nil {
+		if unavailable, ok := asAuthoringUnavailable(err); ok {
+			return suggestionUnavailable(unavailable), nil
+		}
+		return nil, err
+	}
+	result, err := authoring.SuggestAnswers(ctx, authoring.SuggestionJob{
+		Locale:     assistant.locale,
+		Completer:  assistant.completer,
+		Choice:     assistant.choice,
+		SpentToday: assistant.spentToday,
+		Text:       text,
+	})
+	if result.Cost.Micros > 0 {
+		if err := s.spend.RecordSpend(ctx, result.Cost, callerOf(ctx)); err != nil {
+			return nil, err
+		}
+	}
+	if err != nil {
+		return suggestionUnavailable(err), nil
+	}
+	return openapi.SuggestInterviewAnswers200JSONResponse(suggestionsFrom(result)), nil
+}
+
+type authoringAssistant struct {
+	choice     authoring.Choice
+	spentToday int64
+	completer  model.Completer
+	locale     string
+}
+
+type authoringUnavailable struct{ err error }
+
+func (e authoringUnavailable) Error() string { return e.err.Error() }
+func (e authoringUnavailable) Unwrap() error { return e.err }
+
+func asAuthoringUnavailable(err error) (error, bool) {
+	var unavailable authoringUnavailable
+	if errors.As(err, &unavailable) {
+		return unavailable.err, true
+	}
+	return nil, false
+}
+
+func (s *Server) authoringAssistant(ctx context.Context, locale *string) (authoringAssistant, error) {
+	choice, err := s.authoring.Current(ctx)
+	if err != nil {
+		return authoringAssistant{}, err
+	}
+	// Asked before a provider is looked up. A fresh installation has no
+	// assistant, and answering that with "no provider named \"\"" describes
+	// the plumbing instead of the state somebody is actually in.
+	if !choice.Enabled {
+		return authoringAssistant{}, authoringUnavailable{authoring.ErrDisabled}
+	}
+	spentToday, err := s.spend.SpentToday(ctx)
+	if err != nil {
+		return authoringAssistant{}, err
+	}
+	completer, err := s.assistants.Completer(choice.Provider, model.Config{
+		Model: choice.Model, Effort: authoring.EffortFor(choice.Effort),
+	})
+	if err != nil {
+		return authoringAssistant{}, authoringUnavailable{err}
+	}
+	out := authoringAssistant{choice: choice, spentToday: spentToday, completer: completer}
+	if locale != nil {
+		out.locale = *locale
+	}
+	return out, nil
+}
+
 // assistantUnavailable answers the two configuration states and the provider's
 // own failures. Being switched off or out of budget is not a fault: the form
 // remains the way to publish an agent without the assistant.
@@ -109,6 +194,21 @@ func assistantUnavailable(err error) openapi.InterviewAgentResponseObject {
 			upstreamRefusedLater(err.Error()))
 	}
 	return openapi.InterviewAgent400ApplicationProblemPlusJSONResponse{
+		BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
+			upstreamRefused(err.Error())),
+	}
+}
+
+func suggestionUnavailable(err error) openapi.SuggestInterviewAnswersResponseObject {
+	if errors.Is(err, authoring.ErrDisabled) || errors.Is(err, authoring.ErrOverCeiling) {
+		return openapi.SuggestInterviewAnswers409ApplicationProblemPlusJSONResponse(
+			conflicted(err.Error()))
+	}
+	if failure, ok := model.FailureSummaryOf(err); ok && failure.Retryable {
+		return openapi.SuggestInterviewAnswers503ApplicationProblemPlusJSONResponse(
+			upstreamRefusedLater(err.Error()))
+	}
+	return openapi.SuggestInterviewAnswers400ApplicationProblemPlusJSONResponse{
 		BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
 			upstreamRefused(err.Error())),
 	}
@@ -160,4 +260,19 @@ func draftFrom(r authoring.Result) openapi.InterviewDraft {
 		})
 	}
 	return openapi.InterviewDraft{Tools: tools, Steps: steps, Micros: ptr(r.Cost.Micros)}
+}
+
+func suggestionsFrom(r authoring.SuggestionResult) openapi.InterviewSuggestions {
+	return openapi.InterviewSuggestions{
+		Answers: openapi.InterviewSuggestedAnswers{
+			Trigger:   r.Answers.Trigger,
+			MustKnow:  r.Answers.MustKnow,
+			Steps:     r.Answers.Steps,
+			GoesWrong: r.Answers.GoesWrong,
+			NotDecide: r.Answers.NotDecide,
+			Closing:   r.Answers.Closing,
+			NeverDo:   r.Answers.NeverDo,
+		},
+		Micros: ptr(r.Cost.Micros),
+	}
 }

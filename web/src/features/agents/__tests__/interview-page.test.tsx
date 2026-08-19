@@ -9,9 +9,16 @@ import { toast } from "sonner";
 const interview = vi.hoisted(() => ({
   mutate: vi.fn(),
 }));
+const suggestions = vi.hoisted(() => ({
+  mutate: vi.fn(),
+}));
 
 vi.mock("@/features/agents/interview-api", () => ({
   useInterview: () => ({ mutate: interview.mutate, isPending: false }),
+  useInterviewSuggestions: () => ({
+    mutate: suggestions.mutate,
+    isPending: false,
+  }),
 }));
 
 vi.mock("sonner", () => ({
@@ -32,7 +39,7 @@ async function finishInterview() {
     "Ler o chamado, procurar o cliente e responder.",
   );
   await userEvent.click(
-    screen.getByRole("button", { name: "Revisar como respostas" }),
+    screen.getByRole("button", { name: "Revisar sem sugestão" }),
   );
   await userEvent.click(screen.getByRole("button", { name: "Concluir" }));
 }
@@ -40,6 +47,7 @@ async function finishInterview() {
 describe("the agent interview", () => {
   beforeEach(() => {
     interview.mutate.mockReset();
+    suggestions.mutate.mockReset();
     vi.mocked(toast.error).mockReset();
   });
 
@@ -57,7 +65,7 @@ describe("the agent interview", () => {
     expect(interview.mutate).not.toHaveBeenCalled();
 
     await userEvent.click(
-      screen.getByRole("button", { name: "Revisar como respostas" }),
+      screen.getByRole("button", { name: "Revisar sem sugestão" }),
     );
     expect(screen.getByLabelText("Quais são os passos?")).toHaveValue(
       "Quando chega um chamado, procuro o cliente e respondo.",
@@ -67,6 +75,52 @@ describe("the agent interview", () => {
     expect(interview.mutate).toHaveBeenCalledWith(
       expect.objectContaining({
         steps: "Quando chega um chamado, procuro o cliente e respondo.",
+      }),
+      expect.anything(),
+    );
+  });
+
+  it("suggests the fixed answers without generating a draft", async () => {
+    suggestions.mutate.mockImplementation((_capture, options) => {
+      options.onSuccess({
+        answers: {
+          trigger: "Quando chega um alerta.",
+          mustKnow: "Métricas e incidente parecido.",
+          steps: "Ler o alerta e resumir o contexto.",
+          goesWrong: "",
+          notDecide: "Acionar alguém.",
+          closing: "Resumo pronto para o plantonista.",
+          neverDo: "Fechar o incidente.",
+        },
+      });
+    });
+    interview.mutate.mockImplementation((_answers, options) => {
+      options.onSuccess({ tools: [], steps: [] });
+    });
+
+    renderPage();
+
+    await userEvent.type(
+      screen.getByLabelText("Processo"),
+      "Quando chega alerta eu leio métricas e escrevo resumo.",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Sugerir preenchimento" }),
+    );
+
+    expect(interview.mutate).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Quando isso começa?")).toHaveValue(
+      "Quando chega um alerta.",
+    );
+    expect(screen.getByLabelText("Quais são os passos?")).toHaveValue(
+      "Ler o alerta e resumir o contexto.",
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Concluir" }));
+    expect(interview.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        steps: "Ler o alerta e resumir o contexto.",
+        neverDo: "Fechar o incidente.",
       }),
       expect.anything(),
     );

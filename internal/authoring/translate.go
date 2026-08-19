@@ -111,6 +111,77 @@ type Result struct {
 	Cost       domain.Cost
 }
 
+// SuggestedAnswers are the seven fixed fields the author reviews.
+type SuggestedAnswers struct {
+	Trigger   string `json:"trigger"`
+	MustKnow  string `json:"mustKnow"`
+	Steps     string `json:"steps"`
+	GoesWrong string `json:"goesWrong"`
+	NotDecide string `json:"notDecide"`
+	Closing   string `json:"closing"`
+	NeverDo   string `json:"neverDo"`
+}
+
+// SuggestionJob is one assisted extraction from free text to the fixed
+// interview schema.
+type SuggestionJob struct {
+	Completer model.Completer
+	Choice    Choice
+	// SpentToday is what authoring has already cost since the window opened.
+	SpentToday int64
+	Text       string
+	// Locale is the language the author is writing in.
+	Locale string
+}
+
+// SuggestionResult is what came back, and what it cost.
+type SuggestionResult struct {
+	Answers SuggestedAnswers
+	Cost    domain.Cost
+}
+
+// ReadSuggestions parses a reply as the fixed interview fields.
+func ReadSuggestions(reply []byte) (SuggestedAnswers, error) {
+	body, ok := jsonIn(reply)
+	if !ok {
+		return SuggestedAnswers{}, fmt.Errorf("authoring: the reply carried no JSON object")
+	}
+	var got SuggestedAnswers
+	if err := json.Unmarshal(body, &got); err != nil {
+		return SuggestedAnswers{}, fmt.Errorf("authoring: unreadable reply: %w", err)
+	}
+	return got, nil
+}
+
+// SuggestAnswers fits a free description into the fixed interview schema.
+//
+// This is not the interview becoming a chat. The fields are still the
+// platform's, and the author still reviews them before the translation call
+// can turn anything into a draft.
+func SuggestAnswers(ctx context.Context, job SuggestionJob) (SuggestionResult, error) {
+	if !job.Choice.Enabled {
+		return SuggestionResult{}, ErrDisabled
+	}
+	if job.Choice.DailyMicros > 0 && job.SpentToday >= job.Choice.DailyMicros {
+		return SuggestionResult{}, ErrOverCeiling
+	}
+
+	prompt, err := suggestPrompt(job.Locale, job.Text)
+	if err != nil {
+		return SuggestionResult{}, err
+	}
+
+	out, err := job.Completer.Complete(ctx, prompt)
+	if err != nil {
+		return SuggestionResult{Cost: out.Cost}, err
+	}
+	answers, err := ReadSuggestions([]byte(out.Text))
+	if err != nil {
+		return SuggestionResult{Cost: out.Cost}, err
+	}
+	return SuggestionResult{Answers: answers, Cost: out.Cost}, nil
+}
+
 /*
 Translate turns the interview's prose answers into specification fields.
 
