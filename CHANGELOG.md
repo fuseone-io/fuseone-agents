@@ -25,6 +25,29 @@ field" is a commit message.
 
 ---
 
+## [0.7.0] — 2026-08-19
+
+### Added
+
+- **The interview starts free.** Somebody describes the work in their own
+  words, and the console turns that into the seven parts the product's contract
+  names (FU-01..FU-07), shown for review before anything is generated. The
+  parts are a constant in the console, not something the model chooses, so two
+  people describing the same work are asked for the same things and the
+  interview costs no extra call.
+- **"Suggest answers"** fills those seven fields from the free description. It
+  goes through the same authoring assistant, the same daily ceiling and the
+  same cost record as the interview itself — one definition of what has been
+  spent today rather than a second path that also checks. It fills only the
+  seven fields: it does not draft the agent, choose the questions, choose tools,
+  or overwrite anything already edited.
+
+### Fixed
+
+- Creating an agent scrolls in one column instead of overflowing. The template
+  gallery adapts how many cards it shows to the width it has rather than
+  forcing four into whatever is there.
+
 ## [0.6.1] — 2026-08-19
 
 ### Fixed
