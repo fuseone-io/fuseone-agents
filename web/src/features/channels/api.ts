@@ -8,6 +8,8 @@ export function useChannels() {
   return useQuery({
     queryKey: channelKeys.all,
     queryFn: async () => unwrap(await api.GET("/admin/channels")),
+    refetchInterval: 10_000,
+    refetchIntervalInBackground: false,
   });
 }
 

@@ -42,9 +42,11 @@ import {
 import { useScopes } from "@/features/scope/api";
 import { useMe } from "@/features/session/api";
 import { problemMessage } from "@/lib/api/problem-message";
+import type { components } from "@/lib/api/schema.gen";
 
 const EVENTS = ["parked", "failed", "finished"] as const;
 type RunAsPerson = { id: string; display?: string | null; email?: string | null };
+type Conversation = components["schemas"]["ChannelConversation"];
 
 function splitSources(value: string) {
   return value
@@ -99,9 +101,11 @@ const schema = z
  */
 export function ConversationForm({
   channel,
+  conversation,
   onClose,
 }: {
   channel: string;
+  conversation?: Conversation;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -115,14 +119,19 @@ export function ConversationForm({
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
     defaultValues: {
-      conversation: "",
-      scope: "",
-      label: "",
-      mode: "mentions",
-      sources: "",
-      agent: "",
-      runAs: "",
-      wants: ["parked", "failed"],
+      conversation: conversation?.id ?? "",
+      scope: conversation
+        ? `${conversation.scope.company}/${conversation.scope.area ?? ""}`
+        : "",
+      label: conversation?.label ?? "",
+      mode: conversation?.mode ?? "mentions",
+      sources: (conversation?.sources ?? []).join("\n"),
+      agent: conversation?.agent ?? "",
+      runAs: conversation?.runAs ?? "",
+      wants: (conversation?.wants as ("parked" | "failed" | "finished")[]) ?? [
+        "parked",
+        "failed",
+      ],
     },
   });
   const mode = form.watch("mode");
@@ -177,7 +186,11 @@ export function ConversationForm({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{t("channels.newConversation")}</DialogTitle>
+          <DialogTitle>
+            {conversation
+              ? t("channels.editConversation")
+              : t("channels.newConversation")}
+          </DialogTitle>
           <DialogDescription>
             {t("channels.conversationExplains")}
           </DialogDescription>
@@ -194,7 +207,16 @@ export function ConversationForm({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{t("channels.conversation")}</FormLabel>
-                  {manuallyEnterConversation ? (
+                  {conversation ? (
+                    <>
+                      <FormControl>
+                        <Input {...field} disabled className="font-mono" />
+                      </FormControl>
+                      <FormDescription>
+                        {t("channels.conversationIdCannotChange")}
+                      </FormDescription>
+                    </>
+                  ) : manuallyEnterConversation ? (
                     <>
                       {/* Listing is a convenience, not authority. When Slack
                           refuses the list or returns none, the screen says so
@@ -231,7 +253,7 @@ export function ConversationForm({
                         const picked = availableItems.find((c) => c.id === id);
                         if (picked) form.setValue("label", `#${picked.name}`);
                       }}
-                      value={field.value}
+                      value={field.value ?? ""}
                       disabled={available.isLoading}
                     >
                       <FormControl>
@@ -268,7 +290,7 @@ export function ConversationForm({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{t("scope.label")}</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value ?? ""}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder={t("scope.label")} />
@@ -331,7 +353,7 @@ export function ConversationForm({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{t("channels.startMode")}</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value ?? ""}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue />
@@ -366,7 +388,7 @@ export function ConversationForm({
                         <FormLabel>{t("channels.watchAgent")}</FormLabel>
                         <Select
                           onValueChange={field.onChange}
-                          value={field.value}
+                          value={field.value ?? ""}
                           disabled={!scope || agents.isLoading}
                         >
                           <FormControl>
@@ -403,7 +425,7 @@ export function ConversationForm({
                         {runAsPeople.length > 0 ? (
                           <Select
                             onValueChange={field.onChange}
-                            value={field.value}
+                            value={field.value ?? ""}
                           >
                             <FormControl>
                               <SelectTrigger>
@@ -421,7 +443,7 @@ export function ConversationForm({
                             </SelectContent>
                           </Select>
                         ) : me === undefined ? (
-                          <Select disabled>
+                          <Select disabled value="">
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue

@@ -1,4 +1,4 @@
-import { MessageSquare } from "lucide-react";
+import { MessageSquare, Search } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -6,16 +6,24 @@ import {
   ErrorState,
   LoadingRows,
 } from "@/components/shared/states";
-import { LoadMore } from "@/components/shared/load-more";
 import { useChannels } from "@/features/channels/api";
 import { ChannelCard } from "@/features/channels/channel-card";
 import { ChannelForm } from "@/features/channels/channel-form";
 import { ConversationForm } from "@/features/channels/conversation-form";
-import { IntegrationsSection } from "@/features/integrations/integrations-section";
-import { useVisibleItems } from "@/hooks/use-visible-items";
+import { ChannelsToolbar } from "@/features/channels/channels-toolbar";
+import {
+  channelNeedsAttention,
+  filterConversations,
+  type ChannelView,
+} from "@/features/channels/channel-model";
 import type { components } from "@/lib/api/schema.gen";
 
 type Channel = components["schemas"]["Channel"];
+type Conversation = components["schemas"]["ChannelConversation"];
+type ConversationDialog = {
+  channel: string;
+  conversation?: Conversation;
+};
 
 /**
  * Where runs report.
@@ -29,47 +37,67 @@ export function ChannelsTab() {
   const { t } = useTranslation();
   const { data, isLoading, error, refetch } = useChannels();
   const [editing, setEditing] = useState<Channel | null | undefined>(undefined);
-  const [addingTo, setAddingTo] = useState<string | null>(null);
+  const [conversationDialog, setConversationDialog] =
+    useState<ConversationDialog | null>(null);
+  const [query, setQuery] = useState("");
+  const [view, setView] = useState<ChannelView>("all");
 
   const channels = data?.items ?? [];
-  const page = useVisibleItems(channels, 50);
+  const visibleChannels = channels.filter((channel) => {
+    const attention = channelNeedsAttention(channel);
+    const matches = filterConversations(
+      channel.conversations,
+      query,
+      view,
+      attention,
+    );
+    return matches.length > 0 || (view === "attention" && attention);
+  });
 
   if (isLoading) return <LoadingRows rows={3} />;
   if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
 
   return (
     <>
-      <IntegrationsSection
-        title={t("channels.channels")}
-        onAdd={() => setEditing(null)}
-        empty={
-          channels.length === 0 && (
-            <EmptyState
-              icon={<MessageSquare className="size-6" />}
-              title={t("channels.none")}
-              hint={t("channels.noneHint")}
-            />
-          )
-        }
-        footer={
-          <LoadMore
-            loaded={page.loaded}
-            total={page.total}
-            hasMore={page.hasMore}
-            isLoading={false}
-            onLoad={page.loadMore}
+      <section className="flex flex-col gap-3">
+        <ChannelsToolbar
+          query={query}
+          view={view}
+          onQuery={setQuery}
+          onView={setView}
+          onAdd={() => setEditing(null)}
+        />
+
+        {channels.length === 0 ? (
+          <EmptyState
+            icon={<MessageSquare className="size-6" />}
+            title={t("channels.none")}
+            hint={t("channels.noneHint")}
           />
-        }
-      >
-        {page.visible.map((channel) => (
+        ) : visibleChannels.length === 0 ? (
+          <EmptyState
+            icon={<Search className="size-6" />}
+            title={t("channels.noMatches")}
+            hint={t("channels.noMatchesHint")}
+          />
+        ) : (
+          visibleChannels.map((channel) => (
           <ChannelCard
             key={channel.name}
             channel={channel}
+            query={query}
+            view={view}
             onEdit={() => setEditing(channel)}
-            onAddConversation={() => setAddingTo(channel.name)}
+            onAddConversation={() =>
+              setConversationDialog({ channel: channel.name })
+            }
+            onEditConversation={(conversation) =>
+              setConversationDialog({ channel: channel.name, conversation })
+            }
           />
-        ))}
-      </IntegrationsSection>
+          ))
+        )}
+      </section>
 
       {editing !== undefined && (
         <ChannelForm
@@ -78,10 +106,14 @@ export function ChannelsTab() {
           onClose={() => setEditing(undefined)}
         />
       )}
-      {addingTo && (
+      {conversationDialog && (
         <ConversationForm
-          channel={addingTo}
-          onClose={() => setAddingTo(null)}
+          key={`${conversationDialog.channel}/${
+            conversationDialog.conversation?.id ?? "new"
+          }`}
+          channel={conversationDialog.channel}
+          conversation={conversationDialog.conversation}
+          onClose={() => setConversationDialog(null)}
         />
       )}
     </>

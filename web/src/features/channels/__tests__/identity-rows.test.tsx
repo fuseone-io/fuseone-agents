@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
-import { IdentityRows } from "@/features/channels/identity-rows";
+import { ChannelIdentityStrip } from "@/features/channels/channel-identity-strip";
 
 /*
 A binding the runtime refuses is shown as refused.
@@ -13,12 +13,12 @@ is the same asymmetry the backend just closed, kept alive by the screen.
 */
 
 function show(
-  identities: Parameters<typeof IdentityRows>[0]["identities"],
-  seenAccounts: Parameters<typeof IdentityRows>[0]["seenAccounts"] = [],
+  identities: Parameters<typeof ChannelIdentityStrip>[0]["identities"],
+  seenAccounts: Parameters<typeof ChannelIdentityStrip>[0]["seenAccounts"] = [],
 ) {
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <IdentityRows
+      <ChannelIdentityStrip
         channel="acme-slack"
         identities={identities}
         seenAccounts={seenAccounts}

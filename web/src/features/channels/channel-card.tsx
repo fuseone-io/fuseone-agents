@@ -1,24 +1,34 @@
-import { Send, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
+import { useState } from "react";
+import {
+  ChevronDown,
+  ChevronRight,
+  MessageSquare,
+  Settings2,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { IdentityRows } from "@/features/channels/identity-rows";
+import { ConversationList } from "@/features/channels/conversation-list";
+import { ChannelIdentityStrip } from "@/features/channels/channel-identity-strip";
 import {
-  useDeleteConversation,
-  useTestConversation,
-} from "@/features/channels/api";
-import { problemMessage } from "@/lib/api/problem-message";
-import type { components } from "@/lib/api/schema.gen";
-
-type Channel = components["schemas"]["Channel"];
+  channelHealth,
+  channelNeedsAttention,
+  filterConversations,
+  type Channel,
+  type ChannelView,
+  type Conversation,
+} from "@/features/channels/channel-model";
+import { cn } from "@/lib/utils";
 
 interface ChannelCardProps {
   channel: Channel;
+  query: string;
+  view: ChannelView;
   onEdit: () => void;
   onAddConversation: () => void;
+  onEditConversation: (conversation: Conversation) => void;
 }
 
 /**
@@ -31,142 +41,100 @@ interface ChannelCardProps {
  */
 export function ChannelCard({
   channel,
+  query,
+  view,
   onEdit,
   onAddConversation,
+  onEditConversation,
 }: ChannelCardProps) {
   const { t } = useTranslation();
+  const [open, setOpen] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const inboundReady =
     channel.deliveryMode === "socket" ? channel.hasAppToken : channel.hasSigning;
+  const identities = channel.identities ?? [];
+  const attention = channelNeedsAttention(channel);
+  const rows = filterConversations(channel.conversations, query, view, attention);
+  const visibleRows = expanded || query.trim() !== "" ? rows : rows.slice(0, 6);
+  const hidden = rows.length - visibleRows.length;
+  const health = channelHealth(channel);
 
   return (
-    <Card className="gap-0 p-0">
-      <div className="flex items-center gap-3 p-4">
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium">{channel.name}</p>
-          <p className="truncate text-xs text-muted-foreground">
-            {channel.workspace || channel.kind}
-          </p>
-        </div>
-        {!channel.hasCredential && (
-          <Badge variant="outline" className="text-warning">
-            {t("channels.noCredential")}
-          </Badge>
-        )}
-        {channel.deliveryMode === "socket" && (
-          <Badge variant="outline">{t("channels.deliverySocket")}</Badge>
-        )}
-        {channel.deliveryMode === "socket" && !channel.hasAppToken && (
-          <Badge variant="outline" className="text-warning">
-            {t("channels.noAppToken")}
-          </Badge>
-        )}
-        {!channel.enabled && (
-          <Badge variant="outline">{t("common.disabled")}</Badge>
-        )}
-        <Button variant="outline" size="sm" onClick={onEdit}>
-          {t("common.edit")}
-        </Button>
-      </div>
-
-      <Separator />
-
-      <div className="flex flex-col gap-1 p-2">
-        {channel.conversations.length === 0 ? (
-          <p className="px-2 py-3 text-xs text-muted-foreground">
-            {t("channels.noConversation")}
-          </p>
-        ) : (
-          channel.conversations.map((c) => (
-            <ConversationRow
-              key={c.id}
-              channel={channel.name}
-              conversation={c}
-            />
-          ))
-        )}
+    <Card className="gap-0 overflow-hidden p-0">
+      <div className="flex flex-wrap items-center gap-3 border-b p-3">
         <Button
           variant="ghost"
-          size="sm"
-          className="justify-start"
-          onClick={onAddConversation}
+          size="icon"
+          className="size-7 shrink-0"
+          aria-label={open ? t("channels.collapse") : t("channels.expand")}
+          onClick={() => setOpen((current) => !current)}
         >
-          {t("channels.addConversation")}
+          {open ? (
+            <ChevronDown className="size-4" aria-hidden />
+          ) : (
+            <ChevronRight className="size-4" aria-hidden />
+          )}
+        </Button>
+        <span className="grid size-8 shrink-0 place-items-center rounded-md border bg-muted text-muted-foreground">
+          <MessageSquare className="size-4" aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <p className="truncate text-sm font-medium">{channel.name}</p>
+            <Badge variant="outline" className="shrink-0">
+              {channel.deliveryMode === "socket"
+                ? t("channels.deliverySocket")
+                : t("channels.deliveryHttp")}
+            </Badge>
+          </div>
+          <p className="truncate text-xs text-muted-foreground">
+            {t("channels.workspaceMeta", {
+              workspace: channel.workspace || channel.kind,
+              count: channel.conversations.length,
+            })}
+          </p>
+        </div>
+        <span
+          className={cn(
+            "inline-flex items-center gap-1.5 whitespace-nowrap text-xs",
+            health.tone === "ok" ? "text-success" : "text-warning",
+          )}
+        >
+          <span className="size-1.5 rounded-full bg-current" aria-hidden />
+          {t(`channels.health.${health.key}`)}
+        </span>
+        <Button variant="outline" size="sm" onClick={onEdit}>
+          <Settings2 className="size-4" aria-hidden />
+          {t("common.edit")}
         </Button>
       </div>
 
       {/* Only where an answer could arrive. Binding accounts on a channel that
           cannot verify what comes back would be configuring authority for a
           door that is shut. */}
-      {inboundReady && (
+      {open && inboundReady && (
         <>
-          <Separator />
-          <IdentityRows
+          <ChannelIdentityStrip
             channel={channel.name}
-            identities={channel.identities ?? []}
+            identities={identities}
             seenAccounts={channel.seenAccounts ?? []}
           />
+          <Separator />
         </>
       )}
+
+      {open && (
+        <ConversationList
+          channel={channel.name}
+          conversations={visibleRows}
+          total={rows.length}
+          allTotal={channel.conversations.length}
+          hidden={hidden}
+          onExpand={() => setExpanded(true)}
+          onAdd={onAddConversation}
+          onEdit={onEditConversation}
+        />
+      )}
     </Card>
-  );
-}
-
-function ConversationRow({
-  channel,
-  conversation,
-}: {
-  channel: string;
-  conversation: components["schemas"]["ChannelConversation"];
-}) {
-  const { t } = useTranslation();
-  const test = useTestConversation();
-  const remove = useDeleteConversation();
-  const scope = conversation.scope.area
-    ? `${conversation.scope.company}/${conversation.scope.area}`
-    : conversation.scope.company;
-  const mode =
-    conversation.mode === "watch"
-      ? `${t("channels.modeWatch")} · ${conversation.agent ?? "—"}`
-      : t("channels.modeMentions");
-
-  return (
-    <div className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50">
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm">
-          {conversation.label || conversation.id}
-        </p>
-        <p className="truncate font-mono text-2xs tabular-nums text-muted-foreground">
-          {scope} · {(conversation.wants ?? ["parked", "failed"]).join(", ")}
-        </p>
-        <p className="truncate text-2xs text-muted-foreground">{mode}</p>
-      </div>
-      <Button
-        variant="ghost"
-        size="icon"
-        aria-label={t("channels.sendTest")}
-        disabled={test.isPending}
-        onClick={() =>
-          test.mutate(
-            { channel, conversation: conversation.id },
-            {
-              onSuccess: () => toast.success(t("channels.testDelivered")),
-              onError: (error) => toast.error(problemMessage(error, t)),
-            },
-          )
-        }
-      >
-        <Send className="size-4" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        aria-label={t("common.remove")}
-        onClick={() =>
-          remove.mutate({ channel, conversation: conversation.id })
-        }
-      >
-        <Trash2 className="size-4" />
-      </Button>
-    </div>
   );
 }

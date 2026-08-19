@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ComponentProps } from "react";
 import {
   afterEach,
   beforeAll,
@@ -48,14 +49,20 @@ function stubApi(options: { can?: string[] } = {}) {
   );
 }
 
-function renderForm() {
+function renderForm(
+  conversation?: ComponentProps<typeof ConversationForm>["conversation"],
+) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
 
   return render(
     <QueryClientProvider client={client}>
-      <ConversationForm channel="cora-slack" onClose={() => {}} />
+      <ConversationForm
+        channel="cora-slack"
+        conversation={conversation}
+        onClose={() => {}}
+      />
     </QueryClientProvider>,
   );
 }
@@ -143,6 +150,30 @@ describe("conversation configuration", () => {
     expect(await screen.findByRole("option", { name: "Ops Bot" })).toBeInTheDocument();
     expect(
       screen.getByRole("option", { name: "Security Admin" }),
+    ).toBeInTheDocument();
+  });
+
+  it("edits an existing conversation instead of creating a second one", async () => {
+    renderForm({
+      id: "C-alerts",
+      label: "#alerts",
+      scope: { company: "cora", area: "devops" },
+      mode: "watch",
+      sources: ["B0123ALERT", "A0123APP"],
+      agent: "troubleshooting-sre",
+      runAs: "usr_opsbot",
+      wants: ["parked", "failed", "finished"],
+      enabled: true,
+    });
+
+    expect(await screen.findByText("Editar conversa")).toBeInTheDocument();
+    const id = screen.getByDisplayValue("C-alerts");
+    expect(id).toBeDisabled();
+    expect(
+      await screen.findByLabelText("Fontes Slack permitidas"),
+    ).toHaveValue("B0123ALERT\nA0123APP");
+    expect(
+      screen.getByText(/Para apontar outro canal Slack/),
     ).toBeInTheDocument();
   });
 });
