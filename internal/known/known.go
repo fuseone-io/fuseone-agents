@@ -373,6 +373,44 @@ func (s *Servers) Suggest(server, remoteName string) (Suggestion, bool) {
 	return Suggestion{}, false
 }
 
+/*
+RequiresPersonalCredential reports whether every credential shape documented
+for this recipe carries a user's authority.
+
+That difference matters at call time. A scheduled run has no person behind it,
+and using the installation credential for a user-only server would make the
+same agent act as a different identity depending on how it was triggered.
+Servers with an explicit service or installation credential mode are different:
+the operator can choose that shared mode on purpose.
+*/
+func (s *Servers) RequiresPersonalCredential(server string) bool {
+	entry, ok := s.entries[server]
+	return ok && entry.RequiresPersonalCredential()
+}
+
+func (e Entry) RequiresPersonalCredential() bool {
+	seen := false
+	for _, one := range e.AuthModes {
+		if !credentialAuthMode(one.Type) {
+			continue
+		}
+		seen = true
+		if one.Principal != AuthPrincipalUser {
+			return false
+		}
+	}
+	return seen
+}
+
+func credentialAuthMode(kind AuthType) bool {
+	switch kind {
+	case AuthOAuth2, AuthBearer, AuthBasic, AuthHeaders, AuthConfigFile, AuthDSN:
+		return true
+	default:
+		return false
+	}
+}
+
 // For answers what is known about a server, or nothing.
 func (s *Servers) For(server string) (Entry, bool) {
 	entry, ok := s.entries[server]

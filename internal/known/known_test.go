@@ -101,6 +101,22 @@ func load(t *testing.T) *known.Servers {
 	return servers
 }
 
+func TestRequiresPersonalCredential_onlyUserCredentialRecipesRequireADelegation(t *testing.T) {
+	t.Parallel()
+
+	servers := load(t)
+	for _, server := range []string{"google-sheets", "github", "slack"} {
+		if !servers.RequiresPersonalCredential(server) {
+			t.Errorf("%s should require a user delegation for tool calls", server)
+		}
+	}
+	for _, server := range []string{"cloudflare-api", "datadog", "postgres", "acme-internal"} {
+		if servers.RequiresPersonalCredential(server) {
+			t.Errorf("%s should still allow a service or installation credential", server)
+		}
+	}
+}
+
 /*
 Two questions a recipe has to answer separately.
 

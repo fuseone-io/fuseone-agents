@@ -61,6 +61,7 @@ func (c *Catalog) Invoke(ctx context.Context, call engine.Call) (engine.ToolResu
 	// expires; bound it here rather than relying on the server to behave.
 	callCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+	callCtx = WithInvocation(callCtx)
 	callCtx = WithCaller(callCtx, call.OnBehalfOf)
 
 	res, err := session.CallTool(callCtx, &mcp.CallToolParams{

@@ -36,6 +36,14 @@ field" is a commit message.
   installation-scoped because the worker starts one shared process rather than
   attaching a credential to each HTTP request.
 
+### Fixed
+
+- **Scheduled runs no longer use an installation credential for user-only MCP
+  servers.** Recipes whose credential modes all carry a user's authority now
+  require a person on concrete tool calls. Discovery can still use the
+  installation credential, but a cron-triggered run without `OnBehalfOf` stops
+  instead of silently acting as a different identity.
+
 ## [0.4.1] — 2026-08-18
 
 ### Fixed

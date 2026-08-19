@@ -60,6 +60,7 @@ type workerParts struct {
 	// own (NT-005 §5 of the note, and the reason the credential is sealed).
 	settings *settings.Store
 	health   healthRecorder
+	known    *known.Servers
 }
 
 // openWorkerParts connects everything a worker reads before it runs.
@@ -93,6 +94,7 @@ func openWorkerParts(ctx context.Context, dsn string) (*workerParts, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load the known servers: %w", err)
 	}
+	parts.known = shipped
 	parts.catalog = tools.NewCatalog(parts.content).Knowing(shipped)
 
 	if err := parts.openConfiguration(ctx, dsn); err != nil {
@@ -152,7 +154,7 @@ it did not connect.
 func (p *workerParts) connectTools(ctx context.Context, servers []string) error {
 	cleanupStaleConfigFiles()
 
-	reconcile := newReconciler(p.catalog, p.integrations, p.health)
+	reconcile := newReconciler(p.catalog, p.integrations, p.health).withCredentialPolicy(p.known)
 	if p.curator != nil {
 		reconcile = reconcile.publishingTo(p.curator)
 	}
@@ -170,7 +172,7 @@ func (p *workerParts) connectTools(ctx context.Context, servers []string) error 
 		if err := connectServer(ctx, p.catalog, domain.MCPServer{
 			Name: name, Transport: domain.TransportStdio, Command: command,
 			AcceptsLocalExecution: true,
-		}, domain.MCPCredentials{}, nil, nil); err != nil {
+		}, domain.MCPCredentials{}, nil, nil, credentialPolicy{}); err != nil {
 			slog.Error("tool server did not answer; its tools are unavailable",
 				"server", name, "err", err)
 			observe(ctx, p.health, name, false, 0, err.Error())

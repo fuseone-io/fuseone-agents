@@ -495,6 +495,123 @@ func TestAuthenticatedClient_prefersPersonalCredentialsForToolCalls(t *testing.T
 	}
 }
 
+func TestAuthenticatedClient_aUserOnlyServerUsesTheSharedCredentialForDiscovery(t *testing.T) {
+	t.Parallel()
+
+	var seen string
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(remote.Close)
+
+	client, err := authenticatedClientWithPolicy("google",
+		domain.MCPCredentials{Token: "shared"},
+		nil, personalCreds{},
+		credentialPolicy{requirePersonal: true},
+	)
+	if err != nil {
+		t.Fatalf("authenticatedClient: %v", err)
+	}
+	resp, err := client.Get(remote.URL)
+	if err != nil {
+		t.Fatalf("discovery request: %v", err)
+	}
+	_ = resp.Body.Close()
+
+	if seen != "Bearer shared" {
+		t.Fatalf("Authorization = %q, want the shared discovery credential", seen)
+	}
+}
+
+func TestAuthenticatedClient_aUserOnlyServerDoesNotUseTheSharedCredentialForACronCall(t *testing.T) {
+	t.Parallel()
+
+	remote := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("a cron tool call reached the server with the shared credential")
+	}))
+	t.Cleanup(remote.Close)
+
+	client, err := authenticatedClientWithPolicy("google",
+		domain.MCPCredentials{Token: "shared"},
+		nil, personalCreds{},
+		credentialPolicy{requirePersonal: true},
+	)
+	if err != nil {
+		t.Fatalf("authenticatedClient: %v", err)
+	}
+	req, err := http.NewRequestWithContext(
+		tools.WithInvocation(t.Context()), http.MethodGet, remote.URL, nil)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	if _, err := client.Do(req); err == nil {
+		t.Fatal("cron call succeeded by falling back to the shared credential")
+	} else if !strings.Contains(err.Error(), "requires a personal credential") {
+		t.Fatalf("Get error = %v, want the missing person named", err)
+	}
+}
+
+func TestAuthenticatedClient_aUserOnlyServerStillBlocksToolCallsWithoutAnyCredentialStore(t *testing.T) {
+	t.Parallel()
+
+	remote := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("a user-only call reached the server without a personal credential store")
+	}))
+	t.Cleanup(remote.Close)
+
+	client, err := authenticatedClientWithPolicy("google",
+		domain.MCPCredentials{},
+		nil, nil,
+		credentialPolicy{requirePersonal: true},
+	)
+	if err != nil {
+		t.Fatalf("authenticatedClient: %v", err)
+	}
+	if client == nil {
+		t.Fatal("client is nil; the user-only invocation policy would never run")
+	}
+	req, err := http.NewRequestWithContext(
+		tools.WithInvocation(t.Context()), http.MethodGet, remote.URL, nil)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	if _, err := client.Do(req); err == nil {
+		t.Fatal("call succeeded without a personal credential store")
+	} else if !strings.Contains(err.Error(), "requires a personal credential") {
+		t.Fatalf("Get error = %v, want the missing person named", err)
+	}
+}
+
+func TestAuthenticatedClient_aUserOnlyServerDoesNotUseTheSharedCredentialWhenThePersonHasNone(t *testing.T) {
+	t.Parallel()
+
+	remote := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("a user-only call reached the server with the shared credential")
+	}))
+	t.Cleanup(remote.Close)
+
+	client, err := authenticatedClientWithPolicy("google",
+		domain.MCPCredentials{Token: "shared"},
+		nil, personalCreds{},
+		credentialPolicy{requirePersonal: true},
+	)
+	if err != nil {
+		t.Fatalf("authenticatedClient: %v", err)
+	}
+	ctx := tools.WithInvocation(tools.WithCaller(t.Context(), "usr_ana"))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, remote.URL, nil)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	if _, err := client.Do(req); err == nil {
+		t.Fatal("call succeeded by falling back to the shared credential")
+	} else if !strings.Contains(err.Error(), "no personal MCP credential") ||
+		!strings.Contains(err.Error(), "usr_ana") {
+		t.Fatalf("Get error = %v, want Ana's missing credential named", err)
+	}
+}
+
 func TestAuthenticatedClient_readsPersonalCredentialsOnEachCall(t *testing.T) {
 	t.Parallel()
 
@@ -766,7 +883,7 @@ func TestReconciler_aProbeRequestReconnectsThroughTheWorkerPath(t *testing.T) {
 	r.connected["crm"] = fingerprint(server)
 	r.connectTo = func(
 		ctx context.Context, catalog *tools.Catalog, server domain.MCPServer,
-		_ domain.MCPCredentials, _ OAuthGrantStore, _ MCPUserCredentialStore,
+		_ domain.MCPCredentials, _ OAuthGrantStore, _ MCPUserCredentialStore, _ credentialPolicy,
 	) error {
 		return catalog.AddServer(ctx, server.Name, &testSession{tools: []*mcp.Tool{{
 			Name:        "lookup",
@@ -816,7 +933,7 @@ func TestReconciler_aFailedProbeKeepsTheCurrentSession(t *testing.T) {
 	r.connected["crm"] = fingerprint(server)
 	r.connectTo = func(
 		context.Context, *tools.Catalog, domain.MCPServer,
-		domain.MCPCredentials, OAuthGrantStore, MCPUserCredentialStore,
+		domain.MCPCredentials, OAuthGrantStore, MCPUserCredentialStore, credentialPolicy,
 	) error {
 		return errors.New("dial timeout")
 	}
@@ -834,6 +951,34 @@ func TestReconciler_aFailedProbeKeepsTheCurrentSession(t *testing.T) {
 	}
 	if seen := health["crm"]; seen.Reachable || !strings.Contains(seen.Detail, "dial timeout") {
 		t.Fatalf("health = %+v, want the failed probe observation", seen)
+	}
+}
+
+func TestReconciler_aUserOnlyRecipeCarriesTheCredentialPolicyToTheConnection(t *testing.T) {
+	t.Parallel()
+
+	server := domain.MCPServer{
+		Name: "google-sheets", Transport: domain.TransportHTTP,
+		URL: "https://sheets.example.com/mcp", Enabled: true,
+	}
+	configured := &probeServers{servers: []domain.MCPServer{server}}
+	r := newReconciler(
+		tools.NewCatalog(engine.NewMemoryContent()), configured, recordingHealth{},
+	).withCredentialPolicy(personalRequirement{"google-sheets": true})
+
+	seen := false
+	r.connectTo = func(
+		ctx context.Context, catalog *tools.Catalog, server domain.MCPServer,
+		_ domain.MCPCredentials, _ OAuthGrantStore, _ MCPUserCredentialStore, policy credentialPolicy,
+	) error {
+		seen = policy.requirePersonal
+		return catalog.AddServer(ctx, server.Name, &testSession{tools: []*mcp.Tool{{Name: "get_values"}}}, server.Surface)
+	}
+
+	r.reconcile(t.Context())
+
+	if !seen {
+		t.Fatal("connected a user-only recipe without requiring a personal credential for calls")
 	}
 }
 
@@ -857,6 +1002,12 @@ func (p *probeServers) ClaimMCPProbes(_ context.Context, limit int) ([]string, e
 	out := append([]string(nil), p.probes[:limit]...)
 	p.probes = p.probes[limit:]
 	return out, nil
+}
+
+type personalRequirement map[string]bool
+
+func (p personalRequirement) RequiresPersonalCredential(server string) bool {
+	return p[server]
 }
 
 type testSession struct {

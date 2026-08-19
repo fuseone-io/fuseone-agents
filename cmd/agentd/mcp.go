@@ -44,10 +44,11 @@ const toolRefresh = 30 * time.Second
 func connectServer(
 	ctx context.Context, catalog *tools.Catalog, server domain.MCPServer,
 	creds domain.MCPCredentials, oauth OAuthGrantStore, personal MCPUserCredentialStore,
+	policy credentialPolicy,
 ) error {
 	client := mcp.NewClient(&mcp.Implementation{Name: "fuseone-agents", Version: version}, nil)
 
-	transport, cleanup, err := transportFor(ctx, server, creds, oauth, personal)
+	transport, cleanup, err := transportFor(ctx, server, creds, oauth, personal, policy)
 	if err != nil {
 		return err
 	}
@@ -69,11 +70,11 @@ func connectServer(
 
 func transportFor(
 	ctx context.Context, server domain.MCPServer, creds domain.MCPCredentials,
-	oauth OAuthGrantStore, personal MCPUserCredentialStore,
+	oauth OAuthGrantStore, personal MCPUserCredentialStore, policy credentialPolicy,
 ) (mcp.Transport, func(), error) {
 	switch server.TransportOf() {
 	case domain.TransportHTTP:
-		client, err := authenticatedClient(server.Name, creds, oauth, personal)
+		client, err := authenticatedClientWithPolicy(server.Name, creds, oauth, personal, policy)
 		if err != nil {
 			return nil, noop, fmt.Errorf("%s: prepare HTTP credential: %w", server.Name, err)
 		}
@@ -118,22 +119,35 @@ func authenticatedClient(
 	server string, creds domain.MCPCredentials,
 	oauth OAuthGrantStore, personal MCPUserCredentialStore,
 ) (*http.Client, error) {
+	return authenticatedClientWithPolicy(server, creds, oauth, personal, credentialPolicy{})
+}
+
+func authenticatedClientWithPolicy(
+	server string, creds domain.MCPCredentials,
+	oauth OAuthGrantStore, personal MCPUserCredentialStore,
+	policy credentialPolicy,
+) (*http.Client, error) {
 	base := baseHTTPTransport()
 	creds = creds.ForTransport(domain.TransportHTTP)
 	if creds.OAuth != nil && !creds.OAuth.Empty() &&
 		creds.OAuth.AccessToken == "" && !creds.OAuth.CanRefresh() {
 		return nil, fmt.Errorf("oauth grant has no access token and cannot refresh")
 	}
-	if creds.Empty() && personal == nil {
+	if creds.Empty() && personal == nil && !policy.requirePersonal {
 		return nil, nil
 	}
 	return &http.Client{
 		Transport: &credentialAuth{
 			server: server, shared: creds, personal: personal,
-			oauth: oauth, base: base, grants: make(map[domain.UserID]*oauthTransport),
+			policy: policy,
+			oauth:  oauth, base: base, grants: make(map[domain.UserID]*oauthTransport),
 		},
 		Timeout: 60 * time.Second,
 	}, nil
+}
+
+type credentialPolicy struct {
+	requirePersonal bool
 }
 
 func baseHTTPTransport() http.RoundTripper {
@@ -174,6 +188,7 @@ type credentialAuth struct {
 	server   string
 	shared   domain.MCPCredentials
 	personal MCPUserCredentialStore
+	policy   credentialPolicy
 	oauth    OAuthGrantStore
 	base     http.RoundTripper
 	grants   map[domain.UserID]*oauthTransport
@@ -197,7 +212,8 @@ func (a *credentialAuth) RoundTrip(r *http.Request) (*http.Response, error) {
 }
 
 func (a *credentialAuth) credentials(ctx context.Context) (domain.MCPCredentials, domain.UserID, error) {
-	if principal, ok := tools.CallerFrom(ctx); ok && a.personal != nil {
+	principal, hasCaller := tools.CallerFrom(ctx)
+	if hasCaller && a.personal != nil {
 		creds, found, err := a.personal.MCPPersonalCredential(ctx, a.server, principal)
 		if err != nil {
 			return domain.MCPCredentials{}, "", fmt.Errorf(
@@ -212,6 +228,15 @@ func (a *credentialAuth) credentials(ctx context.Context) (domain.MCPCredentials
 			}
 			return creds, principal, nil
 		}
+	}
+	if a.policy.requirePersonal && tools.IsInvocation(ctx) {
+		if !hasCaller {
+			return domain.MCPCredentials{}, "", fmt.Errorf(
+				"%s: this MCP server requires a personal credential, but the run has no person to resolve one for",
+				a.server)
+		}
+		return domain.MCPCredentials{}, "", fmt.Errorf(
+			"%s: no personal MCP credential is configured for %s", a.server, principal)
 	}
 	return a.shared, "", nil
 }
@@ -452,7 +477,12 @@ type Publisher interface {
 type connector func(
 	ctx context.Context, catalog *tools.Catalog, server domain.MCPServer,
 	creds domain.MCPCredentials, oauth OAuthGrantStore, personal MCPUserCredentialStore,
+	policy credentialPolicy,
 ) error
+
+type personalCredentialPolicy interface {
+	RequiresPersonalCredential(server string) bool
+}
 
 type probeClaimer interface {
 	ClaimMCPProbes(ctx context.Context, limit int) ([]string, error)
@@ -467,6 +497,7 @@ type reconciler struct {
 	health    healthRecorder
 	publisher Publisher
 	connectTo connector
+	policy    personalCredentialPolicy
 	// connected maps a server name to the fingerprint of what was connected
 	// under it, so a changed address is noticed rather than assumed stable.
 	connected map[string]string
@@ -483,6 +514,11 @@ func newReconciler(catalog *tools.Catalog, servers Servers, health healthRecorde
 // publishingTo wires where the catalogue is published after it changes.
 func (r *reconciler) publishingTo(p Publisher) *reconciler {
 	r.publisher = p
+	return r
+}
+
+func (r *reconciler) withCredentialPolicy(p personalCredentialPolicy) *reconciler {
+	r.policy = p
 	return r
 }
 
@@ -600,7 +636,12 @@ func (r *reconciler) connect(ctx context.Context, server domain.MCPServer) bool 
 	if store, ok := r.servers.(MCPUserCredentialStore); ok {
 		personal = store
 	}
-	if err := r.connectTo(ctx, r.catalog, server, creds, oauth, personal); err != nil {
+	policy := credentialPolicy{}
+	if server.TransportOf() == domain.TransportHTTP &&
+		r.policy != nil && r.policy.RequiresPersonalCredential(server.Name) {
+		policy.requirePersonal = true
+	}
+	if err := r.connectTo(ctx, r.catalog, server, creds, oauth, personal, policy); err != nil {
 		// Recorded and skipped, never fatal. One broken integration used to
 		// mean nothing on the installation ran, including every agent that
 		// never touches it.
