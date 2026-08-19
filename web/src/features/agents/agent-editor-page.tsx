@@ -93,21 +93,21 @@ export function AgentEditorPage() {
           ends up under the footer — it was scrolled by the outer one, which
           had no idea the footer was there. */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <EditorBody
-            tab={tab}
-            draft={draft}
-            patch={patch}
-            editing={{
-              agentId,
-              creating,
-              onAgentId: setAgentId,
-              template: fromTemplate,
-              onTemplate: setFromTemplate,
-              published,
-            }}
-            tools={{ catalogue, policies: rules, enabled: draft.tools ?? [] }}
-            onSteps={() => setTab("steps")}
-          />
+        <EditorBody
+          tab={tab}
+          draft={draft}
+          patch={patch}
+          editing={{
+            agentId,
+            creating,
+            onAgentId: setAgentId,
+            template: fromTemplate,
+            onTemplate: setFromTemplate,
+            published,
+          }}
+          tools={{ catalogue, policies: rules, enabled: draft.tools ?? [] }}
+          onSteps={() => setTab("steps")}
+        />
       </div>
 
       <EditorFooter

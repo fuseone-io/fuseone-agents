@@ -33,7 +33,7 @@ export function TemplateGallery({
 
   if (isLoading) {
     return (
-      <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-2.5 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
         {[0, 1, 2, 3].map((i) => (
           <Skeleton key={i} className="h-32" />
         ))}
@@ -62,10 +62,10 @@ export function TemplateGallery({
         )}
       </div>
 
-      {/* Four across, because there are four and they are a set to compare
-          rather than a list to read. Two of them stretched over a full row
-          made each one look like a section of the form below it. */}
-      <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+      {/* Compare as cards, but let the available width decide how many fit.
+          Four forced into a narrow authoring column makes real summaries
+          overflow; two on a wide column wastes the space this tab owns. */}
+      <div className="grid gap-2.5 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
         {templates.map((template) => (
           <TemplateCard
             key={template.id}

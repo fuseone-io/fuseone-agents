@@ -61,6 +61,20 @@ const TOOLS = {
   ],
 };
 
+const TEMPLATES = {
+  items: [
+    {
+      id: "alert-response",
+      name: "Alert response",
+      summary:
+        "Takes an alert, gathers the context the person on call would ask for, and proposes the next step.",
+      needs: ["read metrics"],
+      instructions: "You are the first reading of an alert.",
+      triggers: [],
+    },
+  ],
+};
+
 /** Answers whatever the screen asks for, so nothing is left loading. */
 function stubApi() {
   vi.stubGlobal(
@@ -69,6 +83,8 @@ function stubApi() {
       const url = input instanceof Request ? input.url : String(input);
       const body = url.includes("/admin/tools")
         ? TOOLS
+        : url.includes("/agents/templates")
+          ? TEMPLATES
         : url.includes("/agents/suporte")
           ? AGENT
           : { items: [] };
@@ -80,14 +96,15 @@ function stubApi() {
   );
 }
 
-function openEditor() {
+function openEditor(path = "/agents/suporte/edit") {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={["/agents/suporte/edit"]}>
+      <MemoryRouter initialEntries={[path]}>
         <Routes>
+          <Route path="/agents/new" element={<AgentEditorPage />} />
           <Route path="/agents/:agentId/edit" element={<AgentEditorPage />} />
         </Routes>
       </MemoryRouter>
@@ -127,6 +144,17 @@ describe("the agent editor, control by control", () => {
         ).toBeInTheDocument(),
       );
     }
+  });
+
+  it("keeps templates and the definition form in the same scrolling column", async () => {
+    openEditor("/agents/new");
+
+    const column = await screen.findByTestId("agent-definition-column");
+
+    expect(
+      await within(column).findByText("Alert response"),
+    ).toBeInTheDocument();
+    expect(within(column).getByText("Identidade")).toBeInTheDocument();
   });
 
   it("adds a block, and keeps what is written in it", async () => {

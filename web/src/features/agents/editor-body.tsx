@@ -48,38 +48,37 @@ export function EditorBody({
   // rather than as a column that needed scrolling. Cards keep their height and
   // the column scrolls, which is what the comment above always claimed.
   const column =
-    "mx-auto flex w-full max-w-[820px] flex-col gap-4 overflow-y-auto px-5 pt-6 pb-10 [&>*]:shrink-0";
+    "mx-auto flex w-full max-w-[1040px] flex-col gap-4 overflow-y-auto px-5 pt-6 pb-10 [&>*]:shrink-0";
 
   return (
     <>
-      {/* Only while writing the first version, and only on the tab it fills
-          in: offering a starting point beside an agent that already exists
-          would be offering to overwrite it. */}
-      {editing.creating && tab === "definition" && (
-        <div className={column}>
-          <TemplateGallery
-            chosen={editing.template}
-            onChoose={(template) => {
-              patch({
-                name: template.name,
-                area: template.area ?? draft.area,
-                instructions: template.instructions,
-                triggers: template.triggers,
-                budget: template.budget ?? draft.budget,
-              });
-              editing.onAgentId(template.id);
-              editing.onTemplate(template.id);
-            }}
-            onClear={() => {
-              editing.onTemplate(undefined);
-              patch({ name: "", instructions: "", triggers: [] });
-            }}
-          />
-        </div>
-      )}
-
       {tab === "definition" && (
-        <div className={column}>
+        <div data-testid="agent-definition-column" className={column}>
+          {/* Only while writing the first version, and only on the tab it fills
+              in: offering a starting point beside an agent that already exists
+              would be offering to overwrite it. It lives in the same scroller
+              as the form because they are one column; sibling scrollers split
+              the page and hide whichever one lost the height negotiation. */}
+          {editing.creating && (
+            <TemplateGallery
+              chosen={editing.template}
+              onChoose={(template) => {
+                patch({
+                  name: template.name,
+                  area: template.area ?? draft.area,
+                  instructions: template.instructions,
+                  triggers: template.triggers,
+                  budget: template.budget ?? draft.budget,
+                });
+                editing.onAgentId(template.id);
+                editing.onTemplate(template.id);
+              }}
+              onClear={() => {
+                editing.onTemplate(undefined);
+                patch({ name: "", instructions: "", triggers: [] });
+              }}
+            />
+          )}
           <TabDefinition
             draft={draft}
             patch={patch}

@@ -70,12 +70,12 @@ export function TemplateCard({
 
       {/* A minimum height rather than a clamp: four cards side by side whose
           footers do not line up read as four different things. */}
-      <span className="min-h-8 text-xs text-muted-foreground">
+      <span className="min-h-8 min-w-0 text-xs leading-5 break-words text-muted-foreground [overflow-wrap:anywhere]">
         {template.summary}
       </span>
 
-      <span className="flex w-full items-center gap-1.5 border-t border-border-subtle pt-2">
-        <span className="font-mono text-2xs tabular-nums text-muted-foreground">
+      <span className="flex w-full min-w-0 items-center gap-1.5 border-t border-border-subtle pt-2">
+        <span className="shrink-0 font-mono text-2xs tabular-nums text-muted-foreground">
           {t("agents.templateNeeds", { count: template.needs.length })}
         </span>
         {template.area && (
