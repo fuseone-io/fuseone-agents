@@ -13,17 +13,17 @@ import type { RecordedDecision, Verdict } from "@/lib/api/client";
 const VISIBLE = 5;
 
 const VERDICT: Record<Verdict, { verb: string; className: string }> = {
-  allow: { verb: "permitiu", className: "text-success" },
-  constrain: { verb: "restringiu", className: "text-warning" },
-  require_approval: { verb: "escalou", className: "text-warning" },
-  block: { verb: "bloqueou", className: "text-danger" },
+  allow: { verb: "runs.verbAllowed", className: "text-success" },
+  constrain: { verb: "runs.verbConstrained", className: "text-warning" },
+  require_approval: { verb: "runs.verbEscalated", className: "text-warning" },
+  block: { verb: "runs.verbBlocked", className: "text-danger" },
 };
 
 /**
  * What the Gate has been deciding.
  *
  * The one panel that says whether the installation's rules are doing anything.
- * A feed of nothing but "permitiu" means the policy is not engaging; a run of
+ * A feed of nothing but "allowed" means the policy is not engaging; a run of
  * escalations on one rule means it is engaging too much. Neither is visible
  * from inside a single run, which is the only place this used to be readable.
  */
@@ -81,6 +81,7 @@ export function DecisionsFeed({ since }: { since: string }) {
 }
 
 function Row({ decision }: { decision: RecordedDecision }) {
+  const { t } = useTranslation();
   const verdict = VERDICT[decision.verdict];
 
   return (
@@ -93,7 +94,7 @@ function Row({ decision }: { decision: RecordedDecision }) {
           {formatTime(decision.at)}
         </Mono>
         <span className={cn("text-xs font-medium", verdict.className)}>
-          {verdict.verb}
+          {t(verdict.verb)}
         </span>
         <Mono className="truncate">{decision.tool}</Mono>
         {/* Whose agent it was. Without it the feed says something was blocked

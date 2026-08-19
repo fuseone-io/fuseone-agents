@@ -1,23 +1,9 @@
 import { useTranslation } from "react-i18next";
 import { useTools } from "@/features/admin/api";
+import { EffectBadge } from "@/features/agents/effect-badge";
 import { Mono } from "@/components/shared/mono";
 import { formatMicros, formatTokens } from "@/lib/format";
-import { cn } from "@/lib/utils";
 import type { Agent } from "@/lib/api/client";
-
-const EFFECT_TONE: Record<string, string> = {
-  read: "border-border",
-  write: "border-warning bg-warning-surface text-warning",
-  destructive: "border-danger bg-danger-surface text-danger",
-  financial: "border-danger bg-danger-surface text-danger",
-};
-
-const EFFECT_LABEL: Record<string, string> = {
-  read: "leitura",
-  write: "escrita",
-  destructive: "destrutivo",
-  financial: "financeiro",
-};
 
 /**
  * What this version may call, and what it may spend doing it.
@@ -44,21 +30,14 @@ export function AgentCapabilities({ agent }: { agent: Agent }) {
       ) : (
         <ul className="flex flex-col gap-1.5">
           {agent.tools.map((tool) => {
-            const effect = effects.get(tool) ?? "read";
+            const effect = effects.get(tool) ?? "unknown";
             return (
               <li
                 key={tool}
                 className="flex items-center justify-between gap-2"
               >
                 <Mono className="truncate">{tool}</Mono>
-                <span
-                  className={cn(
-                    "shrink-0 rounded-md border px-1.5 text-2xs",
-                    EFFECT_TONE[effect] ?? EFFECT_TONE.read,
-                  )}
-                >
-                  {EFFECT_LABEL[effect] ?? effect}
-                </span>
+                <EffectBadge effect={effect} />
               </li>
             );
           })}

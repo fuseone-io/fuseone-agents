@@ -36,7 +36,7 @@ export function StepRow({ step, last }: { step: Step; last: boolean }) {
       <div className="min-w-0 pb-4">
         <div className="flex flex-wrap items-baseline gap-2">
           <Mono dim>{formatInstant(step.at)}</Mono>
-          <Mono className={TONE_TEXT[tone]}>{verb}</Mono>
+          <Mono className={TONE_TEXT[tone]}>{t(verb)}</Mono>
           {typeof payload.tool === "string" && <Mono>{payload.tool}</Mono>}
           {step.cost && step.cost.micros > 0 && (
             <Mono dim>{formatCost(step.cost)}</Mono>

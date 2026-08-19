@@ -10,28 +10,28 @@ export type Tone = "neutral" | "good" | "warn" | "bad";
  * depths (PRD AU-09). The word carries the meaning; the colour only repeats it.
  */
 const VERBS: Record<StepKind, { verb: string; tone: Tone }> = {
-  run_started: { verb: "iniciou", tone: "neutral" },
+  run_started: { verb: "runs.verbStarted", tone: "neutral" },
   planned: { verb: "runs.verbProposed", tone: "neutral" },
-  gate_decided: { verb: "decidiu", tone: "neutral" },
-  budget_reserved: { verb: "reservou", tone: "neutral" },
-  tool_called: { verb: "chamou", tone: "neutral" },
-  tool_returned: { verb: "respondeu", tone: "neutral" },
-  budget_reconciled: { verb: "conciliou", tone: "neutral" },
+  gate_decided: { verb: "runs.verbDecided", tone: "neutral" },
+  budget_reserved: { verb: "runs.verbReserved", tone: "neutral" },
+  tool_called: { verb: "runs.verbCalled", tone: "neutral" },
+  tool_returned: { verb: "runs.verbReturned", tone: "neutral" },
+  budget_reconciled: { verb: "runs.verbReconciled", tone: "neutral" },
   approval_requested: { verb: "runs.verbAskedApproval", tone: "warn" },
-  approval_decided: { verb: "decidiu", tone: "good" },
+  approval_decided: { verb: "runs.verbDecided", tone: "good" },
   resumed: { verb: "runs.verbResumed", tone: "good" },
   abandoned: { verb: "runs.verbAbandoned", tone: "bad" },
   compensated: { verb: "runs.verbCompensated", tone: "warn" },
-  failed: { verb: "falhou", tone: "bad" },
-  parked: { verb: "estacionou", tone: "warn" },
-  run_finished: { verb: "concluiu", tone: "good" },
+  failed: { verb: "runs.verbFailed", tone: "bad" },
+  parked: { verb: "runs.verbParked", tone: "warn" },
+  run_finished: { verb: "runs.verbFinished", tone: "good" },
 };
 
 const VERDICTS: Record<string, { verb: string; tone: Tone }> = {
-  allow: { verb: "permitiu", tone: "good" },
-  constrain: { verb: "restringiu", tone: "warn" },
+  allow: { verb: "runs.verbAllowed", tone: "good" },
+  constrain: { verb: "runs.verbConstrained", tone: "warn" },
   require_approval: { verb: "runs.verbRequiredApproval", tone: "warn" },
-  block: { verb: "bloqueou", tone: "bad" },
+  block: { verb: "runs.verbBlocked", tone: "bad" },
 };
 
 // The wire encodes verdict and effect as the domain's integers; map them back

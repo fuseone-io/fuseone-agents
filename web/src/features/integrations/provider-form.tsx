@@ -93,7 +93,7 @@ export function ProviderForm({
     }
     try {
       await put.mutateAsync({ ...values, apiKey: values.apiKey || undefined });
-      toast.success(`${values.name} configurado`);
+      toast.success(t("integrations.saved", { name: values.name }));
       onClose();
     } catch (error) {
       toast.error(
