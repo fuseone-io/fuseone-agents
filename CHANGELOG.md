@@ -25,6 +25,49 @@ field" is a commit message.
 
 ---
 
+## [0.6.0] — 2026-08-19
+
+### Upgrade notes
+
+- **Administering identity now requires a grant at the installation, not at
+  `default`/`platform`.** Creating people, setting grants, setting a local
+  password and listing people were all checked against that one company and
+  area — an ordinary, grantable pair. Anyone administering it could mint
+  installation-wide administrators, which is the escalation the company
+  permission was already protected against and this one was not. **If the
+  person who administers your installation holds their grant on
+  `default`/`platform`, they will not be able to manage people after this
+  upgrade.** Give them a grant with company `*` and an empty area first, or
+  recover with `agentd bootstrap --reopen "<reason>"`, which is audited.
+- **Migration `0046` allows the new role in the database** and canonicalises
+  any malformed wildcard row before adding the constraint. A row with company
+  `*` and an area filled in was never installation-wide and no longer reads as
+  though it might be.
+
+### Added
+
+- **An `administrator` role**, carrying every permission, granted at the
+  installation with company `*` and an empty area. Assembling an administrator
+  out of four scoped roles worked and was a poor thing to operate. The console
+  grants it with a button rather than asking anybody to type `*`, and an
+  identity provider can map a group to it.
+- Administration is grouped by job in the navigation, and People reads as a
+  table: access summarised per scope, the matrix on an expanded row, and where
+  each grant came from. **A grant an identity provider asserts is re-derived on
+  every sign-in**, so it is marked as such — revoking it here lasts until its
+  holder signs in again, and the group is the thing to change.
+
+### Changed
+
+- `/me` reports a permission only where the caller actually holds it at the
+  scope the server checks, so the console stops offering screens the backend
+  will refuse.
+
+### Fixed
+
+- Existing grants are left alone. Compacting four roles into `administrator`
+  would widen what somebody reaches inside a migration nobody reviews.
+
 ## [0.5.0] — 2026-08-19
 
 ### Upgrade notes
