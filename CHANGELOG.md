@@ -25,6 +25,18 @@ field" is a commit message.
 
 ---
 
+## [0.8.2] — 2026-08-19
+
+### Fixed
+
+- **A channel with no conversations reads as one waiting to be configured**,
+  not as a failed search. The tab counted a connected channel while the list
+  under it said no conversation matched the filter — both true, and together
+  they told somebody who had just connected Slack to look for a mistake they
+  had not made. Searching still filters: look for a conversation that does not
+  exist and the channel goes away, because there the empty result is the
+  answer.
+
 ## [0.8.1] — 2026-08-19
 
 ### Fixed
