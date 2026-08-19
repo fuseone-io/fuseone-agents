@@ -25,6 +25,17 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **MCP credentials can now be personal.** A signed-in user can store their own
+  credential for a configured remote MCP server. Tool calls use that credential
+  only when the run is acting on that user's behalf; discovery, probes and
+  health checks still use the installation credential. Local stdio servers stay
+  installation-scoped because the worker starts one shared process rather than
+  attaching a credential to each HTTP request.
+
 ## [0.4.1] — 2026-08-18
 
 ### Fixed

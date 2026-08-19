@@ -188,7 +188,7 @@ func TestAuthenticatedClient_sendsBearerTokensToRemoteServers(t *testing.T) {
 	}))
 	t.Cleanup(remote.Close)
 
-	client, err := authenticatedClient("github", domain.MCPCredentials{Token: "ghp_secret"}, nil)
+	client, err := authenticatedClient("github", domain.MCPCredentials{Token: "ghp_secret"}, nil, nil)
 	if err != nil {
 		t.Fatalf("authenticatedClient: %v", err)
 	}
@@ -202,13 +202,13 @@ func TestAuthenticatedClient_sendsBearerTokensToRemoteServers(t *testing.T) {
 func TestAuthenticatedClient_doesNotShareTheDefaultTransport(t *testing.T) {
 	t.Parallel()
 
-	bearerClient, err := authenticatedClient("github", domain.MCPCredentials{Token: "ghp_secret"}, nil)
+	bearerClient, err := authenticatedClient("github", domain.MCPCredentials{Token: "ghp_secret"}, nil, nil)
 	if err != nil {
 		t.Fatalf("authenticatedClient bearer: %v", err)
 	}
-	bearerTransport, ok := bearerClient.Transport.(bearer)
+	bearerTransport, ok := bearerClient.Transport.(*credentialAuth)
 	if !ok {
-		t.Fatalf("bearer transport = %T, want bearer", bearerClient.Transport)
+		t.Fatalf("bearer transport = %T, want *credentialAuth", bearerClient.Transport)
 	}
 	if bearerTransport.base == http.DefaultTransport {
 		t.Fatal("bearer client shares http.DefaultTransport")
@@ -216,13 +216,13 @@ func TestAuthenticatedClient_doesNotShareTheDefaultTransport(t *testing.T) {
 
 	headerClient, err := authenticatedClient("newrelic", domain.MCPCredentials{
 		Headers: map[string]string{"Api-Key": "nr_secret"},
-	}, nil)
+	}, nil, nil)
 	if err != nil {
 		t.Fatalf("authenticatedClient headers: %v", err)
 	}
-	headerTransport, ok := headerClient.Transport.(headerAuth)
+	headerTransport, ok := headerClient.Transport.(*credentialAuth)
 	if !ok {
-		t.Fatalf("header transport = %T, want headerAuth", headerClient.Transport)
+		t.Fatalf("header transport = %T, want *credentialAuth", headerClient.Transport)
 	}
 	if headerTransport.base == http.DefaultTransport {
 		t.Fatal("header client shares http.DefaultTransport")
@@ -230,18 +230,19 @@ func TestAuthenticatedClient_doesNotShareTheDefaultTransport(t *testing.T) {
 
 	oauthClient, err := authenticatedClient("google", domain.MCPCredentials{
 		OAuth: &domain.MCPOAuthGrant{AccessToken: "oauth_access"},
-	}, nil)
+	}, nil, nil)
 	if err != nil {
 		t.Fatalf("authenticatedClient oauth: %v", err)
 	}
-	oauthTransport, ok := oauthClient.Transport.(*oauthTransport)
+	oauthTransport, ok := oauthClient.Transport.(*credentialAuth)
 	if !ok {
-		t.Fatalf("oauth transport = %T, want *oauthTransport", oauthClient.Transport)
+		t.Fatalf("oauth transport = %T, want *credentialAuth", oauthClient.Transport)
 	}
 	if oauthTransport.base == http.DefaultTransport {
 		t.Fatal("oauth client shares http.DefaultTransport")
 	}
-	if oauthTransport.refresh.Transport == http.DefaultTransport {
+	grantTransport := newOAuthTransport("google", "", domain.MCPOAuthGrant{}, nil, baseHTTPTransport())
+	if grantTransport.refresh.Transport == http.DefaultTransport {
 		t.Fatal("oauth refresh client shares http.DefaultTransport")
 	}
 }
@@ -262,7 +263,7 @@ func TestAuthenticatedClient_sendsConfiguredHeaderCredentialsToRemoteServers(t *
 
 	client, err := authenticatedClient("newrelic", domain.MCPCredentials{
 		Headers: map[string]string{"Api-Key": "nr_secret"},
-	}, nil)
+	}, nil, nil)
 	if err != nil {
 		t.Fatalf("authenticatedClient: %v", err)
 	}
@@ -289,7 +290,7 @@ func TestAuthenticatedClient_oauthWinsOverABearerLeftBehind(t *testing.T) {
 		OAuth: &domain.MCPOAuthGrant{
 			AccessToken: "oauth_access",
 		},
-	}, nil)
+	}, nil, nil)
 	if err != nil {
 		t.Fatalf("authenticatedClient: %v", err)
 	}
@@ -345,7 +346,7 @@ func TestAuthenticatedClient_refreshesAnExpiredOAuthGrant(t *testing.T) {
 			ClientSecret:  "secret",
 			ExpiresAtUnix: time.Now().Add(-time.Minute).Unix(),
 		},
-	}, store)
+	}, store, nil)
 	if err != nil {
 		t.Fatalf("authenticatedClient: %v", err)
 	}
@@ -358,6 +359,7 @@ func TestAuthenticatedClient_refreshesAnExpiredOAuthGrant(t *testing.T) {
 		t.Fatal("expired oauth grant was used without refresh")
 	}
 	if store.name != "google" ||
+		store.owner != "" ||
 		store.was.RefreshToken != "refresh" ||
 		store.next.AccessToken != "fresh" ||
 		store.next.RefreshToken != "new-refresh" ||
@@ -379,7 +381,7 @@ func TestAuthenticatedClient_refusesAnExpiredOAuthGrantItCannotRefresh(t *testin
 			AccessToken:   "expired",
 			ExpiresAtUnix: time.Now().Add(-time.Minute).Unix(),
 		},
-	}, nil)
+	}, nil, nil)
 	if err != nil {
 		t.Fatalf("authenticatedClient: %v", err)
 	}
@@ -421,7 +423,7 @@ func TestAuthenticatedClient_aRefreshThatCannotBePersistedIsNotSent(t *testing.T
 			TokenURL:      remote.URL + "/token",
 			ExpiresAtUnix: time.Now().Add(-time.Minute).Unix(),
 		},
-	}, store)
+	}, store, nil)
 	if err != nil {
 		t.Fatalf("authenticatedClient: %v", err)
 	}
@@ -452,18 +454,168 @@ func TestAuthenticatedClient_aRefreshThatCannotBePersistedIsNotSent(t *testing.T
 	}
 }
 
+func TestAuthenticatedClient_prefersPersonalCredentialsForToolCalls(t *testing.T) {
+	t.Parallel()
+
+	var seen []string
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.Header.Get("Authorization"))
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(remote.Close)
+
+	client, err := authenticatedClient("github",
+		domain.MCPCredentials{Token: "shared"},
+		nil,
+		personalCreds{"usr_ana": domain.MCPCredentials{Token: "ana"}},
+	)
+	if err != nil {
+		t.Fatalf("authenticatedClient: %v", err)
+	}
+	req, err := http.NewRequestWithContext(
+		tools.WithCaller(t.Context(), "usr_ana"), http.MethodGet, remote.URL, nil)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("personal request: %v", err)
+	}
+	_ = resp.Body.Close()
+	resp, err = client.Get(remote.URL)
+	if err != nil {
+		t.Fatalf("shared request: %v", err)
+	}
+	_ = resp.Body.Close()
+
+	if len(seen) != 2 ||
+		seen[0] != "Bearer ana" ||
+		seen[1] != "Bearer shared" {
+		t.Fatalf("Authorization = %v, want personal then shared", seen)
+	}
+}
+
+func TestAuthenticatedClient_readsPersonalCredentialsOnEachCall(t *testing.T) {
+	t.Parallel()
+
+	var seen []string
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.Header.Get("Authorization"))
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(remote.Close)
+
+	personal := rotatingPersonal{creds: domain.MCPCredentials{Token: "first"}}
+	client, err := authenticatedClient("github", domain.MCPCredentials{}, nil, &personal)
+	if err != nil {
+		t.Fatalf("authenticatedClient: %v", err)
+	}
+	for _, token := range []string{"first", "second"} {
+		personal.creds = domain.MCPCredentials{Token: token}
+		req, err := http.NewRequestWithContext(
+			tools.WithCaller(t.Context(), "usr_ana"), http.MethodGet, remote.URL, nil)
+		if err != nil {
+			t.Fatalf("request: %v", err)
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatalf("request with %s: %v", token, err)
+		}
+		_ = resp.Body.Close()
+	}
+
+	if len(seen) != 2 || seen[0] != "Bearer first" || seen[1] != "Bearer second" {
+		t.Fatalf("Authorization = %v, want the latest personal token each time", seen)
+	}
+}
+
+func TestAuthenticatedClient_persistsPersonalOAuthRefreshForThatUser(t *testing.T) {
+	t.Parallel()
+
+	store := &recordingOAuthStore{}
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/token":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"access_token":  "fresh",
+				"refresh_token": "new-refresh",
+				"expires_in":    3600,
+			})
+		case "/resource":
+			if got := r.Header.Get("Authorization"); got != "Bearer fresh" {
+				t.Errorf("Authorization = %q, want the refreshed personal token", got)
+			}
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(remote.Close)
+
+	grant := domain.MCPOAuthGrant{
+		AccessToken:   "expired",
+		RefreshToken:  "refresh",
+		TokenURL:      remote.URL + "/token",
+		ExpiresAtUnix: time.Now().Add(-time.Minute).Unix(),
+	}
+	client, err := authenticatedClient("google", domain.MCPCredentials{}, store,
+		personalCreds{"usr_ana": domain.MCPCredentials{OAuth: &grant}})
+	if err != nil {
+		t.Fatalf("authenticatedClient: %v", err)
+	}
+	req, err := http.NewRequestWithContext(
+		tools.WithCaller(t.Context(), "usr_ana"), http.MethodGet, remote.URL+"/resource", nil)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	_ = resp.Body.Close()
+
+	if store.name != "google" ||
+		store.owner != "usr_ana" ||
+		store.was.RefreshToken != "refresh" ||
+		store.next.RefreshToken != "new-refresh" {
+		t.Fatalf("persisted = %s/%s %+v -> %+v, want Ana's grant refreshed",
+			store.name, store.owner, store.was, store.next)
+	}
+}
+
 type recordingOAuthStore struct {
-	name string
-	was  domain.MCPOAuthGrant
-	next domain.MCPOAuthGrant
-	err  error
+	name  string
+	owner domain.UserID
+	was   domain.MCPOAuthGrant
+	next  domain.MCPOAuthGrant
+	err   error
 }
 
 func (s *recordingOAuthStore) RefreshMCPServerOAuth(
-	_ context.Context, name string, was, next domain.MCPOAuthGrant,
+	_ context.Context, name string, owner domain.UserID, was, next domain.MCPOAuthGrant,
 ) error {
-	s.name, s.was, s.next = name, was, next
+	s.name, s.owner, s.was, s.next = name, owner, was, next
 	return s.err
+}
+
+type personalCreds map[domain.UserID]domain.MCPCredentials
+
+func (p personalCreds) MCPPersonalCredential(
+	_ context.Context, _ string, principal domain.UserID,
+) (domain.MCPCredentials, bool, error) {
+	creds, ok := p[principal]
+	return creds, ok, nil
+}
+
+type rotatingPersonal struct {
+	creds domain.MCPCredentials
+	err   error
+}
+
+func (p *rotatingPersonal) MCPPersonalCredential(
+	context.Context, string, domain.UserID,
+) (domain.MCPCredentials, bool, error) {
+	return p.creds, !p.creds.Empty(), p.err
 }
 
 /*
@@ -614,7 +766,7 @@ func TestReconciler_aProbeRequestReconnectsThroughTheWorkerPath(t *testing.T) {
 	r.connected["crm"] = fingerprint(server)
 	r.connectTo = func(
 		ctx context.Context, catalog *tools.Catalog, server domain.MCPServer,
-		_ domain.MCPCredentials, _ OAuthGrantStore,
+		_ domain.MCPCredentials, _ OAuthGrantStore, _ MCPUserCredentialStore,
 	) error {
 		return catalog.AddServer(ctx, server.Name, &testSession{tools: []*mcp.Tool{{
 			Name:        "lookup",
@@ -663,7 +815,8 @@ func TestReconciler_aFailedProbeKeepsTheCurrentSession(t *testing.T) {
 	r := newReconciler(catalog, configured, health).publishingTo(publisher)
 	r.connected["crm"] = fingerprint(server)
 	r.connectTo = func(
-		context.Context, *tools.Catalog, domain.MCPServer, domain.MCPCredentials, OAuthGrantStore,
+		context.Context, *tools.Catalog, domain.MCPServer,
+		domain.MCPCredentials, OAuthGrantStore, MCPUserCredentialStore,
 	) error {
 		return errors.New("dial timeout")
 	}

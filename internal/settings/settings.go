@@ -32,13 +32,14 @@ var (
 type Kind string
 
 const (
-	KindModelProvider Kind = "model_provider"
-	KindMCPServer     Kind = "mcp_server"
-	KindPack          Kind = "capability_pack"
-	KindBudget        Kind = "budget"
-	KindRetention     Kind = "retention"
-	KindBranding      Kind = "branding"
-	KindPolicy        Kind = "policy"
+	KindModelProvider     Kind = "model_provider"
+	KindMCPServer         Kind = "mcp_server"
+	KindMCPUserCredential Kind = "mcp_user_credential"
+	KindPack              Kind = "capability_pack"
+	KindBudget            Kind = "budget"
+	KindRetention         Kind = "retention"
+	KindBranding          Kind = "branding"
+	KindPolicy            Kind = "policy"
 	// KindIdentityProvider holds who may sign in and what signing in grants.
 	// Here rather than in a table of its own because the vault, the trail and
 	// the reveal-once path all already work for a setting, and an identity

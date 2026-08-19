@@ -1200,6 +1200,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/integrations/mcp-credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The caller's own MCP credentials
+         * @description Lists only whether the signed-in user has supplied a credential for
+         *     each remote MCP server. The credential itself never leaves the vault.
+         *
+         *     This is not administrative configuration: it does not connect a server,
+         *     widen the tool surface, or classify an effect. It lets a run carrying
+         *     this user's delegation call a remote server as that user instead of as
+         *     the installation.
+         */
+        get: operations["listMCPUserCredentials"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/integrations/mcp-credentials/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Store the caller's credential for one remote MCP server
+         * @description Stores a credential owned by the signed-in user, for a configured HTTP
+         *     MCP server. The worker reads it only when a run carries that user's
+         *     OnBehalfOf; discovery and health checks still use the server's shared
+         *     credential, if any.
+         */
+        put: operations["putMCPUserCredential"];
+        post?: never;
+        /** Remove the caller's credential for one MCP server */
+        delete: operations["deleteMCPUserCredential"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/people": {
         parameters: {
             query?: never;
@@ -2545,6 +2595,29 @@ export interface components {
              */
             expiresAtUnix?: number;
             scopes?: string[];
+        };
+        MCPUserCredentialInput: {
+            /** @description Bearer token for this signed-in user. Omit to keep the stored one. A non-empty token replaces stored headers or OAuth material. */
+            token?: string;
+            /** @description Exact HTTP headers for this signed-in user. Omit to keep stored headers. A non-empty object replaces stored bearer or OAuth material. */
+            headers?: {
+                [key: string]: string;
+            };
+            /** @description Manual OAuth grant for this signed-in user. Omit to keep the stored grant. A non-empty grant replaces bearer or header credentials. */
+            oauth?: components["schemas"]["MCPOAuthGrant"];
+        };
+        MCPUserCredential: {
+            /** @description The configured remote MCP server this credential belongs to. */
+            server: string;
+            /** @description Whether any personal credential is stored. */
+            hasCredential: boolean;
+            /** @description Whether the stored credential is exact HTTP headers. */
+            hasHeaders: boolean;
+            /** @description Whether the stored credential is an OAuth grant. */
+            hasOAuth: boolean;
+            updatedBy?: string;
+            /** Format: date-time */
+            updatedAt?: string;
         };
         MCPServer: {
             /** @description Namespaces the tools it offers, so two servers naming a tool "search" do not collide. */
@@ -5306,6 +5379,81 @@ export interface operations {
                         providers: components["schemas"]["ModelProvider"][];
                     };
                 };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listMCPUserCredentials: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's MCP credential presence. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["MCPUserCredential"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    putMCPUserCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The configured MCP server name. */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MCPUserCredentialInput"];
+            };
+        };
+        responses: {
+            /** @description Stored. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    deleteMCPUserCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The configured MCP server name. */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];

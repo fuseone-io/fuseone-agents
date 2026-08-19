@@ -141,6 +141,22 @@ type MCPServer struct {
 	UpdatedAt time.Time
 }
 
+// MCPPersonalCredential is the read model for one person's credential to one
+// remote MCP server. It reports presence and shape only; the sealed material
+// never leaves the vault through an ordinary read.
+type MCPPersonalCredential struct {
+	Server string
+	// Principal is the user who owns the credential. The API only lists the
+	// caller's own rows, but the store keeps the owner explicit because the
+	// vault key is shared infrastructure, not a browser session.
+	Principal  UserID
+	HasSecret  bool
+	HasHeaders bool
+	HasOAuth   bool
+	UpdatedBy  string
+	UpdatedAt  time.Time
+}
+
 // TransportOf reads a server's transport, defaulting an unset one to stdio.
 func (s MCPServer) TransportOf() string {
 	if s.Transport == "" {

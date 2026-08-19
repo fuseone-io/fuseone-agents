@@ -18,7 +18,7 @@ func newIntegrations(t *testing.T) *admin.Integrations {
 
 	pool := openPool(t)
 	if _, err := pool.Exec(context.Background(),
-		`delete from settings where kind in ('mcp_server', 'mcp_probe', 'model_provider', 'model_price')`); err != nil {
+		`delete from settings where kind in ('mcp_server', 'mcp_user_credential', 'mcp_probe', 'model_provider', 'model_price')`); err != nil {
 		t.Fatalf("clean: %v", err)
 	}
 
@@ -382,6 +382,203 @@ func TestPutMCPServer_remote_sealsHeadersAndNeverListsThem(t *testing.T) {
 	}
 }
 
+func TestPutMCPPersonalCredential_sealsOneUsersRemoteCredential(t *testing.T) {
+	i := newIntegrations(t)
+	pool := openPool(t)
+	ctx := context.Background()
+
+	if err := i.PutMCPServer(ctx, "usr_curator", platform, domain.MCPServer{
+		Name: "newrelic", Transport: domain.TransportHTTP,
+		URL: "https://mcp.newrelic.com/mcp/", Enabled: true,
+	}, domain.MCPCredentialPatch{}); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+	if err := i.PutMCPPersonalCredential(ctx, "usr_ana", platform, "newrelic",
+		domain.MCPCredentialPatch{
+			Headers: map[string]string{"Api-Key": "ana-secret"},
+		}); err != nil {
+		t.Fatalf("PutMCPPersonalCredential: %v", err)
+	}
+
+	listed, err := i.MCPPersonalCredentials(ctx, "usr_ana")
+	if err != nil {
+		t.Fatalf("MCPPersonalCredentials: %v", err)
+	}
+	if len(listed) != 1 ||
+		listed[0].Server != "newrelic" ||
+		!listed[0].HasSecret ||
+		!listed[0].HasHeaders ||
+		listed[0].HasOAuth {
+		t.Fatalf("listed = %+v, want only presence of Ana's header credential", listed)
+	}
+	other, err := i.MCPPersonalCredentials(ctx, "usr_bia")
+	if err != nil {
+		t.Fatalf("MCPPersonalCredentials(other): %v", err)
+	}
+	if len(other) != 0 {
+		t.Fatalf("other user listed = %+v, want no cross-user credential leak", other)
+	}
+
+	creds, found, err := i.MCPPersonalCredential(ctx, "newrelic", "usr_ana")
+	if err != nil {
+		t.Fatalf("MCPPersonalCredential: %v", err)
+	}
+	if !found || creds.Headers["Api-Key"] != "ana-secret" {
+		t.Fatalf("credential = %+v found=%v, want the sealed header back only through the credential reader", creds, found)
+	}
+
+	var detail string
+	if err := pool.QueryRow(ctx, `
+		select detail::text from admin_events
+		where action = 'mcp_credential.configured' and target = 'newrelic'
+		order by event_id desc limit 1`,
+	).Scan(&detail); err != nil {
+		t.Fatalf("read event: %v", err)
+	}
+	if !contains(detail, "headersChanged") || contains(detail, "ana-secret") {
+		t.Fatalf("detail = %s, want a credential change without the secret", detail)
+	}
+}
+
+func TestPutMCPPersonalCredential_refusesLocalServers(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+
+	if err := i.PutMCPServer(ctx, "usr_curator", platform, domain.MCPServer{
+		Name: "toolbox", Transport: domain.TransportStdio,
+		Command: "/usr/local/bin/toolbox", Enabled: true,
+		AcceptsLocalExecution: true,
+	}, domain.MCPCredentialPatch{}); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+
+	err := i.PutMCPPersonalCredential(ctx, "usr_ana", platform, "toolbox",
+		domain.MCPCredentialPatch{Token: ptr("secret")})
+	if !errors.Is(err, admin.ErrMCPPersonalCredentialLocal) {
+		t.Fatalf("PutMCPPersonalCredential = %v, want the local-server refusal", err)
+	}
+}
+
+func TestMCPPersonalCredential_refusesCorruptedMetadata(t *testing.T) {
+	i := newIntegrations(t)
+	pool := openPool(t)
+	ctx := context.Background()
+
+	if err := i.PutMCPServer(ctx, "usr_curator", platform, domain.MCPServer{
+		Name: "github", Transport: domain.TransportHTTP,
+		URL: "https://api.githubcopilot.com/mcp/", Enabled: true,
+	}, domain.MCPCredentialPatch{}); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+	if err := i.PutMCPPersonalCredential(ctx, "usr_ana", platform, "github",
+		domain.MCPCredentialPatch{Token: ptr("ghp_secret")}); err != nil {
+		t.Fatalf("PutMCPPersonalCredential: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		update settings
+		set value = '{"server":"github","principal":"usr_bia"}'
+		where kind = 'mcp_user_credential'`); err != nil {
+		t.Fatalf("corrupt metadata: %v", err)
+	}
+
+	_, found, err := i.MCPPersonalCredential(ctx, "github", "usr_ana")
+	if !errors.Is(err, admin.ErrMCPPersonalCredentialCorrupt) {
+		t.Fatalf("MCPPersonalCredential err = %v found=%v, want the corrupted row refused", err, found)
+	}
+}
+
+func TestRefreshMCPServerOAuth_personalGrantStaysWithThatUser(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+
+	if err := i.PutMCPServer(ctx, "usr_curator", platform, domain.MCPServer{
+		Name: "google-workspace", Transport: domain.TransportHTTP,
+		URL: "https://mcp.example.com/google", Enabled: true,
+	}, domain.MCPCredentialPatch{}); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+	was := domain.MCPOAuthGrant{
+		AccessToken: "old-access", RefreshToken: "old-refresh",
+		TokenURL: "https://issuer.example/token",
+	}
+	next := was
+	next.AccessToken = "new-access"
+	next.RefreshToken = "new-refresh"
+	if err := i.PutMCPPersonalCredential(ctx, "usr_ana", platform, "google-workspace",
+		domain.MCPCredentialPatch{OAuth: &was}); err != nil {
+		t.Fatalf("PutMCPPersonalCredential: %v", err)
+	}
+
+	if err := i.RefreshMCPServerOAuth(ctx, "google-workspace", "usr_ana", was, next); err != nil {
+		t.Fatalf("RefreshMCPServerOAuth: %v", err)
+	}
+
+	creds, found, err := i.MCPPersonalCredential(ctx, "google-workspace", "usr_ana")
+	if err != nil {
+		t.Fatalf("MCPPersonalCredential: %v", err)
+	}
+	if !found || creds.OAuth == nil || creds.OAuth.RefreshToken != "new-refresh" {
+		t.Fatalf("personal oauth = %+v found=%v, want Ana's rotated grant", creds.OAuth, found)
+	}
+	shared, err := i.MCPCredentials(ctx, "google-workspace")
+	if err != nil {
+		t.Fatalf("MCPCredentials: %v", err)
+	}
+	if !shared.Empty() {
+		t.Fatalf("shared credential = %+v, want personal refresh not to write it", shared)
+	}
+}
+
+func TestDeleteMCPServer_removesPersonalCredentialsForThatServer(t *testing.T) {
+	i := newIntegrations(t)
+	pool := openPool(t)
+	ctx := context.Background()
+
+	for _, name := range []string{"github", "stripe"} {
+		if err := i.PutMCPServer(ctx, "usr_curator", platform, domain.MCPServer{
+			Name: name, Transport: domain.TransportHTTP,
+			URL: "https://example.com/" + name, Enabled: true,
+		}, domain.MCPCredentialPatch{}); err != nil {
+			t.Fatalf("PutMCPServer(%s): %v", name, err)
+		}
+	}
+	if err := i.PutMCPPersonalCredential(ctx, "usr_ana", platform, "github",
+		domain.MCPCredentialPatch{Token: ptr("ghp_secret")}); err != nil {
+		t.Fatalf("PutMCPPersonalCredential(github): %v", err)
+	}
+	if err := i.PutMCPPersonalCredential(ctx, "usr_ana", platform, "stripe",
+		domain.MCPCredentialPatch{Token: ptr("sk_secret")}); err != nil {
+		t.Fatalf("PutMCPPersonalCredential(stripe): %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		update settings
+		set value = '{"principal":"usr_ana"}'
+		where kind = 'mcp_user_credential'
+		  and value->>'server' = 'github'`); err != nil {
+		t.Fatalf("make github metadata old-shaped: %v", err)
+	}
+
+	if err := i.DeleteMCPServer(ctx, "usr_curator", platform, "github"); err != nil {
+		t.Fatalf("DeleteMCPServer: %v", err)
+	}
+
+	var rows int
+	if err := pool.QueryRow(ctx,
+		`select count(*) from settings where kind = 'mcp_user_credential'`,
+	).Scan(&rows); err != nil {
+		t.Fatalf("count credentials: %v", err)
+	}
+	if rows != 1 {
+		t.Fatalf("personal credential rows = %d, want only the unrelated server left", rows)
+	}
+	if _, found, err := i.MCPPersonalCredential(ctx, "github", "usr_ana"); err != nil || found {
+		t.Fatalf("deleted credential found=%v err=%v, want it gone", found, err)
+	}
+	if _, found, err := i.MCPPersonalCredential(ctx, "stripe", "usr_ana"); err != nil || !found {
+		t.Fatalf("unrelated credential found=%v err=%v, want it preserved", found, err)
+	}
+}
+
 func TestPutMCPServer_writingOAuthReplacesStoredBearer(t *testing.T) {
 	i := newIntegrations(t)
 	ctx := context.Background()
@@ -466,7 +663,7 @@ func TestRefreshMCPServerOAuth_persistsTheRotatedGrantAndRecordsNoSecret(t *test
 		domain.MCPCredentialPatch{OAuth: &was}); err != nil {
 		t.Fatalf("PutMCPServer: %v", err)
 	}
-	if err := i.RefreshMCPServerOAuth(ctx, "google-sheets", was, next); err != nil {
+	if err := i.RefreshMCPServerOAuth(ctx, "google-sheets", "", was, next); err != nil {
 		t.Fatalf("RefreshMCPServerOAuth: %v", err)
 	}
 
@@ -533,7 +730,7 @@ func TestRefreshMCPServerOAuth_refusesToOverwriteAChangedGrant(t *testing.T) {
 		t.Fatalf("PutMCPServer replacing: %v", err)
 	}
 
-	err := i.RefreshMCPServerOAuth(ctx, "google-sheets", was, next)
+	err := i.RefreshMCPServerOAuth(ctx, "google-sheets", "", was, next)
 	if !errors.Is(err, admin.ErrOAuthGrantChanged) {
 		t.Fatalf("RefreshMCPServerOAuth = %v, want the changed grant refused", err)
 	}

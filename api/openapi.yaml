@@ -1740,6 +1740,75 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /integrations/mcp-credentials:
+    get:
+      tags: [integrations]
+      operationId: listMCPUserCredentials
+      summary: The caller's own MCP credentials
+      description: |
+        Lists only whether the signed-in user has supplied a credential for
+        each remote MCP server. The credential itself never leaves the vault.
+
+        This is not administrative configuration: it does not connect a server,
+        widen the tool surface, or classify an effect. It lets a run carrying
+        this user's delegation call a remote server as that user instead of as
+        the installation.
+      responses:
+        '200':
+          description: The caller's MCP credential presence.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/MCPUserCredential' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /integrations/mcp-credentials/{name}:
+    put:
+      tags: [integrations]
+      operationId: putMCPUserCredential
+      summary: Store the caller's credential for one remote MCP server
+      description: |
+        Stores a credential owned by the signed-in user, for a configured HTTP
+        MCP server. The worker reads it only when a run carries that user's
+        OnBehalfOf; discovery and health checks still use the server's shared
+        credential, if any.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: The configured MCP server name.
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MCPUserCredentialInput' }
+      responses:
+        '204': { description: Stored. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    delete:
+      tags: [integrations]
+      operationId: deleteMCPUserCredential
+      summary: Remove the caller's credential for one MCP server
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: The configured MCP server name.
+          schema: { type: string }
+      responses:
+        '204': { description: Removed. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /admin/people:
     get:
       tags: [admin]
@@ -3960,6 +4029,46 @@ components:
         scopes:
           type: array
           items: { type: string }
+
+    MCPUserCredentialInput:
+      type: object
+      properties:
+        token:
+          type: string
+          description: >
+            Bearer token for this signed-in user. Omit to keep the stored one.
+            A non-empty token replaces stored headers or OAuth material.
+        headers:
+          type: object
+          additionalProperties: { type: string }
+          description: >
+            Exact HTTP headers for this signed-in user. Omit to keep stored
+            headers. A non-empty object replaces stored bearer or OAuth
+            material.
+        oauth:
+          allOf: [{ $ref: '#/components/schemas/MCPOAuthGrant' }]
+          description: >
+            Manual OAuth grant for this signed-in user. Omit to keep the stored
+            grant. A non-empty grant replaces bearer or header credentials.
+
+    MCPUserCredential:
+      type: object
+      required: [server, hasCredential, hasHeaders, hasOAuth]
+      properties:
+        server:
+          type: string
+          description: The configured remote MCP server this credential belongs to.
+        hasCredential:
+          type: boolean
+          description: Whether any personal credential is stored.
+        hasHeaders:
+          type: boolean
+          description: Whether the stored credential is exact HTTP headers.
+        hasOAuth:
+          type: boolean
+          description: Whether the stored credential is an OAuth grant.
+        updatedBy: { type: string }
+        updatedAt: { type: string, format: date-time }
 
     MCPServer:
       type: object

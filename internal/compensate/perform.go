@@ -119,7 +119,8 @@ func performOne(
 
 	result, invokeErr := deps.Tools.Invoke(ctx, engine.Call{
 		RunID: start.RunID, Seq: seq, Tool: act.Undo, Args: args,
-		IdemKey: fmt.Sprintf("compensate:%s:%d", start.RunID, act.Seq),
+		OnBehalfOf: start.OnBehalfOf,
+		IdemKey:    fmt.Sprintf("compensate:%s:%d", start.RunID, act.Seq),
 	})
 	// Both shapes of failure. A tool layer reports a refusal from the far side
 	// in the result and a broken connection as an error, and an undo that did

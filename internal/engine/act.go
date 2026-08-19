@@ -217,7 +217,9 @@ func (r *Runner) invoke(
 
 	result, invokeErr := r.deps.Tools.Invoke(ctx, Call{
 		RunID: start.RunID, Seq: state.Seq,
-		Tool: p.Tool, Args: p.Args, IdemKey: idemKey,
+		Tool: p.Tool, Args: p.Args,
+		OnBehalfOf: start.OnBehalfOf,
+		IdemKey:    idemKey,
 	})
 	returned := domain.ToolReturnedPayload{Tool: p.Tool, ResultRef: result.ResultRef}
 	if invokeErr != nil {

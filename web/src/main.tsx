@@ -83,6 +83,10 @@ createRoot(document.getElementById("root")!).render(
                     element={<IntegrationsPage section="providers" />}
                   />
                   <Route
+                    path="/integrations/credentials"
+                    element={<IntegrationsPage section="credentials" />}
+                  />
+                  <Route
                     path="/integrations/channels"
                     element={<IntegrationsPage section="channels" />}
                   />

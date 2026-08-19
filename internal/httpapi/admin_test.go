@@ -17,9 +17,11 @@ import (
 // call rather than on a database.
 type fakeAdmin struct {
 	servers   []domain.MCPServer
+	personal  []domain.MCPPersonalCredential
 	providers []domain.ModelProvider
 
 	putServer   domain.MCPServer
+	putPersonal string
 	putToken    string
 	putHeaders  map[string]string
 	putOAuth    *domain.MCPOAuthGrant
@@ -38,6 +40,27 @@ func (f *fakeAdmin) MCPServers(context.Context) ([]domain.MCPServer, error) {
 }
 func (f *fakeAdmin) Providers(context.Context) ([]domain.ModelProvider, error) {
 	return f.providers, f.err
+}
+func (f *fakeAdmin) MCPPersonalCredentials(context.Context, domain.UserID) ([]domain.MCPPersonalCredential, error) {
+	return f.personal, f.err
+}
+func (f *fakeAdmin) PutMCPPersonalCredential(
+	_ context.Context, by domain.UserID, _ domain.Scope, name string,
+	creds domain.MCPCredentialPatch,
+) error {
+	f.putPersonal, f.putBy, f.putHeaders = name, by, creds.Headers
+	if creds.Token != nil {
+		f.putToken = *creds.Token
+	}
+	if creds.OAuth != nil {
+		copy := *creds.OAuth
+		f.putOAuth = &copy
+	}
+	return f.err
+}
+func (f *fakeAdmin) DeleteMCPPersonalCredential(_ context.Context, by domain.UserID, _ domain.Scope, name string) error {
+	f.deleted, f.putBy = name, by
+	return f.err
 }
 func (f *fakeAdmin) PutMCPServer(
 	_ context.Context, by domain.UserID, _ domain.Scope, s domain.MCPServer,
@@ -301,6 +324,57 @@ func TestProbeMCPServer_withoutThePermission_isRefused(t *testing.T) {
 	}
 	if admin.probed != "" {
 		t.Fatalf("probe was recorded despite the refusal: %q", admin.probed)
+	}
+}
+
+func TestPutMCPUserCredential_isAllowedForAnAuthorAndStoresOnlyTheirCredential(t *testing.T) {
+	t.Parallel()
+
+	admin := &fakeAdmin{}
+	resp, err := serverWith(t, admin).PutMCPUserCredential(
+		inArea("devops", domain.RoleAuthor),
+		openapi.PutMCPUserCredentialRequestObject{
+			Name: "github",
+			Body: &openapi.PutMCPUserCredentialJSONRequestBody{
+				Token: ptr("ghp_secret"),
+			},
+		})
+	if err != nil {
+		t.Fatalf("PutMCPUserCredential: %v", err)
+	}
+	if _, ok := resp.(openapi.PutMCPUserCredential204Response); !ok {
+		t.Fatalf("response = %T, want 204", resp)
+	}
+	if admin.putPersonal != "github" || admin.putBy != "usr_ana" || admin.putToken != "ghp_secret" {
+		t.Fatalf("stored = %q by %q token %q, want Ana's github credential",
+			admin.putPersonal, admin.putBy, admin.putToken)
+	}
+}
+
+func TestListMCPUserCredentials_returnsPresenceOnly(t *testing.T) {
+	t.Parallel()
+
+	at := time.Date(2026, 8, 19, 12, 0, 0, 0, time.UTC)
+	admin := &fakeAdmin{personal: []domain.MCPPersonalCredential{{
+		Server: "github", Principal: "usr_ana", HasSecret: true,
+		HasHeaders: true, UpdatedBy: "usr_ana", UpdatedAt: at,
+	}}}
+	resp, err := serverWith(t, admin).ListMCPUserCredentials(
+		inArea("devops", domain.RoleAuthor),
+		openapi.ListMCPUserCredentialsRequestObject{})
+	if err != nil {
+		t.Fatalf("ListMCPUserCredentials: %v", err)
+	}
+	body, ok := resp.(openapi.ListMCPUserCredentials200JSONResponse)
+	if !ok {
+		t.Fatalf("response = %T, want 200", resp)
+	}
+	if len(body.Items) != 1 ||
+		body.Items[0].Server != "github" ||
+		!body.Items[0].HasCredential ||
+		!body.Items[0].HasHeaders ||
+		body.Items[0].HasOAuth {
+		t.Fatalf("items = %+v, want only credential presence", body.Items)
 	}
 }
 

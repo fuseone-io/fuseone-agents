@@ -23,11 +23,13 @@ import { ServerCard } from "@/features/integrations/server-card";
 import { ProviderCard } from "@/features/integrations/provider-card";
 import {
   useIntegrations,
+  useMCPUserCredentials,
   type MCPServer,
   type ModelProvider,
 } from "@/features/integrations/api";
 import { useRecipes } from "@/features/integrations/mcp/api";
 import { AvailableServersPanel } from "@/features/integrations/mcp/available-servers-panel";
+import { UserCredentialsPanel } from "@/features/integrations/mcp/user-credentials-panel";
 import { LoadMore } from "@/components/shared/load-more";
 import { useVisibleItems } from "@/hooks/use-visible-items";
 import {
@@ -60,6 +62,7 @@ export function IntegrationsPage({
   const integrations = useIntegrations();
   const recipes = useRecipes();
   const channels = useChannels();
+  const credentials = useMCPUserCredentials();
   const [editing, setEditing] = useState<Editing | null>(null);
 
   const servers = integrations.data?.mcpServers ?? [];
@@ -71,10 +74,14 @@ export function IntegrationsPage({
     connected: integrations.data ? servers.length : undefined,
     available:
       integrations.data && recipes.data ? available.length : undefined,
+    credentials: credentials.data ? credentials.data.items.length : undefined,
     providers: integrations.data ? providers.length : undefined,
     channels: channels.data ? channels.data.items.length : undefined,
   };
-  const needsIntegrations = section === "connected" || section === "providers";
+  const needsIntegrations =
+    section === "connected" ||
+    section === "providers" ||
+    section === "credentials";
 
   return (
     <>
@@ -180,6 +187,23 @@ export function IntegrationsPage({
             onRetry={() => {
               void integrations.refetch();
               void recipes.refetch();
+            }}
+          />
+        ) : section === "credentials" ? (
+          <UserCredentialsPanel
+            servers={servers}
+            recipes={recipes.data?.items ?? []}
+            credentials={credentials.data?.items ?? []}
+            isLoading={
+              integrations.isLoading ||
+              recipes.isLoading ||
+              credentials.isLoading
+            }
+            error={integrations.error ?? recipes.error ?? credentials.error}
+            onRetry={() => {
+              void integrations.refetch();
+              void recipes.refetch();
+              void credentials.refetch();
             }}
           />
         ) : (

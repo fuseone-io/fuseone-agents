@@ -170,7 +170,7 @@ func (p *workerParts) connectTools(ctx context.Context, servers []string) error 
 		if err := connectServer(ctx, p.catalog, domain.MCPServer{
 			Name: name, Transport: domain.TransportStdio, Command: command,
 			AcceptsLocalExecution: true,
-		}, domain.MCPCredentials{}, nil); err != nil {
+		}, domain.MCPCredentials{}, nil, nil); err != nil {
 			slog.Error("tool server did not answer; its tools are unavailable",
 				"server", name, "err", err)
 			observe(ctx, p.health, name, false, 0, err.Error())

@@ -43,11 +43,11 @@ const toolRefresh = 30 * time.Second
 // configuration, and the form that offers them says so.
 func connectServer(
 	ctx context.Context, catalog *tools.Catalog, server domain.MCPServer,
-	creds domain.MCPCredentials, oauth OAuthGrantStore,
+	creds domain.MCPCredentials, oauth OAuthGrantStore, personal MCPUserCredentialStore,
 ) error {
 	client := mcp.NewClient(&mcp.Implementation{Name: "fuseone-agents", Version: version}, nil)
 
-	transport, cleanup, err := transportFor(ctx, server, creds, oauth)
+	transport, cleanup, err := transportFor(ctx, server, creds, oauth, personal)
 	if err != nil {
 		return err
 	}
@@ -69,11 +69,11 @@ func connectServer(
 
 func transportFor(
 	ctx context.Context, server domain.MCPServer, creds domain.MCPCredentials,
-	oauth OAuthGrantStore,
+	oauth OAuthGrantStore, personal MCPUserCredentialStore,
 ) (mcp.Transport, func(), error) {
 	switch server.TransportOf() {
 	case domain.TransportHTTP:
-		client, err := authenticatedClient(server.Name, creds, oauth)
+		client, err := authenticatedClient(server.Name, creds, oauth, personal)
 		if err != nil {
 			return nil, noop, fmt.Errorf("%s: prepare HTTP credential: %w", server.Name, err)
 		}
@@ -115,25 +115,25 @@ func (s cleanupSession) Close() error {
 // server, and a transport installed on http.DefaultClient would send it to
 // everything this process talks to.
 func authenticatedClient(
-	server string, creds domain.MCPCredentials, oauth OAuthGrantStore,
+	server string, creds domain.MCPCredentials,
+	oauth OAuthGrantStore, personal MCPUserCredentialStore,
 ) (*http.Client, error) {
 	base := baseHTTPTransport()
-	if creds.OAuth != nil && !creds.OAuth.Empty() {
-		if creds.OAuth.AccessToken == "" && !creds.OAuth.CanRefresh() {
-			return nil, fmt.Errorf("oauth grant has no access token and cannot refresh")
-		}
-		return &http.Client{
-			Transport: newOAuthTransport(server, *creds.OAuth, oauth, base),
-			Timeout:   60 * time.Second,
-		}, nil
+	creds = creds.ForTransport(domain.TransportHTTP)
+	if creds.OAuth != nil && !creds.OAuth.Empty() &&
+		creds.OAuth.AccessToken == "" && !creds.OAuth.CanRefresh() {
+		return nil, fmt.Errorf("oauth grant has no access token and cannot refresh")
 	}
-	if len(creds.Headers) > 0 {
-		return &http.Client{Transport: headerAuth{headers: creds.Headers, base: base}, Timeout: 60 * time.Second}, nil
-	}
-	if creds.Token == "" {
+	if creds.Empty() && personal == nil {
 		return nil, nil
 	}
-	return &http.Client{Transport: bearer{token: creds.Token, base: base}, Timeout: 60 * time.Second}, nil
+	return &http.Client{
+		Transport: &credentialAuth{
+			server: server, shared: creds, personal: personal,
+			oauth: oauth, base: base, grants: make(map[domain.UserID]*oauthTransport),
+		},
+		Timeout: 60 * time.Second,
+	}, nil
 }
 
 func baseHTTPTransport() http.RoundTripper {
@@ -169,9 +169,70 @@ func (h headerAuth) RoundTrip(r *http.Request) (*http.Response, error) {
 	return h.base.RoundTrip(out)
 }
 
+type credentialAuth struct {
+	mu       sync.Mutex
+	server   string
+	shared   domain.MCPCredentials
+	personal MCPUserCredentialStore
+	oauth    OAuthGrantStore
+	base     http.RoundTripper
+	grants   map[domain.UserID]*oauthTransport
+}
+
+func (a *credentialAuth) RoundTrip(r *http.Request) (*http.Response, error) {
+	creds, owner, err := a.credentials(r.Context())
+	if err != nil {
+		return nil, err
+	}
+	if creds.OAuth != nil && !creds.OAuth.Empty() {
+		return a.oauthRoundTrip(r, owner, *creds.OAuth)
+	}
+	if len(creds.Headers) > 0 {
+		return headerAuth{headers: creds.Headers, base: a.base}.RoundTrip(r)
+	}
+	if creds.Token != "" {
+		return bearer{token: creds.Token, base: a.base}.RoundTrip(r)
+	}
+	return a.base.RoundTrip(r)
+}
+
+func (a *credentialAuth) credentials(ctx context.Context) (domain.MCPCredentials, domain.UserID, error) {
+	if principal, ok := tools.CallerFrom(ctx); ok && a.personal != nil {
+		creds, found, err := a.personal.MCPPersonalCredential(ctx, a.server, principal)
+		if err != nil {
+			return domain.MCPCredentials{}, "", fmt.Errorf(
+				"%s: read personal MCP credential for %s: %w", a.server, principal, err)
+		}
+		if found {
+			creds = creds.ForTransport(domain.TransportHTTP)
+			if creds.OAuth != nil && !creds.OAuth.Empty() &&
+				creds.OAuth.AccessToken == "" && !creds.OAuth.CanRefresh() {
+				return domain.MCPCredentials{}, "", fmt.Errorf(
+					"%s: personal oauth grant has no access token and cannot refresh", a.server)
+			}
+			return creds, principal, nil
+		}
+	}
+	return a.shared, "", nil
+}
+
+func (a *credentialAuth) oauthRoundTrip(
+	r *http.Request, owner domain.UserID, grant domain.MCPOAuthGrant,
+) (*http.Response, error) {
+	a.mu.Lock()
+	transport := a.grants[owner]
+	if transport == nil || !transport.derivedFrom(grant) {
+		transport = newOAuthTransport(a.server, owner, grant, a.oauth, a.base)
+		a.grants[owner] = transport
+	}
+	a.mu.Unlock()
+	return transport.RoundTrip(r)
+}
+
 type oauthTransport struct {
 	mu        sync.Mutex
 	server    string
+	owner     domain.UserID
 	grant     domain.MCPOAuthGrant
 	base      http.RoundTripper
 	refresh   *http.Client
@@ -181,10 +242,12 @@ type oauthTransport struct {
 }
 
 func newOAuthTransport(
-	server string, grant domain.MCPOAuthGrant, store OAuthGrantStore, base http.RoundTripper,
+	server string, owner domain.UserID,
+	grant domain.MCPOAuthGrant, store OAuthGrantStore, base http.RoundTripper,
 ) *oauthTransport {
 	return &oauthTransport{
 		server: server,
+		owner:  owner,
 		grant:  grant,
 		base:   base,
 		store:  store,
@@ -193,6 +256,13 @@ func newOAuthTransport(
 			Timeout:   30 * time.Second,
 		},
 	}
+}
+
+func (t *oauthTransport) derivedFrom(grant domain.MCPOAuthGrant) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	return t.grant.Equal(grant) || (t.dirty && t.dirtyFrom.Equal(grant))
 }
 
 func (t *oauthTransport) RoundTrip(r *http.Request) (*http.Response, error) {
@@ -241,7 +311,7 @@ func (t *oauthTransport) persist(ctx context.Context) error {
 		t.dirtyFrom = domain.MCPOAuthGrant{}
 		return nil
 	}
-	if err := t.store.RefreshMCPServerOAuth(ctx, t.server, t.dirtyFrom, t.grant); err != nil {
+	if err := t.store.RefreshMCPServerOAuth(ctx, t.server, t.owner, t.dirtyFrom, t.grant); err != nil {
 		return fmt.Errorf("persist refreshed oauth grant: %w", err)
 	}
 	t.dirty = false
@@ -355,10 +425,21 @@ type Servers interface {
 	MCPCredentials(ctx context.Context, name string) (domain.MCPCredentials, error)
 }
 
+// MCPUserCredentialStore resolves a per-person credential at the only moment
+// it can be chosen: a concrete tool call carrying OnBehalfOf.
+type MCPUserCredentialStore interface {
+	MCPPersonalCredential(
+		ctx context.Context, name string, principal domain.UserID,
+	) (domain.MCPCredentials, bool, error)
+}
+
 // OAuthGrantStore persists refresh-token rotation before a request is sent
 // with a grant that only exists in memory.
 type OAuthGrantStore interface {
-	RefreshMCPServerOAuth(ctx context.Context, name string, was, next domain.MCPOAuthGrant) error
+	RefreshMCPServerOAuth(
+		ctx context.Context, name string, principal domain.UserID,
+		was, next domain.MCPOAuthGrant,
+	) error
 }
 
 // Publisher records what the installation now offers, so the administration
@@ -370,7 +451,7 @@ type Publisher interface {
 
 type connector func(
 	ctx context.Context, catalog *tools.Catalog, server domain.MCPServer,
-	creds domain.MCPCredentials, oauth OAuthGrantStore,
+	creds domain.MCPCredentials, oauth OAuthGrantStore, personal MCPUserCredentialStore,
 ) error
 
 type probeClaimer interface {
@@ -515,7 +596,11 @@ func (r *reconciler) connect(ctx context.Context, server domain.MCPServer) bool 
 	if store, ok := r.servers.(OAuthGrantStore); ok {
 		oauth = store
 	}
-	if err := r.connectTo(ctx, r.catalog, server, creds, oauth); err != nil {
+	var personal MCPUserCredentialStore
+	if store, ok := r.servers.(MCPUserCredentialStore); ok {
+		personal = store
+	}
+	if err := r.connectTo(ctx, r.catalog, server, creds, oauth, personal); err != nil {
 		// Recorded and skipped, never fatal. One broken integration used to
 		// mean nothing on the installation ran, including every agent that
 		// never touches it.

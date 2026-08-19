@@ -1,31 +1,37 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { RefreshCw, Trash2 } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Panel } from "@/components/shared/panel";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Mono } from "@/components/shared/mono";
 import { problemMessage } from "@/lib/api/problem-message";
 import { CredentialFields } from "@/features/integrations/mcp/credential-fields";
 import {
   dsnEnvMode,
-  headerCredential,
   headerNames,
-  multiHeaderCredential,
   remoteAuthPlan,
-  type AuthMode,
   type RemoteAuthPlan,
 } from "@/features/integrations/mcp/auth-plan";
 import type { ServerRecipe } from "@/features/integrations/mcp/api";
+import {
+  blankCredential,
+  localCredential,
+  remoteCredential,
+} from "@/features/integrations/mcp/credential-value";
 import {
   oauthExpiryIsValid,
   oauthFromValue,
   oauthHasValue,
 } from "@/features/integrations/mcp/oauth-credential";
-import { readVariables } from "@/features/integrations/mcp/variables";
+import {
+  OAuthFields,
+  StoredOAuthOnly,
+} from "@/features/integrations/mcp/oauth-fields";
+import {
+  remoteTokenHint,
+  remoteTokenLabel,
+} from "@/features/integrations/mcp/credential-labels";
 import {
   usePutMCPServer,
   useProbeMCPServer,
@@ -224,88 +230,6 @@ export function ConnectionPanel({
   );
 }
 
-type CredentialValue = {
-  token: string;
-  headers: Record<string, string>;
-  dsn: string;
-  env: string;
-  configFile: string;
-  configFileEnv: string;
-  oauthAccessToken: string;
-  oauthRefreshToken: string;
-  oauthTokenURL: string;
-  oauthClientID: string;
-  oauthClientSecret: string;
-  oauthTokenType: string;
-  oauthExpiresAtUnix: string;
-  oauthScopes: string;
-};
-
-function blankCredential(configFileEnv: string): CredentialValue {
-  return {
-    token: "",
-    headers: {},
-    dsn: "",
-    env: "",
-    configFile: "",
-    configFileEnv,
-    oauthAccessToken: "",
-    oauthRefreshToken: "",
-    oauthTokenURL: "",
-    oauthClientID: "",
-    oauthClientSecret: "",
-    oauthTokenType: "",
-    oauthExpiresAtUnix: "",
-    oauthScopes: "",
-  };
-}
-
-function remoteTokenLabel(
-  mode: AuthMode | null,
-  t: ReturnType<typeof useTranslation>["t"],
-) {
-  return mode?.label ?? t("mcp.remoteBearerToken");
-}
-
-function remoteTokenHint(
-  mode: AuthMode | null,
-  t: ReturnType<typeof useTranslation>["t"],
-) {
-  if (!mode) return undefined;
-  const header = mode.header ?? "Authorization";
-  const prefix = mode.prefix;
-  if (!prefix) return t("mcp.remoteHeaderHint", { header });
-  return t("mcp.remoteBearerHint", { header, prefix });
-}
-
-function remoteCredential(
-  value: CredentialValue,
-  plan: RemoteAuthPlan,
-  headers: string[],
-) {
-  if (value.token !== "" && plan.secret?.type === "bearer") {
-    return { token: value.token };
-  }
-  if (value.token !== "" && plan.secret) {
-    return { headers: headerCredential(plan.secret, value.token) };
-  }
-  if (headers.length > 0) {
-    return { headers: multiHeaderCredential(headers, value.headers) };
-  }
-  return {};
-}
-
-function localCredential(value: CredentialValue, dsnMode: AuthMode | null) {
-  if (value.env === "" && (dsnMode === null || value.dsn === "")) {
-    return {};
-  }
-  const env = value.env === "" ? {} : readVariables(value.env);
-  if (dsnMode?.env && value.dsn !== "") {
-    env[dsnMode.env] = value.dsn;
-  }
-  return { env };
-}
-
 function RemoteAuthSummary({ plan }: { plan: RemoteAuthPlan }) {
   const { t } = useTranslation();
   if (!plan.known) {
@@ -332,159 +256,6 @@ function RemoteAuthSummary({ plan }: { plan: RemoteAuthPlan }) {
     <p className="rounded-lg border border-warning/30 bg-warning-surface px-3 py-2 text-xs text-warning">
       {t("mcp.authShapeUnsupported", { modes })}
     </p>
-  );
-}
-
-function OAuthFields({
-  value,
-  hasOAuth,
-  conflict,
-  invalidExpiry,
-  onChange,
-  onRevoke,
-}: {
-  value: CredentialValue;
-  hasOAuth: boolean;
-  conflict: boolean;
-  invalidExpiry: boolean;
-  onChange: (next: CredentialValue) => void;
-  onRevoke: () => void;
-}) {
-  const { t } = useTranslation();
-  return (
-    <div className="space-y-3 border-t pt-3">
-      <div className="grid gap-3 sm:grid-cols-2">
-        <OAuthInput
-          id="oauth-access-token"
-          label={t("mcp.oauthAccessToken")}
-          type="password"
-          value={value.oauthAccessToken}
-          onChange={(oauthAccessToken) => onChange({ ...value, oauthAccessToken })}
-        />
-        <OAuthInput
-          id="oauth-refresh-token"
-          label={t("mcp.oauthRefreshToken")}
-          type="password"
-          value={value.oauthRefreshToken}
-          onChange={(oauthRefreshToken) => onChange({ ...value, oauthRefreshToken })}
-        />
-        <OAuthInput
-          id="oauth-token-url"
-          label={t("mcp.oauthTokenURL")}
-          value={value.oauthTokenURL}
-          onChange={(oauthTokenURL) => onChange({ ...value, oauthTokenURL })}
-        />
-        <OAuthInput
-          id="oauth-client-id"
-          label={t("mcp.oauthClientID")}
-          value={value.oauthClientID}
-          onChange={(oauthClientID) => onChange({ ...value, oauthClientID })}
-        />
-        <OAuthInput
-          id="oauth-client-secret"
-          label={t("mcp.oauthClientSecret")}
-          type="password"
-          value={value.oauthClientSecret}
-          onChange={(oauthClientSecret) => onChange({ ...value, oauthClientSecret })}
-        />
-        <OAuthInput
-          id="oauth-token-type"
-          label={t("mcp.oauthTokenType")}
-          placeholder={t("mcp.oauthTokenTypePlaceholder")}
-          value={value.oauthTokenType}
-          onChange={(oauthTokenType) => onChange({ ...value, oauthTokenType })}
-        />
-        <OAuthInput
-          id="oauth-expires-at"
-          label={t("mcp.oauthExpiresAtUnix")}
-          value={value.oauthExpiresAtUnix}
-          onChange={(oauthExpiresAtUnix) => onChange({ ...value, oauthExpiresAtUnix })}
-        />
-        <div className="space-y-1.5">
-          <Label htmlFor="oauth-scopes">{t("mcp.oauthScopes")}</Label>
-          <Textarea
-            id="oauth-scopes"
-            rows={2}
-            className="font-mono text-xs"
-            value={value.oauthScopes}
-            onChange={(e) => onChange({ ...value, oauthScopes: e.target.value })}
-          />
-        </div>
-      </div>
-      <p className="text-xs text-muted-foreground">
-        {hasOAuth ? t("mcp.oauthKept") : t("mcp.oauthHint")}
-      </p>
-      {conflict && (
-        <p className="text-xs text-danger">{t("mcp.oauthBearerConflict")}</p>
-      )}
-      {invalidExpiry && (
-        <p className="text-xs text-danger">{t("mcp.oauthExpiryInvalid")}</p>
-      )}
-      {hasOAuth && (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={onRevoke}
-          className="text-danger"
-        >
-          <Trash2 className="size-3.5" />
-          {t("mcp.revokeOAuth")}
-        </Button>
-      )}
-    </div>
-  );
-}
-
-function StoredOAuthOnly({ onRevoke }: { onRevoke: () => void }) {
-  const { t } = useTranslation();
-  return (
-    <div className="space-y-3 border-t pt-3">
-      <p className="rounded-lg border border-warning/30 bg-warning-surface px-3 py-2 text-xs text-warning">
-        {t("mcp.storedOAuthOutsideRecipe")}
-      </p>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={onRevoke}
-        className="text-danger"
-      >
-        <Trash2 className="size-3.5" />
-        {t("mcp.revokeOAuth")}
-      </Button>
-    </div>
-  );
-}
-
-function OAuthInput({
-  id,
-  label,
-  type = "text",
-  placeholder,
-  value,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  type?: string;
-  placeholder?: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
-      <Input
-        id={id}
-        type={type}
-        autoComplete="off"
-        className="font-mono"
-        placeholder={placeholder}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
-    </div>
   );
 }
 

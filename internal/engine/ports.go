@@ -84,6 +84,10 @@ type Call struct {
 
 	Tool domain.ToolID
 	Args []byte
+	// OnBehalfOf is the human delegation the run is using. Tool transports use
+	// it only to choose the credential owned by that human; the Gate has
+	// already decided whether the call may happen at all.
+	OnBehalfOf domain.UserID
 	// IdemKey is carried through to the tool so an adapter that supports
 	// idempotency natively can deduplicate on its own side too.
 	IdemKey string

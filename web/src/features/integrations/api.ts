@@ -3,6 +3,7 @@ import { api, unwrap } from "@/lib/api/client";
 import type { components } from "@/lib/api/schema.gen";
 
 export type MCPServer = components["schemas"]["MCPServer"];
+export type MCPUserCredential = components["schemas"]["MCPUserCredential"];
 export type MCPOAuthGrant = components["schemas"]["MCPOAuthGrant"];
 export type ModelProvider = components["schemas"]["ModelProvider"];
 export type IntegrationHealth = components["schemas"]["IntegrationHealth"];
@@ -10,6 +11,7 @@ export type IntegrationHealth = components["schemas"]["IntegrationHealth"];
 export const integrationKeys = {
   all: ["integrations"] as const,
   list: () => [...integrationKeys.all, "list"] as const,
+  mcpCredentials: () => [...integrationKeys.all, "mcp-credentials"] as const,
 };
 
 export function useIntegrations() {
@@ -95,8 +97,8 @@ export function usePutMCPServer() {
 }
 
 export function useDeleteMCPServer() {
-	const queryClient = useQueryClient();
-	return useMutation({
+  const queryClient = useQueryClient();
+  return useMutation({
     mutationFn: async (name: string) =>
       unwrap(
         await api.DELETE("/admin/integrations/mcp-servers/{name}", {
@@ -105,7 +107,56 @@ export function useDeleteMCPServer() {
       ),
     onSuccess: () =>
       void queryClient.invalidateQueries({ queryKey: integrationKeys.all }),
-	  });
+  });
+}
+
+export function useMCPUserCredentials() {
+  return useQuery({
+    queryKey: integrationKeys.mcpCredentials(),
+    queryFn: async () => unwrap(await api.GET("/integrations/mcp-credentials")),
+  });
+}
+
+export function usePutMCPUserCredential() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      name: string;
+      token?: string;
+      headers?: Record<string, string>;
+      oauth?: MCPOAuthGrant;
+    }) =>
+      unwrap(
+        await api.PUT("/integrations/mcp-credentials/{name}", {
+          params: { path: { name: input.name } },
+          body: {
+            token: input.token,
+            headers: input.headers,
+            oauth: input.oauth,
+          },
+        }),
+      ),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({
+        queryKey: integrationKeys.mcpCredentials(),
+      }),
+  });
+}
+
+export function useDeleteMCPUserCredential() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (name: string) =>
+      unwrap(
+        await api.DELETE("/integrations/mcp-credentials/{name}", {
+          params: { path: { name } },
+        }),
+      ),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({
+        queryKey: integrationKeys.mcpCredentials(),
+      }),
+  });
 }
 
 export function useProbeMCPServer() {
