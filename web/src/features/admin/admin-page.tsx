@@ -44,7 +44,8 @@ export function AdminPage() {
   const { t } = useTranslation();
   const { data: me } = useMe();
   const tab = useTab("admin", "tools");
-  const visibleTabs = visibleAdminTabs(me?.can);
+  const can = me === null ? null : me?.can;
+  const visibleTabs = visibleAdminTabs(can);
   const value = visibleTabs.some((item) => item.value === tab.value)
     ? tab.value
     : visibleTabs[0]?.value;

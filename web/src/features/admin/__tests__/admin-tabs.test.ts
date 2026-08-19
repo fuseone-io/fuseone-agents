@@ -14,4 +14,21 @@ describe("administration tabs", () => {
       visibleAdminTabs(["identity:write"]).map((tab) => tab.value),
     ).toEqual(["identity", "people"]);
   });
+
+  it("keeps an unknown session different from an open installation", () => {
+    expect(visibleAdminTabs(undefined).map((tab) => tab.value)).toEqual([]);
+    expect(visibleAdminTabs(null).map((tab) => tab.value)).toEqual([
+      "tools",
+      "branding",
+      "authoring",
+      "companies",
+      "areas",
+      "identity",
+      "people",
+      "prices",
+      "budgets",
+      "retention",
+      "events",
+    ]);
+  });
 });

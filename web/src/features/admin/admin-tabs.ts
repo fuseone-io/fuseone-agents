@@ -59,8 +59,12 @@ export const ADMIN_TAB_ACCESS = [
 export type AdminTab = (typeof ADMIN_TAB_ACCESS)[number];
 export type AdminTabValue = AdminTab["value"];
 
-export function visibleAdminTabs(can: string[] | undefined): AdminTab[] {
+export function visibleAdminTabs(
+  can: string[] | null | undefined,
+): AdminTab[] {
+  if (can === null) return [...ADMIN_TAB_ACCESS];
+  if (can === undefined) return [];
   return ADMIN_TAB_ACCESS.filter(
-    (item) => !can || can.includes(item.permission),
+    (item) => can.includes(item.permission),
   );
 }

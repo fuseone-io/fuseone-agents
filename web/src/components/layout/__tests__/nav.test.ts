@@ -32,4 +32,13 @@ describe("the navigation", () => {
     expect(navItemVisible(item("/admin"), ["identity:write"])).toBe(true);
     expect(navItemVisible(item("/admin"), ["audit:read"])).toBe(true);
   });
+
+  it("does not read an unknown session as the open installation mode", () => {
+    expect(navItemVisible(item("/admin"), undefined)).toBe(false);
+    expect(navItemVisible(item("/manual"), undefined)).toBe(true);
+  });
+
+  it("keeps the deliberate open-installation mode unrestricted", () => {
+    expect(navItemVisible(item("/admin"), null)).toBe(true);
+  });
 });

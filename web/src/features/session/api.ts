@@ -30,11 +30,14 @@ export const sessionKeys = { me: ["session", "me"] as const };
 async function fetchMe(): Promise<Me | null> {
   const response = await fetch("/api/v1/me", { credentials: "same-origin" });
 
-  // Anything but a caller is simply nobody, and that is an answer rather than
-  // a failure: 401 on a protected installation, 404 on one running with no
-  // identity at all. Throwing put the console into its error state and left an
-  // errored query refetching on every render.
-  if (!response.ok) return null;
+  // A missing caller is an answer only for the two shapes that mean it:
+  // unsigned on a protected installation, or no identity configured at all.
+  // A transient server error is not open mode; caching it as `null` would
+  // briefly remove every permission filter in the console.
+  if (response.status === 401 || response.status === 404) return null;
+  if (!response.ok) {
+    throw new Error(`session lookup failed with status ${response.status}`);
+  }
 
   return (await response.json()) as Me;
 }

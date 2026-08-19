@@ -50,6 +50,14 @@ export function SessionGate({ children }: { children: ReactNode }) {
     );
   }
 
+  if (me.error) {
+    return (
+      <div className="p-10">
+        <ErrorState error={me.error} onRetry={() => void me.refetch()} />
+      </div>
+    );
+  }
+
   if (!me.data) {
     return (
       <SignInPage

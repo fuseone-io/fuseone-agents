@@ -22,7 +22,8 @@ export function AppSidebar() {
   const { t } = useTranslation();
   const { pathname } = useLocation();
   const { data: me } = useMe();
-  const allowed = (item: NavItem) => navItemVisible(item, me?.can);
+  const can = me === null ? null : me?.can;
+  const allowed = (item: NavItem) => navItemVisible(item, can);
 
   // The one rule between the two grounds is the design system's sidebar
   // border, a step stronger than the hairline used everywhere else.

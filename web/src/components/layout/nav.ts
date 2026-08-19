@@ -127,9 +127,10 @@ export const NAV: NavGroup[] = [
 
 export function navItemVisible(
   item: NavItem,
-  can: string[] | undefined,
+  can: string[] | null | undefined,
 ): boolean {
-  if (!can) return true;
+  if (can === null) return true;
+  if (can === undefined) return !item.permission && !item.anyPermission;
   if (item.permission && !can.includes(item.permission)) return false;
   if (item.anyPermission) {
     return item.anyPermission.some((permission) => can.includes(permission));

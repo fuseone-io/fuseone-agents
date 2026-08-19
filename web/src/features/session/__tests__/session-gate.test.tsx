@@ -98,4 +98,20 @@ describe("what a visitor sees before there is a session", () => {
 
     expect(await screen.findByText("console")).toBeInTheDocument();
   });
+
+  it("does not treat a transient /me failure as a signed-out visitor", async () => {
+    serve({
+      "/auth/providers": {
+        status: 200,
+        body: { providers: [], bootstrapPending: false, authRequired: true },
+      },
+      "/api/v1/me": { status: 503 },
+    });
+    renderGate();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "A requisição falhou.",
+    );
+    expect(screen.queryByText(/Nenhum provedor de identidade/)).not.toBeInTheDocument();
+  });
 });
