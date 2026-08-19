@@ -104,6 +104,10 @@ func assistantUnavailable(err error) openapi.InterviewAgentResponseObject {
 		return openapi.InterviewAgent409ApplicationProblemPlusJSONResponse(
 			conflicted(err.Error()))
 	}
+	if failure, ok := model.FailureSummaryOf(err); ok && failure.Retryable {
+		return openapi.InterviewAgent503ApplicationProblemPlusJSONResponse(
+			upstreamRefusedLater(err.Error()))
+	}
 	return openapi.InterviewAgent400ApplicationProblemPlusJSONResponse{
 		BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
 			upstreamRefused(err.Error())),

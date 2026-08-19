@@ -3947,6 +3947,19 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            /**
+             * @description The model provider refused in a way that can clear without the
+             *     author changing the interview, such as overload, rate limiting or
+             *     a network failure.
+             */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     countInstructionTokens: {

@@ -298,6 +298,14 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
+        '503':
+          description: |
+            The model provider refused in a way that can clear without the
+            author changing the interview, such as overload, rate limiting or
+            a network failure.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
 
   /agents/instructions/tokens:
     post:

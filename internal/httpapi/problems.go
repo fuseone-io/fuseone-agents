@@ -105,6 +105,14 @@ func upstreamRefused(detail string) openapi.Problem {
 	return refusal(http.StatusBadRequest, CodeUpstreamRefused, "Upstream refused", detail)
 }
 
+// upstreamRefusedLater is an upstream refusal that is not a fault in this
+// request: the provider is overloaded, rate-limiting or unreachable. The code
+// stays the same so the console can keep one sentence, while the status tells
+// logs and monitors that retrying later is the right class of answer.
+func upstreamRefusedLater(detail string) openapi.Problem {
+	return refusal(http.StatusServiceUnavailable, CodeUpstreamRefused, "Upstream refused", detail)
+}
+
 // savedNotReachable is a configuration stored against something that did not
 // answer. Both halves, because either alone is misleading.
 func savedNotReachable(detail string) openapi.Problem {
