@@ -5,6 +5,11 @@ export const ADMIN_TAB_ACCESS = [
     permission: "tool:classify",
   },
   {
+    value: "events",
+    label: "admin.trail",
+    permission: "audit:read",
+  },
+  {
     value: "branding",
     label: "admin.branding",
     permission: "brand:write",
@@ -15,6 +20,11 @@ export const ADMIN_TAB_ACCESS = [
     permission: "provider:write",
   },
   {
+    value: "identity",
+    label: "admin.identity",
+    permission: "identity:write",
+  },
+  {
     value: "companies",
     label: "companies.companies",
     permission: "company:write",
@@ -23,11 +33,6 @@ export const ADMIN_TAB_ACCESS = [
     value: "areas",
     label: "admin.areas",
     permission: "scope:write",
-  },
-  {
-    value: "identity",
-    label: "admin.identity",
-    permission: "identity:write",
   },
   {
     value: "people",
@@ -49,15 +54,41 @@ export const ADMIN_TAB_ACCESS = [
     label: "admin.retention",
     permission: "data:erase",
   },
-  {
-    value: "events",
-    label: "admin.trail",
-    permission: "audit:read",
-  },
 ] as const;
 
 export type AdminTab = (typeof ADMIN_TAB_ACCESS)[number];
 export type AdminTabValue = AdminTab["value"];
+
+export const ADMIN_TAB_GROUPS = [
+  {
+    label: "admin.group.activity",
+    tabs: ["tools", "events"],
+  },
+  {
+    label: "admin.group.platform",
+    tabs: ["branding", "authoring", "identity"],
+  },
+  {
+    label: "admin.group.organization",
+    tabs: ["companies", "areas"],
+  },
+  {
+    label: "admin.group.people",
+    tabs: ["people"],
+  },
+  {
+    label: "admin.group.limits",
+    tabs: ["prices", "budgets", "retention"],
+  },
+] as const satisfies ReadonlyArray<{
+  label: string;
+  tabs: ReadonlyArray<AdminTabValue>;
+}>;
+
+const ADMIN_TABS_BY_VALUE = ADMIN_TAB_ACCESS.reduce(
+  (byValue, tab) => ({ ...byValue, [tab.value]: tab }),
+  {} as Record<AdminTabValue, AdminTab>,
+);
 
 export function visibleAdminTabs(
   can: string[] | null | undefined,
@@ -67,4 +98,17 @@ export function visibleAdminTabs(
   return ADMIN_TAB_ACCESS.filter(
     (item) => can.includes(item.permission),
   );
+}
+
+export function visibleAdminTabGroups(
+  can: string[] | null | undefined,
+): Array<{ label: string; tabs: AdminTab[] }> {
+  const visible = new Set(visibleAdminTabs(can).map((tab) => tab.value));
+
+  return ADMIN_TAB_GROUPS.map((group) => ({
+    label: group.label,
+    tabs: group.tabs
+      .map((value) => ADMIN_TABS_BY_VALUE[value])
+      .filter((tab) => visible.has(tab.value)),
+  })).filter((group) => group.tabs.length > 0);
 }

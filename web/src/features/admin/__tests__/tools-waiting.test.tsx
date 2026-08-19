@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { Waiting, waitingFor } from "@/features/admin/tools-panel";
+import { Waiting } from "@/features/admin/tools-panel";
+import { waitingFor } from "@/features/admin/waiting-tools";
 import type { Tool } from "@/features/admin/api";
 
 function tool(toolId: string, effect: Tool["effect"]): Tool {

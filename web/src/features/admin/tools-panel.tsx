@@ -24,6 +24,7 @@ import { ClassifyDialog } from "@/features/admin/classify-dialog";
 import { useTools, type Tool } from "@/features/admin/api";
 import { Badge } from "@/components/ui/badge";
 import { useVisibleItems } from "@/hooks/use-visible-items";
+import { waitingFor } from "@/features/admin/waiting-tools";
 
 const HEAD =
   "h-[30px] bg-muted text-2xs uppercase tracking-label text-muted-foreground";
@@ -47,10 +48,6 @@ Both refusals count. A tool nobody ruled on and a tool whose ruling was
 overtaken are stopped by the Gate alike, and a count that left the second out
 would say the queue was empty while agents were being stopped.
 */
-export function waitingFor(tools: Tool[]): Tool[] {
-  return tools.filter((tool) => tool.effect === "unknown" || tool.stale === true);
-}
-
 export function Waiting({ tools }: { tools: Tool[] }) {
   const { t } = useTranslation();
   const waiting = waitingFor(tools).length;

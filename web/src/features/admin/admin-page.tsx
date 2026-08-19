@@ -2,7 +2,6 @@ import { useTranslation } from "react-i18next";
 import type { ComponentType } from "react";
 import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CompaniesPanel } from "@/features/companies/companies-panel";
 import { useTab } from "@/features/preferences/use-preferences";
 import { ToolsPanel } from "@/features/admin/tools-panel";
@@ -17,8 +16,9 @@ import { BudgetsPanel } from "@/features/admin/budgets-panel";
 import { BrandingPanel } from "@/features/admin/branding-panel";
 import {
   type AdminTabValue,
-  visibleAdminTabs,
+  visibleAdminTabGroups,
 } from "@/features/admin/admin-tabs";
+import { AdminNav } from "@/features/admin/admin-nav";
 import { useMe } from "@/features/session/api";
 
 const ADMIN_PANELS = {
@@ -45,10 +45,11 @@ export function AdminPage() {
   const { data: me } = useMe();
   const tab = useTab("admin", "tools");
   const can = me === null ? null : me?.can;
-  const visibleTabs = visibleAdminTabs(can);
-  const value = visibleTabs.some((item) => item.value === tab.value)
-    ? tab.value
-    : visibleTabs[0]?.value;
+  const visibleGroups = visibleAdminTabGroups(can);
+  const visibleTabs = visibleGroups.flatMap((group) => group.tabs);
+  const active = visibleTabs.find((item) => item.value === tab.value) ?? visibleTabs[0];
+  const value = active?.value;
+  const ActivePanel = value ? ADMIN_PANELS[value] : null;
 
   return (
     <>
@@ -63,33 +64,23 @@ export function AdminPage() {
           {t("admin.noAvailableSections")}
         </div>
       ) : (
-        /* Vertical, because nine tabs in a row is a row that wraps on a
-          laptop and reads as a paragraph of links rather than as navigation.
-          Down the side they are a list, they have room for their full names,
-          and the one in force is obvious without counting. */
-        <Tabs
-          value={value}
-          onValueChange={tab.onValueChange}
-          orientation="vertical"
-          className="min-h-0 flex-1 flex-col gap-6 lg:flex-row"
-        >
-          <TabsList className="w-full shrink-0 self-stretch lg:w-48 lg:self-start">
-            {visibleTabs.map((item) => (
-              <TabsTrigger key={item.value} value={item.value}>
-                {t(item.label)}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-
-          {visibleTabs.map((item) => {
-            const Panel = ADMIN_PANELS[item.value];
-            return (
-              <TabsContent key={item.value} value={item.value} className="min-w-0">
-                <Panel />
-              </TabsContent>
-            );
-          })}
-        </Tabs>
+        <div className="flex min-h-0 flex-1 flex-col items-stretch gap-6 lg:flex-row lg:items-start">
+          <AdminNav
+            groups={visibleGroups}
+            value={value!}
+            onValueChange={(next) => tab.onValueChange(next)}
+          />
+          {ActivePanel && (
+            <div
+              id={`admin-panel-${value}`}
+              role="tabpanel"
+              aria-labelledby={`admin-tab-${value}`}
+              className="min-w-0 flex-1"
+            >
+              <ActivePanel />
+            </div>
+          )}
+        </div>
       )}
     </>
   );

@@ -52,6 +52,13 @@
     "effectWrite": "Altera algo, e é reversível.",
     "emptyUsesName": "Vazio usa o próprio nome.",
     "eventsHint": "Toda mudança de configuração aparece aqui com quem fez e quando: classificar uma ferramenta, cadastrar um provedor, remover um servidor.",
+    "group": {
+      "activity": "Atividade",
+      "limits": "Limites",
+      "organization": "Organização",
+      "people": "Pessoas",
+      "platform": "Plataforma"
+    },
     "identity": "Entrada e acesso",
     "inCurrency": "Em reais. Deixe vazio para não limitar por valor.",
     "model": "Modelo",
@@ -100,6 +107,7 @@
     "sayScope": "Diga a que este teto se aplica.",
     "scopeShapes": "<code>installation</code>, uma empresa, ou <code>empresa/área</code>.",
     "searchTools": "Buscar ferramenta…",
+    "sections": "Seções de administração",
     "server": "Servidor",
     "shownAs": "Como aparece",
     "spendCeiling": "Teto de gasto",

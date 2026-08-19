@@ -52,6 +52,13 @@
     "effectWrite": "Changes something, and is reversible.",
     "emptyUsesName": "Empty uses the name itself.",
     "eventsHint": "Every configuration change appears here with who made it and when: classifying a tool, registering a provider, removing a server.",
+    "group": {
+      "activity": "Activity",
+      "limits": "Limits",
+      "organization": "Organization",
+      "people": "People",
+      "platform": "Platform"
+    },
     "identity": "Sign-in and access",
     "inCurrency": "In the installation's currency. Leave empty not to cap by amount.",
     "model": "Model",
@@ -100,6 +107,7 @@
     "sayScope": "Say what this ceiling applies to.",
     "scopeShapes": "<code>installation</code>, a company, or <code>company/area</code>.",
     "searchTools": "Search tools…",
+    "sections": "Administration sections",
     "server": "Server",
     "shownAs": "How it is shown",
     "spendCeiling": "Spend ceiling",
