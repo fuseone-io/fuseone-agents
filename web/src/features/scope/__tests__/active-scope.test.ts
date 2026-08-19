@@ -15,6 +15,11 @@ describe("the active scope", () => {
     expect(scopeParamsOf(useActiveScope.getState())).toEqual({});
   });
 
+  it("treats a stored installation wildcard as everything, not as a company filter", () => {
+    useActiveScope.getState().choose({ company: "*", area: "" });
+    expect(scopeParamsOf(useActiveScope.getState())).toEqual({});
+  });
+
   it("sends the company alone when the whole company is chosen", () => {
     useActiveScope.getState().choose({ company: "acme", area: "" });
     expect(scopeParamsOf(useActiveScope.getState())).toEqual({
@@ -34,6 +39,21 @@ describe("the active scope", () => {
     useActiveScope.getState().choose({ company: "antiga", area: "cx" });
     useActiveScope.getState().reconcile([grant("acme", "")]);
     expect(useActiveScope.getState()).toMatchObject({ company: "", area: "" });
+  });
+
+  it("drops a stored wildcard scope after the installation grant moved to the everything choice", () => {
+    useActiveScope.getState().choose({ company: "*", area: "" });
+    useActiveScope.getState().reconcile([grant("*", "")]);
+    expect(useActiveScope.getState()).toMatchObject({ company: "", area: "" });
+  });
+
+  it("keeps a real company chosen by an installation administrator", () => {
+    useActiveScope.getState().choose({ company: "acme", area: "cx" });
+    useActiveScope.getState().reconcile([grant("*", "")]);
+    expect(useActiveScope.getState()).toMatchObject({
+      company: "acme",
+      area: "cx",
+    });
   });
 
   it("keeps an area chosen inside a company the caller holds wholesale", () => {

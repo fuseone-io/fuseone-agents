@@ -3,6 +3,8 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import type { MeGrant } from "@/features/session/api";
 import { durableOrMemory } from "@/lib/durable-storage";
 
+const INSTALLATION = "*";
+
 /**
  * Which company and area the console is currently reading.
  *
@@ -39,6 +41,10 @@ export const useActiveScope = create<ActiveScope>()(
       reconcile: (grants) => {
         const { company, area } = get();
         if (company === "") return;
+        if (company === INSTALLATION) {
+          set({ company: "", area: "" });
+          return;
+        }
         if (!reaches(grants, company, area)) set({ company: "", area: "" });
       },
     }),
@@ -50,10 +56,12 @@ export const useActiveScope = create<ActiveScope>()(
   ),
 );
 
-/** A grant over a whole company reaches every area in it. */
+/** A grant over a whole company reaches its areas; installation reaches all. */
 function reaches(grants: MeGrant[], company: string, area: string): boolean {
   return grants.some(
-    (g) => g.company === company && (g.area === "" || g.area === area),
+    (g) =>
+      (g.company === INSTALLATION && g.area === "") ||
+      (g.company === company && (g.area === "" || g.area === area)),
   );
 }
 
@@ -66,12 +74,12 @@ export function scopeParamsOf({ company, area }: Scope): {
   company?: string;
   area?: string;
 } {
-  if (company === "") return {};
+  if (company === "" || company === INSTALLATION) return {};
   return area === "" ? { company } : { company, area };
 }
 
 /** The fragment that makes a query key belong to one context.
  *  Without it, switching context serves the previous one from cache. */
 export function scopeKeyOf({ company, area }: Scope): string {
-  return company === "" ? "*" : `${company}/${area}`;
+  return company === "" || company === INSTALLATION ? "*" : `${company}/${area}`;
 }

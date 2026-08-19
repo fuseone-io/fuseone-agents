@@ -82,6 +82,9 @@ func (s *Store) List(ctx context.Context, visible []domain.Scope) ([]domain.Regi
 	if len(visible) == 0 {
 		return nil, nil
 	}
+	if reachesInstallation(visible) {
+		return s.listAll(ctx)
+	}
 
 	companies, areas := make([]string, 0, len(visible)), make([]string, 0, len(visible))
 	for _, v := range visible {
@@ -105,6 +108,36 @@ func (s *Store) List(ctx context.Context, visible []domain.Scope) ([]domain.Regi
         group by s.company_id, s.area_id, s.label, s.created_at, s.created_by
         order by s.company_id, s.area_id`,
 		companies, areas)
+	if err != nil {
+		return nil, fmt.Errorf("scope: list: %w", err)
+	}
+	defer rows.Close()
+
+	var out []domain.RegisteredScope
+	for rows.Next() {
+		got, err := scan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, got)
+	}
+	return out, rows.Err()
+}
+
+func reachesInstallation(visible []domain.Scope) bool {
+	for _, scope := range visible {
+		if scope.Company == domain.Installation && scope.Area == "" {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Store) listAll(ctx context.Context) ([]domain.RegisteredScope, error) {
+	rows, err := s.pool.Query(ctx, `
+        select s.company_id, s.area_id, s.label, s.created_at, s.created_by
+        from scopes s
+        order by s.company_id, s.area_id`)
 	if err != nil {
 		return nil, fmt.Errorf("scope: list: %w", err)
 	}

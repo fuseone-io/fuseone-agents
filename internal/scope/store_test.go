@@ -32,14 +32,15 @@ func storeFor(t *testing.T) *scope.Store {
 	if err := ledger.Migrate(t.Context(), pool); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	if _, err := pool.Exec(t.Context(), `delete from scopes where company_id = 'suite'`); err != nil {
+	if _, err := pool.Exec(t.Context(), `delete from scopes where company_id in ('suite', 'suite-other')`); err != nil {
 		t.Fatalf("clean: %v", err)
 	}
 	// The company has to exist before an area can be registered in it, which
 	// is the whole point of the key added in 0029. Seeding it here is what a
 	// real installation does through the administration area.
 	if _, err := pool.Exec(t.Context(), `
-		insert into companies (company_id, name) values ('suite', 'suite')
+		insert into companies (company_id, name)
+		values ('suite', 'suite'), ('suite-other', 'suite-other')
 		on conflict (company_id) do nothing`); err != nil {
 		t.Fatalf("seed company: %v", err)
 	}
@@ -126,5 +127,34 @@ func TestList_grantOnTheCompanyAndOnAnAreaInIt_returnsTheAreaOnce(t *testing.T) 
 	}
 	if len(got) != 1 {
 		t.Errorf("got %d rows, want cx once: %+v", len(got), got)
+	}
+}
+
+func TestList_installationGrantSeesEveryCompanyArea(t *testing.T) {
+	store := storeFor(t)
+	ctx := t.Context()
+
+	if _, err := store.Put(ctx, "suite", "cx", "", "usr_a"); err != nil {
+		t.Fatalf("put suite: %v", err)
+	}
+	if _, err := store.Put(ctx, "suite-other", "financeiro", "", "usr_a"); err != nil {
+		t.Fatalf("put suite-other: %v", err)
+	}
+
+	got, err := store.List(ctx, []domain.Scope{{Company: domain.Installation}})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	seen := map[domain.Scope]bool{}
+	for _, area := range got {
+		seen[area.Scope] = true
+	}
+	for _, want := range []domain.Scope{
+		{Company: "suite", Area: "cx"},
+		{Company: "suite-other", Area: "financeiro"},
+	} {
+		if !seen[want] {
+			t.Fatalf("got %+v, want %s", got, want)
+		}
 	}
 }

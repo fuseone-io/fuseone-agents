@@ -12,10 +12,12 @@ import {
   BrandLogoLockup,
   BrandLogoMark,
 } from "@/features/branding/branding-provider";
+import { useCompanies } from "@/features/companies/api";
 import { useActiveScope } from "@/features/scope/active-scope";
 import { useScopes, type RegisteredScope } from "@/features/scope/api";
 import { ScopeChoice } from "@/features/scope/scope-choice";
 import { ScopeGroup } from "@/features/scope/scope-group";
+import { scopeCompanies } from "@/features/scope/scope-options";
 import { useMe } from "@/features/session/api";
 
 /**
@@ -30,6 +32,10 @@ export function ScopeSwitcher() {
   const { t } = useTranslation();
   const { data: me } = useMe();
   const { data } = useScopes();
+  const canListCompanies = me === null || me?.can.includes("company:write");
+  const { data: companiesData } = useCompanies({
+    enabled: Boolean(canListCompanies),
+  });
   const { company, area, choose, reconcile } = useActiveScope();
   const { isMobile } = useSidebar();
 
@@ -39,8 +45,12 @@ export function ScopeSwitcher() {
     if (me) reconcile(me.grants);
   }, [me, reconcile]);
 
-  const companies = [...new Set(me?.grants.map((g) => g.company) ?? [])].sort();
   const areas = data?.items ?? [];
+  const companies = scopeCompanies({
+    grants: me?.grants ?? [],
+    companies: companiesData?.items ?? [],
+    areas,
+  });
 
   return (
     <DropdownMenu>
