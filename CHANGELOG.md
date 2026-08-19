@@ -25,6 +25,22 @@ field" is a commit message.
 
 ---
 
+## [0.8.1] — 2026-08-19
+
+### Fixed
+
+- **A watched conversation can be corrected.** It could be created and not
+  changed, so fixing a `runAs` or a permitted source meant creating a second
+  conversation for the same place. Editing opens the same form with the
+  identifier fixed, because changing that would create another conversation
+  rather than correct this one.
+- Channels refreshes every ten seconds, so **Seen recently** answers whether
+  Slack is delivering at all — which is the question somebody wiring up Socket
+  Mode is actually asking, and a column that only moved on a manual reload
+  could not answer it. The refresh pauses when the tab is not in focus.
+- A channel's conversations render as a compact scrollable table rather than a
+  list that grew until the screen stopped being usable.
+
 ## [0.8.0] — 2026-08-19
 
 ### Upgrade notes
