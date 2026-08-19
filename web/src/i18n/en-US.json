@@ -64,6 +64,7 @@
     "noAmountCeiling": "no amount ceiling",
     "noCeiling": "No ceiling configured",
     "noCeilingHint": "With no scope ceiling, the only limit is what each agent specification sets per run — nobody can cap an area. Reaching a ceiling pauses the run and it continues later.",
+    "noAvailableSections": "No administration section is available to this account.",
     "noPrices": "No rate configured",
     "noPricesHint": "With no rate every cost in the console reads zero: the platform counts tokens and refuses to guess at money. Run ceilings, area ceilings and the authoring assistant's bound are all without effect.",
     "noProviderForAuthoring": "No provider connected",

@@ -25,6 +25,12 @@ export interface NavItem {
    * the specific resource is known.
    */
   permission?: string;
+  /**
+   * At least one of these permissions must be present. Used for hub pages that
+   * contain several administrative surfaces; showing them for a common read
+   * permission teaches people that the console offers acts they cannot take.
+   */
+  anyPermission?: string[];
 }
 
 export interface NavGroup {
@@ -102,11 +108,34 @@ export const NAV: NavGroup[] = [
         to: "/admin",
         label: "nav.admin",
         icon: Settings2,
-        permission: "tool:read",
+        anyPermission: [
+          "audit:read",
+          "identity:write",
+          "brand:write",
+          "provider:write",
+          "budget:write",
+          "policy:write",
+          "scope:write",
+          "data:erase",
+          "company:write",
+          "tool:classify",
+        ],
       },
     ],
   },
 ];
+
+export function navItemVisible(
+  item: NavItem,
+  can: string[] | undefined,
+): boolean {
+  if (!can) return true;
+  if (item.permission && !can.includes(item.permission)) return false;
+  if (item.anyPermission) {
+    return item.anyPermission.some((permission) => can.includes(permission));
+  }
+  return true;
+}
 
 /**
  * The icon each screen leads with.

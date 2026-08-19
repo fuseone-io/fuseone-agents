@@ -64,6 +64,7 @@
     "noAmountCeiling": "sem teto de valor",
     "noCeiling": "Nenhum teto configurado",
     "noCeilingHint": "Sem teto por escopo, o único limite é o que cada especificação de agente define por execução — ninguém consegue limitar uma área. Ao atingir um teto a execução pausa e continua depois.",
+    "noAvailableSections": "Nenhuma seção de administração está disponível para esta conta.",
     "noPrices": "Nenhuma tarifa configurada",
     "noPricesHint": "Sem tarifa, todo custo do console lê zero: a plataforma conta tokens e se recusa a chutar dinheiro. Teto de execução, teto de área e o limite do assistente de autoria ficam todos sem efeito.",
     "noProviderForAuthoring": "Nenhum provedor conectado",

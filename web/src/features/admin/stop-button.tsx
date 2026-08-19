@@ -22,11 +22,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useScopes } from "@/features/scope/api";
+import { EVERYTHING, stopTargetsFor } from "@/features/admin/stop-access";
 import { useSetStop, useStops } from "@/features/admin/stops-api";
+import { useMe } from "@/features/session/api";
 import { problemMessage } from "@/lib/api/problem-message";
-
-/** "" is the whole installation; anything else is `company/area`. */
-const EVERYTHING = "";
 
 /**
  * Stops the platform without a deploy (PRD FO-06).
@@ -45,14 +44,23 @@ export function StopButton() {
   const set = useSetStop();
   const { data: stops } = useStops();
   const { data: scopes } = useScopes();
+  const { data: me } = useMe();
 
   // Nothing to offer while the installation is already off.
   if (stops?.some((s) => s.level === "installation")) return null;
 
-  const [company = "", area = ""] = target.split("/");
+  if (me === undefined) return null;
+  const targets = stopTargetsFor(me, scopes?.items ?? []);
+  const firstTarget = targets[0];
+  if (!firstTarget) return null;
+
+  const selected = targets.some((candidate) => candidate.value === target)
+    ? target
+    : firstTarget.value;
+  const [company = "", area = ""] = selected.split("/");
   const stop = () =>
     set.mutate(
-      target === EVERYTHING
+      selected === EVERYTHING
         ? { level: "installation", stopped: true, reason }
         : { level: "scope", stopped: true, reason, scope: { company, area } },
       {
@@ -91,22 +99,19 @@ export function StopButton() {
             {/* One agent is the pause on its own screen. This control is for
                 the two levels wider than that, because somebody reaching for
                 it usually cannot yet name the agent. */}
-            <Select value={target} onValueChange={setTarget}>
+            <Select value={selected} onValueChange={setTarget}>
               <SelectTrigger id="level">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={EVERYTHING}>
-                  {t("stops.levelInstallation")}
-                </SelectItem>
-                {(scopes?.items ?? []).map((scope) => (
+                {targets.map((candidate) => (
                   <SelectItem
-                    key={`${scope.company}/${scope.area}`}
-                    value={`${scope.company}/${scope.area}`}
+                    key={candidate.value || "installation"}
+                    value={candidate.value}
                   >
-                    {t("stops.levelScope", {
-                      where: scope.label || scope.area,
-                    })}
+                    {candidate.value === EVERYTHING
+                      ? t("stops.levelInstallation")
+                      : t("stops.levelScope", { where: candidate.label })}
                   </SelectItem>
                 ))}
               </SelectContent>

@@ -12,7 +12,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { NAV, type NavItem } from "@/components/layout/nav";
+import { NAV, navItemVisible, type NavItem } from "@/components/layout/nav";
 import { UserMenu } from "@/components/layout/user-menu";
 import { useApprovals } from "@/features/approvals/api";
 import { useMe } from "@/features/session/api";
@@ -22,7 +22,7 @@ export function AppSidebar() {
   const { t } = useTranslation();
   const { pathname } = useLocation();
   const { data: me } = useMe();
-  const allowed = permissionFilter(me?.can);
+  const allowed = (item: NavItem) => navItemVisible(item, me?.can);
 
   // The one rule between the two grounds is the design system's sidebar
   // border, a step stronger than the hairline used everywhere else.
@@ -90,16 +90,6 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
 function usePendingCount(to: string): number {
   const { items } = useApprovals();
   return to === "/approvals" ? items.length : 0;
-}
-
-/**
- * Before the session loads, nothing is hidden. A sidebar that reshuffles a
- * beat after the page paints is worse than one that briefly offers a link the
- * server will refuse.
- */
-function permissionFilter(can: string[] | undefined) {
-  return (item: NavItem) =>
-    !can || !item.permission || can.includes(item.permission);
 }
 
 // An installation with no identity configured has no scope to name, and an em
