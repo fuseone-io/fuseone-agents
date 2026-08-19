@@ -12,9 +12,8 @@ import { ChannelForm } from "@/features/channels/channel-form";
 import { ConversationForm } from "@/features/channels/conversation-form";
 import { ChannelsToolbar } from "@/features/channels/channels-toolbar";
 import {
-  channelNeedsAttention,
-  filterConversations,
   type ChannelView,
+  visibleChannels,
 } from "@/features/channels/channel-model";
 import type { components } from "@/lib/api/schema.gen";
 
@@ -43,16 +42,7 @@ export function ChannelsTab() {
   const [view, setView] = useState<ChannelView>("all");
 
   const channels = data?.items ?? [];
-  const visibleChannels = channels.filter((channel) => {
-    const attention = channelNeedsAttention(channel);
-    const matches = filterConversations(
-      channel.conversations,
-      query,
-      view,
-      attention,
-    );
-    return matches.length > 0 || (view === "attention" && attention);
-  });
+  const shownChannels = visibleChannels(channels, query, view);
 
   if (isLoading) return <LoadingRows rows={3} />;
   if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
@@ -74,27 +64,27 @@ export function ChannelsTab() {
             title={t("channels.none")}
             hint={t("channels.noneHint")}
           />
-        ) : visibleChannels.length === 0 ? (
+        ) : shownChannels.length === 0 ? (
           <EmptyState
             icon={<Search className="size-6" />}
             title={t("channels.noMatches")}
             hint={t("channels.noMatchesHint")}
           />
         ) : (
-          visibleChannels.map((channel) => (
-          <ChannelCard
-            key={channel.name}
-            channel={channel}
-            query={query}
-            view={view}
-            onEdit={() => setEditing(channel)}
-            onAddConversation={() =>
-              setConversationDialog({ channel: channel.name })
-            }
-            onEditConversation={(conversation) =>
-              setConversationDialog({ channel: channel.name, conversation })
-            }
-          />
+          shownChannels.map((channel) => (
+            <ChannelCard
+              key={channel.name}
+              channel={channel}
+              query={query}
+              view={view}
+              onEdit={() => setEditing(channel)}
+              onAddConversation={() =>
+                setConversationDialog({ channel: channel.name })
+              }
+              onEditConversation={(conversation) =>
+                setConversationDialog({ channel: channel.name, conversation })
+              }
+            />
           ))
         )}
       </section>

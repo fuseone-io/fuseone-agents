@@ -55,3 +55,22 @@ export function filterConversations(
       .includes(q);
   });
 }
+
+export function visibleChannels(
+  channels: Channel[],
+  query: string,
+  view: ChannelView,
+) {
+  const q = query.trim();
+  return channels.filter((channel) => {
+    if (view === "all" && q === "") return true;
+    const attention = channelNeedsAttention(channel);
+    const matches = filterConversations(
+      channel.conversations,
+      query,
+      view,
+      attention,
+    );
+    return matches.length > 0 || (view === "attention" && attention);
+  });
+}

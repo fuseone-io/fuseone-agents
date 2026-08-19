@@ -54,7 +54,9 @@ export function ConversationList({
                 colSpan={5}
                 className="h-20 text-center text-xs text-muted-foreground"
               >
-                {t("channels.noConversationMatches")}
+                {allTotal === 0
+                  ? t("channels.noConversation")
+                  : t("channels.noConversationMatches")}
               </TableCell>
             </TableRow>
           ) : (
