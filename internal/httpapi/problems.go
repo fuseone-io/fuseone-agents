@@ -36,6 +36,7 @@ const (
 	CodeNotStored       Code = "fuseone:not-stored"
 	CodeConflict        Code = "fuseone:conflict"
 	CodeUpstreamRefused Code = "fuseone:upstream-refused"
+	CodeUpstreamBusy    Code = "fuseone:upstream-busy"
 	CodeUnavailable     Code = "fuseone:unavailable"
 	// CodeSavedNotReachable is its own condition rather than a failure: the
 	// configuration was stored and the far side did not answer. Saying only
@@ -105,12 +106,11 @@ func upstreamRefused(detail string) openapi.Problem {
 	return refusal(http.StatusBadRequest, CodeUpstreamRefused, "Upstream refused", detail)
 }
 
-// upstreamRefusedLater is an upstream refusal that is not a fault in this
-// request: the provider is overloaded, rate-limiting or unreachable. The code
-// stays the same so the console can keep one sentence, while the status tells
-// logs and monitors that retrying later is the right class of answer.
+// upstreamRefusedLater is not a refusal of this request. The provider is
+// overloaded, rate-limiting or unreachable, so a person should hear "try
+// later" and not "the other side said no".
 func upstreamRefusedLater(detail string) openapi.Problem {
-	return refusal(http.StatusServiceUnavailable, CodeUpstreamRefused, "Upstream refused", detail)
+	return refusal(http.StatusServiceUnavailable, CodeUpstreamBusy, "Upstream busy", detail)
 }
 
 // savedNotReachable is a configuration stored against something that did not

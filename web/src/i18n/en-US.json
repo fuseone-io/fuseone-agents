@@ -1299,6 +1299,7 @@
     "saved-not-reachable": "Saved, but nobody can sign in with it yet: {{detail}}",
     "sign-in-failed": "Sign-in failed: {{detail}}",
     "unavailable": "Unavailable right now: {{detail}}",
+    "upstream-busy": "The system on the other side is busy: {{detail}} — try again in a moment.",
     "upstream-refused": "The system on the other side refused: {{detail}}"
   },
   "retention": {

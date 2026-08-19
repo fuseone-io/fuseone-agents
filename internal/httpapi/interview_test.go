@@ -40,8 +40,11 @@ func TestAssistantUnavailable_retryableProviderFailureIsTemporary(t *testing.T) 
 	if status != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want 503", status)
 	}
-	if got := valueOr(problem.Type); got != string(CodeUpstreamRefused) {
-		t.Fatalf("type = %q, want %q", got, CodeUpstreamRefused)
+	if got := valueOr(problem.Type); got != string(CodeUpstreamBusy) {
+		t.Fatalf("type = %q, want %q", got, CodeUpstreamBusy)
+	}
+	if problem.Title != "Upstream busy" {
+		t.Fatalf("title = %q, want Upstream busy", problem.Title)
 	}
 	if problem.Status != http.StatusServiceUnavailable {
 		t.Fatalf("problem status = %d, want 503", problem.Status)

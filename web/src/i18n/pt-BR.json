@@ -1299,6 +1299,7 @@
     "saved-not-reachable": "Gravado, mas ninguém consegue entrar por ele ainda: {{detail}}",
     "sign-in-failed": "Não foi possível entrar: {{detail}}",
     "unavailable": "Indisponível no momento: {{detail}}",
+    "upstream-busy": "O sistema do outro lado está sobrecarregado: {{detail}} — tente novamente em instantes.",
     "upstream-refused": "O sistema do outro lado recusou: {{detail}}"
   },
   "retention": {

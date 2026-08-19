@@ -31,9 +31,10 @@ field" is a commit message.
 
 - **The interview no longer logs transient model-provider failures as bad
   requests.** Overload, rate limiting and network failures now answer `503`
-  while keeping the same `fuseone:upstream-refused` problem code for the
-  console. Non-retryable provider refusals, such as an invalid key or model,
-  still answer `400`.
+  with `fuseone:upstream-busy`, so the console says to try again rather than
+  saying the provider refused the request. Non-retryable provider refusals,
+  such as an invalid key or model, still answer `400` with
+  `fuseone:upstream-refused`.
 
 - **Signing in no longer depends on which `serve` replica answers.** The OIDC
   registry is per process, so a provider configured through one replica was

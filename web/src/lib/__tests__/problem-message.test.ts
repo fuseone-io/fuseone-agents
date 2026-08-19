@@ -26,4 +26,14 @@ describe("problemMessage", () => {
     });
     expect(problemMessage(error, t)).toBe("problem.conflict");
   });
+
+  it("keeps a busy upstream distinct from a refusal", () => {
+    const error = new ApiError(503, {
+      type: "fuseone:upstream-busy",
+      title: "Upstream busy",
+      status: 503,
+      detail: "model_provider_overloaded",
+    });
+    expect(problemMessage(error, t)).toBe("problem.upstream-busy");
+  });
 });
