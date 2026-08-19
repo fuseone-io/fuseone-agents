@@ -15,9 +15,12 @@ export interface ChannelInput {
   name: string;
   kind: "slack";
   workspace?: string;
+  deliveryMode?: "http" | "socket";
   /** Omitted keeps the stored one: correcting a name must not demand
    *  re-entering a secret nobody has to hand. */
   token?: string;
+  appToken?: string;
+  signingSecret?: string;
   enabled?: boolean;
 }
 
@@ -56,6 +59,10 @@ export interface ConversationInput {
   company: string;
   area?: string;
   label?: string;
+  mode?: "mentions" | "watch";
+  sources?: string[];
+  agent?: string;
+  runAs?: string;
   wants?: ("parked" | "failed" | "finished")[];
 }
 
@@ -122,9 +129,9 @@ export function useTestConversation() {
  *
  * Only the ones the bot is already in, so choosing from it cannot produce a
  * configuration that saves cleanly and delivers nothing. A failure here is
- * usually an app granted `chat:write` and not `channels:read` — the screen
- * shows the reason and falls back to typing an identifier rather than
- * pretending the bot is in no channels.
+ * usually an app granted `chat:write` and not `channels:read`. An empty list
+ * is usually a bot that was not invited after the scopes were granted. The
+ * screen names both instead of rendering a picker with no choices.
  */
 export function useAvailableConversations(channel: string) {
   return useQuery({
@@ -136,6 +143,22 @@ export function useAvailableConversations(channel: string) {
         }),
       ),
     retry: false,
+  });
+}
+
+export function useAgentsForScope(scope: string) {
+  const [company = "", area = ""] = scope.split("/");
+  return useQuery({
+    queryKey: [...channelKeys.all, "agents", company, area] as const,
+    queryFn: async () =>
+      unwrap(
+        await api.GET("/agents", {
+          params: {
+            query: { company, area: area || undefined, allVersions: false },
+          },
+        }),
+      ),
+    enabled: company !== "",
   });
 }
 

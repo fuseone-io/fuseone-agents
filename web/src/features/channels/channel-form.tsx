@@ -37,7 +37,10 @@ const schema = z.object({
   name: z.string().min(1, "channels.needsName"),
   kind: z.string().min(1, "channels.needsKind"),
   workspace: z.string(),
+  deliveryMode: z.enum(["http", "socket"]),
   token: z.string(),
+  appToken: z.string(),
+  signingSecret: z.string(),
 });
 
 /**
@@ -54,9 +57,10 @@ const CREDENTIAL: Record<string, { label: string; hint: string }> = {
 /**
  * Connecting a workspace.
  *
- * The credential is write-only, in both directions: the form never receives
- * one and an empty field on an edit keeps what is stored. Correcting a
- * workspace's name must not demand re-entering a secret nobody has to hand.
+ * The credentials are write-only, in both directions: the form never receives
+ * them and an empty field on an edit keeps what belongs to the selected
+ * delivery mode. Correcting a workspace's name must not demand re-entering a
+ * secret nobody has to hand.
  */
 export function ChannelForm({
   channel,
@@ -77,7 +81,10 @@ export function ChannelForm({
       name: channel?.name ?? "",
       kind: channel?.kind ?? kinds[0] ?? "",
       workspace: channel?.workspace ?? "",
+      deliveryMode: channel?.deliveryMode ?? "http",
       token: "",
+      appToken: "",
+      signingSecret: "",
     },
   });
 
@@ -85,6 +92,7 @@ export function ChannelForm({
     label: "channels.credential",
     hint: "",
   };
+  const deliveryMode = form.watch("deliveryMode");
 
   async function submit(values: z.infer<typeof schema>) {
     try {
@@ -92,7 +100,10 @@ export function ChannelForm({
         name: values.name.trim(),
         kind: values.kind as "slack",
         workspace: values.workspace.trim() || undefined,
+        deliveryMode: values.deliveryMode,
         token: values.token.trim() || undefined,
+        appToken: values.appToken.trim() || undefined,
+        signingSecret: values.signingSecret.trim() || undefined,
       });
       toast.success(t("channels.saved"));
       onClose();
@@ -179,6 +190,36 @@ export function ChannelForm({
             />
             <FormField
               control={form.control}
+              name="deliveryMode"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("channels.deliveryMode")}</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="http">
+                        {t("channels.deliveryHttp")}
+                      </SelectItem>
+                      <SelectItem value="socket">
+                        {t("channels.deliverySocket")}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    {deliveryMode === "socket"
+                      ? t("channels.socketExplains")
+                      : t("channels.httpExplains")}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
               name="token"
               render={({ field }) => (
                 <FormItem>
@@ -200,6 +241,60 @@ export function ChannelForm({
                 </FormItem>
               )}
             />
+            {deliveryMode === "http" && (
+              <FormField
+                control={form.control}
+                name="signingSecret"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("channels.signingSecret")}</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        type="password"
+                        autoComplete="off"
+                        placeholder={
+                          channel?.hasSigning
+                            ? t("channels.tokenStored")
+                            : t("channels.signingSecretHint")
+                        }
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t("channels.signingSecretExplains")}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+            {deliveryMode === "socket" && (
+              <FormField
+                control={form.control}
+                name="appToken"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("channels.appToken")}</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        type="password"
+                        autoComplete="off"
+                        placeholder={
+                          channel?.hasAppToken
+                            ? t("channels.tokenStored")
+                            : t("channels.appTokenHint")
+                        }
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t("channels.appTokenExplains")}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose}>

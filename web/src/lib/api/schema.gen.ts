@@ -1704,9 +1704,11 @@ export interface paths {
          * @description The connections this installation can post through, and the
          *     conversations mapped onto scopes inside them.
          *
-         *     Outbound only. Nothing a conversation says reaches this platform, so a
-         *     connection here grants no ability to start anything — it is a place
-         *     runs speak to (NT-005 stage 1).
+         *     A channel is where runs report, and — when inbound delivery is
+         *     configured — where a deliberate mention can ask an agent to start.
+         *     The two halves share one connection but not one secret: posting uses
+         *     the bot token, HTTP inbound uses the signing secret, and Socket Mode
+         *     uses an app-level token (NT-005 stage 1 and stage 3).
          */
         get: operations["listChannels"];
         put?: never;
@@ -2995,14 +2997,23 @@ export interface components {
             name: string;
             kind: string;
             workspace?: string;
+            /**
+             * @description How Slack asks reach this installation. Empty legacy rows read as http.
+             * @enum {string}
+             */
+            deliveryMode?: "http" | "socket";
             enabled: boolean;
-            /** @description Whether a credential is stored, never what it is. */
+            /** @description Whether the bot token used for posting is stored, never what it is. */
             hasCredential: boolean;
             /** @description Whether this channel can verify what arrives. A channel posts long before anybody switches the inbound half on. */
             hasSigning?: boolean;
+            /** @description Whether the Socket Mode app-level token is stored, never what it is. */
+            hasAppToken?: boolean;
             conversations: components["schemas"]["ChannelConversation"][];
             /** @description The accounts that speak for somebody in this channel. */
             identities?: components["schemas"]["ChannelIdentity"][];
+            /** @description Channel accounts this installation has seen interact with it. Convenience for binding only; it grants nothing. */
+            seenAccounts?: components["schemas"]["ChannelSeenAccount"][];
         };
         /** @description Which platform user a channel account speaks for. */
         ChannelIdentity: {
@@ -3022,10 +3033,28 @@ export interface components {
              */
             unreadable?: boolean;
         };
+        /**
+         * @description A channel account seen in a signed event, but not necessarily bound.
+         *     This is a hint for an administrator, not authority.
+         */
+        ChannelSeenAccount: {
+            account: string;
+            conversation?: string;
+            /** Format: date-time */
+            lastSeen: string;
+        };
         ChannelConversation: {
             id: string;
             label?: string;
             scope: components["schemas"]["Scope"];
+            /**
+             * @description How inbound Slack messages may start runs. Empty legacy rows read as mentions.
+             * @enum {string}
+             */
+            mode?: "mentions" | "watch";
+            sources?: string[];
+            agent?: string;
+            runAs?: string;
             wants?: string[];
             enabled: boolean;
         };
@@ -6248,8 +6277,27 @@ export interface operations {
                     kind: "slack";
                     /** @description What a person calls it. Never used to address anything. */
                     workspace?: string;
+                    /**
+                     * @description How Slack asks reach this installation.
+                     *
+                     *     `http` means Slack calls this installation's Request URL
+                     *     and the signing secret verifies each request. `socket`
+                     *     means a worker opens Slack Socket Mode outbound with an
+                     *     app-level token, so no public callback URL is required for
+                     *     Events API payloads.
+                     * @default http
+                     * @enum {string}
+                     */
+                    deliveryMode?: "http" | "socket";
                     /** @description The bot credential, sealed by the vault. Omit to keep the stored one — renaming a workspace must not demand re-entering a secret nobody has to hand. */
                     token?: string;
+                    /**
+                     * @description Slack app-level token (`xapp-...`) used to open Socket
+                     *     Mode. Omit to keep the stored one. It is not the bot token:
+                     *     it cannot post messages, and it exists only so the worker
+                     *     can receive Events API payloads over an outbound WebSocket.
+                     */
+                    appToken?: string;
                     /**
                      * @description What arriving requests are checked against, sealed beside
                      *     the token. Not the same secret and not interchangeable: the
@@ -6359,6 +6407,25 @@ export interface operations {
                     area?: string;
                     /** @description What a person calls it, for the console and the logs. */
                     label?: string;
+                    /**
+                     * @description `mentions` starts only when a person mentions the channel
+                     *     bot and names an agent. `watch` starts one configured
+                     *     agent from ordinary messages written by configured
+                     *     sources, under the configured principal.
+                     * @default mentions
+                     * @enum {string}
+                     */
+                    mode?: "mentions" | "watch";
+                    /**
+                     * @description Slack user, bot or app ids allowed to trigger watched
+                     *     messages. They filter the source; they never grant
+                     *     authority.
+                     */
+                    sources?: string[];
+                    /** @description The agent started by watched messages. */
+                    agent?: string;
+                    /** @description The platform principal watched messages run on behalf of. */
+                    runAs?: string;
                     /** @description Which events reach it. Empty means the defaults, which are parked and failed — a conversation that hears every run finish is one people mute. */
                     wants?: ("parked" | "failed" | "finished")[];
                     /** @default true */

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 import { IdentityRows } from "@/features/channels/identity-rows";
@@ -12,10 +12,17 @@ the platform complained compares that error against a line that looks fine. It
 is the same asymmetry the backend just closed, kept alive by the screen.
 */
 
-function show(identities: Parameters<typeof IdentityRows>[0]["identities"]) {
+function show(
+  identities: Parameters<typeof IdentityRows>[0]["identities"],
+  seenAccounts: Parameters<typeof IdentityRows>[0]["seenAccounts"] = [],
+) {
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <IdentityRows channel="acme-slack" identities={identities} />
+      <IdentityRows
+        channel="acme-slack"
+        identities={identities}
+        seenAccounts={seenAccounts}
+      />
     </QueryClientProvider>,
   );
 }
@@ -40,5 +47,20 @@ describe("who can decide", () => {
 
     expect(screen.getByText("U404")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /remover/i })).toHaveLength(1);
+  });
+
+  it("uses a seen account as a form hint rather than a binding", () => {
+    show([], [
+      {
+        account: "U777",
+        conversation: "C-alerts",
+        lastSeen: "2026-08-19T12:00:00.000Z",
+      },
+    ]);
+
+    fireEvent.click(screen.getByRole("button", { name: /U777/i }));
+
+    expect(screen.getByLabelText(/conta/i)).toHaveValue("U777");
+    expect(screen.queryByText(/vinculado/i)).not.toBeInTheDocument();
   });
 });

@@ -14,6 +14,7 @@ import {
 import { useBindIdentity, useUnbindIdentity } from "@/features/channels/api";
 import { usePeople } from "@/features/admin/people-api";
 import { problemMessage } from "@/lib/api/problem-message";
+import { formatRelative } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Mono } from "@/components/shared/mono";
 import type { components } from "@/lib/api/schema.gen";
@@ -33,9 +34,11 @@ import type { components } from "@/lib/api/schema.gen";
 export function IdentityRows({
   channel,
   identities,
+  seenAccounts,
 }: {
   channel: string;
   identities: components["schemas"]["ChannelIdentity"][];
+  seenAccounts: components["schemas"]["ChannelSeenAccount"][];
 }) {
   const { t } = useTranslation();
   const [account, setAccount] = useState("");
@@ -113,6 +116,45 @@ export function IdentityRows({
             </Button>
           </div>
         ))
+      )}
+
+      {seenAccounts.length > 0 && (
+        <div className="mt-2 border-t pt-2">
+          <p className="px-2 text-2xs font-medium uppercase tracking-label text-muted-foreground">
+            {t("channels.seenAccounts")}
+          </p>
+          <p className="px-2 py-1 text-xs text-muted-foreground">
+            {t("channels.seenAccountsHint")}
+          </p>
+          <div className="flex flex-col gap-1">
+            {seenAccounts.map((seen) => (
+              <button
+                key={seen.account}
+                type="button"
+                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted/50"
+                onClick={() => setAccount(seen.account)}
+              >
+                <UserRoundCheck
+                  className="size-3.5 shrink-0 text-muted-foreground"
+                  aria-hidden
+                />
+                <Mono className="min-w-0 flex-1 truncate text-xs">
+                  {seen.account}
+                </Mono>
+                {seen.conversation && (
+                  <span className="max-w-28 truncate text-2xs text-muted-foreground">
+                    {seen.conversation}
+                  </span>
+                )}
+                <span className="shrink-0 text-2xs text-muted-foreground">
+                  {t("channels.seenAt", {
+                    when: formatRelative(seen.lastSeen),
+                  })}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
       )}
 
       <div className="flex flex-wrap items-center gap-2 px-2 pt-1">

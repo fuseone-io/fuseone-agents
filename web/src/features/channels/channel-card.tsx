@@ -35,6 +35,8 @@ export function ChannelCard({
   onAddConversation,
 }: ChannelCardProps) {
   const { t } = useTranslation();
+  const inboundReady =
+    channel.deliveryMode === "socket" ? channel.hasAppToken : channel.hasSigning;
 
   return (
     <Card className="gap-0 p-0">
@@ -48,6 +50,14 @@ export function ChannelCard({
         {!channel.hasCredential && (
           <Badge variant="outline" className="text-warning">
             {t("channels.noCredential")}
+          </Badge>
+        )}
+        {channel.deliveryMode === "socket" && (
+          <Badge variant="outline">{t("channels.deliverySocket")}</Badge>
+        )}
+        {channel.deliveryMode === "socket" && !channel.hasAppToken && (
+          <Badge variant="outline" className="text-warning">
+            {t("channels.noAppToken")}
           </Badge>
         )}
         {!channel.enabled && (
@@ -87,12 +97,13 @@ export function ChannelCard({
       {/* Only where an answer could arrive. Binding accounts on a channel that
           cannot verify what comes back would be configuring authority for a
           door that is shut. */}
-      {channel.hasSigning && (
+      {inboundReady && (
         <>
           <Separator />
           <IdentityRows
             channel={channel.name}
             identities={channel.identities ?? []}
+            seenAccounts={channel.seenAccounts ?? []}
           />
         </>
       )}
@@ -113,6 +124,10 @@ function ConversationRow({
   const scope = conversation.scope.area
     ? `${conversation.scope.company}/${conversation.scope.area}`
     : conversation.scope.company;
+  const mode =
+    conversation.mode === "watch"
+      ? `${t("channels.modeWatch")} · ${conversation.agent ?? "—"}`
+      : t("channels.modeMentions");
 
   return (
     <div className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50">
@@ -123,6 +138,7 @@ function ConversationRow({
         <p className="truncate font-mono text-2xs tabular-nums text-muted-foreground">
           {scope} · {(conversation.wants ?? ["parked", "failed"]).join(", ")}
         </p>
+        <p className="truncate text-2xs text-muted-foreground">{mode}</p>
       </div>
       <Button
         variant="ghost"

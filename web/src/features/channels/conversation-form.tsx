@@ -1,4 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+import { RefreshCw } from "lucide-react";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -23,6 +25,8 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { usePeople } from "@/features/admin/people-api";
 import {
   Select,
   SelectContent,
@@ -31,20 +35,59 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  useAgentsForScope,
   useAvailableConversations,
   useSaveConversation,
 } from "@/features/channels/api";
 import { useScopes } from "@/features/scope/api";
+import { useMe } from "@/features/session/api";
 import { problemMessage } from "@/lib/api/problem-message";
 
 const EVENTS = ["parked", "failed", "finished"] as const;
+type RunAsPerson = { id: string; display?: string | null; email?: string | null };
 
-const schema = z.object({
-  conversation: z.string().min(1, "channels.needsConversation"),
-  label: z.string(),
-  scope: z.string().min(1, "channels.needsScope"),
-  wants: z.array(z.enum(EVENTS)).min(1, "channels.needsEvent"),
-});
+function splitSources(value: string) {
+  return value
+    .split(/[\n,]/)
+    .map((one) => one.trim())
+    .filter(Boolean);
+}
+
+const schema = z
+  .object({
+    conversation: z.string().min(1, "channels.needsConversation"),
+    label: z.string(),
+    scope: z.string().min(1, "channels.needsScope"),
+    mode: z.enum(["mentions", "watch"]),
+    sources: z.string(),
+    agent: z.string(),
+    runAs: z.string(),
+    wants: z.array(z.enum(EVENTS)).min(1, "channels.needsEvent"),
+  })
+  .superRefine((value, ctx) => {
+    if (value.mode !== "watch") return;
+    if (splitSources(value.sources).length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["sources"],
+        message: "channels.needsWatchSource",
+      });
+    }
+    if (value.agent.trim() === "") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["agent"],
+        message: "channels.needsWatchAgent",
+      });
+    }
+    if (value.runAs.trim() === "") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["runAs"],
+        message: "channels.needsWatchRunAs",
+      });
+    }
+  });
 
 /**
  * Pointing a scope's runs at a conversation.
@@ -65,6 +108,9 @@ export function ConversationForm({
   const save = useSaveConversation();
   const { data: scopes } = useScopes();
   const available = useAvailableConversations(channel);
+  const availableItems = available.data?.items ?? [];
+  const manuallyEnterConversation =
+    available.isError || (available.isSuccess && availableItems.length === 0);
 
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
@@ -72,9 +118,35 @@ export function ConversationForm({
       conversation: "",
       scope: "",
       label: "",
+      mode: "mentions",
+      sources: "",
+      agent: "",
+      runAs: "",
       wants: ["parked", "failed"],
     },
   });
+  const mode = form.watch("mode");
+  const scope = form.watch("scope");
+  const agents = useAgentsForScope(scope);
+  const people = usePeople();
+  const peopleItems = (people.data?.items ?? []).filter((p) => !p.disabled);
+  const { data: me } = useMe();
+  const canDelegateRunAs =
+    me === null || Boolean(me?.can.includes("identity:write"));
+  const runAsPeople: RunAsPerson[] = canDelegateRunAs
+    ? peopleItems
+    : me
+      ? peopleItems.some((person) => person.id === me.id)
+        ? peopleItems.filter((person) => person.id === me.id)
+        : [{ id: me.id, display: me.display }]
+      : [];
+
+  useEffect(() => {
+    if (mode !== "watch" || me === null || me === undefined) return;
+    if (canDelegateRunAs) return;
+    if (form.getValues("runAs") === me.id) return;
+    form.setValue("runAs", me.id, { shouldValidate: true });
+  }, [canDelegateRunAs, form, me, mode]);
 
   async function submit(values: z.infer<typeof schema>) {
     // The select's values are always company/area, but a destructure of a
@@ -87,6 +159,11 @@ export function ConversationForm({
         company,
         area: area || undefined,
         label: values.label.trim() || undefined,
+        mode: values.mode,
+        sources:
+          values.mode === "watch" ? splitSources(values.sources) : undefined,
+        agent: values.mode === "watch" ? values.agent.trim() : undefined,
+        runAs: values.mode === "watch" ? values.runAs.trim() : undefined,
         wants: values.wants,
       });
       toast.success(t("channels.conversationSaved"));
@@ -117,26 +194,41 @@ export function ConversationForm({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{t("channels.conversation")}</FormLabel>
-                  {available.isError ? (
+                  {manuallyEnterConversation ? (
                     <>
-                      {/* The listing needs a scope posting does not. Rather
-                          than an empty picker reading as "the bot is in no
-                          channels", the reason is shown and the identifier can
-                          be typed. */}
+                      {/* Listing is a convenience, not authority. When Slack
+                          refuses the list or returns none, the screen says so
+                          and lets an operator paste the stable channel id
+                          rather than leaving behind a picker with no choices. */}
                       <FormControl>
                         <Input {...field} placeholder="C0123ABCDEF" />
                       </FormControl>
-                      <FormDescription className="text-warning">
-                        {problemMessage(available.error, t)}
+                      <FormDescription
+                        className={available.isError ? "text-warning" : ""}
+                      >
+                        {available.isError
+                          ? problemMessage(available.error, t)
+                          : t("channels.noAvailableConversations")}
                       </FormDescription>
+                      {!available.isError && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="w-fit"
+                          disabled={available.isFetching}
+                          onClick={() => void available.refetch()}
+                        >
+                          <RefreshCw className="size-3.5" aria-hidden />
+                          {t("common.retry")}
+                        </Button>
+                      )}
                     </>
                   ) : (
                     <Select
                       onValueChange={(id) => {
                         field.onChange(id);
-                        const picked = (available.data?.items ?? []).find(
-                          (c) => c.id === id,
-                        );
+                        const picked = availableItems.find((c) => c.id === id);
                         if (picked) form.setValue("label", `#${picked.name}`);
                       }}
                       value={field.value}
@@ -154,7 +246,7 @@ export function ConversationForm({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {(available.data?.items ?? []).map((c) => (
+                        {availableItems.map((c) => (
                           <SelectItem key={c.id} value={c.id}>
                             {c.private ? "🔒 " : "#"}
                             {c.name}
@@ -233,6 +325,151 @@ export function ConversationForm({
                 </FormItem>
               )}
             />
+            <FormField
+              control={form.control}
+              name="mode"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("channels.startMode")}</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="mentions">
+                        {t("channels.modeMentions")}
+                      </SelectItem>
+                      <SelectItem value="watch">
+                        {t("channels.modeWatch")}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    {mode === "watch"
+                      ? t("channels.modeWatchExplains")
+                      : t("channels.modeMentionsExplains")}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            {mode === "watch" && (
+              <div className="rounded-md border bg-muted/30 p-3">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="agent"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("channels.watchAgent")}</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value}
+                          disabled={!scope || agents.isLoading}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue
+                                placeholder={t("channels.pickWatchAgent")}
+                              />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {(agents.data?.items ?? []).map((agent) => (
+                              <SelectItem
+                                key={agent.agentId}
+                                value={agent.agentId}
+                              >
+                                {agent.name || agent.agentId}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>
+                          {t("channels.watchAgentExplains")}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="runAs"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("channels.watchRunAs")}</FormLabel>
+                        {runAsPeople.length > 0 ? (
+                          <Select
+                            onValueChange={field.onChange}
+                            value={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue
+                                  placeholder={t("channels.pickWatchRunAs")}
+                                />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {runAsPeople.map((person) => (
+                                <SelectItem key={person.id} value={person.id}>
+                                  {person.display || person.email || person.id}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : me === undefined ? (
+                          <Select disabled>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue
+                                  placeholder={t("common.loading")}
+                                />
+                              </SelectTrigger>
+                            </FormControl>
+                          </Select>
+                        ) : (
+                          <FormControl>
+                            <Input
+                              {...field}
+                              placeholder={t("channels.watchRunAsPlaceholder")}
+                            />
+                          </FormControl>
+                        )}
+                        <FormDescription>
+                          {canDelegateRunAs
+                            ? t("channels.watchRunAsExplains")
+                            : t("channels.watchRunAsSelfOnly")}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <FormField
+                  control={form.control}
+                  name="sources"
+                  render={({ field }) => (
+                    <FormItem className="mt-4">
+                      <FormLabel>{t("channels.watchSources")}</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          {...field}
+                          className="min-h-20 font-mono text-xs"
+                          placeholder={t("channels.watchSourcesPlaceholder")}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {t("channels.watchSourcesExplains")}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose}>
