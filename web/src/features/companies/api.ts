@@ -1,5 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap } from "@/lib/api/client";
+import type { components } from "@/lib/api/schema.gen";
+
+export type Company = components["schemas"]["Company"];
 
 export const companyKeys = { all: ["companies"] as const };
 
@@ -11,10 +14,11 @@ export const companyKeys = { all: ["companies"] as const };
  * different one — it comes from their own grants and shows only what they
  * reach.
  */
-export function useCompanies() {
+export function useCompanies(options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: companyKeys.all,
     queryFn: async () => unwrap(await api.GET("/admin/companies")),
+    enabled: options.enabled ?? true,
     retry: false,
   });
 }

@@ -1,24 +1,30 @@
+import { useDeferredValue, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useState } from "react";
-import { Layers, Plus } from "lucide-react";
+import { Layers } from "lucide-react";
 import { toast } from "sonner";
-import { Panel } from "@/components/shared/panel";
-import { Mono } from "@/components/shared/mono";
-import { LoadMore } from "@/components/shared/load-more";
-import { Button } from "@/components/ui/button";
 import {
   EmptyState,
   ErrorState,
   LoadingRows,
 } from "@/components/shared/states";
-import { RemoveButton } from "@/components/shared/remove-button";
 import { AreaForm } from "@/features/admin/area-form";
+import {
+  companyOptionsFor,
+  matchesArea,
+} from "@/features/admin/area-filters";
+import { AreaHeader } from "@/features/admin/area-header";
+import { AreaList } from "@/features/admin/area-list";
+import { AreaToolbar } from "@/features/admin/area-toolbar";
+import { useCompanies } from "@/features/companies/api";
+import { useMe } from "@/features/session/api";
 import {
   useDeleteScope,
   useScopes,
   type RegisteredScope,
 } from "@/features/scope/api";
 import { useVisibleItems } from "@/hooks/use-visible-items";
+
+const EMPTY_AREAS: RegisteredScope[] = [];
 
 /**
  * The areas work is filed under.
@@ -31,81 +37,114 @@ import { useVisibleItems } from "@/hooks/use-visible-items";
 export function AreasPanel() {
   const { t } = useTranslation();
   const { data, isLoading, error, refetch } = useScopes();
+  const { data: me } = useMe();
+  const canListCompanies = me === null || me?.can.includes("company:write");
+  const companiesQuery = useCompanies({ enabled: Boolean(canListCompanies) });
   const [adding, setAdding] = useState(false);
-  const areas = data?.items ?? [];
-  const page = useVisibleItems(areas, 50);
+  const [editing, setEditing] = useState<RegisteredScope | null>(null);
+  const [search, setSearch] = useState("");
+  const [openRows, setOpenRows] = useState<Record<string, boolean>>({});
+  const remove = useDeleteScope();
+
+  const areas = data?.items ?? EMPTY_AREAS;
+  const query = useDeferredValue(search.trim().toLowerCase());
+  const filtered = useMemo(
+    () => areas.filter((area) => !query || matchesArea(area, query, t)),
+    [areas, query, t],
+  );
+  const page = useVisibleItems(filtered, 50);
+  const companyOptions = companyOptionsFor({
+    grants: me?.grants ?? [],
+    companies: companiesQuery.data?.items ?? [],
+    areas,
+  });
+  const companies = new Set(areas.map((area) => area.company)).size;
+  const noMatches = areas.length > 0 && filtered.length === 0;
 
   return (
-    <Panel
-      title={t("admin.areas")}
-      action={
-        <Button size="sm" onClick={() => setAdding(true)}>
-          <Plus className="size-4" />
-          {t("admin.newFeminine")}
-        </Button>
-      }
-    >
+    <section className="overflow-hidden rounded-xl border bg-card shadow-sm">
+      <AreaHeader onAdd={() => setAdding(true)} />
       {isLoading ? (
-        <LoadingRows rows={3} />
+        <div className="p-4">
+          <LoadingRows rows={3} />
+        </div>
       ) : error ? (
-        <ErrorState error={error} onRetry={() => void refetch()} />
+        <div className="p-4">
+          <ErrorState error={error} onRetry={() => void refetch()} />
+        </div>
       ) : areas.length === 0 ? (
-        <EmptyState
-          icon={<Layers className="size-6" />}
-          title={t("scope.noAreas")}
-          hint={t("admin.areaHint")}
-        />
+        <div className="p-4">
+          <EmptyState
+            icon={<Layers className="size-6" />}
+            title={t("scope.noAreas")}
+            hint={t("admin.areaHint")}
+          />
+        </div>
+      ) : noMatches ? (
+        <>
+          <AreaToolbar
+            search={search}
+            onSearch={setSearch}
+            total={areas.length}
+            companies={companies}
+          />
+          <NoAreaMatches />
+        </>
       ) : (
         <>
-          <ul className="flex flex-col gap-2">
-            {page.visible.map((area) => (
-              <AreaRow key={`${area.company}/${area.area}`} area={area} />
-            ))}
-          </ul>
-          <LoadMore
-            loaded={page.loaded}
-            total={page.total}
+          <AreaToolbar
+            search={search}
+            onSearch={setSearch}
+            total={areas.length}
+            companies={companies}
+          />
+          <AreaList
+            areas={page.visible}
+            openRows={openRows}
+            shown={page.loaded}
+            total={areas.length}
             hasMore={page.hasMore}
-            isLoading={false}
-            onLoad={page.loadMore}
+            onOpenChange={(scope, open) =>
+              setOpenRows((rows) => ({ ...rows, [scope]: open }))
+            }
+            onEdit={setEditing}
+            onRemove={(area) =>
+              remove.mutate(`${area.company}/${area.area}`, {
+                onSuccess: () => toast.success(t("admin.areaWithdrawn")),
+                onError: () => toast.error(t("admin.withdrawFailed")),
+              })
+            }
+            onLoadMore={page.loadMore}
           />
         </>
       )}
 
-      {adding && <AreaForm onClose={() => setAdding(false)} />}
-    </Panel>
+      {adding && (
+        <AreaForm
+          companyOptions={companyOptions}
+          onClose={() => setAdding(false)}
+        />
+      )}
+      {editing && (
+        <AreaForm
+          area={editing}
+          companyOptions={companyOptions}
+          onClose={() => setEditing(null)}
+        />
+      )}
+    </section>
   );
 }
 
-function AreaRow({ area }: { area: RegisteredScope }) {
+function NoAreaMatches() {
   const { t } = useTranslation();
-  const remove = useDeleteScope();
-  const shown = area.label || area.area;
-
   return (
-    <li className="flex items-center gap-2 rounded-lg border p-3">
-      <div className="min-w-0 flex-1">
-        <div className="font-medium">{shown}</div>
-        {/* The id, always, and never only the label: it is what a ceiling, a
-            policy and an agent all reference, and what somebody types into a
-            file. A row showing only "Atendimento" hides that it is `cx`. */}
-        <Mono dim>
-          {area.company}/{area.area}
-        </Mono>
-      </div>
-      <RemoveButton
-        title={t("admin.removeArea", { area: shown })}
-        description={t("admin.withdrawArea")}
-        onConfirm={() =>
-          remove.mutate(`${area.company}/${area.area}`, {
-            onSuccess: () => toast.success(t("admin.areaWithdrawn")),
-            onError: (e) =>
-              toast.error(
-                e instanceof Error ? e.message : t("admin.withdrawFailed"),
-              ),
-          })
-        }
+    <div className="p-8">
+      <EmptyState
+        icon={<Layers className="size-6" />}
+        title={t("admin.noAreasFound")}
+        hint={t("admin.noAreasFoundHint")}
       />
-    </li>
+    </div>
   );
 }

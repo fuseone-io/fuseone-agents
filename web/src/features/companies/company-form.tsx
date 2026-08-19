@@ -12,20 +12,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Form } from "@/components/ui/form";
 import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { useCreateCompany } from "@/features/companies/api";
+  useCreateCompany,
+  useUpdateCompany,
+  type Company,
+} from "@/features/companies/api";
+import { CompanyFormFields } from "@/features/companies/company-form-fields";
+import type { CompanyFormValues } from "@/features/companies/company-form-fields";
 import { problemMessage } from "@/lib/api/problem-message";
 
-const schema = z.object({
+const schema: z.ZodType<CompanyFormValues> = z.object({
   id: z
     .string()
     .min(1, "companies.needsId")
@@ -45,24 +42,40 @@ const schema = z.object({
  * would report success and then show you nothing, because every listing here
  * is filtered by the scopes you hold.
  */
-export function CompanyForm({ onClose }: { onClose: () => void }) {
+export function CompanyForm({
+  company,
+  onClose,
+}: {
+  company?: Company;
+  onClose: () => void;
+}) {
   const { t } = useTranslation();
   const create = useCreateCompany();
+  const update = useUpdateCompany();
+  const editing = Boolean(company);
 
-  const form = useForm<z.infer<typeof schema>>({
+  const form = useForm<CompanyFormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { id: "", label: "" },
+    defaultValues: { id: company?.id ?? "", label: company?.label ?? "" },
   });
 
-  async function submit(values: z.infer<typeof schema>) {
+  async function submit(values: CompanyFormValues) {
     try {
-      await create.mutateAsync({
-        id: values.id.trim(),
-        label: values.label.trim() || undefined,
-      });
-      toast.success(t("companies.registered"), {
-        description: t("companies.grantedYou"),
-      });
+      if (company) {
+        await update.mutateAsync({
+          company: company.id,
+          label: values.label.trim() || company.id,
+        });
+        toast.success(t("companies.saved"));
+      } else {
+        await create.mutateAsync({
+          id: values.id.trim(),
+          label: values.label.trim() || undefined,
+        });
+        toast.success(t("companies.registered"), {
+          description: t("companies.grantedYou"),
+        });
+      }
       onClose();
     } catch (error) {
       toast.error(problemMessage(error, t));
@@ -73,8 +86,12 @@ export function CompanyForm({ onClose }: { onClose: () => void }) {
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{t("companies.register")}</DialogTitle>
-          <DialogDescription>{t("companies.explains")}</DialogDescription>
+          <DialogTitle>
+            {t(editing ? "companies.editing" : "companies.register")}
+          </DialogTitle>
+          <DialogDescription>
+            {t(editing ? "companies.editExplains" : "companies.explains")}
+          </DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
@@ -82,46 +99,17 @@ export function CompanyForm({ onClose }: { onClose: () => void }) {
             onSubmit={form.handleSubmit(submit)}
             className="flex flex-col gap-4"
           >
-            <FormField
-              control={form.control}
-              name="id"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("companies.identifier")}</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      className="font-mono"
-                      placeholder="acme"
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    {t("companies.idNeverChanges")}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="label"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("admin.shownAs")}</FormLabel>
-                  <FormControl>
-                    <Input {...field} placeholder={t("common.optional")} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <CompanyFormFields control={form.control} editing={editing} />
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose}>
                 {t("common.cancel")}
               </Button>
-              <Button type="submit" disabled={create.isPending}>
-                {t("companies.register")}
+              <Button
+                type="submit"
+                disabled={create.isPending || update.isPending}
+              >
+                {t(editing ? "common.save" : "companies.register")}
               </Button>
             </DialogFooter>
           </form>
