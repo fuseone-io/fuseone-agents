@@ -25,24 +25,56 @@ field" is a commit message.
 
 ---
 
-## [Unreleased]
+## [0.5.0] — 2026-08-19
+
+### Upgrade notes
+
+- **A tool server whose credentials are personal by nature will not act on the
+  installation's credential.** Where every credential shape a catalogue recipe
+  documents carries a user's authority — Google, GitHub, Slack and the like —
+  a real tool call now requires the person the run is on behalf of to have
+  connected their own. A scheduled run has nobody behind it, so it stops rather
+  than acting as a different identity than the same agent would use when a
+  person triggered it. Discovery, probing and health checks still use the
+  installation's credential: asking a server what it offers is not acting for
+  anyone.
+- **Abandoning a run now requires `run:cancel` rather than `run:trigger`.** The
+  permission existed and enforced nothing; a role built to start runs but not
+  end them did not actually withhold anything. Any role that could abandon a
+  run before can still abandon it — author and curator hold both — but a role
+  assembled by hand from individual permissions may need `run:cancel` added.
 
 ### Added
 
-- **MCP credentials can now be personal.** A signed-in user can store their own
-  credential for a configured remote MCP server. Tool calls use that credential
-  only when the run is acting on that user's behalf; discovery, probes and
-  health checks still use the installation credential. Local stdio servers stay
-  installation-scoped because the worker starts one shared process rather than
-  attaching a credential to each HTTP request.
+- **Personal MCP credentials.** A person connects their own credential to a
+  configured HTTP tool server, and a run uses it for the person it acts on
+  behalf of. The credential is sealed against the pair — server and principal
+  together — never returned by any listing, and chosen at the moment of the
+  call rather than when the server was configured. Local (stdio) servers are
+  deliberately excluded: one shared process in the worker has no per-user
+  request to carry a credential on.
+
+### Changed
+
+- A model failure that will pass answers `503` with `fuseone:upstream-busy`
+  instead of `400`. Saturation and rate limiting are "try again shortly", and
+  they used to read as a rejected form — in the status, and in the sentence the
+  console showed.
 
 ### Fixed
 
-- **Scheduled runs no longer use an installation credential for user-only MCP
-  servers.** Recipes whose credential modes all carry a user's authority now
-  require a person on concrete tool calls. Discovery can still use the
-  installation credential, but a cron-triggered run without `OnBehalfOf` stops
-  instead of silently acting as a different identity.
+- The console no longer offers controls the caller cannot use: `Administration`
+  is shown for the permissions its screens actually require rather than for
+  `tool:read`, its tabs are filtered individually, and a stop offers only the
+  scopes the person reaches. The server always refused these; the screen was
+  promising what the backend would decline.
+- A failed session lookup no longer reads as an installation with no identity.
+  `401` and `404` mean nobody, and anything else is now an error — a transient
+  `503` used to be cached as "open mode" for a minute, removing every
+  permission filter in the console.
+- Agent cards, run trails, the decision feed and integration toasts go through
+  i18n. A card also says `unclassified` rather than `read` for a tool nobody has
+  classified, which is what the Gate already believed.
 
 ## [0.4.1] — 2026-08-18
 
