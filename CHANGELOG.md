@@ -25,6 +25,31 @@ field" is a commit message.
 
 ---
 
+## [0.6.1] — 2026-08-19
+
+### Fixed
+
+- **An installation-wide administrator can pick a company again.** The scope
+  switcher built its list from the caller's own grants, so the one grant an
+  installation administrator holds — company `*`, no area — appeared as a
+  company literally called `*`. Choosing it sent `*` as a filter and the
+  screens came back empty, which reads as an installation with no runs rather
+  than as a filter that cannot match.
+
+  The same assumption was underneath, in `ListScopes`: an installation grant
+  was matched as a company name, so it found the areas of a company that does
+  not exist. Fixing only the switcher would have removed the visible symptom
+  and left an administrator with no areas at all. Both halves require company
+  `*` **and** an empty area, which is what installation-wide has meant since
+  0.6.0 — `*` with an area filled in is an ordinary scope and always was.
+
+  A scope already saved in a browser as `*` is normalised to "everything"
+  rather than left pointing at a filter that no longer exists.
+- Companies and Areas read like People: a toolbar, a table header, expandable
+  rows and per-row actions. The Areas form also built its company list from
+  grants, so an installation administrator was offered `*` there too instead
+  of the companies that exist.
+
 ## [0.6.0] — 2026-08-19
 
 ### Upgrade notes
