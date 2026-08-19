@@ -70,11 +70,12 @@ func (s *Server) AbandonRun(ctx context.Context, req openapi.AbandonRunRequestOb
 		}, nil
 	}
 
-	// Ending a run makes the platform act on the world. That is the authority
-	// to make it run, not the authority to read what it did.
-	if err := auth.Require(ctx, domain.PermRunTrigger, state.Scope); err != nil {
+	// Ending a run makes the platform act on the world, but it is not the
+	// authority to start one. Kept separate so an installation can let someone
+	// trigger an agent without letting them abandon somebody else's run.
+	if err := auth.Require(ctx, domain.PermRunCancel, state.Scope); err != nil {
 		return openapi.AbandonRun403ApplicationProblemPlusJSONResponse{
-			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermRunTrigger, state.Scope),
+			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermRunCancel, state.Scope),
 		}, nil
 	}
 	if state.Terminal() {
