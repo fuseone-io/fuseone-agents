@@ -3,22 +3,26 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { MessagesSquare } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
-import { InterviewQuestion } from "@/features/agents/interview-question";
+import { InterviewCapture } from "@/features/agents/interview-capture";
+import { InterviewChecklist } from "@/features/agents/interview-checklist";
 import { useInterview } from "@/features/agents/interview-api";
+import { InterviewReview } from "@/features/agents/interview-review";
 import {
-  QUESTIONS,
+  EMPTY_INTERVIEW_ANSWERS,
   draftFromInterview,
+  type InterviewAnswerKey,
+  type InterviewAnswersState,
 } from "@/features/agents/interview-model";
 import { problemMessage } from "@/lib/api/problem-message";
 
 /**
- * The interview: seven questions, one at a time (PRD §6.1).
+ * The interview: a free description resolved into seven fixed fields.
  *
- * The questions are fixed and in order, and no model chooses what to ask next.
+ * The fields are fixed and no model chooses what to ask next.
  * An authoring path whose questions varied per run could not be reviewed,
- * reproduced or audited — and what it produces is published.
+ * reproduced or audited — and what it produces is published. The free-form
+ * capture is ergonomics; the review is the contract.
  *
  * It ends on the editor rather than publishing directly. The read-back there
  * is what the author approves (FU-08), and routing both paths through one
@@ -29,11 +33,22 @@ export function InterviewPage() {
   const navigate = useNavigate();
   const translate = useInterview();
 
-  const [at, setAt] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [capture, setCapture] = useState("");
+  const [reviewing, setReviewing] = useState(false);
+  const [answers, setAnswers] = useState<InterviewAnswersState>(
+    EMPTY_INTERVIEW_ANSWERS,
+  );
 
-  const question = QUESTIONS[at];
-  const last = at === QUESTIONS.length - 1;
+  const review = () => {
+    setAnswers((current) => ({
+      ...current,
+      steps: current.steps.trim() === "" ? capture : current.steps,
+    }));
+    setReviewing(true);
+  };
+
+  const changeAnswer = (field: InterviewAnswerKey, value: string) =>
+    setAnswers((current) => ({ ...current, [field]: value }));
 
   const finish = () =>
     translate.mutate(
@@ -61,8 +76,6 @@ export function InterviewPage() {
       },
     );
 
-  if (!question) return null;
-
   return (
     <>
       <PageHeader
@@ -71,41 +84,23 @@ export function InterviewPage() {
         description={t("interview.subtitle")}
       />
 
-      <div className="flex max-w-2xl flex-col gap-6">
-        <p className="font-mono text-2xs tabular-nums text-muted-foreground">
-          {t("interview.progress", { at: at + 1, of: QUESTIONS.length })}
-        </p>
-
-        <InterviewQuestion
-          question={question.key}
-          hint={question.hint}
-          value={answers[question.fills] ?? ""}
-          onChange={(value) =>
-            setAnswers({ ...answers, [question.fills]: value })
-          }
-        />
-
-        <div className="flex items-center gap-2">
-          {at > 0 && (
-            <Button variant="outline" onClick={() => setAt(at - 1)}>
-              {t("interview.back")}
-            </Button>
-          )}
-          <Button
-            disabled={translate.isPending}
-            onClick={() => (last ? finish() : setAt(at + 1))}
-          >
-            {t(last ? "interview.finish" : "interview.next")}
-          </Button>
-          {/* Skippable, and it says so. An author who cannot answer "what
-              usually goes wrong" has told you something about the process,
-              and blocking them there loses the other six answers. */}
-          {!last && (
-            <Button variant="ghost" onClick={() => setAt(at + 1)}>
-              {t("interview.skip")}
-            </Button>
+      <div className="grid max-w-6xl gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="flex min-w-0 flex-col gap-4">
+          <InterviewCapture
+            value={capture}
+            onChange={setCapture}
+            onReview={review}
+          />
+          {reviewing && (
+            <InterviewReview
+              answers={answers}
+              isPending={translate.isPending}
+              onChange={changeAnswer}
+              onFinish={finish}
+            />
           )}
         </div>
+        <InterviewChecklist answers={answers} />
       </div>
     </>
   );

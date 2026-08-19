@@ -44,13 +44,23 @@ export const QUESTIONS = [
   },
 ] as const;
 
-/**
- * What the answers amount to, before anybody edits them.
- *
- * The prose the author wrote becomes the instructions verbatim. It is what an
- * auditor reads in two years to understand a run, and paraphrasing it would
- * replace the author's words with the platform's.
- */
+export type InterviewAnswerKey = (typeof QUESTIONS)[number]["fills"];
+export type InterviewAnswersState = Record<InterviewAnswerKey, string>;
+
+export const EMPTY_INTERVIEW_ANSWERS: InterviewAnswersState = {
+  trigger: "",
+  mustKnow: "",
+  steps: "",
+  goesWrong: "",
+  notDecide: "",
+  closing: "",
+  neverDo: "",
+};
+
+export function filledAnswers(answers: InterviewAnswersState) {
+  return QUESTIONS.filter((question) => answers[question.fills].trim() !== "");
+}
+
 /**
  * What the interview leaves behind, as a draft.
  *
