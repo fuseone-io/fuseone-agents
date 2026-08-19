@@ -27,6 +27,13 @@ Concretely, on a fresh install and after several upgrades:
   reaching what the worker reaches. That is a decision with a name attached to
   it, and a stored server carries no acceptance until an administrator gives
   one.
+- **A user-only MCP server does not act with the installation credential.** If
+  a shipped recipe says every credential mode carries a user's authority, a
+  concrete tool call has to carry `OnBehalfOf` and that person's sealed
+  credential. Discovery, probes and health checks may still use the
+  installation credential because they are not acts by an agent. A scheduled
+  run has no person behind it, so it stops instead of silently becoming the
+  installation.
 - **A run will not finish without somewhere to put its answer.** From 0.3.3 the
   worker writes a run's closing answer to the content store, behind a
   reference, so retention and erasure reach it like everything else. It refuses
@@ -39,6 +46,13 @@ Concretely, on a fresh install and after several upgrades:
 - **A tool whose definition changed waits for a fresh ruling.** A ruling names
   the definition it judged; when a server redefines a tool under the same name,
   the old ruling stops applying.
+
+There is one boundary to that rule. For an MCP server that is not in the
+shipped catalogue, the platform cannot infer whether its credential is personal
+or service-owned. It keeps those custom integrations compatible and does not
+force the user-only rule by guesswork. If that boundary ever becomes too wide,
+the fix is an explicit server-level declaration in the console, and absence of
+that declaration should refuse rather than permit.
 
 None of these is a fault to work around. An operator who reads them as breakage
 disables the thing that makes the platform worth installing.
