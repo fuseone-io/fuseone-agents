@@ -1,19 +1,25 @@
 import { useDeferredValue, useMemo, useState } from "react";
-import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { Users } from "lucide-react";
 import { Panel } from "@/components/shared/panel";
-import { Toolbar } from "@/components/shared/toolbar";
 import {
   EmptyState,
   ErrorState,
   LoadingRows,
 } from "@/components/shared/states";
-import { LoadMore } from "@/components/shared/load-more";
-import { Button } from "@/components/ui/button";
 import { GrantEditor } from "@/features/admin/grant-editor";
 import { LocalPersonForm } from "@/features/admin/local-person-form";
 import { PasswordDialog } from "@/features/admin/password-dialog";
+import { PeopleFooter } from "@/features/admin/people-footer";
+import {
+  isLocalPasswordIdentity,
+  matchesPeopleView,
+  matchesPerson,
+  type PeopleView,
+} from "@/features/admin/people-filters";
+import { PeopleHeader } from "@/features/admin/people-header";
+import { PeopleTableHeader } from "@/features/admin/people-table-header";
+import { PeopleToolbar } from "@/features/admin/people-toolbar";
 import { PersonRow } from "@/features/admin/person-row";
 import { usePeople, type Person } from "@/features/admin/people-api";
 import { useVisibleItems } from "@/hooks/use-visible-items";
@@ -35,18 +41,24 @@ export function PeoplePanel() {
   const [adding, setAdding] = useState(false);
   const [settingPassword, setSettingPassword] = useState<Person | null>(null);
   const [search, setSearch] = useState("");
+  const [view, setView] = useState<PeopleView>("all");
+  const [openRows, setOpenRows] = useState<Record<string, boolean>>({});
 
   const people = data?.items ?? EMPTY_PEOPLE;
   const query = useDeferredValue(search.trim().toLowerCase());
   const filtered = useMemo(
     () =>
-      query
-        ? people.filter((person) => matchesPerson(person, query, t))
-        : people,
-    [people, query, t],
+      people.filter(
+        (person) =>
+          matchesPeopleView(person, view) &&
+          (!query || matchesPerson(person, query, t)),
+      ),
+    [people, query, t, view],
   );
   const page = useVisibleItems(filtered, 50);
   const noMatches = people.length > 0 && filtered.length === 0;
+  const noRole = people.filter((person) => (person.grants ?? []).length === 0);
+  const local = people.filter(isLocalPasswordIdentity);
 
   if (editing) {
     return (
@@ -57,60 +69,55 @@ export function PeoplePanel() {
   }
 
   return (
-    <Panel
-      title={t("people.title")}
-      action={
-        <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
-          {t("people.addLocal")}
-        </Button>
-      }
-    >
+    <section className="overflow-hidden rounded-xl border bg-card shadow-sm">
+      <PeopleHeader onAddLocal={() => setAdding(true)} />
+
       {isLoading ? (
-        <LoadingRows rows={4} />
+        <div className="p-4">
+          <LoadingRows rows={4} />
+        </div>
       ) : error ? (
-        <ErrorState error={error} onRetry={() => void refetch()} />
+        <div className="p-4">
+          <ErrorState error={error} onRetry={() => void refetch()} />
+        </div>
       ) : people.length === 0 ? (
-        <EmptyState
-          icon={<Users className="size-6" />}
-          title={t("people.emptyTitle")}
-          hint={t("people.emptyHint")}
-        />
-      ) : (
-        <div className="flex flex-col gap-3">
-          <Toolbar
-            placeholder="people.search"
-            value={search}
-            onChange={setSearch}
-            trailing={
-              <span className="text-xs text-muted-foreground">
-                {t("people.showing", {
-                  shown: filtered.length,
-                  total: people.length,
-                })}
-              </span>
-            }
+        <div className="p-4">
+          <EmptyState
+            icon={<Users className="size-6" />}
+            title={t("people.emptyTitle")}
+            hint={t("people.emptyHint")}
           />
+        </div>
+      ) : (
+        <>
+          <PeopleToolbar
+            search={search}
+            onSearch={setSearch}
+            view={view}
+            onView={setView}
+            noRole={noRole.length}
+            local={local.length}
+          />
+
           {noMatches ? (
-            <EmptyState
-              icon={<Users className="size-6" />}
-              title={t("people.noMatches")}
-              hint={t("people.noMatchesHint")}
-            />
+            <div className="p-8">
+              <EmptyState
+                icon={<Users className="size-6" />}
+                title={t("people.noMatches")}
+                hint={t("people.noMatchesHint")}
+              />
+            </div>
           ) : (
-            <ul className="flex flex-col gap-2">
-              <li
-                className="hidden grid-cols-[minmax(0,1.1fr)_minmax(0,1.5fr)_minmax(128px,auto)_minmax(136px,auto)] gap-3 px-3 text-2xs font-medium uppercase tracking-normal text-muted-foreground lg:grid"
-                aria-hidden
-              >
-                <span>{t("people.person")}</span>
-                <span>{t("people.access")}</span>
-                <span>{t("people.lastActivity")}</span>
-                <span>{t("people.actions")}</span>
-              </li>
+            <ul className="divide-y divide-border-subtle">
+              <PeopleTableHeader />
               {page.visible.map((person) => (
                 <li key={person.id}>
                   <PersonRow
                     person={person}
+                    open={Boolean(openRows[person.id])}
+                    onOpenChange={(open) =>
+                      setOpenRows((rows) => ({ ...rows, [person.id]: open }))
+                    }
                     onEdit={() => setEditing(person)}
                     onSetPassword={() => setSettingPassword(person)}
                   />
@@ -118,16 +125,16 @@ export function PeoplePanel() {
               ))}
             </ul>
           )}
+
           {!noMatches && (
-            <LoadMore
-              loaded={page.loaded}
-              total={page.total}
+            <PeopleFooter
+              shown={page.loaded}
+              total={people.length}
               hasMore={page.hasMore}
-              isLoading={false}
-              onLoad={page.loadMore}
+              onLoadMore={page.loadMore}
             />
           )}
-        </div>
+        </>
       )}
 
       {adding && <LocalPersonForm onClose={() => setAdding(false)} />}
@@ -137,28 +144,6 @@ export function PeoplePanel() {
           onClose={() => setSettingPassword(null)}
         />
       )}
-    </Panel>
+    </section>
   );
-}
-
-function matchesPerson(person: Person, query: string, t: TFunction) {
-  return [
-    person.display,
-    person.email,
-    person.id,
-    person.provider,
-    person.username,
-    person.kind,
-    t(`people.kind.${person.kind}`),
-    ...(person.grants ?? []).flatMap((grant) => [
-      grant.role,
-      t(`roles.${grant.role}`),
-      grant.company,
-      grant.area,
-      grant.asserted ? "provider" : "direct",
-      grant.asserted ? t("people.asserted") : t("people.grantedHere"),
-    ]),
-  ]
-    .filter(Boolean)
-    .some((value) => String(value).toLowerCase().includes(query));
 }

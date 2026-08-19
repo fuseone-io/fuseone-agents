@@ -1,93 +1,76 @@
-import { useTranslation } from "react-i18next";
-import { Badge } from "@/components/ui/badge";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Mono } from "@/components/shared/mono";
-import { GrantBadge } from "@/features/admin/grant-badge";
-import { formatRelative } from "@/lib/format";
+import { PersonAccessMatrix } from "@/features/admin/person-access-matrix";
+import { PersonAccessSummary } from "@/features/admin/person-access-summary";
+import { PersonActions } from "@/features/admin/person-actions";
+import { groupGrants } from "@/features/admin/person-access-model";
+import { PersonIdentityCell } from "@/features/admin/person-identity-cell";
+import {
+  PersonLastSeenCell,
+  PersonSignInCell,
+} from "@/features/admin/person-signin-cell";
 import type { Person } from "@/features/admin/people-api";
 
 /**
- * One person, and everything they hold.
+ * One person in the administrative list.
  *
- * Holding nothing is stated rather than left blank: somebody who can sign in
- * and do nothing looks identical to somebody nobody has got to yet, and they
- * are the same problem.
+ * The row is the summary and the expansion is the detail. All editing still
+ * goes through the existing grant editor, so this screen does not grow a
+ * second permission-writing path.
  */
 export function PersonRow({
   person,
+  open,
+  onOpenChange,
   onEdit,
   onSetPassword,
 }: {
   person: Person;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onEdit: () => void;
   onSetPassword: () => void;
 }) {
-  const { t } = useTranslation();
-  const grants = person.grants ?? [];
+  const groups = groupGrants(person.grants ?? []);
+  const panelId = `person-access-${cssId(person.id)}`;
 
   return (
-    <div className="grid gap-3 rounded-lg border p-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1.5fr)_minmax(128px,auto)_minmax(136px,auto)] lg:items-center">
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="min-w-0 break-words font-medium">
-            {person.display}
-          </span>
-          {person.kind !== "user" && (
-            <Badge variant="outline">{t(`people.kind.${person.kind}`)}</Badge>
-          )}
-          {person.disabled && (
-            <Badge variant="destructive">{t("people.disabled")}</Badge>
-          )}
-        </div>
-        <Mono dim className="block truncate text-xs">
-          {person.email || person.id}
-        </Mono>
-      </div>
-
-      <div className="min-w-0">
-        <p className="mb-1 text-2xs font-medium uppercase tracking-normal text-muted-foreground lg:hidden">
-          {t("people.access")}
-        </p>
-        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-          {grants.length === 0 ? (
-            <Badge variant="destructive">{t("people.noAccess")}</Badge>
+    <div className="min-w-0">
+      <Button
+        type="button"
+        variant="ghost"
+        aria-expanded={open}
+        aria-controls={panelId}
+        onClick={() => onOpenChange(!open)}
+        className="grid h-auto w-full grid-cols-1 justify-stretch gap-3 rounded-none px-4 py-3 text-left font-normal whitespace-normal transition-colors hover:bg-muted/60 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1.7fr)_138px_108px_36px] lg:items-center"
+      >
+        <PersonIdentityCell person={person} />
+        <PersonAccessSummary groups={groups} />
+        <PersonSignInCell person={person} />
+        <PersonLastSeenCell lastSeen={person.lastSeen} />
+        <span className="hidden size-7 place-items-center rounded-md text-muted-foreground lg:grid">
+          {open ? (
+            <ChevronUp className="size-4" aria-hidden />
           ) : (
-            grants.map((grant, i) => <GrantBadge key={i} grant={grant} />)
+            <ChevronDown className="size-4" aria-hidden />
           )}
+        </span>
+      </Button>
+
+      {open && (
+        <div id={panelId}>
+          <PersonAccessMatrix groups={groups} onEdit={onEdit} />
+          <PersonActions
+            person={person}
+            onEdit={onEdit}
+            onSetPassword={onSetPassword}
+          />
         </div>
-      </div>
-
-      <div className="min-w-0 text-xs text-muted-foreground">
-        <p className="mb-1 text-2xs font-medium uppercase tracking-normal text-muted-foreground lg:hidden">
-          {t("people.lastActivity")}
-        </p>
-        {person.lastSeen
-          ? t("people.lastSeen", { when: formatRelative(person.lastSeen) })
-          : t("people.neverSeen")}
-      </div>
-
-      {/* Only where a password is the way in. Somebody a provider vouched
-          for signs in there, and offering to set one here would invite two
-          credentials for one person. */}
-      <div className="flex min-w-0 flex-wrap items-center justify-start gap-2 lg:justify-end">
-        {person.kind === "user" &&
-          !(person.provider ?? "").startsWith("oidc") && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7"
-              onClick={onSetPassword}
-            >
-              {person.username
-                ? t("people.changePassword")
-                : t("people.setPassword")}
-            </Button>
-          )}
-
-        <Button variant="ghost" size="sm" className="h-7" onClick={onEdit}>
-          {t("people.manage")}
-        </Button>
-      </div>
+      )}
     </div>
   );
+}
+
+function cssId(value: string) {
+  return value.replace(/[^a-zA-Z0-9_-]/g, "-");
 }

@@ -1,0 +1,21 @@
+import { UserPlus } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { Button } from "@/components/ui/button";
+
+export function PeopleHeader({ onAddLocal }: { onAddLocal: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <header className="flex flex-wrap items-start gap-3 border-b px-4 py-3.5">
+      <div className="min-w-0 flex-1">
+        <h2 className="text-base font-medium">{t("people.title")}</h2>
+        <p className="mt-1 max-w-2xl text-xs text-muted-foreground">
+          {t("people.subtitle")}
+        </p>
+      </div>
+      <Button variant="outline" size="sm" onClick={onAddLocal}>
+        <UserPlus className="size-4" aria-hidden />
+        {t("people.addLocal")}
+      </Button>
+    </header>
+  );
+}
