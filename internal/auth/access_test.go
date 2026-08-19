@@ -22,7 +22,7 @@ func person(kind domain.PrincipalKind, grants ...domain.Grant) domain.Principal 
 
 // --- the authorisation model -------------------------------------------------
 
-func TestRoles_curatorIsTheOnlyOneThatCanWidenWhatAgentsMayDo(t *testing.T) {
+func TestRoles_curatorAndAdminCanWidenWhatAgentsMayDo(t *testing.T) {
 	t.Parallel()
 
 	// Classifying a tool's effect and writing a capability pack are the two
@@ -35,12 +35,32 @@ func TestRoles_curatorIsTheOnlyOneThatCanWidenWhatAgentsMayDo(t *testing.T) {
 	} {
 		for _, role := range domain.Roles() {
 			allowed := role.Allows(perm)
-			if role == domain.RoleCurator && !allowed {
-				t.Errorf("curator cannot %s", perm)
+			if (role == domain.RoleCurator || role == domain.RoleAdmin) && !allowed {
+				t.Errorf("%s cannot %s", role, perm)
 			}
-			if role != domain.RoleCurator && allowed {
-				t.Errorf("%s can %s — only the curator should", role, perm)
+			if role != domain.RoleCurator && role != domain.RoleAdmin && allowed {
+				t.Errorf("%s can %s — only the curator and admin should", role, perm)
 			}
+		}
+	}
+}
+
+func TestRoles_adminCarriesEveryPermission(t *testing.T) {
+	t.Parallel()
+
+	for _, perm := range []domain.Permission{
+		domain.PermRunRead, domain.PermRunTrigger, domain.PermRunCancel, domain.PermApprovalAct,
+		domain.PermAgentRead, domain.PermAgentPublish,
+		domain.PermCostRead,
+		domain.PermAuditRead, domain.PermAuditExport,
+		domain.PermToolRead, domain.PermToolClassify, domain.PermPackWrite,
+		domain.PermProviderWrite, domain.PermBudgetWrite, domain.PermBrandWrite,
+		domain.PermPolicyRead, domain.PermPolicyWrite,
+		domain.PermIdentityWrite, domain.PermScopeWrite, domain.PermDataErase,
+		domain.PermCompanyWrite,
+	} {
+		if !domain.RoleAdmin.Allows(perm) {
+			t.Errorf("admin cannot %s", perm)
 		}
 	}
 }

@@ -45,6 +45,21 @@ func TestGrantsFor_mappedGroup_becomesAScopedGrant(t *testing.T) {
 	}
 }
 
+func TestGrantsFor_installationAdminUsesTheExplicitWildcardScope(t *testing.T) {
+	t.Parallel()
+
+	p := provider(auth.GroupMapping{Group: "admins", Company: "*", Area: "", Role: "admin"})
+
+	got := p.GrantsFor([]string{"admins"})
+	if len(got) != 1 {
+		t.Fatalf("GrantsFor = %v, want exactly the installation grant", got)
+	}
+	want := domain.Grant{Scope: domain.Scope{Company: domain.Installation}, Role: domain.RoleAdmin}
+	if got[0] != want {
+		t.Errorf("GrantsFor = %v, want %v", got[0], want)
+	}
+}
+
 func TestGrantsFor_groupComparisonIsExactApartFromCase(t *testing.T) {
 	t.Parallel()
 
@@ -67,6 +82,7 @@ func TestGrantsFor_malformedMapping_grantsNothingRatherThanSomethingApproximate(
 		auth.GroupMapping{Group: "a", Company: "acme", Area: "cx", Role: "wizard"},
 		auth.GroupMapping{Group: "b", Company: "", Area: "cx", Role: "author"},
 		auth.GroupMapping{Group: "c", Company: "acme", Area: "", Role: "author"},
+		auth.GroupMapping{Group: "d", Company: "*", Area: "cx", Role: "admin"},
 	)
 
 	// Silently widening a scope from a broken mapping would be invisible to

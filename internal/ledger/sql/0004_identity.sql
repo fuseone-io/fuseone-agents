@@ -46,14 +46,15 @@ create unique index principals_provider_subject_uniq
     on principals (provider, subject)
     where subject <> '';
 
--- Grants are always scoped. There is no installation-wide role: an operator
--- who administers two companies holds two grants, and the trail names which
--- one each action was taken under.
+-- Grants are always scoped. The installation-wide grant is a scope, not a
+-- wildcard permission: role says what, scope says where, and the trail names
+-- both for every administrative act.
 create table role_grants (
     principal_id text        not null references principals(principal_id) on delete cascade,
     company_id   text        not null,
     area_id      text        not null,
-    role         text        not null check (role in ('author', 'approver', 'curator', 'auditor')),
+    role         text        not null check (role in ('admin', 'author', 'approver', 'curator', 'auditor')),
+    check (company_id <> '*' or area_id = ''),
     granted_by   text        not null default '',
     granted_at   timestamptz not null default now(),
     primary key (principal_id, company_id, area_id, role)

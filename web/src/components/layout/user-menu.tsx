@@ -45,7 +45,11 @@ export function UserMenu() {
                     instead: in a governance tool, what somebody may do is the
                     fact a reader needs at a glance. */}
                 <span className="truncate text-xs text-muted-foreground">
-                  {rolesOf(me.grants)}
+                  {rolesOf(
+                    me.grants,
+                    (role) => t(`roles.${role}`),
+                    t("people.noAccess"),
+                  )}
                 </span>
               </div>
               <ChevronsUpDown className="size-3.5 text-muted-foreground group-data-[collapsible=icon]:hidden" />
@@ -88,7 +92,11 @@ function initialsOf(display: string): string {
   return words.map((w) => w[0]?.toUpperCase() ?? "").join("") || "?";
 }
 
-function rolesOf(grants: MeGrant[]): string {
+function rolesOf(
+  grants: MeGrant[],
+  label: (role: MeGrant["role"]) => string,
+  empty: string,
+): string {
   const roles = [...new Set(grants.map((g) => g.role))];
-  return roles.length ? roles.join(", ") : "Sem acesso";
+  return roles.length ? roles.map(label).join(", ") : empty;
 }

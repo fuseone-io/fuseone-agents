@@ -61,6 +61,29 @@ func claimFirst(t *testing.T, b *auth.Bootstrap) {
 	}
 }
 
+func TestClaim_grantsOneInstallationAdmin(t *testing.T) {
+	b, _ := bootstrapFor(t)
+	secret, issued, err := b.Issue(t.Context(), time.Hour)
+	if err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
+	if !issued {
+		t.Fatal("fresh bootstrap did not issue a token")
+	}
+
+	_, principal, err := b.Claim(t.Context(), secret, "Ana", "test", "127.0.0.1")
+	if err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+
+	if len(principal.Grants) != 1 {
+		t.Fatalf("grants = %+v, want one admin grant", principal.Grants)
+	}
+	if got := principal.Grants[0]; got.Scope.Company != "*" || got.Scope.Area != "" || got.Role != "admin" {
+		t.Errorf("grant = %+v, want installation admin", got)
+	}
+}
+
 func TestIssue_afterTheInstallationIsClaimed_refuses(t *testing.T) {
 	b, _ := bootstrapFor(t)
 	claimFirst(t, b)

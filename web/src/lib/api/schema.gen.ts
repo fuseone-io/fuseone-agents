@@ -1293,10 +1293,10 @@ export interface paths {
          *     where they are already handled, and the console never sees a password.
          *
          *     This is for the installation that has no provider yet, and for the
-         *     small one that never will. The four roles exist to hold an author and
-         *     an approver apart, and an installation with a single account cannot
-         *     show the separation it is sold on — before this, a fresh installation
-         *     had exactly one account, the one the setup token created.
+         *     small one that never will. The duties exist to hold an author and an
+         *     approver apart, and an installation with a single account cannot show
+         *     the separation it is sold on — before this, a fresh installation had
+         *     exactly one account, the one the setup token created.
          *
          *     The account arrives holding nothing. Granting is a separate act, on
          *     the screen that already does it, so creating somebody and deciding
@@ -2311,13 +2311,13 @@ export interface components {
             /** @description Whether any case has yet to settle. Derived from the runs rather than tracked beside them: the runs are the queue, so a simulation is still going exactly when one of its runs is. */
             running: boolean;
         };
-        /** @description One group asserted by the provider, and the scoped grant it produces. There is no installation-wide role: a mapping always names a company and an area. */
+        /** @description One group asserted by the provider, and the scoped grant it produces. A mapping normally names a company and an area. Naming company `*` with an empty area is the explicit installation-wide scope. */
         GroupMapping: {
             group: string;
             company: string;
             area: string;
             /** @enum {string} */
-            role: "author" | "approver" | "curator" | "auditor";
+            role: "admin" | "author" | "approver" | "curator" | "auditor";
         };
         IdentityProvider: {
             id: string;
@@ -2349,13 +2349,13 @@ export interface components {
             company: string;
             area: string;
             /** @enum {string} */
-            role: "author" | "approver" | "curator" | "auditor";
+            role: "admin" | "author" | "approver" | "curator" | "auditor";
         };
         HeldGrant: {
             company: string;
             area: string;
             /** @enum {string} */
-            role: "author" | "approver" | "curator" | "auditor";
+            role: "admin" | "author" | "approver" | "curator" | "auditor";
             /** @description That an identity provider produced this on sign-in. It cannot be revoked here — it is re-derived the next time its holder signs in, so the group is what to change. */
             asserted: boolean;
             /** @description Who granted it, or which provider asserted it. */

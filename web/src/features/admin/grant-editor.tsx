@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus } from "lucide-react";
+import { Plus, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { GrantRow } from "@/features/admin/grant-row";
@@ -39,6 +39,9 @@ export function GrantEditor({
   );
 
   const asserted = held.filter((g) => g.asserted);
+  const hasInstallationAdmin = granted.some(
+    (g) => g.company === "*" && g.area === "" && g.role === "admin",
+  );
   const update = (index: number, patch: Partial<GrantInput>) =>
     setGranted(granted.map((g, i) => (i === index ? { ...g, ...patch } : g)));
 
@@ -87,20 +90,37 @@ export function GrantEditor({
           />
         ))}
 
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 self-start"
-          onClick={() =>
-            setGranted([
-              ...granted,
-              { company: "default", area: "", role: "author" },
-            ])
-          }
-        >
-          <Plus className="size-4" aria-hidden />
-          {t("people.addGrant")}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8"
+            onClick={() =>
+              setGranted([
+                ...granted,
+                { company: "default", area: "", role: "author" },
+              ])
+            }
+          >
+            <Plus className="size-4" aria-hidden />
+            {t("people.addGrant")}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8"
+            disabled={hasInstallationAdmin}
+            onClick={() =>
+              setGranted([
+                ...granted,
+                { company: "*", area: "", role: "admin" },
+              ])
+            }
+          >
+            <ShieldCheck className="size-4" aria-hidden />
+            {t("people.addAdminGrant")}
+          </Button>
+        </div>
       </div>
 
       <div className="flex gap-2">

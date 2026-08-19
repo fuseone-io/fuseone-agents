@@ -52,6 +52,15 @@ func TestContains_theZeroScope_reachesNothing(t *testing.T) {
 	}
 }
 
+func TestContains_installationScopeMustHaveNoArea(t *testing.T) {
+	t.Parallel()
+
+	malformed := domain.Scope{Company: domain.Installation, Area: "cx"}
+	if malformed.Contains(domain.Scope{Company: "acme", Area: "cx"}) {
+		t.Error("a malformed installation scope with an area reached everything")
+	}
+}
+
 // The other direction: holding a company does not let somebody act on the
 // installation, which is what stops one company's administrator creating a
 // second one.

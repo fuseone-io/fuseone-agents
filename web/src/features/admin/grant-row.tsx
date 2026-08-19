@@ -13,6 +13,7 @@ import {
 import type { GrantInput } from "@/features/admin/people-api";
 
 const ROLES: GrantInput["role"][] = [
+  "admin",
   "author",
   "approver",
   "curator",

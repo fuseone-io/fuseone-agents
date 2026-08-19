@@ -97,7 +97,7 @@ func TestPutIdentityProvider_savingMakesItLive(t *testing.T) {
 
 	live := &fakeSignIn{}
 	store := &fakeIdentity{secret: "stored-secret"}
-	resp, err := identityServer(store, live).PutIdentityProvider(as(domain.RoleCurator), providerInput())
+	resp, err := identityServer(store, live).PutIdentityProvider(asInstallation(domain.RoleCurator), providerInput())
 	if err != nil {
 		t.Fatalf("PutIdentityProvider: %v", err)
 	}
@@ -126,7 +126,7 @@ func TestPutIdentityProvider_thatCannotBeDiscovered_saysSoNow(t *testing.T) {
 
 	live := &fakeSignIn{err: errors.New("dial tcp: connection refused")}
 	resp, err := identityServer(&fakeIdentity{}, live).PutIdentityProvider(
-		as(domain.RoleCurator), providerInput())
+		asInstallation(domain.RoleCurator), providerInput())
 	if err != nil {
 		t.Fatalf("PutIdentityProvider: %v", err)
 	}
@@ -150,7 +150,7 @@ func TestPutIdentityProvider_disabled_leavesTheRegistry(t *testing.T) {
 	off := false
 	req.Body.Enabled = &off
 
-	if _, err := identityServer(&fakeIdentity{}, live).PutIdentityProvider(as(domain.RoleCurator), req); err != nil {
+	if _, err := identityServer(&fakeIdentity{}, live).PutIdentityProvider(asInstallation(domain.RoleCurator), req); err != nil {
 		t.Fatalf("PutIdentityProvider: %v", err)
 	}
 	// Switching a provider off keeps its configuration and stops the sign-ins.
@@ -168,7 +168,7 @@ func TestListIdentityProviders_neverCarriesTheClientSecret(t *testing.T) {
 	}}}
 
 	resp, err := identityServer(store, &fakeSignIn{}).ListIdentityProviders(
-		as(domain.RoleCurator), openapi.ListIdentityProvidersRequestObject{})
+		asInstallation(domain.RoleCurator), openapi.ListIdentityProvidersRequestObject{})
 	if err != nil {
 		t.Fatalf("ListIdentityProviders: %v", err)
 	}
@@ -189,7 +189,7 @@ func TestPutIdentityProvider_withoutIdentityWrite_isForbidden(t *testing.T) {
 	store := &fakeIdentity{}
 	live := &fakeSignIn{}
 	// Deciding who may sign in is not something an author or an approver does.
-	resp, err := identityServer(store, live).PutIdentityProvider(as(domain.RoleAuthor), providerInput())
+	resp, err := identityServer(store, live).PutIdentityProvider(asInstallation(domain.RoleAuthor), providerInput())
 	if err != nil {
 		t.Fatalf("PutIdentityProvider: %v", err)
 	}
@@ -205,7 +205,7 @@ func TestDeleteIdentityProvider_stopsAcceptingSignIns(t *testing.T) {
 	t.Parallel()
 
 	store, live := &fakeIdentity{}, &fakeSignIn{}
-	if _, err := identityServer(store, live).DeleteIdentityProvider(as(domain.RoleCurator),
+	if _, err := identityServer(store, live).DeleteIdentityProvider(asInstallation(domain.RoleCurator),
 		openapi.DeleteIdentityProviderRequestObject{Id: "keycloak"}); err != nil {
 		t.Fatalf("DeleteIdentityProvider: %v", err)
 	}
@@ -214,5 +214,26 @@ func TestDeleteIdentityProvider_stopsAcceptingSignIns(t *testing.T) {
 	// second keeps accepting sign-ins for a configuration nobody can see.
 	if store.deleted != "keycloak" || len(live.removed) != 1 {
 		t.Errorf("deleted %q, removed %v", store.deleted, live.removed)
+	}
+}
+
+func TestPutIdentityProvider_adminInTheAdministrationAreaCannotGrantSignInToInstallation(t *testing.T) {
+	t.Parallel()
+
+	store, live := &fakeIdentity{}, &fakeSignIn{}
+	req := providerInput()
+	req.Body.Mappings = &[]openapi.GroupMapping{
+		{Group: "admins", Company: "*", Area: "", Role: "admin"},
+	}
+
+	resp, err := identityServer(store, live).PutIdentityProvider(as(domain.RoleAdmin), req)
+	if err != nil {
+		t.Fatalf("PutIdentityProvider: %v", err)
+	}
+	if _, ok := resp.(openapi.PutIdentityProvider403ApplicationProblemPlusJSONResponse); !ok {
+		t.Fatalf("response = %T, want it refused", resp)
+	}
+	if len(store.stored) != 0 || len(live.added) != 0 {
+		t.Error("an area administrator configured an installation-wide sign-in mapping")
 	}
 }

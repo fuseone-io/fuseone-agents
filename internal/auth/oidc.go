@@ -210,9 +210,14 @@ func (p *OIDCProvider) GrantsFor(groups []string) []domain.Grant {
 			continue
 		}
 		role, err := domain.ParseRole(m.Role)
-		if err != nil || m.Company == "" || m.Area == "" {
+		if err != nil ||
+			m.Company == "" ||
+			(m.Company == string(domain.Installation) && m.Area != "") ||
+			(m.Company != string(domain.Installation) && m.Area == "") {
 			// A malformed mapping grants nothing rather than something
-			// approximate. Silently widening a scope here would be invisible.
+			// approximate. Silently widening a company scope here would be
+			// invisible; the only empty area accepted is the explicit
+			// installation scope, written as company "*".
 			continue
 		}
 		grant := domain.Grant{

@@ -46,3 +46,17 @@ func TestCan_companyCuratorGovernsANewArea(t *testing.T) {
 		t.Error("a company curator could not govern an area created later")
 	}
 }
+
+func TestCan_installationAdminReachesEveryCompany(t *testing.T) {
+	t.Parallel()
+
+	admin := domain.Principal{
+		Grants: []domain.Grant{{Scope: domain.Scope{Company: domain.Installation}, Role: domain.RoleAdmin}},
+	}
+	if !admin.Can(domain.PermCompanyWrite, domain.Scope{Company: domain.Installation}) {
+		t.Error("an installation admin could not govern companies")
+	}
+	if !admin.Can(domain.PermToolClassify, domain.Scope{Company: "newco", Area: "devops"}) {
+		t.Error("an installation admin did not reach a company area")
+	}
+}

@@ -39,9 +39,9 @@ func (s *Server) WithIdentity(store Identity, live SignIn) *Server {
 func (s *Server) ListIdentityProviders(
 	ctx context.Context, _ openapi.ListIdentityProvidersRequestObject,
 ) (openapi.ListIdentityProvidersResponseObject, error) {
-	if err := auth.Require(ctx, domain.PermIdentityWrite, adminScope); err != nil {
+	if err := auth.Require(ctx, domain.PermIdentityWrite, identityScope); err != nil {
 		return openapi.ListIdentityProviders403ApplicationProblemPlusJSONResponse{
-			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermIdentityWrite, adminScope),
+			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermIdentityWrite, identityScope),
 		}, nil
 	}
 	if s.identity == nil {
@@ -62,9 +62,9 @@ func (s *Server) ListIdentityProviders(
 func (s *Server) PutIdentityProvider(
 	ctx context.Context, req openapi.PutIdentityProviderRequestObject,
 ) (openapi.PutIdentityProviderResponseObject, error) {
-	if err := auth.Require(ctx, domain.PermIdentityWrite, adminScope); err != nil {
+	if err := auth.Require(ctx, domain.PermIdentityWrite, identityScope); err != nil {
 		return openapi.PutIdentityProvider403ApplicationProblemPlusJSONResponse{
-			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermIdentityWrite, adminScope),
+			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermIdentityWrite, identityScope),
 		}, nil
 	}
 	if s.identity == nil || req.Body == nil {
@@ -76,7 +76,7 @@ func (s *Server) PutIdentityProvider(
 	if req.Body.ClientSecret != nil {
 		secret = *req.Body.ClientSecret
 	}
-	if err := s.identity.PutIdentityProvider(ctx, callerOf(ctx), adminScope, provider, secret); err != nil {
+	if err := s.identity.PutIdentityProvider(ctx, callerOf(ctx), identityScope, provider, secret); err != nil {
 		return openapi.PutIdentityProvider400ApplicationProblemPlusJSONResponse(
 			upstreamRefused(err.Error())), nil
 	}
@@ -98,16 +98,16 @@ func (s *Server) PutIdentityProvider(
 func (s *Server) DeleteIdentityProvider(
 	ctx context.Context, req openapi.DeleteIdentityProviderRequestObject,
 ) (openapi.DeleteIdentityProviderResponseObject, error) {
-	if err := auth.Require(ctx, domain.PermIdentityWrite, adminScope); err != nil {
+	if err := auth.Require(ctx, domain.PermIdentityWrite, identityScope); err != nil {
 		return openapi.DeleteIdentityProvider403ApplicationProblemPlusJSONResponse{
-			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermIdentityWrite, adminScope),
+			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermIdentityWrite, identityScope),
 		}, nil
 	}
 	if s.identity == nil {
 		return openapi.DeleteIdentityProvider204Response{}, nil
 	}
 
-	if err := s.identity.DeleteIdentityProvider(ctx, callerOf(ctx), adminScope, req.Id); err != nil {
+	if err := s.identity.DeleteIdentityProvider(ctx, callerOf(ctx), identityScope, req.Id); err != nil {
 		return nil, fmt.Errorf("delete identity provider %s: %w", req.Id, err)
 	}
 	if s.signIn != nil {

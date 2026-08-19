@@ -32,7 +32,8 @@ type MeGrant struct {
 	Role    string `json:"role"`
 }
 
-// meFrom renders the caller, including the permissions they hold anywhere.
+// meFrom renders the caller, including the permissions they hold where the
+// console can actually use them.
 //
 // The console uses `can` to decide which navigation to show. It is a hint for
 // the interface, never the enforcement — every request is checked again on the
@@ -49,13 +50,28 @@ func meFrom(p domain.Principal) Me {
 			Company: string(g.Scope.Company), Area: string(g.Scope.Area), Role: string(g.Role),
 		})
 		for _, perm := range g.Role.Permissions() {
-			if _, dup := seen[perm]; !dup {
-				seen[perm] = struct{}{}
-				out.Can = append(out.Can, string(perm))
+			if _, dup := seen[perm]; dup {
+				continue
 			}
+			if !canShowInConsole(p, perm) {
+				continue
+			}
+			seen[perm] = struct{}{}
+			out.Can = append(out.Can, string(perm))
 		}
 	}
 	return out
+}
+
+func canShowInConsole(p domain.Principal, perm domain.Permission) bool {
+	switch perm {
+	case domain.PermCompanyWrite:
+		return p.Can(perm, domain.Scope{Company: domain.Installation})
+	case domain.PermIdentityWrite:
+		return p.Can(perm, identityScope)
+	default:
+		return p.CanAnywhere(perm)
+	}
 }
 
 // MeHandler answers "who am I", for the console's first request after load.

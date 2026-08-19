@@ -1,7 +1,6 @@
 import { useTranslation } from "react-i18next";
-import { Plus, X } from "lucide-react";
+import { Plus, ShieldCheck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -10,23 +9,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { MappingField } from "@/features/admin/mapping-field";
 import type { GroupMapping } from "@/features/admin/identity-api";
 
 const ROLES: GroupMapping["role"][] = [
+  "admin",
   "author",
   "approver",
   "curator",
   "auditor",
 ];
 
-/**
- * Which group gets which role, where.
- *
- * A provider with no mapping grants nothing, and that is the correct default:
- * authenticating proves who somebody is, and it should never by itself decide
- * what they may do. The rows say so in the order somebody thinks it — this
- * group, in this area, may do this.
- */
+/** Which group gets which role, where. */
 export function MappingBuilder({
   mappings,
   onChange,
@@ -51,19 +45,19 @@ export function MappingBuilder({
           key={index}
           className="grid grid-cols-[1fr_1fr_1fr_130px_32px] items-end gap-2"
         >
-          <Field
+          <MappingField
             label={t("identity.group")}
             value={mapping.group}
             onChange={(group) => update(index, { group })}
             id={`group-${index}`}
           />
-          <Field
+          <MappingField
             label={t("identity.company")}
             value={mapping.company}
             onChange={(company) => update(index, { company })}
             id={`company-${index}`}
           />
-          <Field
+          <MappingField
             label={t("identity.area")}
             value={mapping.area}
             onChange={(area) => update(index, { area })}
@@ -107,47 +101,36 @@ export function MappingBuilder({
         </div>
       ))}
 
-      <Button
-        variant="outline"
-        size="sm"
-        className="h-8 self-start"
-        onClick={() =>
-          onChange([
-            ...mappings,
-            { group: "", company: "", area: "", role: "author" },
-          ])
-        }
-      >
-        <Plus className="size-4" aria-hidden />
-        {t("identity.addMapping")}
-      </Button>
-    </div>
-  );
-}
-
-function Field({
-  id,
-  label,
-  value,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <Label htmlFor={id} className="text-xs">
-        {label}
-      </Label>
-      <Input
-        id={id}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="h-9 font-mono text-xs"
-        autoComplete="off"
-      />
+      <div className="flex flex-wrap gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8"
+          onClick={() =>
+            onChange([
+              ...mappings,
+              { group: "", company: "", area: "", role: "author" },
+            ])
+          }
+        >
+          <Plus className="size-4" aria-hidden />
+          {t("identity.addMapping")}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8"
+          onClick={() =>
+            onChange([
+              ...mappings,
+              { group: "", company: "*", area: "", role: "admin" },
+            ])
+          }
+        >
+          <ShieldCheck className="size-4" aria-hidden />
+          {t("identity.addAdminMapping")}
+        </Button>
+      </div>
     </div>
   );
 }

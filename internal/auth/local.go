@@ -214,9 +214,9 @@ Create makes an account that does not need an identity provider.
 Not the way a customer with a provider should add people — that is what the
 provider is for, and grants for somebody it vouched for are set on the person
 it already knows. This is for the installation that has no provider yet, and
-for the small one that never will: the four roles exist to hold an author and
-an approver apart, and an installation with one account cannot show the
-separation it is sold on.
+for the small one that never will: the duties exist to hold an author and an
+approver apart, and an installation with one account cannot show the separation
+it is sold on.
 
 The username is compared without case, so `Ana` and `ana` are one account
 rather than two that look identical in a list.

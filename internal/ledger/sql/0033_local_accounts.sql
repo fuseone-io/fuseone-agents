@@ -8,9 +8,9 @@
 -- whose administrator lost that session had no door left, and no installation
 -- could have two people in it before its first provider was registered.
 --
--- Which matters more than convenience: the four roles exist to separate an
--- author from an approver, and a platform with one account cannot demonstrate
--- the separation it is sold on.
+-- Which matters more than convenience: the duties exist to separate an author
+-- from an approver, and a platform with one account cannot demonstrate the
+-- separation it is sold on.
 
 -- The handle somebody types. Separate from `subject`, which belongs to the
 -- provider that issued it, so the administrator created by the setup token can

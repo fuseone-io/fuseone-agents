@@ -39,7 +39,7 @@ func TestListPeople_marksWhatAnOperatorCannotRevokeHere(t *testing.T) {
 		},
 	}}}
 
-	resp, err := peopleServer(people).ListPeople(as(domain.RoleCurator), openapi.ListPeopleRequestObject{})
+	resp, err := peopleServer(people).ListPeople(asInstallation(domain.RoleCurator), openapi.ListPeopleRequestObject{})
 	if err != nil {
 		t.Fatalf("ListPeople: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestListPeople_includesSomebodyWithNoGrantAtAll(t *testing.T) {
 		ID: "usr_novo", Kind: domain.PrincipalUser, Display: "Novo",
 	}}}
 
-	resp, err := peopleServer(people).ListPeople(as(domain.RoleCurator), openapi.ListPeopleRequestObject{})
+	resp, err := peopleServer(people).ListPeople(asInstallation(domain.RoleCurator), openapi.ListPeopleRequestObject{})
 	if err != nil {
 		t.Fatalf("ListPeople: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestSetGrants_recordsWhoGranted(t *testing.T) {
 	t.Parallel()
 
 	people := &fakePeople{}
-	_, err := peopleServer(people).SetGrants(as(domain.RoleCurator), openapi.SetGrantsRequestObject{
+	_, err := peopleServer(people).SetGrants(asInstallation(domain.RoleCurator), openapi.SetGrantsRequestObject{
 		PrincipalId: "usr_ana",
 		Body: &openapi.SetGrantsJSONRequestBody{
 			Grants: []openapi.GrantInput{{Company: "acme", Area: "cx", Role: "approver"}},
@@ -99,7 +99,7 @@ func TestSetGrants_withoutIdentityWrite_isForbidden(t *testing.T) {
 	t.Parallel()
 
 	people := &fakePeople{}
-	resp, err := peopleServer(people).SetGrants(as(domain.RoleAuthor), openapi.SetGrantsRequestObject{
+	resp, err := peopleServer(people).SetGrants(asInstallation(domain.RoleAuthor), openapi.SetGrantsRequestObject{
 		PrincipalId: "usr_ana",
 		Body: &openapi.SetGrantsJSONRequestBody{
 			Grants: []openapi.GrantInput{{Company: "acme", Area: "cx", Role: "curator"}},
@@ -114,5 +114,26 @@ func TestSetGrants_withoutIdentityWrite_isForbidden(t *testing.T) {
 	}
 	if len(people.set) != 0 {
 		t.Error("it was granted anyway")
+	}
+}
+
+func TestSetGrants_adminInTheAdministrationAreaCannotMintInstallationAdmins(t *testing.T) {
+	t.Parallel()
+
+	people := &fakePeople{}
+	resp, err := peopleServer(people).SetGrants(as(domain.RoleAdmin), openapi.SetGrantsRequestObject{
+		PrincipalId: "usr_ana",
+		Body: &openapi.SetGrantsJSONRequestBody{
+			Grants: []openapi.GrantInput{{Company: "*", Area: "", Role: "admin"}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("SetGrants: %v", err)
+	}
+	if _, ok := resp.(openapi.SetGrants403ApplicationProblemPlusJSONResponse); !ok {
+		t.Fatalf("response = %T, want it refused", resp)
+	}
+	if len(people.set) != 0 {
+		t.Error("an area administrator minted an installation administrator")
 	}
 }

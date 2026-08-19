@@ -10,7 +10,13 @@ export type ScopeGrant = {
   origin: Origin;
 };
 
-export const ROLE_ORDER: Role[] = ["approver", "auditor", "author", "curator"];
+export const ROLE_ORDER: Role[] = [
+  "admin",
+  "approver",
+  "auditor",
+  "author",
+  "curator",
+];
 
 export function groupGrants(grants: HeldGrant[]): ScopeGrant[] {
   const byScope = new Map<
@@ -43,7 +49,8 @@ export function groupGrants(grants: HeldGrant[]): ScopeGrant[] {
 }
 
 export function roleSummary(roles: Role[], t: TFunction) {
-  if (roles.length === ROLE_ORDER.length) return t("people.fullAccess");
+  if (roles.includes("admin")) return t("roles.admin").toLocaleLowerCase();
+  if (roles.length === ROLE_ORDER.length - 1) return t("people.fullAccess");
   if (roles.length === 1) return t(`roles.${roles[0]}`).toLocaleLowerCase();
   return t("people.roleCount", { count: roles.length });
 }

@@ -11,7 +11,13 @@ export interface StopTarget {
 }
 
 const INSTALLATION = "*";
-const RUN_READ_ROLES = new Set(["author", "approver", "auditor", "curator"]);
+const RUN_READ_ROLES = new Set([
+  "admin",
+  "author",
+  "approver",
+  "auditor",
+  "curator",
+]);
 
 export function stopTargetsFor(
   me: Me | null,

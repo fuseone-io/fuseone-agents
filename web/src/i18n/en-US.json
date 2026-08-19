@@ -778,6 +778,7 @@
     "tainted": "The arguments derive from untrusted data read at an earlier step."
   },
   "identity": {
+    "addAdminMapping": "Add administrator mapping",
     "addMapping": "Add mapping",
     "area": "Area",
     "clientId": "Client ID",
@@ -1185,6 +1186,7 @@
   "people": {
     "access": "Access",
     "actions": "Actions",
+    "addAdminGrant": "Grant administrator",
     "addGrant": "Add access",
     "addLocal": "Create local access",
     "addScope": "Add scope",
@@ -1403,6 +1405,7 @@
     "title": "Retention and erasure"
   },
   "roles": {
+    "admin": "Administrator",
     "approver": "Approver",
     "auditor": "Auditor",
     "author": "Author",

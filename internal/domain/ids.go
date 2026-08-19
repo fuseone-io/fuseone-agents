@@ -53,7 +53,7 @@ func (s Scope) Contains(other Scope) bool {
 	// The one scope above every company. Checked first and by name, never by
 	// emptiness: the zero scope must go on reaching nothing.
 	if s.Company == Installation {
-		return true
+		return s.Area == ""
 	}
 	if s.Company != other.Company {
 		return false

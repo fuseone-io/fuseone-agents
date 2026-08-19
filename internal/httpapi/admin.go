@@ -58,12 +58,16 @@ func (s *Server) answeringServers(ctx context.Context) (map[string]bool, error) 
 	return out, nil
 }
 
-// adminScope is where platform-wide administration is authorised.
-//
-// What a tool does to the world does not vary by who calls it, so a ruling is
-// installation-wide and the permission to make one is checked in the scope
-// that owns the installation.
+// adminScope is the platform administration area used by operational settings
+// that are still ordinary scoped operations. Identity administration is not
+// checked here: it can mint installation administrators, so it uses the
+// installation scope below.
 var adminScope = domain.Scope{Company: "default", Area: "platform"}
+
+// identityScope is where changing who may administer the installation is
+// authorised. Using adminScope here would let somebody with identity:write in
+// the ordinary default/platform area mint installation-wide administrators.
+var identityScope = domain.Scope{Company: domain.Installation}
 
 // staleObservation is how long an unconfigured server stays on the screen
 // after the last worker stopped saying it holds it. Generous next to the

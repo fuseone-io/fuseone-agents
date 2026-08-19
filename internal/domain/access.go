@@ -9,12 +9,16 @@ import (
 
 // Role is what a principal may do within a scope.
 //
-// Four roles, deliberately. Every extra role is a combination somebody has to
-// reason about at three in the morning, and the PRD's personas map cleanly
-// onto these four (PRD §4, DE-05).
+// Five roles, deliberately. The first four keep duties separate; Admin is the
+// operational shortcut for the person who is responsible for the installation
+// rather than for one duty inside it.
 type Role string
 
 const (
+	// RoleAdmin administers the installation. It is still scoped: held at the
+	// installation scope it reaches every company, held lower it reaches only
+	// that lower scope.
+	RoleAdmin Role = "admin"
 	// RoleAuthor describes processes and corrects examples. Never touches a
 	// guardrail — that separation is what makes open authoring safe.
 	RoleAuthor Role = "author"
@@ -27,7 +31,7 @@ const (
 	RoleAuditor Role = "auditor"
 )
 
-var roles = []Role{RoleAuthor, RoleApprover, RoleCurator, RoleAuditor}
+var roles = []Role{RoleAdmin, RoleAuthor, RoleApprover, RoleCurator, RoleAuditor}
 
 func (r Role) Valid() bool { return slices.Contains(roles, r) }
 
@@ -101,6 +105,15 @@ const (
 // The table is the authorisation model in full — there is no inheritance and
 // no wildcard, so reading one row tells you everything a role can do.
 var grants = map[Role][]Permission{
+	RoleAdmin: {
+		PermRunRead, PermRunTrigger, PermRunCancel, PermApprovalAct,
+		PermAgentRead, PermAgentPublish,
+		PermCostRead,
+		PermAuditRead, PermAuditExport,
+		PermToolRead, PermToolClassify, PermPackWrite,
+		PermProviderWrite, PermBudgetWrite, PermBrandWrite, PermPolicyRead, PermPolicyWrite,
+		PermIdentityWrite, PermScopeWrite, PermDataErase, PermCompanyWrite,
+	},
 	RoleAuthor: {
 		PermRunRead, PermRunTrigger, PermRunCancel,
 		PermAgentRead, PermAgentPublish,
@@ -147,9 +160,9 @@ func (r Role) Permissions() []Permission {
 
 // Grant binds a principal to a role within a scope.
 //
-// A grant is always scoped. There is no installation-wide role: an operator
-// who administers two companies holds two grants, and the audit trail names
-// which one each action was taken under.
+// A grant is always scoped. Installation-wide administration is represented by
+// the installation scope, not by an unbounded role: role says what, scope says
+// where, and the audit trail names both.
 type Grant struct {
 	Scope Scope
 	Role  Role

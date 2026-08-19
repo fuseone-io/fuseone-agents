@@ -46,9 +46,9 @@ var bootstrapGrant = domain.Scope{Company: domain.Installation}
 
 // Bootstrap handles the first run.
 //
-// A new installation is a deadlock: configuring an identity provider needs the
-// Curator permission, and the only way to get a Curator is through an identity
-// provider. The setup token breaks it exactly once.
+// A new installation is a deadlock: configuring an identity provider needs
+// administrative authority, and the only ordinary way to get that authority is
+// through an identity provider. The setup token breaks it exactly once.
 type Bootstrap struct {
 	pool *pgxpool.Pool
 	dir  *Postgres
@@ -66,13 +66,13 @@ func NewBootstrap(pool *pgxpool.Pool, dir *Postgres) *Bootstrap {
 
 // Pending reports whether the installation still needs setting up.
 //
-// The test is whether anybody holds Curator anywhere. That is the capability
-// the setup token exists to grant, so its presence is what closes the door —
-// not a flag somebody could forget to set.
+// The test is whether anybody already holds installation administration. That
+// is the capability the setup token exists to grant, so its presence is what
+// closes the door — not a flag somebody could forget to set.
 func (b *Bootstrap) Pending(ctx context.Context) (bool, error) {
 	var exists bool
 	err := b.pool.QueryRow(ctx,
-		`select exists(select 1 from role_grants where role = 'curator')`).Scan(&exists)
+		`select exists(select 1 from role_grants where role in ('admin', 'curator'))`).Scan(&exists)
 	if err != nil {
 		return false, fmt.Errorf("auth: check bootstrap: %w", err)
 	}
@@ -99,9 +99,9 @@ func (b *Bootstrap) Open(ctx context.Context) (bool, error) {
 
 // Claim exchanges the setup token for the first administrator.
 //
-// It creates the bootstrap scope, a local principal, and a Curator grant, then
-// burns the token. Everything after this happens through the identity
-// provider that administrator configures.
+// It creates the bootstrap scope, a local principal, and an Admin grant, then
+// burns the token. Everything after this happens through the identity provider
+// that administrator configures.
 func (b *Bootstrap) Claim(ctx context.Context, secret, display, userAgent, ip string) (Token, domain.Principal, error) {
 	// The token is the credential, and its existence is the gate.
 	//
@@ -169,28 +169,19 @@ func (b *Bootstrap) Claim(ctx context.Context, secret, display, userAgent, ip st
 		return Token{}, domain.Principal{}, fmt.Errorf("auth: create principal: %w", err)
 	}
 
-	// Every role, deliberately.
+	// Installation administrator, deliberately.
 	//
-	// The four roles exist to separate duties — the Curator writes the rules
-	// and the Approver decides on exceptions to them — and that separation is
-	// only meaningful once there is more than one person. Until then it is a
-	// deadlock: an installation whose sole administrator cannot approve
-	// anything has an approval queue nobody can empty, which is the same shape
-	// as the deadlock the setup token exists to break.
-	//
-	// Narrowing this is the first thing an operator should do after
-	// configuring an identity provider, and the trail records that it started
-	// here.
-	for _, role := range []domain.Role{
-		domain.RoleCurator, domain.RoleApprover, domain.RoleAuthor, domain.RoleAuditor,
-	} {
-		if _, err := tx.Exec(ctx, `
-			insert into role_grants (principal_id, company_id, area_id, role, granted_by)
-			values ($1, $2, $3, $4, 'bootstrap')
-			on conflict do nothing`,
-			principalID, string(bootstrapGrant.Company), string(bootstrapGrant.Area), string(role)); err != nil {
-			return Token{}, domain.Principal{}, fmt.Errorf("auth: grant %s: %w", role, err)
-		}
+	// The setup token exists to break the first-person deadlock: until somebody
+	// can configure identity, scopes, tools and approvals, nobody else can be
+	// granted the duties that separate those powers. Admin is still just a
+	// scoped role; the bootstrap grant is powerful because the scope is the
+	// installation.
+	if _, err := tx.Exec(ctx, `
+		insert into role_grants (principal_id, company_id, area_id, role, granted_by)
+		values ($1, $2, $3, $4, 'bootstrap')
+		on conflict do nothing`,
+		principalID, string(bootstrapGrant.Company), string(bootstrapGrant.Area), string(domain.RoleAdmin)); err != nil {
+		return Token{}, domain.Principal{}, fmt.Errorf("auth: grant %s: %w", domain.RoleAdmin, err)
 	}
 
 	// Burn the token in the same transaction that grants the role: a partial
@@ -222,10 +213,7 @@ func (b *Bootstrap) Claim(ctx context.Context, secret, display, userAgent, ip st
 		Display: display,
 		Kind:    domain.PrincipalUser,
 		Grants: []domain.Grant{
-			{Scope: bootstrapGrant, Role: domain.RoleCurator},
-			{Scope: bootstrapGrant, Role: domain.RoleApprover},
-			{Scope: bootstrapGrant, Role: domain.RoleAuthor},
-			{Scope: bootstrapGrant, Role: domain.RoleAuditor},
+			{Scope: bootstrapGrant, Role: domain.RoleAdmin},
 		},
 	}, nil
 }

@@ -7,6 +7,7 @@ import type { Person } from "@/features/admin/people-api";
 const hooks = vi.hoisted(() => ({
   people: [] as Person[],
   refetch: vi.fn(),
+  setGrants: vi.fn(),
 }));
 
 vi.mock("@/features/admin/people-api", async (importOriginal) => {
@@ -20,6 +21,7 @@ vi.mock("@/features/admin/people-api", async (importOriginal) => {
       error: null,
       refetch: hooks.refetch,
     }),
+    useSetGrants: () => ({ mutate: hooks.setGrants, isPending: false }),
   };
 });
 
@@ -90,6 +92,7 @@ describe("people administration", () => {
   beforeEach(() => {
     hooks.people = people;
     hooks.refetch.mockReset();
+    hooks.setGrants.mockReset();
   });
 
   it("filters by identity and access without making the row layout carry the search", async () => {
@@ -136,10 +139,27 @@ describe("people administration", () => {
       ),
     ).toBeInTheDocument();
     expect(within(matrix).getByText("Aprovador")).toBeInTheDocument();
+    expect(within(matrix).getByText("Administrador")).toBeInTheDocument();
     expect(within(matrix).getByText("Auditor")).toBeInTheDocument();
     expect(within(matrix).getByText("Autor")).toBeInTheDocument();
     expect(within(matrix).getByText("Curador")).toBeInTheDocument();
     expect(within(matrix).getByText("concedido aqui")).toBeInTheDocument();
+  });
+
+  it("offers an installation administrator grant without making the operator type the wildcard", async () => {
+    render(<PeoplePanel />);
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /Kleber Rocha/ }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Gerenciar" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Conceder administrador" }),
+    );
+
+    expect(screen.getByDisplayValue("*")).toBeInTheDocument();
+    const roles = screen.getAllByRole("combobox", { name: "Papel" });
+    expect(roles.at(-1)).toHaveTextContent("Administrador");
   });
 
   it("filters the list by sign-in source and missing roles", async () => {

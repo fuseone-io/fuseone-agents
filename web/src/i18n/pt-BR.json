@@ -778,6 +778,7 @@
     "tainted": "Os argumentos derivam de dado não confiável lido em um passo anterior."
   },
   "identity": {
+    "addAdminMapping": "Adicionar mapeamento de administrador",
     "addMapping": "Adicionar mapeamento",
     "area": "Área",
     "clientId": "Client ID",
@@ -1185,6 +1186,7 @@
   "people": {
     "access": "Acesso",
     "actions": "Ações",
+    "addAdminGrant": "Conceder administrador",
     "addGrant": "Adicionar acesso",
     "addLocal": "Criar acesso local",
     "addScope": "Adicionar escopo",
@@ -1403,6 +1405,7 @@
     "title": "Retenção e apagamento"
   },
   "roles": {
+    "admin": "Administrador",
     "approver": "Aprovador",
     "auditor": "Auditor",
     "author": "Autor",

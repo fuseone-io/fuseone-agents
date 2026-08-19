@@ -1849,10 +1849,10 @@ paths:
         where they are already handled, and the console never sees a password.
 
         This is for the installation that has no provider yet, and for the
-        small one that never will. The four roles exist to hold an author and
-        an approver apart, and an installation with a single account cannot
-        show the separation it is sold on — before this, a fresh installation
-        had exactly one account, the one the setup token created.
+        small one that never will. The duties exist to hold an author and an
+        approver apart, and an installation with a single account cannot show
+        the separation it is sold on — before this, a fresh installation had
+        exactly one account, the one the setup token created.
 
         The account arrives holding nothing. Granting is a separate act, on
         the screen that already does it, so creating somebody and deciding
@@ -3625,8 +3625,8 @@ components:
       type: object
       description: >
         One group asserted by the provider, and the scoped grant it produces.
-        There is no installation-wide role: a mapping always names a company
-        and an area.
+        A mapping normally names a company and an area. Naming company `*`
+        with an empty area is the explicit installation-wide scope.
       required: [group, company, area, role]
       properties:
         group: { type: string }
@@ -3634,7 +3634,7 @@ components:
         area: { type: string }
         role:
           type: string
-          enum: [author, approver, curator, auditor]
+          enum: [admin, author, approver, curator, auditor]
 
     IdentityProvider:
       type: object
@@ -3683,7 +3683,7 @@ components:
         area: { type: string }
         role:
           type: string
-          enum: [author, approver, curator, auditor]
+          enum: [admin, author, approver, curator, auditor]
 
     HeldGrant:
       type: object
@@ -3693,7 +3693,7 @@ components:
         area: { type: string }
         role:
           type: string
-          enum: [author, approver, curator, auditor]
+          enum: [admin, author, approver, curator, auditor]
         asserted:
           type: boolean
           description: >

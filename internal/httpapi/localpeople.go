@@ -14,9 +14,9 @@ Accounts that do not need an identity provider.
 
 Beside the provider and never instead of it. Where a customer has one, that is
 how people arrive — and the hole this fills is that until one is configured an
-installation has exactly one account, the one the setup token created. Four
-roles that exist to hold an author and an approver apart cannot be shown with
-a single account, and an administrator who lost that session had no door left.
+installation has exactly one account, the one the setup token created. The
+duties that hold an author and an approver apart cannot be shown with a single
+account, and an administrator who lost that session had no door left.
 */
 
 // Accounts is local sign-in, declared here by the consumer.
@@ -35,9 +35,9 @@ func (s *Server) WithAccounts(accounts Accounts) *Server {
 func (s *Server) CreateLocalPerson(
 	ctx context.Context, req openapi.CreateLocalPersonRequestObject,
 ) (openapi.CreateLocalPersonResponseObject, error) {
-	if err := auth.Require(ctx, domain.PermIdentityWrite, adminScope); err != nil {
+	if err := auth.Require(ctx, domain.PermIdentityWrite, identityScope); err != nil {
 		return openapi.CreateLocalPerson403ApplicationProblemPlusJSONResponse{
-			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermIdentityWrite, adminScope),
+			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermIdentityWrite, identityScope),
 		}, nil
 	}
 	if s.accounts == nil || req.Body == nil {
@@ -74,9 +74,9 @@ func (s *Server) SetPassword(
 	// Somebody may always set their own, which is what stops "change your
 	// password" needing the authority to administer everybody else's.
 	if string(callerOf(ctx)) != req.PrincipalId {
-		if err := auth.Require(ctx, domain.PermIdentityWrite, adminScope); err != nil {
+		if err := auth.Require(ctx, domain.PermIdentityWrite, identityScope); err != nil {
 			return openapi.SetPassword403ApplicationProblemPlusJSONResponse{
-				ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermIdentityWrite, adminScope),
+				ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermIdentityWrite, identityScope),
 			}, nil
 		}
 	}

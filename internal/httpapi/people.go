@@ -25,9 +25,9 @@ func (s *Server) WithPeople(people People) *Server {
 func (s *Server) ListPeople(
 	ctx context.Context, _ openapi.ListPeopleRequestObject,
 ) (openapi.ListPeopleResponseObject, error) {
-	if err := auth.Require(ctx, domain.PermIdentityWrite, adminScope); err != nil {
+	if err := auth.Require(ctx, domain.PermIdentityWrite, identityScope); err != nil {
 		return openapi.ListPeople403ApplicationProblemPlusJSONResponse{
-			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermIdentityWrite, adminScope),
+			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermIdentityWrite, identityScope),
 		}, nil
 	}
 	if s.people == nil {
@@ -48,9 +48,9 @@ func (s *Server) ListPeople(
 func (s *Server) SetGrants(
 	ctx context.Context, req openapi.SetGrantsRequestObject,
 ) (openapi.SetGrantsResponseObject, error) {
-	if err := auth.Require(ctx, domain.PermIdentityWrite, adminScope); err != nil {
+	if err := auth.Require(ctx, domain.PermIdentityWrite, identityScope); err != nil {
 		return openapi.SetGrants403ApplicationProblemPlusJSONResponse{
-			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermIdentityWrite, adminScope),
+			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermIdentityWrite, identityScope),
 		}, nil
 	}
 	if s.people == nil || req.Body == nil {

@@ -138,6 +138,14 @@ func as(role domain.Role) context.Context {
 	})
 }
 
+// asInstallation returns a caller holding a role at the installation scope.
+func asInstallation(role domain.Role) context.Context {
+	return auth.WithPrincipal(context.Background(), domain.Principal{
+		ID: "usr_ana", Kind: domain.PrincipalUser,
+		Grants: []domain.Grant{{Scope: identityScope, Role: role}},
+	})
+}
+
 func TestPutMCPServer_withoutThePermission_isRefused(t *testing.T) {
 	t.Parallel()
 
