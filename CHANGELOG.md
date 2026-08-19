@@ -25,6 +25,46 @@ field" is a commit message.
 
 ---
 
+## [0.8.0] — 2026-08-19
+
+### Upgrade notes
+
+- **Watched Slack conversations must name who the automated run acts for.**
+  A watched message is not a person asking in the moment: it is an event that
+  matched a configured source. The conversation therefore needs a `runAs`
+  principal configured ahead of time. API writes that choose `mode: watch`
+  without `runAs` are refused.
+- **Delegating watched messages to another principal now requires identity
+  administration at the installation.** `runAs` becomes the run's
+  `OnBehalfOf`, and personal MCP credentials are sealed by that principal. A
+  channel configurator may run watched messages as themselves, but naming
+  somebody else requires `identity:write` on the installation scope. The
+  chosen principal must exist, be active and hold a grant in the conversation's
+  scope.
+
+### Added
+
+- **Slack Socket Mode can receive asks without a public FuseOne callback URL.**
+  A worker opens Slack's WebSocket with an app-level token and writes events to
+  the same durable inbox as the HTTP callback path before acknowledging them.
+  The message text is still marked untrusted, and approval buttons continue to
+  require the HTTP interaction path.
+- **Conversations can watch selected Slack sources.** A watched conversation
+  starts one configured agent only when a Slack user, bot or app id matches the
+  configured source list. The Slack text never chooses the agent, and the
+  source never grants authority; authority comes from the configured `runAs`
+  principal.
+- **Recently seen Slack accounts appear while linking people.** Signed Slack
+  mentions and interactions record account ids as binding hints. Clicking one
+  fills the form, but grants nothing until an administrator chooses a platform
+  person and saves.
+
+### Fixed
+
+- Creating an agent now marks every required field and explains what is still
+  missing before publishing. The publish button, the footer copy and the field
+  markers all read the same requirement list.
+
 ## [0.7.0] — 2026-08-19
 
 ### Added
