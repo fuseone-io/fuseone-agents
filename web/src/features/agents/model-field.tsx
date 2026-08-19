@@ -34,11 +34,13 @@ export function ModelField({
   options,
   onChange,
   id,
+  required,
 }: {
   value: string;
   options: string[];
   onChange: (model: string) => void;
   id: string;
+  required?: boolean;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -55,6 +57,7 @@ export function ModelField({
           variant="outline"
           role="combobox"
           aria-expanded={open}
+          aria-required={required}
           className="justify-between font-mono font-normal"
         >
           <span className={cn(!value && "text-muted-foreground")}>

@@ -2,6 +2,7 @@ import { ShieldCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Section, Labelled } from "@/features/policies/section";
+import { agentRequirementMarked } from "@/features/agents/agent-required";
 import { formatMicros } from "@/lib/format";
 import type { AgentDefinition } from "@/lib/api/client";
 
@@ -28,6 +29,7 @@ export function AgentBudgetSection({
       icon={ShieldCheck}
       title={t("agents.perRunCeiling")}
       hint={t("agents.zeroIsNoCeiling")}
+      required={agentRequirementMarked("budget")}
     >
       <div className="grid gap-3 sm:grid-cols-4">
         <Labelled label={t("agents.costMicros")} htmlFor="budget-micros">

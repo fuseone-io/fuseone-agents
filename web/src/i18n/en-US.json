@@ -239,6 +239,7 @@
     "fieldSteps": "Process steps",
     "fieldTools": "tools",
     "fieldTriggers": "triggers",
+    "fillRequired": "Fill the required fields: {{fields}}.",
     "filter": {
       "all": "All",
       "read": "Read",

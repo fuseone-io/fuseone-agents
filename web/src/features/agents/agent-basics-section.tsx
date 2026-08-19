@@ -12,6 +12,7 @@ import { ModelField, modelsFor } from "@/features/agents/model-field";
 import { useIntegrations } from "@/features/integrations/api";
 import { Section, Labelled } from "@/features/policies/section";
 import { AgentAreaField } from "@/features/agents/agent-area-field";
+import { agentRequirementMarked } from "@/features/agents/agent-required";
 import type { AgentDefinition } from "@/lib/api/client";
 
 /** Who this agent is, and what it was told to do. */
@@ -40,7 +41,11 @@ export function AgentBasicsSection({
       hint={t("agents.areaIsUnit")}
     >
       <div className="grid gap-3 sm:grid-cols-[200px_1fr_160px]">
-        <Labelled label={t("agents.identifier")} htmlFor="agent-id">
+        <Labelled
+          label={t("agents.identifier")}
+          htmlFor="agent-id"
+          required={agentRequirementMarked("identifier")}
+        >
           {/* Set once: runs reference it forever, and an id that moved would
               orphan every one of them. */}
           <Input
@@ -51,14 +56,20 @@ export function AgentBasicsSection({
             readOnly={!editable}
             className="font-mono"
             placeholder="suporte"
+            required={agentRequirementMarked("identifier")}
           />
         </Labelled>
-        <Labelled label={t("admin.name")} htmlFor="agent-name">
+        <Labelled
+          label={t("admin.name")}
+          htmlFor="agent-name"
+          required={agentRequirementMarked("name")}
+        >
           <Input
             id="agent-name"
             value={draft.name}
             onChange={(e) => patch({ name: e.target.value })}
             placeholder={t("agents.namePlaceholder")}
+            required={agentRequirementMarked("name")}
           />
         </Labelled>
         <AgentAreaField
@@ -75,12 +86,20 @@ export function AgentBasicsSection({
         {/* Offered from what this installation has actually configured. A
             typed provider name that nothing serves is an agent that publishes
             and fails on its first turn, naming a provider nobody connected. */}
-        <Labelled label={t("agents.provider")} htmlFor="agent-provider">
+        <Labelled
+          label={t("agents.provider")}
+          htmlFor="agent-provider"
+          required={agentRequirementMarked("provider")}
+        >
           <Select
             value={draft.provider}
             onValueChange={(provider) => patch({ provider, model: "" })}
           >
-            <SelectTrigger id="agent-provider" className="font-mono">
+            <SelectTrigger
+              id="agent-provider"
+              className="font-mono"
+              aria-required={agentRequirementMarked("provider")}
+            >
               <SelectValue placeholder={t("agents.pickProvider")} />
             </SelectTrigger>
             <SelectContent>
@@ -92,12 +111,17 @@ export function AgentBasicsSection({
             </SelectContent>
           </Select>
         </Labelled>
-        <Labelled label={t("agents.model")} htmlFor="agent-model">
+        <Labelled
+          label={t("agents.model")}
+          htmlFor="agent-model"
+          required={agentRequirementMarked("model")}
+        >
           <ModelField
             id="agent-model"
             value={draft.model}
             options={modelsFor(draft.provider, providers, presets)}
             onChange={(model) => patch({ model })}
+            required={agentRequirementMarked("model")}
           />
         </Labelled>
         <Labelled label={t("agents.effort")} htmlFor="agent-effort">
@@ -123,8 +147,6 @@ export function AgentBasicsSection({
           </Select>
         </Labelled>
       </div>
-
-
     </Section>
   );
 }

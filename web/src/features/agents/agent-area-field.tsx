@@ -6,6 +6,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { agentRequirementMarked } from "@/features/agents/agent-required";
 import { Labelled } from "@/features/policies/section";
 import { useScopes } from "@/features/scope/api";
 
@@ -32,9 +33,17 @@ export function AgentAreaField({
   const known = declared.some((s) => s.area === area);
 
   return (
-    <Labelled label={t("admin.area")} htmlFor="agent-area">
+    <Labelled
+      label={t("admin.area")}
+      htmlFor="agent-area"
+      required={agentRequirementMarked("area")}
+    >
       <Select value={area || undefined} onValueChange={onChange}>
-        <SelectTrigger id="agent-area" className="w-full font-mono">
+        <SelectTrigger
+          id="agent-area"
+          className="w-full font-mono"
+          aria-required={agentRequirementMarked("area")}
+        >
           <SelectValue placeholder={t("agents.choose")} />
         </SelectTrigger>
         <SelectContent>

@@ -157,6 +157,21 @@ describe("the agent editor, control by control", () => {
     expect(within(column).getByText("Identidade")).toBeInTheDocument();
   });
 
+  it("blocks publishing a new agent until the required fields are filled", async () => {
+    openEditor("/agents/new");
+
+    const publish = await screen.findByRole("button", {
+      name: /Criar agente pausado/,
+    });
+    expect(publish).toBeDisabled();
+
+    const missing = screen.getByText(/Preencha os campos obrigatórios/);
+    expect(missing).toHaveTextContent(/área/);
+    expect(missing).toHaveTextContent(/provedor/i);
+    expect(missing).toHaveTextContent(/modelo/);
+    expect(missing).toHaveTextContent(/ferramentas/);
+  });
+
   it("adds a block, and keeps what is written in it", async () => {
     openEditor();
 

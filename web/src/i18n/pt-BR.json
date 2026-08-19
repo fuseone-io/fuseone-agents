@@ -239,6 +239,7 @@
     "fieldSteps": "Passos do processo",
     "fieldTools": "ferramentas",
     "fieldTriggers": "gatilhos",
+    "fillRequired": "Preencha os campos obrigatórios: {{fields}}.",
     "filter": {
       "all": "Tudo",
       "read": "Leitura",

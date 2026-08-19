@@ -15,6 +15,7 @@ export function Section({
   icon: Icon,
   title,
   hint,
+  required,
   action,
   flush,
   children,
@@ -22,6 +23,7 @@ export function Section({
   icon?: LucideIcon;
   title: string;
   hint?: string;
+  required?: boolean;
   /** The one thing this section can do, beside its title. */
   action?: ReactNode;
   /** For content that draws its own edges to the card's border. */
@@ -36,7 +38,14 @@ export function Section({
             <Icon className="size-3.5" aria-hidden />
           </span>
         )}
-        <h2 className="shrink-0 text-sm font-medium">{title}</h2>
+        <h2 className="shrink-0 text-sm font-medium">
+          {title}
+          {required && (
+            <span className="ml-1 text-warning" aria-hidden>
+              *
+            </span>
+          )}
+        </h2>
         {/* Beside the title rather than under it: the header is one line, and
             a caption on a second row doubles the chrome above every field. */}
         {hint && (
@@ -56,10 +65,12 @@ export function Section({
 export function Labelled({
   label,
   htmlFor,
+  required,
   children,
 }: {
   label: string;
   htmlFor: string;
+  required?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -69,6 +80,11 @@ export function Labelled({
         className="text-2xs uppercase tracking-label text-muted-foreground"
       >
         {label}
+        {required && (
+          <span className="ml-1 text-warning" aria-hidden>
+            *
+          </span>
+        )}
       </Label>
       {children}
     </div>

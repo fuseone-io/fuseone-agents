@@ -15,6 +15,7 @@ import { split } from "@/features/agents/instruction-blocks";
 import { InstructionsStrip } from "@/features/agents/instructions-strip";
 import { summarise } from "@/features/agents/instructions-summary";
 import { useInstructionBlocks } from "@/features/agents/use-instruction-blocks";
+import { agentRequirementMarked } from "@/features/agents/agent-required";
 
 /**
  * What the model is told, written as prose and read as the payload.
@@ -58,6 +59,7 @@ export function InstructionsEditor({
       icon={FileText}
       title={t("agents.instructions")}
       hint={t("agents.instructionsHint")}
+      required={agentRequirementMarked("instructions")}
       action={
         <InstructionsViewTabs
           view={view}

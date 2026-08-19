@@ -24,6 +24,7 @@ export function EditorFooter({
   creating,
   publishing,
   ready,
+  missingRequired,
   onPublish,
   onDiscard,
 }: {
@@ -31,10 +32,12 @@ export function EditorFooter({
   creating: boolean;
   publishing: boolean;
   ready: boolean;
+  missingRequired: string[];
   onPublish: () => void;
   onDiscard: () => void;
 }) {
   const { t } = useTranslation();
+  const missing = missingRequired.map((key) => t(key)).join(", ");
 
   return (
     <div className="sticky bottom-0 flex h-14 shrink-0 items-center gap-3 border-t border-border bg-card px-4">
@@ -72,7 +75,15 @@ export function EditorFooter({
         </Popover>
       )}
 
-      <div className="ml-auto flex items-center gap-2">
+      <div className="min-w-0 flex-1">
+        {missingRequired.length > 0 && (
+          <p className="truncate text-xs text-muted-foreground">
+            {t("agents.fillRequired", { fields: missing })}
+          </p>
+        )}
+      </div>
+
+      <div className="flex shrink-0 items-center gap-2">
         <Button variant="outline" onClick={onDiscard}>
           {t("common.cancel")}
         </Button>

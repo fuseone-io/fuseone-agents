@@ -9,10 +9,12 @@ import { EditorTabBar } from "@/features/agents/editor-tab-bar";
 import { EditorHeader } from "@/features/agents/editor-header";
 import { counts, type EditorTab } from "@/features/agents/editor-tabs";
 import { useAgentDraft } from "@/features/agents/agent-draft";
+import { agentRequirements } from "@/features/agents/agent-required";
 import { usePublishAgent } from "@/features/agents/agent-editor-api";
 import { useAgent } from "@/features/agents/agent-detail-api";
 import { useTools } from "@/features/admin/api";
 import { usePolicies } from "@/features/policies/api";
+import { problemMessage } from "@/lib/api/problem-message";
 
 /**
  * One agent, written or rewritten.
@@ -50,8 +52,10 @@ export function AgentEditorPage() {
     );
   }
 
-  const ready =
-    agentId !== "" && draft.name !== "" && draft.instructions.trim() !== "";
+  const missingRequired = agentRequirements(agentId, draft)
+    .filter((item) => !item.done)
+    .map((item) => item.labelKey);
+  const ready = missingRequired.length === 0;
 
   const submit = () =>
     publish.mutate(
@@ -67,7 +71,7 @@ export function AgentEditorPage() {
           );
           void navigate(`/agents/${agentId}`);
         },
-        onError: () => toast.error(t("agents.publishFailed")),
+        onError: (error) => toast.error(problemMessage(error, t)),
       },
     );
 
@@ -115,6 +119,7 @@ export function AgentEditorPage() {
         creating={creating}
         publishing={publish.isPending}
         ready={ready}
+        missingRequired={missingRequired}
         onPublish={submit}
         onDiscard={() => void navigate("/agents")}
       />
