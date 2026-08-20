@@ -25,6 +25,31 @@ field" is a commit message.
 
 ---
 
+## [0.9.0] — 2026-08-19
+
+### Upgrade notes
+
+- **Publishing an agent now requires the company as well as the area.** The
+  scope used to be resolved by matching the area name against the caller's
+  grants and taking the company from whichever matched first — and area
+  identifiers are scoped by a company, so an author editing an agent shown as
+  `cora/platform` could publish it into `default/platform`. The authority used
+  was not the authority the screen displayed. A request that names no company
+  is now refused rather than inferred, so **an automation that publishes
+  through the API without a company will start receiving 403** and needs the
+  field added. **An agent published before this may carry the wrong scope and
+  is worth republishing.**
+- **Saving a watched conversation refuses an agent that cannot be started by a
+  message.** A conversation configured against an agent whose published version
+  does not declare the `Conversation` trigger was accepted and then refused at
+  runtime, in Slack, in front of whoever posted. Existing conversations are not
+  rewritten; the next save of one validates it.
+
+### Fixed
+
+- The agent picker for a watched conversation offers only agents a message can
+  start, instead of every agent in scope.
+
 ## [0.8.2] — 2026-08-19
 
 ### Fixed
