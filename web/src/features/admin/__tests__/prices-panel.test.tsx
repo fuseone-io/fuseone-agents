@@ -39,6 +39,7 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 describe("price administration", () => {
   beforeEach(() => {
+    hooks.prices = [];
     setInstallationCurrency("EUR");
     hooks.refetch.mockReset();
     hooks.refetch.mockResolvedValue({});
@@ -104,6 +105,43 @@ describe("price administration", () => {
     await waitFor(() =>
       expect(hooks.setMoney).toHaveBeenCalledWith(
         { currency: "USD" },
+        expect.any(Object),
+      ),
+    );
+  });
+
+  it("keeps decimal rates editable until they are saved as micros", async () => {
+    const user = userEvent.setup();
+    hooks.prices = [
+      {
+        provider: "anthropic",
+        model: "claude-haiku-4-5",
+        source: "market_default",
+        currency: "USD",
+        inputMicros: 500_000,
+        outputMicros: 2_500_000,
+      },
+    ];
+
+    render(<PricesPanel />);
+
+    await user.click(screen.getByText("anthropic/claude-haiku-4-5"));
+    const input = screen.getByLabelText("Entrada / milhão");
+    await user.type(input, "0.5");
+
+    expect(input).toHaveValue("0.5");
+
+    const save = screen.getAllByRole("button", { name: "Salvar" }).at(-1);
+    expect(save).toBeDefined();
+    await user.click(save!);
+
+    await waitFor(() =>
+      expect(hooks.put).toHaveBeenCalledWith(
+        expect.objectContaining({
+          provider: "anthropic",
+          model: "claude-haiku-4-5",
+          inputMicros: 500_000,
+        }),
         expect.any(Object),
       ),
     );

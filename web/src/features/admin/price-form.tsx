@@ -1,5 +1,6 @@
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,15 +9,22 @@ import {
   PropertiesSheetBody,
   PropertiesSheetFooter,
 } from "@/components/shared/properties-sheet";
-import { Labelled } from "@/features/policies/section";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+} from "@/components/ui/form";
 import { usePutPrice, type ModelPrice } from "@/features/admin/prices-api";
-
-const RATES = [
-  { field: "inputMicros", label: "admin.rateInput" },
-  { field: "outputMicros", label: "admin.rateOutput" },
-  { field: "cacheReadMicros", label: "admin.rateCacheRead" },
-  { field: "cacheWriteMicros", label: "admin.rateCacheWrite" },
-] as const;
+import {
+  initialPriceFormValues,
+  modelPriceFromForm,
+  PRICE_RATES,
+  priceFormSchema,
+  type PriceFormValues,
+} from "@/features/admin/price-form-model";
+import { PriceRateField } from "@/features/admin/price-rate-field";
 
 /**
  * A rate, in the installation's currency per million tokens.
@@ -36,12 +44,16 @@ export function PriceForm({
   const { t } = useTranslation();
   const put = usePutPrice();
   const isMarketDefault = price?.source === "market_default";
-  const [draft, setDraft] = useState<ModelPrice>(
-    initialDraft(price),
-  );
+  const form = useForm<PriceFormValues>({
+    resolver: zodResolver(priceFormSchema),
+    mode: "onChange",
+    defaultValues: initialPriceFormValues(price),
+  });
+  const values = useWatch({ control: form.control });
+  const canSave = priceFormSchema.safeParse(values).success && !put.isPending;
 
-  const submit = () =>
-    put.mutate(draft, {
+  const submit = (draft: PriceFormValues) =>
+    put.mutate(modelPriceFromForm(draft), {
       onSuccess: () => {
         toast.success(t("admin.rateSet"), {
           description: t("admin.rateApplies"),
@@ -67,86 +79,69 @@ export function PriceForm({
         isMarketDefault ? "admin.marketRateOverrideHint" : "admin.ratesAreYours",
       )}
     >
-      <div className="flex min-h-0 flex-1 flex-col">
-        <PropertiesSheetBody>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Labelled label={t("agents.provider")} htmlFor="price-provider">
-              <Input
-                id="price-provider"
-                value={draft.provider}
-                disabled={!!price}
-                onChange={(e) =>
-                  setDraft({ ...draft, provider: e.target.value })
-                }
-                className="font-mono"
-                placeholder="anthropic"
+      <Form {...form}>
+        <form
+          onSubmit={form.handleSubmit(submit)}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          <PropertiesSheetBody>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="provider"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("agents.provider")}</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        disabled={!!price}
+                        className="font-mono"
+                        placeholder="anthropic"
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
               />
-            </Labelled>
-            <Labelled label={t("admin.model")} htmlFor="price-model">
-              <Input
-                id="price-model"
-                value={draft.model}
-                disabled={!!price}
-                onChange={(e) => setDraft({ ...draft, model: e.target.value })}
-                className="font-mono"
-                placeholder="claude-opus-5"
+              <FormField
+                control={form.control}
+                name="model"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("admin.model")}</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        disabled={!!price}
+                        className="font-mono"
+                        placeholder="claude-opus-5"
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
               />
-            </Labelled>
 
-            {RATES.map(({ field, label }) => (
-              <Labelled key={field} label={t(label)} htmlFor={`price-${field}`}>
-                <Input
-                  id={`price-${field}`}
-                  inputMode="decimal"
-                  value={
-                    draft[field] ? String((draft[field] ?? 0) / 1_000_000) : ""
-                  }
-                  onChange={(e) =>
-                    setDraft({
-                      ...draft,
-                      [field]:
-                        Math.round(
-                          Number(e.target.value.replace(",", ".")) * 1_000_000,
-                        ) || 0,
-                    })
-                  }
-                  className="font-mono"
-                  placeholder="0"
+              {PRICE_RATES.map(({ field, label }) => (
+                <PriceRateField
+                  key={field}
+                  control={form.control}
+                  name={field}
+                  label={t(label)}
                 />
-              </Labelled>
-            ))}
-          </div>
-        </PropertiesSheetBody>
+              ))}
+            </div>
+          </PropertiesSheetBody>
 
-        <PropertiesSheetFooter>
-          <Button variant="outline" onClick={onClose}>
-            {t("common.cancel")}
-          </Button>
-          <Button
-            disabled={!draft.provider || !draft.model || put.isPending}
-            onClick={submit}
-          >
-            {t("common.save")}
-          </Button>
-        </PropertiesSheetFooter>
-      </div>
+          <PropertiesSheetFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              {t("common.cancel")}
+            </Button>
+            <Button type="submit" disabled={!canSave}>
+              {t("common.save")}
+            </Button>
+          </PropertiesSheetFooter>
+        </form>
+      </Form>
     </PropertiesSheet>
   );
-}
-
-function initialDraft(price: ModelPrice | null): ModelPrice {
-  if (!price) {
-    return { provider: "", model: "", inputMicros: 0, outputMicros: 0 };
-  }
-  if (price.source === "market_default") {
-    return {
-      provider: price.provider,
-      model: price.model,
-      inputMicros: 0,
-      outputMicros: 0,
-      cacheReadMicros: 0,
-      cacheWriteMicros: 0,
-    };
-  }
-  return price;
 }
