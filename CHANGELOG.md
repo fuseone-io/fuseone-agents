@@ -25,6 +25,30 @@ field" is a commit message.
 
 ---
 
+## [0.15.0] — 2026-08-20
+
+### Added
+
+- **The installation declares its currency.** Cost and ceilings are integers in
+  millionths of it, and which currency that was lived in a comment — obeyed
+  until somebody brought a number in good faith from somewhere else, which is
+  how published prices in dollars reached a ceiling written in reais. It is now
+  an ISO code, validated, changed with `budget:write` and recorded as an
+  administrative event. Existing installations keep `BRL`.
+
+  **Changing it converts nothing.** Converting stored amounts would rewrite an
+  audit record with a rate nobody reviewed, at the moment somebody changed a
+  dropdown. So changing the currency changes how historical costs, ceilings and
+  configured rates are *read* — the numbers stay and what they claim to be
+  changes. **Review your ceilings and configured rates before changing it.** The
+  screen says so permanently rather than in a dialog, because whoever opens it
+  months later to check a rate needs it as much as whoever changes it today.
+
+### Fixed
+
+- The agent overview's tabs read as an underline rather than as buttons that
+  lost their fill, fixed in the primitive where the defect was.
+
 ## [0.14.0] — 2026-08-20
 
 ### Upgrade notes
