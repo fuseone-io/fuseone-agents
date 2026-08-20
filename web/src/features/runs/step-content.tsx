@@ -1,6 +1,8 @@
 import { useTranslation } from "react-i18next";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useStepContent } from "@/features/runs/api";
+import { JsonBody } from "@/components/shared/json-body";
+import { RunOutcomeBody } from "@/features/runs/run-outcome-body";
 
 /**
  * What a step referenced, fetched when somebody opens it.
@@ -13,10 +15,14 @@ export function StepContent({
   runId,
   seq,
   open,
+  prose = false,
 }: {
   runId: string;
   seq: number;
   open: boolean;
+  /** A closing answer is a document the model wrote; everything else the trail
+   *  references is a payload. They are read differently and rendered so. */
+  prose?: boolean;
 }) {
   const { t } = useTranslation();
   const content = useStepContent(runId, seq, open);
@@ -31,17 +37,13 @@ export function StepContent({
     );
   }
 
-  return (
-    <pre className="mt-2.5 overflow-x-auto rounded-lg border border-border bg-muted p-3 font-mono text-xs">
-      {pretty(content.data.content)}
-    </pre>
-  );
+  if (prose) {
+    return (
+      <div className="mt-2.5 max-h-[min(60vh,32rem)] overflow-auto rounded-lg border border-border bg-muted px-3 py-1">
+        <RunOutcomeBody body={content.data.content} />
+      </div>
+    );
+  }
+  return <JsonBody body={content.data.content} className="mt-2.5" />;
 }
 
-function pretty(body: string): string {
-  try {
-    return JSON.stringify(JSON.parse(body), null, 2);
-  } catch {
-    return body;
-  }
-}

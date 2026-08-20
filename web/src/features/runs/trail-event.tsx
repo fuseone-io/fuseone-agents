@@ -98,7 +98,12 @@ export function TrailEvent({
               {body}
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <StepContent runId={runId} seq={step.seq} open={open} />
+              <StepContent
+                runId={runId}
+                seq={step.seq}
+                open={open}
+                prose={step.kind === "run_finished"}
+              />
             </CollapsibleContent>
           </Collapsible>
         ) : (

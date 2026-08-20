@@ -1,4 +1,5 @@
 import { Trans, useTranslation } from "react-i18next";
+import { JsonBody } from "@/components/shared/json-body";
 import { TriangleAlert } from "lucide-react";
 import { Mono } from "@/components/shared/mono";
 
@@ -16,20 +17,9 @@ export function DecisionArguments({ body }: { body?: string }) {
       </p>
     );
   }
-  return (
-    <pre className="max-h-[min(48vh,28rem)] max-w-full overflow-auto rounded-lg border border-border bg-muted p-3 font-mono text-xs whitespace-pre-wrap break-words">
-      {pretty(body)}
-    </pre>
-  );
+  return <JsonBody body={body} />;
 }
 
-function pretty(body: string): string {
-  try {
-    return JSON.stringify(JSON.parse(body), null, 2);
-  } catch {
-    return body;
-  }
-}
 
 /**
  * Why this call was escalated: the taint the arguments carry.
