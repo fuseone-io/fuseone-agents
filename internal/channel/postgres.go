@@ -2,6 +2,7 @@ package channel
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -143,6 +144,32 @@ func (p *Postgres) Reported(ctx context.Context, run domain.RunID, e Event, at t
 		return fmt.Errorf("channel: mark %s reported: %w", run, err)
 	}
 	return nil
+}
+
+// FinishedOutcome reads the payload that names a run's closing answer.
+//
+// The bytes of the answer are not here; run_finished carries a reference into
+// the content store. This method reads only the ledger fact needed to resolve
+// that reference when a channel is owed the final reply.
+func (p *Postgres) FinishedOutcome(ctx context.Context, run domain.RunID) (domain.RunFinishedPayload, error) {
+	var raw []byte
+	err := p.pool.QueryRow(ctx, `
+		select payload from run_steps
+		where run_id = $1 and kind = 'run_finished'
+		order by seq desc
+		limit 1`, string(run)).Scan(&raw)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.RunFinishedPayload{}, fmt.Errorf("channel: %s has no finished step", run)
+	}
+	if err != nil {
+		return domain.RunFinishedPayload{}, fmt.Errorf("channel: read finished step for %s: %w", run, err)
+	}
+
+	var out domain.RunFinishedPayload
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return domain.RunFinishedPayload{}, fmt.Errorf("channel: decode finished step for %s: %w", run, err)
+	}
+	return out, nil
 }
 
 /*

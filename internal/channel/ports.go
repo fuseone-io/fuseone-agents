@@ -76,6 +76,11 @@ type Opens interface {
 	Open(ctx context.Context, req Request) (Opened, error)
 }
 
+// Outcomes reads the closing answer a finished run recorded.
+type Outcomes interface {
+	FinishedOutcome(ctx context.Context, run domain.RunID) (domain.RunFinishedPayload, error)
+}
+
 /*
 ErrWontStart means the opener declined, rather than failed.
 

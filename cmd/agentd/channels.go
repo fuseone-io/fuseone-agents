@@ -78,6 +78,11 @@ const askSweep = 5 * time.Second
 // pass of it costs a call to somebody else's API.
 const askAnswer = 10 * time.Second
 
+// askFinishedAnswer is how often successful runs opened from a channel say
+// their final answer back in the thread that asked. Separate from askAnswer:
+// refusals and outcomes fail differently and neither should hold the other.
+const askFinishedAnswer = 10 * time.Second
+
 /*
 askLease is how long one consumer holds an ask before another may take it.
 
@@ -111,6 +116,7 @@ func (p *workerParts) consumeAsks(ctx context.Context, owner string) {
 			channel.FromTrigger(p.opener()), // the same pauses and stops as a schedule
 			drivers,                         // and the bot that says it back
 		).
+		WithOutcomes(channel.NewPostgres(pool), p.content).
 		WithThreadContext(configured, drivers).
 		Binding(admin.NewChannels(pool, p.settings).PrincipalFor)
 
@@ -119,6 +125,9 @@ func (p *workerParts) consumeAsks(ctx context.Context, owner string) {
 	})
 	go sweep(ctx, askAnswer, "refusals delivered", func() (int, error) {
 		return consumer.Answer(ctx, askLease, 20)
+	})
+	go sweep(ctx, askFinishedAnswer, "answers delivered", func() (int, error) {
+		return consumer.AnswerFinished(ctx, askLease, 20)
 	})
 }
 

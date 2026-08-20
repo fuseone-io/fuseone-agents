@@ -84,6 +84,7 @@ the claim itself.
 type Claimed struct {
 	Arrival
 	Owner string
+	RunID domain.RunID
 	// Detail is what was decided about this ask, for a debt being delivered.
 	// Empty while the ask is still pending: there is nothing decided yet.
 	Detail string
@@ -143,6 +144,21 @@ func (i *Inbox) Claim(
 	return i.claim(ctx, owner, lease, limit, "status = 'pending'")
 }
 
+// Finished takes opened asks whose runs finished and whose answer has not been
+// said back to the conversation that asked.
+func (i *Inbox) Finished(
+	ctx context.Context, owner string, lease time.Duration, limit int,
+) ([]Claimed, error) {
+	return i.claim(ctx, owner, lease, limit, `
+		status = 'opened' and answer_due and answered_at is null and run_id <> ''
+		and exists (
+			select 1 from runs
+			where runs.run_id = channel_inbox.run_id
+			  and runs.phase = 'finished'
+			  and not runs.simulated
+		)`)
+}
+
 // claim takes rows matching a state, leases them, and hands them back.
 //
 // The state is a literal in the two callers above and never a caller's string:
@@ -187,7 +203,7 @@ func (i *Inbox) claim(
 		          channel_inbox.thread, channel_inbox.agent,
 		          channel_inbox.run_as, channel_inbox.source,
 		          channel_inbox.payload,
-		          channel_inbox.detail`,
+		          channel_inbox.detail, channel_inbox.run_id`,
 		owner, lease.String(), limit)
 	if err != nil {
 		return nil, fmt.Errorf("channel: claim from the inbox: %w", err)
@@ -198,19 +214,22 @@ func (i *Inbox) claim(
 	for rows.Next() {
 		var a Arrival
 		var detail string
+		var run string
 		if err := rows.Scan(&a.Channel, &a.Conversation, &a.EventID, &a.Message,
 			&a.AskedBy, &a.Text, &a.Thread, &a.Agent, &a.RunAs, &a.Source,
-			&a.Payload, &detail); err != nil {
+			&a.Payload, &detail, &run); err != nil {
 			return nil, err
 		}
-		out = append(out, Claimed{Arrival: a, Owner: owner, Detail: detail})
+		out = append(out, Claimed{
+			Arrival: a, Owner: owner, RunID: domain.RunID(run), Detail: detail,
+		})
 	}
 	return out, rows.Err()
 }
 
 // Opened records which run an ask became.
 func (i *Inbox) Opened(ctx context.Context, c Claimed, run string, at time.Time) error {
-	return i.settle(ctx, c, settled{Status: "opened", Run: run}, at)
+	return i.settle(ctx, c, settled{Status: "opened", Run: run, AnswerDue: true}, at)
 }
 
 // ErrNotClaimed means this ask is somebody else's now: already settled, or
@@ -261,16 +280,38 @@ func (i *Inbox) Answered(ctx context.Context, c Claimed, at time.Time) error {
 	return nil
 }
 
+// FinishedAnswered marks a finished run's closing answer as said.
+//
+// Same owner check as refusals. This is a second debt carried by the same ask:
+// the run opened first, did its work later, and only then is the person owed
+// the final answer in the thread where they asked.
+func (i *Inbox) FinishedAnswered(ctx context.Context, c Claimed, at time.Time) error {
+	tag, err := i.pool.Exec(ctx, `
+		update channel_inbox
+		set answered_at = $5, answer_due = false, leased_until = null, lease_owner = ''
+		where channel = $1 and conversation = $2 and event_id = $3
+		  and lease_owner = $4 and status = 'opened' and answered_at is null`,
+		c.Channel, c.Conversation, c.EventID, c.Owner, at.UTC())
+	if err != nil {
+		return fmt.Errorf("channel: mark %s finished answer delivered: %w", c.EventID, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("%w: %s", ErrNotClaimed, c.EventID)
+	}
+	return nil
+}
+
 // settled is what a settle writes. A struct because the row has more parts
 // than a parameter list should carry, and because two of them are easy to
 // swap: `detail` and `reason` are both strings, and a caller that transposed
 // them would tell the person a code and the operator a sentence.
 type settled struct {
-	Status   string
-	Detail   string
-	Reason   string
-	Run      string
-	Answered bool
+	Status    string
+	Detail    string
+	Reason    string
+	Run       string
+	Answered  bool
+	AnswerDue bool
 }
 
 /*
@@ -291,11 +332,11 @@ func (i *Inbox) settle(ctx context.Context, c Claimed, s settled, at time.Time) 
 	tag, err := i.pool.Exec(ctx, `
 		update channel_inbox
 		set status = $5, detail = $6, run_id = $7, at = $8, reason = $9,
-		    answered_at = $10, leased_until = null, lease_owner = ''
+		    answered_at = $10, answer_due = $11, leased_until = null, lease_owner = ''
 		where channel = $1 and conversation = $2 and event_id = $3
 		  and status = 'pending' and lease_owner = $4`,
 		c.Channel, c.Conversation, c.EventID, c.Owner,
-		s.Status, s.Detail, s.Run, at.UTC(), s.Reason, answered)
+		s.Status, s.Detail, s.Run, at.UTC(), s.Reason, answered, s.AnswerDue)
 	if err != nil {
 		return fmt.Errorf("channel: settle %s: %w", c.EventID, err)
 	}

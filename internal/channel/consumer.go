@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/engine"
 )
 
 /*
@@ -41,6 +42,8 @@ type Consumer struct {
 	threads      ThreadReader
 	opener       Opens
 	answers      Answers
+	outcomes     Outcomes
+	content      engine.ContentStore
 	bindings     func(ctx context.Context, channel, account string) (domain.UserID, bool, error)
 	ceiling      Ceiling
 	clock        func() time.Time
@@ -92,6 +95,14 @@ func (c *Consumer) With(
 ) *Consumer {
 	c.scopes, c.published, c.willing = scopes, published, willing
 	c.subjects, c.opener, c.answers = subjects, opener, answers
+	return c
+}
+
+// WithOutcomes wires the store that can read the final answer of a run that
+// began in a channel. Separate from With because opening and refusing asks can
+// work without it; only the success path needs to read content back.
+func (c *Consumer) WithOutcomes(outcomes Outcomes, content engine.ContentStore) *Consumer {
+	c.outcomes, c.content = outcomes, content
 	return c
 }
 
@@ -239,6 +250,60 @@ func (c *Consumer) Answer(ctx context.Context, lease time.Duration, limit int) (
 }
 
 /*
+AnswerFinished says the final answer of runs that began in a conversation.
+
+This is deliberately not the reporter's "finished" announcement. The reporter
+says that a run ended and links to the console; this says the answer itself in
+the thread that asked. Only asks that opened a run are eligible, so the platform
+does not invent recipients for scheduled, manual or event-composed runs.
+*/
+func (c *Consumer) AnswerFinished(ctx context.Context, lease time.Duration, limit int) (int, error) {
+	if err := c.wiredForFinishedAnswers(); err != nil {
+		return 0, err
+	}
+
+	owed, err := c.inbox.Finished(ctx, c.owner, lease, limit)
+	if err != nil {
+		return 0, err
+	}
+
+	said, failures := 0, []error{}
+	for _, one := range owed {
+		payload, err := c.outcomes.FinishedOutcome(ctx, one.RunID)
+		if err != nil {
+			failures = append(failures, fmt.Errorf("channel: read finished answer for %s: %w", one.RunID, err))
+			continue
+		}
+
+		text, err := engine.OutcomeOf(ctx, c.content, payload)
+		if err != nil {
+			if errors.Is(err, domain.ErrContentErased) {
+				text = "The agent finished, but its closing answer was erased by retention or a data erasure request."
+			} else {
+				failures = append(failures, fmt.Errorf("channel: resolve finished answer for %s: %w", one.RunID, err))
+				continue
+			}
+		}
+
+		if text != "" {
+			if err := c.answers.Reply(ctx, one.Channel, one.Conversation, one.Thread, text); err != nil {
+				// Left owed, so somebody tries again. A finished run whose
+				// answer never appears in the conversation reads as silence,
+				// which is the failure this sweep exists to avoid.
+				failures = append(failures, fmt.Errorf("channel: answer %s: %w", one.EventID, err))
+				continue
+			}
+			said++
+		}
+		if err := c.inbox.FinishedAnswered(ctx, one, c.clock()); err != nil {
+			failures = append(failures, err)
+			continue
+		}
+	}
+	return said, errors.Join(failures...)
+}
+
+/*
 AskKey names the intention an ask represents, for idempotency.
 
 Hashed rather than joined. A channel is a name somebody typed into a form and a
@@ -274,6 +339,24 @@ func (c *Consumer) wired() error {
 		if !present {
 			missing = append(missing, name)
 		}
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	sort.Strings(missing)
+	return fmt.Errorf("%w: %s", ErrNotWired, strings.Join(missing, ", "))
+}
+
+func (c *Consumer) wiredForFinishedAnswers() error {
+	if err := c.wired(); err != nil {
+		return err
+	}
+	missing := []string{}
+	if c.outcomes == nil {
+		missing = append(missing, "a finished-run reader")
+	}
+	if c.content == nil {
+		missing = append(missing, "a content store")
 	}
 	if len(missing) == 0 {
 		return nil

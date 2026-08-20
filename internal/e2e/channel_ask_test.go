@@ -76,10 +76,23 @@ type conversing struct {
 }
 
 // saidAloud stands in for the vendor, and records rather than posts.
-type saidAloud struct{ texts []string }
+type saidAloud struct {
+	texts   []string
+	replies []saidReply
+}
 
-func (s *saidAloud) Reply(_ context.Context, _, _, _, text string) error {
+type saidReply struct {
+	channel      string
+	conversation string
+	thread       string
+	text         string
+}
+
+func (s *saidAloud) Reply(_ context.Context, channel, conversation, thread, text string) error {
 	s.texts = append(s.texts, text)
+	s.replies = append(s.replies, saidReply{
+		channel: channel, conversation: conversation, thread: thread, text: text,
+	})
 	return nil
 }
 
@@ -195,6 +208,7 @@ func aConversation(t *testing.T) *conversing {
 			channel.NewConfigured(store), c.registry, c.registry,
 			channel.NewPostgres(pool), channel.FromTrigger(opener), c.said,
 		).
+		WithOutcomes(channel.NewPostgres(pool), ledger.NewContent(pool)).
 		Binding(c.channels.PrincipalFor)
 	return c
 }
@@ -254,6 +268,33 @@ func (c *conversing) runs(t *testing.T) int {
 	return n
 }
 
+func (c *conversing) finish(t *testing.T, runID string, outcome string) {
+	t.Helper()
+	ctx := context.Background()
+
+	content := ledger.NewContent(c.pool)
+	ref, err := content.Put(ctx, domain.RunID(runID), 2, []byte(outcome))
+	if err != nil {
+		t.Fatalf("store the outcome: %v", err)
+	}
+
+	steps, err := ledger.NewPostgres(c.pool).Read(ctx, domain.RunID(runID), 0)
+	if err != nil {
+		t.Fatalf("read the opened run: %v", err)
+	}
+	first := steps[0]
+	payload, _ := json.Marshal(domain.RunFinishedPayload{
+		OutcomeRef: ref, OutcomeDigest: "sha256:test",
+	})
+	if _, err := ledger.NewPostgres(c.pool).Append(ctx, domain.Step{
+		RunID: domain.RunID(runID), Kind: domain.StepRunFinished,
+		Scope: first.Scope, AgentID: first.AgentID, VersionID: first.VersionID,
+		OnBehalfOf: first.OnBehalfOf, Payload: payload, At: time.Now(),
+	}); err != nil {
+		t.Fatalf("finish the run: %v", err)
+	}
+}
+
 func TestAsk_aMentionInAMappedConversation_becomesARunForWhoeverAsked(t *testing.T) {
 	c := aConversation(t)
 
@@ -308,6 +349,41 @@ func TestAsk_aMentionInAMappedConversation_becomesARunForWhoeverAsked(t *testing
 	}
 	if len(c.said.texts) != 0 {
 		t.Errorf("said %v; opening a run says nothing, the run does", c.said.texts)
+	}
+}
+
+func TestAsk_aFinishedRunAnswersInTheThreadThatAsked(t *testing.T) {
+	c := aConversation(t)
+
+	c.mention(t, "EvAnswer", "<@U0BOT> helper diagnose this alert")
+	if _, err := c.consumer.Sweep(context.Background(), time.Minute, 10); err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	_, runID, _ := c.opened(t, "EvAnswer")
+	c.finish(t, runID, "diagnosis complete")
+
+	if len(c.said.texts) != 0 {
+		t.Fatalf("said before answer sweep: %v", c.said.texts)
+	}
+	delivered, err := c.consumer.AnswerFinished(context.Background(), time.Minute, 10)
+	if err != nil {
+		t.Fatalf("answer finished: %v", err)
+	}
+	if delivered != 1 || len(c.said.replies) != 1 {
+		t.Fatalf("delivered %d replies %+v", delivered, c.said.replies)
+	}
+	got := c.said.replies[0]
+	if got.channel != "acme" || got.conversation != "C07" || got.thread != "1786.1" {
+		t.Fatalf("reply went to %s/%s/%s, want the original channel conversation and thread",
+			got.channel, got.conversation, got.thread)
+	}
+	if got.text != "diagnosis complete" {
+		t.Errorf("text = %q", got.text)
+	}
+
+	again, err := c.consumer.AnswerFinished(context.Background(), time.Minute, 10)
+	if err != nil || again != 0 {
+		t.Fatalf("delivered %d more (%v); the answer was already said", again, err)
 	}
 }
 
