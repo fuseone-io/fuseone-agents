@@ -299,6 +299,16 @@ func TestRender_theSameDefinitionTwice_isTheSameVersion(t *testing.T) {
 	}
 }
 
+func TestPublish_refusesADefinitionForAnotherCompany(t *testing.T) {
+	r := openRegistry(t)
+	ctx := context.Background()
+	published := published(t, strings.Replace(definition, "area: cx", "company: cora\narea: cx", 1))
+
+	if err := r.Publish(ctx, published, "usr_ana", "acme"); err == nil {
+		t.Fatal("Publish succeeded with a definition for another company")
+	}
+}
+
 func TestPublish_emits_survivesTheRegistry(t *testing.T) {
 	registry := openRegistry(t)
 	ctx := context.Background()

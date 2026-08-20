@@ -170,6 +170,35 @@ existing session alone.
 reason is worth reading: "this writes" and "this writes in a run that read
 somebody else's text" are different sentences and different risks.
 
+### Slack delivery paths
+
+Slack has three different paths that look similar and fail differently:
+
+| Slack feature | FuseOne URL or credential | What it is for |
+| --- | --- | --- |
+| **Socket Mode** | `xapp-...` app-level token, stored on the channel | Receiving events over an outbound WebSocket when FuseOne has no public URL |
+| **Event Subscriptions over HTTP** | `https://<host>/hooks/channel/<name>/slack/events` | Receiving Slack Events API payloads, including URL verification challenges |
+| **Interactivity & Shortcuts** | `https://<host>/hooks/channel/<name>/slack` | Receiving button clicks, including approval and refusal actions |
+| **Posting/listing channels** | `xoxb-...` bot token, stored on the channel | Sending messages, listing conversations, and posting test messages |
+| **HTTP request verification** | Slack signing secret, stored on the channel | Verifying Slack HTTP requests on both `/slack` and `/slack/events` |
+
+Do not put the interactivity URL in **Event Subscriptions**. Slack verifies an
+events URL by POSTing a `challenge`, and only `/slack/events` answers that
+challenge. If Slack reports "your URL didn't respond with the value of the
+challenge parameter" and the serve log shows
+`POST /hooks/channel/<name>/slack status=400`, the app is calling the button
+endpoint with an events challenge.
+
+For an installation that should expose only Slack hooks publicly, route only
+`/hooks` through the external ingress, or route these two exact paths if no
+agent webhooks should be public:
+
+- `/hooks/channel/<name>/slack`
+- `/hooks/channel/<name>/slack/events`
+
+The ingress path restriction is not authentication. Slack authentication is
+the request signature checked with the channel's signing secret.
+
 **A Slack mention does not open a run.** Check which delivery mode the channel
 uses. In HTTP mode, Slack must reach `/hooks/channel/<name>/slack/events` and
 the signing secret must verify the request. In Socket Mode, no public URL is

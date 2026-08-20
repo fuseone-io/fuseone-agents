@@ -664,6 +664,7 @@
     "modeMentionsExplains": "Uma pessoa menciona o bot e começa a mensagem com o id ou nome do agente.",
     "modeWatch": "Observar mensagens selecionadas",
     "modeWatchExplains": "Só mensagens das fontes Slack configuradas iniciam o agente configurado. A mensagem continua sendo entrada não confiável.",
+    "noWatchAgents": "Nenhum agente neste escopo declara o gatilho Conversation. Publique um com Governança → Gatilhos → Conversation.",
     "watchAgent": "Iniciar agente",
     "watchAgentExplains": "O texto do Slack nunca escolhe o agente.",
     "watchRunAs": "Rodar como",

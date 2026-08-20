@@ -60,15 +60,15 @@ func (s *Server) WithPublisher(p Publisher) *Server {
 func (s *Server) PublishAgent(
 	ctx context.Context, req openapi.PublishAgentRequestObject,
 ) (openapi.PublishAgentResponseObject, error) {
-	// Publishing into an area needs the right to publish there. The company
-	// comes from the caller's own grant rather than a constant: in phase 1
-	// there is one, and hardcoding it is how a phase-2 bug gets written today
-	// and found in a year.
-	scope, allowed := publishScope(ctx, domain.AreaID(req.Body.Area))
+	// Publishing into an area needs the right to publish into the exact
+	// company/area pair the author chose. Area identifiers are scoped by
+	// company; inferring the company from the first matching grant is how an
+	// editor showing cora/platform can publish default/platform.
+	scope, allowed := publishScope(ctx,
+		domain.CompanyID(req.Body.Company), domain.AreaID(req.Body.Area))
 	if !allowed {
 		return openapi.PublishAgent403ApplicationProblemPlusJSONResponse{
-			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermAgentPublish,
-				domain.Scope{Area: domain.AreaID(req.Body.Area)}),
+			ForbiddenApplicationProblemPlusJSONResponse: forbidden(domain.PermAgentPublish, scope),
 		}, nil
 	}
 	if s.publisher == nil {
@@ -185,18 +185,26 @@ func (s *Server) SetAgentPaused(
 	return openapi.SetAgentPaused204Response{}, nil
 }
 
-// publishScope finds a grant that lets the caller publish into an area, and
-// the company that grant belongs to.
+// publishScope checks the exact scope the caller asked to publish into.
 //
 // A grant with no area covers its whole company, which is how somebody who
 // administers a company publishes into an area nobody has granted separately.
-func publishScope(ctx context.Context, area domain.AreaID) (domain.Scope, bool) {
+func publishScope(
+	ctx context.Context, company domain.CompanyID, area domain.AreaID,
+) (domain.Scope, bool) {
+	target := domain.Scope{Company: company, Area: area}
+	if company == "" || company == domain.Installation || area == "" {
+		return target, false
+	}
+	if err := domain.ValidCompanyID(string(company)); err != nil {
+		return target, false
+	}
 	for _, held := range auth.VisibleScopes(ctx, domain.PermAgentPublish) {
-		if held.Area == "" || held.Area == area {
-			return domain.Scope{Company: held.Company, Area: area}, true
+		if held.Contains(target) {
+			return target, true
 		}
 	}
-	return domain.Scope{}, false
+	return target, false
 }
 
 // agentVersions is which versions already exist, so publishing can report
@@ -225,7 +233,8 @@ func renderAndParse(id string, in openapi.AgentDefinition) ([]byte, spec.Spec, e
 	}
 
 	draft := spec.Spec{
-		ID: domain.AgentID(id), Name: in.Name, Area: domain.AreaID(in.Area),
+		ID: domain.AgentID(id), Name: in.Name,
+		Company: domain.CompanyID(in.Company), Area: domain.AreaID(in.Area),
 		Provider: in.Provider, Model: in.Model, Effort: valueOr(in.Effort),
 		Instructions: in.Instructions,
 	}

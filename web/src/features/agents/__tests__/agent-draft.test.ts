@@ -32,6 +32,7 @@ describe("the agent draft", () => {
     rerender({ loaded: cobranca });
     expect(result.current.draft).toMatchObject({
       name: "Cobrança amigável",
+      company: "default",
       area: "financeiro",
       instructions: "Cobre com educação.",
     });

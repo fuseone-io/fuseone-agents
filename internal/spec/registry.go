@@ -35,6 +35,14 @@ func NewRegistry(pool *pgxpool.Pool) *Registry {
 // published what was already published, which is not an error and must not
 // overwrite the original's authorship or date.
 func (r *Registry) Publish(ctx context.Context, s Spec, by domain.UserID, company domain.CompanyID) error {
+	if company == "" || company == domain.Installation {
+		return fmt.Errorf("spec: publish %s@%s: company %q is not a publishable company", s.ID, s.Version, company)
+	}
+	if s.Company != "" && s.Company != company {
+		return fmt.Errorf("spec: publish %s@%s: definition company %q does not match authorised company %q",
+			s.ID, s.Version, s.Company, company)
+	}
+
 	budget, err := json.Marshal(s.Budget)
 	if err != nil {
 		return fmt.Errorf("spec: encode budget: %w", err)
@@ -117,6 +125,7 @@ func (r *Registry) Get(ctx context.Context, agent domain.AgentID, version domain
 	for _, t := range tools {
 		s.Tools = append(s.Tools, domain.ToolID(t))
 	}
+	s.Company = domain.CompanyID(company)
 	if err := json.Unmarshal(budget, &s.Budget); err != nil {
 		return Spec{}, fmt.Errorf("spec: decode budget: %w", err)
 	}

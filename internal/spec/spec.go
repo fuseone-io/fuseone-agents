@@ -25,9 +25,10 @@ var (
 
 // Spec is one version of an agent.
 type Spec struct {
-	ID   domain.AgentID
-	Name string
-	Area domain.AreaID
+	ID      domain.AgentID
+	Name    string
+	Company domain.CompanyID
+	Area    domain.AreaID
 
 	// Version is the digest of the file's bytes. Making the version *be* the
 	// content means a run pinned to a version is pinned to exact text — there
@@ -81,6 +82,7 @@ type Trigger struct {
 type frontmatter struct {
 	ID       string    `yaml:"id"`
 	Name     string    `yaml:"name"`
+	Company  string    `yaml:"company,omitempty"`
 	Area     string    `yaml:"area"`
 	Provider string    `yaml:"provider"`
 	Model    string    `yaml:"model"`
@@ -113,6 +115,7 @@ func Parse(source string, data []byte) (Spec, error) {
 	s := Spec{
 		ID:           domain.AgentID(fm.ID),
 		Name:         fm.Name,
+		Company:      domain.CompanyID(fm.Company),
 		Area:         domain.AreaID(fm.Area),
 		Version:      versionOf(data),
 		Provider:     fm.Provider,
@@ -155,6 +158,11 @@ func (s Spec) validate() error {
 	}
 	if s.Area == "" {
 		problems = append(problems, "area is required — it is the unit of cost attribution")
+	}
+	if s.Company != "" {
+		if err := domain.ValidCompanyID(string(s.Company)); err != nil {
+			problems = append(problems, fmt.Sprintf("company is invalid: %v", err))
+		}
 	}
 	if s.Instructions == "" {
 		problems = append(problems, "the body is the agent's instructions and cannot be empty")

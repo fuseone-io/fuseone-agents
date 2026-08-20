@@ -29,6 +29,7 @@ func Render(s Spec) ([]byte, error) {
 	fm := frontmatter{
 		ID:       string(s.ID),
 		Name:     s.Name,
+		Company:  string(s.Company),
 		Area:     string(s.Area),
 		Provider: s.Provider,
 		Model:    s.Model,

@@ -65,7 +65,7 @@ export function EditorBody({
               onChoose={(template) => {
                 patch({
                   name: template.name,
-                  area: template.area ?? draft.area,
+                  area: draft.company !== "" ? (template.area ?? draft.area) : draft.area,
                   instructions: template.instructions,
                   triggers: template.triggers,
                   budget: template.budget ?? draft.budget,

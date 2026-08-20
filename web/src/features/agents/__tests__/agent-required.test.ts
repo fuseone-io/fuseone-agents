@@ -26,6 +26,7 @@ describe("agent publish requirements", () => {
     const draft: AgentDefinition = {
       ...BLANK,
       name: "Ticket triage",
+      company: "acme",
       area: "support",
       provider: "anthropic",
       model: "claude-opus-5",

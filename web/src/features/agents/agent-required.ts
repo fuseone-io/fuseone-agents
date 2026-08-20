@@ -61,7 +61,7 @@ function agentRequirementIsDone(
     case "name":
       return draft.name.trim() !== "";
     case "area":
-      return draft.area.trim() !== "";
+      return draft.company.trim() !== "" && draft.area.trim() !== "";
     case "provider":
       return draft.provider.trim() !== "";
     case "model":

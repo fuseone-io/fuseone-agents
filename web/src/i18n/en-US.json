@@ -664,6 +664,7 @@
     "modeMentionsExplains": "A person mentions the bot and starts the message with the agent id or name.",
     "modeWatch": "Watch selected messages",
     "modeWatchExplains": "Only messages from the configured Slack sources start the configured agent. The message is still untrusted input.",
+    "noWatchAgents": "No agent in this scope declares the Conversation trigger. Publish one with Governance → Triggers → Conversation.",
     "watchAgent": "Start agent",
     "watchAgentExplains": "The Slack text never chooses the agent.",
     "watchRunAs": "Run as",

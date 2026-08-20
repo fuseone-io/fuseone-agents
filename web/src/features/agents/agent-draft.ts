@@ -4,6 +4,7 @@ import type { AgentDefinition, AgentDetail } from "@/lib/api/client";
 /** A new agent starts with nothing chosen and nothing granted. */
 export const BLANK: AgentDefinition = {
   name: "",
+  company: "",
   area: "",
   provider: "",
   model: "",
@@ -69,6 +70,7 @@ export function toDefinition(
   const { agent, instructions, steps, emits } = detail;
   return {
     name: agent.name,
+    company: agent.scope.company,
     area: agent.scope.area,
     provider: agent.provider,
     model: agent.model,
@@ -118,7 +120,7 @@ export function changesBetween(
   };
 
   compare("agents.fieldName", before.name, after.name);
-  compare("agents.fieldArea", before.area, after.area);
+  compare("agents.fieldArea", scopeOf(before), scopeOf(after));
   compare(
     "agents.fieldModel",
     `${before.provider}/${before.model}`,
@@ -140,6 +142,11 @@ export function changesBetween(
   compare("agents.fieldSteps", before.steps, after.steps);
   compare("agents.fieldEmits", before.emits, after.emits);
   return changes;
+}
+
+function scopeOf(definition: AgentDefinition): string {
+  if (definition.company === "" && definition.area === "") return "";
+  return `${definition.company}/${definition.area}`;
 }
 
 /**

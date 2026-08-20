@@ -57,7 +57,7 @@ function Checklist({ draft }: { draft: AgentDefinition }) {
   const { t } = useTranslation();
   const items = [
     {
-      done: draft.name !== "" && draft.area !== "",
+      done: draft.name !== "" && draft.company !== "" && draft.area !== "",
       label: t("agents.nameAndArea"),
     },
     {

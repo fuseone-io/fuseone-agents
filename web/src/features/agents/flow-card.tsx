@@ -21,10 +21,10 @@ export function FlowCard({ draft }: { draft: AgentDefinition }) {
   const tools = draft.tools ?? [];
 
   const flow = useQuery({
-    // Keyed on what the answer depends on: the area decides the catalogue,
+    // Keyed on what the answer depends on: the scope decides the catalogue,
     // and the tools decide the paths.
-    queryKey: ["flow", draft.area, tools.join(",")],
-    enabled: tools.length > 0 && Boolean(draft.area),
+    queryKey: ["flow", draft.company, draft.area, tools.join(",")],
+    enabled: tools.length > 0 && Boolean(draft.company) && Boolean(draft.area),
     // The rail should not blank between keystrokes: the previous answer is
     // right until the new one disagrees.
     placeholderData: keepPreviousData,

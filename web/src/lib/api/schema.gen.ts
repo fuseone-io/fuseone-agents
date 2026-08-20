@@ -3272,6 +3272,12 @@ export interface components {
         };
         AgentDefinition: {
             name: string;
+            /**
+             * @description The company this agent is filed under. Area identifiers are only
+             *     unique inside a company, so publishing must name the pair the
+             *     author chose rather than asking the server to infer one.
+             */
+            company: string;
             area: string;
             provider: string;
             model: string;

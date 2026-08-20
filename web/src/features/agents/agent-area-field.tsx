@@ -21,16 +21,19 @@ import { useScopes } from "@/features/scope/api";
  * from under the ceiling and the policies that governed it.
  */
 export function AgentAreaField({
+  company,
   area,
   onChange,
 }: {
+  company: string;
   area: string;
-  onChange: (area: string) => void;
+  onChange: (scope: { company: string; area: string }) => void;
 }) {
   const { t } = useTranslation();
   const { data } = useScopes();
   const declared = data?.items ?? [];
-  const known = declared.some((s) => s.area === area);
+  const value = company !== "" && area !== "" ? scopeValue(company, area) : "";
+  const known = declared.some((s) => s.company === company && s.area === area);
 
   return (
     <Labelled
@@ -38,7 +41,12 @@ export function AgentAreaField({
       htmlFor="agent-area"
       required={agentRequirementMarked("area")}
     >
-      <Select value={area || undefined} onValueChange={onChange}>
+      <Select
+        value={value || undefined}
+        onValueChange={(next) => {
+          onChange(splitScope(next));
+        }}
+      >
         <SelectTrigger
           id="agent-area"
           className="w-full font-mono"
@@ -47,18 +55,18 @@ export function AgentAreaField({
           <SelectValue placeholder={t("agents.choose")} />
         </SelectTrigger>
         <SelectContent>
-          {area !== "" && !known && (
-            <SelectItem value={area} className="font-mono">
-              {t("agents.areaUndeclared", { area })}
+          {company !== "" && area !== "" && !known && (
+            <SelectItem value={value} className="font-mono">
+              {t("agents.areaUndeclared", { area: value })}
             </SelectItem>
           )}
           {declared.map((s) => (
             <SelectItem
               key={`${s.company}/${s.area}`}
-              value={s.area}
+              value={scopeValue(s.company, s.area)}
               className="font-mono"
             >
-              {s.area}
+              {s.company}/{s.area}
               {s.label && s.label !== s.area ? ` · ${s.label}` : ""}
             </SelectItem>
           ))}
@@ -71,4 +79,13 @@ export function AgentAreaField({
       </Select>
     </Labelled>
   );
+}
+
+function scopeValue(company: string, area: string): string {
+  return `${company}/${area}`;
+}
+
+function splitScope(value: string): { company: string; area: string } {
+  const parts = value.split("/", 2);
+  return { company: parts[0] ?? "", area: parts[1] ?? "" };
 }

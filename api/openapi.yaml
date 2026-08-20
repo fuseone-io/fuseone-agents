@@ -5034,9 +5034,15 @@ components:
 
     AgentDefinition:
       type: object
-      required: [name, area, provider, model, instructions]
+      required: [name, company, area, provider, model, instructions]
       properties:
         name: { type: string }
+        company:
+          type: string
+          description: |
+            The company this agent is filed under. Area identifiers are only
+            unique inside a company, so publishing must name the pair the
+            author chose rather than asking the server to infer one.
         area: { type: string }
         provider: { type: string }
         model: { type: string }

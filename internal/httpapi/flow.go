@@ -24,7 +24,8 @@ about to publish, and an author who may not publish into an area has no reason
 to be asking what publishing into it would do.
 */
 func (s *Server) CheckDataFlow(ctx context.Context, req openapi.CheckDataFlowRequestObject) (openapi.CheckDataFlowResponseObject, error) {
-	scope, allowed := publishScope(ctx, domain.AreaID(req.Body.Area))
+	scope, allowed := publishScope(ctx,
+		domain.CompanyID(req.Body.Company), domain.AreaID(req.Body.Area))
 	if !allowed {
 		return openapi.CheckDataFlow403ApplicationProblemPlusJSONResponse{
 			ForbiddenApplicationProblemPlusJSONResponse: forbidden(

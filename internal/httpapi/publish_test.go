@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/ledger"
@@ -16,6 +17,7 @@ import (
 
 type publisher struct {
 	published []spec.Spec
+	companies []domain.CompanyID
 	paused    map[domain.AgentID]bool
 	ensured   []domain.AgentID
 }
@@ -24,8 +26,9 @@ func newPublisher() *publisher {
 	return &publisher{paused: map[domain.AgentID]bool{}}
 }
 
-func (p *publisher) Publish(_ context.Context, s spec.Spec, _ domain.UserID, _ domain.CompanyID) error {
+func (p *publisher) Publish(_ context.Context, s spec.Spec, _ domain.UserID, company domain.CompanyID) error {
 	p.published = append(p.published, s)
+	p.companies = append(p.companies, company)
 	return nil
 }
 
@@ -49,7 +52,8 @@ func (p *publisher) IsPaused(_ context.Context, agent domain.AgentID) (bool, err
 
 func definition(over func(*openapi.AgentDefinition)) *openapi.PublishAgentJSONRequestBody {
 	body := openapi.AgentDefinition{
-		Name: "Atendimento", Area: "cx", Provider: "openai", Model: "gpt-test",
+		Name: "Atendimento", Company: "acme", Area: "cx",
+		Provider: "openai", Model: "gpt-test",
 		Instructions: "Atenda o chamado e responda.",
 		Tools:        &[]string{"crm.lookup"},
 		// A definition with no ceiling is one the parser refuses, and this
@@ -92,6 +96,84 @@ func TestPublishAgent_writesTheVersionAndRecordsItPaused(t *testing.T) {
 	}
 	if len(pub.published) != 1 || pub.published[0].ID != "triage" {
 		t.Errorf("published = %+v, want the agent", pub.published)
+	}
+}
+
+func TestPublishAgent_usesTheCompanyTheAuthorChose(t *testing.T) {
+	t.Parallel()
+	pub := newPublisher()
+	ctx := auth.WithPrincipal(context.Background(), domain.Principal{
+		ID: "usr_ana", Kind: domain.PrincipalUser,
+		Grants: []domain.Grant{
+			{Scope: domain.Scope{Company: "default", Area: "platform"}, Role: domain.RoleAuthor},
+			{Scope: domain.Scope{Company: "cora", Area: "platform"}, Role: domain.RoleAuthor},
+		},
+	})
+
+	resp, err := publishServer(t, pub).PublishAgent(
+		ctx,
+		openapi.PublishAgentRequestObject{AgentId: "troubleshooting-sre", Body: definition(func(d *openapi.AgentDefinition) {
+			d.Company = "cora"
+			d.Area = "platform"
+		})},
+	)
+	if err != nil {
+		t.Fatalf("PublishAgent: %v", err)
+	}
+	if _, ok := resp.(openapi.PublishAgent200JSONResponse); !ok {
+		t.Fatalf("response = %T, want published", resp)
+	}
+	if len(pub.companies) != 1 || pub.companies[0] != "cora" {
+		t.Fatalf("published companies = %+v, want cora", pub.companies)
+	}
+	if len(pub.published) != 1 || pub.published[0].Company != "cora" {
+		t.Fatalf("published definition company = %+v, want cora", pub.published)
+	}
+}
+
+func TestPublishAgent_refusesTheInstallationSentinelAsAnAgentCompany(t *testing.T) {
+	t.Parallel()
+
+	resp, err := publishServer(t, newPublisher()).PublishAgent(
+		asInstallation(domain.RoleAdmin),
+		openapi.PublishAgentRequestObject{AgentId: "triage", Body: definition(func(d *openapi.AgentDefinition) {
+			d.Company = string(domain.Installation)
+			d.Area = "platform"
+		})},
+	)
+	if err != nil {
+		t.Fatalf("PublishAgent: %v", err)
+	}
+	if _, ok := resp.(openapi.PublishAgent403ApplicationProblemPlusJSONResponse); !ok {
+		t.Fatalf("response = %T, want forbidden", resp)
+	}
+}
+
+func TestPublishAgent_changingCompanyChangesTheVersion(t *testing.T) {
+	t.Parallel()
+
+	acme, parsedAcme, err := renderAndParse("triage", *definition(func(d *openapi.AgentDefinition) {
+		d.Company = "acme"
+		d.Area = "platform"
+	}))
+	if err != nil {
+		t.Fatalf("render acme: %v", err)
+	}
+	cora, parsedCora, err := renderAndParse("triage", *definition(func(d *openapi.AgentDefinition) {
+		d.Company = "cora"
+		d.Area = "platform"
+	}))
+	if err != nil {
+		t.Fatalf("render cora: %v", err)
+	}
+
+	if parsedAcme.Company != "acme" || parsedCora.Company != "cora" {
+		t.Fatalf("companies = %q and %q, want the file to carry each chosen company",
+			parsedAcme.Company, parsedCora.Company)
+	}
+	if parsedAcme.Version == parsedCora.Version {
+		t.Fatalf("versions both = %s; company was not part of the versioned artefact\n%s\n%s",
+			parsedAcme.Version, acme, cora)
 	}
 }
 

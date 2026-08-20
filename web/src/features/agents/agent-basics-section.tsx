@@ -73,8 +73,9 @@ export function AgentBasicsSection({
           />
         </Labelled>
         <AgentAreaField
+          company={draft.company}
           area={draft.area}
-          onChange={(area) => patch({ area })}
+          onChange={(scope) => patch(scope)}
         />
       </div>
 

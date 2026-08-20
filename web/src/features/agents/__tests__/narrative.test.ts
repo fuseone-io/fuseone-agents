@@ -10,7 +10,7 @@ const tools = [
 
 const draft = (over: Partial<AgentDefinition> = {}): AgentDefinition =>
   ({
-    name: "Suporte", area: "cx", provider: "anthropic", model: "m",
+    name: "Suporte", company: "acme", area: "cx", provider: "anthropic", model: "m",
     instructions: "", tools: [], budget: { micros: 500_000, steps: 60 },
     triggers: [], ...over,
   }) as AgentDefinition;
