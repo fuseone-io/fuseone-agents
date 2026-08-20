@@ -25,6 +25,32 @@ field" is a commit message.
 
 ---
 
+## [0.16.0] — 2026-08-20
+
+### Added
+
+- **A run records why it finished.** Today that is `no_tool_call`: the model
+  answered with text instead of proposing another tool call, and text ends a
+  run. The trail says so rather than leaving somebody to conclude the run
+  stopped for no reason. Runs recorded before this carry no reason and keep the
+  general wording, which is the right answer for a run that never stated one.
+
+  Finishing is still an omission rather than an act — a run ends when the model
+  *does not* call a tool, so "I will continue" and "I am done" arrive
+  identically. This release makes that visible; it does not make it impossible.
+
+### Fixed
+
+- **A configured model rate takes effect without restarting the worker.**
+  Prices were read once at start-up and the planner was cached per agent
+  version, so an installation that configured a rate kept billing at the old
+  one — usually zero — until something restarted. Two layers held the stale
+  value, and fixing either alone would have looked like the fix had failed.
+  A failed refresh keeps the last good rate rather than falling back to zero.
+  **Runs already recorded are not repriced**; what was written as zero stays
+  zero.
+- Line tabs no longer overflow their container.
+
 ## [0.15.1] — 2026-08-20
 
 ### Fixed
