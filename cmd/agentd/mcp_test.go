@@ -607,9 +607,9 @@ func TestAuthenticatedClient_aUserOnlyServerDoesNotUseTheSharedCredentialWhenThe
 	}
 	if _, err := client.Do(req); err == nil {
 		t.Fatal("call succeeded by falling back to the shared credential")
-	} else if !strings.Contains(err.Error(), "no personal MCP credential") ||
+	} else if !strings.Contains(err.Error(), "installation credential for discovery") ||
 		!strings.Contains(err.Error(), "usr_ana") {
-		t.Fatalf("Get error = %v, want Ana's missing credential named", err)
+		t.Fatalf("Get error = %v, want Ana's missing personal credential named beside the shared discovery credential", err)
 	}
 }
 
@@ -865,6 +865,26 @@ func TestFingerprint_aServerNobodyTouched_keepsItsSession(t *testing.T) {
 	}
 }
 
+func TestTransportForHTTP_doesNotOpenAStandaloneSSEStream(t *testing.T) {
+	t.Parallel()
+
+	transport, cleanup, err := transportFor(t.Context(), domain.MCPServer{
+		Name: "grafana", Transport: domain.TransportHTTP, URL: "https://grafana.example/mcp",
+	}, domain.MCPCredentials{}, nil, nil, credentialPolicy{})
+	if err != nil {
+		t.Fatalf("transportFor: %v", err)
+	}
+	t.Cleanup(cleanup)
+
+	streamable, ok := transport.(*mcp.StreamableClientTransport)
+	if !ok {
+		t.Fatalf("transport = %T, want StreamableClientTransport", transport)
+	}
+	if !streamable.DisableStandaloneSSE {
+		t.Fatal("the worker would keep an optional idle SSE stream and close the MCP client when a proxy drops it")
+	}
+}
+
 func TestConnectServer_legacyHTTPProtocolDoesNotSendModernDiscover(t *testing.T) {
 	t.Parallel()
 
@@ -1066,6 +1086,54 @@ func TestReconciler_aFailedProbeKeepsTheCurrentSession(t *testing.T) {
 	}
 }
 
+func TestReconciler_aReconnectedServerGetsItsRecordedRulingsBeforeItCanRun(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	server := domain.MCPServer{
+		Name: "crm", Transport: domain.TransportHTTP, URL: "https://tools.example.com/mcp",
+		Enabled: true, UpdatedAt: time.Date(2026, 8, 17, 10, 0, 0, 0, time.UTC),
+	}
+	configured := &probeServers{servers: []domain.MCPServer{server}, probes: []string{"crm"}}
+	catalog := tools.NewCatalog(engine.NewMemoryContent())
+	old := &testSession{tools: []*mcp.Tool{{Name: "old"}}}
+	if err := catalog.AddServer(ctx, "crm", old, nil); err != nil {
+		t.Fatalf("seed catalog: %v", err)
+	}
+	rulings := &recordingRulings{}
+	r := newReconciler(catalog, configured, recordingHealth{}).classifyingWith(rulings)
+	r.connected["crm"] = fingerprint(server)
+	r.connectTo = func(
+		ctx context.Context, catalog *tools.Catalog, server domain.MCPServer,
+		_ domain.MCPCredentials, _ OAuthGrantStore, _ MCPUserCredentialStore, _ credentialPolicy,
+	) error {
+		if err := catalog.AddServer(ctx, server.Name, &testSession{tools: []*mcp.Tool{{
+			Name:        "fetch",
+			Description: "Fetch a document.",
+			InputSchema: map[string]any{"type": "object"},
+		}}}, server.Surface); err != nil {
+			return err
+		}
+		for _, entry := range catalog.List() {
+			if entry.ID == "crm.fetch" {
+				rulings.rulings = []domain.ToolClassification{{
+					Tool: entry.ID, Effect: domain.EffectRead, Digest: entry.Digest,
+				}}
+				return nil
+			}
+		}
+		return errors.New("crm.fetch was not imported")
+	}
+
+	r.reconcile(ctx)
+
+	if rulings.calls == 0 {
+		t.Fatal("the reconciler did not refresh classifications after discovery")
+	}
+	if effect, ok := catalog.Effect("crm.fetch"); !ok || effect != domain.EffectRead {
+		t.Fatalf("effect = %v (%v), want the recorded ruling applied before a tool call", effect, ok)
+	}
+}
+
 func TestReconciler_aUserOnlyRecipeCarriesTheCredentialPolicyToTheConnection(t *testing.T) {
 	t.Parallel()
 
@@ -1154,6 +1222,16 @@ type protocolRequirement map[string]string
 
 func (p protocolRequirement) MCPProtocolMode(server string) string {
 	return p[server]
+}
+
+type recordingRulings struct {
+	calls   int
+	rulings []domain.ToolClassification
+}
+
+func (r *recordingRulings) List(context.Context, domain.Scope) ([]domain.ToolClassification, error) {
+	r.calls++
+	return append([]domain.ToolClassification(nil), r.rulings...), nil
 }
 
 type testSession struct {

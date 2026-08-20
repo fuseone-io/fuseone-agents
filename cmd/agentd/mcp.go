@@ -85,6 +85,10 @@ func transportFor(
 		return &mcp.StreamableClientTransport{
 			Endpoint:   server.URL,
 			HTTPClient: client,
+			// Tool calls are request/response. The optional standalone SSE stream
+			// is an idle GET that proxies commonly close, and the SDK then closes
+			// the whole client after retries without progress.
+			DisableStandaloneSSE: true,
 		}, noop, nil
 
 	case domain.TransportStdio:
@@ -311,6 +315,11 @@ func (a *credentialAuth) credentials(ctx context.Context) (domain.MCPCredentials
 			return domain.MCPCredentials{}, "", fmt.Errorf(
 				"%s: this MCP server requires a personal credential, but the run has no person to resolve one for",
 				a.server)
+		}
+		if !a.shared.Empty() {
+			return domain.MCPCredentials{}, "", fmt.Errorf(
+				"%s: this MCP server has an installation credential for discovery, but tool calls require a personal MCP credential for %s",
+				a.server, principal)
 		}
 		return domain.MCPCredentials{}, "", fmt.Errorf(
 			"%s: no personal MCP credential is configured for %s", a.server, principal)
@@ -577,6 +586,7 @@ type reconciler struct {
 	servers   Servers
 	health    healthRecorder
 	publisher Publisher
+	rulings   tools.Classifier
 	connectTo connector
 	policy    personalCredentialPolicy
 	protocol  mcpProtocolPolicy
@@ -596,6 +606,11 @@ func newReconciler(catalog *tools.Catalog, servers Servers, health healthRecorde
 // publishingTo wires where the catalogue is published after it changes.
 func (r *reconciler) publishingTo(p Publisher) *reconciler {
 	r.publisher = p
+	return r
+}
+
+func (r *reconciler) classifyingWith(c tools.Classifier) *reconciler {
+	r.rulings = c
 	return r
 }
 
@@ -737,6 +752,14 @@ func (r *reconciler) connect(ctx context.Context, server domain.MCPServer) bool 
 			"server", server.Name, "transport", server.TransportOf(), "err", err)
 		observe(ctx, r.health, server.Name, false, 0, err.Error())
 		return false
+	}
+	if r.rulings != nil {
+		if _, err := r.catalog.Sync(ctx, r.rulings, domain.Scope{}); err != nil {
+			slog.Error("could not apply tool classifications after discovery",
+				"server", server.Name, "transport", server.TransportOf(), "err", err)
+			observe(ctx, r.health, server.Name, false, 0, err.Error())
+			return false
+		}
 	}
 
 	r.connected[server.Name] = fingerprint(server)

@@ -31,7 +31,10 @@ func NewPublisher(pool *pgxpool.Pool, clock Clock) *Publisher {
 func (p *Publisher) Publish(
 	ctx context.Context, s Spec, by domain.UserID, company domain.CompanyID,
 ) error {
-	return p.registry.Publish(ctx, s, by, company)
+	if err := p.registry.Publish(ctx, s, by, company); err != nil {
+		return err
+	}
+	return p.registry.MakeCurrent(ctx, s.ID, s.Version)
 }
 
 func (p *Publisher) EnsurePaused(ctx context.Context, agent domain.AgentID, by domain.UserID) error {

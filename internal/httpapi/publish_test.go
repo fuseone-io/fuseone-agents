@@ -18,6 +18,7 @@ import (
 type publisher struct {
 	published []spec.Spec
 	companies []domain.CompanyID
+	current   []domain.VersionID
 	paused    map[domain.AgentID]bool
 	ensured   []domain.AgentID
 }
@@ -29,6 +30,7 @@ func newPublisher() *publisher {
 func (p *publisher) Publish(_ context.Context, s spec.Spec, _ domain.UserID, company domain.CompanyID) error {
 	p.published = append(p.published, s)
 	p.companies = append(p.companies, company)
+	p.current = append(p.current, s.Version)
 	return nil
 }
 
@@ -96,6 +98,9 @@ func TestPublishAgent_writesTheVersionAndRecordsItPaused(t *testing.T) {
 	}
 	if len(pub.published) != 1 || pub.published[0].ID != "triage" {
 		t.Errorf("published = %+v, want the agent", pub.published)
+	}
+	if len(pub.current) != 1 || pub.current[0] != pub.published[0].Version {
+		t.Errorf("current = %+v, want the version that was just published", pub.current)
 	}
 }
 

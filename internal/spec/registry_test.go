@@ -31,7 +31,7 @@ triggers:
 Read the ticket and classify it.
 `
 
-func openRegistry(t *testing.T) *spec.Registry {
+func openSpecPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 
 	dsn := os.Getenv("TEST_DATABASE_URL")
@@ -63,7 +63,12 @@ func openRegistry(t *testing.T) *spec.Registry {
 		`truncate agent_specs; truncate agent_state`); err != nil {
 		t.Fatalf("clean: %v", err)
 	}
-	return spec.NewRegistry(pool)
+	return pool
+}
+
+func openRegistry(t *testing.T) *spec.Registry {
+	t.Helper()
+	return spec.NewRegistry(openSpecPool(t))
 }
 
 func published(t *testing.T, source string) spec.Spec {

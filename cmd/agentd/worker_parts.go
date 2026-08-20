@@ -158,7 +158,7 @@ func (p *workerParts) connectTools(ctx context.Context, servers []string) error 
 		withCredentialPolicy(p.known).
 		withProtocolPolicy(p.known)
 	if p.curator != nil {
-		reconcile = reconcile.publishingTo(p.curator)
+		reconcile = reconcile.publishingTo(p.curator).classifyingWith(p.curator)
 	}
 
 	for _, entry := range servers {
