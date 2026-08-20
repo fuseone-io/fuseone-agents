@@ -1,8 +1,8 @@
 package admin_test
 
 import (
+	"encoding/json"
 	"errors"
-	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -57,8 +57,18 @@ func TestMoney_changingItIsRecordedWithoutPretendingToConvertHistory(t *testing.
 	if action != "money.changed" {
 		t.Fatalf("action = %q", action)
 	}
-	if !strings.Contains(detail, `"currency":"USD"`) {
-		t.Fatalf("detail = %#v", detail)
+	// Decoded rather than matched as text: the column is jsonb, and Postgres
+	// reserialises it with its own spacing. Asserting the rendering makes the
+	// test fail on a database formatting choice while the recorded fact is
+	// exactly right — which is a test about the wrong thing.
+	var recorded struct {
+		Currency string `json:"currency"`
+	}
+	if err := json.Unmarshal([]byte(detail), &recorded); err != nil {
+		t.Fatalf("detail is not JSON: %v", err)
+	}
+	if recorded.Currency != "USD" {
+		t.Fatalf("recorded currency = %q", recorded.Currency)
 	}
 }
 
