@@ -25,6 +25,21 @@ field" is a commit message.
 
 ---
 
+## [0.17.0] — 2026-08-20
+
+### Added
+
+- **The manual is something you can look things up in.** Pages declare a
+  section and tags, their headings are extracted, and the console gained a
+  sidebar by section, search across titles, summaries, sections, tags and
+  headings, and an on-page outline. The index carries all of that without the
+  page bodies, so opening the menu is still not downloading the book.
+- **Four more pages, in both languages**: writing good blocks, Slack and
+  channels, MCP servers and credentials, costs and limits. Six per language
+  now. They answer the questions this platform's refusals actually raise — why
+  a call needs a personal credential, why a run stopped at a ceiling — which
+  until now were answered only in commit messages and by whoever was nearby.
+
 ## [0.16.0] — 2026-08-20
 
 ### Added
