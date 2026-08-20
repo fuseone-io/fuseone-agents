@@ -14,7 +14,7 @@ import {
 import { ConversationForm } from "@/features/channels/conversation-form";
 import { setLocale } from "@/i18n";
 
-function stubApi(options: { can?: string[] } = {}) {
+function stubApi(options: { can?: string[]; agents?: unknown[] } = {}) {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: Request) => {
@@ -39,7 +39,11 @@ function stubApi(options: { can?: string[] } = {}) {
                 ],
               }
             : url.includes("/agents")
-              ? { items: [{ agentId: "troubleshooting-sre", name: "Troubleshooting SRE" }] }
+              ? {
+                  items: options.agents ?? [
+                    { agentId: "troubleshooting-sre", name: "Troubleshooting SRE" },
+                  ],
+                }
           : {};
       return new Response(JSON.stringify(body), {
         status: 200,
@@ -109,6 +113,40 @@ describe("conversation configuration", () => {
     expect(screen.getByText("Iniciar agente")).toBeInTheDocument();
     expect(screen.getByText("Fontes Slack permitidas")).toBeInTheDocument();
     expect(screen.getByText("Rodar como")).toBeInTheDocument();
+  });
+
+  it("only offers agents that declared the Conversation trigger for watched messages", async () => {
+    stubApi({
+      agents: [
+        { agentId: "internal-only", name: "Internal only", triggers: [] },
+        {
+          agentId: "troubleshooting-sre",
+          name: "Troubleshooting SRE",
+          triggers: [{ type: "channel" }],
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    renderForm({
+      id: "C-alerts",
+      label: "#alerts",
+      scope: { company: "cora", area: "devops" },
+      mode: "watch",
+      sources: ["B0123ALERT"],
+      agent: "",
+      runAs: "usr_opsbot",
+      wants: ["parked"],
+      enabled: true,
+    });
+
+    await user.click(await screen.findByRole("combobox", { name: /Iniciar agente/ }));
+
+    expect(
+      await screen.findByRole("option", { name: "Troubleshooting SRE" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("option", { name: "Internal only" }),
+    ).not.toBeInTheDocument();
   });
 
   it("only offers the caller as runAs unless they administer identities", async () => {

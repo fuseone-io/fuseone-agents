@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { RefreshCw } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -137,6 +137,10 @@ export function ConversationForm({
   const mode = form.watch("mode");
   const scope = form.watch("scope");
   const agents = useAgentsForScope(scope);
+  const startableAgents = useMemo(
+    () => (agents.data?.items ?? []).filter(startableFromConversation),
+    [agents.data?.items],
+  );
   const people = usePeople();
   const peopleItems = (people.data?.items ?? []).filter((p) => !p.disabled);
   const { data: me } = useMe();
@@ -399,7 +403,7 @@ export function ConversationForm({
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {(agents.data?.items ?? []).map((agent) => (
+                            {startableAgents.map((agent) => (
                               <SelectItem
                                 key={agent.agentId}
                                 value={agent.agentId}
@@ -410,7 +414,9 @@ export function ConversationForm({
                           </SelectContent>
                         </Select>
                         <FormDescription>
-                          {t("channels.watchAgentExplains")}
+                          {agents.isSuccess && startableAgents.length === 0
+                            ? t("channels.noWatchAgents")
+                            : t("channels.watchAgentExplains")}
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
@@ -506,4 +512,8 @@ export function ConversationForm({
       </DialogContent>
     </Dialog>
   );
+}
+
+function startableFromConversation(agent: components["schemas"]["Agent"]) {
+  return (agent.triggers ?? []).some((trigger) => trigger.type === "channel");
 }

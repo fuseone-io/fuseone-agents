@@ -9,6 +9,7 @@ import (
 	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
+	"github.com/fuseone/agents/internal/spec"
 )
 
 /*
@@ -163,8 +164,25 @@ func (s *Server) PutConversation(
 		Area:    domain.AreaID(valueOr(req.Body.Area)),
 	}
 	mode := conversationMode(req.Body.Mode)
+	agent := domain.AgentID(valueOr(req.Body.Agent))
 	runAs := domain.UserID(valueOr(req.Body.RunAs))
 	if mode == channel.ConversationWatch {
+		if agent == "" {
+			return openapi.PutConversation400ApplicationProblemPlusJSONResponse{
+				BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
+					invalid("watched messages need an agent to start")),
+			}, nil
+		}
+		reason, err := s.refuseWatchAgent(ctx, agent, scope)
+		if err != nil {
+			return nil, err
+		}
+		if reason != "" {
+			return openapi.PutConversation400ApplicationProblemPlusJSONResponse{
+				BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
+					invalid(reason)),
+			}, nil
+		}
 		if runAs == "" {
 			return openapi.PutConversation400ApplicationProblemPlusJSONResponse{
 				BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
@@ -176,7 +194,7 @@ func (s *Server) PutConversation(
 				ForbiddenApplicationProblemPlusJSONResponse: *resp,
 			}, nil
 		}
-		reason, err := s.refuseRunAsPrincipal(ctx, runAs, scope)
+		reason, err = s.refuseRunAsPrincipal(ctx, runAs, scope)
 		if err != nil {
 			return nil, err
 		}
@@ -194,7 +212,7 @@ func (s *Server) PutConversation(
 		Scope:   scope,
 		Mode:    mode,
 		Sources: valueOrSlice(req.Body.Sources),
-		Agent:   domain.AgentID(valueOr(req.Body.Agent)),
+		Agent:   agent,
 		RunAs:   runAs,
 		Wants:   wantsOf(req.Body.Wants),
 		Enabled: orDefault(req.Body.Enabled, true),
@@ -206,6 +224,37 @@ func (s *Server) PutConversation(
 		}, nil
 	}
 	return openapi.PutConversation204Response{}, nil
+}
+
+func (s *Server) refuseWatchAgent(
+	ctx context.Context, agent domain.AgentID, scope domain.Scope,
+) (string, error) {
+	if s.agents == nil {
+		return "", nil
+	}
+	/*
+		Watched messages name the agent in configuration rather than in Slack
+		text, but the same two facts still have to intersect: this is the scope
+		the conversation speaks for, and the published version declared that a
+		conversation may start it. Without this check, a client can save a
+		configuration that only fails later, in the Slack thread.
+	*/
+	published, err := s.agents.List(ctx, scope, false)
+	if err != nil {
+		return "", fmt.Errorf("list agents startable from channel: %w", err)
+	}
+	for _, one := range published {
+		if one.ID != agent {
+			continue
+		}
+		for _, trigger := range one.Triggers {
+			if trigger.Type == spec.TriggerChannel {
+				return "", nil
+			}
+		}
+		return "watched messages need an agent that declares the Conversation trigger in this scope", nil
+	}
+	return "watched messages need an agent published in this scope", nil
 }
 
 func (s *Server) refuseRunAsDelegation(

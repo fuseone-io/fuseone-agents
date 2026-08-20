@@ -10,6 +10,7 @@ import (
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/spec"
 )
 
 /*
@@ -324,6 +325,49 @@ func TestPutConversation_watchModeRequiresRunAs(t *testing.T) {
 	}
 	if spy.putConv.RunAs != "" {
 		t.Fatalf("conversation reached the store with runAs = %q", spy.putConv.RunAs)
+	}
+}
+
+func TestPutConversation_watchModeRefusesAnAgentWithoutConversationTrigger(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{}
+	agents := &fakeAgents{published: []domain.AgentSummary{{
+		ID:    "troubleshooting-sre",
+		Scope: domain.Scope{Company: "acme", Area: "ops"},
+	}}}
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, nil).WithAgents(agents)
+
+	resp, err := s.PutConversation(as(domain.RoleCurator), watchConversation("usr_ana"))
+	if err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+	if _, ok := resp.(openapi.PutConversation400ApplicationProblemPlusJSONResponse); !ok {
+		t.Fatalf("response = %T, want bad request", resp)
+	}
+	if spy.putConv.Agent != "" {
+		t.Fatalf("conversation reached the store with agent = %q", spy.putConv.Agent)
+	}
+}
+
+func TestPutConversation_watchModeAcceptsAnAgentWithConversationTrigger(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{}
+	agents := &fakeAgents{published: []domain.AgentSummary{{
+		ID:       "troubleshooting-sre",
+		Scope:    domain.Scope{Company: "acme", Area: "ops"},
+		Triggers: []domain.AgentTrigger{{Type: spec.TriggerChannel}},
+	}}}
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, nil).WithAgents(agents)
+
+	resp, err := s.PutConversation(as(domain.RoleCurator), watchConversation("usr_ana"))
+	if err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+	if _, ok := resp.(openapi.PutConversation204Response); !ok {
+		t.Fatalf("response = %T, want accepted", resp)
+	}
+	if spy.putConv.Agent != "troubleshooting-sre" {
+		t.Fatalf("agent = %q, want the configured agent", spy.putConv.Agent)
 	}
 }
 
