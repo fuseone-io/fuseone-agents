@@ -61,7 +61,8 @@ export interface ConversationInput {
   company: string;
   area?: string;
   label?: string;
-  mode?: "mentions" | "watch";
+  mode?: "mentions" | "watch" | "both";
+  threadContext?: boolean;
   sources?: string[];
   agent?: string;
   runAs?: string;

@@ -41,6 +41,36 @@ type Subjects interface {
 	AboutRun(ctx context.Context, channel, conversation, ref string) (domain.RunID, bool, error)
 }
 
+// ThreadContextPolicy answers whether a conversation chose to send surrounding
+// thread text into the run input. It is separate from scope resolution because
+// it is not authority: the conversation already speaks for a scope, and this
+// only controls how much untrusted evidence accompanies the ask.
+type ThreadContextPolicy interface {
+	IncludeThreadContext(ctx context.Context, channel, conversation string) (bool, error)
+}
+
+// ThreadReader reads earlier messages from a vendor thread.
+type ThreadReader interface {
+	Thread(ctx context.Context, channel, conversation, thread, before string) (ThreadContext, error)
+}
+
+// ThreadContext is the bounded evidence read from a vendor thread.
+type ThreadContext struct {
+	Conversation string          `json:"conversation,omitempty"`
+	Thread       string          `json:"thread,omitempty"`
+	Messages     []ThreadMessage `json:"messages,omitempty"`
+	Truncated    bool            `json:"truncated,omitempty"`
+	Unavailable  string          `json:"unavailable,omitempty"`
+}
+
+// ThreadMessage is one message as evidence. Source is the vendor account that
+// wrote it, not a platform principal and not authority.
+type ThreadMessage struct {
+	Ref    string `json:"ref"`
+	Source string `json:"source,omitempty"`
+	Text   string `json:"text"`
+}
+
 // Opens turns an intention into a run.
 type Opens interface {
 	Open(ctx context.Context, req Request) (Opened, error)

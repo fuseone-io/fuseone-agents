@@ -41,6 +41,12 @@ func (s *spoke) Say(_ context.Context, conversation, thread, text string) error 
 	return nil
 }
 
+func (s *spoke) Thread(
+	context.Context, string, string, string,
+) (channel.ThreadContext, error) {
+	return channel.ThreadContext{}, nil
+}
+
 func stored(t *testing.T) (*settings.Store, *pgxpool.Pool) {
 	t.Helper()
 	dsn := os.Getenv("TEST_DATABASE_URL")

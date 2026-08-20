@@ -100,15 +100,18 @@ const askLease = time.Minute
 // when it will not (NT-005 stage 3).
 func (p *workerParts) consumeAsks(ctx context.Context, owner string) {
 	pool := p.configPool
+	configured := channel.NewConfigured(p.settings)
+	drivers := connect.New(p.settings)
 	consumer := channel.NewConsumer(channel.NewInbox(pool), owner, slog.Default()).
 		With(
-			channel.NewConfigured(p.settings), // which scope a conversation speaks for
-			p.registry,                        // what could be started there
-			p.registry,                        // and which of those agreed to be
-			channel.NewPostgres(pool),         // what a thread is about
-			channel.FromTrigger(p.opener()),   // the same pauses and stops as a schedule
-			connect.New(p.settings),           // and the bot that says it back
+			configured,                      // which scope a conversation speaks for
+			p.registry,                      // what could be started there
+			p.registry,                      // and which of those agreed to be
+			channel.NewPostgres(pool),       // what a thread is about
+			channel.FromTrigger(p.opener()), // the same pauses and stops as a schedule
+			drivers,                         // and the bot that says it back
 		).
+		WithThreadContext(configured, drivers).
 		Binding(admin.NewChannels(pool, p.settings).PrincipalFor)
 
 	go sweep(ctx, askSweep, "asks opened", func() (int, error) {

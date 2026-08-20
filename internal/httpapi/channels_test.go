@@ -221,6 +221,90 @@ func TestPutConversation_watchModeRunsAsTheConfigurerByDefault(t *testing.T) {
 	}
 }
 
+func TestPutConversation_mentionsModeCanIncludeThreadContext(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{}
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, nil)
+	on := true
+	mode := openapi.PutConversationJSONBodyModeMentions
+
+	resp, err := s.PutConversation(as(domain.RoleCurator), openapi.PutConversationRequestObject{
+		Name: "acme-slack", Conversation: "C-alerts",
+		Body: &openapi.PutConversationJSONRequestBody{
+			Company: "acme", Area: ptr("ops"),
+			Mode: &mode, ThreadContext: &on,
+		},
+	})
+	if err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+	if _, ok := resp.(openapi.PutConversation204Response); !ok {
+		t.Fatalf("response = %T, want accepted", resp)
+	}
+	if !spy.putConv.ThreadContext {
+		t.Fatal("thread context was not stored for the mentions conversation")
+	}
+}
+
+func TestPutConversation_bothModeKeepsMentionsAndWatchSettings(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{}
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, nil)
+	on := true
+	mode := openapi.PutConversationJSONBodyModeBoth
+	sources := []string{"B-alerts"}
+
+	resp, err := s.PutConversation(as(domain.RoleCurator), openapi.PutConversationRequestObject{
+		Name: "acme-slack", Conversation: "C-alerts",
+		Body: &openapi.PutConversationJSONRequestBody{
+			Company: "acme", Area: ptr("ops"),
+			Mode: &mode, Sources: &sources,
+			Agent: ptr("troubleshooting-sre"), RunAs: ptr("usr_ana"),
+			ThreadContext: &on,
+		},
+	})
+	if err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+	if _, ok := resp.(openapi.PutConversation204Response); !ok {
+		t.Fatalf("response = %T, want accepted", resp)
+	}
+	if spy.putConv.Mode != channel.ConversationBoth {
+		t.Fatalf("mode = %q, want both", spy.putConv.Mode)
+	}
+	if !spy.putConv.ThreadContext {
+		t.Fatal("thread context was not stored for the mention side")
+	}
+	if spy.putConv.Agent != "troubleshooting-sre" || spy.putConv.RunAs != "usr_ana" {
+		t.Fatalf("watch settings = agent %q runAs %q, want kept",
+			spy.putConv.Agent, spy.putConv.RunAs)
+	}
+}
+
+func TestListChannels_saysWhichConversationsIncludeThreadContext(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{listed: []admin.Channel{{
+		Name: "acme-slack", Kind: "slack",
+		Conversations: []admin.Conversation{{
+			ID: "C-alerts", Scope: domain.Scope{Company: "acme", Area: "ops"},
+			ThreadContext: true,
+		}},
+	}}}
+	s := NewServer(ledger.NewMemory(), "test").
+		WithChannels(spy, nil).
+		WithChannelListing(&listerSpy{})
+
+	resp, err := s.ListChannels(as(domain.RoleCurator), openapi.ListChannelsRequestObject{})
+	if err != nil {
+		t.Fatalf("ListChannels: %v", err)
+	}
+	page := resp.(openapi.ListChannels200JSONResponse)
+	got := page.Items[0].Conversations[0].ThreadContext
+	if got == nil || !*got {
+		t.Fatalf("threadContext = %v, want true", got)
+	}
+}
+
 func TestPutConversation_watchModeCannotDelegateRunAsWithoutIdentityAdministration(t *testing.T) {
 	t.Parallel()
 	spy := &channelSpy{}

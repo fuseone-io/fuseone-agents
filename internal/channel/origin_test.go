@@ -104,6 +104,73 @@ func TestWatchFor_aConfiguredSourceAnswersTheAutomation(t *testing.T) {
 	}
 }
 
+func TestWatchFor_bothModeAlsoAnswersTheAutomation(t *testing.T) {
+	store, channels := configuredChannels(t)
+
+	if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+		ID: "C07-ops", Label: "#ops", Enabled: true,
+		Scope:   domain.Scope{Company: "acme", Area: "ops"},
+		Mode:    channel.ConversationBoth,
+		Sources: []string{"B-alerts"},
+		Agent:   "triagem", RunAs: "usr_opsbot",
+		ThreadContext: true,
+	}, "usr_ana"); err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+
+	rule, ok, err := store.WatchFor(t.Context(), "acme-slack", "C07-ops",
+		channel.Source{Bot: "B-alerts"})
+	if err != nil {
+		t.Fatalf("WatchFor: %v", err)
+	}
+	if !ok || rule.Agent != "triagem" || rule.RunAs != "usr_opsbot" {
+		t.Fatalf("rule = %+v, ok = %v, want the configured automation", rule, ok)
+	}
+
+	include, err := store.IncludeThreadContext(t.Context(), "acme-slack", "C07-ops")
+	if err != nil {
+		t.Fatalf("IncludeThreadContext: %v", err)
+	}
+	if !include {
+		t.Fatal("both mode did not keep the mention-thread context choice")
+	}
+}
+
+func TestIncludeThreadContext_onlyMentionsConversationsCanChooseIt(t *testing.T) {
+	store, channels := configuredChannels(t)
+
+	if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+		ID: "C07-alerts", Label: "#alerts", Enabled: true,
+		Scope:         domain.Scope{Company: "acme", Area: "ops"},
+		ThreadContext: true,
+	}, "usr_ana"); err != nil {
+		t.Fatalf("PutConversation mentions: %v", err)
+	}
+	if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+		ID: "C08-watch", Label: "#watch", Enabled: true,
+		Scope: domain.Scope{Company: "acme", Area: "ops"},
+		Mode:  channel.ConversationWatch, Sources: []string{"B-alerts"},
+		Agent: "triagem", RunAs: "usr_opsbot", ThreadContext: true,
+	}, "usr_ana"); err != nil {
+		t.Fatalf("PutConversation watch: %v", err)
+	}
+
+	include, err := store.IncludeThreadContext(t.Context(), "acme-slack", "C07-alerts")
+	if err != nil {
+		t.Fatalf("IncludeThreadContext mentions: %v", err)
+	}
+	if !include {
+		t.Fatal("mentions conversation did not keep the thread context choice")
+	}
+	include, err = store.IncludeThreadContext(t.Context(), "acme-slack", "C08-watch")
+	if err != nil {
+		t.Fatalf("IncludeThreadContext watch: %v", err)
+	}
+	if include {
+		t.Fatal("watch mode included mention-thread context")
+	}
+}
+
 func TestPutConversation_watchModeRequiresAuthorityAndSource(t *testing.T) {
 	_, channels := configuredChannels(t)
 

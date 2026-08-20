@@ -166,7 +166,7 @@ func (s *Server) PutConversation(
 	mode := conversationMode(req.Body.Mode)
 	agent := domain.AgentID(valueOr(req.Body.Agent))
 	runAs := domain.UserID(valueOr(req.Body.RunAs))
-	if mode == channel.ConversationWatch {
+	if channel.StartsFromWatch(mode) {
 		if agent == "" {
 			return openapi.PutConversation400ApplicationProblemPlusJSONResponse{
 				BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
@@ -207,15 +207,16 @@ func (s *Server) PutConversation(
 	}
 
 	err := s.channels.PutConversation(ctx, req.Name, admin.Conversation{
-		ID:      req.Conversation,
-		Label:   valueOr(req.Body.Label),
-		Scope:   scope,
-		Mode:    mode,
-		Sources: valueOrSlice(req.Body.Sources),
-		Agent:   agent,
-		RunAs:   runAs,
-		Wants:   wantsOf(req.Body.Wants),
-		Enabled: orDefault(req.Body.Enabled, true),
+		ID:            req.Conversation,
+		Label:         valueOr(req.Body.Label),
+		Scope:         scope,
+		Mode:          mode,
+		Sources:       valueOrSlice(req.Body.Sources),
+		Agent:         agent,
+		RunAs:         runAs,
+		ThreadContext: orDefault(req.Body.ThreadContext, false),
+		Wants:         wantsOf(req.Body.Wants),
+		Enabled:       orDefault(req.Body.Enabled, true),
 	}, caller)
 	if err != nil {
 		return openapi.PutConversation400ApplicationProblemPlusJSONResponse{
@@ -427,6 +428,9 @@ func channelFrom(
 		}
 		if conv.RunAs != "" {
 			item.RunAs = ptr(string(conv.RunAs))
+		}
+		if conv.ThreadContext {
+			item.ThreadContext = ptr(true)
 		}
 		if len(conv.Wants) > 0 {
 			item.Wants = &conv.Wants

@@ -68,7 +68,7 @@ Roughly twenty-five tables. The ones that can hold personal data:
 | `run_steps` | Who asked, which agent, which tool, what the Gate decided; references and digests for bulk content — **and the free text listed in section 1**, permanently |
 | `runs.last_error` | Operational error text for the latest failed turn; classified model provider failures store only a stable code, but unclassified local or integration failures can still carry free text |
 | `principals`, `sessions`, `role_grants` | The people who use the console: identity from the customer's own provider |
-| `channel_inbox`, `channel_deliveries` | Messages exchanged on a connected channel, and what was sent back |
+| `channel_inbox`, `channel_deliveries` | Messages exchanged on a connected channel, what was sent back, and optional thread context supplied to a run |
 | `admin_events`, `audit` records | Who changed what configuration, and when |
 
 `agent_specs`, `policies`, `areas`, `scopes`, `settings` and the trigger tables
@@ -117,6 +117,14 @@ environment: the child receives an allowlist (`PATH`, `HOME`, `TMPDIR`, `LANG`,
 
 **Channels.** A connected channel — Slack, for instance — carries messages to
 that provider under the customer's own workspace agreement.
+
+A channel can also be configured to include prior Slack thread messages when a
+person mentions the agent inside a thread. That is not just "the message that
+mentioned the bot": it can include text written by other people in the same
+thread. Those messages become run input, are stored as content behind a
+reference, are marked untrusted, and may be sent to the configured model
+provider along with the rest of the prompt. The checkbox that enables this is
+therefore a data-protection decision, not only an authoring convenience.
 
 **Sign-in.** OIDC reaches the customer's own identity provider: it fetches the
 issuer's discovery document, and exchanges an authorisation code for a token on

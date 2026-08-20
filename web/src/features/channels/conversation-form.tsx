@@ -47,6 +47,7 @@ import type { components } from "@/lib/api/schema.gen";
 const EVENTS = ["parked", "failed", "finished"] as const;
 type RunAsPerson = { id: string; display?: string | null; email?: string | null };
 type Conversation = components["schemas"]["ChannelConversation"];
+type ConversationMode = "mentions" | "watch" | "both";
 
 function splitSources(value: string) {
   return value
@@ -60,14 +61,15 @@ const schema = z
     conversation: z.string().min(1, "channels.needsConversation"),
     label: z.string(),
     scope: z.string().min(1, "channels.needsScope"),
-    mode: z.enum(["mentions", "watch"]),
+    mode: z.enum(["mentions", "watch", "both"]),
+    threadContext: z.boolean(),
     sources: z.string(),
     agent: z.string(),
     runAs: z.string(),
     wants: z.array(z.enum(EVENTS)).min(1, "channels.needsEvent"),
   })
   .superRefine((value, ctx) => {
-    if (value.mode !== "watch") return;
+    if (!startsFromWatch(value.mode)) return;
     if (splitSources(value.sources).length === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -90,6 +92,14 @@ const schema = z
       });
     }
   });
+
+function startsFromMentions(mode: ConversationMode) {
+  return mode !== "watch";
+}
+
+function startsFromWatch(mode: ConversationMode) {
+  return mode === "watch" || mode === "both";
+}
 
 /**
  * Pointing a scope's runs at a conversation.
@@ -125,6 +135,7 @@ export function ConversationForm({
         : "",
       label: conversation?.label ?? "",
       mode: conversation?.mode ?? "mentions",
+      threadContext: conversation?.threadContext ?? false,
       sources: (conversation?.sources ?? []).join("\n"),
       agent: conversation?.agent ?? "",
       runAs: conversation?.runAs ?? "",
@@ -155,7 +166,7 @@ export function ConversationForm({
       : [];
 
   useEffect(() => {
-    if (mode !== "watch" || me === null || me === undefined) return;
+    if (!startsFromWatch(mode) || me === null || me === undefined) return;
     if (canDelegateRunAs) return;
     if (form.getValues("runAs") === me.id) return;
     form.setValue("runAs", me.id, { shouldValidate: true });
@@ -173,10 +184,13 @@ export function ConversationForm({
         area: area || undefined,
         label: values.label.trim() || undefined,
         mode: values.mode,
+        threadContext: startsFromMentions(values.mode)
+          ? values.threadContext
+          : false,
         sources:
-          values.mode === "watch" ? splitSources(values.sources) : undefined,
-        agent: values.mode === "watch" ? values.agent.trim() : undefined,
-        runAs: values.mode === "watch" ? values.runAs.trim() : undefined,
+          startsFromWatch(values.mode) ? splitSources(values.sources) : undefined,
+        agent: startsFromWatch(values.mode) ? values.agent.trim() : undefined,
+        runAs: startsFromWatch(values.mode) ? values.runAs.trim() : undefined,
         wants: values.wants,
       });
       toast.success(t("channels.conversationSaved"));
@@ -370,18 +384,48 @@ export function ConversationForm({
                       <SelectItem value="watch">
                         {t("channels.modeWatch")}
                       </SelectItem>
+                      <SelectItem value="both">
+                        {t("channels.modeBoth")}
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                   <FormDescription>
                     {mode === "watch"
                       ? t("channels.modeWatchExplains")
-                      : t("channels.modeMentionsExplains")}
+                      : mode === "both"
+                        ? t("channels.modeBothExplains")
+                        : t("channels.modeMentionsExplains")}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            {mode === "watch" && (
+            {startsFromMentions(mode) && (
+              <FormField
+                control={form.control}
+                name="threadContext"
+                render={({ field }) => (
+                  <FormItem className="rounded-md border bg-muted/30 p-3">
+                    <label className="flex items-start gap-2 text-sm">
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={(on) => field.onChange(Boolean(on))}
+                      />
+                      <span className="grid gap-1">
+                        <span className="font-medium">
+                          {t("channels.threadContext")}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {t("channels.threadContextExplains")}
+                        </span>
+                      </span>
+                    </label>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+            {startsFromWatch(mode) && (
               <div className="rounded-md border bg-muted/30 p-3">
                 <div className="grid gap-4 md:grid-cols-2">
                   <FormField

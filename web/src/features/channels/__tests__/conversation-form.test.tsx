@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ComponentProps } from "react";
 import {
@@ -14,11 +14,29 @@ import {
 import { ConversationForm } from "@/features/channels/conversation-form";
 import { setLocale } from "@/i18n";
 
-function stubApi(options: { can?: string[]; agents?: unknown[] } = {}) {
+function stubApi(
+  options: {
+    can?: string[];
+    agents?: unknown[];
+    requests?: { method: string; url: string; body?: unknown }[];
+  } = {},
+) {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: Request) => {
       const url = input instanceof Request ? input.url : String(input);
+      const method = input instanceof Request ? input.method : "GET";
+      if (options.requests) {
+        const text =
+          input instanceof Request && method !== "GET"
+            ? await input.clone().text()
+            : "";
+        options.requests.push({
+          method,
+          url,
+          body: text ? JSON.parse(text) : undefined,
+        });
+      }
       const body = url.includes("/api/v1/me")
         ? {
             id: "usr_opsbot",
@@ -213,5 +231,72 @@ describe("conversation configuration", () => {
     expect(
       screen.getByText(/Para apontar outro canal Slack/),
     ).toBeInTheDocument();
+  });
+
+  it("sends the mention thread context choice when a conversation is saved", async () => {
+    const requests: { method: string; url: string; body?: unknown }[] = [];
+    stubApi({ requests });
+    const user = userEvent.setup();
+    renderForm({
+      id: "C-alerts",
+      label: "#alerts",
+      scope: { company: "cora", area: "devops" },
+      mode: "mentions",
+      threadContext: false,
+      wants: ["parked", "failed"],
+      enabled: true,
+    });
+
+    expect(await screen.findByText("Editar conversa")).toBeInTheDocument();
+    await user.click(screen.getByText("Incluir contexto da thread"));
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() =>
+      expect(requests.some((r) => r.method === "PUT")).toBe(true),
+    );
+    const put = requests.find((r) => r.method === "PUT");
+    expect(put?.body).toMatchObject({
+      company: "cora",
+      area: "devops",
+      mode: "mentions",
+      threadContext: true,
+    });
+  });
+
+  it("can keep mentions and watched messages enabled together", async () => {
+    const requests: { method: string; url: string; body?: unknown }[] = [];
+    stubApi({ requests });
+    const user = userEvent.setup();
+    renderForm({
+      id: "C-alerts",
+      label: "#alerts",
+      scope: { company: "cora", area: "devops" },
+      mode: "both",
+      threadContext: false,
+      sources: ["B0123ALERT", "A0123APP"],
+      agent: "troubleshooting-sre",
+      runAs: "usr_opsbot",
+      wants: ["parked", "failed"],
+      enabled: true,
+    });
+
+    expect(await screen.findByText("Iniciar agente")).toBeInTheDocument();
+    expect(screen.getByText("Fontes Slack permitidas")).toBeInTheDocument();
+    await user.click(screen.getByText("Incluir contexto da thread"));
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() =>
+      expect(requests.some((r) => r.method === "PUT")).toBe(true),
+    );
+    const put = requests.find((r) => r.method === "PUT");
+    expect(put?.body).toMatchObject({
+      company: "cora",
+      area: "devops",
+      mode: "both",
+      threadContext: true,
+      sources: ["B0123ALERT", "A0123APP"],
+      agent: "troubleshooting-sre",
+      runAs: "usr_opsbot",
+    });
   });
 });

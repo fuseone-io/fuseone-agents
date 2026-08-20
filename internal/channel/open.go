@@ -69,7 +69,11 @@ func (c *Consumer) open(ctx context.Context, a Claimed) (domain.RunID, Refusal, 
 		return "", *over, nil
 	}
 
-	input, err := json.Marshal(c.structured(ctx, a, ask, asker))
+	record, err := c.structured(ctx, a, ask, asker)
+	if err != nil {
+		return "", Refusal{}, err
+	}
+	input, err := json.Marshal(record)
 	if err != nil {
 		return "", Refusal{}, fmt.Errorf("channel: record the ask %s: %w", a.EventID, err)
 	}
@@ -194,7 +198,7 @@ what was actually said.
 */
 func (c *Consumer) structured(
 	ctx context.Context, a Claimed, ask Ask, asker domain.UserID,
-) structuredAsk {
+) (structuredAsk, error) {
 	out := structuredAsk{Text: ask.Text, AskedBy: string(asker)}
 	if a.Source.Key() != "" {
 		out.Source = a.Source.Key()
@@ -205,19 +209,61 @@ func (c *Consumer) structured(
 	// never the same string in a real channel, and comparing them meant this
 	// branch never fired.
 	if a.Thread == "" || a.Thread == a.Message {
-		return out
+		return out, nil
 	}
 	run, found, err := c.subjects.AboutRun(ctx, a.Channel, a.Conversation, a.Thread)
 	if err != nil {
 		c.log.Warn("could not resolve what a thread is about",
 			"channel", a.Channel, "thread", a.Thread, "err", err)
+		return out, nil
+	}
+	if found {
+		out.Subject = &askSubject{Kind: "run", Run: string(run)}
+		return out, nil
+	}
+
+	include, err := c.includeThreadContext(ctx, a)
+	if err != nil {
+		return structuredAsk{}, err
+	}
+	if !include {
+		return out, nil
+	}
+	out.Thread = c.readThreadContext(ctx, a)
+	return out, nil
+}
+
+func (c *Consumer) includeThreadContext(ctx context.Context, a Claimed) (bool, error) {
+	if c.threadPolicy == nil {
+		return false, nil
+	}
+	include, err := c.threadPolicy.IncludeThreadContext(ctx, a.Channel, a.Conversation)
+	if err != nil {
+		return false, fmt.Errorf("channel: read thread context policy for %s: %w", a.Conversation, err)
+	}
+	return include, nil
+}
+
+func (c *Consumer) readThreadContext(ctx context.Context, a Claimed) *ThreadContext {
+	out := &ThreadContext{Conversation: a.Conversation, Thread: a.Thread}
+	if c.threads == nil {
+		out.Unavailable = "thread context is not wired"
 		return out
 	}
-	if !found {
+	got, err := c.threads.Thread(ctx, a.Channel, a.Conversation, a.Thread, a.Message)
+	if err != nil {
+		c.log.Warn("could not read channel thread context",
+			"channel", a.Channel, "conversation", a.Conversation, "thread", a.Thread, "err", err)
+		out.Unavailable = err.Error()
 		return out
 	}
-	out.Subject = &askSubject{Kind: "run", Run: string(run)}
-	return out
+	if got.Conversation == "" {
+		got.Conversation = a.Conversation
+	}
+	if got.Thread == "" {
+		got.Thread = a.Thread
+	}
+	return &got
 }
 
 /*

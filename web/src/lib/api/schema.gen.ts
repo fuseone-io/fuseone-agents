@@ -3051,7 +3051,13 @@ export interface components {
              * @description How inbound Slack messages may start runs. Empty legacy rows read as mentions.
              * @enum {string}
              */
-            mode?: "mentions" | "watch";
+            mode?: "mentions" | "watch" | "both";
+            /**
+             * @description Whether a mention made inside an existing vendor thread includes
+             *     earlier thread messages in the run input. The text remains
+             *     untrusted; this only supplies context for the agent to read.
+             */
+            threadContext?: boolean;
             sources?: string[];
             agent?: string;
             runAs?: string;
@@ -6417,11 +6423,13 @@ export interface operations {
                      * @description `mentions` starts only when a person mentions the channel
                      *     bot and names an agent. `watch` starts one configured
                      *     agent from ordinary messages written by configured
-                     *     sources, under the configured principal.
+                     *     sources, under the configured principal. `both` keeps the
+                     *     mention path and the watched-message path enabled together;
+                     *     each keeps its own authority.
                      * @default mentions
                      * @enum {string}
                      */
-                    mode?: "mentions" | "watch";
+                    mode?: "mentions" | "watch" | "both";
                     /**
                      * @description Slack user, bot or app ids allowed to trigger watched
                      *     messages. They filter the source; they never grant
@@ -6432,6 +6440,14 @@ export interface operations {
                     agent?: string;
                     /** @description The platform principal watched messages run on behalf of. */
                     runAs?: string;
+                    /**
+                     * @description For modes that accept mentions. When a person mentions the
+                     *     bot inside an existing Slack thread, include a bounded slice
+                     *     of earlier thread messages in the run input. Those messages
+                     *     remain untrusted input and require the Slack history scope
+                     *     for the conversation type.
+                     */
+                    threadContext?: boolean;
                     /** @description Which events reach it. Empty means the defaults, which are parked and failed — a conversation that hears every run finish is one people mute. */
                     wants?: ("parked" | "failed" | "finished")[];
                     /** @default true */

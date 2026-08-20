@@ -26,10 +26,15 @@ export function ConversationRow({
   const scope = conversation.scope.area
     ? `${conversation.scope.company}/${conversation.scope.area}`
     : conversation.scope.company;
+  const threadContext = conversation.threadContext
+    ? ` · ${t("channels.threadContextShort")}`
+    : "";
   const mode =
     conversation.mode === "watch"
       ? `${t("channels.modeWatch")} · ${conversation.agent ?? "-"}`
-      : t("channels.modeMentions");
+      : conversation.mode === "both"
+        ? `${t("channels.modeBoth")} · ${conversation.agent ?? "-"}${threadContext}`
+        : `${t("channels.modeMentions")}${threadContext}`;
 
   return (
     <TableRow>

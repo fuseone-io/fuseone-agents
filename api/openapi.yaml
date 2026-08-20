@@ -2746,13 +2746,15 @@ paths:
                   description: What a person calls it, for the console and the logs.
                 mode:
                   type: string
-                  enum: [mentions, watch]
+                  enum: [mentions, watch, both]
                   default: mentions
                   description: |
                     `mentions` starts only when a person mentions the channel
                     bot and names an agent. `watch` starts one configured
                     agent from ordinary messages written by configured
-                    sources, under the configured principal.
+                    sources, under the configured principal. `both` keeps the
+                    mention path and the watched-message path enabled together;
+                    each keeps its own authority.
                 sources:
                   type: array
                   description: |
@@ -2766,6 +2768,14 @@ paths:
                 runAs:
                   type: string
                   description: The platform principal watched messages run on behalf of.
+                threadContext:
+                  type: boolean
+                  description: |
+                    For modes that accept mentions. When a person mentions the
+                    bot inside an existing Slack thread, include a bounded slice
+                    of earlier thread messages in the run input. Those messages
+                    remain untrusted input and require the Slack history scope
+                    for the conversation type.
                 wants:
                   type: array
                   description: >
@@ -4718,8 +4728,14 @@ components:
         scope: { $ref: '#/components/schemas/Scope' }
         mode:
           type: string
-          enum: [mentions, watch]
+          enum: [mentions, watch, both]
           description: How inbound Slack messages may start runs. Empty legacy rows read as mentions.
+        threadContext:
+          type: boolean
+          description: |
+            Whether a mention made inside an existing vendor thread includes
+            earlier thread messages in the run input. The text remains
+            untrusted; this only supplies context for the agent to read.
         sources:
           type: array
           items: { type: string }

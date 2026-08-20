@@ -256,18 +256,96 @@ func TestSweep_aReplyInSomebodyElsesThread_carriesNoSubject(t *testing.T) {
 	}
 }
 
+func TestSweep_aReplyInSomebodyElsesThread_canCarryThreadContext(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT> triagem investiga isso", func(p *consumerParts) {
+		p.arrival.Thread = "9999.9"
+		p.subjects.found = false
+		p.threadPolicy.include = true
+		p.threads.context = channel.ThreadContext{
+			Messages: []channel.ThreadMessage{{
+				Ref: "9999.9", Source: "app:A-alerts",
+				Text: "firing alertGatewayRTMInterfaceErrors",
+			}},
+		}
+	})
+
+	if _, err := c.Sweep(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+
+	var ask struct {
+		Thread *channel.ThreadContext `json:"thread"`
+	}
+	if err := json.Unmarshal(parts.opener.last.Input, &ask); err != nil {
+		t.Fatalf("input: %v", err)
+	}
+	if ask.Thread == nil || len(ask.Thread.Messages) != 1 {
+		t.Fatalf("thread = %+v, want the configured thread context", ask.Thread)
+	}
+	if ask.Thread.Conversation != "C07-ops" || ask.Thread.Thread != "9999.9" {
+		t.Errorf("thread = %+v, want the conversation and thread named", ask.Thread)
+	}
+	if got := ask.Thread.Messages[0].Text; got != "firing alertGatewayRTMInterfaceErrors" {
+		t.Errorf("thread text = %q", got)
+	}
+}
+
+func TestSweep_threadContextIsNotReadWithoutTheConversationOptIn(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT> triagem investiga isso", func(p *consumerParts) {
+		p.arrival.Thread = "9999.9"
+		p.subjects.found = false
+		p.threads.err = errors.New("thread context should not have been read")
+	})
+
+	if _, err := c.Sweep(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+
+	if parts.threads.calls != 0 {
+		t.Fatal("thread context was read without the conversation choosing it")
+	}
+	if strings.Contains(string(parts.opener.last.Input), "thread") {
+		t.Errorf("input = %s, want no thread context", parts.opener.last.Input)
+	}
+}
+
+func TestSweep_threadContextReadFailureIsVisibleInTheInput(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT> triagem investiga isso", func(p *consumerParts) {
+		p.arrival.Thread = "9999.9"
+		p.subjects.found = false
+		p.threadPolicy.include = true
+		p.threads.err = errors.New("slack: refused: missing_scope (the app needs channels:history)")
+	})
+
+	if _, err := c.Sweep(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+
+	var ask struct {
+		Thread *channel.ThreadContext `json:"thread"`
+	}
+	if err := json.Unmarshal(parts.opener.last.Input, &ask); err != nil {
+		t.Fatalf("input: %v", err)
+	}
+	if ask.Thread == nil || !strings.Contains(ask.Thread.Unavailable, "channels:history") {
+		t.Fatalf("thread = %+v, want the Slack scope problem visible", ask.Thread)
+	}
+}
+
 // --- the harness ------------------------------------------------------------
 
 type consumerParts struct {
-	inbox    *channel.Inbox
-	arrival  channel.Arrival
-	scopes   *scopeStub
-	subjects *subjectStub
-	opener   *openerSpy
-	answers  *answerSpy
-	bound    bool
-	bindErr  error
-	willing  bool
+	inbox        *channel.Inbox
+	arrival      channel.Arrival
+	scopes       *scopeStub
+	subjects     *subjectStub
+	threadPolicy *threadPolicyStub
+	threads      *threadReaderStub
+	opener       *openerSpy
+	answers      *answerSpy
+	bound        bool
+	bindErr      error
+	willing      bool
 }
 
 func consumerFor(t *testing.T, said string) (*channel.Consumer, *consumerParts) {
@@ -283,13 +361,15 @@ func consumerWith(
 ) (*channel.Consumer, *consumerParts) {
 	t.Helper()
 	p := &consumerParts{
-		inbox:    freshInbox(t),
-		scopes:   &scopeStub{scope: domain.Scope{Company: "acme", Area: "ops"}},
-		subjects: &subjectStub{found: true},
-		opener:   &openerSpy{},
-		answers:  &answerSpy{},
-		bound:    true,
-		willing:  true,
+		inbox:        freshInbox(t),
+		scopes:       &scopeStub{scope: domain.Scope{Company: "acme", Area: "ops"}},
+		subjects:     &subjectStub{found: true},
+		threadPolicy: &threadPolicyStub{},
+		threads:      &threadReaderStub{},
+		opener:       &openerSpy{},
+		answers:      &answerSpy{},
+		bound:        true,
+		willing:      true,
 		arrival: channel.Arrival{
 			// A delivery id and a message id that are not the same string,
 			// because in a real channel they never are. They were, in the
@@ -308,6 +388,7 @@ func consumerWith(
 
 	c := channel.NewConsumer(p.inbox, "worker-1", slog.New(slog.NewTextHandler(io.Discard, nil))).
 		With(p.scopes, p, p, p.subjects, p.opener, p.answers).
+		WithThreadContext(p.threadPolicy, p.threads).
 		Binding(func(_ context.Context, _, _ string) (domain.UserID, bool, error) {
 			return "usr_ana", p.bound, p.bindErr
 		})
@@ -321,6 +402,7 @@ func consumerLike(t *testing.T, p *consumerParts, owner string) *channel.Consume
 	t.Helper()
 	return channel.NewConsumer(p.inbox, owner, slog.New(slog.NewTextHandler(io.Discard, nil))).
 		With(p.scopes, p, p, p.subjects, p.opener, p.answers).
+		WithThreadContext(p.threadPolicy, p.threads).
 		Binding(func(_ context.Context, _, _ string) (domain.UserID, bool, error) {
 			return "usr_ana", p.bound, p.bindErr
 		})
@@ -361,6 +443,28 @@ type subjectStub struct {
 
 func (s *subjectStub) AboutRun(context.Context, string, string, string) (domain.RunID, bool, error) {
 	return s.run, s.found && s.run != "", nil
+}
+
+type threadPolicyStub struct {
+	include bool
+	err     error
+}
+
+func (s *threadPolicyStub) IncludeThreadContext(context.Context, string, string) (bool, error) {
+	return s.include, s.err
+}
+
+type threadReaderStub struct {
+	calls   int
+	context channel.ThreadContext
+	err     error
+}
+
+func (r *threadReaderStub) Thread(
+	context.Context, string, string, string, string,
+) (channel.ThreadContext, error) {
+	r.calls++
+	return r.context, r.err
 }
 
 type openerSpy struct {

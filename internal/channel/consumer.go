@@ -32,18 +32,20 @@ broken, and the second time somebody is ignored they stop asking.
 // Scopes answers which scope a conversation speaks for, declared here by the
 // consumer.
 type Consumer struct {
-	inbox     *Inbox
-	scopes    Scopes
-	published Published
-	willing   Willing
-	subjects  Subjects
-	opener    Opens
-	answers   Answers
-	bindings  func(ctx context.Context, channel, account string) (domain.UserID, bool, error)
-	ceiling   Ceiling
-	clock     func() time.Time
-	owner     string
-	log       *slog.Logger
+	inbox        *Inbox
+	scopes       Scopes
+	published    Published
+	willing      Willing
+	subjects     Subjects
+	threadPolicy ThreadContextPolicy
+	threads      ThreadReader
+	opener       Opens
+	answers      Answers
+	bindings     func(ctx context.Context, channel, account string) (domain.UserID, bool, error)
+	ceiling      Ceiling
+	clock        func() time.Time
+	owner        string
+	log          *slog.Logger
 }
 
 // Ask is the structured record of what somebody asked for.
@@ -58,10 +60,11 @@ type structuredAsk struct {
 	// Absent for anything else, and absent is the honest answer: an agent that
 	// needs a specific alert can go and search for one, which is a tool call
 	// somebody can audit rather than a guess this edge made silently.
-	Subject *askSubject `json:"subject,omitempty"`
-	Text    string      `json:"text"`
-	AskedBy string      `json:"asked_by,omitempty"`
-	Source  string      `json:"source,omitempty"`
+	Subject *askSubject    `json:"subject,omitempty"`
+	Text    string         `json:"text"`
+	AskedBy string         `json:"asked_by,omitempty"`
+	Source  string         `json:"source,omitempty"`
+	Thread  *ThreadContext `json:"thread,omitempty"`
 }
 
 type askSubject struct {
@@ -89,6 +92,15 @@ func (c *Consumer) With(
 ) *Consumer {
 	c.scopes, c.published, c.willing = scopes, published, willing
 	c.subjects, c.opener, c.answers = subjects, opener, answers
+	return c
+}
+
+// WithThreadContext wires optional retrieval of evidence from a channel
+// thread. Optional because most conversations do not ask for it; explicit
+// because reading surrounding Slack text is a different decision from allowing
+// a mention to start a run.
+func (c *Consumer) WithThreadContext(policy ThreadContextPolicy, reader ThreadReader) *Consumer {
+	c.threadPolicy, c.threads = policy, reader
 	return c
 }
 

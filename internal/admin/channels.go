@@ -61,15 +61,16 @@ type Channel struct {
 
 // Conversation is one place, and the scope it speaks for.
 type Conversation struct {
-	ID      string
-	Label   string
-	Scope   domain.Scope
-	Mode    string
-	Sources []string
-	Agent   domain.AgentID
-	RunAs   domain.UserID
-	Wants   []string
-	Enabled bool
+	ID            string
+	Label         string
+	Scope         domain.Scope
+	Mode          string
+	Sources       []string
+	Agent         domain.AgentID
+	RunAs         domain.UserID
+	ThreadContext bool
+	Wants         []string
+	Enabled       bool
 }
 
 // List answers with every connection and the conversations mapped into it.
@@ -128,13 +129,14 @@ func conversationsOf(channelName string, stored []settings.Setting) []Conversati
 	var out []Conversation
 	for _, s := range stored {
 		var v struct {
-			Channel string   `json:"channel"`
-			Label   string   `json:"label"`
-			Mode    string   `json:"mode"`
-			Sources []string `json:"sources"`
-			Agent   string   `json:"agent"`
-			RunAs   string   `json:"runAs"`
-			Wants   []string `json:"wants"`
+			Channel       string   `json:"channel"`
+			Label         string   `json:"label"`
+			Mode          string   `json:"mode"`
+			Sources       []string `json:"sources"`
+			Agent         string   `json:"agent"`
+			RunAs         string   `json:"runAs"`
+			ThreadContext bool     `json:"threadContext"`
+			Wants         []string `json:"wants"`
 		}
 		if err := json.Unmarshal(s.Value, &v); err != nil || v.Channel != channelName {
 			continue
@@ -144,7 +146,8 @@ func conversationsOf(channelName string, stored []settings.Setting) []Conversati
 			Mode:    channel.ConversationMode(v.Mode),
 			Sources: compactStrings(v.Sources),
 			Agent:   domain.AgentID(v.Agent), RunAs: domain.UserID(v.RunAs),
-			Wants: v.Wants, Enabled: s.Enabled,
+			ThreadContext: v.ThreadContext,
+			Wants:         v.Wants, Enabled: s.Enabled,
 		})
 	}
 	return out
@@ -255,7 +258,7 @@ func (c *Channels) PutConversation(
 	}
 	mode := channel.ConversationMode(conv.Mode)
 	sources := compactStrings(conv.Sources)
-	if mode == channel.ConversationWatch {
+	if channel.StartsFromWatch(mode) {
 		switch {
 		case len(sources) == 0:
 			return ErrNoWatchSource
@@ -269,6 +272,9 @@ func (c *Channels) PutConversation(
 		conv.Agent = ""
 		conv.RunAs = ""
 	}
+	if !channel.StartsFromMentions(mode) {
+		conv.ThreadContext = false
+	}
 	if err := c.unmapped(ctx, channelName, conv); err != nil {
 		return err
 	}
@@ -277,6 +283,7 @@ func (c *Channels) PutConversation(
 		"channel": channelName, "label": conv.Label, "wants": conv.Wants,
 		"mode": mode, "sources": sources,
 		"agent": string(conv.Agent), "runAs": string(conv.RunAs),
+		"threadContext": conv.ThreadContext,
 	})
 	if err != nil {
 		return err
@@ -295,6 +302,7 @@ func (c *Channels) PutConversation(
 		"channel": channelName, "scope": conv.Scope.String(), "wants": conv.Wants,
 		"mode": mode, "sources": sources,
 		"agent": string(conv.Agent), "runAs": string(conv.RunAs),
+		"threadContext": conv.ThreadContext,
 	})
 }
 

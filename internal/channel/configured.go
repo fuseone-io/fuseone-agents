@@ -45,6 +45,10 @@ const (
 	// ConversationWatch means selected ordinary messages from configured
 	// sources may start one configured agent under one configured principal.
 	ConversationWatch = "watch"
+	// ConversationBoth keeps the deliberate mention path and also watches
+	// selected ordinary messages. The two paths keep their own authority:
+	// mentions come from the bound person; watched messages come from RunAs.
+	ConversationBoth = "both"
 )
 
 // Connection is the non-secret half of a channel: which vendor, and anything
@@ -69,10 +73,23 @@ func DeliveryMode(mode string) string {
 }
 
 func ConversationMode(mode string) string {
-	if mode == ConversationWatch {
+	switch mode {
+	case ConversationWatch:
 		return ConversationWatch
+	case ConversationBoth:
+		return ConversationBoth
+	default:
+		return ConversationMentions
 	}
-	return ConversationMentions
+}
+
+func StartsFromMentions(mode string) bool {
+	return ConversationMode(mode) != ConversationWatch
+}
+
+func StartsFromWatch(mode string) bool {
+	mode = ConversationMode(mode)
+	return mode == ConversationWatch || mode == ConversationBoth
 }
 
 // Source is who wrote a channel event as the vendor names it.
@@ -120,11 +137,12 @@ type conversationValue struct {
 	Label   string `json:"label,omitempty"`
 	// Mode governs inbound starts. Wants governs outbound announcements; they
 	// are deliberately separate decisions.
-	Mode    string         `json:"mode,omitempty"`
-	Sources []string       `json:"sources,omitempty"`
-	Agent   domain.AgentID `json:"agent,omitempty"`
-	RunAs   domain.UserID  `json:"runAs,omitempty"`
-	Wants   []Event        `json:"wants,omitempty"`
+	Mode          string         `json:"mode,omitempty"`
+	Sources       []string       `json:"sources,omitempty"`
+	Agent         domain.AgentID `json:"agent,omitempty"`
+	RunAs         domain.UserID  `json:"runAs,omitempty"`
+	ThreadContext bool           `json:"threadContext,omitempty"`
+	Wants         []Event        `json:"wants,omitempty"`
 }
 
 // Configured reads channels and conversations from the administration area.
@@ -186,7 +204,7 @@ func (c *Configured) WatchFor(
 		if err := json.Unmarshal(s.Value, &v); err != nil {
 			continue
 		}
-		if v.Channel != channelName || ConversationMode(v.Mode) != ConversationWatch {
+		if v.Channel != channelName || !StartsFromWatch(v.Mode) {
 			continue
 		}
 		if v.Agent == "" || v.RunAs == "" || !source.Matches(v.Sources) {
@@ -195,4 +213,31 @@ func (c *Configured) WatchFor(
 		return WatchRule{Agent: v.Agent, RunAs: v.RunAs, Sources: v.Sources}, true, nil
 	}
 	return WatchRule{}, false, nil
+}
+
+// IncludeThreadContext answers whether a mention-capable conversation chose to send
+// earlier thread messages into the run input. It intentionally does not apply
+// to watched messages: those start from the message itself, while this option
+// covers a person replying to an existing alert thread with a mention.
+func (c *Configured) IncludeThreadContext(
+	ctx context.Context, channelName, id string,
+) (bool, error) {
+	stored, err := c.store.List(ctx, KindConversation)
+	if err != nil {
+		return false, fmt.Errorf("channel: list conversations: %w", err)
+	}
+	for _, s := range stored {
+		if s.Name != id || !s.Enabled {
+			continue
+		}
+		var v conversationValue
+		if err := json.Unmarshal(s.Value, &v); err != nil {
+			continue
+		}
+		if v.Channel != channelName || !StartsFromMentions(v.Mode) {
+			continue
+		}
+		return v.ThreadContext, nil
+	}
+	return false, nil
 }

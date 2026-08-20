@@ -33,6 +33,7 @@ undeliverable on that connection.
 type Driver interface {
 	channel.Poster
 	Say(ctx context.Context, conversation, thread, text string) error
+	Thread(ctx context.Context, conversation, thread, before string) (channel.ThreadContext, error)
 }
 
 // Drivers resolves a configured connection to something that can post.
@@ -78,6 +79,17 @@ func (d *Drivers) Reply(ctx context.Context, name, conversation, thread, text st
 		return err
 	}
 	return driver.Say(ctx, conversation, thread, text)
+}
+
+// Thread reads bounded context from the connection that received the ask.
+func (d *Drivers) Thread(
+	ctx context.Context, name, conversation, thread, before string,
+) (channel.ThreadContext, error) {
+	driver, err := d.driver(ctx, name)
+	if err != nil {
+		return channel.ThreadContext{}, err
+	}
+	return driver.Thread(ctx, conversation, thread, before)
 }
 
 func (d *Drivers) driver(ctx context.Context, name string) (Driver, error) {
