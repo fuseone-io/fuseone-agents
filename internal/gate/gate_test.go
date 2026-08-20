@@ -192,6 +192,31 @@ func TestEvaluate_estimateExceedsRemainingBudget_blocked(t *testing.T) {
 	}
 }
 
+func TestEvaluate_budgetBlockNamesTheDimensionAndNumbers(t *testing.T) {
+	t.Parallel()
+
+	r := request()
+	r.Budget = domain.Budget{Micros: 1_000_000, Steps: 60}
+	r.Committed = domain.Consumption{Steps: 60}
+	r.Estimate = domain.Consumption{ToolCalls: 1, Steps: 1}
+
+	d := evaluate(t, New(), r)
+
+	if d.Rule != RuleBudget || d.Verdict != domain.VerdictBlock {
+		t.Fatalf("decision = %+v, want a budget block", d)
+	}
+	if d.Breached != "steps" {
+		t.Fatalf("Breached = %q, want steps; this is not a money ceiling", d.Breached)
+	}
+	if d.Budget.Steps != 60 || d.Projected.Steps != 61 || d.Committed.Steps != 60 {
+		t.Errorf("budget context = budget %+v committed %+v projected %+v",
+			d.Budget, d.Committed, d.Projected)
+	}
+	if d.Projected.Micros != 0 {
+		t.Errorf("Projected.Micros = %d; a steps ceiling must not read as spend", d.Projected.Micros)
+	}
+}
+
 func TestEvaluate_alreadyExecutedIdempotencyKey_blockedAsDuplicate(t *testing.T) {
 	t.Parallel()
 

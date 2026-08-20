@@ -121,6 +121,21 @@ func (h *harness) payloadOf(t *testing.T, kind domain.StepKind, into any) error 
 	return json.Unmarshal(steps[i].Payload, into)
 }
 
+// lastPayloadOf decodes the payload of the last step of a kind.
+func (h *harness) lastPayloadOf(t *testing.T, kind domain.StepKind, into any) error {
+	t.Helper()
+	steps, err := h.ledger.Read(context.Background(), "run-1", domain.FirstSeq)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	for i := len(steps) - 1; i >= 0; i-- {
+		if steps[i].Kind == kind {
+			return json.Unmarshal(steps[i].Payload, into)
+		}
+	}
+	return fmt.Errorf("no %s step in %v", kind, h.kinds(t))
+}
+
 func newHarness(t *testing.T, proposals ...Proposal) *harness {
 	t.Helper()
 	return newHarnessOn(t, fixedClock{t: time.Date(2026, 8, 10, 12, 0, 0, 0, time.UTC)}, proposals...)
@@ -802,6 +817,24 @@ func TestAdvance_toolCallCeilingReached_blocksTheNextCall(t *testing.T) {
 	if len(h.tools.invocations) != 1 {
 		t.Errorf("invocations = %v, want one call against a ceiling of one",
 			h.tools.invocations)
+	}
+
+	var decided domain.GateDecidedPayload
+	if err := h.lastPayloadOf(t, domain.StepGateDecided, &decided); err != nil {
+		t.Fatalf("read final gate decision: %v", err)
+	}
+	if decided.Breached != "tool calls" {
+		t.Fatalf("breached = %q, want the dimension that stopped the run", decided.Breached)
+	}
+	if decided.Budget == nil || decided.Committed == nil ||
+		decided.Estimate == nil || decided.Projected == nil {
+		t.Fatalf("budget evidence = budget %+v committed %+v estimate %+v projected %+v",
+			decided.Budget, decided.Committed, decided.Estimate, decided.Projected)
+	}
+	if decided.Budget.ToolCalls != 1 || decided.Committed.ToolCalls != 1 ||
+		decided.Estimate.ToolCalls != 1 || decided.Projected.ToolCalls != 2 {
+		t.Fatalf("budget evidence = budget %+v committed %+v estimate %+v projected %+v",
+			decided.Budget, decided.Committed, decided.Estimate, decided.Projected)
 	}
 }
 

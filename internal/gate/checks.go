@@ -127,7 +127,15 @@ func checkBudget(r Request) result {
 		WallClockMS: r.Committed.WallClockMS + r.Estimate.WallClockMS,
 	}
 	if dim := r.Budget.Exceeds(projected); dim != "" {
-		return stop("would exceed the run's " + dim + " ceiling")
+		return result{
+			verdict:   domain.VerdictBlock,
+			reason:    "would exceed the run's " + dim + " ceiling",
+			budget:    r.Budget,
+			committed: r.Committed,
+			estimate:  r.Estimate,
+			projected: projected,
+			breached:  dim,
+		}
 	}
 	return pass()
 }

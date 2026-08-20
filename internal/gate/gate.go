@@ -41,13 +41,20 @@ const policyVersion = "builtin/v1"
 
 // result is a check's answer: a verdict plus why.
 type result struct {
-	verdict domain.Verdict
-	reason  string
+	verdict   domain.Verdict
+	reason    string
+	budget    domain.Budget
+	committed domain.Consumption
+	estimate  domain.Consumption
+	projected domain.Consumption
+	breached  string
 }
 
-func pass() result                 { return result{verdict: domain.VerdictAllow} }
-func stop(why string) result       { return result{domain.VerdictBlock, why} }
-func needsHuman(why string) result { return result{domain.VerdictRequireApproval, why} }
+func pass() result           { return result{verdict: domain.VerdictAllow} }
+func stop(why string) result { return result{verdict: domain.VerdictBlock, reason: why} }
+func needsHuman(why string) result {
+	return result{verdict: domain.VerdictRequireApproval, reason: why}
+}
 
 type check struct {
 	rule string
@@ -125,6 +132,11 @@ func (g *Gate) Evaluate(_ context.Context, r Request) (domain.Decision, error) {
 			Verdict:    got.verdict,
 			Rule:       c.rule,
 			Reason:     got.reason,
+			Budget:     got.budget,
+			Committed:  got.committed,
+			Estimate:   got.estimate,
+			Projected:  got.projected,
+			Breached:   got.breached,
 			PolicyHash: g.policyHash,
 			Monitored:  worst.Monitored,
 		}

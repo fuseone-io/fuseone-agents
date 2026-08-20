@@ -67,6 +67,24 @@ func withThisCall(estimate domain.Consumption) domain.Consumption {
 	return estimate
 }
 
+func budgetAsConsumption(b domain.Budget) domain.Consumption {
+	return domain.Consumption{
+		Micros:      b.Micros,
+		Tokens:      b.Tokens,
+		ToolCalls:   b.ToolCalls,
+		Steps:       b.Steps,
+		WallClockMS: b.WallClockMS,
+	}
+}
+
+func budgetEvidence(d domain.Decision) (*domain.Consumption, *domain.Consumption, *domain.Consumption, *domain.Consumption) {
+	if d.Breached == "" {
+		return nil, nil, nil, nil
+	}
+	budget := budgetAsConsumption(d.Budget)
+	return &budget, &d.Committed, &d.Estimate, &d.Projected
+}
+
 // act runs the proposal through the Gate and, if it survives, executes it.
 func (r *Runner) act(ctx context.Context, state State, start Start, p Proposal) (Status, error) {
 	effect, _ := r.deps.Catalog.Effect(p.Tool)
@@ -102,6 +120,7 @@ func (r *Runner) act(ctx context.Context, state State, start Start, p Proposal) 
 		return Status{}, fmt.Errorf("engine: gate: %w", err)
 	}
 
+	budget, committed, estimate, projected := budgetEvidence(decision)
 	state, err = r.append(ctx, state, start, domain.Step{
 		Kind:       domain.StepGateDecided,
 		PolicyHash: decision.PolicyHash,
@@ -109,6 +128,9 @@ func (r *Runner) act(ctx context.Context, state State, start Start, p Proposal) 
 			Tool: p.Tool, Effect: effect, Verdict: decision.Verdict,
 			Rule: decision.Rule, Reason: decision.Reason,
 			PolicyCode: decision.PolicyCode, Monitored: decision.Monitored,
+			Budget:    budget,
+			Committed: committed, Estimate: estimate,
+			Projected: projected, Breached: decision.Breached,
 			// The inputs beside the outcome, so this decision can be
 			// re-evaluated later and not merely replayed (AU-08).
 			Labels: state.Labels, ArgsDigest: digest(p.Args),

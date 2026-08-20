@@ -77,6 +77,15 @@ type Decision struct {
 	// obeyed — otherwise a screen shows a rule denying things beside a run
 	// that carried on, and somebody spends an afternoon on it.
 	Monitored []MonitoredPolicy
+	// Budget context is present when the budget rule blocks. It says which
+	// dimension would cross the ceiling and with what projected consumption,
+	// so a screen does not have to infer "cost" from a rule that also governs
+	// tokens, calls, steps and wall clock.
+	Budget    Budget
+	Committed Consumption
+	Estimate  Consumption
+	Projected Consumption
+	Breached  string
 }
 
 // MonitoredPolicy is what a watching rule would have done.

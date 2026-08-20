@@ -104,6 +104,16 @@ type GateDecidedPayload struct {
 	// than reporting it unchanged.
 	Labels     Labels `json:"labels,omitempty"`
 	ArgsDigest string `json:"args_digest,omitempty"`
+
+	// Budget is recorded only when the budget check blocks. "Budget" covers
+	// money, tokens, calls, steps and wall clock; without the dimension and
+	// numbers the trail says "ceiling" beside R$0.00 and sends the operator
+	// to the wrong screen.
+	Budget    *Consumption `json:"budget,omitempty"`
+	Committed *Consumption `json:"committed,omitempty"`
+	Estimate  *Consumption `json:"estimate,omitempty"`
+	Projected *Consumption `json:"projected,omitempty"`
+	Breached  string       `json:"breached,omitempty"`
 }
 
 type BudgetReservedPayload struct {

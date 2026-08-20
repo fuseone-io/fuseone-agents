@@ -56,3 +56,32 @@ describe("a run finished since the answer moved", () => {
     ).toEqual({ key: "runs.outcomeStored" });
   });
 });
+
+describe("a run parked by a ceiling", () => {
+  it("names the budget dimension instead of making a zero-cost run look impossible", () => {
+    const line = detailOf({
+      seq: 63,
+      kind: "gate_decided",
+      at: "2026-08-20T12:00:00Z",
+      hash: "h",
+      payload: {
+        tool: "grafana.query_prometheus",
+        verdict: "block",
+        rule: "budget",
+        breached: "steps",
+        budget: { micros: 1_000_000, steps: 60 },
+        committed: { steps: 60 },
+        estimate: { tool_calls: 1, steps: 1 },
+        projected: { steps: 61 },
+      },
+    } as never);
+
+    expect(line.key).toBe("runs.storyBudgetExceededSteps");
+    expect(line.values).toMatchObject({
+      used: "61",
+      ceiling: "60",
+      already: "60",
+      requested: "1",
+    });
+  });
+});

@@ -1,6 +1,11 @@
 import { effectOf, verdictOf } from "@/features/runs/step-verb";
 import { explainRule } from "@/lib/gate-rules";
-import { formatCost, formatMicros, formatTokens } from "@/lib/format";
+import {
+  formatCost,
+  formatDurationMs,
+  formatMicros,
+  formatTokens,
+} from "@/lib/format";
 import type { Step, StepKind } from "@/lib/api/client";
 
 /**
@@ -115,6 +120,8 @@ export function detailOf(step: Step): Line {
       // it says which effect was inside which pack, which is the fact an
       // auditor is checking.
       const rule = typeof payload.rule === "string" ? payload.rule : "";
+      const budget = budgetLine(payload);
+      if (rule === "budget" && budget) return budget;
       const explained = explainRule(rule);
       if (explained) return { key: explained };
       const effect = effectOf(step);
@@ -188,6 +195,88 @@ export function detailOf(step: Step): Line {
 
     default:
       return NOTHING;
+  }
+}
+
+function budgetLine(payload: Record<string, unknown>): Line | undefined {
+  const breached = typeof payload.breached === "string" ? payload.breached : "";
+  const budget = record(payload.budget);
+  const committed = record(payload.committed);
+  const estimate = record(payload.estimate);
+  const projected = record(payload.projected);
+  if (!breached || !budget || !projected) return undefined;
+
+  const dim = budgetDimension(breached);
+  if (!dim) return undefined;
+
+  const ceiling = dim.read(budget);
+  const used = dim.read(projected);
+  if (ceiling <= 0 || used <= 0) return undefined;
+
+  return {
+    key: dim.key,
+    values: {
+      used: dim.format(used),
+      ceiling: dim.format(ceiling),
+      already: dim.format(dim.read(committed)),
+      requested: dim.format(dim.read(estimate)),
+    },
+  };
+}
+
+type RawRecord = Record<string, unknown>;
+
+function record(value: unknown): RawRecord {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as RawRecord)
+    : {};
+}
+
+function numberField(value: RawRecord, key: string): number {
+  const found = value[key];
+  return typeof found === "number" && Number.isFinite(found) ? found : 0;
+}
+
+function budgetDimension(name: string):
+  | {
+      key: string;
+      read: (value: RawRecord) => number;
+      format: (value: number) => string;
+    }
+  | undefined {
+  switch (name) {
+    case "cost":
+      return {
+        key: "runs.storyBudgetExceededCost",
+        read: (value) => numberField(value, "micros"),
+        format: formatMicros,
+      };
+    case "tokens":
+      return {
+        key: "runs.storyBudgetExceededTokens",
+        read: (value) => numberField(value, "tokens"),
+        format: formatTokens,
+      };
+    case "tool calls":
+      return {
+        key: "runs.storyBudgetExceededToolCalls",
+        read: (value) => numberField(value, "tool_calls"),
+        format: formatTokens,
+      };
+    case "steps":
+      return {
+        key: "runs.storyBudgetExceededSteps",
+        read: (value) => numberField(value, "steps"),
+        format: formatTokens,
+      };
+    case "wall clock":
+      return {
+        key: "runs.storyBudgetExceededWallClock",
+        read: (value) => numberField(value, "wall_clock_ms"),
+        format: formatDurationMs,
+      };
+    default:
+      return undefined;
   }
 }
 
