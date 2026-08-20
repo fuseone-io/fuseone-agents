@@ -1,0 +1,38 @@
+server: kagent
+title: kagent
+category: operations
+publisher: kagent project
+docs: https://kagent.dev/docs/kagent/examples/agents-mcp
+docsFrom: publisher
+provenance: documentation
+status: published
+config: [credential]
+transport: http
+url: http://<kagent-control-plane>:8083/mcp
+auth: >
+  A customer-operated kagent control plane MCP endpoint. The documentation
+  shows an HTTP endpoint exposed by the kagent controller; production exposure
+  should be protected by the network boundary or by a gateway credential. The
+  credential's reach is whatever kagent agents and Kubernetes permissions that
+  endpoint exposes.
+authModes:
+  - type: bearer
+    principal: service
+    label: Gateway bearer token
+    header: Authorization
+    prefix: Bearer
+    note: Use when the kagent MCP endpoint is protected by an ingress, gateway or service mesh.
+  - type: none
+    principal: none
+    label: In-cluster or development endpoint
+    note: Only for a private endpoint whose network boundary is the authentication boundary.
+
+note: >
+  kagent exposes its running agents through a Streamable HTTP MCP endpoint. The
+  concrete tools represent agents configured in that cluster, so this recipe
+  intentionally suggests no classifications: an agent named through kagent may
+  only read Kubernetes state, or it may deploy, patch, delete, page people, and
+  call other tools. The handshake and the Curator's review are the first
+  trustworthy description of what this specific endpoint can do.
+
+suggestions: []

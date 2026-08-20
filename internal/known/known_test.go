@@ -297,6 +297,22 @@ func TestLoad_operationsPackKeepsRemoteAndInstanceDefinedShapesSeparate(t *testi
 				server, len(entry.Suggestions))
 		}
 	}
+
+	kagent, ok := servers.For("kagent")
+	if !ok {
+		t.Fatal("kagent recipe missing")
+	}
+	if kagent.Transport != "http" || kagent.URL == "" {
+		t.Fatalf("kagent connection = %s %s, want an HTTP MCP endpoint placeholder",
+			kagent.Transport, kagent.URL)
+	}
+	if !hasAuthMode(kagent.AuthModes, known.AuthBearer) || !hasAuthMode(kagent.AuthModes, known.AuthNone) {
+		t.Fatalf("kagent auth modes = %+v, want protected and private endpoint shapes", kagent.AuthModes)
+	}
+	if len(kagent.Suggestions) != 0 {
+		t.Fatalf("kagent suggests %d tools even though tools are cluster-defined",
+			len(kagent.Suggestions))
+	}
 }
 
 func TestSuggest_operationsPackKeepsOperationalTextTainted(t *testing.T) {

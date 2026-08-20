@@ -59,6 +59,7 @@ const SERVER_ICONS: Record<string, LucideIcon> = {
   "google-sheets": FileSpreadsheet,
   "google-slides": Presentation,
   grafana: ChartNoAxesCombined,
+  kagent: CloudCog,
   linear: SquareKanban,
   memory: Brain,
   notion: BookOpen,
