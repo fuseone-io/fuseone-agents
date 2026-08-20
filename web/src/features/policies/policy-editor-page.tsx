@@ -71,8 +71,8 @@ export function PolicyEditorPage() {
         description={t("policies.editorSubtitle")}
       />
 
-      <div className="grid gap-5 lg:grid-cols-[1fr_316px] lg:items-start">
-        <div className="flex flex-col gap-4">
+      <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_316px] lg:items-start">
+        <div className="flex min-w-0 flex-col gap-4">
           <IdentitySection
             draft={draft}
             patch={patch}
@@ -91,13 +91,13 @@ export function PolicyEditorPage() {
       {/* The commit never leaves the screen, and its label names the
           consequence: a rule that will watch and a rule that will stop things
           are different acts and must not share a button that says t("common.save"). */}
-      <div className="sticky bottom-0 -mx-6 -mb-6 flex items-center gap-2 border-t border-border bg-card px-6 py-3 shadow-md">
+      <div className="sticky bottom-0 -mx-6 -mb-6 flex min-w-0 flex-wrap items-center gap-2 border-t border-border bg-card px-6 py-3 shadow-md">
         {changes.length > 0 && (
-          <span className="text-xs text-warning">
+          <span className="min-w-0 text-xs text-warning">
             {t("policies.unsavedChanges", { count: changes.length })}
           </span>
         )}
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           <Button variant="outline" onClick={() => navigate("/policies")}>
             {t("common.cancel")}
           </Button>

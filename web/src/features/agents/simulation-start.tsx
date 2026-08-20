@@ -10,7 +10,10 @@ import { Panel } from "@/components/shared/panel";
 import { cn } from "@/lib/utils";
 import { useStartSimulation } from "@/features/agents/simulation-api";
 import { countCases } from "@/features/agents/simulation-tally";
+import { SimulationReadinessNotice } from "@/features/agents/simulation-readiness";
+import { simulationReadiness } from "@/features/agents/simulation-readiness-state";
 import { problemMessage } from "@/lib/api/problem-message";
+import type { Agent } from "@/lib/api/client";
 
 /**
  * The set of occurrences to replay, and the one button that starts it.
@@ -22,15 +25,24 @@ import { problemMessage } from "@/lib/api/problem-message";
  */
 export function SimulationStart({
   agentId,
+  agent,
+  agentLoading,
+  agentError,
+  onRetryAgent,
   onStarted,
 }: {
   agentId: string;
+  agent?: Agent;
+  agentLoading?: boolean;
+  agentError?: Error | null;
+  onRetryAgent?: () => void;
   onStarted: (simulationId: string) => void;
 }) {
   const { t } = useTranslation();
   const [cases, setCases] = useState("");
   const start = useStartSimulation(agentId);
   const count = countCases(cases);
+  const readiness = simulationReadiness({ agent, agentLoading, agentError, t });
 
   const submit = () =>
     start.mutate(
@@ -53,11 +65,14 @@ export function SimulationStart({
         <p className="text-sm text-muted-foreground">
           {t("simulation.setHelp")}
         </p>
+        {readiness && (
+          <SimulationReadinessNotice
+            readiness={readiness}
+            agentId={agentId}
+            onRetry={onRetryAgent}
+          />
+        )}
 
-        {/* The native control names its own button, in the browser's language
-            and not the console's — so it is the label that is visible and the
-            input that is only reachable. Hidden, never removed: it is still
-            what the keyboard tabs to and what opens the picker. */}
         <Label
           htmlFor="sim-file"
           className={cn(
@@ -72,9 +87,6 @@ export function SimulationStart({
           id="sim-file"
           type="file"
           accept=".jsonl,.ndjson,.json,.txt"
-          // sr-only alone leaves the component's own w-full standing, and an
-          // absolutely positioned full-width input hangs off the page. size-px
-          // is in the same merge group, so it wins rather than fights.
           className="sr-only size-px"
           onChange={(e) => {
             const file = e.target.files?.[0];
@@ -98,16 +110,16 @@ export function SimulationStart({
         </div>
 
         <div className="flex items-center gap-2">
-          <Button disabled={count === 0 || start.isPending} onClick={submit}>
+          <Button
+            disabled={readiness?.blocksStart || count === 0 || start.isPending}
+            onClick={submit}
+          >
             {t("simulation.start")}
           </Button>
 
-          {/* Beside the upload, because re-checking what was already
-              corrected is the more common of the two once an agent has been
-              running for a while. */}
           <Button
             variant="outline"
-            disabled={start.isPending}
+            disabled={readiness?.blocksStart || start.isPending}
             onClick={() =>
               start.mutate(
                 { corpus: true },

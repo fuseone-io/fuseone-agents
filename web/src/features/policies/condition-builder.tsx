@@ -3,13 +3,7 @@ import { Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { ConditionField } from "@/features/policies/condition-field";
 import type { PolicyCondition } from "@/lib/api/client";
 
 /** What a rule can read. Short on purpose: every field here has to be
@@ -62,19 +56,19 @@ export function ConditionBuilder({
       {conditions.map((condition, index) => (
         <div
           key={index}
-          className="grid grid-cols-[42px_1fr_120px_1fr_32px] items-center gap-2"
+          className="grid min-w-0 grid-cols-1 gap-2 rounded-lg border border-border p-2 md:grid-cols-[42px_minmax(0,1fr)_120px_minmax(0,1fr)_32px] md:items-center md:border-0 md:p-0"
         >
-          <span className="text-right text-xs text-muted-foreground">
-            {index === 0 ? "policies.when" : "e"}
+          <span className="min-w-0 text-xs text-muted-foreground md:text-right">
+            {index === 0 ? t("policies.when") : t("policies.and")}
           </span>
 
-          <Field
+          <ConditionField
             label={t("policies.field")}
             value={condition.field}
             options={FIELDS}
             onChange={(field) => update(index, { field })}
           />
-          <Field
+          <ConditionField
             label={t("policies.operator")}
             value={condition.op}
             options={OPERATORS}
@@ -83,7 +77,7 @@ export function ConditionBuilder({
             }
           />
 
-          <div>
+          <div className="min-w-0">
             <Label htmlFor={`value-${index}`} className="sr-only">
               {t("policies.conditionValue", { n: index + 1 })}
             </Label>
@@ -121,40 +115,5 @@ export function ConditionBuilder({
         {t("policies.addCondition")}
       </Button>
     </div>
-  );
-}
-
-function Field({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  options: { value: string; label: string }[];
-  onChange: (value: string) => void;
-}) {
-  const { t } = useTranslation();
-  return (
-    <Select value={value} onValueChange={onChange}>
-      <SelectTrigger
-        className="!h-[34px] w-full font-mono text-xs"
-        aria-label={label}
-      >
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {options.map((option) => (
-          <SelectItem
-            key={option.value}
-            value={option.value}
-            className="font-mono text-xs"
-          >
-            {t(option.label)}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
   );
 }

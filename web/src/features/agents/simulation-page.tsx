@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { FlaskConical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
+import { useAgent } from "@/features/agents/agent-detail-api";
 import { useSimulation } from "@/features/agents/simulation-api";
 import { SimulationStart } from "@/features/agents/simulation-start";
 import { SimulationReportView } from "@/features/agents/simulation-report";
@@ -25,6 +26,7 @@ export function SimulationPage() {
   const id = params.get("sim") ?? "";
 
   const report = useSimulation(agentId, id);
+  const agent = useAgent(agentId);
 
   return (
     <div className="flex w-full min-w-0 flex-col gap-5">
@@ -43,6 +45,10 @@ export function SimulationPage() {
       {id === "" ? (
         <SimulationStart
           agentId={agentId}
+          agent={agent.data?.agent}
+          agentLoading={agent.isLoading}
+          agentError={agent.error}
+          onRetryAgent={() => void agent.refetch()}
           onStarted={(started) =>
             setParams({ sim: started }, { replace: true })
           }

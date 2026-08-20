@@ -7,7 +7,7 @@ const EFFECT_CHOICES = [
   {
     value: "allow",
     label: "policies.allow",
-    note: "registra e segue",
+    note: "policies.recordsAndContinues",
     className: "border-success bg-success-surface",
   },
   {
@@ -19,7 +19,7 @@ const EFFECT_CHOICES = [
   {
     value: "deny",
     label: "policies.deny",
-    note: "recusa e registra",
+    note: "policies.refusesAndRecords",
     className: "border-danger bg-danger-surface",
   },
 ] as const;
@@ -54,7 +54,7 @@ export function EffectSection({
             >
               <span className="text-sm font-medium">{t(choice.label)}</span>
               <span className="text-xs text-muted-foreground">
-                {choice.note}
+                {t(choice.note)}
               </span>
             </button>
           ))}
@@ -78,7 +78,7 @@ export function EffectSection({
                   : "border-border",
               )}
             >
-              {mode === "monitor" ? "policies.monitor" : "policies.enforce"}
+              {t(mode === "monitor" ? "policies.monitor" : "policies.enforce")}
             </button>
           ))}
         </div>
