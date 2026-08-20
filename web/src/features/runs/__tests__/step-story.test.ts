@@ -29,7 +29,7 @@ describe("a run that stopped where the author said it would", () => {
     expect(line.values).toMatchObject({ what: "não encontrar o cliente" });
   });
 
-  it("says only the outcome when nothing was asserted", () => {
+  it("does not infer why an old run finished", () => {
     const line = detailOf({
       seq: 9,
       kind: "run_finished",
@@ -37,12 +37,25 @@ describe("a run that stopped where the author said it would", () => {
       payload: { outcome: "Respondi e encerrei." },
     } as never);
 
-    expect(line.key).toBe("Respondi e encerrei.");
+    expect(line.key).toBe("runs.finishedWithOutcome");
+    expect(line.values).toMatchObject({ outcome: "Respondi e encerrei." });
+  });
+
+  it("says no tool call finished the run only when the ledger recorded it", () => {
+    const line = detailOf({
+      seq: 9,
+      kind: "run_finished",
+      at: "2026-08-14T12:00:00Z",
+      payload: { outcome: "Respondi e encerrei.", reason: "no_tool_call" },
+    } as never);
+
+    expect(line.key).toBe("runs.finishedByNoToolCallWithOutcome");
+    expect(line.values).toMatchObject({ outcome: "Respondi e encerrei." });
   });
 });
 
 describe("a run finished since the answer moved", () => {
-  it("says the answer is held rather than reading as silence", () => {
+  it("says the answer is held rather than reading an old run as silence", () => {
     // Blank would be the story of an agent that finished saying nothing, which
     // is a different run from one whose answer is in the content store.
     expect(
@@ -54,6 +67,18 @@ describe("a run finished since the answer moved", () => {
         payload: { outcome_ref: "content:run-1:4" },
       } as Step),
     ).toEqual({ key: "runs.outcomeStored" });
+  });
+
+  it("says no tool call finished the run and the answer is held when recorded", () => {
+    expect(
+      detailOf({
+        seq: 4,
+        kind: "run_finished",
+        at: "2026-08-18T12:00:00Z",
+        hash: "h",
+        payload: { outcome_ref: "content:run-1:4", reason: "no_tool_call" },
+      } as Step),
+    ).toEqual({ key: "runs.finishedByNoToolCallStored" });
   });
 });
 

@@ -236,6 +236,16 @@ type ParkedPayload struct {
 	Failure  *FailureSummary `json:"failure,omitempty"`
 }
 
+type RunFinishedReason string
+
+const (
+	// RunFinishedNoToolCall means the planner returned text without a next
+	// tool proposal. In the current loop, that is the explicit signal the
+	// model has finished; the console reads this field rather than inferring
+	// the reason from the absence of a tool call later.
+	RunFinishedNoToolCall RunFinishedReason = "no_tool_call"
+)
+
 type RunFinishedPayload struct {
 	// Outcome is the model's closing answer, and is written only by runs
 	// recorded before it moved to the content store. The chain is immutable,
@@ -251,6 +261,9 @@ type RunFinishedPayload struct {
 	// without the answer surviving to prove it.
 	OutcomeRef    string `json:"outcome_ref,omitempty"`
 	OutcomeDigest string `json:"outcome_digest,omitempty"`
+	// Reason names what made the engine close the run. Optional because older
+	// runs did not record it; absence is "unknown", not a value to infer.
+	Reason RunFinishedReason `json:"reason,omitempty"`
 	// StoppedBy is the step's declared exception, when that is why the run
 	// ended here. The author's own words, recorded verbatim.
 	//

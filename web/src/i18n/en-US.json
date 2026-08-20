@@ -1758,6 +1758,10 @@
     "whatChanged": "What changed",
     "whatChangedPlaceholder": "the area's monthly ceiling was raised to R$ 500",
     "wholePeriod": "The whole period",
+    "finishedByNoToolCall": "The model did not propose another tool call, so the run finished.",
+    "finishedByNoToolCallStored": "The model did not propose another tool call, so the run finished. The closing answer is held in the content store, under retention and erasure.",
+    "finishedByNoToolCallWithOutcome": "The model did not propose another tool call, so the run finished: {{outcome}}",
+    "finishedWithOutcome": "Run finished: {{outcome}}",
     "outcomeStored": "The closing answer is held in the content store, under retention and erasure."
   },
   "runtime": {

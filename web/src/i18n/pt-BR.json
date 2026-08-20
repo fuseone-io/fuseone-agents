@@ -1758,6 +1758,10 @@
     "whatChanged": "O que mudou",
     "whatChangedPlaceholder": "teto mensal da área erguido para R$ 500",
     "wholePeriod": "Todo o período",
+    "finishedByNoToolCall": "O modelo não propôs outra chamada de ferramenta, então a execução foi concluída.",
+    "finishedByNoToolCallStored": "O modelo não propôs outra chamada de ferramenta, então a execução foi concluída. A resposta final ficou no armazenamento de conteúdo, sujeita à retenção e ao apagamento.",
+    "finishedByNoToolCallWithOutcome": "O modelo não propôs outra chamada de ferramenta, então a execução foi concluída: {{outcome}}",
+    "finishedWithOutcome": "Execução concluída: {{outcome}}",
     "outcomeStored": "A resposta final ficou no armazenamento de conteúdo, sujeita à retenção e ao apagamento."
   },
   "runtime": {

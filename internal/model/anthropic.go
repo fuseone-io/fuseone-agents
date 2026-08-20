@@ -196,6 +196,10 @@ that as final for this run and choose another approach rather than retrying.
 Propose one tool call at a time. When there is nothing left to do, reply with a
 short plain-text summary and make no tool call; that is how you finish.
 
+If more investigation requires a tool that is available to this run, call that
+tool now. Do not say that you will continue, check logs, inspect metrics, read
+documents, or use a tool later; a text reply ends the run.
+
 When the step you are at names the thing that ends it, and that thing has
 happened, you finish the same way — and the first line of your reply is exactly
 "STOP: " followed by that step's own words, copied. Everything after that line

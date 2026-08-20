@@ -189,6 +189,76 @@ func TestAnthropic_systemPrompt_isCachedAndFreeOfVolatileText(t *testing.T) {
 	}
 }
 
+func TestLoopContract_tellsTheModelThatTextEndsTheRun(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name     string
+		kind     model.Kind
+		response string
+		system   func(map[string]any) string
+	}{
+		{
+			name:     "anthropic",
+			kind:     model.KindAnthropic,
+			response: anthropicToolUse,
+			system: func(body map[string]any) string {
+				blocks, _ := body["system"].([]any)
+				var text strings.Builder
+				for _, b := range blocks {
+					m, _ := b.(map[string]any)
+					text.WriteString(" ")
+					text.WriteString(asString(m["text"]))
+				}
+				return text.String()
+			},
+		},
+		{
+			name:     "openai-compatible",
+			kind:     model.KindOpenAICompatible,
+			response: openAIToolCall,
+			system: func(body map[string]any) string {
+				msgs, _ := body["messages"].([]any)
+				if len(msgs) == 0 {
+					return ""
+				}
+				first, _ := msgs[0].(map[string]any)
+				return asString(first["content"])
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			c := serve(t, tc.response)
+
+			_, err := plannerFor(t, tc.kind, c.server.URL, model.Config{}).
+				Plan(context.Background(), input())
+			if err != nil {
+				t.Fatalf("Plan: %v", err)
+			}
+
+			system := strings.Join(strings.Fields(tc.system(c.body)), " ")
+			for _, want := range []string{
+				"call that tool now",
+				"Do not say that you will continue",
+				"a text reply ends the run",
+			} {
+				if !strings.Contains(system, want) {
+					t.Errorf("system prompt does not contain %q:\n%s", want, system)
+				}
+			}
+		})
+	}
+}
+
+func asString(v any) string {
+	s, _ := v.(string)
+	return s
+}
+
 // --- OpenAI-compatible -------------------------------------------------------
 
 const openAIToolCall = `{

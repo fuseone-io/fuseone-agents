@@ -186,11 +186,23 @@ export function detailOf(step: Step): Line {
       const inline =
         typeof payload.outcome === "string" ? payload.outcome : "";
       const held = typeof payload.outcome_ref === "string" && payload.outcome_ref;
+      const reason = typeof payload.reason === "string" ? payload.reason : "";
       if (stopped) {
         const outcome = inline;
         return { key: "runs.stoppedByException", values: { what: stopped, outcome } };
       }
-      return inline ? { key: inline } : held ? { key: "runs.outcomeStored" } : NOTHING;
+      if (reason === "no_tool_call") {
+        return inline
+          ? { key: "runs.finishedByNoToolCallWithOutcome", values: { outcome: inline } }
+          : held
+            ? { key: "runs.finishedByNoToolCallStored" }
+            : { key: "runs.finishedByNoToolCall" };
+      }
+      return inline
+        ? { key: "runs.finishedWithOutcome", values: { outcome: inline } }
+        : held
+          ? { key: "runs.outcomeStored" }
+          : NOTHING;
     }
 
     default:

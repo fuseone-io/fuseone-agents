@@ -414,6 +414,14 @@ func TestAdvance_plannerReportsDone_finishesRun(t *testing.T) {
 	if st.Phase != PhaseFinished || !st.Done {
 		t.Errorf("Phase = %v, Done = %v, want finished/true", st.Phase, st.Done)
 	}
+
+	var finished domain.RunFinishedPayload
+	if err := h.payloadOf(t, domain.StepRunFinished, &finished); err != nil {
+		t.Fatalf("payload: %v", err)
+	}
+	if finished.Reason != domain.RunFinishedNoToolCall {
+		t.Errorf("reason = %q, want %q", finished.Reason, domain.RunFinishedNoToolCall)
+	}
 }
 
 func TestAdvance_toolFails_recordsFailureAndReleasesTheReservation(t *testing.T) {

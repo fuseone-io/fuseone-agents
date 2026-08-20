@@ -90,6 +90,7 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 			Payload: mustJSON(domain.RunFinishedPayload{
 				OutcomeRef:    ref,
 				OutcomeDigest: digest([]byte(proposal.Outcome)),
+				Reason:        domain.RunFinishedNoToolCall,
 				StoppedBy:     proposal.StoppedBy,
 			}),
 		})
