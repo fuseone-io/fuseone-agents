@@ -25,6 +25,30 @@ field" is a commit message.
 
 ---
 
+## [0.11.0] — 2026-08-20
+
+### Added
+
+- **`protocolMode` on an HTTP tool server.** A server that does not accept the
+  current discovery probe can be connected in `legacy` mode, and the recipe for
+  a known server supplies that on its own — Outline is marked as such, so an
+  installation that already configured it does not have to reconnect. Only the
+  discovery probe is answered locally; listing and calling tools go to the
+  server unchanged, and classification and the tool surface are untouched.
+
+### Changed
+
+- Properties are edited in a side sheet rather than a modal: a channel
+  connection, a conversation, a tool server, a provider, a company, an area, a
+  ceiling, a price, a person. Configuring something while still seeing what it
+  belongs to is the point. Acts stay modal — starting, stopping, classifying —
+  and **erasing content is an `AlertDialog`**, which does not close on a stray
+  click or key, because it is the one administrative operation nobody can undo.
+
+### Fixed
+
+- A tool failure keeps its diagnostics.
+
 ## [0.10.0] — 2026-08-20
 
 ### Added
