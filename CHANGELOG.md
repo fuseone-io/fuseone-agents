@@ -25,6 +25,34 @@ field" is a commit message.
 
 ---
 
+## [0.14.0] — 2026-08-20
+
+### Upgrade notes
+
+- **A model with no rate configured for this installation reports zero cost
+  again.** Published market prices are shown as a reference and no longer act
+  as rates. They are in USD, and cost is millionths of the installation's own
+  currency — the same value a budget ceiling is compared against — so a ceiling
+  written as R$300 would have been compared against dollars and only fired once
+  real spending was several times past what whoever wrote it intended.
+  **Configure the rate for each model you use, in your own currency**, and
+  until you do, cost reads zero rather than plausible-but-wrong.
+
+### Added
+
+- A refusal by budget ceiling now carries the ceiling, what has been spent
+  against it, and the estimate for the call that crossed it, so deciding
+  whether to raise the ceiling does not mean reading the ledger by hand.
+- The prices screen distinguishes a **market default** from a **rate this
+  installation set**, showing the default's source, currency, URL and the date
+  it was read. Overriding one opens empty fields rather than the published
+  figure, so nobody confirms an amount they did not type. Defaults can be
+  reloaded from the release.
+
+### Fixed
+
+- The agent overview's header and tabs hold at the widths people actually use.
+
 ## [0.13.0] — 2026-08-20
 
 ### Upgrade notes
