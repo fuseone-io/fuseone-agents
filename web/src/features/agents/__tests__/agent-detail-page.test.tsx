@@ -1,0 +1,119 @@
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { AgentDetailPage } from "@/features/agents/agent-detail-page";
+import { setLocale } from "@/i18n";
+import type { AgentDetail } from "@/lib/api/client";
+
+const detail = vi.hoisted(() => ({
+  data: undefined as AgentDetail | undefined,
+}));
+
+vi.mock("@/features/agents/agent-detail-api", () => ({
+  useAgent: () => ({
+    data: detail.data,
+    isLoading: false,
+    error: null,
+    refetch: vi.fn(),
+  }),
+}));
+
+vi.mock("@/features/agents/agent-action-bar", () => ({
+  AgentActionBar: () => <div data-testid="agent-actions" />,
+  ReadOnlyBar: () => <div data-testid="read-only-actions" />,
+}));
+
+vi.mock("@/features/agents/agent-runs", () => ({
+  AgentRuns: ({ showHeader }: { showHeader?: boolean }) => (
+    <section aria-label="runs panel" data-header={showHeader ? "yes" : "no"} />
+  ),
+}));
+
+vi.mock("@/features/agents/agent-capabilities", () => ({
+  AgentCapabilities: ({ compact }: { compact?: boolean }) => (
+    <aside data-testid="capability-rail" data-compact={compact ? "yes" : "no"} />
+  ),
+}));
+
+vi.mock("@/features/agents/webhooks-panel", () => ({
+  WebhooksPanel: () => <aside data-testid="webhooks-rail" />,
+}));
+
+vi.mock("@/features/agents/agent-versions", () => ({
+  AgentVersions: ({ compact }: { compact?: boolean }) => (
+    <aside data-testid="versions-rail" data-compact={compact ? "yes" : "no"} />
+  ),
+}));
+
+function showDetail() {
+  return render(
+    <MemoryRouter initialEntries={["/agents/troubleshooting-devops"]}>
+      <Routes>
+        <Route path="/agents/:agentId" element={<AgentDetailPage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
+describe("the agent overview", () => {
+  beforeEach(() => {
+    setLocale("en-US");
+    detail.data = {
+      agent: {
+        agentId: "troubleshooting-devops",
+        versionId: "vb6148c24",
+        scope: { company: "cora", area: "platform" },
+        name: "Troubleshooting DevOps",
+        provider: "anthropic",
+        model: "claude-opus-5",
+        tools: ["grafana.query_loki_logs"],
+        budget: { micros: 500_000, steps: 60 },
+        publishedAt: "2026-08-20T00:26:59Z",
+        latest: true,
+        paused: false,
+        stage: "copilot",
+        activity: {
+          runs: 19,
+          finished: 17,
+          waiting: 0,
+          costMicros: 0,
+          lastPhase: "finished",
+          lastRunAt: "2026-08-20T00:28:33Z",
+        },
+      },
+      instructions: "The definition is not the landing view.",
+      source: "console",
+      steps: [],
+      versions: [{ versionId: "vb6148c24", latest: true, publishedAt: "2026-08-20T00:26:59Z" }],
+    };
+  });
+
+  it("opens on runs and leaves the definition behind a tab", async () => {
+    showDetail();
+
+    expect(screen.getByRole("tab", { name: /Runs 19/ })).toHaveAttribute(
+      "data-state",
+      "active",
+    );
+    expect(screen.getByLabelText("runs panel")).toHaveAttribute(
+      "data-header",
+      "no",
+    );
+    expect(screen.queryByText("The definition is not the landing view.")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("tab", { name: "Definition" }));
+
+    expect(
+      screen.getByText("The definition is not the landing view."),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("capability-rail")).toHaveAttribute(
+      "data-compact",
+      "yes",
+    );
+    expect(screen.getByTestId("versions-rail")).toHaveAttribute(
+      "data-compact",
+      "yes",
+    );
+  });
+});

@@ -15,12 +15,16 @@ export function AgentVersions({
   agentId,
   versions,
   current,
+  compact = false,
 }: {
   agentId: string;
   versions: AgentVersion[];
   current: string;
+  compact?: boolean;
 }) {
   const { t } = useTranslation();
+  const shown = compact ? versions.slice(0, 4) : versions;
+  const hidden = Math.max(versions.length - shown.length, 0);
   return (
     <section className="flex flex-col gap-2.5 rounded-xl border border-border bg-card p-4 shadow-sm">
       <h2 className="text-2xs uppercase tracking-label text-muted-foreground">
@@ -28,7 +32,7 @@ export function AgentVersions({
       </h2>
 
       <ol className="flex flex-col">
-        {versions.map((version) => (
+        {shown.map((version) => (
           <li key={version.versionId}>
             <Link
               to={`/agents/${agentId}?version=${version.versionId}`}
@@ -50,6 +54,11 @@ export function AgentVersions({
           </li>
         ))}
       </ol>
+      {hidden > 0 && (
+        <p className="text-2xs text-muted-foreground">
+          {t("agents.moreVersions", { count: hidden })}
+        </p>
+      )}
     </section>
   );
 }

@@ -18,13 +18,16 @@ export function AgentDefinition({
   instructions,
   source,
   steps,
+  view = "auto",
 }: {
   instructions?: string;
   source?: string;
   steps?: components["schemas"]["AgentStep"][];
+  view?: "auto" | "instructions" | "steps";
 }) {
   const { t } = useTranslation();
   const declared = steps ?? [];
+  const showTabs = view === "auto" && declared.length > 0;
   return (
     <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-sm">
       <div className="flex flex-wrap items-center gap-2">
@@ -43,7 +46,11 @@ export function AgentDefinition({
           that declares no steps has one envelope holding its whole pack, and
           a diagram of that would show a single box — teaching a reader it has
           one step when it has none declared. */}
-      {declared.length > 0 ? (
+      {view === "steps" ? (
+        <StepsOnly steps={declared} />
+      ) : view === "instructions" ? (
+        <Prose instructions={instructions} />
+      ) : showTabs ? (
         <Tabs defaultValue="prose">
           <TabsList className="h-8">
             <TabsTrigger value="prose">{t("agents.asProse")}</TabsTrigger>
@@ -61,6 +68,23 @@ export function AgentDefinition({
       )}
     </section>
   );
+}
+
+function StepsOnly({ steps }: { steps: components["schemas"]["AgentStep"][] }) {
+  const { t } = useTranslation();
+  if (steps.length === 0) {
+    return (
+      <div className="flex min-h-48 flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted/30 p-8 text-center">
+        <p className="max-w-sm text-sm font-medium">
+          {t("agents.noFixedSteps")}
+        </p>
+        <p className="mt-2 max-w-md text-xs text-muted-foreground">
+          {t("agents.noFixedStepsHint")}
+        </p>
+      </div>
+    );
+  }
+  return <AgentFlow steps={steps} />;
 }
 
 /**

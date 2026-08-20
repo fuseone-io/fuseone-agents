@@ -11,22 +11,30 @@ import { useRuns } from "@/features/runs/api";
  * whether an agent is behaving, and hiding the runs of the version somebody is
  * about to replace would answer the wrong question.
  */
-export function AgentRuns({ agentId }: { agentId: string }) {
+export function AgentRuns({
+  agentId,
+  showHeader = true,
+}: {
+  agentId: string;
+  showHeader?: boolean;
+}) {
   const { t } = useTranslation();
   const { items: runs, isLoading, error } = useRuns({ agentId });
 
   return (
     <section className="flex flex-col gap-2.5">
-      <div className="flex items-center gap-2">
-        <h2 className="text-sm font-medium">{t("agents.runs")}</h2>
-        <span className="text-xs text-muted-foreground">{runs.length}</span>
-        <Link
-          to="/runs"
-          className="ml-auto text-xs text-primary hover:underline"
-        >
-          {t("agents.seeAll")}
-        </Link>
-      </div>
+      {showHeader && (
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-medium">{t("agents.runs")}</h2>
+          <span className="text-xs text-muted-foreground">{runs.length}</span>
+          <Link
+            to="/runs"
+            className="ml-auto text-xs text-primary hover:underline"
+          >
+            {t("agents.seeAll")}
+          </Link>
+        </div>
+      )}
 
       <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
         {isLoading ? (

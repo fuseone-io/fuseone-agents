@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useTools } from "@/features/admin/api";
 import { EffectBadge } from "@/features/agents/effect-badge";
@@ -5,19 +6,18 @@ import { Mono } from "@/components/shared/mono";
 import { formatMicros, formatTokens } from "@/lib/format";
 import type { Agent } from "@/lib/api/client";
 
-/**
- * What this version may call, and what it may spend doing it.
- *
- * The effect beside each tool, because the pack is only half the answer: what
- * is not listed here cannot be invoked, and what is listed still has to say
- * what it does to the world before a reader can judge the risk.
- */
-export function AgentCapabilities({ agent }: { agent: Agent }) {
+export function AgentCapabilities({ agent, compact = false }: {
+  agent: Agent;
+  compact?: boolean;
+}) {
   const { t } = useTranslation();
+  const [expanded, setExpanded] = useState(false);
   const tools = useTools();
   const effects = new Map(
     (tools.data?.items ?? []).map((t) => [t.toolId, t.effect] as const),
   );
+  const shownTools = compact && !expanded ? agent.tools.slice(0, 6) : agent.tools;
+  const hidden = Math.max(agent.tools.length - shownTools.length, 0);
 
   return (
     <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-sm">
@@ -28,19 +28,38 @@ export function AgentCapabilities({ agent }: { agent: Agent }) {
       {agent.tools.length === 0 ? (
         <p className="text-xs text-muted-foreground">{t("agents.noTools")}</p>
       ) : (
-        <ul className="flex flex-col gap-1.5">
-          {agent.tools.map((tool) => {
+        <ul
+          className={
+            compact ? "flex flex-wrap gap-1.5" : "flex flex-col gap-1.5"
+          }
+        >
+          {shownTools.map((tool) => {
             const effect = effects.get(tool) ?? "unknown";
             return (
               <li
                 key={tool}
-                className="flex items-center justify-between gap-2"
+                className={
+                  compact
+                    ? "inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-md bg-muted px-2 py-1"
+                    : "flex items-center justify-between gap-2"
+                }
               >
                 <Mono className="truncate">{tool}</Mono>
                 <EffectBadge effect={effect} />
               </li>
             );
           })}
+          {hidden > 0 && (
+            <li>
+              <button
+                type="button"
+                className="inline-flex items-center rounded-md bg-muted px-2 py-1 text-2xs text-muted-foreground transition hover:bg-muted/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={() => setExpanded(true)}
+              >
+                {t("agents.moreTools", { count: hidden })}
+              </button>
+            </li>
+          )}
         </ul>
       )}
 
@@ -74,12 +93,6 @@ export function AgentCapabilities({ agent }: { agent: Agent }) {
   );
 }
 
-/**
- * What starts a run of this agent.
- *
- * An agent nothing triggers only ever runs when somebody presses the button,
- * which is worth saying plainly rather than leaving as an empty row.
- */
 function Triggers({ agent }: { agent: Agent }) {
   const { t } = useTranslation();
   const triggers = agent.triggers ?? [];
@@ -105,13 +118,6 @@ function Triggers({ agent }: { agent: Agent }) {
   );
 }
 
-/**
- * Zero means no ceiling, which is a different thing from a ceiling of zero.
- *
- * The translator is a parameter rather than a call at the end, because the
- * key on its own is what used to reach the screen: a key that exists in both
- * catalogues and is never handed to `t` passes every guard there is.
- */
 function budgetOf(
   value: number | undefined,
   format: (n: number) => string,
