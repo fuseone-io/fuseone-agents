@@ -4,13 +4,10 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  PropertiesSheet,
+  PropertiesSheetBody,
+  PropertiesSheetFooter,
+} from "@/components/shared/properties-sheet";
 import { Labelled } from "@/features/policies/section";
 import { usePutPrice, type ModelPrice } from "@/features/admin/prices-api";
 
@@ -55,15 +52,14 @@ export function PriceForm({
     });
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>
-            {t(price ? "admin.editRate" : "admin.newRate")}
-          </DialogTitle>
-          <DialogDescription>{t("admin.ratesAreYours")}</DialogDescription>
-        </DialogHeader>
-
+    <PropertiesSheet
+      open
+      onOpenChange={(open) => !open && onClose()}
+      title={t(price ? "admin.editRate" : "admin.newRate")}
+      description={t("admin.ratesAreYours")}
+    >
+      <div className="flex min-h-0 flex-1 flex-col">
+        <PropertiesSheetBody>
         <div className="grid gap-3 sm:grid-cols-2">
           <Labelled label={t("agents.provider")} htmlFor="price-provider">
             <Input
@@ -109,8 +105,9 @@ export function PriceForm({
             </Labelled>
           ))}
         </div>
+        </PropertiesSheetBody>
 
-        <DialogFooter>
+        <PropertiesSheetFooter>
           <Button variant="outline" onClick={onClose}>
             {t("common.cancel")}
           </Button>
@@ -120,8 +117,8 @@ export function PriceForm({
           >
             {t("common.save")}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </PropertiesSheetFooter>
+      </div>
+    </PropertiesSheet>
   );
 }

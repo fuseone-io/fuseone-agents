@@ -1,18 +1,19 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useEraseContent } from "@/features/admin/retention-api";
 
 /**
@@ -54,12 +55,14 @@ export function EraseDialog({ onClose }: { onClose: () => void }) {
     );
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{t("retention.eraseTitle")}</DialogTitle>
-          <DialogDescription>{t("retention.eraseExplains")}</DialogDescription>
-        </DialogHeader>
+    <AlertDialog open onOpenChange={(open) => !open && onClose()}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{t("retention.eraseTitle")}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {t("retention.eraseExplains")}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="erase-runs">{t("retention.runs")}</Label>
@@ -86,21 +89,22 @@ export function EraseDialog({ onClose }: { onClose: () => void }) {
           />
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            {t("common.cancel")}
-          </Button>
-          <Button
+        <AlertDialogFooter>
+          <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+          <AlertDialogAction
             variant="destructive"
             disabled={
               named.length === 0 || reason.trim() === "" || erase.isPending
             }
-            onClick={submit}
+            onClick={(event) => {
+              event.preventDefault();
+              submit();
+            }}
           >
             {t("retention.eraseConfirm", { count: named.length })}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

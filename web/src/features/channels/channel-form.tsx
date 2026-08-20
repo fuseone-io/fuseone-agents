@@ -5,13 +5,10 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  PropertiesSheet,
+  PropertiesSheetBody,
+  PropertiesSheetFooter,
+} from "@/components/shared/properties-sheet";
 import {
   Form,
   FormControl,
@@ -113,20 +110,18 @@ export function ChannelForm({
   }
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>
-            {channel ? t("channels.editChannel") : t("channels.newChannel")}
-          </DialogTitle>
-          <DialogDescription>{t("channels.explains")}</DialogDescription>
-        </DialogHeader>
-
-        <Form {...form}>
-          <form
-            onSubmit={form.handleSubmit(submit)}
-            className="flex flex-col gap-4"
-          >
+    <PropertiesSheet
+      open
+      onOpenChange={(open) => !open && onClose()}
+      title={channel ? t("channels.editChannel") : t("channels.newChannel")}
+      description={t("channels.explains")}
+    >
+      <Form {...form}>
+        <form
+          onSubmit={form.handleSubmit(submit)}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          <PropertiesSheetBody className="space-y-4">
             <FormField
               control={form.control}
               name="name"
@@ -295,18 +290,18 @@ export function ChannelForm({
                 )}
               />
             )}
+          </PropertiesSheetBody>
 
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={onClose}>
-                {t("common.cancel")}
-              </Button>
-              <Button type="submit" disabled={save.isPending}>
-                {t("common.save")}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+          <PropertiesSheetFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              {t("common.cancel")}
+            </Button>
+            <Button type="submit" disabled={save.isPending}>
+              {t("common.save")}
+            </Button>
+          </PropertiesSheetFooter>
+        </form>
+      </Form>
+    </PropertiesSheet>
   );
 }

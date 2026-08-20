@@ -5,13 +5,10 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  PropertiesSheet,
+  PropertiesSheetBody,
+  PropertiesSheetFooter,
+} from "@/components/shared/properties-sheet";
 import {
   Form,
   FormControl,
@@ -65,18 +62,18 @@ export function LocalPersonForm({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{t("people.addLocal")}</DialogTitle>
-          <DialogDescription>{t("people.localExplains")}</DialogDescription>
-        </DialogHeader>
-
-        <Form {...form}>
-          <form
-            onSubmit={form.handleSubmit(submit)}
-            className="flex flex-col gap-4"
-          >
+    <PropertiesSheet
+      open
+      onOpenChange={(open) => !open && onClose()}
+      title={t("people.addLocal")}
+      description={t("people.localExplains")}
+    >
+      <Form {...form}>
+        <form
+          onSubmit={form.handleSubmit(submit)}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          <PropertiesSheetBody className="space-y-4">
             <FormField
               control={form.control}
               name="username"
@@ -118,18 +115,18 @@ export function LocalPersonForm({ onClose }: { onClose: () => void }) {
                 </FormItem>
               )}
             />
+          </PropertiesSheetBody>
 
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={onClose}>
-                {t("common.cancel")}
-              </Button>
-              <Button type="submit" disabled={create.isPending}>
-                {t("people.addLocal")}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+          <PropertiesSheetFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              {t("common.cancel")}
+            </Button>
+            <Button type="submit" disabled={create.isPending}>
+              {t("people.addLocal")}
+            </Button>
+          </PropertiesSheetFooter>
+        </form>
+      </Form>
+    </PropertiesSheet>
   );
 }

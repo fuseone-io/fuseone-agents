@@ -27,18 +27,20 @@ function server(): MCPServer {
   };
 }
 
-describe("the MCP server modal", () => {
-  it("keeps the connection form inside the viewport with a scrollable body", () => {
+describe("the MCP server properties sheet", () => {
+  it("keeps the connection form full-height with a scrollable body", () => {
     render(<ServerForm server={server()} onClose={vi.fn()} />);
 
     const dialog = screen.getByRole("dialog");
     expect(dialog).toHaveClass(
-      "max-h-[calc(100dvh-2rem)]",
+      "h-full",
       "overflow-hidden",
+      "right-0",
     );
     expect(screen.getByTestId("server-form-scroll")).toHaveClass(
       "overflow-y-auto",
-      "max-h-[calc(100dvh-11rem)]",
+      "min-h-0",
+      "flex-1",
     );
     expect(screen.getByRole("button", { name: "Salvar" })).toBeInTheDocument();
   });

@@ -5,13 +5,10 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  PropertiesSheet,
+  PropertiesSheetBody,
+  PropertiesSheetFooter,
+} from "@/components/shared/properties-sheet";
 import { Form } from "@/components/ui/form";
 import {
   useCreateCompany,
@@ -83,38 +80,34 @@ export function CompanyForm({
   }
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>
-            {t(editing ? "companies.editing" : "companies.register")}
-          </DialogTitle>
-          <DialogDescription>
-            {t(editing ? "companies.editExplains" : "companies.explains")}
-          </DialogDescription>
-        </DialogHeader>
-
-        <Form {...form}>
-          <form
-            onSubmit={form.handleSubmit(submit)}
-            className="flex flex-col gap-4"
-          >
+    <PropertiesSheet
+      open
+      onOpenChange={(open) => !open && onClose()}
+      title={t(editing ? "companies.editing" : "companies.register")}
+      description={t(editing ? "companies.editExplains" : "companies.explains")}
+    >
+      <Form {...form}>
+        <form
+          onSubmit={form.handleSubmit(submit)}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          <PropertiesSheetBody className="space-y-4">
             <CompanyFormFields control={form.control} editing={editing} />
+          </PropertiesSheetBody>
 
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={onClose}>
-                {t("common.cancel")}
-              </Button>
-              <Button
-                type="submit"
-                disabled={create.isPending || update.isPending}
-              >
-                {t(editing ? "common.save" : "companies.register")}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+          <PropertiesSheetFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              {t("common.cancel")}
+            </Button>
+            <Button
+              type="submit"
+              disabled={create.isPending || update.isPending}
+            >
+              {t(editing ? "common.save" : "companies.register")}
+            </Button>
+          </PropertiesSheetFooter>
+        </form>
+      </Form>
+    </PropertiesSheet>
   );
 }

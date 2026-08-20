@@ -7,13 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  PropertiesSheet,
+  PropertiesSheetBody,
+  PropertiesSheetFooter,
+} from "@/components/shared/properties-sheet";
 import {
   Form,
   FormControl,
@@ -92,20 +89,18 @@ export function BudgetForm({
   }
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>
-            {budget ? t("admin.editCeiling") : t("admin.newCeiling")}
-          </DialogTitle>
-          <DialogDescription>{t("admin.ceilingsInherit")}</DialogDescription>
-        </DialogHeader>
-
-        <Form {...form}>
-          <form
-            onSubmit={form.handleSubmit(submit)}
-            className="flex flex-col gap-4"
-          >
+    <PropertiesSheet
+      open
+      onOpenChange={(open) => !open && onClose()}
+      title={budget ? t("admin.editCeiling") : t("admin.newCeiling")}
+      description={t("admin.ceilingsInherit")}
+    >
+      <Form {...form}>
+        <form
+          onSubmit={form.handleSubmit(submit)}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          <PropertiesSheetBody className="space-y-4">
             <FormField
               control={form.control}
               name="scope"
@@ -211,18 +206,18 @@ export function BudgetForm({
                 </FormItem>
               )}
             />
+          </PropertiesSheetBody>
 
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={onClose}>
-                {t("common.cancel")}
-              </Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {t("common.save")}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+          <PropertiesSheetFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              {t("common.cancel")}
+            </Button>
+            <Button type="submit" disabled={form.formState.isSubmitting}>
+              {t("common.save")}
+            </Button>
+          </PropertiesSheetFooter>
+        </form>
+      </Form>
+    </PropertiesSheet>
   );
 }

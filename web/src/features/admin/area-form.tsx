@@ -6,13 +6,10 @@ import { z } from "zod";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  PropertiesSheet,
+  PropertiesSheetBody,
+  PropertiesSheetFooter,
+} from "@/components/shared/properties-sheet";
 import { Form } from "@/components/ui/form";
 import { AreaFormFields } from "@/features/admin/area-form-fields";
 import type { AreaFormValues } from "@/features/admin/area-form-fields";
@@ -88,39 +85,35 @@ export function AreaForm({
   }
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>
-            {t(editing ? "admin.editArea" : "admin.newArea")}
-          </DialogTitle>
-          <DialogDescription>
-            {t(editing ? "admin.editAreaExplains" : "admin.areaExplains")}
-          </DialogDescription>
-        </DialogHeader>
-
-        <Form {...form}>
-          <form
-            onSubmit={form.handleSubmit(submit)}
-            className="flex flex-col gap-4"
-          >
+    <PropertiesSheet
+      open
+      onOpenChange={(open) => !open && onClose()}
+      title={t(editing ? "admin.editArea" : "admin.newArea")}
+      description={t(editing ? "admin.editAreaExplains" : "admin.areaExplains")}
+    >
+      <Form {...form}>
+        <form
+          onSubmit={form.handleSubmit(submit)}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          <PropertiesSheetBody className="space-y-4">
             <AreaFormFields
               control={form.control}
               companyOptions={companyOptions}
               editing={editing}
             />
+          </PropertiesSheetBody>
 
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={onClose}>
-                {t("common.cancel")}
-              </Button>
-              <Button type="submit" disabled={register.isPending}>
-                {t(editing ? "common.save" : "admin.declare")}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+          <PropertiesSheetFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              {t("common.cancel")}
+            </Button>
+            <Button type="submit" disabled={register.isPending}>
+              {t(editing ? "common.save" : "admin.declare")}
+            </Button>
+          </PropertiesSheetFooter>
+        </form>
+      </Form>
+    </PropertiesSheet>
   );
 }
