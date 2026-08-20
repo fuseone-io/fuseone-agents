@@ -56,6 +56,23 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Branding' }
 
+  /money:
+    get:
+      tags: [system]
+      operationId: getMoney
+      summary: Installation money unit
+      description: |
+        Public by design: it carries no authority or spend, only the currency
+        code the console uses to render Cost.Micros and Budget.Micros. The
+        integer still comes from the ledger; this endpoint names the unit.
+      security: []
+      responses:
+        '200':
+          description: The currency in force, falling back to the product default.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MoneySettings' }
+
   /manual:
     get:
       tags: [system]
@@ -3161,6 +3178,27 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /admin/money:
+    put:
+      tags: [admin]
+      operationId: setMoney
+      summary: Set the installation currency
+      description: |
+        Names the currency Cost.Micros and Budget.Micros are interpreted in.
+        This does not convert existing ledger rows or configured ceilings.
+        It changes the unit readers attach to the integer, so installations
+        should choose it before relying on money ceilings.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MoneySettings' }
+      responses:
+        '204': { description: The currency is recorded. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /admin/scopes:
     get:
       tags: [admin]
@@ -4103,6 +4141,22 @@ components:
         sourceUpdatedAt:
           type: string
           description: Date the bundled market default was checked.
+
+    MoneySettings:
+      type: object
+      required: [currency]
+      description: |
+        The currency code the installation uses for Cost.Micros and
+        Budget.Micros. It is a unit label, not an exchange-rate engine:
+        changing it does not convert existing ledger rows, ceilings or
+        configured model prices.
+      properties:
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          minLength: 3
+          maxLength: 3
+          description: Three-letter ISO 4217 currency code, such as BRL or USD.
 
     ModelPreset:
       type: object

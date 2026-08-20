@@ -68,7 +68,12 @@
       "platform": "Platform"
     },
     "identity": "Sign-in and access",
-    "inCurrency": "In the installation's currency. Leave empty not to cap by amount.",
+    "currency": "Currency",
+    "currencyHistoryWarning": "Changing the installation currency changes how historical costs, ceilings and configured rates are read. It does not convert numbers already stored.",
+    "currencySaved": "Currency saved",
+    "currencySaveFailed": "Could not save the currency",
+    "inCurrency": "In the installation currency. Leave empty not to cap by amount.",
+    "installationCurrency": "Installation currency",
     "model": "Model",
     "monthly": "Monthly — resets on the 1st",
     "name": "Name",

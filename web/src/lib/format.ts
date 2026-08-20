@@ -2,6 +2,8 @@ import { currentLocale } from "@/i18n";
 import type { Cost } from "@/lib/api/client";
 
 const MICROS_PER_UNIT = 1_000_000;
+export const DEFAULT_CURRENCY = "BRL";
+let installationCurrency = DEFAULT_CURRENCY;
 
 /**
  * What the installation bills in.
@@ -9,10 +11,16 @@ const MICROS_PER_UNIT = 1_000_000;
  * Deliberately not a function of the locale. Money crosses the wire as
  * millionths of the installation's currency, so choosing English must change
  * "1.234,50" into "1,234.50" and leave R$ as R$ — a reader who switched
- * language and saw dollars would be looking at a different number. When the
- * API reports the installation's currency, this reads it from there.
+ * language and saw dollars would be looking at a different number. The app
+ * reads the installation currency from /money and sets it here.
  */
-const CURRENCY = "BRL";
+export function setInstallationCurrency(currency: string | undefined) {
+  installationCurrency = normalizeCurrency(currency);
+}
+
+export function currentCurrency(): string {
+  return installationCurrency;
+}
 
 /**
  * Built per call rather than once at module load.
@@ -29,18 +37,27 @@ const numberFormat = (options: Intl.NumberFormatOptions) =>
  * decimals instead of rounding to zero and reading as free.
  */
 export function formatMicros(micros: number): string {
+  return formatCurrencyMicros(micros, installationCurrency);
+}
+
+export function formatCurrencyMicros(micros: number, currency: string): string {
   const value = micros / MICROS_PER_UNIT;
   const digits =
     value !== 0 && Math.abs(value) < 0.01 ? { maximumFractionDigits: 4 } : {};
   return numberFormat({
     style: "currency",
-    currency: CURRENCY,
+    currency: normalizeCurrency(currency),
     ...digits,
   }).format(value);
 }
 
 export function formatCost(cost: Cost | undefined): string {
   return formatMicros(cost?.micros ?? 0);
+}
+
+function normalizeCurrency(currency: string | undefined): string {
+  const code = currency?.trim().toUpperCase();
+  return code && /^[A-Z]{3}$/.test(code) ? code : DEFAULT_CURRENCY;
 }
 
 export function formatTokens(n: number | undefined): string {

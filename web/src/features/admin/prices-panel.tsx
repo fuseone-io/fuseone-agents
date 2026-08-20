@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Coins, Plus, RefreshCw } from "lucide-react";
+import { CircleAlert, Coins, Plus, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Panel } from "@/components/shared/panel";
 import { Mono } from "@/components/shared/mono";
@@ -13,6 +13,7 @@ import {
 } from "@/components/shared/states";
 import { LoadMore } from "@/components/shared/load-more";
 import { RemoveButton } from "@/components/shared/remove-button";
+import { PriceCurrencyControl } from "@/features/admin/price-currency-control";
 import { PriceForm } from "@/features/admin/price-form";
 import {
   useDeletePrice,
@@ -20,8 +21,7 @@ import {
   type ModelPrice,
 } from "@/features/admin/prices-api";
 import { useVisibleItems } from "@/hooks/use-visible-items";
-import { formatMicros } from "@/lib/format";
-import { currentLocale } from "@/i18n";
+import { formatCurrencyMicros, formatMicros } from "@/lib/format";
 
 /**
  * What this installation pays per model.
@@ -41,7 +41,8 @@ export function PricesPanel() {
     <Panel
       title={t("admin.prices")}
       action={
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <PriceCurrencyControl />
           <Button
             size="sm"
             variant="outline"
@@ -61,6 +62,14 @@ export function PricesPanel() {
         </div>
       }
     >
+      <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+        <CircleAlert
+          className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-300"
+          aria-hidden
+        />
+        <p>{t("admin.currencyHistoryWarning")}</p>
+      </div>
+
       {isLoading ? (
         <LoadingRows rows={3} />
       ) : error ? (
@@ -170,12 +179,5 @@ function formatPrice(price: ModelPrice, micros: number): string {
   if (price.source !== "market_default" || !price.currency) {
     return formatMicros(micros);
   }
-  const value = micros / 1_000_000;
-  const digits =
-    value !== 0 && Math.abs(value) < 0.01 ? { maximumFractionDigits: 4 } : {};
-  return new Intl.NumberFormat(currentLocale(), {
-    style: "currency",
-    currency: price.currency,
-    ...digits,
-  }).format(value);
+  return formatCurrencyMicros(micros, price.currency);
 }

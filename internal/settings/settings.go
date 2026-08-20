@@ -37,6 +37,7 @@ const (
 	KindMCPUserCredential Kind = "mcp_user_credential"
 	KindPack              Kind = "capability_pack"
 	KindBudget            Kind = "budget"
+	KindMoney             Kind = "money"
 	KindRetention         Kind = "retention"
 	KindBranding          Kind = "branding"
 	KindPolicy            Kind = "policy"

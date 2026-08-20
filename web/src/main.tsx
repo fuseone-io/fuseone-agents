@@ -9,6 +9,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/shared/theme-provider";
 import { AppShell } from "@/components/layout/app-shell";
 import { BrandingProvider } from "@/features/branding/branding-provider";
+import { MoneyProvider } from "@/features/money/money-provider";
 import { SessionGate } from "@/features/session/session-gate";
 import { OverviewPage } from "@/features/overview/overview-page";
 import { PoliciesPage } from "@/features/policies/policies-page";
@@ -51,10 +52,11 @@ createRoot(document.getElementById("root")!).render(
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
         <BrandingProvider>
-          <BrowserRouter>
-            <SessionGate>
-              <AppShell>
-                <Routes>
+          <MoneyProvider>
+            <BrowserRouter>
+              <SessionGate>
+                <AppShell>
+                  <Routes>
                   <Route path="/" element={<Navigate to="/overview" replace />} />
                   <Route path="/overview" element={<OverviewPage />} />
                   <Route path="/agents" element={<AgentsPage />} />
@@ -103,10 +105,11 @@ createRoot(document.getElementById("root")!).render(
                   <Route path="/manual/:slug" element={<ManualReadPage />} />
                   <Route path="/admin" element={<AdminPage />} />
                   <Route path="*" element={<NotFoundPage />} />
-                </Routes>
-              </AppShell>
-            </SessionGate>
-          </BrowserRouter>
+                  </Routes>
+                </AppShell>
+              </SessionGate>
+            </BrowserRouter>
+          </MoneyProvider>
           <Toaster richColors closeButton />
         </BrandingProvider>
       </QueryClientProvider>

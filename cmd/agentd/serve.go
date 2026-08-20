@@ -148,6 +148,7 @@ func serve(args []string) error {
 			// permission: the one act here nobody can undo.
 			// The key exports are signed with, and its public half.
 			WithSigning(admin.NewSigning(identity.pool, store)).
+			WithMoney(admin.NewMoney(identity.pool, store)).
 			WithBranding(admin.NewBranding(identity.pool, store)).
 			WithRetention(
 				admin.NewRetention(identity.pool, store),

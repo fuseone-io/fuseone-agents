@@ -106,6 +106,7 @@ type Server struct {
 	batteries   LastBattery
 	// retention and erasures decide whether content survives.
 	retention      Retention
+	money          Money
 	branding       Branding
 	channels       ChannelAdmin
 	companies      CompanyAdmin

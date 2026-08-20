@@ -1,9 +1,17 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { setLocale } from "@/i18n";
-import { formatMicros, formatRelative } from "@/lib/format";
+import {
+  DEFAULT_CURRENCY,
+  formatMicros,
+  formatRelative,
+  setInstallationCurrency,
+} from "@/lib/format";
 
 describe("formatMicros", () => {
-  beforeEach(() => setLocale("pt-BR"));
+  beforeEach(() => {
+    setLocale("pt-BR");
+    setInstallationCurrency(DEFAULT_CURRENCY);
+  });
 
   it("keeps sub-cent amounts visible instead of rounding them to zero", () => {
     // A single run often costs a fraction of a cent. Rounding it to R$ 0,00
@@ -33,6 +41,12 @@ describe("formatMicros", () => {
     expect(portuguese).toContain("1.234,50");
     expect(english).toContain("R$");
     expect(portuguese).toContain("R$");
+  });
+
+  it("uses the installation currency rather than assuming Brazilian reais", () => {
+    setInstallationCurrency("USD");
+
+    expect(formatMicros(1_500_000)).toMatch(/US\$/);
   });
 });
 

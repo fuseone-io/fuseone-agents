@@ -68,7 +68,12 @@
       "platform": "Plataforma"
     },
     "identity": "Entrada e acesso",
-    "inCurrency": "Em reais. Deixe vazio para não limitar por valor.",
+    "currency": "Moeda",
+    "currencyHistoryWarning": "Trocar a moeda da instalação muda como custos históricos, tetos e tarifas configuradas são lidos. Não converte os números já gravados.",
+    "currencySaved": "Moeda salva",
+    "currencySaveFailed": "Não foi possível salvar a moeda",
+    "inCurrency": "Na moeda da instalação. Deixe vazio para não limitar por valor.",
+    "installationCurrency": "Moeda da instalação",
     "model": "Modelo",
     "monthly": "Mensal — reinicia no dia 1",
     "name": "Nome",
