@@ -1,6 +1,8 @@
 ---
 title: O que a plataforma para antes de acontecer
 summary: A escada de efeito, o rastro do que veio de fora, e por que aprovar não é o mesmo que permitir.
+section: governance
+tags: gate, aprovação, classificação, untrusted, taint, política
 order: 2
 ---
 

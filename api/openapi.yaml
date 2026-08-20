@@ -3452,23 +3452,49 @@ components:
 
     ManualEntry:
       type: object
-      required: [slug, title, summary, order]
+      required: [slug, title, summary, section, tags, order, headings]
       properties:
         slug: { type: string }
         title: { type: string }
         summary: { type: string }
+        section:
+          type: string
+          description: Stable section key. The console translates the label.
+        tags:
+          type: array
+          items: { type: string }
+        headings:
+          type: array
+          items: { $ref: '#/components/schemas/ManualHeading' }
         order: { type: integer }
+
+    ManualHeading:
+      type: object
+      required: [id, title, level]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        level: { type: integer }
 
     ManualPage:
       type: object
       description: |
         One page. `body` is Markdown; an internal link in it names another
         slug of this manual and never a path in the repository.
-      required: [slug, title, summary, order, body]
+      required: [slug, title, summary, section, tags, order, headings, body]
       properties:
         slug: { type: string }
         title: { type: string }
         summary: { type: string }
+        section:
+          type: string
+          description: Stable section key. The console translates the label.
+        tags:
+          type: array
+          items: { type: string }
+        headings:
+          type: array
+          items: { $ref: '#/components/schemas/ManualHeading' }
         order: { type: integer }
         body: { type: string }
 

@@ -2187,7 +2187,16 @@ export interface components {
             slug: string;
             title: string;
             summary: string;
+            /** @description Stable section key. The console translates the label. */
+            section: string;
+            tags: string[];
+            headings: components["schemas"]["ManualHeading"][];
             order: number;
+        };
+        ManualHeading: {
+            id: string;
+            title: string;
+            level: number;
         };
         /**
          * @description One page. `body` is Markdown; an internal link in it names another
@@ -2197,6 +2206,10 @@ export interface components {
             slug: string;
             title: string;
             summary: string;
+            /** @description Stable section key. The console translates the label. */
+            section: string;
+            tags: string[];
+            headings: components["schemas"]["ManualHeading"][];
             order: number;
             body: string;
         };

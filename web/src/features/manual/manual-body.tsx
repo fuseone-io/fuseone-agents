@@ -1,6 +1,7 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Link } from "react-router-dom";
+import type { ManualPage } from "@/features/manual/api";
 
 /**
  * One page of the manual, rendered.
@@ -13,10 +14,37 @@ import { Link } from "react-router-dom";
  * GFM because the manual compares things in tables, and a comparison written
  * as a list is a comparison nobody reads.
  */
-export function ManualBody({ body }: { body: string }) {
+export function ManualBody({
+  body,
+  headings = [],
+}: {
+  body: string;
+  headings?: ManualPage["headings"];
+}) {
+  let headingIndex = 0;
+  const Heading = ({ children }: { children?: React.ReactNode }) => {
+    const heading = headings[headingIndex++];
+    return (
+      <h2 id={heading?.id} className="scroll-mt-20">
+        {children}
+      </h2>
+    );
+  };
+  const Subheading = ({ children }: { children?: React.ReactNode }) => {
+    const heading = headings[headingIndex++];
+    return (
+      <h3 id={heading?.id} className="scroll-mt-20">
+        {children}
+      </h3>
+    );
+  };
+
   return (
-    <div className="min-w-0 max-w-[68ch] [&_h2]:mt-8 [&_h2]:text-lg [&_h2]:font-medium [&_p]:my-3 [&_p]:break-words [&_li]:my-1 [&_ul]:list-disc [&_ul]:pl-5 [&_strong]:font-medium">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: Anchor, table: Grid }}>
+    <div className="min-w-0 max-w-[72ch] [&_h2]:mt-8 [&_h2]:text-lg [&_h2]:font-medium [&_h3]:mt-6 [&_h3]:font-medium [&_p]:my-3 [&_p]:break-words [&_li]:my-1 [&_ul]:list-disc [&_ul]:pl-5 [&_strong]:font-medium">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{ a: Anchor, table: Grid, h2: Heading, h3: Subheading }}
+      >
         {body}
       </ReactMarkdown>
     </div>

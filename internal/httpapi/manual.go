@@ -33,7 +33,8 @@ func (s *Server) GetManual(
 	for _, page := range pages {
 		entries = append(entries, openapi.ManualEntry{
 			Slug: page.Slug, Title: page.Title,
-			Summary: page.Summary, Order: page.Order,
+			Summary: page.Summary, Section: page.Section, Tags: page.Tags,
+			Order: page.Order, Headings: headingsOut(page.Headings),
 		})
 	}
 	return openapi.GetManual200JSONResponse{Locale: locale, Pages: entries}, nil
@@ -62,7 +63,8 @@ func (s *Server) GetManualPage(
 		}
 		return openapi.GetManualPage200JSONResponse{
 			Slug: page.Slug, Title: page.Title, Summary: page.Summary,
-			Order: page.Order, Body: page.Body,
+			Section: page.Section, Tags: page.Tags, Order: page.Order,
+			Headings: headingsOut(page.Headings), Body: page.Body,
 		}, nil
 	}
 	return openapi.GetManualPage404ApplicationProblemPlusJSONResponse(
@@ -81,6 +83,14 @@ func localeOf(asked string) string {
 		}
 	}
 	return defaultLocale
+}
+
+func headingsOut(in []docs.Heading) []openapi.ManualHeading {
+	out := make([]openapi.ManualHeading, 0, len(in))
+	for _, h := range in {
+		out = append(out, openapi.ManualHeading{Id: h.ID, Title: h.Title, Level: h.Level})
+	}
+	return out
 }
 
 func deref[T any](p *T) T {

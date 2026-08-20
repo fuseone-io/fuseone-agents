@@ -1,6 +1,8 @@
 ---
 title: What the platform stops before it happens
 summary: The effect ladder, the mark carried by anything read from outside, and why approving is not permitting.
+section: governance
+tags: gate, approval, classification, untrusted, taint, policy
 order: 2
 ---
 

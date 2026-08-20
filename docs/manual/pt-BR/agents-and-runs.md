@@ -1,6 +1,8 @@
 ---
 title: Agentes, versões e execuções
 summary: O que é publicado, o que é fixado e o que fica registrado.
+section: start
+tags: agente, versão, execução, rastro, publicação
 order: 1
 ---
 

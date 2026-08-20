@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 //go:embed all:manual
@@ -31,11 +32,22 @@ var manual embed.FS
 // Body is Markdown, not HTML: rendering belongs to the reader, and a server
 // that hands out HTML has to be trusted about what it put in it.
 type Page struct {
-	Slug    string
-	Title   string
-	Summary string
-	Order   int
-	Body    string
+	Slug     string
+	Title    string
+	Summary  string
+	Section  string
+	Tags     []string
+	Order    int
+	Headings []Heading
+	Body     string
+}
+
+// Heading is one h2/h3 entry the console can use for a table of contents and
+// search without carrying each page body in the index.
+type Heading struct {
+	ID    string
+	Title string
+	Level int
 }
 
 /*
@@ -99,6 +111,10 @@ func parse(raw string) (Page, error) {
 			page.Title = value
 		case "summary":
 			page.Summary = value
+		case "section":
+			page.Section = value
+		case "tags":
+			page.Tags = splitTags(value)
 		case "order":
 			n, err := strconv.Atoi(value)
 			if err != nil {
@@ -110,8 +126,11 @@ func parse(raw string) (Page, error) {
 		}
 	}
 
-	if page.Title == "" || page.Summary == "" {
-		return Page{}, fmt.Errorf("title and summary are both required")
+	if page.Title == "" || page.Summary == "" || page.Section == "" {
+		return Page{}, fmt.Errorf("title, summary and section are required")
+	}
+	if len(page.Tags) == 0 {
+		return Page{}, fmt.Errorf("tags are required: they are what search can match before loading a page")
 	}
 	// The contract declares order required, and a page that omits it does not
 	// fail — it takes position zero and quietly becomes the first thing anybody
@@ -120,5 +139,79 @@ func parse(raw string) (Page, error) {
 		return Page{}, fmt.Errorf("order is required: it decides where the index puts this page")
 	}
 	page.Body = strings.TrimLeft(body, "\n")
+	page.Headings = headings(page.Body)
 	return page, nil
+}
+
+func splitTags(value string) []string {
+	var tags []string
+	for _, tag := range strings.Split(value, ",") {
+		tag = strings.TrimSpace(tag)
+		if tag != "" {
+			tags = append(tags, tag)
+		}
+	}
+	return tags
+}
+
+func headings(body string) []Heading {
+	var out []Heading
+	seen := make(map[string]int)
+	inFence := false
+	for _, line := range strings.Split(body, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "```") {
+			inFence = !inFence
+			continue
+		}
+		if inFence {
+			continue
+		}
+		level, title, ok := headingLine(trimmed)
+		if !ok {
+			continue
+		}
+		id := anchorID(title)
+		seen[id]++
+		if seen[id] > 1 {
+			id = fmt.Sprintf("%s-%d", id, seen[id])
+		}
+		out = append(out, Heading{ID: id, Title: title, Level: level})
+	}
+	return out
+}
+
+func headingLine(line string) (int, string, bool) {
+	level := 0
+	for level < len(line) && line[level] == '#' {
+		level++
+	}
+	if level < 2 || level > 3 || len(line) <= level || line[level] != ' ' {
+		return 0, "", false
+	}
+	title := strings.TrimSpace(line[level+1:])
+	title = strings.TrimSpace(strings.TrimRight(title, "#"))
+	return level, title, title != ""
+}
+
+func anchorID(title string) string {
+	var b strings.Builder
+	dash := false
+	for _, r := range strings.ToLower(title) {
+		switch {
+		case unicode.IsLetter(r) || unicode.IsDigit(r):
+			if dash && b.Len() > 0 {
+				b.WriteByte('-')
+			}
+			dash = false
+			b.WriteRune(r)
+		default:
+			dash = true
+		}
+	}
+	id := b.String()
+	if id == "" {
+		return "section"
+	}
+	return id
 }

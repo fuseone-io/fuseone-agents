@@ -1,6 +1,8 @@
 ---
 title: Agents, versions and runs
 summary: What gets published, what gets pinned, and what stays on the record.
+section: start
+tags: agent, version, run, trail, publishing
 order: 1
 ---
 

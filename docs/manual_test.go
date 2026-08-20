@@ -13,6 +13,18 @@ import (
 // somebody edits in a hurry.
 var locales = []string{"pt-BR", "en-US"}
 
+var sections = map[string]bool{
+	"start":           true,
+	"authoring":       true,
+	"integrations":    true,
+	"governance":      true,
+	"cost":            true,
+	"operations":      true,
+	"security":        true,
+	"troubleshooting": true,
+	"reference":       true,
+}
+
 // A link in the manual is the one thing no reviewer checks by hand, and the one
 // that fails in front of a reader rather than in front of an author. The manual
 // is served from a route that knows nothing about the repository, so a link to
@@ -79,6 +91,30 @@ func TestManual_ordersAreUniqueSoTheIndexDoesNotReshuffle(t *testing.T) {
 	}
 }
 
+func TestManual_entriesCarrySearchableMetadata(t *testing.T) {
+	t.Parallel()
+
+	for _, locale := range locales {
+		t.Run(locale, func(t *testing.T) {
+			t.Parallel()
+			for _, p := range read(t, locale) {
+				if p.Section == "" {
+					t.Errorf("%s has no section", p.Slug)
+				}
+				if !sections[p.Section] {
+					t.Errorf("%s has unknown section %q", p.Slug, p.Section)
+				}
+				if len(p.Tags) == 0 {
+					t.Errorf("%s has no tags", p.Slug)
+				}
+				if len(p.Headings) == 0 {
+					t.Errorf("%s has no headings for the page outline", p.Slug)
+				}
+			}
+		})
+	}
+}
+
 // The manual is user-facing content, and the repository's rule for user-facing
 // content is that pt-BR and en-US stay in parity. A page written in one
 // language only is not half a manual — it is a reader who switches language and
@@ -95,6 +131,9 @@ func TestManual_bothLocalesCarryTheSamePagesInTheSameOrder(t *testing.T) {
 		// so a page that sorts differently is a different manual.
 		if pt[i].Slug != en[i].Slug {
 			t.Errorf("position %d is %q in pt-BR and %q in en-US", i, pt[i].Slug, en[i].Slug)
+		}
+		if pt[i].Section != en[i].Section {
+			t.Errorf("%s is in section %q in pt-BR and %q in en-US", pt[i].Slug, pt[i].Section, en[i].Section)
 		}
 	}
 }

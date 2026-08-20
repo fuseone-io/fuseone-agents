@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { ErrorState, LoadingRows } from "@/components/shared/states";
 import { Button } from "@/components/ui/button";
 import { ManualBody } from "@/features/manual/manual-body";
+import { ManualPageOutline } from "@/features/manual/manual-page-outline";
 import { useManualPage } from "@/features/manual/api";
 
 /** One page, read. */
@@ -29,7 +30,12 @@ export function ManualReadPage() {
       </PageHeader>
       {page.isLoading && <LoadingRows rows={6} />}
       {page.error && <ErrorState error={page.error} onRetry={() => void page.refetch()} />}
-      {page.data && <ManualBody body={page.data.body} />}
+      {page.data && (
+        <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_260px]">
+          <ManualBody body={page.data.body} headings={page.data.headings} />
+          <ManualPageOutline page={page.data} />
+        </div>
+      )}
     </>
   );
 }
