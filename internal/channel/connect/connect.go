@@ -33,6 +33,7 @@ undeliverable on that connection.
 type Driver interface {
 	channel.Poster
 	Say(ctx context.Context, conversation, thread, text string) error
+	SayOutcome(ctx context.Context, conversation, thread, text string) error
 	Thread(ctx context.Context, conversation, thread, before string) (channel.ThreadContext, error)
 }
 
@@ -79,6 +80,16 @@ func (d *Drivers) Reply(ctx context.Context, name, conversation, thread, text st
 		return err
 	}
 	return driver.Say(ctx, conversation, thread, text)
+}
+
+// ReplyOutcome says the final answer of a run, rendered in the vendor's own
+// safe subset of formatting.
+func (d *Drivers) ReplyOutcome(ctx context.Context, name, conversation, thread, text string) error {
+	driver, err := d.driver(ctx, name)
+	if err != nil {
+		return err
+	}
+	return driver.SayOutcome(ctx, conversation, thread, text)
 }
 
 // Thread reads bounded context from the connection that received the ask.

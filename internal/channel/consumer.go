@@ -286,7 +286,7 @@ func (c *Consumer) AnswerFinished(ctx context.Context, lease time.Duration, limi
 		}
 
 		if text != "" {
-			if err := c.answers.Reply(ctx, one.Channel, one.Conversation, one.Thread, text); err != nil {
+			if err := c.answers.ReplyOutcome(ctx, one.Channel, one.Conversation, one.Thread, text); err != nil {
 				// Left owed, so somebody tries again. A finished run whose
 				// answer never appears in the conversation reads as silence,
 				// which is the failure this sweep exists to avoid.

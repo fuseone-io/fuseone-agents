@@ -86,12 +86,21 @@ type saidReply struct {
 	conversation string
 	thread       string
 	text         string
+	outcome      bool
 }
 
 func (s *saidAloud) Reply(_ context.Context, channel, conversation, thread, text string) error {
 	s.texts = append(s.texts, text)
 	s.replies = append(s.replies, saidReply{
 		channel: channel, conversation: conversation, thread: thread, text: text,
+	})
+	return nil
+}
+
+func (s *saidAloud) ReplyOutcome(_ context.Context, channel, conversation, thread, text string) error {
+	s.texts = append(s.texts, text)
+	s.replies = append(s.replies, saidReply{
+		channel: channel, conversation: conversation, thread: thread, text: text, outcome: true,
 	})
 	return nil
 }
@@ -376,6 +385,9 @@ func TestAsk_aFinishedRunAnswersInTheThreadThatAsked(t *testing.T) {
 	if got.channel != "acme" || got.conversation != "C07" || got.thread != "1786.1" {
 		t.Fatalf("reply went to %s/%s/%s, want the original channel conversation and thread",
 			got.channel, got.conversation, got.thread)
+	}
+	if !got.outcome {
+		t.Fatal("finished answer used the literal refusal path; it should use the vendor's outcome renderer")
 	}
 	if got.text != "diagnosis complete" {
 		t.Errorf("text = %q", got.text)

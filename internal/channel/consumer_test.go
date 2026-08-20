@@ -483,8 +483,9 @@ func (o *openerSpy) Open(_ context.Context, req channel.Request) (channel.Opened
 }
 
 type answerSpy struct {
-	said []string
-	err  error
+	said     []string
+	outcomes []string
+	err      error
 }
 
 func (a *answerSpy) Reply(_ context.Context, _, _, _, text string) error {
@@ -492,6 +493,14 @@ func (a *answerSpy) Reply(_ context.Context, _, _, _, text string) error {
 		return a.err
 	}
 	a.said = append(a.said, text)
+	return nil
+}
+
+func (a *answerSpy) ReplyOutcome(_ context.Context, _, _, _, text string) error {
+	if a.err != nil {
+		return a.err
+	}
+	a.outcomes = append(a.outcomes, text)
 	return nil
 }
 

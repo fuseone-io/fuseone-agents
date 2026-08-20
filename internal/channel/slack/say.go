@@ -27,10 +27,34 @@ this vendor treats as markup.
 // Say replies in a thread. Plain text, no blocks: there is nothing to decide,
 // and a button that decides nothing is the worst thing to put on a refusal.
 func (p *Poster) Say(ctx context.Context, conversation, thread, text string) error {
+	no := false
 	_, err := p.send(ctx, postMessage{
 		Channel: conversation,
 		Thread:  thread,
 		Text:    escape(text),
+		Mrkdwn:  &no,
+	})
+	return err
+}
+
+/*
+SayOutcome replies with the run's closing answer.
+
+This is not the refusal path. A refusal quotes somebody's text and must stay
+literal; an outcome is a document the model wrote for a person to read. Slack
+does not speak Markdown, it speaks mrkdwn, so the translation happens at this
+edge and only for a small safe subset. Links stay visible, and unfurls stay
+off: content from a run must not make Slack fetch a URL the model chose.
+*/
+func (p *Poster) SayOutcome(ctx context.Context, conversation, thread, text string) error {
+	no := false
+	_, err := p.send(ctx, postMessage{
+		Channel:     conversation,
+		Thread:      thread,
+		Text:        outcome(text),
+		Parse:       "none",
+		UnfurlLinks: &no,
+		UnfurlMedia: &no,
 	})
 	return err
 }

@@ -41,6 +41,11 @@ func (s *spoke) Say(_ context.Context, conversation, thread, text string) error 
 	return nil
 }
 
+func (s *spoke) SayOutcome(_ context.Context, conversation, thread, text string) error {
+	s.conversation, s.thread, s.text = conversation, thread, text
+	return nil
+}
+
 func (s *spoke) Thread(
 	context.Context, string, string, string,
 ) (channel.ThreadContext, error) {

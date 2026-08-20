@@ -116,6 +116,7 @@ type Opened struct {
 // Answers says something back where the ask was made.
 type Answers interface {
 	Reply(ctx context.Context, channel, conversation, thread, text string) error
+	ReplyOutcome(ctx context.Context, channel, conversation, thread, text string) error
 }
 
 // Consumer opens the runs that asks became.

@@ -78,8 +78,12 @@ func (p *Poster) Post(
 }
 
 type postMessage struct {
-	Channel string `json:"channel"`
-	Text    string `json:"text"`
-	Blocks  []any  `json:"blocks,omitempty"`
-	Thread  string `json:"thread_ts,omitempty"`
+	Channel     string `json:"channel"`
+	Text        string `json:"text"`
+	Blocks      []any  `json:"blocks,omitempty"`
+	Thread      string `json:"thread_ts,omitempty"`
+	Parse       string `json:"parse,omitempty"`
+	Mrkdwn      *bool  `json:"mrkdwn,omitempty"`
+	UnfurlLinks *bool  `json:"unfurl_links,omitempty"`
+	UnfurlMedia *bool  `json:"unfurl_media,omitempty"`
 }
