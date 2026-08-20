@@ -3099,11 +3099,12 @@ paths:
       operationId: listPrices
       summary: What this installation pays per model
       description: |
-        Nothing ships rates. They vary by contract, and a table baked into the
-        binary would misreport what a customer with a negotiated discount pays
-        — worse than reporting nothing, because a wrong figure is one somebody
-        acts on. A model with no rate has its runs recorded in tokens and no
-        money.
+        Configured rates are the installation's contract override. Known
+        models also return bundled market defaults as reference values, with
+        their own currency named. Those defaults are not used for Cost.Micros:
+        money in the ledger and in ceilings is always the installation's
+        currency. Unknown models still record tokens and no money until an
+        operator sets a rate.
       responses:
         '200':
           description: The rates configured.
@@ -4071,15 +4072,37 @@ components:
       type: object
       required: [provider, model]
       description: |
-        Micros per million tokens. Cache reads and cache writes are their own
-        rates because a cache read costs a fraction of an input token.
+        Micros per million tokens. A configured contract rate is the only rate
+        used for accounting in the installation's currency. Bundled market
+        defaults are reference values with their own currency. Cache reads and
+        cache writes are their own rates because a cache read costs a fraction
+        of an input token.
       properties:
         provider: { type: string }
         model: { type: string }
+        source:
+          type: string
+          enum: [configured, market_default]
+          description: |
+            Where this rate came from. Requests may omit it; writes always
+            create configured rates in the installation's currency. Reads
+            include market defaults as reference values when no configured
+            rate exists.
+        currency:
+          type: string
+          description: |
+            Currency for reference market defaults, such as USD. Configured
+            rates omit it because they are in the installation's currency.
         inputMicros: { type: integer, format: int64 }
         outputMicros: { type: integer, format: int64 }
         cacheReadMicros: { type: integer, format: int64 }
         cacheWriteMicros: { type: integer, format: int64 }
+        sourceUrl:
+          type: string
+          description: Public pricing page used for a market default.
+        sourceUpdatedAt:
+          type: string
+          description: Date the bundled market default was checked.
 
     ModelPreset:
       type: object

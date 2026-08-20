@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Coins, Plus } from "lucide-react";
+import { Coins, Plus, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Panel } from "@/components/shared/panel";
 import { Mono } from "@/components/shared/mono";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   EmptyState,
   ErrorState,
@@ -20,15 +21,14 @@ import {
 } from "@/features/admin/prices-api";
 import { useVisibleItems } from "@/hooks/use-visible-items";
 import { formatMicros } from "@/lib/format";
+import { currentLocale } from "@/i18n";
 
 /**
  * What this installation pays per model.
  *
- * Until a rate exists here, every cost in the console reads zero: the platform
- * counts tokens and refuses to guess at money, so a run's cost, an agent's
- * ceiling and the authoring assistant's daily bound are all decoration. That
- * is the honest failure, but it is a failure, and this screen is the only
- * thing that ends it.
+ * Market defaults are displayed as sourced reference values, not as accounting
+ * rates. Until a custom rate exists in the installation's currency, Cost.Micros
+ * remains zero and money ceilings cannot rely on a foreign unit.
  */
 export function PricesPanel() {
   const { t } = useTranslation();
@@ -41,10 +41,24 @@ export function PricesPanel() {
     <Panel
       title={t("admin.prices")}
       action={
-        <Button size="sm" onClick={() => setEditing(null)}>
-          <Plus className="size-4" aria-hidden />
-          {t("common.new")}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() =>
+              void refetch().then(() =>
+                toast.success(t("admin.marketDefaultsRefreshed")),
+              )
+            }
+          >
+            <RefreshCw className="size-4" aria-hidden />
+            {t("admin.refreshMarketDefaults")}
+          </Button>
+          <Button size="sm" onClick={() => setEditing(null)}>
+            <Plus className="size-4" aria-hidden />
+            {t("common.new")}
+          </Button>
+        </div>
       }
     >
       {isLoading ? (
@@ -94,6 +108,7 @@ function PriceRow({
 }) {
   const { t } = useTranslation();
   const remove = useDeletePrice();
+  const isMarketDefault = price.source === "market_default";
 
   return (
     <li className="flex items-center gap-2 rounded-lg border p-3">
@@ -102,36 +117,65 @@ function PriceRow({
         onClick={onEdit}
         className="min-w-0 flex-1 text-left focus-visible:underline focus-visible:outline-none"
       >
-        <div className="font-mono text-sm">
-          {price.provider}/{price.model}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="font-mono text-sm">
+            {price.provider}/{price.model}
+          </div>
+          <Badge variant={isMarketDefault ? "outline" : "secondary"}>
+            {t(isMarketDefault ? "admin.marketDefault" : "admin.customRate")}
+          </Badge>
         </div>
         {/* All four, always. Reading only the input rate is how somebody
             concludes a cached agent is expensive. */}
         <Mono dim>
           {t("admin.rateLine", {
-            input: formatMicros(price.inputMicros ?? 0),
-            output: formatMicros(price.outputMicros ?? 0),
-            cacheRead: formatMicros(price.cacheReadMicros ?? 0),
-            cacheWrite: formatMicros(price.cacheWriteMicros ?? 0),
+            input: formatPrice(price, price.inputMicros ?? 0),
+            output: formatPrice(price, price.outputMicros ?? 0),
+            cacheRead: formatPrice(price, price.cacheReadMicros ?? 0),
+            cacheWrite: formatPrice(price, price.cacheWriteMicros ?? 0),
           })}
         </Mono>
+        {isMarketDefault && price.sourceUpdatedAt && (
+          <div className="mt-1 text-xs text-muted-foreground">
+            {t("admin.marketDefaultChecked", {
+              date: price.sourceUpdatedAt,
+              currency: price.currency ?? "",
+            })}
+          </div>
+        )}
       </button>
-      <RemoveButton
-        title={t("admin.removeRate", { model: price.model })}
-        description={t("admin.removeRateHint")}
-        onConfirm={() =>
-          remove.mutate(
-            { provider: price.provider, model: price.model },
-            {
-              onSuccess: () => toast.success(t("admin.rateRemoved")),
-              onError: (e) =>
-                toast.error(
-                  e instanceof Error ? e.message : t("common.removeFailed"),
-                ),
-            },
-          )
-        }
-      />
+      {!isMarketDefault && (
+        <RemoveButton
+          title={t("admin.removeRate", { model: price.model })}
+          description={t("admin.removeRateHint")}
+          onConfirm={() =>
+            remove.mutate(
+              { provider: price.provider, model: price.model },
+              {
+                onSuccess: () => toast.success(t("admin.rateRemoved")),
+                onError: (e) =>
+                  toast.error(
+                    e instanceof Error ? e.message : t("common.removeFailed"),
+                  ),
+              },
+            )
+          }
+        />
+      )}
     </li>
   );
+}
+
+function formatPrice(price: ModelPrice, micros: number): string {
+  if (price.source !== "market_default" || !price.currency) {
+    return formatMicros(micros);
+  }
+  const value = micros / 1_000_000;
+  const digits =
+    value !== 0 && Math.abs(value) < 0.01 ? { maximumFractionDigits: 4 } : {};
+  return new Intl.NumberFormat(currentLocale(), {
+    style: "currency",
+    currency: price.currency,
+    ...digits,
+  }).format(value);
 }

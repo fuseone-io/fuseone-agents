@@ -6,9 +6,9 @@ import (
 	"github.com/fuseone/agents/internal/model"
 )
 
-// Prices are the installation's, never the platform's: they vary by contract,
-// and a rate shipped in a binary would quietly misreport what a customer with
-// a negotiated discount actually pays.
+// Configured prices are the installation's; market defaults are public
+// reference values in their own currency. They must not feed Cost.Micros,
+// whose domain contract is the installation's currency.
 
 func TestPlanner_fillsTheRateRegisteredForThatModel(t *testing.T) {
 	t.Parallel()
@@ -35,7 +35,7 @@ func TestPlanner_fillsTheRateRegisteredForThatModel(t *testing.T) {
 	}
 }
 
-func TestPriceFor_aModelNobodyPriced_isZeroRatherThanAGuess(t *testing.T) {
+func TestPriceFor_aKnownModelNobodyPriced_isStillZero(t *testing.T) {
 	t.Parallel()
 
 	registry := model.NewRegistry(nil)
@@ -47,11 +47,49 @@ func TestPriceFor_aModelNobodyPriced_isZeroRatherThanAGuess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("price: %v", err)
 	}
-	// Zero means the ledger records tokens and no money, which is the honest
-	// answer. A default rate would put a number an operator trusts next to a
-	// figure nobody supplied.
 	if got != (model.Prices{}) {
-		t.Errorf("got %+v, want zero", got)
+		t.Errorf("got %+v, want no accounting rate without a configured installation price", got)
+	}
+}
+
+func TestPriceFor_anUnknownModelNobodyPriced_isStillZero(t *testing.T) {
+	t.Parallel()
+
+	registry := model.NewRegistry(nil)
+	if err := registry.Register(model.Provider{Name: "anthropic", Kind: model.KindAnthropic}); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+
+	got, err := registry.PriceFor("anthropic", "claude-from-next-week")
+	if err != nil {
+		t.Fatalf("price: %v", err)
+	}
+	// A public default exists only for models named in the bundled table. For
+	// a new or custom model, zero says "no price" rather than inventing money.
+	if got != (model.Prices{}) {
+		t.Errorf("got %+v, want no price for an unknown model", got)
+	}
+}
+
+func TestPriceFor_aConfiguredRateOverridesTheMarketDefault(t *testing.T) {
+	t.Parallel()
+
+	registry := model.NewRegistry(nil)
+	if err := registry.Register(model.Provider{
+		Name: "anthropic", Kind: model.KindAnthropic,
+		Prices: map[string]model.Prices{
+			"claude-opus-5": {InputMicros: 1, OutputMicros: 2},
+		},
+	}); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+
+	got, err := registry.PriceFor("anthropic", "claude-opus-5")
+	if err != nil {
+		t.Fatalf("price: %v", err)
+	}
+	if got.InputMicros != 1 || got.OutputMicros != 2 {
+		t.Errorf("got %+v, want the configured contract rate", got)
 	}
 }
 

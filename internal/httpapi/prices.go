@@ -3,10 +3,12 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"sort"
 
 	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
+	"github.com/fuseone/agents/internal/model"
 )
 
 // Rates is the installation's price list, declared here by the consumer.
@@ -33,18 +35,32 @@ func (s *Server) ListPrices(
 			ForbiddenApplicationProblemPlusJSONResponse: *resp,
 		}, nil
 	}
-	if s.rates == nil {
-		return openapi.ListPrices200JSONResponse{Items: []openapi.ModelPrice{}}, nil
+	var stored []admin.ModelPrice
+	if s.rates != nil {
+		var err error
+		stored, err = s.rates.Prices(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
-
-	stored, err := s.rates.Prices(ctx)
-	if err != nil {
-		return nil, err
-	}
-	items := make([]openapi.ModelPrice, 0, len(stored))
+	items := make([]openapi.ModelPrice, 0, len(stored)+len(model.MarketPrices()))
+	seen := map[string]struct{}{}
 	for _, p := range stored {
+		seen[p.Provider+"/"+p.Model] = struct{}{}
 		items = append(items, priceFrom(p))
 	}
+	for _, p := range model.MarketPrices() {
+		if _, ok := seen[p.Provider+"/"+p.Model]; ok {
+			continue
+		}
+		items = append(items, marketPriceFrom(p))
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].Provider == items[j].Provider {
+			return items[i].Model < items[j].Model
+		}
+		return items[i].Provider < items[j].Provider
+	})
 	return openapi.ListPrices200JSONResponse{Items: items}, nil
 }
 
@@ -95,6 +111,21 @@ func priceFrom(p admin.ModelPrice) openapi.ModelPrice {
 		Provider: p.Provider, Model: p.Model,
 		InputMicros: ptr(p.InputMicros), OutputMicros: ptr(p.OutputMicros),
 		CacheReadMicros: ptr(p.CacheReadMicros), CacheWriteMicros: ptr(p.CacheWriteMicros),
+		Source:    ptr(sourceOf(p.Source)),
+		Currency:  ptrNonEmpty(p.Currency),
+		SourceUrl: ptrNonEmpty(p.SourceURL), SourceUpdatedAt: ptrNonEmpty(p.SourceUpdatedAt),
+	}
+}
+
+func marketPriceFrom(p model.MarketPrice) openapi.ModelPrice {
+	return openapi.ModelPrice{
+		Provider: p.Provider, Model: p.Model,
+		InputMicros: ptr(p.Prices.InputMicros), OutputMicros: ptr(p.Prices.OutputMicros),
+		CacheReadMicros:  ptr(p.Prices.CacheReadMicros),
+		CacheWriteMicros: ptr(p.Prices.CacheWriteMicros),
+		Source:           ptr(openapi.MarketDefault),
+		Currency:         ptrNonEmpty(p.Currency),
+		SourceUrl:        ptrNonEmpty(p.SourceURL), SourceUpdatedAt: ptrNonEmpty(p.SourceUpdatedAt),
 	}
 }
 
@@ -104,4 +135,18 @@ func priceInto(in openapi.ModelPrice) admin.ModelPrice {
 		InputMicros: valueOr(in.InputMicros), OutputMicros: valueOr(in.OutputMicros),
 		CacheReadMicros: valueOr(in.CacheReadMicros), CacheWriteMicros: valueOr(in.CacheWriteMicros),
 	}
+}
+
+func sourceOf(source string) openapi.ModelPriceSource {
+	if source == model.PriceSourceMarketDefault {
+		return openapi.MarketDefault
+	}
+	return openapi.Configured
+}
+
+func ptrNonEmpty(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }

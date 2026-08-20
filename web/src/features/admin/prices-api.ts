@@ -6,8 +6,12 @@ export type ModelPrice = components["schemas"]["ModelPrice"];
 
 export const priceKeys = { all: ["prices"] as const };
 
-/** What this installation pays per model. Nothing ships rates: they vary by
- *  contract, and a wrong one is worse than none. */
+/** What this installation pays per model.
+ *
+ * Configured rates are the installation's contract override. Market defaults
+ * are bundled with the release as reference values; they do not feed
+ * Cost.Micros until an operator records a local rate.
+ */
 export function usePrices() {
   return useQuery({
     queryKey: priceKeys.all,

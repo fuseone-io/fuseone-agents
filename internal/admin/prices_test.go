@@ -7,9 +7,9 @@ import (
 	"github.com/fuseone/agents/internal/domain"
 )
 
-// A price list is the installation's own. Nothing ships rates, because they
-// vary by contract and a wrong one is worse than none: it puts a number an
-// operator trusts beside money nobody supplied.
+// A stored price list is the installation's own override. Market defaults ship
+// separately, because a negotiated contract rate is the only number the
+// installation itself supplied.
 
 func TestPutPrice_ratesComeBackPerModel(t *testing.T) {
 	i := newIntegrations(t)

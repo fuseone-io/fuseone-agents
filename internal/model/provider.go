@@ -39,10 +39,9 @@ type Provider struct {
 	Models []string
 
 	// Prices are what this installation pays per model, in micros per million
-	// tokens. The installation's own: rates vary by contract, and a table
-	// shipped in a binary would quietly misreport what a customer with a
-	// negotiated discount actually pays. Absent means the ledger records
-	// tokens and no money, which is honest rather than a guess.
+	// tokens. A configured rate wins over the bundled market default because
+	// contracts vary; absent falls back to a named public default when the
+	// platform knows one. Unknown models still record tokens and no money.
 	Prices map[string]Prices
 
 	APIKey  string

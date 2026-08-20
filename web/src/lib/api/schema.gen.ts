@@ -1952,11 +1952,12 @@ export interface paths {
         };
         /**
          * What this installation pays per model
-         * @description Nothing ships rates. They vary by contract, and a table baked into the
-         *     binary would misreport what a customer with a negotiated discount pays
-         *     — worse than reporting nothing, because a wrong figure is one somebody
-         *     acts on. A model with no rate has its runs recorded in tokens and no
-         *     money.
+         * @description Configured rates are the installation's contract override. Known
+         *     models also return bundled market defaults as reference values, with
+         *     their own currency named. Those defaults are not used for Cost.Micros:
+         *     money in the ledger and in ceilings is always the installation's
+         *     currency. Unknown models still record tokens and no money until an
+         *     operator sets a rate.
          */
         get: operations["listPrices"];
         /**
@@ -2567,12 +2568,28 @@ export interface components {
             reason?: string;
         };
         /**
-         * @description Micros per million tokens. Cache reads and cache writes are their own
-         *     rates because a cache read costs a fraction of an input token.
+         * @description Micros per million tokens. A configured contract rate is the only rate
+         *     used for accounting in the installation's currency. Bundled market
+         *     defaults are reference values with their own currency. Cache reads and
+         *     cache writes are their own rates because a cache read costs a fraction
+         *     of an input token.
          */
         ModelPrice: {
             provider: string;
             model: string;
+            /**
+             * @description Where this rate came from. Requests may omit it; writes always
+             *     create configured rates in the installation's currency. Reads
+             *     include market defaults as reference values when no configured
+             *     rate exists.
+             * @enum {string}
+             */
+            source?: "configured" | "market_default";
+            /**
+             * @description Currency for reference market defaults, such as USD. Configured
+             *     rates omit it because they are in the installation's currency.
+             */
+            currency?: string;
             /** Format: int64 */
             inputMicros?: number;
             /** Format: int64 */
@@ -2581,6 +2598,10 @@ export interface components {
             cacheReadMicros?: number;
             /** Format: int64 */
             cacheWriteMicros?: number;
+            /** @description Public pricing page used for a market default. */
+            sourceUrl?: string;
+            /** @description Date the bundled market default was checked. */
+            sourceUpdatedAt?: string;
         };
         ModelPreset: {
             name: string;

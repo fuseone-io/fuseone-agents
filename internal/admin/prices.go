@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/model"
 	"github.com/fuseone/agents/internal/settings"
 )
 
@@ -17,10 +18,11 @@ const KindModelPrice settings.Kind = "model_price"
 /*
 ModelPrice is what an installation pays for one model.
 
-Nothing ships rates. They vary by contract, and a table baked into the binary
-would quietly misreport what a customer with a negotiated discount pays —
-which is worse than reporting nothing, because a wrong figure is one an
-operator acts on.
+Configured rates are the installation's contract. Public market defaults are
+shown when no contract rate exists, but they do not feed Cost.Micros: they are
+usually in USD, while the ledger and ceilings are in the installation's
+currency. A wrong source beside a right-looking number is how a cost screen
+becomes a promise the platform cannot keep.
 
 The four rates stay separate. A cache read costs a fraction of an input token,
 and collapsing them into one number is what makes an agent's cost impossible to
@@ -29,11 +31,15 @@ diagnose (PRD FO-08).
 type ModelPrice struct {
 	Provider string `json:"provider"`
 	Model    string `json:"model"`
+	Source   string `json:"source,omitempty"`
 
-	InputMicros      int64 `json:"inputMicros"`
-	OutputMicros     int64 `json:"outputMicros"`
-	CacheReadMicros  int64 `json:"cacheReadMicros"`
-	CacheWriteMicros int64 `json:"cacheWriteMicros"`
+	InputMicros      int64  `json:"inputMicros"`
+	OutputMicros     int64  `json:"outputMicros"`
+	CacheReadMicros  int64  `json:"cacheReadMicros"`
+	CacheWriteMicros int64  `json:"cacheWriteMicros"`
+	Currency         string `json:"currency,omitempty"`
+	SourceURL        string `json:"sourceUrl,omitempty"`
+	SourceUpdatedAt  string `json:"sourceUpdatedAt,omitempty"`
 }
 
 // ErrNoModel means a rate was given for a provider without naming a model.
@@ -49,6 +55,10 @@ func (i *Integrations) PutPrice(
 		// of magnitude.
 		return ErrNoModel
 	}
+	price.Source = model.PriceSourceConfigured
+	price.Currency = ""
+	price.SourceURL = ""
+	price.SourceUpdatedAt = ""
 
 	value, err := json.Marshal(price)
 	if err != nil {
@@ -92,6 +102,9 @@ func (i *Integrations) Prices(ctx context.Context) ([]ModelPrice, error) {
 		var price ModelPrice
 		if err := json.Unmarshal(s.Value, &price); err != nil {
 			return nil, fmt.Errorf("admin: decode price %s: %w", s.Name, err)
+		}
+		if price.Source == "" {
+			price.Source = model.PriceSourceConfigured
 		}
 		out = append(out, price)
 	}

@@ -35,8 +35,9 @@ export function PriceForm({
 }) {
   const { t } = useTranslation();
   const put = usePutPrice();
+  const isMarketDefault = price?.source === "market_default";
   const [draft, setDraft] = useState<ModelPrice>(
-    price ?? { provider: "", model: "", inputMicros: 0, outputMicros: 0 },
+    initialDraft(price),
   );
 
   const submit = () =>
@@ -55,56 +56,66 @@ export function PriceForm({
     <PropertiesSheet
       open
       onOpenChange={(open) => !open && onClose()}
-      title={t(price ? "admin.editRate" : "admin.newRate")}
-      description={t("admin.ratesAreYours")}
+      title={t(
+        price
+          ? isMarketDefault
+            ? "admin.overrideMarketRate"
+            : "admin.editRate"
+          : "admin.newRate",
+      )}
+      description={t(
+        isMarketDefault ? "admin.marketRateOverrideHint" : "admin.ratesAreYours",
+      )}
     >
       <div className="flex min-h-0 flex-1 flex-col">
         <PropertiesSheetBody>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Labelled label={t("agents.provider")} htmlFor="price-provider">
-            <Input
-              id="price-provider"
-              value={draft.provider}
-              disabled={!!price}
-              onChange={(e) => setDraft({ ...draft, provider: e.target.value })}
-              className="font-mono"
-              placeholder="anthropic"
-            />
-          </Labelled>
-          <Labelled label={t("admin.model")} htmlFor="price-model">
-            <Input
-              id="price-model"
-              value={draft.model}
-              disabled={!!price}
-              onChange={(e) => setDraft({ ...draft, model: e.target.value })}
-              className="font-mono"
-              placeholder="claude-opus-5"
-            />
-          </Labelled>
-
-          {RATES.map(({ field, label }) => (
-            <Labelled key={field} label={t(label)} htmlFor={`price-${field}`}>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Labelled label={t("agents.provider")} htmlFor="price-provider">
               <Input
-                id={`price-${field}`}
-                inputMode="decimal"
-                value={
-                  draft[field] ? String((draft[field] ?? 0) / 1_000_000) : ""
-                }
+                id="price-provider"
+                value={draft.provider}
+                disabled={!!price}
                 onChange={(e) =>
-                  setDraft({
-                    ...draft,
-                    [field]:
-                      Math.round(
-                        Number(e.target.value.replace(",", ".")) * 1_000_000,
-                      ) || 0,
-                  })
+                  setDraft({ ...draft, provider: e.target.value })
                 }
                 className="font-mono"
-                placeholder="0"
+                placeholder="anthropic"
               />
             </Labelled>
-          ))}
-        </div>
+            <Labelled label={t("admin.model")} htmlFor="price-model">
+              <Input
+                id="price-model"
+                value={draft.model}
+                disabled={!!price}
+                onChange={(e) => setDraft({ ...draft, model: e.target.value })}
+                className="font-mono"
+                placeholder="claude-opus-5"
+              />
+            </Labelled>
+
+            {RATES.map(({ field, label }) => (
+              <Labelled key={field} label={t(label)} htmlFor={`price-${field}`}>
+                <Input
+                  id={`price-${field}`}
+                  inputMode="decimal"
+                  value={
+                    draft[field] ? String((draft[field] ?? 0) / 1_000_000) : ""
+                  }
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      [field]:
+                        Math.round(
+                          Number(e.target.value.replace(",", ".")) * 1_000_000,
+                        ) || 0,
+                    })
+                  }
+                  className="font-mono"
+                  placeholder="0"
+                />
+              </Labelled>
+            ))}
+          </div>
         </PropertiesSheetBody>
 
         <PropertiesSheetFooter>
@@ -121,4 +132,21 @@ export function PriceForm({
       </div>
     </PropertiesSheet>
   );
+}
+
+function initialDraft(price: ModelPrice | null): ModelPrice {
+  if (!price) {
+    return { provider: "", model: "", inputMicros: 0, outputMicros: 0 };
+  }
+  if (price.source === "market_default") {
+    return {
+      provider: price.provider,
+      model: price.model,
+      inputMicros: 0,
+      outputMicros: 0,
+      cacheReadMicros: 0,
+      cacheWriteMicros: 0,
+    };
+  }
+  return price;
 }

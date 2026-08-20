@@ -14,9 +14,10 @@ provider through the resolver and an authoring call reaches it through the
 interview, and a rate threaded through both is a rate that ends up set in one
 of them — with the other silently recording zero.
 
-Zero is a real answer: it means nobody supplied a rate, so the ledger records
-tokens and no money. A default would put a number an operator trusts beside a
-figure nobody gave.
+Configured rates are the only rates that feed Cost.Micros. Market defaults are
+public reference values, usually in USD, and Cost.Micros is the installation's
+currency by domain contract. Mixing those units would make money ceilings fail
+open. With no configured rate, zero says "no price in this installation".
 */
 func (r *Registry) PriceFor(providerName, modelName string) (Prices, error) {
 	r.mu.RLock()
@@ -25,7 +26,10 @@ func (r *Registry) PriceFor(providerName, modelName string) (Prices, error) {
 	if !ok {
 		return Prices{}, fmt.Errorf("model: no provider named %q", providerName)
 	}
-	return p.Prices[modelName], nil
+	if price, ok := p.Prices[modelName]; ok {
+		return price, nil
+	}
+	return Prices{}, nil
 }
 
 // withPrice fills a rate the caller did not supply.
