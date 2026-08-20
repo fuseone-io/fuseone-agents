@@ -54,6 +54,29 @@ const datadog: ServerRecipe = {
   url: "https://mcp.datadoghq.com/api/unstable/mcp-server/mcp",
 };
 
+const outline: ServerRecipe = {
+  server: "outline",
+  title: "Outline",
+  category: "knowledge",
+  publisher: "Outline",
+  docsFrom: "publisher",
+  provenance: "documentation",
+  status: "published",
+  configRequirements: ["credential"],
+  authModes: [
+    { type: "oauth2", principal: "user", label: "Outline OAuth" },
+    {
+      type: "bearer",
+      principal: "user",
+      label: "Outline API key",
+      header: "Authorization",
+      prefix: "Bearer",
+    },
+  ],
+  transport: "http",
+  url: "https://example.getoutline.com/mcp",
+};
+
 function remote(name: string): MCPServer {
   return {
     name,
@@ -189,6 +212,23 @@ describe("personal MCP credentials", () => {
 
     expect(api.deleteAsync).toHaveBeenCalledWith("google-workspace");
     expect(api.putAsync).not.toHaveBeenCalled();
+  });
+
+  it("does not describe a user-only server credential as a runtime fallback", () => {
+    open({
+      servers: [
+        remote("outline"),
+      ],
+      recipes: [outline],
+      credentials: [],
+    });
+
+    expect(
+      screen.getByText(/credencial pessoal para chamadas de ferramenta/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/execuções sem a sua própria credencial caem nela/i),
+    ).not.toBeInTheDocument();
   });
 
   it("does not offer personal credentials for local processes", () => {

@@ -24,6 +24,7 @@ import {
 } from "@/features/integrations/mcp/recipe-badges";
 import {
   headerNames,
+  requiresPersonalCredential,
   remoteAuthPlan,
 } from "@/features/integrations/mcp/auth-plan";
 import { CredentialFields } from "@/features/integrations/mcp/credential-fields";
@@ -173,6 +174,10 @@ function PersonalCredentialEditor({
   const remove = useDeleteMCPUserCredential();
   const remotePlan = remoteAuthPlan(recipe?.authModes, recipe !== null);
   const remoteHeaders = headerNames(remotePlan.multiHeaders);
+  const userOnlyCredentials = requiresPersonalCredential(
+    recipe?.authModes,
+    recipe !== null,
+  );
   const [value, setValue] = useState(() => blankCredential());
   const oauthChanged = oauthHasValue(value);
   const secretChanged = remotePlan.secret !== null && value.token.trim() !== "";
@@ -194,9 +199,14 @@ function PersonalCredentialEditor({
     remoteHeaders.length > 0 ||
     remotePlan.oauth !== null;
   const changed = secretChanged || headersComplete || oauthChanged;
-  const hasSharedOnly =
-    (server.hasSecret || server.hasOAuth) &&
-    !credential;
+  const hasSharedCredential = server.hasSecret === true || server.hasOAuth === true;
+  const hasSharedOnly = hasSharedCredential && !credential;
+  const sharedCredentialText = sharedCredentialHint({
+    userOnlyCredentials,
+    hasSharedCredential,
+    hasSharedOnly,
+    t,
+  });
 
   async function save(
     input: { token?: string; headers?: Record<string, string>; oauth?: MCPOAuthGrant },
@@ -248,9 +258,7 @@ function PersonalCredentialEditor({
         <div className="rounded-lg border bg-card p-3">
           <p className="text-xs font-medium">{t("mcp.sharedCredential")}</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            {hasSharedOnly
-              ? t("mcp.sharedCredentialFallback")
-              : t("mcp.sharedCredentialHint")}
+            {sharedCredentialText}
           </p>
         </div>
         <div className="rounded-lg border bg-card p-3">
@@ -337,6 +345,29 @@ function PersonalCredentialEditor({
       </div>
     </section>
   );
+}
+
+function sharedCredentialHint({
+  userOnlyCredentials,
+  hasSharedCredential,
+  hasSharedOnly,
+  t,
+}: {
+  userOnlyCredentials: boolean;
+  hasSharedCredential: boolean;
+  hasSharedOnly: boolean;
+  t: ReturnType<typeof useTranslation>["t"];
+}) {
+  if (userOnlyCredentials && hasSharedCredential) {
+    return t("mcp.sharedCredentialDiscoveryOnly");
+  }
+  if (userOnlyCredentials) {
+    return t("mcp.sharedCredentialNotFallback");
+  }
+  if (hasSharedOnly) {
+    return t("mcp.sharedCredentialFallback");
+  }
+  return t("mcp.sharedCredentialHint");
 }
 
 function personalCredentialLabel(

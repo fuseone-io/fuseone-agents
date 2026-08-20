@@ -9,9 +9,10 @@ import { EmptyCanvas } from "@/features/agents/empty-canvas";
 import { ReadAgainButton } from "@/features/agents/read-again-button";
 import { StepInspector } from "@/features/agents/step-inspector";
 import { StepsTextView } from "@/features/agents/steps-text-view";
-import { undescribed } from "@/features/agents/steps-drift";
+import { contradictions, undescribed } from "@/features/agents/steps-drift";
 import { useStepDrawing } from "@/features/agents/use-step-drawing";
 import { DriftWarning } from "@/features/agents/drift-warning";
+import { StepContradictionWarning } from "@/features/agents/step-contradiction-warning";
 import type { AgentDefinition, Policy, Tool } from "@/lib/api/client";
 
 /**
@@ -39,6 +40,7 @@ export function TabSteps({
   const { steps, pack, selected } = drawing;
 
   const silent = undescribed(steps, draft.instructions);
+  const conflicts = contradictions(steps, draft.instructions, catalogue, pack);
 
   /*
   Read once on arriving here, when there is prose and no stages yet.
@@ -109,7 +111,10 @@ export function TabSteps({
       </div>
 
       <div className="mx-auto w-full max-w-[820px] px-5 pt-4">
-        <DriftWarning tools={silent} />
+        <div className="flex flex-col gap-2">
+          <DriftWarning tools={silent} />
+          <StepContradictionWarning conflicts={conflicts} />
+        </div>
       </div>
 
       {steps.length === 0 ? (

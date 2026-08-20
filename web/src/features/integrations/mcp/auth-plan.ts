@@ -103,6 +103,31 @@ export function dsnEnvMode(modes: AuthMode[] | null | undefined) {
   return modes?.find((mode) => mode.type === "dsn" && mode.env?.trim()) ?? null;
 }
 
+export function requiresPersonalCredential(
+  modes: AuthMode[] | null | undefined,
+  known: boolean,
+) {
+  if (!known) return false;
+  let sawCredential = false;
+  for (const mode of modes ?? []) {
+    if (!credentialAuthMode(mode)) continue;
+    sawCredential = true;
+    if (mode.principal !== "user") return false;
+  }
+  return sawCredential;
+}
+
+function credentialAuthMode(mode: AuthMode) {
+  return (
+    mode.type === "oauth2" ||
+    mode.type === "bearer" ||
+    mode.type === "basic" ||
+    mode.type === "headers" ||
+    mode.type === "config_file" ||
+    mode.type === "dsn"
+  );
+}
+
 export function headerCredential(mode: AuthMode, secret: string): Record<string, string> {
   const header = mode.header?.trim();
   if (!header) return {};

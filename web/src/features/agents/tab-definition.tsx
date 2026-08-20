@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { AgentBasicsSection } from "@/features/agents/agent-basics-section";
 import { InstructionsEditor } from "@/features/agents/instructions-editor";
 import { useInstructionTokens } from "@/features/agents/instruction-tokens-api";
+import { StepContradictionWarning } from "@/features/agents/step-contradiction-warning";
+import { contradictions } from "@/features/agents/steps-drift";
 import type { AgentDefinition, Policy, Tool } from "@/lib/api/client";
 
 /**
@@ -41,6 +43,12 @@ export function TabDefinition({
     draft.model,
     draft.instructions,
   );
+  const conflicts = contradictions(
+    draft.steps ?? [],
+    draft.instructions,
+    tools.catalogue,
+    draft.tools ?? [],
+  );
 
   return (
     <>
@@ -63,6 +71,8 @@ export function TabDefinition({
         tokens={tokens}
         was={editing.published}
       />
+
+      <StepContradictionWarning conflicts={conflicts} onOpen={onSteps} />
 
       <ReadAs steps={(draft.steps ?? []).length} onOpen={onSteps} />
     </>

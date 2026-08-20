@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { undescribed } from "@/features/agents/steps-drift";
+import { contradictions, undescribed } from "@/features/agents/steps-drift";
+import type { Tool } from "@/lib/api/client";
 
 /*
 The drawing and the words are authored separately, so they can disagree.
@@ -35,5 +36,81 @@ describe("what the drawing says and the instructions do not", () => {
     expect(
       undescribed([{ name: "Pensar" }], "Consulte o CRM, responda e encerre."),
     ).toEqual([]);
+  });
+});
+
+/*
+What the instructions forbid and the drawing still does.
+
+This is the other unsafe direction: a Never block is not policy, but a screen
+that lets a step keep the opposite instruction hidden in another tab is how a
+run later appears to ignore its author.
+*/
+describe("what Never forbids and the stages still carry", () => {
+  it("names the stage that still stops on the forbidden subject", () => {
+    expect(
+      contradictions(
+        [
+          {
+            name: "Diagnosticar",
+            stopsWhen: "Se o alerta possuir runbook, consultar via Outline.",
+          },
+        ],
+        "Nunca\nNão tente ler o runbook; ignore essa parte do runbook.",
+        [],
+      ),
+    ).toEqual([{ at: 0, why: "forbiddenStop", term: "runbook" }]);
+  });
+
+  it("names a tool the stage can still reach after Never names it", () => {
+    const catalogue: Tool[] = [
+      {
+        toolId: "outline.list_documents",
+        server: "outline",
+        effect: "read",
+        untrusted: true,
+      },
+    ];
+
+    expect(
+      contradictions(
+        [{ name: "Buscar", reaches: ["outline.list_documents"] }],
+        "Never\nDo not use Outline for this run.",
+        catalogue,
+      ),
+    ).toEqual([
+      {
+        at: 0,
+        why: "forbiddenReach",
+        term: "outline.list_documents",
+        tool: "outline.list_documents",
+      },
+    ]);
+  });
+
+  it("uses the pack when the agent has no stages", () => {
+    const catalogue: Tool[] = [
+      {
+        toolId: "outline.list_documents",
+        server: "outline",
+        effect: "read",
+        untrusted: true,
+      },
+    ];
+
+    expect(
+      contradictions(
+        [],
+        "Never\nDo not use Outline for this run.",
+        catalogue,
+        ["outline.list_documents"],
+      ),
+    ).toEqual([
+      {
+        why: "forbiddenReach",
+        term: "outline.list_documents",
+        tool: "outline.list_documents",
+      },
+    ]);
   });
 });
