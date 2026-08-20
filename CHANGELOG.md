@@ -25,6 +25,18 @@ field" is a commit message.
 
 ---
 
+## [0.15.1] — 2026-08-20
+
+### Fixed
+
+- **A model price accepts decimals again.** The form converted what was typed
+  into micros on every keystroke and rendered the result back, so an
+  intermediate state that is valid typing and invalid as a number — `0`, on the
+  way to `0.5` — was reformatted to empty and the next character landed alone:
+  `0.5` became `5`, ten times the intended rate, in the field that decides what
+  every run is billed. The field now holds text while it is being edited and
+  converts once, on save.
+
 ## [0.15.0] — 2026-08-20
 
 ### Added
