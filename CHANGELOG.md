@@ -25,6 +25,47 @@ field" is a commit message.
 
 ---
 
+## [0.13.0] — 2026-08-20
+
+### Upgrade notes
+
+- **Migration `0049` adds `answer_due` to the channel inbox, defaulting to
+  `false`.** That default is the behaviour, not a detail: every ask recorded
+  before the upgrade counts as already settled, so upgrading does not pour
+  answers for finished runs into Slack threads that went cold — at whatever
+  hour the rollout happens, to people who moved on. Only asks opened afterwards
+  become answer debts.
+
+### Added
+
+- **A run that started from a Slack ask now answers in that thread.** Before,
+  the answer stayed in the trail and Slack got refusals and a generic
+  `finished` card in the root channel, so the person who asked had to go looking
+  for the reply to their own question. An answer erased by retention or a
+  subject request is reported as erased rather than posted blank.
+
+  The `finished` announcement is separate and still fires if the conversation
+  asks for it — a conversation that now gets the real answer in-thread probably
+  wants `Finished` unticked in **What to announce**.
+- **kagent** in the tool catalogue: a customer-operated control plane over HTTP
+  MCP. It suggests no classifications, because its tools are the agents
+  configured in that cluster — one may read Kubernetes state and the next may
+  deploy or delete, so the handshake and the Curator's review are the first
+  trustworthy description of what a specific endpoint can do.
+
+### Fixed
+
+- **The agent page opens on Runs**, with the definition and steps behind tabs
+  and a compact rail. The tool list truncates with a `+n` that expands, because
+  "which tools does this agent reach" is asked before taking an agent out of
+  draft and cannot be answered with "six of them".
+- **The trail renders what it shows.** Payloads are coloured from the parsed
+  value and fall back to the raw text when they are not JSON; a run's closing
+  answer renders as the report the model wrote. In that answer a link is shown
+  with its destination but is not clickable, and an image is not fetched: the
+  answer restates what the agent read from outside, and the trail should not
+  offer an auditor a destination a third party chose.
+
 ## [0.12.0] — 2026-08-20
 
 ### Added
