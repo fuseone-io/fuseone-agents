@@ -3,6 +3,7 @@ package tools_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -246,6 +247,44 @@ func TestInvoke_toolReportsFailure_isSurfacedNotSwallowed(t *testing.T) {
 	// model needs to see it to choose a different approach.
 	if !res.Failed {
 		t.Error("Failed = false for a tool that reported an error")
+	}
+}
+
+func TestInvoke_transportFailureIsStoredForTheModel(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	srv := lookupServer()
+	srv.err = errors.New("Bad Request: Unsupported protocol version: 2026-07-28")
+	c, content := catalogWith(t, srv)
+
+	res, err := c.Invoke(ctx, engine.Call{RunID: "run-1", Seq: 5, Tool: "crm.lookup"})
+	if err == nil {
+		t.Fatal("Invoke succeeded despite a transport failure")
+	}
+	if !res.Failed || res.ErrorCode != "invoke_error" {
+		t.Fatalf("failure = (%v, %q), want invoke_error", res.Failed, res.ErrorCode)
+	}
+	if res.ResultRef == "" {
+		t.Fatal("transport failure did not produce a content reference")
+	}
+	if !res.Labels.Has(domain.LabelUntrusted) {
+		t.Errorf("Labels = %v, want the untrusted label on a failed untrusted tool", res.Labels)
+	}
+
+	stored, err := content.Get(ctx, res.ResultRef)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	got := string(stored)
+	for _, want := range []string{
+		"the tool failed: invoke_error",
+		"crm.lookup",
+		"Unsupported protocol version: 2026-07-28",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("stored diagnostic = %q, want it to contain %q", got, want)
+		}
 	}
 }
 

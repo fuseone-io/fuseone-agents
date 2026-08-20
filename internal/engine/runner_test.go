@@ -51,18 +51,24 @@ type countingTools struct {
 	content     ContentStore
 	body        []byte
 	err         error
+	failed      bool
+	errorCode   string
 }
 
 func (c *countingTools) Invoke(ctx context.Context, call Call) (ToolResult, error) {
 	c.invocations = append(c.invocations, call.Tool)
+	result := ToolResult{Failed: c.failed, ErrorCode: c.errorCode}
+	if len(c.body) > 0 {
+		ref, err := c.content.Put(ctx, call.RunID, call.Seq, c.body)
+		if err != nil {
+			return ToolResult{}, err
+		}
+		result.ResultRef = ref
+	}
 	if c.err != nil {
-		return ToolResult{}, c.err
+		return result, c.err
 	}
-	ref, err := c.content.Put(ctx, call.RunID, call.Seq, c.body)
-	if err != nil {
-		return ToolResult{}, err
-	}
-	return ToolResult{ResultRef: ref}, nil
+	return result, nil
 }
 
 type staticCatalog map[domain.ToolID]domain.Effect
@@ -527,6 +533,87 @@ func TestAdvance_toolCalled_storesArgumentsSoTheCallReplaysWithThem(t *testing.T
 	}
 	if string(turns[i].Args) != string(args) {
 		t.Errorf("replayed args = %q, want %q", turns[i].Args, args)
+	}
+}
+
+func TestAdvance_toolLevelFailureReplaysAsFailure(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t, Proposal{Tool: "crm.lookup", Args: []byte(`{"id":"42"}`)})
+	h.tools.failed = true
+	h.tools.errorCode = "tool_error"
+	h.tools.body = []byte("customer not found")
+
+	if _, err := h.runner.Advance(ctx, h.start(t, generousBudget())); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+
+	var returned domain.ToolReturnedPayload
+	if err := h.payloadOf(t, domain.StepToolReturned, &returned); err != nil {
+		t.Fatalf("no tool_returned step: %v", err)
+	}
+	if !returned.Failed || returned.ErrorCode != "tool_error" {
+		t.Fatalf("returned failure = (%v, %q), want tool_error", returned.Failed, returned.ErrorCode)
+	}
+
+	steps, err := h.ledger.Read(ctx, "run-1", domain.FirstSeq)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	turns, err := BuildTranscript(ctx, h.content, steps)
+	if err != nil {
+		t.Fatalf("BuildTranscript: %v", err)
+	}
+	i := slices.IndexFunc(turns, func(turn Turn) bool { return turn.Kind == TurnToolResult })
+	if i < 0 {
+		t.Fatal("the transcript has no tool result")
+	}
+	if !turns[i].Failed || string(turns[i].Content) != "customer not found" {
+		t.Errorf("tool result = (failed %v, content %q), want failed customer not found",
+			turns[i].Failed, turns[i].Content)
+	}
+}
+
+func TestAdvance_invokeFailureKeepsTheDiagnosticReference(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t, Proposal{Tool: "crm.lookup", Args: []byte(`{"id":"42"}`)})
+	h.tools.err = errors.New("transport refused the call")
+	h.tools.failed = true
+	h.tools.errorCode = "invoke_error"
+	h.tools.body = []byte("the tool failed: invoke_error\ntransport refused the call")
+
+	if _, err := h.runner.Advance(ctx, h.start(t, generousBudget())); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+
+	var returned domain.ToolReturnedPayload
+	if err := h.payloadOf(t, domain.StepToolReturned, &returned); err != nil {
+		t.Fatalf("no tool_returned step: %v", err)
+	}
+	if !returned.Failed || returned.ErrorCode != "invoke_error" {
+		t.Fatalf("returned failure = (%v, %q), want invoke_error", returned.Failed, returned.ErrorCode)
+	}
+	if returned.ResultRef == "" {
+		t.Fatal("invoke failure lost the diagnostic content reference")
+	}
+
+	steps, err := h.ledger.Read(ctx, "run-1", domain.FirstSeq)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	turns, err := BuildTranscript(ctx, h.content, steps)
+	if err != nil {
+		t.Fatalf("BuildTranscript: %v", err)
+	}
+	i := slices.IndexFunc(turns, func(turn Turn) bool { return turn.Kind == TurnToolResult })
+	if i < 0 {
+		t.Fatal("the transcript has no tool result")
+	}
+	if got := string(turns[i].Content); got != "the tool failed: invoke_error\ntransport refused the call" {
+		t.Errorf("tool result content = %q", got)
 	}
 }
 

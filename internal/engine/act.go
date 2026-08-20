@@ -222,9 +222,13 @@ func (r *Runner) invoke(
 		IdemKey:    idemKey,
 	})
 	returned := domain.ToolReturnedPayload{Tool: p.Tool, ResultRef: result.ResultRef}
+	if result.Failed {
+		returned.Failed = true
+		returned.ErrorCode = firstNonEmpty(result.ErrorCode, "tool_error")
+	}
 	if invokeErr != nil {
 		returned.Failed = true
-		returned.ErrorCode = "invoke_error"
+		returned.ErrorCode = firstNonEmpty(result.ErrorCode, "invoke_error")
 	}
 
 	if state, err = r.append(ctx, state, start, domain.Step{
@@ -281,6 +285,15 @@ func idempotencyKey(runID domain.RunID, tool domain.ToolID, args []byte) string 
 	fmt.Fprintf(h, "%s|%s|", runID, tool)
 	_, _ = h.Write(args)
 	return hex.EncodeToString(h.Sum(nil))[:32]
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func digest(b []byte) string {

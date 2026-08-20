@@ -18,6 +18,9 @@ import (
 	"github.com/fuseone/agents/internal/engine"
 )
 
+const toolInvokeErrorLimit = 4096
+const toolInvokeErrorTruncated = "\n\n[truncated by FuseOne: the tool failure diagnostic had %d bytes and this installation stores %d]"
+
 /*
 Calling a tool: the one place in this package where something happens to the
 world.
@@ -50,6 +53,14 @@ func (c *Catalog) Invoke(ctx context.Context, call engine.Call) (engine.ToolResu
 		return engine.ToolResult{}, fmt.Errorf("%w: %s", ErrUnknownServer, entry.Server)
 	}
 
+	out := engine.ToolResult{}
+	// Output from a source the Curator has not vouched for is tainted from the
+	// moment it enters. Everything derived from it inherits the label, which
+	// is what stops an attacker-authored document steering a later action.
+	if entry.Untrusted {
+		out.Labels = domain.NewLabels(domain.LabelUntrusted)
+	}
+
 	var args any
 	if len(call.Args) > 0 {
 		if err := json.Unmarshal(call.Args, &args); err != nil {
@@ -69,18 +80,21 @@ func (c *Catalog) Invoke(ctx context.Context, call engine.Call) (engine.ToolResu
 		Arguments: args,
 	})
 	if err != nil {
-		return engine.ToolResult{}, fmt.Errorf("tools: call %s: %w", call.Tool, err)
+		out.Failed = true
+		out.ErrorCode = "invoke_error"
+		if c.content != nil {
+			ref, storeErr := c.content.Put(ctx, call.RunID, call.Seq, invocationErrorText(call.Tool, err))
+			if storeErr != nil {
+				return engine.ToolResult{}, fmt.Errorf("tools: store failure for %s: %w", call.Tool, storeErr)
+			}
+			out.ResultRef = ref
+		}
+		return out, fmt.Errorf("tools: call %s: %w", call.Tool, err)
 	}
 
-	out := engine.ToolResult{Failed: res.IsError}
+	out.Failed = res.IsError
 	if res.IsError {
 		out.ErrorCode = "tool_error"
-	}
-	// Output from a source the Curator has not vouched for is tainted from the
-	// moment it enters. Everything derived from it inherits the label, which
-	// is what stops an attacker-authored document steering a later action.
-	if entry.Untrusted {
-		out.Labels = domain.NewLabels(domain.LabelUntrusted)
 	}
 
 	text := flatten(res)
@@ -92,6 +106,18 @@ func (c *Catalog) Invoke(ctx context.Context, call engine.Call) (engine.ToolResu
 		out.ResultRef = ref
 	}
 	return out, nil
+}
+
+func invocationErrorText(tool domain.ToolID, err error) []byte {
+	text := fmt.Sprintf("the tool failed: invoke_error\n%s: %v", tool, err)
+	if len(text) <= toolInvokeErrorLimit {
+		return []byte(text)
+	}
+	notice := fmt.Sprintf(toolInvokeErrorTruncated, len(text), toolInvokeErrorLimit)
+	if len(notice) >= toolInvokeErrorLimit {
+		return []byte(notice[:toolInvokeErrorLimit])
+	}
+	return []byte(text[:toolInvokeErrorLimit-len(notice)] + notice)
 }
 
 // flatten renders a tool result as text for the model.
