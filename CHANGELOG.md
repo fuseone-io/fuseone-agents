@@ -25,6 +25,26 @@ field" is a commit message.
 
 ---
 
+## [0.10.0] — 2026-08-20
+
+### Added
+
+- **A conversation can pass the thread as context.** When somebody mentions an
+  agent inside a Slack thread, the earlier messages can be read and handed to
+  the run — bounded to twenty messages and 32KB, with the mention itself
+  excluded. A missing Slack history scope becomes `thread.unavailable` in the
+  input rather than a retry that cannot succeed, so the agent knows the context
+  was unavailable instead of assuming the thread was empty.
+- **A channel can do both at once**: answer mentions and watch permitted
+  sources in the same place.
+
+### Changed
+
+- Thread context is off unless somebody turns it on, and the console says what
+  turning it on means: a mention is a person consenting about their own
+  message, while reading the thread includes messages other people wrote, and
+  those reach the configured model provider. DP-001 records the same.
+
 ## [0.9.0] — 2026-08-19
 
 ### Upgrade notes
