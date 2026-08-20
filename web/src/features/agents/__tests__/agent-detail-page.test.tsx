@@ -19,9 +19,16 @@ vi.mock("@/features/agents/agent-detail-api", () => ({
   }),
 }));
 
-vi.mock("@/features/agents/agent-action-bar", () => ({
-  AgentActionBar: () => <div data-testid="agent-actions" />,
-  ReadOnlyBar: () => <div data-testid="read-only-actions" />,
+vi.mock("@/features/agents/agent-primary", () => ({
+  AgentPrimary: () => <button type="button">Run</button>,
+}));
+
+vi.mock("@/features/agents/agent-more-menu", () => ({
+  AgentMoreMenu: () => <button type="button" aria-label="More actions" />,
+}));
+
+vi.mock("@/features/agents/stage-control", () => ({
+  StageControl: () => <div role="group" aria-label="Trust" />,
 }));
 
 vi.mock("@/features/agents/agent-runs", () => ({
@@ -96,6 +103,9 @@ describe("the agent overview", () => {
       "data-state",
       "active",
     );
+    for (const tab of screen.getAllByRole("tab")) {
+      expect(tab).toHaveClass("flex-none");
+    }
     expect(screen.getByLabelText("runs panel")).toHaveAttribute(
       "data-header",
       "no",
