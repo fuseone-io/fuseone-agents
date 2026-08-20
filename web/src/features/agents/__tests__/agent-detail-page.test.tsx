@@ -108,6 +108,10 @@ describe("the agent overview", () => {
       expect(tab.className).toContain(
         "group-data-[variant=line]/tabs-list:rounded-none",
       );
+      expect(tab.className).toContain(
+        "group-data-[orientation=horizontal]/tabs:after:bottom-0",
+      );
+      expect(tab.className).not.toContain("after:bottom-[-5px]");
     }
     expect(screen.getByLabelText("runs panel")).toHaveAttribute(
       "data-header",
