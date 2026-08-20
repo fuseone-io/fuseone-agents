@@ -25,6 +25,42 @@ field" is a commit message.
 
 ---
 
+## [0.12.0] — 2026-08-20
+
+### Added
+
+- **The editor warns when a step still does what the instructions forbid.** An
+  agent told never to use a tool would use it anyway and read as ignoring its
+  author: a step's `stopsWhen` and the tools in its reach are separate sources,
+  and prose changes neither. The warning names the step and the tool, on both
+  tabs, before publishing.
+
+  It warns rather than refuses. "Never" is prose, and turning prose into policy
+  would have the platform infer intent from text. What removes capability is
+  taking the tool out of reach. The match is loose on purpose — a tool counts
+  as named by its full name or the part after the dot — so it can be silent on
+  a real conflict, and no warning is not a clean bill of health.
+
+### Fixed
+
+- **A tool call no longer dies with `client is closing`.** The HTTP transport
+  opened the optional server-initiated SSE stream, an idle connection proxies
+  close, after which the SDK closed the whole client and unrelated calls
+  failed.
+
+  It stays closed as a boundary rather than as tuning. That stream carries
+  requests a tool server makes back into the worker — sampling among them,
+  which is a model call arriving outside the ceiling and the cost record every
+  other model call goes through. Reopening it needs a policy for notifications
+  and for any server request that spends, not just code that can receive one.
+- **A rediscovered tool server no longer refuses classified tools.** Its
+  catalogue was briefly unclassified, so a tool somebody had ruled on was
+  refused until the next reconcile. Rulings are reapplied as soon as discovery
+  succeeds, through the same path as before — the digest still has to match, so
+  a ruling is reconfirmed against the schema that exists rather than restored.
+- The credentials panel says that a shared credential covers discovery while a
+  tool call needs the personal credential of the principal the run acts for.
+
 ## [0.11.0] — 2026-08-20
 
 ### Added
