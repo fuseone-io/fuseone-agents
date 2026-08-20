@@ -105,6 +105,9 @@ describe("the agent overview", () => {
     );
     for (const tab of screen.getAllByRole("tab")) {
       expect(tab).toHaveClass("flex-none");
+      expect(tab.className).toContain(
+        "group-data-[variant=line]/tabs-list:rounded-none",
+      );
     }
     expect(screen.getByLabelText("runs panel")).toHaveAttribute(
       "data-header",
