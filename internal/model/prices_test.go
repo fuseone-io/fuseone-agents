@@ -93,6 +93,47 @@ func TestPriceFor_aConfiguredRateOverridesTheMarketDefault(t *testing.T) {
 	}
 }
 
+func TestSetPrices_updatesRegisteredProvidersAndAdvancesTheRevision(t *testing.T) {
+	t.Parallel()
+
+	registry := model.NewRegistry(nil)
+	if err := registry.Register(model.Provider{
+		Name: "anthropic", Kind: model.KindAnthropic,
+	}); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	before := registry.PriceRevision()
+
+	if changed := registry.SetPrices(map[string]map[string]model.Prices{
+		"anthropic": {
+			"claude-opus-5": {InputMicros: 7_000_000},
+		},
+	}); !changed {
+		t.Fatal("SetPrices reported no change")
+	}
+	got, err := registry.PriceFor("anthropic", "claude-opus-5")
+	if err != nil {
+		t.Fatalf("price: %v", err)
+	}
+	if got.InputMicros != 7_000_000 {
+		t.Fatalf("price = %+v, want refreshed rate", got)
+	}
+	if registry.PriceRevision() != before+1 {
+		t.Fatalf("revision = %d, want %d", registry.PriceRevision(), before+1)
+	}
+
+	if changed := registry.SetPrices(map[string]map[string]model.Prices{
+		"anthropic": {
+			"claude-opus-5": {InputMicros: 7_000_000},
+		},
+	}); changed {
+		t.Fatal("same price table should not advance the revision")
+	}
+	if registry.PriceRevision() != before+1 {
+		t.Fatalf("revision changed on an identical table")
+	}
+}
+
 func TestPlanner_carriesTheRateWithoutTheCallerAskingForIt(t *testing.T) {
 	t.Parallel()
 

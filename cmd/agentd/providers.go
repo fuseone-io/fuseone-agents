@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/fuseone/agents/internal/vault"
 
@@ -53,25 +54,9 @@ func registerConfigured(ctx context.Context, registry *model.Registry, integrati
 		return fmt.Errorf("read configured providers: %w", err)
 	}
 
-	// The installation's own rates, attached to the provider they belong to.
-	// Read once here rather than at each call: a run and an authoring call
-	// build their clients through different paths, and a price fetched per
-	// call is a price one of those paths forgets.
-	rates, err := integrations.Prices(ctx)
+	priced, err := configuredPrices(ctx, integrations)
 	if err != nil {
-		return fmt.Errorf("read configured prices: %w", err)
-	}
-	priced := map[string]map[string]model.Prices{}
-	for _, r := range rates {
-		if priced[r.Provider] == nil {
-			priced[r.Provider] = map[string]model.Prices{}
-		}
-		priced[r.Provider][r.Model] = model.Prices{
-			InputMicros:      r.InputMicros,
-			OutputMicros:     r.OutputMicros,
-			CacheReadMicros:  r.CacheReadMicros,
-			CacheWriteMicros: r.CacheWriteMicros,
-		}
+		return err
 	}
 
 	for _, p := range configured {
@@ -103,6 +88,69 @@ func registerConfigured(ctx context.Context, registry *model.Registry, integrati
 			"source", "administration", "priced_models", len(provider.Prices))
 	}
 	return nil
+}
+
+// configuredPrices reads the installation's own rates.
+//
+// They are live configuration, unlike a published agent version. Workers
+// refresh them on a timer so saving a rate does not require a deploy, while
+// model calls still run without a database read on every turn.
+func configuredPrices(ctx context.Context, integrations *admin.Integrations) (map[string]map[string]model.Prices, error) {
+	priced := map[string]map[string]model.Prices{}
+	if integrations == nil {
+		return priced, nil
+	}
+	rates, err := integrations.Prices(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("read configured prices: %w", err)
+	}
+	for _, r := range rates {
+		if priced[r.Provider] == nil {
+			priced[r.Provider] = map[string]model.Prices{}
+		}
+		priced[r.Provider][r.Model] = model.Prices{
+			InputMicros:      r.InputMicros,
+			OutputMicros:     r.OutputMicros,
+			CacheReadMicros:  r.CacheReadMicros,
+			CacheWriteMicros: r.CacheWriteMicros,
+		}
+	}
+	return priced, nil
+}
+
+func refreshConfiguredPrices(ctx context.Context, registry *model.Registry, integrations *admin.Integrations) error {
+	priced, err := configuredPrices(ctx, integrations)
+	if err != nil {
+		return err
+	}
+	if registry.SetPrices(priced) {
+		slog.Info("model prices refreshed")
+	}
+	return nil
+}
+
+// priceRefresh bounds how long a rate edited in the console takes to reach a
+// running worker. A failed read leaves the last good rate table in place: an
+// accounting refresh must not turn a priced model back into zero.
+const priceRefresh = 30 * time.Second
+
+func watchConfiguredPrices(ctx context.Context, registry *model.Registry, integrations *admin.Integrations) {
+	if integrations == nil {
+		return
+	}
+	ticker := time.NewTicker(priceRefresh)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := refreshConfiguredPrices(ctx, registry, integrations); err != nil && ctx.Err() == nil {
+				slog.Warn("could not refresh model prices", "err", err)
+			}
+		}
+	}
 }
 
 // registerFromEnv keeps the environment working for an installation that has

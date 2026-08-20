@@ -135,9 +135,10 @@ func PresetNames() []string {
 // The engine only ever sees engine.Planner, so which vendor answers a run is
 // an installation setting rather than an architectural commitment.
 type Registry struct {
-	mu        sync.RWMutex
-	providers map[string]Provider
-	http      *http.Client
+	mu            sync.RWMutex
+	providers     map[string]Provider
+	http          *http.Client
+	priceRevision uint64
 }
 
 func NewRegistry(hc *http.Client) *Registry {
@@ -155,6 +156,7 @@ func (r *Registry) Register(p Provider) error {
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	p.Prices = clonePriceMap(p.Prices)
 	r.providers[p.Name] = p
 	return nil
 }
@@ -163,6 +165,41 @@ func (r *Registry) Names() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return slices.Sorted(maps.Keys(r.providers))
+}
+
+// PriceRevision changes when the installation's configured rates change.
+//
+// A planner owns the rate it was built with. Specs are immutable by version,
+// but prices are live administration state, so a resolver must not reuse a
+// planner after this changes.
+func (r *Registry) PriceRevision() uint64 {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.priceRevision
+}
+
+// SetPrices replaces the configured rates on registered providers.
+//
+// Provider credentials and endpoints are still connection state; this only
+// refreshes the money table operators edit while the worker is running.
+func (r *Registry) SetPrices(priced map[string]map[string]Prices) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	changed := false
+	for name, provider := range r.providers {
+		next := clonePriceMap(priced[name])
+		if maps.Equal(provider.Prices, next) {
+			continue
+		}
+		provider.Prices = next
+		r.providers[name] = provider
+		changed = true
+	}
+	if changed {
+		r.priceRevision++
+	}
+	return changed
 }
 
 // Planner builds the planner an agent runs on.
@@ -196,4 +233,11 @@ func (r *Registry) Planner(providerName string, cfg Config, tools ToolSchemas) (
 	default:
 		return nil, fmt.Errorf("model: provider %q has unknown kind %q", p.Name, p.Kind)
 	}
+}
+
+func clonePriceMap(in map[string]Prices) map[string]Prices {
+	if len(in) == 0 {
+		return nil
+	}
+	return maps.Clone(in)
 }

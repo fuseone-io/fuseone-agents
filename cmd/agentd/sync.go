@@ -197,6 +197,10 @@ func loadSpecs(
 		return nil, err
 	}
 	registerFromEnv(providers)
+	if err := refreshConfiguredPrices(ctx, providers, integrations); err != nil {
+		return nil, err
+	}
+	go watchConfiguredPrices(ctx, providers, integrations)
 
 	if len(providers.Names()) == 0 {
 		slog.Warn("no model provider configured; add one in the administration area")

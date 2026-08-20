@@ -95,7 +95,11 @@ export function PricesPanel() {
       )}
 
       {editing !== undefined && (
-        <PriceForm price={editing} onClose={() => setEditing(undefined)} />
+        <PriceForm
+          price={editing}
+          knownPrices={prices}
+          onClose={() => setEditing(undefined)}
+        />
       )}
     </Panel>
   );

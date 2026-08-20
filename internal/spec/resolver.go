@@ -38,11 +38,12 @@ type Resolver struct {
 	providers *model.Registry
 	tools     model.ToolSchemas
 
-	// planners are cached per agent version. A planner owns an HTTP client and
-	// a stable system prompt, and the version is a content digest, so a cached
-	// planner can never be stale: different bytes are a different version.
+	// planners are cached per agent version and price revision. A planner owns
+	// an HTTP client, a stable system prompt and the rate it accounts with:
+	// the version is immutable, but the price table is live administration
+	// state.
 	mu       sync.RWMutex
-	planners map[domain.VersionID]engine.Planner
+	planners map[domain.VersionID]cachedPlanner
 }
 
 func NewResolver(specs Definitions, providers *model.Registry, tools model.ToolSchemas) *Resolver {
@@ -50,7 +51,7 @@ func NewResolver(specs Definitions, providers *model.Registry, tools model.ToolS
 		specs:     specs,
 		providers: providers,
 		tools:     tools,
-		planners:  make(map[domain.VersionID]engine.Planner),
+		planners:  make(map[domain.VersionID]cachedPlanner),
 	}
 }
 
@@ -86,28 +87,42 @@ func (r *Resolver) Resolve(ctx context.Context, agent domain.AgentID, version do
 }
 
 func (r *Resolver) planner(spec Spec) (engine.Planner, error) {
-	r.mu.RLock()
-	cached, ok := r.planners[spec.Version]
-	r.mu.RUnlock()
-	if ok {
-		return cached, nil
-	}
+	for {
+		priceRevision := r.providers.PriceRevision()
+		r.mu.RLock()
+		cached, ok := r.planners[spec.Version]
+		r.mu.RUnlock()
+		if ok && cached.priceRevision == priceRevision {
+			return cached.planner, nil
+		}
 
-	planner, err := r.providers.Planner(spec.Provider, model.Config{
-		Model:  spec.Model,
-		Effort: spec.Effort,
-		// The body of the definition is the system prompt: what the author
-		// reviewed is what the model receives.
-		SystemPrompt: spec.Instructions,
-	}, r.tools)
-	if err != nil {
-		return nil, fmt.Errorf("spec: %s@%s: %w", spec.ID, spec.Version, err)
-	}
+		planner, err := r.providers.Planner(spec.Provider, model.Config{
+			Model:  spec.Model,
+			Effort: spec.Effort,
+			// The body of the definition is the system prompt: what the author
+			// reviewed is what the model receives.
+			SystemPrompt: spec.Instructions,
+		}, r.tools)
+		if err != nil {
+			return nil, fmt.Errorf("spec: %s@%s: %w", spec.ID, spec.Version, err)
+		}
+		if r.providers.PriceRevision() != priceRevision {
+			continue
+		}
 
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.planners[spec.Version] = planner
-	return planner, nil
+		r.mu.Lock()
+		r.planners[spec.Version] = cachedPlanner{
+			planner:       planner,
+			priceRevision: priceRevision,
+		}
+		r.mu.Unlock()
+		return planner, nil
+	}
+}
+
+type cachedPlanner struct {
+	planner       engine.Planner
+	priceRevision uint64
 }
 
 // envelopes hands the engine the step list as plain tool sets. The engine

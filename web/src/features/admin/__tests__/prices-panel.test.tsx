@@ -146,4 +146,60 @@ describe("price administration", () => {
       ),
     );
   });
+
+  it("offers known providers and models without copying reference prices", async () => {
+    const user = userEvent.setup();
+    hooks.prices = [
+      {
+        provider: "anthropic",
+        model: "claude-haiku-4-5",
+        source: "market_default",
+        currency: "USD",
+        inputMicros: 500_000,
+        outputMicros: 2_500_000,
+      },
+      {
+        provider: "openai",
+        model: "gpt-4o-mini",
+        source: "market_default",
+        currency: "USD",
+        inputMicros: 150_000,
+        outputMicros: 600_000,
+      },
+    ];
+
+    render(<PricesPanel />);
+
+    await user.click(screen.getByRole("button", { name: "Novo" }));
+    await user.click(screen.getByRole("button", { name: "anthropic" }));
+
+    expect(screen.getByLabelText("Provedor")).toHaveValue("anthropic");
+    expect(
+      screen.getByRole("button", { name: "claude-haiku-4-5" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "gpt-4o-mini" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "claude-haiku-4-5" }));
+
+    expect(screen.getByLabelText("Modelo")).toHaveValue("claude-haiku-4-5");
+    expect(screen.getByLabelText("Entrada / milhão")).toHaveValue("");
+
+    const save = screen.getAllByRole("button", { name: "Salvar" }).at(-1);
+    expect(save).toBeDefined();
+    await user.click(save!);
+
+    await waitFor(() =>
+      expect(hooks.put).toHaveBeenCalledWith(
+        expect.objectContaining({
+          provider: "anthropic",
+          model: "claude-haiku-4-5",
+          inputMicros: 0,
+          outputMicros: 0,
+        }),
+        expect.any(Object),
+      ),
+    );
+  });
 });

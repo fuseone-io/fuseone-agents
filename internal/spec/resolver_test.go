@@ -45,3 +45,46 @@ func TestResolve_fromTheRegistry_runsAnAgentNobodyPutOnDisk(t *testing.T) {
 		t.Errorf("pack = %v, want the published tools", resolved.Start.Pack.Tools())
 	}
 }
+
+func TestResolve_rebuildsThePlannerWhenPricesChange(t *testing.T) {
+	registry := openRegistry(t)
+	ctx := context.Background()
+
+	authored := published(t, definition)
+	if err := registry.Publish(ctx, authored, "usr_ana", "acme"); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+
+	providers := model.NewRegistry(nil)
+	if err := providers.Register(model.Provider{
+		Name: "openai", Kind: model.KindOpenAICompatible,
+		BaseURL: "http://127.0.0.1:1", APIKey: "test",
+		Prices: map[string]model.Prices{
+			"test-model": {InputMicros: 1_000_000},
+		},
+	}); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	resolver := spec.NewResolver(registry, providers, nil)
+
+	first, err := resolver.Resolve(ctx, authored.ID, authored.Version)
+	if err != nil {
+		t.Fatalf("Resolve first: %v", err)
+	}
+	if got := model.RateOf(first.Planner); got.InputMicros != 1_000_000 {
+		t.Fatalf("first rate = %+v", got)
+	}
+
+	providers.SetPrices(map[string]map[string]model.Prices{
+		"openai": {
+			"test-model": {InputMicros: 9_000_000},
+		},
+	})
+	second, err := resolver.Resolve(ctx, authored.ID, authored.Version)
+	if err != nil {
+		t.Fatalf("Resolve second: %v", err)
+	}
+	if got := model.RateOf(second.Planner); got.InputMicros != 9_000_000 {
+		t.Fatalf("second rate = %+v, want refreshed planner", got)
+	}
+}

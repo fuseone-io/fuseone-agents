@@ -262,5 +262,9 @@ func assistants(ctx context.Context, integrations *admin.Integrations) *model.Re
 		slog.Warn("could not read configured providers for the authoring assistant", "err", err)
 	}
 	registerFromEnv(providers)
+	if err := refreshConfiguredPrices(ctx, providers, integrations); err != nil {
+		slog.Warn("could not read configured prices for the authoring assistant", "err", err)
+	}
+	go watchConfiguredPrices(ctx, providers, integrations)
 	return providers
 }

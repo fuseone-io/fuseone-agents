@@ -3,27 +3,22 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   PropertiesSheet,
   PropertiesSheetBody,
   PropertiesSheetFooter,
 } from "@/components/shared/properties-sheet";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-} from "@/components/ui/form";
+import { Form } from "@/components/ui/form";
 import { usePutPrice, type ModelPrice } from "@/features/admin/prices-api";
 import {
   initialPriceFormValues,
   modelPriceFromForm,
   PRICE_RATES,
   priceFormSchema,
+  type PriceSuggestion,
   type PriceFormValues,
 } from "@/features/admin/price-form-model";
+import { PriceIdentityFields } from "@/features/admin/price-identity-fields";
 import { PriceRateField } from "@/features/admin/price-rate-field";
 
 /**
@@ -36,9 +31,11 @@ import { PriceRateField } from "@/features/admin/price-rate-field";
  */
 export function PriceForm({
   price,
+  knownPrices,
   onClose,
 }: {
   price: ModelPrice | null;
+  knownPrices: PriceSuggestion[];
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -86,39 +83,10 @@ export function PriceForm({
         >
           <PropertiesSheetBody>
             <div className="grid gap-3 sm:grid-cols-2">
-              <FormField
-                control={form.control}
-                name="provider"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t("agents.provider")}</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        disabled={!!price}
-                        className="font-mono"
-                        placeholder="anthropic"
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="model"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t("admin.model")}</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        disabled={!!price}
-                        className="font-mono"
-                        placeholder="claude-opus-5"
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
+              <PriceIdentityFields
+                form={form}
+                locked={!!price}
+                suggestions={knownPrices}
               />
 
               {PRICE_RATES.map(({ field, label }) => (

@@ -21,6 +21,7 @@ export type PriceRateName = keyof Pick<
   PriceFormValues,
   "inputMicros" | "outputMicros" | "cacheReadMicros" | "cacheWriteMicros"
 >;
+export type PriceSuggestion = Pick<ModelPrice, "provider" | "model">;
 
 export const PRICE_RATES: { field: PriceRateName; label: string }[] = [
   { field: "inputMicros", label: "admin.rateInput" },
@@ -59,6 +60,23 @@ export function modelPriceFromForm(values: PriceFormValues): ModelPrice {
   };
 }
 
+export function knownPriceProviders(prices: PriceSuggestion[]): string[] {
+  return sortedUnique(prices.map((price) => price.provider));
+}
+
+export function knownPriceModels(
+  prices: PriceSuggestion[],
+  provider: string | undefined,
+): string[] {
+  const selected = provider?.trim();
+  if (!selected) return [];
+  return sortedUnique(
+    prices
+      .filter((price) => price.provider === selected)
+      .map((price) => price.model),
+  );
+}
+
 function blankPrice(provider: string, model: string): PriceFormValues {
   return {
     provider,
@@ -78,4 +96,10 @@ function rateMicros(value: string): number {
   const trimmed = value.trim();
   if (trimmed === "") return 0;
   return Math.round(Number(trimmed.replace(",", ".")) * 1_000_000);
+}
+
+function sortedUnique(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b),
+  );
 }
