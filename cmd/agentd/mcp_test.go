@@ -9,6 +9,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -864,6 +865,117 @@ func TestFingerprint_aServerNobodyTouched_keepsItsSession(t *testing.T) {
 	}
 }
 
+func TestConnectServer_legacyHTTPProtocolDoesNotSendModernDiscover(t *testing.T) {
+	t.Parallel()
+
+	var sawDiscover atomic.Bool
+	var sawToolsList atomic.Bool
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+		if r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if r.Method != http.MethodPost {
+			t.Errorf("method = %s, want POST", r.Method)
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			ID     json.RawMessage `json:"id"`
+			Method string          `json:"method"`
+			Params struct {
+				ProtocolVersion string `json:"protocolVersion"`
+			} `json:"params"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Errorf("decode request: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		switch req.Method {
+		case "server/discover":
+			sawDiscover.Store(true)
+			http.Error(w, "Bad Request: Unsupported protocol version: 2026-07-28", http.StatusBadRequest)
+		case "initialize":
+			if got := req.Params.ProtocolVersion; got != "2025-11-25" {
+				t.Errorf("initialize protocol = %q, want legacy 2025-11-25", got)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Mcp-Session-Id", "outline-legacy")
+			respondRPC(t, w, req.ID, map[string]any{
+				"protocolVersion": "2025-11-25",
+				"capabilities":    map[string]any{},
+				"serverInfo":      map[string]any{"name": "outline", "version": "test"},
+			})
+		case "notifications/initialized":
+			if got := r.Header.Get("Mcp-Protocol-Version"); got == "2026-07-28" {
+				t.Errorf("initialized used the modern MCP protocol header")
+			}
+			w.WriteHeader(http.StatusAccepted)
+		case "tools/list":
+			sawToolsList.Store(true)
+			if got := r.Header.Get("Mcp-Protocol-Version"); got == "2026-07-28" {
+				t.Errorf("tools/list used the modern MCP protocol header")
+			}
+			respondRPC(t, w, req.ID, map[string]any{
+				"tools": []map[string]any{{
+					"name":        "search",
+					"description": "Search documents.",
+					"inputSchema": map[string]any{"type": "object"},
+				}},
+			})
+		default:
+			t.Errorf("unexpected MCP method %q", req.Method)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(remote.Close)
+
+	catalog := tools.NewCatalog(engine.NewMemoryContent())
+	err := connectServer(t.Context(), catalog, domain.MCPServer{
+		Name: "outline", Transport: domain.TransportHTTP, URL: remote.URL,
+		ProtocolMode: domain.MCPProtocolLegacy, Enabled: true,
+	}, domain.MCPCredentials{}, nil, nil, credentialPolicy{})
+	if err != nil {
+		t.Fatalf("connectServer: %v", err)
+	}
+	t.Cleanup(func() { _ = catalog.RemoveServer("outline") })
+
+	if sawDiscover.Load() {
+		t.Fatal("the legacy compatibility mode still sent server/discover upstream")
+	}
+	if !sawToolsList.Load() {
+		t.Fatal("the connection did not get far enough to list tools")
+	}
+	if _, known := catalog.Lookup("outline.search"); !known {
+		t.Fatal("the legacy MCP server's tool was not imported")
+	}
+}
+
+func respondRPC(t *testing.T, w http.ResponseWriter, id json.RawMessage, result any) {
+	t.Helper()
+	w.Header().Set("Content-Type", "application/json")
+	if len(id) == 0 {
+		id = json.RawMessage("null")
+	}
+	if err := json.NewEncoder(w).Encode(struct {
+		JSONRPC string          `json:"jsonrpc"`
+		ID      json.RawMessage `json:"id"`
+		Result  any             `json:"result"`
+	}{
+		JSONRPC: "2.0",
+		ID:      id,
+		Result:  result,
+	}); err != nil {
+		t.Fatalf("write JSON-RPC response: %v", err)
+	}
+}
+
 func TestReconciler_aProbeRequestReconnectsThroughTheWorkerPath(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -982,6 +1094,34 @@ func TestReconciler_aUserOnlyRecipeCarriesTheCredentialPolicyToTheConnection(t *
 	}
 }
 
+func TestReconciler_aKnownLegacyRecipeCarriesTheProtocolToTheConnection(t *testing.T) {
+	t.Parallel()
+
+	server := domain.MCPServer{
+		Name: "outline", Transport: domain.TransportHTTP,
+		URL: "https://outline.example.com/mcp", Enabled: true,
+	}
+	configured := &probeServers{servers: []domain.MCPServer{server}}
+	r := newReconciler(
+		tools.NewCatalog(engine.NewMemoryContent()), configured, recordingHealth{},
+	).withProtocolPolicy(protocolRequirement{"outline": domain.MCPProtocolLegacy})
+
+	seen := ""
+	r.connectTo = func(
+		ctx context.Context, catalog *tools.Catalog, server domain.MCPServer,
+		_ domain.MCPCredentials, _ OAuthGrantStore, _ MCPUserCredentialStore, _ credentialPolicy,
+	) error {
+		seen = server.MCPProtocolModeOf()
+		return catalog.AddServer(ctx, server.Name, &testSession{tools: []*mcp.Tool{{Name: "search"}}}, server.Surface)
+	}
+
+	r.reconcile(t.Context())
+
+	if seen != domain.MCPProtocolLegacy {
+		t.Fatalf("protocol mode = %q, want legacy from the known recipe", seen)
+	}
+}
+
 type probeServers struct {
 	servers []domain.MCPServer
 	probes  []string
@@ -1007,6 +1147,12 @@ func (p *probeServers) ClaimMCPProbes(_ context.Context, limit int) ([]string, e
 type personalRequirement map[string]bool
 
 func (p personalRequirement) RequiresPersonalCredential(server string) bool {
+	return p[server]
+}
+
+type protocolRequirement map[string]string
+
+func (p protocolRequirement) MCPProtocolMode(server string) string {
 	return p[server]
 }
 

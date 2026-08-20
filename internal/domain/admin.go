@@ -77,6 +77,12 @@ const (
 	TransportHTTP  = "http"
 )
 
+// MCP protocol modes control how a Streamable HTTP server is negotiated.
+const (
+	MCPProtocolAuto   = "auto"
+	MCPProtocolLegacy = "legacy"
+)
+
 // DefaultMCPConfigFileEnv is where a local server receives the path of a
 // platform-managed configuration file unless an operator names a different
 // variable for that server.
@@ -96,6 +102,10 @@ type MCPServer struct {
 
 	// URL is the endpoint, for http.
 	URL string
+	// ProtocolMode is normally auto. Legacy forces the pre-2026 initialize
+	// handshake for servers whose endpoint rejects the newer server/discover
+	// probe rather than negotiating it.
+	ProtocolMode string
 	// HasSecret reports that a credential document is stored, never what it is.
 	HasSecret bool
 	// HasOAuth reports that the credential document includes an OAuth grant
@@ -163,6 +173,14 @@ func (s MCPServer) TransportOf() string {
 		return TransportStdio
 	}
 	return s.Transport
+}
+
+// MCPProtocolModeOf reads the HTTP protocol negotiation mode.
+func (s MCPServer) MCPProtocolModeOf() string {
+	if s.ProtocolMode == "" {
+		return MCPProtocolAuto
+	}
+	return s.ProtocolMode
 }
 
 // ConfigFileEnvName returns the variable that receives the managed config path.

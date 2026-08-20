@@ -84,6 +84,7 @@ func (s *Server) ListIntegrations(ctx context.Context, _ openapi.ListIntegration
 		server := openapi.MCPServer{
 			Name: srv.Name, Args: &srv.Args, Enabled: srv.Enabled,
 			Transport:     ptr(openapi.Transport(srv.TransportOf())),
+			ProtocolMode:  ptr(openapi.MCPProtocolMode(srv.MCPProtocolModeOf())),
 			HasSecret:     ptr(srv.HasSecret),
 			HasOAuth:      ptr(srv.HasOAuth),
 			HasVariables:  ptr(srv.HasVariables),

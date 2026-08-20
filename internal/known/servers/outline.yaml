@@ -9,6 +9,7 @@ status: published
 config: [credential]
 transport: http
 url: https://<workspace>.getoutline.com/mcp
+protocolMode: legacy
 auth: >
   OAuth by default, or an Outline API key sent as a bearer token. Scope the key
   to the workspace and permissions the agent should actually use; the MCP

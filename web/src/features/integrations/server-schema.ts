@@ -15,6 +15,7 @@ export const serverSchema = z
       .min(1, "integrations.nameServer")
       .regex(/^[a-z0-9][a-z0-9_-]*$/, "integrations.nameCharset"),
     transport: z.enum(["stdio", "http"]),
+    protocolMode: z.enum(["auto", "legacy"]),
     command: z.string(),
     args: z.string(),
     url: z.string(),

@@ -2332,6 +2332,12 @@ paths:
                 url:
                   type: string
                   description: Required for http.
+                protocolMode:
+                  allOf: [{ $ref: '#/components/schemas/MCPProtocolMode' }]
+                  description: >
+                    How the HTTP MCP protocol is negotiated. Omit to use auto.
+                    Legacy exists for endpoints that reject the current
+                    server/discover probe.
                 token:
                   type: string
                   description: >
@@ -4105,6 +4111,17 @@ components:
         which is a far larger thing to hand somebody than a URL.
       enum: [stdio, http]
 
+    MCPProtocolMode:
+      type: string
+      description: |
+        How a Streamable HTTP MCP server is negotiated.
+
+        Auto uses the SDK's current negotiation. Legacy skips the 2026
+        server/discover probe and starts with the pre-2026 initialize flow for
+        servers whose endpoint rejects the newer probe instead of negotiating
+        it. Meaningless for stdio.
+      enum: [auto, legacy]
+
     MCPOAuthGrant:
       type: object
       properties:
@@ -4191,6 +4208,12 @@ components:
         url:
           type: string
           description: The endpoint, for http.
+        protocolMode:
+          allOf: [{ $ref: '#/components/schemas/MCPProtocolMode' }]
+          description: >
+            How the HTTP MCP protocol is negotiated. Absent reads as auto.
+            Legacy exists for servers that are current but have not adopted
+            the 2026 server/discover probe yet.
         hasSecret:
           type: boolean
           description: That a credential document is stored, never what it is.
@@ -4337,6 +4360,12 @@ components:
             variables, generated config file, path access, or no auth at all.
             Keeping this separate from the prose prevents every provider from
             collapsing into "paste a token here".
+        protocolMode:
+          allOf: [{ $ref: '#/components/schemas/MCPProtocolMode' }]
+          description: >
+            Suggested HTTP protocol negotiation mode. It fills the form and
+            decides nothing; legacy is for endpoints that reject the current
+            server/discover probe.
         transport: { $ref: '#/components/schemas/Transport' }
         command: { type: string }
         args:

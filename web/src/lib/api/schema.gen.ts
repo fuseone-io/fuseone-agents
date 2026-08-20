@@ -2605,6 +2605,16 @@ export interface components {
          * @enum {string}
          */
         Transport: "stdio" | "http";
+        /**
+         * @description How a Streamable HTTP MCP server is negotiated.
+         *
+         *     Auto uses the SDK's current negotiation. Legacy skips the 2026
+         *     server/discover probe and starts with the pre-2026 initialize flow for
+         *     servers whose endpoint rejects the newer probe instead of negotiating
+         *     it. Meaningless for stdio.
+         * @enum {string}
+         */
+        MCPProtocolMode: "auto" | "legacy";
         MCPOAuthGrant: {
             /** @description Current OAuth access token. Never returned by a listing. */
             accessToken?: string;
@@ -2657,6 +2667,8 @@ export interface components {
             args?: string[];
             /** @description The endpoint, for http. */
             url?: string;
+            /** @description How the HTTP MCP protocol is negotiated. Absent reads as auto. Legacy exists for servers that are current but have not adopted the 2026 server/discover probe yet. */
+            protocolMode?: components["schemas"]["MCPProtocolMode"];
             /** @description That a credential document is stored, never what it is. */
             hasSecret?: boolean;
             /** @description The sealed credential document includes an OAuth grant for a remote server. The grant never comes back through this API. */
@@ -2774,6 +2786,8 @@ export interface components {
              *     collapsing into "paste a token here".
              */
             authModes?: components["schemas"]["ServerRecipeAuthMode"][];
+            /** @description Suggested HTTP protocol negotiation mode. It fills the form and decides nothing; legacy is for endpoints that reject the current server/discover probe. */
+            protocolMode?: components["schemas"]["MCPProtocolMode"];
             transport?: components["schemas"]["Transport"];
             command?: string;
             args?: string[];
@@ -6062,6 +6076,8 @@ export interface operations {
                     args?: string[];
                     /** @description Required for http. */
                     url?: string;
+                    /** @description How the HTTP MCP protocol is negotiated. Omit to use auto. Legacy exists for endpoints that reject the current server/discover probe. */
+                    protocolMode?: components["schemas"]["MCPProtocolMode"];
                     /** @description Bearer token for a remote server. Omit to keep the stored one — correcting a URL must not demand re-entering a secret nobody has to hand. */
                     token?: string;
                     /** @description Exact HTTP headers for a remote server whose credential is not a bearer token, such as Api-Key or Authorization: Basic. Omit to keep stored headers. Send an empty object to remove them. A non-empty object becomes the active HTTP credential and replaces stored bearer or OAuth material. */

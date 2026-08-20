@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -78,6 +79,9 @@ func transportFor(
 		if err != nil {
 			return nil, noop, fmt.Errorf("%s: prepare HTTP credential: %w", server.Name, err)
 		}
+		if server.MCPProtocolModeOf() == domain.MCPProtocolLegacy {
+			client = legacyMCPClient(client)
+		}
 		return &mcp.StreamableClientTransport{
 			Endpoint:   server.URL,
 			HTTPClient: client,
@@ -96,6 +100,79 @@ func transportFor(
 }
 
 func noop() {}
+
+func legacyMCPClient(client *http.Client) *http.Client {
+	if client == nil {
+		return &http.Client{Transport: legacyMCPDiscover{base: baseHTTPTransport()}, Timeout: 60 * time.Second}
+	}
+	out := *client
+	base := out.Transport
+	if base == nil {
+		base = baseHTTPTransport()
+	}
+	out.Transport = legacyMCPDiscover{base: base}
+	return &out
+}
+
+type legacyMCPDiscover struct {
+	base http.RoundTripper
+}
+
+func (l legacyMCPDiscover) RoundTrip(r *http.Request) (*http.Response, error) {
+	if r.Method != http.MethodPost || r.Body == nil {
+		return l.base.RoundTrip(r)
+	}
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		return nil, err
+	}
+	_ = r.Body.Close()
+
+	out := r.Clone(r.Context())
+	out.Body = io.NopCloser(bytes.NewReader(body))
+	out.ContentLength = int64(len(body))
+
+	var req struct {
+		JSONRPC string          `json:"jsonrpc"`
+		ID      json.RawMessage `json:"id"`
+		Method  string          `json:"method"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil || req.Method != "server/discover" {
+		return l.base.RoundTrip(out)
+	}
+	if len(req.ID) == 0 {
+		req.ID = json.RawMessage("null")
+	}
+	payload, err := json.Marshal(struct {
+		JSONRPC string          `json:"jsonrpc"`
+		ID      json.RawMessage `json:"id"`
+		Error   struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}{
+		JSONRPC: "2.0",
+		ID:      req.ID,
+		Error: struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		}{
+			Code:    -32601,
+			Message: `method not found: "server/discover"`,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &http.Response{
+		StatusCode:    http.StatusOK,
+		Status:        "200 OK",
+		Header:        http.Header{"Content-Type": []string{"application/json"}},
+		Body:          io.NopCloser(bytes.NewReader(payload)),
+		ContentLength: int64(len(payload)),
+		Request:       r,
+	}, nil
+}
 
 type cleanupSession struct {
 	tools.Session
@@ -437,7 +514,7 @@ the row already answers.
 func fingerprint(server domain.MCPServer) string {
 	sum := sha256.Sum256([]byte(strings.Join([]string{
 		server.TransportOf(), server.Command, strings.Join(server.Args, " "), server.URL,
-		server.ConfigFileEnvName(),
+		server.MCPProtocolModeOf(), server.ConfigFileEnvName(),
 		fmt.Sprint(server.Enabled), server.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}, "\x00")))
 	return hex.EncodeToString(sum[:8])
@@ -484,6 +561,10 @@ type personalCredentialPolicy interface {
 	RequiresPersonalCredential(server string) bool
 }
 
+type mcpProtocolPolicy interface {
+	MCPProtocolMode(server string) string
+}
+
 type probeClaimer interface {
 	ClaimMCPProbes(ctx context.Context, limit int) ([]string, error)
 }
@@ -498,6 +579,7 @@ type reconciler struct {
 	publisher Publisher
 	connectTo connector
 	policy    personalCredentialPolicy
+	protocol  mcpProtocolPolicy
 	// connected maps a server name to the fingerprint of what was connected
 	// under it, so a changed address is noticed rather than assumed stable.
 	connected map[string]string
@@ -519,6 +601,11 @@ func (r *reconciler) publishingTo(p Publisher) *reconciler {
 
 func (r *reconciler) withCredentialPolicy(p personalCredentialPolicy) *reconciler {
 	r.policy = p
+	return r
+}
+
+func (r *reconciler) withProtocolPolicy(p mcpProtocolPolicy) *reconciler {
+	r.protocol = p
 	return r
 }
 
@@ -546,7 +633,7 @@ func (r *reconciler) reconcile(ctx context.Context) {
 		if mark == "flag" {
 			continue
 		}
-		if server, still := wanted[name]; still && fingerprint(server) == mark {
+		if server, still := wanted[name]; still && fingerprint(r.withProtocol(server)) == mark {
 			continue
 		}
 		// Gone, switched off, or pointing somewhere else. All three mean the
@@ -621,6 +708,7 @@ func (r *reconciler) consumeProbes(ctx context.Context, wanted map[string]domain
 }
 
 func (r *reconciler) connect(ctx context.Context, server domain.MCPServer) bool {
+	server = r.withProtocol(server)
 	creds, err := r.servers.MCPCredentials(ctx, server.Name)
 	if err != nil {
 		slog.Error("tool server has no readable credential", "server", server.Name, "err", err)
@@ -657,6 +745,18 @@ func (r *reconciler) connect(ctx context.Context, server domain.MCPServer) bool 
 		"server", server.Name, "transport", server.TransportOf(), "tools", count)
 	observe(ctx, r.health, server.Name, true, count, "")
 	return true
+}
+
+func (r *reconciler) withProtocol(server domain.MCPServer) domain.MCPServer {
+	if server.TransportOf() != domain.TransportHTTP ||
+		server.MCPProtocolModeOf() != domain.MCPProtocolAuto ||
+		r.protocol == nil {
+		return server
+	}
+	if mode := r.protocol.MCPProtocolMode(server.Name); mode != "" {
+		server.ProtocolMode = mode
+	}
+	return server
 }
 
 // watch keeps reconciling until ctx is cancelled. Its caller owns it.

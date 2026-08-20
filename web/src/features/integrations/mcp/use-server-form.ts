@@ -44,6 +44,7 @@ export function useServerForm(
     defaultValues: {
       name: server?.name ?? "",
       transport: server?.transport ?? "stdio",
+      protocolMode: server?.protocolMode ?? recipe?.protocolMode ?? "auto",
       command: server?.command ?? "",
       args: (server?.args ?? []).join(" "),
       url: server?.url ?? "",
@@ -87,6 +88,7 @@ export function useServerForm(
       await put.mutateAsync({
         name: values.name,
         transport: values.transport,
+        protocolMode: values.protocolMode,
         command: values.command,
         args: values.args.split(/\s+/).filter(Boolean),
         url: values.url,

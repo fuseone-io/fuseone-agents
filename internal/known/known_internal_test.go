@@ -94,6 +94,34 @@ authModes:
 	}
 }
 
+func TestLoad_protocolModeOnAStdioRecipe_isRefused(t *testing.T) {
+	t.Parallel()
+
+	_, err := load(fstest.MapFS{
+		"servers/crm.yaml": {Data: []byte(minimal("crm", "CRM") + `transport: stdio
+command: crm-mcp
+protocolMode: legacy
+`)},
+	})
+	if err == nil || !strings.Contains(err.Error(), "protocol mode for a non-http server") {
+		t.Fatalf("load = %v, want non-http protocol mode refusal", err)
+	}
+}
+
+func TestLoad_unknownProtocolMode_isRefused(t *testing.T) {
+	t.Parallel()
+
+	_, err := load(fstest.MapFS{
+		"servers/crm.yaml": {Data: []byte(minimal("crm", "CRM") + `transport: http
+url: https://crm.example.com/mcp
+protocolMode: future
+`)},
+	})
+	if err == nil || !strings.Contains(err.Error(), "unknown MCP protocol mode") {
+		t.Fatalf("load = %v, want unknown protocol mode refusal", err)
+	}
+}
+
 func TestLoad_envTargetBelongsOnlyToDSNAuth(t *testing.T) {
 	t.Parallel()
 

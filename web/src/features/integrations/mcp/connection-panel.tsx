@@ -97,6 +97,7 @@ export function ConnectionPanel({
       await put.mutateAsync({
         name: server.name,
         transport: server.transport ?? "stdio",
+        protocolMode: server.protocolMode ?? "auto",
         command: server.command ?? "",
         args: server.args ?? [],
         url: server.url ?? "",

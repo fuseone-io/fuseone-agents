@@ -93,6 +93,22 @@ const datadogWithBearer: ServerRecipe = {
   ],
 };
 
+const outline: ServerRecipe = {
+  server: "outline",
+  title: "Outline",
+  category: "knowledge",
+  publisher: "Outline",
+  docsFrom: "publisher",
+  provenance: "documentation",
+  status: "published",
+  configRequirements: ["credential"],
+  authModes: [{ type: "bearer", principal: "user", label: "Outline API key" }],
+  transport: "http",
+  protocolMode: "legacy",
+  url: "https://example.getoutline.com/mcp",
+  note: "Workspace wiki.",
+};
+
 function open(recipes: ServerRecipe[] = [stripe]) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -203,6 +219,28 @@ describe("available MCP servers", () => {
       }),
     );
     expect(api.mutateAsync.mock.calls[0]?.[0].token).toBeUndefined();
+  });
+
+  it("connects a legacy HTTP recipe with its protocol mode", async () => {
+    open([outline]);
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Conectar Outline" }),
+    );
+    await userEvent.type(screen.getByLabelText(/outline api key/i), "pat");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Conectar sistema" }),
+    );
+
+    expect(api.mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "outline",
+        transport: "http",
+        protocolMode: "legacy",
+        url: "https://example.getoutline.com/mcp",
+        token: "pat",
+      }),
+    );
   });
 
   it("refuses the initial-connect credential conflict instead of choosing one", async () => {

@@ -237,6 +237,23 @@ func TestLoad_rootlyIsRemoteFirstAndKeepsIncidentTextTainted(t *testing.T) {
 	}
 }
 
+func TestLoad_outlineUsesLegacyHTTPProtocolNegotiation(t *testing.T) {
+	t.Parallel()
+
+	servers := load(t)
+	entry, ok := servers.For("outline")
+	if !ok {
+		t.Fatal("outline recipe missing")
+	}
+	if entry.Transport != "http" || entry.ProtocolMode != known.ProtocolLegacy {
+		t.Fatalf("outline connection = %s/%s, want HTTP with legacy MCP negotiation",
+			entry.Transport, entry.ProtocolMode)
+	}
+	if got := servers.MCPProtocolMode("outline"); got != string(known.ProtocolLegacy) {
+		t.Fatalf("MCPProtocolMode(outline) = %q, want legacy", got)
+	}
+}
+
 func TestLoad_operationsPackKeepsRemoteAndInstanceDefinedShapesSeparate(t *testing.T) {
 	t.Parallel()
 

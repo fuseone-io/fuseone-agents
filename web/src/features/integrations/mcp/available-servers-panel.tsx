@@ -422,6 +422,7 @@ function ConnectServerPanel({
     ? {
         name: recipe.server,
         transport: recipe.transport ?? "stdio",
+        protocolMode: recipe.protocolMode ?? "auto",
         command: recipe.command ?? "",
         args: recipe.args ?? [],
         url: recipe.url ?? "",

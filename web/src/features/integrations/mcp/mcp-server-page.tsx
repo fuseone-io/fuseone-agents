@@ -45,6 +45,7 @@ export function MCPServerPage() {
         name: server.name,
         surface: [...chosen],
         transport: server.transport ?? "stdio",
+        protocolMode: server.protocolMode ?? "auto",
         command: server.command ?? "",
         args: server.args ?? [],
         url: server.url ?? "",

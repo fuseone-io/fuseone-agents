@@ -42,6 +42,9 @@ func (s *Server) PutMCPServer(ctx context.Context, req openapi.PutMCPServerReque
 	if req.Body.Url != nil {
 		server.URL = *req.Body.Url
 	}
+	if req.Body.ProtocolMode != nil {
+		server.ProtocolMode = string(*req.Body.ProtocolMode)
+	}
 	if req.Body.ConfigFileEnv != nil {
 		server.ConfigFileEnv = req.Body.ConfigFileEnv
 	}

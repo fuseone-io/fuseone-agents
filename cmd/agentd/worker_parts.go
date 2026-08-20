@@ -154,7 +154,9 @@ it did not connect.
 func (p *workerParts) connectTools(ctx context.Context, servers []string) error {
 	cleanupStaleConfigFiles()
 
-	reconcile := newReconciler(p.catalog, p.integrations, p.health).withCredentialPolicy(p.known)
+	reconcile := newReconciler(p.catalog, p.integrations, p.health).
+		withCredentialPolicy(p.known).
+		withProtocolPolicy(p.known)
 	if p.curator != nil {
 		reconcile = reconcile.publishingTo(p.curator)
 	}

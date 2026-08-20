@@ -59,6 +59,7 @@ this whole design keeps with a person.
 function fill(form: UseFormReturn<ServerFormValues>, recipe: ServerRecipe) {
   form.setValue("name", recipe.server);
   if (recipe.transport) form.setValue("transport", recipe.transport);
+  form.setValue("protocolMode", recipe.protocolMode ?? "auto");
   form.setValue("command", recipe.command ?? "");
   form.setValue("args", (recipe.args ?? []).join(" "));
   form.setValue("url", recipe.url ?? "");

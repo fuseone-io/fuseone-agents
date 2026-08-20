@@ -130,6 +130,9 @@ func (s *Server) ListRecipes(ctx context.Context, _ openapi.ListRecipesRequestOb
 		if e.Transport != "" {
 			recipe.Transport = ptr(openapi.Transport(e.Transport))
 		}
+		if e.ProtocolMode != "" {
+			recipe.ProtocolMode = ptr(openapi.MCPProtocolMode(e.ProtocolMode))
+		}
 		if len(e.Args) > 0 {
 			recipe.Args = ptr(e.Args)
 		}

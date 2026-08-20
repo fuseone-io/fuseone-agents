@@ -90,6 +90,15 @@ const (
 	AuthPrincipalService      AuthPrincipal = "service"
 )
 
+// ProtocolMode says whether a server can use the current Streamable HTTP
+// negotiation or needs the legacy initialize flow.
+type ProtocolMode string
+
+const (
+	ProtocolAuto   ProtocolMode = "auto"
+	ProtocolLegacy ProtocolMode = "legacy"
+)
+
 // AuthMode is one authentication shape documented for a recipe.
 type AuthMode struct {
 	Type      AuthType      `yaml:"type"`
@@ -200,6 +209,8 @@ type Entry struct {
 	Command   string   `yaml:"command,omitempty"`
 	Args      []string `yaml:"args,omitempty"`
 	URL       string   `yaml:"url,omitempty"`
+	// ProtocolMode is only meaningful for HTTP servers. Empty means auto.
+	ProtocolMode ProtocolMode `yaml:"protocolMode,omitempty"`
 	// Auth is the credential it expects, in words a person reads before going
 	// to fetch one. Not a field name and not a schema: what to get, and what
 	// it will be able to reach.
@@ -289,6 +300,10 @@ func check(path string, entry Entry) error {
 		return fmt.Errorf("known: %s suggests http and no address", path)
 	case entry.Transport != "" && entry.Transport != "stdio" && entry.Transport != "http":
 		return fmt.Errorf("known: %s suggests %q, which is not a transport", path, entry.Transport)
+	case entry.ProtocolMode != "" && entry.ProtocolMode != ProtocolAuto && entry.ProtocolMode != ProtocolLegacy:
+		return fmt.Errorf("known: %s suggests unknown MCP protocol mode %q", path, entry.ProtocolMode)
+	case entry.ProtocolMode != "" && entry.Transport != "http":
+		return fmt.Errorf("known: %s names an MCP protocol mode for a non-http server", path)
 	}
 	for _, one := range entry.Suggestions {
 		if one.Why == "" {
@@ -386,6 +401,14 @@ the operator can choose that shared mode on purpose.
 func (s *Servers) RequiresPersonalCredential(server string) bool {
 	entry, ok := s.entries[server]
 	return ok && entry.RequiresPersonalCredential()
+}
+
+func (s *Servers) MCPProtocolMode(server string) string {
+	entry, ok := s.entries[server]
+	if !ok || entry.ProtocolMode == "" {
+		return ""
+	}
+	return string(entry.ProtocolMode)
 }
 
 func (e Entry) RequiresPersonalCredential() bool {

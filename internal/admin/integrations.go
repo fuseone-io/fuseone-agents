@@ -20,6 +20,7 @@ var (
 	ErrNoName           = errors.New("admin: an integration needs a name")
 	ErrNoURL            = errors.New("admin: a remote tool server needs an address")
 	ErrNoCommand        = errors.New("admin: an MCP server needs a command to run")
+	ErrBadMCPProtocol   = errors.New("admin: unknown MCP protocol mode")
 	ErrBadConfigFileEnv = errors.New(
 		"admin: the managed config file environment variable must be a shell variable name")
 	// ErrLocalExecutionNotAccepted means a local server was configured without
@@ -48,10 +49,11 @@ const kindMCPProbe settings.Kind = "mcp_probe"
 // how they are encoded into a settings row.
 
 type storedServer struct {
-	Transport string   `json:"transport,omitempty"`
-	Command   string   `json:"command,omitempty"`
-	Args      []string `json:"args,omitempty"`
-	URL       string   `json:"url,omitempty"`
+	Transport    string   `json:"transport,omitempty"`
+	Command      string   `json:"command,omitempty"`
+	Args         []string `json:"args,omitempty"`
+	URL          string   `json:"url,omitempty"`
+	ProtocolMode string   `json:"protocolMode,omitempty"`
 	// ConfigFileEnv is metadata about a sealed config file, not the file
 	// itself. Empty means the platform default.
 	ConfigFileEnv string `json:"configFileEnv,omitempty"`
@@ -127,6 +129,7 @@ func (i *Integrations) MCPServers(ctx context.Context) ([]domain.MCPServer, erro
 		server := domain.MCPServer{
 			Name: row.Name, Transport: stored.Transport,
 			Command: stored.Command, Args: stored.Args, URL: stored.URL,
+			ProtocolMode:          stored.ProtocolMode,
 			Surface:               stored.Surface,
 			AcceptsLocalExecution: stored.AcceptsLocalExecution,
 			HasSecret:             row.HasSecret,
@@ -166,6 +169,11 @@ func (i *Integrations) PutMCPServer(
 		return ErrLocalExecutionNotAccepted
 	case transport == domain.TransportHTTP && strings.TrimSpace(server.URL) == "":
 		return ErrNoURL
+	case server.MCPProtocolModeOf() != domain.MCPProtocolAuto &&
+		server.MCPProtocolModeOf() != domain.MCPProtocolLegacy:
+		return ErrBadMCPProtocol
+	case transport != domain.TransportHTTP && server.MCPProtocolModeOf() != domain.MCPProtocolAuto:
+		return ErrBadMCPProtocol
 	case server.ConfigFileEnv != nil && !validConfigFileEnv(*server.ConfigFileEnv):
 		return ErrBadConfigFileEnv
 	}
@@ -212,7 +220,9 @@ func (i *Integrations) PutMCPServer(
 			}
 			value, err := json.Marshal(storedServer{
 				Transport: transport, Command: server.Command,
-				Args: server.Args, URL: server.URL, Surface: surface,
+				Args: server.Args, URL: server.URL,
+				ProtocolMode:          storedProtocolMode(transport, server.MCPProtocolModeOf()),
+				Surface:               surface,
 				ConfigFileEnv:         configEnv,
 				HasVariables:          len(merged.Env) > 0,
 				HasOAuth:              merged.OAuth != nil && !merged.OAuth.Empty(),
@@ -241,7 +251,8 @@ func (i *Integrations) PutMCPServer(
 					// trail whose older half no longer answers the query that
 					// reads its newer half.
 					"transport": transport, "command": server.Command, "url": server.URL,
-					"enabled": server.Enabled, "tokenChanged": given.Token != nil,
+					"protocolMode": server.MCPProtocolModeOf(),
+					"enabled":      server.Enabled, "tokenChanged": given.Token != nil,
 					"headersChanged":        given.Headers != nil,
 					"oauthChanged":          given.OAuth != nil,
 					"acceptsLocalExecution": server.AcceptsLocalExecution,
@@ -261,6 +272,13 @@ func configFileEnv(name string) *string {
 		return nil
 	}
 	return &name
+}
+
+func storedProtocolMode(transport, mode string) string {
+	if transport != domain.TransportHTTP || mode == domain.MCPProtocolAuto {
+		return ""
+	}
+	return mode
 }
 
 var configFileEnvPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)

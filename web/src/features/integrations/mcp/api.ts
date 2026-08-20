@@ -37,6 +37,7 @@ export function useSetSurface() {
       name: string;
       surface: string[];
       transport: "stdio" | "http";
+      protocolMode: "auto" | "legacy";
       command: string;
       args: string[];
       url: string;
@@ -48,6 +49,7 @@ export function useSetSurface() {
           params: { path: { name: input.name } },
           body: {
             transport: input.transport,
+            protocolMode: input.protocolMode,
             command: input.command,
             args: input.args,
             url: input.url,
