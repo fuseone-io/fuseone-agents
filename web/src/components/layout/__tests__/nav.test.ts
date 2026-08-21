@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { NAV, PAGE_TITLES, navItemVisible } from "@/components/layout/nav";
+import {
+  NAV,
+  PAGE_TITLES,
+  navItemVisible,
+  subTitleKey,
+} from "@/components/layout/nav";
 
 function item(to: string) {
   for (const group of NAV) {
@@ -40,5 +45,10 @@ describe("the navigation", () => {
 
   it("keeps the deliberate open-installation mode unrestricted", () => {
     expect(navItemVisible(item("/admin"), null)).toBe(true);
+  });
+
+  it("names new records from the section they belong to", () => {
+    expect(subTitleKey("agents", "new")).toBe("agents.newAgent");
+    expect(subTitleKey("policies", "new")).toBe("policies.newPolicy");
   });
 });

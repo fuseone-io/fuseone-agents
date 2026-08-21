@@ -181,8 +181,17 @@ export const PAGE_TITLES: Record<string, string> = {
  * Everything else in a second breadcrumb position is a record — a run, an
  * agent, a policy code — and reads in mono because it is machine-generated.
  */
-export const SUB_TITLES: Record<string, string> = {
-  new: "agents.newAgent",
-  interview: "interview.title",
-  edit: "agents.edit",
+const SUB_TITLES: Record<string, Record<string, string>> = {
+  agents: {
+    new: "agents.newAgent",
+    interview: "interview.title",
+    edit: "agents.edit",
+  },
+  policies: {
+    new: "policies.newPolicy",
+  },
 };
+
+export function subTitleKey(section: string, detail: string) {
+  return SUB_TITLES[section]?.[detail];
+}

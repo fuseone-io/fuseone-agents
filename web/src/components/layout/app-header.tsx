@@ -17,7 +17,7 @@ import {
 } from "@/components/layout/page-actions";
 import { LanguageToggle } from "@/components/shared/language-toggle";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
-import { PAGE_TITLES, SUB_TITLES } from "@/components/layout/nav";
+import { PAGE_TITLES, subTitleKey } from "@/components/layout/nav";
 
 /**
  * 52px, with a rule along its bottom edge.
@@ -60,6 +60,7 @@ function Crumbs({ pathname, label }: { pathname: string; label?: string }) {
   // The key, or the segment itself for a screen with no name registered.
   const key = PAGE_TITLES[section];
   const title = key ? t(key) : section;
+  const subTitle = detail ? subTitleKey(section, detail) : undefined;
 
   return (
     <Breadcrumb>
@@ -86,8 +87,8 @@ function Crumbs({ pathname, label }: { pathname: string; label?: string }) {
                   showing both side by side reads as a duplicate. */}
               {label ? (
                 <BreadcrumbPage>{label}</BreadcrumbPage>
-              ) : SUB_TITLES[detail] ? (
-                <BreadcrumbPage>{t(SUB_TITLES[detail])}</BreadcrumbPage>
+              ) : subTitle ? (
+                <BreadcrumbPage>{t(subTitle)}</BreadcrumbPage>
               ) : (
                 <BreadcrumbPage className="font-mono text-xs">
                   {detail}

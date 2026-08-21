@@ -64,7 +64,7 @@ export function PolicyEditorPage() {
   };
 
   return (
-    <>
+    <div className="flex min-w-0 max-w-full flex-col gap-6 overflow-x-clip">
       <PageHeader
         icon={PAGE_ICONS.policies}
         title={creating ? t("policies.newPolicy") : loaded!.name}
@@ -111,6 +111,6 @@ export function PolicyEditorPage() {
           </Button>
         </div>
       </div>
-    </>
+    </div>
   );
 }
