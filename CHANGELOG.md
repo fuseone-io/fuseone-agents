@@ -25,6 +25,31 @@ field" is a commit message.
 
 ---
 
+## [0.18.0] — 2026-08-21
+
+### Added
+
+- **Simulation is a rehearsal, and reads like one.** Situations come from what
+  already happened, from something you write, or from pasted JSON, and the
+  report says which situations were tried and how each went.
+
+  A case the Gate refused counts as needing a look **even when the run went on
+  to finish**, because that is the finding a rehearsal exists to surface —
+  hiding it under "finished" is how a blocked action reaches publishing review
+  as a green row. A case where the Gate asked for approval is not flagged: a
+  human being consulted is the agent working, and marking it teaches people to
+  ignore the mark.
+
+  The screen does not promise a rehearsal is free, because it is not: tools are
+  dry, and every planning call is billed by the provider, which is why the same
+  ceilings apply. What it promises is that nothing is sent to or changed in an
+  external system.
+
+### Fixed
+
+- The policy editor contains its overflow, and creating a policy is named in
+  the breadcrumb instead of showing an empty crumb.
+
 ## [0.17.1] — 2026-08-20
 
 ### Fixed
