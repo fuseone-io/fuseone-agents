@@ -1,25 +1,39 @@
 import { useTranslation } from "react-i18next";
-import { ChevronDown } from "lucide-react";
+import { Link } from "react-router-dom";
+import type { TFunction } from "i18next";
+import {
+  Brain,
+  Check,
+  ChevronDown,
+  CircleAlert,
+  Clock,
+  MessageSquareOff,
+  Wrench,
+} from "lucide-react";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Mono } from "@/components/shared/mono";
-import { ActRow } from "@/features/agents/simulation-act";
-import { SettledBadge } from "@/features/agents/simulation-settled";
 import { reasonKey } from "@/features/agents/simulation-reason";
+import {
+  caseNeedsLook,
+  stoppedByGate,
+} from "@/features/agents/simulation-tally";
 import { formatMicros } from "@/lib/format";
-import type { SimulationCase } from "@/features/agents/simulation-api";
+import { cn } from "@/lib/utils";
+import type {
+  SimulationAct,
+  SimulationCase,
+} from "@/features/agents/simulation-api";
 
 /**
- * One occurrence, and what the agent would have done with it.
+ * One situation, and what the agent would have done with it.
  *
- * Collapsed by default because the answer an author wants first is how many
- * cases ended badly, not what each one proposed. The proposals are one press
- * away, and that press is what a correction is written from (FU-12).
+ * The technical acts remain visible, but the first sentence says the useful
+ * thing: answered, stopped, waited, or still running.
  */
 export function CaseRow({
   index,
@@ -33,54 +47,49 @@ export function CaseRow({
 }) {
   const { t } = useTranslation();
   const acts = entry.acted ?? [];
-  const unmet = entry.unmet ?? [];
+  const status = statusOf(entry, t);
+  const StatusIcon = status.icon;
+  const blocked = stoppedByGate(entry);
 
   return (
-    <Collapsible className="overflow-hidden rounded-xl border bg-card shadow-sm">
-      {/* The correction sits beside the trigger, not inside it. A control
-          nested in a control is invalid markup, and the hand-rolled span it
-          would take instead loses the focus ring and the keyboard behaviour
-          that make it usable by anybody not holding a mouse. */}
-      <div className="flex items-center">
+    <Collapsible>
+      <div className="flex min-w-0 items-center gap-2 px-4 py-3">
         <CollapsibleTrigger asChild>
-          <Button
-            variant="ghost"
-            className="flex h-auto flex-1 items-center justify-start gap-3 rounded-none px-4 py-3 text-left"
+          <button
+            type="button"
+            className="flex min-w-0 flex-1 items-center gap-3 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <span className="text-sm text-muted-foreground tabular-nums">
-              {t("simulation.caseNumber", { n: index })}
+            <span
+              className={cn(
+                "grid size-5 shrink-0 place-items-center rounded-full",
+                status.className,
+              )}
+            >
+              <StatusIcon className="size-3" aria-hidden />
             </span>
-            <SettledBadge settled={entry.settled} />
-
-            <span className="text-xs text-muted-foreground">
-              {t("simulation.stepCount", { count: entry.steps })}
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">
+                {t("simulation.situationNumber", { n: index })}
+              </p>
+              <p className="truncate text-xs text-muted-foreground">
+                {status.subtitle}
+              </p>
+            </div>
+            <span className={cn("shrink-0 text-xs", status.textClassName)}>
+              {status.state}
             </span>
-            <Mono className="text-xs text-muted-foreground">
-              {formatMicros(entry.cost.micros)}
-            </Mono>
-
-            {entry.reason && <Reason reason={entry.reason} />}
-
-            {entry.expected && entry.expected.length > 0 && (
-              <Badge variant={unmet.length > 0 ? "destructive" : "secondary"}>
-                {unmet.length > 0
-                  ? t("correction.broke", { count: unmet.length })
-                  : t("correction.held")}
-              </Badge>
-            )}
-
             <ChevronDown
               aria-hidden
-              className="ml-auto size-4 shrink-0 text-muted-foreground transition-transform [[data-state=open]_&]:rotate-180"
+              className="size-4 shrink-0 text-muted-foreground transition-transform [[data-state=open]_&]:rotate-180"
             />
-          </Button>
+          </button>
         </CollapsibleTrigger>
 
         {onCorrect && (
           <Button
             variant="ghost"
             size="sm"
-            className="mr-2 h-7 shrink-0 text-muted-foreground"
+            className="h-7 shrink-0 text-muted-foreground"
             onClick={onCorrect}
           >
             {t("correction.correct")}
@@ -89,28 +98,187 @@ export function CaseRow({
       </div>
 
       <CollapsibleContent>
-        {acts.length === 0 ? (
-          <p className="border-t px-4 py-3 text-xs text-muted-foreground">
-            {t("simulation.noActs")}
-          </p>
-        ) : (
-          <ul>
-            {acts.map((act, i) => (
-              <ActRow key={`${act.tool}-${i}`} act={act} />
-            ))}
-          </ul>
-        )}
+        <div className="flex min-w-0 flex-col gap-4 border-t bg-muted/50 px-4 py-4 pl-11">
+          <section className="flex min-w-0 flex-col gap-2">
+            <h3 className="text-2xs uppercase tracking-label text-muted-foreground">
+              {t("simulation.whatItWouldDo")}
+            </h3>
+            {acts.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                {t("simulation.noActs")}
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {acts.map((act, i) => (
+                  <ActStep key={`${act.tool}-${i}`} act={act} />
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section className="flex min-w-0 flex-col gap-2">
+            <h3 className="text-2xs uppercase tracking-label text-muted-foreground">
+              {t("simulation.answerWouldWrite")}
+            </h3>
+            <Outcome entry={entry} />
+          </section>
+
+          {(entry.unmet?.length ?? 0) > 0 ||
+          entry.error ||
+          entry.reason ||
+          blocked ? (
+            <div className="flex gap-2 rounded-lg bg-warning-surface px-3 py-2 text-sm text-warning">
+              <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
+              <span className="min-w-0 break-words">{warning(entry, t)}</span>
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap items-center gap-2">
+            {entry.runId && (
+              <Link
+                to={`/runs/${entry.runId}`}
+                className="text-xs text-text-accent underline-offset-4 hover:underline"
+              >
+                {t("simulation.seeEverything")}
+              </Link>
+            )}
+            <span className="ml-auto font-mono text-xs text-muted-foreground">
+              {t("simulation.meta", {
+                steps: entry.steps,
+                calls: acts.length,
+                cost: formatMicros(entry.cost.micros),
+              })}
+            </span>
+          </div>
+        </div>
       </CollapsibleContent>
     </Collapsible>
   );
 }
 
-/** The stable code as a sentence, or as it came when nobody translated it. */
-function Reason({ reason }: { reason: string }) {
+function ActStep({ act }: { act: SimulationAct }) {
   const { t } = useTranslation();
-  const key = reasonKey(reason);
-  if (!key) {
-    return <Mono className="text-2xs text-muted-foreground">{reason}</Mono>;
+  const blocked = act.verdict === "block" || !act.reached;
+  const Icon = blocked ? MessageSquareOff : act.reached ? Wrench : Brain;
+  const tone = blocked
+    ? "text-warning"
+    : act.reached
+      ? "text-text-accent"
+      : "text-muted-foreground";
+
+  return (
+    <li className="flex min-w-0 items-start gap-3">
+      <span className="grid size-5 shrink-0 place-items-center rounded-full border bg-card">
+        <Icon className={cn("size-3", tone)} aria-hidden />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm">
+          {blocked
+            ? t("simulation.stepBlocked", { tool: act.tool })
+            : t("simulation.stepWouldCall", { tool: act.tool })}
+        </p>
+        <Mono dim className="block truncate text-2xs">
+          {act.tool}
+          {" · "}
+          {t(effectKey(act))}
+          {act.policy || act.rule ? ` · ${act.policy ?? act.rule}` : ""}
+        </Mono>
+      </div>
+      <span className="shrink-0 text-xs text-muted-foreground">
+        {blocked ? t("simulation.heldBack") : t("simulation.dryCall")}
+      </span>
+    </li>
+  );
+}
+
+function Outcome({ entry }: { entry: SimulationCase }) {
+  const { t } = useTranslation();
+  if (entry.outcome && entry.outcome.trim() !== "") {
+    return (
+      <blockquote className="max-w-3xl border-l-2 border-border-strong pl-3 text-sm leading-6 text-muted-foreground whitespace-pre-wrap">
+        {entry.outcome}
+      </blockquote>
+    );
   }
-  return <span className="text-xs text-muted-foreground">{t(key)}</span>;
+  if (entry.outcomeState === "unavailable") {
+    return (
+      <p className="text-sm text-muted-foreground">
+        {t("simulation.outcomeUnavailable")}
+      </p>
+    );
+  }
+  return (
+    <p className="text-sm text-muted-foreground">
+      {t("simulation.noAnswerYet")}
+    </p>
+  );
+}
+
+function statusOf(entry: SimulationCase, t: TFunction) {
+  switch (entry.settled) {
+    case "finished":
+      if (caseNeedsLook(entry)) {
+        return {
+          icon: CircleAlert,
+          className: "bg-warning-surface text-warning",
+          textClassName: "text-warning",
+          state: t("simulation.needsALook"),
+          subtitle: t("simulation.gaveUpBeforeAnswering"),
+        };
+      }
+      return {
+        icon: Check,
+        className: "bg-success-surface text-success",
+        textClassName: "text-success",
+        state: t("simulation.asExpected"),
+        subtitle: t("simulation.answeredHeldBack"),
+      };
+    case "awaiting_approval":
+      return {
+        icon: CircleAlert,
+        className: "bg-warning-surface text-warning",
+        textClassName: "text-warning",
+        state: t("simulation.needsALook"),
+        subtitle: t("simulation.wouldAskSomeone"),
+      };
+    case "parked":
+      return {
+        icon: CircleAlert,
+        className: "bg-warning-surface text-warning",
+        textClassName: "text-warning",
+        state: t("simulation.needsALook"),
+        subtitle: t("simulation.gaveUpBeforeAnswering"),
+      };
+    default:
+      return {
+        icon: Clock,
+        className: "bg-muted text-muted-foreground",
+        textClassName: "text-muted-foreground",
+        state: t("simulation.notRehearsed"),
+        subtitle: t("simulation.waitingForResult"),
+      };
+  }
+}
+
+function warning(entry: SimulationCase, t: TFunction) {
+  if (entry.error) return entry.error;
+  if (entry.reason) {
+    const key = reasonKey(entry.reason);
+    return key ? t(key) : entry.reason;
+  }
+  if (stoppedByGate(entry)) return t("simulation.gateStoppedProposal");
+  return t("simulation.unmetExpectations", {
+    count: entry.unmet?.length ?? 0,
+  });
+}
+
+const EFFECTS: Record<string, string> = {
+  read: "simulation.effectRead",
+  write: "simulation.effectWrite",
+  destructive: "simulation.effectDestructive",
+  financial: "simulation.effectFinancial",
+};
+
+function effectKey(act: SimulationAct): string {
+  return EFFECTS[act.effect] ?? "simulation.effectUnknown";
 }

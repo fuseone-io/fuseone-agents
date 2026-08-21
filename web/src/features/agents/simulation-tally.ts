@@ -54,9 +54,26 @@ export function tally(report: SimulationReport): Tally {
   return counted;
 }
 
+/**
+ * A case that did not go cleanly through to a held answer.
+ *
+ * Gate refusals are counted even if the run later finished: that is the
+ * interesting rehearsal finding, and hiding it under "finished" is how a
+ * blocked action reaches publishing review as a green row.
+ */
+export function caseNeedsLook(c: SimulationCase): boolean {
+  return (
+    c.settled !== "finished" ||
+    (c.unmet?.length ?? 0) > 0 ||
+    c.error !== undefined ||
+    c.reason !== undefined ||
+    stoppedByGate(c)
+  );
+}
+
 /** A case the Gate refused at least once — counted apart from where it ended,
  *  because a run that was refused and carried on still needs looking at. */
-function stoppedByGate(c: SimulationCase): boolean {
+export function stoppedByGate(c: SimulationCase): boolean {
   return (c.acted ?? []).some((act) => act.verdict === "block");
 }
 

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { countCases, tally } from "@/features/agents/simulation-tally";
+import {
+  caseNeedsLook,
+  countCases,
+  tally,
+} from "@/features/agents/simulation-tally";
 import type { SimulationCase } from "@/features/agents/simulation-api";
 
 function aCase(over: Partial<SimulationCase>): SimulationCase {
@@ -65,5 +69,26 @@ describe("tally", () => {
     });
 
     expect(counted.micros).toBe(4000);
+  });
+});
+
+describe("caseNeedsLook", () => {
+  it("keeps a finished run with a blocked proposal out of the green bucket", () => {
+    // The report is read before publishing. A run that finished only after a
+    // Gate refusal is exactly the rehearsal finding somebody needs to review.
+    expect(
+      caseNeedsLook(
+        aCase({
+          acted: [
+            {
+              tool: "crm.refund",
+              effect: "financial",
+              verdict: "block",
+              reached: false,
+            },
+          ],
+        }),
+      ),
+    ).toBe(true);
   });
 });

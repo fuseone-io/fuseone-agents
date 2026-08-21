@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { SimulationStart } from "@/features/agents/simulation-start";
+import { setLocale } from "@/i18n";
 import type { Agent } from "@/lib/api/client";
 
 const RUNNING_AGENT: Agent = {
@@ -61,42 +62,95 @@ function stubStart() {
 }
 
 describe("starting a simulation", () => {
-  beforeEach(() => vi.restoreAllMocks());
+  beforeEach(() => {
+    setLocale("en-US");
+    vi.restoreAllMocks();
+  });
   afterEach(() => vi.unstubAllGlobals());
 
-  it("will not start with nothing to run", async () => {
+  it("will not start a pasted set with nothing to run", async () => {
     // A set of zero cases is a report of zero rows somebody reads as a pass.
+    const user = userEvent.setup();
     renderStart();
-    expect(screen.getByRole("button", { name: "Simular" })).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "Paste JSON" }));
+
+    expect(
+      screen.getByRole("button", { name: "Rehearse 0 situations" }),
+    ).toBeDisabled();
   });
 
   it("will not start while the agent is stopped", async () => {
     renderStart({ agent: { ...RUNNING_AGENT, paused: true } });
 
-    expect(screen.getByText("Este agente está parado")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Simular" })).toBeDisabled();
+    expect(screen.getByText("This agent is stopped")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Rehearse saved situations" }),
+    ).toBeDisabled();
   });
 
   it("counts the cases as they are pasted, ignoring the trailing newline", async () => {
     const user = userEvent.setup();
     renderStart();
 
-    await user.type(screen.getByLabelText("Casos"), '{{"a":1}\n{{"a":2}\n');
+    await user.click(screen.getByRole("button", { name: "Paste JSON" }));
+    await user.type(screen.getByLabelText("Cases"), '{{"a":1}\n{{"a":2}\n');
 
-    expect(await screen.findByText("2 casos")).toBeInTheDocument();
+    expect(await screen.findByText(/2 lines read/)).toBeInTheDocument();
   });
 
-  it("hands the simulation back so the page can follow it", async () => {
+  it("starts from saved situations by default", async () => {
     const posted = stubStart();
     const user = userEvent.setup();
     const onStarted = renderStart();
 
-    await user.type(screen.getByLabelText("Casos"), '{{"a":1}');
-    await user.click(screen.getByRole("button", { name: "Simular" }));
+    await user.click(
+      screen.getByRole("button", { name: "Rehearse saved situations" }),
+    );
+
+    await waitFor(() => expect(onStarted).toHaveBeenCalledWith("sim_triage_1"));
+    expect(JSON.parse(posted[0]!)).toEqual({ corpus: true });
+  });
+
+  it("hands pasted JSON back so the page can follow it", async () => {
+    const posted = stubStart();
+    const user = userEvent.setup();
+    const onStarted = renderStart();
+
+    await user.click(screen.getByRole("button", { name: "Paste JSON" }));
+    await user.type(screen.getByLabelText("Cases"), '{{"a":1}');
+    await user.click(
+      screen.getByRole("button", { name: "Rehearse 1 situation" }),
+    );
 
     await waitFor(() => expect(onStarted).toHaveBeenCalledWith("sim_triage_1"));
     // The cases go up as they were written: the server splits and validates
     // them, and a second parse here could disagree about what a case is.
     expect(JSON.parse(posted[0]!)).toEqual({ cases: '{"a":1}' });
+  });
+
+  it("turns a hand-written situation into JSONL only when rehearsing", async () => {
+    const posted = stubStart();
+    const user = userEvent.setup();
+    const onStarted = renderStart();
+
+    await user.click(screen.getByRole("button", { name: "Write my own" }));
+    await user.type(screen.getByLabelText(/What arrived/), "Checkout alert");
+    await user.type(
+      screen.getByLabelText("The message itself"),
+      "pod restarted twice",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Add this situation" }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Rehearse 1 situation" }),
+    );
+
+    await waitFor(() => expect(onStarted).toHaveBeenCalledWith("sim_triage_1"));
+    expect(JSON.parse(JSON.parse(posted[0]!).cases)).toEqual({
+      subject: "Checkout alert",
+      message: "pod restarted twice",
+    });
   });
 });

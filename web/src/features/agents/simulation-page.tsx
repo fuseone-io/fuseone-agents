@@ -1,6 +1,7 @@
 import { useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { FlaskConical } from "lucide-react";
+import { FlaskConical, ShieldCheck } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
 import { useAgent } from "@/features/agents/agent-detail-api";
@@ -33,12 +34,23 @@ export function SimulationPage() {
       <PageHeader
         icon={FlaskConical}
         title={t("simulation.title")}
-        description={agentId}
+        description={t("simulation.subtitle", {
+          agent: agent.data?.agent.name || agentId,
+        })}
       >
         {id !== "" && (
           <Button variant="outline" onClick={() => setParams({})}>
             {t("simulation.again")}
           </Button>
+        )}
+        {id === "" && (
+          <Badge
+            variant="secondary"
+            className="gap-1 bg-surface-accent text-text-accent"
+          >
+            <ShieldCheck className="size-3" aria-hidden />
+            {t("simulation.safePill")}
+          </Badge>
         )}
       </PageHeader>
 
