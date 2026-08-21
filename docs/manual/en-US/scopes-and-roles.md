@@ -12,11 +12,11 @@ order: 9
 
 **Role** says *what* a person may do. And a role never stands alone — it is always granted **inside a scope**.
 
-The same person can be an author in `cora/platform` and only an approver in `cora/finance`. That is not an exception; it is the design.
+The same person can be an author in `acme/platform` and only an approver in `acme/finance`. That is not an exception; it is the design.
 
 ## An area is scoped by its company
 
-`platform` inside `cora` and `platform` inside `default` are **different areas**, despite the identical name.
+`platform` inside `acme` and `platform` inside `default` are **different areas**, despite the identical name.
 
 This matters when publishing: you choose the pair, not just the area. An agent published into the wrong pair runs with somewhere else's permissions.
 

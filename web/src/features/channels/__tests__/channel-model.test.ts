@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { visibleChannels, type Channel } from "@/features/channels/channel-model";
 
 const emptyChannel: Channel = {
-  name: "cora-slack",
+  name: "acme-slack",
   kind: "slack",
-  workspace: "Cora",
+  workspace: "Acme",
   deliveryMode: "socket",
   enabled: true,
   hasCredential: true,

@@ -37,7 +37,7 @@ vi.mock("@/features/companies/api", async (importOriginal) => {
 describe("company administration", () => {
   beforeEach(() => {
     hooks.companies = [
-      { id: "cora", label: "Cora", areas: 2, archived: false },
+      { id: "acme", label: "Acme", areas: 2, archived: false },
       { id: "legacy", label: "Legacy", areas: 1, archived: true },
     ];
     hooks.refetch.mockReset();
@@ -50,11 +50,11 @@ describe("company administration", () => {
     render(<CompaniesPanel />);
 
     expect(screen.getByRole("searchbox")).toBeInTheDocument();
-    expect(screen.getByText("Cora")).toBeInTheDocument();
+    expect(screen.getByText("Acme")).toBeInTheDocument();
     expect(screen.getByText("Legacy")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Retiradas" }));
-    expect(screen.queryByText("Cora")).not.toBeInTheDocument();
+    expect(screen.queryByText("Acme")).not.toBeInTheDocument();
     expect(screen.getByText("Legacy")).toBeInTheDocument();
 
     await userEvent.type(screen.getByRole("searchbox"), "missing");
@@ -64,17 +64,17 @@ describe("company administration", () => {
   it("edits the displayed name without changing the identifier", async () => {
     render(<CompaniesPanel />);
 
-    await userEvent.click(screen.getByRole("button", { name: /Cora/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Acme/ }));
     await userEvent.click(screen.getByRole("button", { name: "Editar" }));
     expect(screen.getByLabelText("Identificador")).toBeDisabled();
 
     await userEvent.clear(screen.getByLabelText("Como aparece"));
-    await userEvent.type(screen.getByLabelText("Como aparece"), "Cora Labs");
+    await userEvent.type(screen.getByLabelText("Como aparece"), "Acme Labs");
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
     expect(hooks.update).toHaveBeenCalledWith({
-      company: "cora",
-      label: "Cora Labs",
+      company: "acme",
+      label: "Acme Labs",
     });
   });
 });

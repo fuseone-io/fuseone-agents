@@ -38,15 +38,15 @@ describe("channel card", () => {
     const conversation: Channel["conversations"][number] = {
       id: "C-alerts",
       label: "#alerts",
-      scope: { company: "cora", area: "platform" },
+      scope: { company: "acme", area: "platform" },
       mode: "mentions",
       wants: ["parked", "failed"],
       enabled: true,
     };
     const edit = renderCard({
-      name: "cora-slack",
+      name: "acme-slack",
       kind: "slack",
-      workspace: "Cora",
+      workspace: "Acme",
       deliveryMode: "socket",
       enabled: true,
       hasCredential: true,
@@ -63,9 +63,9 @@ describe("channel card", () => {
     setLocale("en-US");
     renderCard(
       {
-        name: "cora-slack",
+        name: "acme-slack",
         kind: "slack",
-        workspace: "Cora",
+        workspace: "Acme",
         deliveryMode: "socket",
         enabled: true,
         hasCredential: true,
@@ -74,7 +74,7 @@ describe("channel card", () => {
           {
             id: "C-alerts",
             label: "#alerts",
-            scope: { company: "cora", area: "platform" },
+            scope: { company: "acme", area: "platform" },
             mode: "mentions",
             wants: ["failed"],
             enabled: true,
@@ -82,7 +82,7 @@ describe("channel card", () => {
           {
             id: "C-approvals",
             label: "#approvals",
-            scope: { company: "cora", area: "platform" },
+            scope: { company: "acme", area: "platform" },
             mode: "mentions",
             wants: ["parked"],
             enabled: true,

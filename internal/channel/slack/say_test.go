@@ -111,7 +111,7 @@ func TestSayOutcome_translatesMarkdownToSlackWithoutLettingItAct(t *testing.T) {
 		"",
 		"**Sistema** `engineering-ai-agents`",
 		"",
-		"- veja [runbook](https://wiki.cora.tools/doc/x)",
+		"- veja [runbook](https://wiki.acme.example/doc/x)",
 		"![pixel](https://evil.example/p.png)",
 		"<!channel>",
 	}, "\n")
@@ -124,7 +124,7 @@ func TestSayOutcome_translatesMarkdownToSlackWithoutLettingItAct(t *testing.T) {
 	for _, want := range []string{
 		"*Diagnóstico*",
 		"*Sistema* `engineering-ai-agents`",
-		"runbook (https://wiki.cora.tools/doc/x)",
+		"runbook (https://wiki.acme.example/doc/x)",
 		"pixel (image: https://evil.example/p.png)",
 		"&lt;!channel&gt;",
 	} {

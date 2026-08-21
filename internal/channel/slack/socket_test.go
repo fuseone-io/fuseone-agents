@@ -19,7 +19,7 @@ func TestSocketReceiver_acknowledgesOnlyAfterTheAskIsRecorded(t *testing.T) {
 	inbox := &socketInbox{}
 
 	ack, err := (slack.SocketReceiver{
-		Channel: "cora-slack",
+		Channel: "acme-slack",
 		Inbox:   inbox,
 	}).Handle(context.Background(), socketFrame("env-1", slackEvent()))
 	if err != nil {
@@ -28,7 +28,7 @@ func TestSocketReceiver_acknowledgesOnlyAfterTheAskIsRecorded(t *testing.T) {
 	if string(ack) != `{"envelope_id":"env-1"}` {
 		t.Fatalf("ack = %s", ack)
 	}
-	if inbox.got.Channel != "cora-slack" ||
+	if inbox.got.Channel != "acme-slack" ||
 		inbox.got.Conversation != "C07" ||
 		inbox.got.EventID != "Ev1" ||
 		inbox.got.Message != "1786.42" ||
@@ -44,7 +44,7 @@ func TestSocketReceiver_aMentionMarksTheSlackAccountAsSeen(t *testing.T) {
 	seen := &socketSeen{}
 
 	ack, err := (slack.SocketReceiver{
-		Channel: "cora-slack",
+		Channel: "acme-slack",
 		Inbox:   inbox,
 		Seen:    seen,
 	}).Handle(context.Background(), socketFrame("env-seen", slackEvent()))
@@ -54,7 +54,7 @@ func TestSocketReceiver_aMentionMarksTheSlackAccountAsSeen(t *testing.T) {
 	if string(ack) != `{"envelope_id":"env-seen"}` {
 		t.Fatalf("ack = %s", ack)
 	}
-	if seen.channel != "cora-slack" || seen.account != "U505" || seen.conversation != "C07" {
+	if seen.channel != "acme-slack" || seen.account != "U505" || seen.conversation != "C07" {
 		t.Fatalf("seen = %s/%s/%s, want the signed Slack account", seen.channel, seen.account, seen.conversation)
 	}
 	if inbox.got.EventID != "Ev1" {
@@ -67,7 +67,7 @@ func TestSocketReceiver_whenTheInboxCannotRecord_doesNotAcknowledge(t *testing.T
 	inbox := &socketInbox{err: errors.New("postgres is down")}
 
 	ack, err := (slack.SocketReceiver{
-		Channel: "cora-slack",
+		Channel: "acme-slack",
 		Inbox:   inbox,
 	}).Handle(context.Background(), socketFrame("env-1", slackEvent()))
 	if err == nil {
@@ -81,7 +81,7 @@ func TestSocketReceiver_whenTheInboxCannotRecord_doesNotAcknowledge(t *testing.T
 func TestSocketReceiver_ordinarySocketMessagesAreAcknowledgedAndIgnored(t *testing.T) {
 	t.Parallel()
 	ack, err := (slack.SocketReceiver{
-		Channel: "cora-slack",
+		Channel: "acme-slack",
 		Inbox:   &socketInbox{},
 	}).Handle(context.Background(), socketFrame("env-1", map[string]any{
 		"type":     "event_callback",
@@ -101,7 +101,7 @@ func TestSocketReceiver_aWatchedSourceRecordsTheConfiguredAutomation(t *testing.
 	inbox := &socketInbox{}
 
 	ack, err := (slack.SocketReceiver{
-		Channel: "cora-slack",
+		Channel: "acme-slack",
 		Inbox:   inbox,
 		Rules: socketRules{
 			source: "B-alerts", agent: "troubleshooting-sre", runAs: "usr_opsbot",
@@ -133,7 +133,7 @@ func TestSocketReceiver_aMessageFromAnotherSourceDoesNotEnterTheInbox(t *testing
 	inbox := &socketInbox{}
 
 	ack, err := (slack.SocketReceiver{
-		Channel: "cora-slack",
+		Channel: "acme-slack",
 		Inbox:   inbox,
 		Rules: socketRules{
 			source: "B-alerts", agent: "troubleshooting-sre", runAs: "usr_opsbot",

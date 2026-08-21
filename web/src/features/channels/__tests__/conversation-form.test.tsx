@@ -48,7 +48,7 @@ function stubApi(
         : url.includes("/available")
         ? { items: [] }
         : url.includes("/admin/scopes")
-          ? { items: [{ company: "cora", area: "devops", label: "Devops" }] }
+          ? { items: [{ company: "acme", area: "devops", label: "Devops" }] }
           : url.includes("/admin/people")
             ? {
                 items: [
@@ -81,7 +81,7 @@ function renderForm(
   return render(
     <QueryClientProvider client={client}>
       <ConversationForm
-        channel="cora-slack"
+        channel="acme-slack"
         conversation={conversation}
         onClose={() => {}}
       />
@@ -148,7 +148,7 @@ describe("conversation configuration", () => {
     renderForm({
       id: "C-alerts",
       label: "#alerts",
-      scope: { company: "cora", area: "devops" },
+      scope: { company: "acme", area: "devops" },
       mode: "watch",
       sources: ["B0123ALERT"],
       agent: "",
@@ -213,7 +213,7 @@ describe("conversation configuration", () => {
     renderForm({
       id: "C-alerts",
       label: "#alerts",
-      scope: { company: "cora", area: "devops" },
+      scope: { company: "acme", area: "devops" },
       mode: "watch",
       sources: ["B0123ALERT", "A0123APP"],
       agent: "troubleshooting-sre",
@@ -240,7 +240,7 @@ describe("conversation configuration", () => {
     renderForm({
       id: "C-alerts",
       label: "#alerts",
-      scope: { company: "cora", area: "devops" },
+      scope: { company: "acme", area: "devops" },
       mode: "mentions",
       threadContext: false,
       wants: ["parked", "failed"],
@@ -256,7 +256,7 @@ describe("conversation configuration", () => {
     );
     const put = requests.find((r) => r.method === "PUT");
     expect(put?.body).toMatchObject({
-      company: "cora",
+      company: "acme",
       area: "devops",
       mode: "mentions",
       threadContext: true,
@@ -270,7 +270,7 @@ describe("conversation configuration", () => {
     renderForm({
       id: "C-alerts",
       label: "#alerts",
-      scope: { company: "cora", area: "devops" },
+      scope: { company: "acme", area: "devops" },
       mode: "both",
       threadContext: false,
       sources: ["B0123ALERT", "A0123APP"],
@@ -290,7 +290,7 @@ describe("conversation configuration", () => {
     );
     const put = requests.find((r) => r.method === "PUT");
     expect(put?.body).toMatchObject({
-      company: "cora",
+      company: "acme",
       area: "devops",
       mode: "both",
       threadContext: true,

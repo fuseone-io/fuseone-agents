@@ -10,7 +10,7 @@ import type { Agent } from "@/lib/api/client";
 const RUNNING_AGENT: Agent = {
   agentId: "triage",
   versionId: "v1",
-  scope: { company: "cora", area: "platform" },
+  scope: { company: "acme", area: "platform" },
   name: "Triage",
   provider: "anthropic",
   model: "claude-sonnet-5",

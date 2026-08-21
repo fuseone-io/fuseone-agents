@@ -353,7 +353,7 @@ field" is a commit message.
   scope used to be resolved by matching the area name against the caller's
   grants and taking the company from whichever matched first — and area
   identifiers are scoped by a company, so an author editing an agent shown as
-  `cora/platform` could publish it into `default/platform`. The authority used
+  `acme/platform` could publish it into `default/platform`. The authority used
   was not the authority the screen displayed. A request that names no company
   is now refused rather than inferred, so **an automation that publishes
   through the API without a company will start receiving 403** and needs the

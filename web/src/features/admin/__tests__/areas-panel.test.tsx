@@ -55,12 +55,12 @@ vi.mock("@/features/session/api", async (importOriginal) => {
 describe("areas administration", () => {
   beforeEach(() => {
     hooks.areas = [
-      { company: "cora", area: "support", label: "Support" },
+      { company: "acme", area: "support", label: "Support" },
       { company: "acme", area: "finance", label: "Finance" },
     ];
     hooks.companies = [
       { id: "acme", label: "Acme", areas: 1, archived: false },
-      { id: "cora", label: "Cora", areas: 1, archived: false },
+      { id: "acme", label: "Acme", areas: 1, archived: false },
     ];
     hooks.me = {
       id: "usr_admin",

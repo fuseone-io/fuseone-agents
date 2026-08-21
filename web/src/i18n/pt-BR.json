@@ -1987,7 +1987,7 @@
     "whereFrom": "De onde veio",
     "whereFromPlaceholder": "#alerts",
     "whichSystem": "Qual sistema",
-    "whichSystemPlaceholder": "cora/checkout",
+    "whichSystemPlaceholder": "acme/checkout",
     "wouldAskSomeone": "Pediria decisão de uma pessoa antes de continuar",
     "wouldHaveActed": "Chegaria a ferramentas",
     "wouldHaveCalled": "chamaria aqui",

@@ -12,11 +12,11 @@ order: 9
 
 **Papel** diz *o que* uma pessoa pode fazer. E papel nunca vale sozinho — ele é sempre concedido **dentro de um escopo**.
 
-Um mesmo alguém pode ser autor em `cora/plataforma` e apenas aprovador em `cora/financeiro`. Isso não é exceção; é o desenho.
+Um mesmo alguém pode ser autor em `acme/plataforma` e apenas aprovador em `acme/financeiro`. Isso não é exceção; é o desenho.
 
 ## Área é escopada por empresa
 
-`plataforma` dentro de `cora` e `plataforma` dentro de `default` são **áreas diferentes**, apesar do nome igual.
+`plataforma` dentro de `acme` e `plataforma` dentro de `default` são **áreas diferentes**, apesar do nome igual.
 
 Isso importa na hora de publicar: você escolhe a dupla, não só a área. Um agente publicado na dupla errada roda com as permissões de outro lugar.
 

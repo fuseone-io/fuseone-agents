@@ -307,7 +307,9 @@ func TestRender_theSameDefinitionTwice_isTheSameVersion(t *testing.T) {
 func TestPublish_refusesADefinitionForAnotherCompany(t *testing.T) {
 	r := openRegistry(t)
 	ctx := context.Background()
-	published := published(t, strings.Replace(definition, "area: cx", "company: cora\narea: cx", 1))
+	// Two different companies on purpose: the definition names one and the
+	// publisher acts for another, which is the whole refusal being asserted.
+	published := published(t, strings.Replace(definition, "area: cx", "company: globex\narea: cx", 1))
 
 	if err := r.Publish(ctx, published, "usr_ana", "acme"); err == nil {
 		t.Fatal("Publish succeeded with a definition for another company")

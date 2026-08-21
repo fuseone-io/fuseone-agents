@@ -63,7 +63,7 @@ func (s *Server) PublishAgent(
 	// Publishing into an area needs the right to publish into the exact
 	// company/area pair the author chose. Area identifiers are scoped by
 	// company; inferring the company from the first matching grant is how an
-	// editor showing cora/platform can publish default/platform.
+	// editor showing acme/platform can publish default/platform.
 	scope, allowed := publishScope(ctx,
 		domain.CompanyID(req.Body.Company), domain.AreaID(req.Body.Area))
 	if !allowed {

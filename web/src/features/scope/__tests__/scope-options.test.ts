@@ -28,10 +28,10 @@ describe("scope switcher company choices", () => {
     expect(
       scopeCompanies({
         grants: [grant("*")],
-        companies: [company("acme"), company("cora")],
+        companies: [company("acme"), company("globex")],
         areas: [area("acme", "cx")],
       }),
-    ).toEqual(["acme", "cora"]);
+    ).toEqual(["acme", "globex"]);
   });
 
   it("keeps ordinary grant companies and visible area companies for non-global callers", () => {
@@ -39,8 +39,8 @@ describe("scope switcher company choices", () => {
       scopeCompanies({
         grants: [grant("acme", "cx")],
         companies: [company("hidden")],
-        areas: [area("cora", "support")],
+        areas: [area("globex", "support")],
       }),
-    ).toEqual(["acme", "cora"]);
+    ).toEqual(["acme", "globex"]);
   });
 });

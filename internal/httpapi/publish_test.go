@@ -111,14 +111,14 @@ func TestPublishAgent_usesTheCompanyTheAuthorChose(t *testing.T) {
 		ID: "usr_ana", Kind: domain.PrincipalUser,
 		Grants: []domain.Grant{
 			{Scope: domain.Scope{Company: "default", Area: "platform"}, Role: domain.RoleAuthor},
-			{Scope: domain.Scope{Company: "cora", Area: "platform"}, Role: domain.RoleAuthor},
+			{Scope: domain.Scope{Company: "acme", Area: "platform"}, Role: domain.RoleAuthor},
 		},
 	})
 
 	resp, err := publishServer(t, pub).PublishAgent(
 		ctx,
 		openapi.PublishAgentRequestObject{AgentId: "troubleshooting-sre", Body: definition(func(d *openapi.AgentDefinition) {
-			d.Company = "cora"
+			d.Company = "acme"
 			d.Area = "platform"
 		})},
 	)
@@ -128,11 +128,11 @@ func TestPublishAgent_usesTheCompanyTheAuthorChose(t *testing.T) {
 	if _, ok := resp.(openapi.PublishAgent200JSONResponse); !ok {
 		t.Fatalf("response = %T, want published", resp)
 	}
-	if len(pub.companies) != 1 || pub.companies[0] != "cora" {
-		t.Fatalf("published companies = %+v, want cora", pub.companies)
+	if len(pub.companies) != 1 || pub.companies[0] != "acme" {
+		t.Fatalf("published companies = %+v, want acme", pub.companies)
 	}
-	if len(pub.published) != 1 || pub.published[0].Company != "cora" {
-		t.Fatalf("published definition company = %+v, want cora", pub.published)
+	if len(pub.published) != 1 || pub.published[0].Company != "acme" {
+		t.Fatalf("published definition company = %+v, want acme", pub.published)
 	}
 }
 
@@ -164,21 +164,21 @@ func TestPublishAgent_changingCompanyChangesTheVersion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("render acme: %v", err)
 	}
-	cora, parsedCora, err := renderAndParse("triage", *definition(func(d *openapi.AgentDefinition) {
-		d.Company = "cora"
+	globex, parsedGlobex, err := renderAndParse("triage", *definition(func(d *openapi.AgentDefinition) {
+		d.Company = "globex"
 		d.Area = "platform"
 	}))
 	if err != nil {
-		t.Fatalf("render cora: %v", err)
+		t.Fatalf("render globex: %v", err)
 	}
 
-	if parsedAcme.Company != "acme" || parsedCora.Company != "cora" {
+	if parsedAcme.Company != "acme" || parsedGlobex.Company != "globex" {
 		t.Fatalf("companies = %q and %q, want the file to carry each chosen company",
-			parsedAcme.Company, parsedCora.Company)
+			parsedAcme.Company, parsedGlobex.Company)
 	}
-	if parsedAcme.Version == parsedCora.Version {
+	if parsedAcme.Version == parsedGlobex.Version {
 		t.Fatalf("versions both = %s; company was not part of the versioned artefact\n%s\n%s",
-			parsedAcme.Version, acme, cora)
+			parsedAcme.Version, acme, globex)
 	}
 }
 

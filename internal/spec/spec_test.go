@@ -325,7 +325,7 @@ func TestRender_companySurvivesTheRoundTrip(t *testing.T) {
 	// Otherwise moving an agent between two companies with the same area id
 	// makes the same version digest and the registry keeps the old row.
 	source := spec.Spec{
-		ID: "triagem", Name: "Triagem", Company: "cora", Area: "platform",
+		ID: "triagem", Name: "Triagem", Company: "acme", Area: "platform",
 		Provider: "openai", Model: "gpt-4o-mini",
 		Tools:        []domain.ToolID{"crm.lookup"},
 		Budget:       domain.Budget{Micros: 100_000},
@@ -340,8 +340,8 @@ func TestRender_companySurvivesTheRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
-	if again.Company != "cora" {
-		t.Errorf("company = %q after the round trip, want cora", again.Company)
+	if again.Company != "acme" {
+		t.Errorf("company = %q after the round trip, want acme", again.Company)
 	}
 }
 

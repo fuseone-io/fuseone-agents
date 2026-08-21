@@ -13,7 +13,7 @@ function stubScopes() {
         JSON.stringify({
           items: [
             { company: "default", area: "platform", label: "Default platform" },
-            { company: "cora", area: "platform", label: "Cora platform" },
+            { company: "acme", area: "platform", label: "Acme platform" },
           ],
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
@@ -53,8 +53,8 @@ describe("the agent area field", () => {
     const onChange = renderField();
 
     await user.click(screen.getByRole("combobox", { name: "Area" }));
-    await user.click(await screen.findByRole("option", { name: /cora\/platform/ }));
+    await user.click(await screen.findByRole("option", { name: /acme\/platform/ }));
 
-    expect(onChange).toHaveBeenCalledWith({ company: "cora", area: "platform" });
+    expect(onChange).toHaveBeenCalledWith({ company: "acme", area: "platform" });
   });
 });

@@ -34,7 +34,7 @@ const people: Person[] = [
     provider: "oidc:keycloak",
     grants: [
       {
-        company: "cora",
+        company: "acme",
         area: "devops",
         role: "curator",
         asserted: true,
@@ -51,25 +51,25 @@ const people: Person[] = [
     provider: "oidc:keycloak",
     grants: [
       {
-        company: "cora",
+        company: "acme",
         area: "finance",
         role: "approver",
         asserted: false,
       },
       {
-        company: "cora",
+        company: "acme",
         area: "finance",
         role: "auditor",
         asserted: false,
       },
       {
-        company: "cora",
+        company: "acme",
         area: "finance",
         role: "author",
         asserted: false,
       },
       {
-        company: "cora",
+        company: "acme",
         area: "finance",
         role: "curator",
         asserted: false,
@@ -124,7 +124,7 @@ describe("people administration", () => {
     expect(screen.getAllByText("Acesso").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Entrada").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Visto").length).toBeGreaterThan(0);
-    expect(screen.getByText("cora/finance")).toBeInTheDocument();
+    expect(screen.getByText("acme/finance")).toBeInTheDocument();
     expect(screen.getByText("acesso completo")).toBeInTheDocument();
 
     await userEvent.click(

@@ -70,7 +70,7 @@ describe("the agent overview", () => {
       agent: {
         agentId: "troubleshooting-devops",
         versionId: "vb6148c24",
-        scope: { company: "cora", area: "platform" },
+        scope: { company: "acme", area: "platform" },
         name: "Troubleshooting DevOps",
         provider: "anthropic",
         model: "claude-opus-5",
