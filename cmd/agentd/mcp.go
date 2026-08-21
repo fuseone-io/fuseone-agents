@@ -22,6 +22,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/netguard"
 	"github.com/fuseone/agents/internal/tools"
 )
 
@@ -232,10 +233,13 @@ type credentialPolicy struct {
 }
 
 func baseHTTPTransport() http.RoundTripper {
-	if transport, ok := http.DefaultTransport.(*http.Transport); ok {
-		return transport.Clone()
+	transport, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		transport = &http.Transport{}
 	}
-	return http.DefaultTransport
+	out := transport.Clone()
+	netguard.GuardHTTPTransport(out)
+	return netguard.RefuseEnvironmentProxy(out)
 }
 
 type bearer struct {

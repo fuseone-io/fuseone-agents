@@ -13,12 +13,16 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/netguard"
 	"github.com/fuseone/agents/internal/settings"
 )
 
 var (
-	ErrNoName           = errors.New("admin: an integration needs a name")
-	ErrNoURL            = errors.New("admin: a remote tool server needs an address")
+	ErrNoName        = errors.New("admin: an integration needs a name")
+	ErrNoURL         = errors.New("admin: a remote tool server needs an address")
+	ErrBadMCPURL     = errors.New("admin: a remote tool server address must be http or https")
+	ErrBlockedMCPURL = errors.New(
+		"admin: a remote tool server address cannot target cloud metadata or link-local networks")
 	ErrNoCommand        = errors.New("admin: an MCP server needs a command to run")
 	ErrBadMCPProtocol   = errors.New("admin: unknown MCP protocol mode")
 	ErrBadConfigFileEnv = errors.New(
@@ -169,6 +173,12 @@ func (i *Integrations) PutMCPServer(
 		return ErrLocalExecutionNotAccepted
 	case transport == domain.TransportHTTP && strings.TrimSpace(server.URL) == "":
 		return ErrNoURL
+	case transport == domain.TransportHTTP:
+		if err := netguard.ValidateHTTPURL(server.URL); errors.Is(err, netguard.ErrBlockedAddress) {
+			return fmt.Errorf("%w: %v", ErrBlockedMCPURL, err)
+		} else if err != nil {
+			return fmt.Errorf("%w: %v", ErrBadMCPURL, err)
+		}
 	case server.MCPProtocolModeOf() != domain.MCPProtocolAuto &&
 		server.MCPProtocolModeOf() != domain.MCPProtocolLegacy:
 		return ErrBadMCPProtocol

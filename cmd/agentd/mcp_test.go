@@ -17,6 +17,7 @@ import (
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
+	"github.com/fuseone/agents/internal/netguard"
 	"github.com/fuseone/agents/internal/tools"
 )
 
@@ -198,6 +199,19 @@ func TestAuthenticatedClient_sendsBearerTokensToRemoteServers(t *testing.T) {
 		t.Fatalf("Get: %v", err)
 	}
 	_ = resp.Body.Close()
+}
+
+func TestAuthenticatedClient_refusesCloudMetadataAtDialTime(t *testing.T) {
+	t.Parallel()
+
+	client, err := authenticatedClient("metadata", domain.MCPCredentials{Token: "secret"}, nil, nil)
+	if err != nil {
+		t.Fatalf("authenticatedClient: %v", err)
+	}
+	_, err = client.Get("http://169.254.169.254/latest/meta-data")
+	if !errors.Is(err, netguard.ErrBlockedAddress) {
+		t.Fatalf("Get = %v, want metadata address refused", err)
+	}
 }
 
 func TestAuthenticatedClient_doesNotShareTheDefaultTransport(t *testing.T) {

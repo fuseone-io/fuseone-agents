@@ -262,6 +262,30 @@ func TestPutMCPServer_remote_needsAnAddressRatherThanACommand(t *testing.T) {
 	}
 }
 
+func TestPutMCPServer_remoteRefusesCloudMetadataAddress(t *testing.T) {
+	i := newIntegrations(t)
+
+	err := i.PutMCPServer(context.Background(), "usr_ana", platform, domain.MCPServer{
+		Name: "metadata", Transport: domain.TransportHTTP,
+		URL: "http://169.254.169.254/latest/meta-data", Enabled: true,
+	}, domain.MCPCredentialPatch{})
+	if !errors.Is(err, admin.ErrBlockedMCPURL) {
+		t.Fatalf("PutMCPServer = %v, want metadata address refused", err)
+	}
+}
+
+func TestPutMCPServer_remoteAllowsPrivateNetworkAddress(t *testing.T) {
+	i := newIntegrations(t)
+
+	err := i.PutMCPServer(context.Background(), "usr_ana", platform, domain.MCPServer{
+		Name: "internal-crm", Transport: domain.TransportHTTP,
+		URL: "http://10.24.0.17:8080/mcp", Enabled: true,
+	}, domain.MCPCredentialPatch{})
+	if err != nil {
+		t.Fatalf("PutMCPServer = %v, want private address allowed", err)
+	}
+}
+
 func TestPutMCPServer_local_stillNeedsACommand(t *testing.T) {
 	i := newIntegrations(t)
 

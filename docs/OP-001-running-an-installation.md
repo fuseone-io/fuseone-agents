@@ -27,6 +27,15 @@ Concretely, on a fresh install and after several upgrades:
   reaching what the worker reaches. That is a decision with a name attached to
   it, and a stored server carries no acceptance until an administrator gives
   one.
+- **A remote MCP server may be private, but not metadata or link-local.**
+  Private RFC1918 or in-cluster addresses are normal for customer-operated MCP
+  servers. Cloud metadata and link-local ranges are not normal tool servers, so
+  an HTTP MCP address pointing at them is refused when configured and refused
+  again when the worker dials after DNS resolution.
+  Environment HTTP proxies are refused for the MCP client for the same reason:
+  if a proxy resolves the name, the worker cannot prove it is not being rebound
+  to metadata. Installations that require an outbound proxy need an explicit
+  future proxy policy rather than this client silently bypassing or trusting it.
 - **A user-only MCP server does not act with the installation credential.** If
   a shipped recipe says every credential mode carries a user's authority, a
   concrete tool call has to carry `OnBehalfOf` and that person's sealed
