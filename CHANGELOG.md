@@ -25,6 +25,15 @@ field" is a commit message.
 
 ---
 
+## [0.19.1] — 2026-08-21
+
+### Fixed
+
+- No customer name appears in the product. Fixtures, manual examples and test
+  data use the fictional companies this repository already used for the
+  purpose — `acme`, and `globex` where a second one is needed. This repository
+  is public and the product is installed by whoever installs it.
+
 ## [0.19.0] — 2026-08-21
 
 ### Added
