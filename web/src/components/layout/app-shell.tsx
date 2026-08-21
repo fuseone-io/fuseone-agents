@@ -53,7 +53,7 @@ function Shell({ children }: { children: ReactNode }) {
     // uncontrolled, which means somebody who works with the sidebar collapsed
     // collapses it again on every single page load.
     <SidebarProvider
-      className="h-svh bg-background"
+      className="h-svh overflow-hidden bg-background"
       open={compact ? false : sidebarOpen}
       onOpenChange={setSidebarOpen}
     >

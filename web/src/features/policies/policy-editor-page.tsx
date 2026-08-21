@@ -64,7 +64,13 @@ export function PolicyEditorPage() {
   };
 
   return (
-    <div className="flex min-w-0 max-w-full flex-col gap-6 overflow-x-clip">
+    // No overflow-x here, deliberately. Setting one axis to anything but
+    // visible makes CSS use-value the other axis to auto, so overflow-x-clip
+    // gave this page an implicit overflow-y: auto — a second scroll container
+    // inside the shell's, which is why creating a policy showed two bars and
+    // no other screen did. Containment is min-w-0 and max-w-full, which is what
+    // was actually holding the width.
+    <div className="flex min-w-0 max-w-full flex-col gap-6">
       <PageHeader
         icon={PAGE_ICONS.policies}
         title={creating ? t("policies.newPolicy") : loaded!.name}
