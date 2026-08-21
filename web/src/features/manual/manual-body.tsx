@@ -39,8 +39,13 @@ export function ManualBody({
     );
   };
 
+  // The steps are deliberately large. A heading one size above its prose and
+  // sharing its weight reads as an emphasised sentence, which is how somebody
+  // scrolling loses track of where a section starts. h2 carries a rule above it
+  // as well, because on a long page the gap alone is not a boundary — it is
+  // just more gap.
   return (
-    <div className="min-w-0 max-w-[72ch] [&_h2]:mt-8 [&_h2]:text-lg [&_h2]:font-medium [&_h3]:mt-6 [&_h3]:font-medium [&_p]:my-3 [&_p]:break-words [&_li]:my-1 [&_ul]:list-disc [&_ul]:pl-5 [&_strong]:font-medium">
+    <div className="min-w-0 max-w-[72ch] [&_h2]:mt-10 [&_h2]:border-t [&_h2]:border-border [&_h2]:pt-6 [&_h2]:text-2xl [&_h2]:font-semibold [&_h2]:tracking-tight [&_h2:first-child]:mt-0 [&_h2:first-child]:border-0 [&_h2:first-child]:pt-0 [&_h3]:mt-7 [&_h3]:text-lg [&_h3]:font-semibold [&_p]:my-3 [&_p]:break-words [&_li]:my-1 [&_ul]:list-disc [&_ul]:pl-5 [&_strong]:font-medium">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{ a: Anchor, table: Grid, h2: Heading, h3: Subheading }}
