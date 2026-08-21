@@ -7,6 +7,7 @@ export const FAILURE_LABELS: Record<string, string> = {
   model_network: "runtime.failureModelNetwork",
   model_refused: "runtime.failureModelRefused",
   model_provider_error: "runtime.failureModelProviderError",
+  mcp_server_rate_limited: "runtime.failureMCPServerRateLimited",
   attempts_exhausted: "runtime.failureAttemptsExhausted",
 };
 

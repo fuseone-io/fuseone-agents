@@ -62,6 +62,8 @@ export function useServerForm(
       oauthScopes: "",
       configFile: "",
       configFileEnv: server?.configFileEnv ?? "",
+      rateLimitPerSecond: server?.rateLimit?.ratePerSecond?.toString() ?? "",
+      rateLimitBurst: server?.rateLimit?.burst?.toString() ?? "",
       // Never carried forward from the transport. A server nobody has accepted
       // must show as not accepted, or the box would tick itself on the screen
       // where the decision is supposed to be made.
@@ -100,6 +102,7 @@ export function useServerForm(
         oauth: oauthHasValue(values) ? oauthFromValue(values) : undefined,
         configFile: values.configFile || undefined,
         configFileEnv: values.configFileEnv,
+        rateLimit: rateLimitFromValues(values),
         acceptsLocalExecution: values.acceptsLocalExecution,
         enabled: values.enabled,
       });
@@ -145,6 +148,12 @@ function localEnv(values: ServerFormValues, dsnMode: AuthMode | null) {
     env[dsnMode.env] = values.dsn;
   }
   return env;
+}
+
+function rateLimitFromValues(values: ServerFormValues) {
+  const rate = Number(values.rateLimitPerSecond.trim() || "0");
+  const burst = Number.parseInt(values.rateLimitBurst.trim() || "0", 10);
+  return { ratePerSecond: rate, burst };
 }
 
 function readEnvLines(raw: string) {

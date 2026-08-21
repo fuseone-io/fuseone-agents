@@ -117,11 +117,15 @@ func performOne(
 		return record(ctx, deps, start, act, false, err.Error())
 	}
 
-	result, invokeErr := deps.Tools.Invoke(ctx, engine.Call{
+	call := engine.Call{
 		RunID: start.RunID, Seq: seq, Tool: act.Undo, Args: args,
 		OnBehalfOf: start.OnBehalfOf,
 		IdemKey:    fmt.Sprintf("compensate:%s:%d", start.RunID, act.Seq),
-	})
+	}
+	if err := deps.Tools.Reserve(ctx, call); err != nil {
+		return record(ctx, deps, start, act, false, err.Error())
+	}
+	result, invokeErr := deps.Tools.Invoke(ctx, call)
 	// Both shapes of failure. A tool layer reports a refusal from the far side
 	// in the result and a broken connection as an error, and an undo that did
 	// not happen is the same fact either way.

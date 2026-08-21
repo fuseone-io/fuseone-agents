@@ -50,9 +50,14 @@ type countingTools struct {
 	invocations []domain.ToolID
 	content     ContentStore
 	body        []byte
+	reserveErr  error
 	err         error
 	failed      bool
 	errorCode   string
+}
+
+func (c *countingTools) Reserve(context.Context, Call) error {
+	return c.reserveErr
 }
 
 func (c *countingTools) Invoke(ctx context.Context, call Call) (ToolResult, error) {
@@ -229,6 +234,27 @@ func TestAdvance_readTool_recordsFullGatedCycle(t *testing.T) {
 	}
 	if err := h.ledger.Verify(ctx, "run-1"); err != nil {
 		t.Errorf("Verify: %v", err)
+	}
+}
+
+func TestAdvance_reserveFailureDoesNotRecordAToolCall(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t, Proposal{Tool: "crm.lookup", Args: []byte(`{"id":"42"}`)})
+	h.tools.reserveErr = errors.New("rate limited")
+
+	if _, err := h.runner.Advance(ctx, h.start(t, generousBudget())); err == nil {
+		t.Fatal("Advance succeeded, want reserve failure")
+	}
+	got := h.kinds(t)
+	if slices.Contains(got, domain.StepBudgetReserved) ||
+		slices.Contains(got, domain.StepToolCalled) ||
+		slices.Contains(got, domain.StepToolReturned) {
+		t.Fatalf("ledger = %v, want no budget or tool steps after a reserve failure", got)
+	}
+	if len(h.tools.invocations) != 0 {
+		t.Fatalf("tool invoked %d times after reserve failed", len(h.tools.invocations))
 	}
 }
 

@@ -59,6 +59,8 @@ func wantsATool() *flakyPlanner {
 
 type noTools struct{}
 
+func (noTools) Reserve(context.Context, Call) error { return nil }
+
 func (noTools) Invoke(context.Context, Call) (engine.ToolResult, error) {
 	return engine.ToolResult{}, nil
 }

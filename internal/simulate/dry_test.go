@@ -12,6 +12,8 @@ import (
 // and this is here to prove nothing does.
 type liveTools struct{ calls int }
 
+func (l *liveTools) Reserve(context.Context, engine.Call) error { return nil }
+
 func (l *liveTools) Invoke(context.Context, engine.Call) (engine.ToolResult, error) {
 	l.calls++
 	return engine.ToolResult{}, nil

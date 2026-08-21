@@ -35,6 +35,12 @@ export const serverSchema = z
     configFileEnv: z
       .string()
       .regex(/^[A-Za-z_][A-Za-z0-9_]*$|^$/, "mcp.configFileEnvInvalid"),
+    rateLimitPerSecond: z
+      .string()
+      .regex(/^$|^(?:0|[1-9]\d*)(?:\.\d+)?$/, "mcp.rateLimitRateInvalid"),
+    rateLimitBurst: z
+      .string()
+      .regex(/^$|^\d+$/, "mcp.rateLimitBurstInvalid"),
     acceptsLocalExecution: z.boolean(),
     enabled: z.boolean(),
   })
@@ -85,6 +91,10 @@ export const serverSchema = z
       message: "mcp.oauthBearerConflict",
     },
   )
+  .refine((v) => rateLimitComplete(v), {
+    path: ["rateLimitPerSecond"],
+    message: "mcp.rateLimitPairInvalid",
+  })
   /*
    * A local server is a program this installation starts inside the worker.
    * The server refuses one nobody accepted; this says so before the round
@@ -96,3 +106,25 @@ export const serverSchema = z
   });
 
 export type ServerFormValues = z.infer<typeof serverSchema>;
+
+function rateLimitComplete(values: {
+  rateLimitPerSecond: string;
+  rateLimitBurst: string;
+}) {
+  const rate = positiveNumber(values.rateLimitPerSecond);
+  const burst = positiveInteger(values.rateLimitBurst);
+  if (rate && burst) return true;
+  return disabledNumber(values.rateLimitPerSecond) && disabledNumber(values.rateLimitBurst);
+}
+
+function positiveNumber(raw: string) {
+  return raw.trim() !== "" && Number(raw) > 0;
+}
+
+function positiveInteger(raw: string) {
+  return raw.trim() !== "" && Number(raw) > 0;
+}
+
+function disabledNumber(raw: string) {
+  return raw.trim() === "" || Number(raw) === 0;
+}

@@ -29,6 +29,8 @@ outlives every simulation it serves.
 */
 type DryTools struct{}
 
+func (DryTools) Reserve(context.Context, engine.Call) error { return nil }
+
 func (DryTools) Invoke(context.Context, engine.Call) (engine.ToolResult, error) {
 	// No reference and no labels: nothing was read, so nothing can be tainted
 	// by it. Inventing a label would make the next decision a decision about

@@ -69,6 +69,7 @@ export function ServerFields({
           <HeaderFields form={form} headers={headers} hasSecret={hasSecret} />
         )}
         {auth.oauth !== null && <OAuthFormFields form={form} />}
+        <RateLimitFields form={form} />
       </>
     );
   }
@@ -122,8 +123,32 @@ export function ServerFields({
           hasConfigFile ? t("mcp.configFileKept") : t("mcp.configFileHint")
         }
       />
+      <RateLimitFields form={form} />
       <AcceptLocalExecution form={form} />
     </>
+  );
+}
+
+function RateLimitFields({ form }: { form: UseFormReturn<ServerFormValues> }) {
+  const { t } = useTranslation();
+  return (
+    <div className="space-y-3 rounded-lg border p-3">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field
+          form={form}
+          name="rateLimitPerSecond"
+          label={t("mcp.rateLimitPerSecond")}
+          placeholder="1"
+        />
+        <Field
+          form={form}
+          name="rateLimitBurst"
+          label={t("mcp.rateLimitBurst")}
+          placeholder="5"
+        />
+      </div>
+      <p className="text-xs text-muted-foreground">{t("mcp.rateLimitHint")}</p>
+    </div>
   );
 }
 
@@ -339,6 +364,8 @@ function Field({
     | "command"
     | "args"
     | "configFileEnv"
+    | "rateLimitPerSecond"
+    | "rateLimitBurst"
     | "oauthAccessToken"
     | "oauthRefreshToken"
     | "oauthTokenURL"

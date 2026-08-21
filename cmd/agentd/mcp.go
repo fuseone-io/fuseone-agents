@@ -63,7 +63,7 @@ func connectServer(
 	if cleanup != nil {
 		managed = cleanupSession{Session: session, cleanup: cleanup}
 	}
-	if err := catalog.AddServer(ctx, server.Name, managed, server.Surface); err != nil {
+	if err := catalog.AddServer(ctx, server.Name, managed, server.Surface, tools.WithRateLimit(server.RateLimit)); err != nil {
 		_ = managed.Close()
 		return fmt.Errorf("import tools from %s: %w", server.Name, err)
 	}
@@ -528,9 +528,17 @@ func fingerprint(server domain.MCPServer) string {
 	sum := sha256.Sum256([]byte(strings.Join([]string{
 		server.TransportOf(), server.Command, strings.Join(server.Args, " "), server.URL,
 		server.MCPProtocolModeOf(), server.ConfigFileEnvName(),
+		rateLimitFingerprint(server.RateLimit),
 		fmt.Sprint(server.Enabled), server.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}, "\x00")))
 	return hex.EncodeToString(sum[:8])
+}
+
+func rateLimitFingerprint(limit *domain.MCPRateLimit) string {
+	if limit == nil {
+		return ""
+	}
+	return fmt.Sprintf("%g/%d", limit.RatePerSecond, limit.Burst)
 }
 
 // Servers is where the configured set is read from, declared here by the

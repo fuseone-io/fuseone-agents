@@ -36,6 +36,11 @@ Concretely, on a fresh install and after several upgrades:
   if a proxy resolves the name, the worker cannot prove it is not being rebound
   to metadata. Installations that require an outbound proxy need an explicit
   future proxy policy rather than this client silently bypassing or trusting it.
+- **An MCP server rate limit is per worker.** It is a token bucket on the
+  worker process before a tool call leaves for that server. With two workers,
+  the effective ceiling is roughly twice the configured value. Use it to keep a
+  fragile integration from being burst by one worker; do not read it as a
+  distributed quota for the whole installation.
 - **A user-only MCP server does not act with the installation credential.** If
   a shipped recipe says every credential mode carries a user's authority, a
   concrete tool call has to carry `OnBehalfOf` and that person's sealed

@@ -879,6 +879,23 @@ func TestFingerprint_aServerNobodyTouched_keepsItsSession(t *testing.T) {
 	}
 }
 
+func TestFingerprint_aRateLimitChangeReconnectsTheServer(t *testing.T) {
+	t.Parallel()
+
+	before := domain.MCPServer{
+		Name: "github", Transport: domain.TransportHTTP,
+		URL: "https://api.example.com/mcp", Enabled: true,
+		UpdatedAt: time.Date(2026, 8, 16, 9, 0, 0, 0, time.UTC),
+		RateLimit: &domain.MCPRateLimit{RatePerSecond: 1, Burst: 2},
+	}
+	after := before
+	after.RateLimit = &domain.MCPRateLimit{RatePerSecond: 0.5, Burst: 2}
+
+	if fingerprint(before) == fingerprint(after) {
+		t.Error("unchanged; the worker would keep the old MCP rate limit")
+	}
+}
+
 func TestTransportForHTTP_doesNotOpenAStandaloneSSEStream(t *testing.T) {
 	t.Parallel()
 

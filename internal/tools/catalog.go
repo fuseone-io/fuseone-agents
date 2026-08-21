@@ -119,6 +119,7 @@ type Catalog struct {
 	mu       sync.RWMutex
 	sessions map[string]Session
 	entries  map[domain.ToolID]Entry
+	limiters map[string]*serverLimiter
 
 	content engine.ContentStore
 	timeout time.Duration
@@ -162,6 +163,7 @@ func NewCatalog(content engine.ContentStore) *Catalog {
 	return &Catalog{
 		sessions: make(map[string]Session),
 		entries:  make(map[domain.ToolID]Entry),
+		limiters: make(map[string]*serverLimiter),
 		content:  content,
 		timeout:  60 * time.Second,
 	}

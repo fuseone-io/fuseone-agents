@@ -48,6 +48,9 @@ func (s *Server) PutMCPServer(ctx context.Context, req openapi.PutMCPServerReque
 	if req.Body.ConfigFileEnv != nil {
 		server.ConfigFileEnv = req.Body.ConfigFileEnv
 	}
+	if req.Body.RateLimit != nil {
+		server.RateLimit = rateLimitFromRequest(req.Body.RateLimit)
+	}
 	if req.Body.Enabled != nil {
 		server.Enabled = *req.Body.Enabled
 	}
@@ -87,6 +90,21 @@ func (s *Server) PutMCPServer(ctx context.Context, req openapi.PutMCPServerReque
 		}, nil
 	}
 	return openapi.PutMCPServer204Response{}, nil
+}
+
+func rateLimitFromRequest(limit *openapi.MCPRateLimit) *domain.MCPRateLimit {
+	if limit == nil {
+		return nil
+	}
+	var rate float64
+	if limit.RatePerSecond != nil {
+		rate = *limit.RatePerSecond
+	}
+	var burst int
+	if limit.Burst != nil {
+		burst = *limit.Burst
+	}
+	return &domain.MCPRateLimit{RatePerSecond: rate, Burst: burst}
 }
 
 func (s *Server) ProbeMCPServer(ctx context.Context, req openapi.ProbeMCPServerRequestObject) (openapi.ProbeMCPServerResponseObject, error) {

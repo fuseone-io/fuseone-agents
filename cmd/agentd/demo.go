@@ -137,6 +137,8 @@ type stubTools struct {
 	runID   domain.RunID
 }
 
+func (stubTools) Reserve(context.Context, engine.Call) error { return nil }
+
 func (s stubTools) Invoke(ctx context.Context, call engine.Call) (engine.ToolResult, error) {
 	ref, err := s.content.Put(ctx, s.runID, int64(len(call.Tool)),
 		[]byte(`{"demo":"`+string(call.Tool)+`"}`))

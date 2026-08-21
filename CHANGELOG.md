@@ -35,6 +35,13 @@ field" is a commit message.
   run, and starts from the upgrade time rather than replaying historical
   refusals.
 
+### Security
+
+- MCP servers can now carry an optional per-worker token bucket for tool calls.
+  When a bucket is empty, the call does not leave the worker and the run retries
+  later instead of recording a failed tool call. The limit is not distributed:
+  multiple worker replicas each have their own bucket.
+
 ## [0.19.1] — 2026-08-21
 
 ### Fixed

@@ -44,4 +44,19 @@ describe("the MCP server properties sheet", () => {
     );
     expect(screen.getByRole("button", { name: "Salvar" })).toBeInTheDocument();
   });
+
+  it("shows the stored per-worker rate limit", () => {
+    render(
+      <ServerForm
+        server={{
+          ...server(),
+          rateLimit: { ratePerSecond: 0.5, burst: 3 },
+        }}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText("Chamadas por segundo")).toHaveValue("0.5");
+    expect(screen.getByLabelText("Rajada")).toHaveValue("3");
+  });
 });

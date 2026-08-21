@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
 	"slices"
 	"strings"
@@ -27,6 +28,8 @@ var (
 	ErrBadMCPProtocol   = errors.New("admin: unknown MCP protocol mode")
 	ErrBadConfigFileEnv = errors.New(
 		"admin: the managed config file environment variable must be a shell variable name")
+	ErrBadMCPRateLimit = errors.New(
+		"admin: MCP rate limit needs both a positive rate and a positive burst, or neither")
 	// ErrLocalExecutionNotAccepted means a local server was configured without
 	// anybody saying they accept what a local server is.
 	//
@@ -76,6 +79,10 @@ type storedServer struct {
 		on offering what it always did; one chosen as empty offers nothing.
 	*/
 	Surface *[]string `json:"surface,omitempty"`
+	// RateLimit is per worker process. In a deployment with multiple workers,
+	// the effective cap scales with the replica count; it is an operational
+	// guard, not a distributed quota.
+	RateLimit *domain.MCPRateLimit `json:"rateLimit,omitempty"`
 	// AcceptsLocalExecution is stored rather than assumed from the transport.
 	// A row written before this existed has not been accepted by anybody, and
 	// reading it as accepted would grant on upgrade what nobody granted.
@@ -135,6 +142,7 @@ func (i *Integrations) MCPServers(ctx context.Context) ([]domain.MCPServer, erro
 			Command: stored.Command, Args: stored.Args, URL: stored.URL,
 			ProtocolMode:          stored.ProtocolMode,
 			Surface:               stored.Surface,
+			RateLimit:             stored.RateLimit,
 			AcceptsLocalExecution: stored.AcceptsLocalExecution,
 			HasSecret:             row.HasSecret,
 			HasOAuth:              stored.HasOAuth,
@@ -187,6 +195,10 @@ func (i *Integrations) PutMCPServer(
 	case server.ConfigFileEnv != nil && !validConfigFileEnv(*server.ConfigFileEnv):
 		return ErrBadConfigFileEnv
 	}
+	rateLimit, err := normalizedRateLimit(server.RateLimit)
+	if err != nil {
+		return err
+	}
 
 	/*
 		Both folds happen inside the write's own transaction, under the row's
@@ -219,6 +231,9 @@ func (i *Integrations) PutMCPServer(
 			if surface == nil {
 				surface = was.Surface
 			}
+			if server.RateLimit == nil {
+				rateLimit = was.RateLimit
+			}
 			configEnv := was.ConfigFileEnv
 			if server.ConfigFileEnv != nil {
 				configEnv = *server.ConfigFileEnv
@@ -233,6 +248,7 @@ func (i *Integrations) PutMCPServer(
 				Args: server.Args, URL: server.URL,
 				ProtocolMode:          storedProtocolMode(transport, server.MCPProtocolModeOf()),
 				Surface:               surface,
+				RateLimit:             rateLimit,
 				ConfigFileEnv:         configEnv,
 				HasVariables:          len(merged.Env) > 0,
 				HasOAuth:              merged.OAuth != nil && !merged.OAuth.Empty(),
@@ -272,6 +288,7 @@ func (i *Integrations) PutMCPServer(
 					"hasConfigFile":         merged.ConfigFile != "",
 					"configFileEnv":         configEnv,
 					"surface":               surfaceSize(surface),
+					"rateLimit":             rateLimitDetail(rateLimit),
 				}, nil
 		},
 	})
@@ -289,6 +306,28 @@ func storedProtocolMode(transport, mode string) string {
 		return ""
 	}
 	return mode
+}
+
+func normalizedRateLimit(limit *domain.MCPRateLimit) (*domain.MCPRateLimit, error) {
+	if limit == nil {
+		return nil, nil
+	}
+	disabled := limit.RatePerSecond == 0 && limit.Burst == 0
+	if disabled {
+		return nil, nil
+	}
+	if math.IsNaN(limit.RatePerSecond) || math.IsInf(limit.RatePerSecond, 0) ||
+		limit.RatePerSecond <= 0 || limit.Burst <= 0 {
+		return nil, ErrBadMCPRateLimit
+	}
+	return &domain.MCPRateLimit{RatePerSecond: limit.RatePerSecond, Burst: limit.Burst}, nil
+}
+
+func rateLimitDetail(limit *domain.MCPRateLimit) any {
+	if limit == nil {
+		return nil
+	}
+	return map[string]any{"ratePerSecond": limit.RatePerSecond, "burst": limit.Burst}
 }
 
 var configFileEnvPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)

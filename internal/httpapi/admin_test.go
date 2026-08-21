@@ -218,7 +218,10 @@ func TestPutMCPServer_attributesTheChangeToTheCaller(t *testing.T) {
 	admin := &fakeAdmin{}
 	resp, err := serverWith(t, admin).PutMCPServer(as(domain.RoleCurator), openapi.PutMCPServerRequestObject{
 		Name: "crm",
-		Body: &openapi.PutMCPServerJSONRequestBody{Command: ptr("bin/devstack"), Args: &[]string{"mcp"}},
+		Body: &openapi.PutMCPServerJSONRequestBody{
+			Command: ptr("bin/devstack"), Args: &[]string{"mcp"},
+			RateLimit: &openapi.MCPRateLimit{RatePerSecond: ptr(0.5), Burst: ptr(3)},
+		},
 	})
 	if err != nil {
 		t.Fatalf("PutMCPServer: %v", err)
@@ -232,6 +235,11 @@ func TestPutMCPServer_attributesTheChangeToTheCaller(t *testing.T) {
 	}
 	if admin.putServer.Command != "bin/devstack" || len(admin.putServer.Args) != 1 {
 		t.Errorf("stored = %+v, want the command and its arguments", admin.putServer)
+	}
+	if admin.putServer.RateLimit == nil ||
+		admin.putServer.RateLimit.RatePerSecond != 0.5 ||
+		admin.putServer.RateLimit.Burst != 3 {
+		t.Errorf("rate limit = %#v, want request values", admin.putServer.RateLimit)
 	}
 }
 

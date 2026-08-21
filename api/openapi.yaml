@@ -2414,6 +2414,12 @@ paths:
                     server uses. Omit to leave the choice as it stands, which
                     for a server nobody has chosen one for means everything it
                     offers. Send an empty array to bring in nothing.
+                rateLimit:
+                  allOf: [{ $ref: '#/components/schemas/MCPRateLimit' }]
+                  description: >
+                    Per-worker token bucket for outgoing tool calls to this
+                    server. Omit to leave the choice as it stands. Send both
+                    fields as zero to disable it.
                 acceptsLocalExecution:
                   type: boolean
                   description: >
@@ -4294,6 +4300,22 @@ components:
         updatedBy: { type: string }
         updatedAt: { type: string, format: date-time }
 
+    MCPRateLimit:
+      type: object
+      description: >
+        Per-worker token bucket for outgoing tool calls to one MCP server.
+        With multiple worker replicas, each process has its own bucket; this
+        is an operational guard against bursts, not an installation-wide quota.
+        Set both fields to zero to disable it.
+      properties:
+        ratePerSecond:
+          type: number
+          format: double
+          minimum: 0
+        burst:
+          type: integer
+          minimum: 0
+
     MCPServer:
       type: object
       required: [name, enabled]
@@ -4358,6 +4380,9 @@ components:
             It is not a permission. Outside the surface a tool is not "allowed
             with conditions"; it is not here. No model is told about it, no
             call reaches it, and the Gate is never asked.
+        rateLimit:
+          allOf: [{ $ref: '#/components/schemas/MCPRateLimit' }]
+          nullable: true
         acceptsLocalExecution:
           type: boolean
           description: |

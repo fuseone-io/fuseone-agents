@@ -88,6 +88,15 @@ const (
 // variable for that server.
 const DefaultMCPConfigFileEnv = "FUSEONE_MCP_CONFIG_FILE"
 
+// MCPRateLimit bounds outgoing tool calls to one MCP server from one worker
+// process. It is deliberately local to the process: a distributed limiter
+// would be a separate coordination system, while this is an operator's guard
+// against bursts into a fragile integration.
+type MCPRateLimit struct {
+	RatePerSecond float64
+	Burst         int
+}
+
 type MCPServer struct {
 	Name string
 	// Transport is stdio or http. Empty reads as stdio: rows written before
@@ -134,6 +143,10 @@ type MCPServer struct {
 		unclassified.
 	*/
 	Surface *[]string
+
+	// RateLimit bounds tool calls sent from one worker process to this server.
+	// Nil means no limit. With multiple workers, each worker has its own bucket.
+	RateLimit *MCPRateLimit
 
 	// AcceptsLocalExecution records that somebody accepted what stdio is.
 	//

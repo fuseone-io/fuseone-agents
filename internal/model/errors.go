@@ -62,14 +62,18 @@ func (e *ProviderError) Summary() domain.FailureSummary {
 	}
 }
 
-// FailureSummaryOf reads the stable part of a provider failure through any
-// wrapping added by the engine and worker.
+type failureSummarizer interface {
+	Summary() domain.FailureSummary
+}
+
+// FailureSummaryOf reads the stable part of a failure through any wrapping
+// added by the engine and worker.
 func FailureSummaryOf(err error) (domain.FailureSummary, bool) {
-	var provider *ProviderError
-	if !errors.As(err, &provider) {
+	var summarized failureSummarizer
+	if !errors.As(err, &summarized) {
 		return domain.FailureSummary{}, false
 	}
-	return provider.Summary(), true
+	return summarized.Summary(), true
 }
 
 func providerRefused(provider string) error {

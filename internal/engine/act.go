@@ -209,6 +209,16 @@ func (r *Runner) invoke(
 	ctx context.Context, state State, start Start,
 	p Proposal, effect domain.Effect, idemKey string,
 ) (Status, error) {
+	call := Call{
+		RunID: start.RunID,
+		Tool:  p.Tool, Args: p.Args,
+		OnBehalfOf: start.OnBehalfOf,
+		IdemKey:    idemKey,
+	}
+	if err := r.deps.Tools.Reserve(ctx, call); err != nil {
+		return Status{}, err
+	}
+
 	state, err := r.append(ctx, state, start, domain.Step{
 		Kind: domain.StepBudgetReserved,
 		Payload: mustJSON(domain.BudgetReservedPayload{
@@ -237,12 +247,8 @@ func (r *Runner) invoke(
 		return Status{}, err
 	}
 
-	result, invokeErr := r.deps.Tools.Invoke(ctx, Call{
-		RunID: start.RunID, Seq: state.Seq,
-		Tool: p.Tool, Args: p.Args,
-		OnBehalfOf: start.OnBehalfOf,
-		IdemKey:    idemKey,
-	})
+	call.Seq = state.Seq
+	result, invokeErr := r.deps.Tools.Invoke(ctx, call)
 	returned := domain.ToolReturnedPayload{Tool: p.Tool, ResultRef: result.ResultRef}
 	if result.Failed {
 		returned.Failed = true

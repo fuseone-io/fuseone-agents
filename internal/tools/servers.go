@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/fuseone/agents/internal/domain"
 )
@@ -36,10 +37,14 @@ somebody rules on it (PRD DE-12, DE-13).
 // That was always the argument, and unclassified is what it argues for:
 // refusing the server's claim without acting on it in either direction.
 func (c *Catalog) AddServer(
-	ctx context.Context, name string, session Session, surface *[]string,
+	ctx context.Context, name string, session Session, surface *[]string, options ...ServerOption,
 ) error {
 	if name == "" {
 		return fmt.Errorf("tools: server needs a name")
+	}
+	var opts serverOptions
+	for _, option := range options {
+		option(&opts)
 	}
 
 	listed, err := session.ListTools(ctx, nil)
@@ -72,6 +77,11 @@ func (c *Catalog) AddServer(
 
 	old := c.sessions[name]
 	c.sessions[name] = session
+	if limiter := newServerLimiter(opts.rateLimit, time.Now()); limiter != nil {
+		c.limiters[name] = limiter
+	} else {
+		delete(c.limiters, name)
+	}
 	for id, entry := range c.entries {
 		if entry.Server == name {
 			delete(c.entries, id)
@@ -120,6 +130,7 @@ func (c *Catalog) RemoveServer(name string) error {
 		return nil
 	}
 	delete(c.sessions, name)
+	delete(c.limiters, name)
 	for id, entry := range c.entries {
 		if entry.Server == name {
 			delete(c.entries, id)
@@ -143,6 +154,7 @@ func (c *Catalog) Close() error {
 		}
 	}
 	clear(c.sessions)
+	clear(c.limiters)
 	return errors.Join(errs...)
 }
 

@@ -29,6 +29,8 @@ type recorder struct {
 	broken map[domain.ToolID]bool
 }
 
+func (r *recorder) Reserve(context.Context, engine.Call) error { return nil }
+
 func (r *recorder) Invoke(_ context.Context, c engine.Call) (engine.ToolResult, error) {
 	r.calls = append(r.calls, c)
 	if r.broken[c.Tool] {

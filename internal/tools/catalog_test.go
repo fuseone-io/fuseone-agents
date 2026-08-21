@@ -11,6 +11,7 @@ import (
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/known"
+	"github.com/fuseone/agents/internal/model"
 	"github.com/fuseone/agents/internal/tools"
 )
 
@@ -78,6 +79,33 @@ func lookupServer() *fakeServer {
 			},
 		}},
 		result: text("Cliente encontrado: ACME Ltda"),
+	}
+}
+
+func TestReserve_rateLimitsPerServerBeforeTheCallLeaves(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	srv := lookupServer()
+	c := tools.NewCatalog(engine.NewMemoryContent())
+	if err := c.AddServer(ctx, "crm", srv, nil,
+		tools.WithRateLimit(&domain.MCPRateLimit{RatePerSecond: 0.01, Burst: 1})); err != nil {
+		t.Fatalf("AddServer: %v", err)
+	}
+	call := engine.Call{RunID: "run-1", Tool: "crm.lookup", Args: []byte(`{}`)}
+	if err := c.Reserve(ctx, call); err != nil {
+		t.Fatalf("first Reserve: %v", err)
+	}
+	err := c.Reserve(ctx, call)
+	if !errors.Is(err, tools.ErrServerRateLimited) {
+		t.Fatalf("second Reserve = %v, want rate limit", err)
+	}
+	if len(srv.calls) != 0 {
+		t.Fatalf("Reserve called the server %v", srv.calls)
+	}
+	failure, ok := model.FailureSummaryOf(err)
+	if !ok || failure.Code != tools.CodeMCPServerRateLimited || !failure.Retryable {
+		t.Fatalf("FailureSummaryOf = %#v, %v", failure, ok)
 	}
 }
 

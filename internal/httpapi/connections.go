@@ -85,6 +85,7 @@ func (s *Server) ListIntegrations(ctx context.Context, _ openapi.ListIntegration
 			Name: srv.Name, Args: &srv.Args, Enabled: srv.Enabled,
 			Transport:     ptr(openapi.Transport(srv.TransportOf())),
 			ProtocolMode:  ptr(openapi.MCPProtocolMode(srv.MCPProtocolModeOf())),
+			RateLimit:     rateLimitToResponse(srv.RateLimit),
 			HasSecret:     ptr(srv.HasSecret),
 			HasOAuth:      ptr(srv.HasOAuth),
 			HasVariables:  ptr(srv.HasVariables),
@@ -151,6 +152,16 @@ func (s *Server) ListIntegrations(ctx context.Context, _ openapi.ListIntegration
 		})
 	}
 	return body, nil
+}
+
+func rateLimitToResponse(limit *domain.MCPRateLimit) *openapi.MCPRateLimit {
+	if limit == nil {
+		return nil
+	}
+	return &openapi.MCPRateLimit{
+		RatePerSecond: ptr(limit.RatePerSecond),
+		Burst:         ptr(limit.Burst),
+	}
 }
 
 // knownProviders exposes the model package's preset table.

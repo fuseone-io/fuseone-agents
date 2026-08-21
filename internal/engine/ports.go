@@ -73,6 +73,10 @@ type Proposal struct {
 
 // Tools invokes a registered tool, normally an MCP server.
 type Tools interface {
+	// Reserve is called before a ToolCalled step is recorded. An operational
+	// refusal here means the effect has not left the worker, so the run can
+	// retry without the trail claiming a call happened.
+	Reserve(ctx context.Context, call Call) error
 	Invoke(ctx context.Context, call Call) (ToolResult, error)
 }
 
