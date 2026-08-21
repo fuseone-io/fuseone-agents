@@ -25,6 +25,41 @@ field" is a commit message.
 
 ---
 
+## [0.19.0] — 2026-08-21
+
+### Added
+
+- **Six more manual pages, in both languages — twelve per language now.**
+
+  **Your first agent, end to end** is one worked example carried the whole way:
+  an agent that answers infrastructure questions in Slack. It only reads, so
+  the platform can be seen working without risking anything, and then it shows
+  what changes at the step where writing starts. Every other page had explained
+  a piece and none had given the order.
+
+  **Policies** was a screen in the navigation with no page at all, using
+  vocabulary nobody guesses — deny beats escalate, allow is the only thing that
+  loosens, monitor versus enforce — on the screen where a mistake reaches every
+  step of every agent.
+
+  **Draft, copilot and autonomous** answers what changes between the stages by
+  saying what does not: the Gate evaluates the same in all three, so autonomous
+  means no human wait on what was already cleared. It gives questions instead
+  of a number, and says that promoting is the moment policy stops having a
+  human behind it.
+
+  **Companies, areas and roles**, **Approving an action** and **Reading a run**
+  cover where things live and who reaches them, what you are deciding when a
+  run stops, and where to look when something already went wrong.
+
+  Every page ends in use cases rather than concepts.
+
+### Fixed
+
+- Manual headings read as headings. `h2` sat one size above its prose and
+  shared its weight while `h3` was body text in bold, so the start of a section
+  read as an emphasised sentence.
+
 ## [0.18.2] — 2026-08-21
 
 ### Fixed
