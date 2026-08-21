@@ -42,6 +42,38 @@ field" is a commit message.
   later instead of recording a failed tool call. The limit is not distributed:
   multiple worker replicas each have their own bucket.
 
+## [0.20.0] — 2026-08-21
+
+### Upgrade notes
+
+- **An HTTP tool server whose address resolves to cloud metadata or link-local
+  is refused** — `169.254.0.0/16`, `fe80::/10`, `fd00:ec2::/64`. Private
+  addresses stay allowed, because an installation reaching its own network is
+  the normal case; those ranges are where instance credentials live and no
+  tool server belongs. It is checked when the address is saved **and again at
+  the moment of dialling, after DNS**, so a name that later resolves there does
+  not get through.
+- **A proxy in the environment is refused rather than ignored** for those
+  calls. With a proxy, the name is resolved by the proxy and this worker can no
+  longer prove where the connection went. `NO_PROXY` is honoured, so a server
+  excluded there still works — but **an installation that reaches its tool
+  servers only through a mandatory proxy cannot connect them**, and now says so
+  instead of failing quietly.
+- **Announcing new Gate refusals starts from this upgrade**, not from history.
+  Its cursor begins now, so syncing does not post months of past refusals.
+
+### Added
+
+- **The first time a Gate refusal of a given shape appears in a scope, the
+  channel is told.** A shape is its rule or policy code, tool, effect and
+  verdict — so the first one is signal and the hundredth repeat is not. It
+  carries a link to the run it happened in, and rehearsals are excluded because
+  a rehearsal produces refusals by design.
+- **A tool server can carry a rate limit**, in calls per second with a burst.
+  Exceeding it does not send the call and does not end the run: it is retryable
+  and carries how long to wait. **The limit is per worker**, so a pool of two
+  admits twice what one does — the console says so where it is configured.
+
 ## [0.19.1] — 2026-08-21
 
 ### Fixed
