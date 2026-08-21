@@ -25,6 +25,20 @@ field" is a commit message.
 
 ---
 
+## [0.17.1] — 2026-08-20
+
+### Fixed
+
+- **Simulation says an agent cannot be simulated before you spend anything on
+  finding out.** A paused or withdrawn agent let the buttons be clicked and
+  refused afterwards; the screen now reads the agent's state and disables them
+  with the reason shown. A simulation costs real provider calls, so discovering
+  this at the click is discovering it after deciding to pay.
+- The policy editor holds its width: a grid column that has to shrink is
+  `minmax(0,1fr)` rather than `1fr`, condition rows stack on narrow screens,
+  and the bottom bar wraps instead of pushing the page sideways.
+- Three catalogue keys were rendering as their own names in the policy screen.
+
 ## [0.17.0] — 2026-08-20
 
 ### Added
