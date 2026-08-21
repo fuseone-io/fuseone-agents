@@ -33,11 +33,18 @@ func NewNotice(conversations Conversations, poster Poster) *Notice {
 // ordinary cause is a bot removed from one channel, and letting that silence
 // the others would turn one misconfiguration into no notice at all.
 func (n *Notice) Announce(ctx context.Context, scope domain.Scope, m Message) error {
+	_, err := n.AnnounceCount(ctx, scope, m)
+	return err
+}
+
+// AnnounceCount is Announce plus how many messages left.
+func (n *Notice) AnnounceCount(ctx context.Context, scope domain.Scope, m Message) (int, error) {
 	places, err := n.conversations.For(ctx, scope)
 	if err != nil {
-		return fmt.Errorf("channel: conversations for %s: %w", scope, err)
+		return 0, fmt.Errorf("channel: conversations for %s: %w", scope, err)
 	}
 
+	sent := 0
 	failures := []error{}
 	for _, place := range places {
 		if !place.wants(m.Event) {
@@ -45,7 +52,9 @@ func (n *Notice) Announce(ctx context.Context, scope domain.Scope, m Message) er
 		}
 		if _, err := n.poster.Post(ctx, place, m); err != nil {
 			failures = append(failures, fmt.Errorf("channel: post to %s: %w", place.Label, err))
+			continue
 		}
+		sent++
 	}
-	return errors.Join(failures...)
+	return sent, errors.Join(failures...)
 }

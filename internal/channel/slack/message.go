@@ -32,6 +32,11 @@ func summary(m channel.Message) string {
 			m.Agent, reasonOr(m.Reason, "corrections stopped holding"))
 	case channel.EventFailed:
 		return fmt.Sprintf("%s stopped: %s", m.Agent, reasonOr(m.Reason, "no reason recorded"))
+	case channel.EventGateRefusal:
+		if m.Tool != "" {
+			return fmt.Sprintf("A new Gate block appeared for %s", m.Tool)
+		}
+		return "A new Gate block appeared"
 	case "test":
 		// Says what it is. A test message that looked like a real one would
 		// have somebody opening a run that does not exist.

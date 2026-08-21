@@ -46,6 +46,7 @@ func (p *workerParts) startLoops(ctx context.Context, cfg workerFlags, sim *work
 	// What the people waiting on a run get told (NT-005 stage 1).
 	if p.settings != nil {
 		go reportToChannels(ctx, p.settings, channel.NewPostgres(p.configPool), cfg.baseURL)
+		go watchPolicyRefusals(ctx, p.settings, p.configPool, cfg.baseURL, cfg.owner+"-gate-refusals")
 	}
 
 	// And what they ask back (NT-005 stage 3). The door writes an ask down and

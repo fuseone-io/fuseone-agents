@@ -25,6 +25,16 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- Channels that receive failed-run notifications now hear about the first time
+  a new Gate block shape appears in their scope. The alert is deduplicated by
+  rule or policy code, tool, effect and verdict, links to the first concrete
+  run, and starts from the upgrade time rather than replaying historical
+  refusals.
+
 ## [0.19.1] — 2026-08-21
 
 ### Fixed

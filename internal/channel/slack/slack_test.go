@@ -181,3 +181,42 @@ func TestPost_drift_saysNothingWasPublishedAndNamesTheCorrection(t *testing.T) {
 		t.Errorf("summary = %q, want it to say nothing was published, and which case", said)
 	}
 }
+
+func TestPost_gateRefusalNamesTheNewGateBlock(t *testing.T) {
+	t.Parallel()
+
+	var body string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		body = string(raw)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"ok":true,"ts":"1"}`)
+	}))
+	defer server.Close()
+
+	_, err := poster(server).Post(t.Context(),
+		channel.Conversation{ID: "C07", Label: "#ops"},
+		channel.Message{
+			Event:  channel.EventGateRefusal,
+			RunID:  "run-1",
+			Agent:  "triage",
+			Scope:  domain.Scope{Company: "acme", Area: "cx"},
+			Tool:   "crm.delete_account",
+			Reason: "POL-100 blocked destructive",
+			Link:   "https://agents.example.com/runs/run-1",
+		})
+	if err != nil {
+		t.Fatalf("post: %v", err)
+	}
+
+	for _, want := range []string{
+		"A new Gate block appeared",
+		"crm.delete_account",
+		"POL-100 blocked destructive",
+		"https://agents.example.com/runs/run-1",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the policy refusal message does not carry %q", want)
+		}
+	}
+}

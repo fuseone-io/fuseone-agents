@@ -179,6 +179,11 @@ existing session alone.
 reason is worth reading: "this writes" and "this writes in a run that read
 somebody else's text" are different sentences and different risks.
 
+**A new Gate block appears in a channel.** The platform announces the first
+time a particular block shape appears in that channel's scope: rule or policy
+code, tool, effect and verdict. Repetitions stay quiet, because a channel that
+hears the same denial all afternoon is a channel people mute.
+
 ### Slack delivery paths
 
 Slack has three different paths that look similar and fail differently:

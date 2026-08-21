@@ -207,6 +207,46 @@ func TestSweep_noConversationWantsIt_leavesTheRunToBeAnnouncedLater(t *testing.T
 	}
 }
 
+func TestNotice_gateRefusalRidesWithFailedNotifications(t *testing.T) {
+	t.Parallel()
+
+	posts := &recorder{}
+	notice := channel.NewNotice(&fixedConversations{}, posts)
+
+	n, err := notice.AnnounceCount(t.Context(),
+		domain.Scope{Company: "acme", Area: "ops"},
+		channel.Message{Event: channel.EventGateRefusal, Tool: "crm.delete_account"},
+	)
+	if err != nil {
+		t.Fatalf("Announce: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("AnnounceCount = %d, want one message sent", n)
+	}
+	if len(posts.sent) != 1 {
+		t.Fatalf("sent %d messages, want one conversation that asked for failed events", len(posts.sent))
+	}
+	if posts.sent[0].conversation.ID != "C07-ops" {
+		t.Errorf("conversation = %q, want #ops", posts.sent[0].conversation.ID)
+	}
+
+	posts = &recorder{}
+	notice = channel.NewNotice(&fixedConversations{}, posts)
+	n, err = notice.AnnounceCount(t.Context(),
+		domain.Scope{Company: "acme", Area: "support"},
+		channel.Message{Event: channel.EventGateRefusal, Tool: "crm.delete_account"},
+	)
+	if err != nil {
+		t.Fatalf("Announce support: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("AnnounceCount support = %d, want no message sent", n)
+	}
+	if len(posts.sent) != 0 {
+		t.Fatalf("sent %d messages to a conversation that only asked for parked events", len(posts.sent))
+	}
+}
+
 func report(run, company, area string, ev channel.Event) channel.Report {
 	return channel.Report{
 		RunID:   domain.RunID(run),

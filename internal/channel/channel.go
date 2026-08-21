@@ -31,6 +31,10 @@ const (
 	EventParked Event = "parked"
 	// EventFailed is a run that stopped and will not continue by itself.
 	EventFailed Event = "failed"
+	// EventGateRefusal is the first time a particular Gate block appears in
+	// a scope. It rides with failed notifications for now: the same people
+	// who need to know a run stopped need to know a new shape of stop exists.
+	EventGateRefusal Event = "gate_refusal"
 	// EventFinished is a run that ended well. Off by default.
 	EventFinished Event = "finished"
 	// EventDrifted is an agent that stopped holding its corrections with
@@ -85,11 +89,18 @@ func (c Conversation) wants(e Event) bool {
 		list = []Event{EventParked, EventFailed, EventDrifted}
 	}
 	for _, want := range list {
-		if want == e {
+		if want == e || want == failedFamily(e) {
 			return true
 		}
 	}
 	return false
+}
+
+func failedFamily(e Event) Event {
+	if e == EventGateRefusal {
+		return EventFailed
+	}
+	return ""
 }
 
 // Message is what gets posted, in parts rather than as a rendered string.
