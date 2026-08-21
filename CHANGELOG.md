@@ -25,6 +25,15 @@ field" is a commit message.
 
 ---
 
+## [0.18.1] — 2026-08-21
+
+### Fixed
+
+- Creating or editing a policy no longer overflows. The actions moved to the
+  page header, where every other screen keeps them, and the sticky footer that
+  sat inside the scrolling content — pinned to a container that scrolled with
+  it — is gone.
+
 ## [0.18.0] — 2026-08-21
 
 ### Added
