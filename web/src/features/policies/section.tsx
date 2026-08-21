@@ -31,8 +31,8 @@ export function Section({
   children: ReactNode;
 }) {
   return (
-    <section className="flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-      <div className="flex items-center gap-2.5 border-b border-border px-4 py-3">
+    <section className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <div className="flex min-w-0 items-center gap-2.5 border-b border-border px-4 py-3">
         {Icon && (
           <span className="flex size-6 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
             <Icon className="size-3.5" aria-hidden />
@@ -56,7 +56,9 @@ export function Section({
         {action && <div className="ml-auto shrink-0">{action}</div>}
       </div>
 
-      <div className={cn(!flush && "flex flex-col gap-3 p-4")}>{children}</div>
+      <div className={cn(!flush && "flex min-w-0 flex-col gap-3 p-4")}>
+        {children}
+      </div>
     </section>
   );
 }
@@ -74,7 +76,7 @@ export function Labelled({
   children: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex min-w-0 flex-col gap-1.5">
       <Label
         htmlFor={htmlFor}
         className="text-2xs uppercase tracking-label text-muted-foreground"

@@ -21,7 +21,7 @@ export function IdentitySection({
   const { t } = useTranslation();
   return (
     <Section title={t("policies.identity")} hint={t("policies.codeAppears")}>
-      <div className="grid gap-3 sm:grid-cols-[140px_1fr_200px]">
+      <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,140px)_minmax(0,1fr)_minmax(0,200px)]">
         <Labelled label={t("policies.code")} htmlFor="code">
           {/* Set once. It is in the trail and in support conversations, and a
               code that moved would orphan every one of them. */}
@@ -58,7 +58,7 @@ export function IdentitySection({
           onChange={(e) => patch({ reason: e.target.value })}
           placeholder={t("policies.reasonPlaceholder")}
         />
-        <p className="text-xs text-muted-foreground">
+        <p className="break-words text-xs text-muted-foreground">
           {t("policies.reasonExplains", { code })}
         </p>
       </Labelled>

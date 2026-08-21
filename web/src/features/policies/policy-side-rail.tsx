@@ -24,7 +24,7 @@ export function PolicySideRail({
 }) {
   const { t } = useTranslation();
   return (
-    <aside className="flex flex-col gap-3 lg:sticky lg:top-0">
+    <aside className="flex min-w-0 flex-col gap-3 lg:sticky lg:top-0">
       <Card title={t("policies.theRule")}>
         <Mono className="block break-words text-xs">
           {draftSentence(draft, t)}
@@ -57,9 +57,9 @@ export function PolicySideRail({
           ) : (
             <ul className="flex flex-col gap-1.5">
               {changes.map((change) => (
-                <li key={t(change.field)} className="text-xs">
+                <li key={t(change.field)} className="min-w-0 break-words text-xs">
                   <span className="text-warning">~</span> {t(change.field)}{" "}
-                  <Mono dim className="text-2xs">
+                  <Mono dim className="break-words text-2xs">
                     {change.from} → {change.to}
                   </Mono>
                 </li>
@@ -82,8 +82,8 @@ function Card({
   children: React.ReactNode;
 }) {
   return (
-    <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4 shadow-sm">
-      <h2 className="text-2xs uppercase tracking-label text-muted-foreground">
+    <section className="flex min-w-0 flex-col gap-2 rounded-xl border border-border bg-card p-4 shadow-sm">
+      <h2 className="break-words text-2xs uppercase tracking-label text-muted-foreground">
         {title}
       </h2>
       {children}

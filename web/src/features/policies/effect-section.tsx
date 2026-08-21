@@ -37,7 +37,7 @@ export function EffectSection({
     <Section title={t("policies.effectAndEnforcement")}>
       <fieldset>
         <legend className="sr-only">{t("policies.effectWhenMatched")}</legend>
-        <div className="grid gap-2 sm:grid-cols-3">
+        <div className="grid min-w-0 gap-2 sm:grid-cols-[repeat(3,minmax(0,1fr))]">
           {EFFECT_CHOICES.map((choice) => (
             <button
               key={choice.value}
@@ -46,14 +46,16 @@ export function EffectSection({
               aria-checked={draft.effect === choice.value}
               onClick={() => patch({ effect: choice.value })}
               className={cn(
-                "flex flex-col gap-0.5 rounded-lg border p-3 text-left",
+                "flex min-w-0 flex-col gap-0.5 rounded-lg border p-3 text-left",
                 draft.effect === choice.value
                   ? choice.className
                   : "border-border",
               )}
             >
-              <span className="text-sm font-medium">{t(choice.label)}</span>
-              <span className="text-xs text-muted-foreground">
+              <span className="break-words text-sm font-medium">
+                {t(choice.label)}
+              </span>
+              <span className="break-words text-xs text-muted-foreground">
                 {t(choice.note)}
               </span>
             </button>
@@ -63,7 +65,7 @@ export function EffectSection({
 
       <fieldset>
         <legend className="sr-only">{t("policies.enforcement")}</legend>
-        <div className="flex gap-2">
+        <div className="flex min-w-0 flex-wrap gap-2">
           {(["monitor", "enforce"] as const).map((mode) => (
             <button
               key={mode}
@@ -72,7 +74,7 @@ export function EffectSection({
               aria-checked={draft.mode === mode}
               onClick={() => patch({ mode })}
               className={cn(
-                "h-8 flex-1 rounded-md border text-xs",
+                "h-8 min-w-28 flex-1 rounded-md border px-2 text-xs",
                 draft.mode === mode
                   ? "border-primary bg-surface-accent text-text-accent"
                   : "border-border",

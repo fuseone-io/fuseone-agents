@@ -91,7 +91,7 @@ export function PolicyEditorPage() {
       {/* The commit never leaves the screen, and its label names the
           consequence: a rule that will watch and a rule that will stop things
           are different acts and must not share a button that says t("common.save"). */}
-      <div className="sticky bottom-0 -mx-6 -mb-6 flex min-w-0 flex-wrap items-center gap-2 border-t border-border bg-card px-6 py-3 shadow-md">
+      <div className="sticky bottom-0 z-10 mt-4 flex min-w-0 flex-wrap items-center gap-2 rounded-t-xl border border-border bg-card px-4 py-3 shadow-md sm:px-6">
         {changes.length > 0 && (
           <span className="min-w-0 text-xs text-warning">
             {t("policies.unsavedChanges", { count: changes.length })}
