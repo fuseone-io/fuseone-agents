@@ -69,7 +69,24 @@ export function PolicyEditorPage() {
         icon={PAGE_ICONS.policies}
         title={creating ? t("policies.newPolicy") : loaded!.name}
         description={t("policies.editorSubtitle")}
-      />
+      >
+        {changes.length > 0 && (
+          <span className="min-w-0 text-xs text-warning">
+            {t("policies.unsavedChanges", { count: changes.length })}
+          </span>
+        )}
+        <Button variant="outline" onClick={() => navigate("/policies")}>
+          {t("common.cancel")}
+        </Button>
+        <Button
+          onClick={submit}
+          disabled={save.isPending || !draft.name || !code}
+        >
+          {draft.mode === "monitor"
+            ? t("policies.saveMonitoring")
+            : t("policies.saveAndEnforce")}
+        </Button>
+      </PageHeader>
 
       <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_316px] lg:items-start">
         <div className="flex min-w-0 flex-col gap-4">
@@ -86,30 +103,6 @@ export function PolicyEditorPage() {
         </div>
 
         <PolicySideRail draft={draft} creating={creating} changes={changes} />
-      </div>
-
-      {/* The commit never leaves the screen, and its label names the
-          consequence: a rule that will watch and a rule that will stop things
-          are different acts and must not share a button that says t("common.save"). */}
-      <div className="sticky bottom-0 z-10 mt-4 flex min-w-0 flex-wrap items-center gap-2 rounded-t-xl border border-border bg-card px-4 py-3 shadow-md sm:px-6">
-        {changes.length > 0 && (
-          <span className="min-w-0 text-xs text-warning">
-            {t("policies.unsavedChanges", { count: changes.length })}
-          </span>
-        )}
-        <div className="ml-auto flex shrink-0 items-center gap-2">
-          <Button variant="outline" onClick={() => navigate("/policies")}>
-            {t("common.cancel")}
-          </Button>
-          <Button
-            onClick={submit}
-            disabled={save.isPending || !draft.name || !code}
-          >
-            {draft.mode === "monitor"
-              ? t("policies.saveMonitoring")
-              : t("policies.saveAndEnforce")}
-          </Button>
-        </div>
       </div>
     </div>
   );
