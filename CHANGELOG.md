@@ -25,6 +25,17 @@ field" is a commit message.
 
 ---
 
+## [0.18.2] — 2026-08-21
+
+### Fixed
+
+- **A screen scrolls once.** The document was scrolling behind the content
+  container, so the tallest screen in the console — creating a policy — showed
+  two scrollbars and its header scrolled away. The shell now clips to the
+  viewport, leaving the content container as the only thing that scrolls.
+  Shorter screens never crossed the threshold, which is why this looked like
+  one page's defect.
+
 ## [0.18.1] — 2026-08-21
 
 ### Fixed
