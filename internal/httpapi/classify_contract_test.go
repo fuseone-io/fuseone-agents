@@ -194,9 +194,19 @@ func TestListRecipes_carryWhoPublishesAndWhoseDocumentationWasRead(t *testing.T)
 	if !ok {
 		t.Fatal("Datadog recipe missing")
 	}
+	if datadog.RequiresPersonalCredential {
+		t.Fatal("Datadog recipe says every credential is personal; service credentials are documented")
+	}
 	if mode, ok := authMode(*datadog.AuthModes, openapi.ServerRecipeAuthModeTypeHeaders); !ok || mode.Headers == nil ||
 		!slices.Equal(*mode.Headers, []string{"DD_API_KEY", "DD_APPLICATION_KEY"}) {
 		t.Fatalf("Datadog headers auth = %+v, want both header names delivered to the console", mode)
+	}
+	outline, ok := recipeNamed(listed.Items, "outline")
+	if !ok {
+		t.Fatal("Outline recipe missing")
+	}
+	if !outline.RequiresPersonalCredential {
+		t.Fatal("Outline recipe does not say tools require a personal credential")
 	}
 	postgres, ok := recipeNamed(listed.Items, "postgres")
 	if !ok {

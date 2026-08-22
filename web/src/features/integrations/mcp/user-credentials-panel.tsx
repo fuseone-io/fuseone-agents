@@ -24,7 +24,6 @@ import {
 } from "@/features/integrations/mcp/recipe-badges";
 import {
   headerNames,
-  requiresPersonalCredential,
   remoteAuthPlan,
 } from "@/features/integrations/mcp/auth-plan";
 import { CredentialFields } from "@/features/integrations/mcp/credential-fields";
@@ -174,10 +173,7 @@ function PersonalCredentialEditor({
   const remove = useDeleteMCPUserCredential();
   const remotePlan = remoteAuthPlan(recipe?.authModes, recipe !== null);
   const remoteHeaders = headerNames(remotePlan.multiHeaders);
-  const userOnlyCredentials = requiresPersonalCredential(
-    recipe?.authModes,
-    recipe !== null,
-  );
+  const userOnlyCredentials = recipe?.requiresPersonalCredential === true;
   const [value, setValue] = useState(() => blankCredential());
   const oauthChanged = oauthHasValue(value);
   const secretChanged = remotePlan.secret !== null && value.token.trim() !== "";

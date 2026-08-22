@@ -46,6 +46,7 @@ function recipe(
     provenance: "documentation",
     status: "published",
     configRequirements: ["credential"],
+    requiresPersonalCredential: false,
     authModes,
     transport: "http",
     url: "https://mcp.example.com/google",

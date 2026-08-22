@@ -4415,7 +4415,7 @@ components:
 
     ServerRecipe:
       type: object
-      required: [server, title, category, publisher, docsFrom, provenance, status, configRequirements]
+      required: [server, title, category, publisher, docsFrom, provenance, status, configRequirements, requiresPersonalCredential]
       properties:
         server:
           type: string
@@ -4488,6 +4488,14 @@ components:
             variables, generated config file, path access, or no auth at all.
             Keeping this separate from the prose prevents every provider from
             collapsing into "paste a token here".
+        requiresPersonalCredential:
+          type: boolean
+          description: |
+            Whether every documented credential shape for this recipe carries a
+            user's authority. This is the same rule the worker uses when a run
+            calls tools: if it is true, a run without a principal or without
+            that principal's credential stops instead of falling back to the
+            installation credential.
         protocolMode:
           allOf: [{ $ref: '#/components/schemas/MCPProtocolMode' }]
           description: >

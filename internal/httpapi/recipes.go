@@ -104,13 +104,14 @@ func (s *Server) ListRecipes(ctx context.Context, _ openapi.ListRecipesRequestOb
 	for _, e := range entries {
 		recipe := openapi.ServerRecipe{
 			Server: e.Server, Title: e.Title, Publisher: e.Publisher,
-			AuthModes:          authModes(e.AuthModes),
-			Category:           e.Category,
-			ConfigRequirements: configRequirements(e.Config),
-			DocsFrom:           openapi.ServerRecipeDocsFrom(e.DocsFrom),
-			Provenance:         openapi.ServerRecipeProvenance(e.Provenance),
-			Status:             openapi.ServerRecipeStatus(e.Status),
-			Suggestions:        ptr(len(e.Suggestions)),
+			AuthModes:                  authModes(e.AuthModes),
+			Category:                   e.Category,
+			ConfigRequirements:         configRequirements(e.Config),
+			DocsFrom:                   openapi.ServerRecipeDocsFrom(e.DocsFrom),
+			Provenance:                 openapi.ServerRecipeProvenance(e.Provenance),
+			RequiresPersonalCredential: e.RequiresPersonalCredential(),
+			Status:                     openapi.ServerRecipeStatus(e.Status),
+			Suggestions:                ptr(len(e.Suggestions)),
 		}
 		if e.Docs != "" {
 			recipe.Docs = ptr(e.Docs)

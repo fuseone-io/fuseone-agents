@@ -2882,6 +2882,14 @@ export interface components {
              *     collapsing into "paste a token here".
              */
             authModes?: components["schemas"]["ServerRecipeAuthMode"][];
+            /**
+             * @description Whether every documented credential shape for this recipe carries a
+             *     user's authority. This is the same rule the worker uses when a run
+             *     calls tools: if it is true, a run without a principal or without
+             *     that principal's credential stops instead of falling back to the
+             *     installation credential.
+             */
+            requiresPersonalCredential: boolean;
             /** @description Suggested HTTP protocol negotiation mode. It fills the form and decides nothing; legacy is for endpoints that reject the current server/discover probe. */
             protocolMode?: components["schemas"]["MCPProtocolMode"];
             transport?: components["schemas"]["Transport"];

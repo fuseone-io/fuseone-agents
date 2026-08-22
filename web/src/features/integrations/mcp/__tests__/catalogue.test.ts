@@ -17,6 +17,7 @@ const recipe = (server: string, category: string): ServerRecipe => ({
   provenance: "documentation",
   status: "published",
   configRequirements: [],
+  requiresPersonalCredential: false,
 });
 
 const connected = (name: string, tools = 0): MCPServer => ({

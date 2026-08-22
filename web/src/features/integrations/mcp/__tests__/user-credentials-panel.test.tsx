@@ -42,6 +42,7 @@ const datadog: ServerRecipe = {
   provenance: "documentation",
   status: "published",
   configRequirements: ["credential"],
+  requiresPersonalCredential: false,
   authModes: [
     {
       type: "headers",
@@ -63,6 +64,7 @@ const outline: ServerRecipe = {
   provenance: "documentation",
   status: "published",
   configRequirements: ["credential"],
+  requiresPersonalCredential: true,
   authModes: [
     { type: "oauth2", principal: "user", label: "Outline OAuth" },
     {

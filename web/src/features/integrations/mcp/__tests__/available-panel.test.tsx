@@ -32,6 +32,7 @@ const stripe: ServerRecipe = {
   provenance: "documentation",
   status: "published",
   configRequirements: ["credential"],
+  requiresPersonalCredential: true,
   authModes: [{ type: "oauth2", principal: "user", label: "Stripe OAuth" }],
   transport: "http",
   url: "https://mcp.stripe.com",
@@ -48,6 +49,7 @@ const postgres: ServerRecipe = {
   provenance: "documentation",
   status: "archived",
   configRequirements: ["credential"],
+  requiresPersonalCredential: false,
   authModes: [
     {
       type: "dsn",
@@ -68,6 +70,7 @@ const datadog: ServerRecipe = {
   provenance: "documentation",
   status: "published",
   configRequirements: ["credential"],
+  requiresPersonalCredential: false,
   authModes: [
     {
       type: "headers",
@@ -102,6 +105,7 @@ const outline: ServerRecipe = {
   provenance: "documentation",
   status: "published",
   configRequirements: ["credential"],
+  requiresPersonalCredential: true,
   authModes: [{ type: "bearer", principal: "user", label: "Outline API key" }],
   transport: "http",
   protocolMode: "legacy",
