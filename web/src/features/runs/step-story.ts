@@ -147,9 +147,19 @@ export function detailOf(step: Step): Line {
     }
 
     case "tool_returned":
-      return payload.failed
-        ? { key: "runs.storyToolFailed", values: { code: payload.error_code ?? "" } }
-        : NOTHING;
+      if (payload.failed) {
+        return { key: "runs.storyToolFailed", values: { code: payload.error_code ?? "" } };
+      }
+      if (payload.cached) {
+        return {
+          key: "runs.storyToolCached",
+          values: {
+            run: payload.cached_from_run ?? "",
+            seq: payload.cached_from_seq ?? "",
+          },
+        };
+      }
+      return NOTHING;
 
     case "approval_decided":
       return {
@@ -309,7 +319,9 @@ export function summaryOf(step: Step): Line {
     case "tool_called":
       return { key: "runs.summaryToolCalled", values: { tool } };
     case "tool_returned":
-      return { key: "runs.summaryToolReturned", values: { tool } };
+      return payload.cached
+        ? { key: "runs.summaryToolCached", values: { tool } }
+        : { key: "runs.summaryToolReturned", values: { tool } };
     case "budget_reserved":
       return typeof payload.tokens === "number"
         ? {

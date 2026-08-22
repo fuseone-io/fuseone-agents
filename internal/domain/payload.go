@@ -142,6 +142,12 @@ type ToolReturnedPayload struct {
 	ResultRef string `json:"result_ref,omitempty"`
 	Failed    bool   `json:"failed,omitempty"`
 	ErrorCode string `json:"error_code,omitempty"`
+	// Cached says this run received a stored result instead of reaching the
+	// tool server. The fresh ResultRef belongs to this run; the source fields
+	// identify where the bytes first came from.
+	Cached        bool  `json:"cached,omitempty"`
+	CachedFromRun RunID `json:"cached_from_run,omitempty"`
+	CachedFromSeq int64 `json:"cached_from_seq,omitempty"`
 }
 
 type ApprovalRequestedPayload struct {

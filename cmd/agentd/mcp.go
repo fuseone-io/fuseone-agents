@@ -63,7 +63,10 @@ func connectServer(
 	if cleanup != nil {
 		managed = cleanupSession{Session: session, cleanup: cleanup}
 	}
-	if err := catalog.AddServer(ctx, server.Name, managed, server.Surface, tools.WithRateLimit(server.RateLimit)); err != nil {
+	if err := catalog.AddServer(ctx, server.Name, managed, server.Surface,
+		tools.WithRateLimit(server.RateLimit),
+		tools.WithResultCache(server.Cache),
+	); err != nil {
 		_ = managed.Close()
 		return fmt.Errorf("import tools from %s: %w", server.Name, err)
 	}
@@ -528,7 +531,7 @@ func fingerprint(server domain.MCPServer) string {
 	sum := sha256.Sum256([]byte(strings.Join([]string{
 		server.TransportOf(), server.Command, strings.Join(server.Args, " "), server.URL,
 		server.MCPProtocolModeOf(), server.ConfigFileEnvName(),
-		rateLimitFingerprint(server.RateLimit),
+		rateLimitFingerprint(server.RateLimit), resultCacheFingerprint(server.Cache),
 		fmt.Sprint(server.Enabled), server.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}, "\x00")))
 	return hex.EncodeToString(sum[:8])
@@ -539,6 +542,13 @@ func rateLimitFingerprint(limit *domain.MCPRateLimit) string {
 		return ""
 	}
 	return fmt.Sprintf("%g/%d", limit.RatePerSecond, limit.Burst)
+}
+
+func resultCacheFingerprint(cache *domain.MCPResultCache) string {
+	if cache == nil {
+		return ""
+	}
+	return fmt.Sprintf("%d/%d", cache.TTLSeconds, cache.MaxEntries)
 }
 
 // Servers is where the configured set is read from, declared here by the

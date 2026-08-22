@@ -51,6 +51,7 @@ describe("the MCP server properties sheet", () => {
         server={{
           ...server(),
           rateLimit: { ratePerSecond: 0.5, burst: 3 },
+          cache: { ttlSeconds: 45, maxEntries: 80 },
         }}
         onClose={vi.fn()}
       />,
@@ -58,5 +59,7 @@ describe("the MCP server properties sheet", () => {
 
     expect(screen.getByLabelText("Chamadas por segundo")).toHaveValue("0.5");
     expect(screen.getByLabelText("Rajada")).toHaveValue("3");
+    expect(screen.getByLabelText("TTL da cache em segundos")).toHaveValue("45");
+    expect(screen.getByLabelText("Entradas da cache")).toHaveValue("80");
   });
 });

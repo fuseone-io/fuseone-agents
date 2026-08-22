@@ -41,6 +41,14 @@ Concretely, on a fresh install and after several upgrades:
   the effective ceiling is roughly twice the configured value. Use it to keep a
   fragile integration from being burst by one worker; do not read it as a
   distributed quota for the whole installation.
+- **An MCP result cache is per worker and only for reads.** It keeps small,
+  successful read results in the worker's memory for a short TTL. The cache key
+  includes tool definition, arguments, scope and `OnBehalfOf`, so a personal or
+  scoped read is not shared across people or areas. A hit is recorded in the
+  trail as a cache hit with the original run and step; it is not recorded as a
+  fresh call to the server. This reduces repeated MCP traffic and latency. It
+  does not reduce model input tokens by itself — summarising or clipping large
+  tool results is a separate optimisation.
 - **A user-only MCP server does not act with the installation credential.** If
   a shipped recipe says every credential mode carries a user's authority, a
   concrete tool call has to carry `OnBehalfOf` and that person's sealed

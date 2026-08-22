@@ -86,6 +86,21 @@ O catálogo declara a forma, mas o runtime só envia o que foi configurado.
 Não preencha duas formas ao mesmo tempo. A tela recusa para evitar que uma
 pessoa configure uma coisa e o runtime envie outra.
 
+## Cache de resultado
+
+Um servidor pode cachear resultados de leitura bem-sucedidos por um TTL curto.
+Use para leituras estáveis e repetidas, como "listar datasources" ou "buscar o
+mesmo runbook", não para dados que precisam estar frescos em toda chamada.
+
+A cache vive em cada processo de worker, não em um store compartilhado. Com
+dois workers, qualquer um deles pode dar miss até ter visto a mesma leitura. Um
+hit ainda grava uma referência de conteúdo nova para a run atual, e a trilha
+diz qual run e passo anteriores forneceram os bytes.
+
+A chave inclui definição da ferramenta, argumentos, escopo e `OnBehalfOf`.
+Assim um resultado produzido com credencial pessoal fica com a pessoa que o
+produziu.
+
 ## Diagnóstico rápido
 
 - Servidor "answering" mas tool falha com credencial pessoal: configure a

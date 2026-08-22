@@ -257,6 +257,125 @@ func TestInvoke_result_goesToContentStoreNotTheLedger(t *testing.T) {
 	}
 }
 
+func TestInvoke_successfulReadCanBeServedFromTheResultCache(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	srv := lookupServer()
+	content := engine.NewMemoryContent()
+	c := tools.NewCatalog(content)
+	if err := c.AddServer(ctx, "crm", srv, nil,
+		tools.WithRateLimit(&domain.MCPRateLimit{RatePerSecond: 0.01, Burst: 1}),
+		tools.WithResultCache(&domain.MCPResultCache{TTLSeconds: 60, MaxEntries: 8})); err != nil {
+		t.Fatalf("AddServer: %v", err)
+	}
+	if err := c.Classify(domain.ToolClassification{Tool: "crm.lookup", Effect: domain.EffectRead, Untrusted: true}); err != nil {
+		t.Fatalf("Classify: %v", err)
+	}
+
+	firstCall := engine.Call{
+		RunID: "run-1", Seq: 7, Tool: "crm.lookup",
+		Scope: domain.Scope{Company: "cora", Area: "platform"},
+		Args:  []byte(`{"email":"a@b.com"}`),
+	}
+	if err := c.Reserve(ctx, firstCall); err != nil {
+		t.Fatalf("first Reserve: %v", err)
+	}
+	first, err := c.Invoke(ctx, firstCall)
+	if err != nil {
+		t.Fatalf("first Invoke: %v", err)
+	}
+	srv.result = text("fresh server value")
+
+	secondCall := engine.Call{
+		RunID: "run-2", Seq: 3, Tool: "crm.lookup",
+		Scope: domain.Scope{Company: "cora", Area: "platform"},
+		Args:  []byte(`{"email":"a@b.com"}`),
+	}
+	if err := c.Reserve(ctx, secondCall); err != nil {
+		t.Fatalf("second Reserve = %v, want the cache hit not to spend a rate-limit token", err)
+	}
+	second, err := c.Invoke(ctx, secondCall)
+	if err != nil {
+		t.Fatalf("second Invoke: %v", err)
+	}
+	if len(srv.calls) != 1 {
+		t.Fatalf("server calls = %v, want one real call and one cache hit", srv.calls)
+	}
+	if !second.Cached || second.CachedFromRun != "run-1" || second.CachedFromSeq != 7 {
+		t.Fatalf("cached metadata = (%v, %q, %d), want run-1 #7", second.Cached, second.CachedFromRun, second.CachedFromSeq)
+	}
+	if second.ResultRef == "" || second.ResultRef == first.ResultRef {
+		t.Fatalf("cached result ref = %q; first ref = %q, want a fresh ref for this run", second.ResultRef, first.ResultRef)
+	}
+	stored, err := content.Get(ctx, second.ResultRef)
+	if err != nil {
+		t.Fatalf("Get(cached): %v", err)
+	}
+	if string(stored) != "Cliente encontrado: ACME Ltda" {
+		t.Errorf("cached body = %q, want the original successful read", stored)
+	}
+	if !second.Labels.Has(domain.LabelUntrusted) {
+		t.Errorf("cached labels = %v, want the original taint preserved", second.Labels)
+	}
+}
+
+func TestInvoke_resultCacheIsSeparatedByPrincipalAndScope(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	srv := lookupServer()
+	c := tools.NewCatalog(engine.NewMemoryContent())
+	if err := c.AddServer(ctx, "crm", srv, nil,
+		tools.WithResultCache(&domain.MCPResultCache{TTLSeconds: 60, MaxEntries: 8})); err != nil {
+		t.Fatalf("AddServer: %v", err)
+	}
+	if err := c.Classify(domain.ToolClassification{Tool: "crm.lookup", Effect: domain.EffectRead, Untrusted: true}); err != nil {
+		t.Fatalf("Classify: %v", err)
+	}
+
+	calls := []engine.Call{
+		{RunID: "run-1", Seq: 1, Tool: "crm.lookup", Scope: domain.Scope{Company: "cora", Area: "platform"}, OnBehalfOf: "ana", Args: []byte(`{}`)},
+		{RunID: "run-2", Seq: 1, Tool: "crm.lookup", Scope: domain.Scope{Company: "cora", Area: "platform"}, OnBehalfOf: "bruno", Args: []byte(`{}`)},
+		{RunID: "run-3", Seq: 1, Tool: "crm.lookup", Scope: domain.Scope{Company: "cora", Area: "finance"}, OnBehalfOf: "ana", Args: []byte(`{}`)},
+	}
+	for _, call := range calls {
+		if res, err := c.Invoke(ctx, call); err != nil || res.Cached {
+			t.Fatalf("Invoke(%s/%s/%s) = cached %v, err %v; want fresh", call.RunID, call.Scope, call.OnBehalfOf, res.Cached, err)
+		}
+	}
+	if len(srv.calls) != len(calls) {
+		t.Fatalf("server calls = %v, want one per principal/scope boundary", srv.calls)
+	}
+}
+
+func TestInvoke_resultCacheDoesNotServeWriteResults(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	srv := lookupServer()
+	c := tools.NewCatalog(engine.NewMemoryContent())
+	if err := c.AddServer(ctx, "crm", srv, nil,
+		tools.WithResultCache(&domain.MCPResultCache{TTLSeconds: 60, MaxEntries: 8})); err != nil {
+		t.Fatalf("AddServer: %v", err)
+	}
+	if err := c.Classify(domain.ToolClassification{Tool: "crm.lookup", Effect: domain.EffectWrite, Untrusted: true}); err != nil {
+		t.Fatalf("Classify: %v", err)
+	}
+	for i := 0; i < 2; i++ {
+		res, err := c.Invoke(ctx, engine.Call{RunID: domain.RunID("run"), Seq: int64(i + 1), Tool: "crm.lookup"})
+		if err != nil {
+			t.Fatalf("Invoke(%d): %v", i, err)
+		}
+		if res.Cached {
+			t.Fatalf("Invoke(%d) was served from cache for a write-classified tool", i)
+		}
+	}
+	if len(srv.calls) != 2 {
+		t.Fatalf("server calls = %v, want no cache for write effect", srv.calls)
+	}
+}
+
 func TestInvoke_toolReportsFailure_isSurfacedNotSwallowed(t *testing.T) {
 	t.Parallel()
 

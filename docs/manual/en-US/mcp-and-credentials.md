@@ -86,6 +86,20 @@ configured.
 Do not fill two shapes at the same time. The screen refuses that so a person
 does not configure one thing while the runtime sends another.
 
+## Result cache
+
+A server can cache successful read-only results for a short TTL. Use it for
+stable, repeated reads such as "list datasources" or "fetch the same runbook",
+not for data that must be fresh on every call.
+
+The cache lives in each worker process, not in a shared store. With two
+workers, either worker may miss until it has seen the same read. A cache hit
+still writes a fresh content reference for the current run and the trail says
+which earlier run and step supplied the bytes.
+
+The cache key includes the tool definition, arguments, scope and `OnBehalfOf`.
+That keeps a personal credential result with the person who produced it.
+
 ## Quick diagnosis
 
 - Server is "answering" but a tool fails with personal credential: configure

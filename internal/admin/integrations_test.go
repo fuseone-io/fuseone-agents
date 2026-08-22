@@ -1399,6 +1399,77 @@ func TestPutMCPServer_aPartialRateLimitIsRefused(t *testing.T) {
 	}
 }
 
+func TestPutMCPServer_aWriteThatOmitsTheResultCache_keepsTheStoredOne(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+	server := domain.MCPServer{
+		Name: "crm", Transport: domain.TransportHTTP,
+		URL: "https://tools.example.com/mcp", Enabled: true,
+		Cache: &domain.MCPResultCache{TTLSeconds: 30, MaxEntries: 12},
+	}
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, server,
+		domain.MCPCredentialPatch{}); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+
+	server.Cache = nil
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, server,
+		domain.MCPCredentialPatch{Token: ptr("rotated")}); err != nil {
+		t.Fatalf("PutMCPServer again: %v", err)
+	}
+
+	servers, err := i.MCPServers(ctx)
+	if err != nil {
+		t.Fatalf("MCPServers: %v", err)
+	}
+	if servers[0].Cache == nil ||
+		servers[0].Cache.TTLSeconds != 30 ||
+		servers[0].Cache.MaxEntries != 12 {
+		t.Fatalf("cache = %#v, want the stored cache", servers[0].Cache)
+	}
+}
+
+func TestPutMCPServer_aZeroResultCacheClearsTheStoredOne(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+	server := domain.MCPServer{
+		Name: "crm", Transport: domain.TransportHTTP,
+		URL: "https://tools.example.com/mcp", Enabled: true,
+		Cache: &domain.MCPResultCache{TTLSeconds: 30, MaxEntries: 12},
+	}
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, server,
+		domain.MCPCredentialPatch{}); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+
+	server.Cache = &domain.MCPResultCache{}
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, server,
+		domain.MCPCredentialPatch{}); err != nil {
+		t.Fatalf("PutMCPServer clearing: %v", err)
+	}
+
+	servers, err := i.MCPServers(ctx)
+	if err != nil {
+		t.Fatalf("MCPServers: %v", err)
+	}
+	if servers[0].Cache != nil {
+		t.Fatalf("cache = %#v, want none", servers[0].Cache)
+	}
+}
+
+func TestPutMCPServer_aPartialResultCacheIsRefused(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+	err := i.PutMCPServer(ctx, "usr_ana", platform, domain.MCPServer{
+		Name: "crm", Transport: domain.TransportHTTP,
+		URL: "https://tools.example.com/mcp", Enabled: true,
+		Cache: &domain.MCPResultCache{MaxEntries: 12},
+	}, domain.MCPCredentialPatch{})
+	if !errors.Is(err, admin.ErrBadMCPResultCache) {
+		t.Fatalf("PutMCPServer = %v, want bad result cache", err)
+	}
+}
+
 /*
 Two people editing one server do not undo each other.
 

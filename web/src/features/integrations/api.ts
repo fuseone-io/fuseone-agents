@@ -69,6 +69,7 @@ export function usePutMCPServer() {
        */
       configFileEnv?: string;
       rateLimit?: components["schemas"]["MCPRateLimit"];
+      cache?: components["schemas"]["MCPResultCache"];
       acceptsLocalExecution: boolean;
       enabled: boolean;
     }) =>
@@ -90,6 +91,7 @@ export function usePutMCPServer() {
             configFile: input.configFile,
             configFileEnv: input.configFileEnv,
             rateLimit: input.rateLimit,
+            cache: input.cache,
             acceptsLocalExecution: input.acceptsLocalExecution,
             enabled: input.enabled,
           },

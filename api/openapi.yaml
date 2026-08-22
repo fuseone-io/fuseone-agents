@@ -2420,6 +2420,12 @@ paths:
                     Per-worker token bucket for outgoing tool calls to this
                     server. Omit to leave the choice as it stands. Send both
                     fields as zero to disable it.
+                cache:
+                  allOf: [{ $ref: '#/components/schemas/MCPResultCache' }]
+                  description: >
+                    Per-worker in-memory cache for successful read-only tool
+                    results from this server. Omit to leave the choice as it
+                    stands. Send both fields as zero to disable it.
                 acceptsLocalExecution:
                   type: boolean
                   description: >
@@ -4316,6 +4322,20 @@ components:
           type: integer
           minimum: 0
 
+    MCPResultCache:
+      type: object
+      description: >
+        Per-worker in-memory cache for successful read-only tool results from
+        one MCP server. Each cache hit is recorded in the run trail as a cache
+        hit, not as a fresh server call. Set both fields to zero to disable it.
+      properties:
+        ttlSeconds:
+          type: integer
+          minimum: 0
+        maxEntries:
+          type: integer
+          minimum: 0
+
     MCPServer:
       type: object
       required: [name, enabled]
@@ -4382,6 +4402,9 @@ components:
             call reaches it, and the Gate is never asked.
         rateLimit:
           allOf: [{ $ref: '#/components/schemas/MCPRateLimit' }]
+          nullable: true
+        cache:
+          allOf: [{ $ref: '#/components/schemas/MCPResultCache' }]
           nullable: true
         acceptsLocalExecution:
           type: boolean

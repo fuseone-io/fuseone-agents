@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detailOf } from "@/features/runs/step-story";
+import { detailOf, summaryOf } from "@/features/runs/step-story";
 import type { Step } from "@/lib/api/client";
 
 /*
@@ -107,6 +107,32 @@ describe("a run parked by a ceiling", () => {
       ceiling: "60",
       already: "60",
       requested: "1",
+    });
+  });
+});
+
+describe("a cached tool result", () => {
+  it("says the server was not called for this answer", () => {
+    const step = {
+      seq: 8,
+      kind: "tool_returned",
+      at: "2026-08-22T12:00:00Z",
+      hash: "h",
+      payload: {
+        tool: "grafana.query_prometheus",
+        cached: true,
+        cached_from_run: "run-original",
+        cached_from_seq: 4,
+      },
+    } as never;
+
+    expect(detailOf(step)).toEqual({
+      key: "runs.storyToolCached",
+      values: { run: "run-original", seq: 4 },
+    });
+    expect(summaryOf(step)).toEqual({
+      key: "runs.summaryToolCached",
+      values: { tool: "grafana.query_prometheus" },
     });
   });
 });

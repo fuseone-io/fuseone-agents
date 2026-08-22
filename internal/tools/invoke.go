@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -39,7 +40,9 @@ func (c *Catalog) Invoke(ctx context.Context, call engine.Call) (engine.ToolResu
 	c.mu.RLock()
 	entry, known := c.entries[call.Tool]
 	session, connected := c.sessions[entry.Server]
+	cache := c.caches[entry.Server]
 	timeout := c.timeout
+	content := c.content
 	c.mu.RUnlock()
 
 	if !known || !entry.OnSurface {
@@ -68,6 +71,22 @@ func (c *Catalog) Invoke(ctx context.Context, call engine.Call) (engine.ToolResu
 		}
 	}
 
+	cacheKey := resultCacheKeyOf(entry, call)
+	if resultCacheable(entry, call, content, cache) {
+		if cached, ok := cache.get(cacheKey, time.Now()); ok {
+			ref, err := content.Put(ctx, call.RunID, call.Seq, cached.body)
+			if err != nil {
+				return engine.ToolResult{}, fmt.Errorf("tools: store cached result of %s: %w", call.Tool, err)
+			}
+			out.ResultRef = ref
+			out.Labels = cached.labels.Clone()
+			out.Cached = true
+			out.CachedFromRun = cached.sourceRun
+			out.CachedFromSeq = cached.sourceSeq
+			return out, nil
+		}
+	}
+
 	// A tool that never returns would hold a worker's slot until the lease
 	// expires; bound it here rather than relying on the server to behave.
 	callCtx, cancel := context.WithTimeout(ctx, timeout)
@@ -82,8 +101,8 @@ func (c *Catalog) Invoke(ctx context.Context, call engine.Call) (engine.ToolResu
 	if err != nil {
 		out.Failed = true
 		out.ErrorCode = "invoke_error"
-		if c.content != nil {
-			ref, storeErr := c.content.Put(ctx, call.RunID, call.Seq, invocationErrorText(call.Tool, err))
+		if content != nil {
+			ref, storeErr := content.Put(ctx, call.RunID, call.Seq, invocationErrorText(call.Tool, err))
 			if storeErr != nil {
 				return engine.ToolResult{}, fmt.Errorf("tools: store failure for %s: %w", call.Tool, storeErr)
 			}
@@ -98,12 +117,16 @@ func (c *Catalog) Invoke(ctx context.Context, call engine.Call) (engine.ToolResu
 	}
 
 	text := flatten(res)
-	if c.content != nil && text != "" {
-		ref, err := c.content.Put(ctx, call.RunID, call.Seq, []byte(text))
+	if content != nil && text != "" {
+		body := []byte(text)
+		ref, err := content.Put(ctx, call.RunID, call.Seq, body)
 		if err != nil {
 			return engine.ToolResult{}, fmt.Errorf("tools: store result of %s: %w", call.Tool, err)
 		}
 		out.ResultRef = ref
+		if resultCacheable(entry, call, content, cache) && !out.Failed {
+			cache.put(cacheKey, body, out.Labels, call.RunID, call.Seq, time.Now())
+		}
 	}
 	return out, nil
 }

@@ -64,6 +64,8 @@ export function useServerForm(
       configFileEnv: server?.configFileEnv ?? "",
       rateLimitPerSecond: server?.rateLimit?.ratePerSecond?.toString() ?? "",
       rateLimitBurst: server?.rateLimit?.burst?.toString() ?? "",
+      cacheTTLSeconds: server?.cache?.ttlSeconds?.toString() ?? "",
+      cacheMaxEntries: server?.cache?.maxEntries?.toString() ?? "",
       // Never carried forward from the transport. A server nobody has accepted
       // must show as not accepted, or the box would tick itself on the screen
       // where the decision is supposed to be made.
@@ -103,6 +105,7 @@ export function useServerForm(
         configFile: values.configFile || undefined,
         configFileEnv: values.configFileEnv,
         rateLimit: rateLimitFromValues(values),
+        cache: resultCacheFromValues(values),
         acceptsLocalExecution: values.acceptsLocalExecution,
         enabled: values.enabled,
       });
@@ -154,6 +157,12 @@ function rateLimitFromValues(values: ServerFormValues) {
   const rate = Number(values.rateLimitPerSecond.trim() || "0");
   const burst = Number.parseInt(values.rateLimitBurst.trim() || "0", 10);
   return { ratePerSecond: rate, burst };
+}
+
+function resultCacheFromValues(values: ServerFormValues) {
+  const ttl = Number.parseInt(values.cacheTTLSeconds.trim() || "0", 10);
+  const maxEntries = Number.parseInt(values.cacheMaxEntries.trim() || "0", 10);
+  return { ttlSeconds: ttl, maxEntries };
 }
 
 function readEnvLines(raw: string) {

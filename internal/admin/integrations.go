@@ -30,6 +30,8 @@ var (
 		"admin: the managed config file environment variable must be a shell variable name")
 	ErrBadMCPRateLimit = errors.New(
 		"admin: MCP rate limit needs both a positive rate and a positive burst, or neither")
+	ErrBadMCPResultCache = errors.New(
+		"admin: MCP result cache needs a positive TTL; max entries must be zero or positive")
 	// ErrLocalExecutionNotAccepted means a local server was configured without
 	// anybody saying they accept what a local server is.
 	//
@@ -83,6 +85,9 @@ type storedServer struct {
 	// the effective cap scales with the replica count; it is an operational
 	// guard, not a distributed quota.
 	RateLimit *domain.MCPRateLimit `json:"rateLimit,omitempty"`
+	// Cache is also per worker process. It is an optimisation for read results,
+	// not a distributed truth about the external system.
+	Cache *domain.MCPResultCache `json:"cache,omitempty"`
 	// AcceptsLocalExecution is stored rather than assumed from the transport.
 	// A row written before this existed has not been accepted by anybody, and
 	// reading it as accepted would grant on upgrade what nobody granted.
@@ -143,6 +148,7 @@ func (i *Integrations) MCPServers(ctx context.Context) ([]domain.MCPServer, erro
 			ProtocolMode:          stored.ProtocolMode,
 			Surface:               stored.Surface,
 			RateLimit:             stored.RateLimit,
+			Cache:                 stored.Cache,
 			AcceptsLocalExecution: stored.AcceptsLocalExecution,
 			HasSecret:             row.HasSecret,
 			HasOAuth:              stored.HasOAuth,
@@ -199,6 +205,10 @@ func (i *Integrations) PutMCPServer(
 	if err != nil {
 		return err
 	}
+	cache, err := normalizedResultCache(server.Cache)
+	if err != nil {
+		return err
+	}
 
 	/*
 		Both folds happen inside the write's own transaction, under the row's
@@ -234,6 +244,9 @@ func (i *Integrations) PutMCPServer(
 			if server.RateLimit == nil {
 				rateLimit = was.RateLimit
 			}
+			if server.Cache == nil {
+				cache = was.Cache
+			}
 			configEnv := was.ConfigFileEnv
 			if server.ConfigFileEnv != nil {
 				configEnv = *server.ConfigFileEnv
@@ -249,6 +262,7 @@ func (i *Integrations) PutMCPServer(
 				ProtocolMode:          storedProtocolMode(transport, server.MCPProtocolModeOf()),
 				Surface:               surface,
 				RateLimit:             rateLimit,
+				Cache:                 cache,
 				ConfigFileEnv:         configEnv,
 				HasVariables:          len(merged.Env) > 0,
 				HasOAuth:              merged.OAuth != nil && !merged.OAuth.Empty(),
@@ -289,6 +303,7 @@ func (i *Integrations) PutMCPServer(
 					"configFileEnv":         configEnv,
 					"surface":               surfaceSize(surface),
 					"rateLimit":             rateLimitDetail(rateLimit),
+					"cache":                 resultCacheDetail(cache),
 				}, nil
 		},
 	})
@@ -323,11 +338,36 @@ func normalizedRateLimit(limit *domain.MCPRateLimit) (*domain.MCPRateLimit, erro
 	return &domain.MCPRateLimit{RatePerSecond: limit.RatePerSecond, Burst: limit.Burst}, nil
 }
 
+func normalizedResultCache(cache *domain.MCPResultCache) (*domain.MCPResultCache, error) {
+	if cache == nil {
+		return nil, nil
+	}
+	disabled := cache.TTLSeconds == 0 && cache.MaxEntries == 0
+	if disabled {
+		return nil, nil
+	}
+	if cache.TTLSeconds <= 0 || cache.MaxEntries < 0 {
+		return nil, ErrBadMCPResultCache
+	}
+	maxEntries := cache.MaxEntries
+	if maxEntries == 0 {
+		maxEntries = 256
+	}
+	return &domain.MCPResultCache{TTLSeconds: cache.TTLSeconds, MaxEntries: maxEntries}, nil
+}
+
 func rateLimitDetail(limit *domain.MCPRateLimit) any {
 	if limit == nil {
 		return nil
 	}
 	return map[string]any{"ratePerSecond": limit.RatePerSecond, "burst": limit.Burst}
+}
+
+func resultCacheDetail(cache *domain.MCPResultCache) any {
+	if cache == nil {
+		return nil
+	}
+	return map[string]any{"ttlSeconds": cache.TTLSeconds, "maxEntries": cache.MaxEntries}
 }
 
 var configFileEnvPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)

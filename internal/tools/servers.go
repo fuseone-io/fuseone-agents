@@ -82,6 +82,11 @@ func (c *Catalog) AddServer(
 	} else {
 		delete(c.limiters, name)
 	}
+	if cache := newResultCache(opts.cache); cache != nil {
+		c.caches[name] = cache
+	} else {
+		delete(c.caches, name)
+	}
 	for id, entry := range c.entries {
 		if entry.Server == name {
 			delete(c.entries, id)
@@ -131,6 +136,7 @@ func (c *Catalog) RemoveServer(name string) error {
 	}
 	delete(c.sessions, name)
 	delete(c.limiters, name)
+	delete(c.caches, name)
 	for id, entry := range c.entries {
 		if entry.Server == name {
 			delete(c.entries, id)
@@ -155,6 +161,7 @@ func (c *Catalog) Close() error {
 	}
 	clear(c.sessions)
 	clear(c.limiters)
+	clear(c.caches)
 	return errors.Join(errs...)
 }
 

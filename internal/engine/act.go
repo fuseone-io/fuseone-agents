@@ -211,6 +211,7 @@ func (r *Runner) invoke(
 ) (Status, error) {
 	call := Call{
 		RunID: start.RunID,
+		Scope: start.Scope,
 		Tool:  p.Tool, Args: p.Args,
 		OnBehalfOf: start.OnBehalfOf,
 		IdemKey:    idemKey,
@@ -250,6 +251,11 @@ func (r *Runner) invoke(
 	call.Seq = state.Seq
 	result, invokeErr := r.deps.Tools.Invoke(ctx, call)
 	returned := domain.ToolReturnedPayload{Tool: p.Tool, ResultRef: result.ResultRef}
+	if result.Cached {
+		returned.Cached = true
+		returned.CachedFromRun = result.CachedFromRun
+		returned.CachedFromSeq = result.CachedFromSeq
+	}
 	if result.Failed {
 		returned.Failed = true
 		returned.ErrorCode = firstNonEmpty(result.ErrorCode, "tool_error")

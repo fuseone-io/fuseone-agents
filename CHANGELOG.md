@@ -27,6 +27,8 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.21.0] — 2026-08-22
+
 ### Added
 
 - Channels that receive failed-run notifications now hear about the first time
@@ -34,6 +36,11 @@ field" is a commit message.
   rule or policy code, tool, effect and verdict, links to the first concrete
   run, and starts from the upgrade time rather than replaying historical
   refusals.
+- MCP servers can now carry a per-worker result cache for successful read-only
+  tool calls. Cache hits are keyed by tool definition, arguments, scope and
+  `OnBehalfOf`, write a fresh content reference into the current run, and are
+  shown in the trail with the original run and step instead of pretending the
+  server was called again.
 
 ### Security
 

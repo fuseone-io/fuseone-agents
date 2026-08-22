@@ -70,6 +70,7 @@ export function ServerFields({
         )}
         {auth.oauth !== null && <OAuthFormFields form={form} />}
         <RateLimitFields form={form} />
+        <ResultCacheFields form={form} />
       </>
     );
   }
@@ -124,6 +125,7 @@ export function ServerFields({
         }
       />
       <RateLimitFields form={form} />
+      <ResultCacheFields form={form} />
       <AcceptLocalExecution form={form} />
     </>
   );
@@ -148,6 +150,29 @@ function RateLimitFields({ form }: { form: UseFormReturn<ServerFormValues> }) {
         />
       </div>
       <p className="text-xs text-muted-foreground">{t("mcp.rateLimitHint")}</p>
+    </div>
+  );
+}
+
+function ResultCacheFields({ form }: { form: UseFormReturn<ServerFormValues> }) {
+  const { t } = useTranslation();
+  return (
+    <div className="space-y-3 rounded-lg border p-3">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field
+          form={form}
+          name="cacheTTLSeconds"
+          label={t("mcp.cacheTTLSeconds")}
+          placeholder="30"
+        />
+        <Field
+          form={form}
+          name="cacheMaxEntries"
+          label={t("mcp.cacheMaxEntries")}
+          placeholder="256"
+        />
+      </div>
+      <p className="text-xs text-muted-foreground">{t("mcp.cacheHint")}</p>
     </div>
   );
 }
@@ -366,6 +391,8 @@ function Field({
     | "configFileEnv"
     | "rateLimitPerSecond"
     | "rateLimitBurst"
+    | "cacheTTLSeconds"
+    | "cacheMaxEntries"
     | "oauthAccessToken"
     | "oauthRefreshToken"
     | "oauthTokenURL"

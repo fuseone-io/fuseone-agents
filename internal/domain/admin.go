@@ -97,6 +97,14 @@ type MCPRateLimit struct {
 	Burst         int
 }
 
+// MCPResultCache keeps successful read results for a short time inside one
+// worker process. It is an optimisation, not a record: every cached hit still
+// writes a fresh content reference into the run that used it.
+type MCPResultCache struct {
+	TTLSeconds int
+	MaxEntries int
+}
+
 type MCPServer struct {
 	Name string
 	// Transport is stdio or http. Empty reads as stdio: rows written before
@@ -147,6 +155,9 @@ type MCPServer struct {
 	// RateLimit bounds tool calls sent from one worker process to this server.
 	// Nil means no limit. With multiple workers, each worker has its own bucket.
 	RateLimit *MCPRateLimit
+	// Cache keeps successful read results inside one worker process. Nil means
+	// no cache. With multiple workers, each process keeps its own entries.
+	Cache *MCPResultCache
 
 	// AcceptsLocalExecution records that somebody accepted what stdio is.
 	//

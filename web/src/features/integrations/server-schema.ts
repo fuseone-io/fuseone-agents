@@ -41,6 +41,12 @@ export const serverSchema = z
     rateLimitBurst: z
       .string()
       .regex(/^$|^\d+$/, "mcp.rateLimitBurstInvalid"),
+    cacheTTLSeconds: z
+      .string()
+      .regex(/^$|^\d+$/, "mcp.cacheTTLInvalid"),
+    cacheMaxEntries: z
+      .string()
+      .regex(/^$|^\d+$/, "mcp.cacheMaxEntriesInvalid"),
     acceptsLocalExecution: z.boolean(),
     enabled: z.boolean(),
   })
@@ -95,6 +101,10 @@ export const serverSchema = z
     path: ["rateLimitPerSecond"],
     message: "mcp.rateLimitPairInvalid",
   })
+  .refine((v) => resultCacheComplete(v), {
+    path: ["cacheTTLSeconds"],
+    message: "mcp.cachePairInvalid",
+  })
   /*
    * A local server is a program this installation starts inside the worker.
    * The server refuses one nobody accepted; this says so before the round
@@ -115,6 +125,14 @@ function rateLimitComplete(values: {
   const burst = positiveInteger(values.rateLimitBurst);
   if (rate && burst) return true;
   return disabledNumber(values.rateLimitPerSecond) && disabledNumber(values.rateLimitBurst);
+}
+
+function resultCacheComplete(values: {
+  cacheTTLSeconds: string;
+  cacheMaxEntries: string;
+}) {
+  if (positiveInteger(values.cacheTTLSeconds)) return true;
+  return disabledNumber(values.cacheTTLSeconds) && disabledNumber(values.cacheMaxEntries);
 }
 
 function positiveNumber(raw: string) {

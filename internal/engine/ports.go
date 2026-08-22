@@ -85,6 +85,7 @@ type Call struct {
 	// to file bulky results in the content store under a stable key.
 	RunID domain.RunID
 	Seq   int64
+	Scope domain.Scope
 
 	Tool domain.ToolID
 	Args []byte
@@ -103,10 +104,13 @@ type ToolResult struct {
 	ResultRef string
 	// Labels is the taint of the result. A tool reading external content
 	// returns LabelUntrusted, and it propagates from here.
-	Labels    domain.Labels
-	Cost      domain.Cost
-	Failed    bool
-	ErrorCode string
+	Labels        domain.Labels
+	Cost          domain.Cost
+	Failed        bool
+	ErrorCode     string
+	Cached        bool
+	CachedFromRun domain.RunID
+	CachedFromSeq int64
 }
 
 // Catalog resolves a tool's effect classification, set centrally by the

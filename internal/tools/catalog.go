@@ -120,6 +120,7 @@ type Catalog struct {
 	sessions map[string]Session
 	entries  map[domain.ToolID]Entry
 	limiters map[string]*serverLimiter
+	caches   map[string]*resultCache
 
 	content engine.ContentStore
 	timeout time.Duration
@@ -164,6 +165,7 @@ func NewCatalog(content engine.ContentStore) *Catalog {
 		sessions: make(map[string]Session),
 		entries:  make(map[domain.ToolID]Entry),
 		limiters: make(map[string]*serverLimiter),
+		caches:   make(map[string]*resultCache),
 		content:  content,
 		timeout:  60 * time.Second,
 	}

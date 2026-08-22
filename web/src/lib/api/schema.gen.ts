@@ -2753,6 +2753,11 @@ export interface components {
             ratePerSecond?: number;
             burst?: number;
         };
+        /** @description Per-worker in-memory cache for successful read-only tool results from one MCP server. Each cache hit is recorded in the run trail as a cache hit, not as a fresh server call. Set both fields to zero to disable it. */
+        MCPResultCache: {
+            ttlSeconds?: number;
+            maxEntries?: number;
+        };
         MCPServer: {
             /** @description Namespaces the tools it offers, so two servers naming a tool "search" do not collide. */
             name: string;
@@ -2791,6 +2796,7 @@ export interface components {
              */
             surface?: string[] | null;
             rateLimit?: components["schemas"]["MCPRateLimit"] | null;
+            cache?: components["schemas"]["MCPResultCache"] | null;
             /**
              * @description That somebody accepted what stdio is. A local server is a program
              *     this installation starts inside the worker: it runs as the worker,
@@ -6226,6 +6232,8 @@ export interface operations {
                     surface?: string[];
                     /** @description Per-worker token bucket for outgoing tool calls to this server. Omit to leave the choice as it stands. Send both fields as zero to disable it. */
                     rateLimit?: components["schemas"]["MCPRateLimit"];
+                    /** @description Per-worker in-memory cache for successful read-only tool results from this server. Omit to leave the choice as it stands. Send both fields as zero to disable it. */
+                    cache?: components["schemas"]["MCPResultCache"];
                     /** @description Required for stdio, and refused without it. A local server is a program this installation starts inside the worker, running as the worker and reaching whatever the worker can reach. That is a decision a person makes, not one a transport implies, and it is recorded with their name. */
                     acceptsLocalExecution?: boolean;
                     /** @default true */

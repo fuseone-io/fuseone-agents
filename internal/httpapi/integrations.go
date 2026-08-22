@@ -51,6 +51,9 @@ func (s *Server) PutMCPServer(ctx context.Context, req openapi.PutMCPServerReque
 	if req.Body.RateLimit != nil {
 		server.RateLimit = rateLimitFromRequest(req.Body.RateLimit)
 	}
+	if req.Body.Cache != nil {
+		server.Cache = resultCacheFromRequest(req.Body.Cache)
+	}
 	if req.Body.Enabled != nil {
 		server.Enabled = *req.Body.Enabled
 	}
@@ -105,6 +108,21 @@ func rateLimitFromRequest(limit *openapi.MCPRateLimit) *domain.MCPRateLimit {
 		burst = *limit.Burst
 	}
 	return &domain.MCPRateLimit{RatePerSecond: rate, Burst: burst}
+}
+
+func resultCacheFromRequest(cache *openapi.MCPResultCache) *domain.MCPResultCache {
+	if cache == nil {
+		return nil
+	}
+	var ttl int
+	if cache.TtlSeconds != nil {
+		ttl = *cache.TtlSeconds
+	}
+	var maxEntries int
+	if cache.MaxEntries != nil {
+		maxEntries = *cache.MaxEntries
+	}
+	return &domain.MCPResultCache{TTLSeconds: ttl, MaxEntries: maxEntries}
 }
 
 func (s *Server) ProbeMCPServer(ctx context.Context, req openapi.ProbeMCPServerRequestObject) (openapi.ProbeMCPServerResponseObject, error) {

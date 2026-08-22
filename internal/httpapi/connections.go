@@ -86,6 +86,7 @@ func (s *Server) ListIntegrations(ctx context.Context, _ openapi.ListIntegration
 			Transport:     ptr(openapi.Transport(srv.TransportOf())),
 			ProtocolMode:  ptr(openapi.MCPProtocolMode(srv.MCPProtocolModeOf())),
 			RateLimit:     rateLimitToResponse(srv.RateLimit),
+			Cache:         resultCacheToResponse(srv.Cache),
 			HasSecret:     ptr(srv.HasSecret),
 			HasOAuth:      ptr(srv.HasOAuth),
 			HasVariables:  ptr(srv.HasVariables),
@@ -161,6 +162,16 @@ func rateLimitToResponse(limit *domain.MCPRateLimit) *openapi.MCPRateLimit {
 	return &openapi.MCPRateLimit{
 		RatePerSecond: ptr(limit.RatePerSecond),
 		Burst:         ptr(limit.Burst),
+	}
+}
+
+func resultCacheToResponse(cache *domain.MCPResultCache) *openapi.MCPResultCache {
+	if cache == nil {
+		return nil
+	}
+	return &openapi.MCPResultCache{
+		TtlSeconds: ptr(cache.TTLSeconds),
+		MaxEntries: ptr(cache.MaxEntries),
 	}
 }
 

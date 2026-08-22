@@ -896,6 +896,23 @@ func TestFingerprint_aRateLimitChangeReconnectsTheServer(t *testing.T) {
 	}
 }
 
+func TestFingerprint_aResultCacheChangeReconnectsTheServer(t *testing.T) {
+	t.Parallel()
+
+	before := domain.MCPServer{
+		Name: "github", Transport: domain.TransportHTTP,
+		URL: "https://api.example.com/mcp", Enabled: true,
+		UpdatedAt: time.Date(2026, 8, 16, 9, 0, 0, 0, time.UTC),
+		Cache:     &domain.MCPResultCache{TTLSeconds: 30, MaxEntries: 256},
+	}
+	after := before
+	after.Cache = &domain.MCPResultCache{TTLSeconds: 5, MaxEntries: 256}
+
+	if fingerprint(before) == fingerprint(after) {
+		t.Error("unchanged; the worker would keep the old MCP result cache")
+	}
+}
+
 func TestTransportForHTTP_doesNotOpenAStandaloneSSEStream(t *testing.T) {
 	t.Parallel()
 

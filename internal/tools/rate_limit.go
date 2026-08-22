@@ -42,6 +42,7 @@ func (e *ServerRateLimitError) Summary() domain.FailureSummary {
 
 type serverOptions struct {
 	rateLimit *domain.MCPRateLimit
+	cache     *domain.MCPResultCache
 }
 
 type ServerOption func(*serverOptions)
@@ -55,6 +56,23 @@ func WithRateLimit(limit *domain.MCPRateLimit) ServerOption {
 		options.rateLimit = &domain.MCPRateLimit{
 			RatePerSecond: limit.RatePerSecond,
 			Burst:         limit.Burst,
+		}
+	}
+}
+
+func WithResultCache(cache *domain.MCPResultCache) ServerOption {
+	return func(options *serverOptions) {
+		if cache == nil || cache.TTLSeconds <= 0 {
+			options.cache = nil
+			return
+		}
+		maxEntries := cache.MaxEntries
+		if maxEntries <= 0 {
+			maxEntries = defaultResultCacheEntries
+		}
+		options.cache = &domain.MCPResultCache{
+			TTLSeconds: cache.TTLSeconds,
+			MaxEntries: maxEntries,
 		}
 	}
 }
@@ -115,6 +133,11 @@ func (c *Catalog) Reserve(ctx context.Context, call engine.Call) error {
 	}
 	if _, connected := c.sessions[entry.Server]; !connected {
 		return fmt.Errorf("%w: %s", ErrUnknownServer, entry.Server)
+	}
+	if cache := c.caches[entry.Server]; resultCacheable(entry, call, c.content, cache) {
+		if cache.has(resultCacheKeyOf(entry, call), time.Now()) {
+			return nil
+		}
 	}
 	limiter := c.limiters[entry.Server]
 	if wait, ok := limiter.allow(time.Now()); !ok {
