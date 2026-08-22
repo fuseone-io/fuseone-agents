@@ -157,6 +157,29 @@ describe("the agent editor, control by control", () => {
     expect(within(column).getByText("Identidade")).toBeInTheDocument();
   });
 
+  it("guides a first agent author to the tab that owns the next decision", async () => {
+    openEditor("/agents/new");
+
+    const guide = await screen.findByTestId("agent-guided-path");
+    expect(
+      within(guide).getByText("Caminho do primeiro agente"),
+    ).toBeInTheDocument();
+    expect(
+      within(guide).getByText("1 de 5 obrigatórios prontos"),
+    ).toBeInTheDocument();
+
+    await userEvent.click(
+      within(guide).getByRole("button", { name: /Pacote de capacidades/ }),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByRole("tab", { name: /Ferramentas/ })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      ),
+    );
+  });
+
   it("blocks publishing a new agent until the required fields are filled", async () => {
     openEditor("/agents/new");
 

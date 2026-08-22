@@ -10,6 +10,8 @@ import { EditorHeader } from "@/features/agents/editor-header";
 import { counts, type EditorTab } from "@/features/agents/editor-tabs";
 import { useAgentDraft } from "@/features/agents/agent-draft";
 import { agentRequirements } from "@/features/agents/agent-required";
+import { AgentGuidedPath } from "@/features/agents/agent-guided-path";
+import { guidedAgentSteps } from "@/features/agents/agent-guided-path-model";
 import { usePublishAgent } from "@/features/agents/agent-editor-api";
 import { useAgent } from "@/features/agents/agent-detail-api";
 import { useTools } from "@/features/admin/api";
@@ -52,7 +54,8 @@ export function AgentEditorPage() {
     );
   }
 
-  const missingRequired = agentRequirements(agentId, draft)
+  const requirements = agentRequirements(agentId, draft);
+  const missingRequired = requirements
     .filter((item) => !item.done)
     .map((item) => item.labelKey);
   const ready = missingRequired.length === 0;
@@ -90,6 +93,12 @@ export function AgentEditorPage() {
         stage={t(`stage.${loaded.data?.agent.stage ?? "draft"}`)}
       />
       <EditorTabBar active={tab} onChange={setTab} counts={counts(draft)} />
+      {creating && (
+        <AgentGuidedPath
+          steps={guidedAgentSteps(requirements, draft)}
+          onOpen={setTab}
+        />
+      )}
 
       {/* Unpadded, so a tab with a bar of its own can reach both edges, and
           not scrolling: whichever tab is open owns its own scrolling. Two

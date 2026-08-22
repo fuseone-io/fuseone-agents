@@ -73,7 +73,7 @@ export function AgentsPage() {
         <Button size="sm" variant="outline" asChild>
           <Link to="/agents/interview">
             <MessagesSquare className="size-4" aria-hidden />
-            {t("interview.title")}
+            {t("agents.guidedAgent")}
           </Link>
         </Button>
         <Button size="sm" asChild>
