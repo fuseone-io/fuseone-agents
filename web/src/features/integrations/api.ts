@@ -114,10 +114,11 @@ export function useDeleteMCPServer() {
   });
 }
 
-export function useMCPUserCredentials() {
+export function useMCPUserCredentials(enabled = true) {
   return useQuery({
     queryKey: integrationKeys.mcpCredentials(),
     queryFn: async () => unwrap(await api.GET("/integrations/mcp-credentials")),
+    enabled,
   });
 }
 

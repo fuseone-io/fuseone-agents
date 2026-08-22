@@ -14,11 +14,12 @@ export const recipeKeys = { all: ["recipes"] as const };
  * a recipe fills the form and decides nothing, which is why the card carries
  * the publisher and whose page it was read from rather than a badge.
  */
-export function useRecipes() {
+export function useRecipes(enabled = true) {
   return useQuery({
     queryKey: recipeKeys.all,
     queryFn: async () =>
       unwrap(await api.GET("/admin/integrations/recipes", {})),
+    enabled,
   });
 }
 

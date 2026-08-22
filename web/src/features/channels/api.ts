@@ -4,10 +4,11 @@ import { api, unwrap } from "@/lib/api/client";
 export const channelKeys = { all: ["channels"] as const };
 
 /** The connections runs report through, with the conversations inside them. */
-export function useChannels() {
+export function useChannels(enabled = true) {
   return useQuery({
     queryKey: channelKeys.all,
     queryFn: async () => unwrap(await api.GET("/admin/channels")),
+    enabled,
     refetchInterval: 10_000,
     refetchIntervalInBackground: false,
   });

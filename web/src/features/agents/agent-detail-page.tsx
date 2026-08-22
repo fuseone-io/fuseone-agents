@@ -9,6 +9,12 @@ import { AgentCapabilities } from "@/features/agents/agent-capabilities";
 import { AgentVersions } from "@/features/agents/agent-versions";
 import { WebhooksPanel } from "@/features/agents/webhooks-panel";
 import { AgentRuns } from "@/features/agents/agent-runs";
+import { AgentGuidedPath } from "@/features/agents/agent-guided-path";
+import { publishedAgentGuideSteps } from "@/features/agents/agent-guided-path-model";
+import { useTools } from "@/features/admin/api";
+import { useChannels } from "@/features/channels/api";
+import { useMCPUserCredentials } from "@/features/integrations/api";
+import { useRecipes } from "@/features/integrations/mcp/api";
 
 /**
  * One agent, as it was published.
@@ -26,6 +32,15 @@ export function AgentDetailPage() {
   const version = params.get("version") ?? undefined;
 
   const agent = useAgent(agentId, version);
+  const publishedPreview = agent.data?.agent;
+  const hasTools = (publishedPreview?.tools ?? []).length > 0;
+  const hasChannelTrigger = (publishedPreview?.triggers ?? []).some(
+    (trigger) => trigger.type === "channel",
+  );
+  const tools = useTools();
+  const recipes = useRecipes(hasTools);
+  const credentials = useMCPUserCredentials(hasTools);
+  const channels = useChannels(hasChannelTrigger);
 
   if (agent.isLoading) return <LoadingRows rows={8} />;
   if (agent.error) {
@@ -36,6 +51,14 @@ export function AgentDetailPage() {
   if (!agent.data) return null;
 
   const { agent: published, instructions, source, steps, versions } = agent.data;
+  const guide = publishedAgentGuideSteps(published, instructions, {
+    agentId,
+    catalogue: tools.data?.items,
+    recipes: recipes.data?.items,
+    credentials: credentials.data?.items,
+    channels: channels.data?.items,
+    simulationTo: `/agents/${agentId}/simulate`,
+  });
 
   return (
     <Tabs
@@ -65,6 +88,12 @@ export function AgentDetailPage() {
             </TabsTrigger>
           </TabsList>
         }
+      />
+      <AgentGuidedPath
+        steps={guide}
+        titleKey="agents.launchGuideTitle"
+        subtitleKey="agents.launchGuideSubtitle"
+        progressKey="agents.launchGuideProgress"
       />
 
       <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_300px] xl:items-start">

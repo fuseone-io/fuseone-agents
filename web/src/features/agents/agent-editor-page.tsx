@@ -15,6 +15,9 @@ import { guidedAgentSteps } from "@/features/agents/agent-guided-path-model";
 import { usePublishAgent } from "@/features/agents/agent-editor-api";
 import { useAgent } from "@/features/agents/agent-detail-api";
 import { useTools } from "@/features/admin/api";
+import { useChannels } from "@/features/channels/api";
+import { useMCPUserCredentials } from "@/features/integrations/api";
+import { useRecipes } from "@/features/integrations/mcp/api";
 import { usePolicies } from "@/features/policies/api";
 import { problemMessage } from "@/lib/api/problem-message";
 
@@ -45,6 +48,13 @@ export function AgentEditorPage() {
   const { draft, patch, changes, published } = useAgentDraft(
     creating ? undefined : loaded.data,
   );
+  const selectedTools = draft.tools ?? [];
+  const hasChannelTrigger = (draft.triggers ?? []).some(
+    (trigger) => trigger.type === "channel",
+  );
+  const recipes = useRecipes(selectedTools.length > 0);
+  const credentials = useMCPUserCredentials(selectedTools.length > 0);
+  const channels = useChannels(hasChannelTrigger);
   const publish = usePublishAgent();
 
   if (!creating && loaded.isLoading) return <LoadingRows rows={6} />;
@@ -95,7 +105,13 @@ export function AgentEditorPage() {
       <EditorTabBar active={tab} onChange={setTab} counts={counts(draft)} />
       {creating && (
         <AgentGuidedPath
-          steps={guidedAgentSteps(requirements, draft)}
+          steps={guidedAgentSteps(requirements, draft, {
+            agentId,
+            catalogue: tools.data?.items,
+            recipes: recipes.data?.items,
+            credentials: credentials.data?.items,
+            channels: channels.data?.items,
+          })}
           onOpen={setTab}
         />
       )}

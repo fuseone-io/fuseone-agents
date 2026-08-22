@@ -19,6 +19,35 @@ vi.mock("@/features/agents/agent-detail-api", () => ({
   }),
 }));
 
+vi.mock("@/features/admin/api", () => ({
+  useTools: () => ({
+    data: {
+      items: [
+        {
+          toolId: "grafana.query_loki_logs",
+          server: "grafana",
+          effect: "read",
+          untrusted: true,
+          onSurface: true,
+          offered: true,
+        },
+      ],
+    },
+  }),
+}));
+
+vi.mock("@/features/channels/api", () => ({
+  useChannels: () => ({ data: { items: [] } }),
+}));
+
+vi.mock("@/features/integrations/api", () => ({
+  useMCPUserCredentials: () => ({ data: { items: [] } }),
+}));
+
+vi.mock("@/features/integrations/mcp/api", () => ({
+  useRecipes: () => ({ data: { items: [] } }),
+}));
+
 vi.mock("@/features/agents/agent-primary", () => ({
   AgentPrimary: () => <button type="button">Run</button>,
 }));
