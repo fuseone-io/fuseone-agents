@@ -27,6 +27,39 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.25.0] — 2026-08-23
+
+### Added
+
+- **A run says where its spend came from.** The run page shows the cost, the
+  four token counters, and what the prompt was made of — instructions,
+  platform text, input, notes, tool schemas, tool arguments and tool results —
+  attributed to the tool each came from. Opening an expensive run now answers
+  "which part of this was large" without reading the trail by hand.
+
+  Tokens and bytes sit side by side and are never combined. Tokens are what the
+  provider reported and the only thing money derives from; bytes are what the
+  platform measured while assembling the prompt. Dividing one by the other
+  would invent a rate.
+
+- **Zero cost says which kind of zero it is.** A run that called nothing spent
+  nothing; a run that called a model with no configured rate also reads zero,
+  and so does one whose rate is deliberately zero, or whose call rounded below
+  a micro. The planning step now records which, so the screen reports it
+  instead of guessing from the figure. Runs recorded before this say the
+  provenance is unknown, which is the honest answer.
+
+- **What compaction removed is measured where it happens**, and shown per tool.
+  A prompt dominated by one server now says how much was already trimmed there,
+  which is what turns "compact something next" into a choice rather than a
+  guess.
+
+- **Cache hits are counted as calls avoided, never as tokens saved.** A cached
+  result still goes into the prompt whole: the cache saves a request to
+  somebody else's system, not model input. The two savings are reported
+  separately and there is no combined figure, because one would overstate what
+  was spared and point at compacting what the cache already covers.
+
 ## [0.24.0] — 2026-08-22
 
 ### Upgrade notes
