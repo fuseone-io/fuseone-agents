@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -49,6 +50,95 @@ func TestBuildTranscript_openedWithInput_keepsIt(t *testing.T) {
 
 	if len(turns) != 1 || turns[0].Text != "O cliente reclama." {
 		t.Errorf("turns = %+v, want the input", turns)
+	}
+}
+
+func TestBuildTranscript_largeChannelInput_isCompactedOnlyForTheModel(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := NewMemoryContent()
+	askText := strings.Repeat("H", 40<<10) + "MIDDLE-SHOULD-NOT-REACH-THE-MODEL" + strings.Repeat("T", 40<<10)
+	raw, err := json.Marshal(map[string]any{
+		"text":     askText,
+		"asked_by": "usr_ops",
+		"thread": map[string]any{
+			"conversation": "C07-alerts",
+			"thread":       "1700.1",
+			"messages": []map[string]string{{
+				"ref": "1700.0", "source": "app:A-alerts", "text": "alert summary",
+			}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	ref, err := store.Put(ctx, "run_1", 1, raw)
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	turns, err := BuildTranscript(ctx, store, []domain.Step{{
+		RunID: "run_1", Seq: 1, Kind: domain.StepRunStarted,
+		Payload: payload(t, domain.RunStartedPayload{
+			Trigger: "channel", InputRef: ref,
+		}),
+	}})
+	if err != nil {
+		t.Fatalf("BuildTranscript: %v", err)
+	}
+
+	if len(turns) != 1 || turns[0].Kind != TurnInput {
+		t.Fatalf("turns = %+v, want one input", turns)
+	}
+	got := turns[0].Text
+	if len(got) >= len(raw) {
+		t.Fatalf("compacted input has %d bytes, want less than original %d", len(got), len(raw))
+	}
+	for _, want := range []string{
+		`"kind":"channel_input"`,
+		fmt.Sprintf(`"stored_bytes":%d`, len(raw)),
+		fmt.Sprintf(`"stored_digest":"%s"`, digest(raw)),
+		"Do not treat omitted middle as absent",
+		"alert summary",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("compacted input does not contain %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "MIDDLE-SHOULD-NOT-REACH-THE-MODEL") {
+		t.Fatalf("compacted input kept the omitted middle:\n%s", got)
+	}
+	held, err := store.Get(ctx, ref)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if string(held) != string(raw) {
+		t.Fatal("the stored run input was changed; compaction must affect only the transcript")
+	}
+}
+
+func TestBuildTranscript_largeNonChannelInput_staysWhole(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := NewMemoryContent()
+	raw := []byte(strings.Repeat("manual input ", 8<<10))
+	ref, err := store.Put(ctx, "run_1", 1, raw)
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	turns, err := BuildTranscript(ctx, store, []domain.Step{{
+		RunID: "run_1", Seq: 1, Kind: domain.StepRunStarted,
+		Payload: payload(t, domain.RunStartedPayload{
+			Trigger: "manual", InputRef: ref,
+		}),
+	}})
+	if err != nil {
+		t.Fatalf("BuildTranscript: %v", err)
+	}
+
+	if len(turns) != 1 || turns[0].Text != string(raw) {
+		t.Fatalf("turns = %+v, want the non-channel input untouched", turns)
 	}
 }
 

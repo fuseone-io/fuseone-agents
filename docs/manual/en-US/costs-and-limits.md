@@ -84,6 +84,12 @@ Use this line to choose the next optimisation. If tool results dominate, reduce
 or summarise that tool's output. If instructions dominate, rewrite the agent
 blocks. If input dominates, route less context into the run.
 
+Large channel inputs are also compacted before they reach the model. The full
+ask remains in the content store and trail; the model receives valid JSON with
+long fields shortened, the stored size and a digest. This is most visible when
+a Slack alert or thread carries a large payload before the agent has called any
+tool.
+
 Large Grafana Loki and Prometheus query results are compacted before they are
 shown to the model on later turns. The full tool result remains in the run
 content store and trail; the model receives a compact view with the beginning,

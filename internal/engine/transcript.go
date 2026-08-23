@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"unicode/utf8"
@@ -81,7 +82,10 @@ func BuildTranscript(ctx context.Context, store ContentStore, steps []domain.Ste
 			// block, so it is also how a scheduled run dies before its first
 			// word.
 			if len(text) > 0 {
-				turns = append(turns, Turn{Kind: TurnInput, Text: string(text)})
+				turns = append(turns, Turn{
+					Kind: TurnInput,
+					Text: string(compactRunInputForTranscript(p.Trigger, text)),
+				})
 			}
 
 		case domain.StepToolCalled:
@@ -157,10 +161,115 @@ func BuildTranscript(ctx context.Context, store ContentStore, steps []domain.Ste
 }
 
 const (
+	channelInputCompactAfter = 32 << 10
+	inputFieldCompactAfter   = 16 << 10
+	inputFieldHeadBytes      = 10 << 10
+	inputFieldTailBytes      = 4 << 10
+
 	toolResultCompactAfter = 32 << 10
 	toolResultHeadBytes    = 16 << 10
 	toolResultTailBytes    = 8 << 10
 )
+
+func compactRunInputForTranscript(trigger string, content []byte) []byte {
+	if trigger != "channel" || len(content) <= channelInputCompactAfter {
+		return content
+	}
+
+	var input any
+	if err := json.Unmarshal(content, &input); err != nil {
+		return compactRawChannelInput(content)
+	}
+
+	changes := []map[string]any{}
+	compacted := compactJSONStrings(input, "", &changes)
+	if len(changes) == 0 {
+		return content
+	}
+
+	obj, ok := compacted.(map[string]any)
+	if !ok {
+		return compactRawChannelInput(content)
+	}
+	obj["fuseone_compaction"] = map[string]any{
+		"kind":          "channel_input",
+		"stored_bytes":  len(content),
+		"stored_digest": digest(content),
+		"message": "FuseOne compacted this channel input before sending it to the model. " +
+			"Only the beginning and end of long fields are shown. Do not treat omitted middle as absent; " +
+			"use a narrower ask or fetch the original source if this is not enough.",
+		"fields": changes,
+	}
+
+	out, err := json.Marshal(obj)
+	if err != nil {
+		return compactRawChannelInput(content)
+	}
+	return out
+}
+
+func compactJSONStrings(v any, path string, changes *[]map[string]any) any {
+	switch x := v.(type) {
+	case map[string]any:
+		for k, child := range x {
+			x[k] = compactJSONStrings(child, jsonPath(path, k), changes)
+		}
+		return x
+	case []any:
+		for i, child := range x {
+			x[i] = compactJSONStrings(child, fmt.Sprintf("%s[%d]", path, i), changes)
+		}
+		return x
+	case string:
+		if len(x) <= inputFieldCompactAfter {
+			return x
+		}
+		compacted := compactTextField(x)
+		*changes = append(*changes, map[string]any{
+			"path":           path,
+			"original_bytes": len(x),
+			"shown_bytes":    len(compacted),
+		})
+		return compacted
+	default:
+		return v
+	}
+}
+
+func compactTextField(text string) string {
+	head := utf8Prefix([]byte(text), inputFieldHeadBytes)
+	tail := utf8Suffix([]byte(text), inputFieldTailBytes)
+
+	var b strings.Builder
+	b.WriteString("FuseOne compacted this field before sending it to the model. ")
+	b.WriteString("Only the beginning and end are shown here. ")
+	b.WriteString("Do not treat the omitted middle as absent.\n\n")
+	fmt.Fprintf(&b, "--- first %d bytes ---\n%s\n\n", len(head), head)
+	fmt.Fprintf(&b, "--- omitted %d bytes ---\n\n", max(0, len(text)-len(head)-len(tail)))
+	fmt.Fprintf(&b, "--- last %d bytes ---\n%s", len(tail), tail)
+	return b.String()
+}
+
+func compactRawChannelInput(content []byte) []byte {
+	head := utf8Prefix(content, inputFieldHeadBytes)
+	tail := utf8Suffix(content, inputFieldTailBytes)
+
+	var b strings.Builder
+	b.WriteString("FuseOne compacted this channel input before sending it to the model.\n")
+	fmt.Fprintf(&b, "Stored input: %d bytes, digest %s.\n", len(content), digest(content))
+	b.WriteString("Only the beginning and end are shown here. Do not treat the omitted middle as absent; use a narrower ask or fetch the original source if this is not enough.\n\n")
+	fmt.Fprintf(&b, "--- first %d bytes ---\n%s\n\n", len(head), head)
+	fmt.Fprintf(&b, "--- omitted %d bytes ---\n\n", max(0, len(content)-len(head)-len(tail)))
+	fmt.Fprintf(&b, "--- last %d bytes ---\n%s", len(tail), tail)
+	return []byte(b.String())
+}
+
+func jsonPath(parent, key string) string {
+	if parent == "" {
+		return key
+	}
+	return parent + "." + key
+}
 
 func compactToolResultForTranscript(tool domain.ToolID, content []byte) []byte {
 	if len(content) <= toolResultCompactAfter || !compactableObservabilityTool(tool) {

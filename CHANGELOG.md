@@ -27,6 +27,13 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Added
+
+- Large channel inputs are compacted before they are sent to the model. The
+  original ask stays in the content store and trail; the model receives a JSON
+  projection with long fields shortened, plus the stored input size and digest,
+  so a long Slack alert or thread does not dominate the first turn.
+
 ## [0.22.0] — 2026-08-22
 
 ### Added
