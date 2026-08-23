@@ -27,6 +27,19 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Added
+
+- **The cost page now shows planning spend by model and by agent.** It reads
+  the forward-only projection introduced in 0.26.0, says when that projection
+  began, and flags buckets with calls that had no configured rate so token
+  volume with unknown money is not mistaken for cheap work.
+
+### Fixed
+
+- **Simulated runs no longer enter the planning-spend projection.** The sweep
+  still advances past them, so a simulation near the cursor cannot keep the
+  aggregate from reaching later production calls.
+
 ## [0.26.0] — 2026-08-23
 
 No new screen. This release corrects a rate that was applied to the wrong

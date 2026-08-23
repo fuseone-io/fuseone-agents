@@ -24,7 +24,12 @@ import { BudgetAlerts } from "@/features/cost/budget-alerts";
 import { CostKpis } from "@/features/cost/cost-kpis";
 import { CostDrivers } from "@/features/cost/cost-drivers";
 import { CostCaps } from "@/features/cost/cost-caps";
-import { useCostRollup, useCostWindow } from "@/features/cost/api";
+import { PlanningSpendPanel } from "@/features/cost/planning-spend-panel";
+import {
+  useCostRollup,
+  useCostWindow,
+  usePlanningSpend,
+} from "@/features/cost/api";
 import { useVisibleItems } from "@/hooks/use-visible-items";
 
 const HEAD =
@@ -37,9 +42,16 @@ export function CostPage() {
   const daily = useCostRollup(window.from, window.to, "day");
   const byAgent = useCostRollup(window.from, window.to, "agent");
   const byArea = useCostRollup(window.from, window.to, "area");
+  const planningByModel = usePlanningSpend(window.from, window.to, "models");
+  const planningByAgent = usePlanningSpend(window.from, window.to, "agents");
 
   const error = daily.error ?? byAgent.error;
   const isLoading = daily.isLoading || byAgent.isLoading;
+  const planningError = planningByModel.error ?? planningByAgent.error;
+  const retryPlanning = () => {
+    void planningByModel.refetch();
+    void planningByAgent.refetch();
+  };
   const buckets = byAgent.data?.buckets ?? [];
   const page = useVisibleItems(buckets, 50);
 
@@ -94,6 +106,14 @@ export function CostPage() {
           </div>
 
           <CostCaps byArea={byArea.data} />
+
+          <PlanningSpendPanel
+            byModel={planningByModel.data}
+            byAgent={planningByAgent.data}
+            isLoading={planningByModel.isLoading || planningByAgent.isLoading}
+            error={planningError}
+            onRetry={retryPlanning}
+          />
 
           <Panel
             title={t("cost.byAgent")}

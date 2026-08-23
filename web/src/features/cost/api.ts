@@ -10,6 +10,8 @@ export const costKeys = {
   all: ["cost"] as const,
   rollup: (scope: string, from: string, to: string, groupBy: string) =>
     [...costKeys.all, groupBy, scope, from, to] as const,
+  planning: (scope: string, from: string, to: string, cut: "agents" | "models") =>
+    [...costKeys.all, "planning", cut, scope, from, to] as const,
 };
 
 /**
@@ -40,6 +42,23 @@ export function useCostRollup(
       unwrap(
         await api.GET("/cost", {
           params: { query: { ...scope.params, from, to, groupBy } },
+        }),
+      ),
+  });
+}
+
+export function usePlanningSpend(
+  from: string,
+  to: string,
+  cut: "agents" | "models",
+) {
+  const scope = useScopeFilter();
+  return useQuery({
+    queryKey: costKeys.planning(scope.key, from, to, cut),
+    queryFn: async () =>
+      unwrap(
+        await api.GET(`/cost/planning/${cut}`, {
+          params: { query: { ...scope.params, from, to } },
         }),
       ),
   });
