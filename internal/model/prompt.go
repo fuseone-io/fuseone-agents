@@ -24,11 +24,12 @@ func promptInputBreakdown(
 	in engine.PlanInput, cfg Config, toolSchemas ToolSchemas, offered names,
 ) domain.PromptInputBreakdown {
 	out := domain.PromptInputBreakdown{
-		Unit:                promptBreakdownUnit,
-		Instructions:        int64(len(cfg.SystemPrompt)),
-		Platform:            int64(len(loopContract)),
-		ToolArgumentsByTool: map[domain.ToolID]int64{},
-		ToolResultsByTool:   map[domain.ToolID]int64{},
+		Unit:                    promptBreakdownUnit,
+		Instructions:            int64(len(cfg.SystemPrompt)),
+		Platform:                int64(len(loopContract)),
+		ToolArgumentsByTool:     map[domain.ToolID]int64{},
+		ToolResultsByTool:       map[domain.ToolID]int64{},
+		ToolResultsElidedByTool: map[domain.ToolID]int64{},
 	}
 
 	if in.Step != "" {
@@ -53,6 +54,10 @@ func promptInputBreakdown(
 			n := int64(len(toolResultContent(turn)))
 			out.ToolResults += n
 			out.ToolResultsByTool[turn.Tool] += n
+			if turn.Elided > 0 {
+				out.ToolResultsElided += turn.Elided
+				out.ToolResultsElidedByTool[turn.Tool] += turn.Elided
+			}
 		}
 	}
 	if len(in.Transcript) == 0 {
@@ -66,6 +71,9 @@ func promptInputBreakdown(
 	}
 	if len(out.ToolResultsByTool) == 0 {
 		out.ToolResultsByTool = nil
+	}
+	if len(out.ToolResultsElidedByTool) == 0 {
+		out.ToolResultsElidedByTool = nil
 	}
 	return out
 }

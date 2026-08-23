@@ -257,12 +257,38 @@ func TestPlanner_recordsPriceProvenanceFromTheRegistry(t *testing.T) {
 	}
 }
 
+// Elision is not part of what was sent, so a composition carrying it still
+// sums to Total. Without the exclusion above this reads as a mismatch, which
+// is the wrong failure: the prompt is correct and the adding is not.
+func TestPromptParts_elisionIsNotPartOfTheTotal(t *testing.T) {
+	t.Parallel()
+
+	got := measuredPromptParts(domain.PromptInputBreakdown{
+		Instructions:      100,
+		ToolResults:       200,
+		ToolResultsElided: 90_000,
+		Total:             300,
+	})
+	if got != 300 {
+		t.Errorf("parts summed to %d, want 300 — elision counted as sent", got)
+	}
+}
+
 func measuredPromptParts(p domain.PromptInputBreakdown) int64 {
 	v := reflect.ValueOf(p)
 	t := v.Type()
 	var total int64
 	for i := 0; i < v.NumField(); i++ {
-		if t.Field(i).Name == "Total" || v.Field(i).Kind() != reflect.Int64 {
+		// Total is the sum being checked, and ToolResultsElided is what the
+		// model never received — adding it would assert that the composition
+		// describes a prompt that was not sent. Named here rather than left to
+		// the next int64 field: a counter added later joins this sum silently,
+		// which is how a guard stops guarding without failing.
+		switch t.Field(i).Name {
+		case "Total", "ToolResultsElided":
+			continue
+		}
+		if v.Field(i).Kind() != reflect.Int64 {
 			continue
 		}
 		total += v.Field(i).Int()

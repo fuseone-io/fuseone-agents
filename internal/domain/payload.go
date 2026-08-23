@@ -112,6 +112,15 @@ type PromptInputBreakdown struct {
 	ToolArgumentsByTool map[ToolID]int64 `json:"tool_arguments_by_tool,omitempty"`
 	ToolResultsByTool   map[ToolID]int64 `json:"tool_results_by_tool,omitempty"`
 
+	// ToolResultsElided is what compaction removed before these results were
+	// sent, in content bytes, counted at the cut. It is not part of Total:
+	// Total is what the model received, and adding what it did not receive
+	// would make the composition describe a prompt that was never sent.
+	ToolResultsElided int64 `json:"tool_results_elided,omitempty"`
+	// ToolResultsElidedByTool names which tool the saving came from, so
+	// compacting the next one is a decision rather than a guess.
+	ToolResultsElidedByTool map[ToolID]int64 `json:"tool_results_elided_by_tool,omitempty"`
+
 	Total int64 `json:"total,omitempty"`
 }
 

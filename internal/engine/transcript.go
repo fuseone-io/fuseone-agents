@@ -46,6 +46,10 @@ type Turn struct {
 	Args    []byte
 	Failed  bool
 	Content []byte
+	// Elided is what compaction removed before this turn was handed to the
+	// model, in content bytes. Counted at the cut so the saving is something
+	// the run measured rather than a subtraction across two records.
+	Elided int64
 }
 
 // ContentStore holds payloads too large or too sensitive for the ledger.
@@ -120,8 +124,9 @@ func BuildTranscript(ctx context.Context, store ContentStore, steps []domain.Ste
 			if p.Failed && len(content) == 0 {
 				content = []byte("the tool failed: " + p.ErrorCode)
 			}
+			var elided int64
 			if !p.Failed {
-				content = compactToolResultForTranscript(p.Tool, content)
+				content = compactToolResult(p.Tool, content, &elided)
 			}
 			turns = append(turns, Turn{
 				Kind: TurnToolResult,
@@ -130,6 +135,7 @@ func BuildTranscript(ctx context.Context, store ContentStore, steps []domain.Ste
 				Tool:    p.Tool,
 				Failed:  p.Failed,
 				Content: content,
+				Elided:  elided,
 			})
 
 		case domain.StepGateDecided:
@@ -276,6 +282,20 @@ func jsonPath(parent, key string) string {
 }
 
 func compactToolResultForTranscript(tool domain.ToolID, content []byte) []byte {
+	var ignored int64
+	return compactToolResult(tool, content, &ignored)
+}
+
+/*
+compactToolResult shortens a large result and records what it removed.
+
+The saving is counted here rather than worked out later. What was sent is in
+the run's composition and the whole is in the content store, so a screen could
+subtract one from the other — but that is arithmetic across two records kept
+for different reasons, and it drifts the first time either changes. Measured at
+the cut, the number is something the run observed.
+*/
+func compactToolResult(tool domain.ToolID, content []byte, elided *int64) []byte {
 	if len(content) <= toolResultCompactAfter || !compactableLargeToolResult(tool) {
 		return content
 	}
@@ -287,7 +307,9 @@ func compactToolResultForTranscript(tool domain.ToolID, content []byte) []byte {
 	fmt.Fprintf(&b, "Stored result: %d bytes, digest %s.\n", len(content), digest(content))
 	b.WriteString("Only the beginning and end are shown here. Do not treat the omitted middle as absent; call a narrower query if this is not enough.\n\n")
 	fmt.Fprintf(&b, "--- first %d bytes ---\n%s\n\n", len(head), head)
-	fmt.Fprintf(&b, "--- omitted %d bytes ---\n\n", max(0, len(content)-len(head)-len(tail)))
+	removed := max(0, len(content)-len(head)-len(tail))
+	*elided += int64(removed)
+	fmt.Fprintf(&b, "--- omitted %d bytes ---\n\n", removed)
 	fmt.Fprintf(&b, "--- last %d bytes ---\n%s", len(tail), tail)
 	return []byte(b.String())
 }
