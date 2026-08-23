@@ -35,17 +35,17 @@ type finishArgs struct {
 }
 
 func finishProposal(
-	args []byte, cost domain.Cost, prompt domain.PromptInputBreakdown,
-	price domain.ModelPriceUse,
+	args []byte, base engine.Proposal,
 ) engine.Proposal {
 	var decoded finishArgs
 	_ = json.Unmarshal(args, &decoded)
-	return engine.Proposal{
-		Done:      true,
-		Outcome:   strings.TrimSpace(decoded.Summary),
-		StoppedBy: strings.TrimSpace(decoded.StoppedBy),
-		Cost:      cost,
-		Prompt:    prompt,
-		Price:     price,
-	}
+
+	// Built from the proposal the call already produced rather than by listing
+	// its fields. Listing them dropped provider and model the moment those
+	// existed, silently, and would drop the next one the same way — a finished
+	// run would carry cost with nothing saying which model spent it.
+	base.Done = true
+	base.Outcome = strings.TrimSpace(decoded.Summary)
+	base.StoppedBy = strings.TrimSpace(decoded.StoppedBy)
+	return base
 }

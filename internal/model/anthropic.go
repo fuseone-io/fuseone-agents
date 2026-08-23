@@ -137,7 +137,7 @@ func (a *Anthropic) Plan(ctx context.Context, in engine.PlanInput) (engine.Propo
 	cost := a.cost(resp.Usage)
 	price := a.cfg.priceUse(cost)
 	if resp.StopReason == anthropic.StopReasonRefusal {
-		return engine.Proposal{Cost: cost, Prompt: prompt, Price: price}, providerRefused(a.provider)
+		return engine.Proposal{Cost: cost, Prompt: prompt, Price: price, Provider: a.provider, Model: a.cfg.Model}, providerRefused(a.provider)
 	}
 
 	return a.proposalFrom(resp, offered, prompt, cost, price), nil
@@ -250,7 +250,7 @@ func (a *Anthropic) proposalFrom(
 	resp *anthropic.Message, offered names, prompt domain.PromptInputBreakdown,
 	cost domain.Cost, price domain.ModelPriceUse,
 ) engine.Proposal {
-	p := engine.Proposal{Cost: cost, Prompt: prompt, Price: price}
+	p := engine.Proposal{Cost: cost, Prompt: prompt, Price: price, Provider: a.provider, Model: a.cfg.Model}
 
 	var summary strings.Builder
 	for _, block := range resp.Content {
@@ -260,7 +260,7 @@ func (a *Anthropic) proposalFrom(
 		case anthropic.ToolUseBlock:
 			tool := offered.idOf(variant.Name)
 			if isFinishTool(tool) {
-				return finishProposal([]byte(variant.JSON.Input.Raw()), p.Cost, p.Prompt, p.Price)
+				return finishProposal([]byte(variant.JSON.Input.Raw()), p)
 			}
 			p.Tool = tool
 			// Input is raw JSON; never string-match it. Escaping of Unicode

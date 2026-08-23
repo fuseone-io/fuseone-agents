@@ -66,9 +66,11 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 		return Status{}, err
 	}
 	planned := domain.PlannedPayload{
-		Node:   StepNameAt(start, state.Called),
-		Price:  pricePayload(proposal.Price),
-		Prompt: promptInputPayload(proposal.Prompt),
+		Node:     StepNameAt(start, state.Called),
+		Provider: proposal.Provider,
+		Model:    proposal.Model,
+		Price:    pricePayload(proposal.Price),
+		Prompt:   promptInputPayload(proposal.Prompt),
 	}
 	if state, err = r.append(ctx, state, start, domain.Step{
 		Kind: domain.StepPlanned,

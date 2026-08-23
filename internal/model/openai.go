@@ -73,7 +73,7 @@ func (o *OpenAICompatible) Plan(ctx context.Context, in engine.PlanInput) (engin
 	cost := o.cost(out.Usage)
 	price := o.cfg.priceUse(cost)
 	if choice.FinishReason == "content_filter" {
-		return engine.Proposal{Cost: cost, Prompt: prompt, Price: price}, providerRefused(o.provider.Name)
+		return engine.Proposal{Cost: cost, Prompt: prompt, Price: price, Provider: o.provider.Name, Model: o.cfg.Model}, providerRefused(o.provider.Name)
 	}
 
 	return o.proposalFrom(choice, offered, prompt, cost, price), nil
@@ -83,13 +83,13 @@ func (o *OpenAICompatible) proposalFrom(
 	c chatChoice, offered names, prompt domain.PromptInputBreakdown,
 	cost domain.Cost, price domain.ModelPriceUse,
 ) engine.Proposal {
-	p := engine.Proposal{Cost: cost, Prompt: prompt, Price: price}
+	p := engine.Proposal{Cost: cost, Prompt: prompt, Price: price, Provider: o.provider.Name, Model: o.cfg.Model}
 
 	if len(c.Message.ToolCalls) > 0 {
 		call := c.Message.ToolCalls[0]
 		tool := offered.idOf(call.Function.Name)
 		if isFinishTool(tool) {
-			return finishProposal([]byte(call.Function.Arguments), p.Cost, p.Prompt, p.Price)
+			return finishProposal([]byte(call.Function.Arguments), p)
 		}
 		p.Tool = tool
 		// Arguments arrive as a JSON *string* here, unlike Anthropic's object.
