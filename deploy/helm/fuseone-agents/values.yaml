@@ -55,6 +55,12 @@ worker:
   # a way to seed one, not a way to run one.
   specs:
     configMap: ""
+  # Prometheus text metrics for the worker pool. This exposes only counters and
+  # gauges about queue movement; the ledger and logs remain the place for run
+  # ids, agents, tools and diagnostics.
+  metrics:
+    enabled: true
+    port: 9090
 
 # Migrations run as a job before the pods that need them. It takes an advisory
 # lock, so a second one waits rather than racing — but a hook gives a clear

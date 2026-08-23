@@ -1,7 +1,11 @@
+{{- $metrics := .Values.worker.metrics | default dict -}}
 {{ .Chart.Name }} {{ .Chart.AppVersion }} is installed as {{ .Release.Name }}.
 
   API and console   {{ include "fuseone.fullname" . }}:{{ .Values.service.port }}
   Workers           {{ .Values.worker.replicas }} × {{ .Values.worker.concurrency }} concurrent runs
+{{- if ($metrics.enabled | default false) }}
+  Worker metrics    {{ include "fuseone.fullname" . }}-worker:{{ ($metrics.port | default 9090) }}/metrics
+{{- end }}
 {{- if .Values.ingress.enabled }}
   Reachable at      https://{{ .Values.ingress.host }}
 {{- else }}

@@ -31,6 +31,8 @@ type workerFlags struct {
 	// a run waiting for approval that does not link to it is a message that
 	// makes the reader go looking.
 	baseURL string
+	// metricsAddr is a worker-only listener for Prometheus. Empty disables it.
+	metricsAddr string
 }
 
 func readWorkerFlags(args []string) (workerFlags, error) {
@@ -39,6 +41,8 @@ func readWorkerFlags(args []string) (workerFlags, error) {
 	fs.StringVar(&cfg.dsn, "dsn", os.Getenv("DATABASE_URL"), "PostgreSQL connection string")
 	fs.StringVar(&cfg.baseURL, "base-url", os.Getenv("FUSEONE_BASE_URL"),
 		"where the console answers, for the links a notification carries")
+	fs.StringVar(&cfg.metricsAddr, "metrics-addr", envOr("FUSEONE_WORKER_METRICS_ADDR", ":9090"),
+		"address for worker Prometheus metrics; empty disables it")
 	fs.StringVar(&cfg.owner, "owner", defaultOwner(), "identifies this process in a lease")
 	fs.IntVar(&cfg.concurrency, "concurrency", 4, "runs advanced at once")
 	fs.DurationVar(&cfg.lease, "lease", 2*time.Minute, "must outlast the slowest single turn")
@@ -86,7 +90,12 @@ func workerCmd(args []string) error {
 		return err
 	}
 
-	w, sim := parts.pools(cfg, parts.deps(gate), specs)
+	metrics := worker.NewMetricsRegistry()
+	if err := startWorkerMetrics(ctx, cfg.metricsAddr, metrics); err != nil {
+		return err
+	}
+
+	w, sim := parts.pools(cfg, parts.deps(gate), specs, metrics)
 	parts.startLoops(ctx, cfg, sim)
 
 	slog.Info("worker started", "owner", cfg.owner, "concurrency", cfg.concurrency)
@@ -144,21 +153,25 @@ The simulation pool is smaller, because a simulation is somebody waiting at a
 screen for a set of a few dozen rather than the installation's steady load —
 and because the budget it spends is real.
 */
-func (p *workerParts) pools(cfg workerFlags, deps engine.Deps, specs worker.Specs) (*worker.Worker, *worker.Worker) {
+func (p *workerParts) pools(
+	cfg workerFlags, deps engine.Deps, specs worker.Specs, metrics *worker.MetricsRegistry,
+) (*worker.Worker, *worker.Worker) {
 	// What takes each tool back, for a run somebody abandons. The same
 	// catalogue that says what a tool does: the Curator rules on both in one
 	// act, because they are one judgement (PRD SE-08).
 	w := worker.New(worker.Config{
 		Owner: cfg.owner, Concurrency: cfg.concurrency, Lease: cfg.lease,
 	}, p.queue, deps, specs, engine.SystemClock{}, slog.Default()).
-		WithUndos(p.catalog)
+		WithUndos(p.catalog).
+		WithMetrics(metrics.Pool("runs", cfg.concurrency))
 
 	sim := worker.New(worker.Config{
 		Owner:       cfg.owner + "-sim",
 		Concurrency: simulationSlots(cfg.concurrency),
 		Lease:       cfg.lease,
 	}, simulations(p.store), simulate.Deps(deps), specs, engine.SystemClock{}, slog.Default()).
-		WithUndos(p.catalog)
+		WithUndos(p.catalog).
+		WithMetrics(metrics.Pool("simulations", simulationSlots(cfg.concurrency)))
 
 	if p.configPool != nil {
 		// How far each agent is trusted. Without it the pool treats every

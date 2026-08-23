@@ -9,6 +9,7 @@ Several replicas are safe by construction. The queue is claim-based with
 leases — `FOR UPDATE SKIP LOCKED` — so workers share one queue without
 coordinating, and a run has one writer at a time (NF-15).
 */}}
+{{- $metrics := .Values.worker.metrics | default dict -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -53,10 +54,15 @@ spec:
             - worker
             - --concurrency={{ .Values.worker.concurrency }}
             - --lease={{ .Values.worker.lease }}
+            {{- if ($metrics.enabled | default false) }}
+            - --metrics-addr=:{{ ($metrics.port | default 9090) }}
+            {{- else }}
+            - --metrics-addr=
+            {{- end }}
             {{- if .Values.baseUrl }}
             # The worker announces runs to channels, and a notification about a
             # run waiting for approval has to link to it. This process serves
-            # nothing, so it cannot know the address it has to point at.
+            # only metrics, so it cannot know the address it has to point at.
             - --base-url={{ .Values.baseUrl }}
             {{- end }}
             {{- if .Values.worker.specs.configMap }}
@@ -69,6 +75,11 @@ spec:
             - name: HOSTNAME
               valueFrom:
                 fieldRef: { fieldPath: metadata.name }
+          {{- if ($metrics.enabled | default false) }}
+          ports:
+            - name: metrics
+              containerPort: {{ ($metrics.port | default 9090) }}
+          {{- end }}
           volumeMounts:
             # The one writable path, and the config file a local MCP server
             # reads is why it exists: the worker materialises it under the
@@ -81,11 +92,9 @@ spec:
               mountPath: /agents
               readOnly: true
           {{- end }}
-          # No probes. A worker serves nothing, so there is no endpoint to ask;
-          # it stops when its context does, and a wedged one is visible as a
-          # queue that stops draining rather than as a port that stops
-          # answering. Giving it an HTTP server to be probed on would be adding
-          # a listener for the benefit of the probe.
+          # No probes. The metrics listener is observational: a wedged worker
+          # is visible as a queue that stops draining, not as a port that stops
+          # answering. Probing it would make observability look like liveness.
           securityContext: {{- toYaml .Values.containerSecurityContext | nindent 12 }}
           resources: {{- toYaml .Values.worker.resources | nindent 12 }}
       volumes:

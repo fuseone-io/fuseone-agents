@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -177,6 +180,29 @@ func TestTurn_claimsAndAdvancesARun(t *testing.T) {
 	}
 	if got := phaseOf(t, s.store); got != engine.PhaseFinished {
 		t.Errorf("Phase = %v, want finished", got)
+	}
+}
+
+func TestTurn_recordsMetricsForClaimsAndResultingPhase(t *testing.T) {
+	t.Parallel()
+
+	reg := NewMetricsRegistry()
+	s := newSetup(t, Config{}, &flakyPlanner{}, nil)
+	s.worker.WithMetrics(reg.Pool("runs", 4))
+	openRun(t, s.store)
+
+	if _, err := s.worker.turn(context.Background(), slog.New(slog.DiscardHandler)); err != nil {
+		t.Fatalf("turn: %v", err)
+	}
+
+	body := metricsBody(reg)
+	for _, want := range []string{
+		`fuseone_worker_claims_total{pool="runs",result="claimed"} 1`,
+		`fuseone_worker_advances_total{pool="runs",phase="finished"} 1`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("metrics body missing %q:\n%s", want, body)
+		}
 	}
 }
 
@@ -435,6 +461,45 @@ func TestTurn_nonRetryableProviderFailureParksWithoutBurningAttempts(t *testing.
 	if _, err := s.store.Claim(context.Background(), "other", time.Minute); !errors.Is(err, domain.ErrNoClaimableRun) {
 		t.Fatalf("Claim after non-retryable provider failure = %v, want no retry queued", err)
 	}
+}
+
+func TestTurn_failureMetricsUseStableCodesInsteadOfErrorText(t *testing.T) {
+	t.Parallel()
+
+	reg := NewMetricsRegistry()
+	planner := &flakyPlanner{
+		failures: 99,
+		err: &model.ProviderError{
+			Provider:  "anthropic",
+			Code:      model.CodeAuthFailed,
+			Status:    401,
+			RequestID: "req_auth",
+			Message:   "secret diagnostic text",
+			Retryable: false,
+		},
+	}
+	s := newSetup(t, Config{MaxAttempts: 5}, planner, nil)
+	s.worker.WithMetrics(reg.Pool("runs", 4))
+	openRun(t, s.store)
+
+	if _, err := s.worker.turn(context.Background(), slog.New(slog.DiscardHandler)); err != nil {
+		t.Fatalf("turn: %v", err)
+	}
+
+	body := metricsBody(reg)
+	if !strings.Contains(body,
+		`fuseone_worker_advance_failures_total{pool="runs",reason="model_auth_failed",parked="true"} 1`) {
+		t.Fatalf("metrics body did not record the stable failure code:\n%s", body)
+	}
+	if strings.Contains(body, "secret diagnostic text") || strings.Contains(body, "req_auth") {
+		t.Fatalf("metrics body contains diagnostic text:\n%s", body)
+	}
+}
+
+func metricsBody(reg *MetricsRegistry) string {
+	rec := httptest.NewRecorder()
+	reg.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	return rec.Body.String()
 }
 
 // staticCeilings stands in for the configured scope budgets.

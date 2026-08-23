@@ -61,6 +61,7 @@ and therefore in whatever holds your values file.
 |---|---|
 | `-serve` | The API and the console, in one process. Stateless; scale freely. |
 | `-worker` | The pool that drains the run queue. Several are safe: the queue is claim-based with leases, and a run has one writer at a time. |
+| `-worker` service | Optional Prometheus metrics for worker movement. It exposes counters and gauges, not run content or diagnostics. |
 | `-migrate` | A pre-install and pre-upgrade hook. Nothing serves against a schema it does not know. |
 
 ## The probes are not the same question
@@ -71,6 +72,10 @@ crash loop across the installation.
 
 Readiness does ask, and answers 503 with the reason. A pod that cannot read the
 ledger leaves the load balancer's rotation and is not restarted for it.
+
+Workers expose `/metrics` when `worker.metrics.enabled` is true. That listener
+is observational, not a health check: a stuck worker is a queue that stops
+draining, not a port that stops answering.
 
 ## Where agents come from
 

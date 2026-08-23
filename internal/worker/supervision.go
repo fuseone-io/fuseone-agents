@@ -50,6 +50,8 @@ holding whatever a failure happened to mention is one that eventually carries
 personal data through it (AU-04).
 */
 func (w *Worker) park(ctx context.Context, claim domain.Claim, reason error, code string) error {
+	w.metrics.Park(code)
+
 	head, err := w.deps.Ledger.Head(ctx, claim.RunID)
 	if err == nil && head.Kind.Terminal() {
 		// The runner already recorded it — a budget ceiling, most often. A

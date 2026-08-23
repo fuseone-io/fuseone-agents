@@ -9,7 +9,7 @@ spec:
     - name: http
       port: {{ .Values.service.port }}
       targetPort: http
-  # Only the API. The worker answers nothing, and a Service selecting both
-  # would send half the requests to a pod with no listener.
+  # Only the API. Worker metrics have their own Service; selecting both here
+  # would send console requests to a pod that does not implement the API.
   selector: {{- include "fuseone.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: serve

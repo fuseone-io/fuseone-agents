@@ -30,10 +30,13 @@ func (w *Worker) turn(ctx context.Context, log *slog.Logger) (bool, error) {
 	claim, err := w.queue.Claim(ctx, w.cfg.Owner, w.cfg.Lease)
 	switch {
 	case errors.Is(err, domain.ErrNoClaimableRun):
+		w.metrics.Claim("empty")
 		return false, nil
 	case err != nil:
+		w.metrics.Claim("error")
 		return false, fmt.Errorf("claim: %w", err)
 	}
+	w.metrics.Claim("claimed")
 
 	log = log.With("run", claim.RunID, "agent", claim.AgentID)
 
@@ -77,7 +80,12 @@ func (w *Worker) turn(ctx context.Context, log *slog.Logger) (bool, error) {
 	// undoing, and asking the model what to do next would be asking it to
 	// carry on with a run somebody already ended.
 	if claim.Phase == engine.PhaseCompensating.String() {
-		return true, w.undo(ctx, claim, start, log)
+		if err := w.undo(ctx, claim, start, log); err != nil {
+			w.metrics.AdvanceFailure("compensation_interrupted", true)
+			return true, err
+		}
+		w.metrics.Advance(engine.PhaseFailed.String())
+		return true, nil
 	}
 
 	// The runner is a thin wrapper over its dependencies, so building one per
@@ -87,6 +95,7 @@ func (w *Worker) turn(ctx context.Context, log *slog.Logger) (bool, error) {
 	status, advErr := engine.NewRunner(deps).Advance(ctx, start)
 	if advErr != nil {
 		outcome := w.failure(claim, advErr)
+		w.metrics.AdvanceFailure(failureReasonFor(advErr), outcome.Parked)
 		log.Warn("advance failed",
 			"attempt", claim.Attempts+1, "parked", outcome.Parked, "err", advErr)
 		if outcome.Parked {
@@ -95,8 +104,16 @@ func (w *Worker) turn(ctx context.Context, log *slog.Logger) (bool, error) {
 		return true, w.release(ctx, claim, outcome)
 	}
 
+	w.metrics.Advance(status.Phase.String())
 	log.Debug("advanced", "phase", status.Phase.String(), "seq", status.Seq)
 	return true, w.release(ctx, claim, domain.ClaimOutcome{})
+}
+
+func failureReasonFor(err error) string {
+	if failure, ok := model.FailureSummaryOf(err); ok {
+		return failure.Code
+	}
+	return "unclassified"
 }
 
 func parkedReasonFor(err error) string {

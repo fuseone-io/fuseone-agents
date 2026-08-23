@@ -129,6 +129,9 @@ type Worker struct {
 	// ruled on nothing can still abandon a run, and every act comes back
 	// reported as standing rather than quietly dropped.
 	undos compensate.Catalogue
+	// metrics is optional. The ledger remains the diagnostic record; metrics
+	// only say whether this pool is moving.
+	metrics *PoolMetrics
 }
 
 // WithUndos wires the Curator's ruling on what compensates what.
@@ -146,6 +149,12 @@ func (w *Worker) WithStages(s Stages) *Worker {
 // WithCeilings wires the scope budgets a run is narrowed by.
 func (w *Worker) WithCeilings(c Ceilings) *Worker {
 	w.ceilings = c
+	return w
+}
+
+// WithMetrics wires low-cardinality counters for this pool.
+func (w *Worker) WithMetrics(m *PoolMetrics) *Worker {
+	w.metrics = m
 	return w
 }
 

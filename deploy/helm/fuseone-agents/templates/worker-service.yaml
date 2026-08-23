@@ -1,0 +1,20 @@
+{{- $metrics := .Values.worker.metrics | default dict -}}
+{{- if ($metrics.enabled | default false) }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "fuseone.fullname" . }}-worker
+  labels: {{- include "fuseone.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  type: ClusterIP
+  ports:
+    - name: metrics
+      port: {{ ($metrics.port | default 9090) }}
+      targetPort: metrics
+  # Only worker metrics. The API service deliberately selects serve pods, and
+  # this one deliberately selects worker pods; mixing them would send requests
+  # to a process that does not implement that surface.
+  selector: {{- include "fuseone.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+{{- end }}
