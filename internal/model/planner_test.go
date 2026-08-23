@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -183,8 +184,38 @@ func TestPlanner_reportsPromptCompositionBySource(t *testing.T) {
 			if p.ToolSchemas <= 0 || p.Platform <= 0 || p.Total <= p.ToolResults {
 				t.Fatalf("Prompt = %+v, want schemas and platform text included", p)
 			}
+			if got, want := p.Total, measuredPromptParts(p); got != want {
+				t.Fatalf("Prompt.Total = %d, want measured source parts to sum to %d: %+v", got, want, p)
+			}
+			if got, want := sumToolBytes(p.ToolArgumentsByTool), p.ToolArguments; got != want {
+				t.Fatalf("ToolArgumentsByTool sum = %d, want ToolArguments %d", got, want)
+			}
+			if got, want := sumToolBytes(p.ToolResultsByTool), p.ToolResults; got != want {
+				t.Fatalf("ToolResultsByTool sum = %d, want ToolResults %d", got, want)
+			}
 		})
 	}
+}
+
+func measuredPromptParts(p domain.PromptInputBreakdown) int64 {
+	v := reflect.ValueOf(p)
+	t := v.Type()
+	var total int64
+	for i := 0; i < v.NumField(); i++ {
+		if t.Field(i).Name == "Total" || v.Field(i).Kind() != reflect.Int64 {
+			continue
+		}
+		total += v.Field(i).Int()
+	}
+	return total
+}
+
+func sumToolBytes(m map[domain.ToolID]int64) int64 {
+	var total int64
+	for _, n := range m {
+		total += n
+	}
+	return total
 }
 
 func TestAnthropic_textOnly_meansTheRunIsDone(t *testing.T) {
