@@ -143,7 +143,10 @@ func writeSpend(ctx context.Context, tx pgx.Tx, s plannedStep) (bool, error) {
 		// Unreadable rather than absent, and equally not this sweep's to fix.
 		return false, nil
 	}
-	if p.Model == "" {
+	// Both halves or neither. The projection aggregates by the pair, and a row
+	// with a model under an empty provider is a financial fact with half a
+	// subject — it would group into a bucket nobody can act on.
+	if p.Provider == "" || p.Model == "" {
 		return false, nil
 	}
 

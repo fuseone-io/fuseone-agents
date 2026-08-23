@@ -147,7 +147,46 @@ func TestSpend_skipsAPlanningStepThatNamesNoModel(t *testing.T) {
 	}
 }
 
-func TestSpend_cursorAdvancesOnlyOverWhatWasWritten(t *testing.T) {
+func TestSpend_cursorPassesAStepItSkipped(t *testing.T) {
+	pool := spendPoolFor(t)
+	store := ledger.NewPostgres(pool)
+	spend := finops.NewSpend(pool)
+	base := time.Now().Add(-time.Hour).UTC().Truncate(time.Microsecond)
+	seedSpendCursor(t, pool, base)
+
+	// A step with no pair, then one with. A batch of one reads only the first,
+	// writes nothing, and must still move past it: a cursor that advanced only
+	// over what it wrote would rediscover this row every minute for ever and
+	// never reach the second.
+	appendPlanned(t, store, "run-old", base.Add(time.Second),
+		domain.Cost{Micros: 500}, domain.PlannedPayload{Node: "triage"})
+	appendPlanned(t, store, "run-new", base.Add(2*time.Second),
+		domain.Cost{Micros: 700}, domain.PlannedPayload{Provider: "openai", Model: "gpt-4o-mini"})
+
+	if n, err := spend.Project(t.Context(), 1); err != nil || n != 0 {
+		t.Fatalf("first Project = %d, %v; want nothing written", n, err)
+	}
+	if n, err := spend.Project(t.Context(), 1); err != nil || n != 1 {
+		t.Fatalf("second Project = %d, %v; want the step behind the skipped one", n, err)
+	}
+}
+
+func TestSpend_halfAPairIsNotProjected(t *testing.T) {
+	pool := spendPoolFor(t)
+	store := ledger.NewPostgres(pool)
+	spend := finops.NewSpend(pool)
+	base := time.Now().Add(-time.Hour).UTC().Truncate(time.Microsecond)
+	seedSpendCursor(t, pool, base)
+
+	appendPlanned(t, store, "run-no-provider", base.Add(time.Second),
+		domain.Cost{Micros: 500}, domain.PlannedPayload{Model: "gpt-4o-mini"})
+
+	if n, err := spend.Project(t.Context(), 10); err != nil || n != 0 {
+		t.Fatalf("Project = %d, %v; want a model with no provider left out", n, err)
+	}
+}
+
+func TestSpend_resumesWhereTheBatchStopped(t *testing.T) {
 	pool := spendPoolFor(t)
 	store := ledger.NewPostgres(pool)
 	spend := finops.NewSpend(pool)
@@ -159,8 +198,8 @@ func TestSpend_cursorAdvancesOnlyOverWhatWasWritten(t *testing.T) {
 			domain.Cost{Micros: 100}, domain.PlannedPayload{Provider: "anthropic", Model: "m"})
 	}
 
-	// A batch smaller than the backlog: the cursor must stop where the writing
-	// stopped, so the next pass resumes rather than skipping.
+	// A batch smaller than the backlog: the next pass resumes from where this
+	// one stopped rather than starting over or skipping ahead.
 	if n, err := spend.Project(t.Context(), 2); err != nil || n != 2 {
 		t.Fatalf("Project = %d, %v; want the batch size", n, err)
 	}
