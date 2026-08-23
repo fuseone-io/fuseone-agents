@@ -35,6 +35,9 @@ field" is a commit message.
   returns text without calling a tool or the finish action parks the run for a
   person to inspect instead of ending silently. Older runs that finished by
   returning text keep their recorded reason and continue to render correctly.
+  Agents that used to finish by returning plain text may start parking after
+  this upgrade; watch the human queue and any configured channel alerts for
+  `no_finish_action` during the first runs after rollout.
 - **Workers expose Prometheus metrics by default on `/metrics` inside the
   cluster.** The chart creates a worker-only ClusterIP service when
   `worker.metrics.enabled` is true. The metrics carry low-cardinality pool
