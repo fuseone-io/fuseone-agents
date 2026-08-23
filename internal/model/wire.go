@@ -47,6 +47,7 @@ func namesFor(in engine.PlanInput) names {
 		tool: make(map[string]domain.ToolID, len(in.Tools)),
 	}
 	n.add(in.Tools...)
+	n.add(finishToolID)
 	for _, turn := range in.Transcript {
 		n.add(turn.Tool)
 	}

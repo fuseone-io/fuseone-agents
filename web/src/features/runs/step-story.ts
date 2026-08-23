@@ -52,6 +52,7 @@ const VERDICT_CHIP: Record<string, { text: string; className: string }> = {
 const PARKED: Record<string, string> = {
   budget_exhausted: "runs.ceilingHit",
   no_progress: "runs.storyInsisted",
+  no_finish_action: "runs.storyNoFinishAction",
 };
 
 export interface Chip {
@@ -213,6 +214,13 @@ export function detailOf(step: Step): Line {
           : held
             ? { key: "runs.finishedByNoToolCallStored" }
             : { key: "runs.finishedByNoToolCall" };
+      }
+      if (reason === "finish_tool") {
+        return inline
+          ? { key: "runs.finishedByFinishWithOutcome", values: { outcome: inline } }
+          : held
+            ? { key: "runs.finishedByFinishStored" }
+            : { key: "runs.finishedByFinish" };
       }
       return inline
         ? { key: "runs.finishedWithOutcome", values: { outcome: inline } }

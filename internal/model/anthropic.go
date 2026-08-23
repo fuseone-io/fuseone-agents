@@ -177,8 +177,8 @@ func stepNote(in engine.PlanInput) string {
 	}
 	return fmt.Sprintf(
 		"You are at the step called %q. Its author wrote that it stops when: %s\n"+
-			"If that has happened, finish the run and begin your final message with "+
-			"exactly `STOP: %s` on its own line, then explain in your own words.",
+			"If that has happened, call the finish tool with `stopped_by` set to "+
+			"exactly `%s`, then explain in `summary` in your own words.",
 		in.Step, in.StopsWhen, in.StopsWhen)
 }
 
@@ -190,23 +190,22 @@ Every action you propose passes through a deterministic gate before it happens.
 A refused call is reported back to you with the rule that refused it — treat
 that as final for this run and choose another approach rather than retrying.
 
-Propose one tool call at a time. When there is nothing left to do, reply with a
-short plain-text summary and make no tool call; that is how you finish.
+Propose one tool call at a time. When there is nothing left to do, call the
+finish tool with a short plain-text summary. That is the only way to finish.
 
 If more investigation requires a tool that is available to this run, call that
 tool now. Do not say that you will continue, check logs, inspect metrics, read
-documents, or use a tool later; a text reply ends the run.
+documents, or use a tool later; text without a tool is not progress and the
+run will stop for a person to inspect.
 
 When the step you are at names the thing that ends it, and that thing has
-happened, you finish the same way — and the first line of your reply is exactly
-"STOP: " followed by that step's own words, copied. Everything after that line
-is your summary, in your words. The line is how the record says the run ended
-where its author said it would; without it the record says only that you
-stopped, and nobody afterwards can tell the two apart.`
+happened, you call the finish tool and set "stopped_by" to that step's own
+words, copied. The field is how the record says the run ended where its author
+said it would; without it the record says only that the run finished.`
 
 func (a *Anthropic) toolParams(ids []domain.ToolID, offered names) []anthropic.ToolUnionParam {
 	if a.tools == nil {
-		return nil
+		return []anthropic.ToolUnionParam{finishToolParam(offered)}
 	}
 	out := make([]anthropic.ToolUnionParam, 0, len(ids))
 	for _, id := range ids {
@@ -221,13 +220,23 @@ func (a *Anthropic) toolParams(ids []domain.ToolID, offered names) []anthropic.T
 		}
 		out = append(out, anthropic.ToolUnionParam{OfTool: &tool})
 	}
+	out = append(out, finishToolParam(offered))
 	return out
+}
+
+func finishToolParam(offered names) anthropic.ToolUnionParam {
+	tool := anthropic.ToolParam{
+		Name:        offered.wire[finishToolID],
+		Description: anthropic.String(finishToolDescription),
+		InputSchema: anthropic.ToolInputSchemaParam{Properties: finishToolSchema()},
+	}
+	return anthropic.ToolUnionParam{OfTool: &tool}
 }
 
 // proposalFrom reads the model's answer.
 //
-// A tool_use block is the next action; text alone means the model considers
-// the run finished.
+// A tool_use block is the next action. Finishing is also a tool_use block,
+// owned by the platform, so text alone no longer closes a run by omission.
 func (a *Anthropic) proposalFrom(
 	resp *anthropic.Message, offered names, prompt domain.PromptInputBreakdown,
 ) engine.Proposal {
@@ -239,7 +248,11 @@ func (a *Anthropic) proposalFrom(
 		case anthropic.TextBlock:
 			summary.WriteString(variant.Text)
 		case anthropic.ToolUseBlock:
-			p.Tool = offered.idOf(variant.Name)
+			tool := offered.idOf(variant.Name)
+			if isFinishTool(tool) {
+				return finishProposal([]byte(variant.JSON.Input.Raw()), p.Cost, p.Prompt)
+			}
+			p.Tool = tool
 			// Input is raw JSON; never string-match it. Escaping of Unicode
 			// and slashes varies between models.
 			p.Args = []byte(variant.JSON.Input.Raw())
@@ -247,7 +260,6 @@ func (a *Anthropic) proposalFrom(
 	}
 
 	if p.Tool == "" {
-		p.Done = true
 		p.Outcome, p.StoppedBy = readOutcome(summary.String())
 	}
 	return p

@@ -218,7 +218,25 @@ func sumToolBytes(m map[domain.ToolID]int64) int64 {
 	return total
 }
 
-func TestAnthropic_textOnly_meansTheRunIsDone(t *testing.T) {
+func TestAnthropic_finishTool_meansTheRunIsDone(t *testing.T) {
+	t.Parallel()
+	c := serve(t, `{"id":"m","type":"message","role":"assistant","model":"claude-opus-5",
+	  "content":[{"type":"tool_use","id":"toolu_finish","name":"_fuseone__finish","input":{"summary":"Classifiquei como cobrança.","stopped_by":"não encontrar o cliente"}}],
+	  "stop_reason":"tool_use","usage":{"input_tokens":10,"output_tokens":5}}`)
+
+	got, err := plannerFor(t, model.KindAnthropic, c.server.URL, model.Config{}).
+		Plan(context.Background(), input())
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+
+	if !got.Done || got.Tool != "" || got.Outcome != "Classifiquei como cobrança." ||
+		got.StoppedBy != "não encontrar o cliente" {
+		t.Errorf("proposal = %+v, want an explicit finished run", got)
+	}
+}
+
+func TestAnthropic_textOnly_doesNotFinishTheRun(t *testing.T) {
 	t.Parallel()
 	c := serve(t, `{"id":"m","type":"message","role":"assistant","model":"claude-opus-5",
 	  "content":[{"type":"text","text":"Classifiquei como cobrança."}],
@@ -230,10 +248,11 @@ func TestAnthropic_textOnly_meansTheRunIsDone(t *testing.T) {
 		t.Fatalf("Plan: %v", err)
 	}
 
-	// No tool call is how the model says it has finished — there is no
-	// separate "done" signal to misread.
-	if !got.Done || got.Outcome == "" {
-		t.Errorf("Done = %v, Outcome = %q, want a finished run with a summary", got.Done, got.Outcome)
+	// Text is useful evidence, but not an act. Finishing is a platform tool,
+	// so the engine has a concrete step to record instead of inferring from
+	// the absence of a tool call.
+	if got.Done || got.Tool != "" || got.Outcome == "" {
+		t.Errorf("proposal = %+v, want text held without a finish decision", got)
 	}
 }
 
@@ -290,7 +309,7 @@ func TestAnthropic_systemPrompt_isCachedAndFreeOfVolatileText(t *testing.T) {
 	}
 }
 
-func TestLoopContract_tellsTheModelThatTextEndsTheRun(t *testing.T) {
+func TestLoopContract_tellsTheModelToFinishWithTheFinishTool(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
@@ -345,13 +364,32 @@ func TestLoopContract_tellsTheModelThatTextEndsTheRun(t *testing.T) {
 			for _, want := range []string{
 				"call that tool now",
 				"Do not say that you will continue",
-				"a text reply ends the run",
+				"call the finish tool",
+				"the only way to finish",
 			} {
 				if !strings.Contains(system, want) {
 					t.Errorf("system prompt does not contain %q:\n%s", want, system)
 				}
 			}
 		})
+	}
+}
+
+func TestOpenAICompatible_finishTool_becomesTheSameFinishedProposal(t *testing.T) {
+	t.Parallel()
+	c := serve(t, `{
+	  "choices":[{"finish_reason":"tool_calls","message":{"role":"assistant","tool_calls":[
+	    {"id":"call_finish","type":"function","function":{"name":"_fuseone__finish","arguments":"{\"summary\":\"Pronto.\"}"}}]}}],
+	  "usage":{"prompt_tokens":10,"completion_tokens":5}
+	}`)
+
+	got, err := plannerFor(t, model.KindOpenAICompatible, c.server.URL, model.Config{Model: "gpt-x"}).
+		Plan(context.Background(), input())
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	if !got.Done || got.Tool != "" || got.Outcome != "Pronto." {
+		t.Errorf("proposal = %+v, want an explicit finished run", got)
 	}
 }
 

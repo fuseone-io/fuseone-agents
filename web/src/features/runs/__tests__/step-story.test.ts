@@ -52,6 +52,18 @@ describe("a run that stopped where the author said it would", () => {
     expect(line.key).toBe("runs.finishedByNoToolCallWithOutcome");
     expect(line.values).toMatchObject({ outcome: "Respondi e encerrei." });
   });
+
+  it("says the explicit finish action ended the run when recorded", () => {
+    const line = detailOf({
+      seq: 9,
+      kind: "run_finished",
+      at: "2026-08-14T12:00:00Z",
+      payload: { outcome: "Diagnóstico concluído.", reason: "finish_tool" },
+    } as never);
+
+    expect(line.key).toBe("runs.finishedByFinishWithOutcome");
+    expect(line.values).toMatchObject({ outcome: "Diagnóstico concluído." });
+  });
 });
 
 describe("a run finished since the answer moved", () => {
@@ -79,6 +91,32 @@ describe("a run finished since the answer moved", () => {
         payload: { outcome_ref: "content:run-1:4", reason: "no_tool_call" },
       } as Step),
     ).toEqual({ key: "runs.finishedByNoToolCallStored" });
+  });
+
+  it("says the answer is held after an explicit finish action", () => {
+    expect(
+      detailOf({
+        seq: 4,
+        kind: "run_finished",
+        at: "2026-08-18T12:00:00Z",
+        hash: "h",
+        payload: { outcome_ref: "content:run-1:4", reason: "finish_tool" },
+      } as Step),
+    ).toEqual({ key: "runs.finishedByFinishStored" });
+  });
+});
+
+describe("a run parked because the model only returned text", () => {
+  it("says a person must inspect the missing finish action", () => {
+    expect(
+      detailOf({
+        seq: 7,
+        kind: "parked",
+        at: "2026-08-20T12:00:00Z",
+        hash: "h",
+        payload: { reason: "no_finish_action" },
+      } as Step),
+    ).toEqual({ key: "runs.storyNoFinishAction" });
   });
 });
 

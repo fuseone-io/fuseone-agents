@@ -43,7 +43,8 @@ func (m *modelServer) restore() {
 }
 
 type chatReply struct {
-	// Tool and Args make the model ask for a tool call; Text finishes the run.
+	// Tool and Args make the model ask for a tool call; Text calls the
+	// platform finish action with that summary.
 	Tool, Args, Text string
 	PromptTokens     int64
 	CompletionTokens int64
@@ -101,13 +102,23 @@ func responseFor(r chatReply) map[string]any {
 			"id": "call_1", "type": "function",
 			"function": map[string]any{"name": r.Tool, "arguments": r.Args},
 		}}
+	} else if r.Text != "" {
+		args, _ := json.Marshal(map[string]string{"summary": r.Text})
+		message["tool_calls"] = []map[string]any{{
+			"id": "call_finish", "type": "function",
+			"function": map[string]any{"name": "_fuseone__finish", "arguments": string(args)},
+		}}
 	} else {
 		message["content"] = r.Text
 	}
 
 	finish := r.FinishReason
 	if finish == "" {
-		finish = "stop"
+		if _, calls := message["tool_calls"]; calls {
+			finish = "tool_calls"
+		} else {
+			finish = "stop"
+		}
 	}
 	return map[string]any{
 		"choices": []map[string]any{{"finish_reason": finish, "message": message}},

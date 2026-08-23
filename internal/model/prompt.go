@@ -37,7 +37,7 @@ func promptInputBreakdown(
 	if note := budgetNote(in); note != "" {
 		out.Platform += int64(len(note))
 	}
-	out.ToolSchemas = toolSchemaBytes(in.Tools, toolSchemas, offered)
+	out.ToolSchemas = toolSchemaBytes(in.Tools, toolSchemas, offered) + finishToolSchemaBytes(offered)
 
 	for _, turn := range in.Transcript {
 		switch turn.Kind {
@@ -68,6 +68,15 @@ func promptInputBreakdown(
 		out.ToolResultsByTool = nil
 	}
 	return out
+}
+
+func finishToolSchemaBytes(offered names) int64 {
+	total := int64(len(offered.wire[finishToolID]) + len(finishToolDescription))
+	raw, err := json.Marshal(finishToolSchema())
+	if err == nil {
+		total += int64(len(raw))
+	}
+	return total
 }
 
 func toolSchemaBytes(ids []domain.ToolID, schemas ToolSchemas, offered names) int64 {

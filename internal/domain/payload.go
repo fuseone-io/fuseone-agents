@@ -273,10 +273,12 @@ type ParkedPayload struct {
 type RunFinishedReason string
 
 const (
+	// RunFinishedByFinishTool means the planner called the platform-owned
+	// finish action. Finishing is an act, not the absence of a tool call.
+	RunFinishedByFinishTool RunFinishedReason = "finish_tool"
 	// RunFinishedNoToolCall means the planner returned text without a next
-	// tool proposal. In the current loop, that is the explicit signal the
-	// model has finished; the console reads this field rather than inferring
-	// the reason from the absence of a tool call later.
+	// tool proposal. Runs before explicit finish used that as the closing
+	// convention; new runs should not write it.
 	RunFinishedNoToolCall RunFinishedReason = "no_tool_call"
 )
 

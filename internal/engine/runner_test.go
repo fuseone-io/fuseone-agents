@@ -481,8 +481,34 @@ func TestAdvance_plannerReportsDone_finishesRun(t *testing.T) {
 	if err := h.payloadOf(t, domain.StepRunFinished, &finished); err != nil {
 		t.Fatalf("payload: %v", err)
 	}
-	if finished.Reason != domain.RunFinishedNoToolCall {
-		t.Errorf("reason = %q, want %q", finished.Reason, domain.RunFinishedNoToolCall)
+	if finished.Reason != domain.RunFinishedByFinishTool {
+		t.Errorf("reason = %q, want %q", finished.Reason, domain.RunFinishedByFinishTool)
+	}
+}
+
+func TestAdvance_plannerReturnsTextWithoutAction_parksInsteadOfFinishing(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t, Proposal{Outcome: "Vou continuar analisando."})
+
+	st, err := h.runner.Advance(ctx, h.start(t, generousBudget()))
+	if err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+
+	if st.Phase != PhaseParked || st.Done {
+		t.Fatalf("Phase = %v, Done = %v, want parked/not done", st.Phase, st.Done)
+	}
+	if len(h.tools.invocations) != 0 {
+		t.Fatalf("empty proposal reached the tool layer: %v", h.tools.invocations)
+	}
+	var parked domain.ParkedPayload
+	if err := h.payloadOf(t, domain.StepParked, &parked); err != nil {
+		t.Fatalf("payload: %v", err)
+	}
+	if parked.Reason != "no_finish_action" {
+		t.Errorf("reason = %q, want no_finish_action", parked.Reason)
 	}
 }
 

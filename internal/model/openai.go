@@ -84,14 +84,17 @@ func (o *OpenAICompatible) proposalFrom(
 
 	if len(c.Message.ToolCalls) > 0 {
 		call := c.Message.ToolCalls[0]
-		p.Tool = offered.idOf(call.Function.Name)
+		tool := offered.idOf(call.Function.Name)
+		if isFinishTool(tool) {
+			return finishProposal([]byte(call.Function.Arguments), p.Cost, p.Prompt)
+		}
+		p.Tool = tool
 		// Arguments arrive as a JSON *string* here, unlike Anthropic's object.
 		// The Gate validates the decoded form, so pass the bytes through.
 		p.Args = []byte(call.Function.Arguments)
 		return p
 	}
 
-	p.Done = true
 	p.Outcome = strings.TrimSpace(c.Message.Content)
 	return p
 }
@@ -174,27 +177,37 @@ func (o *OpenAICompatible) chatMessages(in engine.PlanInput, offered names) []ch
 }
 
 func (o *OpenAICompatible) chatTools(ids []domain.ToolID, offered names) []chatTool {
-	if o.tools == nil {
-		return nil
-	}
 	out := make([]chatTool, 0, len(ids))
-	for _, id := range ids {
-		_, desc, schema, ok := o.tools.Schema(id)
-		if !ok {
-			continue
-		}
-		out = append(out, chatTool{
-			Type: "function",
-			Function: chatFunctionDef{
-				Name:        offered.wire[id],
-				Description: desc,
-				Parameters: map[string]any{
-					"type":       "object",
-					"properties": schema,
+	if o.tools != nil {
+		for _, id := range ids {
+			_, desc, schema, ok := o.tools.Schema(id)
+			if !ok {
+				continue
+			}
+			out = append(out, chatTool{
+				Type: "function",
+				Function: chatFunctionDef{
+					Name:        offered.wire[id],
+					Description: desc,
+					Parameters: map[string]any{
+						"type":       "object",
+						"properties": schema,
+					},
 				},
-			},
-		})
+			})
+		}
 	}
+	out = append(out, chatTool{
+		Type: "function",
+		Function: chatFunctionDef{
+			Name:        offered.wire[finishToolID],
+			Description: finishToolDescription,
+			Parameters: map[string]any{
+				"type":       "object",
+				"properties": finishToolSchema(),
+			},
+		},
+	})
 	return out
 }
 

@@ -327,8 +327,12 @@ func TestAnthropic_aToolOnlyTheTranscriptMentions_isNotOffered(t *testing.T) {
 	}
 
 	tools, _ := c.body["tools"].([]any)
-	if len(tools) != 0 {
-		t.Errorf("offered %d tools, want none — the schema stub serves only crm.lookup", len(tools))
+	if len(tools) != 1 {
+		t.Fatalf("offered %d tools, want only the platform finish tool", len(tools))
+	}
+	tool, _ := tools[0].(map[string]any)
+	if name, _ := tool["name"].(string); name != "_fuseone__finish" {
+		t.Errorf("offered %q, want only the platform finish tool", name)
 	}
 }
 

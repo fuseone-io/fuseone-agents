@@ -94,11 +94,15 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 			Payload: mustJSON(domain.RunFinishedPayload{
 				OutcomeRef:    ref,
 				OutcomeDigest: digest([]byte(proposal.Outcome)),
-				Reason:        domain.RunFinishedNoToolCall,
+				Reason:        domain.RunFinishedByFinishTool,
 				StoppedBy:     proposal.StoppedBy,
 			}),
 		})
 		return status(state), err
+	}
+
+	if proposal.Tool == "" {
+		return r.park(ctx, state, start, "no_finish_action")
 	}
 
 	return r.act(ctx, state, start, proposal)
