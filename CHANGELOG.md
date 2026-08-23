@@ -27,6 +27,31 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.24.0] — 2026-08-22
+
+### Upgrade notes
+
+- **New runs now finish only through the platform finish action.** A model that
+  returns text without calling a tool or the finish action parks the run for a
+  person to inspect instead of ending silently. Older runs that finished by
+  returning text keep their recorded reason and continue to render correctly.
+- **Workers expose Prometheus metrics by default on `/metrics` inside the
+  cluster.** The chart creates a worker-only ClusterIP service when
+  `worker.metrics.enabled` is true. The metrics carry low-cardinality pool
+  movement only; they do not include run ids, agent ids, tools, user text or
+  provider diagnostics.
+
+### Added
+
+- The model is now always offered a platform-owned finish action. Calling it
+  records `finish_tool` in the run trail, stores the closing answer in the
+  content store as before, and keeps the reason for ending explicit instead of
+  inferred from the absence of a tool call.
+- Workers now export Prometheus text metrics for configured slots, claim
+  results, advance phases, stable failure codes and worker-supervisor parking
+  reasons. Binding the metrics listener fails worker startup rather than
+  silently running without the surface the chart advertised.
+
 ## [0.23.0] — 2026-08-22
 
 ### Added
