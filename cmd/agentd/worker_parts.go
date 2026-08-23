@@ -65,6 +65,9 @@ type workerParts struct {
 
 // openWorkerParts connects everything a worker reads before it runs.
 func openWorkerParts(ctx context.Context, dsn string) (*workerParts, error) {
+	if err := waitForStartupPostgres(ctx, dsn); err != nil {
+		return nil, err
+	}
 	store, err := openStore(ctx, dsn)
 	if err != nil {
 		return nil, err

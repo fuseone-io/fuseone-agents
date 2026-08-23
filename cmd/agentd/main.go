@@ -105,9 +105,11 @@ func openStore(ctx context.Context, dsn string) (Store, error) {
 		return nil, fmt.Errorf("connect to postgres: %w", err)
 	}
 	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
 		return nil, fmt.Errorf("ping postgres: %w", err)
 	}
 	if err := ledger.Migrate(ctx, pool); err != nil {
+		pool.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
 	slog.Info("connected to postgres")

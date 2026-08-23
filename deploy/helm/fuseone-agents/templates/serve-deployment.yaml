@@ -59,7 +59,10 @@ spec:
             periodSeconds: 5
             failureThreshold: 2
           # The same endpoint again, with a budget: a pod that never becomes
-          # ready is a failed rollout rather than one that hangs.
+          # ready is a failed rollout rather than one that hangs. Keep this
+          # above postgresStartupTimeout in cmd/agentd/postgres_wait.go: the
+          # process waits for Postgres before binding, then still has to open
+          # the store, migrate, and build identity before readiness can pass.
           startupProbe:
             httpGet: { path: /api/v1/readyz, port: http }
             periodSeconds: 3

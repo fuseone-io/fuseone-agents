@@ -36,6 +36,12 @@ field" is a commit message.
 
 ### Fixed
 
+- **The server waits briefly for Postgres during startup instead of exiting immediately.**
+  The serve pod now spends part of the Kubernetes startup-probe budget retrying
+  the initial database ping, so a short Postgres restart during a rollout does
+  not turn into an immediate crash loop. A database that still does not answer
+  fails visibly after the startup budget is spent.
+
 - **Simulated runs no longer enter the planning-spend projection.** The sweep
   still advances past them, so a simulation near the cursor cannot keep the
   aggregate from reaching later production calls.

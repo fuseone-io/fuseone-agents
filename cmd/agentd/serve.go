@@ -55,6 +55,10 @@ func serve(args []string) error {
 
 	ctx := context.Background()
 
+	if err := waitForStartupPostgres(ctx, *dsn); err != nil {
+		return err
+	}
+
 	store, err := openStore(ctx, *dsn)
 	if err != nil {
 		return err
