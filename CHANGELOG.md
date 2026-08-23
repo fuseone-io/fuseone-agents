@@ -27,6 +27,8 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.27.0] — 2026-08-23
+
 ### Added
 
 - **The cost page now shows planning spend by model and by agent.** It reads
@@ -36,15 +38,20 @@ field" is a commit message.
 
 ### Fixed
 
-- **The server waits briefly for Postgres during startup instead of exiting immediately.**
-  The serve pod now spends part of the Kubernetes startup-probe budget retrying
-  the initial database ping, so a short Postgres restart during a rollout does
-  not turn into an immediate crash loop. A database that still does not answer
-  fails visibly after the startup budget is spent.
+- **A Postgres restart during a rollout no longer fails the rollout.** Both the
+  API and the worker used to exit the moment the first database ping was
+  refused, so a database that took half a minute to come back turned into a
+  crash loop with backoff — and an upgrade that timed out waiting for pods that
+  were never going to start in time. Both now retry for up to 45 seconds before
+  binding, which fits inside the startup-probe budget with room for the
+  migration and identity setup that follow. A database that still does not
+  answer fails loudly, naming the connection error rather than the timeout.
 
-- **Simulated runs no longer enter the planning-spend projection.** The sweep
-  still advances past them, so a simulation near the cursor cannot keep the
-  aggregate from reaching later production calls.
+- **Simulated runs no longer enter the planning-spend projection**, and rows
+  that 0.26.0 already projected for them are removed by the migration. A
+  rehearsal was being reported as production spend. The sweep still advances
+  past simulations, so one sitting near the cursor cannot keep the aggregate
+  from reaching later production calls.
 
 ## [0.26.0] — 2026-08-23
 
