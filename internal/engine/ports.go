@@ -65,6 +65,9 @@ type Proposal struct {
 	// It is measured by the planner because only the planner knows the final
 	// wire shape: system text, tool schemas and transcript all meet there.
 	Prompt domain.PromptInputBreakdown
+	// Price is the rate provenance for this planning call. Cost is accounting;
+	// this is only the explanation for zero and precision.
+	Price domain.ModelPriceUse
 	// Done reports that the agent considers the run complete.
 	Done    bool
 	Outcome string

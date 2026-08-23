@@ -67,6 +67,7 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 	}
 	planned := domain.PlannedPayload{
 		Node:   StepNameAt(start, state.Called),
+		Price:  pricePayload(proposal.Price),
 		Prompt: promptInputPayload(proposal.Prompt),
 	}
 	if state, err = r.append(ctx, state, start, domain.Step{
@@ -220,6 +221,13 @@ func mustJSON(v any) []byte {
 
 func promptInputPayload(p domain.PromptInputBreakdown) *domain.PromptInputBreakdown {
 	if p.Unit == "" && p.Total == 0 {
+		return nil
+	}
+	return &p
+}
+
+func pricePayload(p domain.ModelPriceUse) *domain.ModelPriceUse {
+	if p.Status == "" {
 		return nil
 	}
 	return &p

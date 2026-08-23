@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Panel } from "@/components/shared/panel";
 import { formatBytes, formatCost, formatTokens } from "@/lib/format";
 import { runSpend } from "@/features/runs/run-spend";
+import type { UnpricedReason } from "@/features/runs/run-spend";
 import type { Run, Step } from "@/lib/api/client";
 
 /**
@@ -37,12 +38,10 @@ export function RunSpendPanel({ run, steps }: { run: Run; steps: Step[] }) {
           <div className="font-mono text-[22px]/7 font-medium tabular-nums">
             {formatCost(run.cost)}
           </div>
-          {/* Zero has two causes and only one of them is a price. */}
+          {/* Zero has several causes; the ledger records which one this run hit. */}
           {!spend.priced && (
             <p className="mt-1 text-xs text-warning">
-              {spend.reason === "no_rate"
-                ? t("runs.spendNoRate")
-                : t("runs.spendNothing")}
+              {t(reasonKey(spend.reason))}
             </p>
           )}
           <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
@@ -118,4 +117,21 @@ function Row({ label, value }: { label: string; value?: number }) {
       </dd>
     </>
   );
+}
+
+function reasonKey(reason: UnpricedReason | undefined): string {
+  switch (reason) {
+    case "missing_rate":
+      return "runs.spendMissingRate";
+    case "partial_missing_rate":
+      return "runs.spendPartialMissingRate";
+    case "configured_zero":
+      return "runs.spendConfiguredZero";
+    case "rounded_zero":
+      return "runs.spendRoundedZero";
+    case "nothing_spent":
+      return "runs.spendNothing";
+    default:
+      return "runs.spendUnknown";
+  }
 }

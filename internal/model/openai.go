@@ -70,23 +70,26 @@ func (o *OpenAICompatible) Plan(ctx context.Context, in engine.PlanInput) (engin
 	choice := out.Choices[0]
 	// Providers spell a policy stop differently; treat them all as a refusal
 	// so the caller has one condition to handle across every provider.
+	cost := o.cost(out.Usage)
+	price := o.cfg.priceUse(cost)
 	if choice.FinishReason == "content_filter" {
-		return engine.Proposal{Cost: o.cost(out.Usage), Prompt: prompt}, providerRefused(o.provider.Name)
+		return engine.Proposal{Cost: cost, Prompt: prompt, Price: price}, providerRefused(o.provider.Name)
 	}
 
-	return o.proposalFrom(choice, out.Usage, offered, prompt), nil
+	return o.proposalFrom(choice, offered, prompt, cost, price), nil
 }
 
 func (o *OpenAICompatible) proposalFrom(
-	c chatChoice, u chatUsage, offered names, prompt domain.PromptInputBreakdown,
+	c chatChoice, offered names, prompt domain.PromptInputBreakdown,
+	cost domain.Cost, price domain.ModelPriceUse,
 ) engine.Proposal {
-	p := engine.Proposal{Cost: o.cost(u), Prompt: prompt}
+	p := engine.Proposal{Cost: cost, Prompt: prompt, Price: price}
 
 	if len(c.Message.ToolCalls) > 0 {
 		call := c.Message.ToolCalls[0]
 		tool := offered.idOf(call.Function.Name)
 		if isFinishTool(tool) {
-			return finishProposal([]byte(call.Function.Arguments), p.Cost, p.Prompt)
+			return finishProposal([]byte(call.Function.Arguments), p.Cost, p.Prompt, p.Price)
 		}
 		p.Tool = tool
 		// Arguments arrive as a JSON *string* here, unlike Anthropic's object.

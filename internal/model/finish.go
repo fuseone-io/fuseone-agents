@@ -34,7 +34,10 @@ type finishArgs struct {
 	StoppedBy string `json:"stopped_by"`
 }
 
-func finishProposal(args []byte, cost domain.Cost, prompt domain.PromptInputBreakdown) engine.Proposal {
+func finishProposal(
+	args []byte, cost domain.Cost, prompt domain.PromptInputBreakdown,
+	price domain.ModelPriceUse,
+) engine.Proposal {
 	var decoded finishArgs
 	_ = json.Unmarshal(args, &decoded)
 	return engine.Proposal{
@@ -43,5 +46,6 @@ func finishProposal(args []byte, cost domain.Cost, prompt domain.PromptInputBrea
 		StoppedBy: strings.TrimSpace(decoded.StoppedBy),
 		Cost:      cost,
 		Prompt:    prompt,
+		Price:     price,
 	}
 }

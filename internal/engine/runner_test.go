@@ -254,6 +254,10 @@ func TestAdvance_recordsThePromptCompositionThePlannerMeasured(t *testing.T) {
 		Tool:   "crm.lookup",
 		Args:   []byte(`{"id":"42"}`),
 		Prompt: prompt,
+		Price: domain.ModelPriceUse{
+			Status:         domain.ModelPriceConfigured,
+			NonZeroApplied: true,
+		},
 	})
 
 	if _, err := h.runner.Advance(ctx, h.start(t, generousBudget())); err != nil {
@@ -270,6 +274,10 @@ func TestAdvance_recordsThePromptCompositionThePlannerMeasured(t *testing.T) {
 	if got.Prompt.Unit != "content_bytes" || got.Prompt.ToolResults != 1200 ||
 		got.Prompt.ToolResultsByTool["crm.lookup"] != 1200 {
 		t.Fatalf("Prompt = %+v, want the measured tool result bytes", *got.Prompt)
+	}
+	if got.Price == nil || got.Price.Status != domain.ModelPriceConfigured ||
+		!got.Price.NonZeroApplied {
+		t.Fatalf("Price = %+v, want configured non-zero rate provenance", got.Price)
 	}
 }
 

@@ -1,10 +1,16 @@
 import type { Cost, Step } from "@/lib/api/client";
 
 /** Why a run's cost reads as nothing, when it does. */
-export type UnpricedReason = "no_rate" | "nothing_spent";
+export type UnpricedReason =
+  | "missing_rate"
+  | "partial_missing_rate"
+  | "configured_zero"
+  | "rounded_zero"
+  | "nothing_spent"
+  | "unknown";
 
 export interface RunSpend {
-  /** False when the figure on screen is not a price anybody set. */
+  /** False when the figure on screen is not a complete non-zero price. */
   priced: boolean;
   reason?: UnpricedReason;
   /** Content bytes by source, summed across the run's planning turns. */
@@ -45,11 +51,13 @@ const SOURCES = [
 /**
  * What a run spent, and whether the number means what it looks like.
  *
- * Zero cost has two very different causes. A run that called nothing spent
- * nothing; a run that called a model nobody configured a rate for also reads
- * zero, and only one of those is a price. Reporting the figure without the
- * reason leaves an operator unable to tell a cheap agent from an unpriced one
- * — which is the confusion that made market defaults reference-only.
+ * Zero cost has several different causes. A run that called nothing spent
+ * nothing; a run without a configured rate is unpriced; a configured zero rate
+ * is deliberate; and a non-zero rate can round below one micro. A positive
+ * total can still be partial when one planning turn had a rate and another did
+ * not. The ledger now records price provenance on each planned step, so this
+ * screen reads rather than guesses. Old zero-cost runs without that field fall
+ * back to "unknown".
  *
  * Bytes and tokens are returned side by side and never combined. Bytes are
  * measured by this platform while assembling the prompt; tokens are what the
@@ -57,19 +65,55 @@ const SOURCES = [
  * divided one by the other would be inventing a rate.
  */
 export function runSpend(cost: Cost, steps: Step[]): RunSpend {
-  const tokens =
-    (cost.inputTokens ?? 0) +
-    (cost.outputTokens ?? 0) +
-    (cost.cacheReadTokens ?? 0) +
-    (cost.cacheWriteTokens ?? 0);
-
-  const priced = (cost.micros ?? 0) > 0;
+  const reason = priceReason(cost, steps);
   return {
-    priced,
-    reason: priced ? undefined : tokens > 0 ? "no_rate" : "nothing_spent",
+    priced: reason === undefined,
+    reason,
     bytes: promptBytes(steps),
     byTool: promptBytesByTool(steps),
   };
+}
+
+function priceReason(cost: Cost, steps: Step[]): UnpricedReason | undefined {
+  const micros = cost.micros ?? 0;
+  if (tokensOf(cost) === 0) return "nothing_spent";
+  const uses = priceUses(steps);
+  if (uses.length === 0) return micros > 0 ? undefined : "unknown";
+  if (uses.some((use) => use.status === "missing")) {
+    return micros > 0 ? "partial_missing_rate" : "missing_rate";
+  }
+  if (uses.some((use) => use.status !== "configured")) {
+    return micros > 0 ? undefined : "unknown";
+  }
+  if (micros > 0) return undefined;
+  if (uses.some((use) => use.non_zero_applied === true)) return "rounded_zero";
+  return "configured_zero";
+}
+
+function tokensOf(cost: Cost): number {
+  return (
+    (cost.inputTokens ?? 0) +
+    (cost.outputTokens ?? 0) +
+    (cost.cacheReadTokens ?? 0) +
+    (cost.cacheWriteTokens ?? 0)
+  );
+}
+
+interface PriceUse {
+  status?: string;
+  non_zero_applied?: boolean;
+}
+
+function priceUses(steps: Step[]): PriceUse[] {
+  const out: PriceUse[] = [];
+  for (const step of steps) {
+    const payload = (step.payload ?? {}) as Record<string, unknown>;
+    const price = payload.price;
+    if (price && typeof price === "object" && !Array.isArray(price)) {
+      out.push(price as PriceUse);
+    }
+  }
+  return out;
 }
 
 /** The per-tool maps, which say which tool made a prompt heavy. */

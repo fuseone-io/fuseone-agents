@@ -57,6 +57,9 @@ type Config struct {
 	// the installation's own price list; zero means cost is recorded as tokens
 	// only, never as a guess.
 	PricePerMTok Prices
+	// PriceConfigured distinguishes an absent rate from an intentionally zero
+	// one. The numeric rate alone cannot: both are Prices{}.
+	PriceConfigured bool
 }
 
 // Prices are the installation's rates, in micros per million tokens.
@@ -69,6 +72,10 @@ type Prices struct {
 	OutputMicros     int64
 	CacheReadMicros  int64
 	CacheWriteMicros int64
+}
+
+func (p Prices) IsZero() bool {
+	return p == Prices{}
 }
 
 func (c *Config) withDefaults() {
@@ -127,11 +134,13 @@ func (a *Anthropic) Plan(ctx context.Context, in engine.PlanInput) (engine.Propo
 	// Check the stop reason before reading content. A refusal returns HTTP 200
 	// with an empty or partial content list, so indexing straight into
 	// content[0] turns a policy decision into a nil dereference.
+	cost := a.cost(resp.Usage)
+	price := a.cfg.priceUse(cost)
 	if resp.StopReason == anthropic.StopReasonRefusal {
-		return engine.Proposal{Cost: a.cost(resp.Usage), Prompt: prompt}, providerRefused(a.provider)
+		return engine.Proposal{Cost: cost, Prompt: prompt, Price: price}, providerRefused(a.provider)
 	}
 
-	return a.proposalFrom(resp, offered, prompt), nil
+	return a.proposalFrom(resp, offered, prompt, cost, price), nil
 }
 
 // system builds the system prompt.
@@ -239,8 +248,9 @@ func finishToolParam(offered names) anthropic.ToolUnionParam {
 // owned by the platform, so text alone no longer closes a run by omission.
 func (a *Anthropic) proposalFrom(
 	resp *anthropic.Message, offered names, prompt domain.PromptInputBreakdown,
+	cost domain.Cost, price domain.ModelPriceUse,
 ) engine.Proposal {
-	p := engine.Proposal{Cost: a.cost(resp.Usage), Prompt: prompt}
+	p := engine.Proposal{Cost: cost, Prompt: prompt, Price: price}
 
 	var summary strings.Builder
 	for _, block := range resp.Content {
@@ -250,7 +260,7 @@ func (a *Anthropic) proposalFrom(
 		case anthropic.ToolUseBlock:
 			tool := offered.idOf(variant.Name)
 			if isFinishTool(tool) {
-				return finishProposal([]byte(variant.JSON.Input.Raw()), p.Cost, p.Prompt)
+				return finishProposal([]byte(variant.JSON.Input.Raw()), p.Cost, p.Prompt, p.Price)
 			}
 			p.Tool = tool
 			// Input is raw JSON; never string-match it. Escaping of Unicode

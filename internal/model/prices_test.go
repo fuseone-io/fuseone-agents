@@ -26,16 +26,19 @@ func TestPlanner_fillsTheRateRegisteredForThatModel(t *testing.T) {
 	// Filled by the registry rather than by each caller. A run and an
 	// authoring call reach a provider through different paths, and a price
 	// threaded through both is a price that ends up set in one of them.
-	got, err := registry.PriceFor("anthropic", "claude-opus-5")
+	got, ok, err := registry.PriceFor("anthropic", "claude-opus-5")
 	if err != nil {
 		t.Fatalf("price: %v", err)
+	}
+	if !ok {
+		t.Fatal("price was not reported as configured")
 	}
 	if got.InputMicros != 5_000_000 || got.OutputMicros != 25_000_000 {
 		t.Errorf("got %+v", got)
 	}
 }
 
-func TestPriceFor_aKnownModelNobodyPriced_isStillZero(t *testing.T) {
+func TestPriceFor_aKnownModelNobodyPriced_isMissing(t *testing.T) {
 	t.Parallel()
 
 	registry := model.NewRegistry(nil)
@@ -43,16 +46,19 @@ func TestPriceFor_aKnownModelNobodyPriced_isStillZero(t *testing.T) {
 		t.Fatalf("register: %v", err)
 	}
 
-	got, err := registry.PriceFor("anthropic", "claude-opus-5")
+	got, ok, err := registry.PriceFor("anthropic", "claude-opus-5")
 	if err != nil {
 		t.Fatalf("price: %v", err)
+	}
+	if ok {
+		t.Fatal("unconfigured price reported as configured")
 	}
 	if got != (model.Prices{}) {
 		t.Errorf("got %+v, want no accounting rate without a configured installation price", got)
 	}
 }
 
-func TestPriceFor_anUnknownModelNobodyPriced_isStillZero(t *testing.T) {
+func TestPriceFor_anUnknownModelNobodyPriced_isMissing(t *testing.T) {
 	t.Parallel()
 
 	registry := model.NewRegistry(nil)
@@ -60,9 +66,12 @@ func TestPriceFor_anUnknownModelNobodyPriced_isStillZero(t *testing.T) {
 		t.Fatalf("register: %v", err)
 	}
 
-	got, err := registry.PriceFor("anthropic", "claude-from-next-week")
+	got, ok, err := registry.PriceFor("anthropic", "claude-from-next-week")
 	if err != nil {
 		t.Fatalf("price: %v", err)
+	}
+	if ok {
+		t.Fatal("unknown model price reported as configured")
 	}
 	// A public default exists only for models named in the bundled table. For
 	// a new or custom model, zero says "no price" rather than inventing money.
@@ -84,12 +93,40 @@ func TestPriceFor_aConfiguredRateOverridesTheMarketDefault(t *testing.T) {
 		t.Fatalf("register: %v", err)
 	}
 
-	got, err := registry.PriceFor("anthropic", "claude-opus-5")
+	got, ok, err := registry.PriceFor("anthropic", "claude-opus-5")
 	if err != nil {
 		t.Fatalf("price: %v", err)
 	}
+	if !ok {
+		t.Fatal("price was not reported as configured")
+	}
 	if got.InputMicros != 1 || got.OutputMicros != 2 {
 		t.Errorf("got %+v, want the configured contract rate", got)
+	}
+}
+
+func TestPriceFor_aConfiguredZeroRate_isStillConfigured(t *testing.T) {
+	t.Parallel()
+
+	registry := model.NewRegistry(nil)
+	if err := registry.Register(model.Provider{
+		Name: "vllm", Kind: model.KindOpenAICompatible, BaseURL: "https://x/v1",
+		Prices: map[string]model.Prices{
+			"llama": {},
+		},
+	}); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+
+	got, ok, err := registry.PriceFor("vllm", "llama")
+	if err != nil {
+		t.Fatalf("price: %v", err)
+	}
+	if !ok {
+		t.Fatal("configured zero rate was collapsed into missing")
+	}
+	if got != (model.Prices{}) {
+		t.Errorf("got %+v, want deliberate zero", got)
 	}
 }
 
@@ -111,9 +148,12 @@ func TestSetPrices_updatesRegisteredProvidersAndAdvancesTheRevision(t *testing.T
 	}); !changed {
 		t.Fatal("SetPrices reported no change")
 	}
-	got, err := registry.PriceFor("anthropic", "claude-opus-5")
+	got, ok, err := registry.PriceFor("anthropic", "claude-opus-5")
 	if err != nil {
 		t.Fatalf("price: %v", err)
+	}
+	if !ok {
+		t.Fatal("refreshed price was not reported as configured")
 	}
 	if got.InputMicros != 7_000_000 {
 		t.Fatalf("price = %+v, want refreshed rate", got)

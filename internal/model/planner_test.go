@@ -51,12 +51,20 @@ func serve(t *testing.T, response string) *capture {
 }
 
 func plannerFor(t *testing.T, kind model.Kind, url string, cfg model.Config) engine.Planner {
+	return plannerForPrices(t, kind, url, cfg, nil)
+}
+
+func plannerForPrices(
+	t *testing.T, kind model.Kind, url string, cfg model.Config,
+	prices map[string]model.Prices,
+) engine.Planner {
 	t.Helper()
 
 	reg := model.NewRegistry(nil)
 	if err := reg.Register(model.Provider{
 		Name: "under-test", Kind: kind, BaseURL: url, APIKey: "test-key",
 		SupportsReasoningEffort: true,
+		Prices:                  prices,
 	}); err != nil {
 		t.Fatalf("Register: %v", err)
 	}
@@ -192,6 +200,58 @@ func TestPlanner_reportsPromptCompositionBySource(t *testing.T) {
 			}
 			if got, want := sumToolBytes(p.ToolResultsByTool), p.ToolResults; got != want {
 				t.Fatalf("ToolResultsByTool sum = %d, want ToolResults %d", got, want)
+			}
+		})
+	}
+}
+
+func TestPlanner_recordsPriceProvenanceFromTheRegistry(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name           string
+		prices         map[string]model.Prices
+		wantStatus     string
+		wantNonZeroUse bool
+	}{
+		{
+			name:       "missing",
+			wantStatus: domain.ModelPriceMissing,
+		},
+		{
+			name:       "configured zero",
+			prices:     map[string]model.Prices{"gpt": {}},
+			wantStatus: domain.ModelPriceConfigured,
+		},
+		{
+			name:           "non-zero rounded below a micro",
+			prices:         map[string]model.Prices{"gpt": {InputMicros: 1}},
+			wantStatus:     domain.ModelPriceConfigured,
+			wantNonZeroUse: true,
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			c := serve(t, `{"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"ok"}}],
+			  "usage":{"prompt_tokens":1,"completion_tokens":0}}`)
+
+			got, err := plannerForPrices(
+				t, model.KindOpenAICompatible, c.server.URL,
+				model.Config{Model: "gpt"}, tc.prices,
+			).Plan(context.Background(), input())
+			if err != nil {
+				t.Fatalf("Plan: %v", err)
+			}
+
+			if got.Cost.Micros != 0 {
+				t.Fatalf("Cost.Micros = %d, want zero so only provenance explains it", got.Cost.Micros)
+			}
+			if got.Price.Status != tc.wantStatus || got.Price.NonZeroApplied != tc.wantNonZeroUse {
+				t.Fatalf("Price = %+v, want status %q and non-zero use %v",
+					got.Price, tc.wantStatus, tc.wantNonZeroUse)
 			}
 		})
 	}

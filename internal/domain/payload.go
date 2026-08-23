@@ -67,11 +67,29 @@ type PlannedPayload struct {
 	ProposalRef string `json:"proposal_ref,omitempty"`
 	Model       string `json:"model,omitempty"`
 	Effort      string `json:"effort,omitempty"`
+	// Price says whether this planning call had an installation rate behind the
+	// tokens it recorded. Cost.Micros stays the accounting number; this is the
+	// provenance that lets a screen distinguish "unknown price" from "configured
+	// zero" and "rounded below one micro".
+	Price *ModelPriceUse `json:"price,omitempty"`
 	// Prompt describes what the platform put in front of the model for this
 	// planning call. It is measured while assembling the request, before the
 	// provider tokenises it, so the unit is content bytes rather than tokens.
 	// Cost remains the provider-reported token and money record.
 	Prompt *PromptInputBreakdown `json:"prompt,omitempty"`
+}
+
+const (
+	ModelPriceMissing    = "missing"
+	ModelPriceConfigured = "configured"
+)
+
+type ModelPriceUse struct {
+	Status string `json:"status"`
+	// NonZeroApplied is true when at least one token class used by this planning
+	// call had a non-zero configured rate. If Cost.Micros is still zero, the
+	// explanation is precision rather than a missing or deliberately zero rate.
+	NonZeroApplied bool `json:"non_zero_applied,omitempty"`
 }
 
 // PromptInputBreakdown is the model input's composition by source.

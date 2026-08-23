@@ -9,15 +9,53 @@ function planned(prompt: Record<string, unknown>): Step {
   } as Step;
 }
 
+function plannedWithPrice(price: Record<string, unknown>): Step {
+  return {
+    seq: 1, kind: "planned", at: "2026-08-23T00:00:00Z", hash: "h",
+    payload: { price },
+  } as Step;
+}
+
 describe("what a run spent", () => {
-  it("says a rate is missing rather than letting zero read as free", () => {
-    // The number is the same either way. Without the reason, an operator
-    // cannot tell a cheap run from a model nobody priced — which is exactly
-    // the confusion configured rates were made honest to avoid.
-    const spend = runSpend({ micros: 0, inputTokens: 4000 }, []);
+  it("reads a missing rate from the planned step rather than guessing from zero", () => {
+    const spend = runSpend({ micros: 0, inputTokens: 4000 }, [
+      plannedWithPrice({ status: "missing" }),
+    ]);
 
     expect(spend.priced).toBe(false);
-    expect(spend.reason).toBe("no_rate");
+    expect(spend.reason).toBe("missing_rate");
+  });
+
+  it("does not call a positive total complete when one planning call was unpriced", () => {
+    const spend = runSpend({ micros: 900, inputTokens: 4000 }, [
+      plannedWithPrice({ status: "configured", non_zero_applied: true }),
+      plannedWithPrice({ status: "missing" }),
+    ]);
+
+    expect(spend.priced).toBe(false);
+    expect(spend.reason).toBe("partial_missing_rate");
+  });
+
+  it("keeps a configured zero rate distinct from a missing rate", () => {
+    const spend = runSpend({ micros: 0, inputTokens: 4000 }, [
+      plannedWithPrice({ status: "configured" }),
+    ]);
+
+    expect(spend.reason).toBe("configured_zero");
+  });
+
+  it("keeps rounding below one micro distinct from a missing rate", () => {
+    const spend = runSpend({ micros: 0, inputTokens: 1 }, [
+      plannedWithPrice({ status: "configured", non_zero_applied: true }),
+    ]);
+
+    expect(spend.reason).toBe("rounded_zero");
+  });
+
+  it("does not invent price provenance for older runs", () => {
+    const spend = runSpend({ micros: 0, inputTokens: 4000 }, []);
+
+    expect(spend.reason).toBe("unknown");
   });
 
   it("does not call a run free when it truly spent nothing", () => {
