@@ -106,5 +106,5 @@ func (a *anthropicCompleter) Complete(ctx context.Context, prompt string) (Compl
 			text += block.Text
 		}
 	}
-	return Completion{Text: text, Cost: a.cost(resp.Usage)}, nil
+	return Completion{Text: text, Cost: a.cost(resp.Usage, a.cfg.Model)}, nil
 }

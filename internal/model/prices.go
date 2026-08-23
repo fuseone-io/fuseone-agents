@@ -49,6 +49,19 @@ func (r *Registry) withPrice(providerName string, cfg Config) Config {
 		cfg.PricePerMTok = price
 		cfg.PriceConfigured = ok
 	}
+	// And a way to price a model this planner was not built for. A step may
+	// name its own, and without this the planner would bill it at the agent's
+	// base rate — the misattribution that made the aggregate worth building
+	// per planning call in the first place.
+	if cfg.RateFor == nil {
+		cfg.RateFor = func(model string) (Prices, bool) {
+			price, ok, err := r.PriceFor(providerName, model)
+			if err != nil {
+				return Prices{}, false
+			}
+			return price, ok
+		}
+	}
 	return cfg
 }
 
@@ -64,13 +77,20 @@ func RateOf(p engine.Planner) Prices {
 	return Prices{}
 }
 
-func (c Config) priceUse(cost domain.Cost) domain.ModelPriceUse {
-	if !c.PriceConfigured {
+/*
+priceUse describes the rate a call was actually billed at.
+
+Takes the resolved rate rather than reading the planner's, so a step that named
+its own model reports provenance for that model. Reading cfg here would have
+said "configured" about a rate the call did not use.
+*/
+func priceUse(price Prices, configured bool, cost domain.Cost) domain.ModelPriceUse {
+	if !configured {
 		return domain.ModelPriceUse{Status: domain.ModelPriceMissing}
 	}
 	return domain.ModelPriceUse{
 		Status:         domain.ModelPriceConfigured,
-		NonZeroApplied: c.PricePerMTok.nonZeroAppliedTo(cost),
+		NonZeroApplied: price.nonZeroAppliedTo(cost),
 	}
 }
 

@@ -48,6 +48,9 @@ func (o *OpenAICompatible) Plan(ctx context.Context, in engine.PlanInput) (engin
 	offered := namesFor(in)
 	prompt := promptInputBreakdown(in, o.cfg, o.tools, offered)
 	body := chatRequest{
+		// Not overridable here, unlike the Anthropic path: this client sends
+		// the planner's model and nothing reads in.Model, so cfg.Model is the
+		// effective one and every figure below belongs to it.
 		Model:     o.cfg.Model,
 		Messages:  o.chatMessages(in, offered),
 		Tools:     o.chatTools(in.Tools, offered),
@@ -71,7 +74,7 @@ func (o *OpenAICompatible) Plan(ctx context.Context, in engine.PlanInput) (engin
 	// Providers spell a policy stop differently; treat them all as a refusal
 	// so the caller has one condition to handle across every provider.
 	cost := o.cost(out.Usage)
-	price := o.cfg.priceUse(cost)
+	price := priceUse(o.cfg.PricePerMTok, o.cfg.PriceConfigured, cost)
 	if choice.FinishReason == "content_filter" {
 		return engine.Proposal{Cost: cost, Prompt: prompt, Price: price, Provider: o.provider.Name, Model: o.cfg.Model}, providerRefused(o.provider.Name)
 	}

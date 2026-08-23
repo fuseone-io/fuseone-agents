@@ -57,6 +57,12 @@ type Config struct {
 	// the installation's own price list; zero means cost is recorded as tokens
 	// only, never as a guess.
 	PricePerMTok Prices
+	// RateFor resolves the rate for a model this call actually used, which is
+	// not always cfg.Model: a step may name its own. Without it the planner
+	// prices every call at the agent's base rate, and a step that switches to
+	// a cheaper model is billed as the expensive one — a FinOps figure that is
+	// wrong in a direction nobody notices.
+	RateFor func(model string) (Prices, bool)
 	// PriceConfigured distinguishes an absent rate from an intentionally zero
 	// one. The numeric rate alone cannot: both are Prices{}.
 	PriceConfigured bool
@@ -134,13 +140,17 @@ func (a *Anthropic) Plan(ctx context.Context, in engine.PlanInput) (engine.Propo
 	// Check the stop reason before reading content. A refusal returns HTTP 200
 	// with an empty or partial content list, so indexing straight into
 	// content[0] turns a policy decision into a nil dereference.
-	cost := a.cost(resp.Usage)
-	price := a.cfg.priceUse(cost)
+	// The pair this call was actually made against — not the agent's default,
+	// which is what every figure below would otherwise be attributed to.
+	model := or(in.Model, a.cfg.Model)
+	rate, configured := a.rateFor(model)
+	cost := a.cost(resp.Usage, model)
+	price := priceUse(rate, configured, cost)
 	if resp.StopReason == anthropic.StopReasonRefusal {
-		return engine.Proposal{Cost: cost, Prompt: prompt, Price: price, Provider: a.provider, Model: a.cfg.Model}, providerRefused(a.provider)
+		return engine.Proposal{Cost: cost, Prompt: prompt, Price: price, Provider: a.provider, Model: model}, providerRefused(a.provider)
 	}
 
-	return a.proposalFrom(resp, offered, prompt, cost, price), nil
+	return a.proposalFrom(resp, offered, prompt, cost, price, model), nil
 }
 
 // system builds the system prompt.
@@ -242,15 +252,30 @@ func finishToolParam(offered names) anthropic.ToolUnionParam {
 	return anthropic.ToolUnionParam{OfTool: &tool}
 }
 
+/*
+rateFor answers for the model a call actually used.
+
+Falls back to the planner's own rate only when nothing can resolve the model,
+so a step override is priced as itself rather than as the agent's default.
+*/
+func (a *Anthropic) rateFor(model string) (Prices, bool) {
+	if a.cfg.RateFor != nil {
+		if price, ok := a.cfg.RateFor(model); ok || model != a.cfg.Model {
+			return price, ok
+		}
+	}
+	return a.cfg.PricePerMTok, a.cfg.PriceConfigured
+}
+
 // proposalFrom reads the model's answer.
 //
 // A tool_use block is the next action. Finishing is also a tool_use block,
 // owned by the platform, so text alone no longer closes a run by omission.
 func (a *Anthropic) proposalFrom(
 	resp *anthropic.Message, offered names, prompt domain.PromptInputBreakdown,
-	cost domain.Cost, price domain.ModelPriceUse,
+	cost domain.Cost, price domain.ModelPriceUse, model string,
 ) engine.Proposal {
-	p := engine.Proposal{Cost: cost, Prompt: prompt, Price: price, Provider: a.provider, Model: a.cfg.Model}
+	p := engine.Proposal{Cost: cost, Prompt: prompt, Price: price, Provider: a.provider, Model: model}
 
 	var summary strings.Builder
 	for _, block := range resp.Content {
@@ -280,8 +305,8 @@ func (a *Anthropic) proposalFrom(
 // Cache reads and writes are priced separately and recorded separately: a
 // cache read costs a fraction of an input token, and folding them together is
 // what makes an expensive agent impossible to diagnose.
-func (a *Anthropic) cost(u anthropic.Usage) domain.Cost {
-	pr := a.cfg.PricePerMTok
+func (a *Anthropic) cost(u anthropic.Usage, model string) domain.Cost {
+	pr, _ := a.rateFor(model)
 	const perMillion = 1_000_000
 
 	micros := u.InputTokens*pr.InputMicros/perMillion +
