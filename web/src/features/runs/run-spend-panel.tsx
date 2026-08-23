@@ -26,6 +26,11 @@ export function RunSpendPanel({ run, steps }: { run: Run; steps: Step[] }) {
   // Named, because "tool results dominate" is a category and the next slice
   // needs a cause: which tool to compact.
   const tools = Object.entries(spend.byTool).sort((a, b) => b[1] - a[1]);
+  // The heaviest three. A run against many servers turns a full list into
+  // another wall, and the decision this supports is which one to look at next.
+  const trimmed = Object.entries(spend.elidedByTool)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3);
   const total = sources.reduce((sum, [, value]) => sum + value, 0);
 
   return (
@@ -121,7 +126,23 @@ export function RunSpendPanel({ run, steps }: { run: Run; steps: Step[] }) {
                   <div className="text-xs">
                     {t("runs.savedCompaction", { bytes: formatBytes(spend.elided) })}
                   </div>
-                  <p className="text-2xs text-muted-foreground">
+                  {/* Named here too. A total tells somebody compaction is
+                      working; the tool tells them where the next one is. */}
+                  {trimmed.length > 0 && (
+                    <dl className="mt-1 grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 text-2xs">
+                      {trimmed.map(([tool, value]) => (
+                        <Fragment key={tool}>
+                          <dt className="min-w-0 truncate font-mono text-muted-foreground">
+                            {tool}
+                          </dt>
+                          <dd className="text-right font-mono tabular-nums text-muted-foreground">
+                            {formatBytes(value)}
+                          </dd>
+                        </Fragment>
+                      ))}
+                    </dl>
+                  )}
+                  <p className="mt-1 text-2xs text-muted-foreground">
                     {t("runs.savedCompactionHelp")}
                   </p>
                 </li>
