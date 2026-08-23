@@ -34,6 +34,10 @@ field" is a commit message.
   projection with long fields shortened, plus a separate platform note with
   the stored input size and digest, so a long Slack alert or thread does not
   dominate the first turn.
+- Large GitHub pull-request, file, commit and log reads are compacted before
+  they are replayed to the model. The full result stays in the content store
+  and trail; the model receives the beginning, the end, the stored size and a
+  digest, so a large PR diff does not get paid for again on every turn.
 
 ## [0.22.0] — 2026-08-22
 

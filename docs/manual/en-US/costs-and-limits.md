@@ -90,10 +90,11 @@ long fields shortened and a separate platform note with the stored size and a
 digest. This is most visible when a Slack alert or thread carries a large
 payload before the agent has called any tool.
 
-Large Grafana Loki and Prometheus query results are compacted before they are
-shown to the model on later turns. The full tool result remains in the run
-content store and trail; the model receives a compact view with the beginning,
-the end, the stored size and a digest. This keeps observability dumps from
+Large Grafana Loki and Prometheus query results, and large GitHub pull-request
+diffs, file contents, commits and logs, are compacted before they are shown to
+the model on later turns. The full tool result remains in the run content store
+and trail; the model receives a compact view with the beginning, the end, the
+stored size and a digest. This keeps observability dumps and PR diffs from
 crowding out the next decision without changing the audit record.
 
 ## Configuration checklist

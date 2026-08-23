@@ -276,7 +276,7 @@ func jsonPath(parent, key string) string {
 }
 
 func compactToolResultForTranscript(tool domain.ToolID, content []byte) []byte {
-	if len(content) <= toolResultCompactAfter || !compactableObservabilityTool(tool) {
+	if len(content) <= toolResultCompactAfter || !compactableLargeToolResult(tool) {
 		return content
 	}
 	head := utf8Prefix(content, toolResultHeadBytes)
@@ -292,6 +292,10 @@ func compactToolResultForTranscript(tool domain.ToolID, content []byte) []byte {
 	return []byte(b.String())
 }
 
+func compactableLargeToolResult(tool domain.ToolID) bool {
+	return compactableObservabilityTool(tool) || compactableGitHubReviewTool(tool)
+}
+
 func compactableObservabilityTool(tool domain.ToolID) bool {
 	name := string(tool)
 	if !strings.HasPrefix(name, "grafana.") {
@@ -299,6 +303,22 @@ func compactableObservabilityTool(tool domain.ToolID) bool {
 	}
 	return strings.HasPrefix(name, "grafana.query_loki") ||
 		strings.HasPrefix(name, "grafana.query_prometheus")
+}
+
+func compactableGitHubReviewTool(tool domain.ToolID) bool {
+	name := string(tool)
+	if !strings.HasPrefix(name, "github.") {
+		return false
+	}
+	remote := strings.TrimPrefix(name, "github.")
+	return strings.HasPrefix(remote, "get_pull_request") ||
+		strings.HasPrefix(remote, "list_pull_request") ||
+		remote == "search_pull_requests" ||
+		remote == "get_file_contents" ||
+		remote == "search_code" ||
+		remote == "get_commit" ||
+		remote == "list_commits" ||
+		strings.HasSuffix(remote, "_logs")
 }
 
 func utf8Prefix(content []byte, limit int) string {
