@@ -2,8 +2,14 @@ package finops
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
+
+	"github.com/fuseone/agents/internal/domain"
 )
 
 /*
@@ -35,18 +41,36 @@ type Bucket struct {
 // Reads the projection, never the chain: this is opened when somebody is
 // worried about money, which is the worst moment to make the database walk an
 // append-only log.
-func (s *Spend) ByModel(ctx context.Context, from, to time.Time) ([]Bucket, error) {
-	return s.aggregate(ctx, from, to, "provider, model", "provider, model, ''")
+func (s *Spend) ByModel(ctx context.Context, filter domain.RunFilter) ([]Bucket, error) {
+	return s.aggregate(ctx, filter, "provider, model", "provider, model, ''")
 }
 
 // ByAgent sums the same window by which agent spent it.
-func (s *Spend) ByAgent(ctx context.Context, from, to time.Time) ([]Bucket, error) {
-	return s.aggregate(ctx, from, to, "agent_id", "'', '', agent_id")
+func (s *Spend) ByAgent(ctx context.Context, filter domain.RunFilter) ([]Bucket, error) {
+	return s.aggregate(ctx, filter, "agent_id", "'', '', agent_id")
+}
+
+// ProjectedFrom is when this projection started making claims.
+func (s *Spend) ProjectedFrom(ctx context.Context) (time.Time, error) {
+	var at time.Time
+	err := s.pool.QueryRow(ctx, `
+		select started_at from planning_spend_cursor where id = true`).Scan(&at)
+	if err == nil {
+		return at.UTC(), nil
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return time.Time{}, nil
+	}
+	return time.Time{}, fmt.Errorf("finops: read spend projection start: %w", err)
 }
 
 // aggregate runs one shape of rollup. `groupBy` and `selected` are constants
 // from the two callers above and never reach here from a request.
-func (s *Spend) aggregate(ctx context.Context, from, to time.Time, groupBy, selected string) ([]Bucket, error) {
+func (s *Spend) aggregate(ctx context.Context, filter domain.RunFilter, groupBy, selected string) ([]Bucket, error) {
+	where, args, err := planningSpendFilterSQL(filter)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := s.pool.Query(ctx, `
 		select `+selected+`,
 		       count(*) as calls,
@@ -57,11 +81,9 @@ func (s *Spend) aggregate(ctx context.Context, from, to time.Time, groupBy, sele
 		       coalesce(sum(cache_read_tokens), 0),
 		       coalesce(sum(cache_write_tokens), 0),
 		       count(*) filter (where price_status <> 'configured') as unpriced
-		from planning_spend
-		where day >= $1::date and day <= $2::date
+		from planning_spend `+where+`
 		group by `+groupBy+`
-		order by coalesce(sum(cost_micros), 0) desc, count(*) desc`,
-		from.UTC(), to.UTC())
+		order by coalesce(sum(cost_micros), 0) desc, count(*) desc`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("finops: aggregate spend: %w", err)
 	}
@@ -79,4 +101,74 @@ func (s *Spend) aggregate(ctx context.Context, from, to time.Time, groupBy, sele
 		out = append(out, b)
 	}
 	return out, rows.Err()
+}
+
+func planningSpendFilterSQL(f domain.RunFilter) (string, []any, error) {
+	if f.Until.IsZero() {
+		return "", nil, fmt.Errorf("finops: a planning spend rollup needs an upper bound")
+	}
+
+	var (
+		clauses []string
+		args    []any
+	)
+	add := func(clause string, value any) {
+		args = append(args, value)
+		clauses = append(clauses, fmt.Sprintf(clause, len(args)))
+	}
+
+	if !f.Since.IsZero() {
+		add("day >= ($%d at time zone 'UTC')::date", f.Since.UTC())
+	}
+	add("day <= ($%d at time zone 'UTC')::date", f.Until.UTC())
+	if f.AgentID != "" {
+		add("agent_id = $%d", string(f.AgentID))
+	}
+	if f.Scope.Company != "" {
+		addScope(&clauses, &args, f.Scope)
+	}
+	if len(f.Scopes) > 0 {
+		if !reachesEveryScope(f.Scopes) {
+			var any []string
+			for _, scope := range f.Scopes {
+				if clause := scopePredicate(&args, scope); clause != "" {
+					any = append(any, clause)
+				}
+			}
+			if len(any) > 0 {
+				clauses = append(clauses, "("+strings.Join(any, " or ")+")")
+			}
+		}
+	}
+
+	return "where " + strings.Join(clauses, " and "), args, nil
+}
+
+func reachesEveryScope(scopes []domain.Scope) bool {
+	for _, scope := range scopes {
+		if scope.Company == domain.Installation && scope.Area == "" {
+			return true
+		}
+	}
+	return false
+}
+
+func addScope(clauses *[]string, args *[]any, scope domain.Scope) {
+	clause := scopePredicate(args, scope)
+	if clause != "" {
+		*clauses = append(*clauses, clause)
+	}
+}
+
+func scopePredicate(args *[]any, scope domain.Scope) string {
+	if scope.Company == domain.Installation && scope.Area == "" {
+		return ""
+	}
+	*args = append(*args, string(scope.Company))
+	company := fmt.Sprintf("company_id = $%d", len(*args))
+	if scope.Area == "" {
+		return company
+	}
+	*args = append(*args, string(scope.Area))
+	return fmt.Sprintf("(%s and area_id = $%d)", company, len(*args))
 }

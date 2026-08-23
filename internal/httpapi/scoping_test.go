@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/finops"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/ledger"
 )
@@ -128,6 +129,79 @@ func TestGetCostRollup_narrowsToTheCallersAreas(t *testing.T) {
 		if bucket.Runs != 1 {
 			t.Errorf("bucket %q has %d runs, want only the caller's", bucket.Key, bucket.Runs)
 		}
+	}
+}
+
+type planningSpendSpy struct {
+	asked        domain.RunFilter
+	projected    time.Time
+	modelBuckets []finops.Bucket
+}
+
+func (p *planningSpendSpy) ByModel(_ context.Context, filter domain.RunFilter) ([]finops.Bucket, error) {
+	p.asked = filter
+	return p.modelBuckets, nil
+}
+
+func (p *planningSpendSpy) ByAgent(_ context.Context, filter domain.RunFilter) ([]finops.Bucket, error) {
+	p.asked = filter
+	return nil, nil
+}
+
+func (p *planningSpendSpy) ProjectedFrom(context.Context) (time.Time, error) {
+	return p.projected, nil
+}
+
+func TestGetPlanningSpendByModel_narrowsToTheCallersAreas(t *testing.T) {
+	t.Parallel()
+
+	window := time.Date(2026, 8, 11, 12, 0, 0, 0, time.UTC)
+	spend := &planningSpendSpy{
+		projected: window.Add(-24 * time.Hour),
+		modelBuckets: []finops.Bucket{{
+			Provider: "anthropic", Model: "opus", Calls: 2, Runs: 1,
+			Micros: 900, InputTokens: 100, Unpriced: 1,
+		}},
+	}
+
+	resp, err := NewServer(storeWithRuns(t), "test").WithPlanningSpend(spend).
+		GetPlanningSpendByModel(inArea("cx", domain.RoleApprover), openapi.GetPlanningSpendByModelRequestObject{
+			Params: openapi.GetPlanningSpendByModelParams{
+				From: window.Add(-time.Hour), To: window.Add(time.Hour),
+			},
+		})
+	if err != nil {
+		t.Fatalf("GetPlanningSpendByModel: %v", err)
+	}
+	rollup := resp.(openapi.GetPlanningSpendByModel200JSONResponse)
+	if len(spend.asked.Scopes) != 1 ||
+		spend.asked.Scopes[0] != (domain.Scope{Company: "acme", Area: "cx"}) {
+		t.Fatalf("asked scopes = %v, want only the caller's area", spend.asked.Scopes)
+	}
+	if rollup.ProjectedFrom == nil || !rollup.ProjectedFrom.Equal(spend.projected) {
+		t.Fatalf("projectedFrom = %s, want %s", rollup.ProjectedFrom, spend.projected)
+	}
+	if rollup.Calls != 2 || rollup.Unpriced != 1 || rollup.Total.Micros != 900 {
+		t.Fatalf("rollup = %+v, want totals from the projected bucket", rollup)
+	}
+}
+
+func TestGetPlanningSpendByModel_withoutAProjectionDoesNotClaimCoverage(t *testing.T) {
+	t.Parallel()
+
+	window := time.Date(2026, 8, 11, 12, 0, 0, 0, time.UTC)
+	resp, err := NewServer(storeWithRuns(t), "test").
+		GetPlanningSpendByModel(inArea("cx", domain.RoleApprover), openapi.GetPlanningSpendByModelRequestObject{
+			Params: openapi.GetPlanningSpendByModelParams{
+				From: window.Add(-time.Hour), To: window.Add(time.Hour),
+			},
+		})
+	if err != nil {
+		t.Fatalf("GetPlanningSpendByModel: %v", err)
+	}
+	rollup := resp.(openapi.GetPlanningSpendByModel200JSONResponse)
+	if rollup.ProjectedFrom != nil {
+		t.Fatalf("projectedFrom = %s, want absent when no projection is wired", rollup.ProjectedFrom)
 	}
 }
 

@@ -27,6 +27,7 @@ import (
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/authoring"
 	"github.com/fuseone/agents/internal/engine"
+	"github.com/fuseone/agents/internal/finops"
 	"github.com/fuseone/agents/internal/httpapi"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/known"
@@ -149,6 +150,7 @@ func serve(args []string) error {
 			// The key exports are signed with, and its public half.
 			WithSigning(admin.NewSigning(identity.pool, store)).
 			WithMoney(admin.NewMoney(identity.pool, store)).
+			WithPlanningSpend(finops.NewSpend(identity.pool)).
 			WithBranding(admin.NewBranding(identity.pool, store)).
 			WithRetention(
 				admin.NewRetention(identity.pool, store),

@@ -45,7 +45,9 @@ func seedSpendCursor(t *testing.T, pool *pgxpool.Pool, at time.Time) {
 		on conflict (id) do update set
 			scanned_at = excluded.scanned_at,
 			scanned_run_id = excluded.scanned_run_id,
-			scanned_seq = excluded.scanned_seq`, at.UTC()); err != nil {
+			scanned_seq = excluded.scanned_seq,
+			started_at = coalesce(planning_spend_cursor.started_at, excluded.scanned_at)`,
+		at.UTC()); err != nil {
 		t.Fatalf("seed cursor: %v", err)
 	}
 }
@@ -64,10 +66,30 @@ func appendRun(
 	at time.Time, calls ...call,
 ) {
 	t.Helper()
-	scope := domain.Scope{Company: "acme", Area: "platform"}
+	appendScopedRun(t, store, id, agent, domain.Scope{Company: "acme", Area: "platform"}, at, calls...)
+}
+
+func appendScopedRun(
+	t *testing.T, store *ledger.Postgres, id domain.RunID, agent domain.AgentID,
+	scope domain.Scope, at time.Time, calls ...call,
+) {
+	t.Helper()
+	appendScopedRunWithStart(t, store, id, agent, scope, at, domain.RunStartedPayload{}, calls...)
+}
+
+func appendScopedRunWithStart(
+	t *testing.T, store *ledger.Postgres, id domain.RunID, agent domain.AgentID,
+	scope domain.Scope, at time.Time, start domain.RunStartedPayload, calls ...call,
+) {
+	t.Helper()
+	startBody, err := json.Marshal(start)
+	if err != nil {
+		t.Fatalf("marshal start: %v", err)
+	}
 	if _, err := store.Append(t.Context(), domain.Step{
 		RunID: id, Kind: domain.StepRunStarted, Scope: scope,
 		AgentID: agent, VersionID: "v1", At: at.UTC(),
+		Payload: startBody,
 	}); err != nil {
 		t.Fatalf("Append start %s: %v", id, err)
 	}
@@ -191,6 +213,31 @@ func TestSpend_cursorPassesAStepItSkipped(t *testing.T) {
 	}
 }
 
+func TestSpend_cursorPassesASimulatedPlanningStep(t *testing.T) {
+	pool := spendPoolFor(t)
+	store := ledger.NewPostgres(pool)
+	spend := finops.NewSpend(pool)
+	base := time.Now().Add(-time.Hour).UTC().Truncate(time.Microsecond)
+	seedSpendCursor(t, pool, base)
+
+	appendScopedRunWithStart(t, store, "run-simulated", "triage",
+		domain.Scope{Company: "acme", Area: "platform"}, base.Add(time.Second),
+		domain.RunStartedPayload{Trigger: "simulation", Simulated: true, Simulation: "sim-a"},
+		call{
+			cost:    domain.Cost{Micros: 500},
+			planned: domain.PlannedPayload{Provider: "anthropic", Model: "opus"},
+		})
+	appendPlanned(t, store, "run-real", base.Add(2*time.Second),
+		domain.Cost{Micros: 700}, domain.PlannedPayload{Provider: "anthropic", Model: "opus"})
+
+	if n, err := spend.Project(t.Context(), 1); err != nil || n != 0 {
+		t.Fatalf("first Project = %d, %v; want simulated spend skipped", n, err)
+	}
+	if n, err := spend.Project(t.Context(), 1); err != nil || n != 1 {
+		t.Fatalf("second Project = %d, %v; want the real call behind it", n, err)
+	}
+}
+
 func TestSpend_halfAPairIsNotProjected(t *testing.T) {
 	pool := spendPoolFor(t)
 	store := ledger.NewPostgres(pool)
@@ -262,7 +309,9 @@ func TestSpend_aggregatesByModelAndSaysWhatIsUnpriced(t *testing.T) {
 		t.Fatalf("Project: %v", err)
 	}
 
-	got, err := spend.ByModel(t.Context(), base, base.Add(time.Hour))
+	got, err := spend.ByModel(t.Context(), domain.RunFilter{
+		Since: base, Until: base.Add(time.Hour),
+	})
 	if err != nil {
 		t.Fatalf("ByModel: %v", err)
 	}
@@ -311,7 +360,9 @@ func TestSpend_aggregatesByAgentAcrossRunsAndCarriesTheUnpriced(t *testing.T) {
 		t.Fatalf("Project: %v", err)
 	}
 
-	got, err := spend.ByAgent(t.Context(), base, base.Add(time.Hour))
+	got, err := spend.ByAgent(t.Context(), domain.RunFilter{
+		Since: base, Until: base.Add(time.Hour),
+	})
 	if err != nil {
 		t.Fatalf("ByAgent: %v", err)
 	}
@@ -338,5 +389,110 @@ func TestSpend_aggregatesByAgentAcrossRunsAndCarriesTheUnpriced(t *testing.T) {
 	}
 	if got[1].Agent != "billing" || got[1].Micros != 400 || got[1].Runs != 1 {
 		t.Fatalf("second bucket = %+v, want billing behind it", got[1])
+	}
+}
+
+func TestSpend_aggregatesOnlyVisibleScopes(t *testing.T) {
+	pool := spendPoolFor(t)
+	store := ledger.NewPostgres(pool)
+	spend := finops.NewSpend(pool)
+	base := time.Now().Add(-time.Hour).UTC().Truncate(time.Microsecond)
+	seedSpendCursor(t, pool, base)
+
+	priced := domain.ModelPriceUse{Status: domain.ModelPriceConfigured}
+	appendScopedRun(t, store, "run-platform", "triage",
+		domain.Scope{Company: "acme", Area: "platform"}, base.Add(time.Second),
+		call{
+			cost:    domain.Cost{Micros: 700},
+			planned: domain.PlannedPayload{Provider: "anthropic", Model: "opus", Price: &priced},
+		})
+	appendScopedRun(t, store, "run-private", "triage",
+		domain.Scope{Company: "acme", Area: "finance"}, base.Add(2*time.Second),
+		call{
+			cost:    domain.Cost{Micros: 900},
+			planned: domain.PlannedPayload{Provider: "anthropic", Model: "opus", Price: &priced},
+		})
+	appendScopedRun(t, store, "run-other-company", "triage",
+		domain.Scope{Company: "globex", Area: "platform"}, base.Add(3*time.Second),
+		call{
+			cost:    domain.Cost{Micros: 1100},
+			planned: domain.PlannedPayload{Provider: "anthropic", Model: "opus", Price: &priced},
+		})
+
+	if _, err := spend.Project(t.Context(), 100); err != nil {
+		t.Fatalf("Project: %v", err)
+	}
+
+	got, err := spend.ByModel(t.Context(), domain.RunFilter{
+		Since: base, Until: base.Add(time.Hour),
+		Scopes: []domain.Scope{{Company: "acme", Area: "platform"}},
+	})
+	if err != nil {
+		t.Fatalf("ByModel: %v", err)
+	}
+	if len(got) != 1 || got[0].Micros != 700 {
+		t.Fatalf("scoped ByModel = %+v, want only acme/platform spend", got)
+	}
+
+	companyWide, err := spend.ByModel(t.Context(), domain.RunFilter{
+		Since: base, Until: base.Add(time.Hour),
+		Scopes: []domain.Scope{{Company: "acme"}},
+	})
+	if err != nil {
+		t.Fatalf("ByModel company: %v", err)
+	}
+	if len(companyWide) != 1 || companyWide[0].Micros != 1600 {
+		t.Fatalf("company ByModel = %+v, want both acme areas only", companyWide)
+	}
+
+	all, err := spend.ByModel(t.Context(), domain.RunFilter{
+		Since: base, Until: base.Add(time.Hour),
+		Scopes: []domain.Scope{{Company: domain.Installation}},
+	})
+	if err != nil {
+		t.Fatalf("ByModel installation: %v", err)
+	}
+	if len(all) != 1 || all[0].Micros != 2700 {
+		t.Fatalf("installation ByModel = %+v, want every company", all)
+	}
+
+	mixed, err := spend.ByModel(t.Context(), domain.RunFilter{
+		Since: base, Until: base.Add(time.Hour),
+		Scopes: []domain.Scope{
+			{Company: "acme", Area: "platform"},
+			{Company: domain.Installation},
+		},
+	})
+	if err != nil {
+		t.Fatalf("ByModel mixed installation: %v", err)
+	}
+	if len(mixed) != 1 || mixed[0].Micros != 2700 {
+		t.Fatalf("mixed installation ByModel = %+v, want installation to dominate smaller scopes", mixed)
+	}
+}
+
+func TestSpend_projectionStartSurvivesCursorMovement(t *testing.T) {
+	pool := spendPoolFor(t)
+	store := ledger.NewPostgres(pool)
+	spend := finops.NewSpend(pool)
+	base := time.Now().Add(-time.Hour).UTC().Truncate(time.Microsecond)
+	seedSpendCursor(t, pool, base)
+
+	started, err := spend.ProjectedFrom(t.Context())
+	if err != nil {
+		t.Fatalf("ProjectedFrom: %v", err)
+	}
+	appendPlanned(t, store, "run-a", base.Add(time.Second),
+		domain.Cost{Micros: 900},
+		domain.PlannedPayload{Provider: "anthropic", Model: "opus"})
+	if _, err := spend.Project(t.Context(), 100); err != nil {
+		t.Fatalf("Project: %v", err)
+	}
+	after, err := spend.ProjectedFrom(t.Context())
+	if err != nil {
+		t.Fatalf("ProjectedFrom after: %v", err)
+	}
+	if !after.Equal(started) {
+		t.Fatalf("projection start moved from %s to %s", started, after)
 	}
 }

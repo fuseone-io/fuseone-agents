@@ -75,6 +75,7 @@ type Server struct {
 	// the first proposal a Curator confirms, never a classification.
 	known       Suggesters
 	spend       Spend
+	planning    PlanningSpend
 	rates       Rates
 	pauses      Pauses
 	retirements Retirements

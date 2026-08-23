@@ -1449,6 +1449,65 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /cost/planning/models:
+    get:
+      tags: [cost]
+      operationId: getPlanningSpendByModel
+      summary: Planning spend by effective model
+      description: |
+        One bucket per provider and model actually used by planning calls.
+        The projection is forward-only: older ledger steps did not name the
+        effective model, so the response names when this rollup starts making
+        claims rather than estimating the past.
+      parameters:
+        - $ref: '#/components/parameters/CompanyScope'
+        - $ref: '#/components/parameters/Area'
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: The model rollup.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlanningSpendRollup' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /cost/planning/agents:
+    get:
+      tags: [cost]
+      operationId: getPlanningSpendByAgent
+      summary: Planning spend by agent
+      description: |
+        One bucket per agent. This cut deliberately does not name a provider or
+        model: an agent can use more than one model across planning calls, and
+        carrying one would be an arbitrary row from a folded bucket.
+      parameters:
+        - $ref: '#/components/parameters/CompanyScope'
+        - $ref: '#/components/parameters/Area'
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: The agent rollup.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlanningSpendRollup' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /audit:
     get:
       tags: [audit]
@@ -5844,6 +5903,57 @@ components:
         buckets:
           type: array
           items: { $ref: '#/components/schemas/CostBucket' }
+
+    PlanningSpendBucket:
+      type: object
+      required: [provider, model, agent, cost, calls, runs, unpriced]
+      properties:
+        provider:
+          type: string
+          description: Empty on the agent cut, where the bucket can include several models.
+        model:
+          type: string
+          description: Empty on the agent cut, where the bucket can include several models.
+        agent:
+          type: string
+          description: Empty on the model cut.
+        cost: { $ref: '#/components/schemas/Cost' }
+        calls: { type: integer, format: int64 }
+        runs:
+          type: integer
+          format: int64
+          description: |
+            Distinct runs inside this bucket. On the model cut a run that used
+            two models contributes to both model buckets, so this is not a
+            global unique-run total.
+        unpriced:
+          type: integer
+          format: int64
+          description: Planning calls in this bucket that had no configured rate.
+
+    PlanningSpendRollup:
+      type: object
+      required: [from, to, groupBy, total, calls, unpriced, buckets]
+      properties:
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        groupBy: { type: string, enum: [model, agent] }
+        projectedFrom:
+          type: string
+          format: date-time
+          description: |
+            When this projection started. Earlier planning steps did not name
+            the effective provider/model pair, so this rollup starts here
+            instead of guessing history.
+        total: { $ref: '#/components/schemas/Cost' }
+        calls: { type: integer, format: int64 }
+        unpriced:
+          type: integer
+          format: int64
+          description: Planning calls in the response that had no configured rate.
+        buckets:
+          type: array
+          items: { $ref: '#/components/schemas/PlanningSpendBucket' }
 
     BudgetAlert:
       type: object

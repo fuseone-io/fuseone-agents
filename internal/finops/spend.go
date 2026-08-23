@@ -43,33 +43,54 @@ repeats rather than the one that skips, because a skipped call is money the
 aggregate silently never counted.
 */
 func (s *Spend) Project(ctx context.Context, limit int) (int, error) {
-	if limit <= 0 {
-		limit = 200
-	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("finops: begin: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	from, err := readCursor(ctx, tx)
+	written, last, ok, err := projectBatch(ctx, tx, projectionLimit(limit))
 	if err != nil {
 		return 0, err
+	}
+	if !ok {
+		return 0, nil
+	}
+	if err := writeCursor(ctx, tx, last); err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, fmt.Errorf("finops: commit: %w", err)
+	}
+	return written, nil
+}
+
+func projectionLimit(limit int) int {
+	if limit > 0 {
+		return limit
+	}
+	return 200
+}
+
+func projectBatch(ctx context.Context, tx pgx.Tx, limit int) (int, cursor, bool, error) {
+	from, err := readCursor(ctx, tx)
+	if err != nil {
+		return 0, cursor{}, false, err
 	}
 
 	steps, err := plannedAfter(ctx, tx, from, limit)
 	if err != nil {
-		return 0, err
+		return 0, cursor{}, false, err
 	}
 	if len(steps) == 0 {
-		return 0, nil
+		return 0, cursor{}, false, nil
 	}
 
 	written := 0
 	for _, step := range steps {
 		ok, err := writeSpend(ctx, tx, step)
 		if err != nil {
-			return 0, err
+			return 0, cursor{}, false, err
 		}
 		if ok {
 			written++
@@ -80,13 +101,7 @@ func (s *Spend) Project(ctx context.Context, limit int) (int, error) {
 	// no model is still a step this pass has seen, and leaving it behind the
 	// cursor would make every future pass read it again for ever.
 	last := steps[len(steps)-1]
-	if err := writeCursor(ctx, tx, cursor{at: last.at, runID: last.runID, seq: last.seq}); err != nil {
-		return 0, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return 0, fmt.Errorf("finops: commit: %w", err)
-	}
-	return written, nil
+	return written, cursor{at: last.at, runID: last.runID, seq: last.seq}, true, nil
 }
 
 type plannedStep struct {
@@ -96,19 +111,21 @@ type plannedStep struct {
 	agentID   string
 	companyID string
 	areaID    string
+	simulated bool
 	cost      domain.Cost
 	payload   []byte
 }
 
 func plannedAfter(ctx context.Context, tx pgx.Tx, from cursor, limit int) ([]plannedStep, error) {
 	rows, err := tx.Query(ctx, `
-		select at, run_id, seq, agent_id, company_id, area_id,
-		       cost_micros, input_tokens, output_tokens,
-		       cache_read_tokens, cache_write_tokens, payload
-		from run_steps
-		where kind = 'planned'
-		  and (at, run_id, seq) > ($1, $2, $3)
-		order by at, run_id, seq
+		select s.at, s.run_id, s.seq, s.agent_id, s.company_id, s.area_id,
+		       r.simulated, s.cost_micros, s.input_tokens, s.output_tokens,
+		       s.cache_read_tokens, s.cache_write_tokens, s.payload
+		from run_steps s
+		join runs r on r.run_id = s.run_id
+		where s.kind = 'planned'
+		  and (s.at, s.run_id, s.seq) > ($1, $2, $3)
+		order by s.at, s.run_id, s.seq
 		limit $4`, from.at, from.runID, from.seq, limit)
 	if err != nil {
 		return nil, fmt.Errorf("finops: read planning steps: %w", err)
@@ -119,7 +136,7 @@ func plannedAfter(ctx context.Context, tx pgx.Tx, from cursor, limit int) ([]pla
 	for rows.Next() {
 		var s plannedStep
 		if err := rows.Scan(&s.at, &s.runID, &s.seq, &s.agentID, &s.companyID, &s.areaID,
-			&s.cost.Micros, &s.cost.InputTokens, &s.cost.OutputTokens,
+			&s.simulated, &s.cost.Micros, &s.cost.InputTokens, &s.cost.OutputTokens,
 			&s.cost.CacheReadTokens, &s.cost.CacheWriteTokens, &s.payload); err != nil {
 			return nil, fmt.Errorf("finops: scan planning step: %w", err)
 		}
@@ -138,6 +155,9 @@ spend against a model the step never named; failing on them would stop the
 sweep at the oldest row in the installation and never reach today's.
 */
 func writeSpend(ctx context.Context, tx pgx.Tx, s plannedStep) (bool, error) {
+	if s.simulated {
+		return false, nil
+	}
 	var p domain.PlannedPayload
 	if err := json.Unmarshal(s.payload, &p); err != nil {
 		// Unreadable rather than absent, and equally not this sweep's to fix.
@@ -159,7 +179,7 @@ func writeSpend(ctx context.Context, tx pgx.Tx, s plannedStep) (bool, error) {
 			run_id, seq, provider, model, agent_id, company_id, area_id, day,
 			cost_micros, input_tokens, output_tokens,
 			cache_read_tokens, cache_write_tokens, price_status)
-		values ($1,$2,$3,$4,$5,$6,$7,$8::date,$9,$10,$11,$12,$13,$14)
+		values ($1,$2,$3,$4,$5,$6,$7,($8 at time zone 'UTC')::date,$9,$10,$11,$12,$13,$14)
 		on conflict (run_id, seq) do nothing`,
 		s.runID, s.seq, p.Provider, p.Model, s.agentID, s.companyID, s.areaID, s.at,
 		s.cost.Micros, s.cost.InputTokens, s.cost.OutputTokens,
@@ -186,7 +206,7 @@ func readCursor(ctx context.Context, tx pgx.Tx) (cursor, error) {
 	}
 	now := time.Now().UTC()
 	if _, err := tx.Exec(ctx, `
-		insert into planning_spend_cursor (id, scanned_at) values (true, $1)
+		insert into planning_spend_cursor (id, scanned_at, started_at) values (true, $1, $1)
 		on conflict (id) do nothing`, now); err != nil {
 		return cursor{}, fmt.Errorf("finops: initialise spend cursor: %w", err)
 	}

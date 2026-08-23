@@ -1016,6 +1016,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/cost/planning/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Planning spend by effective model
+         * @description One bucket per provider and model actually used by planning calls.
+         *     The projection is forward-only: older ledger steps did not name the
+         *     effective model, so the response names when this rollup starts making
+         *     claims rather than estimating the past.
+         */
+        get: operations["getPlanningSpendByModel"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/cost/planning/agents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Planning spend by agent
+         * @description One bucket per agent. This cut deliberately does not name a provider or
+         *     model: an agent can use more than one model across planning calls, and
+         *     carrying one would be an arbitrary row from a folded bucket.
+         */
+        get: operations["getPlanningSpendByAgent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/audit": {
         parameters: {
             query?: never;
@@ -3874,6 +3919,53 @@ export interface components {
             total: components["schemas"]["Cost"];
             buckets: components["schemas"]["CostBucket"][];
         };
+        PlanningSpendBucket: {
+            /** @description Empty on the agent cut, where the bucket can include several models. */
+            provider: string;
+            /** @description Empty on the agent cut, where the bucket can include several models. */
+            model: string;
+            /** @description Empty on the model cut. */
+            agent: string;
+            cost: components["schemas"]["Cost"];
+            /** Format: int64 */
+            calls: number;
+            /**
+             * Format: int64
+             * @description Distinct runs inside this bucket. On the model cut a run that used
+             *     two models contributes to both model buckets, so this is not a
+             *     global unique-run total.
+             */
+            runs: number;
+            /**
+             * Format: int64
+             * @description Planning calls in this bucket that had no configured rate.
+             */
+            unpriced: number;
+        };
+        PlanningSpendRollup: {
+            /** Format: date-time */
+            from: string;
+            /** Format: date-time */
+            to: string;
+            /** @enum {string} */
+            groupBy: "model" | "agent";
+            /**
+             * Format: date-time
+             * @description When this projection started. Earlier planning steps did not name
+             *     the effective provider/model pair, so this rollup starts here
+             *     instead of guessing history.
+             */
+            projectedFrom?: string;
+            total: components["schemas"]["Cost"];
+            /** Format: int64 */
+            calls: number;
+            /**
+             * Format: int64
+             * @description Planning calls in the response that had no configured rate.
+             */
+            unpriced: number;
+            buckets: components["schemas"]["PlanningSpendBucket"][];
+        };
         BudgetAlert: {
             scope: components["schemas"]["Scope"];
             /** @description The percentage crossed — 50, 80 or 100. */
@@ -5323,6 +5415,62 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CostRollup"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getPlanningSpendByModel: {
+        parameters: {
+            query: {
+                /** @description Company scope. A single value until multi-company (PRD 3.1). */
+                company?: components["parameters"]["CompanyScope"];
+                area?: components["parameters"]["Area"];
+                from: string;
+                to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The model rollup. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanningSpendRollup"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getPlanningSpendByAgent: {
+        parameters: {
+            query: {
+                /** @description Company scope. A single value until multi-company (PRD 3.1). */
+                company?: components["parameters"]["CompanyScope"];
+                area?: components["parameters"]["Area"];
+                from: string;
+                to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The agent rollup. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanningSpendRollup"];
                 };
             };
             401: components["responses"]["Unauthorized"];
