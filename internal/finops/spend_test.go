@@ -216,3 +216,47 @@ func TestSpend_resumesWhereTheBatchStopped(t *testing.T) {
 		t.Fatalf("rows = %d, want every planning call projected exactly once", rows)
 	}
 }
+
+func TestSpend_aggregatesByModelAndSaysWhatIsUnpriced(t *testing.T) {
+	pool := spendPoolFor(t)
+	store := ledger.NewPostgres(pool)
+	spend := finops.NewSpend(pool)
+	base := time.Now().Add(-time.Hour).UTC().Truncate(time.Microsecond)
+	seedSpendCursor(t, pool, base)
+
+	priced := domain.ModelPriceUse{Status: domain.ModelPriceConfigured}
+	missing := domain.ModelPriceUse{Status: domain.ModelPriceMissing}
+
+	appendPlanned(t, store, "run-1", base.Add(time.Second),
+		domain.Cost{Micros: 900, InputTokens: 100},
+		domain.PlannedPayload{Provider: "anthropic", Model: "opus", Price: &priced})
+	appendPlanned(t, store, "run-2", base.Add(2*time.Second),
+		domain.Cost{Micros: 100, InputTokens: 20},
+		domain.PlannedPayload{Provider: "anthropic", Model: "opus", Price: &priced})
+	// Same provider, no rate: its tokens are real and its money is not.
+	appendPlanned(t, store, "run-3", base.Add(3*time.Second),
+		domain.Cost{Micros: 0, InputTokens: 5_000},
+		domain.PlannedPayload{Provider: "anthropic", Model: "haiku", Price: &missing})
+
+	if _, err := spend.Project(t.Context(), 100); err != nil {
+		t.Fatalf("Project: %v", err)
+	}
+
+	got, err := spend.ByModel(t.Context(), base, base.Add(time.Hour))
+	if err != nil {
+		t.Fatalf("ByModel: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d buckets, want one per model", len(got))
+	}
+
+	// Ordered by spend, so the expensive one is the first thing read.
+	if got[0].Model != "opus" || got[0].Micros != 1000 || got[0].Calls != 2 {
+		t.Fatalf("first bucket = %+v, want opus summed across its calls", got[0])
+	}
+	// The unpriced one is not hidden and not counted as free: it carries its
+	// tokens and says the money is missing, so a total nobody can trust says so.
+	if got[1].Model != "haiku" || got[1].InputTokens != 5_000 || got[1].Unpriced != 1 {
+		t.Fatalf("second bucket = %+v, want haiku with its tokens and unpriced flagged", got[1])
+	}
+}
