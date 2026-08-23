@@ -50,29 +50,49 @@ func seedSpendCursor(t *testing.T, pool *pgxpool.Pool, at time.Time) {
 	}
 }
 
-func appendPlanned(
-	t *testing.T, store *ledger.Postgres, id domain.RunID, at time.Time,
-	cost domain.Cost, planned domain.PlannedPayload,
+// call is one planning step: what it cost and what it names.
+type call struct {
+	cost    domain.Cost
+	planned domain.PlannedPayload
+}
+
+// appendRun writes a run and every planning step under it, so a test can say
+// "this agent made three calls across two runs" the way an installation does.
+// A run with several turns is the ordinary case, not the exotic one.
+func appendRun(
+	t *testing.T, store *ledger.Postgres, id domain.RunID, agent domain.AgentID,
+	at time.Time, calls ...call,
 ) {
 	t.Helper()
 	scope := domain.Scope{Company: "acme", Area: "platform"}
 	if _, err := store.Append(t.Context(), domain.Step{
 		RunID: id, Kind: domain.StepRunStarted, Scope: scope,
-		AgentID: "triage", VersionID: "v1", At: at.UTC(),
+		AgentID: agent, VersionID: "v1", At: at.UTC(),
 	}); err != nil {
 		t.Fatalf("Append start %s: %v", id, err)
 	}
-	body, err := json.Marshal(planned)
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
+	for i, c := range calls {
+		body, err := json.Marshal(c.planned)
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		if _, err := store.Append(t.Context(), domain.Step{
+			RunID: id, Kind: domain.StepPlanned, Scope: scope,
+			AgentID: agent, VersionID: "v1",
+			At:   at.Add(time.Duration(i+1) * time.Second).UTC(),
+			Cost: c.cost, Payload: body,
+		}); err != nil {
+			t.Fatalf("Append planned %s: %v", id, err)
+		}
 	}
-	if _, err := store.Append(t.Context(), domain.Step{
-		RunID: id, Kind: domain.StepPlanned, Scope: scope,
-		AgentID: "triage", VersionID: "v1", At: at.Add(time.Second).UTC(),
-		Cost: cost, Payload: body,
-	}); err != nil {
-		t.Fatalf("Append planned %s: %v", id, err)
-	}
+}
+
+func appendPlanned(
+	t *testing.T, store *ledger.Postgres, id domain.RunID, at time.Time,
+	cost domain.Cost, planned domain.PlannedPayload,
+) {
+	t.Helper()
+	appendRun(t, store, id, "triage", at, call{cost: cost, planned: planned})
 }
 
 func TestSpend_projectsEachPlanningCallOnce(t *testing.T) {
@@ -258,5 +278,65 @@ func TestSpend_aggregatesByModelAndSaysWhatIsUnpriced(t *testing.T) {
 	// tokens and says the money is missing, so a total nobody can trust says so.
 	if got[1].Model != "haiku" || got[1].InputTokens != 5_000 || got[1].Unpriced != 1 {
 		t.Fatalf("second bucket = %+v, want haiku with its tokens and unpriced flagged", got[1])
+	}
+}
+
+func TestSpend_aggregatesByAgentAcrossRunsAndCarriesTheUnpriced(t *testing.T) {
+	pool := spendPoolFor(t)
+	store := ledger.NewPostgres(pool)
+	spend := finops.NewSpend(pool)
+	base := time.Now().Add(-time.Hour).UTC().Truncate(time.Microsecond)
+	seedSpendCursor(t, pool, base)
+
+	priced := domain.ModelPriceUse{Status: domain.ModelPriceConfigured}
+	missing := domain.ModelPriceUse{Status: domain.ModelPriceMissing}
+	spent := func(micros, in int64, model string, price *domain.ModelPriceUse) call {
+		return call{
+			cost:    domain.Cost{Micros: micros, InputTokens: in},
+			planned: domain.PlannedPayload{Provider: "anthropic", Model: model, Price: price},
+		}
+	}
+
+	// Two runs for one agent, and one of them turned twice: the agent cut has to
+	// fold calls across runs, not report whichever run was last.
+	appendRun(t, store, "run-a", "triage", base.Add(time.Second),
+		spent(600, 100, "opus", &priced),
+		spent(300, 40, "opus", &priced))
+	appendRun(t, store, "run-b", "triage", base.Add(10*time.Second),
+		spent(0, 5_000, "haiku", &missing))
+	appendRun(t, store, "run-c", "billing", base.Add(20*time.Second),
+		spent(400, 80, "opus", &priced))
+
+	if _, err := spend.Project(t.Context(), 100); err != nil {
+		t.Fatalf("Project: %v", err)
+	}
+
+	got, err := spend.ByAgent(t.Context(), base, base.Add(time.Hour))
+	if err != nil {
+		t.Fatalf("ByAgent: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d buckets, want one per agent", len(got))
+	}
+
+	// Ordered by spend, and a call is not a run: three calls over two runs is
+	// what the agent did, and reporting either number as the other would make a
+	// chatty agent look busy or a busy one look cheap.
+	if got[0].Agent != "triage" || got[0].Micros != 900 ||
+		got[0].Calls != 3 || got[0].Runs != 2 {
+		t.Fatalf("first bucket = %+v, want triage folded across its runs", got[0])
+	}
+	// The unpriced call crosses into this cut too. Its tokens are here and its
+	// money is not, which is the only honest way to show a rate nobody set.
+	if got[0].Unpriced != 1 || got[0].InputTokens != 5_140 {
+		t.Fatalf("first bucket = %+v, want the unpriced call counted with its tokens", got[0])
+	}
+	// This cut groups by agent alone, so it names no model. Carrying one would
+	// be picking an arbitrary row out of a bucket that folded several.
+	if got[0].Provider != "" || got[0].Model != "" {
+		t.Fatalf("first bucket = %+v, want no model on the agent cut", got[0])
+	}
+	if got[1].Agent != "billing" || got[1].Micros != 400 || got[1].Runs != 1 {
+		t.Fatalf("second bucket = %+v, want billing behind it", got[1])
 	}
 }
