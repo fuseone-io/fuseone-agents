@@ -27,6 +27,59 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.26.0] — 2026-08-23
+
+No new screen. This release corrects a rate that was applied to the wrong
+model, and lays the projection that a cost-by-model and cost-by-agent view will
+read from.
+
+### Upgrade notes
+
+- **The cost aggregate starts empty and fills forward.** The migration creates
+  a projection of what each planning call cost and starts a sweep that runs
+  every minute from that moment. It does not read the history: runs recorded
+  before the upgrade stay in the ledger and never enter the aggregate. For the
+  first days the totals are therefore short — and short is not cheap. Anything
+  built on them has to say which period it covers, or it reports "we have not
+  looked that far back" as "the installation spent little".
+
+- **Past runs are not repriced.** The fix below applies from this version
+  onward. Steps already in the chain keep the figures they were recorded with,
+  because the ledger does not amend — a correction is a new step, never an edit
+  to an old one. An installation that used per-step models should read its
+  historical cost figures with the caveat below in mind.
+
+### Fixed
+
+- **A step that chooses its own model is now billed as that model.** In a
+  multi-step agent a stage may name its own model — the usual reason being to
+  run one stage on something cheaper. The request went to the model the step
+  named, but the rate came from the model the *agent* was configured with, so
+  the cost recorded was the wrong model's price for the right model's tokens.
+  A cheaper stage was recorded as expensive, a more expensive one as cheap, and
+  a stage whose model had no configured rate could still record money.
+
+  The effective model is now resolved once per call and answers all three
+  questions — which model to send to, which pair to record, which rate to
+  apply. Agents that never override the model per step were never affected.
+
+### Added
+
+- **A planning step names the model it called**, alongside the provider and
+  whether the rate applied was configured, missing, or deliberately zero.
+  "Configured" is now a claim about the rate that was *applied*, not about one
+  that happened to exist somewhere in the price list.
+
+- **What each planning call cost is projected into its own table**, summable by
+  provider and model or by agent, over a window. The sweep is idempotent per
+  step, so a pass can be repeated without doubling the money, and a step it
+  cannot attribute — one recorded before the pair was written — is passed over
+  rather than guessed at or allowed to stall the sweep behind it.
+
+  A rollup carries how many of its calls had no configured rate. A bucket of
+  those has real tokens and zero money, and folding it into a total silently
+  would report unknown as cheap.
+
 ## [0.25.0] — 2026-08-23
 
 ### Added
