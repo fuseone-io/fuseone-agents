@@ -82,9 +82,13 @@ func BuildTranscript(ctx context.Context, store ContentStore, steps []domain.Ste
 			// block, so it is also how a scheduled run dies before its first
 			// word.
 			if len(text) > 0 {
+				compacted, note := compactRunInputForTranscript(p.Trigger, text)
+				if note != "" {
+					turns = append(turns, Turn{Kind: TurnNote, Text: note})
+				}
 				turns = append(turns, Turn{
 					Kind: TurnInput,
-					Text: string(compactRunInputForTranscript(p.Trigger, text)),
+					Text: string(compacted),
 				})
 			}
 
@@ -171,41 +175,47 @@ const (
 	toolResultTailBytes    = 8 << 10
 )
 
-func compactRunInputForTranscript(trigger string, content []byte) []byte {
+func compactRunInputForTranscript(trigger string, content []byte) ([]byte, string) {
 	if trigger != "channel" || len(content) <= channelInputCompactAfter {
-		return content
+		return content, ""
 	}
 
 	var input any
 	if err := json.Unmarshal(content, &input); err != nil {
-		return compactRawChannelInput(content)
+		return compactRawChannelInput(content), channelInputCompactionNote(content, nil)
 	}
 
 	changes := []map[string]any{}
 	compacted := compactJSONStrings(input, "", &changes)
 	if len(changes) == 0 {
-		return content
+		return content, ""
 	}
 
 	obj, ok := compacted.(map[string]any)
 	if !ok {
-		return compactRawChannelInput(content)
-	}
-	obj["fuseone_compaction"] = map[string]any{
-		"kind":          "channel_input",
-		"stored_bytes":  len(content),
-		"stored_digest": digest(content),
-		"message": "FuseOne compacted this channel input before sending it to the model. " +
-			"Only the beginning and end of long fields are shown. Do not treat omitted middle as absent; " +
-			"use a narrower ask or fetch the original source if this is not enough.",
-		"fields": changes,
+		return compactRawChannelInput(content), channelInputCompactionNote(content, nil)
 	}
 
 	out, err := json.Marshal(obj)
 	if err != nil {
-		return compactRawChannelInput(content)
+		return compactRawChannelInput(content), channelInputCompactionNote(content, nil)
 	}
-	return out
+	return out, channelInputCompactionNote(content, changes)
+}
+
+func channelInputCompactionNote(content []byte, fields []map[string]any) string {
+	var b strings.Builder
+	b.WriteString("FuseOne compacted the channel input before sending it to the model.\n")
+	fmt.Fprintf(&b, "Stored input: %d bytes, digest %s.\n", len(content), digest(content))
+	b.WriteString("Only the beginning and end of compacted content are shown. Do not treat omitted middle as absent; use a narrower ask or fetch the original source if this is not enough.")
+	if len(fields) > 0 {
+		b.WriteString("\nCompacted fields:")
+		for _, field := range fields {
+			fmt.Fprintf(&b, "\n- %v: %v bytes stored, %v bytes shown",
+				field["path"], field["original_bytes"], field["shown_bytes"])
+		}
+	}
+	return b.String()
 }
 
 func compactJSONStrings(v any, path string, changes *[]map[string]any) any {
@@ -241,9 +251,6 @@ func compactTextField(text string) string {
 	tail := utf8Suffix([]byte(text), inputFieldTailBytes)
 
 	var b strings.Builder
-	b.WriteString("FuseOne compacted this field before sending it to the model. ")
-	b.WriteString("Only the beginning and end are shown here. ")
-	b.WriteString("Do not treat the omitted middle as absent.\n\n")
 	fmt.Fprintf(&b, "--- first %d bytes ---\n%s\n\n", len(head), head)
 	fmt.Fprintf(&b, "--- omitted %d bytes ---\n\n", max(0, len(text)-len(head)-len(tail)))
 	fmt.Fprintf(&b, "--- last %d bytes ---\n%s", len(tail), tail)
@@ -255,9 +262,6 @@ func compactRawChannelInput(content []byte) []byte {
 	tail := utf8Suffix(content, inputFieldTailBytes)
 
 	var b strings.Builder
-	b.WriteString("FuseOne compacted this channel input before sending it to the model.\n")
-	fmt.Fprintf(&b, "Stored input: %d bytes, digest %s.\n", len(content), digest(content))
-	b.WriteString("Only the beginning and end are shown here. Do not treat the omitted middle as absent; use a narrower ask or fetch the original source if this is not enough.\n\n")
 	fmt.Fprintf(&b, "--- first %d bytes ---\n%s\n\n", len(head), head)
 	fmt.Fprintf(&b, "--- omitted %d bytes ---\n\n", max(0, len(content)-len(head)-len(tail)))
 	fmt.Fprintf(&b, "--- last %d bytes ---\n%s", len(tail), tail)

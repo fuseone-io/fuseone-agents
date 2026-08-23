@@ -87,9 +87,10 @@ contexto para a run.
 
 Entradas grandes vindas de canal também são compactadas antes de chegar ao
 modelo. A ask completa continua no content store e na trilha; o modelo recebe
-um JSON válido com campos longos encurtados, tamanho guardado e digest. Isso
-aparece principalmente quando um alerta ou thread do Slack traz um payload
-grande antes de o agente chamar qualquer ferramenta.
+um JSON válido com campos longos encurtados e uma nota separada da plataforma
+com tamanho guardado e digest. Isso aparece principalmente quando um alerta ou
+thread do Slack traz um payload grande antes de o agente chamar qualquer
+ferramenta.
 
 Resultados grandes de consultas Grafana Loki e Prometheus são compactados
 antes de serem mostrados ao modelo nos turnos seguintes. O resultado completo
