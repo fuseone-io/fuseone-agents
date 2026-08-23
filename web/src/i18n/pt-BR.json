@@ -1866,7 +1866,14 @@
       "tool_arguments": "Argumentos de ferramenta"
     },
     "promptByTool": "Por ferramenta",
-    "promptByToolHelp": "Bytes que cada ferramenta trouxe para o prompt."
+    "promptByToolHelp": "Bytes que cada ferramenta trouxe para o prompt.",
+    "savedTitle": "O que foi poupado",
+    "savedCompaction": "{{bytes}} não foram enviados ao modelo",
+    "savedCompactionHelp": "Compactação de resultados grandes. Esses bytes não viraram token; o resultado inteiro continua guardado.",
+    "savedCache": "{{count}} chamada servida do cache",
+    "savedCache_other": "{{count}} chamadas servidas do cache",
+    "savedCacheHelp": "O cache evita ir ao sistema do outro lado. Não reduz token: o resultado vai inteiro para o prompt.",
+    "savedNone": "Nada foi compactado nem servido do cache nesta execução."
   },
   "runtime": {
     "backingOff": "Em backoff",

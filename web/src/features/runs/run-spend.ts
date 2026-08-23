@@ -18,6 +18,21 @@ export interface RunSpend {
   /** The same bytes attributed to the tool that produced them, so a heavy
    *  prompt names a cause rather than a category. */
   byTool: Record<string, number>;
+  /**
+   * Content bytes compaction removed before the prompt was sent, and the tool
+   * each came from. This is a token saving: those bytes never reached the
+   * provider.
+   */
+  elided: number;
+  elidedByTool: Record<string, number>;
+  /**
+   * Tool calls served from cache. Deliberately a count and not bytes: a cached
+   * result still goes into the prompt whole, so the cache saves a call to
+   * somebody else's system and no tokens at all. There is no combined figure
+   * with `elided` on purpose — adding them would claim a saving that did not
+   * happen and send the reader to compact the wrong thing.
+   */
+  cacheHits: number;
 }
 
 /**
@@ -71,6 +86,9 @@ export function runSpend(cost: Cost, steps: Step[]): RunSpend {
     reason,
     bytes: promptBytes(steps),
     byTool: promptBytesByTool(steps),
+    elided: elidedBytes(steps),
+    elidedByTool: elidedByTool(steps),
+    cacheHits: cacheHits(steps),
   };
 }
 
@@ -132,6 +150,38 @@ function promptBytesByTool(steps: Step[]): Record<string, number> {
     }
   }
   return total;
+}
+
+function elidedBytes(steps: Step[]): number {
+  let total = 0;
+  for (const prompt of compositions(steps)) {
+    const value = prompt.tool_results_elided;
+    if (typeof value === "number") total += value;
+  }
+  return total;
+}
+
+function elidedByTool(steps: Step[]): Record<string, number> {
+  const total: Record<string, number> = {};
+  for (const prompt of compositions(steps)) {
+    const attributed = prompt.tool_results_elided_by_tool;
+    if (typeof attributed !== "object" || attributed === null) continue;
+    for (const [tool, value] of Object.entries(attributed)) {
+      if (typeof value !== "number") continue;
+      total[tool] = (total[tool] ?? 0) + value;
+    }
+  }
+  return total;
+}
+
+function cacheHits(steps: Step[]): number {
+  let hits = 0;
+  for (const step of steps) {
+    if (step.kind !== "tool_returned") continue;
+    const payload = (step.payload ?? {}) as Record<string, unknown>;
+    if (payload.cached === true) hits++;
+  }
+  return hits;
 }
 
 function* compositions(steps: Step[]) {

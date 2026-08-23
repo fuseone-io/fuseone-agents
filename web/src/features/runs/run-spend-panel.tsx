@@ -102,6 +102,42 @@ export function RunSpendPanel({ run, steps }: { run: Run; steps: Step[] }) {
           <p className="mt-3 text-2xs text-muted-foreground">
             {t("runs.promptCompositionUnit")}
           </p>
+
+          {/* Two savings, never one number. Compaction kept bytes out of the
+              prompt; the cache kept a call off somebody else's system and sent
+              the same bytes anyway. A combined figure would send the reader to
+              compact whatever the cache already covers. */}
+          <h3 className="mt-4 text-2xs uppercase tracking-label text-muted-foreground">
+            {t("runs.savedTitle")}
+          </h3>
+          {spend.elided === 0 && spend.cacheHits === 0 ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              {t("runs.savedNone")}
+            </p>
+          ) : (
+            <ul className="mt-2 space-y-2">
+              {spend.elided > 0 && (
+                <li>
+                  <div className="text-xs">
+                    {t("runs.savedCompaction", { bytes: formatBytes(spend.elided) })}
+                  </div>
+                  <p className="text-2xs text-muted-foreground">
+                    {t("runs.savedCompactionHelp")}
+                  </p>
+                </li>
+              )}
+              {spend.cacheHits > 0 && (
+                <li>
+                  <div className="text-xs">
+                    {t("runs.savedCache", { count: spend.cacheHits })}
+                  </div>
+                  <p className="text-2xs text-muted-foreground">
+                    {t("runs.savedCacheHelp")}
+                  </p>
+                </li>
+              )}
+            </ul>
+          )}
         </div>
       </div>
     </Panel>

@@ -125,3 +125,47 @@ describe("the composition read from a real payload", () => {
     expect(spend.bytes).toEqual({ instructions: 10 });
   });
 });
+
+function returned(payload: Record<string, unknown>): Step {
+  return {
+    seq: 2, kind: "tool_returned", at: "2026-08-23T00:00:00Z", hash: "h", payload,
+  } as Step;
+}
+
+describe("what compaction and the cache saved", () => {
+  it("reports elided bytes as a token saving, named by tool", () => {
+    const spend = runSpend({ micros: 900 }, [
+      planned({
+        unit: "content_bytes",
+        tool_results: 10_000,
+        tool_results_elided: 90_000,
+        tool_results_elided_by_tool: { "grafana.query_loki_logs": 90_000 },
+        total: 10_000,
+      }),
+    ]);
+
+    expect(spend.elided).toBe(90_000);
+    expect(spend.elidedByTool["grafana.query_loki_logs"]).toBe(90_000);
+  });
+
+  it("counts a cache hit as a call avoided, never as bytes saved", () => {
+    // A cached result still goes into the prompt whole. Folding it into the
+    // same number as compaction would claim a token saving that did not
+    // happen — the reader would compact the wrong thing next.
+    const spend = runSpend({ micros: 900 }, [
+      returned({ tool: "github.issue_read", cached: true, cached_from_run: "run-1" }),
+      returned({ tool: "github.issue_read" }),
+    ]);
+
+    expect(spend.cacheHits).toBe(1);
+    expect(spend.elided).toBe(0);
+  });
+
+  it("keeps the two savings apart in the shape it returns", () => {
+    // No combined field exists to be mistaken for a total saving.
+    const spend = runSpend({ micros: 0 }, []);
+
+    expect(spend).not.toHaveProperty("saved");
+    expect(spend).not.toHaveProperty("totalSaved");
+  });
+});

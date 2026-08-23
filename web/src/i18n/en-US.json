@@ -1866,7 +1866,14 @@
       "tool_arguments": "Tool arguments"
     },
     "promptByTool": "By tool",
-    "promptByToolHelp": "Bytes each tool contributed to the prompt."
+    "promptByToolHelp": "Bytes each tool contributed to the prompt.",
+    "savedTitle": "What was saved",
+    "savedCompaction": "{{bytes}} never sent to the model",
+    "savedCompactionHelp": "Compaction of large results. Those bytes did not become tokens; the whole result is still stored.",
+    "savedCache": "{{count}} call served from cache",
+    "savedCache_other": "{{count}} calls served from cache",
+    "savedCacheHelp": "The cache avoids going to the other side's system. It does not reduce tokens: the result goes into the prompt whole.",
+    "savedNone": "Nothing was compacted or served from cache in this run."
   },
   "runtime": {
     "backingOff": "Backing off",
