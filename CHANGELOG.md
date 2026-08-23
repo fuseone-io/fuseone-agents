@@ -27,6 +27,8 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.23.0] — 2026-08-22
+
 ### Added
 
 - Large channel inputs are compacted before they are sent to the model. The
