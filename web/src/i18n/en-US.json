@@ -1858,9 +1858,11 @@
       "input": "Run input",
       "notes": "Notes",
       "tool_schemas": "Tool schemas",
-      "tool_args": "Tool arguments",
-      "tool_results": "Tool results"
-    }
+      "tool_results": "Tool results",
+      "tool_arguments": "Tool arguments"
+    },
+    "promptByTool": "By tool",
+    "promptByToolHelp": "Bytes each tool contributed to the prompt."
   },
   "runtime": {
     "backingOff": "Backing off",

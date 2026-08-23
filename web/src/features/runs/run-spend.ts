@@ -9,6 +9,9 @@ export interface RunSpend {
   reason?: UnpricedReason;
   /** Content bytes by source, summed across the run's planning turns. */
   bytes: Record<string, number>;
+  /** The same bytes attributed to the tool that produced them, so a heavy
+   *  prompt names a cause rather than a category. */
+  byTool: Record<string, number>;
 }
 
 /**
@@ -19,8 +22,25 @@ export interface RunSpend {
  */
 const CONTENT_BYTES = "content_bytes";
 
-/** Fields of the composition payload that are not measurements. */
-const NOT_A_SOURCE = new Set(["unit", "tools"]);
+/**
+ * The sources a prompt is composed of, named rather than inferred.
+ *
+ * An allow list rather than an exclusion list, because the first version of
+ * this summed every number it did not recognise and swallowed `total` — which
+ * doubled the composition and made the proportion bar divide against itself. A
+ * field added to the payload later is now ignored until somebody adds it here,
+ * which is the safe direction: a missing source is visibly absent, an invented
+ * one is a chart that lies.
+ */
+const SOURCES = [
+  "instructions",
+  "platform",
+  "input",
+  "notes",
+  "tool_schemas",
+  "tool_arguments",
+  "tool_results",
+] as const;
 
 /**
  * What a run spent, and whether the number means what it looks like.
@@ -48,18 +68,42 @@ export function runSpend(cost: Cost, steps: Step[]): RunSpend {
     priced,
     reason: priced ? undefined : tokens > 0 ? "no_rate" : "nothing_spent",
     bytes: promptBytes(steps),
+    byTool: promptBytesByTool(steps),
   };
+}
+
+/** The per-tool maps, which say which tool made a prompt heavy. */
+const BY_TOOL = ["tool_arguments_by_tool", "tool_results_by_tool"] as const;
+
+function promptBytesByTool(steps: Step[]): Record<string, number> {
+  const total: Record<string, number> = {};
+  for (const prompt of compositions(steps)) {
+    for (const field of BY_TOOL) {
+      const attributed = prompt[field];
+      if (typeof attributed !== "object" || attributed === null) continue;
+      for (const [tool, value] of Object.entries(attributed)) {
+        if (typeof value !== "number") continue;
+        total[tool] = (total[tool] ?? 0) + value;
+      }
+    }
+  }
+  return total;
+}
+
+function* compositions(steps: Step[]) {
+  for (const step of steps) {
+    const payload = (step.payload ?? {}) as Record<string, unknown>;
+    const prompt = payload.prompt as Record<string, unknown> | undefined;
+    if (prompt && prompt.unit === CONTENT_BYTES) yield prompt;
+  }
 }
 
 function promptBytes(steps: Step[]): Record<string, number> {
   const total: Record<string, number> = {};
-  for (const step of steps) {
-    const payload = (step.payload ?? {}) as Record<string, unknown>;
-    const prompt = payload.prompt as Record<string, unknown> | undefined;
-    if (!prompt || prompt.unit !== CONTENT_BYTES) continue;
-
-    for (const [source, value] of Object.entries(prompt)) {
-      if (NOT_A_SOURCE.has(source) || typeof value !== "number") continue;
+  for (const prompt of compositions(steps)) {
+    for (const source of SOURCES) {
+      const value = prompt[source];
+      if (typeof value !== "number") continue;
       total[source] = (total[source] ?? 0) + value;
     }
   }

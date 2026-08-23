@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { useTranslation } from "react-i18next";
 import { Panel } from "@/components/shared/panel";
 import { formatBytes, formatCost, formatTokens } from "@/lib/format";
@@ -21,6 +22,9 @@ export function RunSpendPanel({ run, steps }: { run: Run; steps: Step[] }) {
   const { t } = useTranslation();
   const spend = runSpend(run.cost, steps);
   const sources = Object.entries(spend.bytes).sort((a, b) => b[1] - a[1]);
+  // Named, because "tool results dominate" is a category and the next slice
+  // needs a cause: which tool to compact.
+  const tools = Object.entries(spend.byTool).sort((a, b) => b[1] - a[1]);
   const total = sources.reduce((sum, [, value]) => sum + value, 0);
 
   return (
@@ -79,7 +83,24 @@ export function RunSpendPanel({ run, steps }: { run: Run; steps: Step[] }) {
               ))}
             </ul>
           )}
-          <p className="mt-2 text-2xs text-muted-foreground">
+          {tools.length > 0 && (
+            <>
+              <h3 className="mt-4 text-2xs uppercase tracking-label text-muted-foreground">
+                {t("runs.promptByTool")}
+              </h3>
+              <dl className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 text-xs">
+                {tools.map(([tool, value]) => (
+                  <Fragment key={tool}>
+                    <dt className="min-w-0 truncate font-mono">{tool}</dt>
+                    <dd className="text-right font-mono tabular-nums text-muted-foreground">
+                      {formatBytes(value)}
+                    </dd>
+                  </Fragment>
+                ))}
+              </dl>
+            </>
+          )}
+          <p className="mt-3 text-2xs text-muted-foreground">
             {t("runs.promptCompositionUnit")}
           </p>
         </div>

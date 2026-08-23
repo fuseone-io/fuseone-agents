@@ -47,3 +47,43 @@ describe("what a run spent", () => {
     expect(spend.bytes).toEqual({});
   });
 });
+
+describe("the composition read from a real payload", () => {
+  // The shape the engine actually writes, `total` and per-tool maps included.
+  const real = planned({
+    unit: "content_bytes",
+    instructions: 2_000,
+    tool_results: 98_000,
+    tool_arguments: 500,
+    tool_results_by_tool: { "grafana.query_loki_logs": 90_000, "github.issue_read": 8_000 },
+    tool_arguments_by_tool: { "grafana.query_loki_logs": 500 },
+    total: 100_500,
+  });
+
+  it("never counts the payload's own total as a source", () => {
+    // Summing it doubled the composition and made the proportion bar divide
+    // against a figure that already contained every bar.
+    const spend = runSpend({ micros: 900 }, [real]);
+
+    expect(spend.bytes).not.toHaveProperty("total");
+    const summed = Object.values(spend.bytes).reduce((a, b) => a + b, 0);
+    expect(summed).toBe(100_500);
+  });
+
+  it("names the tool that made the prompt heavy", () => {
+    const spend = runSpend({ micros: 900 }, [real]);
+
+    expect(spend.byTool["grafana.query_loki_logs"]).toBe(90_500);
+    expect(spend.byTool["github.issue_read"]).toBe(8_000);
+  });
+
+  it("ignores a source the payload gains later until somebody names it", () => {
+    // The safe direction: an unknown field is visibly absent rather than
+    // silently folded into a chart.
+    const spend = runSpend({ micros: 900 }, [
+      planned({ unit: "content_bytes", instructions: 10, memory: 5_000 }),
+    ]);
+
+    expect(spend.bytes).toEqual({ instructions: 10 });
+  });
+});

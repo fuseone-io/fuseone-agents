@@ -1858,9 +1858,11 @@
       "input": "Entrada da execução",
       "notes": "Notas",
       "tool_schemas": "Esquemas de ferramenta",
-      "tool_args": "Argumentos de ferramenta",
-      "tool_results": "Resultados de ferramenta"
-    }
+      "tool_results": "Resultados de ferramenta",
+      "tool_arguments": "Argumentos de ferramenta"
+    },
+    "promptByTool": "Por ferramenta",
+    "promptByToolHelp": "Bytes que cada ferramenta trouxe para o prompt."
   },
   "runtime": {
     "backingOff": "Em backoff",
