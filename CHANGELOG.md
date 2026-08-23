@@ -27,6 +27,8 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.22.0] — 2026-08-22
+
 ### Added
 
 - Each model proposal now records the prompt content composition in the trail:
