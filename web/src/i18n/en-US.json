@@ -1840,7 +1840,27 @@
     "finishedByNoToolCallStored": "The model did not propose another tool call, so the run finished. The closing answer is held in the content store, under retention and erasure.",
     "finishedByNoToolCallWithOutcome": "The model did not propose another tool call, so the run finished: {{outcome}}",
     "finishedWithOutcome": "Run finished: {{outcome}}",
-    "outcomeStored": "The closing answer is held in the content store, under retention and erasure."
+    "outcomeStored": "The closing answer is held in the content store, under retention and erasure.",
+    "spendTitle": "Where the spend came from",
+    "spendHelp": "Tokens are what the provider billed. Bytes are what the platform measured while assembling the prompt. The two do not add up.",
+    "spendNoRate": "Zero because no rate is configured for this model, not because the run was free.",
+    "spendNothing": "Nothing was sent to a provider in this run.",
+    "tokensIn": "Input",
+    "tokensOut": "Output",
+    "tokensCacheRead": "Cache read",
+    "tokensCacheWrite": "Cache write",
+    "promptComposition": "Prompt composition",
+    "promptCompositionEmpty": "This run recorded no composition. Runs from before the measurement do not carry it.",
+    "promptCompositionUnit": "Content bytes measured at assembly, not tokens.",
+    "promptSource": {
+      "instructions": "Instructions",
+      "platform": "Platform text",
+      "input": "Run input",
+      "notes": "Notes",
+      "tool_schemas": "Tool schemas",
+      "tool_args": "Tool arguments",
+      "tool_results": "Tool results"
+    }
   },
   "runtime": {
     "backingOff": "Backing off",

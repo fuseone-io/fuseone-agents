@@ -1840,7 +1840,27 @@
     "finishedByNoToolCallStored": "O modelo não propôs outra chamada de ferramenta, então a execução foi concluída. A resposta final ficou no armazenamento de conteúdo, sujeita à retenção e ao apagamento.",
     "finishedByNoToolCallWithOutcome": "O modelo não propôs outra chamada de ferramenta, então a execução foi concluída: {{outcome}}",
     "finishedWithOutcome": "Execução concluída: {{outcome}}",
-    "outcomeStored": "A resposta final ficou no armazenamento de conteúdo, sujeita à retenção e ao apagamento."
+    "outcomeStored": "A resposta final ficou no armazenamento de conteúdo, sujeita à retenção e ao apagamento.",
+    "spendTitle": "De onde veio o gasto",
+    "spendHelp": "Tokens são o que o provedor cobrou. Bytes são o que a plataforma mediu ao montar o prompt. As duas medidas não se somam.",
+    "spendNoRate": "Zero porque não há tarifa configurada para este modelo, não porque a execução foi gratuita.",
+    "spendNothing": "Nada foi enviado a um provedor nesta execução.",
+    "tokensIn": "Entrada",
+    "tokensOut": "Saída",
+    "tokensCacheRead": "Cache lido",
+    "tokensCacheWrite": "Cache escrito",
+    "promptComposition": "Composição do prompt",
+    "promptCompositionEmpty": "Esta execução não registrou composição. Execuções anteriores à medição não têm esse dado.",
+    "promptCompositionUnit": "Bytes de conteúdo medidos na montagem, não tokens.",
+    "promptSource": {
+      "instructions": "Instruções",
+      "platform": "Texto da plataforma",
+      "input": "Entrada da execução",
+      "notes": "Notas",
+      "tool_schemas": "Esquemas de ferramenta",
+      "tool_args": "Argumentos de ferramenta",
+      "tool_results": "Resultados de ferramenta"
+    }
   },
   "runtime": {
     "backingOff": "Em backoff",

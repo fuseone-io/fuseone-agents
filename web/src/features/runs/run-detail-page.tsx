@@ -3,6 +3,7 @@ import { ErrorState, LoadingRows } from "@/components/shared/states";
 import { PendingDecision } from "@/features/runs/pending-decision";
 import { RunIdentity } from "@/features/runs/run-identity";
 import { RunKpis } from "@/features/runs/run-kpis";
+import { RunSpendPanel } from "@/features/runs/run-spend-panel";
 import { RunFailureNotice } from "@/features/runs/run-failure-notice";
 import { RunSideRail } from "@/features/runs/run-side-rail";
 import { TrailPanel } from "@/features/runs/trail-panel";
@@ -49,6 +50,7 @@ export function RunDetailPage() {
       )}
 
       <RunKpis run={data} steps={items.length} />
+      <RunSpendPanel run={data} steps={items} />
 
       <div className="grid gap-5 lg:grid-cols-[1fr_300px] lg:items-start">
         <TrailPanel
