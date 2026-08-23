@@ -85,6 +85,13 @@ dominarem, reduza ou resuma a saída daquela ferramenta. Se instruções
 dominarem, reescreva os blocos do agente. Se entrada dominar, envie menos
 contexto para a run.
 
+Resultados grandes de consultas Grafana Loki e Prometheus são compactados
+antes de serem mostrados ao modelo nos turnos seguintes. O resultado completo
+continua no content store da run e na trilha; o modelo recebe uma visão
+compacta com o começo, o fim, o tamanho guardado e um digest. Isso impede que
+dumps de observabilidade ocupem a próxima decisão sem mudar o registro de
+auditoria.
+
 ## Checklist de configuração
 
 1. Configure a moeda da instalação.

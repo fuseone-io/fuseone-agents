@@ -84,6 +84,12 @@ Use this line to choose the next optimisation. If tool results dominate, reduce
 or summarise that tool's output. If instructions dominate, rewrite the agent
 blocks. If input dominates, route less context into the run.
 
+Large Grafana Loki and Prometheus query results are compacted before they are
+shown to the model on later turns. The full tool result remains in the run
+content store and trail; the model receives a compact view with the beginning,
+the end, the stored size and a digest. This keeps observability dumps from
+crowding out the next decision without changing the audit record.
+
 ## Configuration checklist
 
 1. Configure the installation currency.

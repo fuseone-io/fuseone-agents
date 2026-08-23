@@ -34,6 +34,10 @@ field" is a commit message.
   results, with tool-result bytes attributed by tool. These are measured
   content bytes, not provider tokens or money, so they identify what made a
   turn large without estimating cost.
+- Large Grafana Loki and Prometheus query results are compacted before they
+  are replayed to the model. The full result stays in the content store and
+  trail; the model receives the beginning, the end, the stored size and a
+  digest so observability dumps do not dominate every later turn.
 
 ## [0.21.0] — 2026-08-22
 

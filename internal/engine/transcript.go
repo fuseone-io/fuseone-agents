@@ -3,6 +3,8 @@ package engine
 import (
 	"context"
 	"fmt"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/fuseone/agents/internal/domain"
 )
@@ -110,6 +112,9 @@ func BuildTranscript(ctx context.Context, store ContentStore, steps []domain.Ste
 			if p.Failed && len(content) == 0 {
 				content = []byte("the tool failed: " + p.ErrorCode)
 			}
+			if !p.Failed {
+				content = compactToolResultForTranscript(p.Tool, content)
+			}
 			turns = append(turns, Turn{
 				Kind: TurnToolResult,
 				// Pairs with the call one step earlier.
@@ -149,6 +154,60 @@ func BuildTranscript(ctx context.Context, store ContentStore, steps []domain.Ste
 		}
 	}
 	return turns, nil
+}
+
+const (
+	toolResultCompactAfter = 32 << 10
+	toolResultHeadBytes    = 16 << 10
+	toolResultTailBytes    = 8 << 10
+)
+
+func compactToolResultForTranscript(tool domain.ToolID, content []byte) []byte {
+	if len(content) <= toolResultCompactAfter || !compactableObservabilityTool(tool) {
+		return content
+	}
+	head := utf8Prefix(content, toolResultHeadBytes)
+	tail := utf8Suffix(content, toolResultTailBytes)
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "FuseOne compacted this %s result before sending it back to the model.\n", tool)
+	fmt.Fprintf(&b, "Stored result: %d bytes, digest %s.\n", len(content), digest(content))
+	b.WriteString("Only the beginning and end are shown here. Do not treat the omitted middle as absent; call a narrower query if this is not enough.\n\n")
+	fmt.Fprintf(&b, "--- first %d bytes ---\n%s\n\n", len(head), head)
+	fmt.Fprintf(&b, "--- omitted %d bytes ---\n\n", max(0, len(content)-len(head)-len(tail)))
+	fmt.Fprintf(&b, "--- last %d bytes ---\n%s", len(tail), tail)
+	return []byte(b.String())
+}
+
+func compactableObservabilityTool(tool domain.ToolID) bool {
+	name := string(tool)
+	if !strings.HasPrefix(name, "grafana.") {
+		return false
+	}
+	return strings.HasPrefix(name, "grafana.query_loki") ||
+		strings.HasPrefix(name, "grafana.query_prometheus")
+}
+
+func utf8Prefix(content []byte, limit int) string {
+	if len(content) <= limit {
+		return string(content)
+	}
+	part := content[:limit]
+	for len(part) > 0 && !utf8.Valid(part) {
+		part = part[:len(part)-1]
+	}
+	return string(part)
+}
+
+func utf8Suffix(content []byte, limit int) string {
+	if len(content) <= limit {
+		return string(content)
+	}
+	part := content[len(content)-limit:]
+	for len(part) > 0 && !utf8.Valid(part) {
+		part = part[1:]
+	}
+	return string(part)
 }
 
 // CallID derives the identifier that pairs a tool call with its result.
