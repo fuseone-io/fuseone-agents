@@ -1,6 +1,7 @@
 import { effectOf, verdictOf } from "@/features/runs/step-verb";
 import { explainRule } from "@/lib/gate-rules";
 import {
+  formatBytes,
   formatCost,
   formatDurationMs,
   formatMicros,
@@ -109,6 +110,11 @@ export function detailOf(step: Step): Line {
   const payload = (step.payload ?? {}) as Record<string, unknown>;
 
   switch (step.kind) {
+    case "planned": {
+      const prompt = promptLine(payload);
+      return prompt ?? NOTHING;
+    }
+
     case "run_started":
       return typeof payload.trigger === "string"
         ? { key: "runs.storyTrigger", values: { trigger: payload.trigger } }
@@ -242,6 +248,24 @@ function budgetLine(payload: Record<string, unknown>): Line | undefined {
       ceiling: dim.format(ceiling),
       already: dim.format(dim.read(committed)),
       requested: dim.format(dim.read(estimate)),
+    },
+  };
+}
+
+function promptLine(payload: Record<string, unknown>): Line | undefined {
+  const prompt = record(payload.prompt);
+  if (prompt.unit !== "content_bytes") return undefined;
+
+  const total = numberField(prompt, "total");
+  if (total <= 0) return undefined;
+
+  return {
+    key: "runs.storyPromptComposition",
+    values: {
+      total: formatBytes(total),
+      instructions: formatBytes(numberField(prompt, "instructions")),
+      input: formatBytes(numberField(prompt, "input")),
+      toolResults: formatBytes(numberField(prompt, "tool_results")),
     },
   };
 }

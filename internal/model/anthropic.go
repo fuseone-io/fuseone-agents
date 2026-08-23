@@ -100,6 +100,7 @@ func (a *Anthropic) Plan(ctx context.Context, in engine.PlanInput) (engine.Propo
 	// provider is offered, and the identifier a proposal is read back as.
 	offered := namesFor(in)
 	tools := a.toolParams(in.Tools, offered)
+	prompt := promptInputBreakdown(in, a.cfg, a.tools, offered)
 
 	resp, err := a.client.Messages.New(ctx, anthropic.MessageNewParams{
 		// The step's, when it named one. The provider is not overridable: it
@@ -127,10 +128,10 @@ func (a *Anthropic) Plan(ctx context.Context, in engine.PlanInput) (engine.Propo
 	// with an empty or partial content list, so indexing straight into
 	// content[0] turns a policy decision into a nil dereference.
 	if resp.StopReason == anthropic.StopReasonRefusal {
-		return engine.Proposal{Cost: a.cost(resp.Usage)}, providerRefused(a.provider)
+		return engine.Proposal{Cost: a.cost(resp.Usage), Prompt: prompt}, providerRefused(a.provider)
 	}
 
-	return a.proposalFrom(resp, offered), nil
+	return a.proposalFrom(resp, offered, prompt), nil
 }
 
 // system builds the system prompt.
@@ -154,12 +155,8 @@ func (a *Anthropic) system(in engine.PlanInput) []anthropic.TextBlockParam {
 		blocks = append(blocks, anthropic.TextBlockParam{Text: stepNote(in)})
 	}
 
-	if in.Budget.Micros > 0 {
-		blocks = append(blocks, anthropic.TextBlockParam{
-			Text: fmt.Sprintf(
-				"Budget remaining for this run: %s. Pace yourself and finish cleanly rather than being cut off.",
-				formatMicros(in.Remaining.Micros)),
-		})
+	if note := budgetNote(in); note != "" {
+		blocks = append(blocks, anthropic.TextBlockParam{Text: note})
 	}
 	return blocks
 }
@@ -231,8 +228,10 @@ func (a *Anthropic) toolParams(ids []domain.ToolID, offered names) []anthropic.T
 //
 // A tool_use block is the next action; text alone means the model considers
 // the run finished.
-func (a *Anthropic) proposalFrom(resp *anthropic.Message, offered names) engine.Proposal {
-	p := engine.Proposal{Cost: a.cost(resp.Usage)}
+func (a *Anthropic) proposalFrom(
+	resp *anthropic.Message, offered names, prompt domain.PromptInputBreakdown,
+) engine.Proposal {
+	p := engine.Proposal{Cost: a.cost(resp.Usage), Prompt: prompt}
 
 	var summary strings.Builder
 	for _, block := range resp.Content {
@@ -307,12 +306,8 @@ func messagesFrom(turns []engine.Turn, offered names) []anthropic.MessageParam {
 			))
 
 		case engine.TurnToolResult:
-			content := string(t.Content)
-			if content == "" {
-				content = "(no content)"
-			}
 			out = append(out, anthropic.NewUserMessage(
-				anthropic.NewToolResultBlock(t.CallID, content, t.Failed),
+				anthropic.NewToolResultBlock(t.CallID, toolResultContent(t), t.Failed),
 			))
 		}
 	}

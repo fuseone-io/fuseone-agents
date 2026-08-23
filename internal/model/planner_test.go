@@ -117,6 +117,76 @@ func TestAnthropic_toolUse_becomesAProposal(t *testing.T) {
 	}
 }
 
+func TestPlanner_reportsPromptCompositionBySource(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name     string
+		kind     model.Kind
+		response string
+	}{
+		{
+			name: "anthropic",
+			kind: model.KindAnthropic,
+			response: `{"id":"m","type":"message","role":"assistant","model":"claude-opus-5",
+			  "content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":10}}`,
+		},
+		{
+			name: "openai-compatible",
+			kind: model.KindOpenAICompatible,
+			response: `{"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"ok"}}],
+			  "usage":{"prompt_tokens":10}}`,
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			c := serve(t, tc.response)
+			in := engine.PlanInput{
+				Transcript: []engine.Turn{
+					{Kind: engine.TurnInput, Text: "alert text"},
+					{Kind: engine.TurnToolUse, Tool: "crm.lookup", CallID: "call-1", Args: []byte(`{"email":"a@b.com"}`)},
+					{Kind: engine.TurnToolResult, Tool: "crm.lookup", CallID: "call-1", Content: []byte(`{"name":"Ana"}`)},
+					{Kind: engine.TurnNote, Text: "The platform refused another call."},
+				},
+				Tools:     []domain.ToolID{"crm.lookup"},
+				Budget:    domain.Budget{Micros: 500_000},
+				Remaining: domain.Consumption{Micros: 250_000},
+			}
+
+			got, err := plannerFor(t, tc.kind, c.server.URL, model.Config{
+				SystemPrompt: "Follow the runbook.",
+			}).Plan(context.Background(), in)
+			if err != nil {
+				t.Fatalf("Plan: %v", err)
+			}
+
+			p := got.Prompt
+			if p.Unit != "content_bytes" {
+				t.Fatalf("Prompt.Unit = %q, want content_bytes", p.Unit)
+			}
+			if p.Input != int64(len("alert text")) ||
+				p.Instructions != int64(len("Follow the runbook.")) ||
+				p.Notes != int64(len("The platform refused another call.")) {
+				t.Fatalf("Prompt = %+v, want exact source byte counts", p)
+			}
+			if p.ToolArguments != int64(len(`{"email":"a@b.com"}`)) ||
+				p.ToolArgumentsByTool["crm.lookup"] != p.ToolArguments {
+				t.Fatalf("tool argument bytes = %+v, want them attributed to crm.lookup", p)
+			}
+			if p.ToolResults != int64(len(`{"name":"Ana"}`)) ||
+				p.ToolResultsByTool["crm.lookup"] != p.ToolResults {
+				t.Fatalf("tool result bytes = %+v, want them attributed to crm.lookup", p)
+			}
+			if p.ToolSchemas <= 0 || p.Platform <= 0 || p.Total <= p.ToolResults {
+				t.Fatalf("Prompt = %+v, want schemas and platform text included", p)
+			}
+		})
+	}
+}
+
 func TestAnthropic_textOnly_meansTheRunIsDone(t *testing.T) {
 	t.Parallel()
 	c := serve(t, `{"id":"m","type":"message","role":"assistant","model":"claude-opus-5",

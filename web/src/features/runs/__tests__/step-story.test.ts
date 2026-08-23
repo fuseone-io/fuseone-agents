@@ -136,3 +136,33 @@ describe("a cached tool result", () => {
     });
   });
 });
+
+describe("a planned turn", () => {
+  it("shows prompt composition as measured content, not cost", () => {
+    const line = detailOf({
+      seq: 2,
+      kind: "planned",
+      at: "2026-08-22T12:00:00Z",
+      hash: "h",
+      payload: {
+        prompt: {
+          unit: "content_bytes",
+          total: 4096,
+          instructions: 512,
+          input: 128,
+          tool_results: 2048,
+        },
+      },
+    } as never);
+
+    expect(line).toEqual({
+      key: "runs.storyPromptComposition",
+      values: {
+        total: "4 KiB",
+        instructions: "512 B",
+        input: "128 B",
+        toolResults: "2 KiB",
+      },
+    });
+  });
+});

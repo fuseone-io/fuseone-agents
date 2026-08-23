@@ -237,6 +237,42 @@ func TestAdvance_readTool_recordsFullGatedCycle(t *testing.T) {
 	}
 }
 
+func TestAdvance_recordsThePromptCompositionThePlannerMeasured(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	prompt := domain.PromptInputBreakdown{
+		Unit:        "content_bytes",
+		Input:       31,
+		ToolResults: 1200,
+		ToolResultsByTool: map[domain.ToolID]int64{
+			"crm.lookup": 1200,
+		},
+		Total: 1231,
+	}
+	h := newHarness(t, Proposal{
+		Tool:   "crm.lookup",
+		Args:   []byte(`{"id":"42"}`),
+		Prompt: prompt,
+	})
+
+	if _, err := h.runner.Advance(ctx, h.start(t, generousBudget())); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+
+	var got domain.PlannedPayload
+	if err := h.payloadOf(t, domain.StepPlanned, &got); err != nil {
+		t.Fatalf("planned payload: %v", err)
+	}
+	if got.Prompt == nil {
+		t.Fatal("Prompt = nil, want the planner's measured prompt composition")
+	}
+	if got.Prompt.Unit != "content_bytes" || got.Prompt.ToolResults != 1200 ||
+		got.Prompt.ToolResultsByTool["crm.lookup"] != 1200 {
+		t.Fatalf("Prompt = %+v, want the measured tool result bytes", *got.Prompt)
+	}
+}
+
 func TestAdvance_reserveFailureDoesNotRecordAToolCall(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

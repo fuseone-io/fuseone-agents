@@ -64,6 +64,15 @@ export function formatTokens(n: number | undefined): string {
   return numberFormat({}).format(n ?? 0);
 }
 
+export function formatBytes(n: number | undefined): string {
+  const bytes = n ?? 0;
+  if (bytes < 1024) return `${numberFormat({}).format(bytes)} B`;
+  if (bytes < 1024 * 1024) {
+    return `${numberFormat({ maximumFractionDigits: 1 }).format(bytes / 1024)} KiB`;
+  }
+  return `${numberFormat({ maximumFractionDigits: 1 }).format(bytes / (1024 * 1024))} MiB`;
+}
+
 export function formatInstant(iso: string): string {
   return new Intl.DateTimeFormat(currentLocale(), {
     dateStyle: "short",

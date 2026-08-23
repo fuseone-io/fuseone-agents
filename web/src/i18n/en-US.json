@@ -1777,6 +1777,7 @@
     "storyHumanDecided": "Human decision recorded",
     "storyInsisted": "the model insisted on a refused call and the run was interrupted",
     "storyParked": "Run parked",
+    "storyPromptComposition": "Prompt content: {{total}} measured · {{toolResults}} from tool results · {{input}} from input · {{instructions}} from instructions",
     "storyProposed": "The model proposed",
     "storyReconciledWith": "Budget reconciled · {{spent}}",
     "storyRefused": "refused by policy",

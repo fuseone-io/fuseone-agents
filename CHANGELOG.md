@@ -27,6 +27,14 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Added
+
+- Each model proposal now records the prompt content composition in the trail:
+  instructions, platform text, run input, notes, tool arguments and tool
+  results, with tool-result bytes attributed by tool. These are measured
+  content bytes, not provider tokens or money, so they identify what made a
+  turn large without estimating cost.
+
 ## [0.21.0] — 2026-08-22
 
 ### Added

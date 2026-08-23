@@ -65,6 +65,10 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 	if err != nil {
 		return Status{}, err
 	}
+	planned := domain.PlannedPayload{
+		Node:   StepNameAt(start, state.Called),
+		Prompt: promptInputPayload(proposal.Prompt),
+	}
 	if state, err = r.append(ctx, state, start, domain.Step{
 		Kind: domain.StepPlanned,
 		Cost: proposal.Cost,
@@ -72,7 +76,7 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 		// payload since the beginning and never written, because nothing knew
 		// which step a run was in — that is what a correction anchors to
 		// (PRD FU-13), and what lets the diagram group by stage.
-		Payload: mustJSON(domain.PlannedPayload{Node: StepNameAt(start, state.Called)}),
+		Payload: mustJSON(planned),
 	}); err != nil {
 		return Status{}, err
 	}
@@ -208,6 +212,13 @@ func mustJSON(v any) []byte {
 		panic("engine: payload is not serialisable: " + err.Error())
 	}
 	return b
+}
+
+func promptInputPayload(p domain.PromptInputBreakdown) *domain.PromptInputBreakdown {
+	if p.Unit == "" && p.Total == 0 {
+		return nil
+	}
+	return &p
 }
 
 func isNotFound(err error) bool {

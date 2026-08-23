@@ -70,6 +70,21 @@ output, cache read e cache write porque eles não custam igual.
 Mesmo quando cache read é barato, ele ainda é consumo. Otimização boa é aquela
 que aparece na contabilidade, não a que desaparece dela.
 
+## Descobrir o que deixou o prompt grande
+
+A trilha da run mostra o conteúdo do prompt em cada proposta do modelo:
+instruções, entrada, notas da plataforma e resultados de ferramenta.
+
+Esses números são **bytes de conteúdo**, medidos pela plataforma enquanto monta
+o pedido ao modelo. Eles não são tokens e não são custo. Tokens e dinheiro
+continuam vindo do uso reportado pelo provedor e da tarifa configurada na
+instalação.
+
+Use essa linha para escolher a próxima otimização. Se resultados de ferramenta
+dominarem, reduza ou resuma a saída daquela ferramenta. Se instruções
+dominarem, reescreva os blocos do agente. Se entrada dominar, envie menos
+contexto para a run.
+
 ## Checklist de configuração
 
 1. Configure a moeda da instalação.

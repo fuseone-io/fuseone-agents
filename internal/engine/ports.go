@@ -61,6 +61,10 @@ type Proposal struct {
 	Estimate domain.Consumption
 	// Cost is what the planning call itself consumed.
 	Cost domain.Cost
+	// Prompt is the composition of the input the planner sent to the model.
+	// It is measured by the planner because only the planner knows the final
+	// wire shape: system text, tool schemas and transcript all meet there.
+	Prompt domain.PromptInputBreakdown
 	// Done reports that the agent considers the run complete.
 	Done    bool
 	Outcome string

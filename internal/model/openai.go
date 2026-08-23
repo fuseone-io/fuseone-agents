@@ -46,6 +46,7 @@ func (o *OpenAICompatible) Plan(ctx context.Context, in engine.PlanInput) (engin
 	// Built once for this request and used in both directions: the names the
 	// provider is offered, and the identifier a proposal is read back as.
 	offered := namesFor(in)
+	prompt := promptInputBreakdown(in, o.cfg, o.tools, offered)
 	body := chatRequest{
 		Model:     o.cfg.Model,
 		Messages:  o.chatMessages(in, offered),
@@ -70,14 +71,16 @@ func (o *OpenAICompatible) Plan(ctx context.Context, in engine.PlanInput) (engin
 	// Providers spell a policy stop differently; treat them all as a refusal
 	// so the caller has one condition to handle across every provider.
 	if choice.FinishReason == "content_filter" {
-		return engine.Proposal{Cost: o.cost(out.Usage)}, providerRefused(o.provider.Name)
+		return engine.Proposal{Cost: o.cost(out.Usage), Prompt: prompt}, providerRefused(o.provider.Name)
 	}
 
-	return o.proposalFrom(choice, out.Usage, offered), nil
+	return o.proposalFrom(choice, out.Usage, offered, prompt), nil
 }
 
-func (o *OpenAICompatible) proposalFrom(c chatChoice, u chatUsage, offered names) engine.Proposal {
-	p := engine.Proposal{Cost: o.cost(u)}
+func (o *OpenAICompatible) proposalFrom(
+	c chatChoice, u chatUsage, offered names, prompt domain.PromptInputBreakdown,
+) engine.Proposal {
+	p := engine.Proposal{Cost: o.cost(u), Prompt: prompt}
 
 	if len(c.Message.ToolCalls) > 0 {
 		call := c.Message.ToolCalls[0]
@@ -135,10 +138,8 @@ func (o *OpenAICompatible) chatMessages(in engine.PlanInput, offered names) []ch
 	if in.Step != "" {
 		system += "\n\n" + stepNote(in)
 	}
-	if in.Budget.Micros > 0 {
-		system += fmt.Sprintf(
-			"\n\nBudget remaining for this run: %s. Pace yourself and finish cleanly rather than being cut off.",
-			formatMicros(in.Remaining.Micros))
+	if note := budgetNote(in); note != "" {
+		system += "\n\n" + note
 	}
 
 	// The system turn stays first and byte-stable across turns: every provider
@@ -162,11 +163,7 @@ func (o *OpenAICompatible) chatMessages(in engine.PlanInput, offered names) []ch
 			})
 
 		case engine.TurnToolResult:
-			content := string(t.Content)
-			if content == "" {
-				content = "(no content)"
-			}
-			msgs = append(msgs, chatMessage{Role: "tool", ToolCallID: t.CallID, Content: content})
+			msgs = append(msgs, chatMessage{Role: "tool", ToolCallID: t.CallID, Content: toolResultContent(t)})
 		}
 	}
 

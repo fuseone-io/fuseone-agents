@@ -70,6 +70,20 @@ input, output, cache read and cache write because they do not cost the same.
 Even when cache read is cheap, it is still consumption. A good optimisation is
 one that appears in accounting, not one that disappears from it.
 
+## Finding what made the prompt large
+
+The run trail shows prompt content on each model proposal: instructions, input,
+platform notes and tool results.
+
+Those figures are **content bytes**, measured by the platform while it builds
+the model request. They are not tokens and they are not cost. Tokens and money
+still come from the provider usage report and the configured installation
+rate.
+
+Use this line to choose the next optimisation. If tool results dominate, reduce
+or summarise that tool's output. If instructions dominate, rewrite the agent
+blocks. If input dominates, route less context into the run.
+
 ## Configuration checklist
 
 1. Configure the installation currency.

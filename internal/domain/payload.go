@@ -67,6 +67,34 @@ type PlannedPayload struct {
 	ProposalRef string `json:"proposal_ref,omitempty"`
 	Model       string `json:"model,omitempty"`
 	Effort      string `json:"effort,omitempty"`
+	// Prompt describes what the platform put in front of the model for this
+	// planning call. It is measured while assembling the request, before the
+	// provider tokenises it, so the unit is content bytes rather than tokens.
+	// Cost remains the provider-reported token and money record.
+	Prompt *PromptInputBreakdown `json:"prompt,omitempty"`
+}
+
+// PromptInputBreakdown is the model input's composition by source.
+//
+// This is measurement, not accounting: fields are content bytes the platform
+// itself assembled, and no field is converted to money. The provider's usage
+// remains the only source of token counts.
+type PromptInputBreakdown struct {
+	Unit string `json:"unit"`
+
+	Instructions int64 `json:"instructions,omitempty"`
+	Platform     int64 `json:"platform,omitempty"`
+	Input        int64 `json:"input,omitempty"`
+	Notes        int64 `json:"notes,omitempty"`
+	ToolSchemas  int64 `json:"tool_schemas,omitempty"`
+
+	ToolArguments int64 `json:"tool_arguments,omitempty"`
+	ToolResults   int64 `json:"tool_results,omitempty"`
+
+	ToolArgumentsByTool map[ToolID]int64 `json:"tool_arguments_by_tool,omitempty"`
+	ToolResultsByTool   map[ToolID]int64 `json:"tool_results_by_tool,omitempty"`
+
+	Total int64 `json:"total,omitempty"`
 }
 
 type GateDecidedPayload struct {
