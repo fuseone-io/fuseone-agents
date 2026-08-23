@@ -11,6 +11,7 @@ import (
 	"github.com/fuseone/agents/internal/budget"
 	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/engine"
+	"github.com/fuseone/agents/internal/finops"
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/spec"
 	"github.com/fuseone/agents/internal/trigger"
@@ -67,6 +68,13 @@ func (p *workerParts) startLoops(ctx context.Context, cfg workerFlags, sim *work
 	// which is the whole reason it is a setting.
 	if p.durable != nil && p.retention != nil {
 		go sweepContent(ctx, admin.NewErasures(p.configPool, p.durable, p.retention))
+	}
+
+	// What each planning call cost, for the aggregate. A projection rather
+	// than a read-time fold: this is opened when somebody is worried about
+	// money, which is the worst moment to make the database walk the chain.
+	if p.configPool != nil {
+		go sweepSpend(ctx, finops.NewSpend(p.configPool))
 	}
 
 	// Demoting an agent people keep overruling. Promotion is not here on

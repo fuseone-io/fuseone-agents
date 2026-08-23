@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/fuseone/agents/internal/admin"
+	"github.com/fuseone/agents/internal/finops"
 
 	"github.com/fuseone/agents/internal/budget"
 	"github.com/fuseone/agents/internal/domain"
@@ -32,6 +33,25 @@ func runSimulations(ctx context.Context, w *worker.Worker) {
 	if err := w.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 		slog.Error("simulation pool stopped", "err", err)
 	}
+}
+
+// spendSweep is how often planning calls are projected for the cost aggregate.
+//
+// A minute, not seconds. This exists so a cost screen never folds the chain,
+// and a figure that is a minute behind is still a figure somebody can act on —
+// nobody decides on model spend in the second after a step. Reading more often
+// would put load on the ledger for freshness nothing asks for.
+const spendSweep = time.Minute
+
+// spendBatch bounds one pass. Small enough that a busy installation catching
+// up does not hold its transaction long, large enough to drain a backlog in
+// minutes rather than hours.
+const spendBatch = 500
+
+func sweepSpend(ctx context.Context, spend *finops.Spend) {
+	sweep(ctx, spendSweep, "planning calls projected", func() (int, error) {
+		return spend.Project(ctx, spendBatch)
+	})
 }
 
 // retentionSweep is how often content past its window is erased.
