@@ -179,27 +179,7 @@ func TestCommandFor_aConfiguredVariable_winsOverTheOneCopiedThrough(t *testing.T
 	}
 }
 
-func TestCommandFor_aProxiedStdioServer_doesNotStartWithoutAProxy(t *testing.T) {
-	server := accepted()
-	server.StdioEgress = &domain.MCPStdioEgress{
-		Mode: domain.MCPEgressProxied,
-		AllowedDestinations: []domain.MCPEgressDestination{
-			{Host: "crm.internal", Port: 443},
-		},
-	}
-	t.Setenv(stdioEgressProxyURLEnv, "")
-
-	if _, _, err := commandFor(t.Context(), server, domain.MCPCredentials{}); err == nil {
-		t.Fatal("no error; proxied stdio fell back to direct worker egress")
-	} else if !errors.Is(err, errStdioEgressProxyMissing) {
-		t.Fatalf("commandFor = %v, want proxy-missing refusal", err)
-	}
-}
-
-func TestCommandFor_aProxiedStdioServer_getsOnlyProxyPolicyEnvironment(t *testing.T) {
-	t.Setenv(stdioEgressProxyURLEnv, "http://proxy.fuseone.svc:8080/path?secret=nope")
-	t.Setenv("HTTPS_PROXY", "http://corporate-proxy-with-credential")
-	t.Setenv("NO_PROXY", "metadata.google.internal")
+func TestCommandFor_aProxiedStdioServer_getsALocalProxyPolicyEnvironment(t *testing.T) {
 	server := accepted()
 	server.StdioEgress = &domain.MCPStdioEgress{
 		Mode: domain.MCPEgressProxied,
@@ -208,6 +188,8 @@ func TestCommandFor_aProxiedStdioServer_getsOnlyProxyPolicyEnvironment(t *testin
 			{Host: "*.sales.internal", Port: 8443},
 		},
 	}
+	t.Setenv("HTTPS_PROXY", "http://corporate-proxy-with-credential")
+	t.Setenv("NO_PROXY", "metadata.google.internal")
 
 	cmd, cleanup, err := commandFor(t.Context(), server, domain.MCPCredentials{})
 	if err != nil {
@@ -215,9 +197,12 @@ func TestCommandFor_aProxiedStdioServer_getsOnlyProxyPolicyEnvironment(t *testin
 	}
 	t.Cleanup(cleanup)
 
+	proxy := envValue(cmd.Env, "HTTP_PROXY")
+	if !strings.HasPrefix(proxy, "http://fuseone:") || !strings.Contains(proxy, "@127.0.0.1:") {
+		t.Fatalf("HTTP_PROXY = %q, want authenticated worker-local proxy", proxy)
+	}
 	for _, want := range []string{
-		"HTTP_PROXY=http://proxy.fuseone.svc:8080",
-		"HTTPS_PROXY=http://proxy.fuseone.svc:8080",
+		"HTTPS_PROXY=" + proxy,
 		"NO_PROXY=",
 		"FUSEONE_MCP_EGRESS_ALLOWED=crm.internal:443,*.sales.internal:8443",
 	} {
@@ -230,8 +215,7 @@ func TestCommandFor_aProxiedStdioServer_getsOnlyProxyPolicyEnvironment(t *testin
 	}
 }
 
-func TestCommandFor_aProxyURLWithCredentials_isRefused(t *testing.T) {
-	t.Setenv(stdioEgressProxyURLEnv, "http://user:pass@proxy.fuseone.svc:8080")
+func TestCommandFor_aCredentialCannotOverrideTheLocalProxy(t *testing.T) {
 	server := accepted()
 	server.StdioEgress = &domain.MCPStdioEgress{
 		Mode: domain.MCPEgressProxied,
@@ -240,15 +224,21 @@ func TestCommandFor_aProxyURLWithCredentials_isRefused(t *testing.T) {
 		},
 	}
 
-	if _, _, err := commandFor(t.Context(), server, domain.MCPCredentials{}); err == nil {
-		t.Fatal("no error; proxy credentials would be handed to the child")
-	} else if !errors.Is(err, errStdioEgressProxyBad) {
-		t.Fatalf("commandFor = %v, want bad proxy refusal", err)
+	cmd, cleanup, err := commandFor(t.Context(), server, domain.MCPCredentials{
+		Env: map[string]string{"HTTP_PROXY": "http://attacker.example:8080"},
+	})
+	if err != nil {
+		t.Fatalf("commandFor: %v", err)
+	}
+	t.Cleanup(cleanup)
+
+	got := envValue(cmd.Env, "HTTP_PROXY")
+	if !strings.HasPrefix(got, "http://fuseone:") || !strings.Contains(got, "@127.0.0.1:") {
+		t.Fatalf("HTTP_PROXY resolves to %q, want local proxy to win", got)
 	}
 }
 
 func TestCommandFor_aMalformedStoredEgressDestination_isRefused(t *testing.T) {
-	t.Setenv(stdioEgressProxyURLEnv, "http://proxy.fuseone.svc:8080")
 	server := accepted()
 	server.StdioEgress = &domain.MCPStdioEgress{
 		Mode: domain.MCPEgressProxied,

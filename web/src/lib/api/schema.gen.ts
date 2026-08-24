@@ -2808,11 +2808,11 @@ export interface components {
             host: string;
             port: number;
         };
-        /** @description Requested egress handling for a stdio MCP process. Inherit is the historical behaviour: the process receives no proxy variables from FuseOne. Proxied requires allowed destinations and makes the worker refuse to start the process unless a stdio egress proxy endpoint is configured for that worker. */
+        /** @description Requested egress handling for a stdio MCP process. Inherit is the historical behaviour: the process receives no proxy variables from FuseOne. Proxied requires allowed destinations, starts a worker-local proxy, and makes the worker refuse destinations outside that list. */
         MCPStdioEgress: {
             /** @enum {string} */
             mode: "inherit" | "proxied";
-            /** @description Destinations the configured proxy is expected to allow for this server. Empty or omitted is valid only for inherit. */
+            /** @description Destinations the worker-local proxy may connect to for this server. Empty or omitted is valid only for inherit. */
             allowedDestinations?: components["schemas"]["MCPEgressDestination"][];
         };
         /**
@@ -2851,10 +2851,10 @@ export interface components {
              *     know its transport/configuration. metadata_refused: HTTP MCP uses
              *     local DNS resolution and refuses cloud metadata/link-local
              *     destinations and environment proxies; private network and internet
-             *     destinations are otherwise allowed. proxy_requested: stdio is
-             *     configured to receive HTTP(S) proxy variables and will not start on
-             *     a worker without a proxy endpoint; deployment-level network policy
-             *     is still what prevents bypass. unconstrained_local_process: stdio
+             *     destinations are otherwise allowed. proxy_requested: stdio receives
+             *     HTTP(S) proxy variables for a worker-local proxy that refuses
+             *     destinations outside the stored allow-list; deployment-level network
+             *     policy is still what prevents bypass. unconstrained_local_process: stdio
              *     starts a process on the worker and the platform does not constrain
              *     its outbound destinations.
              * @enum {string}
