@@ -11,9 +11,9 @@ export const regressionKeys = {
 };
 
 /** The corrections this agent is held to, re-checked on every version. */
-export function useRegressions(agentId: string) {
+export function useRegressions(agentId: string, enabled = true) {
   return useQuery({
-    enabled: agentId !== "",
+    enabled: enabled && agentId !== "",
     queryKey: regressionKeys.of(agentId),
     queryFn: async () =>
       unwrap(

@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { useStartSimulation } from "@/features/agents/simulation-api";
+import { SimulationCostPreview } from "@/features/agents/simulation-cost-preview";
 import { countCases } from "@/features/agents/simulation-tally";
 import { SimulationReadinessNotice } from "@/features/agents/simulation-readiness";
 import { simulationReadiness } from "@/features/agents/simulation-readiness-state";
@@ -322,30 +323,38 @@ export function SimulationStart({
               </p>
             </div>
           ) : (
-            <ul className="divide-y overflow-hidden rounded-lg border">
-              {source === "corpus" ? (
-                <SituationRow
-                  title={t("simulation.savedSituationsTitle")}
-                  subtitle={t("simulation.savedSituationsShort")}
-                  state={t("simulation.ready")}
-                />
-              ) : source === "write" ? (
-                written.map((line, index) => (
+            <>
+              <SimulationCostPreview
+                agentId={agentId}
+                agent={agent}
+                source={source}
+                chosenCount={chosenCount}
+              />
+              <ul className="divide-y overflow-hidden rounded-lg border">
+                {source === "corpus" ? (
                   <SituationRow
-                    key={`${line}-${index}`}
-                    title={titleOf(line, index, t)}
-                    subtitle={t("simulation.handWritten")}
+                    title={t("simulation.savedSituationsTitle")}
+                    subtitle={t("simulation.savedSituationsShort")}
+                    state={t("simulation.ready")}
+                  />
+                ) : source === "write" ? (
+                  written.map((line, index) => (
+                    <SituationRow
+                      key={`${line}-${index}`}
+                      title={titleOf(line, index, t)}
+                      subtitle={t("simulation.handWritten")}
+                      state={t("simulation.notRehearsed")}
+                    />
+                  ))
+                ) : (
+                  <SituationRow
+                    title={t("simulation.pastedSituations", { count: pastedCount })}
+                    subtitle={t("simulation.serverValidates")}
                     state={t("simulation.notRehearsed")}
                   />
-                ))
-              ) : (
-                <SituationRow
-                  title={t("simulation.pastedSituations", { count: pastedCount })}
-                  subtitle={t("simulation.serverValidates")}
-                  state={t("simulation.notRehearsed")}
-                />
-              )}
-            </ul>
+                )}
+              </ul>
+            </>
           )}
         </StepCard>
       </main>

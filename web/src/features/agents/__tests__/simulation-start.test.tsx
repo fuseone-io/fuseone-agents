@@ -21,6 +21,17 @@ const RUNNING_AGENT: Agent = {
   paused: false,
 };
 
+const PRICED_AGENT: Agent = {
+  ...RUNNING_AGENT,
+  budget: { micros: 500_000, steps: 20, tokens: 100_000 },
+  activity: {
+    runs: 5,
+    finished: 5,
+    waiting: 0,
+    costMicros: 1_000_000,
+  },
+};
+
 function renderStart({
   onStarted = vi.fn(),
   agent = RUNNING_AGENT,
@@ -41,17 +52,25 @@ function renderStart({
   return onStarted;
 }
 
-/** Answers the start with an accepted set, and records what was posted. */
-function stubStart() {
+/** Answers the API calls this screen makes, and records simulation starts. */
+function stubApi({
+  regressions = [],
+}: {
+  regressions?: { id: string }[];
+} = {}) {
   const posted: string[] = [];
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: Request | RequestInfo | URL, init?: RequestInit) => {
-      posted.push(
-        input instanceof Request
-          ? await input.text()
-          : String(init?.body ?? ""),
-      );
+      const request = input instanceof Request ? input : new Request(input, init);
+      const path = new URL(request.url).pathname;
+      if (request.method === "GET" && path.endsWith("/agents/triage/regressions")) {
+        return new Response(JSON.stringify({ items: regressions }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      posted.push(await request.text());
       return new Response(JSON.stringify({ id: "sim_triage_1", cases: 2 }), {
         status: 202,
         headers: { "Content-Type": "application/json" },
@@ -65,6 +84,7 @@ describe("starting a simulation", () => {
   beforeEach(() => {
     setLocale("en-US");
     vi.restoreAllMocks();
+    stubApi();
   });
   afterEach(() => vi.unstubAllGlobals());
 
@@ -100,7 +120,7 @@ describe("starting a simulation", () => {
   });
 
   it("starts from saved situations by default", async () => {
-    const posted = stubStart();
+    const posted = stubApi();
     const user = userEvent.setup();
     const onStarted = renderStart();
 
@@ -113,7 +133,7 @@ describe("starting a simulation", () => {
   });
 
   it("hands pasted JSON back so the page can follow it", async () => {
-    const posted = stubStart();
+    const posted = stubApi();
     const user = userEvent.setup();
     const onStarted = renderStart();
 
@@ -129,8 +149,38 @@ describe("starting a simulation", () => {
     expect(JSON.parse(posted[0]!)).toEqual({ cases: '{"a":1}' });
   });
 
+  it("shows the maximum money exposure before opening pasted cases", async () => {
+    const user = userEvent.setup();
+    renderStart({ agent: PRICED_AGENT });
+
+    await user.click(screen.getByRole("button", { name: "Paste JSON" }));
+    await user.type(screen.getByLabelText("Cases"), '{{"a":1}\n{{"a":2}\n');
+
+    expect(await screen.findByText(/Expected about R\$0\.40/)).toBeInTheDocument();
+    expect(screen.getByText(/maximum R\$1\.00/)).toBeInTheDocument();
+  });
+
+  it("counts the saved corpus before naming its maximum exposure", async () => {
+    stubApi({ regressions: [{ id: "a" }, { id: "b" }, { id: "c" }] });
+
+    renderStart({ agent: PRICED_AGENT });
+
+    expect(await screen.findByText(/Expected about R\$0\.60/)).toBeInTheDocument();
+    expect(screen.getByText(/maximum R\$1\.50/)).toBeInTheDocument();
+  });
+
+  it("does not pretend to know money exposure when the agent has no money ceiling", async () => {
+    renderStart({ agent: RUNNING_AGENT });
+
+    expect(
+      await screen.findByText(
+        "This agent has no money ceiling per run, so the maximum money exposure cannot be known before starting.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("turns a hand-written situation into JSONL only when rehearsing", async () => {
-    const posted = stubStart();
+    const posted = stubApi();
     const user = userEvent.setup();
     const onStarted = renderStart();
 

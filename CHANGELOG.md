@@ -27,6 +27,15 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Added
+
+- **Simulations now show cost before they open runs.** The start screen counts
+  pasted, written and saved situations, estimates spend from the agent's
+  historical average when one exists, and shows the maximum exposure enforced
+  by the per-run money ceiling. If no money ceiling exists, it says the
+  exposure is not capped instead of letting a dry tool layer read as a free
+  run.
+
 ## [0.27.0] — 2026-08-23
 
 ### Added
