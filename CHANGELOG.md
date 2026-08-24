@@ -27,6 +27,14 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Upgrade notes
+
+- **Runtime failure diagnostics add partial indexes over `run_steps`.** The
+  release keeps `/runtime` from folding the audit trail during an incident by
+  indexing failed tool-return steps both newest-first and by scope. On
+  installations with large partitioned history, expect the migration to spend
+  time building those indexes before the new image is ready.
+
 ### Added
 
 - **Simulations now show cost before they open runs.** The start screen counts
