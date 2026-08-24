@@ -43,6 +43,31 @@ field" is a commit message.
 
 ### Added
 
+- **The runtime page opens with what needs attention.** One queue over every
+  operational projection the page already held — stuck leases and backing-off
+  runs, model provider failures, MCP tool failures, channel delivery failures
+  and stdio egress denials — ordered by how often each is happening. Items
+  carry a stable code and a count and nothing else: no run id, tool argument,
+  conversation text, URL or provider diagnostic. The list pages rather than
+  truncating, so "8 of 23" is visible instead of a cut nobody sees.
+
+  Egress denials appear only for a caller who can read the whole installation,
+  because that signal belongs to the worker process rather than to any one
+  scope.
+
+- **An agent's overview says what would justify trusting it further.** The
+  Trust Center reads evidence the platform already has — how its runs ended,
+  whether a regression corpus exists, whether anybody owes it a decision, and
+  whether it is published and running — and recommends the next step for its
+  stage.
+
+  It separates four answers rather than two: missing, unknown, bad and good. A
+  run still in flight is not a failure, an absent regression corpus is not a
+  bad one, and **a run waiting for a person is not a mark against the agent** —
+  a copilot agent waits for people by design, and the Gate stopping a call is
+  the platform working. Execution failures are what count against it, and they
+  still do even while something else is pending.
+
 - **The runtime cockpit now shows stdio MCP egress denials.** When a local MCP
   process is routed through the FuseOne egress proxy and tries to leave its
   allow-list, the worker reports the attempt with a stable code. The console
