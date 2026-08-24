@@ -1,10 +1,13 @@
 package channel_test
 
 import (
+	"errors"
+	"fmt"
 	"slices"
 	"testing"
 
 	"github.com/fuseone/agents/internal/channel"
+	"github.com/fuseone/agents/internal/domain"
 )
 
 func TestMetricTask_boundsUnknownTasks(t *testing.T) {
@@ -31,6 +34,44 @@ func TestMetricCode_boundsUnknownCodes(t *testing.T) {
 	}
 	if got := channel.MetricCode("slack-team-alerts"); got != channel.MetricOther {
 		t.Fatalf("unknown code = %q, want other", got)
+	}
+}
+
+func TestChannelErrorSummary_marksOnlyRateLimitRetryable(t *testing.T) {
+	type summarized interface {
+		Summary() domain.FailureSummary
+	}
+	rateLimit := channel.NewError(channel.CodeRateLimited, "slack: rate limited").(summarized)
+	if !rateLimit.Summary().Retryable {
+		t.Fatal("rate-limit summary is not retryable")
+	}
+	missingScope := channel.NewError(channel.CodeMissingScope, "slack: missing scope").(summarized)
+	if missingScope.Summary().Retryable {
+		t.Fatal("missing-scope summary is retryable")
+	}
+}
+
+func TestFailureCodes_readsEveryJoinedChannelFailure(t *testing.T) {
+	err := errors.Join(
+		fmt.Errorf("post to first: %w", channel.NewError(
+			channel.CodeDeliveryFailed, "slack: refused: unknown_error",
+		)),
+		fmt.Errorf("post to second: %w", channel.NewError(
+			channel.CodeMissingScope, "slack: refused: missing_scope",
+		)),
+		fmt.Errorf("post to third: %w", channel.NewError(
+			channel.CodeMissingScope, "slack: refused: missing_scope",
+		)),
+	)
+
+	got := channel.FailureCodes(err)
+	want := []string{
+		channel.CodeDeliveryFailed,
+		channel.CodeMissingScope,
+		channel.CodeMissingScope,
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("FailureCodes = %v, want %v", got, want)
 	}
 }
 

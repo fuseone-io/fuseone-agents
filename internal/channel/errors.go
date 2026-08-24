@@ -53,6 +53,44 @@ func (e *Error) Unwrap() error {
 
 func (e *Error) Summary() domain.FailureSummary {
 	return domain.FailureSummary{
-		Code: MetricCode(e.Code),
+		Code:      MetricCode(e.Code),
+		Retryable: e.Code == CodeRateLimited,
 	}
+}
+
+type failureSummarizer interface {
+	Summary() domain.FailureSummary
+}
+
+// FailureCodes returns every stable channel code inside err. A sweep can join
+// one failure per conversation; picking the first would hide the rest forever
+// when the same conversation sorts first on every pass.
+func FailureCodes(err error) []string {
+	var out []string
+	collectFailureCodes(err, &out)
+	if len(out) == 0 {
+		return []string{MetricOther}
+	}
+	return out
+}
+
+func collectFailureCodes(err error, out *[]string) {
+	if err == nil {
+		return
+	}
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		for _, one := range joined.Unwrap() {
+			collectFailureCodes(one, out)
+		}
+		return
+	}
+	if summarized, ok := err.(failureSummarizer); ok {
+		*out = append(*out, MetricCode(summarized.Summary().Code))
+		return
+	}
+	if wrapped, ok := err.(interface{ Unwrap() error }); ok {
+		collectFailureCodes(wrapped.Unwrap(), out)
+		return
+	}
+	*out = append(*out, MetricOther)
 }

@@ -22,6 +22,7 @@ type MetricsRegistry struct {
 	mcpToolCalls           map[mcpToolMetric]uint64
 	mcpReservationRefusals map[string]uint64
 	channelSweeps          map[channelSweepMetric]uint64
+	channelFailures        map[channelFailureMetric]uint64
 	channelItems           map[string]uint64
 }
 
@@ -31,6 +32,7 @@ func NewMetricsRegistry() *MetricsRegistry {
 		mcpToolCalls:           map[mcpToolMetric]uint64{},
 		mcpReservationRefusals: map[string]uint64{},
 		channelSweeps:          map[channelSweepMetric]uint64{},
+		channelFailures:        map[channelFailureMetric]uint64{},
 		channelItems:           map[string]uint64{},
 	}
 }
@@ -143,11 +145,18 @@ func renderMCPMetrics(w http.ResponseWriter, snap registrySnapshot) {
 }
 
 func renderChannelMetrics(w http.ResponseWriter, snap registrySnapshot) {
-	fmt.Fprintln(w, "# HELP fuseone_channel_sweeps_total Channel sweeps by task, result and stable code.")
+	fmt.Fprintln(w, "# HELP fuseone_channel_sweeps_total Channel sweeps by task and result.")
 	fmt.Fprintln(w, "# TYPE fuseone_channel_sweeps_total counter")
 	for _, key := range sortedChannelSweepKeys(snap.channelSweeps) {
-		fmt.Fprintf(w, "fuseone_channel_sweeps_total{task=%s,result=%s,code=%s} %d\n",
-			label(key.task), label(key.result), label(key.code), snap.channelSweeps[key])
+		fmt.Fprintf(w, "fuseone_channel_sweeps_total{task=%s,result=%s} %d\n",
+			label(key.task), label(key.result), snap.channelSweeps[key])
+	}
+
+	fmt.Fprintln(w, "# HELP fuseone_channel_failures_total Channel sweep failures by task and stable code.")
+	fmt.Fprintln(w, "# TYPE fuseone_channel_failures_total counter")
+	for _, key := range sortedChannelFailureKeys(snap.channelFailures) {
+		fmt.Fprintf(w, "fuseone_channel_failures_total{task=%s,code=%s} %d\n",
+			label(key.task), label(key.code), snap.channelFailures[key])
 	}
 
 	fmt.Fprintln(w, "# HELP fuseone_channel_items_total Channel items handled by task.")
@@ -172,6 +181,7 @@ type registrySnapshot struct {
 	mcpToolCalls           map[mcpToolMetric]uint64
 	mcpReservationRefusals map[string]uint64
 	channelSweeps          map[channelSweepMetric]uint64
+	channelFailures        map[channelFailureMetric]uint64
 	channelItems           map[string]uint64
 }
 
@@ -185,6 +195,7 @@ func (r *MetricsRegistry) snapshot() registrySnapshot {
 		mcpToolCalls:           copyMCPToolCounters(r.mcpToolCalls),
 		mcpReservationRefusals: copyStringCounters(r.mcpReservationRefusals),
 		channelSweeps:          copyChannelSweepCounters(r.channelSweeps),
+		channelFailures:        copyChannelFailureCounters(r.channelFailures),
 		channelItems:           copyStringCounters(r.channelItems),
 	}
 	r.mu.Unlock()
@@ -211,7 +222,11 @@ type mcpToolMetric struct {
 type channelSweepMetric struct {
 	task   string
 	result string
-	code   string
+}
+
+type channelFailureMetric struct {
+	task string
+	code string
 }
 
 const metricOther = "other"
@@ -244,19 +259,29 @@ func (r *MetricsRegistry) MCPReservationRefused(code string) {
 	r.mcpReservationRefusals[code]++
 }
 
-func (r *MetricsRegistry) ChannelSweep(task, result, code string, items int) {
+func (r *MetricsRegistry) ChannelSweep(task, result string, items int) {
 	if r == nil {
 		return
 	}
 	task = channel.MetricTask(task)
 	result = channel.MetricResult(result)
-	code = channel.MetricCode(code)
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.channelSweeps[channelSweepMetric{task: task, result: result, code: code}]++
+	r.channelSweeps[channelSweepMetric{task: task, result: result}]++
 	if items > 0 {
 		r.channelItems[task] += uint64(items)
 	}
+}
+
+func (r *MetricsRegistry) ChannelFailure(task, code string) {
+	if r == nil {
+		return
+	}
+	task = channel.MetricTask(task)
+	code = channel.MetricCode(code)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.channelFailures[channelFailureMetric{task: task, code: code}]++
 }
 
 func boundedMetricValue(value string, allowed map[string]bool) string {
@@ -358,6 +383,14 @@ func copyChannelSweepCounters(in map[channelSweepMetric]uint64) map[channelSweep
 	return out
 }
 
+func copyChannelFailureCounters(in map[channelFailureMetric]uint64) map[channelFailureMetric]uint64 {
+	out := make(map[channelFailureMetric]uint64, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
+}
+
 func sortedKeys(m map[string]uint64) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
@@ -407,8 +440,19 @@ func sortedChannelSweepKeys(m map[channelSweepMetric]uint64) []channelSweepMetri
 		if keys[i].task != keys[j].task {
 			return keys[i].task < keys[j].task
 		}
-		if keys[i].result != keys[j].result {
-			return keys[i].result < keys[j].result
+		return keys[i].result < keys[j].result
+	})
+	return keys
+}
+
+func sortedChannelFailureKeys(m map[channelFailureMetric]uint64) []channelFailureMetric {
+	keys := make([]channelFailureMetric, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].task != keys[j].task {
+			return keys[i].task < keys[j].task
 		}
 		return keys[i].code < keys[j].code
 	})
