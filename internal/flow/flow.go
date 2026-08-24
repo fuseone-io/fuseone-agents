@@ -9,10 +9,10 @@ answer: an author about to publish should find out that their agent reads a
 customer's email and then writes to a ticket, rather than finding out from an
 approval queue that fills up on Monday.
 
-It reports rather than refuses. The path it finds is usually the point of the
-agent — reading something and acting on it is what these things are for — and
-a check that blocked publication would be turned off within a week. What it
-buys is that nobody is surprised.
+Check reports every path. Most of them are warnings: reading something and
+acting on it is what these things are for. Callers may still refuse the
+non-reversible subset, because destructive or financial acts cannot be made
+safe by asking for approval after the model has already proposed them.
 */
 package flow
 
@@ -51,6 +51,13 @@ type Path struct {
 
 func (p Path) String() string {
 	return fmt.Sprintf("%s → %s (%s)", p.From, p.To, p.Effect)
+}
+
+// BlocksPublication reports the paths that cannot be made safe by runtime
+// approval. Reversible writes still publish: the Gate asks a person at the
+// moment of action, with the concrete arguments in front of them.
+func (p Path) BlocksPublication() bool {
+	return p.Effect.Valid() && !p.Effect.Reversible()
 }
 
 // Finding is something worth saying about a specification before it is

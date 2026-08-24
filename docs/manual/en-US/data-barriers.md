@@ -39,12 +39,30 @@ The barrier is the carried label. Once `area:acme/platform` is in the run, the
 Gate refuses actions in a run outside that scope. If an event would open a
 listener in another area, the run is not opened.
 
+## Publishing catches the irreversible cases
+
+Before saving a version, FuseOne also checks the draft's declared steps against
+the tool catalogue. If data from an untrusted source can reach a destructive or
+financial tool, publishing is refused. Those actions cannot be made safe by
+approving them after the model has already proposed them.
+
+Reversible writes are different. They can still publish, but the runtime Gate
+asks a person at the concrete call, with the actual arguments in front of them.
+That keeps useful agents possible without letting money-moving or destructive
+flows start from untrusted text.
+
 ## What an operator sees
 
 In a trail, a blocked call names the rule `data_barrier` and explains that the
 run carries data from outside this company or area. That is not a policy to
 edit and not a missing approval; it means the data flow crossed a boundary the
 platform does not have authorization to cross.
+
+For provenance, read the labels on the steps themselves. A `planned` step shows
+the labels on the model input for that planning call. `gate_decided`,
+`approval_requested` and `tool_called` show the labels on the proposed or
+executed tool input. A `$fuseone.context.read` result also names the source run
+and digest of the shared artifact.
 
 If this happens:
 

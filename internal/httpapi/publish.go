@@ -8,6 +8,7 @@ import (
 
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/flow"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/spec"
 )
@@ -89,6 +90,17 @@ func (s *Server) PublishAgent(
 		return openapi.PublishAgent400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
 				invalid(fmt.Sprintf("the schedule %q is not one this platform can read", bad))),
+		}, nil
+	}
+
+	blocked, err := s.blockingStaticFlows(ctx, published)
+	if err != nil {
+		return nil, err
+	}
+	if len(blocked) > 0 {
+		return openapi.PublishAgent400ApplicationProblemPlusJSONResponse{
+			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
+				invalid(staticFlowBlockDetail(blocked))),
 		}, nil
 	}
 
@@ -205,6 +217,33 @@ func publishScope(
 		}
 	}
 	return target, false
+}
+
+func (s *Server) blockingStaticFlows(ctx context.Context, draft spec.Spec) ([]flow.Path, error) {
+	catalogue, err := s.rulings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	finding := flow.Check(draft.Tools, envelopesOf(draft), catalogue)
+	var out []flow.Path
+	for _, path := range finding.Paths {
+		if path.BlocksPublication() {
+			out = append(out, path)
+		}
+	}
+	return out, nil
+}
+
+func staticFlowBlockDetail(paths []flow.Path) string {
+	first := paths[0]
+	detail := fmt.Sprintf(
+		"untrusted data can reach non-reversible tool %s (%s) from %s",
+		first.To, first.Effect, first.From,
+	)
+	if len(paths) > 1 {
+		detail = fmt.Sprintf("%s and %d more path(s)", detail, len(paths)-1)
+	}
+	return detail
 }
 
 // agentVersions is which versions already exist, so publishing can report

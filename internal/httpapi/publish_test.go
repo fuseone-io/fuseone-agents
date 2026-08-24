@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -461,6 +462,90 @@ func TestPublishAgent_scheduleNobodyCanParse_isRefusedBeforePublishing(t *testin
 	if len(pub.published) != 0 {
 		t.Error("a version was written for a schedule that cannot fire")
 	}
+}
+
+func TestPublishAgent_refusesUntrustedDataToANonReversibleTool(t *testing.T) {
+	t.Parallel()
+	pub := newPublisher()
+	server := publishServer(t, pub).WithAdministration(nil, publishFlowTools(), nil)
+
+	resp, err := server.PublishAgent(
+		inArea("cx", domain.RoleAuthor),
+		openapi.PublishAgentRequestObject{AgentId: "triage", Body: definition(func(d *openapi.AgentDefinition) {
+			d.Tools = &[]string{"crm.lookup", "pay.refund"}
+		})},
+	)
+	if err != nil {
+		t.Fatalf("PublishAgent: %v", err)
+	}
+	refused, ok := resp.(openapi.PublishAgent400ApplicationProblemPlusJSONResponse)
+	if !ok {
+		t.Fatalf("response = %T, want 400", resp)
+	}
+	if len(pub.published) != 0 {
+		t.Fatal("published a version whose static flow reaches a financial tool")
+	}
+	if refused.Detail == nil ||
+		!strings.Contains(*refused.Detail, "pay.refund") ||
+		!strings.Contains(*refused.Detail, "financial") {
+		t.Fatalf("detail = %v, want the non-reversible tool and effect named", refused.Detail)
+	}
+}
+
+func TestPublishAgent_allowsUntrustedDataToAReversibleWrite(t *testing.T) {
+	t.Parallel()
+	pub := newPublisher()
+	server := publishServer(t, pub).WithAdministration(nil, publishFlowTools(), nil)
+
+	resp, err := server.PublishAgent(
+		inArea("cx", domain.RoleAuthor),
+		openapi.PublishAgentRequestObject{AgentId: "triage", Body: definition(func(d *openapi.AgentDefinition) {
+			d.Tools = &[]string{"crm.lookup", "crm.reply"}
+		})},
+	)
+	if err != nil {
+		t.Fatalf("PublishAgent: %v", err)
+	}
+	if _, ok := resp.(openapi.PublishAgent200JSONResponse); !ok {
+		t.Fatalf("response = %T, want published", resp)
+	}
+	if len(pub.published) != 1 {
+		t.Fatalf("published = %d, want the reversible flow to publish", len(pub.published))
+	}
+}
+
+func TestPublishAgent_allowsNonReversibleToolBeforeTheUntrustedRead(t *testing.T) {
+	t.Parallel()
+	pub := newPublisher()
+	server := publishServer(t, pub).WithAdministration(nil, publishFlowTools(), nil)
+
+	resp, err := server.PublishAgent(
+		inArea("cx", domain.RoleAuthor),
+		openapi.PublishAgentRequestObject{AgentId: "triage", Body: definition(func(d *openapi.AgentDefinition) {
+			d.Tools = &[]string{"crm.lookup", "pay.refund"}
+			d.Steps = &[]openapi.AgentStep{
+				{Name: "Refund before reading", Reaches: ptr([]string{"pay.refund"})},
+				{Name: "Read from CRM", Reaches: ptr([]string{"crm.lookup"})},
+			}
+		})},
+	)
+	if err != nil {
+		t.Fatalf("PublishAgent: %v", err)
+	}
+	if _, ok := resp.(openapi.PublishAgent200JSONResponse); !ok {
+		t.Fatalf("response = %T, want published", resp)
+	}
+	if len(pub.published) != 1 {
+		t.Fatalf("published = %d, want no path when the non-reversible act happens first", len(pub.published))
+	}
+}
+
+func publishFlowTools() *fakeTools {
+	return &fakeTools{entries: []domain.ToolEntry{
+		{ID: "crm.lookup", Effect: domain.EffectRead, Untrusted: true, OnSurface: true},
+		{ID: "crm.reply", Effect: domain.EffectWrite, OnSurface: true},
+		{ID: "pay.refund", Effect: domain.EffectFinancial, OnSurface: true},
+	}}
 }
 
 type schedules struct{ synced map[domain.AgentID][]string }

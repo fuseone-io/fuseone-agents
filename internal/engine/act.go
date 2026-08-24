@@ -124,6 +124,7 @@ func (r *Runner) act(ctx context.Context, state State, start Start, p Proposal) 
 	state, err = r.append(ctx, state, start, domain.Step{
 		Kind:       domain.StepGateDecided,
 		PolicyHash: decision.PolicyHash,
+		Labels:     state.Labels.Clone(),
 		Payload: mustJSON(domain.GateDecidedPayload{
 			Tool: p.Tool, Effect: effect, Verdict: decision.Verdict,
 			Rule: decision.Rule, Reason: decision.Reason,
@@ -166,7 +167,8 @@ func (r *Runner) refused(
 			return Status{}, err
 		}
 		state, err = r.append(ctx, state, start, domain.Step{
-			Kind: domain.StepApprovalRequested,
+			Kind:   domain.StepApprovalRequested,
+			Labels: state.Labels.Clone(),
 			Payload: mustJSON(domain.ApprovalRequestedPayload{
 				Tool: p.Tool, Rule: decision.Rule, Reason: decision.Reason,
 				Effect: effect, ArgsRef: argsRef, ArgsDigest: digest(p.Args),
@@ -242,6 +244,7 @@ func (r *Runner) invoke(
 	if state, err = r.append(ctx, state, start, domain.Step{
 		Kind:    domain.StepToolCalled,
 		IdemKey: idemKey,
+		Labels:  state.Labels.Clone(),
 		Payload: mustJSON(domain.ToolCalledPayload{
 			Tool: p.Tool, Effect: effect, ArgsRef: argsRef, ArgsDigest: digest(p.Args),
 		}),

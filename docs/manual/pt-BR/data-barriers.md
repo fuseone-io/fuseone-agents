@@ -40,12 +40,32 @@ A barreira é o label carregado. Depois que `area:acme/platform` entra na
 execução, o Gate recusa ações em uma execução fora daquele escopo. Se um evento
 abriria um listener em outra área, a execução nem é aberta.
 
+## A publicação pega os casos irreversíveis
+
+Antes de salvar uma versão, o FuseOne também compara os steps declarados do
+rascunho com o catálogo de ferramentas. Se dado de uma fonte não confiável pode
+chegar a uma ferramenta destrutiva ou financeira, a publicação é recusada.
+Essas ações não ficam seguras por serem aprovadas depois que o modelo já as
+propôs.
+
+Writes reversíveis são diferentes. Eles ainda podem ser publicados, mas o Gate
+em runtime pede uma pessoa na chamada concreta, com os argumentos reais na
+frente dela. Isso mantém agentes úteis possíveis sem permitir que fluxos
+financeiros ou destrutivos partam de texto não confiável.
+
 ## O que o operador vê
 
 Na trilha, uma chamada bloqueada nomeia a regra `data_barrier` e explica que a
 execução carrega dados de fora desta empresa ou área. Isso não é uma política
 para editar e não é aprovação faltando; significa que o fluxo de dado cruzou
 uma fronteira que a plataforma não tem autorização para cruzar.
+
+Para conferir proveniência, leia os labels nos próprios passos. Um passo
+`planned` mostra os labels do input enviado ao modelo naquela chamada de
+planejamento. `gate_decided`, `approval_requested` e `tool_called` mostram os
+labels do input proposto ou executado pela ferramenta. Um resultado de
+`$fuseone.context.read` também nomeia a run de origem e o digest do artefato
+compartilhado.
 
 Se isso acontecer:
 

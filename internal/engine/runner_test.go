@@ -117,15 +117,24 @@ type harness struct {
 // payloadOf decodes the payload of the first step of a kind.
 func (h *harness) payloadOf(t *testing.T, kind domain.StepKind, into any) error {
 	t.Helper()
+	step, err := h.stepOf(t, kind)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(step.Payload, into)
+}
+
+func (h *harness) stepOf(t *testing.T, kind domain.StepKind) (domain.Step, error) {
+	t.Helper()
 	steps, err := h.ledger.Read(context.Background(), "run-1", domain.FirstSeq)
 	if err != nil {
 		t.Fatalf("Read: %v", err)
 	}
 	i := slices.IndexFunc(steps, func(s domain.Step) bool { return s.Kind == kind })
 	if i < 0 {
-		return fmt.Errorf("no %s step in %v", kind, h.kinds(t))
+		return domain.Step{}, fmt.Errorf("no %s step in %v", kind, h.kinds(t))
 	}
-	return json.Unmarshal(steps[i].Payload, into)
+	return steps[i], nil
 }
 
 // lastPayloadOf decodes the payload of the last step of a kind.
@@ -348,6 +357,74 @@ func TestAdvance_recordsThePromptCompositionThePlannerMeasured(t *testing.T) {
 	if got.Price == nil || got.Price.Status != domain.ModelPriceConfigured ||
 		!got.Price.NonZeroApplied {
 		t.Fatalf("Price = %+v, want configured non-zero rate provenance", got.Price)
+	}
+}
+
+func TestAdvance_recordsModelAndToolInputLabelsOnTheTrail(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t, Proposal{Tool: "crm.lookup", Args: []byte(`{"id":"42"}`)})
+	start := h.start(t, generousBudget())
+	labels := domain.ScopeLabels(start.Scope).Union(domain.NewLabels(domain.LabelUntrusted))
+	if _, err := h.ledger.Append(ctx, domain.Step{
+		RunID: start.RunID, Kind: domain.StepRunStarted,
+		Scope: start.Scope, AgentID: start.AgentID,
+		VersionID: start.VersionID, OnBehalfOf: start.OnBehalfOf,
+		Labels:  labels,
+		Payload: mustJSON(domain.RunStartedPayload{Trigger: "webhook"}),
+	}); err != nil {
+		t.Fatalf("open run: %v", err)
+	}
+
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+
+	for _, kind := range []domain.StepKind{
+		domain.StepPlanned,
+		domain.StepGateDecided,
+		domain.StepToolCalled,
+	} {
+		step, err := h.stepOf(t, kind)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !step.Labels.Has(domain.LabelUntrusted) ||
+			!step.Labels.Has(domain.LabelArea(start.Scope)) {
+			t.Fatalf("%s labels = %v, want model/tool input provenance", kind, step.Labels)
+		}
+	}
+}
+
+func TestAdvance_recordsApprovalInputLabelsOnTheTrail(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t, Proposal{Tool: "crm.note", Args: []byte(`{"text":"hi"}`)})
+	start := h.start(t, generousBudget())
+	labels := domain.ScopeLabels(start.Scope).Union(domain.NewLabels(domain.LabelUntrusted))
+	if _, err := h.ledger.Append(ctx, domain.Step{
+		RunID: start.RunID, Kind: domain.StepRunStarted,
+		Scope: start.Scope, AgentID: start.AgentID,
+		VersionID: start.VersionID, OnBehalfOf: start.OnBehalfOf,
+		Labels:  labels,
+		Payload: mustJSON(domain.RunStartedPayload{Trigger: "webhook"}),
+	}); err != nil {
+		t.Fatalf("open run: %v", err)
+	}
+
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+
+	step, err := h.stepOf(t, domain.StepApprovalRequested)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !step.Labels.Has(domain.LabelUntrusted) ||
+		!step.Labels.Has(domain.LabelArea(start.Scope)) {
+		t.Fatalf("approval labels = %v, want the labels a person is deciding on", step.Labels)
 	}
 }
 

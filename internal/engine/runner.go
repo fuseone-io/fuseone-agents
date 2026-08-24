@@ -73,8 +73,9 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 		Prompt:   promptInputPayload(proposal.Prompt),
 	}
 	if state, err = r.append(ctx, state, start, domain.Step{
-		Kind: domain.StepPlanned,
-		Cost: proposal.Cost,
+		Kind:   domain.StepPlanned,
+		Labels: state.Labels.Clone(),
+		Cost:   proposal.Cost,
 		// The step the run was in when it proposed this. Reserved on the
 		// payload since the beginning and never written, because nothing knew
 		// which step a run was in — that is what a correction anchors to
