@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -61,6 +62,16 @@ func (r *recordingMetrics) MCPReservationRefused(code string) {
 	r.refusals = append(r.refusals, code)
 }
 
+type recordingToolHealth []domain.IntegrationToolCallObservation
+
+func (r *recordingToolHealth) RecordToolCall(
+	_ context.Context,
+	obs domain.IntegrationToolCallObservation,
+) error {
+	*r = append(*r, obs)
+	return nil
+}
+
 type summarizedToolError struct{ code string }
 
 func (e summarizedToolError) Error() string { return "stable tool failure" }
@@ -115,8 +126,10 @@ func TestReserve_rateLimitsPerServerBeforeTheCallLeaves(t *testing.T) {
 
 	srv := lookupServer()
 	metrics := &recordingMetrics{}
+	health := &recordingToolHealth{}
 	c := tools.NewCatalog(engine.NewMemoryContent())
 	c.WithMetrics(metrics)
+	c.WithToolCallHealth(health, "worker-a")
 	if err := c.AddServer(ctx, "crm", srv, nil,
 		tools.WithRateLimit(&domain.MCPRateLimit{RatePerSecond: 0.01, Burst: 1})); err != nil {
 		t.Fatalf("AddServer: %v", err)
@@ -135,6 +148,11 @@ func TestReserve_rateLimitsPerServerBeforeTheCallLeaves(t *testing.T) {
 	if got := metrics.refusals; len(got) != 1 || got[0] != tools.CodeMCPServerRateLimited {
 		t.Fatalf("reservation refusals = %v, want rate-limit code", got)
 	}
+	if got := *health; len(got) != 1 ||
+		got[0].Name != "crm" || got[0].OK ||
+		got[0].Code != tools.CodeMCPServerRateLimited {
+		t.Fatalf("tool-call health = %#v, want rate-limit observation", got)
+	}
 	failure, ok := model.FailureSummaryOf(err)
 	if !ok || failure.Code != tools.CodeMCPServerRateLimited || !failure.Retryable {
 		t.Fatalf("FailureSummaryOf = %#v, %v", failure, ok)
@@ -148,7 +166,9 @@ func TestInvoke_recordsStableFailureCodesForMCPMetricsAndTrail(t *testing.T) {
 	srv := lookupServer()
 	srv.err = summarizedToolError{code: tools.CodeMCPPersonalCredentialMissing}
 	metrics := &recordingMetrics{}
+	health := &recordingToolHealth{}
 	c := tools.NewCatalog(engine.NewMemoryContent()).WithMetrics(metrics)
+	c.WithToolCallHealth(health, "worker-a")
 	if err := c.AddServer(ctx, "crm", srv, nil); err != nil {
 		t.Fatalf("AddServer: %v", err)
 	}
@@ -167,6 +187,35 @@ func TestInvoke_recordsStableFailureCodesForMCPMetricsAndTrail(t *testing.T) {
 	if got := metrics.toolCalls; len(got) != 1 ||
 		got[0] != (toolCallMetric{result: "error", code: tools.CodeMCPPersonalCredentialMissing}) {
 		t.Fatalf("tool call metrics = %#v, want stable credential failure", got)
+	}
+	if got := *health; len(got) != 1 ||
+		got[0].Name != "crm" || got[0].OK ||
+		got[0].Code != tools.CodeMCPPersonalCredentialMissing {
+		t.Fatalf("tool-call health = %#v, want stable credential failure", got)
+	}
+}
+
+func TestInvoke_recordsSuccessfulToolCallHealth(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	at := time.Date(2026, 8, 24, 15, 42, 0, 0, time.UTC)
+	health := &recordingToolHealth{}
+	c, _ := catalogWith(t, lookupServer())
+	c.WithClock(func() time.Time { return at })
+	c.WithToolCallHealth(health, "worker-a")
+	if err := c.Classify(domain.ToolClassification{Tool: "crm.lookup", Effect: domain.EffectRead}); err != nil {
+		t.Fatalf("Classify: %v", err)
+	}
+
+	if _, err := c.Invoke(ctx, engine.Call{RunID: "run-1", Seq: 1, Tool: "crm.lookup", Args: []byte(`{}`)}); err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+
+	if got := *health; len(got) != 1 ||
+		got[0].Name != "crm" || !got[0].OK || got[0].Code != tools.CodeMCPNoCode ||
+		!got[0].ObservedAt.Equal(at) {
+		t.Fatalf("tool-call health = %#v, want success observation", got)
 	}
 }
 

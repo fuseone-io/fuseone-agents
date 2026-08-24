@@ -1406,6 +1406,10 @@ func (r recordingHealth) Record(_ context.Context, h domain.IntegrationHealth) e
 	return nil
 }
 
+func (r recordingHealth) RecordToolCall(_ context.Context, _ domain.IntegrationToolCallObservation) error {
+	return nil
+}
+
 type recordingPublisher struct {
 	entries []domain.ToolEntry
 }

@@ -306,4 +306,35 @@ type IntegrationHealth struct {
 	// ObservedBy is which worker saw this. Several connect to the same servers
 	// and can disagree — one pod on a network that reaches it, one not.
 	ObservedBy string
+	// LastReachableAt is the last successful discovery. A failed probe must not
+	// erase it: "it worked before and fails now" is more useful than just "it
+	// fails".
+	LastReachableAt *time.Time
+	// ToolCall is the last tools/call observation. Discovery and tool calls use
+	// different credentials and failure modes, so one cannot stand in for the
+	// other.
+	ToolCall *IntegrationToolCallHealth
+}
+
+// IntegrationToolCallHealth is what a concrete tools/call attempt proved.
+//
+// It intentionally carries a stable code rather than the raw error. Tool-call
+// failures can include third-party URLs or diagnostics; the integration page
+// needs the family, not the payload.
+type IntegrationToolCallHealth struct {
+	OK         bool
+	Code       string
+	ObservedAt time.Time
+	ObservedBy string
+	LastOKAt   *time.Time
+}
+
+// IntegrationToolCallObservation is the write shape for one tools/call
+// attempt.
+type IntegrationToolCallObservation struct {
+	Name       string
+	OK         bool
+	Code       string
+	ObservedAt time.Time
+	ObservedBy string
 }

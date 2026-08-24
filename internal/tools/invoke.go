@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -44,16 +43,25 @@ func (c *Catalog) Invoke(ctx context.Context, call engine.Call) (engine.ToolResu
 	timeout := c.timeout
 	content := c.content
 	metrics := c.metrics
+	health := c.health
+	healthBy := c.healthBy
+	clock := c.clock
 	c.mu.RUnlock()
+	now := clockNow(clock)
 
-	if !known || !entry.OnSurface {
+	if !known {
 		// The model is not the only caller. A resumed run replays a call the
 		// ledger holds and a specification names tools by hand, so a surface
 		// enforced only where the schemas are written is a surface with a way
 		// round it.
 		return engine.ToolResult{}, fmt.Errorf("%w: %s", ErrUnknownTool, call.Tool)
 	}
+	if !entry.OnSurface {
+		recordMCPToolHealth(ctx, health, healthBy, entry.Server, false, CodeMCPUnknownTool, now)
+		return engine.ToolResult{}, fmt.Errorf("%w: %s", ErrUnknownTool, call.Tool)
+	}
 	if !connected {
+		recordMCPToolHealth(ctx, health, healthBy, entry.Server, false, CodeMCPUnknownServer, now)
 		return engine.ToolResult{}, fmt.Errorf("%w: %s", ErrUnknownServer, entry.Server)
 	}
 
@@ -74,7 +82,7 @@ func (c *Catalog) Invoke(ctx context.Context, call engine.Call) (engine.ToolResu
 
 	cacheKey := resultCacheKeyOf(entry, call)
 	if resultCacheable(entry, call, content, cache) {
-		if cached, ok := cache.get(cacheKey, time.Now()); ok {
+		if cached, ok := cache.get(cacheKey, now); ok {
 			ref, err := content.Put(ctx, call.RunID, call.Seq, cached.body)
 			if err != nil {
 				return engine.ToolResult{}, fmt.Errorf("tools: store cached result of %s: %w", call.Tool, err)
@@ -112,6 +120,7 @@ func (c *Catalog) Invoke(ctx context.Context, call engine.Call) (engine.ToolResu
 			out.ResultRef = ref
 		}
 		recordMCPToolCall(metrics, "error", code, false)
+		recordMCPToolHealth(ctx, health, healthBy, entry.Server, false, code, clockNow(clock))
 		return out, fmt.Errorf("tools: call %s: %w", call.Tool, err)
 	}
 
@@ -119,8 +128,10 @@ func (c *Catalog) Invoke(ctx context.Context, call engine.Call) (engine.ToolResu
 	if res.IsError {
 		out.ErrorCode = CodeMCPToolError
 		recordMCPToolCall(metrics, "error", CodeMCPToolError, false)
+		recordMCPToolHealth(ctx, health, healthBy, entry.Server, false, CodeMCPToolError, clockNow(clock))
 	} else {
 		recordMCPToolCall(metrics, "ok", CodeMCPNoCode, false)
+		recordMCPToolHealth(ctx, health, healthBy, entry.Server, true, CodeMCPNoCode, clockNow(clock))
 	}
 
 	text := flatten(res)
@@ -132,7 +143,7 @@ func (c *Catalog) Invoke(ctx context.Context, call engine.Call) (engine.ToolResu
 		}
 		out.ResultRef = ref
 		if resultCacheable(entry, call, content, cache) && !out.Failed {
-			cache.put(cacheKey, body, out.Labels, call.RunID, call.Seq, time.Now())
+			cache.put(cacheKey, body, out.Labels, call.RunID, call.Seq, clockNow(clock))
 		}
 	}
 	return out, nil

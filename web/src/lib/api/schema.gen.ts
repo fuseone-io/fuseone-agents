@@ -3072,6 +3072,31 @@ export interface components {
              *     disagree — one pod on a network that reaches it, one not.
              */
             observedBy?: string;
+            /**
+             * Format: date-time
+             * @description The last successful discovery probe, if one has ever answered.
+             */
+            lastReachableAt?: string;
+            /**
+             * @description The last concrete tools/call observation. Discovery can work while
+             *     calls fail because credentials, rate limits and runtime policy sit
+             *     on a different path.
+             */
+            toolCall?: components["schemas"]["IntegrationToolCallHealth"] | null;
+        };
+        IntegrationToolCallHealth: {
+            ok: boolean;
+            /** @description Stable failure family, or "none" for the last successful call. */
+            code: string;
+            /** Format: date-time */
+            observedAt: string;
+            /** @description Which worker made the call observation. */
+            observedBy?: string;
+            /**
+             * Format: date-time
+             * @description The last successful tools/call observation, if one has ever succeeded.
+             */
+            lastOkAt?: string;
         };
         ModelProvider: {
             name: string;

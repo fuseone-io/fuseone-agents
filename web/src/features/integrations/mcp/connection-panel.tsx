@@ -30,6 +30,7 @@ import {
 } from "@/features/integrations/mcp/oauth-fields";
 import { CallAuthNote } from "@/features/integrations/mcp/call-auth-note";
 import { EgressNote } from "@/features/integrations/mcp/egress-note";
+import { MCPHealthNote } from "@/features/integrations/mcp/health-note";
 import {
   remoteTokenHint,
   remoteTokenLabel,
@@ -141,6 +142,7 @@ export function ConnectionPanel({
         </dl>
 
         {!local && <RemoteAuthSummary plan={remotePlan} />}
+        <MCPHealthNote health={server.health} />
         <CallAuthNote callAuth={server.callAuth} />
         <EgressNote egress={server.egress} />
 

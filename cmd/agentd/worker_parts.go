@@ -104,6 +104,7 @@ func openWorkerParts(ctx context.Context, dsn string) (*workerParts, error) {
 		return nil, err
 	}
 	parts.health = healthOf(parts.configPool)
+	parts.catalog.WithToolCallHealth(parts.health, hostname())
 	return parts, nil
 }
 

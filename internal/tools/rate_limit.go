@@ -123,30 +123,83 @@ func (l *serverLimiter) allow(now time.Time) (time.Duration, bool) {
 // effect. A rate-limited call did not reach the server, so it is a retryable
 // worker failure rather than a ToolReturned failure.
 func (c *Catalog) Reserve(ctx context.Context, call engine.Call) error {
-	_ = ctx
+	decision := c.reserve(call)
+	if decision.healthCode != "" {
+		recordMCPToolHealth(
+			ctx,
+			decision.health,
+			decision.healthBy,
+			decision.server,
+			false,
+			decision.healthCode,
+			decision.observedAt,
+		)
+	}
+	return decision.err
+}
+
+type reserveDecision struct {
+	err        error
+	health     ToolCallHealth
+	healthBy   string
+	server     string
+	healthCode string
+	observedAt time.Time
+}
+
+func (c *Catalog) reserve(call engine.Call) reserveDecision {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	entry, known := c.entries[call.Tool]
-	if !known || !entry.OnSurface {
+	health := c.health
+	healthBy := c.healthBy
+	observedAt := clockNow(c.clock)
+	if !known {
 		c.recordMCPReservationRefused(CodeMCPUnknownTool)
-		return fmt.Errorf("%w: %s", ErrUnknownTool, call.Tool)
+		return reserveDecision{err: fmt.Errorf("%w: %s", ErrUnknownTool, call.Tool)}
+	}
+	if !entry.OnSurface {
+		c.recordMCPReservationRefused(CodeMCPUnknownTool)
+		return reserveFailure(
+			fmt.Errorf("%w: %s", ErrUnknownTool, call.Tool),
+			health, healthBy, entry.Server, CodeMCPUnknownTool, observedAt)
 	}
 	if _, connected := c.sessions[entry.Server]; !connected {
 		c.recordMCPReservationRefused(CodeMCPUnknownServer)
-		return fmt.Errorf("%w: %s", ErrUnknownServer, entry.Server)
+		return reserveFailure(
+			fmt.Errorf("%w: %s", ErrUnknownServer, entry.Server),
+			health, healthBy, entry.Server, CodeMCPUnknownServer, observedAt)
 	}
 	if cache := c.caches[entry.Server]; resultCacheable(entry, call, c.content, cache) {
-		if cache.has(resultCacheKeyOf(entry, call), time.Now()) {
-			return nil
+		if cache.has(resultCacheKeyOf(entry, call), observedAt) {
+			return reserveDecision{}
 		}
 	}
 	limiter := c.limiters[entry.Server]
-	if wait, ok := limiter.allow(time.Now()); !ok {
+	if wait, ok := limiter.allow(observedAt); !ok {
 		c.recordMCPReservationRefused(CodeMCPServerRateLimited)
-		return &ServerRateLimitError{Server: entry.Server, RetryAfter: wait}
+		return reserveFailure(
+			&ServerRateLimitError{Server: entry.Server, RetryAfter: wait},
+			health, healthBy, entry.Server, CodeMCPServerRateLimited, observedAt)
 	}
-	return nil
+	return reserveDecision{}
+}
+
+func reserveFailure(
+	err error,
+	health ToolCallHealth,
+	healthBy, server, code string,
+	observedAt time.Time,
+) reserveDecision {
+	return reserveDecision{
+		err:        err,
+		health:     health,
+		healthBy:   healthBy,
+		server:     server,
+		healthCode: code,
+		observedAt: observedAt,
+	}
 }
 
 func (c *Catalog) recordMCPReservationRefused(code string) {

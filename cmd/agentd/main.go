@@ -208,6 +208,7 @@ func healthOf(pool *pgxpool.Pool) healthRecorder {
 // saw.
 type healthRecorder interface {
 	Record(ctx context.Context, obs domain.IntegrationHealth) error
+	RecordToolCall(ctx context.Context, obs domain.IntegrationToolCallObservation) error
 }
 
 // observe records an attempt, and never fails the caller over it. Losing the

@@ -32,6 +32,8 @@ const EN_EGRESS_LOCAL =
   "FuseOne does not constrain outbound destinations for this local process. It runs with the worker's network access.";
 const EN_EGRESS_UNKNOWN =
   "This worker-observed server has no configured transport in the console, so FuseOne cannot describe its egress policy.";
+const EN_TOOL_CALL_FAILED =
+  "Tools/call: the last call failed {{seen}} with <code>{{code}}</code>. Last success: {{last}}.";
 
 vi.mock("@/features/integrations/api", async (importOriginal) => {
   const actual =
@@ -169,6 +171,45 @@ describe("the MCP connection panel", () => {
     );
     expect(enUS.mcp.egressLocalUnconstrained).toBe(EN_EGRESS_LOCAL);
     expect(enUS.mcp.egressUnknown).toBe(EN_EGRESS_UNKNOWN);
+  });
+
+  it("pins the tool-call failure statement in both locales", () => {
+    expect(ptBR.mcp.toolCallFailed).toBe(
+      "Tools/call: a última chamada falhou {{seen}} com <code>{{code}}</code>. Último sucesso: {{last}}.",
+    );
+    expect(enUS.mcp.toolCallFailed).toBe(EN_TOOL_CALL_FAILED);
+  });
+
+  it("separates discovery health from concrete tool-call health", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-24T12:04:00Z"));
+    try {
+      render(
+        <ConnectionPanel
+          server={remote({
+            health: {
+              reachable: true,
+              toolCount: 12,
+              observedAt: "2026-08-24T12:03:00Z",
+              toolCall: {
+                ok: false,
+                code: "mcp_personal_credential_missing",
+                observedAt: "2026-08-24T12:00:00Z",
+                lastOkAt: "2026-08-24T11:54:00Z",
+              },
+            },
+          })}
+        />,
+      );
+
+      expect(screen.getByText("Saúde do runtime")).toBeInTheDocument();
+      expect(screen.getByText(/Discovery: respondeu há 1 minuto com 12 ferramentas/))
+        .toBeInTheDocument();
+      expect(screen.getByText("mcp_personal_credential_missing")).toBeInTheDocument();
+      expect(screen.getByText(/Último sucesso: há 10 minutos/)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("says HTTP refuses metadata but does not claim egress containment", () => {

@@ -131,6 +131,11 @@ type Catalog struct {
 	// metrics receives low-cardinality operational counters. It is deliberately
 	// narrower than the catalogue: no server, tool or run identifier is a label.
 	metrics Metrics
+	// health receives the latest tools/call observation by server. It records
+	// code and timestamp only; the call result and arguments stay in the run.
+	health   ToolCallHealth
+	healthBy string
+	clock    func() time.Time
 }
 
 // Suggester is what the platform already knows about a server's tools,
@@ -163,6 +168,30 @@ func (c *Catalog) WithMetrics(metrics Metrics) *Catalog {
 	return c
 }
 
+// WithToolCallHealth wires durable integration health after the catalogue
+// exists. Optional: a test or one-shot worker can still call tools without a
+// database-backed observation store.
+func (c *Catalog) WithToolCallHealth(health ToolCallHealth, observedBy string) *Catalog {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.health = health
+	c.healthBy = observedBy
+	return c
+}
+
+// WithClock replaces the catalogue clock. It exists because tool-call health is
+// durable operator evidence, so tests should own the observation instant.
+func (c *Catalog) WithClock(clock func() time.Time) *Catalog {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if clock == nil {
+		c.clock = time.Now
+		return c
+	}
+	c.clock = clock
+	return c
+}
+
 // Lookup returns one entry, for the console and for the Curator's screen.
 func (c *Catalog) Lookup(id domain.ToolID) (Entry, bool) {
 	c.mu.RLock()
@@ -179,7 +208,15 @@ func NewCatalog(content engine.ContentStore) *Catalog {
 		caches:   make(map[string]*resultCache),
 		content:  content,
 		timeout:  60 * time.Second,
+		clock:    time.Now,
 	}
+}
+
+func clockNow(clock func() time.Time) time.Time {
+	if clock == nil {
+		return time.Now()
+	}
+	return clock()
 }
 
 var (

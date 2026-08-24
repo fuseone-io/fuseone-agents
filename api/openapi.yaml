@@ -4784,6 +4784,34 @@ components:
           description: |
             Which worker saw this. Several connect to the same servers and can
             disagree — one pod on a network that reaches it, one not.
+        lastReachableAt:
+          type: string
+          format: date-time
+          description: The last successful discovery probe, if one has ever answered.
+        toolCall:
+          allOf: [{ $ref: '#/components/schemas/IntegrationToolCallHealth' }]
+          nullable: true
+          description: |
+            The last concrete tools/call observation. Discovery can work while
+            calls fail because credentials, rate limits and runtime policy sit
+            on a different path.
+
+    IntegrationToolCallHealth:
+      type: object
+      required: [ok, code, observedAt]
+      properties:
+        ok: { type: boolean }
+        code:
+          type: string
+          description: Stable failure family, or "none" for the last successful call.
+        observedAt: { type: string, format: date-time }
+        observedBy:
+          type: string
+          description: Which worker made the call observation.
+        lastOkAt:
+          type: string
+          format: date-time
+          description: The last successful tools/call observation, if one has ever succeeded.
 
     ModelProvider:
       type: object

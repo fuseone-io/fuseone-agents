@@ -37,11 +37,24 @@ type Integrations interface {
 }
 
 func healthFrom(seen domain.IntegrationHealth) openapi.IntegrationHealth {
-	return openapi.IntegrationHealth{
+	out := openapi.IntegrationHealth{
 		Reachable: seen.Reachable, ToolCount: seen.ToolCount,
 		Detail: ptr(seen.Detail), ObservedAt: seen.ObservedAt,
 		ObservedBy: ptr(seen.ObservedBy),
 	}
+	if seen.LastReachableAt != nil {
+		out.LastReachableAt = seen.LastReachableAt
+	}
+	if seen.ToolCall != nil {
+		out.ToolCall = &openapi.IntegrationToolCallHealth{
+			Ok:         seen.ToolCall.OK,
+			Code:       seen.ToolCall.Code,
+			ObservedAt: seen.ToolCall.ObservedAt,
+			ObservedBy: ptr(seen.ToolCall.ObservedBy),
+			LastOkAt:   seen.ToolCall.LastOKAt,
+		}
+	}
+	return out
 }
 
 func (s *Server) ListIntegrations(ctx context.Context, _ openapi.ListIntegrationsRequestObject) (openapi.ListIntegrationsResponseObject, error) {

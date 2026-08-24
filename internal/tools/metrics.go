@@ -1,7 +1,10 @@
 package tools
 
 import (
+	"context"
 	"errors"
+	"log/slog"
+	"time"
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/mcpmetrics"
@@ -35,6 +38,39 @@ func MCPMetricCodes() []string {
 type Metrics interface {
 	MCPToolCall(result, code string, cached bool)
 	MCPReservationRefused(code string)
+}
+
+// ToolCallHealth receives the stable outcome of concrete tools/call attempts.
+type ToolCallHealth interface {
+	RecordToolCall(ctx context.Context, obs domain.IntegrationToolCallObservation) error
+}
+
+func recordMCPToolHealth(
+	ctx context.Context,
+	health ToolCallHealth,
+	observedBy string,
+	server string,
+	ok bool,
+	code string,
+	observedAt time.Time,
+) {
+	if health == nil || server == "" {
+		return
+	}
+	code = MCPMetricCode(code)
+	if ok {
+		code = CodeMCPNoCode
+	}
+	err := health.RecordToolCall(ctx, domain.IntegrationToolCallObservation{
+		Name:       server,
+		OK:         ok,
+		Code:       code,
+		ObservedAt: observedAt.UTC(),
+		ObservedBy: observedBy,
+	})
+	if err != nil {
+		slog.Warn("could not record MCP tool-call health", "server", server, "err", err)
+	}
 }
 
 type failureSummarizer interface {

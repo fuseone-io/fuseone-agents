@@ -54,6 +54,98 @@ func TestForget_oneNobodyEverObserved_isNotAnError(t *testing.T) {
 	}
 }
 
+func TestRecord_aFailedDiscoveryKeepsTheLastSuccessfulProbe(t *testing.T) {
+	health := newHealth(t)
+	ctx := context.Background()
+	answered := time.Date(2026, 8, 24, 10, 0, 0, 0, time.UTC)
+	failed := answered.Add(10 * time.Minute)
+
+	if err := health.Record(ctx, domain.IntegrationHealth{
+		Name: "crm", Reachable: true, ToolCount: 3,
+		ObservedAt: answered, ObservedBy: "worker-a",
+	}); err != nil {
+		t.Fatalf("Record success: %v", err)
+	}
+	if err := health.Record(ctx, domain.IntegrationHealth{
+		Name: "crm", Reachable: false, Detail: "connection refused",
+		ObservedAt: failed, ObservedBy: "worker-b",
+	}); err != nil {
+		t.Fatalf("Record failure: %v", err)
+	}
+
+	all, err := health.All(ctx)
+	if err != nil {
+		t.Fatalf("All: %v", err)
+	}
+	got := all["crm"]
+	if got.Reachable || got.LastReachableAt == nil || !got.LastReachableAt.Equal(answered) {
+		t.Fatalf("health = %#v, want failure with last success preserved", got)
+	}
+}
+
+func TestRecordToolCall_aFailedCallKeepsTheLastSuccessfulCall(t *testing.T) {
+	health := newHealth(t)
+	ctx := context.Background()
+	answered := time.Date(2026, 8, 24, 10, 0, 0, 0, time.UTC)
+	failed := answered.Add(10 * time.Minute)
+
+	if err := health.Record(ctx, domain.IntegrationHealth{
+		Name: "crm", Reachable: true, ToolCount: 3,
+		ObservedAt: answered, ObservedBy: "worker-a",
+	}); err != nil {
+		t.Fatalf("Record discovery: %v", err)
+	}
+	if err := health.RecordToolCall(ctx, domain.IntegrationToolCallObservation{
+		Name: "crm", OK: true, Code: "none",
+		ObservedAt: answered, ObservedBy: "worker-a",
+	}); err != nil {
+		t.Fatalf("RecordToolCall success: %v", err)
+	}
+	if err := health.RecordToolCall(ctx, domain.IntegrationToolCallObservation{
+		Name: "crm", OK: false, Code: "mcp_personal_credential_missing",
+		ObservedAt: failed, ObservedBy: "worker-b",
+	}); err != nil {
+		t.Fatalf("RecordToolCall failure: %v", err)
+	}
+
+	all, err := health.All(ctx)
+	if err != nil {
+		t.Fatalf("All: %v", err)
+	}
+	got := all["crm"]
+	if got.ToolCall == nil {
+		t.Fatal("tool-call health missing")
+	}
+	if got.ToolCall.OK || got.ToolCall.Code != "mcp_personal_credential_missing" ||
+		got.ToolCall.LastOKAt == nil || !got.ToolCall.LastOKAt.Equal(answered) {
+		t.Fatalf("tool-call health = %#v, want failed call with last success preserved", got.ToolCall)
+	}
+	if !got.Reachable {
+		t.Fatalf("discovery was overwritten by tool-call health: %#v", got)
+	}
+}
+
+func TestRecordToolCall_withoutDiscoveryDoesNotInventDiscovery(t *testing.T) {
+	health := newHealth(t)
+	ctx := context.Background()
+	at := time.Date(2026, 8, 24, 15, 0, 0, 0, time.UTC)
+
+	if err := health.RecordToolCall(ctx, domain.IntegrationToolCallObservation{
+		Name: "crm", OK: true, Code: "none",
+		ObservedAt: at, ObservedBy: "worker-a",
+	}); err != nil {
+		t.Fatalf("RecordToolCall: %v", err)
+	}
+
+	all, err := health.All(ctx)
+	if err != nil {
+		t.Fatalf("All: %v", err)
+	}
+	if _, exists := all["crm"]; exists {
+		t.Fatalf("tool-call health invented discovery: %#v", all["crm"])
+	}
+}
+
 func TestDeleteMCPServer_forgetsWhatWasObservedAboutIt(t *testing.T) {
 	pool := openPool(t)
 	ctx := context.Background()

@@ -1137,6 +1137,42 @@ func TestListIntegrations_keepsOneAWorkerStillHolds(t *testing.T) {
 	}
 }
 
+func TestListIntegrationsSeparatesDiscoveryFromToolCallHealth(t *testing.T) {
+	t.Parallel()
+
+	discovered := time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC)
+	called := discovered.Add(5 * time.Minute)
+	lastCall := discovered.Add(-30 * time.Minute)
+	admin := &fakeAdmin{servers: []domain.MCPServer{{
+		Name: "crm", Transport: domain.TransportHTTP, URL: "https://mcp.example/crm",
+		Enabled: true,
+	}}}
+	health := fakeHealth{"crm": {
+		Name: "crm", Reachable: true, ToolCount: 3,
+		ObservedAt: discovered, ObservedBy: "worker-a",
+		ToolCall: &domain.IntegrationToolCallHealth{
+			OK: false, Code: "mcp_personal_credential_missing",
+			ObservedAt: called, ObservedBy: "worker-b", LastOKAt: &lastCall,
+		},
+	}}
+
+	resp, err := serverWith(t, admin).WithHealth(health).
+		ListIntegrations(as(domain.RoleCurator), openapi.ListIntegrationsRequestObject{})
+	if err != nil {
+		t.Fatalf("ListIntegrations: %v", err)
+	}
+	body := resp.(openapi.ListIntegrations200JSONResponse)
+	got := body.McpServers[0].Health
+	if got == nil || got.ToolCall == nil {
+		t.Fatalf("health = %#v, want tool-call health", got)
+	}
+	if !got.Reachable || got.ToolCall.Ok ||
+		got.ToolCall.Code != "mcp_personal_credential_missing" ||
+		got.ToolCall.LastOkAt == nil || !got.ToolCall.LastOkAt.Equal(lastCall) {
+		t.Fatalf("health = %#v, want discovery success and call failure", got)
+	}
+}
+
 // fakeHealth stands in for what workers observed.
 type fakeHealth map[string]domain.IntegrationHealth
 
