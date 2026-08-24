@@ -27,6 +27,8 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.28.0] — 2026-08-24
+
 ### Upgrade notes
 
 - **Runtime failure diagnostics add partial indexes over `run_steps`.** The
@@ -44,6 +46,21 @@ field" is a commit message.
   the same retention boundary as old channel input and delivery diagnostics.
 
 ### Added
+
+- **The worker's `/metrics` endpoint now answers for MCP and channels too**, not
+  only the run pool: tool calls by result and stable code, calls refused before
+  leaving the worker, channel sweeps by task and result, and each channel
+  failure counted by its own code rather than whichever one sorted first.
+
+  This endpoint is deliberately the volatile half. It reports what *this worker
+  process* has seen since it started, it resets on restart, and two replicas
+  answer two different numbers. It is the right source for "is this happening
+  right now" and the wrong one for "since when" — which is why the console does
+  not read it.
+
+  Every label is drawn from a fixed vocabulary and anything outside it becomes
+  `other`, so a code that arrives from a third-party MCP server cannot grow the
+  label set or the process's memory.
 
 - **The runtime page now shows durable channel delivery failures.** When a
   channel announcement cannot be delivered, the reporter records the stable
