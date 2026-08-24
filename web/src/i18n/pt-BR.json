@@ -1274,6 +1274,7 @@
     "egressTitle": "Alcance de rede",
     "egressMetadataRefused": "Endereços de metadata de nuvem e link-local são recusados. Proxies de ambiente são recusados para que a validação de endereço use DNS local. Destinos na rede privada e na internet continuam permitidos.",
     "egressProxyRequested": "Este processo local recebe HTTP_PROXY e HTTPS_PROXY para um proxy local do worker que recusa destinos fora da allow-list. Isso ainda não impede sockets diretos sem uma política de rede no deploy.",
+    "egressProxyWithNetworkPolicy": "Este processo local usa o proxy local do worker, que recusa destinos fora da allow-list, e o operador declarou que os pods de worker estão cobertos por NetworkPolicy aplicada pelo cluster. O FuseOne não verifica o CNI; esta afirmação depende dessa declaração operacional.",
     "egressLocalUnconstrained": "O FuseOne não restringe destinos de saída deste processo local. Ele roda com o acesso de rede do worker.",
     "egressUnknown": "Este servidor observado pelo worker não tem transporte configurado no console, então o FuseOne não consegue descrever sua política de egresso.",
     "stdioEgressMode": "Egresso do processo local",

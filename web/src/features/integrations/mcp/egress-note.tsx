@@ -30,6 +30,8 @@ function messageOf(
       return t("mcp.egressMetadataRefused");
     case "proxy_requested":
       return t("mcp.egressProxyRequested");
+    case "proxy_with_network_policy":
+      return t("mcp.egressProxyWithNetworkPolicy");
     case "unconstrained_local_process":
       return t("mcp.egressLocalUnconstrained");
     default:

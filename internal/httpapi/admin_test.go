@@ -552,6 +552,74 @@ func TestListIntegrations_saysProxiedStdioRequestedAProxy(t *testing.T) {
 	}
 }
 
+func TestListIntegrations_saysStdioNetworkPolicyRequiresProxyAndDeclaration(t *testing.T) {
+	t.Parallel()
+
+	proxied := &domain.MCPStdioEgress{
+		Mode: domain.MCPEgressProxied,
+		AllowedDestinations: []domain.MCPEgressDestination{
+			{Host: "wiki.internal", Port: 443},
+		},
+	}
+	cases := []struct {
+		name     string
+		egress   *domain.MCPStdioEgress
+		declared bool
+		want     openapi.MCPServerEgressPolicy
+	}{
+		{
+			name: "proxied and declared", egress: proxied, declared: true,
+			want: openapi.MCPServerEgressPolicyProxyWithNetworkPolicy,
+		},
+		{
+			name: "proxied and not declared", egress: proxied,
+			want: openapi.MCPServerEgressPolicyProxyRequested,
+		},
+		{
+			name: "inherit and declared",
+			egress: &domain.MCPStdioEgress{
+				Mode: domain.MCPEgressInherit,
+			},
+			declared: true,
+			want:     openapi.MCPServerEgressPolicyUnconstrainedLocalProcess,
+		},
+		{
+			name:     "no egress config and declared",
+			declared: true,
+			want:     openapi.MCPServerEgressPolicyUnconstrainedLocalProcess,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			admin := &fakeAdmin{
+				servers: []domain.MCPServer{{
+					Name: "local-wiki", Transport: domain.TransportStdio,
+					Command: "wiki-mcp", Enabled: true,
+					StdioEgress: tc.egress,
+				}},
+			}
+
+			resp, err := serverWith(t, admin).
+				WithStdioEgressNetworkPolicyDeclared(tc.declared).
+				ListIntegrations(as(domain.RoleCurator), openapi.ListIntegrationsRequestObject{})
+			if err != nil {
+				t.Fatalf("ListIntegrations: %v", err)
+			}
+			egress := egressOf(t, resp, "local-wiki")
+			if egress.Policy != tc.want {
+				t.Fatalf("egress = %+v, want %s", egress, tc.want)
+			}
+			if tc.want != openapi.MCPServerEgressPolicyProxyWithNetworkPolicy &&
+				egress.Policy == openapi.MCPServerEgressPolicyProxyWithNetworkPolicy {
+				t.Fatal("network policy declaration promoted a server that was not both proxied and declared")
+			}
+		})
+	}
+}
+
 func callAuthOf(
 	t *testing.T, resp openapi.ListIntegrationsResponseObject, name string,
 ) openapi.MCPServerCallAuth {

@@ -4476,7 +4476,7 @@ components:
       properties:
         policy:
           type: string
-          enum: [unknown, metadata_refused, proxy_requested, unconstrained_local_process]
+          enum: [unknown, metadata_refused, proxy_requested, proxy_with_network_policy, unconstrained_local_process]
           description: |
             unknown: the worker observed the server but the console does not
             know its transport/configuration. metadata_refused: HTTP MCP uses
@@ -4485,7 +4485,11 @@ components:
             destinations are otherwise allowed. proxy_requested: stdio receives
             HTTP(S) proxy variables for a worker-local proxy that refuses
             destinations outside the stored allow-list; deployment-level network
-            policy is still what prevents bypass. unconstrained_local_process: stdio
+            policy is still what prevents bypass. proxy_with_network_policy: the
+            same local proxy is requested and the operator has explicitly
+            declared that the worker deployment is covered by enforced
+            NetworkPolicy, which is not inferred from manifest presence.
+            unconstrained_local_process: stdio
             starts a process on the worker and the platform does not constrain
             its outbound destinations.
 

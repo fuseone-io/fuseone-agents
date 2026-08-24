@@ -27,6 +27,23 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Upgrade notes
+
+- **A strong stdio MCP egress statement now requires an explicit operator
+  declaration.** `worker.stdioEgress.networkPolicy.enforced=true` tells the
+  console that worker pods are covered by CNI-enforced NetworkPolicy, whether
+  rendered by this chart or installed separately. Do not enable it on clusters
+  where NetworkPolicy is ignored or not covering the worker pods; the platform
+  cannot infer that from manifest presence.
+
+### Changed
+
+- **Proxied stdio MCP connections now distinguish proxy-only from proxy plus
+  deployment containment.** Without the declaration, the console still says the
+  local proxy refuses destinations outside the allow-list but direct sockets
+  need deployment NetworkPolicy. With the declaration, it says the operator has
+  stated that policy is enforced.
+
 ## [0.28.0] — 2026-08-24
 
 ### Upgrade notes

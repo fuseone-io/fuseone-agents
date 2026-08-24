@@ -117,6 +117,10 @@ type Server struct {
 	// signing is the key exports are sealed with.
 	signing   Signing
 	publisher Publisher
+	// stdioEgressNetworkPolicyDeclared is an operator assertion: the cluster
+	// applies network policy around workers. The API cannot infer that from
+	// rendered YAML, because a CNI can ignore NetworkPolicy entirely.
+	stdioEgressNetworkPolicyDeclared bool
 	// clock is injectable so a run's opening instant is a fact of the request
 	// rather than of whichever machine happened to serve it.
 	clock Clock
@@ -136,6 +140,13 @@ func (s *Server) WithClock(clock Clock) *Server {
 
 func NewServer(store Store, version string) *Server {
 	return &Server{store: store, version: version}
+}
+
+// WithStdioEgressNetworkPolicyDeclared records the operator's statement that
+// the deployment prevents stdio MCP processes from bypassing the local proxy.
+func (s *Server) WithStdioEgressNetworkPolicyDeclared(declared bool) *Server {
+	s.stdioEgressNetworkPolicyDeclared = declared
+	return s
 }
 
 // WithAdministration returns the server with the administration area wired.

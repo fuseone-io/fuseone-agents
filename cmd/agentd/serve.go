@@ -155,6 +155,9 @@ func serve(args []string) error {
 			WithSigning(admin.NewSigning(identity.pool, store)).
 			WithMoney(admin.NewMoney(identity.pool, store)).
 			WithPlanningSpend(finops.NewSpend(identity.pool)).
+			WithStdioEgressNetworkPolicyDeclared(
+				os.Getenv("FUSEONE_STDIO_EGRESS_NETWORK_POLICY_DECLARED") == "true",
+			).
 			WithBranding(admin.NewBranding(identity.pool, store)).
 			WithRetention(
 				admin.NewRetention(identity.pool, store),

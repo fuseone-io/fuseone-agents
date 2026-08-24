@@ -2854,12 +2854,16 @@ export interface components {
              *     destinations are otherwise allowed. proxy_requested: stdio receives
              *     HTTP(S) proxy variables for a worker-local proxy that refuses
              *     destinations outside the stored allow-list; deployment-level network
-             *     policy is still what prevents bypass. unconstrained_local_process: stdio
+             *     policy is still what prevents bypass. proxy_with_network_policy: the
+             *     same local proxy is requested and the operator has explicitly
+             *     declared that the worker deployment is covered by enforced
+             *     NetworkPolicy, which is not inferred from manifest presence.
+             *     unconstrained_local_process: stdio
              *     starts a process on the worker and the platform does not constrain
              *     its outbound destinations.
              * @enum {string}
              */
-            policy: "unknown" | "metadata_refused" | "proxy_requested" | "unconstrained_local_process";
+            policy: "unknown" | "metadata_refused" | "proxy_requested" | "proxy_with_network_policy" | "unconstrained_local_process";
         };
         MCPServer: {
             /** @description Namespaces the tools it offers, so two servers naming a tool "search" do not collide. */

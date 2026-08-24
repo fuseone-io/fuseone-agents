@@ -23,6 +23,8 @@ COMBINATIONS = [
     ["--set", "ingress.enabled=true", "--set", "ingress.host=a.example.com"],
     ["--set", "gateway.enabled=true", "--set", "gateway.parentRefs[0].name=g"],
     ["--set", "networkPolicy.enabled=true"],
+    ["--set", "worker.stdioEgress.networkPolicy.enforced=true"],
+    ["--set", "networkPolicy.enabled=true", "--set", "worker.stdioEgress.networkPolicy.enforced=true"],
     ["--set", "topologySpread.enabled=false"],
 ]
 CARRIES_PODS = ("Deployment", "Job", "StatefulSet", "DaemonSet")
@@ -38,6 +40,35 @@ def mounts_resolve(doc):
                 yield f"{doc['metadata']['name']}: mounts {mount['name']}, which no volume provides"
 
 
+def env_value(doc, container_name, name):
+    spec = doc["spec"]["template"]["spec"]
+    for container in spec.get("containers", []):
+        if container["name"] != container_name:
+            continue
+        for item in container.get("env", []):
+            if item["name"] == name:
+                return item.get("value")
+    return None
+
+
+def network_policy_declaration_matches(extra, docs):
+    expected = (
+        "true"
+        if "worker.stdioEgress.networkPolicy.enforced=true" in extra
+        else "false"
+    )
+    saw_serve = False
+    for doc in docs:
+        if doc and doc.get("kind") == "Deployment" and doc["metadata"]["name"].endswith("-serve"):
+            saw_serve = True
+            actual = env_value(doc, "serve", "FUSEONE_STDIO_EGRESS_NETWORK_POLICY_DECLARED")
+            if actual != expected:
+                return f"{' '.join(extra) or 'defaults'} — serve egress declaration = {actual!r}, want {expected!r}"
+    if not saw_serve:
+        return f"{' '.join(extra) or 'defaults'} — serve deployment was not rendered"
+    return None
+
+
 def main():
     problems = []
     for extra in COMBINATIONS:
@@ -48,7 +79,11 @@ def main():
         if rendered.returncode != 0:
             problems.append(f"{' '.join(extra) or 'defaults'}: {rendered.stderr.strip().splitlines()[-1]}")
             continue
-        for doc in yaml.safe_load_all(rendered.stdout):
+        docs = list(yaml.safe_load_all(rendered.stdout))
+        problem = network_policy_declaration_matches(extra, docs)
+        if problem:
+            problems.append(problem)
+        for doc in docs:
             if doc and doc.get("kind") in CARRIES_PODS:
                 problems.extend(f"{' '.join(extra) or 'defaults'} — {p}" for p in mounts_resolve(doc))
 

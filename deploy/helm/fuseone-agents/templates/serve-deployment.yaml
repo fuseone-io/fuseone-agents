@@ -41,7 +41,11 @@ spec:
             {{- if .Values.baseUrl }}
             - --base-url={{ .Values.baseUrl }}
             {{- end }}
-          env: {{- include "fuseone.env" . | nindent 12 }}
+          env:
+            {{- include "fuseone.env" . | nindent 12 }}
+            {{- $stdioNetworkPolicyEnforced := default false ((((.Values.worker).stdioEgress).networkPolicy).enforced) }}
+            - name: FUSEONE_STDIO_EGRESS_NETWORK_POLICY_DECLARED
+              value: {{ ternary "true" "false" $stdioNetworkPolicyEnforced | quote }}
           ports:
             - name: http
               containerPort: 8080

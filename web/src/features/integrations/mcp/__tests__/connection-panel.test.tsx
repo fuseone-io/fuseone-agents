@@ -16,6 +16,8 @@ const PT_EGRESS_METADATA =
   "Endereços de metadata de nuvem e link-local são recusados. Proxies de ambiente são recusados para que a validação de endereço use DNS local. Destinos na rede privada e na internet continuam permitidos.";
 const PT_EGRESS_PROXY =
   "Este processo local recebe HTTP_PROXY e HTTPS_PROXY para um proxy local do worker que recusa destinos fora da allow-list. Isso ainda não impede sockets diretos sem uma política de rede no deploy.";
+const PT_EGRESS_PROXY_WITH_NETWORK_POLICY =
+  "Este processo local usa o proxy local do worker, que recusa destinos fora da allow-list, e o operador declarou que os pods de worker estão cobertos por NetworkPolicy aplicada pelo cluster. O FuseOne não verifica o CNI; esta afirmação depende dessa declaração operacional.";
 const PT_EGRESS_LOCAL =
   "O FuseOne não restringe destinos de saída deste processo local. Ele roda com o acesso de rede do worker.";
 const PT_EGRESS_UNKNOWN =
@@ -24,6 +26,8 @@ const EN_EGRESS_METADATA =
   "Cloud metadata and link-local addresses are refused. Environment proxies are refused so address validation uses local DNS. Private network and internet destinations are otherwise allowed.";
 const EN_EGRESS_PROXY =
   "This local process receives HTTP_PROXY and HTTPS_PROXY for a worker-local proxy that refuses destinations outside its allow-list. This still does not prevent direct sockets without a deployment network policy.";
+const EN_EGRESS_PROXY_WITH_NETWORK_POLICY =
+  "This local process uses the worker-local proxy that refuses destinations outside its allow-list, and the operator declared that worker pods are covered by cluster-enforced NetworkPolicy. FuseOne does not verify the CNI; this statement depends on that operational declaration.";
 const EN_EGRESS_LOCAL =
   "FuseOne does not constrain outbound destinations for this local process. It runs with the worker's network access.";
 const EN_EGRESS_UNKNOWN =
@@ -153,10 +157,16 @@ describe("the MCP connection panel", () => {
   it("pins the egress statements in both locales", () => {
     expect(ptBR.mcp.egressMetadataRefused).toBe(PT_EGRESS_METADATA);
     expect(ptBR.mcp.egressProxyRequested).toBe(PT_EGRESS_PROXY);
+    expect(ptBR.mcp.egressProxyWithNetworkPolicy).toBe(
+      PT_EGRESS_PROXY_WITH_NETWORK_POLICY,
+    );
     expect(ptBR.mcp.egressLocalUnconstrained).toBe(PT_EGRESS_LOCAL);
     expect(ptBR.mcp.egressUnknown).toBe(PT_EGRESS_UNKNOWN);
     expect(enUS.mcp.egressMetadataRefused).toBe(EN_EGRESS_METADATA);
     expect(enUS.mcp.egressProxyRequested).toBe(EN_EGRESS_PROXY);
+    expect(enUS.mcp.egressProxyWithNetworkPolicy).toBe(
+      EN_EGRESS_PROXY_WITH_NETWORK_POLICY,
+    );
     expect(enUS.mcp.egressLocalUnconstrained).toBe(EN_EGRESS_LOCAL);
     expect(enUS.mcp.egressUnknown).toBe(EN_EGRESS_UNKNOWN);
   });
@@ -206,6 +216,24 @@ describe("the MCP connection panel", () => {
     );
 
     expect(screen.getByText(PT_EGRESS_PROXY)).toBeInTheDocument();
+  });
+
+  it("says proxied stdio has deployment containment only after the operator declaration", () => {
+    render(
+      <ConnectionPanel
+        server={{
+          name: "local-wiki",
+          transport: "stdio",
+          command: "wiki-mcp",
+          args: [],
+          enabled: true,
+          egress: { policy: "proxy_with_network_policy" },
+        }}
+      />,
+    );
+
+    expect(screen.getByText(PT_EGRESS_PROXY_WITH_NETWORK_POLICY))
+      .toBeInTheDocument();
   });
 
   it("says observed unmanaged servers have unknown egress policy", () => {

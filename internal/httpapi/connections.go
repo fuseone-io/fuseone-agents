@@ -109,7 +109,7 @@ func (s *Server) ListIntegrations(ctx context.Context, _ openapi.ListIntegration
 			Surface:               srv.Surface,
 			AcceptsLocalExecution: ptr(srv.AcceptsLocalExecution),
 			CallAuth:              ptr(callAuth.forServer(srv.Name, srv.TransportOf())),
-			Egress:                ptr(mcpEgress(srv)),
+			Egress:                ptr(s.mcpEgress(srv)),
 			StdioEgress:           stdioEgressToResponse(srv.StdioEgress),
 		}
 		server.Command = someString(srv.Command)
@@ -221,14 +221,18 @@ func (a mcpCallAuth) forServer(name, transport string) openapi.MCPServerCallAuth
 	}
 }
 
-func mcpEgress(server domain.MCPServer) openapi.MCPServerEgress {
+func (s *Server) mcpEgress(server domain.MCPServer) openapi.MCPServerEgress {
 	policy := openapi.MCPServerEgressPolicyUnknown
 	switch server.TransportOf() {
 	case domain.TransportHTTP:
 		policy = openapi.MCPServerEgressPolicyMetadataRefused
 	case domain.TransportStdio:
 		if server.StdioEgress != nil && server.StdioEgress.Mode == domain.MCPEgressProxied {
-			policy = openapi.MCPServerEgressPolicyProxyRequested
+			if s.stdioEgressNetworkPolicyDeclared {
+				policy = openapi.MCPServerEgressPolicyProxyWithNetworkPolicy
+			} else {
+				policy = openapi.MCPServerEgressPolicyProxyRequested
+			}
 		} else {
 			policy = openapi.MCPServerEgressPolicyUnconstrainedLocalProcess
 		}

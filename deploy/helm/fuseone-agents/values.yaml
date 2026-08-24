@@ -61,6 +61,13 @@ worker:
   metrics:
     enabled: true
     port: 9090
+  stdioEgress:
+    networkPolicy:
+      # Operator declaration, not chart auto-detection. Set true only when the
+      # worker pods are actually isolated by a CNI-enforced NetworkPolicy
+      # (rendered by this chart or installed separately). The console uses this
+      # to say that proxied stdio MCP servers have deployment-level containment.
+      enforced: false
 
 # Migrations run as a job before the pods that need them. It takes an advisory
 # lock, so a second one waits rather than racing — but a hook gives a clear
