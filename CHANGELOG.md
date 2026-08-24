@@ -27,6 +27,37 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.33.0] — 2026-08-24
+
+### Security
+
+- **An agent whose untrusted input can reach a destructive or financial tool
+  no longer publishes.** The draft's declared steps are checked against the
+  tool catalogue before the version is saved, and a path from an untrusted
+  source to a non-reversible act is refused with the path named.
+
+  Reversible writes still publish. They are answered by the Gate at the
+  concrete call, with the real arguments in front of a person — which is a
+  decision somebody can actually make. Destructive and financial acts are not
+  made safe that way: by the time the approval is asked, the model has already
+  chosen the target from text it did not verify.
+
+  The way out is order, not an override. Sources carry forward, so a
+  non-reversible tool in a step *before* any untrusted read still publishes —
+  the same rule taint follows at runtime. An unclassified tool does not block
+  publication, because the Gate already refuses to call one.
+
+### Added
+
+- **The trail shows the labels each step carried.** `planned` names the labels
+  on the model input for that planning call; `gate_decided`,
+  `approval_requested` and `tool_called` name the labels on the tool input
+  being judged or executed. Reading a shared context artifact also records the
+  run it came from and its digest.
+
+  Provenance stops being something to reconstruct by reading the whole trail
+  and becomes something each step states about itself.
+
 ## [0.32.0] — 2026-08-24
 
 ### Added
