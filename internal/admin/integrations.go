@@ -420,6 +420,39 @@ func (i *Integrations) MCPPersonalCredentials(
 	return out, nil
 }
 
+// MCPPersonalCredentialPresence reports which named remote servers have a
+// credential for this principal. It reads exact keys instead of scanning every
+// user's credential row; the integrations page grows with connected servers,
+// not with every person in the installation.
+func (i *Integrations) MCPPersonalCredentialPresence(
+	ctx context.Context, principal domain.UserID, servers []string,
+) (map[string]bool, error) {
+	out := map[string]bool{}
+	seen := map[string]bool{}
+	for _, server := range servers {
+		if server == "" || seen[server] {
+			continue
+		}
+		seen[server] = true
+		set, err := i.settings.Get(ctx,
+			settings.ScopeInstallation, domain.Scope{},
+			settings.KindMCPUserCredential, mcpUserCredentialName(server, principal))
+		switch {
+		case errors.Is(err, settings.ErrNotFound):
+			continue
+		case err != nil:
+			return nil, err
+		}
+		if _, err := storedPersonalCredential(set, server, principal); err != nil {
+			return nil, err
+		}
+		if set.HasSecret {
+			out[server] = true
+		}
+	}
+	return out, nil
+}
+
 // MCPPersonalCredential opens one person's credential for one server. It is
 // used only at call time, when the run has an OnBehalfOf to name whose
 // credential may be sent.

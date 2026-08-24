@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/model"
@@ -23,6 +24,7 @@ needs the absence answered as plainly as the presence.
 type Integrations interface {
 	MCPServers(ctx context.Context) ([]domain.MCPServer, error)
 	MCPPersonalCredentials(ctx context.Context, principal domain.UserID) ([]domain.MCPPersonalCredential, error)
+	MCPPersonalCredentialPresence(ctx context.Context, principal domain.UserID, servers []string) (map[string]bool, error)
 	PutMCPPersonalCredential(ctx context.Context, by domain.UserID, scope domain.Scope, name string, creds domain.MCPCredentialPatch) error
 	DeleteMCPPersonalCredential(ctx context.Context, by domain.UserID, scope domain.Scope, name string) error
 	Providers(ctx context.Context) ([]domain.ModelProvider, error)
@@ -67,6 +69,10 @@ func (s *Server) ListIntegrations(ctx context.Context, _ openapi.ListIntegration
 	if err != nil {
 		return nil, fmt.Errorf("list MCP servers: %w", err)
 	}
+	callAuth, err := s.mcpCallAuth(ctx, servers)
+	if err != nil {
+		return nil, err
+	}
 
 	// What was observed, beside what was configured. A server can be enabled,
 	// correct and unreachable, and only one of those three is somebody's
@@ -102,6 +108,7 @@ func (s *Server) ListIntegrations(ctx context.Context, _ openapi.ListIntegration
 			// an empty list is "chosen, and none of it".
 			Surface:               srv.Surface,
 			AcceptsLocalExecution: ptr(srv.AcceptsLocalExecution),
+			CallAuth:              ptr(callAuth.forServer(srv.Name, srv.TransportOf())),
 		}
 		server.Command = someString(srv.Command)
 		server.Url = someString(srv.URL)
@@ -153,6 +160,60 @@ func (s *Server) ListIntegrations(ctx context.Context, _ openapi.ListIntegration
 		})
 	}
 	return body, nil
+}
+
+type mcpCallAuth struct {
+	known    map[string]bool
+	personal map[string]bool
+}
+
+func (s *Server) mcpCallAuth(ctx context.Context, servers []domain.MCPServer) (mcpCallAuth, error) {
+	out := mcpCallAuth{known: map[string]bool{}, personal: map[string]bool{}}
+	if s.known != nil {
+		for _, entry := range s.known.All() {
+			out.known[entry.Server] = entry.RequiresPersonalCredential()
+		}
+	}
+	caller, ok := auth.PrincipalFrom(ctx)
+	if !ok || s.integrations == nil {
+		return out, nil
+	}
+	personal, err := s.integrations.MCPPersonalCredentialPresence(
+		ctx, caller.ID, remoteServerNames(servers))
+	if err != nil {
+		return mcpCallAuth{}, fmt.Errorf("list caller MCP credentials: %w", err)
+	}
+	out.personal = personal
+	return out, nil
+}
+
+func remoteServerNames(servers []domain.MCPServer) []string {
+	var out []string
+	for _, server := range servers {
+		if server.TransportOf() == domain.TransportHTTP {
+			out = append(out, server.Name)
+		}
+	}
+	return out
+}
+
+func (a mcpCallAuth) forServer(name, transport string) openapi.MCPServerCallAuth {
+	policy := openapi.MCPServerCallAuthPolicyUnknown
+	hasPersonal := a.personal[name]
+	if transport == domain.TransportStdio {
+		policy = openapi.MCPServerCallAuthPolicyLocalProcess
+		hasPersonal = false
+	} else if requiresPersonal, ok := a.known[name]; ok {
+		if requiresPersonal {
+			policy = openapi.MCPServerCallAuthPolicyPersonalRequired
+		} else {
+			policy = openapi.MCPServerCallAuthPolicyInstallationOrService
+		}
+	}
+	return openapi.MCPServerCallAuth{
+		Policy:                      policy,
+		CallerHasPersonalCredential: hasPersonal,
+	}
 }
 
 func rateLimitToResponse(limit *domain.MCPRateLimit) *openapi.MCPRateLimit {

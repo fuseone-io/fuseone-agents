@@ -27,6 +27,7 @@ type fakeAdmin struct {
 	putOAuth    *domain.MCPOAuthGrant
 	putEnv      map[string]string
 	token       string
+	personalFor domain.UserID
 	putProvider domain.ModelProvider
 	putKey      string
 	putBy       domain.UserID
@@ -41,8 +42,25 @@ func (f *fakeAdmin) MCPServers(context.Context) ([]domain.MCPServer, error) {
 func (f *fakeAdmin) Providers(context.Context) ([]domain.ModelProvider, error) {
 	return f.providers, f.err
 }
-func (f *fakeAdmin) MCPPersonalCredentials(context.Context, domain.UserID) ([]domain.MCPPersonalCredential, error) {
+func (f *fakeAdmin) MCPPersonalCredentials(_ context.Context, principal domain.UserID) ([]domain.MCPPersonalCredential, error) {
+	f.personalFor = principal
 	return f.personal, f.err
+}
+func (f *fakeAdmin) MCPPersonalCredentialPresence(
+	_ context.Context, principal domain.UserID, servers []string,
+) (map[string]bool, error) {
+	f.personalFor = principal
+	out := map[string]bool{}
+	for _, server := range servers {
+		for _, credential := range f.personal {
+			if credential.Server == server &&
+				credential.Principal == principal &&
+				credential.HasSecret {
+				out[server] = true
+			}
+		}
+	}
+	return out, f.err
 }
 func (f *fakeAdmin) PutMCPPersonalCredential(
 	_ context.Context, by domain.UserID, _ domain.Scope, name string,
@@ -392,6 +410,120 @@ func TestListMCPUserCredentials_returnsPresenceOnly(t *testing.T) {
 		body.Items[0].HasOAuth {
 		t.Fatalf("items = %+v, want only credential presence", body.Items)
 	}
+}
+
+func TestListIntegrations_explainsPersonalCredentialRequirementForCaller(t *testing.T) {
+	t.Parallel()
+
+	shipped, err := known.Load()
+	if err != nil {
+		t.Fatalf("known: %v", err)
+	}
+	admin := &fakeAdmin{servers: []domain.MCPServer{{
+		Name: "outline", Transport: domain.TransportHTTP, URL: "https://wiki.example/mcp",
+		Enabled: true, HasSecret: true,
+	}}}
+
+	resp, err := serverWith(t, admin).WithKnown(shipped).
+		ListIntegrations(as(domain.RoleCurator), openapi.ListIntegrationsRequestObject{})
+	if err != nil {
+		t.Fatalf("ListIntegrations: %v", err)
+	}
+	auth := callAuthOf(t, resp, "outline")
+	if auth.Policy != openapi.MCPServerCallAuthPolicyPersonalRequired ||
+		auth.CallerHasPersonalCredential {
+		t.Fatalf("call auth = %+v, want personal required and missing", auth)
+	}
+	if admin.personalFor != "usr_ana" {
+		t.Fatalf("personal credentials were listed for %q, want the caller", admin.personalFor)
+	}
+}
+
+func TestListIntegrations_reportsTheCallersPersonalCredentialPresence(t *testing.T) {
+	t.Parallel()
+
+	shipped, err := known.Load()
+	if err != nil {
+		t.Fatalf("known: %v", err)
+	}
+	admin := &fakeAdmin{
+		servers: []domain.MCPServer{{
+			Name: "github", Transport: domain.TransportHTTP,
+			URL: "https://api.githubcopilot.com/mcp/", Enabled: true,
+		}},
+		personal: []domain.MCPPersonalCredential{{
+			Server: "github", Principal: "usr_ana", HasSecret: true,
+		}},
+	}
+
+	resp, err := serverWith(t, admin).WithKnown(shipped).
+		ListIntegrations(as(domain.RoleCurator), openapi.ListIntegrationsRequestObject{})
+	if err != nil {
+		t.Fatalf("ListIntegrations: %v", err)
+	}
+	auth := callAuthOf(t, resp, "github")
+	if auth.Policy != openapi.MCPServerCallAuthPolicyPersonalRequired ||
+		!auth.CallerHasPersonalCredential {
+		t.Fatalf("call auth = %+v, want personal required and present", auth)
+	}
+}
+
+func TestListIntegrations_keepsCustomHTTPAuthShapeUnknown(t *testing.T) {
+	t.Parallel()
+
+	admin := &fakeAdmin{servers: []domain.MCPServer{{
+		Name: "acme-crm", Transport: domain.TransportHTTP,
+		URL: "https://mcp.acme.example", Enabled: true,
+	}}}
+
+	resp, err := serverWith(t, admin).
+		ListIntegrations(as(domain.RoleCurator), openapi.ListIntegrationsRequestObject{})
+	if err != nil {
+		t.Fatalf("ListIntegrations: %v", err)
+	}
+	auth := callAuthOf(t, resp, "acme-crm")
+	if auth.Policy != openapi.MCPServerCallAuthPolicyUnknown {
+		t.Fatalf("call auth = %+v, want unknown", auth)
+	}
+}
+
+func TestListIntegrations_saysLocalProcessIsNotPersonalPerCall(t *testing.T) {
+	t.Parallel()
+
+	admin := &fakeAdmin{
+		servers: []domain.MCPServer{{
+			Name: "local-wiki", Transport: domain.TransportStdio,
+			Command: "wiki-mcp", Enabled: true,
+		}},
+		personal: []domain.MCPPersonalCredential{{
+			Server: "local-wiki", Principal: "usr_ana", HasSecret: true,
+		}},
+	}
+
+	resp, err := serverWith(t, admin).
+		ListIntegrations(as(domain.RoleCurator), openapi.ListIntegrationsRequestObject{})
+	if err != nil {
+		t.Fatalf("ListIntegrations: %v", err)
+	}
+	auth := callAuthOf(t, resp, "local-wiki")
+	if auth.Policy != openapi.MCPServerCallAuthPolicyLocalProcess ||
+		auth.CallerHasPersonalCredential {
+		t.Fatalf("call auth = %+v, want local process and no personal credential", auth)
+	}
+}
+
+func callAuthOf(
+	t *testing.T, resp openapi.ListIntegrationsResponseObject, name string,
+) openapi.MCPServerCallAuth {
+	t.Helper()
+	body := resp.(openapi.ListIntegrations200JSONResponse)
+	for _, server := range body.McpServers {
+		if server.Name == name && server.CallAuth != nil {
+			return *server.CallAuth
+		}
+	}
+	t.Fatalf("server %q or callAuth missing in %+v", name, body.McpServers)
+	return openapi.MCPServerCallAuth{}
 }
 
 func TestPutModelProvider_withoutAKey_passesNoneSoTheStoredOneSurvives(t *testing.T) {

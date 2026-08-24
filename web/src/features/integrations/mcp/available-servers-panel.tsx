@@ -41,6 +41,7 @@ import {
   shelves,
   type Listing,
 } from "@/features/integrations/mcp/catalogue";
+import { CallAuthNote } from "@/features/integrations/mcp/call-auth-note";
 import { cn } from "@/lib/utils";
 
 const ORIGINS = ["all", "published", "reference", "archived"] as const;
@@ -325,6 +326,7 @@ function ConnectedServerPanel({
           <div className="flex flex-wrap items-center gap-1.5">
             <AuthModeBadges modes={entry.authModes} />
           </div>
+          <CallAuthNote callAuth={server.callAuth} />
         </div>
 
         <div className="space-y-2">
@@ -470,6 +472,7 @@ function ConnectServerPanel({
             command: null,
             args: [],
             url: null,
+            callAuth: null,
             recipe: null,
           }
         }

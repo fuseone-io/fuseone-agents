@@ -442,6 +442,22 @@ func TestPutMCPPersonalCredential_sealsOneUsersRemoteCredential(t *testing.T) {
 	if len(other) != 0 {
 		t.Fatalf("other user listed = %+v, want no cross-user credential leak", other)
 	}
+	present, err := i.MCPPersonalCredentialPresence(ctx,
+		"usr_ana", []string{"newrelic", "github", "newrelic"})
+	if err != nil {
+		t.Fatalf("MCPPersonalCredentialPresence: %v", err)
+	}
+	if len(present) != 1 || !present["newrelic"] {
+		t.Fatalf("presence = %+v, want only Ana's requested New Relic credential", present)
+	}
+	otherPresence, err := i.MCPPersonalCredentialPresence(ctx,
+		"usr_bia", []string{"newrelic"})
+	if err != nil {
+		t.Fatalf("MCPPersonalCredentialPresence(other): %v", err)
+	}
+	if len(otherPresence) != 0 {
+		t.Fatalf("other presence = %+v, want no cross-user credential leak", otherPresence)
+	}
 
 	creds, found, err := i.MCPPersonalCredential(ctx, "newrelic", "usr_ana")
 	if err != nil {

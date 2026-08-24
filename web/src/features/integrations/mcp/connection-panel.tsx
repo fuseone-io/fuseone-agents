@@ -28,6 +28,7 @@ import {
   OAuthFields,
   StoredOAuthOnly,
 } from "@/features/integrations/mcp/oauth-fields";
+import { CallAuthNote } from "@/features/integrations/mcp/call-auth-note";
 import {
   remoteTokenHint,
   remoteTokenLabel,
@@ -139,6 +140,7 @@ export function ConnectionPanel({
         </dl>
 
         {!local && <RemoteAuthSummary plan={remotePlan} />}
+        <CallAuthNote callAuth={server.callAuth} />
 
         <CredentialFields
           local={local}

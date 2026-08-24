@@ -2803,6 +2803,30 @@ export interface components {
             ttlSeconds?: number;
             maxEntries?: number;
         };
+        /**
+         * @description What the API can say about authentication for tools/call for the
+         *     signed-in caller. This is not a trust decision and not a Gate verdict:
+         *     surface, classification and policy still decide whether a tool may run.
+         */
+        MCPServerCallAuth: {
+            /**
+             * @description unknown: no catalogue recipe verifies this remote server's auth
+             *     shape. installation_or_service: the recipe documents a service,
+             *     installation or no-credential path. personal_required: every
+             *     documented credential path carries user authority, so a tool call
+             *     needs the caller's personal MCP credential. local_process: stdio
+             *     starts a process with installation-side environment/configuration;
+             *     no per-user request exists when it starts.
+             * @enum {string}
+             */
+            policy: "unknown" | "installation_or_service" | "personal_required" | "local_process";
+            /**
+             * @description Whether the signed-in caller has a personal credential stored for
+             *     this server. Presence only; the sealed material never leaves the
+             *     vault, and the API never accepts a principal parameter for this.
+             */
+            callerHasPersonalCredential: boolean;
+        };
         MCPServer: {
             /** @description Namespaces the tools it offers, so two servers naming a tool "search" do not collide. */
             name: string;
@@ -2842,6 +2866,12 @@ export interface components {
             surface?: string[] | null;
             rateLimit?: components["schemas"]["MCPRateLimit"] | null;
             cache?: components["schemas"]["MCPResultCache"] | null;
+            /**
+             * @description Authentication usability for tools/call for the signed-in caller.
+             *     A server can answer discovery and still be unusable for a run by
+             *     this person when personal credentials are required and absent.
+             */
+            callAuth?: components["schemas"]["MCPServerCallAuth"] | null;
             /**
              * @description That somebody accepted what stdio is. A local server is a program
              *     this installation starts inside the worker: it runs as the worker,

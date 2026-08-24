@@ -76,6 +76,61 @@ describe("the MCP connection panel", () => {
     expect(screen.getByRole("button", { name: "Tentar agora" })).toBeDisabled();
   });
 
+  it("explains when discovery can work but calls need this user's credential", () => {
+    render(
+      <ConnectionPanel
+        server={remote({
+          hasSecret: true,
+          callAuth: {
+            policy: "personal_required",
+            callerHasPersonalCredential: false,
+          },
+        })}
+      />,
+    );
+
+    expect(screen.getByText("Uso em chamadas")).toBeInTheDocument();
+    expect(screen.getByText(/chamadas de ferramenta em seu nome vão parar/i))
+      .toBeInTheDocument();
+  });
+
+  it("does not pretend a custom HTTP server's auth shape is verified", () => {
+    render(
+      <ConnectionPanel
+        server={remote({
+          callAuth: {
+            policy: "unknown",
+            callerHasPersonalCredential: false,
+          },
+        })}
+      />,
+    );
+
+    expect(screen.getByText(/Nenhuma receita do catálogo verifica esta forma de autenticação/i))
+      .toBeInTheDocument();
+  });
+
+  it("says a local process cannot use per-user credentials", () => {
+    render(
+      <ConnectionPanel
+        server={{
+          name: "local-wiki",
+          transport: "stdio",
+          command: "wiki-mcp",
+          args: [],
+          enabled: true,
+          callAuth: {
+            policy: "local_process",
+            callerHasPersonalCredential: false,
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByText(/não há credencial por usuário nesse transporte/i))
+      .toBeInTheDocument();
+  });
+
   it("saves a manual OAuth grant as oauth rather than a bearer token", async () => {
     render(<ConnectionPanel server={remote()} />);
 
