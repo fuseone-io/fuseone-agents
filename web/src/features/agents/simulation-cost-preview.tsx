@@ -85,12 +85,14 @@ function costPreviewText({
   loading: boolean;
   error: boolean;
 }) {
-  if (source === "corpus" && loading && perRunMicros > 0) {
+  if (source === "corpus" && loading) {
+    if (perRunMicros <= 0) return t("simulation.costPreviewCountingUnbounded");
     return t("simulation.costPreviewCounting", {
       perRun: formatMicros(perRunMicros),
     });
   }
-  if (source === "corpus" && error && perRunMicros > 0) {
+  if (source === "corpus" && error) {
+    if (perRunMicros <= 0) return t("simulation.costPreviewCorpusUnknownUnbounded");
     return t("simulation.costPreviewCorpusUnknown", {
       perRun: formatMicros(perRunMicros),
     });
@@ -103,6 +105,14 @@ function costPreviewText({
   }
   if (expectedMicros !== undefined && averageMicros !== undefined) {
     if (totalMicros !== undefined) {
+      if (averageMicros > perRunMicros) {
+        return t("simulation.costPreviewAverageAboveCeiling", {
+          count: caseCount,
+          average: formatMicros(averageMicros),
+          perRun: formatMicros(perRunMicros),
+          total: formatMicros(totalMicros),
+        });
+      }
       return t("simulation.costPreviewExpectedBounded", {
         count: caseCount,
         average: formatMicros(averageMicros),

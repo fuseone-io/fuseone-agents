@@ -55,8 +55,10 @@ function renderStart({
 /** Answers the API calls this screen makes, and records simulation starts. */
 function stubApi({
   regressions = [],
+  regressionsError = false,
 }: {
   regressions?: { id: string }[];
+  regressionsError?: boolean;
 } = {}) {
   const posted: string[] = [];
   vi.stubGlobal(
@@ -65,6 +67,12 @@ function stubApi({
       const request = input instanceof Request ? input : new Request(input, init);
       const path = new URL(request.url).pathname;
       if (request.method === "GET" && path.endsWith("/agents/triage/regressions")) {
+        if (regressionsError) {
+          return new Response(JSON.stringify({ title: "broken" }), {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
         return new Response(JSON.stringify({ items: regressions }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
@@ -167,6 +175,43 @@ describe("starting a simulation", () => {
 
     expect(await screen.findByText(/Expected about R\$0\.60/)).toBeInTheDocument();
     expect(screen.getByText(/maximum R\$1\.50/)).toBeInTheDocument();
+  });
+
+  it("does not estimate above the current money ceiling", async () => {
+    const user = userEvent.setup();
+    renderStart({
+      agent: {
+        ...PRICED_AGENT,
+        budget: { micros: 100_000, steps: 20 },
+        activity: {
+          runs: 1,
+          finished: 1,
+          waiting: 0,
+          costMicros: 800_000,
+        },
+      },
+    });
+
+    await user.click(screen.getByRole("button", { name: "Paste JSON" }));
+    await user.type(screen.getByLabelText("Cases"), '{{"a":1}\n{{"a":2}\n');
+
+    expect(
+      await screen.findByText(/historical average is R\$0\.80 per run/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/at most R\$0\.20/)).toBeInTheDocument();
+    expect(screen.queryByText(/Expected about R\$1\.60/)).not.toBeInTheDocument();
+  });
+
+  it("keeps corpus failures distinct from missing money ceilings", async () => {
+    stubApi({ regressionsError: true });
+
+    renderStart({ agent: RUNNING_AGENT });
+
+    expect(
+      await screen.findByText(
+        "Saved situations could not be counted, and this agent has no money ceiling. The total money exposure cannot be known before starting.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("does not pretend to know money exposure when the agent has no money ceiling", async () => {
