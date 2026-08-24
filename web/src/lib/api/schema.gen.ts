@@ -3745,6 +3745,14 @@ export interface components {
              *     included.
              */
             channelFailures: components["schemas"]["RuntimeChannelFailureBucket"][];
+            /**
+             * @description Stdio MCP egress proxy denials last seen in the requested window.
+             *     Codes are bounded to the same stable egress vocabulary used by
+             *     worker metrics; URL paths, query strings, headers, bodies and tool
+             *     arguments are not included. This global signal is empty when the
+             *     caller cannot read the installation-wide runtime view.
+             */
+            egressDenials: components["schemas"]["RuntimeEgressDenialBucket"][];
         };
         RuntimeQueue: {
             /**
@@ -3817,6 +3825,34 @@ export interface components {
              * @description Distinct runs whose announcement failed with this code.
              */
             runs: number;
+            /**
+             * Format: date-time
+             * @description First time this durable source saw the failure form.
+             */
+            firstAt: string;
+            /**
+             * Format: date-time
+             * @description Most recent time this durable source saw the failure form.
+             */
+            lastAt: string;
+        };
+        RuntimeEgressDenialBucket: {
+            code: string;
+            /**
+             * Format: int64
+             * @description Proxy requests that failed with this code.
+             */
+            attempts: number;
+            /**
+             * Format: int64
+             * @description Distinct stdio MCP server proxy instances that saw this code.
+             */
+            servers: number;
+            /**
+             * Format: int64
+             * @description Distinct known host and port pairs affected by this code.
+             */
+            destinations: number;
             /**
              * Format: date-time
              * @description First time this durable source saw the failure form.

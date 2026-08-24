@@ -34,6 +34,7 @@ func runtimeHealthFrom(h domain.RuntimeHealth) openapi.RuntimeHealth {
 		Failures:        make([]openapi.RuntimeFailureBucket, 0, len(h.Failures)),
 		ToolFailures:    make([]openapi.RuntimeToolFailureBucket, 0, len(h.ToolFailures)),
 		ChannelFailures: make([]openapi.RuntimeChannelFailureBucket, 0, len(h.ChannelFailures)),
+		EgressDenials:   make([]openapi.RuntimeEgressDenialBucket, 0, len(h.EgressDenials)),
 	}
 	for _, one := range h.Failures {
 		out.Failures = append(out.Failures, openapi.RuntimeFailureBucket{
@@ -57,6 +58,13 @@ func runtimeHealthFrom(h domain.RuntimeHealth) openapi.RuntimeHealth {
 		out.ChannelFailures = append(out.ChannelFailures, openapi.RuntimeChannelFailureBucket{
 			Code: one.Code, Attempts: one.Attempts,
 			Conversations: one.Conversations, ScopeWide: one.ScopeWide, Runs: one.Runs,
+			FirstAt: one.FirstAt, LastAt: one.LastAt,
+		})
+	}
+	for _, one := range h.EgressDenials {
+		out.EgressDenials = append(out.EgressDenials, openapi.RuntimeEgressDenialBucket{
+			Code: one.Code, Attempts: one.Attempts,
+			Servers: one.Servers, Destinations: one.Destinations,
 			FirstAt: one.FirstAt, LastAt: one.LastAt,
 		})
 	}

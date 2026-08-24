@@ -71,6 +71,7 @@ type RuntimeHealth struct {
 	Failures        []RuntimeFailureBucket
 	ToolFailures    []RuntimeToolFailureBucket
 	ChannelFailures []RuntimeChannelFailureBucket
+	EgressDenials   []RuntimeEgressDenialBucket
 }
 
 type RuntimeQueue struct {
@@ -105,6 +106,15 @@ type RuntimeChannelFailureBucket struct {
 	Runs          int64
 	FirstAt       time.Time
 	LastAt        time.Time
+}
+
+type RuntimeEgressDenialBucket struct {
+	Code         string
+	Attempts     int64
+	Servers      int64
+	Destinations int64
+	FirstAt      time.Time
+	LastAt       time.Time
 }
 
 // ThroughputBucket is one interval of a run count, split by what became of the

@@ -69,6 +69,7 @@ Roughly twenty-five tables. The ones that can hold personal data:
 | `runs.last_error` | Operational error text for the latest failed turn; classified model provider failures store only a stable code, but unclassified local or integration failures can still carry free text |
 | `principals`, `sessions`, `role_grants` | The people who use the console: identity from the customer's own provider |
 | `channel_inbox`, `channel_deliveries`, `channel_delivery_failures` | Messages exchanged on a connected channel, what was sent back, optional thread context supplied to a run, and operational delivery failures tied to a run and conversation |
+| `mcp_egress_denials` | Stdio MCP proxy failures by configured server, host, port, stable code and timestamps; no URL path, query string, header, body, token or tool argument |
 | `admin_events`, `audit` records | Who changed what configuration, and when |
 
 `agent_specs`, `policies`, `areas`, `scopes`, `settings` and the trigger tables
@@ -165,8 +166,9 @@ is for.
 
 Operational channel rows survive a per-subject erasure too. They are not the
 chain, but they are not found by subject and they are not rewritten by the
-erasure job: `channel_inbox`, `channel_deliveries` and
-`channel_delivery_failures` age out through retention instead.
+erasure job: `channel_inbox`, `channel_deliveries`,
+`channel_delivery_failures` and `mcp_egress_denials` age out through retention
+instead.
 
 **And, for older runs, more than that.** The free text of section 1 survives too,
 including model answers recorded before `OutcomeRef` existed. That part was not
@@ -195,6 +197,8 @@ opened ask whose finished run still owes its closing answer, is current work
 even if the original message is older than the retention window. The failure
 case follows the same rule. A channel failure that began months ago but still
 failed this morning is current operational evidence, not expired history.
+Stdio MCP egress denials are also deleted by last-seen time, so a still-active
+egress problem remains visible until it stops recurring and then ages out.
 
 There is a floor. A window below 24 hours is refused, and it is checked twice —
 when the setting is written and again when the sweep reads it back. The second

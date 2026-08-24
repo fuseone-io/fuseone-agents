@@ -29,6 +29,12 @@ export const FAILURE_LABELS: Record<string, string> = {
   channel_conversation_unavailable: "runtime.failureChannelConversationUnavailable",
   channel_missing_scope: "runtime.failureChannelMissingScope",
   channel_rate_limited: "runtime.failureChannelRateLimited",
+  stdio_egress_unauthorized: "runtime.failureStdioEgressUnauthorized",
+  stdio_egress_bad_request: "runtime.failureStdioEgressBadRequest",
+  stdio_egress_destination_denied: "runtime.failureStdioEgressDestinationDenied",
+  stdio_egress_metadata_refused: "runtime.failureStdioEgressMetadataRefused",
+  stdio_egress_destination_unavailable:
+    "runtime.failureStdioEgressDestinationUnavailable",
 };
 
 export function failureLabel(code: string): string {

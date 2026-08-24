@@ -11,6 +11,7 @@ import (
 
 	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/egress"
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/known"
 	"github.com/fuseone/agents/internal/ledger"
@@ -60,6 +61,7 @@ type workerParts struct {
 	// own (NT-005 §5 of the note, and the reason the credential is sealed).
 	settings *settings.Store
 	health   healthRecorder
+	egress   *egress.Postgres
 	known    *known.Servers
 }
 
@@ -104,6 +106,7 @@ func openWorkerParts(ctx context.Context, dsn string) (*workerParts, error) {
 		return nil, err
 	}
 	parts.health = healthOf(parts.configPool)
+	parts.egress = egress.NewPostgres(parts.configPool)
 	parts.catalog.WithToolCallHealth(parts.health, hostname())
 	return parts, nil
 }
@@ -155,12 +158,17 @@ The flags first: they are the way to point a laptop at a server before there is
 an administrator to configure one, and the reconciler must not disconnect what
 it did not connect.
 */
-func (p *workerParts) connectTools(ctx context.Context, servers []string) error {
+func (p *workerParts) connectTools(
+	ctx context.Context, servers []string, metrics *worker.MetricsRegistry,
+) error {
 	cleanupStaleConfigFiles()
+	egressObserver := newStdioEgressReporting(p.egress, metrics)
+	egressObserver.start(ctx, stdioEgressFlush)
 
 	reconcile := newReconciler(p.catalog, p.integrations, p.health).
 		withCredentialPolicy(p.known).
-		withProtocolPolicy(p.known)
+		withProtocolPolicy(p.known).
+		withStdioEgressObserver(egressObserver)
 	if p.curator != nil {
 		reconcile = reconcile.publishingTo(p.curator).classifyingWith(p.curator)
 	}
@@ -178,7 +186,7 @@ func (p *workerParts) connectTools(ctx context.Context, servers []string) error 
 		if err := connectServer(ctx, p.catalog, domain.MCPServer{
 			Name: name, Transport: domain.TransportStdio, Command: command,
 			AcceptsLocalExecution: true,
-		}, domain.MCPCredentials{}, nil, nil, credentialPolicy{}); err != nil {
+		}, domain.MCPCredentials{}, nil, nil, credentialPolicy{}, egressObserver); err != nil {
 			slog.Error("tool server did not answer; its tools are unavailable",
 				"server", name, "err", err)
 			observe(ctx, p.health, name, false, 0, err.Error())

@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strconv"
 	"strings"
@@ -20,6 +21,7 @@ import (
 	"time"
 
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/egressmetrics"
 	"github.com/fuseone/agents/internal/netguard"
 )
 
@@ -29,12 +31,17 @@ type stdioEgressProxy struct {
 	token     string
 	dialer    netguard.Dialer
 	transport http.RoundTripper
+	observer  stdioEgressObserver
 }
 
 const stdioProxyTunnelIdleTimeout = 5 * time.Minute
 
+type stdioEgressObserver interface {
+	StdioEgressDenied(ctx context.Context, server, host string, port int, code string)
+}
+
 func startStdioEgressProxy(
-	server string, destinations []domain.MCPEgressDestination,
+	server string, destinations []domain.MCPEgressDestination, observer stdioEgressObserver,
 ) (string, func(), error) {
 	policy, err := newStdioProxyPolicy(destinations)
 	if err != nil {
@@ -55,6 +62,7 @@ func startStdioEgressProxy(
 		token:     token,
 		dialer:    guardedProxyDialer(),
 		transport: guardedProxyTransport(),
+		observer:  observer,
 	}
 	srv := &http.Server{Handler: proxy, ReadHeaderTimeout: 5 * time.Second}
 	done := make(chan struct{})
@@ -105,6 +113,7 @@ func guardedProxyTransport() http.RoundTripper {
 
 func (p *stdioEgressProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !p.authorized(r) {
+		p.recordDenial(r.Context(), egressmetrics.CodeUnauthorized, proxyTarget{})
 		w.Header().Set("Proxy-Authenticate", `Basic realm="fuseone-stdio-egress"`)
 		http.Error(w, "stdio egress proxy requires its local token", http.StatusProxyAuthRequired)
 		return
@@ -114,14 +123,17 @@ func (p *stdioEgressProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.URL == nil || r.URL.Scheme != "http" || r.URL.Host == "" || r.URL.User != nil {
+		p.recordDenial(r.Context(), egressmetrics.CodeBadRequest, proxyTarget{})
 		http.Error(w, "stdio egress proxy expects absolute http requests", http.StatusBadRequest)
 		return
 	}
-	if _, err := p.policy.checkedTarget(r.URL, 80); err != nil {
+	target, code, err := p.policy.checkedTarget(r.URL, 80)
+	if err != nil {
+		p.recordDenial(r.Context(), code, target)
 		http.Error(w, "egress destination is not allowed", http.StatusForbidden)
 		return
 	}
-	p.forwardHTTP(w, r)
+	p.forwardHTTP(w, r, target)
 }
 
 func (p *stdioEgressProxy) authorized(r *http.Request) bool {
@@ -138,13 +150,14 @@ func (p *stdioEgressProxy) authorized(r *http.Request) bool {
 	return subtle.ConstantTimeCompare(decoded, want) == 1
 }
 
-func (p *stdioEgressProxy) forwardHTTP(w http.ResponseWriter, r *http.Request) {
+func (p *stdioEgressProxy) forwardHTTP(w http.ResponseWriter, r *http.Request, target proxyTarget) {
 	out := r.Clone(r.Context())
 	out.RequestURI = ""
 	out.Header = r.Header.Clone()
 	removeHopByHopHeaders(out.Header)
 	resp, err := p.transport.RoundTrip(out)
 	if err != nil {
+		p.recordDenial(r.Context(), codeForProxyDialError(err), target)
 		http.Error(w, "egress destination is unavailable", http.StatusBadGateway)
 		return
 	}
@@ -157,17 +170,37 @@ func (p *stdioEgressProxy) forwardHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *stdioEgressProxy) handleConnect(w http.ResponseWriter, r *http.Request) {
-	target, err := p.policy.checkedAuthority(r.Host, 0)
+	target, code, err := p.policy.checkedAuthority(r.Host, 0)
 	if err != nil {
+		p.recordDenial(r.Context(), code, target)
 		http.Error(w, "egress destination is not allowed", http.StatusForbidden)
 		return
 	}
 	upstream, err := p.dialer.DialContext(r.Context(), "tcp", target.address())
 	if err != nil {
+		p.recordDenial(r.Context(), codeForProxyDialError(err), target)
 		http.Error(w, "egress destination is unavailable", http.StatusBadGateway)
 		return
 	}
 	p.hijackConnect(w, upstream)
+}
+
+func (p *stdioEgressProxy) recordDenial(ctx context.Context, code string, target proxyTarget) {
+	if p.observer == nil {
+		return
+	}
+	host, port := "", 0
+	if target.recordable() {
+		host, port = target.host, target.port
+	}
+	p.observer.StdioEgressDenied(ctx, p.server, host, port, code)
+}
+
+func codeForProxyDialError(err error) string {
+	if errors.Is(err, netguard.ErrBlockedAddress) {
+		return egressmetrics.CodeMetadataRefused
+	}
+	return egressmetrics.CodeDestinationUnavailable
 }
 
 func (p *stdioEgressProxy) hijackConnect(w http.ResponseWriter, upstream net.Conn) {
@@ -288,28 +321,37 @@ func validProxyDestination(dest domain.MCPEgressDestination) bool {
 	return netguard.CheckHostLiteral(dest.Host) == nil
 }
 
-func (p stdioProxyPolicy) checkedTarget(u *url.URL, defaultPort int) (proxyTarget, error) {
+func (p stdioProxyPolicy) checkedTarget(u *url.URL, defaultPort int) (proxyTarget, string, error) {
 	return p.checkedAuthority(u.Host, defaultPort)
 }
 
-func (p stdioProxyPolicy) checkedAuthority(authority string, defaultPort int) (proxyTarget, error) {
+func (p stdioProxyPolicy) checkedAuthority(authority string, defaultPort int) (proxyTarget, string, error) {
 	target, err := parseProxyTarget(authority, defaultPort)
-	if err != nil || !p.allows(target) {
-		return proxyTarget{}, errStdioEgressProxyBad
+	if err != nil {
+		return proxyTarget{}, egressmetrics.CodeBadRequest, errStdioEgressProxyBad
+	}
+	recordable, ok := p.allows(target)
+	target.record = recordable
+	if !ok {
+		return target, egressmetrics.CodeDestinationDenied, errStdioEgressProxyBad
 	}
 	if err := netguard.CheckHostLiteral(target.host); err != nil {
-		return proxyTarget{}, err
+		return target, egressmetrics.CodeMetadataRefused, err
 	}
-	return target, nil
+	return target, "", nil
 }
 
-func (p stdioProxyPolicy) allows(target proxyTarget) bool {
+func (p stdioProxyPolicy) allows(target proxyTarget) (bool, bool) {
 	for _, dest := range p.destinations {
-		if dest.Port == target.port && hostMatches(dest.Host, target.host) {
-			return true
+		if dest.Port != target.port || !hostMatches(dest.Host, target.host) {
+			continue
 		}
+		// Only an exact configured destination is durable evidence. A denied
+		// target, or a wildcard child picked by the stdio process, is untrusted
+		// input and can carry unbounded cardinality or encoded secrets.
+		return !strings.HasPrefix(dest.Host, "*.") && dest.Host == target.host, true
 	}
-	return false
+	return false, false
 }
 
 func hostMatches(pattern, host string) bool {
@@ -321,8 +363,22 @@ func hostMatches(pattern, host string) bool {
 }
 
 type proxyTarget struct {
-	host string
-	port int
+	host   string
+	port   int
+	record bool
+}
+
+func (t proxyTarget) recordable() bool {
+	if !t.record || t.port < 1 || t.port > 65535 || t.host == "" {
+		return false
+	}
+	if domain.ValidMCPEgressDestination(domain.MCPEgressDestination{Host: t.host, Port: t.port}) {
+		return true
+	}
+	if _, err := netip.ParseAddr(t.host); err == nil {
+		return true
+	}
+	return false
 }
 
 func parseProxyTarget(authority string, defaultPort int) (proxyTarget, error) {

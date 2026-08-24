@@ -107,7 +107,11 @@ func (e *Erasures) Sweep(ctx context.Context) (int, error) {
 	if err != nil {
 		return erased, err
 	}
-	total := erased + channelRecords
+	egressRecords, err := e.eraseEgressOperationalRows(ctx, tx, before)
+	if err != nil {
+		return erased, err
+	}
+	total := erased + channelRecords + egressRecords
 	if total == 0 {
 		// Nothing aged out, which is the ordinary case. Recording it would
 		// bury the sweeps that did something under thousands that did not.
@@ -118,6 +122,7 @@ func (e *Erasures) Sweep(ctx context.Context) (int, error) {
 		Principal: "", Scope: domain.Scope{}, Action: "content.expired", Target: "content",
 		Detail: map[string]any{
 			"objects": erased, "channelRecords": channelRecords,
+			"egressRecords":  egressRecords,
 			"olderThanHours": int64(window / time.Hour),
 		},
 	}); err != nil {
@@ -130,6 +135,7 @@ func (e *Erasures) Sweep(ctx context.Context) (int, error) {
 }
 
 const retentionChannelBatch = 5_000
+const retentionEgressBatch = 5_000
 
 func (e *Erasures) eraseChannelOperationalRows(ctx context.Context, conn db, before time.Time) (int, error) {
 	total := int64(0)
@@ -175,6 +181,25 @@ func (e *Erasures) eraseChannelOperationalRows(ctx context.Context, conn db, bef
 		total += tag.RowsAffected()
 	}
 	return int(total), nil
+}
+
+func (e *Erasures) eraseEgressOperationalRows(ctx context.Context, conn db, before time.Time) (int, error) {
+	// ctid is safe here because the rows are selected and deleted in one
+	// statement. Do not split this into a read followed by a later delete.
+	tag, err := conn.Exec(ctx, `
+		with doomed as (
+			select ctid from mcp_egress_denials
+			where last_seen < $1
+			order by last_seen
+			limit $2
+		)
+		delete from mcp_egress_denials
+		where ctid in (select ctid from doomed)`,
+		before.UTC(), retentionEgressBatch)
+	if err != nil {
+		return 0, fmt.Errorf("admin: erase stdio egress records: %w", err)
+	}
+	return int(tag.RowsAffected()), nil
 }
 
 func (e *Erasures) record(

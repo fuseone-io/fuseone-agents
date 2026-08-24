@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -64,6 +65,65 @@ func TestStdioEgressProxy_refusesRequestsWithoutTheLocalToken(t *testing.T) {
 	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusProxyAuthRequired {
 		t.Fatalf("status = %s, want 407", resp.Status)
+	}
+}
+
+func TestStdioEgressProxy_recordsDenialsWithoutURLParts(t *testing.T) {
+	observer := &recordingStdioEgress{}
+	proxyURL := startProxyForObserver(t,
+		domain.MCPEgressDestination{Host: "allowed.internal", Port: 80}, observer)
+	client := proxiedClient(t, proxyURL)
+
+	resp, err := client.Get("http://blocked.internal:8080/private?token=secret")
+	if err != nil {
+		t.Fatalf("blocked GET: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("status = %s, want 403", resp.Status)
+	}
+
+	if len(observer.denials) != 1 {
+		t.Fatalf("denials = %+v, want one", observer.denials)
+	}
+	got := observer.denials[0]
+	if got.server != "crm" || got.host != "" || got.port != 0 {
+		t.Fatalf("denial target = %+v, want server only for untrusted target", got)
+	}
+	if got.code != "stdio_egress_destination_denied" {
+		t.Fatalf("code = %q, want destination denied", got.code)
+	}
+	for _, forbidden := range []string{"private", "token", "secret"} {
+		if strings.Contains(got.host, forbidden) || strings.Contains(got.code, forbidden) {
+			t.Fatalf("denial leaked URL part %q: %+v", forbidden, got)
+		}
+	}
+}
+
+func TestStdioEgressProxy_recordsConfiguredDestinationWhenItCannotConnect(t *testing.T) {
+	observer := &recordingStdioEgress{}
+	proxyURL := startProxyForObserver(t,
+		domain.MCPEgressDestination{Host: "127.0.0.1", Port: 1}, observer)
+	client := proxiedClient(t, proxyURL)
+
+	resp, err := client.Get("http://127.0.0.1:1/")
+	if err != nil {
+		t.Fatalf("unavailable GET: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusBadGateway {
+		t.Fatalf("status = %s, want 502", resp.Status)
+	}
+
+	if len(observer.denials) != 1 {
+		t.Fatalf("denials = %+v, want one", observer.denials)
+	}
+	got := observer.denials[0]
+	if got.host != "127.0.0.1" || got.port != 1 {
+		t.Fatalf("denial target = %+v, want configured host:port", got)
+	}
+	if got.code != "stdio_egress_destination_unavailable" {
+		t.Fatalf("code = %q, want destination unavailable", got.code)
 	}
 }
 
@@ -139,7 +199,7 @@ func TestStdioEgressProxy_tunnelsConnectOnlyToConfiguredDestinations(t *testing.
 func TestStdioEgressProxy_refusesCloudMetadataLiterals(t *testing.T) {
 	_, cleanup, err := startStdioEgressProxy("crm", []domain.MCPEgressDestination{
 		{Host: "169.254.169.254", Port: 80},
-	})
+	}, nil)
 	t.Cleanup(cleanup)
 	if !errors.Is(err, errStdioEgressProxyBad) {
 		t.Fatalf("startStdioEgressProxy = %v, want bad proxy policy", err)
@@ -155,12 +215,38 @@ func TestStdioProxyPolicy_aWildcardDoesNotMatchTheApexWithALeadingDot(t *testing
 
 func startProxyFor(t *testing.T, dest domain.MCPEgressDestination) string {
 	t.Helper()
-	proxy, cleanup, err := startStdioEgressProxy("crm", []domain.MCPEgressDestination{dest})
+	return startProxyForObserver(t, dest, nil)
+}
+
+func startProxyForObserver(
+	t *testing.T, dest domain.MCPEgressDestination, observer stdioEgressObserver,
+) string {
+	t.Helper()
+	proxy, cleanup, err := startStdioEgressProxy("crm", []domain.MCPEgressDestination{dest}, observer)
 	if err != nil {
 		t.Fatalf("startStdioEgressProxy: %v", err)
 	}
 	t.Cleanup(cleanup)
 	return proxy
+}
+
+type recordingStdioEgress struct {
+	denials []recordedStdioEgress
+}
+
+type recordedStdioEgress struct {
+	server string
+	host   string
+	port   int
+	code   string
+}
+
+func (r *recordingStdioEgress) StdioEgressDenied(
+	_ context.Context, server, host string, port int, code string,
+) {
+	r.denials = append(r.denials, recordedStdioEgress{
+		server: server, host: host, port: port, code: code,
+	})
 }
 
 func proxiedClient(t *testing.T, proxy string) *http.Client {

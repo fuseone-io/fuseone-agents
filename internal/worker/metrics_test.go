@@ -26,6 +26,8 @@ func TestMetricsRegistry_rendersOnlyLowCardinalityWorkerFacts(t *testing.T) {
 	reg.ChannelSweep("announcements", "ok", 3)
 	reg.ChannelSweep("slack-team-alerts", "error", 1)
 	reg.ChannelFailure("slack-team-alerts", "slack-team-alerts")
+	reg.StdioEgressDenial("stdio_egress_destination_denied")
+	reg.StdioEgressDenial("crm.internal:443/path")
 
 	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
 	rec := httptest.NewRecorder()
@@ -51,6 +53,8 @@ func TestMetricsRegistry_rendersOnlyLowCardinalityWorkerFacts(t *testing.T) {
 		`fuseone_channel_items_total{task="announcements"} 3`,
 		`fuseone_channel_items_total{task="answers_delivered"} 2`,
 		`fuseone_channel_items_total{task="other"} 1`,
+		`fuseone_stdio_egress_denials_total{code="other"} 1`,
+		`fuseone_stdio_egress_denials_total{code="stdio_egress_destination_denied"} 1`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("metrics body missing %q:\n%s", want, body)
@@ -58,7 +62,7 @@ func TestMetricsRegistry_rendersOnlyLowCardinalityWorkerFacts(t *testing.T) {
 	}
 	for _, forbidden := range []string{
 		"run_", "agent=", "tool=", "server=", "channel=", "conversation=", "usr_", "err=",
-		"github-mcp", "ACME-4417", "jira-prod", "slack-team-alerts",
+		"github-mcp", "ACME-4417", "jira-prod", "slack-team-alerts", "crm.internal",
 	} {
 		if strings.Contains(body, forbidden) {
 			t.Fatalf("metrics body contains high-cardinality or diagnostic text %q:\n%s", forbidden, body)

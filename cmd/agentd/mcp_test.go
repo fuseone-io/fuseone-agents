@@ -1017,7 +1017,7 @@ func TestTransportForHTTP_doesNotOpenAStandaloneSSEStream(t *testing.T) {
 
 	transport, cleanup, err := transportFor(t.Context(), domain.MCPServer{
 		Name: "grafana", Transport: domain.TransportHTTP, URL: "https://grafana.example/mcp",
-	}, domain.MCPCredentials{}, nil, nil, credentialPolicy{})
+	}, domain.MCPCredentials{}, nil, nil, credentialPolicy{}, nil)
 	if err != nil {
 		t.Fatalf("transportFor: %v", err)
 	}
@@ -1107,7 +1107,7 @@ func TestConnectServer_legacyHTTPProtocolDoesNotSendModernDiscover(t *testing.T)
 	err := connectServer(t.Context(), catalog, domain.MCPServer{
 		Name: "outline", Transport: domain.TransportHTTP, URL: remote.URL,
 		ProtocolMode: domain.MCPProtocolLegacy, Enabled: true,
-	}, domain.MCPCredentials{}, nil, nil, credentialPolicy{})
+	}, domain.MCPCredentials{}, nil, nil, credentialPolicy{}, nil)
 	if err != nil {
 		t.Fatalf("connectServer: %v", err)
 	}
@@ -1163,6 +1163,7 @@ func TestReconciler_aProbeRequestReconnectsThroughTheWorkerPath(t *testing.T) {
 	r.connectTo = func(
 		ctx context.Context, catalog *tools.Catalog, server domain.MCPServer,
 		_ domain.MCPCredentials, _ OAuthGrantStore, _ MCPUserCredentialStore, _ credentialPolicy,
+		_ stdioEgressObserver,
 	) error {
 		return catalog.AddServer(ctx, server.Name, &testSession{tools: []*mcp.Tool{{
 			Name:        "lookup",
@@ -1213,6 +1214,7 @@ func TestReconciler_aFailedProbeKeepsTheCurrentSession(t *testing.T) {
 	r.connectTo = func(
 		context.Context, *tools.Catalog, domain.MCPServer,
 		domain.MCPCredentials, OAuthGrantStore, MCPUserCredentialStore, credentialPolicy,
+		stdioEgressObserver,
 	) error {
 		return errors.New("dial timeout")
 	}
@@ -1252,6 +1254,7 @@ func TestReconciler_aReconnectedServerGetsItsRecordedRulingsBeforeItCanRun(t *te
 	r.connectTo = func(
 		ctx context.Context, catalog *tools.Catalog, server domain.MCPServer,
 		_ domain.MCPCredentials, _ OAuthGrantStore, _ MCPUserCredentialStore, _ credentialPolicy,
+		_ stdioEgressObserver,
 	) error {
 		if err := catalog.AddServer(ctx, server.Name, &testSession{tools: []*mcp.Tool{{
 			Name:        "fetch",
@@ -1297,6 +1300,7 @@ func TestReconciler_aUserOnlyRecipeCarriesTheCredentialPolicyToTheConnection(t *
 	r.connectTo = func(
 		ctx context.Context, catalog *tools.Catalog, server domain.MCPServer,
 		_ domain.MCPCredentials, _ OAuthGrantStore, _ MCPUserCredentialStore, policy credentialPolicy,
+		_ stdioEgressObserver,
 	) error {
 		seen = policy.requirePersonal
 		return catalog.AddServer(ctx, server.Name, &testSession{tools: []*mcp.Tool{{Name: "get_values"}}}, server.Surface)
@@ -1325,6 +1329,7 @@ func TestReconciler_aKnownLegacyRecipeCarriesTheProtocolToTheConnection(t *testi
 	r.connectTo = func(
 		ctx context.Context, catalog *tools.Catalog, server domain.MCPServer,
 		_ domain.MCPCredentials, _ OAuthGrantStore, _ MCPUserCredentialStore, _ credentialPolicy,
+		_ stdioEgressObserver,
 	) error {
 		seen = server.MCPProtocolModeOf()
 		return catalog.AddServer(ctx, server.Name, &testSession{tools: []*mcp.Tool{{Name: "search"}}}, server.Surface)

@@ -47,11 +47,11 @@ const toolRefresh = 30 * time.Second
 func connectServer(
 	ctx context.Context, catalog *tools.Catalog, server domain.MCPServer,
 	creds domain.MCPCredentials, oauth OAuthGrantStore, personal MCPUserCredentialStore,
-	policy credentialPolicy,
+	policy credentialPolicy, observer stdioEgressObserver,
 ) error {
 	client := mcp.NewClient(&mcp.Implementation{Name: "fuseone-agents", Version: version}, nil)
 
-	transport, cleanup, err := transportFor(ctx, server, creds, oauth, personal, policy)
+	transport, cleanup, err := transportFor(ctx, server, creds, oauth, personal, policy, observer)
 	if err != nil {
 		return err
 	}
@@ -77,6 +77,7 @@ func connectServer(
 func transportFor(
 	ctx context.Context, server domain.MCPServer, creds domain.MCPCredentials,
 	oauth OAuthGrantStore, personal MCPUserCredentialStore, policy credentialPolicy,
+	observer stdioEgressObserver,
 ) (mcp.Transport, func(), error) {
 	switch server.TransportOf() {
 	case domain.TransportHTTP:
@@ -97,7 +98,7 @@ func transportFor(
 		}, noop, nil
 
 	case domain.TransportStdio:
-		cmd, cleanup, err := commandFor(ctx, server, creds)
+		cmd, cleanup, err := commandFor(ctx, server, creds, observer)
 		if err != nil {
 			return nil, noop, err
 		}
@@ -630,7 +631,7 @@ type Publisher interface {
 type connector func(
 	ctx context.Context, catalog *tools.Catalog, server domain.MCPServer,
 	creds domain.MCPCredentials, oauth OAuthGrantStore, personal MCPUserCredentialStore,
-	policy credentialPolicy,
+	policy credentialPolicy, observer stdioEgressObserver,
 ) error
 
 type personalCredentialPolicy interface {
@@ -657,6 +658,7 @@ type reconciler struct {
 	connectTo connector
 	policy    personalCredentialPolicy
 	protocol  mcpProtocolPolicy
+	egress    stdioEgressObserver
 	// connected maps a server name to the fingerprint of what was connected
 	// under it, so a changed address is noticed rather than assumed stable.
 	connected map[string]string
@@ -688,6 +690,11 @@ func (r *reconciler) withCredentialPolicy(p personalCredentialPolicy) *reconcile
 
 func (r *reconciler) withProtocolPolicy(p mcpProtocolPolicy) *reconciler {
 	r.protocol = p
+	return r
+}
+
+func (r *reconciler) withStdioEgressObserver(o stdioEgressObserver) *reconciler {
+	r.egress = o
 	return r
 }
 
@@ -811,7 +818,7 @@ func (r *reconciler) connect(ctx context.Context, server domain.MCPServer) bool 
 		r.policy != nil && r.policy.RequiresPersonalCredential(server.Name) {
 		policy.requirePersonal = true
 	}
-	if err := r.connectTo(ctx, r.catalog, server, creds, oauth, personal, policy); err != nil {
+	if err := r.connectTo(ctx, r.catalog, server, creds, oauth, personal, policy, r.egress); err != nil {
 		// Recorded and skipped, never fatal. One broken integration used to
 		// mean nothing on the installation ran, including every agent that
 		// never touches it.
@@ -884,6 +891,7 @@ the next secret to the deployment, and then it is silently wrong.
 */
 func commandFor(
 	ctx context.Context, server domain.MCPServer, creds domain.MCPCredentials,
+	observers ...stdioEgressObserver,
 ) (*exec.Cmd, func(), error) {
 	if !server.AcceptsLocalExecution {
 		// Checked again here, and not only where it is written. A row can
@@ -919,7 +927,11 @@ func commandFor(
 		cleanup()
 		return nil, noop, err
 	}
-	egressEnv, egressCleanup, err := stdioEgressEnv(server)
+	var observer stdioEgressObserver
+	if len(observers) > 0 {
+		observer = observers[0]
+	}
+	egressEnv, egressCleanup, err := stdioEgressEnv(server, observer)
 	if err != nil {
 		return fail(err)
 	}
@@ -945,7 +957,7 @@ var (
 		"stdio egress proxy requires at least one valid destination")
 )
 
-func stdioEgressEnv(server domain.MCPServer) ([]string, func(), error) {
+func stdioEgressEnv(server domain.MCPServer, observer stdioEgressObserver) ([]string, func(), error) {
 	if server.StdioEgress == nil || server.StdioEgress.Mode != domain.MCPEgressProxied {
 		return nil, noop, nil
 	}
@@ -953,7 +965,8 @@ func stdioEgressEnv(server domain.MCPServer) ([]string, func(), error) {
 	if err != nil {
 		return nil, noop, fmt.Errorf("%s: %w", server.Name, err)
 	}
-	proxy, cleanup, err := startStdioEgressProxy(server.Name, server.StdioEgress.AllowedDestinations)
+	proxy, cleanup, err := startStdioEgressProxy(
+		server.Name, server.StdioEgress.AllowedDestinations, observer)
 	if err != nil {
 		return nil, noop, fmt.Errorf("%s: %w", server.Name, err)
 	}

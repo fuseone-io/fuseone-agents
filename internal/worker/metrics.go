@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/fuseone/agents/internal/channel"
+	"github.com/fuseone/agents/internal/egressmetrics"
 	"github.com/fuseone/agents/internal/tools"
 )
 
@@ -24,6 +25,7 @@ type MetricsRegistry struct {
 	channelSweeps          map[channelSweepMetric]uint64
 	channelFailures        map[channelFailureMetric]uint64
 	channelItems           map[string]uint64
+	stdioEgressDenials     map[string]uint64
 }
 
 func NewMetricsRegistry() *MetricsRegistry {
@@ -34,6 +36,7 @@ func NewMetricsRegistry() *MetricsRegistry {
 		channelSweeps:          map[channelSweepMetric]uint64{},
 		channelFailures:        map[channelFailureMetric]uint64{},
 		channelItems:           map[string]uint64{},
+		stdioEgressDenials:     map[string]uint64{},
 	}
 }
 
@@ -66,6 +69,7 @@ func (r *MetricsRegistry) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	renderWorkerMetrics(w, snap.pools)
 	renderMCPMetrics(w, snap)
 	renderChannelMetrics(w, snap)
+	renderStdioEgressMetrics(w, snap)
 }
 
 func renderWorkerMetrics(w http.ResponseWriter, snap []poolSnapshot) {
@@ -167,6 +171,15 @@ func renderChannelMetrics(w http.ResponseWriter, snap registrySnapshot) {
 	}
 }
 
+func renderStdioEgressMetrics(w http.ResponseWriter, snap registrySnapshot) {
+	fmt.Fprintln(w, "# HELP fuseone_stdio_egress_denials_total Stdio MCP proxy denials by stable code.")
+	fmt.Fprintln(w, "# TYPE fuseone_stdio_egress_denials_total counter")
+	for _, key := range sortedKeys(snap.stdioEgressDenials) {
+		fmt.Fprintf(w, "fuseone_stdio_egress_denials_total{code=%s} %d\n",
+			label(key), snap.stdioEgressDenials[key])
+	}
+}
+
 type poolSnapshot struct {
 	pool     string
 	slots    int
@@ -183,6 +196,7 @@ type registrySnapshot struct {
 	channelSweeps          map[channelSweepMetric]uint64
 	channelFailures        map[channelFailureMetric]uint64
 	channelItems           map[string]uint64
+	stdioEgressDenials     map[string]uint64
 }
 
 func (r *MetricsRegistry) snapshot() registrySnapshot {
@@ -197,6 +211,7 @@ func (r *MetricsRegistry) snapshot() registrySnapshot {
 		channelSweeps:          copyChannelSweepCounters(r.channelSweeps),
 		channelFailures:        copyChannelFailureCounters(r.channelFailures),
 		channelItems:           copyStringCounters(r.channelItems),
+		stdioEgressDenials:     copyStringCounters(r.stdioEgressDenials),
 	}
 	r.mu.Unlock()
 
@@ -282,6 +297,16 @@ func (r *MetricsRegistry) ChannelFailure(task, code string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.channelFailures[channelFailureMetric{task: task, code: code}]++
+}
+
+func (r *MetricsRegistry) StdioEgressDenial(code string) {
+	if r == nil {
+		return
+	}
+	code = egressmetrics.Code(code)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.stdioEgressDenials[code]++
 }
 
 func boundedMetricValue(value string, allowed map[string]bool) string {

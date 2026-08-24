@@ -19,6 +19,7 @@ import { stateOfPhase } from "@/lib/agent-state";
 import { PHASE_LABELS } from "@/features/runs/phase-badge";
 import { useRuntimeHealth } from "@/features/runtime/api";
 import { ChannelFailuresPanel } from "@/features/runtime/channel-failures-panel";
+import { EgressDenialsPanel } from "@/features/runtime/egress-denials-panel";
 import { failureLabel } from "@/features/runtime/failure-labels";
 import { ToolFailuresPanel } from "@/features/runtime/tool-failures-panel";
 import type { Phase, RuntimeFailureBucket, RuntimeHealth } from "@/lib/api/client";
@@ -64,6 +65,7 @@ function RuntimeBody({ health }: { health: RuntimeHealth }) {
       <ProviderFailures failures={health.failures} />
       <ToolFailuresPanel failures={health.toolFailures} />
       <ChannelFailuresPanel failures={health.channelFailures} />
+      <EgressDenialsPanel denials={health.egressDenials} />
       <PhasePanel health={health} />
     </div>
   );

@@ -5653,7 +5653,7 @@ components:
 
     RuntimeHealth:
       type: object
-      required: [byPhase, queue, failures, toolFailures, channelFailures]
+      required: [byPhase, queue, failures, toolFailures, channelFailures, egressDenials]
       properties:
         byPhase:
           type: object
@@ -5678,6 +5678,15 @@ components:
             metrics; Slack text, channel labels and delivery bodies are not
             included.
           items: { $ref: '#/components/schemas/RuntimeChannelFailureBucket' }
+        egressDenials:
+          type: array
+          description: |
+            Stdio MCP egress proxy denials last seen in the requested window.
+            Codes are bounded to the same stable egress vocabulary used by
+            worker metrics; URL paths, query strings, headers, bodies and tool
+            arguments are not included. This global signal is empty when the
+            caller cannot read the installation-wide runtime view.
+          items: { $ref: '#/components/schemas/RuntimeEgressDenialBucket' }
 
     RuntimeQueue:
       type: object
@@ -5751,6 +5760,32 @@ components:
           type: integer
           format: int64
           description: Distinct runs whose announcement failed with this code.
+        firstAt:
+          type: string
+          format: date-time
+          description: First time this durable source saw the failure form.
+        lastAt:
+          type: string
+          format: date-time
+          description: Most recent time this durable source saw the failure form.
+
+    RuntimeEgressDenialBucket:
+      type: object
+      required: [code, attempts, servers, destinations, firstAt, lastAt]
+      properties:
+        code: { type: string }
+        attempts:
+          type: integer
+          format: int64
+          description: Proxy requests that failed with this code.
+        servers:
+          type: integer
+          format: int64
+          description: Distinct stdio MCP server proxy instances that saw this code.
+        destinations:
+          type: integer
+          format: int64
+          description: Distinct known host and port pairs affected by this code.
         firstAt:
           type: string
           format: date-time

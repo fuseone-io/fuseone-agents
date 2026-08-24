@@ -7,6 +7,7 @@ import (
 
 	"github.com/fuseone/agents/internal/channelmetrics"
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/egressmetrics"
 	"github.com/fuseone/agents/internal/mcpmetrics"
 )
 
@@ -163,7 +164,66 @@ func (p *Postgres) RuntimeHealth(ctx context.Context, filter domain.RunFilter) (
 	if err != nil {
 		return domain.RuntimeHealth{}, err
 	}
+	if runtimeCanReadInstallation(recent) {
+		out.EgressDenials, err = p.runtimeEgressDenials(ctx, since)
+		if err != nil {
+			return domain.RuntimeHealth{}, err
+		}
+	}
 	return out, nil
+}
+
+func (p *Postgres) runtimeEgressDenials(
+	ctx context.Context, since time.Time,
+) ([]domain.RuntimeEgressDenialBucket, error) {
+	args := []any{since, egressmetrics.Codes()}
+	rows, err := p.pool.Query(ctx, `
+		with denials as (
+			select case
+			         when code = any($2) then code
+			         else '`+egressmetrics.CodeOther+`'
+			       end as code,
+			       server, host, port, attempts, first_seen, last_seen
+			from mcp_egress_denials
+			where last_seen >= $1
+		)
+		select code, coalesce(sum(attempts), 0), count(distinct server),
+		       count(distinct (host, port)) filter (where host <> '' and port > 0),
+		       min(first_seen), max(last_seen)
+		from denials
+		group by code
+		order by coalesce(sum(attempts), 0) desc, max(last_seen) desc`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("runtime stdio egress denials: %w", err)
+	}
+	return scanRuntimeEgressDenials(rows)
+}
+
+func scanRuntimeEgressDenials(rows pgxRows) ([]domain.RuntimeEgressDenialBucket, error) {
+	defer rows.Close()
+	var out []domain.RuntimeEgressDenialBucket
+	for rows.Next() {
+		var one domain.RuntimeEgressDenialBucket
+		if err := rows.Scan(&one.Code, &one.Attempts, &one.Servers,
+			&one.Destinations, &one.FirstAt, &one.LastAt); err != nil {
+			return nil, err
+		}
+		one.FirstAt, one.LastAt = one.FirstAt.UTC(), one.LastAt.UTC()
+		out = append(out, one)
+	}
+	return out, rows.Err()
+}
+
+func runtimeCanReadInstallation(filter domain.RunFilter) bool {
+	if filter.Scope.Company == domain.Installation && filter.Scope.Area == "" {
+		return true
+	}
+	for _, scope := range filter.Scopes {
+		if scope.Company == domain.Installation && scope.Area == "" {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *Postgres) runtimeChannelFailures(
