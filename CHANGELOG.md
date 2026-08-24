@@ -27,6 +27,37 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.31.0] — 2026-08-24
+
+### Upgrade notes
+
+- **Migration 0058 creates the durable stdio egress-denial projection.** It adds
+  `mcp_egress_denials`, keyed by server, exact configured destination and stable
+  denial code. The table stores counts and first/last seen times, not request
+  paths, query strings, headers, bodies, tokens or tool arguments.
+
+- **Retention now expires stdio MCP egress-denial rows too.** Rows age out by
+  `last_seen`, in batches, and the `content.expired` audit event reports the
+  number as `egressRecords`. A denial that keeps recurring remains current
+  operational evidence until it stops and ages past the retention window.
+
+### Added
+
+- **The runtime cockpit now shows stdio MCP egress denials.** When a local MCP
+  process is routed through the FuseOne egress proxy and tries to leave its
+  allow-list, the worker reports the attempt with a stable code. The console
+  reads the durable projection under installation scope, so it can answer
+  "which contained servers are trying to leave their declared route" without
+  opening pod logs.
+
+### Security
+
+- **Denied stdio destinations are bounded before they become evidence.** Exact
+  configured destinations are stored with host and port; wildcard children and
+  destinations chosen entirely by the MCP process are aggregated by code only.
+  That keeps the table limited by operator configuration rather than by
+  untrusted process input.
+
 ## [0.30.0] — 2026-08-24
 
 ### Added
