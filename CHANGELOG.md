@@ -27,6 +27,8 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.29.0] — 2026-08-24
+
 ### Upgrade notes
 
 - **A strong stdio MCP egress statement now requires an explicit operator
