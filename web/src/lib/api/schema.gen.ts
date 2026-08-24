@@ -3638,6 +3638,13 @@ export interface components {
              *     tool arguments and tool response bodies are not included.
              */
             toolFailures: components["schemas"]["RuntimeToolFailureBucket"][];
+            /**
+             * @description Channel delivery failures last seen in the requested window. Codes
+             *     are bounded to the same stable channel vocabulary used by worker
+             *     metrics; Slack text, channel labels and delivery bodies are not
+             *     included.
+             */
+            channelFailures: components["schemas"]["RuntimeChannelFailureBucket"][];
         };
         RuntimeQueue: {
             /**
@@ -3689,6 +3696,34 @@ export interface components {
              */
             runs: number;
             /** Format: date-time */
+            lastAt: string;
+        };
+        RuntimeChannelFailureBucket: {
+            code: string;
+            /**
+             * Format: int64
+             * @description Delivery attempts that failed with this code.
+             */
+            attempts: number;
+            /**
+             * Format: int64
+             * @description Distinct channel conversations affected by this code.
+             */
+            conversations: number;
+            /**
+             * Format: int64
+             * @description Distinct runs whose announcement failed with this code.
+             */
+            runs: number;
+            /**
+             * Format: date-time
+             * @description First time this durable source saw the failure form.
+             */
+            firstAt: string;
+            /**
+             * Format: date-time
+             * @description Most recent time this durable source saw the failure form.
+             */
             lastAt: string;
         };
         DecisionPage: {

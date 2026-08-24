@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/fuseone/agents/internal/channelmetrics"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/mcpmetrics"
 )
@@ -153,6 +154,56 @@ func (p *Postgres) RuntimeHealth(ctx context.Context, filter domain.RunFilter) (
 		}
 		one.LastAt = one.LastAt.UTC()
 		out.ToolFailures = append(out.ToolFailures, one)
+	}
+	if err := rows.Err(); err != nil {
+		return domain.RuntimeHealth{}, err
+	}
+
+	out.ChannelFailures, err = p.runtimeChannelFailures(ctx, recent, since)
+	if err != nil {
+		return domain.RuntimeHealth{}, err
+	}
+	return out, nil
+}
+
+func (p *Postgres) runtimeChannelFailures(
+	ctx context.Context, filter domain.RunFilter, since time.Time,
+) ([]domain.RuntimeChannelFailureBucket, error) {
+	where, args := runFilterOn(filter, "last_seen")
+	where = whereAnd(where, fmt.Sprintf("last_seen >= $%d", len(args)+1))
+	args = append(args, since, channelmetrics.Codes())
+	rows, err := p.pool.Query(ctx, `
+		with failures as (
+			select case
+			         when code = any($`+fmt.Sprint(len(args))+`) then code
+			         else '`+channelmetrics.CodeOther+`'
+			       end as code,
+			       run_id, channel, conversation, attempts, first_seen, last_seen
+			from channel_delivery_failures `+where+`
+		)
+		select code, coalesce(sum(attempts), 0),
+		       count(distinct (channel, conversation)), count(distinct run_id),
+		       min(first_seen), max(last_seen)
+		from failures
+		group by code
+		order by coalesce(sum(attempts), 0) desc, max(last_seen) desc`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("runtime channel failures: %w", err)
+	}
+	return scanRuntimeChannelFailures(rows)
+}
+
+func scanRuntimeChannelFailures(rows pgxRows) ([]domain.RuntimeChannelFailureBucket, error) {
+	defer rows.Close()
+	var out []domain.RuntimeChannelFailureBucket
+	for rows.Next() {
+		var one domain.RuntimeChannelFailureBucket
+		if err := rows.Scan(&one.Code, &one.Attempts, &one.Conversations,
+			&one.Runs, &one.FirstAt, &one.LastAt); err != nil {
+			return nil, err
+		}
+		one.FirstAt, one.LastAt = one.FirstAt.UTC(), one.LastAt.UTC()
+		out = append(out, one)
 	}
 	return out, rows.Err()
 }

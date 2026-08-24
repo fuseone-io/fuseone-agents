@@ -18,6 +18,7 @@ import { formatRelative } from "@/lib/format";
 import { stateOfPhase } from "@/lib/agent-state";
 import { PHASE_LABELS } from "@/features/runs/phase-badge";
 import { useRuntimeHealth } from "@/features/runtime/api";
+import { ChannelFailuresPanel } from "@/features/runtime/channel-failures-panel";
 import { failureLabel } from "@/features/runtime/failure-labels";
 import { ToolFailuresPanel } from "@/features/runtime/tool-failures-panel";
 import type { Phase, RuntimeFailureBucket, RuntimeHealth } from "@/lib/api/client";
@@ -62,6 +63,7 @@ function RuntimeBody({ health }: { health: RuntimeHealth }) {
       <QueuePanel health={health} />
       <ProviderFailures failures={health.failures} />
       <ToolFailuresPanel failures={health.toolFailures} />
+      <ChannelFailuresPanel failures={health.channelFailures} />
       <PhasePanel health={health} />
     </div>
   );

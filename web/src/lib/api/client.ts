@@ -56,6 +56,8 @@ export type RunStats = components["schemas"]["RunStats"];
 export type RuntimeHealth = components["schemas"]["RuntimeHealth"];
 export type RuntimeFailureBucket = components["schemas"]["RuntimeFailureBucket"];
 export type RuntimeToolFailureBucket = components["schemas"]["RuntimeToolFailureBucket"];
+export type RuntimeChannelFailureBucket =
+  components["schemas"]["RuntimeChannelFailureBucket"];
 export type Cost = components["schemas"]["Cost"];
 export type Agent = components["schemas"]["Agent"];
 export type AgentVersion = components["schemas"]["AgentVersion"];

@@ -66,10 +66,11 @@ func (s RunStats) Count(phase string) int64 { return s.ByPhase[phase] }
 // facts: provider, code and status, never run ids, request ids or provider
 // bodies.
 type RuntimeHealth struct {
-	ByPhase      map[string]int64
-	Queue        RuntimeQueue
-	Failures     []RuntimeFailureBucket
-	ToolFailures []RuntimeToolFailureBucket
+	ByPhase         map[string]int64
+	Queue           RuntimeQueue
+	Failures        []RuntimeFailureBucket
+	ToolFailures    []RuntimeToolFailureBucket
+	ChannelFailures []RuntimeChannelFailureBucket
 }
 
 type RuntimeQueue struct {
@@ -94,6 +95,15 @@ type RuntimeToolFailureBucket struct {
 	Calls  int64
 	Runs   int64
 	LastAt time.Time
+}
+
+type RuntimeChannelFailureBucket struct {
+	Code          string
+	Attempts      int64
+	Conversations int64
+	Runs          int64
+	FirstAt       time.Time
+	LastAt        time.Time
 }
 
 // ThroughputBucket is one interval of a run count, split by what became of the

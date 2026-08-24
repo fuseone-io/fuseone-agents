@@ -3,20 +3,21 @@ package channel
 import (
 	"errors"
 
+	"github.com/fuseone/agents/internal/channelmetrics"
 	"github.com/fuseone/agents/internal/domain"
 )
 
 const (
-	CodeConfigurationReadFailed = "channel_configuration_read_failed"
-	CodeConnectionDisabled      = "channel_connection_disabled"
-	CodeInvalidConfiguration    = "channel_invalid_configuration"
-	CodeMissingCredential       = "channel_missing_credential"
-	CodeUnsupportedKind         = "channel_unsupported_kind"
-	CodeDeliveryFailed          = "channel_delivery_failed"
-	CodeCredentialRejected      = "channel_credential_rejected"
-	CodeConversationUnavailable = "channel_conversation_unavailable"
-	CodeMissingScope            = "channel_missing_scope"
-	CodeRateLimited             = "channel_rate_limited"
+	CodeConfigurationReadFailed = channelmetrics.CodeConfigurationReadFailed
+	CodeConnectionDisabled      = channelmetrics.CodeConnectionDisabled
+	CodeInvalidConfiguration    = channelmetrics.CodeInvalidConfiguration
+	CodeMissingCredential       = channelmetrics.CodeMissingCredential
+	CodeUnsupportedKind         = channelmetrics.CodeUnsupportedKind
+	CodeDeliveryFailed          = channelmetrics.CodeDeliveryFailed
+	CodeCredentialRejected      = channelmetrics.CodeCredentialRejected
+	CodeConversationUnavailable = channelmetrics.CodeConversationUnavailable
+	CodeMissingScope            = channelmetrics.CodeMissingScope
+	CodeRateLimited             = channelmetrics.CodeRateLimited
 )
 
 // Error carries the stable reason a channel operation failed. The wrapped text

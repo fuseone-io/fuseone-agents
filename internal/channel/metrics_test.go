@@ -87,3 +87,17 @@ func TestMetricTasks_exposesTheBoundedVocabulary(t *testing.T) {
 		}
 	}
 }
+
+func TestMetricCodes_exposesTheBoundedVocabulary(t *testing.T) {
+	codes := channel.MetricCodes()
+	for _, want := range []string{
+		channel.MetricOther,
+		channel.CodeDeliveryFailed,
+		channel.CodeMissingScope,
+		channel.CodeRateLimited,
+	} {
+		if !slices.Contains(codes, want) {
+			t.Fatalf("codes %v missing %q", codes, want)
+		}
+	}
+}

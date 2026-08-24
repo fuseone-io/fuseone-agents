@@ -5509,7 +5509,7 @@ components:
 
     RuntimeHealth:
       type: object
-      required: [byPhase, queue, failures, toolFailures]
+      required: [byPhase, queue, failures, toolFailures, channelFailures]
       properties:
         byPhase:
           type: object
@@ -5526,6 +5526,14 @@ components:
             to the same stable MCP vocabulary used by worker metrics; run ids,
             tool arguments and tool response bodies are not included.
           items: { $ref: '#/components/schemas/RuntimeToolFailureBucket' }
+        channelFailures:
+          type: array
+          description: |
+            Channel delivery failures last seen in the requested window. Codes
+            are bounded to the same stable channel vocabulary used by worker
+            metrics; Slack text, channel labels and delivery bodies are not
+            included.
+          items: { $ref: '#/components/schemas/RuntimeChannelFailureBucket' }
 
     RuntimeQueue:
       type: object
@@ -5578,6 +5586,32 @@ components:
           format: int64
           description: Distinct runs that saw at least one failure with this code.
         lastAt: { type: string, format: date-time }
+
+    RuntimeChannelFailureBucket:
+      type: object
+      required: [code, attempts, conversations, runs, firstAt, lastAt]
+      properties:
+        code: { type: string }
+        attempts:
+          type: integer
+          format: int64
+          description: Delivery attempts that failed with this code.
+        conversations:
+          type: integer
+          format: int64
+          description: Distinct channel conversations affected by this code.
+        runs:
+          type: integer
+          format: int64
+          description: Distinct runs whose announcement failed with this code.
+        firstAt:
+          type: string
+          format: date-time
+          description: First time this durable source saw the failure form.
+        lastAt:
+          type: string
+          format: date-time
+          description: Most recent time this durable source saw the failure form.
 
     DecisionPage:
       type: object

@@ -19,6 +19,16 @@ export const FAILURE_LABELS: Record<string, string> = {
   unknown_server: "runtime.failureMCPUnknownServer",
   unknown_tool: "runtime.failureMCPUnknownTool",
   attempts_exhausted: "runtime.failureAttemptsExhausted",
+  channel_configuration_read_failed: "runtime.failureChannelConfigurationRead",
+  channel_connection_disabled: "runtime.failureChannelConnectionDisabled",
+  channel_invalid_configuration: "runtime.failureChannelInvalidConfiguration",
+  channel_missing_credential: "runtime.failureChannelMissingCredential",
+  channel_unsupported_kind: "runtime.failureChannelUnsupportedKind",
+  channel_delivery_failed: "runtime.failureChannelDeliveryFailed",
+  channel_credential_rejected: "runtime.failureChannelCredentialRejected",
+  channel_conversation_unavailable: "runtime.failureChannelConversationUnavailable",
+  channel_missing_scope: "runtime.failureChannelMissingScope",
+  channel_rate_limited: "runtime.failureChannelRateLimited",
 };
 
 export function failureLabel(code: string): string {

@@ -141,6 +141,54 @@ func TestRecordFailure_keepsScopeAndCountsRetries(t *testing.T) {
 	}
 }
 
+func TestRuntimeHealth_channelFailuresAreScopedAndBounded(t *testing.T) {
+	store, pool := channelStore(t)
+	ctx := t.Context()
+	ops := domain.Scope{Company: "acme", Area: "ops"}
+	finance := domain.Scope{Company: "acme", Area: "finance"}
+
+	recordFailure := func(run, conversation, code string, scope domain.Scope, seen time.Time) {
+		t.Helper()
+		if err := store.RecordFailure(ctx, channel.DeliveryFailure{
+			RunID: domain.RunID(run), Event: channel.EventParked,
+			Channel: "acme-slack", Conversation: conversation,
+			Code: code, Scope: scope, AgentID: "triage", SeenAt: seen,
+		}); err != nil {
+			t.Fatalf("RecordFailure %s/%s: %v", run, code, err)
+		}
+	}
+
+	recordFailure("run-ops-1", "C07-ops", channel.CodeMissingScope, ops, noon)
+	recordFailure("run-ops-1", "C07-ops", channel.CodeMissingScope, ops, noon.Add(time.Minute))
+	recordFailure("run-ops-2", "C08-ops", "jira-prod.transition_ACME-4417", ops, noon.Add(2*time.Minute))
+	recordFailure("run-finance", "C09-finance", channel.CodeDeliveryFailed, finance, noon.Add(3*time.Minute))
+
+	health, err := ledger.NewPostgres(pool).RuntimeHealth(ctx, domain.RunFilter{
+		Scope: ops, Since: noon.Add(-time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("RuntimeHealth: %v", err)
+	}
+	if len(health.ChannelFailures) != 2 {
+		t.Fatalf("ChannelFailures = %+v, want two scoped buckets", health.ChannelFailures)
+	}
+
+	missing := health.ChannelFailures[0]
+	if missing.Code != channel.CodeMissingScope || missing.Attempts != 2 ||
+		missing.Conversations != 1 || missing.Runs != 1 {
+		t.Fatalf("missing scope bucket = %+v", missing)
+	}
+	if !missing.FirstAt.Equal(noon) || !missing.LastAt.Equal(noon.Add(time.Minute)) {
+		t.Fatalf("missing scope window = %s..%s", missing.FirstAt, missing.LastAt)
+	}
+
+	other := health.ChannelFailures[1]
+	if other.Code != channel.MetricOther || other.Attempts != 1 ||
+		other.Conversations != 1 || other.Runs != 1 {
+		t.Fatalf("dynamic code bucket = %+v, want bounded other", other)
+	}
+}
+
 func channelStore(t *testing.T) (*channel.Postgres, *pgxpool.Pool) {
 	t.Helper()
 	dsn := os.Getenv("TEST_DATABASE_URL")
