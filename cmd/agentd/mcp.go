@@ -282,6 +282,35 @@ type credentialAuth struct {
 	grants   map[domain.UserID]*oauthTransport
 }
 
+type mcpCredentialError struct {
+	code    string
+	server  string
+	message string
+	err     error
+}
+
+func (e *mcpCredentialError) Error() string {
+	if e.err != nil {
+		return fmt.Sprintf("%s: %s: %v", e.server, e.message, e.err)
+	}
+	return fmt.Sprintf("%s: %s", e.server, e.message)
+}
+
+func (e *mcpCredentialError) Unwrap() error { return e.err }
+
+func (e *mcpCredentialError) Summary() domain.FailureSummary {
+	return domain.FailureSummary{
+		Code:      e.code,
+		Retryable: false,
+	}
+}
+
+func credentialFailure(code, server, message string, err error) error {
+	return &mcpCredentialError{
+		code: code, server: server, message: message, err: err,
+	}
+}
+
 func (a *credentialAuth) RoundTrip(r *http.Request) (*http.Response, error) {
 	creds, owner, err := a.credentials(r.Context())
 	if err != nil {
@@ -304,32 +333,35 @@ func (a *credentialAuth) credentials(ctx context.Context) (domain.MCPCredentials
 	if hasCaller && a.personal != nil {
 		creds, found, err := a.personal.MCPPersonalCredential(ctx, a.server, principal)
 		if err != nil {
-			return domain.MCPCredentials{}, "", fmt.Errorf(
-				"%s: read personal MCP credential for %s: %w", a.server, principal, err)
+			return domain.MCPCredentials{}, "", credentialFailure(
+				tools.CodeMCPPersonalCredentialRead, a.server,
+				fmt.Sprintf("read personal MCP credential for %s", principal), err)
 		}
 		if found {
 			creds = creds.ForTransport(domain.TransportHTTP)
 			if creds.OAuth != nil && !creds.OAuth.Empty() &&
 				creds.OAuth.AccessToken == "" && !creds.OAuth.CanRefresh() {
-				return domain.MCPCredentials{}, "", fmt.Errorf(
-					"%s: personal oauth grant has no access token and cannot refresh", a.server)
+				return domain.MCPCredentials{}, "", credentialFailure(
+					tools.CodeMCPPersonalCredentialInvalid, a.server,
+					"personal oauth grant has no access token and cannot refresh", nil)
 			}
 			return creds, principal, nil
 		}
 	}
 	if a.policy.requirePersonal && tools.IsInvocation(ctx) {
 		if !hasCaller {
-			return domain.MCPCredentials{}, "", fmt.Errorf(
-				"%s: this MCP server requires a personal credential, but the run has no person to resolve one for",
-				a.server)
+			return domain.MCPCredentials{}, "", credentialFailure(
+				tools.CodeMCPPersonalCredentialCaller, a.server,
+				"this MCP server requires a personal credential, but the run has no person to resolve one for", nil)
 		}
 		if !a.shared.Empty() {
-			return domain.MCPCredentials{}, "", fmt.Errorf(
-				"%s: this MCP server has an installation credential for discovery, but tool calls require a personal MCP credential for %s",
-				a.server, principal)
+			return domain.MCPCredentials{}, "", credentialFailure(
+				tools.CodeMCPPersonalCredentialMissing, a.server,
+				fmt.Sprintf("this MCP server has an installation credential for discovery, but tool calls require a personal MCP credential for %s", principal), nil)
 		}
-		return domain.MCPCredentials{}, "", fmt.Errorf(
-			"%s: no personal MCP credential is configured for %s", a.server, principal)
+		return domain.MCPCredentials{}, "", credentialFailure(
+			tools.CodeMCPPersonalCredentialMissing, a.server,
+			fmt.Sprintf("no personal MCP credential is configured for %s", principal), nil)
 	}
 	return a.shared, "", nil
 }

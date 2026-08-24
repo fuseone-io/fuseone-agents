@@ -564,6 +564,8 @@ func TestAuthenticatedClient_aUserOnlyServerDoesNotUseTheSharedCredentialForACro
 		t.Fatal("cron call succeeded by falling back to the shared credential")
 	} else if !strings.Contains(err.Error(), "requires a personal credential") {
 		t.Fatalf("Get error = %v, want the missing person named", err)
+	} else {
+		assertFailureCode(t, err, tools.CodeMCPPersonalCredentialCaller)
 	}
 }
 
@@ -595,6 +597,8 @@ func TestAuthenticatedClient_aUserOnlyServerStillBlocksToolCallsWithoutAnyCreden
 		t.Fatal("call succeeded without a personal credential store")
 	} else if !strings.Contains(err.Error(), "requires a personal credential") {
 		t.Fatalf("Get error = %v, want the missing person named", err)
+	} else {
+		assertFailureCode(t, err, tools.CodeMCPPersonalCredentialCaller)
 	}
 }
 
@@ -624,6 +628,26 @@ func TestAuthenticatedClient_aUserOnlyServerDoesNotUseTheSharedCredentialWhenThe
 	} else if !strings.Contains(err.Error(), "installation credential for discovery") ||
 		!strings.Contains(err.Error(), "usr_ana") {
 		t.Fatalf("Get error = %v, want Ana's missing personal credential named beside the shared discovery credential", err)
+	} else {
+		assertFailureCode(t, err, tools.CodeMCPPersonalCredentialMissing)
+	}
+}
+
+func assertFailureCode(t *testing.T, err error, code string) {
+	t.Helper()
+
+	var summarized interface {
+		Summary() domain.FailureSummary
+	}
+	if !errors.As(err, &summarized) {
+		t.Fatalf("error %v does not carry a failure summary", err)
+	}
+	summary := summarized.Summary()
+	if got := summary.Code; got != code {
+		t.Fatalf("failure code = %q, want %q", got, code)
+	}
+	if summary.Provider != "" {
+		t.Fatalf("provider = %q, want empty for an MCP credential failure", summary.Provider)
 	}
 }
 

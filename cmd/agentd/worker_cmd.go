@@ -76,6 +76,12 @@ func workerCmd(args []string) error {
 	}
 	defer parts.Close()
 
+	metrics := worker.NewMetricsRegistry()
+	if err := startWorkerMetrics(ctx, cfg.metricsAddr, metrics); err != nil {
+		return err
+	}
+	parts.catalog.WithMetrics(metrics)
+
 	if err := parts.connectTools(ctx, cfg.servers); err != nil {
 		return err
 	}
@@ -90,13 +96,8 @@ func workerCmd(args []string) error {
 		return err
 	}
 
-	metrics := worker.NewMetricsRegistry()
-	if err := startWorkerMetrics(ctx, cfg.metricsAddr, metrics); err != nil {
-		return err
-	}
-
 	w, sim := parts.pools(cfg, parts.deps(gate), specs, metrics)
-	parts.startLoops(ctx, cfg, sim)
+	parts.startLoops(ctx, cfg, sim, metrics)
 
 	slog.Info("worker started", "owner", cfg.owner, "concurrency", cfg.concurrency)
 	if err := w.Run(ctx); err != nil && !isCancelled(err) {

@@ -9,6 +9,7 @@ import (
 	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/channel/connect"
 	"github.com/fuseone/agents/internal/settings"
+	"github.com/fuseone/agents/internal/worker"
 )
 
 // channelSweep is how often runs report to their conversations.
@@ -25,7 +26,10 @@ const channelSweep = 30 * time.Second
 // conversation says reaches this process; the message even links to the console
 // rather than offering a button, because a button would promise an inbound
 // surface that does not exist yet.
-func reportToChannels(ctx context.Context, store *settings.Store, deliveries *channel.Postgres, baseURL string) {
+func reportToChannels(
+	ctx context.Context, store *settings.Store, deliveries *channel.Postgres,
+	baseURL string, metrics *worker.MetricsRegistry,
+) {
 	reporter := channel.NewReporter(
 		deliveries,
 		channel.NewConfigured(store),
@@ -42,6 +46,7 @@ func reportToChannels(ctx context.Context, store *settings.Store, deliveries *ch
 			return
 		case <-ticker.C:
 			sent, err := reporter.Sweep(ctx, 50)
+			recordChannelSweep(metrics, channel.MetricTaskAnnouncements, sent, err)
 			if err != nil {
 				// Logged and continued. One conversation the bot was removed
 				// from must not stop the sweep that still reaches the others,
@@ -103,7 +108,7 @@ const askLease = time.Minute
 
 // consumeAsks turns what arrived in a conversation into runs, and says why
 // when it will not (NT-005 stage 3).
-func (p *workerParts) consumeAsks(ctx context.Context, owner string) {
+func (p *workerParts) consumeAsks(ctx context.Context, owner string, metrics *worker.MetricsRegistry) {
 	pool := p.configPool
 	configured := channel.NewConfigured(p.settings)
 	drivers := connect.New(p.settings)
@@ -120,13 +125,13 @@ func (p *workerParts) consumeAsks(ctx context.Context, owner string) {
 		WithThreadContext(configured, drivers).
 		Binding(admin.NewChannels(pool, p.settings).PrincipalFor)
 
-	go sweep(ctx, askSweep, "asks opened", func() (int, error) {
+	go channelSweepLoop(ctx, askSweep, channel.MetricTaskAsksOpened, "asks opened", metrics, func() (int, error) {
 		return consumer.Sweep(ctx, askLease, 20)
 	})
-	go sweep(ctx, askAnswer, "refusals delivered", func() (int, error) {
+	go channelSweepLoop(ctx, askAnswer, channel.MetricTaskRefusalsDelivered, "refusals delivered", metrics, func() (int, error) {
 		return consumer.Answer(ctx, askLease, 20)
 	})
-	go sweep(ctx, askFinishedAnswer, "answers delivered", func() (int, error) {
+	go channelSweepLoop(ctx, askFinishedAnswer, channel.MetricTaskAnswersDelivered, "answers delivered", metrics, func() (int, error) {
 		return consumer.AnswerFinished(ctx, askLease, 20)
 	})
 }
@@ -139,6 +144,20 @@ one unreachable conversation must not silence the rest, and the symptom of that
 failure would be silence — the hardest thing to notice.
 */
 func sweep(ctx context.Context, every time.Duration, did string, pass func() (int, error)) {
+	sweepObserved(ctx, every, "", did, nil, pass)
+}
+
+func channelSweepLoop(
+	ctx context.Context, every time.Duration, task, did string,
+	metrics *worker.MetricsRegistry, pass func() (int, error),
+) {
+	sweepObserved(ctx, every, task, did, metrics, pass)
+}
+
+func sweepObserved(
+	ctx context.Context, every time.Duration, task, did string,
+	metrics *worker.MetricsRegistry, pass func() (int, error),
+) {
 	ticker := time.NewTicker(every)
 	defer ticker.Stop()
 	for {
@@ -147,6 +166,7 @@ func sweep(ctx context.Context, every time.Duration, did string, pass func() (in
 			return
 		case <-ticker.C:
 			n, err := pass()
+			recordChannelSweep(metrics, task, n, err)
 			if err != nil {
 				slog.Error("a channel sweep did not finish", "doing", did, "err", err)
 			}
@@ -155,4 +175,15 @@ func sweep(ctx context.Context, every time.Duration, did string, pass func() (in
 			}
 		}
 	}
+}
+
+func recordChannelSweep(metrics *worker.MetricsRegistry, task string, items int, err error) {
+	if metrics == nil {
+		return
+	}
+	if err != nil {
+		metrics.ChannelSweep(task, channel.MetricResultError, items)
+		return
+	}
+	metrics.ChannelSweep(task, channel.MetricResultOK, items)
 }

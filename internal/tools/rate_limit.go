@@ -129,9 +129,11 @@ func (c *Catalog) Reserve(ctx context.Context, call engine.Call) error {
 
 	entry, known := c.entries[call.Tool]
 	if !known || !entry.OnSurface {
+		c.recordMCPReservationRefused(CodeMCPUnknownTool)
 		return fmt.Errorf("%w: %s", ErrUnknownTool, call.Tool)
 	}
 	if _, connected := c.sessions[entry.Server]; !connected {
+		c.recordMCPReservationRefused(CodeMCPUnknownServer)
 		return fmt.Errorf("%w: %s", ErrUnknownServer, entry.Server)
 	}
 	if cache := c.caches[entry.Server]; resultCacheable(entry, call, c.content, cache) {
@@ -141,7 +143,14 @@ func (c *Catalog) Reserve(ctx context.Context, call engine.Call) error {
 	}
 	limiter := c.limiters[entry.Server]
 	if wait, ok := limiter.allow(time.Now()); !ok {
+		c.recordMCPReservationRefused(CodeMCPServerRateLimited)
 		return &ServerRateLimitError{Server: entry.Server, RetryAfter: wait}
 	}
 	return nil
+}
+
+func (c *Catalog) recordMCPReservationRefused(code string) {
+	if c.metrics != nil {
+		c.metrics.MCPReservationRefused(code)
+	}
 }

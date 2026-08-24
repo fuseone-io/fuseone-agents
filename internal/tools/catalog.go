@@ -128,6 +128,9 @@ type Catalog struct {
 	// Optional: without it every tool imports with no suggestion, which is
 	// what happened before there was a catalogue.
 	known Suggester
+	// metrics receives low-cardinality operational counters. It is deliberately
+	// narrower than the catalogue: no server, tool or run identifier is a label.
+	metrics Metrics
 }
 
 // Suggester is what the platform already knows about a server's tools,
@@ -149,6 +152,14 @@ func (c *Catalog) Knowing(known Suggester) *Catalog {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.known = known
+	return c
+}
+
+// WithMetrics wires the worker process metrics after the catalogue exists.
+func (c *Catalog) WithMetrics(metrics Metrics) *Catalog {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.metrics = metrics
 	return c
 }
 

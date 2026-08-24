@@ -30,7 +30,9 @@ They are started together, in one place, because a loop added next to the
 wiring it happens to need is a loop nobody finds again — which is how the
 command that used to hold all of this reached five times its size limit.
 */
-func (p *workerParts) startLoops(ctx context.Context, cfg workerFlags, sim *worker.Worker) {
+func (p *workerParts) startLoops(
+	ctx context.Context, cfg workerFlags, sim *worker.Worker, metrics *worker.MetricsRegistry,
+) {
 	if simulations(p.store) != nil {
 		go runSimulations(ctx, sim)
 		slog.Info("simulation pool started", "slots", simulationSlots(cfg.concurrency))
@@ -46,7 +48,7 @@ func (p *workerParts) startLoops(ctx context.Context, cfg workerFlags, sim *work
 
 	// What the people waiting on a run get told (NT-005 stage 1).
 	if p.settings != nil {
-		go reportToChannels(ctx, p.settings, channel.NewPostgres(p.configPool), cfg.baseURL)
+		go reportToChannels(ctx, p.settings, channel.NewPostgres(p.configPool), cfg.baseURL, metrics)
 		go watchPolicyRefusals(ctx, p.settings, p.configPool, cfg.baseURL, cfg.owner+"-gate-refusals")
 	}
 
@@ -59,7 +61,7 @@ func (p *workerParts) startLoops(ctx context.Context, cfg workerFlags, sim *work
 	// two things to tell apart in a log at three in the morning, and the run
 	// queue already earned that name for the runs it holds.
 	if p.settings != nil && p.registry != nil {
-		p.consumeAsks(ctx, cfg.owner+"-asks")
+		p.consumeAsks(ctx, cfg.owner+"-asks", metrics)
 		go p.receiveSlackSockets(ctx)
 	}
 

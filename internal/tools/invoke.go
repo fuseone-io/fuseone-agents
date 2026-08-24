@@ -43,6 +43,7 @@ func (c *Catalog) Invoke(ctx context.Context, call engine.Call) (engine.ToolResu
 	cache := c.caches[entry.Server]
 	timeout := c.timeout
 	content := c.content
+	metrics := c.metrics
 	c.mu.RUnlock()
 
 	if !known || !entry.OnSurface {
@@ -83,6 +84,7 @@ func (c *Catalog) Invoke(ctx context.Context, call engine.Call) (engine.ToolResu
 			out.Cached = true
 			out.CachedFromRun = cached.sourceRun
 			out.CachedFromSeq = cached.sourceSeq
+			recordMCPToolCall(metrics, "ok", CodeMCPCacheHit, true)
 			return out, nil
 		}
 	}
@@ -99,21 +101,26 @@ func (c *Catalog) Invoke(ctx context.Context, call engine.Call) (engine.ToolResu
 		Arguments: args,
 	})
 	if err != nil {
+		code := failureCodeOf(err, CodeMCPInvokeError)
 		out.Failed = true
-		out.ErrorCode = "invoke_error"
+		out.ErrorCode = code
 		if content != nil {
-			ref, storeErr := content.Put(ctx, call.RunID, call.Seq, invocationErrorText(call.Tool, err))
+			ref, storeErr := content.Put(ctx, call.RunID, call.Seq, invocationErrorText(call.Tool, code, err))
 			if storeErr != nil {
 				return engine.ToolResult{}, fmt.Errorf("tools: store failure for %s: %w", call.Tool, storeErr)
 			}
 			out.ResultRef = ref
 		}
+		recordMCPToolCall(metrics, "error", code, false)
 		return out, fmt.Errorf("tools: call %s: %w", call.Tool, err)
 	}
 
 	out.Failed = res.IsError
 	if res.IsError {
-		out.ErrorCode = "tool_error"
+		out.ErrorCode = CodeMCPToolError
+		recordMCPToolCall(metrics, "error", CodeMCPToolError, false)
+	} else {
+		recordMCPToolCall(metrics, "ok", CodeMCPNoCode, false)
 	}
 
 	text := flatten(res)
@@ -131,8 +138,14 @@ func (c *Catalog) Invoke(ctx context.Context, call engine.Call) (engine.ToolResu
 	return out, nil
 }
 
-func invocationErrorText(tool domain.ToolID, err error) []byte {
-	text := fmt.Sprintf("the tool failed: invoke_error\n%s: %v", tool, err)
+func recordMCPToolCall(metrics Metrics, result, code string, cached bool) {
+	if metrics != nil {
+		metrics.MCPToolCall(result, code, cached)
+	}
+}
+
+func invocationErrorText(tool domain.ToolID, code string, err error) []byte {
+	text := fmt.Sprintf("the tool failed: %s\n%s: %v", code, tool, err)
 	if len(text) <= toolInvokeErrorLimit {
 		return []byte(text)
 	}
