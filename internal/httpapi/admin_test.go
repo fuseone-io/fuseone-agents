@@ -520,6 +520,38 @@ func TestListIntegrations_saysLocalProcessIsNotPersonalPerCall(t *testing.T) {
 	}
 }
 
+func TestListIntegrations_saysProxiedStdioRequestedAProxy(t *testing.T) {
+	t.Parallel()
+
+	admin := &fakeAdmin{
+		servers: []domain.MCPServer{{
+			Name: "local-wiki", Transport: domain.TransportStdio,
+			Command: "wiki-mcp", Enabled: true,
+			StdioEgress: &domain.MCPStdioEgress{
+				Mode: domain.MCPEgressProxied,
+				AllowedDestinations: []domain.MCPEgressDestination{
+					{Host: "wiki.internal", Port: 443},
+				},
+			},
+		}},
+	}
+
+	resp, err := serverWith(t, admin).
+		ListIntegrations(as(domain.RoleCurator), openapi.ListIntegrationsRequestObject{})
+	if err != nil {
+		t.Fatalf("ListIntegrations: %v", err)
+	}
+	body := resp.(openapi.ListIntegrations200JSONResponse)
+	if body.McpServers[0].StdioEgress == nil ||
+		body.McpServers[0].StdioEgress.Mode != openapi.Proxied {
+		t.Fatalf("stdio egress = %+v, want proxied", body.McpServers[0].StdioEgress)
+	}
+	egress := egressOf(t, resp, "local-wiki")
+	if egress.Policy != openapi.MCPServerEgressPolicyProxyRequested {
+		t.Fatalf("egress = %+v, want proxy requested", egress)
+	}
+}
+
 func callAuthOf(
 	t *testing.T, resp openapi.ListIntegrationsResponseObject, name string,
 ) openapi.MCPServerCallAuth {

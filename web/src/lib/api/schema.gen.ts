@@ -2803,6 +2803,18 @@ export interface components {
             ttlSeconds?: number;
             maxEntries?: number;
         };
+        MCPEgressDestination: {
+            /** @description Exact host name, IPv4 literal, or wildcard suffix such as *.example.internal. It is a destination identity for a proxy policy, not a URL and never a credential-bearing value. */
+            host: string;
+            port: number;
+        };
+        /** @description Requested egress handling for a stdio MCP process. Inherit is the historical behaviour: the process receives no proxy variables from FuseOne. Proxied requires allowed destinations and makes the worker refuse to start the process unless a stdio egress proxy endpoint is configured for that worker. */
+        MCPStdioEgress: {
+            /** @enum {string} */
+            mode: "inherit" | "proxied";
+            /** @description Destinations the configured proxy is expected to allow for this server. Empty or omitted is valid only for inherit. */
+            allowedDestinations?: components["schemas"]["MCPEgressDestination"][];
+        };
         /**
          * @description What the API can say about authentication for tools/call for the
          *     signed-in caller. This is not a trust decision and not a Gate verdict:
@@ -2829,9 +2841,9 @@ export interface components {
         };
         /**
          * @description What the platform can say about outbound network reach for this MCP
-         *     transport. This is not a claim that egress is contained: until an
-         *     explicit egress proxy/policy exists, the API names the narrow refusals
-         *     that exist and the unconstrained cases that remain.
+         *     transport. This is not a claim that egress is contained: the API names
+         *     the narrow refusals that exist, proxy requests that the worker will
+         *     enforce at process start, and the unconstrained cases that remain.
          */
         MCPServerEgress: {
             /**
@@ -2839,12 +2851,15 @@ export interface components {
              *     know its transport/configuration. metadata_refused: HTTP MCP uses
              *     local DNS resolution and refuses cloud metadata/link-local
              *     destinations and environment proxies; private network and internet
-             *     destinations are otherwise allowed. unconstrained_local_process:
-             *     stdio starts a process on the worker and the platform does not
-             *     constrain its outbound destinations.
+             *     destinations are otherwise allowed. proxy_requested: stdio is
+             *     configured to receive HTTP(S) proxy variables and will not start on
+             *     a worker without a proxy endpoint; deployment-level network policy
+             *     is still what prevents bypass. unconstrained_local_process: stdio
+             *     starts a process on the worker and the platform does not constrain
+             *     its outbound destinations.
              * @enum {string}
              */
-            policy: "unknown" | "metadata_refused" | "unconstrained_local_process";
+            policy: "unknown" | "metadata_refused" | "proxy_requested" | "unconstrained_local_process";
         };
         MCPServer: {
             /** @description Namespaces the tools it offers, so two servers naming a tool "search" do not collide. */
@@ -2885,6 +2900,8 @@ export interface components {
             surface?: string[] | null;
             rateLimit?: components["schemas"]["MCPRateLimit"] | null;
             cache?: components["schemas"]["MCPResultCache"] | null;
+            /** @description The stored egress request for a stdio server. Absent means inherit. */
+            stdioEgress?: components["schemas"]["MCPStdioEgress"] | null;
             /**
              * @description Authentication usability for tools/call for the signed-in caller.
              *     A server can answer discovery and still be unusable for a run by
@@ -6494,6 +6511,8 @@ export interface operations {
                     rateLimit?: components["schemas"]["MCPRateLimit"];
                     /** @description Per-worker in-memory cache for successful read-only tool results from this server. Omit to leave the choice as it stands. Send both fields as zero to disable it. */
                     cache?: components["schemas"]["MCPResultCache"];
+                    /** @description Egress request for a local stdio process. Omit to leave the stored choice as it stands. Send mode inherit to clear it. Send mode proxied with destinations to require a worker egress proxy before the process starts. The proxy environment is not, by itself, network containment; a deployment-level egress policy is still the enforcement boundary. */
+                    stdioEgress?: components["schemas"]["MCPStdioEgress"];
                     /** @description Required for stdio, and refused without it. A local server is a program this installation starts inside the worker, running as the worker and reaching whatever the worker can reach. That is a decision a person makes, not one a transport implies, and it is recorded with their name. */
                     acceptsLocalExecution?: boolean;
                     /** @default true */

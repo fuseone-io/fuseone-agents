@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -564,6 +565,7 @@ func fingerprint(server domain.MCPServer) string {
 		server.TransportOf(), server.Command, strings.Join(server.Args, " "), server.URL,
 		server.MCPProtocolModeOf(), server.ConfigFileEnvName(),
 		rateLimitFingerprint(server.RateLimit), resultCacheFingerprint(server.Cache),
+		stdioEgressFingerprint(server.StdioEgress),
 		fmt.Sprint(server.Enabled), server.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}, "\x00")))
 	return hex.EncodeToString(sum[:8])
@@ -581,6 +583,17 @@ func resultCacheFingerprint(cache *domain.MCPResultCache) string {
 		return ""
 	}
 	return fmt.Sprintf("%d/%d", cache.TTLSeconds, cache.MaxEntries)
+}
+
+func stdioEgressFingerprint(egress *domain.MCPStdioEgress) string {
+	if egress == nil {
+		return domain.MCPEgressInherit
+	}
+	parts := []string{egress.Mode}
+	for _, dest := range egress.AllowedDestinations {
+		parts = append(parts, fmt.Sprintf("%s:%d", dest.Host, dest.Port))
+	}
+	return strings.Join(parts, ",")
 }
 
 // Servers is where the configured set is read from, declared here by the
@@ -901,6 +914,11 @@ func commandFor(
 		always.
 	*/
 	cmd.Env = append(childEnv(), creds.Environ()...)
+	egressEnv, err := stdioEgressEnv(server)
+	if err != nil {
+		return nil, noop, err
+	}
+	cmd.Env = append(cmd.Env, egressEnv...)
 	cleanup := noop
 	if creds.ConfigFile != "" {
 		path, remove, err := materializeConfigFile(server.Name, creds.ConfigFile)
@@ -913,6 +931,66 @@ func commandFor(
 		cmd.Env = append(cmd.Env, server.ConfigFileEnvName()+"="+path)
 	}
 	return cmd, cleanup, nil
+}
+
+const (
+	stdioEgressProxyURLEnv = "FUSEONE_STDIO_EGRESS_PROXY_URL"
+	stdioEgressAllowedEnv  = "FUSEONE_MCP_EGRESS_ALLOWED"
+)
+
+var (
+	errStdioEgressProxyMissing = errors.New(
+		"stdio egress proxy requested, but this worker has no proxy endpoint configured")
+	errStdioEgressProxyBad = errors.New(
+		"stdio egress proxy endpoint must be http or https, with a host and no embedded credential")
+)
+
+func stdioEgressEnv(server domain.MCPServer) ([]string, error) {
+	if server.StdioEgress == nil || server.StdioEgress.Mode != domain.MCPEgressProxied {
+		return nil, nil
+	}
+	proxy, err := stdioEgressProxyURL()
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", server.Name, err)
+	}
+	allowed, err := stdioEgressAllowed(server.StdioEgress.AllowedDestinations)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", server.Name, err)
+	}
+	return []string{
+		"HTTP_PROXY=" + proxy,
+		"HTTPS_PROXY=" + proxy,
+		"NO_PROXY=",
+		stdioEgressAllowedEnv + "=" + allowed,
+	}, nil
+}
+
+func stdioEgressProxyURL() (string, error) {
+	raw := strings.TrimSpace(os.Getenv(stdioEgressProxyURLEnv))
+	if raw == "" {
+		return "", errStdioEgressProxyMissing
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme == "" || u.Host == "" ||
+		(u.Scheme != "http" && u.Scheme != "https") || u.User != nil {
+		return "", errStdioEgressProxyBad
+	}
+	u.Path, u.RawPath, u.RawQuery, u.Fragment = "", "", "", ""
+	return u.String(), nil
+}
+
+func stdioEgressAllowed(destinations []domain.MCPEgressDestination) (string, error) {
+	if len(destinations) == 0 {
+		return "", errStdioEgressProxyBad
+	}
+	out := make([]string, 0, len(destinations))
+	for _, dest := range destinations {
+		if !domain.ValidMCPEgressDestination(dest) {
+			return "", errStdioEgressProxyBad
+		}
+		out = append(out, fmt.Sprintf("%s:%d", dest.Host, dest.Port))
+	}
+	return strings.Join(out, ","), nil
 }
 
 const configTempPrefix = "fuseone-mcp-config-"

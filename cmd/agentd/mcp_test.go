@@ -179,6 +179,91 @@ func TestCommandFor_aConfiguredVariable_winsOverTheOneCopiedThrough(t *testing.T
 	}
 }
 
+func TestCommandFor_aProxiedStdioServer_doesNotStartWithoutAProxy(t *testing.T) {
+	server := accepted()
+	server.StdioEgress = &domain.MCPStdioEgress{
+		Mode: domain.MCPEgressProxied,
+		AllowedDestinations: []domain.MCPEgressDestination{
+			{Host: "crm.internal", Port: 443},
+		},
+	}
+	t.Setenv(stdioEgressProxyURLEnv, "")
+
+	if _, _, err := commandFor(t.Context(), server, domain.MCPCredentials{}); err == nil {
+		t.Fatal("no error; proxied stdio fell back to direct worker egress")
+	} else if !errors.Is(err, errStdioEgressProxyMissing) {
+		t.Fatalf("commandFor = %v, want proxy-missing refusal", err)
+	}
+}
+
+func TestCommandFor_aProxiedStdioServer_getsOnlyProxyPolicyEnvironment(t *testing.T) {
+	t.Setenv(stdioEgressProxyURLEnv, "http://proxy.fuseone.svc:8080/path?secret=nope")
+	t.Setenv("HTTPS_PROXY", "http://corporate-proxy-with-credential")
+	t.Setenv("NO_PROXY", "metadata.google.internal")
+	server := accepted()
+	server.StdioEgress = &domain.MCPStdioEgress{
+		Mode: domain.MCPEgressProxied,
+		AllowedDestinations: []domain.MCPEgressDestination{
+			{Host: "crm.internal", Port: 443},
+			{Host: "*.sales.internal", Port: 8443},
+		},
+	}
+
+	cmd, cleanup, err := commandFor(t.Context(), server, domain.MCPCredentials{})
+	if err != nil {
+		t.Fatalf("commandFor: %v", err)
+	}
+	t.Cleanup(cleanup)
+
+	for _, want := range []string{
+		"HTTP_PROXY=http://proxy.fuseone.svc:8080",
+		"HTTPS_PROXY=http://proxy.fuseone.svc:8080",
+		"NO_PROXY=",
+		"FUSEONE_MCP_EGRESS_ALLOWED=crm.internal:443,*.sales.internal:8443",
+	} {
+		if !slices.Contains(cmd.Env, want) {
+			t.Errorf("Env misses %q in %v", want, cmd.Env)
+		}
+	}
+	if slices.Contains(cmd.Env, "HTTPS_PROXY=http://corporate-proxy-with-credential") {
+		t.Error("the worker's proxy environment leaked into the child")
+	}
+}
+
+func TestCommandFor_aProxyURLWithCredentials_isRefused(t *testing.T) {
+	t.Setenv(stdioEgressProxyURLEnv, "http://user:pass@proxy.fuseone.svc:8080")
+	server := accepted()
+	server.StdioEgress = &domain.MCPStdioEgress{
+		Mode: domain.MCPEgressProxied,
+		AllowedDestinations: []domain.MCPEgressDestination{
+			{Host: "crm.internal", Port: 443},
+		},
+	}
+
+	if _, _, err := commandFor(t.Context(), server, domain.MCPCredentials{}); err == nil {
+		t.Fatal("no error; proxy credentials would be handed to the child")
+	} else if !errors.Is(err, errStdioEgressProxyBad) {
+		t.Fatalf("commandFor = %v, want bad proxy refusal", err)
+	}
+}
+
+func TestCommandFor_aMalformedStoredEgressDestination_isRefused(t *testing.T) {
+	t.Setenv(stdioEgressProxyURLEnv, "http://proxy.fuseone.svc:8080")
+	server := accepted()
+	server.StdioEgress = &domain.MCPStdioEgress{
+		Mode: domain.MCPEgressProxied,
+		AllowedDestinations: []domain.MCPEgressDestination{
+			{Host: "crm.internal,metadata.google.internal", Port: 443},
+		},
+	}
+
+	if _, _, err := commandFor(t.Context(), server, domain.MCPCredentials{}); err == nil {
+		t.Fatal("no error; a malformed restored egress destination reached the child")
+	} else if !errors.Is(err, errStdioEgressProxyBad) {
+		t.Fatalf("commandFor = %v, want bad proxy refusal", err)
+	}
+}
+
 func TestAuthenticatedClient_sendsBearerTokensToRemoteServers(t *testing.T) {
 	t.Parallel()
 

@@ -2,6 +2,7 @@ package domain
 
 import (
 	"encoding/json"
+	"regexp"
 	"time"
 )
 
@@ -105,6 +106,30 @@ type MCPResultCache struct {
 	MaxEntries int
 }
 
+const (
+	MCPEgressInherit = "inherit"
+	MCPEgressProxied = "proxied"
+)
+
+type MCPEgressDestination struct {
+	Host string
+	Port int
+}
+
+var mcpEgressHostPattern = regexp.MustCompile(
+	`^(?:\*\.)?[a-z0-9](?:[a-z0-9_.-]{0,251}[a-z0-9])?$`,
+)
+
+func ValidMCPEgressDestination(dest MCPEgressDestination) bool {
+	return dest.Port > 0 && dest.Port <= 65535 &&
+		dest.Host != "" && mcpEgressHostPattern.MatchString(dest.Host)
+}
+
+type MCPStdioEgress struct {
+	Mode                string
+	AllowedDestinations []MCPEgressDestination
+}
+
 type MCPServer struct {
 	Name string
 	// Transport is stdio or http. Empty reads as stdio: rows written before
@@ -158,6 +183,10 @@ type MCPServer struct {
 	// Cache keeps successful read results inside one worker process. Nil means
 	// no cache. With multiple workers, each process keeps its own entries.
 	Cache *MCPResultCache
+	// StdioEgress is meaningful only for stdio. Nil reads as inherit: the
+	// local process runs with the worker's network reach and no platform
+	// egress proxy is requested.
+	StdioEgress *MCPStdioEgress
 
 	// AcceptsLocalExecution records that somebody accepted what stdio is.
 	//

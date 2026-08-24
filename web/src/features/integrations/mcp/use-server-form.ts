@@ -41,37 +41,7 @@ export function useServerForm(
 
   const form = useForm<ServerFormValues>({
     resolver: zodResolver(serverSchema),
-    defaultValues: {
-      name: server?.name ?? "",
-      transport: server?.transport ?? "stdio",
-      protocolMode: server?.protocolMode ?? recipe?.protocolMode ?? "auto",
-      command: server?.command ?? "",
-      args: (server?.args ?? []).join(" "),
-      url: server?.url ?? "",
-      token: "",
-      headers: {},
-      env: "",
-      dsn: "",
-      oauthAccessToken: "",
-      oauthRefreshToken: "",
-      oauthTokenURL: "",
-      oauthClientID: "",
-      oauthClientSecret: "",
-      oauthTokenType: "",
-      oauthExpiresAtUnix: "",
-      oauthScopes: "",
-      configFile: "",
-      configFileEnv: server?.configFileEnv ?? "",
-      rateLimitPerSecond: server?.rateLimit?.ratePerSecond?.toString() ?? "",
-      rateLimitBurst: server?.rateLimit?.burst?.toString() ?? "",
-      cacheTTLSeconds: server?.cache?.ttlSeconds?.toString() ?? "",
-      cacheMaxEntries: server?.cache?.maxEntries?.toString() ?? "",
-      // Never carried forward from the transport. A server nobody has accepted
-      // must show as not accepted, or the box would tick itself on the screen
-      // where the decision is supposed to be made.
-      acceptsLocalExecution: server?.acceptsLocalExecution ?? false,
-      enabled: server?.enabled ?? true,
-    },
+    defaultValues: defaultServerValues(server, recipe),
   });
 
   async function submit(values: ServerFormValues) {
@@ -106,6 +76,7 @@ export function useServerForm(
         configFileEnv: values.configFileEnv,
         rateLimit: rateLimitFromValues(values),
         cache: resultCacheFromValues(values),
+        stdioEgress: stdioEgressFromValues(values),
         acceptsLocalExecution: values.acceptsLocalExecution,
         enabled: values.enabled,
       });
@@ -121,6 +92,47 @@ export function useServerForm(
   }
 
   return { form, submit, saving: put.isPending };
+}
+
+function defaultServerValues(
+  server: MCPServer | null,
+  recipe?: ServerRecipe | null,
+): ServerFormValues {
+  return {
+    name: server?.name ?? "",
+    transport: server?.transport ?? "stdio",
+    protocolMode: server?.protocolMode ?? recipe?.protocolMode ?? "auto",
+    command: server?.command ?? "",
+    args: (server?.args ?? []).join(" "),
+    url: server?.url ?? "",
+    token: "",
+    headers: {},
+    env: "",
+    dsn: "",
+    oauthAccessToken: "",
+    oauthRefreshToken: "",
+    oauthTokenURL: "",
+    oauthClientID: "",
+    oauthClientSecret: "",
+    oauthTokenType: "",
+    oauthExpiresAtUnix: "",
+    oauthScopes: "",
+    configFile: "",
+    configFileEnv: server?.configFileEnv ?? "",
+    rateLimitPerSecond: server?.rateLimit?.ratePerSecond?.toString() ?? "",
+    rateLimitBurst: server?.rateLimit?.burst?.toString() ?? "",
+    cacheTTLSeconds: server?.cache?.ttlSeconds?.toString() ?? "",
+    cacheMaxEntries: server?.cache?.maxEntries?.toString() ?? "",
+    stdioEgressMode: server?.stdioEgress?.mode ?? "inherit",
+    stdioEgressDestinations: formatEgressDestinations(
+      server?.stdioEgress?.allowedDestinations,
+    ),
+    // Never carried forward from the transport. A server nobody has accepted
+    // must show as not accepted, or the box would tick itself on the screen
+    // where the decision is supposed to be made.
+    acceptsLocalExecution: server?.acceptsLocalExecution ?? false,
+    enabled: server?.enabled ?? true,
+  };
 }
 
 function remoteCredential(
@@ -163,6 +175,37 @@ function resultCacheFromValues(values: ServerFormValues) {
   const ttl = Number.parseInt(values.cacheTTLSeconds.trim() || "0", 10);
   const maxEntries = Number.parseInt(values.cacheMaxEntries.trim() || "0", 10);
   return { ttlSeconds: ttl, maxEntries };
+}
+
+function stdioEgressFromValues(values: ServerFormValues) {
+  if (values.transport !== "stdio") return undefined;
+  if (values.stdioEgressMode === "inherit") return { mode: "inherit" as const };
+  return {
+    mode: "proxied" as const,
+    allowedDestinations: readEgressDestinations(values.stdioEgressDestinations),
+  };
+}
+
+function readEgressDestinations(raw: string) {
+  return raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const at = line.lastIndexOf(":");
+      return {
+        host: line.slice(0, at).trim().toLowerCase(),
+        port: Number.parseInt(line.slice(at + 1), 10),
+      };
+    });
+}
+
+function formatEgressDestinations(
+  destinations?: Array<{ host: string; port: number }> | null,
+) {
+  return (destinations ?? [])
+    .map((destination) => `${destination.host}:${destination.port}`)
+    .join("\n");
 }
 
 function readEnvLines(raw: string) {

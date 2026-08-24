@@ -109,7 +109,8 @@ func (s *Server) ListIntegrations(ctx context.Context, _ openapi.ListIntegration
 			Surface:               srv.Surface,
 			AcceptsLocalExecution: ptr(srv.AcceptsLocalExecution),
 			CallAuth:              ptr(callAuth.forServer(srv.Name, srv.TransportOf())),
-			Egress:                ptr(mcpEgress(srv.TransportOf())),
+			Egress:                ptr(mcpEgress(srv)),
+			StdioEgress:           stdioEgressToResponse(srv.StdioEgress),
 		}
 		server.Command = someString(srv.Command)
 		server.Url = someString(srv.URL)
@@ -220,15 +221,37 @@ func (a mcpCallAuth) forServer(name, transport string) openapi.MCPServerCallAuth
 	}
 }
 
-func mcpEgress(transport string) openapi.MCPServerEgress {
+func mcpEgress(server domain.MCPServer) openapi.MCPServerEgress {
 	policy := openapi.MCPServerEgressPolicyUnknown
-	switch transport {
+	switch server.TransportOf() {
 	case domain.TransportHTTP:
 		policy = openapi.MCPServerEgressPolicyMetadataRefused
 	case domain.TransportStdio:
-		policy = openapi.MCPServerEgressPolicyUnconstrainedLocalProcess
+		if server.StdioEgress != nil && server.StdioEgress.Mode == domain.MCPEgressProxied {
+			policy = openapi.MCPServerEgressPolicyProxyRequested
+		} else {
+			policy = openapi.MCPServerEgressPolicyUnconstrainedLocalProcess
+		}
 	}
 	return openapi.MCPServerEgress{Policy: policy}
+}
+
+func stdioEgressToResponse(egress *domain.MCPStdioEgress) *openapi.MCPStdioEgress {
+	if egress == nil {
+		return nil
+	}
+	out := openapi.MCPStdioEgress{Mode: openapi.MCPStdioEgressMode(egress.Mode)}
+	var destinations []openapi.MCPEgressDestination
+	for _, dest := range egress.AllowedDestinations {
+		destinations = append(destinations, openapi.MCPEgressDestination{
+			Host: dest.Host,
+			Port: dest.Port,
+		})
+	}
+	if destinations != nil {
+		out.AllowedDestinations = &destinations
+	}
+	return &out
 }
 
 func rateLimitToResponse(limit *domain.MCPRateLimit) *openapi.MCPRateLimit {

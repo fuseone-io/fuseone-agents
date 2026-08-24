@@ -32,6 +32,8 @@ var (
 		"admin: MCP rate limit needs both a positive rate and a positive burst, or neither")
 	ErrBadMCPResultCache = errors.New(
 		"admin: MCP result cache needs a positive TTL; max entries must be zero or positive")
+	ErrBadMCPStdioEgress = errors.New(
+		"admin: stdio egress must be inherit or proxied with host and port destinations")
 	// ErrLocalExecutionNotAccepted means a local server was configured without
 	// anybody saying they accept what a local server is.
 	//
@@ -88,6 +90,9 @@ type storedServer struct {
 	// Cache is also per worker process. It is an optimisation for read results,
 	// not a distributed truth about the external system.
 	Cache *domain.MCPResultCache `json:"cache,omitempty"`
+	// StdioEgress records the operator's egress policy for a local process.
+	// Nil is inherit: the worker does not request a proxy for the child.
+	StdioEgress *domain.MCPStdioEgress `json:"stdioEgress,omitempty"`
 	// AcceptsLocalExecution is stored rather than assumed from the transport.
 	// A row written before this existed has not been accepted by anybody, and
 	// reading it as accepted would grant on upgrade what nobody granted.
@@ -149,6 +154,7 @@ func (i *Integrations) MCPServers(ctx context.Context) ([]domain.MCPServer, erro
 			Surface:               stored.Surface,
 			RateLimit:             stored.RateLimit,
 			Cache:                 stored.Cache,
+			StdioEgress:           stored.StdioEgress,
 			AcceptsLocalExecution: stored.AcceptsLocalExecution,
 			HasSecret:             row.HasSecret,
 			HasOAuth:              stored.HasOAuth,
@@ -209,6 +215,10 @@ func (i *Integrations) PutMCPServer(
 	if err != nil {
 		return err
 	}
+	stdioEgress, stdioEgressMentioned, err := normalizedStdioEgress(server.StdioEgress)
+	if err != nil {
+		return err
+	}
 
 	/*
 		Both folds happen inside the write's own transaction, under the row's
@@ -247,6 +257,9 @@ func (i *Integrations) PutMCPServer(
 			if server.Cache == nil {
 				cache = was.Cache
 			}
+			if !stdioEgressMentioned {
+				stdioEgress = was.StdioEgress
+			}
 			configEnv := was.ConfigFileEnv
 			if server.ConfigFileEnv != nil {
 				configEnv = *server.ConfigFileEnv
@@ -255,6 +268,7 @@ func (i *Integrations) PutMCPServer(
 			merged := given.Apply(domain.ReadMCPCredentials(stored.Secret)).ForTransport(transport)
 			if transport != domain.TransportStdio {
 				configEnv = ""
+				stdioEgress = nil
 			}
 			value, err := json.Marshal(storedServer{
 				Transport: transport, Command: server.Command,
@@ -263,6 +277,7 @@ func (i *Integrations) PutMCPServer(
 				Surface:               surface,
 				RateLimit:             rateLimit,
 				Cache:                 cache,
+				StdioEgress:           stdioEgress,
 				ConfigFileEnv:         configEnv,
 				HasVariables:          len(merged.Env) > 0,
 				HasOAuth:              merged.OAuth != nil && !merged.OAuth.Empty(),
@@ -304,6 +319,7 @@ func (i *Integrations) PutMCPServer(
 					"surface":               surfaceSize(surface),
 					"rateLimit":             rateLimitDetail(rateLimit),
 					"cache":                 resultCacheDetail(cache),
+					"stdioEgress":           stdioEgressDetail(stdioEgress),
 				}, nil
 		},
 	})
@@ -356,6 +372,38 @@ func normalizedResultCache(cache *domain.MCPResultCache) (*domain.MCPResultCache
 	return &domain.MCPResultCache{TTLSeconds: cache.TTLSeconds, MaxEntries: maxEntries}, nil
 }
 
+func normalizedStdioEgress(
+	egress *domain.MCPStdioEgress,
+) (*domain.MCPStdioEgress, bool, error) {
+	if egress == nil {
+		return nil, false, nil
+	}
+	mode := strings.TrimSpace(egress.Mode)
+	if mode == "" || mode == domain.MCPEgressInherit {
+		return nil, true, nil
+	}
+	if mode != domain.MCPEgressProxied || len(egress.AllowedDestinations) == 0 {
+		return nil, true, ErrBadMCPStdioEgress
+	}
+	out := make([]domain.MCPEgressDestination, 0, len(egress.AllowedDestinations))
+	seen := map[domain.MCPEgressDestination]bool{}
+	for _, dest := range egress.AllowedDestinations {
+		host := strings.TrimSpace(strings.ToLower(dest.Host))
+		next := domain.MCPEgressDestination{Host: host, Port: dest.Port}
+		if !domain.ValidMCPEgressDestination(next) {
+			return nil, true, ErrBadMCPStdioEgress
+		}
+		if !seen[next] {
+			seen[next] = true
+			out = append(out, next)
+		}
+	}
+	return &domain.MCPStdioEgress{
+		Mode:                domain.MCPEgressProxied,
+		AllowedDestinations: out,
+	}, true, nil
+}
+
 func rateLimitDetail(limit *domain.MCPRateLimit) any {
 	if limit == nil {
 		return nil
@@ -368,6 +416,16 @@ func resultCacheDetail(cache *domain.MCPResultCache) any {
 		return nil
 	}
 	return map[string]any{"ttlSeconds": cache.TTLSeconds, "maxEntries": cache.MaxEntries}
+}
+
+func stdioEgressDetail(egress *domain.MCPStdioEgress) any {
+	if egress == nil {
+		return map[string]any{"mode": domain.MCPEgressInherit}
+	}
+	return map[string]any{
+		"mode":                egress.Mode,
+		"allowedDestinations": len(egress.AllowedDestinations),
+	}
 }
 
 var configFileEnvPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)

@@ -3,6 +3,7 @@ package admin_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -1483,6 +1484,152 @@ func TestPutMCPServer_aPartialResultCacheIsRefused(t *testing.T) {
 	}, domain.MCPCredentialPatch{})
 	if !errors.Is(err, admin.ErrBadMCPResultCache) {
 		t.Fatalf("PutMCPServer = %v, want bad result cache", err)
+	}
+}
+
+func TestPutMCPServer_aProxiedStdioEgress_isStoredAsPolicy(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, domain.MCPServer{
+		Name: "crm", Transport: domain.TransportStdio,
+		Command: "/bin/crm-mcp", Enabled: true, AcceptsLocalExecution: true,
+		StdioEgress: &domain.MCPStdioEgress{
+			Mode: domain.MCPEgressProxied,
+			AllowedDestinations: []domain.MCPEgressDestination{
+				{Host: "CRM.Internal", Port: 443},
+				{Host: "crm.internal", Port: 443},
+				{Host: "*.sales.internal", Port: 8443},
+			},
+		},
+	}, domain.MCPCredentialPatch{}); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+
+	servers, err := i.MCPServers(ctx)
+	if err != nil {
+		t.Fatalf("MCPServers: %v", err)
+	}
+	got := servers[0].StdioEgress
+	if got == nil || got.Mode != domain.MCPEgressProxied {
+		t.Fatalf("stdio egress = %#v, want proxied", got)
+	}
+	want := []domain.MCPEgressDestination{
+		{Host: "crm.internal", Port: 443},
+		{Host: "*.sales.internal", Port: 8443},
+	}
+	if !slices.Equal(got.AllowedDestinations, want) {
+		t.Fatalf("allowed destinations = %#v, want %#v", got.AllowedDestinations, want)
+	}
+}
+
+func TestPutMCPServer_anOmittedStdioEgress_keepsTheStoredOne(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+	server := domain.MCPServer{
+		Name: "crm", Transport: domain.TransportStdio,
+		Command: "/bin/crm-mcp", Enabled: true, AcceptsLocalExecution: true,
+		StdioEgress: &domain.MCPStdioEgress{
+			Mode: domain.MCPEgressProxied,
+			AllowedDestinations: []domain.MCPEgressDestination{
+				{Host: "crm.internal", Port: 443},
+			},
+		},
+	}
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, server, domain.MCPCredentialPatch{}); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+
+	server.StdioEgress = nil
+	server.Args = []string{"--readonly"}
+	if err := i.PutMCPServer(ctx, "usr_bob", platform, server, domain.MCPCredentialPatch{}); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+	servers, err := i.MCPServers(ctx)
+	if err != nil {
+		t.Fatalf("MCPServers: %v", err)
+	}
+	if servers[0].StdioEgress == nil ||
+		servers[0].StdioEgress.Mode != domain.MCPEgressProxied {
+		t.Fatalf("stdio egress = %#v, want stored proxied policy", servers[0].StdioEgress)
+	}
+}
+
+func TestPutMCPServer_inheritStdioEgress_clearsTheStoredOne(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+	server := domain.MCPServer{
+		Name: "crm", Transport: domain.TransportStdio,
+		Command: "/bin/crm-mcp", Enabled: true, AcceptsLocalExecution: true,
+		StdioEgress: &domain.MCPStdioEgress{
+			Mode: domain.MCPEgressProxied,
+			AllowedDestinations: []domain.MCPEgressDestination{
+				{Host: "crm.internal", Port: 443},
+			},
+		},
+	}
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, server, domain.MCPCredentialPatch{}); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+
+	server.StdioEgress = &domain.MCPStdioEgress{Mode: domain.MCPEgressInherit}
+	if err := i.PutMCPServer(ctx, "usr_bob", platform, server, domain.MCPCredentialPatch{}); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+	servers, err := i.MCPServers(ctx)
+	if err != nil {
+		t.Fatalf("MCPServers: %v", err)
+	}
+	if servers[0].StdioEgress != nil {
+		t.Fatalf("stdio egress = %#v, want inherited/default", servers[0].StdioEgress)
+	}
+}
+
+func TestPutMCPServer_aProxiedStdioEgressNeedsDestinations(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+
+	err := i.PutMCPServer(ctx, "usr_ana", platform, domain.MCPServer{
+		Name: "crm", Transport: domain.TransportStdio,
+		Command: "/bin/crm-mcp", Enabled: true, AcceptsLocalExecution: true,
+		StdioEgress: &domain.MCPStdioEgress{Mode: domain.MCPEgressProxied},
+	}, domain.MCPCredentialPatch{})
+	if !errors.Is(err, admin.ErrBadMCPStdioEgress) {
+		t.Fatalf("PutMCPServer = %v, want bad stdio egress", err)
+	}
+}
+
+func TestPutMCPServer_remoteClearsStdioEgress(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+	server := domain.MCPServer{
+		Name: "crm", Transport: domain.TransportStdio,
+		Command: "/bin/crm-mcp", Enabled: true, AcceptsLocalExecution: true,
+		StdioEgress: &domain.MCPStdioEgress{
+			Mode: domain.MCPEgressProxied,
+			AllowedDestinations: []domain.MCPEgressDestination{
+				{Host: "crm.internal", Port: 443},
+			},
+		},
+	}
+	if err := i.PutMCPServer(ctx, "usr_ana", platform, server, domain.MCPCredentialPatch{}); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+
+	server.Transport = domain.TransportHTTP
+	server.Command = ""
+	server.URL = "https://tools.example.com/mcp"
+	server.AcceptsLocalExecution = false
+	server.StdioEgress = nil
+	if err := i.PutMCPServer(ctx, "usr_bob", platform, server, domain.MCPCredentialPatch{}); err != nil {
+		t.Fatalf("PutMCPServer: %v", err)
+	}
+	servers, err := i.MCPServers(ctx)
+	if err != nil {
+		t.Fatalf("MCPServers: %v", err)
+	}
+	if servers[0].StdioEgress != nil {
+		t.Fatalf("stdio egress = %#v, want none for remote server", servers[0].StdioEgress)
 	}
 }
 

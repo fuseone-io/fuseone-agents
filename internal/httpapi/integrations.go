@@ -54,6 +54,9 @@ func (s *Server) PutMCPServer(ctx context.Context, req openapi.PutMCPServerReque
 	if req.Body.Cache != nil {
 		server.Cache = resultCacheFromRequest(req.Body.Cache)
 	}
+	if req.Body.StdioEgress != nil {
+		server.StdioEgress = stdioEgressFromRequest(req.Body.StdioEgress)
+	}
 	if req.Body.Enabled != nil {
 		server.Enabled = *req.Body.Enabled
 	}
@@ -123,6 +126,22 @@ func resultCacheFromRequest(cache *openapi.MCPResultCache) *domain.MCPResultCach
 		maxEntries = *cache.MaxEntries
 	}
 	return &domain.MCPResultCache{TTLSeconds: ttl, MaxEntries: maxEntries}
+}
+
+func stdioEgressFromRequest(egress *openapi.MCPStdioEgress) *domain.MCPStdioEgress {
+	if egress == nil {
+		return nil
+	}
+	out := domain.MCPStdioEgress{Mode: string(egress.Mode)}
+	if egress.AllowedDestinations != nil {
+		for _, dest := range *egress.AllowedDestinations {
+			out.AllowedDestinations = append(out.AllowedDestinations, domain.MCPEgressDestination{
+				Host: dest.Host,
+				Port: dest.Port,
+			})
+		}
+	}
+	return &out
 }
 
 func (s *Server) ProbeMCPServer(ctx context.Context, req openapi.ProbeMCPServerRequestObject) (openapi.ProbeMCPServerResponseObject, error) {

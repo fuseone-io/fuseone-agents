@@ -4,6 +4,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   FormControl,
   FormDescription,
   FormField,
@@ -91,6 +98,7 @@ export function ServerFields({
         label={t("integrations.arguments")}
         placeholder="--config /etc/crm.yaml"
       />
+      <StdioEgressFields form={form} />
       {dsnMode && (
         <Field
           form={form}
@@ -128,6 +136,53 @@ export function ServerFields({
       <ResultCacheFields form={form} />
       <AcceptLocalExecution form={form} />
     </>
+  );
+}
+
+function StdioEgressFields({
+  form,
+}: {
+  form: UseFormReturn<ServerFormValues>;
+}) {
+  const { t } = useTranslation();
+  const mode = form.watch("stdioEgressMode");
+  return (
+    <div className="space-y-3 rounded-lg border border-warning/30 bg-warning-surface/50 p-3">
+      <FormField
+        control={form.control}
+        name="stdioEgressMode"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>{t("mcp.stdioEgressMode")}</FormLabel>
+            <Select value={field.value} onValueChange={field.onChange}>
+              <FormControl>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                <SelectItem value="inherit">
+                  {t("mcp.stdioEgressInherit")}
+                </SelectItem>
+                <SelectItem value="proxied">
+                  {t("mcp.stdioEgressProxied")}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <FormDescription>{t("mcp.stdioEgressHint")}</FormDescription>
+          </FormItem>
+        )}
+      />
+      {mode === "proxied" && (
+        <TextAreaField
+          form={form}
+          name="stdioEgressDestinations"
+          label={t("mcp.stdioEgressDestinations")}
+          placeholder={t("mcp.stdioEgressDestinationsExample")}
+          hint={t("mcp.stdioEgressDestinationsHint")}
+        />
+      )}
+    </div>
   );
 }
 
@@ -438,7 +493,7 @@ function TextAreaField({
   hint,
 }: {
   form: UseFormReturn<ServerFormValues>;
-  name: "configFile" | "oauthScopes" | "env";
+  name: "configFile" | "oauthScopes" | "env" | "stdioEgressDestinations";
   label: string;
   placeholder: string;
   hint?: string;

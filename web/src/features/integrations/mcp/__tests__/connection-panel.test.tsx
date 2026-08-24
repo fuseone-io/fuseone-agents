@@ -14,12 +14,16 @@ const api = vi.hoisted(() => ({
 
 const PT_EGRESS_METADATA =
   "Endereços de metadata de nuvem e link-local são recusados. Proxies de ambiente são recusados para que a validação de endereço use DNS local. Destinos na rede privada e na internet continuam permitidos.";
+const PT_EGRESS_PROXY =
+  "Este processo local está configurado para receber HTTP_PROXY e HTTPS_PROXY do worker, e não inicia se o worker não tiver proxy de egresso configurado. Isso ainda não impede sockets diretos sem uma política de rede no deploy.";
 const PT_EGRESS_LOCAL =
   "O FuseOne não restringe destinos de saída deste processo local. Ele roda com o acesso de rede do worker.";
 const PT_EGRESS_UNKNOWN =
   "Este servidor observado pelo worker não tem transporte configurado no console, então o FuseOne não consegue descrever sua política de egresso.";
 const EN_EGRESS_METADATA =
   "Cloud metadata and link-local addresses are refused. Environment proxies are refused so address validation uses local DNS. Private network and internet destinations are otherwise allowed.";
+const EN_EGRESS_PROXY =
+  "This local process is configured to receive HTTP_PROXY and HTTPS_PROXY from the worker, and it will not start if that worker has no egress proxy configured. This still does not prevent direct sockets without a deployment network policy.";
 const EN_EGRESS_LOCAL =
   "FuseOne does not constrain outbound destinations for this local process. It runs with the worker's network access.";
 const EN_EGRESS_UNKNOWN =
@@ -148,9 +152,11 @@ describe("the MCP connection panel", () => {
 
   it("pins the egress statements in both locales", () => {
     expect(ptBR.mcp.egressMetadataRefused).toBe(PT_EGRESS_METADATA);
+    expect(ptBR.mcp.egressProxyRequested).toBe(PT_EGRESS_PROXY);
     expect(ptBR.mcp.egressLocalUnconstrained).toBe(PT_EGRESS_LOCAL);
     expect(ptBR.mcp.egressUnknown).toBe(PT_EGRESS_UNKNOWN);
     expect(enUS.mcp.egressMetadataRefused).toBe(EN_EGRESS_METADATA);
+    expect(enUS.mcp.egressProxyRequested).toBe(EN_EGRESS_PROXY);
     expect(enUS.mcp.egressLocalUnconstrained).toBe(EN_EGRESS_LOCAL);
     expect(enUS.mcp.egressUnknown).toBe(EN_EGRESS_UNKNOWN);
   });
@@ -183,6 +189,23 @@ describe("the MCP connection panel", () => {
     );
 
     expect(screen.getByText(PT_EGRESS_LOCAL)).toBeInTheDocument();
+  });
+
+  it("says proxied stdio is a proxy request rather than direct containment", () => {
+    render(
+      <ConnectionPanel
+        server={{
+          name: "local-wiki",
+          transport: "stdio",
+          command: "wiki-mcp",
+          args: [],
+          enabled: true,
+          egress: { policy: "proxy_requested" },
+        }}
+      />,
+    );
+
+    expect(screen.getByText(PT_EGRESS_PROXY)).toBeInTheDocument();
   });
 
   it("says observed unmanaged servers have unknown egress policy", () => {

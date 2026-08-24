@@ -47,6 +47,8 @@ export const serverSchema = z
     cacheMaxEntries: z
       .string()
       .regex(/^$|^\d+$/, "mcp.cacheMaxEntriesInvalid"),
+    stdioEgressMode: z.enum(["inherit", "proxied"]),
+    stdioEgressDestinations: z.string(),
     acceptsLocalExecution: z.boolean(),
     enabled: z.boolean(),
   })
@@ -105,6 +107,10 @@ export const serverSchema = z
     path: ["cacheTTLSeconds"],
     message: "mcp.cachePairInvalid",
   })
+  .refine((v) => stdioEgressComplete(v), {
+    path: ["stdioEgressDestinations"],
+    message: "mcp.stdioEgressDestinationsInvalid",
+  })
   /*
    * A local server is a program this installation starts inside the worker.
    * The server refuses one nobody accepted; this says so before the round
@@ -133,6 +139,30 @@ function resultCacheComplete(values: {
 }) {
   if (positiveInteger(values.cacheTTLSeconds)) return true;
   return disabledNumber(values.cacheTTLSeconds) && disabledNumber(values.cacheMaxEntries);
+}
+
+function stdioEgressComplete(values: {
+  transport: "stdio" | "http";
+  stdioEgressMode: "inherit" | "proxied";
+  stdioEgressDestinations: string;
+}) {
+  if (values.transport !== "stdio" || values.stdioEgressMode === "inherit") {
+    return true;
+  }
+  const lines = values.stdioEgressDestinations
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return lines.length > 0 && lines.every(validEgressDestinationLine);
+}
+
+function validEgressDestinationLine(line: string) {
+  const at = line.lastIndexOf(":");
+  if (at <= 0 || at === line.length - 1) return false;
+  const host = line.slice(0, at).toLowerCase();
+  const port = Number.parseInt(line.slice(at + 1), 10);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) return false;
+  return /^(?:\*\.)?[a-z0-9](?:[a-z0-9_.-]{0,251}[a-z0-9])?$/.test(host);
 }
 
 function positiveNumber(raw: string) {
