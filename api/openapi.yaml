@@ -4421,6 +4421,27 @@ components:
             this server. Presence only; the sealed material never leaves the
             vault, and the API never accepts a principal parameter for this.
 
+    MCPServerEgress:
+      type: object
+      required: [policy]
+      description: |
+        What the platform can say about outbound network reach for this MCP
+        transport. This is not a claim that egress is contained: until an
+        explicit egress proxy/policy exists, the API names the narrow refusals
+        that exist and the unconstrained cases that remain.
+      properties:
+        policy:
+          type: string
+          enum: [unknown, metadata_refused, unconstrained_local_process]
+          description: |
+            unknown: the worker observed the server but the console does not
+            know its transport/configuration. metadata_refused: HTTP MCP uses
+            local DNS resolution and refuses cloud metadata/link-local
+            destinations and environment proxies; private network and internet
+            destinations are otherwise allowed. unconstrained_local_process:
+            stdio starts a process on the worker and the platform does not
+            constrain its outbound destinations.
+
     MCPServer:
       type: object
       required: [name, enabled]
@@ -4498,6 +4519,12 @@ components:
             Authentication usability for tools/call for the signed-in caller.
             A server can answer discovery and still be unusable for a run by
             this person when personal credentials are required and absent.
+        egress:
+          allOf: [{ $ref: '#/components/schemas/MCPServerEgress' }]
+          nullable: true
+          description: |
+            The outbound network statement this API can honestly make for the
+            transport. It names narrow refusals, not an egress-control promise.
         acceptsLocalExecution:
           type: boolean
           description: |

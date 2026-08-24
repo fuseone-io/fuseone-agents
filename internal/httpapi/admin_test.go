@@ -434,6 +434,10 @@ func TestListIntegrations_explainsPersonalCredentialRequirementForCaller(t *test
 		auth.CallerHasPersonalCredential {
 		t.Fatalf("call auth = %+v, want personal required and missing", auth)
 	}
+	egress := egressOf(t, resp, "outline")
+	if egress.Policy != openapi.MCPServerEgressPolicyMetadataRefused {
+		t.Fatalf("egress = %+v, want the HTTP metadata refusal policy", egress)
+	}
 	if admin.personalFor != "usr_ana" {
 		t.Fatalf("personal credentials were listed for %q, want the caller", admin.personalFor)
 	}
@@ -510,6 +514,10 @@ func TestListIntegrations_saysLocalProcessIsNotPersonalPerCall(t *testing.T) {
 		auth.CallerHasPersonalCredential {
 		t.Fatalf("call auth = %+v, want local process and no personal credential", auth)
 	}
+	egress := egressOf(t, resp, "local-wiki")
+	if egress.Policy != openapi.MCPServerEgressPolicyUnconstrainedLocalProcess {
+		t.Fatalf("egress = %+v, want local process unconstrained", egress)
+	}
 }
 
 func callAuthOf(
@@ -524,6 +532,20 @@ func callAuthOf(
 	}
 	t.Fatalf("server %q or callAuth missing in %+v", name, body.McpServers)
 	return openapi.MCPServerCallAuth{}
+}
+
+func egressOf(
+	t *testing.T, resp openapi.ListIntegrationsResponseObject, name string,
+) openapi.MCPServerEgress {
+	t.Helper()
+	body := resp.(openapi.ListIntegrations200JSONResponse)
+	for _, server := range body.McpServers {
+		if server.Name == name && server.Egress != nil {
+			return *server.Egress
+		}
+	}
+	t.Fatalf("server %q or egress missing in %+v", name, body.McpServers)
+	return openapi.MCPServerEgress{}
 }
 
 func TestPutModelProvider_withoutAKey_passesNoneSoTheStoredOneSurvives(t *testing.T) {
@@ -1008,6 +1030,10 @@ func TestListIntegrations_keepsOneAWorkerStillHolds(t *testing.T) {
 	}
 	if managed := body.McpServers[0].Managed; managed == nil || *managed {
 		t.Error("a server nobody configured here is reported as managed")
+	}
+	if egress := body.McpServers[0].Egress; egress == nil ||
+		egress.Policy != openapi.MCPServerEgressPolicyUnknown {
+		t.Fatalf("egress = %+v, want unknown for an observed unmanaged server", egress)
 	}
 }
 

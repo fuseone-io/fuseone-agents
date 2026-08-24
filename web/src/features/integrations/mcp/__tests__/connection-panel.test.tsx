@@ -4,11 +4,26 @@ import { describe, expect, it, beforeEach, vi } from "vitest";
 import { ConnectionPanel } from "@/features/integrations/mcp/connection-panel";
 import type { MCPServer } from "@/features/integrations/api";
 import type { ServerRecipe } from "@/features/integrations/mcp/api";
+import ptBR from "@/i18n/pt-BR.json";
+import enUS from "@/i18n/en-US.json";
 
 const api = vi.hoisted(() => ({
   mutateAsync: vi.fn(),
   probeAsync: vi.fn(),
 }));
+
+const PT_EGRESS_METADATA =
+  "Endereços de metadata de nuvem e link-local são recusados. Proxies de ambiente são recusados para que a validação de endereço use DNS local. Destinos na rede privada e na internet continuam permitidos.";
+const PT_EGRESS_LOCAL =
+  "O FuseOne não restringe destinos de saída deste processo local. Ele roda com o acesso de rede do worker.";
+const PT_EGRESS_UNKNOWN =
+  "Este servidor observado pelo worker não tem transporte configurado no console, então o FuseOne não consegue descrever sua política de egresso.";
+const EN_EGRESS_METADATA =
+  "Cloud metadata and link-local addresses are refused. Environment proxies are refused so address validation uses local DNS. Private network and internet destinations are otherwise allowed.";
+const EN_EGRESS_LOCAL =
+  "FuseOne does not constrain outbound destinations for this local process. It runs with the worker's network access.";
+const EN_EGRESS_UNKNOWN =
+  "This worker-observed server has no configured transport in the console, so FuseOne cannot describe its egress policy.";
 
 vi.mock("@/features/integrations/api", async (importOriginal) => {
   const actual =
@@ -129,6 +144,57 @@ describe("the MCP connection panel", () => {
 
     expect(screen.getByText(/não há credencial por usuário nesse transporte/i))
       .toBeInTheDocument();
+  });
+
+  it("pins the egress statements in both locales", () => {
+    expect(ptBR.mcp.egressMetadataRefused).toBe(PT_EGRESS_METADATA);
+    expect(ptBR.mcp.egressLocalUnconstrained).toBe(PT_EGRESS_LOCAL);
+    expect(ptBR.mcp.egressUnknown).toBe(PT_EGRESS_UNKNOWN);
+    expect(enUS.mcp.egressMetadataRefused).toBe(EN_EGRESS_METADATA);
+    expect(enUS.mcp.egressLocalUnconstrained).toBe(EN_EGRESS_LOCAL);
+    expect(enUS.mcp.egressUnknown).toBe(EN_EGRESS_UNKNOWN);
+  });
+
+  it("says HTTP refuses metadata but does not claim egress containment", () => {
+    render(
+      <ConnectionPanel
+        server={remote({
+          egress: { policy: "metadata_refused" },
+        })}
+      />,
+    );
+
+    expect(screen.getByText("Alcance de rede")).toBeInTheDocument();
+    expect(screen.getByText(PT_EGRESS_METADATA)).toBeInTheDocument();
+  });
+
+  it("says stdio has the worker network and no platform egress constraint", () => {
+    render(
+      <ConnectionPanel
+        server={{
+          name: "local-wiki",
+          transport: "stdio",
+          command: "wiki-mcp",
+          args: [],
+          enabled: true,
+          egress: { policy: "unconstrained_local_process" },
+        }}
+      />,
+    );
+
+    expect(screen.getByText(PT_EGRESS_LOCAL)).toBeInTheDocument();
+  });
+
+  it("says observed unmanaged servers have unknown egress policy", () => {
+    render(
+      <ConnectionPanel
+        server={remote({
+          egress: { policy: "unknown" },
+        })}
+      />,
+    );
+
+    expect(screen.getByText(PT_EGRESS_UNKNOWN)).toBeInTheDocument();
   });
 
   it("saves a manual OAuth grant as oauth rather than a bearer token", async () => {

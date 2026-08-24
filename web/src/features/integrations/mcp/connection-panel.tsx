@@ -29,6 +29,7 @@ import {
   StoredOAuthOnly,
 } from "@/features/integrations/mcp/oauth-fields";
 import { CallAuthNote } from "@/features/integrations/mcp/call-auth-note";
+import { EgressNote } from "@/features/integrations/mcp/egress-note";
 import {
   remoteTokenHint,
   remoteTokenLabel,
@@ -141,6 +142,7 @@ export function ConnectionPanel({
 
         {!local && <RemoteAuthSummary plan={remotePlan} />}
         <CallAuthNote callAuth={server.callAuth} />
+        <EgressNote egress={server.egress} />
 
         <CredentialFields
           local={local}

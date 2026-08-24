@@ -2827,6 +2827,25 @@ export interface components {
              */
             callerHasPersonalCredential: boolean;
         };
+        /**
+         * @description What the platform can say about outbound network reach for this MCP
+         *     transport. This is not a claim that egress is contained: until an
+         *     explicit egress proxy/policy exists, the API names the narrow refusals
+         *     that exist and the unconstrained cases that remain.
+         */
+        MCPServerEgress: {
+            /**
+             * @description unknown: the worker observed the server but the console does not
+             *     know its transport/configuration. metadata_refused: HTTP MCP uses
+             *     local DNS resolution and refuses cloud metadata/link-local
+             *     destinations and environment proxies; private network and internet
+             *     destinations are otherwise allowed. unconstrained_local_process:
+             *     stdio starts a process on the worker and the platform does not
+             *     constrain its outbound destinations.
+             * @enum {string}
+             */
+            policy: "unknown" | "metadata_refused" | "unconstrained_local_process";
+        };
         MCPServer: {
             /** @description Namespaces the tools it offers, so two servers naming a tool "search" do not collide. */
             name: string;
@@ -2872,6 +2891,11 @@ export interface components {
              *     this person when personal credentials are required and absent.
              */
             callAuth?: components["schemas"]["MCPServerCallAuth"] | null;
+            /**
+             * @description The outbound network statement this API can honestly make for the
+             *     transport. It names narrow refusals, not an egress-control promise.
+             */
+            egress?: components["schemas"]["MCPServerEgress"] | null;
             /**
              * @description That somebody accepted what stdio is. A local server is a program
              *     this installation starts inside the worker: it runs as the worker,

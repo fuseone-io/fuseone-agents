@@ -109,6 +109,7 @@ func (s *Server) ListIntegrations(ctx context.Context, _ openapi.ListIntegration
 			Surface:               srv.Surface,
 			AcceptsLocalExecution: ptr(srv.AcceptsLocalExecution),
 			CallAuth:              ptr(callAuth.forServer(srv.Name, srv.TransportOf())),
+			Egress:                ptr(mcpEgress(srv.TransportOf())),
 		}
 		server.Command = someString(srv.Command)
 		server.Url = someString(srv.URL)
@@ -140,6 +141,9 @@ func (s *Server) ListIntegrations(ctx context.Context, _ openapi.ListIntegration
 		body.McpServers = append(body.McpServers, openapi.MCPServer{
 			Name: name, Enabled: true, Managed: ptr(false),
 			Health: ptr(healthFrom(seen)),
+			Egress: ptr(openapi.MCPServerEgress{
+				Policy: openapi.MCPServerEgressPolicyUnknown,
+			}),
 		})
 	}
 	slices.SortFunc(body.McpServers, func(a, b openapi.MCPServer) int {
@@ -214,6 +218,17 @@ func (a mcpCallAuth) forServer(name, transport string) openapi.MCPServerCallAuth
 		Policy:                      policy,
 		CallerHasPersonalCredential: hasPersonal,
 	}
+}
+
+func mcpEgress(transport string) openapi.MCPServerEgress {
+	policy := openapi.MCPServerEgressPolicyUnknown
+	switch transport {
+	case domain.TransportHTTP:
+		policy = openapi.MCPServerEgressPolicyMetadataRefused
+	case domain.TransportStdio:
+		policy = openapi.MCPServerEgressPolicyUnconstrainedLocalProcess
+	}
+	return openapi.MCPServerEgress{Policy: policy}
 }
 
 func rateLimitToResponse(limit *domain.MCPRateLimit) *openapi.MCPRateLimit {

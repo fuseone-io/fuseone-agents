@@ -42,6 +42,7 @@ import {
   type Listing,
 } from "@/features/integrations/mcp/catalogue";
 import { CallAuthNote } from "@/features/integrations/mcp/call-auth-note";
+import { EgressNote } from "@/features/integrations/mcp/egress-note";
 import { cn } from "@/lib/utils";
 
 const ORIGINS = ["all", "published", "reference", "archived"] as const;
@@ -327,6 +328,7 @@ function ConnectedServerPanel({
             <AuthModeBadges modes={entry.authModes} />
           </div>
           <CallAuthNote callAuth={server.callAuth} />
+          <EgressNote egress={server.egress} />
         </div>
 
         <div className="space-y-2">
@@ -473,6 +475,7 @@ function ConnectServerPanel({
             args: [],
             url: null,
             callAuth: null,
+            egress: null,
             recipe: null,
           }
         }

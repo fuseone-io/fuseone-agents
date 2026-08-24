@@ -41,6 +41,7 @@ export type Listing = {
   authModes: NonNullable<ServerRecipe["authModes"]>;
   auth: string | null;
   callAuth: MCPServer["callAuth"] | null;
+  egress: MCPServer["egress"] | null;
   transport: MCPServer["transport"] | ServerRecipe["transport"] | null;
   command: string | null;
   args: string[];
@@ -70,6 +71,7 @@ export function listing(servers: MCPServer[], recipes: ServerRecipe[]): Listing[
       authModes: recipe.authModes ?? [],
       auth: recipe.auth ?? null,
       callAuth: null,
+      egress: null,
       transport: recipe.transport ?? null,
       command: recipe.command ?? null,
       args: recipe.args ?? [],
@@ -97,6 +99,7 @@ export function listing(servers: MCPServer[], recipes: ServerRecipe[]): Listing[
       authModes: known?.authModes ?? [],
       auth: known?.auth ?? null,
       callAuth: server.callAuth ?? null,
+      egress: server.egress ?? null,
       transport: server.transport ?? known?.transport ?? null,
       command: server.command ?? known?.command ?? null,
       args: server.args ?? known?.args ?? [],
