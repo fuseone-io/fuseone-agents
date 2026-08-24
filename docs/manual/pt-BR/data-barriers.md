@@ -54,11 +54,11 @@ Se isso acontecer:
 3. Confira a ligação de eventos antes de assumir que o listener está errado.
 4. Não tente resolver abrindo a query. O label já viajou.
 
-## Por que context sharing depende disso
+## Por que compartilhamento de contexto depende disso
 
-O futuro compartilhamento de contexto entre agentes precisa passar artefatos
-por referência, com labels, digest e origem. Passar texto livre no prompt não
-basta: copia palavras e perde a autoridade ligada ao conteúdo.
+[Compartilhamento de contexto entre agentes](context-sharing.md) passa
+artefatos por referência, com labels, digest e origem. Passar texto livre no
+prompt não basta: copia palavras e perde a autoridade ligada ao conteúdo.
 
 A regra que precisa continuar verdadeira é simples: um listener só pode receber
 contexto quando seu escopo pode carregar os labels daquele contexto, ou quando

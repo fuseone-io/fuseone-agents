@@ -56,9 +56,9 @@ If this happens:
 
 ## Why context sharing depends on this
 
-Future shared context between agents must pass artifacts by reference, with
-labels, digest and origin. Free-form prompt passing is not enough: it copies
-words and loses the authority attached to the content.
+[Context sharing between agents](context-sharing.md) passes artifacts by
+reference, with labels, digest and origin. Free-form prompt passing is not
+enough: it copies words and loses the authority attached to the content.
 
 The rule that must remain true is simple: a listener can receive context only
 when its scope is allowed to carry the labels on that context, or when an
