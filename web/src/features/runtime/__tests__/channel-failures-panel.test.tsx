@@ -10,6 +10,7 @@ test("names stable channel failure codes instead of showing raw codes", () => {
           code: "channel_missing_scope",
           attempts: 49,
           conversations: 7,
+          scopeWide: false,
           runs: 3,
           firstAt: "2026-08-23T11:00:00.000Z",
           lastAt: "2026-08-23T12:00:00.000Z",
@@ -23,4 +24,27 @@ test("names stable channel failure codes instead of showing raw codes", () => {
   expect(screen.getByText("49")).toBeInTheDocument();
   expect(screen.getByText("7")).toBeInTheDocument();
   expect(screen.getByText("3")).toBeInTheDocument();
+});
+
+test("shows scope-wide channel failures without inventing one conversation", () => {
+  render(
+    <ChannelFailuresPanel
+      failures={[
+        {
+          code: "channel_configuration_read_failed",
+          attempts: 1,
+          conversations: 0,
+          scopeWide: true,
+          runs: 1,
+          firstAt: "2026-08-23T11:00:00.000Z",
+          lastAt: "2026-08-23T12:00:00.000Z",
+        },
+      ]}
+    />,
+  );
+
+  expect(
+    screen.getByText("Não foi possível ler a configuração do canal"),
+  ).toBeInTheDocument();
+  expect(screen.getByText("escopo inteiro")).toBeInTheDocument();
 });

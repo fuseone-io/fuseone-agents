@@ -58,7 +58,10 @@ export function ChannelFailuresPanel({
                   {failure.attempts}
                 </TableCell>
                 <TableCell className="text-right tabular-nums">
-                  {failure.conversations}
+                  <ConversationCount
+                    conversations={failure.conversations}
+                    scopeWide={failure.scopeWide}
+                  />
                 </TableCell>
                 <TableCell className="text-right tabular-nums">
                   {failure.runs}
@@ -73,4 +76,21 @@ export function ChannelFailuresPanel({
       )}
     </Panel>
   );
+}
+
+function ConversationCount({
+  conversations,
+  scopeWide,
+}: {
+  conversations: number;
+  scopeWide: boolean;
+}) {
+  const { t } = useTranslation();
+  if (!scopeWide) {
+    return <>{conversations}</>;
+  }
+  if (conversations === 0) {
+    return <>{t("runtime.wholeScope")}</>;
+  }
+  return <>{t("runtime.conversationsAndWholeScope", { count: conversations })}</>;
 }

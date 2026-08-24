@@ -68,7 +68,7 @@ Roughly twenty-five tables. The ones that can hold personal data:
 | `run_steps` | Who asked, which agent, which tool, what the Gate decided; references and digests for bulk content — **and the free text listed in section 1**, permanently |
 | `runs.last_error` | Operational error text for the latest failed turn; classified model provider failures store only a stable code, but unclassified local or integration failures can still carry free text |
 | `principals`, `sessions`, `role_grants` | The people who use the console: identity from the customer's own provider |
-| `channel_inbox`, `channel_deliveries` | Messages exchanged on a connected channel, what was sent back, and optional thread context supplied to a run |
+| `channel_inbox`, `channel_deliveries`, `channel_delivery_failures` | Messages exchanged on a connected channel, what was sent back, optional thread context supplied to a run, and operational delivery failures tied to a run and conversation |
 | `admin_events`, `audit` records | Who changed what configuration, and when |
 
 `agent_specs`, `policies`, `areas`, `scopes`, `settings` and the trigger tables
@@ -163,6 +163,11 @@ tool, what the Gate decided, and the digest of content that no longer exists.
 That much is the deliberate trade — a record of processing is what the platform
 is for.
 
+Operational channel rows survive a per-subject erasure too. They are not the
+chain, but they are not found by subject and they are not rewritten by the
+erasure job: `channel_inbox`, `channel_deliveries` and
+`channel_delivery_failures` age out through retention instead.
+
 **And, for older runs, more than that.** The free text of section 1 survives too,
 including model answers recorded before `OutcomeRef` existed. That part was not
 a trade anybody chose; it is historical behaviour that cannot be repaired by
@@ -182,12 +187,21 @@ it erased anything.
 The window is read on every sweep rather than cached, so shortening retention
 takes effect on the next run.
 
+The same sweep deletes operational channel rows older than the window:
+`channel_inbox` by arrival time, `channel_deliveries` by post time, and
+`channel_delivery_failures` by the last time that failure was seen. Open channel
+debts are kept until answered: a refused ask that still needs a reply, or an
+opened ask whose finished run still owes its closing answer, is current work
+even if the original message is older than the retention window. The failure
+case follows the same rule. A channel failure that began months ago but still
+failed this morning is current operational evidence, not expired history.
+
 There is a floor. A window below 24 hours is refused, and it is checked twice —
 when the setting is written and again when the sweep reads it back. The second
 check is what stops a corrupted row from becoming an installation-wide delete.
 
-**The chain is not swept.** Retention governs content, not the record that
-processing happened.
+**The chain is not swept.** Retention governs content and channel operational
+records, not the record that processing happened.
 
 ---
 

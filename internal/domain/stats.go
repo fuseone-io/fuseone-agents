@@ -101,6 +101,7 @@ type RuntimeChannelFailureBucket struct {
 	Code          string
 	Attempts      int64
 	Conversations int64
+	ScopeWide     bool
 	Runs          int64
 	FirstAt       time.Time
 	LastAt        time.Time

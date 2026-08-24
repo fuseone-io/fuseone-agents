@@ -1890,6 +1890,7 @@
     "cause": "Causa",
     "channelFailures": "Falhas de canal · últimas 24 horas",
     "conversations": "Conversas",
+    "conversationsAndWholeScope": "{{count}} + escopo inteiro",
     "copyRequestId": "Copiar o request ID do provedor",
     "expiredLeases": "Leases expiradas",
     "failureAttemptsExhausted": "Tentativas esgotadas",
@@ -1946,7 +1947,8 @@
     "status": "status {{status}}",
     "subtitle": "Fila dos workers, falhas de provedores, falhas de ferramenta, falhas de entrega de canal e a forma atual do runtime.",
     "title": "Saúde do runtime",
-    "toolFailures": "Falhas de ferramenta · últimas 24 horas"
+    "toolFailures": "Falhas de ferramenta · últimas 24 horas",
+    "wholeScope": "escopo inteiro"
   },
   "scope": {
     "everything": "Tudo o que eu alcanço",

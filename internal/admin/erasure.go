@@ -91,19 +91,90 @@ func (e *Erasures) Sweep(ctx context.Context) (int, error) {
 		return 0, fmt.Errorf("admin: refusing to sweep on a window of %s", window)
 	}
 
-	erased, err := e.content.ErasePast(ctx, e.clock().Add(-window), "retention")
+	before := e.clock().Add(-window)
+	erased, err := e.content.ErasePast(ctx, before, "retention")
 	if err != nil {
 		return 0, err
 	}
-	if erased == 0 {
+
+	tx, err := e.pool.Begin(ctx)
+	if err != nil {
+		return erased, fmt.Errorf("admin: begin retention sweep: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	channelRecords, err := e.eraseChannelOperationalRows(ctx, tx, before)
+	if err != nil {
+		return erased, err
+	}
+	total := erased + channelRecords
+	if total == 0 {
 		// Nothing aged out, which is the ordinary case. Recording it would
 		// bury the sweeps that did something under thousands that did not.
 		return 0, nil
 	}
 
-	return erased, e.record(ctx, "", domain.Scope{}, "content.expired", map[string]any{
-		"objects": erased, "olderThanHours": int64(window / time.Hour),
-	})
+	if err := Record(ctx, tx, Event{
+		Principal: "", Scope: domain.Scope{}, Action: "content.expired", Target: "content",
+		Detail: map[string]any{
+			"objects": erased, "channelRecords": channelRecords,
+			"olderThanHours": int64(window / time.Hour),
+		},
+	}); err != nil {
+		return erased, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return erased, fmt.Errorf("admin: commit retention sweep: %w", err)
+	}
+	return total, nil
+}
+
+const retentionChannelBatch = 5_000
+
+func (e *Erasures) eraseChannelOperationalRows(ctx context.Context, conn db, before time.Time) (int, error) {
+	total := int64(0)
+	for _, stmt := range []string{
+		`with doomed as (
+			select ctid from channel_inbox
+			where at < $1
+			  and not (
+			    -- Owed replies are current work even when the original ask is
+			    -- older than the retention window. A weekend approval must
+			    -- still answer the Slack thread that asked.
+			    (status = 'refused' and answered_at is null)
+			    or (status = 'opened' and answer_due and answered_at is null and run_id <> '')
+			  )
+			order by at
+			limit $2
+		)
+		delete from channel_inbox
+		where ctid in (select ctid from doomed)`,
+		`with doomed as (
+			select ctid from channel_deliveries
+			where posted_at < $1
+			order by posted_at
+			limit $2
+		)
+		delete from channel_deliveries
+		where ctid in (select ctid from doomed)`,
+		// last_seen, not first_seen: an incident that began long ago but is
+		// still failing is current operational evidence, not expired history.
+		`with doomed as (
+			select ctid from channel_delivery_failures
+			where last_seen < $1
+			order by last_seen
+			limit $2
+		)
+		delete from channel_delivery_failures
+		where ctid in (select ctid from doomed)`,
+	} {
+		tag, err := conn.Exec(ctx, stmt, before.UTC(), retentionChannelBatch)
+		if err != nil {
+			return int(total), fmt.Errorf("admin: erase channel records: %w", err)
+		}
+		total += tag.RowsAffected()
+	}
+	return int(total), nil
 }
 
 func (e *Erasures) record(

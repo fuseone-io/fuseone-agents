@@ -35,6 +35,14 @@ field" is a commit message.
   installations with large partitioned history, expect the migration to spend
   time building those indexes before the new image is ready.
 
+- **Retention now deletes channel operational records too.** `channel_inbox`,
+  `channel_deliveries` and `channel_delivery_failures` age out on the same
+  window as content. The migration adds an index over `channel_inbox.at` so the
+  sweep does not scan the inbox table. Open channel debts are kept until they
+  are answered, so a run that waits through the weekend for approval can still
+  answer the Slack thread that asked. After a debt is answered, that row follows
+  the same retention boundary as old channel input and delivery diagnostics.
+
 ### Added
 
 - **The runtime page now shows durable channel delivery failures.** When a
@@ -50,6 +58,13 @@ field" is a commit message.
   by the per-run money ceiling. If no money ceiling exists, it says the
   exposure is not capped instead of letting a dry tool layer read as a free
   run.
+
+### Fixed
+
+- **Channel configuration failures no longer count as one affected
+  conversation.** When the reporter cannot read the channel map, it does not
+  know which conversations would have received the message. The runtime page
+  now marks that as scope-wide instead of inventing a single conversation.
 
 ## [0.27.0] — 2026-08-23
 

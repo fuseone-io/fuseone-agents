@@ -56,7 +56,7 @@ func runtimeHealthFrom(h domain.RuntimeHealth) openapi.RuntimeHealth {
 	for _, one := range h.ChannelFailures {
 		out.ChannelFailures = append(out.ChannelFailures, openapi.RuntimeChannelFailureBucket{
 			Code: one.Code, Attempts: one.Attempts,
-			Conversations: one.Conversations, Runs: one.Runs,
+			Conversations: one.Conversations, ScopeWide: one.ScopeWide, Runs: one.Runs,
 			FirstAt: one.FirstAt, LastAt: one.LastAt,
 		})
 	}

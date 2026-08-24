@@ -118,10 +118,11 @@ func (r *Reporter) announce(ctx context.Context, report Report) (sent, told int,
 			CodeConfigurationReadFailed,
 			fmt.Errorf("channel: conversations for %s: %w", report.Scope, err),
 		)
-		return 0, 0, errors.Join(err, r.recordFailure(ctx, report, Conversation{}, err))
+		return 0, 0, errors.Join(err, r.recordFailures(ctx, r.failuresFor(report, Conversation{}, err)))
 	}
 
 	failures := []error{}
+	deliveryFailures := []DeliveryFailure{}
 	for _, place := range places {
 		if !place.wants(report.Event) {
 			continue
@@ -133,34 +134,41 @@ func (r *Reporter) announce(ctx context.Context, report Report) (sent, told int,
 		posted, err := r.post(ctx, report, place)
 		if err != nil {
 			failures = append(failures, err)
-			if err := r.recordFailure(ctx, report, place, err); err != nil {
-				failures = append(failures, err)
-			}
+			deliveryFailures = append(deliveryFailures, r.failuresFor(report, place, err)...)
 			continue
 		}
 		if posted {
 			sent++
 		}
 	}
+	if err := r.recordFailures(ctx, deliveryFailures); err != nil {
+		failures = append(failures, err)
+	}
 	return sent, told, errors.Join(failures...)
 }
 
-func (r *Reporter) recordFailure(
-	ctx context.Context, report Report, place Conversation, cause error,
-) error {
-	var failures []error
+func (r *Reporter) failuresFor(report Report, place Conversation, cause error) []DeliveryFailure {
+	var failures []DeliveryFailure
 	for _, code := range FailureCodes(cause) {
-		err := r.deliveries.RecordFailure(ctx, DeliveryFailure{
+		failures = append(failures, DeliveryFailure{
 			RunID: report.RunID, Event: report.Event,
 			Channel: place.Channel, Conversation: place.ID,
-			Code: code, Scope: report.Scope, AgentID: report.AgentID,
+			ScopeWide: place.Channel == "" && place.ID == "",
+			Code:      code, Scope: report.Scope, AgentID: report.AgentID,
 			SeenAt: r.clock(),
 		})
-		if err != nil {
-			failures = append(failures, fmt.Errorf("channel: record delivery failure: %w", err))
-		}
 	}
-	return errors.Join(failures...)
+	return failures
+}
+
+func (r *Reporter) recordFailures(ctx context.Context, failures []DeliveryFailure) error {
+	if len(failures) == 0 {
+		return nil
+	}
+	if err := r.deliveries.RecordFailures(ctx, failures); err != nil {
+		return fmt.Errorf("channel: record delivery failures: %w", err)
+	}
+	return nil
 }
 
 // post sends one message, unless it has already been sent.
@@ -206,6 +214,9 @@ type noDeliveries struct{}
 
 func (noDeliveries) Record(context.Context, Delivery) error { return nil }
 func (noDeliveries) RecordFailure(context.Context, DeliveryFailure) error {
+	return nil
+}
+func (noDeliveries) RecordFailures(context.Context, []DeliveryFailure) error {
 	return nil
 }
 func (noDeliveries) Delivered(

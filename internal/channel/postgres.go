@@ -109,27 +109,51 @@ func (p *Postgres) Record(ctx context.Context, d Delivery) error {
 // RecordFailure remembers a failed attempt to tell one conversation. Repeated
 // sweeps update the same fact rather than creating a retry log.
 func (p *Postgres) RecordFailure(ctx context.Context, f DeliveryFailure) error {
-	if f.SeenAt.IsZero() {
-		f.SeenAt = time.Now()
+	return p.RecordFailures(ctx, []DeliveryFailure{f})
+}
+
+// RecordFailures remembers failed attempts in a single batch. During a channel
+// incident the reporter can owe dozens of conversations per sweep; sending the
+// writes together keeps the failure signal durable without turning the sweep
+// into one database round trip per conversation.
+func (p *Postgres) RecordFailures(ctx context.Context, failures []DeliveryFailure) error {
+	if len(failures) == 0 {
+		return nil
 	}
-	_, err := p.pool.Exec(ctx, `
-		insert into channel_delivery_failures (
-			run_id, event, channel, conversation, code,
-			company_id, area_id, agent_id, attempts, first_seen, last_seen)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, 1, $9, $9)
-		on conflict (run_id, event, channel, conversation, code)
-		do update set
-			attempts = channel_delivery_failures.attempts + 1,
-			first_seen = least(channel_delivery_failures.first_seen, excluded.first_seen),
-			last_seen = greatest(channel_delivery_failures.last_seen, excluded.last_seen)`,
-		string(f.RunID), string(f.Event), f.Channel, f.Conversation,
-		MetricCode(f.Code), string(f.Scope.Company), string(f.Scope.Area),
-		string(f.AgentID), f.SeenAt.UTC())
-	if err != nil {
+	batch := &pgx.Batch{}
+	for _, f := range failures {
+		if f.SeenAt.IsZero() {
+			f.SeenAt = time.Now()
+		}
+		batch.Queue(recordFailureSQL,
+			string(f.RunID), string(f.Event), f.Channel, f.Conversation,
+			f.ScopeWide, MetricCode(f.Code), string(f.Scope.Company),
+			string(f.Scope.Area), string(f.AgentID), f.SeenAt.UTC())
+	}
+	results := p.pool.SendBatch(ctx, batch)
+	for range failures {
+		if _, err := results.Exec(); err != nil {
+			_ = results.Close()
+			return fmt.Errorf("channel: record delivery failure: %w", err)
+		}
+	}
+	if err := results.Close(); err != nil {
 		return fmt.Errorf("channel: record delivery failure: %w", err)
 	}
 	return nil
 }
+
+const recordFailureSQL = `
+	insert into channel_delivery_failures (
+		run_id, event, channel, conversation, scope_wide, code,
+		company_id, area_id, agent_id, attempts, first_seen, last_seen)
+	values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 1, $10, $10)
+	on conflict (run_id, event, channel, conversation, code)
+	do update set
+		attempts = channel_delivery_failures.attempts + 1,
+		scope_wide = channel_delivery_failures.scope_wide or excluded.scope_wide,
+		first_seen = least(channel_delivery_failures.first_seen, excluded.first_seen),
+		last_seen = greatest(channel_delivery_failures.last_seen, excluded.last_seen)`
 
 // Delivered answers whether this has already been said here.
 //

@@ -5589,7 +5589,7 @@ components:
 
     RuntimeChannelFailureBucket:
       type: object
-      required: [code, attempts, conversations, runs, firstAt, lastAt]
+      required: [code, attempts, conversations, scopeWide, runs, firstAt, lastAt]
       properties:
         code: { type: string }
         attempts:
@@ -5599,7 +5599,10 @@ components:
         conversations:
           type: integer
           format: int64
-          description: Distinct channel conversations affected by this code.
+          description: Distinct known channel conversations affected by this code.
+        scopeWide:
+          type: boolean
+          description: At least one failure happened before the affected conversations were known.
         runs:
           type: integer
           format: int64

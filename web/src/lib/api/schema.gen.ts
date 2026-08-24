@@ -3707,9 +3707,11 @@ export interface components {
             attempts: number;
             /**
              * Format: int64
-             * @description Distinct channel conversations affected by this code.
+             * @description Distinct known channel conversations affected by this code.
              */
             conversations: number;
+            /** @description At least one failure happened before the affected conversations were known. */
+            scopeWide: boolean;
             /**
              * Format: int64
              * @description Distinct runs whose announcement failed with this code.

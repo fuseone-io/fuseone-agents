@@ -147,10 +147,14 @@ type DeliveryFailure struct {
 	Event        Event
 	Channel      string
 	Conversation string
-	Code         string
-	Scope        domain.Scope
-	AgentID      domain.AgentID
-	SeenAt       time.Time
+	// ScopeWide means the failure happened before the reporter knew which
+	// conversations were owed the message. Counting it as one conversation
+	// would understate the blast radius as confidently as naming all of them.
+	ScopeWide bool
+	Code      string
+	Scope     domain.Scope
+	AgentID   domain.AgentID
+	SeenAt    time.Time
 }
 
 // Reports lists what has happened and not yet been said, declared here by the
@@ -178,6 +182,7 @@ type Poster interface {
 type Deliveries interface {
 	Record(ctx context.Context, d Delivery) error
 	RecordFailure(ctx context.Context, f DeliveryFailure) error
+	RecordFailures(ctx context.Context, failures []DeliveryFailure) error
 	Delivered(ctx context.Context, run domain.RunID, e Event, channel, conversation string) (bool, error)
 }
 

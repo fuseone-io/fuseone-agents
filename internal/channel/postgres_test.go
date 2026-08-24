@@ -124,17 +124,20 @@ func TestRecordFailure_keepsScopeAndCountsRetries(t *testing.T) {
 	}
 
 	var company, area, code string
+	var scopeWide bool
 	var attempts int64
 	var first, last time.Time
 	err := pool.QueryRow(t.Context(), `
-		select company_id, area_id, code, attempts, first_seen, last_seen
+		select company_id, area_id, code, scope_wide, attempts, first_seen, last_seen
 		from channel_delivery_failures
-		where run_id = 'run-waiting'`).Scan(&company, &area, &code, &attempts, &first, &last)
+		where run_id = 'run-waiting'`).Scan(&company, &area, &code, &scopeWide, &attempts, &first, &last)
 	if err != nil {
 		t.Fatalf("read failure: %v", err)
 	}
-	if company != "acme" || area != "ops" || code != channel.MetricOther || attempts != 2 {
-		t.Fatalf("failure row = %s/%s %s attempts=%d", company, area, code, attempts)
+	if company != "acme" || area != "ops" || code != channel.MetricOther ||
+		scopeWide || attempts != 2 {
+		t.Fatalf("failure row = %s/%s %s scopeWide=%v attempts=%d",
+			company, area, code, scopeWide, attempts)
 	}
 	if !first.Equal(noon) || !last.Equal(noon.Add(time.Minute)) {
 		t.Fatalf("first=%s last=%s, want retry window", first, last)
@@ -161,7 +164,14 @@ func TestRuntimeHealth_channelFailuresAreScopedAndBounded(t *testing.T) {
 	recordFailure("run-ops-1", "C07-ops", channel.CodeMissingScope, ops, noon)
 	recordFailure("run-ops-1", "C07-ops", channel.CodeMissingScope, ops, noon.Add(time.Minute))
 	recordFailure("run-ops-2", "C08-ops", "jira-prod.transition_ACME-4417", ops, noon.Add(2*time.Minute))
-	recordFailure("run-finance", "C09-finance", channel.CodeDeliveryFailed, finance, noon.Add(3*time.Minute))
+	if err := store.RecordFailure(ctx, channel.DeliveryFailure{
+		RunID: "run-ops-3", Event: channel.EventParked,
+		Code: channel.CodeConfigurationReadFailed, Scope: ops,
+		AgentID: "triage", ScopeWide: true, SeenAt: noon.Add(3 * time.Minute),
+	}); err != nil {
+		t.Fatalf("RecordFailure scope-wide: %v", err)
+	}
+	recordFailure("run-finance", "C09-finance", channel.CodeDeliveryFailed, finance, noon.Add(4*time.Minute))
 
 	health, err := ledger.NewPostgres(pool).RuntimeHealth(ctx, domain.RunFilter{
 		Scope: ops, Since: noon.Add(-time.Hour),
@@ -169,23 +179,33 @@ func TestRuntimeHealth_channelFailuresAreScopedAndBounded(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RuntimeHealth: %v", err)
 	}
-	if len(health.ChannelFailures) != 2 {
-		t.Fatalf("ChannelFailures = %+v, want two scoped buckets", health.ChannelFailures)
+	if len(health.ChannelFailures) != 3 {
+		t.Fatalf("ChannelFailures = %+v, want three scoped buckets", health.ChannelFailures)
 	}
 
-	missing := health.ChannelFailures[0]
+	byCode := map[string]domain.RuntimeChannelFailureBucket{}
+	for _, bucket := range health.ChannelFailures {
+		byCode[bucket.Code] = bucket
+	}
+	missing := byCode[channel.CodeMissingScope]
 	if missing.Code != channel.CodeMissingScope || missing.Attempts != 2 ||
-		missing.Conversations != 1 || missing.Runs != 1 {
+		missing.Conversations != 1 || missing.ScopeWide || missing.Runs != 1 {
 		t.Fatalf("missing scope bucket = %+v", missing)
 	}
 	if !missing.FirstAt.Equal(noon) || !missing.LastAt.Equal(noon.Add(time.Minute)) {
 		t.Fatalf("missing scope window = %s..%s", missing.FirstAt, missing.LastAt)
 	}
 
-	other := health.ChannelFailures[1]
+	other := byCode[channel.MetricOther]
 	if other.Code != channel.MetricOther || other.Attempts != 1 ||
-		other.Conversations != 1 || other.Runs != 1 {
+		other.Conversations != 1 || other.ScopeWide || other.Runs != 1 {
 		t.Fatalf("dynamic code bucket = %+v, want bounded other", other)
+	}
+
+	scopeWide := byCode[channel.CodeConfigurationReadFailed]
+	if scopeWide.Code != channel.CodeConfigurationReadFailed || scopeWide.Attempts != 1 ||
+		scopeWide.Conversations != 0 || !scopeWide.ScopeWide || scopeWide.Runs != 1 {
+		t.Fatalf("scope-wide bucket = %+v, want no invented conversation", scopeWide)
 	}
 }
 

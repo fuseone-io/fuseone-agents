@@ -151,6 +151,55 @@ func TestSweep_oneConversationRefuses_theOthersStillHear(t *testing.T) {
 	}
 }
 
+func TestSweep_manyConversationsRefuse_recordsFailuresInOneBatch(t *testing.T) {
+	t.Parallel()
+	posts := &recorder{fail: channel.NewError(channel.CodeMissingScope, "slack is down")}
+	deliveries := &memoryDeliveries{}
+	r := channel.NewReporter(
+		&fixedReports{reports: []channel.Report{
+			report("run-1", "acme", "ops", channel.EventParked),
+		}},
+		multiConversations{places: []channel.Conversation{
+			{Channel: "acme-slack", ID: "C07-ops", Label: "#ops", Wants: []channel.Event{channel.EventParked}},
+			{Channel: "acme-slack", ID: "C08-ops", Label: "#war", Wants: []channel.Event{channel.EventParked}},
+		}},
+		posts,
+		func() time.Time { return noon },
+		nil,
+	).WithDeliveries(deliveries)
+
+	if _, err := r.Sweep(t.Context(), 50); err == nil {
+		t.Fatal("the sweep hid conversations it could not reach")
+	}
+	if deliveries.batches != 1 || len(deliveries.failures) != 2 {
+		t.Fatalf("batches=%d failures=%d, want one batched write for two failures",
+			deliveries.batches, len(deliveries.failures))
+	}
+}
+
+func TestSweep_configurationFailure_isRecordedAsScopeWide(t *testing.T) {
+	t.Parallel()
+	deliveries := &memoryDeliveries{}
+	r := channel.NewReporter(
+		&fixedReports{reports: []channel.Report{
+			report("run-1", "acme", "ops", channel.EventParked),
+		}},
+		failingConversations{},
+		&recorder{},
+		func() time.Time { return noon },
+		nil,
+	).WithDeliveries(deliveries)
+
+	if _, err := r.Sweep(t.Context(), 50); err == nil {
+		t.Fatal("the sweep hid that channel configuration could not be read")
+	}
+	if len(deliveries.failures) != 1 || !deliveries.failures[0].ScopeWide ||
+		deliveries.failures[0].Conversation != "" {
+		t.Fatalf("failure = %+v, want scope-wide without an invented conversation",
+			deliveries.failures)
+	}
+}
+
 /*
 A run one conversation could not hear is not a run that was reported.
 
@@ -314,6 +363,20 @@ func (fixedConversations) For(_ context.Context, scope domain.Scope) ([]channel.
 	return nil, nil
 }
 
+type multiConversations struct {
+	places []channel.Conversation
+}
+
+func (m multiConversations) For(context.Context, domain.Scope) ([]channel.Conversation, error) {
+	return m.places, nil
+}
+
+type failingConversations struct{}
+
+func (failingConversations) For(context.Context, domain.Scope) ([]channel.Conversation, error) {
+	return nil, errors.New("read channel settings")
+}
+
 type sent struct {
 	conversation channel.Conversation
 	message      channel.Message
@@ -341,6 +404,7 @@ func (r *recorder) Post(_ context.Context, c channel.Conversation, m channel.Mes
 type memoryDeliveries struct {
 	recorded []channel.Delivery
 	failures []channel.DeliveryFailure
+	batches  int
 }
 
 func (m *memoryDeliveries) Record(_ context.Context, d channel.Delivery) error {
@@ -350,6 +414,12 @@ func (m *memoryDeliveries) Record(_ context.Context, d channel.Delivery) error {
 
 func (m *memoryDeliveries) RecordFailure(_ context.Context, f channel.DeliveryFailure) error {
 	m.failures = append(m.failures, f)
+	return nil
+}
+
+func (m *memoryDeliveries) RecordFailures(_ context.Context, failures []channel.DeliveryFailure) error {
+	m.batches++
+	m.failures = append(m.failures, failures...)
 	return nil
 }
 

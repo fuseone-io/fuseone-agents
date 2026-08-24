@@ -1890,6 +1890,7 @@
     "cause": "Cause",
     "channelFailures": "Channel delivery failures · last 24 hours",
     "conversations": "Conversations",
+    "conversationsAndWholeScope": "{{count}} + whole scope",
     "copyRequestId": "Copy the provider request ID",
     "expiredLeases": "Expired leases",
     "failureAttemptsExhausted": "Too many attempts",
@@ -1946,7 +1947,8 @@
     "status": "status {{status}}",
     "subtitle": "Worker queue, provider failures, tool failures, channel delivery failures and the current shape of the runtime.",
     "title": "Runtime health",
-    "toolFailures": "Tool failures · last 24 hours"
+    "toolFailures": "Tool failures · last 24 hours",
+    "wholeScope": "whole scope"
   },
   "scope": {
     "everything": "Everything I can reach",
