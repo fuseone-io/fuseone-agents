@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/fuseone/agents/internal/channel"
 )
 
 /*
@@ -100,9 +102,12 @@ func (p *Poster) send(ctx context.Context, m postMessage) (string, error) {
 
 	resp, err := p.client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("slack: post: %w", err)
+		return "", channel.WrapError(channel.CodeDeliveryFailed, fmt.Errorf("slack: post: %w", err))
 	}
 	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == http.StatusTooManyRequests {
+		return "", channel.NewError(channel.CodeRateLimited, "slack: rate limited")
+	}
 
 	var answer struct {
 		OK    bool   `json:"ok"`
@@ -110,12 +115,31 @@ func (p *Poster) send(ctx context.Context, m postMessage) (string, error) {
 		Error string `json:"error"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&answer); err != nil {
-		return "", fmt.Errorf("slack: read answer (status %d): %w", resp.StatusCode, err)
+		return "", channel.WrapError(
+			channel.CodeDeliveryFailed,
+			fmt.Errorf("slack: read answer (status %d): %w", resp.StatusCode, err),
+		)
 	}
 	if !answer.OK {
 		// Slack's own word for it. "not_in_channel" tells an operator what to
 		// do; "post failed" tells them to go and find out.
-		return "", fmt.Errorf("slack: refused: %s", answer.Error)
+		return "", channel.NewError(
+			slackDeliveryCode(answer.Error),
+			fmt.Sprintf("slack: refused: %s", answer.Error),
+		)
 	}
 	return answer.TS, nil
+}
+
+func slackDeliveryCode(reason string) string {
+	switch reason {
+	case "invalid_auth", "not_authed", "account_inactive", "token_revoked":
+		return channel.CodeCredentialRejected
+	case "not_in_channel", "channel_not_found", "is_archived":
+		return channel.CodeConversationUnavailable
+	case "missing_scope":
+		return channel.CodeMissingScope
+	default:
+		return channel.CodeDeliveryFailed
+	}
 }

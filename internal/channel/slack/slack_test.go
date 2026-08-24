@@ -2,6 +2,7 @@ package slack_test
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -41,6 +42,15 @@ func TestPost_channelAnswersOkFalse_isAFailureNotASuccess(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "not_in_channel") {
 		t.Errorf("err = %v, want Slack's own reason so an operator knows what to fix", err)
+	}
+	var summarized interface {
+		Summary() domain.FailureSummary
+	}
+	if !errors.As(err, &summarized) {
+		t.Fatalf("err = %v, want a stable summary for metrics", err)
+	}
+	if got := summarized.Summary().Code; got != channel.CodeConversationUnavailable {
+		t.Fatalf("summary code = %q, want %q", got, channel.CodeConversationUnavailable)
 	}
 }
 

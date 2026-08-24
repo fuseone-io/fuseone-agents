@@ -8,6 +8,7 @@ import (
 	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/channel/connect"
+	"github.com/fuseone/agents/internal/model"
 	"github.com/fuseone/agents/internal/settings"
 	"github.com/fuseone/agents/internal/worker"
 )
@@ -182,8 +183,12 @@ func recordChannelSweep(metrics *worker.MetricsRegistry, task string, items int,
 		return
 	}
 	if err != nil {
-		metrics.ChannelSweep(task, channel.MetricResultError, items)
+		code := channel.MetricOther
+		if failure, ok := model.FailureSummaryOf(err); ok {
+			code = failure.Code
+		}
+		metrics.ChannelSweep(task, channel.MetricResultError, code, items)
 		return
 	}
-	metrics.ChannelSweep(task, channel.MetricResultOK, items)
+	metrics.ChannelSweep(task, channel.MetricResultOK, channel.MetricNone, items)
 }

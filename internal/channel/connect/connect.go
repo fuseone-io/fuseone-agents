@@ -107,26 +107,41 @@ func (d *Drivers) driver(ctx context.Context, name string) (Driver, error) {
 	s, err := d.store.Reveal(ctx,
 		settings.ScopeInstallation, domain.Scope{}, channel.KindChannel, name)
 	if err != nil {
-		return nil, fmt.Errorf("connect: read connection: %w", err)
+		return nil, channel.WrapError(
+			channel.CodeConfigurationReadFailed,
+			fmt.Errorf("connect: read connection: %w", err),
+		)
 	}
 	if !s.Enabled {
-		return nil, fmt.Errorf("connect: channel %q is switched off", name)
+		return nil, channel.NewError(
+			channel.CodeConnectionDisabled,
+			fmt.Sprintf("connect: channel %q is switched off", name),
+		)
 	}
 	var conn channel.Connection
 	if err := json.Unmarshal(s.Value, &conn); err != nil {
-		return nil, fmt.Errorf("connect: read connection %q: %w", name, err)
+		return nil, channel.WrapError(
+			channel.CodeInvalidConfiguration,
+			fmt.Errorf("connect: read connection %q: %w", name, err),
+		)
 	}
 
 	creds := channel.ReadCredentials(s.Secret)
 	if creds.Token == "" {
-		return nil, fmt.Errorf("connect: channel %q has no credential", name)
+		return nil, channel.NewError(
+			channel.CodeMissingCredential,
+			fmt.Sprintf("connect: channel %q has no credential", name),
+		)
 	}
 
 	build, known := d.build[conn.Kind]
 	if !known {
 		// Named rather than ignored. A connection of a kind nobody has built
 		// should say so, not fail as a notification that never arrives.
-		return nil, fmt.Errorf("connect: channel %q is of an unsupported kind %q", name, conn.Kind)
+		return nil, channel.NewError(
+			channel.CodeUnsupportedKind,
+			fmt.Sprintf("connect: channel %q is of an unsupported kind %q", name, conn.Kind),
+		)
 	}
 	return build(conn, creds), nil
 }

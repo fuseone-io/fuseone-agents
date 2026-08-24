@@ -25,6 +25,15 @@ func TestMetricResult_boundsUnknownResults(t *testing.T) {
 	}
 }
 
+func TestMetricCode_boundsUnknownCodes(t *testing.T) {
+	if got := channel.MetricCode(channel.CodeMissingCredential); got != channel.CodeMissingCredential {
+		t.Fatalf("known code = %q", got)
+	}
+	if got := channel.MetricCode("slack-team-alerts"); got != channel.MetricOther {
+		t.Fatalf("unknown code = %q, want other", got)
+	}
+}
+
 func TestMetricTasks_exposesTheBoundedVocabulary(t *testing.T) {
 	tasks := channel.MetricTasks()
 	for _, want := range []string{

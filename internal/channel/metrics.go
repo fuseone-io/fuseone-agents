@@ -4,6 +4,7 @@ import "sort"
 
 const (
 	MetricOther = "other"
+	MetricNone  = "none"
 
 	MetricResultError = "error"
 	MetricResultOK    = "ok"
@@ -25,6 +26,19 @@ var (
 		MetricTaskAsksOpened:        true,
 		MetricTaskRefusalsDelivered: true,
 	}
+	metricCodes = map[string]bool{
+		MetricNone:                  true,
+		CodeConfigurationReadFailed: true,
+		CodeConnectionDisabled:      true,
+		CodeInvalidConfiguration:    true,
+		CodeMissingCredential:       true,
+		CodeUnsupportedKind:         true,
+		CodeDeliveryFailed:          true,
+		CodeCredentialRejected:      true,
+		CodeConversationUnavailable: true,
+		CodeMissingScope:            true,
+		CodeRateLimited:             true,
+	}
 )
 
 // MetricResult bounds a channel sweep result before it can become a metric label.
@@ -39,6 +53,14 @@ func MetricResult(result string) string {
 func MetricTask(task string) string {
 	if metricTasks[task] {
 		return task
+	}
+	return MetricOther
+}
+
+// MetricCode bounds a channel failure code before it can become a metric label.
+func MetricCode(code string) string {
+	if metricCodes[code] {
+		return code
 	}
 	return MetricOther
 }

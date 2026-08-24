@@ -143,11 +143,11 @@ func renderMCPMetrics(w http.ResponseWriter, snap registrySnapshot) {
 }
 
 func renderChannelMetrics(w http.ResponseWriter, snap registrySnapshot) {
-	fmt.Fprintln(w, "# HELP fuseone_channel_sweeps_total Channel sweeps by task and result.")
+	fmt.Fprintln(w, "# HELP fuseone_channel_sweeps_total Channel sweeps by task, result and stable code.")
 	fmt.Fprintln(w, "# TYPE fuseone_channel_sweeps_total counter")
 	for _, key := range sortedChannelSweepKeys(snap.channelSweeps) {
-		fmt.Fprintf(w, "fuseone_channel_sweeps_total{task=%s,result=%s} %d\n",
-			label(key.task), label(key.result), snap.channelSweeps[key])
+		fmt.Fprintf(w, "fuseone_channel_sweeps_total{task=%s,result=%s,code=%s} %d\n",
+			label(key.task), label(key.result), label(key.code), snap.channelSweeps[key])
 	}
 
 	fmt.Fprintln(w, "# HELP fuseone_channel_items_total Channel items handled by task.")
@@ -211,6 +211,7 @@ type mcpToolMetric struct {
 type channelSweepMetric struct {
 	task   string
 	result string
+	code   string
 }
 
 const metricOther = "other"
@@ -243,15 +244,16 @@ func (r *MetricsRegistry) MCPReservationRefused(code string) {
 	r.mcpReservationRefusals[code]++
 }
 
-func (r *MetricsRegistry) ChannelSweep(task, result string, items int) {
+func (r *MetricsRegistry) ChannelSweep(task, result, code string, items int) {
 	if r == nil {
 		return
 	}
 	task = channel.MetricTask(task)
 	result = channel.MetricResult(result)
+	code = channel.MetricCode(code)
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.channelSweeps[channelSweepMetric{task: task, result: result}]++
+	r.channelSweeps[channelSweepMetric{task: task, result: result, code: code}]++
 	if items > 0 {
 		r.channelItems[task] += uint64(items)
 	}
@@ -405,7 +407,10 @@ func sortedChannelSweepKeys(m map[channelSweepMetric]uint64) []channelSweepMetri
 		if keys[i].task != keys[j].task {
 			return keys[i].task < keys[j].task
 		}
-		return keys[i].result < keys[j].result
+		if keys[i].result != keys[j].result {
+			return keys[i].result < keys[j].result
+		}
+		return keys[i].code < keys[j].code
 	})
 	return keys
 }
