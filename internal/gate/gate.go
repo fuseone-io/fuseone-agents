@@ -24,6 +24,7 @@ const (
 	RulePassed      = "passed"
 	RuleCapability  = "capability"
 	RuleContract    = "contract"
+	RuleDataBarrier = "data_barrier"
 	RuleTaint       = "taint"
 	RulePolicy      = "policy"
 	RuleBudget      = "budget"
@@ -67,6 +68,7 @@ type check struct {
 var checkOrder = []check{
 	{RuleCapability, checkCapability},
 	{RuleContract, checkContract},
+	{RuleDataBarrier, checkDataBarrier},
 	{RuleTaint, checkTaint},
 	{RulePolicy, checkPolicy},
 	{RuleBudget, checkBudget},

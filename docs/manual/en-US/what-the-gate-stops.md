@@ -52,6 +52,10 @@ where the text came from.
 The mark is not lost along the way. If a marked run triggers another, the
 second is born marked. Composing two steps does not launder the origin.
 
+Company and area marks are stricter than ordinary taint: they are data
+barriers. The run must live in a scope allowed to carry that data. See
+[Data labels and barriers](data-barriers.md).
+
 ## Approving releases an action, not the tool
 
 When a run stops, the screen shows **the exact arguments** that will be sent,

@@ -173,6 +173,51 @@ func TestEvaluate_readWithUntrustedArguments_stillAllowed(t *testing.T) {
 	}
 }
 
+func TestEvaluate_sameScopeData_allowed(t *testing.T) {
+	t.Parallel()
+
+	r := request()
+	r.ArgLabels = domain.ScopeLabels(domain.Scope{Company: "acme", Area: "cx"})
+
+	d := evaluate(t, New(), r)
+
+	if d.Verdict != domain.VerdictAllow {
+		t.Errorf("Verdict = %v (%s), want allow", d.Verdict, d.Rule)
+	}
+}
+
+func TestEvaluate_crossAreaData_blockedBeforeTaint(t *testing.T) {
+	t.Parallel()
+
+	r := request()
+	r.Tool, r.Effect = "crm.note", domain.EffectWrite
+	r.ArgLabels = domain.ScopeLabels(domain.Scope{Company: "acme", Area: "finance"}).
+		Union(domain.NewLabels(domain.LabelUntrusted))
+
+	d := evaluate(t, New(), r)
+
+	if d.Verdict != domain.VerdictBlock {
+		t.Errorf("Verdict = %v, want block", d.Verdict)
+	}
+	if d.Rule != RuleDataBarrier {
+		t.Errorf("Rule = %q, want %q", d.Rule, RuleDataBarrier)
+	}
+}
+
+func TestEvaluate_companyScopeCanCarryItsAreas(t *testing.T) {
+	t.Parallel()
+
+	r := request()
+	r.Scope = domain.Scope{Company: "acme"}
+	r.ArgLabels = domain.ScopeLabels(domain.Scope{Company: "acme", Area: "cx"})
+
+	d := evaluate(t, New(), r)
+
+	if d.Verdict != domain.VerdictAllow {
+		t.Errorf("Verdict = %v (%s), want allow", d.Verdict, d.Rule)
+	}
+}
+
 func TestEvaluate_estimateExceedsRemainingBudget_blocked(t *testing.T) {
 	t.Parallel()
 

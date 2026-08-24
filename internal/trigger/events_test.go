@@ -165,6 +165,41 @@ func TestSweep_theListeningRunInheritsTheSourceAuthorityAndLabels(t *testing.T) 
 	if !started.Labels.Has(domain.LabelUntrusted) || !started.Labels.Has(domain.LabelPersonal) {
 		t.Errorf("labels = %v, want the source run labels inherited", started.Labels)
 	}
+	if !started.Labels.Has(domain.LabelArea(domain.Scope{Company: "acme", Area: "cx"})) {
+		t.Errorf("labels = %v, want the listening run's scope sealed too", started.Labels)
+	}
+}
+
+func TestSweep_crossAreaSourceLabelsDoNotOpenAListeningRun(t *testing.T) {
+	t.Parallel()
+
+	store := ledger.NewMemory()
+	reg := registry{versions: []domain.AgentSummary{
+		{ID: "cobranca", VersionID: "v1", Scope: domain.Scope{Company: "acme", Area: "billing"}, Latest: true},
+	}}
+	clock := fixedClock{t: time.Date(2026, 8, 13, 9, 0, 0, 0, time.UTC)}
+	opener := trigger.NewOpener(store, reg, clock).WithContent(engine.NewMemoryContent())
+	d := trigger.NewDispatcher(wiring{
+		emits:  map[domain.AgentID][]domain.AgentEvent{"triage": {{Event: "incident.triaged"}}},
+		listen: map[string][]domain.AgentID{"incident.triaged": {"cobranca"}},
+	}, finished{{
+		RunID: "run-1", AgentID: "triage", Phase: "finished",
+		Scope:      domain.Scope{Company: "acme", Area: "cx"},
+		OnBehalfOf: "usr_ana",
+		Labels:     domain.ScopeLabels(domain.Scope{Company: "acme", Area: "cx"}),
+	}}, opener, clock, nil)
+
+	opened, err := d.Sweep(context.Background(), 50)
+	if err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if opened != 0 {
+		t.Fatalf("opened %d runs, want none", opened)
+	}
+	runs, _ := store.Runs(context.Background())
+	if len(runs) != 0 {
+		t.Fatalf("ledger holds %d runs, want none", len(runs))
+	}
 }
 
 func TestSweep_runTwice_opensTheSameRunOnce(t *testing.T) {

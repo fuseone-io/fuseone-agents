@@ -370,10 +370,15 @@ func TestOpen_inputFromOutside_taintsTheRunFromItsFirstStep(t *testing.T) {
 	if !steps[0].Labels.Has(domain.LabelUntrusted) {
 		t.Errorf("labels = %v, want the input marked untrusted", steps[0].Labels)
 	}
+	if !steps[0].Labels.Has(domain.LabelArea(domain.Scope{Company: "acme", Area: "cx"})) {
+		t.Errorf("labels = %v, want the run scope sealed beside the input", steps[0].Labels)
+	}
 }
 
-// A run nobody outside said anything to is not tainted for it. The label is a
-// fact about where the input came from, never a posture the platform adopts.
+// A run nobody outside said anything to is not tainted for it. The untrusted
+// label is a fact about where the input came from, never a posture the platform
+// adopts. Scope labels are still sealed: later artifacts need to carry which
+// company and area they came from.
 func TestOpen_aScheduledRun_carriesNoTaint(t *testing.T) {
 	t.Parallel()
 	opener, store := openerFor(t)
@@ -388,5 +393,28 @@ func TestOpen_aScheduledRun_carriesNoTaint(t *testing.T) {
 	steps, _ := store.Read(context.Background(), got.RunID, domain.FirstSeq)
 	if steps[0].Labels.Has(domain.LabelUntrusted) {
 		t.Error("a scheduled run with no input arrived tainted")
+	}
+	if !steps[0].Labels.Has(domain.LabelCompany("acme")) ||
+		!steps[0].Labels.Has(domain.LabelArea(domain.Scope{Company: "acme", Area: "cx"})) {
+		t.Errorf("labels = %v, want company and area provenance", steps[0].Labels)
+	}
+}
+
+func TestOpen_refusesInputLabelledForAnotherAreaBeforeStoringIt(t *testing.T) {
+	t.Parallel()
+	opener, store := openerFor(t)
+
+	_, err := opener.Open(t.Context(), trigger.Request{
+		Agent: "triage", IdemKey: "cross-area-1", Trigger: "event",
+		Input:  []byte(`{"from":"finance"}`),
+		Labels: domain.ScopeLabels(domain.Scope{Company: "acme", Area: "finance"}),
+	})
+	if err == nil {
+		t.Fatal("cross-area input opened a run")
+	}
+
+	runs, _ := store.Runs(context.Background())
+	if len(runs) != 0 {
+		t.Fatalf("ledger holds %d runs, want none", len(runs))
 	}
 }

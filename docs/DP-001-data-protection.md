@@ -65,7 +65,7 @@ Roughly twenty-five tables. The ones that can hold personal data:
 | Where | What it can hold |
 |---|---|
 | `run_content` | Everything an agent read or wrote: ticket text, email bodies, tool arguments, tool results and failure diagnostics, model replies |
-| `run_steps` | Who asked, which agent, which tool, what the Gate decided; references and digests for bulk content — **and the free text listed in section 1**, permanently |
+| `run_steps` | Who asked, which agent, which tool, what the Gate decided; data-flow labels for company, area, untrusted or personal origin; references and digests for bulk content — **and the free text listed in section 1**, permanently |
 | `runs.last_error` | Operational error text for the latest failed turn; classified model provider failures store only a stable code, but unclassified local or integration failures can still carry free text |
 | `principals`, `sessions`, `role_grants` | The people who use the console: identity from the customer's own provider |
 | `channel_inbox`, `channel_deliveries`, `channel_delivery_failures` | Messages exchanged on a connected channel, what was sent back, optional thread context supplied to a run, and operational delivery failures tied to a run and conversation |
@@ -83,6 +83,11 @@ therefore has to stay low-cardinality where it can: typed model provider
 failures write codes such as `model_auth_failed`, not the provider's response
 body. Errors the platform has not classified can still leave their text in
 `runs.last_error`, outside content retention and erasure.
+
+Data-flow labels are not message content. They are stored with steps so the
+Gate can refuse a later action when content from one company or area reaches a
+run outside that scope. They are also what makes future shared context between
+agents auditable by reference instead of by copied prose.
 
 Everything is in the customer's PostgreSQL, in the customer's environment.
 Nothing is stored by the vendor, because there is no vendor-side component.

@@ -995,6 +995,7 @@
   },
   "gate": {
     "badArgs": "The arguments do not match the tool's contract.",
+    "dataBarrier": "The run carries data from outside this company or area.",
     "duplicate": "This call is already in the trail; repeating it would duplicate the effect.",
     "humanCleared": "Cleared by a human decision recorded in this run.",
     "outOfPack": "The tool is outside the run's capability pack.",

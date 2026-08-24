@@ -43,7 +43,8 @@ type Request struct {
 	// Input is what the run is about. Stored outside the ledger.
 	Input []byte
 	/*
-		Labels are what is true about where the input came from.
+		Labels are what is true about where the input came from and which
+		scope the run is allowed to carry.
 
 		Sealed on `run_started`, which the fold unions into the run, so a run
 		opened from outside meets the taint check on its very first proposal
@@ -52,7 +53,9 @@ type Request struct {
 		check that exists for exactly that.
 
 		A fact about provenance and never a posture: a run the clock opened
-		carries none, because nobody outside said anything to it.
+		carries no untrusted source label, but it still carries the company and
+		area labels of the published agent. Those labels are the data barrier
+		future artifacts inherit.
 	*/
 	Labels domain.Labels
 	// Origin is the conversation this ask arrived in, when one did. Sealed on
@@ -145,6 +148,10 @@ func (o *Opener) Open(ctx context.Context, req Request) (Result, error) {
 		return Result{}, fmt.Errorf("%w: %s", ErrUnknownAgent, req.Agent)
 	}
 	published := versions[0]
+	if violation, blocked := req.Labels.ScopeBoundaryViolation(published.Scope); blocked {
+		return Result{}, fmt.Errorf("trigger: %w", violation)
+	}
+	labels := req.Labels.Union(domain.ScopeLabels(published.Scope))
 
 	runID := newRunID(published.ID, o.clock.Now(), req.IdemKey)
 
@@ -162,7 +169,7 @@ func (o *Opener) Open(ctx context.Context, req Request) (Result, error) {
 		OnBehalfOf: req.By,
 		IdemKey:    req.IdemKey,
 		At:         o.clock.Now(),
-		Labels:     req.Labels,
+		Labels:     labels,
 		Payload: mustJSON(domain.RunStartedPayload{
 			Trigger: req.Trigger, InputRef: inputRef,
 			Simulated: req.Simulation != "", Simulation: req.Simulation,

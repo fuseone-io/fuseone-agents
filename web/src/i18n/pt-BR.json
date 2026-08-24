@@ -995,6 +995,7 @@
   },
   "gate": {
     "badArgs": "Os argumentos não batem com o contrato da ferramenta.",
+    "dataBarrier": "A execução carrega dados de fora desta empresa ou área.",
     "duplicate": "Esta chamada já consta na trilha; repeti-la duplicaria o efeito.",
     "humanCleared": "Liberada por decisão humana registrada nesta execução.",
     "outOfPack": "A ferramenta está fora do pacote de capacidades da execução.",

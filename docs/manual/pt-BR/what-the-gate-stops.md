@@ -52,6 +52,10 @@ pode até ser convencido. A escrita para do mesmo jeito, porque o que decide nã
 A marca não se perde no caminho. Se uma execução marcada dispara outra, a
 segunda nasce marcada. Compor dois passos não lava a origem.
 
+Marcas de empresa e área são mais rígidas que taint comum: elas são barreiras
+de dados. A execução precisa viver em um escopo que pode carregar aquele dado.
+Veja [Labels e barreiras de dados](data-barriers.md).
+
 ## Aprovar libera uma ação, não a ferramenta
 
 Quando uma execução para, a tela mostra **os argumentos exatos** que serão

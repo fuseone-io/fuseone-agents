@@ -174,8 +174,10 @@ func inputFor(source domain.RunSummary, event domain.AgentEvent) []byte {
 // what somebody asked. They are not failures of the dispatch, and treating
 // them as failures would stop every other listener of the same event.
 func isRefusal(err error) bool {
+	var boundary domain.ScopeBoundaryViolation
 	return errors.Is(err, ErrPaused) ||
 		errors.Is(err, ErrStopped) ||
 		errors.Is(err, ErrDraft) ||
-		errors.Is(err, ErrUnknownAgent)
+		errors.Is(err, ErrUnknownAgent) ||
+		errors.As(err, &boundary)
 }

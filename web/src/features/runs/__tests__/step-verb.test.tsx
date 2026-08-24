@@ -42,6 +42,20 @@ describe("what a step says it did", () => {
     expect(screen.getByText("bloqueou")).toBeInTheDocument();
   });
 
+  it("explains a data barrier block instead of rendering the raw rule", () => {
+    render(
+      <ul>
+        <StepRow
+          step={step({ payload: { verdict: 4, rule: "data_barrier" } })}
+          last
+        />
+      </ul>,
+    );
+
+    expect(screen.getByText(/fora desta empresa ou área/i)).toBeInTheDocument();
+    expect(screen.queryByText("data_barrier")).not.toBeInTheDocument();
+  });
+
   it("translates the verb into the interface language", () => {
     setLocale("en-US");
 

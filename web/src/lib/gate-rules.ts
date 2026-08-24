@@ -7,6 +7,7 @@ export const GATE_RULES: Record<string, string> = {
   passed: "",
   capability: "gate.outOfPack",
   contract: "gate.badArgs",
+  data_barrier: "gate.dataBarrier",
   taint: "gate.tainted",
   policy: "gate.policyRequires",
   budget: "gate.overCeiling",

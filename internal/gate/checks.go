@@ -62,6 +62,18 @@ func checkContract(r Request) result {
 	return pass()
 }
 
+// checkDataBarrier makes scope labels behave as a data barrier, not as a
+// search filter. A run can only act while every company/area label it carries
+// is inside the run's own scope. Ordinary approval does not release this:
+// cross-company context needs an explicit recorded authorization, not a click
+// on a single tool call.
+func checkDataBarrier(r Request) result {
+	if violation, blocked := r.ArgLabels.ScopeBoundaryViolation(r.Scope); blocked {
+		return stop(violation.Error())
+	}
+	return pass()
+}
+
 // checkTaint closes the prompt-injection path: content read from an untrusted
 // source at an earlier step must not silently steer an action on the world
 // (PRD SE-06).
