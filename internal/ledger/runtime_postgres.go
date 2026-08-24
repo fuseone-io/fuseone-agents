@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/mcpmetrics"
 )
 
 // RuntimeHealth reads the current worker queue and recent typed failures from
@@ -112,6 +113,46 @@ func (p *Postgres) RuntimeHealth(ctx context.Context, filter domain.RunFilter) (
 		}
 		one.LastAt = one.LastAt.UTC()
 		out.Failures = append(out.Failures, one)
+	}
+	if err := rows.Err(); err != nil {
+		return domain.RuntimeHealth{}, err
+	}
+
+	recent.Since = time.Time{}
+	where, args = runFilterOn(recent, "at")
+	where = whereAnd(whereAnd(where, realSteps), "kind = 'tool_returned'")
+	where = whereAnd(where, "payload->>'failed' = 'true'")
+	where = whereAnd(where, fmt.Sprintf("at >= $%d", len(args)+1))
+	args = append(args, since, mcpmetrics.Codes())
+	rows, err = p.pool.Query(ctx, `
+		with failed as (
+			select case
+			         when coalesce(payload->>'error_code', '') = ''
+			           then '`+mcpmetrics.CodeNoCode+`'
+			         else coalesce(payload->>'error_code', '')
+			       end as raw_code,
+			       run_id, at
+			from run_steps `+where+`
+		)
+		select case
+		         when raw_code = any($`+fmt.Sprint(len(args))+`) then raw_code
+		         else '`+mcpmetrics.CodeOther+`'
+		       end as code,
+		       count(*), count(distinct run_id), max(at)
+		from failed
+		group by code
+		order by count(*) desc, max(at) desc`, args...)
+	if err != nil {
+		return domain.RuntimeHealth{}, fmt.Errorf("runtime tool failures: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var one domain.RuntimeToolFailureBucket
+		if err := rows.Scan(&one.Code, &one.Calls, &one.Runs, &one.LastAt); err != nil {
+			return domain.RuntimeHealth{}, err
+		}
+		one.LastAt = one.LastAt.UTC()
+		out.ToolFailures = append(out.ToolFailures, one)
 	}
 	return out, rows.Err()
 }

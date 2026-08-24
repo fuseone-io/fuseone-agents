@@ -19,6 +19,7 @@ import { stateOfPhase } from "@/lib/agent-state";
 import { PHASE_LABELS } from "@/features/runs/phase-badge";
 import { useRuntimeHealth } from "@/features/runtime/api";
 import { failureLabel } from "@/features/runtime/failure-labels";
+import { ToolFailuresPanel } from "@/features/runtime/tool-failures-panel";
 import type { Phase, RuntimeFailureBucket, RuntimeHealth } from "@/lib/api/client";
 
 const WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -60,6 +61,7 @@ function RuntimeBody({ health }: { health: RuntimeHealth }) {
     <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <QueuePanel health={health} />
       <ProviderFailures failures={health.failures} />
+      <ToolFailuresPanel failures={health.toolFailures} />
       <PhasePanel health={health} />
     </div>
   );

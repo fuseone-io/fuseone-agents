@@ -3632,6 +3632,12 @@ export interface components {
             };
             queue: components["schemas"]["RuntimeQueue"];
             failures: components["schemas"]["RuntimeFailureBucket"][];
+            /**
+             * @description Failed tool results seen in the requested window. Codes are bounded
+             *     to the same stable MCP vocabulary used by worker metrics; run ids,
+             *     tool arguments and tool response bodies are not included.
+             */
+            toolFailures: components["schemas"]["RuntimeToolFailureBucket"][];
         };
         RuntimeQueue: {
             /**
@@ -3666,6 +3672,21 @@ export interface components {
             status?: number;
             retryable?: boolean;
             /** Format: int64 */
+            runs: number;
+            /** Format: date-time */
+            lastAt: string;
+        };
+        RuntimeToolFailureBucket: {
+            code: string;
+            /**
+             * Format: int64
+             * @description Tool return failures with this code.
+             */
+            calls: number;
+            /**
+             * Format: int64
+             * @description Distinct runs that saw at least one failure with this code.
+             */
             runs: number;
             /** Format: date-time */
             lastAt: string;

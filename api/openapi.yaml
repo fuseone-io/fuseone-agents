@@ -5509,7 +5509,7 @@ components:
 
     RuntimeHealth:
       type: object
-      required: [byPhase, queue, failures]
+      required: [byPhase, queue, failures, toolFailures]
       properties:
         byPhase:
           type: object
@@ -5519,6 +5519,13 @@ components:
         failures:
           type: array
           items: { $ref: '#/components/schemas/RuntimeFailureBucket' }
+        toolFailures:
+          type: array
+          description: |
+            Failed tool results seen in the requested window. Codes are bounded
+            to the same stable MCP vocabulary used by worker metrics; run ids,
+            tool arguments and tool response bodies are not included.
+          items: { $ref: '#/components/schemas/RuntimeToolFailureBucket' }
 
     RuntimeQueue:
       type: object
@@ -5555,6 +5562,21 @@ components:
         status: { type: integer }
         retryable: { type: boolean }
         runs: { type: integer, format: int64 }
+        lastAt: { type: string, format: date-time }
+
+    RuntimeToolFailureBucket:
+      type: object
+      required: [code, calls, runs, lastAt]
+      properties:
+        code: { type: string }
+        calls:
+          type: integer
+          format: int64
+          description: Tool return failures with this code.
+        runs:
+          type: integer
+          format: int64
+          description: Distinct runs that saw at least one failure with this code.
         lastAt: { type: string, format: date-time }
 
     DecisionPage:

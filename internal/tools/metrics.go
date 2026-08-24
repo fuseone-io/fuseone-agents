@@ -2,56 +2,33 @@ package tools
 
 import (
 	"errors"
-	"sort"
 
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/mcpmetrics"
 )
 
 const (
-	CodeMCPMetricOther               = "other"
-	CodeMCPNoCode                    = "none"
-	CodeMCPInvokeError               = "invoke_error"
-	CodeMCPToolError                 = "tool_error"
-	CodeMCPCacheHit                  = "cache_hit"
-	CodeMCPUnknownTool               = "unknown_tool"
-	CodeMCPUnknownServer             = "unknown_server"
-	CodeMCPPersonalCredentialMissing = "mcp_personal_credential_missing"
-	CodeMCPPersonalCredentialRead    = "mcp_personal_credential_read_failed"
-	CodeMCPPersonalCredentialInvalid = "mcp_personal_credential_invalid"
-	CodeMCPPersonalCredentialCaller  = "mcp_personal_credential_no_principal"
+	CodeMCPMetricOther               = mcpmetrics.CodeOther
+	CodeMCPNoCode                    = mcpmetrics.CodeNoCode
+	CodeMCPInvokeError               = mcpmetrics.CodeInvokeError
+	CodeMCPToolError                 = mcpmetrics.CodeToolError
+	CodeMCPCacheHit                  = mcpmetrics.CodeCacheHit
+	CodeMCPUnknownTool               = mcpmetrics.CodeUnknownTool
+	CodeMCPUnknownServer             = mcpmetrics.CodeUnknownServer
+	CodeMCPPersonalCredentialMissing = mcpmetrics.CodePersonalCredentialMissing
+	CodeMCPPersonalCredentialRead    = mcpmetrics.CodePersonalCredentialRead
+	CodeMCPPersonalCredentialInvalid = mcpmetrics.CodePersonalCredentialInvalid
+	CodeMCPPersonalCredentialCaller  = mcpmetrics.CodePersonalCredentialCaller
 )
-
-var mcpMetricCodes = map[string]bool{
-	CodeMCPCacheHit:                  true,
-	CodeMCPInvokeError:               true,
-	CodeMCPNoCode:                    true,
-	CodeMCPPersonalCredentialCaller:  true,
-	CodeMCPPersonalCredentialInvalid: true,
-	CodeMCPPersonalCredentialMissing: true,
-	CodeMCPPersonalCredentialRead:    true,
-	CodeMCPServerRateLimited:         true,
-	CodeMCPToolError:                 true,
-	CodeMCPUnknownServer:             true,
-	CodeMCPUnknownTool:               true,
-}
 
 // MCPMetricCode bounds a failure code before it can become a metric label.
 func MCPMetricCode(code string) string {
-	if mcpMetricCodes[code] {
-		return code
-	}
-	return CodeMCPMetricOther
+	return mcpmetrics.Code(code)
 }
 
 // MCPMetricCodes returns the stable vocabulary used by metrics and UI.
 func MCPMetricCodes() []string {
-	codes := make([]string, 0, len(mcpMetricCodes)+1)
-	for code := range mcpMetricCodes {
-		codes = append(codes, code)
-	}
-	codes = append(codes, CodeMCPMetricOther)
-	sort.Strings(codes)
-	return codes
+	return mcpmetrics.Codes()
 }
 
 // Metrics is implemented by the worker's low-cardinality Prometheus registry.

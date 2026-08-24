@@ -29,9 +29,10 @@ func (s *Server) GetRuntimeHealth(
 
 func runtimeHealthFrom(h domain.RuntimeHealth) openapi.RuntimeHealth {
 	out := openapi.RuntimeHealth{
-		ByPhase:  h.ByPhase,
-		Queue:    runtimeQueueFrom(h.Queue),
-		Failures: make([]openapi.RuntimeFailureBucket, 0, len(h.Failures)),
+		ByPhase:      h.ByPhase,
+		Queue:        runtimeQueueFrom(h.Queue),
+		Failures:     make([]openapi.RuntimeFailureBucket, 0, len(h.Failures)),
+		ToolFailures: make([]openapi.RuntimeToolFailureBucket, 0, len(h.ToolFailures)),
 	}
 	for _, one := range h.Failures {
 		out.Failures = append(out.Failures, openapi.RuntimeFailureBucket{
@@ -41,6 +42,14 @@ func runtimeHealthFrom(h domain.RuntimeHealth) openapi.RuntimeHealth {
 			Retryable: ptr(one.Retryable),
 			Runs:      one.Runs,
 			LastAt:    one.LastAt,
+		})
+	}
+	for _, one := range h.ToolFailures {
+		out.ToolFailures = append(out.ToolFailures, openapi.RuntimeToolFailureBucket{
+			Code:   one.Code,
+			Calls:  one.Calls,
+			Runs:   one.Runs,
+			LastAt: one.LastAt,
 		})
 	}
 	return out

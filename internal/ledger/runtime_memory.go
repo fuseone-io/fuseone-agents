@@ -2,12 +2,14 @@ package ledger
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/mcpmetrics"
 )
 
 func (m *Memory) RuntimeHealth(ctx context.Context, filter domain.RunFilter) (domain.RuntimeHealth, error) {
@@ -28,10 +30,13 @@ func (m *Memory) RuntimeHealth(ctx context.Context, filter domain.RunFilter) (do
 
 	out := domain.RuntimeHealth{ByPhase: map[string]int64{}}
 	failures := map[string]domain.RuntimeFailureBucket{}
+	toolFailures := map[string]domain.RuntimeToolFailureBucket{}
+	toolFailureRuns := map[string]map[domain.RunID]bool{}
 	for id, steps := range m.runs {
 		if len(steps) == 0 || !matches(steps[0], current) || isSimulated(steps) {
 			continue
 		}
+		collectRuntimeToolFailures(steps, since, toolFailures, toolFailureRuns)
 		summary := summarise(steps)
 		if runtimeActivePhase(summary.Phase) ||
 			(runtimeTerminalPhase(summary.Phase) && !summary.UpdatedAt.Before(since)) {
@@ -95,7 +100,53 @@ func (m *Memory) RuntimeHealth(ctx context.Context, filter domain.RunFilter) (do
 		}
 		return strings.Compare(a.Code, b.Code)
 	})
+	out.ToolFailures = make([]domain.RuntimeToolFailureBucket, 0, len(toolFailures))
+	for code, one := range toolFailures {
+		one.Runs = int64(len(toolFailureRuns[code]))
+		out.ToolFailures = append(out.ToolFailures, one)
+	}
+	slices.SortFunc(out.ToolFailures, func(a, b domain.RuntimeToolFailureBucket) int {
+		if a.Calls != b.Calls {
+			return int(b.Calls - a.Calls)
+		}
+		if c := b.LastAt.Compare(a.LastAt); c != 0 {
+			return c
+		}
+		return strings.Compare(a.Code, b.Code)
+	})
 	return out, nil
+}
+
+func collectRuntimeToolFailures(
+	steps []domain.Step, since time.Time,
+	failures map[string]domain.RuntimeToolFailureBucket,
+	runs map[string]map[domain.RunID]bool,
+) {
+	for _, st := range steps {
+		if st.Kind != domain.StepToolReturned || st.At.Before(since) {
+			continue
+		}
+		var returned domain.ToolReturnedPayload
+		if err := json.Unmarshal(st.Payload, &returned); err != nil || !returned.Failed {
+			continue
+		}
+		code := returned.ErrorCode
+		if code == "" {
+			code = mcpmetrics.CodeNoCode
+		}
+		code = mcpmetrics.Code(code)
+		bucket := failures[code]
+		bucket.Code = code
+		bucket.Calls++
+		if st.At.After(bucket.LastAt) {
+			bucket.LastAt = st.At
+		}
+		failures[code] = bucket
+		if runs[code] == nil {
+			runs[code] = map[domain.RunID]bool{}
+		}
+		runs[code][st.RunID] = true
+	}
 }
 
 func runtimeActivePhase(phase string) bool {

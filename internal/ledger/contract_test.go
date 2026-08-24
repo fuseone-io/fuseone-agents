@@ -16,6 +16,7 @@ import (
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/mcpmetrics"
 )
 
 // One suite, both implementations.
@@ -680,6 +681,42 @@ func TestStatsContract(t *testing.T) {
 		}
 		if got := health.ByPhase["finished"]; got != 1 {
 			t.Errorf("finished = %d, want only terminal work updated in the window", got)
+		}
+	})
+
+	run(t, "runtime health groups recent tool failures by stable code", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		for _, id := range []domain.RunID{"run-a", "run-b", "run-old"} {
+			mustAppend(t, s, startedAt(id, base.Add(-2*time.Hour)))
+		}
+		fail := func(id domain.RunID, at time.Time, code string) {
+			returned := step(id, domain.StepToolReturned)
+			returned.At = at
+			returned.Payload = mustJSON(t, domain.ToolReturnedPayload{
+				Tool: "github.add_issue_comment", Failed: true, ErrorCode: code,
+			})
+			mustAppend(t, s, returned)
+		}
+		fail("run-a", base.Add(-30*time.Minute), "jira-prod.transition_ACME-4417")
+		fail("run-b", base.Add(-20*time.Minute), "jira-prod.transition_ACME-4417")
+		fail("run-b", base.Add(-10*time.Minute), mcpmetrics.CodePersonalCredentialMissing)
+		fail("run-old", base.Add(-2*time.Hour), mcpmetrics.CodeToolError)
+
+		health, err := s.RuntimeHealth(ctx, domain.RunFilter{Since: base.Add(-time.Hour)})
+		if err != nil {
+			t.Fatalf("RuntimeHealth: %v", err)
+		}
+		if len(health.ToolFailures) != 2 {
+			t.Fatalf("tool failures = %+v, want two bounded buckets", health.ToolFailures)
+		}
+		got := health.ToolFailures[0]
+		if got.Code != mcpmetrics.CodeOther || got.Calls != 2 || got.Runs != 2 {
+			t.Errorf("dynamic bucket = %+v, want two calls in two runs as other", got)
+		}
+		got = health.ToolFailures[1]
+		if got.Code != mcpmetrics.CodePersonalCredentialMissing || got.Calls != 1 || got.Runs != 1 {
+			t.Errorf("credential bucket = %+v, want one missing credential call", got)
 		}
 	})
 
