@@ -37,6 +37,13 @@ field" is a commit message.
 
 ### Added
 
+- **Channel delivery failures now have a durable source.** When a channel
+  announcement cannot be delivered, the reporter records the stable failure
+  code with the run's scope, target conversation, first seen time, last seen
+  time and retry count. This is the source the operations cockpit will use for
+  channel incidents; Prometheus still answers only what the current worker
+  process has seen.
+
 - **Simulations now show cost before they open runs.** The start screen counts
   pasted, written and saved situations, estimates spend from the agent's
   historical average when one exists, and shows the maximum exposure enforced

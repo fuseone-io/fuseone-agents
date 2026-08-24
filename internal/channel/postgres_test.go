@@ -106,6 +106,41 @@ func TestUnreported_runIsStillWorking_saysNothing(t *testing.T) {
 	}
 }
 
+func TestRecordFailure_keepsScopeAndCountsRetries(t *testing.T) {
+	store, pool := channelStore(t)
+	failure := channel.DeliveryFailure{
+		RunID: "run-waiting", Event: channel.EventParked,
+		Channel: "acme-slack", Conversation: "C07-ops",
+		Code: "slack-team-alerts", Scope: domain.Scope{Company: "acme", Area: "ops"},
+		AgentID: "triage", SeenAt: noon,
+	}
+
+	if err := store.RecordFailure(t.Context(), failure); err != nil {
+		t.Fatalf("first RecordFailure: %v", err)
+	}
+	failure.SeenAt = noon.Add(time.Minute)
+	if err := store.RecordFailure(t.Context(), failure); err != nil {
+		t.Fatalf("second RecordFailure: %v", err)
+	}
+
+	var company, area, code string
+	var attempts int64
+	var first, last time.Time
+	err := pool.QueryRow(t.Context(), `
+		select company_id, area_id, code, attempts, first_seen, last_seen
+		from channel_delivery_failures
+		where run_id = 'run-waiting'`).Scan(&company, &area, &code, &attempts, &first, &last)
+	if err != nil {
+		t.Fatalf("read failure: %v", err)
+	}
+	if company != "acme" || area != "ops" || code != channel.MetricOther || attempts != 2 {
+		t.Fatalf("failure row = %s/%s %s attempts=%d", company, area, code, attempts)
+	}
+	if !first.Equal(noon) || !last.Equal(noon.Add(time.Minute)) {
+		t.Fatalf("first=%s last=%s, want retry window", first, last)
+	}
+}
+
 func channelStore(t *testing.T) (*channel.Postgres, *pgxpool.Pool) {
 	t.Helper()
 	dsn := os.Getenv("TEST_DATABASE_URL")
@@ -123,7 +158,8 @@ func channelStore(t *testing.T) (*channel.Postgres, *pgxpool.Pool) {
 	if err := ledger.Migrate(t.Context(), pool); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	if _, err := pool.Exec(t.Context(), `truncate run_steps, runs, channel_deliveries`); err != nil {
+	if _, err := pool.Exec(t.Context(), `
+		truncate run_steps, runs, channel_deliveries, channel_delivery_failures`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	return channel.NewPostgres(pool), pool

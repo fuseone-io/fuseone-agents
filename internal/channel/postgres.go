@@ -106,6 +106,31 @@ func (p *Postgres) Record(ctx context.Context, d Delivery) error {
 	return nil
 }
 
+// RecordFailure remembers a failed attempt to tell one conversation. Repeated
+// sweeps update the same fact rather than creating a retry log.
+func (p *Postgres) RecordFailure(ctx context.Context, f DeliveryFailure) error {
+	if f.SeenAt.IsZero() {
+		f.SeenAt = time.Now()
+	}
+	_, err := p.pool.Exec(ctx, `
+		insert into channel_delivery_failures (
+			run_id, event, channel, conversation, code,
+			company_id, area_id, agent_id, attempts, first_seen, last_seen)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, 1, $9, $9)
+		on conflict (run_id, event, channel, conversation, code)
+		do update set
+			attempts = channel_delivery_failures.attempts + 1,
+			first_seen = least(channel_delivery_failures.first_seen, excluded.first_seen),
+			last_seen = greatest(channel_delivery_failures.last_seen, excluded.last_seen)`,
+		string(f.RunID), string(f.Event), f.Channel, f.Conversation,
+		MetricCode(f.Code), string(f.Scope.Company), string(f.Scope.Area),
+		string(f.AgentID), f.SeenAt.UTC())
+	if err != nil {
+		return fmt.Errorf("channel: record delivery failure: %w", err)
+	}
+	return nil
+}
+
 // Delivered answers whether this has already been said here.
 //
 // Here is a conversation *on a connection*: two workspaces are two namespaces,

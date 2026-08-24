@@ -103,7 +103,7 @@ func TestSweep_alreadyReported_doesNotReportAgain(t *testing.T) {
 // to prevent.
 func TestSweep_postFails_leavesNothingRecordedSoTheNextPassRetries(t *testing.T) {
 	t.Parallel()
-	posts := &recorder{fail: errors.New("slack is down")}
+	posts := &recorder{fail: channel.NewError(channel.CodeMissingScope, "slack is down")}
 	deliveries := &memoryDeliveries{}
 	r := reporterFor(t, posts, report("run-1", "acme", "ops", channel.EventParked)).
 		WithDeliveries(deliveries)
@@ -113,6 +113,14 @@ func TestSweep_postFails_leavesNothingRecordedSoTheNextPassRetries(t *testing.T)
 	}
 	if len(deliveries.recorded) != 0 {
 		t.Fatalf("recorded %d deliveries for a message that never left", len(deliveries.recorded))
+	}
+	if len(deliveries.failures) != 1 {
+		t.Fatalf("recorded %d failures, want 1", len(deliveries.failures))
+	}
+	failure := deliveries.failures[0]
+	if failure.Code != channel.CodeMissingScope || failure.Scope.String() != "acme/ops" ||
+		failure.Channel != "acme-slack" || failure.Conversation != "C07-ops" {
+		t.Fatalf("failure = %+v, want scoped missing-scope for the refused conversation", failure)
 	}
 
 	posts.fail = nil
@@ -330,10 +338,18 @@ func (r *recorder) Post(_ context.Context, c channel.Conversation, m channel.Mes
 	return "1786000000.000100", nil
 }
 
-type memoryDeliveries struct{ recorded []channel.Delivery }
+type memoryDeliveries struct {
+	recorded []channel.Delivery
+	failures []channel.DeliveryFailure
+}
 
 func (m *memoryDeliveries) Record(_ context.Context, d channel.Delivery) error {
 	m.recorded = append(m.recorded, d)
+	return nil
+}
+
+func (m *memoryDeliveries) RecordFailure(_ context.Context, f channel.DeliveryFailure) error {
+	m.failures = append(m.failures, f)
 	return nil
 }
 

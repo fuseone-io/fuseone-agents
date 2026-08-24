@@ -139,6 +139,20 @@ type Delivery struct {
 	PostedAt time.Time
 }
 
+// DeliveryFailure records that a conversation was owed a message and did not
+// receive it. It is scoped because the cockpit that reads this later must not
+// turn a channel incident in one area into installation-wide knowledge.
+type DeliveryFailure struct {
+	RunID        domain.RunID
+	Event        Event
+	Channel      string
+	Conversation string
+	Code         string
+	Scope        domain.Scope
+	AgentID      domain.AgentID
+	SeenAt       time.Time
+}
+
 // Reports lists what has happened and not yet been said, declared here by the
 // consumer.
 type Reports interface {
@@ -163,6 +177,7 @@ type Poster interface {
 // Deliveries is what has already been said.
 type Deliveries interface {
 	Record(ctx context.Context, d Delivery) error
+	RecordFailure(ctx context.Context, f DeliveryFailure) error
 	Delivered(ctx context.Context, run domain.RunID, e Event, channel, conversation string) (bool, error)
 }
 

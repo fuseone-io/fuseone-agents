@@ -114,7 +114,11 @@ func (r *Reporter) Sweep(ctx context.Context, limit int) (int, error) {
 func (r *Reporter) announce(ctx context.Context, report Report) (sent, told int, err error) {
 	places, err := r.conversations.For(ctx, report.Scope)
 	if err != nil {
-		return 0, 0, fmt.Errorf("channel: conversations for %s: %w", report.Scope, err)
+		err = WrapError(
+			CodeConfigurationReadFailed,
+			fmt.Errorf("channel: conversations for %s: %w", report.Scope, err),
+		)
+		return 0, 0, errors.Join(err, r.recordFailure(ctx, report, Conversation{}, err))
 	}
 
 	failures := []error{}
@@ -129,6 +133,9 @@ func (r *Reporter) announce(ctx context.Context, report Report) (sent, told int,
 		posted, err := r.post(ctx, report, place)
 		if err != nil {
 			failures = append(failures, err)
+			if err := r.recordFailure(ctx, report, place, err); err != nil {
+				failures = append(failures, err)
+			}
 			continue
 		}
 		if posted {
@@ -136,6 +143,24 @@ func (r *Reporter) announce(ctx context.Context, report Report) (sent, told int,
 		}
 	}
 	return sent, told, errors.Join(failures...)
+}
+
+func (r *Reporter) recordFailure(
+	ctx context.Context, report Report, place Conversation, cause error,
+) error {
+	var failures []error
+	for _, code := range FailureCodes(cause) {
+		err := r.deliveries.RecordFailure(ctx, DeliveryFailure{
+			RunID: report.RunID, Event: report.Event,
+			Channel: place.Channel, Conversation: place.ID,
+			Code: code, Scope: report.Scope, AgentID: report.AgentID,
+			SeenAt: r.clock(),
+		})
+		if err != nil {
+			failures = append(failures, fmt.Errorf("channel: record delivery failure: %w", err))
+		}
+	}
+	return errors.Join(failures...)
 }
 
 // post sends one message, unless it has already been sent.
@@ -180,6 +205,9 @@ func (r *Reporter) message(report Report) Message {
 type noDeliveries struct{}
 
 func (noDeliveries) Record(context.Context, Delivery) error { return nil }
+func (noDeliveries) RecordFailure(context.Context, DeliveryFailure) error {
+	return nil
+}
 func (noDeliveries) Delivered(
 	context.Context, domain.RunID, Event, string, string,
 ) (bool, error) {
