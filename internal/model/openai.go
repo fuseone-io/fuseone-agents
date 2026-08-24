@@ -184,24 +184,29 @@ func (o *OpenAICompatible) chatMessages(in engine.PlanInput, offered names) []ch
 
 func (o *OpenAICompatible) chatTools(ids []domain.ToolID, offered names) []chatTool {
 	out := make([]chatTool, 0, len(ids))
-	if o.tools != nil {
-		for _, id := range ids {
-			_, desc, schema, ok := o.tools.Schema(id)
-			if !ok {
-				continue
-			}
-			out = append(out, chatTool{
-				Type: "function",
-				Function: chatFunctionDef{
-					Name:        offered.wire[id],
-					Description: desc,
-					Parameters: map[string]any{
-						"type":       "object",
-						"properties": schema,
-					},
-				},
-			})
+	for _, id := range ids {
+		if isContextReadTool(id) {
+			out = append(out, contextReadChatTool(offered))
+			continue
 		}
+		if o.tools == nil {
+			continue
+		}
+		_, desc, schema, ok := o.tools.Schema(id)
+		if !ok {
+			continue
+		}
+		out = append(out, chatTool{
+			Type: "function",
+			Function: chatFunctionDef{
+				Name:        offered.wire[id],
+				Description: desc,
+				Parameters: map[string]any{
+					"type":       "object",
+					"properties": schema,
+				},
+			},
+		})
 	}
 	out = append(out, chatTool{
 		Type: "function",
@@ -215,6 +220,20 @@ func (o *OpenAICompatible) chatTools(ids []domain.ToolID, offered names) []chatT
 		},
 	})
 	return out
+}
+
+func contextReadChatTool(offered names) chatTool {
+	return chatTool{
+		Type: "function",
+		Function: chatFunctionDef{
+			Name:        offered.wire[domain.ToolContextRead],
+			Description: contextReadToolDescription,
+			Parameters: map[string]any{
+				"type":       "object",
+				"properties": contextReadToolSchema(),
+			},
+		},
+	}
 }
 
 func (o *OpenAICompatible) post(ctx context.Context, path string, body, into any) error {

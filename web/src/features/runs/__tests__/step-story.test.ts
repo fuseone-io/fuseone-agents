@@ -175,6 +175,38 @@ describe("a cached tool result", () => {
   });
 });
 
+describe("a context tool result", () => {
+  it("links the result to the source run and artifact digest", () => {
+    const step = {
+      seq: 8,
+      kind: "tool_returned",
+      at: "2026-08-22T12:00:00Z",
+      hash: "h",
+      payload: {
+        tool: "$fuseone.context.read",
+        context: {
+          name: "triage_summary",
+          source_run: "run-source",
+          digest: "sha256:abc123",
+        },
+      },
+    } as never;
+
+    expect(detailOf(step)).toEqual({
+      key: "runs.storyToolContext",
+      values: {
+        name: "triage_summary",
+        run: "run-source",
+        digest: "sha256:abc123",
+      },
+    });
+    expect(summaryOf(step)).toEqual({
+      key: "runs.summaryToolContext",
+      values: { tool: "$fuseone.context.read" },
+    });
+  });
+});
+
 describe("a planned turn", () => {
   it("shows prompt composition as measured content, not cost", () => {
     const line = detailOf({

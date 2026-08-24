@@ -97,6 +97,10 @@ type State struct {
 
 	// Labels is the accumulated taint of the run context. It only grows.
 	Labels domain.Labels
+	// ContextArtifacts are the event-supplied references this run may read
+	// through the platform-owned context tool. The set is sealed on
+	// run_started and never grows from model text.
+	ContextArtifacts []domain.ContextArtifact
 
 	// Called is every tool this run has reached the far side of the Gate
 	// with, in order. It is what advances a run through its declared steps:

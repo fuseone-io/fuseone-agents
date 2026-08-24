@@ -63,6 +63,10 @@ type Request struct {
 	// answers where it was asked, and nowhere else is a decision the platform
 	// would be making.
 	Origin *domain.RunOrigin
+	// ContextArtifacts are references an event grants to this run. The opener
+	// checks their labels against the target scope before storing anything, so
+	// a miswired listener cannot make the model see cross-scope content.
+	ContextArtifacts []domain.ContextArtifact
 	// Simulation names the batch this run belongs to, and opening a run under
 	// one is what marks it simulated: never claimed by a worker, never
 	// counted as production. One field rather than a name beside a flag,
@@ -151,6 +155,11 @@ func (o *Opener) Open(ctx context.Context, req Request) (Result, error) {
 	if violation, blocked := req.Labels.ScopeBoundaryViolation(published.Scope); blocked {
 		return Result{}, fmt.Errorf("trigger: %w", violation)
 	}
+	for _, artifact := range req.ContextArtifacts {
+		if violation, blocked := artifact.Labels.ScopeBoundaryViolation(published.Scope); blocked {
+			return Result{}, fmt.Errorf("trigger: %w", violation)
+		}
+	}
 	labels := req.Labels.Union(domain.ScopeLabels(published.Scope))
 
 	runID := newRunID(published.ID, o.clock.Now(), req.IdemKey)
@@ -174,6 +183,7 @@ func (o *Opener) Open(ctx context.Context, req Request) (Result, error) {
 			Trigger: req.Trigger, InputRef: inputRef,
 			Simulated: req.Simulation != "", Simulation: req.Simulation,
 			Case: req.Case, Origin: req.Origin,
+			ContextArtifacts: cloneContextArtifacts(req.ContextArtifacts),
 		}),
 	})
 	if err != nil {
@@ -200,6 +210,18 @@ func (o *Opener) store(ctx context.Context, runID domain.RunID, input []byte) (s
 		return "", fmt.Errorf("trigger: store input: %w", err)
 	}
 	return ref, nil
+}
+
+func cloneContextArtifacts(in []domain.ContextArtifact) []domain.ContextArtifact {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]domain.ContextArtifact, len(in))
+	for i, artifact := range in {
+		out[i] = artifact
+		out[i].Labels = artifact.Labels.Clone()
+	}
+	return out
 }
 
 // newRunID names a run after the intention that opened it.

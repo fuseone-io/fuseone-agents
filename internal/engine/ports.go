@@ -76,7 +76,11 @@ type Proposal struct {
 	// Done reports that the agent considers the run complete.
 	Done    bool
 	Outcome string
-	Node    string
+	// Artifacts are named pieces of the final answer the run publishes by
+	// reference for listeners. Empty means the run only has its ordinary
+	// closing answer.
+	Artifacts map[string]string
+	Node      string
 	// StoppedBy is the step's declared exception, when that is why the run is
 	// stopping. Recorded verbatim: the trail says the model asserted it, and
 	// nobody should read it as having been verified.
@@ -108,6 +112,9 @@ type Call struct {
 	// IdemKey is carried through to the tool so an adapter that supports
 	// idempotency natively can deduplicate on its own side too.
 	IdemKey string
+	// ContextArtifacts is the event-supplied contract this run may retrieve
+	// through the platform-owned context reader.
+	ContextArtifacts []domain.ContextArtifact
 }
 
 type ToolResult struct {
@@ -123,6 +130,7 @@ type ToolResult struct {
 	Cached        bool
 	CachedFromRun domain.RunID
 	CachedFromSeq int64
+	Context       *domain.ContextArtifact
 }
 
 // Catalog resolves a tool's effect classification, set centrally by the

@@ -35,6 +35,11 @@ type RunStartedPayload struct {
 
 	// Origin is where the ask came from, when it came from a conversation.
 	Origin *RunOrigin `json:"origin,omitempty"`
+	// ContextArtifacts is the bounded context contract an event supplied to
+	// this run. It names claim-checks the platform may read through
+	// $fuseone.context.read; it is not content and not an invitation to fetch
+	// arbitrary source-run bytes.
+	ContextArtifacts []ContextArtifact `json:"context_artifacts,omitempty"`
 }
 
 /*
@@ -210,6 +215,9 @@ type ToolReturnedPayload struct {
 	Cached        bool  `json:"cached,omitempty"`
 	CachedFromRun RunID `json:"cached_from_run,omitempty"`
 	CachedFromSeq int64 `json:"cached_from_seq,omitempty"`
+	// Context is present when the result came from the platform-owned context
+	// reader. It links the use back to the source run and artifact digest.
+	Context *ContextArtifact `json:"context,omitempty"`
 }
 
 type ApprovalRequestedPayload struct {
@@ -331,6 +339,10 @@ type RunFinishedPayload struct {
 	// without the answer surviving to prove it.
 	OutcomeRef    string `json:"outcome_ref,omitempty"`
 	OutcomeDigest string `json:"outcome_digest,omitempty"`
+	// Artifacts are named claim-checks this run published for event listeners.
+	// They share context by reference; the bytes stay in the content store and
+	// carry their labels forward to any listener that reads them.
+	Artifacts []ContextArtifact `json:"artifacts,omitempty"`
 	// Reason names what made the engine close the run. Optional because older
 	// runs did not record it; absence is "unknown", not a value to infer.
 	Reason RunFinishedReason `json:"reason,omitempty"`

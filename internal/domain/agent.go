@@ -67,6 +67,32 @@ type AgentEvent struct {
 	Artifacts []string `json:"artifacts,omitempty" yaml:"artifacts,omitempty"`
 }
 
+const (
+	// ToolContextRead is the platform-owned read path for governed context
+	// shared by one run with another. It is a tool, not prompt text, so the
+	// Gate rules on it and the trail records every use.
+	ToolContextRead ToolID = "$fuseone.context.read"
+
+	// ArtifactFinalAnswer names a run's closing answer when an event wants to
+	// share it without copying the prose into the listener's input.
+	ArtifactFinalAnswer = "final_answer"
+)
+
+// ContextArtifact is one claim-check a listening run may retrieve.
+//
+// The payload is in the content store. This contract carries only provenance,
+// reference and labels, so a listener can ask for named context without being
+// handed another agent's prose as instructions.
+type ContextArtifact struct {
+	Name        string  `json:"name"`
+	Kind        string  `json:"kind,omitempty"`
+	Ref         string  `json:"ref"`
+	Digest      string  `json:"digest"`
+	SourceRun   RunID   `json:"source_run"`
+	SourceAgent AgentID `json:"source_agent,omitempty"`
+	Labels      Labels  `json:"labels,omitempty"`
+}
+
 // AgentActivity is how an agent has been doing, aggregated from its runs.
 //
 // An agent has no state of its own to report — the platform has no autonomy

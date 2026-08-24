@@ -18,6 +18,11 @@ func finishToolSchema() map[string]any {
 			"type":        "string",
 			"description": "The final answer to record for the run.",
 		},
+		"artifacts": map[string]any{
+			"type":                 "object",
+			"description":          "Optional named context artifacts to publish for event listeners. Values are stored by reference and are not sent to listeners unless they request them through FuseOne context.",
+			"additionalProperties": map[string]any{"type": "string"},
+		},
 		"stopped_by": map[string]any{
 			"type":        "string",
 			"description": "When the step's declared stopping condition happened, copy that condition exactly here.",
@@ -30,8 +35,9 @@ func isFinishTool(id domain.ToolID) bool {
 }
 
 type finishArgs struct {
-	Summary   string `json:"summary"`
-	StoppedBy string `json:"stopped_by"`
+	Summary   string            `json:"summary"`
+	Artifacts map[string]string `json:"artifacts"`
+	StoppedBy string            `json:"stopped_by"`
 }
 
 func finishProposal(
@@ -46,6 +52,26 @@ func finishProposal(
 	// run would carry cost with nothing saying which model spent it.
 	base.Done = true
 	base.Outcome = strings.TrimSpace(decoded.Summary)
+	base.Artifacts = cleanArtifacts(decoded.Artifacts)
 	base.StoppedBy = strings.TrimSpace(decoded.StoppedBy)
 	return base
+}
+
+func cleanArtifacts(in map[string]string) map[string]string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := map[string]string{}
+	for name, body := range in {
+		name = strings.TrimSpace(name)
+		body = strings.TrimSpace(body)
+		if name == "" || body == "" {
+			continue
+		}
+		out[name] = body
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }

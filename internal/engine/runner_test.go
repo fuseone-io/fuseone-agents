@@ -48,6 +48,7 @@ func (p *scriptedPlanner) Plan(context.Context, PlanInput) (Proposal, error) {
 // transcript bug pass here and fail in production.
 type countingTools struct {
 	invocations []domain.ToolID
+	calls       []Call
 	content     ContentStore
 	body        []byte
 	reserveErr  error
@@ -62,6 +63,7 @@ func (c *countingTools) Reserve(context.Context, Call) error {
 
 func (c *countingTools) Invoke(ctx context.Context, call Call) (ToolResult, error) {
 	c.invocations = append(c.invocations, call.Tool)
+	c.calls = append(c.calls, call)
 	result := ToolResult{Failed: c.failed, ErrorCode: c.errorCode}
 	if len(c.body) > 0 {
 		ref, err := c.content.Put(ctx, call.RunID, call.Seq, c.body)
@@ -162,9 +164,10 @@ func newHarnessOn(t *testing.T, clock Clock, proposals ...Proposal) *harness {
 		Planner: planner,
 		Tools:   tools,
 		Catalog: staticCatalog{
-			"crm.lookup": domain.EffectRead,
-			"crm.note":   domain.EffectWrite,
-			"crm.refund": domain.EffectFinancial,
+			"crm.lookup":           domain.EffectRead,
+			"crm.note":             domain.EffectWrite,
+			"crm.refund":           domain.EffectFinancial,
+			domain.ToolContextRead: domain.EffectRead,
 		},
 		Clock: clock,
 	})
@@ -234,6 +237,73 @@ func TestAdvance_readTool_recordsFullGatedCycle(t *testing.T) {
 	}
 	if err := h.ledger.Verify(ctx, "run-1"); err != nil {
 		t.Errorf("Verify: %v", err)
+	}
+}
+
+func TestAdvance_contextRead_isNotCapabilityWithoutAContract(t *testing.T) {
+	t.Parallel()
+
+	h := newHarness(t, Proposal{
+		Tool: domain.ToolContextRead,
+		Args: []byte(`{"name":"triage_summary"}`),
+	})
+
+	if _, err := h.runner.Advance(context.Background(), h.start(t, generousBudget())); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+
+	if len(h.tools.invocations) != 0 {
+		t.Fatalf("context read invoked without a contract: %v", h.tools.invocations)
+	}
+	var decided domain.GateDecidedPayload
+	if err := h.payloadOf(t, domain.StepGateDecided, &decided); err != nil {
+		t.Fatalf("gate payload: %v", err)
+	}
+	if decided.Rule != gate.RuleCapability {
+		t.Fatalf("rule = %q, want capability", decided.Rule)
+	}
+}
+
+func TestAdvance_contextRead_isCapabilityWhenRunStartedWithAContract(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	artifact := domain.ContextArtifact{
+		Name: "triage_summary", Ref: "run://source/3/abc",
+		Digest: "sha256:abc", SourceRun: "source",
+		Labels: domain.NewLabels(domain.LabelUntrusted),
+	}
+	h := newHarness(t, Proposal{
+		Tool: domain.ToolContextRead,
+		Args: []byte(`{"name":"triage_summary"}`),
+	})
+	start := h.start(t, generousBudget())
+	if _, err := h.ledger.Append(ctx, domain.Step{
+		RunID: start.RunID, Kind: domain.StepRunStarted,
+		Scope: start.Scope, AgentID: start.AgentID,
+		VersionID: start.VersionID, OnBehalfOf: start.OnBehalfOf,
+		Payload: mustJSON(domain.RunStartedPayload{
+			Trigger: "event", ContextArtifacts: []domain.ContextArtifact{artifact},
+		}),
+	}); err != nil {
+		t.Fatalf("open run: %v", err)
+	}
+
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+
+	if len(h.tools.calls) != 1 {
+		t.Fatalf("tool calls = %d, want one", len(h.tools.calls))
+	}
+	if got := h.tools.calls[0].ContextArtifacts; len(got) != 1 || got[0].Name != "triage_summary" {
+		t.Fatalf("context contract on call = %+v", got)
+	}
+	var decided domain.GateDecidedPayload
+	if err := h.payloadOf(t, domain.StepGateDecided, &decided); err != nil {
+		t.Fatalf("gate payload: %v", err)
+	}
+	if decided.Rule != gate.RulePassed || decided.Effect != domain.EffectRead {
+		t.Fatalf("decision = %s/%s, want passed/read", decided.Rule, decided.Effect)
 	}
 }
 
@@ -491,6 +561,53 @@ func TestAdvance_plannerReportsDone_finishesRun(t *testing.T) {
 	}
 	if finished.Reason != domain.RunFinishedByFinishTool {
 		t.Errorf("reason = %q, want %q", finished.Reason, domain.RunFinishedByFinishTool)
+	}
+}
+
+func TestAdvance_finishStoresNamedContextArtifacts(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t, Proposal{
+		Done:      true,
+		Outcome:   "completed",
+		Artifacts: map[string]string{"triage_summary": "root cause: cache saturation"},
+	})
+	start := h.start(t, generousBudget())
+	if _, err := h.ledger.Append(ctx, domain.Step{
+		RunID: start.RunID, Kind: domain.StepRunStarted,
+		Scope: start.Scope, AgentID: start.AgentID,
+		VersionID: start.VersionID, OnBehalfOf: start.OnBehalfOf,
+		Labels:  domain.NewLabels(domain.LabelUntrusted),
+		Payload: mustJSON(domain.RunStartedPayload{Trigger: "event"}),
+	}); err != nil {
+		t.Fatalf("open run: %v", err)
+	}
+
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+
+	var finished domain.RunFinishedPayload
+	if err := h.payloadOf(t, domain.StepRunFinished, &finished); err != nil {
+		t.Fatalf("payload: %v", err)
+	}
+	if len(finished.Artifacts) != 1 {
+		t.Fatalf("artifacts = %+v, want one", finished.Artifacts)
+	}
+	artifact := finished.Artifacts[0]
+	if artifact.Name != "triage_summary" || artifact.Kind != "text" ||
+		artifact.SourceRun != start.RunID || artifact.SourceAgent != start.AgentID ||
+		artifact.Digest != digest([]byte("root cause: cache saturation")) ||
+		!artifact.Labels.Has(domain.LabelUntrusted) {
+		t.Fatalf("artifact = %+v", artifact)
+	}
+	got, err := h.content.Get(ctx, artifact.Ref)
+	if err != nil {
+		t.Fatalf("artifact content: %v", err)
+	}
+	if string(got) != "root cause: cache saturation" {
+		t.Fatalf("artifact body = %q", got)
 	}
 }
 

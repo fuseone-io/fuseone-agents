@@ -223,11 +223,15 @@ words, copied. The field is how the record says the run ended where its author
 said it would; without it the record says only that the run finished.`
 
 func (a *Anthropic) toolParams(ids []domain.ToolID, offered names) []anthropic.ToolUnionParam {
-	if a.tools == nil {
-		return []anthropic.ToolUnionParam{finishToolParam(offered)}
-	}
 	out := make([]anthropic.ToolUnionParam, 0, len(ids))
 	for _, id := range ids {
+		if isContextReadTool(id) {
+			out = append(out, contextReadToolParam(offered))
+			continue
+		}
+		if a.tools == nil {
+			continue
+		}
 		_, desc, schema, ok := a.tools.Schema(id)
 		if !ok {
 			continue
@@ -241,6 +245,15 @@ func (a *Anthropic) toolParams(ids []domain.ToolID, offered names) []anthropic.T
 	}
 	out = append(out, finishToolParam(offered))
 	return out
+}
+
+func contextReadToolParam(offered names) anthropic.ToolUnionParam {
+	tool := anthropic.ToolParam{
+		Name:        offered.wire[domain.ToolContextRead],
+		Description: anthropic.String(contextReadToolDescription),
+		InputSchema: anthropic.ToolInputSchemaParam{Properties: contextReadToolSchema()},
+	}
+	return anthropic.ToolUnionParam{OfTool: &tool}
 }
 
 func finishToolParam(offered names) anthropic.ToolUnionParam {

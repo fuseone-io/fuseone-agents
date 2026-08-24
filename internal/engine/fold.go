@@ -68,11 +68,16 @@ func (s *State) Apply(step domain.Step) error {
 func (s *State) applyKind(step domain.Step) error {
 	switch step.Kind {
 	case domain.StepRunStarted:
+		var p domain.RunStartedPayload
+		if err := decode(step, &p); err != nil {
+			return err
+		}
 		s.RunID = step.RunID
 		s.Scope = step.Scope
 		s.AgentID = step.AgentID
 		s.VersionID = step.VersionID
 		s.OnBehalfOf = step.OnBehalfOf
+		s.ContextArtifacts = p.ContextArtifacts
 		s.Phase = PhaseRunning
 
 	case domain.StepBudgetReserved:

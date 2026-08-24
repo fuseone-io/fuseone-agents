@@ -99,7 +99,7 @@ func (r *Runner) act(ctx context.Context, state State, start Start, p Proposal) 
 		Effect:    effect,
 		Args:      p.Args,
 		ArgLabels: state.Labels,
-		Pack:      envelopeOf(start, state.Called),
+		Pack:      envelopeForState(start, state),
 		Stage:     start.Stage,
 		Budget:    start.Budget,
 		Committed: state.Committed(),
@@ -213,8 +213,9 @@ func (r *Runner) invoke(
 		RunID: start.RunID,
 		Scope: start.Scope,
 		Tool:  p.Tool, Args: p.Args,
-		OnBehalfOf: start.OnBehalfOf,
-		IdemKey:    idemKey,
+		OnBehalfOf:       start.OnBehalfOf,
+		IdemKey:          idemKey,
+		ContextArtifacts: state.ContextArtifacts,
 	}
 	if err := r.deps.Tools.Reserve(ctx, call); err != nil {
 		return Status{}, err
@@ -255,6 +256,10 @@ func (r *Runner) invoke(
 		returned.Cached = true
 		returned.CachedFromRun = result.CachedFromRun
 		returned.CachedFromSeq = result.CachedFromSeq
+	}
+	if result.Context != nil {
+		contextArtifact := *result.Context
+		returned.Context = &contextArtifact
 	}
 	if result.Failed {
 		returned.Failed = true

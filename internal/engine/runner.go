@@ -88,7 +88,12 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 		// The answer goes where an erasure can reach it. Same sequence
 		// arithmetic as a tool's arguments: the reference points at the step
 		// about to be appended, so retention works per run.
-		ref, err := r.storeOutcome(ctx, start.RunID, state.Seq+1, proposal.Outcome)
+		finishSeq := state.Seq + 1
+		ref, err := r.storeOutcome(ctx, start.RunID, finishSeq, proposal.Outcome)
+		if err != nil {
+			return Status{}, err
+		}
+		artifacts, err := r.storeArtifacts(ctx, start, state, finishSeq, proposal.Artifacts)
 		if err != nil {
 			return Status{}, err
 		}
@@ -97,6 +102,7 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 			Payload: mustJSON(domain.RunFinishedPayload{
 				OutcomeRef:    ref,
 				OutcomeDigest: digest([]byte(proposal.Outcome)),
+				Artifacts:     artifacts,
 				Reason:        domain.RunFinishedByFinishTool,
 				StoppedBy:     proposal.StoppedBy,
 			}),
@@ -109,6 +115,32 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 	}
 
 	return r.act(ctx, state, start, proposal)
+}
+
+func (r *Runner) storeArtifacts(
+	ctx context.Context, start Start, state State, seq int64, artifacts map[string]string,
+) ([]domain.ContextArtifact, error) {
+	if len(artifacts) == 0 {
+		return nil, nil
+	}
+	if r.deps.Content == nil {
+		return nil, fmt.Errorf("engine: no content store to hold context artifacts of %s", start.RunID)
+	}
+
+	out := make([]domain.ContextArtifact, 0, len(artifacts))
+	for name, body := range artifacts {
+		data := []byte(body)
+		ref, err := r.deps.Content.Put(ctx, start.RunID, seq, data)
+		if err != nil {
+			return nil, fmt.Errorf("engine: store context artifact %q: %w", name, err)
+		}
+		out = append(out, domain.ContextArtifact{
+			Name: name, Kind: "text", Ref: ref, Digest: digest(data),
+			SourceRun: start.RunID, SourceAgent: start.AgentID,
+			Labels: state.Labels.Clone(),
+		})
+	}
+	return out, nil
 }
 
 /*
@@ -166,7 +198,7 @@ func (r *Runner) plan(ctx context.Context, state State, start Start) (Proposal, 
 		Transcript: transcript,
 		Budget:     start.Budget,
 		Remaining:  remaining(start.Budget, state.Committed()),
-		Tools:      envelopeOf(start, state.Called).Tools(),
+		Tools:      envelopeForState(start, state).Tools(),
 		Model:      model,
 		Effort:     effort,
 		Step:       StepNameAt(start, state.Called),

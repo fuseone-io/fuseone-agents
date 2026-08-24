@@ -31,6 +31,14 @@ func (w wiring) Listeners(context.Context) (map[string][]domain.AgentID, error) 
 	return w.listen, nil
 }
 
+func mustJSON(v any) []byte {
+	data, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	}
+	return data
+}
+
 type finished []domain.RunSummary
 
 func (f finished) ListRuns(context.Context, domain.RunFilter, string, int) ([]domain.RunSummary, error) {
@@ -131,6 +139,206 @@ func TestSweep_eventContextReachesTheListeningRunInput(t *testing.T) {
 		input.FromAgent != "triage" || input.Context != "incident" ||
 		len(input.Artifacts) != 2 || input.Artifacts[1] != "suspected_cause" {
 		t.Errorf("input = %+v, want the source run and declared context", input)
+	}
+}
+
+func TestSweep_eventArtifactsBecomeAContextContract(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := ledger.NewMemory()
+	content := engine.NewMemoryContent()
+	clock := fixedClock{t: time.Date(2026, 8, 13, 9, 0, 0, 0, time.UTC)}
+	reg := registry{versions: []domain.AgentSummary{
+		{ID: "cobranca", VersionID: "v1", Scope: domain.Scope{Company: "acme", Area: "cx"}, Latest: true},
+	}}
+	body := []byte("root cause: queue saturation")
+	ref, err := content.Put(ctx, "run-1", 3, body)
+	if err != nil {
+		t.Fatalf("store artifact: %v", err)
+	}
+	if _, err := store.Append(ctx, domain.Step{
+		RunID: "run-1", Kind: domain.StepRunStarted,
+		Scope:   domain.Scope{Company: "acme", Area: "cx"},
+		AgentID: "triage", VersionID: "v1", OnBehalfOf: "usr_ana",
+		Labels:  domain.ScopeLabels(domain.Scope{Company: "acme", Area: "cx"}),
+		Payload: []byte(`{"trigger":"manual"}`),
+	}); err != nil {
+		t.Fatalf("append start: %v", err)
+	}
+	if _, err := store.Append(ctx, domain.Step{
+		RunID: "run-1", Kind: domain.StepRunFinished,
+		Scope:   domain.Scope{Company: "acme", Area: "cx"},
+		AgentID: "triage", VersionID: "v1", OnBehalfOf: "usr_ana",
+		Payload: mustJSON(domain.RunFinishedPayload{Artifacts: []domain.ContextArtifact{{
+			Name: "triage_summary", Kind: "text", Ref: ref,
+			Digest: "sha256:d3adb33f", SourceRun: "run-1",
+			SourceAgent: "triage", Labels: domain.NewLabels(domain.LabelUntrusted),
+		}}}),
+	}); err != nil {
+		t.Fatalf("append finish: %v", err)
+	}
+	opener := trigger.NewOpener(store, reg, clock).WithContent(content)
+	d := trigger.NewDispatcher(wiring{
+		emits: map[domain.AgentID][]domain.AgentEvent{"triage": {{
+			Event: "incident.triaged", Context: "incident",
+			Artifacts: []string{"triage_summary"},
+		}}},
+		listen: map[string][]domain.AgentID{"incident.triaged": {"cobranca"}},
+	}, finished{{
+		RunID: "run-1", AgentID: "triage", Phase: "finished",
+		Scope:      domain.Scope{Company: "acme", Area: "cx"},
+		OnBehalfOf: "usr_ana",
+		Labels: domain.ScopeLabels(domain.Scope{Company: "acme", Area: "cx"}).
+			Union(domain.NewLabels(domain.LabelUntrusted)),
+	}}, opener, clock, nil).WithRunReader(store)
+
+	if _, err := d.Sweep(ctx, 50); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	runs, _ := store.Runs(ctx)
+	var listener domain.RunID
+	for _, run := range runs {
+		if run != "run-1" {
+			listener = run
+		}
+	}
+	if listener == "" {
+		t.Fatal("listener run was not opened")
+	}
+	steps, err := store.Read(ctx, listener, domain.FirstSeq)
+	if err != nil {
+		t.Fatalf("Read listener: %v", err)
+	}
+	var started domain.RunStartedPayload
+	if err := json.Unmarshal(steps[0].Payload, &started); err != nil {
+		t.Fatalf("decode run_started: %v", err)
+	}
+	if len(started.ContextArtifacts) != 1 || started.ContextArtifacts[0].Name != "triage_summary" {
+		t.Fatalf("context artifacts = %+v", started.ContextArtifacts)
+	}
+	inputBytes, err := content.Get(ctx, started.InputRef)
+	if err != nil {
+		t.Fatalf("input: %v", err)
+	}
+	if string(inputBytes) == string(body) {
+		t.Fatal("listener input contains artifact body; want only the context contract")
+	}
+	var input struct {
+		ContextArtifacts []domain.ContextArtifact `json:"context_artifacts"`
+	}
+	if err := json.Unmarshal(inputBytes, &input); err != nil {
+		t.Fatalf("decode input: %v", err)
+	}
+	if len(input.ContextArtifacts) != 1 || input.ContextArtifacts[0].Ref != ref {
+		t.Fatalf("input context contract = %+v", input.ContextArtifacts)
+	}
+}
+
+func TestSweep_finalAnswerCanBecomeAContextContract(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := ledger.NewMemory()
+	content := engine.NewMemoryContent()
+	clock := fixedClock{t: time.Date(2026, 8, 13, 9, 0, 0, 0, time.UTC)}
+	reg := registry{versions: []domain.AgentSummary{
+		{ID: "cobranca", VersionID: "v1", Scope: domain.Scope{Company: "acme", Area: "cx"}, Latest: true},
+	}}
+	ref, err := content.Put(ctx, "run-1", 3, []byte("closing answer"))
+	if err != nil {
+		t.Fatalf("store outcome: %v", err)
+	}
+	sourceLabels := domain.ScopeLabels(domain.Scope{Company: "acme", Area: "cx"}).
+		Union(domain.NewLabels(domain.LabelUntrusted))
+	if _, err := store.Append(ctx, domain.Step{
+		RunID: "run-1", Kind: domain.StepRunStarted,
+		Scope:   domain.Scope{Company: "acme", Area: "cx"},
+		AgentID: "triage", VersionID: "v1", OnBehalfOf: "usr_ana",
+		Labels: sourceLabels, Payload: []byte(`{"trigger":"manual"}`),
+	}); err != nil {
+		t.Fatalf("append start: %v", err)
+	}
+	if _, err := store.Append(ctx, domain.Step{
+		RunID: "run-1", Kind: domain.StepRunFinished,
+		Scope:   domain.Scope{Company: "acme", Area: "cx"},
+		AgentID: "triage", VersionID: "v1", OnBehalfOf: "usr_ana",
+		Payload: mustJSON(domain.RunFinishedPayload{
+			OutcomeRef: ref, OutcomeDigest: "sha256:answer",
+		}),
+	}); err != nil {
+		t.Fatalf("append finish: %v", err)
+	}
+	opener := trigger.NewOpener(store, reg, clock).WithContent(content)
+	d := trigger.NewDispatcher(wiring{
+		emits: map[domain.AgentID][]domain.AgentEvent{"triage": {{
+			Event: "incident.triaged", Artifacts: []string{domain.ArtifactFinalAnswer},
+		}}},
+		listen: map[string][]domain.AgentID{"incident.triaged": {"cobranca"}},
+	}, finished{{
+		RunID: "run-1", AgentID: "triage", Phase: "finished",
+		Scope:  domain.Scope{Company: "acme", Area: "cx"},
+		Labels: sourceLabels, OnBehalfOf: "usr_ana",
+	}}, opener, clock, nil).WithRunReader(store)
+
+	if _, err := d.Sweep(ctx, 50); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	runs, _ := store.Runs(ctx)
+	var listener domain.RunID
+	for _, run := range runs {
+		if run != "run-1" {
+			listener = run
+		}
+	}
+	steps, err := store.Read(ctx, listener, domain.FirstSeq)
+	if err != nil {
+		t.Fatalf("Read listener: %v", err)
+	}
+	var started domain.RunStartedPayload
+	if err := json.Unmarshal(steps[0].Payload, &started); err != nil {
+		t.Fatalf("decode run_started: %v", err)
+	}
+	if len(started.ContextArtifacts) != 1 {
+		t.Fatalf("context artifacts = %+v", started.ContextArtifacts)
+	}
+	artifact := started.ContextArtifacts[0]
+	if artifact.Name != domain.ArtifactFinalAnswer || artifact.Ref != ref ||
+		artifact.SourceRun != "run-1" || artifact.SourceAgent != "triage" ||
+		!artifact.Labels.Has(domain.LabelUntrusted) {
+		t.Fatalf("final answer artifact = %+v", artifact)
+	}
+}
+
+func TestSweep_malformedSourceFinishFailsInsteadOfDroppingContext(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := ledger.NewMemory()
+	content := engine.NewMemoryContent()
+	clock := fixedClock{t: time.Date(2026, 8, 13, 9, 0, 0, 0, time.UTC)}
+	reg := registry{versions: []domain.AgentSummary{
+		{ID: "cobranca", VersionID: "v1", Scope: domain.Scope{Company: "acme", Area: "cx"}, Latest: true},
+	}}
+	if _, err := store.Append(ctx, domain.Step{
+		RunID: "run-1", Kind: domain.StepRunFinished,
+		Scope:   domain.Scope{Company: "acme", Area: "cx"},
+		AgentID: "triage", VersionID: "v1", OnBehalfOf: "usr_ana",
+		Payload: []byte(`{`),
+	}); err != nil {
+		t.Fatalf("append malformed finish: %v", err)
+	}
+	opener := trigger.NewOpener(store, reg, clock).WithContent(content)
+	d := trigger.NewDispatcher(wiring{
+		emits: map[domain.AgentID][]domain.AgentEvent{"triage": {{
+			Event: "incident.triaged", Artifacts: []string{"triage_summary"},
+		}}},
+		listen: map[string][]domain.AgentID{"incident.triaged": {"cobranca"}},
+	}, aFinishedRun("triage", "run-1"), opener, clock, nil).WithRunReader(store)
+
+	if _, err := d.Sweep(ctx, 50); err == nil {
+		t.Fatal("Sweep succeeded with a malformed source finish payload")
+	}
+	runs, _ := store.Runs(ctx)
+	if len(runs) != 1 {
+		t.Fatalf("runs = %v, want only the malformed source run", runs)
 	}
 }
 

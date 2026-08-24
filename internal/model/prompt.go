@@ -88,11 +88,15 @@ func finishToolSchemaBytes(offered names) int64 {
 }
 
 func toolSchemaBytes(ids []domain.ToolID, schemas ToolSchemas, offered names) int64 {
-	if schemas == nil {
-		return 0
-	}
 	var total int64
 	for _, id := range ids {
+		if isContextReadTool(id) {
+			total += contextReadToolSchemaBytes(offered)
+			continue
+		}
+		if schemas == nil {
+			continue
+		}
 		_, desc, schema, ok := schemas.Schema(id)
 		if !ok {
 			continue

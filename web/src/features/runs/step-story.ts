@@ -157,6 +157,16 @@ export function detailOf(step: Step): Line {
       if (payload.failed) {
         return { key: "runs.storyToolFailed", values: { code: payload.error_code ?? "" } };
       }
+      if (isContextArtifact(payload.context)) {
+        return {
+          key: "runs.storyToolContext",
+          values: {
+            name: payload.context.name,
+            run: payload.context.source_run,
+            digest: payload.context.digest,
+          },
+        };
+      }
       if (payload.cached) {
         return {
           key: "runs.storyToolCached",
@@ -351,6 +361,9 @@ export function summaryOf(step: Step): Line {
     case "tool_called":
       return { key: "runs.summaryToolCalled", values: { tool } };
     case "tool_returned":
+      if (isContextArtifact(payload.context)) {
+        return { key: "runs.summaryToolContext", values: { tool } };
+      }
       return payload.cached
         ? { key: "runs.summaryToolCached", values: { tool } }
         : { key: "runs.summaryToolReturned", values: { tool } };
@@ -369,6 +382,20 @@ export function summaryOf(step: Step): Line {
     default:
       return { key: TITLES[step.kind] };
   }
+}
+
+function isContextArtifact(value: unknown): value is {
+  name: string;
+  source_run: string;
+  digest: string;
+} {
+  if (!value || typeof value !== "object") return false;
+  const artifact = value as Record<string, unknown>;
+  return (
+    typeof artifact.name === "string" &&
+    typeof artifact.source_run === "string" &&
+    typeof artifact.digest === "string"
+  );
 }
 
 /**

@@ -16,7 +16,10 @@ import (
 func TestFinishProposal_keepsTheProviderAndModel(t *testing.T) {
 	t.Parallel()
 
-	got := finishProposal([]byte(`{"summary":"done"}`), engine.Proposal{
+	got := finishProposal([]byte(`{
+		"summary":"done",
+		"artifacts":{"triage_summary":" root cause ","empty":" "}
+	}`), engine.Proposal{
 		Provider: "anthropic",
 		Model:    "claude-haiku-4-5",
 		Cost:     domain.Cost{Micros: 900},
@@ -27,5 +30,8 @@ func TestFinishProposal_keepsTheProviderAndModel(t *testing.T) {
 	}
 	if !got.Done || got.Outcome != "done" {
 		t.Errorf("finish did not record the ending: %+v", got)
+	}
+	if got.Artifacts["triage_summary"] != "root cause" || len(got.Artifacts) != 1 {
+		t.Errorf("artifacts = %+v, want the named non-empty artifact only", got.Artifacts)
 	}
 }

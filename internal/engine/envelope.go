@@ -43,6 +43,14 @@ func envelopeOf(start Start, called []domain.ToolID) gate.Pack {
 	return gate.NewPack(reachable...)
 }
 
+func envelopeForState(start Start, state State) gate.Pack {
+	pack := envelopeOf(start, state.Called)
+	if len(state.ContextArtifacts) == 0 {
+		return pack
+	}
+	return gate.NewPack(append(pack.Tools(), domain.ToolContextRead)...)
+}
+
 // StepAt is the step a run has advanced to: the furthest one whose tools it
 // has already used. It is what the ledger records against a proposal, so a
 // correction can be anchored where the run actually was (PRD FU-13).

@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/admin"
+	"github.com/fuseone/agents/internal/contextshare"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/egress"
 	"github.com/fuseone/agents/internal/engine"
@@ -239,11 +240,12 @@ func (p *workerParts) gate(ctx context.Context) (*policy.Enforcer, error) {
 
 // deps is what the loop runs on.
 func (p *workerParts) deps(gate engine.Gate) engine.Deps {
+	contextTools := contextshare.New(p.catalog, p.catalog, p.content)
 	return engine.Deps{
 		Ledger:  p.store,
 		Gate:    gate,
-		Tools:   p.catalog,
-		Catalog: p.catalog,
+		Tools:   contextTools,
+		Catalog: contextTools,
 		Content: p.content,
 		Clock:   engine.SystemClock{},
 	}
