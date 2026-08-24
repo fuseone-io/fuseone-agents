@@ -27,6 +27,24 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.30.0] — 2026-08-24
+
+### Added
+
+- **MCP connection health now separates discovery from concrete tool calls.**
+  The integration panel can show "the server answered discovery" beside "the
+  last tools/call failed with `mcp_personal_credential_missing`", which is the
+  diagnostic operators used to need pod logs for. The call side records only a
+  stable code, timestamp and worker name; tool arguments, URLs, payloads and
+  vendor diagnostics stay out of the health table.
+
+### Fixed
+
+- **A tools/call observation no longer invents discovery health.** If a runtime
+  call happens before discovery has written a row, or just after a server was
+  removed, the platform leaves discovery unknown instead of creating a fresh
+  "unreachable" discovery row from a successful call.
+
 ## [0.29.0] — 2026-08-24
 
 ### Upgrade notes
