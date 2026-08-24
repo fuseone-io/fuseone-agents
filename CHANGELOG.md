@@ -31,6 +31,23 @@ field" is a commit message.
 
 ### Added
 
+- **One agent can hand another its work without copying it.** An agent may
+  publish named artifacts when it finishes, and the event it emits declares
+  which of them it exposes. A listening run receives the contract only — name,
+  reference, digest, origin and labels — never the bytes. To read one, the
+  model has to call `$fuseone.context.read` by name, and that call crosses the
+  Gate as an ordinary read and lands in the trail like any other.
+
+  The model cannot ask for a reference. It asks for a name, matched against
+  the list the event declared and the ledger recorded when the run opened, so
+  reaching content nobody offered is not refused — it cannot be expressed. A
+  digest that no longer matches fails closed, and so does content that retention has
+  already erased.
+
+  Labels travel with the artifact. Reading something an untrusted source
+  produced taints the reading run, so the write it tries next meets the same
+  Gate the first run would have.
+
 - **The runtime page opens with what needs attention.** One queue over every
   operational projection the page already held — stuck leases and backing-off
   runs, model provider failures, MCP tool failures, channel delivery failures
@@ -55,6 +72,20 @@ field" is a commit message.
   a copilot agent waits for people by design, and the Gate stopping a call is
   the platform working. Execution failures are what count against it, and they
   still do even while something else is pending.
+
+### Security
+
+- **Scope labels are a data barrier, not a search filter.** A run may only act
+  while every company and area label it carries is inside its own scope, and
+  the check runs before taint, policy and budget. It stops an event carrying
+  another company's data before the listening run is opened — before the input
+  is even stored — and stops it again at the Gate if it arrives another way.
+
+  **A human approval does not release it.** Every other rule in the ladder can
+  be answered by a person clicking approve; this one cannot. Data crossing a
+  company boundary needs an explicit recorded authorization, not a decision
+  taken one tool call at a time by whoever happens to be on the approvals
+  screen.
 
 ## [0.31.0] — 2026-08-24
 
