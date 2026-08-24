@@ -11,6 +11,8 @@ import { WebhooksPanel } from "@/features/agents/webhooks-panel";
 import { AgentRuns } from "@/features/agents/agent-runs";
 import { AgentGuidedPath } from "@/features/agents/agent-guided-path";
 import { publishedAgentGuideSteps } from "@/features/agents/agent-guided-path-model";
+import { AgentTrustCenter } from "@/features/agents/agent-trust-center";
+import { useRegressions } from "@/features/agents/regressions-api";
 import { useTools } from "@/features/admin/api";
 import { useChannels } from "@/features/channels/api";
 import { useMCPUserCredentials } from "@/features/integrations/api";
@@ -41,6 +43,7 @@ export function AgentDetailPage() {
   const recipes = useRecipes(hasTools);
   const credentials = useMCPUserCredentials(hasTools);
   const channels = useChannels(hasChannelTrigger);
+  const regressions = useRegressions(agentId, Boolean(agent.data));
 
   if (agent.isLoading) return <LoadingRows rows={8} />;
   if (agent.error) {
@@ -94,6 +97,12 @@ export function AgentDetailPage() {
         titleKey="agents.launchGuideTitle"
         subtitleKey="agents.launchGuideSubtitle"
         progressKey="agents.launchGuideProgress"
+      />
+      <AgentTrustCenter
+        agent={published}
+        regressions={regressions.data?.items}
+        regressionsLoading={regressions.isLoading}
+        regressionsError={regressions.error}
       />
 
       <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_300px] xl:items-start">

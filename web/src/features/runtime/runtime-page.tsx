@@ -21,6 +21,7 @@ import { useRuntimeHealth } from "@/features/runtime/api";
 import { ChannelFailuresPanel } from "@/features/runtime/channel-failures-panel";
 import { EgressDenialsPanel } from "@/features/runtime/egress-denials-panel";
 import { failureLabel } from "@/features/runtime/failure-labels";
+import { RuntimeAttentionPanel } from "@/features/runtime/runtime-attention-panel";
 import { ToolFailuresPanel } from "@/features/runtime/tool-failures-panel";
 import type { Phase, RuntimeFailureBucket, RuntimeHealth } from "@/lib/api/client";
 
@@ -61,6 +62,7 @@ export function RuntimePage() {
 function RuntimeBody({ health }: { health: RuntimeHealth }) {
   return (
     <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <RuntimeAttentionPanel health={health} />
       <QueuePanel health={health} />
       <ProviderFailures failures={health.failures} />
       <ToolFailuresPanel failures={health.toolFailures} />

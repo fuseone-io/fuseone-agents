@@ -19,6 +19,14 @@ vi.mock("@/features/agents/agent-detail-api", () => ({
   }),
 }));
 
+vi.mock("@/features/agents/regressions-api", () => ({
+  useRegressions: () => ({
+    data: { items: [{ id: "case-1", expectations: [] }] },
+    isLoading: false,
+    error: null,
+  }),
+}));
+
 vi.mock("@/features/admin/api", () => ({
   useTools: () => ({
     data: {
