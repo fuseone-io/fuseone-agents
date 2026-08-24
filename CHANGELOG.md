@@ -27,19 +27,7 @@ field" is a commit message.
 
 ## [Unreleased]
 
-## [0.31.0] — 2026-08-24
-
-### Upgrade notes
-
-- **Migration 0058 creates the durable stdio egress-denial projection.** It adds
-  `mcp_egress_denials`, keyed by server, exact configured destination and stable
-  denial code. The table stores counts and first/last seen times, not request
-  paths, query strings, headers, bodies, tokens or tool arguments.
-
-- **Retention now expires stdio MCP egress-denial rows too.** Rows age out by
-  `last_seen`, in batches, and the `content.expired` audit event reports the
-  number as `egressRecords`. A denial that keeps recurring remains current
-  operational evidence until it stops and ages past the retention window.
+## [0.32.0] — 2026-08-24
 
 ### Added
 
@@ -67,6 +55,22 @@ field" is a commit message.
   a copilot agent waits for people by design, and the Gate stopping a call is
   the platform working. Execution failures are what count against it, and they
   still do even while something else is pending.
+
+## [0.31.0] — 2026-08-24
+
+### Upgrade notes
+
+- **Migration 0058 creates the durable stdio egress-denial projection.** It adds
+  `mcp_egress_denials`, keyed by server, exact configured destination and stable
+  denial code. The table stores counts and first/last seen times, not request
+  paths, query strings, headers, bodies, tokens or tool arguments.
+
+- **Retention now expires stdio MCP egress-denial rows too.** Rows age out by
+  `last_seen`, in batches, and the `content.expired` audit event reports the
+  number as `egressRecords`. A denial that keeps recurring remains current
+  operational evidence until it stops and ages past the retention window.
+
+### Added
 
 - **The runtime cockpit now shows stdio MCP egress denials.** When a local MCP
   process is routed through the FuseOne egress proxy and tries to leave its
