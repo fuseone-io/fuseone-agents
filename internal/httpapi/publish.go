@@ -220,7 +220,7 @@ func publishScope(
 }
 
 func (s *Server) blockingStaticFlows(ctx context.Context, draft spec.Spec) ([]flow.Path, error) {
-	catalogue, err := s.rulings(ctx)
+	catalogue, err := s.rulingsFor(ctx, specScope(draft))
 	if err != nil {
 		return nil, err
 	}

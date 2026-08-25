@@ -35,6 +35,7 @@ const (
 	KindModelProvider     Kind = "model_provider"
 	KindMCPServer         Kind = "mcp_server"
 	KindMCPUserCredential Kind = "mcp_user_credential"
+	KindConnectorInstance Kind = "connector_instance"
 	KindPack              Kind = "capability_pack"
 	KindBudget            Kind = "budget"
 	KindMoney             Kind = "money"

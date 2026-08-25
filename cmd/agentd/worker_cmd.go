@@ -115,7 +115,11 @@ can answer "which agents exist" without reading somebody's disk. Publishing the
 same version twice is a no-op: the version is the digest of the content.
 */
 func (p *workerParts) loadAndPublish(ctx context.Context, dir string) (worker.Specs, error) {
-	specs, err := loadSpecs(ctx, dir, p.catalog, p.integrations, p.registry)
+	var schemas toolSchemas = p.catalog
+	if p.native != nil {
+		schemas = p.native
+	}
+	specs, err := loadSpecs(ctx, dir, schemas, p.integrations, p.registry)
 	if err != nil {
 		return nil, err
 	}

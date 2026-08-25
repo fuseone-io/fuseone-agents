@@ -18,6 +18,7 @@ import (
 
 	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/channel/connect"
+	"github.com/fuseone/agents/internal/connectortools"
 	"github.com/fuseone/agents/internal/settings"
 	"github.com/fuseone/agents/internal/vault"
 
@@ -128,10 +129,13 @@ func serve(args []string) error {
 			return fmt.Errorf("load the known servers: %w", err)
 		}
 		channels = admin.NewChannels(identity.pool, store)
+		connectorSettings := connectortools.NewSettings(store)
+		connectorInstances := admin.NewConnectorInstances(identity.pool, store)
 		api = api.WithChannels(channels, channel.NewRouter(drivers)).
 			WithChannelListing(drivers).
 			WithCompanies(admin.NewCompanies(identity.pool)).
-			WithAdministration(curator, curator, integrations).
+			WithAdministration(curator, connectortools.NewToolList(curator, connectorSettings), integrations).
+			WithConnectorInstances(connectorInstances).
 			WithAgents(spec.NewRegistry(identity.pool)).
 			// The stages a version declares, read one version at a time.
 			WithDefinitions(spec.NewRegistry(identity.pool)).

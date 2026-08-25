@@ -40,6 +40,9 @@ func (p *workerParts) startLoops(
 	if p.configPool == nil {
 		return
 	}
+	if p.native != nil && p.settings != nil {
+		go p.watchConnectors(ctx)
+	}
 
 	// The months the ledger is about to need. First, because everything below
 	// writes steps and a month with no partition costs the ability to archive

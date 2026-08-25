@@ -27,6 +27,14 @@ type ToolEntry struct {
 	Description string
 	Effect      Effect
 	Untrusted   bool
+	// Native marks a FuseOne-owned connector tool rather than a tool a
+	// third-party MCP server offered. Native tools carry their own effect from
+	// the connector contract; they are not curator rulings over a remote
+	// schema.
+	Native bool
+	// Scope is meaningful only for Native tools. It is the connector instance
+	// boundary, checked again at runtime by the tool layer.
+	Scope Scope
 	// CompensatedBy is the tool that takes this one back, when the Curator has
 	// said which does. Empty means an act by this tool cannot be undone by
 	// machine, which the abandonment screen reports rather than hides.

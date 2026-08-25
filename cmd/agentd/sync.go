@@ -161,8 +161,12 @@ func publishSpecs(ctx context.Context, registry *spec.Registry, dir string) (int
 // Providers come from the installation's configuration; credentials come from
 // the environment rather than the definition, so an agent file is safe to
 // commit to a repository.
+type toolSchemas interface {
+	Schema(domain.ToolID) (name, description string, input map[string]any, ok bool)
+}
+
 func loadSpecs(
-	ctx context.Context, dir string, catalog *tools.Catalog,
+	ctx context.Context, dir string, catalog toolSchemas,
 	integrations *admin.Integrations, registry *spec.Registry,
 ) (worker.Specs, error) {
 	/*

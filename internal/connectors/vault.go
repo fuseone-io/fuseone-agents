@@ -5,7 +5,7 @@ var vaultConnector = Connector{
 	Name:     "Vault secret storage",
 	Category: CategorySecrets,
 	Summary:  "Store generated keys, certificates and operational secrets without returning secret values to the model.",
-	Maturity: MaturityPlanned,
+	Maturity: MaturityRuntime,
 	Guarantees: []string{
 		"secret values are written from content references, not inline model text",
 		"reads return metadata or a sealed reference unless a separate policy allows plaintext",

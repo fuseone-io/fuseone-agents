@@ -290,8 +290,8 @@ func TestListConnectorCatalog_namesGovernedShapesWithoutPlaintext(t *testing.T) 
 	if !ok {
 		t.Fatal("Vault connector missing")
 	}
-	if vault.Maturity != openapi.GovernedConnectorMaturityPlanned {
-		t.Fatalf("Vault maturity = %q, want planned; executable would be a new runtime surface", vault.Maturity)
+	if vault.Maturity != openapi.GovernedConnectorMaturityRuntime {
+		t.Fatalf("Vault maturity = %q, want runtime; Vault is the first executable connector surface", vault.Maturity)
 	}
 	write, ok := operationNamed(vault.Operations, "vault.write_secret")
 	if !ok {

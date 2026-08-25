@@ -56,6 +56,7 @@ type Server struct {
 	curator      Curator
 	tools        Tools
 	integrations Integrations
+	connectors   ConnectorInstances
 	agents       Agents
 	ceilings     Ceilings
 	content      Content
@@ -156,6 +157,11 @@ func (s *Server) WithStdioEgressNetworkPolicyDeclared(declared bool) *Server {
 // operator can configure anything from it.
 func (s *Server) WithAdministration(curator Curator, tools Tools, integrations Integrations) *Server {
 	s.curator, s.tools, s.integrations = curator, tools, integrations
+	return s
+}
+
+func (s *Server) WithConnectorInstances(connectors ConnectorInstances) *Server {
+	s.connectors = connectors
 	return s
 }
 

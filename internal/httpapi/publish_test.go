@@ -540,12 +540,60 @@ func TestPublishAgent_allowsNonReversibleToolBeforeTheUntrustedRead(t *testing.T
 	}
 }
 
+func TestCheckDataFlow_nativeConnectorToolsAreClassifiedOnlyInsideTheirScope(t *testing.T) {
+	t.Parallel()
+	entries := []domain.ToolEntry{
+		{ID: "crm.lookup", Effect: domain.EffectRead, Untrusted: true, OnSurface: true},
+		{ID: "vault.prod.write_secret", Server: "connector:vault/prod",
+			Effect: domain.EffectWrite, Native: true, OnSurface: true,
+			Scope: domain.Scope{Company: "acme", Area: "platform"}},
+	}
+	server := publishServer(t, newPublisher()).
+		WithAdministration(nil, &fakeTools{entries: entries}, nil)
+
+	platform := flowFor(t, server, "platform")
+	if len(platform.Paths) != 1 || platform.Paths[0].To != "vault.prod.write_secret" {
+		t.Fatalf("platform paths = %+v", platform.Paths)
+	}
+	if len(platform.Unclassified) != 0 {
+		t.Fatalf("platform unclassified = %v", platform.Unclassified)
+	}
+
+	cx := flowFor(t, server, "cx")
+	if len(cx.Paths) != 0 {
+		t.Fatalf("cx paths = %+v, want none because the connector is out of scope", cx.Paths)
+	}
+	if len(cx.Unclassified) != 1 || cx.Unclassified[0] != "vault.prod.write_secret" {
+		t.Fatalf("cx unclassified = %v", cx.Unclassified)
+	}
+}
+
 func publishFlowTools() *fakeTools {
 	return &fakeTools{entries: []domain.ToolEntry{
 		{ID: "crm.lookup", Effect: domain.EffectRead, Untrusted: true, OnSurface: true},
 		{ID: "crm.reply", Effect: domain.EffectWrite, OnSurface: true},
 		{ID: "pay.refund", Effect: domain.EffectFinancial, OnSurface: true},
 	}}
+}
+
+func flowFor(t *testing.T, server *Server, area string) openapi.FlowFinding {
+	t.Helper()
+	resp, err := server.CheckDataFlow(inArea(area, domain.RoleAuthor),
+		openapi.CheckDataFlowRequestObject{
+			AgentId: "triage",
+			Body: definition(func(d *openapi.AgentDefinition) {
+				d.Area = area
+				d.Tools = &[]string{"crm.lookup", "vault.prod.write_secret"}
+			}),
+		})
+	if err != nil {
+		t.Fatalf("CheckDataFlow: %v", err)
+	}
+	found, ok := resp.(openapi.CheckDataFlow200JSONResponse)
+	if !ok {
+		t.Fatalf("response = %T, want flow finding", resp)
+	}
+	return openapi.FlowFinding(found)
 }
 
 type schedules struct{ synced map[domain.AgentID][]string }

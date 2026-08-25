@@ -230,4 +230,5 @@ var validSecretHandling = map[SecretHandling]bool{
 
 var validMaturities = map[Maturity]bool{
 	MaturityPlanned: true,
+	MaturityRuntime: true,
 }

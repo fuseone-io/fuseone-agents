@@ -1150,13 +1150,14 @@
   },
   "connectors": {
     "title": "Governed connectors",
-    "subtitle": "Native connector shapes the platform can govern directly. This release lists the contract only: no credential is created, no worker starts and no agent can call these operations yet.",
+    "subtitle": "Native connector shapes the platform can govern directly. The catalogue names the security contract; executable tools exist only for configured connector instances.",
     "emptyTitle": "No governed connectors in this release",
     "emptyHint": "Connectors appear here only when the platform can describe the security contract they must satisfy.",
     "operations": "Operations",
     "guarantees": "Governed shape",
     "maturity": {
-      "planned": "Planned"
+      "planned": "Planned",
+      "runtime": "Runtime"
     },
     "approval": {
       "none": "no approval",
