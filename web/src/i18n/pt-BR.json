@@ -1150,13 +1150,14 @@
   },
   "connectors": {
     "title": "Connectors governados",
-    "subtitle": "Shapes nativos de connector que a plataforma consegue governar diretamente. Esta versão lista apenas o contrato: nenhuma credencial é criada, nenhum worker inicia e nenhum agente consegue chamar estas operações ainda.",
+    "subtitle": "Shapes nativos de connector que a plataforma consegue governar diretamente. O catálogo nomeia o contrato de segurança; ferramentas executáveis existem só para instâncias configuradas.",
     "emptyTitle": "Nenhum connector governado nesta versão",
     "emptyHint": "Connectors aparecem aqui só quando a plataforma consegue descrever o contrato de segurança que eles precisam cumprir.",
     "operations": "Operações",
     "guarantees": "Shape governado",
     "maturity": {
-      "planned": "Planejado"
+      "planned": "Planejado",
+      "runtime": "Executável"
     },
     "approval": {
       "none": "sem aprovação",

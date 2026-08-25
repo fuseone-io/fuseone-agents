@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/admin"
+	"github.com/fuseone/agents/internal/connectortools"
 	"github.com/fuseone/agents/internal/contextshare"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/egress"
@@ -47,6 +48,7 @@ type workerParts struct {
 	content engine.ContentStore
 	durable *ledger.Content
 	catalog *tools.Catalog
+	native  *connectortools.Layer
 
 	// configPool outlives the call that opens it: the sweeps need it after the
 	// configuration is read, and opening a second pool for the same database
@@ -104,6 +106,12 @@ func openWorkerParts(ctx context.Context, dsn string) (*workerParts, error) {
 	parts.catalog = tools.NewCatalog(parts.content).Knowing(shipped)
 
 	if err := parts.openConfiguration(ctx, dsn); err != nil {
+		return nil, err
+	}
+	parts.native = connectortools.New(
+		parts.catalog, parts.catalog, parts.content,
+		connectortools.NewHTTPVaultClient(nil))
+	if err := parts.refreshConnectors(ctx); err != nil {
 		return nil, err
 	}
 	parts.health = healthOf(parts.configPool)
@@ -240,7 +248,13 @@ func (p *workerParts) gate(ctx context.Context) (*policy.Enforcer, error) {
 
 // deps is what the loop runs on.
 func (p *workerParts) deps(gate engine.Gate) engine.Deps {
-	contextTools := contextshare.New(p.catalog, p.catalog, p.content)
+	tools := engine.Tools(p.catalog)
+	catalog := engine.Catalog(p.catalog)
+	if p.native != nil {
+		tools = p.native
+		catalog = p.native
+	}
+	contextTools := contextshare.New(tools, catalog, p.content)
 	return engine.Deps{
 		Ledger:  p.store,
 		Gate:    gate,

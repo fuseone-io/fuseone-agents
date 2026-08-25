@@ -127,7 +127,11 @@ func (s *Server) ListTools(ctx context.Context, _ openapi.ListToolsRequestObject
 		// No observations at all means nothing can be said, and everything
 		// reads as offered. With observations, silence about a server is the
 		// answer: it is not answering.
-		tool.Offered = ptr(answering == nil || answering[e.Server])
+		if e.Native {
+			tool.Offered = ptr(e.OnSurface)
+		} else {
+			tool.Offered = ptr(answering == nil || answering[e.Server])
+		}
 		// What is on offer now, so a ruling made on this screen can name the
 		// definition it judged — and whether an existing ruling was already
 		// overtaken by one.

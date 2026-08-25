@@ -1,0 +1,197 @@
+package connectortools
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/netguard"
+	"github.com/fuseone/agents/internal/settings"
+)
+
+type Settings struct {
+	store *settings.Store
+}
+
+func NewSettings(store *settings.Store) *Settings { return &Settings{store: store} }
+
+type ConfiguredInstance struct {
+	Instance
+	ScopeKind settings.ScopeKind
+	HasToken  bool
+	UpdatedBy string
+	UpdatedAt time.Time
+}
+
+func (s *Settings) Configured(ctx context.Context) ([]ConfiguredInstance, error) {
+	if s == nil || s.store == nil {
+		return nil, nil
+	}
+	rows, err := s.store.List(ctx, settings.KindConnectorInstance)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ConfiguredInstance, 0, len(rows))
+	for _, row := range rows {
+		instance, err := SettingInstance(row)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, ConfiguredInstance{
+			Instance:  instance,
+			ScopeKind: row.ScopeKind,
+			HasToken:  row.HasSecret,
+			UpdatedBy: row.UpdatedBy,
+			UpdatedAt: row.UpdatedAt,
+		})
+	}
+	return out, nil
+}
+
+func (s *Settings) Instances(ctx context.Context) ([]Instance, error) {
+	if s == nil || s.store == nil {
+		return nil, nil
+	}
+	rows, err := s.store.List(ctx, settings.KindConnectorInstance)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Instance, 0, len(rows))
+	for _, row := range rows {
+		instance, err := s.instance(ctx, row)
+		if err != nil {
+			return nil, err
+		}
+		if instance.Enabled {
+			out = append(out, instance)
+		}
+	}
+	return out, nil
+}
+
+func (s *Settings) ToolEntries(ctx context.Context) ([]domain.ToolEntry, error) {
+	if s == nil || s.store == nil {
+		return nil, nil
+	}
+	rows, err := s.store.List(ctx, settings.KindConnectorInstance)
+	if err != nil {
+		return nil, err
+	}
+	var instances []Instance
+	for _, row := range rows {
+		instance, err := SettingInstance(row)
+		if err != nil {
+			return nil, err
+		}
+		if !row.Enabled || !row.HasSecret {
+			continue
+		}
+		if err := ValidateInstanceConfig(instance); err != nil {
+			return nil, err
+		}
+		instances = append(instances, instance)
+	}
+	return toolEntriesFor(instances), nil
+}
+
+type StoredInstance struct {
+	Connector string      `json:"connector"`
+	Vault     VaultConfig `json:"vault,omitempty"`
+}
+
+func (s *Settings) instance(ctx context.Context, row settings.Setting) (Instance, error) {
+	instance, err := SettingInstance(row)
+	if err != nil {
+		return Instance{}, err
+	}
+	if !instance.Enabled {
+		return instance, nil
+	}
+	revealed, err := s.store.Reveal(ctx, row.ScopeKind, row.Scope, settings.KindConnectorInstance, row.Name)
+	if err != nil {
+		return Instance{}, err
+	}
+	instance.Token = revealed.Secret
+	return instance, ValidateInstance(instance)
+}
+
+func SettingInstance(row settings.Setting) (Instance, error) {
+	var stored StoredInstance
+	if err := json.Unmarshal(row.Value, &stored); err != nil {
+		return Instance{}, fmt.Errorf("connector: decode %s: %w", row.Name, err)
+	}
+	return Instance{
+		Connector: strings.TrimSpace(stored.Connector),
+		Name:      row.Name,
+		Scope:     instanceScope(row),
+		Enabled:   row.Enabled,
+		Vault:     stored.Vault,
+	}, nil
+}
+
+func SettingValue(instance Instance) (json.RawMessage, error) {
+	value, err := json.Marshal(StoredInstance{
+		Connector: strings.TrimSpace(instance.Connector),
+		Vault:     instance.Vault,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("connector: encode %s: %w", instance.Name, err)
+	}
+	return value, nil
+}
+
+func instanceScope(row settings.Setting) domain.Scope {
+	if row.ScopeKind == settings.ScopeInstallation {
+		return domain.Scope{Company: domain.Installation}
+	}
+	return row.Scope
+}
+
+func ValidateInstance(instance Instance) error {
+	if err := ValidateInstanceConfig(instance); err != nil {
+		return err
+	}
+	if strings.TrimSpace(instance.Token) == "" {
+		return fmt.Errorf("connector: %s %s needs a token", instance.Connector, instance.Name)
+	}
+	return nil
+}
+
+func ValidateInstanceConfig(instance Instance) error {
+	if !ValidInstanceName(instance.Name) {
+		return fmt.Errorf("connector: invalid instance name %q", instance.Name)
+	}
+	switch instance.Connector {
+	case "vault":
+		return validateVaultConfig(instance)
+	default:
+		return fmt.Errorf("connector: unsupported connector %q", instance.Connector)
+	}
+}
+
+func validateVaultConfig(instance Instance) error {
+	switch {
+	case strings.TrimSpace(instance.Vault.Address) == "":
+		return fmt.Errorf("connector: vault %s needs an address", instance.Name)
+	case strings.TrimSpace(instance.Vault.Mount) == "":
+		return fmt.Errorf("connector: vault %s needs a mount", instance.Name)
+	case len(instance.Vault.AllowedPathPrefixes) == 0:
+		return fmt.Errorf("connector: vault %s needs allowed path prefixes", instance.Name)
+	}
+	if err := netguard.ValidateHTTPURL(instance.Vault.Address); err != nil {
+		if errors.Is(err, netguard.ErrBlockedAddress) {
+			return fmt.Errorf("connector: vault %s address cannot target cloud metadata or link-local networks", instance.Name)
+		}
+		return fmt.Errorf("connector: vault %s address must be http or https", instance.Name)
+	}
+	for _, prefix := range instance.Vault.AllowedPathPrefixes {
+		if cleanVaultPath(prefix) == "" {
+			return fmt.Errorf("connector: vault %s has an invalid path prefix", instance.Name)
+		}
+	}
+	return nil
+}

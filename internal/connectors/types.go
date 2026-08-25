@@ -41,6 +41,7 @@ type Maturity string
 
 const (
 	MaturityPlanned Maturity = "planned"
+	MaturityRuntime Maturity = "runtime"
 )
 
 type Operation struct {
@@ -61,4 +62,17 @@ type Connector struct {
 	Guarantees []string
 	Caveats    []string
 	Operations []Operation
+}
+
+// OperationByID returns the connector and operation for a catalogue operation
+// id such as "vault.write_secret".
+func OperationByID(id string) (Connector, Operation, bool) {
+	for _, connector := range Catalog() {
+		for _, operation := range connector.Operations {
+			if operation.ID == id {
+				return connector, operation, true
+			}
+		}
+	}
+	return Connector{}, Operation{}, false
 }

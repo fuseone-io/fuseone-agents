@@ -1,6 +1,6 @@
 # NT-009 — Governed connectors
 
-Status: accepted, first catalogue slice
+Status: accepted, runtime foundation in progress
 
 ## Decision
 
@@ -16,9 +16,37 @@ publishes and helps an operator connect it. A governed connector is a platform
 contract: FuseOne owns the operation shape and can enforce the guarantees it
 renders.
 
+## Runtime model
+
+The catalogue describes connector shapes. Runtime configuration creates
+connector instances. An executable tool is the pair of one instance and one
+operation, rendered as:
+
+```text
+<connector>.<instance>.<operation>
+```
+
+For example, the catalogue operation `vault.write_secret` becomes
+`vault.prod.write_secret` for the `prod` Vault instance. The instance name is
+part of the tool id so two Vaults cannot collapse into one capability.
+
+A connector runtime is a FuseOne-owned tool layer, not a side channel:
+
+- the model sees only schemas for tools in the run's pack;
+- the Gate sees the catalogue effect before the external system is reached;
+- arguments and results are claim-checked through the content store;
+- configuration changes are settings plus an admin event;
+- credentials are sealed settings and are revealed only by the worker during
+  execution.
+
+An instance can be installation, company or area scoped. The runtime may execute
+only when the instance scope contains the run scope. A tool id named from a
+different area may still appear in a stale agent definition, but the call fails
+closed before the connector reaches the external system.
+
 ## First slice
 
-The first implementation is deliberately a catalogue only:
+The first implementation was deliberately a catalogue only:
 
 - it creates no credentials;
 - it starts no worker;
@@ -30,6 +58,25 @@ The first implementation is deliberately a catalogue only:
 This avoids the worst intermediate state: a screen that looks ready enough for
 an operator to trust, while the runtime still lacks the controls the screen
 implies.
+
+The first runtime slice starts with Vault because it exercises the hardest
+constraint: secret material may move, but it must not become ordinary model
+text. It supports generic secret writes from named content references, metadata
+reads and lease revocation. Certificate generation itself belongs to an
+approved job connector; Vault stores the generated material after it is already
+in the content store.
+
+## Rollout order
+
+1. Vault secret storage.
+2. Approved automation jobs, including certificate/CSR generation templates.
+3. Governed SQL read templates.
+4. Object storage for governed artifacts.
+5. Identity actions.
+6. DNS and Kubernetes operational connectors.
+7. Outbound email.
+8. Governed HTTP as the bridge for workflows that have not earned a named
+   connector yet.
 
 ## Initial connector shapes
 

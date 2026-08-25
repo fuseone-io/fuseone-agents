@@ -8,7 +8,7 @@ const vault: GovernedConnector = {
   name: "Vault secret storage",
   category: "secrets",
   summary: "Store generated keys and certificates without returning secrets.",
-  maturity: "planned",
+  maturity: "runtime",
   guarantees: [
     "secret values are written from content references, not inline model text",
     "paths are constrained by connector policy before a write reaches Vault",
@@ -27,7 +27,7 @@ const vault: GovernedConnector = {
 };
 
 describe("governed connector catalogue", () => {
-  it("shows planned connectors without offering to connect them", () => {
+  it("shows connector contracts without offering to configure an instance", () => {
     render(
       <ConnectorCatalogPanel
         connectors={[vault]}
@@ -40,7 +40,7 @@ describe("governed connector catalogue", () => {
     expect(
       screen.getByRole("heading", { name: "Vault secret storage" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Planejado")).toBeInTheDocument();
+    expect(screen.getByText("Executável")).toBeInTheDocument();
     expect(screen.getByText("segredos por referência")).toBeInTheDocument();
     expect(screen.getByText("política")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /conectar/i })).toBeNull();

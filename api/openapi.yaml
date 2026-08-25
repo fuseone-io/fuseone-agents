@@ -2410,13 +2410,13 @@ paths:
     get:
       tags: [admin]
       operationId: listConnectorCatalog
-      summary: Governed connector shapes this platform plans to host
+      summary: Governed connector shapes this platform can host
       description: >
-        Native connector shapes the platform intends to govern directly. This
-        is not a runtime surface: listing a connector here creates no
-        credential, starts no worker, and lets no agent call it. The catalogue
-        names the security contract a future connector must satisfy before it
-        becomes executable.
+        Native connector shapes the platform governs directly. Listing a
+        connector here creates no credential and starts no worker; executable
+        tools exist only for configured connector instances. The catalogue names
+        the security contract every instance must satisfy before a call reaches
+        the external system.
       responses:
         '200':
           description: The governed connector catalogue.
@@ -2429,6 +2429,80 @@ paths:
                   items:
                     type: array
                     items: { $ref: '#/components/schemas/GovernedConnector' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/integrations/connectors/instances:
+    get:
+      tags: [admin]
+      operationId: listConnectorInstances
+      summary: Configured governed connector instances
+      description: >
+        Connector instances are the executable endpoints behind governed
+        connector shapes. The response reports whether a token exists; the
+        token itself never leaves the settings vault.
+      responses:
+        '200':
+          description: The configured connector instances.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ConnectorInstance' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/integrations/connectors/instances/{name}:
+    put:
+      tags: [admin]
+      operationId: putConnectorInstance
+      summary: Configure a governed connector instance
+      description: >
+        Configuring an instance creates executable native tools named
+        connector.instance.operation. Omit token to keep the stored one. Send
+        clearToken to remove it; an enabled instance must still have a token
+        after the write.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConnectorInstanceInput' }
+      responses:
+        '204': { description: The connector instance is configured. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    delete:
+      tags: [admin]
+      operationId: deleteConnectorInstance
+      summary: Remove a governed connector instance
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+        - name: scopeKind
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/ConnectorScopeKind' }
+        - name: company
+          in: query
+          schema: { type: string }
+        - name: area
+          in: query
+          schema: { type: string }
+      responses:
+        '204': { description: The connector instance is removed. }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
@@ -4503,8 +4577,8 @@ components:
       enum: [read, write, destructive, financial]
       description: >
         The broad effect an operation can have. The Gate still decides on real
-        tools; this catalogue states the contract a future governed connector
-        must expose.
+        tools; this catalogue states the contract a governed connector must
+        expose.
 
     ConnectorApproval:
       type: string
@@ -4526,7 +4600,7 @@ components:
       properties:
         id:
           type: string
-          description: Stable operation name a future runtime would expose.
+          description: Stable operation name a connector runtime exposes.
         name: { type: string }
         summary: { type: string }
         effects:
@@ -4550,10 +4624,11 @@ components:
         summary: { type: string }
         maturity:
           type: string
-          enum: [planned]
+          enum: [planned, runtime]
           description: >
             Planned means the catalogue describes the intended governed shape
-            but the connector is not executable in this release.
+            but the connector is not executable in this release. Runtime means
+            configured instances can expose executable tools.
         guarantees:
           type: array
           items: { type: string }
@@ -4563,6 +4638,82 @@ components:
         operations:
           type: array
           items: { $ref: '#/components/schemas/GovernedConnectorOperation' }
+
+    ConnectorScopeKind:
+      type: string
+      enum: [installation, company, area]
+      description: >
+        Where the connector instance is configured. Installation applies to all
+        companies, company applies to all areas in one company, and area
+        applies to one area.
+
+    ConnectorVaultConfig:
+      type: object
+      required: [address, mount, allowedPathPrefixes]
+      properties:
+        address:
+          type: string
+          description: >
+            Vault HTTP endpoint. Cloud metadata and link-local destinations are
+            refused before the instance can run.
+        mount:
+          type: string
+          description: KV v2 mount name.
+        namespace:
+          type: string
+          description: Optional Vault namespace.
+        allowedPathPrefixes:
+          type: array
+          minItems: 1
+          items: { type: string }
+          description: >
+            Secret path prefixes this instance may touch. A prefix matches the
+            path itself or children below it; lookalike prefixes do not match.
+
+    ConnectorInstance:
+      type: object
+      required: [name, connector, enabled, scopeKind, hasToken]
+      properties:
+        name:
+          type: string
+          description: Instance name used in tool ids.
+        connector:
+          type: string
+          description: Connector shape, such as vault.
+        enabled: { type: boolean }
+        scopeKind: { $ref: '#/components/schemas/ConnectorScopeKind' }
+        company: { type: string }
+        area: { type: string }
+        hasToken:
+          type: boolean
+          description: Whether a token is stored. The token is never returned.
+        updatedBy: { type: string }
+        updatedAt: { type: string, format: date-time }
+        vault: { $ref: '#/components/schemas/ConnectorVaultConfig' }
+
+    ConnectorInstanceInput:
+      type: object
+      required: [connector, scopeKind]
+      properties:
+        connector:
+          type: string
+          description: Connector shape. The first runtime connector is vault.
+        enabled:
+          type: boolean
+          default: true
+        scopeKind: { $ref: '#/components/schemas/ConnectorScopeKind' }
+        company: { type: string }
+        area: { type: string }
+        vault: { $ref: '#/components/schemas/ConnectorVaultConfig' }
+        token:
+          type: string
+          description: >
+            Connector token to seal. Omit to keep the stored token.
+        clearToken:
+          type: boolean
+          description: >
+            Remove the stored token. An enabled instance is refused unless the
+            same request also supplies a replacement token.
 
     MCPServerCallAuth:
       type: object

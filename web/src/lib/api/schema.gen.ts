@@ -1696,13 +1696,54 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Governed connector shapes this platform plans to host
-         * @description Native connector shapes the platform intends to govern directly. This is not a runtime surface: listing a connector here creates no credential, starts no worker, and lets no agent call it. The catalogue names the security contract a future connector must satisfy before it becomes executable.
+         * Governed connector shapes this platform can host
+         * @description Native connector shapes the platform governs directly. Listing a connector here creates no credential and starts no worker; executable tools exist only for configured connector instances. The catalogue names the security contract every instance must satisfy before a call reaches the external system.
          */
         get: operations["listConnectorCatalog"];
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/integrations/connectors/instances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Configured governed connector instances
+         * @description Connector instances are the executable endpoints behind governed connector shapes. The response reports whether a token exists; the token itself never leaves the settings vault.
+         */
+        get: operations["listConnectorInstances"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/integrations/connectors/instances/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Configure a governed connector instance
+         * @description Configuring an instance creates executable native tools named connector.instance.operation. Omit token to keep the stored one. Send clearToken to remove it; an enabled instance must still have a token after the write.
+         */
+        put: operations["putConnectorInstance"];
+        post?: never;
+        /** Remove a governed connector instance */
+        delete: operations["deleteConnectorInstance"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2864,7 +2905,7 @@ export interface components {
             allowedDestinations?: components["schemas"]["MCPEgressDestination"][];
         };
         /**
-         * @description The broad effect an operation can have. The Gate still decides on real tools; this catalogue states the contract a future governed connector must expose.
+         * @description The broad effect an operation can have. The Gate still decides on real tools; this catalogue states the contract a governed connector must expose.
          * @enum {string}
          */
         ConnectorEffect: "read" | "write" | "destructive" | "financial";
@@ -2879,7 +2920,7 @@ export interface components {
          */
         ConnectorSecretHandling: "none" | "reference_only" | "plaintext_requires_approval";
         GovernedConnectorOperation: {
-            /** @description Stable operation name a future runtime would expose. */
+            /** @description Stable operation name a connector runtime exposes. */
             id: string;
             name: string;
             summary: string;
@@ -2895,13 +2936,58 @@ export interface components {
             category: "automation" | "data" | "infrastructure" | "messaging" | "network" | "secrets" | "security";
             summary: string;
             /**
-             * @description Planned means the catalogue describes the intended governed shape but the connector is not executable in this release.
+             * @description Planned means the catalogue describes the intended governed shape but the connector is not executable in this release. Runtime means configured instances can expose executable tools.
              * @enum {string}
              */
-            maturity: "planned";
+            maturity: "planned" | "runtime";
             guarantees: string[];
             caveats: string[];
             operations: components["schemas"]["GovernedConnectorOperation"][];
+        };
+        /**
+         * @description Where the connector instance is configured. Installation applies to all companies, company applies to all areas in one company, and area applies to one area.
+         * @enum {string}
+         */
+        ConnectorScopeKind: "installation" | "company" | "area";
+        ConnectorVaultConfig: {
+            /** @description Vault HTTP endpoint. Cloud metadata and link-local destinations are refused before the instance can run. */
+            address: string;
+            /** @description KV v2 mount name. */
+            mount: string;
+            /** @description Optional Vault namespace. */
+            namespace?: string;
+            /** @description Secret path prefixes this instance may touch. A prefix matches the path itself or children below it; lookalike prefixes do not match. */
+            allowedPathPrefixes: string[];
+        };
+        ConnectorInstance: {
+            /** @description Instance name used in tool ids. */
+            name: string;
+            /** @description Connector shape, such as vault. */
+            connector: string;
+            enabled: boolean;
+            scopeKind: components["schemas"]["ConnectorScopeKind"];
+            company?: string;
+            area?: string;
+            /** @description Whether a token is stored. The token is never returned. */
+            hasToken: boolean;
+            updatedBy?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+            vault?: components["schemas"]["ConnectorVaultConfig"];
+        };
+        ConnectorInstanceInput: {
+            /** @description Connector shape. The first runtime connector is vault. */
+            connector: string;
+            /** @default true */
+            enabled: boolean;
+            scopeKind: components["schemas"]["ConnectorScopeKind"];
+            company?: string;
+            area?: string;
+            vault?: components["schemas"]["ConnectorVaultConfig"];
+            /** @description Connector token to seal. Omit to keep the stored token. */
+            token?: string;
+            /** @description Remove the stored token. An enabled instance is refused unless the same request also supplies a replacement token. */
+            clearToken?: boolean;
         };
         /**
          * @description What the API can say about authentication for tools/call for the
@@ -6705,6 +6791,84 @@ export interface operations {
                     };
                 };
             };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listConnectorInstances: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The configured connector instances. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ConnectorInstance"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    putConnectorInstance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectorInstanceInput"];
+            };
+        };
+        responses: {
+            /** @description The connector instance is configured. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    deleteConnectorInstance: {
+        parameters: {
+            query: {
+                scopeKind: components["schemas"]["ConnectorScopeKind"];
+                company?: string;
+                area?: string;
+            };
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The connector instance is removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
         };

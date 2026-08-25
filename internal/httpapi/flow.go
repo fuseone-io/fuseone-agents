@@ -41,7 +41,7 @@ func (s *Server) CheckDataFlow(ctx context.Context, req openapi.CheckDataFlowReq
 		}, nil
 	}
 
-	catalogue, err := s.rulings(ctx)
+	catalogue, err := s.rulingsFor(ctx, specScope(draft))
 	if err != nil {
 		return nil, err
 	}
@@ -60,6 +60,10 @@ func envelopesOf(draft spec.Spec) []flow.Envelope {
 	return out
 }
 
+func specScope(draft spec.Spec) domain.Scope {
+	return domain.Scope{Company: draft.Company, Area: draft.Area}
+}
+
 // catalogue is what the Curator has ruled about each tool.
 type ruled map[domain.ToolID]domain.ToolEntry
 
@@ -76,7 +80,7 @@ func (r ruled) Untrusted(tool domain.ToolID) bool { return r[tool].Untrusted }
 // rulings is the catalogue with what the Curator decided about each tool. The
 // assistant's own catalogue next door needs only the names, which is why there
 // are two: one answers "what may I mention", this one answers "what does it do".
-func (s *Server) rulings(ctx context.Context) (ruled, error) {
+func (s *Server) rulingsFor(ctx context.Context, scope domain.Scope) (ruled, error) {
 	if s.tools == nil {
 		return ruled{}, nil
 	}
@@ -86,6 +90,9 @@ func (s *Server) rulings(ctx context.Context) (ruled, error) {
 	}
 	out := make(ruled, len(entries))
 	for _, entry := range entries {
+		if entry.Native && !entry.Scope.Contains(scope) {
+			continue
+		}
 		out[entry.ID] = entry
 	}
 	return out, nil
