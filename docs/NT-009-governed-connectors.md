@@ -105,6 +105,11 @@ in the content store.
   catalogue.
 - Write, destructive and financial effects must be visible before the operation
   can execute, so the Gate can stop or ask.
+- Connector reads are untrusted sources by default. A first-party connector
+  governs shape, scope and storage, not the truth of data returned by an
+  external system. A static flow from a connector read into a non-reversible
+  effect must block publication unless a later connector explicitly proves a
+  narrower trust boundary.
 - Secret movement is not a separate effect. It is declared through
   `secretHandling`, because the Gate's effect ladder and the data-handling
   contract answer different questions.
