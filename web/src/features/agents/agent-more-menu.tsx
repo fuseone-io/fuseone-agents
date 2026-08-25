@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
-import { Archive, Ellipsis, Pause } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Archive, Ellipsis, FlaskConical, Pause } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,11 +27,13 @@ export function AgentMoreMenu({
   agentId,
   onRetire,
   label,
+  simulateTo,
 }: {
   running: boolean;
   agentId: string;
   onRetire: () => void;
   label: string;
+  simulateTo?: string;
 }) {
   const { t } = useTranslation();
   const stop = useSetAgentPaused(agentId);
@@ -43,6 +46,14 @@ export function AgentMoreMenu({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52">
+        {simulateTo && (
+          <DropdownMenuItem asChild>
+            <Link to={simulateTo}>
+              <FlaskConical className="size-4" aria-hidden />
+              {t("agents.simulate")}
+            </Link>
+          </DropdownMenuItem>
+        )}
         {running && (
           <DropdownMenuItem
             onSelect={() =>

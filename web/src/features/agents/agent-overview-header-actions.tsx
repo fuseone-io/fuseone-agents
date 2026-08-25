@@ -8,7 +8,13 @@ import { AgentPrimary } from "@/features/agents/agent-primary";
 import { RetireDialog } from "@/features/agents/retire-agent";
 import type { Agent } from "@/lib/api/client";
 
-export function HeaderActions({ agent }: { agent: Agent }) {
+export function HeaderActions({
+  agent,
+  hideSimulate,
+}: {
+  agent: Agent;
+  hideSimulate?: boolean;
+}) {
   const { t } = useTranslation();
   const [retiring, setRetiring] = useState(false);
   const retired = agent.retired ?? false;
@@ -31,18 +37,21 @@ export function HeaderActions({ agent }: { agent: Agent }) {
           {t("agents.edit")}
         </Link>
       </Button>
-      <Button variant="outline" size="sm" asChild className="h-9">
-        <Link to={`/agents/${agent.agentId}/simulate`}>
-          <FlaskConical className="size-4" aria-hidden />
-          {t("agents.simulate")}
-        </Link>
-      </Button>
+      {!hideSimulate && (
+        <Button variant="outline" size="sm" asChild className="h-9">
+          <Link to={`/agents/${agent.agentId}/simulate`}>
+            <FlaskConical className="size-4" aria-hidden />
+            {t("agents.simulate")}
+          </Link>
+        </Button>
+      )}
       <AgentPrimary agent={agent} />
       <AgentMoreMenu
         running={running}
         agentId={agent.agentId}
         onRetire={() => setRetiring(true)}
         label={t("agents.moreActions")}
+        simulateTo={hideSimulate ? `/agents/${agent.agentId}/simulate` : undefined}
       />
       {retiring && (
         <RetireDialog

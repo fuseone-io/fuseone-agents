@@ -21,10 +21,12 @@ export function AgentOverviewHeader({
   agent,
   versions,
   tabs,
+  hideSimulate,
 }: {
   agent: Agent;
   versions: AgentVersion[];
   tabs: ReactNode;
+  hideSimulate?: boolean;
 }) {
   const { t } = useTranslation();
   const superseded = !agent.latest && versions.length > 1;
@@ -69,7 +71,7 @@ export function AgentOverviewHeader({
           </div>
         </div>
 
-        <HeaderActions agent={agent} />
+        <HeaderActions agent={agent} hideSimulate={hideSimulate} />
       </div>
 
       <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3">

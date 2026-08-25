@@ -60,7 +60,12 @@ vi.mock("@/features/agents/agent-primary", () => ({
 }));
 
 vi.mock("@/features/agents/agent-more-menu", () => ({
-  AgentMoreMenu: () => <button type="button" aria-label="More actions" />,
+  AgentMoreMenu: ({ simulateTo }: { simulateTo?: string }) => (
+    <>
+      <button type="button" aria-label="More actions" />
+      {simulateTo && <a href={simulateTo}>Simulate from menu</a>}
+    </>
+  ),
 }));
 
 vi.mock("@/features/agents/stage-control", () => ({
@@ -172,6 +177,15 @@ describe("the agent overview", () => {
       "no",
     );
     expect(screen.queryByText("The definition is not the landing view.")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Continue: Rehearsal" })).toHaveAttribute(
+      "href",
+      "/agents/troubleshooting-devops/simulate",
+    );
+    expect(screen.queryByRole("link", { name: "Simulate" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Simulate from menu" })).toHaveAttribute(
+      "href",
+      "/agents/troubleshooting-devops/simulate",
+    );
 
     await userEvent.click(screen.getByRole("tab", { name: "Definition" }));
 
@@ -186,5 +200,23 @@ describe("the agent overview", () => {
       "data-compact",
       "yes",
     );
+  });
+
+  it("keeps the header simulation shortcut when the guide points elsewhere", () => {
+    if (detail.data) {
+      detail.data.agent.tools = ["grafana.missing_tool"];
+    }
+
+    showDetail();
+
+    expect(screen.getByRole("link", { name: "Continue: Capability pack" })).toHaveAttribute(
+      "href",
+      "/agents/troubleshooting-devops/edit",
+    );
+    expect(screen.getByRole("link", { name: "Simulate" })).toHaveAttribute(
+      "href",
+      "/agents/troubleshooting-devops/simulate",
+    );
+    expect(screen.queryByRole("link", { name: "Simulate from menu" })).not.toBeInTheDocument();
   });
 });

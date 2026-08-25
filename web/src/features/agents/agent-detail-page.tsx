@@ -10,7 +10,10 @@ import { AgentVersions } from "@/features/agents/agent-versions";
 import { WebhooksPanel } from "@/features/agents/webhooks-panel";
 import { AgentRuns } from "@/features/agents/agent-runs";
 import { AgentGuidedPath } from "@/features/agents/agent-guided-path";
-import { publishedAgentGuideSteps } from "@/features/agents/agent-guided-path-model";
+import {
+  guidedAgentProgress,
+  publishedAgentGuideSteps,
+} from "@/features/agents/agent-guided-path-model";
 import { AgentTrustCenter } from "@/features/agents/agent-trust-center";
 import { useTools } from "@/features/admin/api";
 import { useChannels } from "@/features/channels/api";
@@ -61,6 +64,9 @@ export function AgentDetailPage() {
     channels: channels.data?.items,
     simulationTo: `/agents/${agentId}/simulate`,
   });
+  const nextGuide = guidedAgentProgress(guide).next;
+  const guideOwnsSimulationAction =
+    nextGuide?.id === "simulation" && Boolean(nextGuide.to);
 
   return (
     <Tabs
@@ -70,6 +76,7 @@ export function AgentDetailPage() {
       <AgentOverviewHeader
         agent={published}
         versions={versions}
+        hideSimulate={guideOwnsSimulationAction}
         tabs={
           <TabsList
             variant="line"
