@@ -39,6 +39,10 @@ type ToolEntry struct {
 	// said which does. Empty means an act by this tool cannot be undone by
 	// machine, which the abandonment screen reports rather than hides.
 	CompensatedBy ToolID
+	// Dedupe is present only when the Curator declared how the platform can
+	// recognize this effect across runs without reading raw arguments as an
+	// ungoverned hash.
+	Dedupe ToolDedupe
 	// Suggested is what the platform ships about a server it knows, and it is
 	// not a classification: it is the first proposal, with its reasoning, so
 	// the Curator confirms instead of inventing. Nil for a server nobody

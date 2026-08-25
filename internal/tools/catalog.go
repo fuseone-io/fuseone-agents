@@ -112,6 +112,10 @@ type Entry struct {
 	// on it alongside the effect, because what a tool does to the world and
 	// how to undo it are one judgement (PRD SE-08).
 	CompensatedBy domain.ToolID
+	// Dedupe is the Curator's declaration of a cross-run semantic key for this
+	// effect. Empty means the tool participates only in the ordinary per-run
+	// idempotency already recorded in the ledger.
+	Dedupe domain.ToolDedupe
 }
 
 // Catalog is the registered tool surface of an installation.
@@ -243,9 +247,9 @@ func (c *Catalog) Entries() []domain.ToolEntry {
 		out = append(out, domain.ToolEntry{
 			ID: e.ID, Server: e.Server, Description: e.Description,
 			Effect: e.Effect, Untrusted: e.Untrusted,
-			CompensatedBy: e.CompensatedBy,
-			Suggested:     suggestionOf(e.Suggested),
-			Digest:        e.Digest, Stale: e.Stale, OnSurface: e.OnSurface,
+			CompensatedBy: e.CompensatedBy, Dedupe: e.Dedupe.Clone(),
+			Suggested: suggestionOf(e.Suggested),
+			Digest:    e.Digest, Stale: e.Stale, OnSurface: e.OnSurface,
 		})
 	}
 	slices.SortFunc(out, func(a, b domain.ToolEntry) int {

@@ -294,6 +294,48 @@ func TestClassify_curatorWidensEffect(t *testing.T) {
 	}
 }
 
+func TestClassify_recordsCrossRunDedupeWithoutSharingIt(t *testing.T) {
+	t.Parallel()
+
+	c, _ := catalogWith(t, lookupServer())
+	declared := domain.ToolDedupe{WindowSeconds: 3600, ArgPaths: []string{"customer_id", "title"}}
+	if err := c.Classify(domain.ToolClassification{
+		Tool: "crm.lookup", Effect: domain.EffectWrite, Dedupe: declared,
+	}); err != nil {
+		t.Fatalf("Classify: %v", err)
+	}
+
+	declared.ArgPaths[0] = "mutated-by-caller"
+	first, ok := c.Dedupe("crm.lookup")
+	if !ok {
+		t.Fatal("Dedupe = false, want the Curator's declaration")
+	}
+	first.ArgPaths[0] = "mutated-by-reader"
+	second, ok := c.Dedupe("crm.lookup")
+	if !ok {
+		t.Fatal("Dedupe disappeared after reading it once")
+	}
+	if second.WindowSeconds != 3600 ||
+		len(second.ArgPaths) != 2 || second.ArgPaths[0] != "customer_id" || second.ArgPaths[1] != "title" {
+		t.Fatalf("Dedupe = %+v, want a defensive copy of the stored declaration", second)
+	}
+}
+
+func TestClassify_invalidDedupe_isRejected(t *testing.T) {
+	t.Parallel()
+
+	c, _ := catalogWith(t, lookupServer())
+	if err := c.Classify(domain.ToolClassification{
+		Tool: "crm.lookup", Effect: domain.EffectWrite,
+		Dedupe: domain.ToolDedupe{WindowSeconds: 60, ArgPaths: []string{"ticket/id"}},
+	}); err == nil {
+		t.Fatal("Classify accepted a dedupe declaration with a free-form path")
+	}
+	if _, ok := c.Dedupe("crm.lookup"); ok {
+		t.Fatal("Dedupe = true after an invalid declaration")
+	}
+}
+
 func TestClassify_unknownTool_isRejected(t *testing.T) {
 	t.Parallel()
 
@@ -641,6 +683,32 @@ func TestSync_appliesARecordedRuling_soAPromotionOutlivesTheProcess(t *testing.T
 	}
 	if effect, _ := c.Effect("crm.note"); effect != domain.EffectWrite {
 		t.Errorf("effect after sync = %v, want write", effect)
+	}
+	if got, ok := c.Dedupe("crm.note"); ok || got.Enabled() {
+		t.Errorf("Dedupe = %+v/%v, want absent until a Curator declares it", got, ok)
+	}
+}
+
+func TestSync_appliesARecordedDedupeRuling(t *testing.T) {
+	t.Parallel()
+
+	c, _ := catalogWith(t, noteServer())
+	applied, err := c.Sync(t.Context(), staticRulings{
+		{Tool: "crm.note", Effect: domain.EffectWrite, Dedupe: domain.ToolDedupe{
+			WindowSeconds: 600,
+			ArgPaths:      []string{"customer_id", "title"},
+		}},
+	}, domain.Scope{})
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	if applied != 1 {
+		t.Fatalf("applied = %d, want the ruling applied", applied)
+	}
+	got, ok := c.Dedupe("crm.note")
+	if !ok || got.WindowSeconds != 600 ||
+		len(got.ArgPaths) != 2 || got.ArgPaths[0] != "customer_id" || got.ArgPaths[1] != "title" {
+		t.Fatalf("Dedupe = %+v/%v, want the recorded semantic key", got, ok)
 	}
 }
 

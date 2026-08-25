@@ -45,7 +45,7 @@ func (c *Catalog) Sync(ctx context.Context, from Classifier, scope domain.Scope)
 	applied := 0
 	for _, r := range rulings {
 		entry, ok := c.entries[r.Tool]
-		if !ok || !r.Effect.Valid() {
+		if !ok || !r.Effect.Valid() || r.Dedupe.Validate() != nil {
 			continue
 		}
 		/*
@@ -69,6 +69,7 @@ func (c *Catalog) Sync(ctx context.Context, from Classifier, scope domain.Scope)
 		entry.Effect = r.Effect
 		entry.Untrusted = r.Untrusted
 		entry.CompensatedBy = r.CompensatedBy
+		entry.Dedupe = r.Dedupe.Clone()
 		c.entries[r.Tool] = entry
 		applied++
 	}
@@ -84,6 +85,9 @@ func (c *Catalog) Classify(ruling domain.ToolClassification) error {
 	if !ruling.Effect.Valid() {
 		return fmt.Errorf("tools: %q is not a valid effect classification", ruling.Effect)
 	}
+	if err := ruling.Dedupe.Validate(); err != nil {
+		return fmt.Errorf("tools: invalid dedupe for %s: %w", ruling.Tool, err)
+	}
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -95,6 +99,7 @@ func (c *Catalog) Classify(ruling domain.ToolClassification) error {
 	entry.Effect = ruling.Effect
 	entry.Untrusted = ruling.Untrusted
 	entry.CompensatedBy = ruling.CompensatedBy
+	entry.Dedupe = ruling.Dedupe.Clone()
 	c.entries[ruling.Tool] = entry
 	return nil
 }
@@ -129,4 +134,18 @@ func (c *Catalog) Effect(id domain.ToolID) (domain.Effect, bool) {
 		return domain.EffectUnknown, false
 	}
 	return entry.Effect, true
+}
+
+// Dedupe answers whether a ruled tool has a Curator-declared semantic key for
+// cross-run dedupe. Unknown, off-surface and undeclared tools all return false:
+// the safe default is ordinary execution, not a raw-argument hash fallback.
+func (c *Catalog) Dedupe(id domain.ToolID) (domain.ToolDedupe, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	entry, ok := c.entries[id]
+	if !ok || !entry.OnSurface || !entry.Dedupe.Enabled() {
+		return domain.ToolDedupe{}, false
+	}
+	return entry.Dedupe.Clone(), true
 }

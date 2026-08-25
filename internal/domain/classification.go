@@ -24,6 +24,12 @@ type ToolClassification struct {
 	// compensation for one would be claiming to undo something it cannot.
 	CompensatedBy ToolID
 
+	// Dedupe declares the stable argument fields that make this effect the
+	// same external act across runs. It is a Curator decision for the same
+	// reason Effect is: a model must not decide that its next call is safe to
+	// repeat or broad enough to suppress another tenant's action.
+	Dedupe ToolDedupe
+
 	/*
 		Digest names the definition that was judged.
 
