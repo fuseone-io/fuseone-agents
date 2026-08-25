@@ -27,6 +27,22 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.34.1] — 2026-08-25
+
+### Fixed
+
+- **The agent overview no longer offers the same next step twice.** When the
+  guided path recommends a rehearsal, that recommendation is the visible
+  action and the header's Simulate shortcut moves into the overflow menu.
+  When the guide points somewhere else, Simulate returns to the header and
+  does not also sit in the menu.
+
+  Two buttons side by side pointing at the same screen do not read as a
+  shortcut beside a recommendation; they read as one duplicated button, and
+  the recommendation is the half that loses. Keeping the shortcut reachable
+  rather than removing it leaves a path for somebody who already knows what
+  they want.
+
 ## [0.34.0] — 2026-08-25
 
 ### Changed
