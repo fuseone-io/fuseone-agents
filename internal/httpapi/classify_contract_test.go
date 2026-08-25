@@ -270,6 +270,79 @@ func TestListRecipes_withoutThePermission_isRefused(t *testing.T) {
 	}
 }
 
+func TestListConnectorCatalog_namesGovernedShapesWithoutPlaintext(t *testing.T) {
+	t.Parallel()
+
+	resp, err := NewServer(ledger.NewMemory(), "test").
+		ListConnectorCatalog(as(domain.RoleCurator), openapi.ListConnectorCatalogRequestObject{})
+	if err != nil {
+		t.Fatalf("ListConnectorCatalog: %v", err)
+	}
+	listed, ok := resp.(openapi.ListConnectorCatalog200JSONResponse)
+	if !ok {
+		t.Fatalf("response = %T, want catalog", resp)
+	}
+	if len(listed.Items) == 0 {
+		t.Fatal("no connectors; the screen would promise a catalogue with nothing in it")
+	}
+
+	vault, ok := connectorNamed(listed.Items, "vault")
+	if !ok {
+		t.Fatal("Vault connector missing")
+	}
+	if vault.Maturity != openapi.GovernedConnectorMaturityPlanned {
+		t.Fatalf("Vault maturity = %q, want planned; executable would be a new runtime surface", vault.Maturity)
+	}
+	write, ok := operationNamed(vault.Operations, "vault.write_secret")
+	if !ok {
+		t.Fatal("Vault write operation missing")
+	}
+	if write.SecretHandling != openapi.ConnectorSecretHandlingReferenceOnly {
+		t.Fatalf("Vault write secret handling = %q, want reference-only", write.SecretHandling)
+	}
+	if !slices.Contains(write.Effects, openapi.ConnectorEffectSecret) {
+		t.Fatal("Vault write does not declare a secret effect")
+	}
+	for _, connector := range listed.Items {
+		for _, op := range connector.Operations {
+			if op.SecretHandling == openapi.ConnectorSecretHandlingPlaintextRequiresApproval {
+				t.Fatalf("%s exposes plaintext secret handling before the runtime exists", op.Id)
+			}
+		}
+	}
+}
+
+func TestListConnectorCatalog_withoutThePermission_isRefused(t *testing.T) {
+	t.Parallel()
+
+	resp, err := NewServer(ledger.NewMemory(), "test").
+		ListConnectorCatalog(as(domain.RoleAuditor), openapi.ListConnectorCatalogRequestObject{})
+	if err != nil {
+		t.Fatalf("ListConnectorCatalog: %v", err)
+	}
+	if _, refused := resp.(openapi.ListConnectorCatalog403ApplicationProblemPlusJSONResponse); !refused {
+		t.Fatalf("response = %T, want 403", resp)
+	}
+}
+
+func connectorNamed(in []openapi.GovernedConnector, id string) (openapi.GovernedConnector, bool) {
+	for _, one := range in {
+		if one.Id == id {
+			return one, true
+		}
+	}
+	return openapi.GovernedConnector{}, false
+}
+
+func operationNamed(in []openapi.GovernedConnectorOperation, id string) (openapi.GovernedConnectorOperation, bool) {
+	for _, one := range in {
+		if one.Id == id {
+			return one, true
+		}
+	}
+	return openapi.GovernedConnectorOperation{}, false
+}
+
 /*
 What the console is told about a server it has already narrowed.
 

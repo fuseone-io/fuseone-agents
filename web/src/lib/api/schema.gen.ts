@@ -1688,6 +1688,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/integrations/connectors/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Governed connector shapes this platform plans to host
+         * @description Native connector shapes the platform intends to govern directly. This is not a runtime surface: listing a connector here creates no credential, starts no worker, and lets no agent call it. The catalogue names the security contract a future connector must satisfy before it becomes executable.
+         */
+        get: operations["listConnectorCatalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/integrations/mcp-servers/{name}": {
         parameters: {
             query?: never;
@@ -2842,6 +2862,46 @@ export interface components {
             mode: "inherit" | "proxied";
             /** @description Destinations the worker-local proxy may connect to for this server. Empty or omitted is valid only for inherit. */
             allowedDestinations?: components["schemas"]["MCPEgressDestination"][];
+        };
+        /**
+         * @description The broad effect an operation can have. The Gate still decides on real tools; this catalogue states the contract a future governed connector must expose.
+         * @enum {string}
+         */
+        ConnectorEffect: "read" | "write" | "destructive" | "financial" | "secret";
+        /**
+         * @description Whether the operation is expected to run without a human decision, depends on policy, or is always a human decision before execution.
+         * @enum {string}
+         */
+        ConnectorApproval: "none" | "policy" | "required";
+        /**
+         * @description How secret values may move through the connector. Reference-only means the model can name a stored value without receiving the value itself.
+         * @enum {string}
+         */
+        ConnectorSecretHandling: "none" | "reference_only" | "plaintext_requires_approval";
+        GovernedConnectorOperation: {
+            /** @description Stable operation name a future runtime would expose. */
+            id: string;
+            name: string;
+            summary: string;
+            effects: components["schemas"]["ConnectorEffect"][];
+            approval: components["schemas"]["ConnectorApproval"];
+            secretHandling: components["schemas"]["ConnectorSecretHandling"];
+        };
+        GovernedConnector: {
+            /** @description Stable connector shape, not an instance name. */
+            id: string;
+            name: string;
+            /** @enum {string} */
+            category: "automation" | "infrastructure" | "messaging" | "network" | "secrets";
+            summary: string;
+            /**
+             * @description Planned means the catalogue describes the intended governed shape but the connector is not executable in this release.
+             * @enum {string}
+             */
+            maturity: "planned";
+            guarantees: string[];
+            caveats: string[];
+            operations: components["schemas"]["GovernedConnectorOperation"][];
         };
         /**
          * @description What the API can say about authentication for tools/call for the
@@ -6618,6 +6678,30 @@ export interface operations {
                 content: {
                     "application/json": {
                         items: components["schemas"]["ServerRecipe"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listConnectorCatalog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The governed connector catalogue. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["GovernedConnector"][];
                     };
                 };
             };
