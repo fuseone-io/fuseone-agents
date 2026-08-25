@@ -105,21 +105,28 @@ func TestCatalog_objectStorageMovesBytesByReference(t *testing.T) {
 	t.Parallel()
 
 	connector := connectorByID(t, "object-storage")
+	if !hasGuarantee(connector, "object bytes move through content references instead of inline model text") {
+		t.Fatal("object storage does not declare reference-based content movement")
+	}
 	for _, id := range []string{"object-storage.read_object", "object-storage.write_object"} {
 		op := operationByID(t, connector, id)
-		if op.SecretHandling != SecretReferenceOnly {
-			t.Fatalf("%s secret handling = %q, want reference only", id, op.SecretHandling)
+		if op.SecretHandling != SecretNone {
+			t.Fatalf("%s secret handling = %q, want none", id, op.SecretHandling)
 		}
 	}
 }
 
-func TestCatalog_identityDestructiveActionsRequireApproval(t *testing.T) {
+func TestCatalog_nonReversibleEffectsRequireApproval(t *testing.T) {
 	t.Parallel()
 
-	connector := connectorByID(t, "identity")
-	for _, op := range connector.Operations {
-		if hasEffect(op, EffectDestructive) && op.Approval != ApprovalRequired {
-			t.Fatalf("%s is destructive with approval %q, want required", op.ID, op.Approval)
+	for _, connector := range Catalog() {
+		for _, op := range connector.Operations {
+			if !hasNonReversibleEffect(op) {
+				continue
+			}
+			if op.Approval != ApprovalRequired {
+				t.Fatalf("%s has a non-reversible effect with approval %q, want required", op.ID, op.Approval)
+			}
 		}
 	}
 }
@@ -177,6 +184,10 @@ func hasEffect(op Operation, effect Effect) bool {
 		}
 	}
 	return false
+}
+
+func hasNonReversibleEffect(op Operation) bool {
+	return hasEffect(op, EffectDestructive) || hasEffect(op, EffectFinancial)
 }
 
 func hasGuarantee(connector Connector, guarantee string) bool {

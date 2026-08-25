@@ -22,7 +22,7 @@ var objectStorageConnector = Connector{
 			Summary:        "Reads an allowed object into the content store and returns a reference plus metadata.",
 			Effects:        []Effect{EffectRead},
 			Approval:       ApprovalPolicy,
-			SecretHandling: SecretReferenceOnly,
+			SecretHandling: SecretNone,
 		},
 		{
 			ID:             "object-storage.write_object",
@@ -30,7 +30,7 @@ var objectStorageConnector = Connector{
 			Summary:        "Writes referenced content to an allowed bucket and prefix.",
 			Effects:        []Effect{EffectWrite},
 			Approval:       ApprovalPolicy,
-			SecretHandling: SecretReferenceOnly,
+			SecretHandling: SecretNone,
 		},
 		{
 			ID:             "object-storage.delete_object",
