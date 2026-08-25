@@ -27,6 +27,31 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.34.2] — 2026-08-25
+
+### Fixed
+
+- **Agent cards are the same height, so the list can be compared.** A card used
+  to list every tool on its own line, which made an agent with fifteen tools
+  three times taller than one with a single tool: the grid broke, and the
+  questions a list exists to answer — is it running, is it failing, what does it
+  cost — fell below the technical names. Tools are now grouped into one chip per
+  integration inside a fixed box, with a counter for what does not fit, and the
+  card carries three numbers instead of six. Ceilings, steps and triggers are
+  configuration; they belong on the agent's own page.
+
+- **A capability nobody has classified no longer looks safe.** The chip's colour
+  is the answer to "what can this touch", so it now has three states rather than
+  two: highlighted for write, destructive or financial; plain for tools proven
+  read-only; and outlined for tools the catalogue has not classified.
+
+  Before, an unclassified capability was drawn exactly like a proven read-only
+  one. The card was careful not to invent risk and invented safety instead,
+  which is the worse direction in a console somebody opens to decide what an
+  agent may be trusted with. The Gate already refuses to call an unclassified
+  tool and the runtime already names it; this was the last surface where its
+  absence read as calm.
+
 ## [0.34.1] — 2026-08-25
 
 ### Fixed
