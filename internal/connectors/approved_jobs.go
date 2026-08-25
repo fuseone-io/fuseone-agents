@@ -17,15 +17,15 @@ var approvedJobsConnector = Connector{
 	},
 	Operations: []Operation{
 		{
-			ID:             "jobs.run_template",
+			ID:             "approved-jobs.run_template",
 			Name:           "Run template",
 			Summary:        "Starts an approved job template with validated arguments.",
-			Effects:        []Effect{EffectWrite, EffectSecret},
+			Effects:        []Effect{EffectWrite},
 			Approval:       ApprovalPolicy,
 			SecretHandling: SecretReferenceOnly,
 		},
 		{
-			ID:             "jobs.read_result",
+			ID:             "approved-jobs.read_result",
 			Name:           "Read result",
 			Summary:        "Reads structured job status and non-secret outputs.",
 			Effects:        []Effect{EffectRead},

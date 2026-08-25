@@ -2867,7 +2867,7 @@ export interface components {
          * @description The broad effect an operation can have. The Gate still decides on real tools; this catalogue states the contract a future governed connector must expose.
          * @enum {string}
          */
-        ConnectorEffect: "read" | "write" | "destructive" | "financial" | "secret";
+        ConnectorEffect: "read" | "write" | "destructive" | "financial";
         /**
          * @description Whether the operation is expected to run without a human decision, depends on policy, or is always a human decision before execution.
          * @enum {string}

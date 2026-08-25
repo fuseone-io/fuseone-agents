@@ -50,8 +50,11 @@ implies.
 - Secret values should move as content references by default. Returning
   plaintext is a separate runtime decision and must not be implied by the
   catalogue.
-- Write, destructive, financial and secret effects must be visible before the
-  operation can execute, so the Gate can stop or ask.
+- Write, destructive and financial effects must be visible before the operation
+  can execute, so the Gate can stop or ask.
+- Secret movement is not a separate effect. It is declared through
+  `secretHandling`, because the Gate's effect ladder and the data-handling
+  contract answer different questions.
 - Job runners must run approved templates, not arbitrary command strings.
 - Generic HTTP is a bridge, not a permanent shape. A common workflow should
   graduate into a named connector with narrower operation semantics.

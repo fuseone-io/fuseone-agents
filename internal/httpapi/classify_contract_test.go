@@ -300,9 +300,6 @@ func TestListConnectorCatalog_namesGovernedShapesWithoutPlaintext(t *testing.T) 
 	if write.SecretHandling != openapi.ConnectorSecretHandlingReferenceOnly {
 		t.Fatalf("Vault write secret handling = %q, want reference-only", write.SecretHandling)
 	}
-	if !slices.Contains(write.Effects, openapi.ConnectorEffectSecret) {
-		t.Fatal("Vault write does not declare a secret effect")
-	}
 	for _, connector := range listed.Items {
 		for _, op := range connector.Operations {
 			if op.SecretHandling == openapi.ConnectorSecretHandlingPlaintextRequiresApproval {

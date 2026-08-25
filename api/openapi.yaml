@@ -4500,7 +4500,7 @@ components:
 
     ConnectorEffect:
       type: string
-      enum: [read, write, destructive, financial, secret]
+      enum: [read, write, destructive, financial]
       description: >
         The broad effect an operation can have. The Gate still decides on real
         tools; this catalogue states the contract a future governed connector

@@ -1167,8 +1167,7 @@
       "read": "leitura",
       "write": "escrita",
       "destructive": "destrutiva",
-      "financial": "financeira",
-      "secret": "segredo"
+      "financial": "financeira"
     },
     "secretHandling": {
       "none": "sem segredo",

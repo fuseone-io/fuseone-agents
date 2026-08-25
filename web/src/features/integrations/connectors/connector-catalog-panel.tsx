@@ -184,7 +184,7 @@ function OperationRow({
 function effectClass(effect: GovernedConnector["operations"][number]["effects"][number]) {
   return cn(
     "text-2xs",
-    (effect === "write" || effect === "destructive" || effect === "secret") &&
+    (effect === "write" || effect === "destructive") &&
       "border-primary/50 text-primary",
   );
 }

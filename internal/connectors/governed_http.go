@@ -17,7 +17,7 @@ var governedHTTPConnector = Connector{
 	},
 	Operations: []Operation{
 		{
-			ID:             "http.call_endpoint",
+			ID:             "governed-http.call_endpoint",
 			Name:           "Call endpoint",
 			Summary:        "Calls a declared endpoint with schema-checked arguments.",
 			Effects:        []Effect{EffectRead, EffectWrite},

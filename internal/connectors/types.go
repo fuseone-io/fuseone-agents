@@ -17,7 +17,6 @@ const (
 	EffectWrite       Effect = "write"
 	EffectDestructive Effect = "destructive"
 	EffectFinancial   Effect = "financial"
-	EffectSecret      Effect = "secret"
 )
 
 type Approval string

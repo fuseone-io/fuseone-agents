@@ -19,7 +19,7 @@ const vault: GovernedConnector = {
       id: "vault.write_secret",
       name: "Write secret",
       summary: "Writes a generated key or certificate to an allowed Vault path.",
-      effects: ["write", "secret"],
+      effects: ["write"],
       approval: "policy",
       secretHandling: "reference_only",
     },
