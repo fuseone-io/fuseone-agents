@@ -1126,6 +1126,7 @@
     "serverRemoved": "{{name}} removed",
     "servers": "Tool servers",
     "available": "Available",
+    "connectors": "Connectors",
     "credentials": "Credentials",
     "sections": "Integration sections",
     "stateAnswering": "answering",
@@ -1146,6 +1147,33 @@
     "acceptLocalExecution": "This server runs code inside the worker",
     "acceptLocalExecutionWhy": "A local server is a program this installation starts. It runs as the worker, on its filesystem, and reaches whatever the worker reaches — the Gate decides what a tool may do, and decides nothing about what a process may read. Your name is recorded against this.",
     "acceptLocalExecutionRequired": "Accept what a local server is, or reach this one over HTTP instead."
+  },
+  "connectors": {
+    "title": "Governed connectors",
+    "subtitle": "Native connector shapes the platform can govern directly. This release lists the contract only: no credential is created, no worker starts and no agent can call these operations yet.",
+    "emptyTitle": "No governed connectors in this release",
+    "emptyHint": "Connectors appear here only when the platform can describe the security contract they must satisfy.",
+    "operations": "Operations",
+    "guarantees": "Governed shape",
+    "maturity": {
+      "planned": "Planned"
+    },
+    "approval": {
+      "none": "no approval",
+      "policy": "policy",
+      "required": "required"
+    },
+    "effect": {
+      "read": "read",
+      "write": "write",
+      "destructive": "destructive",
+      "financial": "financial"
+    },
+    "secretHandling": {
+      "none": "no secret",
+      "reference_only": "secrets by reference",
+      "plaintext_requires_approval": "plaintext needs approval"
+    }
   },
   "interview": {
     "assistantFailed": "The assistant could not answer",

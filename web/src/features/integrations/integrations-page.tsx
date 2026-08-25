@@ -23,10 +23,12 @@ import { ServerCard } from "@/features/integrations/server-card";
 import { ProviderCard } from "@/features/integrations/provider-card";
 import {
   useIntegrations,
+  useConnectorCatalog,
   useMCPUserCredentials,
   type MCPServer,
   type ModelProvider,
 } from "@/features/integrations/api";
+import { ConnectorCatalogPanel } from "@/features/integrations/connectors/connector-catalog-panel";
 import { useRecipes } from "@/features/integrations/mcp/api";
 import { AvailableServersPanel } from "@/features/integrations/mcp/available-servers-panel";
 import { UserCredentialsPanel } from "@/features/integrations/mcp/user-credentials-panel";
@@ -63,6 +65,7 @@ export function IntegrationsPage({
   const recipes = useRecipes();
   const channels = useChannels();
   const credentials = useMCPUserCredentials();
+  const connectorCatalog = useConnectorCatalog(section === "connectors");
   const [editing, setEditing] = useState<Editing | null>(null);
 
   const servers = integrations.data?.mcpServers ?? [];
@@ -75,6 +78,9 @@ export function IntegrationsPage({
     available:
       integrations.data && recipes.data ? available.length : undefined,
     credentials: credentials.data ? credentials.data.items.length : undefined,
+    connectors: connectorCatalog.data
+      ? connectorCatalog.data.items.length
+      : undefined,
     providers: integrations.data ? providers.length : undefined,
     channels: channels.data ? channels.data.items.length : undefined,
   };
@@ -188,6 +194,13 @@ export function IntegrationsPage({
               void integrations.refetch();
               void recipes.refetch();
             }}
+          />
+        ) : section === "connectors" ? (
+          <ConnectorCatalogPanel
+            connectors={connectorCatalog.data?.items ?? []}
+            isLoading={connectorCatalog.isLoading}
+            error={connectorCatalog.error}
+            onRetry={() => void connectorCatalog.refetch()}
           />
         ) : section === "credentials" ? (
           <UserCredentialsPanel

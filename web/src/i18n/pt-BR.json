@@ -1126,6 +1126,7 @@
     "serverRemoved": "{{name}} removido",
     "servers": "Servidores de ferramentas",
     "available": "Disponíveis",
+    "connectors": "Connectors",
     "credentials": "Credenciais",
     "sections": "Seções de integrações",
     "stateAnswering": "respondendo",
@@ -1146,6 +1147,33 @@
     "acceptLocalExecution": "Este servidor executa código dentro do worker",
     "acceptLocalExecutionWhy": "Um servidor local é um programa que esta instalação inicia. Roda como o worker, no sistema de ficheiros dele, e alcança tudo o que o worker alcança — o Gate decide o que uma ferramenta pode fazer e não decide nada sobre o que um processo pode ler. O seu nome fica registado nesta decisão.",
     "acceptLocalExecutionRequired": "Aceite o que é um servidor local, ou use HTTP para alcançar este."
+  },
+  "connectors": {
+    "title": "Connectors governados",
+    "subtitle": "Shapes nativos de connector que a plataforma consegue governar diretamente. Esta versão lista apenas o contrato: nenhuma credencial é criada, nenhum worker inicia e nenhum agente consegue chamar estas operações ainda.",
+    "emptyTitle": "Nenhum connector governado nesta versão",
+    "emptyHint": "Connectors aparecem aqui só quando a plataforma consegue descrever o contrato de segurança que eles precisam cumprir.",
+    "operations": "Operações",
+    "guarantees": "Shape governado",
+    "maturity": {
+      "planned": "Planejado"
+    },
+    "approval": {
+      "none": "sem aprovação",
+      "policy": "política",
+      "required": "obrigatória"
+    },
+    "effect": {
+      "read": "leitura",
+      "write": "escrita",
+      "destructive": "destrutiva",
+      "financial": "financeira"
+    },
+    "secretHandling": {
+      "none": "sem segredo",
+      "reference_only": "segredos por referência",
+      "plaintext_requires_approval": "plaintext exige aprovação"
+    }
   },
   "interview": {
     "assistantFailed": "O assistente não conseguiu responder",

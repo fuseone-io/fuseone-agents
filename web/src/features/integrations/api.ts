@@ -7,11 +7,14 @@ export type MCPUserCredential = components["schemas"]["MCPUserCredential"];
 export type MCPOAuthGrant = components["schemas"]["MCPOAuthGrant"];
 export type ModelProvider = components["schemas"]["ModelProvider"];
 export type IntegrationHealth = components["schemas"]["IntegrationHealth"];
+export type GovernedConnector = components["schemas"]["GovernedConnector"];
 
 export const integrationKeys = {
   all: ["integrations"] as const,
   list: () => [...integrationKeys.all, "list"] as const,
   mcpCredentials: () => [...integrationKeys.all, "mcp-credentials"] as const,
+  connectorCatalog: () =>
+    [...integrationKeys.all, "connectors", "catalog"] as const,
 };
 
 export function useIntegrations() {
@@ -122,6 +125,15 @@ export function useMCPUserCredentials(enabled = true) {
   return useQuery({
     queryKey: integrationKeys.mcpCredentials(),
     queryFn: async () => unwrap(await api.GET("/integrations/mcp-credentials")),
+    enabled,
+  });
+}
+
+export function useConnectorCatalog(enabled = true) {
+  return useQuery({
+    queryKey: integrationKeys.connectorCatalog(),
+    queryFn: async () =>
+      unwrap(await api.GET("/admin/integrations/connectors/catalog")),
     enabled,
   });
 }
