@@ -4,10 +4,12 @@ type Category string
 
 const (
 	CategoryAutomation     Category = "automation"
+	CategoryData           Category = "data"
 	CategoryInfrastructure Category = "infrastructure"
 	CategoryMessaging      Category = "messaging"
 	CategoryNetwork        Category = "network"
 	CategorySecrets        Category = "secrets"
+	CategorySecurity       Category = "security"
 )
 
 type Effect string

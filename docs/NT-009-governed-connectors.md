@@ -37,6 +37,12 @@ implies.
   content references; read metadata without returning secret values.
 - Approved automation jobs: run registered job templates such as CSR
   generation without giving the model shell access.
+- Governed SQL read access: run registered read-only templates against
+  approved schemas with declared columns, filters and row limits.
+- Object storage: move governed artifacts through content references inside
+  approved buckets and prefixes.
+- Identity actions: read principals and perform narrow account actions with
+  stable subject identifiers.
 - Kubernetes operations: read diagnostics and perform narrow operational
   writes under namespace and verb policy.
 - DNS management: read, upsert and delete records inside approved zones.
@@ -56,6 +62,12 @@ implies.
   `secretHandling`, because the Gate's effect ladder and the data-handling
   contract answer different questions.
 - Job runners must run approved templates, not arbitrary command strings.
+- SQL connectors must run approved read-only templates, not arbitrary query
+  strings supplied by the model.
+- Object payloads should move as content references unless a runtime explicitly
+  declares and gates plaintext.
+- Identity actions must resolve display names to stable provider identifiers
+  before any write or destructive operation reaches the provider.
 - Generic HTTP is a bridge, not a permanent shape. A common workflow should
   graduate into a named connector with narrower operation semantics.
 - The catalogue is not evidence that an installation can reach the external
