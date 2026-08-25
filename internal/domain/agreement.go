@@ -12,10 +12,46 @@ type Agreement struct {
 	Refused  int
 }
 
+// VersionAgreement is the same measurement pinned to the version that asked.
+//
+// Promotion pages read this beside version-level simulations and spend. A
+// refusal against v2 should not make v3 look less trusted, and a dashboard
+// that cannot separate them teaches authors to distrust the numbers.
+type VersionAgreement struct {
+	Agent   AgentID
+	Version VersionID
+
+	Approved int
+	Refused  int
+}
+
+// VersionGateBlocks counts the Gate decisions that stopped a version.
+//
+// It is deliberately coarse. The Trust Center needs to know whether this
+// published definition is being stopped more often, not which arguments or
+// vendor text caused it. Those stay in the run trail under the normal
+// permissions and retention rules.
+type VersionGateBlocks struct {
+	Agent   AgentID
+	Version VersionID
+
+	Blocks int
+	Runs   int
+}
+
 func (a Agreement) Decided() int { return a.Approved + a.Refused }
 
 // Rate is the share people agreed with, or zero when nobody was asked.
 func (a Agreement) Rate() float64 {
+	if a.Decided() == 0 {
+		return 0
+	}
+	return float64(a.Approved) / float64(a.Decided())
+}
+
+func (a VersionAgreement) Decided() int { return a.Approved + a.Refused }
+
+func (a VersionAgreement) Rate() float64 {
 	if a.Decided() == 0 {
 		return 0
 	}

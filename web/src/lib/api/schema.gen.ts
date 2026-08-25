@@ -614,6 +614,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{agentId}/trust": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Promotion evidence for one published agent version
+         * @description The Trust Center is an aggregate over ledger facts, not a reading of
+         *     the agent's prose. It reports stable evidence codes and counts for the
+         *     version being viewed, with the previous version used only as a
+         *     baseline when both sides have measured evidence.
+         *
+         *     The response deliberately carries no prompt text, tool arguments,
+         *     provider diagnostics, Slack text, URLs, headers, secrets or personal
+         *     identifiers beyond the published agent metadata the caller can already
+         *     read.
+         */
+        get: operations["getAgentTrust"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{agentId}/simulations": {
         parameters: {
             query?: never;
@@ -3485,6 +3513,48 @@ export interface components {
          * @enum {string}
          */
         Standing: "held" | "broke" | "absent";
+        /** @description Promotion evidence for one published agent version. Every judgement comes from structured ledger facts and stable codes, never from instruction prose. */
+        AgentTrust: {
+            versionId: string;
+            /** @description The baseline version, absent when this is the first published version. */
+            previousVersionId?: string | null;
+            status: components["schemas"]["AgentTrustStatus"];
+            recommendation: components["schemas"]["AgentTrustRecommendation"];
+            summary: components["schemas"]["AgentTrustSummary"];
+            window: components["schemas"]["AgentTrustWindow"];
+            evidence: components["schemas"]["AgentTrustEvidence"][];
+        };
+        /** @description Time window used for run-derived trust evidence. Simulation, version comparison, launch state and capability drift may use non-windowed facts, but run history, cost, human decisions and Gate blocks are judged only inside this period. */
+        AgentTrustWindow: {
+            /** Format: date-time */
+            from: string;
+            /** Format: date-time */
+            until: string;
+        };
+        /** @enum {string} */
+        AgentTrustStatus: "ready" | "needs_evidence" | "needs_review";
+        /** @enum {string} */
+        AgentTrustRecommendation: "collect" | "review" | "demote" | "copilot" | "autonomous" | "keep";
+        /** @enum {string} */
+        AgentTrustSummary: "ready" | "evidence" | "review";
+        /** @enum {string} */
+        AgentTrustEvidenceStatus: "good" | "bad" | "missing" | "unknown";
+        /** @enum {string} */
+        AgentTrustEvidenceId: "runs" | "simulation" | "policy" | "decisions" | "launch" | "version" | "cost" | "capabilities";
+        /**
+         * @description Stable reason for this evidence row.
+         * @enum {string}
+         */
+        AgentTrustEvidenceCode: "runs_missing" | "runs_finished" | "runs_unfinished" | "runs_waiting" | "runs_in_progress" | "runs_unknown" | "simulation_missing_corpus" | "simulation_not_run" | "simulation_ready" | "simulation_broken" | "simulation_regressed" | "simulation_incomplete" | "decisions_waiting" | "decisions_quiet" | "decisions_missing" | "decisions_approved" | "decisions_refused" | "launch_running" | "launch_paused" | "version_no_previous" | "version_compared" | "version_regressed" | "version_missing_baseline" | "cost_missing" | "cost_stable" | "cost_increased" | "cost_decreased" | "policy_missing" | "policy_no_blocks" | "policy_blocks" | "policy_blocks_increased" | "policy_blocks_decreased" | "capabilities_no_previous" | "capabilities_unchanged" | "capabilities_added" | "capabilities_removed";
+        AgentTrustEvidence: {
+            id: components["schemas"]["AgentTrustEvidenceId"];
+            status: components["schemas"]["AgentTrustEvidenceStatus"];
+            code: components["schemas"]["AgentTrustEvidenceCode"];
+            /** @description Counts, version identifiers and timestamps used to render the evidence. Values are identifiers and aggregates only; content and diagnostics stay out of this contract. */
+            values: {
+                [key: string]: unknown;
+            };
+        };
         AdminEvent: {
             /** Format: date-time */
             at: string;
@@ -5079,6 +5149,33 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+        };
+    };
+    getAgentTrust: {
+        parameters: {
+            query?: {
+                /** @description A specific version. Defaults to the newest published. */
+                version?: string;
+            };
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The trust evidence. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentTrust"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     startSimulation: {

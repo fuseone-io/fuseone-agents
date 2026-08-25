@@ -110,3 +110,84 @@ func (p *Postgres) Agreement(ctx context.Context, since time.Time) ([]domain.Agr
 	}
 	return out, rows.Err()
 }
+
+// VersionAgreement counts approval decisions per version.
+//
+// Same trail as Agreement, narrower question. Version belongs in the group
+// because the Trust Center compares published definitions: agreement with v1
+// is not evidence about v2.
+func (p *Postgres) VersionAgreement(
+	ctx context.Context, filter domain.RunFilter,
+) ([]domain.VersionAgreement, error) {
+	where, args := runFilterOn(filter, "at")
+	where = whereAnd(whereAnd(where, "kind = 'approval_decided'"), realSteps)
+
+	rows, err := p.pool.Query(ctx, `
+		select agent_id,
+		       version_id,
+		       count(*) filter (where (payload->>'approved')::boolean),
+		       count(*) filter (where not (payload->>'approved')::boolean)
+		from run_steps `+where+`
+		group by agent_id, version_id
+		order by agent_id, version_id`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("version agreement: %w", err)
+	}
+	defer rows.Close()
+
+	var out []domain.VersionAgreement
+	for rows.Next() {
+		var (
+			agent, version string
+			approved       int64
+			refused        int64
+		)
+		if err := rows.Scan(&agent, &version, &approved, &refused); err != nil {
+			return nil, fmt.Errorf("version agreement: scan: %w", err)
+		}
+		out = append(out, domain.VersionAgreement{
+			Agent: domain.AgentID(agent), Version: domain.VersionID(version),
+			Approved: int(approved), Refused: int(refused),
+		})
+	}
+	return out, rows.Err()
+}
+
+// VersionGateBlocks counts Gate refusals per version.
+//
+// The Trust Center compares published definitions, so the version is part of
+// the bucket. Simulations are excluded: a blocked rehearsal is useful in the
+// simulation report, not evidence that production runs are stopping.
+func (p *Postgres) VersionGateBlocks(
+	ctx context.Context, filter domain.RunFilter,
+) ([]domain.VersionGateBlocks, error) {
+	where, args := runFilterOn(filter, "at")
+	args = append(args, int(domain.VerdictBlock))
+	where = whereAnd(whereAnd(where, "kind = 'gate_decided'"),
+		fmt.Sprintf("coalesce((payload->>'verdict')::int, 0) = $%d", len(args)))
+	where = whereAnd(where, realSteps)
+
+	rows, err := p.pool.Query(ctx, `
+		select agent_id, version_id, count(*), count(distinct run_id)
+		from run_steps `+where+`
+		group by agent_id, version_id
+		order by agent_id, version_id`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("version gate blocks: %w", err)
+	}
+	defer rows.Close()
+
+	var out []domain.VersionGateBlocks
+	for rows.Next() {
+		var agent, version string
+		var blocks, runs int64
+		if err := rows.Scan(&agent, &version, &blocks, &runs); err != nil {
+			return nil, fmt.Errorf("version gate blocks: scan: %w", err)
+		}
+		out = append(out, domain.VersionGateBlocks{
+			Agent: domain.AgentID(agent), Version: domain.VersionID(version),
+			Blocks: int(blocks), Runs: int(runs),
+		})
+	}
+	return out, rows.Err()
+}

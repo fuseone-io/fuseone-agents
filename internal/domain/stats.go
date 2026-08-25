@@ -6,6 +6,10 @@ import "time"
 type RunFilter struct {
 	Scope   Scope
 	AgentID AgentID
+	// VersionID narrows to one published definition. A run is pinned to a
+	// version at opening, so this is a ledger fact rather than a registry
+	// lookup performed later.
+	VersionID VersionID
 
 	// Scopes narrows to any of several, which is what a caller who holds a
 	// permission in more than one area needs. It is how a listing is filtered

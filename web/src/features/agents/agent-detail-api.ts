@@ -29,3 +29,21 @@ export function useAgent(agentId: string, version?: string) {
       ),
   });
 }
+
+export function useAgentTrust(agentId: string, version?: string, enabled = true) {
+  return useQuery({
+    enabled: enabled && agentId !== "",
+    queryKey: [
+      ...agentKeys.all,
+      "trust",
+      agentId,
+      version ?? "latest",
+    ] as const,
+    queryFn: async () =>
+      unwrap(
+        await api.GET("/agents/{agentId}/trust", {
+          params: { path: { agentId }, query: { version } },
+        }),
+      ),
+  });
+}

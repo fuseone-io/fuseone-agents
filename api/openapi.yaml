@@ -914,6 +914,39 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
 
+  /agents/{agentId}/trust:
+    get:
+      tags: [agents]
+      operationId: getAgentTrust
+      summary: Promotion evidence for one published agent version
+      description: |
+        The Trust Center is an aggregate over ledger facts, not a reading of
+        the agent's prose. It reports stable evidence codes and counts for the
+        version being viewed, with the previous version used only as a
+        baseline when both sides have measured evidence.
+
+        The response deliberately carries no prompt text, tool arguments,
+        provider diagnostics, Slack text, URLs, headers, secrets or personal
+        identifiers beyond the published agent metadata the caller can already
+        read.
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: version
+          in: query
+          description: A specific version. Defaults to the newest published.
+          schema: { type: string }
+      responses:
+        '200':
+          description: The trust evidence.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentTrust' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /agents/{agentId}/simulations:
     post:
       tags: [agents]
@@ -5350,6 +5383,115 @@ components:
         ran — reported rather than dropped, because a corpus that grew between
         the two versions is a real difference.
       enum: [held, broke, absent]
+
+    AgentTrust:
+      type: object
+      description: >
+        Promotion evidence for one published agent version. Every judgement
+        comes from structured ledger facts and stable codes, never from
+        instruction prose.
+      required: [versionId, status, recommendation, summary, window, evidence]
+      properties:
+        versionId: { type: string }
+        previousVersionId:
+          type: string
+          nullable: true
+          description: The baseline version, absent when this is the first published version.
+        status: { $ref: '#/components/schemas/AgentTrustStatus' }
+        recommendation: { $ref: '#/components/schemas/AgentTrustRecommendation' }
+        summary: { $ref: '#/components/schemas/AgentTrustSummary' }
+        window: { $ref: '#/components/schemas/AgentTrustWindow' }
+        evidence:
+          type: array
+          items: { $ref: '#/components/schemas/AgentTrustEvidence' }
+
+    AgentTrustWindow:
+      type: object
+      description: >
+        Time window used for run-derived trust evidence. Simulation, version
+        comparison, launch state and capability drift may use non-windowed
+        facts, but run history, cost, human decisions and Gate blocks are
+        judged only inside this period.
+      required: [from, until]
+      properties:
+        from: { type: string, format: date-time }
+        until: { type: string, format: date-time }
+
+    AgentTrustStatus:
+      type: string
+      enum: [ready, needs_evidence, needs_review]
+
+    AgentTrustRecommendation:
+      type: string
+      enum: [collect, review, demote, copilot, autonomous, keep]
+
+    AgentTrustSummary:
+      type: string
+      enum: [ready, evidence, review]
+
+    AgentTrustEvidenceStatus:
+      type: string
+      enum: [good, bad, missing, unknown]
+
+    AgentTrustEvidenceId:
+      type: string
+      enum: [runs, simulation, policy, decisions, launch, version, cost, capabilities]
+
+    AgentTrustEvidenceCode:
+      type: string
+      description: Stable reason for this evidence row.
+      enum:
+        - runs_missing
+        - runs_finished
+        - runs_unfinished
+        - runs_waiting
+        - runs_in_progress
+        - runs_unknown
+        - simulation_missing_corpus
+        - simulation_not_run
+        - simulation_ready
+        - simulation_broken
+        - simulation_regressed
+        - simulation_incomplete
+        - decisions_waiting
+        - decisions_quiet
+        - decisions_missing
+        - decisions_approved
+        - decisions_refused
+        - launch_running
+        - launch_paused
+        - version_no_previous
+        - version_compared
+        - version_regressed
+        - version_missing_baseline
+        - cost_missing
+        - cost_stable
+        - cost_increased
+        - cost_decreased
+        - policy_missing
+        - policy_no_blocks
+        - policy_blocks
+        - policy_blocks_increased
+        - policy_blocks_decreased
+        - capabilities_no_previous
+        - capabilities_unchanged
+        - capabilities_added
+        - capabilities_removed
+
+    AgentTrustEvidence:
+      type: object
+      required: [id, status, code, values]
+      properties:
+        id: { $ref: '#/components/schemas/AgentTrustEvidenceId' }
+        status: { $ref: '#/components/schemas/AgentTrustEvidenceStatus' }
+        code: { $ref: '#/components/schemas/AgentTrustEvidenceCode' }
+        values:
+          type: object
+          description: >
+            Counts, version identifiers and timestamps used to render the
+            evidence. Values are identifiers and aggregates only; content and
+            diagnostics stay out of this contract.
+          additionalProperties: true
 
     AdminEvent:
       type: object

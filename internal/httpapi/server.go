@@ -36,6 +36,8 @@ type Store interface {
 	ListRuns(ctx context.Context, filter domain.RunFilter, phase string, limit int) ([]domain.RunSummary, error)
 	CostRollup(ctx context.Context, filter domain.RunFilter, groupBy string) ([]domain.CostBucket, error)
 	AgentActivity(ctx context.Context, filter domain.RunFilter) ([]domain.AgentActivity, error)
+	VersionAgreement(ctx context.Context, filter domain.RunFilter) ([]domain.VersionAgreement, error)
+	VersionGateBlocks(ctx context.Context, filter domain.RunFilter) ([]domain.VersionGateBlocks, error)
 	// SimulationRuns finds the runs one simulation opened. The report is a
 	// fold of them, like every other projection here.
 	SimulationRuns(ctx context.Context, simulation string) ([]domain.RunID, error)

@@ -143,3 +143,132 @@ func (m *Memory) Agreement(ctx context.Context, since time.Time) ([]domain.Agree
 	})
 	return out, nil
 }
+
+// VersionAgreement derives the same per-version decision counts as Postgres.
+func (m *Memory) VersionAgreement(
+	ctx context.Context, filter domain.RunFilter,
+) ([]domain.VersionAgreement, error) {
+	steps, err := m.versionSteps(ctx, filter, domain.StepApprovalDecided)
+	if err != nil {
+		return nil, err
+	}
+
+	counted := map[string]*domain.VersionAgreement{}
+	for _, step := range steps {
+		var decided domain.ApprovalDecidedPayload
+		if err := json.Unmarshal(step.Payload, &decided); err != nil {
+			continue
+		}
+		key := versionStepKey(step)
+		at, seen := counted[key]
+		if !seen {
+			at = &domain.VersionAgreement{
+				Agent: step.AgentID, Version: step.VersionID,
+			}
+			counted[key] = at
+		}
+		if decided.Approved {
+			at.Approved++
+		} else {
+			at.Refused++
+		}
+	}
+
+	out := make([]domain.VersionAgreement, 0, len(counted))
+	for _, a := range counted {
+		out = append(out, *a)
+	}
+	slices.SortFunc(out, func(a, b domain.VersionAgreement) int {
+		if c := strings.Compare(string(a.Agent), string(b.Agent)); c != 0 {
+			return c
+		}
+		return strings.Compare(string(a.Version), string(b.Version))
+	})
+	return out, nil
+}
+
+// VersionGateBlocks derives the same per-version Gate refusal counts as
+// Postgres.
+func (m *Memory) VersionGateBlocks(
+	ctx context.Context, filter domain.RunFilter,
+) ([]domain.VersionGateBlocks, error) {
+	steps, err := m.versionSteps(ctx, filter, domain.StepGateDecided)
+	if err != nil {
+		return nil, err
+	}
+
+	type bucket struct {
+		domain.VersionGateBlocks
+		runs map[domain.RunID]bool
+	}
+	counted := map[string]*bucket{}
+	for _, step := range steps {
+		var decided domain.GateDecidedPayload
+		if err := json.Unmarshal(step.Payload, &decided); err != nil ||
+			decided.Verdict != domain.VerdictBlock {
+			continue
+		}
+		key := versionStepKey(step)
+		at, seen := counted[key]
+		if !seen {
+			at = &bucket{
+				VersionGateBlocks: domain.VersionGateBlocks{
+					Agent: step.AgentID, Version: step.VersionID,
+				},
+				runs: map[domain.RunID]bool{},
+			}
+			counted[key] = at
+		}
+		at.Blocks++
+		at.runs[step.RunID] = true
+	}
+
+	out := make([]domain.VersionGateBlocks, 0, len(counted))
+	for _, b := range counted {
+		b.Runs = len(b.runs)
+		out = append(out, b.VersionGateBlocks)
+	}
+	slices.SortFunc(out, func(a, b domain.VersionGateBlocks) int {
+		if c := strings.Compare(string(a.Agent), string(b.Agent)); c != 0 {
+			return c
+		}
+		return strings.Compare(string(a.Version), string(b.Version))
+	})
+	return out, nil
+}
+
+func (m *Memory) versionSteps(
+	ctx context.Context, filter domain.RunFilter, kind domain.StepKind,
+) ([]domain.Step, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	runFilter := filter
+	runFilter.Since = time.Time{}
+	runFilter.Until = time.Time{}
+	var out []domain.Step
+	for _, steps := range m.runs {
+		if len(steps) == 0 || isSimulated(steps) || !matches(steps[0], runFilter) {
+			continue
+		}
+		for _, step := range steps {
+			if step.Kind == kind && stepWithinWindow(step, filter) {
+				out = append(out, step)
+			}
+		}
+	}
+	return out, nil
+}
+
+func stepWithinWindow(step domain.Step, filter domain.RunFilter) bool {
+	return (filter.Since.IsZero() || !step.At.Before(filter.Since)) &&
+		(filter.Until.IsZero() || step.At.Before(filter.Until))
+}
+
+func versionStepKey(step domain.Step) string {
+	return string(step.AgentID) + "\x00" + string(step.VersionID)
+}

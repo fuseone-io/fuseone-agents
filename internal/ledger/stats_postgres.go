@@ -225,6 +225,9 @@ func runFilterOn(f domain.RunFilter, timeColumn string) (string, []any) {
 	if f.AgentID != "" {
 		add("agent_id = $%d", string(f.AgentID))
 	}
+	if f.VersionID != "" {
+		add("version_id = $%d", string(f.VersionID))
+	}
 	if len(f.Scopes) > 0 {
 		var any []string
 		for _, scope := range f.Scopes {

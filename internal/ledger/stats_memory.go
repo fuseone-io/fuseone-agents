@@ -182,6 +182,8 @@ func matches(first domain.Step, f domain.RunFilter) bool {
 		return false
 	case f.AgentID != "" && first.AgentID != f.AgentID:
 		return false
+	case f.VersionID != "" && first.VersionID != f.VersionID:
+		return false
 	case !f.Since.IsZero() && first.At.Before(f.Since):
 		return false
 	case !f.Until.IsZero() && !first.At.Before(f.Until):

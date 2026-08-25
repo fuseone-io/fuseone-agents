@@ -4,6 +4,7 @@ import (
 	gocontext "context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
@@ -154,7 +155,8 @@ func appendTo(
 	}
 	if _, err = store.Append(gocontext.Background(), domain.Step{
 		RunID: run, Kind: kind, Scope: domain.Scope{Company: "acme", Area: "cx"},
-		AgentID: "triage", VersionID: domain.VersionID(version), Payload: raw,
+		AgentID: "triage", VersionID: domain.VersionID(version),
+		At: time.Now().UTC(), Payload: raw,
 	}); err != nil {
 		t.Fatalf("append %s: %v", kind, err)
 	}

@@ -4,10 +4,11 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AgentDetailPage } from "@/features/agents/agent-detail-page";
 import { setLocale } from "@/i18n";
-import type { AgentDetail } from "@/lib/api/client";
+import type { AgentDetail, AgentTrust } from "@/lib/api/client";
 
 const detail = vi.hoisted(() => ({
   data: undefined as AgentDetail | undefined,
+  trust: undefined as AgentTrust | undefined,
 }));
 
 vi.mock("@/features/agents/agent-detail-api", () => ({
@@ -17,13 +18,11 @@ vi.mock("@/features/agents/agent-detail-api", () => ({
     error: null,
     refetch: vi.fn(),
   }),
-}));
-
-vi.mock("@/features/agents/regressions-api", () => ({
-  useRegressions: () => ({
-    data: { items: [{ id: "case-1", expectations: [] }] },
+  useAgentTrust: () => ({
+    data: detail.trust,
     isLoading: false,
     error: null,
+    refetch: vi.fn(),
   }),
 }));
 
@@ -130,6 +129,24 @@ describe("the agent overview", () => {
       source: "console",
       steps: [],
       versions: [{ versionId: "vb6148c24", latest: true, publishedAt: "2026-08-20T00:26:59Z" }],
+    };
+    detail.trust = {
+      versionId: "vb6148c24",
+      status: "ready",
+      recommendation: "autonomous",
+      summary: "ready",
+      window: {
+        from: "2026-08-01T00:00:00.000Z",
+        until: "2026-08-31T00:00:00.000Z",
+      },
+      evidence: [
+        {
+          id: "simulation",
+          status: "good",
+          code: "simulation_ready",
+          values: { cases: 1, held: 1 },
+        },
+      ],
     };
   });
 

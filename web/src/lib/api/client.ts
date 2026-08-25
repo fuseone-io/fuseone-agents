@@ -62,6 +62,7 @@ export type RuntimeEgressDenialBucket =
   components["schemas"]["RuntimeEgressDenialBucket"];
 export type Cost = components["schemas"]["Cost"];
 export type Agent = components["schemas"]["Agent"];
+export type AgentTrust = components["schemas"]["AgentTrust"];
 export type AgentVersion = components["schemas"]["AgentVersion"];
 export type AgentTrigger = components["schemas"]["AgentTrigger"];
 export type ModelPreset = components["schemas"]["ModelPreset"];

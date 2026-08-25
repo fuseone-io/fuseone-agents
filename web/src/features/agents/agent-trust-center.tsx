@@ -10,17 +10,15 @@ import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/shared/panel";
-import {
-  agentTrustModel,
-  type TrustEvidence,
-  type TrustEvidenceStatus,
-  type TrustStatus,
-} from "@/features/agents/agent-trust-model";
+import { ErrorState, LoadingRows } from "@/components/shared/states";
 import { cn } from "@/lib/utils";
-import type { Agent } from "@/lib/api/client";
-import type { components } from "@/lib/api/schema.gen";
+import { formatInstant, formatMicros } from "@/lib/format";
+import type { Agent, AgentTrust } from "@/lib/api/client";
 
-type RegressionCase = components["schemas"]["RegressionCase"];
+type TrustEvidence = AgentTrust["evidence"][number];
+type TrustEvidenceStatus = TrustEvidence["status"];
+type TrustStatus = AgentTrust["status"];
+
 const STATUS_ICONS: Record<TrustEvidenceStatus, LucideIcon> = {
   good: CheckCircle2,
   bad: AlertTriangle,
@@ -30,55 +28,62 @@ const STATUS_ICONS: Record<TrustEvidenceStatus, LucideIcon> = {
 
 export function AgentTrustCenter({
   agent,
-  regressions,
-  regressionsLoading,
-  regressionsError,
+  trust,
+  loading,
+  error,
+  onRetry,
 }: {
   agent: Agent;
-  regressions?: RegressionCase[];
-  regressionsLoading?: boolean;
-  regressionsError?: unknown;
+  trust?: AgentTrust;
+  loading?: boolean;
+  error?: unknown;
+  onRetry?: () => void;
 }) {
   const { t } = useTranslation();
-  const model = agentTrustModel({
-    agent,
-    regressions,
-    regressionsLoading,
-    regressionsError,
-  });
-
   return (
     <Panel
       title={t("agents.trustTitle")}
-      action={<StatusBadge status={model.status} />}
+      action={trust && <StatusBadge status={trust.status} />}
     >
-      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
-        <TrustSummary agent={agent} model={model} />
-
-        <ol className="grid min-w-0 gap-2 sm:grid-cols-2">
-          {model.evidence.map((item) => (
-            <li key={item.id} className="min-w-0">
-              <EvidenceCard item={item} />
-            </li>
-          ))}
-        </ol>
-      </div>
+      {loading && <LoadingRows rows={2} />}
+      {error ? <ErrorState error={error} onRetry={onRetry} /> : null}
+      {!loading && !error && trust && <TrustBody agent={agent} trust={trust} />}
     </Panel>
   );
 }
 
-function TrustSummary({
-  agent,
-  model,
-}: {
-  agent: Agent;
-  model: ReturnType<typeof agentTrustModel>;
-}) {
+function TrustBody({ agent, trust }: { agent: Agent; trust: AgentTrust }) {
+  return (
+    <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+      <TrustSummary agent={agent} trust={trust} />
+
+      <ol className="grid min-w-0 gap-2 sm:grid-cols-2">
+        {trust.evidence.map((item) => (
+          <li key={item.id} className="min-w-0">
+            <EvidenceCard agent={agent} item={item} />
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+function TrustSummary({ agent, trust }: { agent: Agent; trust: AgentTrust }) {
   const { t } = useTranslation();
   return (
     <div className="min-w-0 space-y-3">
-      <p className="text-sm font-medium">{t(model.recommendationKey)}</p>
-      <p className="text-sm text-muted-foreground">{t(model.summaryKey)}</p>
+      <p className="text-sm font-medium">
+        {t(`agents.trustRecommend${titleID(trust.recommendation)}`)}
+      </p>
+      <p className="text-sm text-muted-foreground">
+        {t(`agents.trustSummary${titleID(trust.summary)}`)}
+      </p>
+      <p className="text-xs leading-snug text-muted-foreground">
+        {t("agents.trustWindow", {
+          from: formatInstant(trust.window.from),
+          until: formatInstant(trust.window.until),
+        })}
+      </p>
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="outline" asChild>
           <Link to={`/agents/${agent.agentId}/simulate`}>
@@ -93,12 +98,12 @@ function TrustSummary({
   );
 }
 
-function EvidenceCard({ item }: { item: TrustEvidence }) {
+function EvidenceCard({ agent, item }: { agent: Agent; item: TrustEvidence }) {
   const { t } = useTranslation();
   const Icon = STATUS_ICONS[item.status];
   return (
     <Link
-      to={item.to}
+      to={evidenceTarget(agent, item)}
       className="flex h-full min-w-0 gap-3 rounded-md border bg-background px-3 py-2 transition-colors hover:border-primary/50"
     >
       <Icon
@@ -108,14 +113,14 @@ function EvidenceCard({ item }: { item: TrustEvidence }) {
       <span className="min-w-0 flex-1">
         <span className="flex min-w-0 flex-wrap items-center gap-2">
           <span className="truncate text-sm font-medium">
-            {t(item.titleKey)}
+            {t(`agents.trustEvidence${titleID(item.id)}`)}
           </span>
           <Badge variant="outline" className={toneClass(item.status)}>
             {t(statusKey(item.status))}
           </Badge>
         </span>
         <span className="mt-1 block text-2xs leading-snug text-muted-foreground">
-          {t(item.bodyKey, item.bodyValues)}
+          {t(`agents.trustCode${titleID(item.code)}`, trustValues(item.values))}
         </span>
       </span>
       <ArrowRight className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
@@ -130,6 +135,34 @@ function StatusBadge({ status }: { status: TrustStatus }) {
       {t(statusKey(status))}
     </Badge>
   );
+}
+
+function evidenceTarget(agent: Agent, item: TrustEvidence) {
+  switch (item.id) {
+    case "simulation":
+    case "version":
+      return `/agents/${agent.agentId}/simulate`;
+    case "decisions":
+      return "/approvals";
+    case "cost":
+      return "/cost";
+    case "policy":
+      return "/runs";
+    case "launch":
+      return "/runtime";
+    default:
+      return "/runs";
+  }
+}
+
+function trustValues(values?: Record<string, unknown>) {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(values ?? {})) {
+    out[key] = key.endsWith("Micros") && typeof value === "number"
+      ? formatMicros(value)
+      : value;
+  }
+  return out;
 }
 
 function statusKey(status: TrustEvidenceStatus | TrustStatus) {

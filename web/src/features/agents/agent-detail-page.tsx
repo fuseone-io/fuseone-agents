@@ -2,7 +2,7 @@ import { useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ErrorState, LoadingRows } from "@/components/shared/states";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useAgent } from "@/features/agents/agent-detail-api";
+import { useAgent, useAgentTrust } from "@/features/agents/agent-detail-api";
 import { AgentOverviewHeader } from "@/features/agents/agent-overview-header";
 import { AgentDefinition } from "@/features/agents/agent-definition";
 import { AgentCapabilities } from "@/features/agents/agent-capabilities";
@@ -12,7 +12,6 @@ import { AgentRuns } from "@/features/agents/agent-runs";
 import { AgentGuidedPath } from "@/features/agents/agent-guided-path";
 import { publishedAgentGuideSteps } from "@/features/agents/agent-guided-path-model";
 import { AgentTrustCenter } from "@/features/agents/agent-trust-center";
-import { useRegressions } from "@/features/agents/regressions-api";
 import { useTools } from "@/features/admin/api";
 import { useChannels } from "@/features/channels/api";
 import { useMCPUserCredentials } from "@/features/integrations/api";
@@ -43,7 +42,7 @@ export function AgentDetailPage() {
   const recipes = useRecipes(hasTools);
   const credentials = useMCPUserCredentials(hasTools);
   const channels = useChannels(hasChannelTrigger);
-  const regressions = useRegressions(agentId, Boolean(agent.data));
+  const trust = useAgentTrust(agentId, version, Boolean(agent.data));
 
   if (agent.isLoading) return <LoadingRows rows={8} />;
   if (agent.error) {
@@ -100,9 +99,10 @@ export function AgentDetailPage() {
       />
       <AgentTrustCenter
         agent={published}
-        regressions={regressions.data?.items}
-        regressionsLoading={regressions.isLoading}
-        regressionsError={regressions.error}
+        trust={trust.data}
+        loading={trust.isLoading}
+        error={trust.error}
+        onRetry={() => void trust.refetch()}
       />
 
       <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_300px] xl:items-start">

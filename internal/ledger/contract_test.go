@@ -39,6 +39,8 @@ type Store interface {
 	ListRuns(ctx context.Context, filter domain.RunFilter, phase string, limit int) ([]domain.RunSummary, error)
 	CostRollup(ctx context.Context, filter domain.RunFilter, groupBy string) ([]domain.CostBucket, error)
 	AgentActivity(ctx context.Context, filter domain.RunFilter) ([]domain.AgentActivity, error)
+	VersionAgreement(ctx context.Context, filter domain.RunFilter) ([]domain.VersionAgreement, error)
+	VersionGateBlocks(ctx context.Context, filter domain.RunFilter) ([]domain.VersionGateBlocks, error)
 	Throughput(ctx context.Context, filter domain.RunFilter) ([]domain.ThroughputBucket, error)
 	Decisions(ctx context.Context, filter domain.RunFilter, limit int) ([]domain.RecordedDecision, error)
 	RunByIdemKey(ctx context.Context, key string) (domain.RunID, error)
@@ -1205,6 +1207,28 @@ func TestAgentActivityContract(t *testing.T) {
 		}
 	})
 
+	run(t, "a version bound counts only that published definition", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		v3 := startedAt("run-v3", base)
+		mustAppend(t, s, v3)
+		mustAppend(t, s, finishedAt("run-v3", base.Add(time.Minute)))
+
+		v2 := startedAt("run-v2", base.Add(time.Minute))
+		v2.VersionID = "v2"
+		mustAppend(t, s, v2)
+
+		activity, err := s.AgentActivity(ctx, domain.RunFilter{
+			AgentID: "triage", VersionID: "v3",
+		})
+		if err != nil {
+			t.Fatalf("AgentActivity: %v", err)
+		}
+		if len(activity) != 1 || activity[0].Runs != 1 || activity[0].Finished != 1 {
+			t.Errorf("activity = %+v, want only the finished v3 run", activity)
+		}
+	})
+
 	run(t, "a scope bound counts only that area's runs", func(t *testing.T, s Store) {
 		ctx := context.Background()
 
@@ -2058,6 +2082,94 @@ func TestAgreementContract(t *testing.T) {
 		}
 		if len(got) != 0 {
 			t.Errorf("agreements = %+v, want none in the window", got)
+		}
+	})
+
+	run(t, "version agreement does not mix published definitions", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		mustAppend(t, s, startedAt("run-v3", base))
+		mustAppend(t, s, answered("run-v3", 2, true))
+
+		v2 := startedAt("run-v2", base)
+		v2.VersionID = "v2"
+		mustAppend(t, s, v2)
+		v2Answer := answered("run-v2", 2, false)
+		v2Answer.VersionID = "v2"
+		mustAppend(t, s, v2Answer)
+
+		got, err := s.VersionAgreement(ctx, domain.RunFilter{
+			AgentID: "triage", VersionID: "v3", Since: base.Add(-time.Hour),
+		})
+		if err != nil {
+			t.Fatalf("VersionAgreement: %v", err)
+		}
+		if len(got) != 1 || got[0].Approved != 1 || got[0].Refused != 0 ||
+			got[0].Version != "v3" {
+			t.Errorf("agreement = %+v, want only v3 approval", got)
+		}
+	})
+
+	run(t, "version gate blocks do not mix versions or rehearsals", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		blocked := func(run domain.RunID, version domain.VersionID, simulated bool) {
+			started := startedAt(run, base)
+			started.VersionID = version
+			if simulated {
+				started.Payload = mustJSON(t, domain.RunStartedPayload{
+					Trigger: "simulation", Simulated: true, Simulation: "sim-a",
+				})
+			}
+			mustAppend(t, s, started)
+			decision := step(run, domain.StepGateDecided)
+			decision.VersionID = version
+			decision.Payload = mustJSON(t, domain.GateDecidedPayload{
+				Tool: "crm.reply", Verdict: domain.VerdictBlock, Rule: "policy",
+			})
+			mustAppend(t, s, decision)
+		}
+
+		blocked("run-v3", "v3", false)
+		blocked("run-v2", "v2", false)
+		blocked("run-sim", "v3", true)
+
+		got, err := s.VersionGateBlocks(ctx, domain.RunFilter{
+			AgentID: "triage", VersionID: "v3", Since: base.Add(-time.Hour),
+		})
+		if err != nil {
+			t.Fatalf("VersionGateBlocks: %v", err)
+		}
+		if len(got) != 1 || got[0].Version != "v3" ||
+			got[0].Blocks != 1 || got[0].Runs != 1 {
+			t.Errorf("blocks = %+v, want one real v3 block", got)
+		}
+	})
+
+	run(t, "version gate blocks respect the time window", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		blockedAt := func(run domain.RunID, at time.Time) {
+			started := startedAt(run, at)
+			mustAppend(t, s, started)
+			decision := step(run, domain.StepGateDecided)
+			decision.At = at.Add(time.Second)
+			decision.Payload = mustJSON(t, domain.GateDecidedPayload{
+				Tool: "crm.reply", Verdict: domain.VerdictBlock, Rule: "policy",
+			})
+			mustAppend(t, s, decision)
+		}
+
+		blockedAt("run-old", base.Add(-48*time.Hour))
+		blockedAt("run-recent", base)
+
+		got, err := s.VersionGateBlocks(ctx, domain.RunFilter{
+			AgentID: "triage", VersionID: "v3",
+			Since: base.Add(-time.Hour), Until: base.Add(time.Hour),
+		})
+		if err != nil {
+			t.Fatalf("VersionGateBlocks: %v", err)
+		}
+		if len(got) != 1 || got[0].Version != "v3" ||
+			got[0].Blocks != 1 || got[0].Runs != 1 {
+			t.Errorf("blocks = %+v, want only the recent block", got)
 		}
 	})
 }
