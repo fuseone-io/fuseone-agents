@@ -73,6 +73,7 @@ describe("an agent card", () => {
     expect(card.className).toContain("h-[272px]");
     expect(screen.getByText("crm")).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
+    expect(screen.getByText("3").className).toContain("leading-none");
     expect(screen.getByText("kb")).toBeInTheDocument();
     expect(screen.getByText("+1")).toBeInTheDocument();
     expect(screen.getByText("6 ferramentas")).toBeInTheDocument();
