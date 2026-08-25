@@ -27,6 +27,14 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.34.3] — 2026-08-25
+
+### Fixed
+
+- **The tool count inside a capability chip sits on its centre line.** The chip
+  and its parts inherit the card's line height, which left the count riding
+  high inside its box on the agent list.
+
 ## [0.34.2] — 2026-08-25
 
 ### Fixed
