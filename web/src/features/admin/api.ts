@@ -22,9 +22,10 @@ export const adminKeys = {
   budgets: () => [...adminKeys.all, "budgets"] as const,
 };
 
-export function useTools() {
+export function useTools(enabled = true) {
   return useQuery({
     queryKey: adminKeys.tools(),
+    enabled,
     queryFn: async () => unwrap(await api.GET("/admin/tools")),
   });
 }

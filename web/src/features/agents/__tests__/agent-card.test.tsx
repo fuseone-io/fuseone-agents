@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { AgentCard } from "@/features/agents/agent-card";
 import type { Agent } from "@/features/agents/api";
+import type { Tool, ToolEffect } from "@/features/admin/api";
 
 const agent = (over: Partial<Agent> = {}): Agent => ({
   agentId: "triage",
@@ -20,6 +21,15 @@ const agent = (over: Partial<Agent> = {}): Agent => ({
 
 function renderCard(ui: React.ReactElement) {
   return render(<MemoryRouter>{ui}</MemoryRouter>);
+}
+
+function tool(toolId: string, effect: ToolEffect): Tool {
+  return {
+    toolId,
+    server: toolId.split(".")[0] ?? "test",
+    effect,
+    untrusted: false,
+  };
 }
 
 describe("an agent card", () => {
@@ -43,13 +53,69 @@ describe("an agent card", () => {
     ).toHaveAttribute("href", "/agents/triage?version=v1");
   });
 
-  it("shows the capability pack, because what is not there cannot be invoked", () => {
+  it("groups the capability pack by integration, so many tools do not stretch the card", () => {
     renderCard(
-      <AgentCard agent={agent({ tools: ["crm.lookup", "kb.search"] })} />,
+      <AgentCard
+        agent={agent({
+          tools: [
+            "crm.lookup",
+            "crm.reply",
+            "crm.close",
+            "kb.search",
+            "kb.fetch",
+            "mail.send",
+          ],
+        })}
+      />,
     );
 
-    expect(screen.getByText("crm.lookup")).toBeInTheDocument();
-    expect(screen.getByText("kb.search")).toBeInTheDocument();
+    const card = screen.getByRole("link", { name: /Triagem de chamados/ });
+    expect(card.className).toContain("h-[272px]");
+    expect(screen.getByText("crm")).toBeInTheDocument();
+    expect(screen.getByText("3")).toBeInTheDocument();
+    expect(screen.getByText("kb")).toBeInTheDocument();
+    expect(screen.getByText("+1")).toBeInTheDocument();
+    expect(screen.getByText("6 ferramentas")).toBeInTheDocument();
+    expect(screen.queryByText("crm.lookup")).not.toBeInTheDocument();
+    expect(screen.queryByText("mail")).not.toBeInTheDocument();
+  });
+
+  it("uses tool classifications when it can say which packs can write", () => {
+    renderCard(
+      <AgentCard
+        agent={agent({ tools: ["grafana.query", "channel.post"] })}
+        catalogue={[
+          tool("grafana.query", "read"),
+          tool("channel.post", "write"),
+        ]}
+      />,
+    );
+
+    expect(
+      screen.getByText("2 ferramentas · 1 pode escrever"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTitle("channel — 1 ferramenta, pode escrever").className,
+    ).toContain("bg-surface-accent");
+    expect(
+      screen.getByTitle("grafana — 1 ferramenta somente leitura").className,
+    ).toContain("bg-muted");
+  });
+
+  it("does not colour an unclassified pack as proven read-only", () => {
+    renderCard(
+      <AgentCard
+        agent={agent({ tools: ["grafana.query", "unknown.exec"] })}
+        catalogue={[tool("grafana.query", "read")]}
+      />,
+    );
+
+    expect(
+      screen.getByTitle("grafana — 1 ferramenta somente leitura").className,
+    ).toContain("bg-muted");
+    expect(screen.getByTitle("unknown.exec").className).toContain(
+      "border-dashed",
+    );
   });
 
   it("says so when an agent was granted nothing, rather than showing an empty row", () => {
@@ -57,7 +123,7 @@ describe("an agent card", () => {
     expect(screen.getByText("Sem ferramentas")).toBeInTheDocument();
   });
 
-  it("says how a run starts, because an agent nothing triggers never runs", () => {
+  it("leaves run configuration off the card, where the list compares health", () => {
     renderCard(
       <AgentCard
         agent={agent({
@@ -65,12 +131,9 @@ describe("an agent card", () => {
         })}
       />,
     );
-    expect(screen.getByText("cron")).toBeInTheDocument();
-  });
-
-  it("calls a manual agent manual instead of leaving the field blank", () => {
-    renderCard(<AgentCard agent={agent()} />);
-    expect(screen.getByText("manual")).toBeInTheDocument();
+    expect(screen.queryByText("cron")).not.toBeInTheDocument();
+    expect(screen.queryByText("Teto")).not.toBeInTheDocument();
+    expect(screen.queryByText("Gatilhos")).not.toBeInTheDocument();
   });
 
   it("marks a superseded version, so history is not mistaken for the present", () => {

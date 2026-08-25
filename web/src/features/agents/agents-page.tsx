@@ -28,6 +28,7 @@ import {
 } from "@/features/agents/agents-view";
 import { EventGraph } from "@/features/agents/event-graph";
 import { useAgents, type Agent } from "@/features/agents/api";
+import { useTools } from "@/features/admin/api";
 import { stateOfAgent, type AgentState } from "@/lib/agent-state";
 import { useVisibleItems } from "@/hooks/use-visible-items";
 
@@ -48,6 +49,7 @@ export function AgentsPage() {
   const { data, isLoading, error, refetch } = useAgents(
     history.value === "all",
   );
+  const tools = useTools(view === "cards");
   const agents = useMemo(() => data?.items ?? [], [data]);
 
   // Filtered here rather than at the API, and that is defensible only because
@@ -141,11 +143,12 @@ export function AgentsPage() {
         />
       ) : view === "cards" ? (
         <>
-          <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(268px,1fr))]">
+          <div className="grid items-start gap-3.5 [grid-template-columns:repeat(auto-fill,minmax(min(100%,308px),1fr))]">
             {page.visible.map((agent) => (
               <AgentCard
                 key={`${agent.agentId}@${agent.versionId}`}
                 agent={agent}
+                catalogue={tools.data?.items}
               />
             ))}
           </div>
