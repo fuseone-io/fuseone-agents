@@ -1031,7 +1031,7 @@
   "gate": {
     "badArgs": "Os argumentos não batem com o contrato da ferramenta.",
     "dataBarrier": "A execução carrega dados de fora desta empresa ou área.",
-    "duplicate": "Esta chamada já consta na trilha; repeti-la duplicaria o efeito.",
+    "duplicate": "Este efeito já está registrado; repeti-lo duplicaria o efeito.",
     "humanCleared": "Liberada por decisão humana registrada nesta execução.",
     "outOfPack": "A ferramenta está fora do pacote de capacidades da execução.",
     "overCeiling": "A chamada ultrapassaria o teto da execução.",
@@ -1851,6 +1851,7 @@
     "nodeProposed": "Modelo propôs",
     "nodeRefused": "bloqueado por política",
     "nodeSealed": "Selada na trilha",
+    "nodeSkipped": "Portão pulou",
     "nodeStarted": "Execução iniciada",
     "noneFinishedYet": "nenhuma execução concluída ainda",
     "noneInPeriod": "Nenhuma execução no período",
@@ -1960,6 +1961,7 @@
     "verbFinished": "concluiu",
     "verbParked": "estacionou",
     "verbProposed": "propôs",
+    "verbSkipped": "pulou",
     "verbReconciled": "conciliou",
     "verbRequiredApproval": "exigiu aprovação",
     "verbReserved": "reservou",
@@ -2283,6 +2285,7 @@
     "verdictApproval": "Pediria aprovação",
     "verdictBlock": "Bloquearia",
     "verdictConstrain": "Restringiria",
+    "verdictDuplicate": "Pularia",
     "waitingForResult": "Esperando o ensaio concluir",
     "wentExpected": "Foi como esperado",
     "whatArrived": "O que chegou",
@@ -2352,6 +2355,7 @@
     "allow": "permitir",
     "block": "bloquear",
     "constrain": "restringir",
+    "duplicate": "pular",
     "require_approval": "escalar"
   }
 }

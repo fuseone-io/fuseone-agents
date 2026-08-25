@@ -5,7 +5,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"time"
 
+	"github.com/fuseone/agents/internal/dedupe"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/gate"
 )
@@ -85,12 +87,81 @@ func budgetEvidence(d domain.Decision) (*domain.Consumption, *domain.Consumption
 	return &budget, &d.Committed, &d.Estimate, &d.Projected
 }
 
+const (
+	defaultDedupePendingTTL  = 2 * time.Minute
+	defaultDedupePendingWait = 10 * time.Second
+	defaultDedupePendingPoll = 250 * time.Millisecond
+)
+
+type semanticDedupe struct {
+	enabled bool
+	key     dedupe.Key
+	window  time.Duration
+	already bool
+}
+
+type dedupeReservation struct {
+	held bool
+}
+
 // act runs the proposal through the Gate and, if it survives, executes it.
 func (r *Runner) act(ctx context.Context, state State, start Start, p Proposal) (Status, error) {
 	effect, _ := r.deps.Catalog.Effect(p.Tool)
 	idemKey := idempotencyKey(start.RunID, p.Tool, p.Args)
+	semantic, err := r.semanticDedupe(ctx, start, p)
+	if err != nil {
+		return Status{}, err
+	}
 
-	decision, err := r.deps.Gate.Evaluate(ctx, gate.Request{
+	decision, err := r.decide(ctx, state, start, p, effect, idemKey,
+		state.AlreadyExecuted(idemKey) || semantic.already)
+	if err != nil {
+		return Status{}, fmt.Errorf("engine: gate: %w", err)
+	}
+
+	if !decision.Verdict.Executable() || decision.Verdict == domain.VerdictRequireApproval {
+		state, err = r.appendGateDecision(ctx, state, start, p, effect, decision)
+		if err != nil {
+			return Status{}, err
+		}
+		return r.refused(ctx, state, start, p, decision, effect)
+	}
+
+	return r.afterExecutableGate(ctx, state, start, p, effect, idemKey, semantic, decision)
+}
+
+func (r *Runner) afterExecutableGate(
+	ctx context.Context, state State, start Start, p Proposal, effect domain.Effect,
+	idemKey string, semantic semanticDedupe, decision domain.Decision,
+) (Status, error) {
+	reservation, duplicate, err := r.reserveSemanticDedupe(ctx, start, semantic)
+	if err != nil {
+		_, appendErr := r.appendGateDecision(ctx, state, start, p, effect, decision)
+		if appendErr != nil {
+			return Status{}, appendErr
+		}
+		return Status{}, err
+	}
+	if duplicate {
+		decision, err = r.decide(ctx, state, start, p, effect, idemKey, true)
+		if err != nil {
+			return Status{}, fmt.Errorf("engine: gate: %w", err)
+		}
+		state, err = r.appendGateDecision(ctx, state, start, p, effect, decision)
+		return status(state), err
+	}
+	state, err = r.appendGateDecision(ctx, state, start, p, effect, decision)
+	if err != nil {
+		return Status{}, err
+	}
+	return r.invoke(ctx, state, start, p, effect, idemKey, semantic, reservation)
+}
+
+func (r *Runner) decide(
+	ctx context.Context, state State, start Start,
+	p Proposal, effect domain.Effect, idemKey string, already bool,
+) (domain.Decision, error) {
+	return r.deps.Gate.Evaluate(ctx, gate.Request{
 		Scope:     start.Scope,
 		RunID:     start.RunID,
 		AgentID:   start.AgentID,
@@ -108,7 +179,7 @@ func (r *Runner) act(ctx context.Context, state State, start Start, p Proposal) 
 		// counted the calls already made and never the one it was ruling on.
 		Estimate:        withThisCall(p.Estimate),
 		IdemKey:         idemKey,
-		AlreadyExecuted: state.AlreadyExecuted(idemKey),
+		AlreadyExecuted: already,
 		// Only for the exact call that was cleared. A grant that travelled to
 		// a different tool, or to the same tool with different arguments,
 		// would be the platform doing something nobody agreed to.
@@ -116,12 +187,14 @@ func (r *Runner) act(ctx context.Context, state State, start Start, p Proposal) 
 			state.Approved.Tool == p.Tool &&
 			state.Approved.ArgsDigest == digest(p.Args),
 	})
-	if err != nil {
-		return Status{}, fmt.Errorf("engine: gate: %w", err)
-	}
+}
 
+func (r *Runner) appendGateDecision(
+	ctx context.Context, state State, start Start,
+	p Proposal, effect domain.Effect, decision domain.Decision,
+) (State, error) {
 	budget, committed, estimate, projected := budgetEvidence(decision)
-	state, err = r.append(ctx, state, start, domain.Step{
+	return r.append(ctx, state, start, domain.Step{
 		Kind:       domain.StepGateDecided,
 		PolicyHash: decision.PolicyHash,
 		Labels:     state.Labels.Clone(),
@@ -138,14 +211,6 @@ func (r *Runner) act(ctx context.Context, state State, start Start, p Proposal) 
 			Stage: start.Stage,
 		}),
 	})
-	if err != nil {
-		return Status{}, err
-	}
-
-	if !decision.Verdict.Executable() || decision.Verdict == domain.VerdictRequireApproval {
-		return r.refused(ctx, state, start, p, decision, effect)
-	}
-	return r.invoke(ctx, state, start, p, effect, idemKey)
 }
 
 /*
@@ -182,6 +247,12 @@ func (r *Runner) refused(
 		// ceiling resumes from this exact step (PRD FO-04).
 		return r.park(ctx, state, start, "budget_exhausted")
 
+	case decision.Verdict == domain.VerdictDuplicate && state.ConsecutiveSkips >= maxConsecutiveBlocks:
+		// A duplicate is not a refusal: no effect leaves the platform, and the
+		// model sees a skip instead of a denial. Repeating the same skip after
+		// feedback is still no progress, so bound it just like repeated blocks.
+		return r.park(ctx, state, start, "no_progress")
+
 	case state.ConsecutiveBlocks >= maxConsecutiveBlocks:
 		// The refusal was fed back and the planner kept asking anyway. Waiting
 		// for the step ceiling to end this does not work: the Gate reports the
@@ -206,10 +277,141 @@ func (r *Runner) park(ctx context.Context, state State, start Start, reason stri
 	return status(state), err
 }
 
+func (r *Runner) semanticDedupe(ctx context.Context, start Start, p Proposal) (semanticDedupe, error) {
+	if r.deps.Dedupe == nil || r.deps.Catalog == nil {
+		return semanticDedupe{}, nil
+	}
+	decl, ok := r.deps.Catalog.Dedupe(p.Tool)
+	if !ok {
+		return semanticDedupe{}, nil
+	}
+	fingerprint, err := decl.Fingerprint(p.Args)
+	if err != nil {
+		return semanticDedupe{}, fmt.Errorf("engine: semantic dedupe for %s: %w", p.Tool, err)
+	}
+	out := semanticDedupe{
+		enabled: true,
+		key:     dedupe.Key{Scope: start.Scope, AgentID: start.AgentID, Tool: p.Tool, Fingerprint: fingerprint},
+		window:  time.Duration(decl.WindowSeconds) * time.Second,
+	}
+	rec, found, err := r.deps.Dedupe.Lookup(ctx, out.key, r.deps.Clock.Now())
+	if err != nil {
+		// Lookup is an optimisation boundary. If it is unavailable, continue
+		// in the old world rather than letting a read path stop every effect.
+		return semanticDedupe{}, nil
+	}
+	out.already = found && rec.State == dedupe.StateConfirmed
+	return out, nil
+}
+
+func (r *Runner) reserveSemanticDedupe(
+	ctx context.Context, start Start, d semanticDedupe,
+) (dedupeReservation, bool, error) {
+	if !d.enabled || r.deps.Dedupe == nil {
+		return dedupeReservation{}, false, nil
+	}
+	rec, err := r.deps.Dedupe.Reserve(ctx, d.key, start.RunID, r.dedupePendingTTL(), r.deps.Clock.Now())
+	if err != nil {
+		return dedupeReservation{}, false, fmt.Errorf("engine: reserve semantic dedupe: %w", err)
+	}
+	return r.interpretDedupeReservation(ctx, start, d, rec)
+}
+
+func (r *Runner) interpretDedupeReservation(
+	ctx context.Context, start Start, d semanticDedupe, rec dedupe.Record,
+) (dedupeReservation, bool, error) {
+	res, dup, pending, err := dedupeRecordOutcome(start, rec)
+	if err != nil || res.held || dup {
+		return res, dup, err
+	}
+	if pending {
+		return r.waitForDedupeReservation(ctx, start, d)
+	}
+	return dedupeReservation{}, false, nil
+}
+
+func (r *Runner) waitForDedupeReservation(
+	ctx context.Context, start Start, d semanticDedupe,
+) (dedupeReservation, bool, error) {
+	deadline := time.NewTimer(r.dedupePendingWait())
+	ticker := time.NewTicker(r.dedupePendingPoll())
+	defer deadline.Stop()
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return dedupeReservation{}, false, ctx.Err()
+		case <-deadline.C:
+			return dedupeReservation{}, false, DedupeInFlightError{}
+		case <-ticker.C:
+			res, dup, err := r.retryDedupeReservation(ctx, start, d)
+			if err != nil || res.held || dup {
+				return res, dup, err
+			}
+		}
+	}
+}
+
+func (r *Runner) retryDedupeReservation(
+	ctx context.Context, start Start, d semanticDedupe,
+) (dedupeReservation, bool, error) {
+	rec, found, err := r.deps.Dedupe.Lookup(ctx, d.key, r.deps.Clock.Now())
+	if err != nil {
+		return dedupeReservation{}, false, fmt.Errorf("engine: lookup pending dedupe: %w", err)
+	}
+	if !found {
+		rec, err = r.deps.Dedupe.Reserve(ctx, d.key, start.RunID, r.dedupePendingTTL(), r.deps.Clock.Now())
+		if err != nil {
+			return dedupeReservation{}, false, fmt.Errorf("engine: reserve semantic dedupe: %w", err)
+		}
+	}
+	res, dup, _, err := dedupeRecordOutcome(start, rec)
+	return res, dup, err
+}
+
+func dedupeRecordOutcome(
+	start Start, rec dedupe.Record,
+) (dedupeReservation, bool, bool, error) {
+	switch {
+	case rec.State == dedupe.StateConfirmed:
+		return dedupeReservation{}, true, false, nil
+	case rec.State == dedupe.StateReserved:
+		return dedupeReservation{held: true}, false, false, nil
+	case rec.State == dedupe.StatePending && rec.RunID == start.RunID:
+		return dedupeReservation{held: true}, false, false, nil
+	case rec.State == dedupe.StatePending:
+		return dedupeReservation{}, false, true, nil
+	default:
+		return dedupeReservation{}, false, false, fmt.Errorf("engine: unknown dedupe state %q", rec.State)
+	}
+}
+
+func (r *Runner) dedupePendingTTL() time.Duration {
+	if r.deps.DedupePendingTTL > 0 {
+		return r.deps.DedupePendingTTL
+	}
+	return defaultDedupePendingTTL
+}
+
+func (r *Runner) dedupePendingWait() time.Duration {
+	if r.deps.DedupePendingWait > 0 {
+		return r.deps.DedupePendingWait
+	}
+	return defaultDedupePendingWait
+}
+
+func (r *Runner) dedupePendingPoll() time.Duration {
+	if r.deps.DedupePendingPoll > 0 {
+		return r.deps.DedupePendingPoll
+	}
+	return defaultDedupePendingPoll
+}
+
 // invoke reserves budget, calls the tool and reconciles.
 func (r *Runner) invoke(
 	ctx context.Context, state State, start Start,
 	p Proposal, effect domain.Effect, idemKey string,
+	semantic semanticDedupe, reservation dedupeReservation,
 ) (Status, error) {
 	call := Call{
 		RunID: start.RunID,
@@ -291,7 +493,26 @@ func (r *Runner) invoke(
 			ReleasedMicros: p.Estimate.Micros, ReleasedTokens: p.Estimate.Tokens,
 		}),
 	})
-	return status(state), err
+	if err != nil {
+		return Status{}, err
+	}
+	if reservation.held {
+		if returned.Failed {
+			if err := r.deps.Dedupe.Release(ctx, semantic.key, start.RunID); err != nil {
+				return Status{}, fmt.Errorf("engine: release semantic dedupe: %w", err)
+			}
+			return status(state), nil
+		}
+		if err := r.deps.Dedupe.Confirm(
+			ctx, semantic.key, start.RunID, call.Seq, semantic.window, r.deps.Clock.Now(),
+		); err != nil {
+			// The effect already happened. A failed confirmation must not mark
+			// it as done; the pending row expires and a future run may retry
+			// rather than being blocked forever by state outside the ledger.
+			return Status{}, fmt.Errorf("engine: confirm semantic dedupe: %w", err)
+		}
+	}
+	return status(state), nil
 }
 
 // store puts the proposed arguments in the content store and returns the

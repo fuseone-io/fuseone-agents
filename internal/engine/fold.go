@@ -111,6 +111,7 @@ func (s *State) applyKind(step domain.Step) error {
 		// A call that reached the Gate's far side is progress, whatever it
 		// returns: the planner is no longer stuck on a refusal.
 		s.ConsecutiveBlocks = 0
+		s.ConsecutiveSkips = 0
 
 	case domain.StepToolReturned:
 		s.PendingTool = ""
@@ -157,6 +158,7 @@ func (s *State) applyKind(step domain.Step) error {
 		// would park the run again on its first refusal instead of giving it
 		// the attempts the supervision policy allows.
 		s.ConsecutiveBlocks = 0
+		s.ConsecutiveSkips = 0
 		s.Phase = PhaseRunning
 
 	case domain.StepRunFinished:
@@ -168,8 +170,13 @@ func (s *State) applyKind(step domain.Step) error {
 		if err := decode(step, &p); err != nil {
 			return err
 		}
-		if !p.Verdict.Executable() && p.Verdict != domain.VerdictRequireApproval {
+		switch {
+		case p.Verdict == domain.VerdictDuplicate:
+			s.ConsecutiveSkips++
+			s.ConsecutiveBlocks = 0
+		case !p.Verdict.Executable() && p.Verdict != domain.VerdictRequireApproval:
 			s.ConsecutiveBlocks++
+			s.ConsecutiveSkips = 0
 		}
 
 	case domain.StepAbandoned:

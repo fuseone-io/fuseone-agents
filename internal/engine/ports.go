@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/fuseone/agents/internal/dedupe"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/gate"
 )
@@ -137,6 +138,17 @@ type ToolResult struct {
 // Curator at registration time (PRD DE-12).
 type Catalog interface {
 	Effect(domain.ToolID) (domain.Effect, bool)
+	Dedupe(domain.ToolID) (domain.ToolDedupe, bool)
+}
+
+// DedupeStore coordinates semantic effect idempotency across runs of the same
+// agent and scope. The Gate never talks to this store; the engine resolves the
+// boolean evidence first and passes that evidence into the Gate.
+type DedupeStore interface {
+	Lookup(ctx context.Context, key dedupe.Key, now time.Time) (dedupe.Record, bool, error)
+	Reserve(ctx context.Context, key dedupe.Key, runID domain.RunID, pendingTTL time.Duration, now time.Time) (dedupe.Record, error)
+	Confirm(ctx context.Context, key dedupe.Key, runID domain.RunID, seq int64, window time.Duration, now time.Time) error
+	Release(ctx context.Context, key dedupe.Key, runID domain.RunID) error
 }
 
 // Gate is the deterministic checkpoint every action crosses.

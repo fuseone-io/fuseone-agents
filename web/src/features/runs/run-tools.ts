@@ -39,7 +39,9 @@ export function toolsOf(steps: Step[]): ToolUse[] {
       use.wrote = true;
     }
     const verdict = verdictOf(step);
-    if (verdict && verdict !== "allow") use.escalated = true;
+    if (verdict && verdict !== "allow" && verdict !== "duplicate") {
+      use.escalated = true;
+    }
     if (step.kind === "approval_requested") use.escalated = true;
 
     uses.set(name, use);

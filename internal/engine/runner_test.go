@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	effectdedupe "github.com/fuseone/agents/internal/dedupe"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/gate"
 	"github.com/fuseone/agents/internal/ledger"
@@ -83,6 +84,105 @@ type staticCatalog map[domain.ToolID]domain.Effect
 func (s staticCatalog) Effect(id domain.ToolID) (domain.Effect, bool) {
 	e, ok := s[id]
 	return e, ok
+}
+
+func (s staticCatalog) Dedupe(domain.ToolID) (domain.ToolDedupe, bool) {
+	return domain.ToolDedupe{}, false
+}
+
+type dedupeCatalog struct {
+	staticCatalog
+	dedupes map[domain.ToolID]domain.ToolDedupe
+}
+
+func (c dedupeCatalog) Dedupe(id domain.ToolID) (domain.ToolDedupe, bool) {
+	d, ok := c.dedupes[id]
+	return d.Clone(), ok && d.Enabled()
+}
+
+type fakeDedupeStore struct {
+	mu sync.Mutex
+
+	lookupFound    []bool
+	lookupRecords  []effectdedupe.Record
+	lookupErr      error
+	reserveRecords []effectdedupe.Record
+	reserveErr     error
+	confirmErr     error
+	releaseErr     error
+
+	lookups  []effectdedupe.Key
+	reserves []effectdedupe.Key
+	confirms []dedupeConfirm
+	releases []dedupeRelease
+}
+
+type dedupeConfirm struct {
+	key effectdedupe.Key
+	run domain.RunID
+	seq int64
+}
+
+type dedupeRelease struct {
+	key effectdedupe.Key
+	run domain.RunID
+}
+
+func (f *fakeDedupeStore) Lookup(
+	_ context.Context, key effectdedupe.Key, _ time.Time,
+) (effectdedupe.Record, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.lookups = append(f.lookups, key)
+	if f.lookupErr != nil {
+		return effectdedupe.Record{}, false, f.lookupErr
+	}
+	if len(f.lookupFound) == 0 {
+		return effectdedupe.Record{}, false, nil
+	}
+	found := f.lookupFound[0]
+	f.lookupFound = f.lookupFound[1:]
+	var rec effectdedupe.Record
+	if len(f.lookupRecords) > 0 {
+		rec = f.lookupRecords[0]
+		f.lookupRecords = f.lookupRecords[1:]
+	}
+	return rec, found, nil
+}
+
+func (f *fakeDedupeStore) Reserve(
+	_ context.Context, key effectdedupe.Key, run domain.RunID, _ time.Duration, _ time.Time,
+) (effectdedupe.Record, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.reserves = append(f.reserves, key)
+	if f.reserveErr != nil {
+		return effectdedupe.Record{}, f.reserveErr
+	}
+	if len(f.reserveRecords) == 0 {
+		return effectdedupe.Record{State: effectdedupe.StateReserved, RunID: run}, nil
+	}
+	rec := f.reserveRecords[0]
+	f.reserveRecords = f.reserveRecords[1:]
+	return rec, nil
+}
+
+func (f *fakeDedupeStore) Confirm(
+	_ context.Context, key effectdedupe.Key, run domain.RunID, seq int64, _ time.Duration, _ time.Time,
+) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.confirms = append(f.confirms, dedupeConfirm{key: key, run: run, seq: seq})
+	return f.confirmErr
+}
+
+func (f *fakeDedupeStore) Release(
+	_ context.Context, key effectdedupe.Key, run domain.RunID,
+) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.releases = append(f.releases, dedupeRelease{key: key, run: run})
+	return f.releaseErr
 }
 
 type fixedClock struct{ t time.Time }
@@ -181,6 +281,23 @@ func newHarnessOn(t *testing.T, clock Clock, proposals ...Proposal) *harness {
 		Clock: clock,
 	})
 	return h
+}
+
+func enableDedupe(h *harness, store *fakeDedupeStore) {
+	h.runner.deps.Catalog = dedupeCatalog{
+		staticCatalog: staticCatalog{
+			"crm.lookup":           domain.EffectRead,
+			"crm.note":             domain.EffectWrite,
+			"crm.refund":           domain.EffectFinancial,
+			domain.ToolContextRead: domain.EffectRead,
+		},
+		dedupes: map[domain.ToolID]domain.ToolDedupe{
+			"crm.lookup": {WindowSeconds: 3600, ArgPaths: []string{"id"}},
+		},
+	}
+	h.runner.deps.Dedupe = store
+	h.runner.deps.DedupePendingWait = 20 * time.Millisecond
+	h.runner.deps.DedupePendingPoll = time.Millisecond
 }
 
 func (h *harness) start(t *testing.T, b domain.Budget) Start {
@@ -563,6 +680,189 @@ func TestResume_crashedAfterToolCall_doesNotInvokeTheToolAgain(t *testing.T) {
 	}
 }
 
+func TestAdvance_confirmedSemanticDedupe_recordsDuplicateWithoutCallingTool(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t, Proposal{Tool: "crm.lookup", Args: []byte(`{"id":"42"}`)})
+	dedupeStore := &fakeDedupeStore{
+		lookupFound: []bool{true},
+		lookupRecords: []effectdedupe.Record{{
+			State: effectdedupe.StateConfirmed, RunID: "run-old", Seq: 7,
+		}},
+	}
+	enableDedupe(h, dedupeStore)
+
+	if _, err := h.runner.Advance(ctx, h.start(t, generousBudget())); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+	if len(h.tools.invocations) != 0 {
+		t.Fatalf("tool invoked despite confirmed semantic dedupe: %v", h.tools.invocations)
+	}
+	if len(dedupeStore.reserves) != 0 {
+		t.Fatalf("Reserve called for a confirmed duplicate: %d", len(dedupeStore.reserves))
+	}
+	var decided domain.GateDecidedPayload
+	if err := h.lastPayloadOf(t, domain.StepGateDecided, &decided); err != nil {
+		t.Fatalf("gate payload: %v", err)
+	}
+	if decided.Verdict != domain.VerdictDuplicate || decided.Rule != gate.RuleIdempotency {
+		t.Fatalf("decision = %s/%s, want duplicate/idempotency", decided.Verdict, decided.Rule)
+	}
+	if slices.Contains(h.kinds(t), domain.StepToolCalled) {
+		t.Fatalf("ledger = %v, want no tool call for a duplicate", h.kinds(t))
+	}
+}
+
+func TestAdvance_successfulSemanticDedupe_confirmsAfterToolReturn(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t, Proposal{Tool: "crm.lookup", Args: []byte(`{"id":"42"}`)})
+	dedupeStore := &fakeDedupeStore{lookupFound: []bool{false}}
+	enableDedupe(h, dedupeStore)
+
+	if _, err := h.runner.Advance(ctx, h.start(t, generousBudget())); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+	called, err := h.stepOf(t, domain.StepToolCalled)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(dedupeStore.confirms) != 1 {
+		t.Fatalf("confirms = %d, want one", len(dedupeStore.confirms))
+	}
+	got := dedupeStore.confirms[0]
+	if got.run != "run-1" || got.seq != called.Seq {
+		t.Fatalf("confirmation = %+v, want run-1 seq %d", got, called.Seq)
+	}
+	if got.key.Scope != (domain.Scope{Company: "acme", Area: "cx"}) ||
+		got.key.AgentID != "triage" || got.key.Tool != "crm.lookup" ||
+		got.key.Fingerprint == "" {
+		t.Fatalf("dedupe key missing platform-owned prefix: %+v", got.key)
+	}
+	if len(dedupeStore.releases) != 0 {
+		t.Fatalf("release called after a successful tool return: %d", len(dedupeStore.releases))
+	}
+}
+
+func TestAdvance_failedSemanticDedupeCall_releasesReservation(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t, Proposal{Tool: "crm.lookup", Args: []byte(`{"id":"42"}`)})
+	h.tools.failed = true
+	dedupeStore := &fakeDedupeStore{lookupFound: []bool{false}}
+	enableDedupe(h, dedupeStore)
+
+	if _, err := h.runner.Advance(ctx, h.start(t, generousBudget())); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+	if len(dedupeStore.releases) != 1 {
+		t.Fatalf("releases = %d, want one after failed tool return", len(dedupeStore.releases))
+	}
+	if len(dedupeStore.confirms) != 0 {
+		t.Fatalf("confirmed a failed tool call: %d", len(dedupeStore.confirms))
+	}
+}
+
+func TestAdvance_confirmFailureAfterEffectLeavesDoesNotMarkItDone(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t, Proposal{Tool: "crm.lookup", Args: []byte(`{"id":"42"}`)})
+	dedupeStore := &fakeDedupeStore{
+		lookupFound: []bool{false},
+		confirmErr:  errors.New("database unavailable"),
+	}
+	enableDedupe(h, dedupeStore)
+
+	if _, err := h.runner.Advance(ctx, h.start(t, generousBudget())); err == nil {
+		t.Fatal("Advance succeeded, want confirmation failure")
+	}
+	got := h.kinds(t)
+	if !slices.Contains(got, domain.StepToolReturned) ||
+		!slices.Contains(got, domain.StepBudgetReconciled) {
+		t.Fatalf("ledger = %v, want tool return and budget reconciliation before confirm failure", got)
+	}
+	if len(dedupeStore.confirms) != 1 {
+		t.Fatalf("confirms = %d, want one attempted confirmation", len(dedupeStore.confirms))
+	}
+}
+
+func TestAdvance_pendingSemanticDedupeWaitsForConfirmationInsteadOfParking(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t, Proposal{Tool: "crm.lookup", Args: []byte(`{"id":"42"}`)})
+	dedupeStore := &fakeDedupeStore{
+		lookupFound: []bool{false, true},
+		lookupRecords: []effectdedupe.Record{
+			{},
+			{State: effectdedupe.StateConfirmed, RunID: "run-old", Seq: 9},
+		},
+		reserveRecords: []effectdedupe.Record{{
+			State: effectdedupe.StatePending, RunID: "run-old",
+		}},
+	}
+	enableDedupe(h, dedupeStore)
+
+	st, err := h.runner.Advance(ctx, h.start(t, generousBudget()))
+	if err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+	if st.Phase == PhaseParked {
+		t.Fatal("pending dedupe parked the run; parked means a person must act")
+	}
+	if len(h.tools.invocations) != 0 {
+		t.Fatalf("tool invoked while another run confirmed the same effect: %v", h.tools.invocations)
+	}
+	var decided domain.GateDecidedPayload
+	if err := h.lastPayloadOf(t, domain.StepGateDecided, &decided); err != nil {
+		t.Fatalf("gate payload: %v", err)
+	}
+	if decided.Verdict != domain.VerdictDuplicate {
+		t.Fatalf("Verdict = %s, want duplicate", decided.Verdict)
+	}
+}
+
+func TestAdvance_pendingSemanticDedupeTimeoutIsRetryableSupervisionState(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t, Proposal{Tool: "crm.lookup", Args: []byte(`{"id":"42"}`)})
+	dedupeStore := &fakeDedupeStore{
+		lookupFound: []bool{false},
+		reserveRecords: []effectdedupe.Record{{
+			State: effectdedupe.StatePending, RunID: "run-old",
+		}},
+	}
+	enableDedupe(h, dedupeStore)
+	h.runner.deps.DedupePendingWait = time.Millisecond
+	h.runner.deps.DedupePendingPoll = time.Millisecond
+
+	_, err := h.runner.Advance(ctx, h.start(t, generousBudget()))
+	if err == nil {
+		t.Fatal("Advance succeeded, want the run to retry under supervision")
+	}
+	var summarized interface {
+		Summary() domain.FailureSummary
+	}
+	if !errors.As(err, &summarized) {
+		t.Fatalf("error %v does not expose a stable failure summary", err)
+	}
+	failure := summarized.Summary()
+	if failure.Code != CodeDedupeInFlight || !failure.Retryable {
+		t.Fatalf("failure = %+v, want retryable %s", failure, CodeDedupeInFlight)
+	}
+	if len(h.tools.invocations) != 0 {
+		t.Fatalf("tool invoked while another run owned the same effect: %v", h.tools.invocations)
+	}
+	if slices.Contains(h.kinds(t), domain.StepParked) {
+		t.Fatalf("pending dedupe parked inside the engine; steps: %v", h.kinds(t))
+	}
+}
+
 // A worker that dies between recording the call and receiving the result
 // leaves an orphan: the effect may or may not have landed, and nothing in the
 // process knows which. The loop must close it out honestly instead of guessing.
@@ -783,6 +1083,35 @@ func TestAdvance_planKeepsProposingABlockedCall_parksInsteadOfLooping(t *testing
 	}
 	if len(h.tools.invocations) != 0 {
 		t.Errorf("a refused tool was invoked: %v", h.tools.invocations)
+	}
+}
+
+func TestAdvance_planKeepsProposingADuplicateCall_parksInsteadOfLooping(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	// A duplicate is not a Gate refusal: no effect leaves the platform, and
+	// the planner sees a skip rather than a denial. If it keeps proposing the
+	// same skipped effect anyway, the run still has to stop spending model
+	// turns on a path that cannot make progress.
+	repeated := Proposal{Tool: "crm.lookup", Args: []byte(`{"id":"42"}`)}
+	h := newHarness(t, slices.Repeat([]Proposal{repeated}, maxConsecutiveBlocks+2)...)
+	start := h.start(t, generousBudget())
+
+	var last Status
+	for range maxConsecutiveBlocks + 2 {
+		var err error
+		if last, err = h.runner.Advance(ctx, start); err != nil {
+			t.Fatalf("Advance: %v", err)
+		}
+	}
+
+	if last.Phase != PhaseParked {
+		t.Fatalf("Phase = %v after repeated duplicate proposals, want parked; steps: %v",
+			last.Phase, h.kinds(t))
+	}
+	if len(h.tools.invocations) != 1 {
+		t.Errorf("tool invocations = %d, want only the original call", len(h.tools.invocations))
 	}
 }
 

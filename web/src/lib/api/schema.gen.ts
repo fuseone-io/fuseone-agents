@@ -2389,7 +2389,7 @@ export interface components {
         /** @enum {string} */
         Phase: "unstarted" | "running" | "awaiting_approval" | "awaiting_tool" | "parked" | "compensating" | "finished" | "failed";
         /** @enum {string} */
-        Verdict: "allow" | "constrain" | "require_approval" | "block";
+        Verdict: "allow" | "constrain" | "require_approval" | "block" | "duplicate";
         /**
          * @description What a tool does to the world, as a caller asserts it. `unknown` is deliberately absent here: it is the zero value that makes an unclassified tool fail closed, and nobody may claim it.
          * @enum {string}

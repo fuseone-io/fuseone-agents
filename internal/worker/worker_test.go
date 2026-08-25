@@ -74,6 +74,9 @@ type Call = engine.Call
 type emptyCatalog struct{}
 
 func (emptyCatalog) Effect(domain.ToolID) (domain.Effect, bool) { return domain.EffectRead, true }
+func (emptyCatalog) Dedupe(domain.ToolID) (domain.ToolDedupe, bool) {
+	return domain.ToolDedupe{}, false
+}
 
 type staticSpecs struct {
 	err     error
@@ -421,6 +424,29 @@ func TestTurn_providerFailure_parksWithTheStableProviderSummary(t *testing.T) {
 	if p.Failure.Provider != "anthropic" || p.Failure.Status != 529 ||
 		p.Failure.RequestID != "req_011CeAaYZkdUe63yaSu5CxCX" || !p.Failure.Retryable {
 		t.Errorf("failure = %+v, want the stable provider summary", *p.Failure)
+	}
+}
+
+func TestTurn_dedupeInFlightParksWithTheStableEngineCode(t *testing.T) {
+	t.Parallel()
+
+	planner := &flakyPlanner{
+		failures: 99,
+		err:      engine.DedupeInFlightError{},
+	}
+	s := newSetup(t, Config{MaxAttempts: 1}, planner, nil)
+	openRun(t, s.store)
+
+	if _, err := s.worker.turn(context.Background(), slog.New(slog.DiscardHandler)); err != nil {
+		t.Fatalf("turn: %v", err)
+	}
+
+	p := parkPayload(t, s.store)
+	if p.Reason != engine.CodeDedupeInFlight {
+		t.Fatalf("reason = %q, want %s", p.Reason, engine.CodeDedupeInFlight)
+	}
+	if p.Failure == nil || p.Failure.Code != engine.CodeDedupeInFlight || !p.Failure.Retryable {
+		t.Fatalf("failure = %+v, want retryable %s", p.Failure, engine.CodeDedupeInFlight)
 	}
 }
 

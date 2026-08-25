@@ -32,6 +32,7 @@ const VERDICTS: Record<string, { verb: string; tone: Tone }> = {
   constrain: { verb: "runs.verbConstrained", tone: "warn" },
   require_approval: { verb: "runs.verbRequiredApproval", tone: "warn" },
   block: { verb: "runs.verbBlocked", tone: "bad" },
+  duplicate: { verb: "runs.verbSkipped", tone: "neutral" },
 };
 
 // The wire encodes verdict and effect as the domain's integers; map them back
@@ -43,6 +44,7 @@ const VERDICT_BY_CODE = [
   "constrain",
   "require_approval",
   "block",
+  "duplicate",
 ];
 const EFFECT_BY_CODE = ["unknown", "read", "write", "destructive", "financial"];
 

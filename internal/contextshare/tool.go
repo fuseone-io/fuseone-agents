@@ -44,6 +44,13 @@ func (l *Layer) Effect(id domain.ToolID) (domain.Effect, bool) {
 	return l.catalog.Effect(id)
 }
 
+func (l *Layer) Dedupe(id domain.ToolID) (domain.ToolDedupe, bool) {
+	if id == domain.ToolContextRead || l.catalog == nil {
+		return domain.ToolDedupe{}, false
+	}
+	return l.catalog.Dedupe(id)
+}
+
 func (l *Layer) Reserve(ctx context.Context, call engine.Call) error {
 	if call.Tool == domain.ToolContextRead {
 		return nil

@@ -38,7 +38,7 @@ const (
 
 // policyVersion must be bumped whenever the semantics of a built-in check
 // change, even when the rule names stay the same.
-const policyVersion = "builtin/v1"
+const policyVersion = "builtin/v2"
 
 // result is a check's answer: a verdict plus why.
 type result struct {
@@ -53,6 +53,9 @@ type result struct {
 
 func pass() result           { return result{verdict: domain.VerdictAllow} }
 func stop(why string) result { return result{verdict: domain.VerdictBlock, reason: why} }
+func duplicate(why string) result {
+	return result{verdict: domain.VerdictDuplicate, reason: why}
+}
 func needsHuman(why string) result {
 	return result{verdict: domain.VerdictRequireApproval, reason: why}
 }
@@ -71,8 +74,8 @@ var checkOrder = []check{
 	{RuleDataBarrier, checkDataBarrier},
 	{RuleTaint, checkTaint},
 	{RulePolicy, checkPolicy},
-	{RuleBudget, checkBudget},
 	{RuleIdempotency, checkIdempotency},
+	{RuleBudget, checkBudget},
 	// Last on purpose. It escalates everything an untrusted agent would do,
 	// so running it early would report "the agent is in Copilot" for a call
 	// that a policy or a taint rule was already stopping for a specific
@@ -147,7 +150,7 @@ func (g *Gate) Evaluate(_ context.Context, r Request) (domain.Decision, error) {
 			// tell two rules apart and nobody can count what either did.
 			d.PolicyCode = authored.code
 		}
-		if got.verdict == domain.VerdictBlock {
+		if got.verdict.Terminal() {
 			return d, nil
 		}
 		if got.verdict > worst.Verdict {

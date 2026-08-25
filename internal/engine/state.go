@@ -124,6 +124,10 @@ type State struct {
 	// A refusal is fed back to the planner so it can choose differently; this
 	// is how the platform notices that it did not.
 	ConsecutiveBlocks int
+	// ConsecutiveSkips counts recognised duplicate effects since the last call
+	// that went through or the last real refusal. A duplicate is not a refusal,
+	// but repeating it forever is still no progress.
+	ConsecutiveSkips int
 
 	// startedAt is the first step's instant, held so elapsed time is a fact of
 	// the trail rather than of whichever worker happens to be running.

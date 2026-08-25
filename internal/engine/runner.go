@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/fuseone/agents/internal/domain"
 )
@@ -16,6 +17,14 @@ type Deps struct {
 	Tools   Tools
 	Catalog Catalog
 	Clock   Clock
+	Dedupe  DedupeStore
+	// DedupePendingTTL is how long a reservation may sit pending before
+	// another run may take it. DedupePendingWait is how long this worker waits
+	// for another run's pending reservation to become confirmed before it
+	// returns an operational error rather than spinning hot.
+	DedupePendingTTL  time.Duration
+	DedupePendingWait time.Duration
+	DedupePendingPoll time.Duration
 	// Content holds payloads too large or too sensitive for the ledger. A nil
 	// store means references never resolve, which is fine for a run whose
 	// tools return nothing bulky.

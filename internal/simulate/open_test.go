@@ -31,6 +31,10 @@ func (c catalog) Effect(id domain.ToolID) (domain.Effect, bool) {
 	return e, ok
 }
 
+func (c catalog) Dedupe(domain.ToolID) (domain.ToolDedupe, bool) {
+	return domain.ToolDedupe{}, false
+}
+
 type clock struct{}
 
 func (clock) Now() time.Time { return time.Date(2026, 8, 12, 9, 0, 0, 0, time.UTC) }

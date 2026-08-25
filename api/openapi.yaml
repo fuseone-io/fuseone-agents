@@ -3769,7 +3769,7 @@ components:
 
     Verdict:
       type: string
-      enum: [allow, constrain, require_approval, block]
+      enum: [allow, constrain, require_approval, block, duplicate]
 
     Effect:
       type: string

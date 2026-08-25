@@ -17,6 +17,7 @@ const VERDICT: Record<Verdict, { verb: string; className: string }> = {
   constrain: { verb: "runs.verbConstrained", className: "text-warning" },
   require_approval: { verb: "runs.verbEscalated", className: "text-warning" },
   block: { verb: "runs.verbBlocked", className: "text-danger" },
+  duplicate: { verb: "runs.verbSkipped", className: "text-muted-foreground" },
 };
 
 /**

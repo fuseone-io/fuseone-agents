@@ -47,6 +47,10 @@ const VERDICT_CHIP: Record<string, { text: string; className: string }> = {
     className: "bg-warning-surface text-warning",
   },
   block: { text: "verdict.block", className: "bg-danger-surface text-danger" },
+  duplicate: {
+    text: "verdict.duplicate",
+    className: "bg-muted text-muted-foreground",
+  },
 };
 
 const PARKED: Record<string, string> = {

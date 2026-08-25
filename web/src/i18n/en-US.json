@@ -1031,7 +1031,7 @@
   "gate": {
     "badArgs": "The arguments do not match the tool's contract.",
     "dataBarrier": "The run carries data from outside this company or area.",
-    "duplicate": "This call is already in the trail; repeating it would duplicate the effect.",
+    "duplicate": "This effect is already recorded; repeating it would duplicate the effect.",
     "humanCleared": "Cleared by a human decision recorded in this run.",
     "outOfPack": "The tool is outside the run's capability pack.",
     "overCeiling": "The call would exceed the run's ceiling.",
@@ -1851,6 +1851,7 @@
     "nodeProposed": "The model proposed",
     "nodeRefused": "blocked by policy",
     "nodeSealed": "Sealed in the trail",
+    "nodeSkipped": "The Gate skipped",
     "nodeStarted": "Run started",
     "noneFinishedYet": "no run finished yet",
     "noneInPeriod": "No run in the period",
@@ -1960,6 +1961,7 @@
     "verbFinished": "finished",
     "verbParked": "parked",
     "verbProposed": "proposed",
+    "verbSkipped": "skipped",
     "verbReconciled": "reconciled",
     "verbRequiredApproval": "required approval",
     "verbReserved": "reserved",
@@ -2283,6 +2285,7 @@
     "verdictApproval": "Would ask approval",
     "verdictBlock": "Would block",
     "verdictConstrain": "Would constrain",
+    "verdictDuplicate": "Would skip",
     "waitingForResult": "Waiting for the rehearsal to settle",
     "wentExpected": "Went as expected",
     "whatArrived": "What arrived",
@@ -2352,6 +2355,7 @@
     "allow": "allow",
     "block": "block",
     "constrain": "constrain",
+    "duplicate": "skip",
     "require_approval": "escalate"
   }
 }

@@ -173,6 +173,7 @@ const GATE_TONE: Record<string, TileTone> = {
   constrain: "escalate",
   require_approval: "escalate",
   block: "block",
+  duplicate: "neutral",
 };
 
 const GATE_TITLE: Record<string, string> = {
@@ -180,6 +181,7 @@ const GATE_TITLE: Record<string, string> = {
   constrain: "runs.nodeConstrained",
   require_approval: "runs.nodeEscalated",
   block: "runs.nodeBlocked",
+  duplicate: "runs.nodeSkipped",
 };
 
 /** The rule, never only the verdict: "blocked by policy" tells a reader

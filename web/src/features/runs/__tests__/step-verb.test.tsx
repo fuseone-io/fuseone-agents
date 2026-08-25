@@ -26,6 +26,9 @@ describe("what a step says it did", () => {
     expect(verbOf(step({ payload: { verdict: 1 } })).verb).toBe(
       "runs.verbAllowed",
     );
+    expect(verbOf(step({ payload: { verdict: 5 } })).verb).toBe(
+      "runs.verbSkipped",
+    );
   });
 
   it("falls back to the kind when the verdict is missing", () => {
