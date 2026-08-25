@@ -27,6 +27,27 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.35.0] — 2026-08-25
+
+### Added
+
+- **The governed connector catalogue now includes data and identity shapes.**
+  The catalogue lists three additional planned connectors: governed SQL read
+  access, object storage, and identity actions.
+
+  SQL is described as read-only and template-based, so a future runtime has a
+  contract for database lookups without granting arbitrary query execution.
+  Object storage says bytes move through content references rather than inline
+  model text. Identity actions distinguish reads from account changes, and
+  destructive actions such as disabling a principal or revoking sessions require
+  a human decision.
+
+  This is still catalogue only. It creates no credentials, starts no connector
+  runtime, exposes no executable tool to an agent, and performs no database,
+  object-store or identity-provider call. The screen is a product contract for
+  what the governed runtime must later enforce, not evidence that an
+  installation can execute those operations today.
+
 ## [0.34.3] — 2026-08-25
 
 ### Fixed
