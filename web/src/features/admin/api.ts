@@ -5,6 +5,7 @@ import type { components } from "@/lib/api/schema.gen";
 
 export type Tool = components["schemas"]["Tool"];
 export type Effect = components["schemas"]["Effect"];
+export type ToolDedupe = components["schemas"]["ToolDedupe"];
 /**
  * What a tool does, as a reader sees it — the same values and `unknown`
  * besides. `Effect` is what a caller may assert and never carries it: a tool
@@ -54,6 +55,7 @@ export function useClassifyTool() {
       untrusted: boolean;
       reason?: string;
       compensatedBy?: string;
+      dedupe?: ToolDedupe;
       /**
        * The definition being judged, as this screen showed it.
        *
@@ -73,6 +75,7 @@ export function useClassifyTool() {
             untrusted: input.untrusted,
             reason: input.reason,
             compensatedBy: input.compensatedBy,
+            dedupe: input.dedupe,
             digest: input.digest,
           },
         }),

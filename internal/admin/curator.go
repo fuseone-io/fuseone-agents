@@ -362,6 +362,7 @@ func (c *Curator) Tools(ctx context.Context) ([]domain.ToolEntry, error) {
 		entries[i].Effect = r.Effect
 		entries[i].Untrusted = r.Untrusted
 		entries[i].CompensatedBy = r.CompensatedBy
+		entries[i].Dedupe = r.Dedupe.Clone()
 	}
 	return entries, nil
 }

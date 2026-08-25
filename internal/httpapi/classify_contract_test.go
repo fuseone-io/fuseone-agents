@@ -102,6 +102,57 @@ func TestClassifyTool_namingTheDefinitionOnOffer_isRecorded(t *testing.T) {
 	}
 }
 
+func TestClassifyTool_recordsTheCuratorsSemanticDedupeKey(t *testing.T) {
+	t.Parallel()
+	server, curator := judgingOne(t, "sha-current")
+	req := ruling(ptr("sha-current"))
+	req.Body.Dedupe = &openapi.ToolDedupe{
+		WindowSeconds: 3600,
+		ArgPaths:      []string{"customer_id", "issue.title"},
+	}
+
+	resp, err := server.ClassifyTool(as(domain.RoleCurator), req)
+	if err != nil {
+		t.Fatalf("ClassifyTool: %v", err)
+	}
+	if _, ok := resp.(openapi.ClassifyTool204Response); !ok {
+		t.Fatalf("response = %T, want 204", resp)
+	}
+	if got := curator.stored.Dedupe; got.WindowSeconds != 3600 ||
+		!slices.Equal(got.ArgPaths, []string{"customer_id", "issue.title"}) {
+		t.Errorf("Dedupe = %+v, want the Curator's semantic key", got)
+	}
+}
+
+func TestListTools_returnsTheRecordedSemanticDedupeKey(t *testing.T) {
+	t.Parallel()
+	one := &judging{tools: []domain.ToolEntry{{
+		ID: "crm.lookup", Server: "crm", Description: "Look a customer up",
+		Effect: domain.EffectRead, Untrusted: true,
+		Dedupe: domain.ToolDedupe{
+			WindowSeconds: 7200,
+			ArgPaths:      []string{"customer_id"},
+		},
+	}}}
+	server := NewServer(ledger.NewMemory(), "test").WithAdministration(one, one, nil)
+
+	resp, err := server.ListTools(as(domain.RoleCurator), openapi.ListToolsRequestObject{})
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+	listed, ok := resp.(openapi.ListTools200JSONResponse)
+	if !ok {
+		t.Fatalf("response = %T, want list", resp)
+	}
+	if len(listed.Items) != 1 || listed.Items[0].Dedupe == nil {
+		t.Fatalf("Dedupe = %+v, want the recorded declaration", listed.Items)
+	}
+	if got := listed.Items[0].Dedupe; got.WindowSeconds != 7200 ||
+		!slices.Equal(got.ArgPaths, []string{"customer_id"}) {
+		t.Errorf("Dedupe = %+v, want the recorded declaration", got)
+	}
+}
+
 /*
 A ruling about a definition the server has since replaced.
 

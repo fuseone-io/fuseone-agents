@@ -2396,6 +2396,18 @@ export interface components {
          */
         Effect: "read" | "write" | "destructive" | "financial";
         /**
+         * @description The Curator's declaration of what makes two effectful calls the same
+         *     external act across runs. Company, area, agent and tool are
+         *     platform-owned key prefixes; this object names only stable fields
+         *     inside the proposed arguments. It is not a result cache.
+         */
+        ToolDedupe: {
+            /** @description How long a confirmed effect suppresses the same semantic call. */
+            windowSeconds: number;
+            /** @description Stable dotted argument paths that identify the external act. */
+            argPaths: string[];
+        };
+        /**
          * @description What the platform ships about a server it already knows, so the Curator
          *     confirms instead of inventing forty rulings from a list of bare names.
          *
@@ -2683,6 +2695,7 @@ export interface components {
             untrusted: boolean;
             /** @description The tool that undoes this one, when the Curator has said which does. */
             compensatedBy?: string;
+            dedupe?: components["schemas"]["ToolDedupe"];
             suggested?: components["schemas"]["ToolSuggestion"];
             /**
              * @description Names the definition on offer right now — the server, the name, the
@@ -6116,6 +6129,7 @@ export interface operations {
                      *     reports rather than hides.
                      */
                     compensatedBy?: string;
+                    dedupe?: components["schemas"]["ToolDedupe"];
                     /**
                      * @description The definition being judged, as the screen showed it.
                      *

@@ -23,6 +23,7 @@ import type { RuntimeHealth } from "@/lib/api/client";
 const PAGE_SIZE = 8;
 const ICONS: Record<RuntimeAttentionKind, LucideIcon> = {
   provider: AlertTriangle,
+  coordination: Clock3,
   tool: Wrench,
   channel: MessageSquareWarning,
   egress: ShieldAlert,

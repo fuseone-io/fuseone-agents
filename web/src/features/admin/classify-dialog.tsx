@@ -14,18 +14,16 @@ import {
   ClassifyFields,
   type Ruling,
 } from "@/features/admin/classify-fields";
+import {
+  blankRuling,
+  classificationInput,
+  startRulingFromTool,
+} from "@/features/admin/classify-dialog-model";
 import { useClassifyTool, type Tool } from "@/features/admin/api";
 import { SuggestedRuling } from "@/features/admin/suggested-ruling";
 import { problemMessage } from "@/lib/api/problem-message";
 
-const BLANK: Ruling = {
-  // Not one of the four. See Ruling: `read` is a permission, so starting
-  // there would make the untouched form a grant.
-  effect: "",
-  untrusted: true,
-  reason: "",
-  compensatedBy: "",
-};
+const BLANK: Ruling = blankRuling();
 
 /**
  * The Curator's act, and the only way write access enters the platform.
@@ -65,7 +63,7 @@ export function ClassifyDialog({
 
   if (identity !== judging) {
     setJudging(identity);
-    setRuling(tool ? startFrom(tool) : BLANK);
+    setRuling(tool ? startRulingFromTool(tool) : BLANK);
   }
 
   if (!tool) return null;
@@ -73,13 +71,9 @@ export function ClassifyDialog({
   async function submit() {
     if (!tool) return;
     try {
-      if (ruling.effect === "") return;
-      await classify.mutateAsync({
-        toolId: tool.toolId,
-        digest: tool.digest,
-        ...ruling,
-        effect: ruling.effect,
-      });
+      const input = classificationInput(tool, ruling);
+      if (!input) return;
+      await classify.mutateAsync(input);
       toast.success(
         t("admin.classified", {
           tool: tool.toolId,
@@ -118,6 +112,7 @@ export function ClassifyDialog({
                 effect: tool.suggested?.effect ?? "",
                 untrusted: tool.suggested?.untrusted ?? true,
                 compensatedBy: tool.suggested?.compensatedBy ?? "",
+                dedupe: ruling.dedupe,
                 // The reason stays theirs. Accepting a suggestion is still a
                 // decision somebody signs, and signing somebody else's
                 // sentence is not the same as writing one.
@@ -143,7 +138,10 @@ export function ClassifyDialog({
               with whatever the form happened to hold. */}
           <Button
             onClick={() => void submit()}
-            disabled={classify.isPending || ruling.effect === ""}
+            disabled={
+              classify.isPending ||
+              classificationInput(tool, ruling) === null
+            }
           >
             {t("admin.recordClassification")}
           </Button>
@@ -151,24 +149,4 @@ export function ClassifyDialog({
       </DialogContent>
     </Dialog>
   );
-}
-
-/*
-startFrom is what a ruling opens on.
-
-A tool nobody has judged opens blank: there is nothing to carry forward, and a
-pre-filled effect would be the platform answering for the Curator.
-
-A tool already ruled on opens on its ruling. The act is "change this", and
-starting from the zero value makes the safest-looking answer — `read` — the one
-a distracted person submits by touching nothing.
-*/
-function startFrom(tool: Tool): Ruling {
-  if (tool.effect === "unknown") return BLANK;
-  return {
-    effect: tool.effect,
-    untrusted: tool.untrusted,
-    reason: "",
-    compensatedBy: tool.compensatedBy ?? "",
-  };
 }

@@ -239,6 +239,7 @@ func TestTools_carryTheUndoTheCuratorDeclared(t *testing.T) {
 	if err := curator.Classify(ctx, platform, domain.ToolClassification{
 		Tool: "crm.note", Effect: domain.EffectWrite, By: "usr_ana",
 		CompensatedBy: "crm.note.delete",
+		Dedupe:        domain.ToolDedupe{WindowSeconds: 3600, ArgPaths: []string{"customer_id", "note.title"}},
 	}); err != nil {
 		t.Fatalf("Classify: %v", err)
 	}
@@ -255,6 +256,10 @@ func TestTools_carryTheUndoTheCuratorDeclared(t *testing.T) {
 	note := find(t, entries, "crm.note")
 	if note.CompensatedBy != "crm.note.delete" {
 		t.Errorf("CompensatedBy = %q, want the tool that undoes it", note.CompensatedBy)
+	}
+	if got := note.Dedupe; got.WindowSeconds != 3600 ||
+		len(got.ArgPaths) != 2 || got.ArgPaths[0] != "customer_id" || got.ArgPaths[1] != "note.title" {
+		t.Errorf("Dedupe = %+v, want the Curator's semantic key", got)
 	}
 }
 

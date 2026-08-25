@@ -20,7 +20,7 @@ export function RunFailureNotice({ run }: { run: Run }) {
         <div className="min-w-0 flex-1">
           <h2 className="font-medium">{t(failureLabel(failure.code))}</h2>
           <p className="mt-1 text-sm text-warning">
-            {t("runtime.runFailureDetail", {
+            {t(runFailureDetail(failure.code), {
               provider: failure.provider || t("runtime.providerUnknown"),
               status: failure.status || t("runtime.noStatus"),
             })}
@@ -41,4 +41,9 @@ export function RunFailureNotice({ run }: { run: Run }) {
       </div>
     </section>
   );
+}
+
+function runFailureDetail(code: string): string {
+  if (code === "dedupe_in_flight") return "runtime.runFailureDedupeInFlightDetail";
+  return "runtime.runFailureDetail";
 }

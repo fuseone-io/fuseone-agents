@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -28,13 +29,21 @@ export type Ruling = {
   untrusted: boolean;
   reason: string;
   compensatedBy: string;
+  dedupe: DedupeRuling;
+};
+
+export type DedupeRuling = {
+  enabled: boolean;
+  windowSeconds: string;
+  argPaths: string;
 };
 
 /**
  * What the Curator is deciding: what the tool does, whether its results can be
- * trusted, and what takes an act by it back.
+ * trusted, what takes an act by it back, and whether the same effect can be
+ * recognised across runs.
  *
- * The three are one judgement, which is why they are one form. Ruling that a
+ * These are one judgement, which is why they are one form. Ruling that a
  * tool moves money and leaving how to reverse it for another screen is how an
  * installation ends up unable to undo the calls it most needs to.
  */
@@ -98,6 +107,65 @@ export function ClassifyFields({
         <p className="text-xs text-muted-foreground">
           {t("admin.undoTakesTheResult")}
         </p>
+      </div>
+
+      <div className="flex flex-col gap-3 rounded-lg border p-3">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <Label htmlFor="dedupe">{t("admin.dedupeEffects")}</Label>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t("admin.dedupeEffectsHint")}
+            </p>
+          </div>
+          <Switch
+            id="dedupe"
+            checked={ruling.dedupe.enabled}
+            onCheckedChange={(enabled) =>
+              onChange({ ...ruling, dedupe: { ...ruling.dedupe, enabled } })
+            }
+          />
+        </div>
+
+        {ruling.dedupe.enabled && (
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,10rem)_minmax(0,1fr)]">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="dedupe-window">{t("admin.dedupeWindow")}</Label>
+              <Input
+                id="dedupe-window"
+                type="number"
+                min={1}
+                value={ruling.dedupe.windowSeconds}
+                onChange={(e) =>
+                  onChange({
+                    ...ruling,
+                    dedupe: {
+                      ...ruling.dedupe,
+                      windowSeconds: e.target.value,
+                    },
+                  })
+                }
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="dedupe-args">{t("admin.dedupeArgPaths")}</Label>
+              <Textarea
+                id="dedupe-args"
+                value={ruling.dedupe.argPaths}
+                onChange={(e) =>
+                  onChange({
+                    ...ruling,
+                    dedupe: { ...ruling.dedupe, argPaths: e.target.value },
+                  })
+                }
+                placeholder={t("admin.dedupeArgPathsPlaceholder")}
+                rows={3}
+              />
+              <p className="text-xs text-muted-foreground">
+                {t("admin.dedupeArgPathsHint")}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col gap-2">

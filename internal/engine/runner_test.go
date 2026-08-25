@@ -709,8 +709,89 @@ func TestAdvance_confirmedSemanticDedupe_recordsDuplicateWithoutCallingTool(t *t
 	if decided.Verdict != domain.VerdictDuplicate || decided.Rule != gate.RuleIdempotency {
 		t.Fatalf("decision = %s/%s, want duplicate/idempotency", decided.Verdict, decided.Rule)
 	}
+	if decided.Duplicate == nil || decided.Duplicate.RunID != "run-old" || decided.Duplicate.Seq != 7 {
+		t.Fatalf("duplicate source = %+v, want run-old step 7", decided.Duplicate)
+	}
 	if slices.Contains(h.kinds(t), domain.StepToolCalled) {
 		t.Fatalf("ledger = %v, want no tool call for a duplicate", h.kinds(t))
+	}
+}
+
+func TestAdvance_confirmedSemanticDedupeWithoutSource_stillRecordsDuplicate(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t, Proposal{Tool: "crm.lookup", Args: []byte(`{"id":"42"}`)})
+	dedupeStore := &fakeDedupeStore{
+		lookupFound: []bool{false},
+		reserveRecords: []effectdedupe.Record{{
+			State: effectdedupe.StateConfirmed,
+		}},
+	}
+	enableDedupe(h, dedupeStore)
+	start := h.start(t, generousBudget())
+
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+	var decided domain.GateDecidedPayload
+	if err := h.lastPayloadOf(t, domain.StepGateDecided, &decided); err != nil {
+		t.Fatalf("gate payload: %v", err)
+	}
+	if decided.Verdict != domain.VerdictDuplicate || decided.Rule != gate.RuleIdempotency {
+		t.Fatalf("decision = %s/%s, want duplicate/idempotency", decided.Verdict, decided.Rule)
+	}
+	if decided.Duplicate != nil {
+		t.Fatalf("duplicate source = %+v, want absent source for an unnamed duplicate", decided.Duplicate)
+	}
+	if slices.Contains(h.kinds(t), domain.StepToolCalled) {
+		t.Fatalf("ledger = %v, want no tool call for a duplicate", h.kinds(t))
+	}
+}
+
+func TestAdvance_confirmedSemanticDedupeSourceDoesNotDecorateEarlierBlocks(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t, Proposal{Tool: "crm.refund", Args: []byte(`{"id":"42"}`)})
+	dedupeStore := &fakeDedupeStore{
+		lookupFound: []bool{true},
+		lookupRecords: []effectdedupe.Record{{
+			State: effectdedupe.StateConfirmed, RunID: "run-old", Seq: 7,
+		}},
+	}
+	h.runner.deps.Catalog = dedupeCatalog{
+		staticCatalog: staticCatalog{
+			"crm.refund": domain.EffectFinancial,
+		},
+		dedupes: map[domain.ToolID]domain.ToolDedupe{
+			"crm.refund": {WindowSeconds: 3600, ArgPaths: []string{"id"}},
+		},
+	}
+	h.runner.deps.Dedupe = dedupeStore
+	start := h.start(t, generousBudget())
+	if _, err := h.ledger.Append(ctx, domain.Step{
+		RunID: start.RunID, Kind: domain.StepRunStarted,
+		Scope: start.Scope, AgentID: start.AgentID,
+		VersionID: start.VersionID, OnBehalfOf: start.OnBehalfOf,
+		Labels:  domain.NewLabels(domain.LabelUntrusted),
+		Payload: mustJSON(domain.RunStartedPayload{Trigger: start.Trigger}),
+	}); err != nil {
+		t.Fatalf("start run: %v", err)
+	}
+
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+	var decided domain.GateDecidedPayload
+	if err := h.lastPayloadOf(t, domain.StepGateDecided, &decided); err != nil {
+		t.Fatalf("gate payload: %v", err)
+	}
+	if decided.Verdict != domain.VerdictBlock || decided.Rule != gate.RuleTaint {
+		t.Fatalf("decision = %s/%s, want taint block", decided.Verdict, decided.Rule)
+	}
+	if decided.Duplicate != nil {
+		t.Fatalf("duplicate source leaked onto a non-duplicate decision: %+v", decided.Duplicate)
 	}
 }
 
@@ -823,6 +904,9 @@ func TestAdvance_pendingSemanticDedupeWaitsForConfirmationInsteadOfParking(t *te
 	}
 	if decided.Verdict != domain.VerdictDuplicate {
 		t.Fatalf("Verdict = %s, want duplicate", decided.Verdict)
+	}
+	if decided.Duplicate == nil || decided.Duplicate.RunID != "run-old" || decided.Duplicate.Seq != 9 {
+		t.Fatalf("duplicate source = %+v, want run-old step 9", decided.Duplicate)
 	}
 }
 

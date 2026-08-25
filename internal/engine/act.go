@@ -98,6 +98,7 @@ type semanticDedupe struct {
 	key     dedupe.Key
 	window  time.Duration
 	already bool
+	source  *domain.DuplicateEffect
 }
 
 type dedupeReservation struct {
@@ -120,7 +121,7 @@ func (r *Runner) act(ctx context.Context, state State, start Start, p Proposal) 
 	}
 
 	if !decision.Verdict.Executable() || decision.Verdict == domain.VerdictRequireApproval {
-		state, err = r.appendGateDecision(ctx, state, start, p, effect, decision)
+		state, err = r.appendGateDecision(ctx, state, start, p, effect, decision, semantic.source)
 		if err != nil {
 			return Status{}, err
 		}
@@ -134,9 +135,9 @@ func (r *Runner) afterExecutableGate(
 	ctx context.Context, state State, start Start, p Proposal, effect domain.Effect,
 	idemKey string, semantic semanticDedupe, decision domain.Decision,
 ) (Status, error) {
-	reservation, duplicate, err := r.reserveSemanticDedupe(ctx, start, semantic)
+	reservation, duplicate, source, err := r.reserveSemanticDedupe(ctx, start, semantic)
 	if err != nil {
-		_, appendErr := r.appendGateDecision(ctx, state, start, p, effect, decision)
+		_, appendErr := r.appendGateDecision(ctx, state, start, p, effect, decision, nil)
 		if appendErr != nil {
 			return Status{}, appendErr
 		}
@@ -147,10 +148,10 @@ func (r *Runner) afterExecutableGate(
 		if err != nil {
 			return Status{}, fmt.Errorf("engine: gate: %w", err)
 		}
-		state, err = r.appendGateDecision(ctx, state, start, p, effect, decision)
+		state, err = r.appendGateDecision(ctx, state, start, p, effect, decision, source)
 		return status(state), err
 	}
-	state, err = r.appendGateDecision(ctx, state, start, p, effect, decision)
+	state, err = r.appendGateDecision(ctx, state, start, p, effect, decision, nil)
 	if err != nil {
 		return Status{}, err
 	}
@@ -191,8 +192,11 @@ func (r *Runner) decide(
 
 func (r *Runner) appendGateDecision(
 	ctx context.Context, state State, start Start,
-	p Proposal, effect domain.Effect, decision domain.Decision,
+	p Proposal, effect domain.Effect, decision domain.Decision, duplicate *domain.DuplicateEffect,
 ) (State, error) {
+	if decision.Verdict != domain.VerdictDuplicate {
+		duplicate = nil
+	}
 	budget, committed, estimate, projected := budgetEvidence(decision)
 	return r.append(ctx, state, start, domain.Step{
 		Kind:       domain.StepGateDecided,
@@ -202,6 +206,7 @@ func (r *Runner) appendGateDecision(
 			Tool: p.Tool, Effect: effect, Verdict: decision.Verdict,
 			Rule: decision.Rule, Reason: decision.Reason,
 			PolicyCode: decision.PolicyCode, Monitored: decision.Monitored,
+			Duplicate: duplicate,
 			Budget:    budget,
 			Committed: committed, Estimate: estimate,
 			Projected: projected, Breached: decision.Breached,
@@ -301,38 +306,41 @@ func (r *Runner) semanticDedupe(ctx context.Context, start Start, p Proposal) (s
 		return semanticDedupe{}, nil
 	}
 	out.already = found && rec.State == dedupe.StateConfirmed
+	if out.already {
+		out.source = duplicateSource(rec)
+	}
 	return out, nil
 }
 
 func (r *Runner) reserveSemanticDedupe(
 	ctx context.Context, start Start, d semanticDedupe,
-) (dedupeReservation, bool, error) {
+) (dedupeReservation, bool, *domain.DuplicateEffect, error) {
 	if !d.enabled || r.deps.Dedupe == nil {
-		return dedupeReservation{}, false, nil
+		return dedupeReservation{}, false, nil, nil
 	}
 	rec, err := r.deps.Dedupe.Reserve(ctx, d.key, start.RunID, r.dedupePendingTTL(), r.deps.Clock.Now())
 	if err != nil {
-		return dedupeReservation{}, false, fmt.Errorf("engine: reserve semantic dedupe: %w", err)
+		return dedupeReservation{}, false, nil, fmt.Errorf("engine: reserve semantic dedupe: %w", err)
 	}
 	return r.interpretDedupeReservation(ctx, start, d, rec)
 }
 
 func (r *Runner) interpretDedupeReservation(
 	ctx context.Context, start Start, d semanticDedupe, rec dedupe.Record,
-) (dedupeReservation, bool, error) {
-	res, dup, pending, err := dedupeRecordOutcome(start, rec)
-	if err != nil || res.held || dup {
-		return res, dup, err
+) (dedupeReservation, bool, *domain.DuplicateEffect, error) {
+	res, duplicate, source, pending, err := dedupeRecordOutcome(start, rec)
+	if err != nil || res.held || duplicate {
+		return res, duplicate, source, err
 	}
 	if pending {
 		return r.waitForDedupeReservation(ctx, start, d)
 	}
-	return dedupeReservation{}, false, nil
+	return dedupeReservation{}, false, nil, nil
 }
 
 func (r *Runner) waitForDedupeReservation(
 	ctx context.Context, start Start, d semanticDedupe,
-) (dedupeReservation, bool, error) {
+) (dedupeReservation, bool, *domain.DuplicateEffect, error) {
 	deadline := time.NewTimer(r.dedupePendingWait())
 	ticker := time.NewTicker(r.dedupePendingPoll())
 	defer deadline.Stop()
@@ -340,13 +348,13 @@ func (r *Runner) waitForDedupeReservation(
 	for {
 		select {
 		case <-ctx.Done():
-			return dedupeReservation{}, false, ctx.Err()
+			return dedupeReservation{}, false, nil, ctx.Err()
 		case <-deadline.C:
-			return dedupeReservation{}, false, DedupeInFlightError{}
+			return dedupeReservation{}, false, nil, DedupeInFlightError{}
 		case <-ticker.C:
-			res, dup, err := r.retryDedupeReservation(ctx, start, d)
-			if err != nil || res.held || dup {
-				return res, dup, err
+			res, duplicate, source, err := r.retryDedupeReservation(ctx, start, d)
+			if err != nil || res.held || duplicate {
+				return res, duplicate, source, err
 			}
 		}
 	}
@@ -354,36 +362,43 @@ func (r *Runner) waitForDedupeReservation(
 
 func (r *Runner) retryDedupeReservation(
 	ctx context.Context, start Start, d semanticDedupe,
-) (dedupeReservation, bool, error) {
+) (dedupeReservation, bool, *domain.DuplicateEffect, error) {
 	rec, found, err := r.deps.Dedupe.Lookup(ctx, d.key, r.deps.Clock.Now())
 	if err != nil {
-		return dedupeReservation{}, false, fmt.Errorf("engine: lookup pending dedupe: %w", err)
+		return dedupeReservation{}, false, nil, fmt.Errorf("engine: lookup pending dedupe: %w", err)
 	}
 	if !found {
 		rec, err = r.deps.Dedupe.Reserve(ctx, d.key, start.RunID, r.dedupePendingTTL(), r.deps.Clock.Now())
 		if err != nil {
-			return dedupeReservation{}, false, fmt.Errorf("engine: reserve semantic dedupe: %w", err)
+			return dedupeReservation{}, false, nil, fmt.Errorf("engine: reserve semantic dedupe: %w", err)
 		}
 	}
-	res, dup, _, err := dedupeRecordOutcome(start, rec)
-	return res, dup, err
+	res, duplicate, source, _, err := dedupeRecordOutcome(start, rec)
+	return res, duplicate, source, err
 }
 
 func dedupeRecordOutcome(
 	start Start, rec dedupe.Record,
-) (dedupeReservation, bool, bool, error) {
+) (dedupeReservation, bool, *domain.DuplicateEffect, bool, error) {
 	switch {
 	case rec.State == dedupe.StateConfirmed:
-		return dedupeReservation{}, true, false, nil
+		return dedupeReservation{}, true, duplicateSource(rec), false, nil
 	case rec.State == dedupe.StateReserved:
-		return dedupeReservation{held: true}, false, false, nil
+		return dedupeReservation{held: true}, false, nil, false, nil
 	case rec.State == dedupe.StatePending && rec.RunID == start.RunID:
-		return dedupeReservation{held: true}, false, false, nil
+		return dedupeReservation{held: true}, false, nil, false, nil
 	case rec.State == dedupe.StatePending:
-		return dedupeReservation{}, false, true, nil
+		return dedupeReservation{}, false, nil, true, nil
 	default:
-		return dedupeReservation{}, false, false, fmt.Errorf("engine: unknown dedupe state %q", rec.State)
+		return dedupeReservation{}, false, nil, false, fmt.Errorf("engine: unknown dedupe state %q", rec.State)
 	}
+}
+
+func duplicateSource(rec dedupe.Record) *domain.DuplicateEffect {
+	if rec.RunID == "" || rec.Seq <= 0 {
+		return nil
+	}
+	return &domain.DuplicateEffect{RunID: rec.RunID, Seq: rec.Seq}
 }
 
 func (r *Runner) dedupePendingTTL() time.Duration {

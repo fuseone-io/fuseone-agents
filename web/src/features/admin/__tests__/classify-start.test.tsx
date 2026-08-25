@@ -1,8 +1,13 @@
-import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ClassifyDialog } from "@/features/admin/classify-dialog";
 import type { Tool } from "@/features/admin/api";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 function tool(over: Partial<Tool> = {}): Tool {
   return {
@@ -73,5 +78,64 @@ describe("what a ruling opens on", () => {
       </QueryClientProvider>,
     );
     expect(screen.getByLabelText("O que esta ferramenta faz com o mundo")).not.toHaveTextContent(/destrutiv/i);
+  });
+
+  it("opens a judged tool on its recorded semantic dedupe key", () => {
+    open(
+      tool({
+        dedupe: {
+          windowSeconds: 3600,
+          argPaths: ["customer_id", "issue.title"],
+        },
+      }),
+    );
+
+    expect(screen.getByLabelText("Evitar efeito duplicado entre execuções")).toBeChecked();
+    expect(screen.getByLabelText("Janela em segundos")).toHaveValue(3600);
+    expect(screen.getByLabelText("Campos que identificam o ato")).toHaveValue("customer_id\nissue.title");
+  });
+
+  /*
+   * The Curator declares the semantic key, not a result cache. This test
+   * follows the form to the HTTP boundary so a visible field cannot stay
+   * beautiful while the server receives no dedupe declaration.
+   */
+  it("sends the semantic dedupe key with the ruling", async () => {
+    const requests: Request[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: Request | string | URL) => {
+        requests.push(input instanceof Request ? input : new Request(input));
+        return new Response(null, { status: 204 });
+      }),
+    );
+    const user = userEvent.setup();
+
+    open(tool());
+    await user.click(screen.getByLabelText("Evitar efeito duplicado entre execuções"));
+    await user.clear(screen.getByLabelText("Janela em segundos"));
+    await user.type(screen.getByLabelText("Janela em segundos"), "3600");
+    await user.type(screen.getByLabelText("Campos que identificam o ato"), "customer_id\nissue.title");
+    await user.click(screen.getByRole("button", { name: "Registrar classificação" }));
+
+    await waitFor(() => expect(requests).toHaveLength(1));
+    const request = requests[0];
+    if (!request) throw new Error("classification request was not sent");
+    await expect(request.json()).resolves.toMatchObject({
+      effect: "destructive",
+      dedupe: {
+        windowSeconds: 3600,
+        argPaths: ["customer_id", "issue.title"],
+      },
+    });
+  });
+
+  it("will not record an enabled dedupe declaration without a semantic key", async () => {
+    const user = userEvent.setup();
+
+    open(tool());
+    await user.click(screen.getByLabelText("Evitar efeito duplicado entre execuções"));
+
+    expect(screen.getByRole("button", { name: "Registrar classificação" })).toBeDisabled();
   });
 });

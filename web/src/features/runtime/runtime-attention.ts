@@ -2,6 +2,7 @@ import type { RuntimeHealth } from "@/lib/api/client";
 
 export type RuntimeAttentionKind =
   | "provider"
+  | "coordination"
   | "tool"
   | "channel"
   | "egress"
@@ -44,6 +45,16 @@ function collectQueue(items: RuntimeAttentionItem[], health: RuntimeHealth) {
 
 function collectProviders(items: RuntimeAttentionItem[], health: RuntimeHealth) {
   for (const failure of health.failures) {
+    if (failure.code === "dedupe_in_flight") {
+      items.push({
+        id: `coordination:${failure.code}`,
+        kind: "coordination",
+        code: failure.code,
+        count: failure.runs,
+        lastAt: failure.lastAt,
+      });
+      continue;
+    }
     items.push({
       id: `provider:${failure.code}:${failure.provider ?? ""}:${failure.status ?? 0}`,
       kind: "provider",
