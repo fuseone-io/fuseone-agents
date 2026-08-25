@@ -27,6 +27,33 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.34.0] — 2026-08-25
+
+### Changed
+
+- **The agent's Trust Center is judged by the server, not by the browser.** The
+  console used to derive its own verdict from whatever fields it happened to
+  have. The judgment now comes from `GET /agents/{agentId}/trust`, built where
+  the evidence lives, and the page renders what it is told. Two people looking
+  at the same agent can no longer be shown two different conclusions because
+  one of them loaded a different set of fields.
+
+  The evidence itself is wider than before: how runs under this version ended,
+  whether a simulation ran the saved corpus, how its cost compares with the
+  previous version, Gate and policy blocks, human decisions, the capabilities
+  it was granted, and whether it is published and running.
+
+- **Trust evidence now states the period it covers.** Run, cost, Gate and
+  human-decision evidence is read over the last 30 days, and the response
+  carries that window so the screen can show it.
+
+  Without a window the numbers were true and mute. "Approved 400 times,
+  refused 3" over eight months cannot tell *was bad and got fixed* from *is bad
+  now*, and a version whose only blocks happened months ago was being judged
+  for them today. Evidence that does not depend on a period — a saved
+  regression corpus either exists or does not — is still read whole, and the
+  wording says which is which rather than claiming "never" from a 30-day read.
+
 ## [0.33.0] — 2026-08-24
 
 ### Security
