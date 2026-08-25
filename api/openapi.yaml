@@ -4546,7 +4546,7 @@ components:
         name: { type: string }
         category:
           type: string
-          enum: [automation, infrastructure, messaging, network, secrets]
+          enum: [automation, data, infrastructure, messaging, network, secrets, security]
         summary: { type: string }
         maturity:
           type: string

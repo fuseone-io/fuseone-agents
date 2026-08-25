@@ -5,6 +5,9 @@ import "slices"
 var catalog = []Connector{
 	vaultConnector,
 	approvedJobsConnector,
+	sqlConnector,
+	objectStorageConnector,
+	identityConnector,
 	kubernetesConnector,
 	dnsConnector,
 	smtpConnector,

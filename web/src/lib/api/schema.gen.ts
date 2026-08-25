@@ -2892,7 +2892,7 @@ export interface components {
             id: string;
             name: string;
             /** @enum {string} */
-            category: "automation" | "infrastructure" | "messaging" | "network" | "secrets";
+            category: "automation" | "data" | "infrastructure" | "messaging" | "network" | "secrets" | "security";
             summary: string;
             /**
              * @description Planned means the catalogue describes the intended governed shape but the connector is not executable in this release.
