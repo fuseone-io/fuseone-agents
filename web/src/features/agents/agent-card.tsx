@@ -265,11 +265,11 @@ function CapabilityChip({
   return (
     <span
       title={packTitle(pack, t)}
-      className={`inline-flex h-[21px] max-w-full items-center gap-1.5 rounded-sm px-2 pr-1 font-mono text-[11px] ${packClass(pack)}`}
+      className={`inline-flex h-[21px] max-w-full items-center gap-1.5 rounded-sm px-2 pr-1 font-mono text-[11px] leading-none ${packClass(pack)}`}
     >
       {renderPackIcon(pack.name)}
-      <span className="min-w-0 truncate">{pack.name}</span>
-      <span className="grid h-[15px] min-w-[17px] place-items-center rounded-[3px] bg-card px-1 text-[10px] font-semibold text-current tabular-nums">
+      <span className="min-w-0 truncate leading-none">{pack.name}</span>
+      <span className="grid h-[15px] min-w-[17px] place-items-center rounded-[3px] bg-card px-1 text-[10px] font-semibold leading-none text-current tabular-nums">
         {pack.count}
       </span>
     </span>
