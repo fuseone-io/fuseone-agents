@@ -27,6 +27,30 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.38.5] — 2026-08-26
+
+### Fixed
+
+- **A suggestion no longer needs approving twice.** Recording a memory
+  suggestion is still a write and still crosses the Gate, but it cannot become
+  active memory on its own, so the run no longer stops for an approval before
+  the review queue gets the item it exists to inspect. The queue is where a
+  person decides. Under auto-confirm the relaxation applies only when the
+  observation is untrusted, because a clean one can become memory without
+  anybody looking.
+
+- **An untrusted observation is never promoted automatically, whatever comes
+  after it.** Auto-confirm counted the same assertion across distinct runs and
+  weighed the trust of whichever run happened to be last. A poisoned run
+  followed by clean ones therefore promoted itself. The decision now reads the
+  labels the suggestion has accumulated, so one untrusted contribution keeps it
+  in review until a person decides — the same rule the rest of the platform
+  already follows: taint never dilutes.
+
+- **An agent that can suggest memory can also look it up.** Learning was
+  offered without the lookup beside it, so an agent could record what it
+  learned and never read it back.
+
 ## [0.38.4] — 2026-08-26
 
 ### Fixed
