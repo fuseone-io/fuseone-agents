@@ -1,0 +1,609 @@
+<!DOCTYPE html><html lang="en" dir="ltr" data-theme="dark" data-has-toc data-has-sidebar class="astro-vdxcvpsm"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>NT-002 · What is left, and in what order | FuseOne Agents</title><link rel="canonical" href="https://fuseone-io.github.io/fuseone-agents/docs/design/nt-002-remaining-work/"/><link rel="sitemap" href="/fuseone-agents/docs/sitemap-index.xml"/><link rel="icon" type="image/svg+xml" href="/fuseone-agents/docs/favicon.svg"/><link rel="shortcut icon" href="/fuseone-agents/docs/favicon.svg" type="image/svg+xml"/><meta name="generator" content="Astro v7.2.7"/><meta name="generator" content="Starlight v0.41.9"/><meta property="og:title" content="NT-002 · What is left, and in what order"/><meta property="og:type" content="article"/><meta property="og:url" content="https://fuseone-io.github.io/fuseone-agents/docs/design/nt-002-remaining-work/"/><meta property="og:locale" content="en"/><meta property="og:description" content="Remaining product work and ordering."/><meta property="og:site_name" content="FuseOne Agents"/><meta name="twitter:card" content="summary_large_image"/><meta name="description" content="Remaining product work and ordering."/><script>
+	window.StarlightThemeProvider = (() => {
+		const storedTheme =
+			typeof localStorage !== 'undefined' && localStorage.getItem('starlight-theme');
+		const theme =
+			storedTheme ||
+			(window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+		document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark';
+		return {
+			updatePickers(theme = storedTheme || 'auto') {
+				document.querySelectorAll('starlight-theme-select').forEach((picker) => {
+					const select = picker.querySelector('select');
+					if (select) select.value = theme;
+					/** @type {HTMLTemplateElement | null} */
+					const tmpl = document.querySelector(`#theme-icons`);
+					const newIcon = tmpl && tmpl.content.querySelector('.' + theme);
+					if (newIcon) {
+						const oldIcon = picker.querySelector('svg.label-icon');
+						if (oldIcon) {
+							oldIcon.replaceChildren(...newIcon.cloneNode(true).childNodes);
+						}
+					}
+				});
+			},
+		};
+	})();
+</script><template id="theme-icons"><svg aria-hidden="true" class="light astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M5 12a1 1 0 0 0-1-1H3a1 1 0 0 0 0 2h1a1 1 0 0 0 1-1Zm.64 5-.71.71a1 1 0 0 0 0 1.41 1 1 0 0 0 1.41 0l.71-.71A1 1 0 0 0 5.64 17ZM12 5a1 1 0 0 0 1-1V3a1 1 0 0 0-2 0v1a1 1 0 0 0 1 1Zm5.66 2.34a1 1 0 0 0 .7-.29l.71-.71a1 1 0 1 0-1.41-1.41l-.66.71a1 1 0 0 0 0 1.41 1 1 0 0 0 .66.29Zm-12-.29a1 1 0 0 0 1.41 0 1 1 0 0 0 0-1.41l-.71-.71a1.004 1.004 0 1 0-1.43 1.41l.73.71ZM21 11h-1a1 1 0 0 0 0 2h1a1 1 0 0 0 0-2Zm-2.64 6A1 1 0 0 0 17 18.36l.71.71a1 1 0 0 0 1.41 0 1 1 0 0 0 0-1.41l-.76-.66ZM12 6.5a5.5 5.5 0 1 0 5.5 5.5A5.51 5.51 0 0 0 12 6.5Zm0 9a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Zm0 3.5a1 1 0 0 0-1 1v1a1 1 0 0 0 2 0v-1a1 1 0 0 0-1-1Z"/></svg><svg aria-hidden="true" class="dark astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21.64 13a1 1 0 0 0-1.05-.14 8.049 8.049 0 0 1-3.37.73 8.15 8.15 0 0 1-8.14-8.1 8.59 8.59 0 0 1 .25-2A1 1 0 0 0 8 2.36a10.14 10.14 0 1 0 14 11.69 1 1 0 0 0-.36-1.05Zm-9.5 6.69A8.14 8.14 0 0 1 7.08 5.22v.27a10.15 10.15 0 0 0 10.14 10.14 9.784 9.784 0 0 0 2.1-.22 8.11 8.11 0 0 1-7.18 4.32v-.04Z"/></svg><svg aria-hidden="true" class="auto astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21 14h-1V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v7H3a1 1 0 0 0-1 1v2a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3v-2a1 1 0 0 0-1-1ZM6 7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v7H6V7Zm14 10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-1h16v1Z"/></svg></template><link rel="stylesheet" href="/fuseone-agents/docs/_astro/print.ehPL0gv-.css" media="print"><link rel="stylesheet" href="/fuseone-agents/docs/_astro/common.DoXChnmr.css"><script type="module" src="/fuseone-agents/docs/_astro/page.Dwipeu-R.js"></script></head><body class="astro-vdxcvpsm"><a class="sl-skip-link astro-vxeigawq" href="#_top">Skip to content</a><div class="page sl-flex astro-gqpr5s5a"><header class="header astro-gqpr5s5a"><div class="header astro-nczgtkxc"><div class="title-wrapper sl-flex astro-nczgtkxc"><a href="/fuseone-agents/docs/" class="site-title sl-flex astro-clw6ags5"><img class="light:sl-hidden print:hidden astro-clw6ags5" alt src="/fuseone-agents/docs/_astro/logo-docs-dark.RgwYBWE_.svg" width="302" height="34"><img class="dark:sl-hidden print:block astro-clw6ags5" alt src="/fuseone-agents/docs/_astro/logo-docs-light.DMrXalo7.svg" width="302" height="34"><span class="sr-only astro-clw6ags5" translate="no">FuseOne Agents</span></a></div><div class="sl-flex print:hidden astro-nczgtkxc"><site-search class="astro-nczgtkxc astro-r5ar4xm7" data-translations="{&quot;placeholder&quot;:&quot;Search&quot;}"><button data-open-modal disabled aria-label="Search" aria-keyshortcuts="Control+K" class="astro-r5ar4xm7"><svg aria-hidden="true" class="astro-r5ar4xm7 astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21.71 20.29 18 16.61A9 9 0 1 0 16.61 18l3.68 3.68a.999.999 0 0 0 1.42 0 1 1 0 0 0 0-1.39ZM11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14Z"/></svg><span class="sl-hidden md:sl-block astro-r5ar4xm7" aria-hidden="true">Search</span><kbd class="sl-hidden md:sl-flex astro-r5ar4xm7" style="display: none;"><kbd class="astro-r5ar4xm7">Ctrl</kbd><kbd class="astro-r5ar4xm7">K</kbd></kbd></button><dialog style="padding:0" aria-label="Search" class="astro-r5ar4xm7"><div class="dialog-frame sl-flex astro-r5ar4xm7"><button data-close-modal class="sl-flex md:sl-hidden astro-r5ar4xm7">Cancel</button><div class="search-container astro-r5ar4xm7"><div id="starlight__search" class="astro-r5ar4xm7"></div></div></div></dialog></site-search><script>
+	(() => {
+		const openBtn = document.querySelector('button[data-open-modal]');
+		const shortcut = openBtn?.querySelector('kbd');
+		if (!openBtn || !(shortcut instanceof HTMLElement)) return;
+		const platformKey = shortcut.querySelector('kbd');
+		if (platformKey && /(Mac|iPhone|iPod|iPad)/i.test(navigator.platform)) {
+			platformKey.textContent = '⌘';
+			openBtn.setAttribute('aria-keyshortcuts', 'Meta+K');
+		}
+		shortcut.style.display = '';
+	})();
+</script><script type="module" src="/fuseone-agents/docs/_astro/Search.astro_astro_type_script_index_0_lang.9wMEBGHj.js"></script></div><div class="sl-hidden md:sl-flex print:hidden right-group astro-nczgtkxc"><div class="sl-flex social-icons astro-nczgtkxc"><a href="https://github.com/fuseone-io/fuseone-agents" rel="me" class="sl-flex astro-cg55etiy"><span class="sr-only astro-cg55etiy">GitHub</span><svg aria-hidden="true" class="astro-cg55etiy astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M12 .3a12 12 0 0 0-3.8 23.38c.6.12.83-.26.83-.57L9 21.07c-3.34.72-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.08-.74.09-.73.09-.73 1.2.09 1.83 1.24 1.83 1.24 1.08 1.83 2.81 1.3 3.5 1 .1-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.14-.3-.54-1.52.1-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.28-1.55 3.29-1.23 3.29-1.23.64 1.66.24 2.88.12 3.18a4.65 4.65 0 0 1 1.23 3.22c0 4.61-2.8 5.63-5.48 5.92.42.36.81 1.1.81 2.22l-.01 3.29c0 .31.2.69.82.57A12 12 0 0 0 12 .3Z"/></svg></a></div><starlight-theme-select><label style="--sl-select-width: 6.25em" class="astro-r2p65idu"><span class="sr-only astro-r2p65idu">Select theme</span><svg aria-hidden="true" class="icon label-icon astro-r2p65idu astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21 14h-1V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v7H3a1 1 0 0 0-1 1v2a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3v-2a1 1 0 0 0-1-1ZM6 7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v7H6V7Zm14 10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-1h16v1Z"/></svg><select autocomplete="off" class="astro-r2p65idu"><option value="dark" class="astro-r2p65idu">Dark</option><option value="light" class="astro-r2p65idu">Light</option><option value="auto" selected class="astro-r2p65idu">Auto</option></select><svg aria-hidden="true" class="icon caret astro-r2p65idu astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M17 9.17a1 1 0 0 0-1.41 0L12 12.71 8.46 9.17a1 1 0 1 0-1.41 1.42l4.24 4.24a1.002 1.002 0 0 0 1.42 0L17 10.59a1.002 1.002 0 0 0 0-1.42Z"/></svg></label></starlight-theme-select><script>
+	StarlightThemeProvider.updatePickers();
+</script><script type="module">var e=`starlight-theme`,t=e=>e===`auto`||e===`dark`||e===`light`?e:`auto`,n=()=>t(typeof localStorage<`u`&&localStorage.getItem(e));function r(t){typeof localStorage<`u`&&localStorage.setItem(e,t===`light`||t===`dark`?t:``)}var i=()=>matchMedia(`(prefers-color-scheme: light)`).matches?`light`:`dark`;function a(e){StarlightThemeProvider.updatePickers(e),document.documentElement.dataset.theme=e===`auto`?i():e,r(e)}matchMedia(`(prefers-color-scheme: light)`).addEventListener(`change`,()=>{n()===`auto`&&a(`auto`)});var o=class extends HTMLElement{constructor(){super(),a(n()),this.querySelector(`select`)?.addEventListener(`change`,e=>{e.currentTarget instanceof HTMLSelectElement&&a(t(e.currentTarget.value))})}};customElements.define(`starlight-theme-select`,o);</script><script type="module">var e=class extends HTMLElement{constructor(){super();let e=this.querySelector(`select`);e&&(e.addEventListener(`change`,e=>{e.currentTarget instanceof HTMLSelectElement&&(window.location.pathname=e.currentTarget.value)}),window.addEventListener(`pageshow`,t=>{if(!t.persisted)return;let n=e.querySelector(`option[selected]`)?.index;n!==e.selectedIndex&&(e.selectedIndex=n??0)}))}};customElements.define(`starlight-lang-select`,e);</script></div></div></header><nav class="sidebar print:hidden astro-gqpr5s5a" aria-label="Main"><starlight-menu-button class="print:hidden astro-vvx7mffu"><button aria-expanded="false" aria-label="Menu" aria-controls="starlight__sidebar" class="sl-flex md:sl-hidden astro-vvx7mffu"><svg aria-hidden="true" class="open-menu astro-vvx7mffu astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M3 8h18a1 1 0 1 0 0-2H3a1 1 0 0 0 0 2Zm18 8H3a1 1 0 0 0 0 2h18a1 1 0 0 0 0-2Zm0-5H3a1 1 0 0 0 0 2h18a1 1 0 0 0 0-2Z"/></svg><svg aria-hidden="true" class="close-menu astro-vvx7mffu astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="m13.41 12 6.3-6.29a1.004 1.004 0 1 0-1.42-1.42L12 10.59l-6.29-6.3a1.004 1.004 0 0 0-1.42 1.42l6.3 6.29-6.3 6.29a1 1 0 0 0 0 1.42.998.998 0 0 0 1.42 0l6.29-6.3 6.29 6.3a.999.999 0 0 0 1.42 0 1 1 0 0 0 0-1.42L13.41 12Z"/></svg></button></starlight-menu-button><script type="module">var e=class extends HTMLElement{btn=this.querySelector(`button`);constructor(){super(),this.btn.addEventListener(`click`,()=>this.toggleExpanded());let e=this.closest(`nav`);e&&e.addEventListener(`keyup`,e=>this.closeOnEscape(e)),matchMedia(`(min-width: 50em)`).addEventListener(`change`,()=>this.setExpanded(!1))}setExpanded(e){this.setAttribute(`aria-expanded`,String(e)),document.body.toggleAttribute(`data-mobile-menu-expanded`,e),document.querySelectorAll(`.main-frame, .sl-skip-link`).forEach(t=>{t.toggleAttribute(`inert`,e)})}toggleExpanded(){this.setExpanded(this.getAttribute(`aria-expanded`)!==`true`)}closeOnEscape(e){e.code===`Escape`&&(this.setExpanded(!1),this.btn.focus())}};customElements.define(`starlight-menu-button`,e);</script><div id="starlight__sidebar" class="sidebar-pane astro-gqpr5s5a"><div class="sidebar-content sl-flex astro-gqpr5s5a"><sl-sidebar-state-persist data-hash="0n3wi4j" class="astro-f5yvicm7"><script aria-hidden="true">
+		(() => {
+			try {
+				if (!matchMedia('(min-width: 50em)').matches) return;
+				/** @type {HTMLElement | null} */
+				const target = document.querySelector('sl-sidebar-state-persist');
+				const state = JSON.parse(sessionStorage.getItem('sl-sidebar-state') || '0');
+				if (!target || !state || target.dataset.hash !== state.hash) return;
+				window._starlightScrollRestore = state.scroll;
+				customElements.define(
+					'sl-sidebar-restore',
+					class SidebarRestore extends HTMLElement {
+						connectedCallback() {
+							try {
+								const idx = parseInt(this.dataset.index || '');
+								const details = this.closest('details');
+								if (details && typeof state.open[idx] === 'boolean') details.open = state.open[idx];
+							} catch {}
+						}
+					}
+				);
+			} catch {}
+		})();
+	</script><ul class="top-level astro-ojxuodky"><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Start</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="0"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/" class="astro-ojxuodky"><span class="astro-ojxuodky">What is FuseOne?</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/start/install/" class="astro-ojxuodky"><span class="astro-ojxuodky">Install</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/reference/helm-chart/" class="astro-ojxuodky"><span class="astro-ojxuodky">Helm chart</span></a></li></ul></details></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Core concepts</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="1"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/concepts/gate/" class="astro-ojxuodky"><span class="astro-ojxuodky">Gate and labels</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/concepts/integrations/" class="astro-ojxuodky"><span class="astro-ojxuodky">Integrations</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/concepts/duplicate-effects/" class="astro-ojxuodky"><span class="astro-ojxuodky">Duplicate effects</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/concepts/memory/" class="astro-ojxuodky"><span class="astro-ojxuodky">Governed memory</span></a></li></ul></details></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Operate</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="2"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/operate/runtime-finops/" class="astro-ojxuodky"><span class="astro-ojxuodky">Runtime and FinOps</span></a></li></ul></details></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Manual</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="3"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/" class="astro-ojxuodky"><span class="astro-ojxuodky">Manual overview</span></a></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">English</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="4"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/" class="astro-ojxuodky"><span class="astro-ojxuodky">English overview</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/first-agent/" class="astro-ojxuodky"><span class="astro-ojxuodky">Your first agent, end to end</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/agents-and-runs/" class="astro-ojxuodky"><span class="astro-ojxuodky">Agents, versions and runs</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/what-the-gate-stops/" class="astro-ojxuodky"><span class="astro-ojxuodky">What the platform stops before it happens</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/writing-agent-blocks/" class="astro-ojxuodky"><span class="astro-ojxuodky">Writing good blocks</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/slack-channels/" class="astro-ojxuodky"><span class="astro-ojxuodky">Slack and channels</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/mcp-and-credentials/" class="astro-ojxuodky"><span class="astro-ojxuodky">MCPs and credentials</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/costs-and-limits/" class="astro-ojxuodky"><span class="astro-ojxuodky">Costs and limits</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/policies/" class="astro-ojxuodky"><span class="astro-ojxuodky">Policies</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/autonomy-stages/" class="astro-ojxuodky"><span class="astro-ojxuodky">Draft, copilot and autonomous</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/scopes-and-roles/" class="astro-ojxuodky"><span class="astro-ojxuodky">Companies, areas and roles</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/approving/" class="astro-ojxuodky"><span class="astro-ojxuodky">Approving an action</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/reading-a-run/" class="astro-ojxuodky"><span class="astro-ojxuodky">Reading a run</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/data-barriers/" class="astro-ojxuodky"><span class="astro-ojxuodky">Data labels and barriers</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/context-sharing/" class="astro-ojxuodky"><span class="astro-ojxuodky">Context sharing between agents</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/simulation-and-regressions/" class="astro-ojxuodky"><span class="astro-ojxuodky">Simulation and regressions</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/auditor-guide/" class="astro-ojxuodky"><span class="astro-ojxuodky">Auditor guide</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/memory/" class="astro-ojxuodky"><span class="astro-ojxuodky">Governed memory</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/duplicate-effects/" class="astro-ojxuodky"><span class="astro-ojxuodky">Duplicate effect recognition</span></a></li></ul></details></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Portuguese</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="5"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/" class="astro-ojxuodky"><span class="astro-ojxuodky">Portuguese overview</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/first-agent/" class="astro-ojxuodky"><span class="astro-ojxuodky">Seu primeiro agente, do começo ao fim</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/agents-and-runs/" class="astro-ojxuodky"><span class="astro-ojxuodky">Agentes, versões e execuções</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/what-the-gate-stops/" class="astro-ojxuodky"><span class="astro-ojxuodky">O que a plataforma para antes de acontecer</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/writing-agent-blocks/" class="astro-ojxuodky"><span class="astro-ojxuodky">Como escrever bons blocos</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/slack-channels/" class="astro-ojxuodky"><span class="astro-ojxuodky">Slack e canais</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/mcp-and-credentials/" class="astro-ojxuodky"><span class="astro-ojxuodky">MCPs e credenciais</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/costs-and-limits/" class="astro-ojxuodky"><span class="astro-ojxuodky">Custos e limites</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/policies/" class="astro-ojxuodky"><span class="astro-ojxuodky">Políticas</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/autonomy-stages/" class="astro-ojxuodky"><span class="astro-ojxuodky">Rascunho, copiloto e autônomo</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/scopes-and-roles/" class="astro-ojxuodky"><span class="astro-ojxuodky">Empresas, áreas e papéis</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/approving/" class="astro-ojxuodky"><span class="astro-ojxuodky">Aprovar uma ação</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/reading-a-run/" class="astro-ojxuodky"><span class="astro-ojxuodky">Ler uma execução</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/data-barriers/" class="astro-ojxuodky"><span class="astro-ojxuodky">Labels e barreiras de dados</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/context-sharing/" class="astro-ojxuodky"><span class="astro-ojxuodky">Compartilhamento de contexto entre agentes</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/simulation-and-regressions/" class="astro-ojxuodky"><span class="astro-ojxuodky">Simulação e regressões</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/auditor-guide/" class="astro-ojxuodky"><span class="astro-ojxuodky">Guia do auditor</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/memory/" class="astro-ojxuodky"><span class="astro-ojxuodky">Memória governada</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/duplicate-effects/" class="astro-ojxuodky"><span class="astro-ojxuodky">Reconhecimento de efeito duplicado</span></a></li></ul></details></li></ul></details></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Design record</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="6"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/reference/manual-and-design-notes/" class="astro-ojxuodky"><span class="astro-ojxuodky">Manual and design notes</span></a></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Rendered source docs</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="7"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/prd-001-fuseone-agents/" class="astro-ojxuodky"><span class="astro-ojxuodky">PRD-001 · FuseOne Agents</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/dp-001-data-protection/" class="astro-ojxuodky"><span class="astro-ojxuodky">DP-001 — Data protection</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/op-001-running-an-installation/" class="astro-ojxuodky"><span class="astro-ojxuodky">OP-001 — Running an installation</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-001-integration-boundary-and-execution-model/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-001 · Integration boundary and execution model</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-002-remaining-work/" aria-current="page" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-002 · What is left, and in what order</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-003-conversational-authoring/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-003 · Conversational authoring</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-004-ledger-volume-and-paging/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-004 · Ledger volume and paging</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-005-interaction-channels/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-005 · Interaction channels</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-006-evaluating-agents/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-006 · Evaluating agents</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-007-drawing-a-process/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-007 · Drawing a process</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-008-a-catalogue-by-shape/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-008 · A catalogue by shape</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-009-governed-connectors/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-009 — Governed connectors</span></a></li></ul></details></li></ul></details></li></ul><script aria-hidden="true">
+		(() => {
+			const scroller = document.getElementById('starlight__sidebar');
+			if (!window._starlightScrollRestore || !scroller) return;
+			scroller.scrollTop = window._starlightScrollRestore;
+			delete window._starlightScrollRestore;
+		})();
+	</script></sl-sidebar-state-persist><div class="md:sl-hidden"><div class="mobile-preferences sl-flex astro-b5gddk54"><div class="social-icons astro-b5gddk54"><a href="https://github.com/fuseone-io/fuseone-agents" rel="me" class="sl-flex astro-cg55etiy"><span class="sr-only astro-cg55etiy">GitHub</span><svg aria-hidden="true" class="astro-cg55etiy astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M12 .3a12 12 0 0 0-3.8 23.38c.6.12.83-.26.83-.57L9 21.07c-3.34.72-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.08-.74.09-.73.09-.73 1.2.09 1.83 1.24 1.83 1.24 1.08 1.83 2.81 1.3 3.5 1 .1-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.14-.3-.54-1.52.1-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.28-1.55 3.29-1.23 3.29-1.23.64 1.66.24 2.88.12 3.18a4.65 4.65 0 0 1 1.23 3.22c0 4.61-2.8 5.63-5.48 5.92.42.36.81 1.1.81 2.22l-.01 3.29c0 .31.2.69.82.57A12 12 0 0 0 12 .3Z"/></svg></a></div><starlight-theme-select><label style="--sl-select-width: 6.25em" class="astro-r2p65idu"><span class="sr-only astro-r2p65idu">Select theme</span><svg aria-hidden="true" class="icon label-icon astro-r2p65idu astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21 14h-1V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v7H3a1 1 0 0 0-1 1v2a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3v-2a1 1 0 0 0-1-1ZM6 7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v7H6V7Zm14 10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-1h16v1Z"/></svg><select autocomplete="off" class="astro-r2p65idu"><option value="dark" class="astro-r2p65idu">Dark</option><option value="light" class="astro-r2p65idu">Light</option><option value="auto" selected class="astro-r2p65idu">Auto</option></select><svg aria-hidden="true" class="icon caret astro-r2p65idu astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M17 9.17a1 1 0 0 0-1.41 0L12 12.71 8.46 9.17a1 1 0 1 0-1.41 1.42l4.24 4.24a1.002 1.002 0 0 0 1.42 0L17 10.59a1.002 1.002 0 0 0 0-1.42Z"/></svg></label></starlight-theme-select><script>
+	StarlightThemeProvider.updatePickers();
+</script></div></div></div></div></nav><div class="main-frame astro-gqpr5s5a"><script type="module">var e=document.getElementById(`starlight__sidebar`),t=e?.querySelector(`sl-sidebar-state-persist`),n=`sl-sidebar-state`,r=()=>{let r=[],i=t?.dataset.hash||``;try{let e=sessionStorage.getItem(n),t=JSON.parse(e||`{}`);Array.isArray(t.open)&&t.hash===i&&(r=t.open)}catch{}return{hash:i,open:r,scroll:e?.scrollTop||0}},i=e=>{try{sessionStorage.setItem(n,JSON.stringify(e))}catch{}},a=()=>i(r()),o=(e,t)=>{let n=r();n.open[t]=e,i(n)};t?.addEventListener(`click`,e=>{if(!(e.target instanceof Element))return;let t=e.target.closest(`summary`)?.closest(`details`);if(!t)return;let n=t.querySelector(`sl-sidebar-restore`),r=parseInt(n?.dataset.index||``);isNaN(r)||o(!t.open,r)}),addEventListener(`visibilitychange`,()=>{document.visibilityState===`hidden`&&a()});</script><div class="lg:sl-flex astro-abfeecmu"><aside class="right-sidebar-container print:hidden astro-abfeecmu"><div class="right-sidebar astro-abfeecmu"><div class="lg:sl-hidden astro-q5mffni3"><mobile-starlight-toc data-min-h="2" data-max-h="3" class="astro-5ulgm6bh"><nav aria-labelledby="starlight__on-this-page--mobile" class="astro-5ulgm6bh"><details id="starlight__mobile-toc" class="astro-5ulgm6bh"><summary id="starlight__on-this-page--mobile" class="sl-flex astro-5ulgm6bh"><span class="toggle sl-flex astro-5ulgm6bh">On this page<svg aria-hidden="true" class="caret astro-5ulgm6bh astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></span><span class="display-current astro-5ulgm6bh"></span></summary><div class="dropdown astro-5ulgm6bh"><ul class="isMobile astro-cxyftcne" style="--depth: 0;"><li style="--depth: 0;" class="astro-cxyftcne"><a href="#_top" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Overview</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#where-the-product-actually-is" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Where the product actually is</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#budget-alerts-have-no-outbound-channel" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Budget alerts have no outbound channel</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#payload-limit-and-what-object-storage-would-change" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Payload limit, and what object storage would change</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#stops-per-pack-became-per-scope" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Stops: “per pack” became “per scope”</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#1-policies" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">1. Policies</span></a><ul class="isMobile astro-cxyftcne" style="--depth: 1;"><li style="--depth: 1;" class="astro-cxyftcne"><a href="#what-exists" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">What exists</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#what-is-missing" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">What is missing</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#the-decision-now-made" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">The decision, now made</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#size" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Size</span></a></li></ul></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#2-agent-authoring" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">2. Agent authoring</span></a><ul class="isMobile astro-cxyftcne" style="--depth: 1;"><li style="--depth: 1;" class="astro-cxyftcne"><a href="#what-exists-1" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">What exists</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#what-the-handoff-has" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">What the handoff has</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#what-the-prd-asks-for" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">What the PRD asks for</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#the-tension-to-resolve" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">The tension to resolve</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#the-decision-now-made-1" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">The decision, now made</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#size-1" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Size</span></a></li></ul></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#3-the-generated-diagram--delivered" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">3. The generated diagram — delivered</span></a><ul class="isMobile astro-cxyftcne" style="--depth: 1;"><li style="--depth: 1;" class="astro-cxyftcne"><a href="#the-conflict" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">The conflict</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#the-harder-problem-underneath" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">The harder problem underneath</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#the-decision-answered-by-the-handoffs-own-data" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">The decision, answered by the handoff’s own data</span></a></li></ul></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#4-integrations--delivered-and-now-at-the-handoffs-level" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">4. Integrations — delivered, and now at the handoff’s level</span></a><ul class="isMobile astro-cxyftcne" style="--depth: 1;"><li style="--depth: 1;" class="astro-cxyftcne"><a href="#the-mismatch-worth-naming" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">The mismatch worth naming</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#still-missing-its-own-screen" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Still missing: its own screen</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#what-was-delivered" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">What was delivered</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#what-existed" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">What existed</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#what-the-handoff-asks-for-8" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">What the handoff asks for (§8)</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#what-is-missing-1" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">What is missing</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#settled-the-published-list-never-shrinks-and-now-says-so" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Settled: the published list never shrinks, and now says so</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#queued-remote-tool-servers" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Queued: remote tool servers</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#connectors-reopened-argued-and-settled-for-now" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Connectors: reopened, argued, and settled for now</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#size-2" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Size</span></a></li></ul></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#recommended-order" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Recommended order</span></a><ul class="isMobile astro-cxyftcne" style="--depth: 1;"><li style="--depth: 1;" class="astro-cxyftcne"><a href="#order-within-policies" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Order within policies</span></a></li></ul></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#open-decisions-collected" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Open decisions, collected</span></a></li></ul></div></details></nav></mobile-starlight-toc><script type="module" src="/fuseone-agents/docs/_astro/MobileTableOfContents.astro_astro_type_script_index_0_lang.BcSo_yiZ.js"></script></div><div class="right-sidebar-panel sl-hidden lg:sl-block astro-q5mffni3"><div class="sl-container astro-q5mffni3"><starlight-toc data-min-h="2" data-max-h="3"><nav aria-labelledby="starlight__on-this-page"><h2 id="starlight__on-this-page">On this page</h2><ul class="astro-cxyftcne" style="--depth: 0;"><li style="--depth: 0;" class="astro-cxyftcne"><a href="#_top" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Overview</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#where-the-product-actually-is" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Where the product actually is</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#budget-alerts-have-no-outbound-channel" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Budget alerts have no outbound channel</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#payload-limit-and-what-object-storage-would-change" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Payload limit, and what object storage would change</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#stops-per-pack-became-per-scope" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Stops: “per pack” became “per scope”</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#1-policies" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">1. Policies</span></a><ul class="astro-cxyftcne" style="--depth: 1;"><li style="--depth: 1;" class="astro-cxyftcne"><a href="#what-exists" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">What exists</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#what-is-missing" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">What is missing</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#the-decision-now-made" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">The decision, now made</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#size" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Size</span></a></li></ul></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#2-agent-authoring" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">2. Agent authoring</span></a><ul class="astro-cxyftcne" style="--depth: 1;"><li style="--depth: 1;" class="astro-cxyftcne"><a href="#what-exists-1" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">What exists</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#what-the-handoff-has" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">What the handoff has</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#what-the-prd-asks-for" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">What the PRD asks for</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#the-tension-to-resolve" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">The tension to resolve</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#the-decision-now-made-1" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">The decision, now made</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#size-1" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Size</span></a></li></ul></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#3-the-generated-diagram--delivered" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">3. The generated diagram — delivered</span></a><ul class="astro-cxyftcne" style="--depth: 1;"><li style="--depth: 1;" class="astro-cxyftcne"><a href="#the-conflict" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">The conflict</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#the-harder-problem-underneath" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">The harder problem underneath</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#the-decision-answered-by-the-handoffs-own-data" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">The decision, answered by the handoff’s own data</span></a></li></ul></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#4-integrations--delivered-and-now-at-the-handoffs-level" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">4. Integrations — delivered, and now at the handoff’s level</span></a><ul class="astro-cxyftcne" style="--depth: 1;"><li style="--depth: 1;" class="astro-cxyftcne"><a href="#the-mismatch-worth-naming" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">The mismatch worth naming</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#still-missing-its-own-screen" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Still missing: its own screen</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#what-was-delivered" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">What was delivered</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#what-existed" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">What existed</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#what-the-handoff-asks-for-8" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">What the handoff asks for (§8)</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#what-is-missing-1" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">What is missing</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#settled-the-published-list-never-shrinks-and-now-says-so" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Settled: the published list never shrinks, and now says so</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#queued-remote-tool-servers" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Queued: remote tool servers</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#connectors-reopened-argued-and-settled-for-now" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Connectors: reopened, argued, and settled for now</span></a></li><li style="--depth: 1;" class="astro-cxyftcne"><a href="#size-2" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Size</span></a></li></ul></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#recommended-order" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Recommended order</span></a><ul class="astro-cxyftcne" style="--depth: 1;"><li style="--depth: 1;" class="astro-cxyftcne"><a href="#order-within-policies" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">Order within policies</span></a></li></ul></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#open-decisions-collected" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Open decisions, collected</span></a></li></ul></nav></starlight-toc><script type="module" src="/fuseone-agents/docs/_astro/TableOfContents.astro_astro_type_script_index_0_lang.Csloo1VZ.js"></script></div></div></div></aside><div class="main-pane astro-abfeecmu"><main data-pagefind-body class="astro-vdxcvpsm" lang="en" dir="ltr"><div class="content-panel astro-oil7k7jf"><div class="sl-container astro-oil7k7jf"><h1 id="_top" class="astro-2sm4b3ln">NT-002 · What is left, and in what order</h1></div></div><div class="content-panel astro-oil7k7jf"><div class="sl-container astro-oil7k7jf"><div class="sl-markdown-content"><p><strong>Status</strong> Proposal · <strong>Date</strong> 2026-08-11 · <strong>Revised</strong> 2026-08-11, after the
+handoff added <code dir="auto">Agente.dc.html</code> and <code dir="auto">Politica.dc.html</code>
+<strong>References</strong> <a href="../prd-001-fuseone-agents/">PRD-001</a> · design handoff (<code dir="auto">design_handoff_fuseone_console</code>)
+<strong>Outcome</strong> An order for the four remaining fronts, and the decisions each needs first</p>
+<p>The console can now observe everything the platform does and start a run three
+ways. What is left is the half that lets somebody <em>change</em> what the platform
+does: policies, agent authoring, the diagram, and integrations.</p>
+<p>This note says what exists for each, what the handoff and the PRD ask for,
+what is missing, and which decision has to be made before the work can start.
+Sizes are given against work already delivered, because that is the only
+estimate anybody here can check.</p>
+<hr>
+<div class="sl-heading-wrapper level-h2"><h2 id="where-the-product-actually-is">Where the product actually is</h2><a class="sl-anchor-link" href="#where-the-product-actually-is"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Where the product actually is”</span></a></div>
+<table>
+<thead>
+<tr>
+<th>Area</th>
+<th>State</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Ledger, Gate, engine, worker</td>
+<td>Delivered</td>
+</tr>
+<tr>
+<td>Triggers — manual, cron, webhook, event</td>
+<td>Delivered</td>
+</tr>
+<tr>
+<td>Overview, Runs, Run trail, Human queue, Agents, Agent detail, Cost, Audit trail</td>
+<td>Delivered</td>
+</tr>
+<tr>
+<td>Administration — tools, MCP servers, model providers, budgets</td>
+<td>Delivered</td>
+</tr>
+<tr>
+<td><strong>Policies</strong></td>
+<td>Enforced in code, not authorable, not visible. Next</td>
+</tr>
+<tr>
+<td><strong>Agent authoring</strong></td>
+<td>Only by dropping a file in a directory</td>
+</tr>
+<tr>
+<td>Generated diagram</td>
+<td>Delivered — the run drawn from the ledger, beside the list</td>
+</tr>
+<tr>
+<td>Integrations</td>
+<td>Delivered, and now a screen of its own</td>
+</tr>
+<tr>
+<td>i18n</td>
+<td>Deferred to last, by decision</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<div class="sl-heading-wrapper level-h2"><h2 id="budget-alerts-have-no-outbound-channel">Budget alerts have no outbound channel</h2><a class="sl-anchor-link" href="#budget-alerts-have-no-outbound-channel"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Budget alerts have no outbound channel”</span></a></div>
+<p>FO-05 asks for progressive alerts per area at 50%, 80% and 100% of the monthly
+budget. The platform notices the crossings, records them once per threshold per
+period, writes them to the administrative trail and shows them on the cost
+screen. What it does not do is <em>send</em> anything: this installation has no mail,
+no chat, no outbound webhook.</p>
+<p>That is the honest half. A person who opens the console sees it; a person who
+does not, does not. Wiring a channel is a small piece on top of what exists —
+<code dir="auto">budget.Watcher.Sweep</code> returns exactly the crossings it announced — and it
+needs a decision about where an installation wants to be told, which is a
+question for a customer rather than for this repository.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="payload-limit-and-what-object-storage-would-change">Payload limit, and what object storage would change</h2><a class="sl-anchor-link" href="#payload-limit-and-what-object-storage-would-change"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Payload limit, and what object storage would change”</span></a></div>
+<p>DE-03 says object storage is optional and that without it the system degrades
+gracefully by lowering the inline payload limit. There was no limit at all:
+whatever a tool returned went into a PostgreSQL row, whole, having first been
+held in memory. Nothing to lower, and an unbounded write.</p>
+<p>One megabyte now, applied by both stores from one rule in the domain — neither
+can import the other, and two copies of a rule is two rules, with the fake
+being the copy every test trusts. Past the limit the store keeps a prefix and
+appends a line saying what happened and how much the tool actually returned.
+The digest stays the digest of the whole payload, so an auditor holding the
+original can still prove it is the one the run used.</p>
+<p>The notice is in the bytes rather than in a column because the reader that
+matters is the model: handed half a JSON document with no notice it reasons
+over it as though it were whole.</p>
+<p>The day object storage arrives, <code dir="auto">Content.WithLimit</code> is where the number goes
+up, and the store grows a second backend behind the same reference. Nothing
+above the claim check has to change: a reference and a digest is already the
+contract.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="stops-per-pack-became-per-scope">Stops: “per pack” became “per scope”</h2><a class="sl-anchor-link" href="#stops-per-pack-became-per-scope"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Stops: “per pack” became “per scope””</span></a></div>
+<p>FO-06 asks for a global switch per agent, <strong>per pack</strong> and per installation.
+This implementation has no named packs — an author lists tools directly in the
+specification, and <code dir="auto">gate.Pack</code> is derived from that list rather than referring
+to a curated object somebody registered. There is a <code dir="auto">pack:write</code> permission and
+no pack to write.</p>
+<p>The middle level is therefore the scope. It is the grouping the rest of the
+platform is built on, it is what an operator says out loud during an incident
+(“stop everything in billing”), and it composes with the hierarchy: stopping a
+company stops its areas.</p>
+<p>If named packs arrive, a pack-level stop is a fourth <code dir="auto">StopLevel</code> and a fourth
+case in <code dir="auto">Stop.Covers</code>. Nothing else has to move.</p>
+<p>The console offers the two wide levels; one agent is the pause that already
+exists on the agent’s own screen. A scope stop can also be thrown through the
+API by anything that holds <code dir="auto">run:read</code> in that scope.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="1-policies">1. Policies</h2><a class="sl-anchor-link" href="#1-policies"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “1. Policies”</span></a></div>
+<div class="sl-heading-wrapper level-h3"><h3 id="what-exists">What exists</h3><a class="sl-anchor-link" href="#what-exists"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “What exists”</span></a></div>
+<p>The Gate’s fourth check is an effect ladder written in Go:</p>
+<div class="expressive-code"><link rel="stylesheet" href="/fuseone-agents/docs/_astro/ec.w36nc.css"><script type="module" src="/fuseone-agents/docs/_astro/ec.0vx5m.js"></script><figure class="frame not-content"><figcaption class="header"></figcaption><pre data-language="plaintext"><code><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">read → allow · write → require approval · destructive, financial → block</span></div></div></code></pre><div class="copy"><div aria-live="polite"></div><button title="Copy to clipboard" data-copied="Copied!" data-code="read → allow · write → require approval · destructive, financial → block"><div></div></button></div></figure></div>
+<p>Its own comment says it is the safe default rather than the design. It works,
+it is versioned as <code dir="auto">builtin/v1</code>, and every step carries that hash.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="what-is-missing">What is missing</h3><a class="sl-anchor-link" href="#what-is-missing"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “What is missing”</span></a></div>
+<p>The handoff’s screen (§5) lists a policy table: code, name, scope, effect
+pill, owner, hits, and an enforcement toggle. None of that has anywhere to
+live — there is one function, not a set of rows.</p>
+<p>Three consequences, in increasing order of seriousness:</p>
+<ol>
+<li><strong>Hits per policy are uncountable.</strong> Every policy decision records
+<code dir="auto">rule: "policy"</code>, never <em>which</em> policy. The ledger cannot tell two apart.</li>
+<li><strong>Nothing can be turned off.</strong> The toggle implies an act of governance:
+an administrative event, and a new policy version.</li>
+<li><strong>The policy hash points at nothing retrievable.</strong> The PRD promises
+reconstructing any decision <em>under the policy in force at the time</em>, and
+gives the Auditor the job of re-evaluating old decisions against a new
+policy. With policy in code, <code dir="auto">builtin/v1</code> cannot be fetched after a deploy.
+The seal names something the platform does not keep.</li>
+</ol>
+<p>The third is why this is not a screen. It is a promise in the PRD that the
+current design cannot keep.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="the-decision-now-made">The decision, now made</h3><a class="sl-anchor-link" href="#the-decision-now-made"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “The decision, now made”</span></a></div>
+<p>The handoff’s policy screen settles it: <strong>a decision table</strong>. Rows of
+<code dir="auto">quando / e</code> over field, operator and value, a resource glob, action chips, and
+a reach — org, teams or named agents. Not an expression language.</p>
+<p>It adds two things this note did not propose, both of which change the build:</p>
+<ul>
+<li><strong>Monitor before enforce.</strong> A <code dir="auto">Monitorar</code> / <code dir="auto">Impor</code> control, offered as a
+real button on creation (<code dir="auto">Criar em modo monitorar</code>) rather than a checkbox.
+A policy in monitor mode is evaluated and recorded and changes no verdict.
+That has to exist in the Gate, not only on the screen: it means a rule can
+produce a decision the run does not obey, which the trail must be able to
+express without an auditor reading it as a bug.</li>
+<li><strong>Simulation against the last 500 runs</strong>, with the count of would-be
+denials, before saving. “A policy is never saved blind.” This needs replay:
+evaluating a draft rule against recorded decisions — which is the same
+machinery the PRD’s Auditor needs to re-evaluate old decisions under a new
+policy, and the reason the policy hash has to name something retrievable.</li>
+</ul>
+<p>One more requirement falls out of the screen: <strong>the compiled restatement</strong>.
+The builder is never the only representation; the operator always reads the
+sentence the engine will evaluate. So the rule model needs a rendering to
+prose that is generated from the same structure the Gate evaluates, or the two
+will drift and the screen will lie.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="size">Size</h3><a class="sl-anchor-link" href="#size"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Size”</span></a></div>
+<p>Largest of the four. Comparable to triggers end to end, probably more:
+a rule model, versioned storage, evaluation inside the Gate without loosening
+the seven-check order, inheritance down the scope hierarchy (the PRD requires
+policy to inherit downwards and never widen), then the screen.</p>
+<hr>
+<div class="sl-heading-wrapper level-h2"><h2 id="2-agent-authoring">2. Agent authoring</h2><a class="sl-anchor-link" href="#2-agent-authoring"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “2. Agent authoring”</span></a></div>
+<div class="sl-heading-wrapper level-h3"><h3 id="what-exists-1">What exists</h3><a class="sl-anchor-link" href="#what-exists-1"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “What exists”</span></a></div>
+<p>An agent is a Markdown file with front matter, loaded from a directory by the
+worker and published as an immutable version. There is no way to create or
+change one from the console.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="what-the-handoff-has">What the handoff has</h3><a class="sl-anchor-link" href="#what-the-handoff-has"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “What the handoff has”</span></a></div>
+<p><code dir="auto">Agente.dc.html</code>, added after this note was first written. One screen, two
+modes. Four form sections — identity, model and instructions, tools,
+governance — a sticky action bar, and a side rail that differs by mode: a
+pre-flight checklist when creating, an unsaved-diff card when editing.</p>
+<p>Two of its decisions resolve the tension below, and resolve it well:</p>
+<ul>
+<li><strong>A new agent is created paused.</strong> Authoring never starts something.</li>
+<li><strong>The primary button names the version</strong>: <code dir="auto">Salvar e publicar v1.5.0</code>, never
+<code dir="auto">Salvar</code>. Editing is authoring the next version, and the button says so
+rather than leaving somebody to discover it.</li>
+</ul>
+<div class="sl-heading-wrapper level-h3"><h3 id="what-the-prd-asks-for">What the PRD asks for</h3><a class="sl-anchor-link" href="#what-the-prd-asks-for"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “What the PRD asks for”</span></a></div>
+<p>Something much larger than a form. The Studio (FU-01 – FU-06) is an
+<strong>interview</strong>: when does this start, what do you need to know, what are the
+steps, what usually goes wrong, what would you not decide alone, how do you
+know you are done. The author approves a <strong>narrative read-back</strong> — “never
+YAML, JSON or a graph” — and corrections are anchored to a step and kept as
+regression cases (FU-12, FU-13).</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="the-tension-to-resolve">The tension to resolve</h3><a class="sl-anchor-link" href="#the-tension-to-resolve"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “The tension to resolve”</span></a></div>
+<p>Publishing creates a version and never edits one, and that is load-bearing:
+runs are pinned to versions, and older versions are the only correct
+explanation of the runs that used them. So “editing an agent” can only mean
+<em>authoring the next version</em>, with the current one as the starting point.
+The console has to make that obvious or people will expect a save button and
+get a new version they did not ask for.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="the-decision-now-made-1">The decision, now made</h3><a class="sl-anchor-link" href="#the-decision-now-made-1"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “The decision, now made”</span></a></div>
+<p>The handoff picks the form, not the interview. That is a smaller scope than
+the PRD’s Studio (FU-01 – FU-06) and a coherent one: the interview can produce
+the same fields later and land on this screen for review.</p>
+<p>What the screen adds beyond today’s specification:</p>
+<ul>
+<li><strong>A per-tool approval rule</strong> — <code dir="auto">Nunca</code> / <code dir="auto">Dado não confiável</code> / <code dir="auto">Sempre</code> —
+which is policy attached to a tool inside an agent, a thing the model does
+not have.</li>
+<li><strong>Attached policies</strong>, with inherited ones locked and marked
+<code dir="auto">herdada da organização</code>.</li>
+<li><strong>A tool blocked by policy</strong> rendered visible but unavailable, with the
+policy code in its subtitle.</li>
+</ul>
+<p>All three reference policies. Which reorders this note.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="size-1">Size</h3><a class="sl-anchor-link" href="#size-1"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Size”</span></a></div>
+<p>Comparable to the administration forms already built, plus the diff view and
+the pre-flight checklist. Small next to policies — and it depends on them.</p>
+<hr>
+<div class="sl-heading-wrapper level-h2"><h2 id="3-the-generated-diagram--delivered">3. The generated diagram — delivered</h2><a class="sl-anchor-link" href="#3-the-generated-diagram--delivered"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “3. The generated diagram — delivered”</span></a></div>
+<blockquote>
+<p>Built as decided below: the run drawn from the ledger, as a second view
+of the trail rather than a separate screen. Eight node kinds, no branch.
+Laid out as a serpentine rather than by elkjs — a run is a chain, and a
+computed layout is more deterministic than a solver whose output can shift
+between versions. When the ledger gains a branch, elk is the answer.</p>
+</blockquote>
+<div class="sl-heading-wrapper level-h3"><h3 id="the-conflict">The conflict</h3><a class="sl-anchor-link" href="#the-conflict"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “The conflict”</span></a></div>
+<p>The handoff’s §7 is a <strong>visual builder</strong>: a left rail of draggable components,
+an “Add step” dropdown, Draft/Staging/Production environments. The PRD makes a
+drag-and-drop builder a non-goal (N5) and asks instead for a <strong>read-only,
+generated</strong> diagram with deterministic layout (FU-17), whose render model is
+never persisted (FU-18).</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="the-harder-problem-underneath">The harder problem underneath</h3><a class="sl-anchor-link" href="#the-harder-problem-underneath"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “The harder problem underneath”</span></a></div>
+<p><strong>There is no graph.</strong> An agent’s specification has instructions, a tool pack,
+ceilings and triggers. <code dir="auto">PlannedPayload</code> carries a <code dir="auto">Node</code> field that is always
+empty. The loop belongs to the interpreter, not to a structure anybody
+authored — so FU-17’s “the agent’s graph” presupposes something the
+specification does not have.</p>
+<p>Two things could be drawn today:</p>
+<ul>
+<li><strong>The run’s actual path</strong>, derived from the ledger. Real data, immediately
+useful, and it is a picture of one execution rather than of the agent.</li>
+<li><strong>The agent’s declared topology</strong> — trigger → model → available tools →
+Gate → effects. Derivable from the specification, and closest to FU-17.</li>
+</ul>
+<p>The handoff’s visual language survives either choice: node shapes, the
+serpentine grid, edge rules, condition pills.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="the-decision-answered-by-the-handoffs-own-data">The decision, answered by the handoff’s own data</h3><a class="sl-anchor-link" href="#the-decision-answered-by-the-handoffs-own-data"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “The decision, answered by the handoff’s own data”</span></a></div>
+<p>The prototype settles it, and not in the direction its chrome suggests.</p>
+<p><code dir="auto">FLOW_NODES</code> in <code dir="auto">ui_kits/console/Console.jsx</code> is nine nodes, and every one of
+them carries a <strong>latency</strong> and a <strong>health</strong>:</p>
+<div class="expressive-code"><figure class="frame not-content"><figcaption class="header"></figcaption><pre data-language="plaintext"><code><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">Webhook received      12ms   Policy gate POL-114    8ms</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">Analyze profile       1.4s   CRM · read account   180ms</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">Human approval      4h SLA   Apply new limit      220ms</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">Seal audit trail      14ms</span></div></div></code></pre><div class="copy"><div aria-live="polite"></div><button title="Copy to clipboard" data-copied="Copied!" data-code="Webhook received      12ms   Policy gate POL-114    8msAnalyze profile       1.4s   CRM · read account   180msHuman approval      4h SLA   Apply new limit      220msSeal audit trail      14ms"><div></div></button></div></figure></div>
+<p>A specification does not have 12ms. That is an execution — the design draws a
+run and wraps it in an authoring shell. Which means the diagram is buildable
+today, from the ledger, with no change to the specification at all.</p>
+<p>Eight node kinds, seven of which are step kinds we already record:</p>
+<table>
+<thead>
+<tr>
+<th>Node</th>
+<th>Comes from</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>trigger</td>
+<td><code dir="auto">run_started</code>, with its trigger</td>
+</tr>
+<tr>
+<td>policy</td>
+<td><code dir="auto">gate_decided</code>, with the policy code</td>
+</tr>
+<tr>
+<td>agent</td>
+<td><code dir="auto">planned</code></td>
+</tr>
+<tr>
+<td>tool</td>
+<td><code dir="auto">tool_called</code> / <code dir="auto">tool_returned</code></td>
+</tr>
+<tr>
+<td>human</td>
+<td><code dir="auto">approval_requested</code> / <code dir="auto">approval_decided</code></td>
+</tr>
+<tr>
+<td>action</td>
+<td><code dir="auto">tool_called</code> whose effect is not a read</td>
+</tr>
+<tr>
+<td>seal</td>
+<td>the hash chain, and <code dir="auto">run_finished</code></td>
+</tr>
+<tr>
+<td><strong>branch</strong></td>
+<td><strong>nothing — the loop belongs to the interpreter</strong></td>
+</tr>
+</tbody>
+</table>
+<p>So the specification does not gain a graph, FU-17’s “the agent’s graph” is
+really the run’s, and the honest screen is the run trail drawn as a diagram
+rather than as a list.</p>
+<p>What stays out is the chrome around it: the flow dropdown, Draft/Staging/
+Production, “Test run”, and a searchable rail of draggable components. That is
+the builder N5 rules out, and it is separable from the picture.</p>
+<hr>
+<div class="sl-heading-wrapper level-h2"><h2 id="4-integrations--delivered-and-now-at-the-handoffs-level">4. Integrations — delivered, and now at the handoff’s level</h2><a class="sl-anchor-link" href="#4-integrations--delivered-and-now-at-the-handoffs-level"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “4. Integrations — delivered, and now at the handoff’s level”</span></a></div>
+<blockquote>
+<p>The top-level screen exists: its own navigation entry, title and header
+action. What is still missing from the handoff is the syncs table.</p>
+</blockquote>
+<div class="sl-heading-wrapper level-h3"><h3 id="the-mismatch-worth-naming">The mismatch worth naming</h3><a class="sl-anchor-link" href="#the-mismatch-worth-naming"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “The mismatch worth naming”</span></a></div>
+<p>The prototype’s cards are <strong>business systems</strong>: Salesforce (CRM), SAP (ERP),
+Postgres · risk, Slack, S3 · documents — each with read/write scopes, a row
+count, and a last sync.</p>
+<p>Ours are <strong>MCP servers</strong>: <code dir="auto">crm</code>, <code dir="auto">kb</code>. In this architecture Salesforce sits
+<em>behind</em> an MCP server, and the platform never talks to it directly (N4: tools
+arrive over MCP, heavy integration stays the FuseOne platform’s problem). So
+the handoff’s cards describe a layer this product deliberately does not own.</p>
+<p>Two ways to close that, and they are not the same product:</p>
+<ul>
+<li><strong>Name the server after what it fronts.</strong> A server called <code dir="auto">salesforce</code>
+offering <code dir="auto">salesforce.*</code> tools reads exactly like the handoff’s card, and the
+platform keeps knowing nothing about Salesforce. Costs nothing, buys most of
+the look.</li>
+<li><strong>Model the system behind the server.</strong> The platform learns that <code dir="auto">crm</code> fronts
+Salesforce, with credentials and sync state of its own. That is the
+integration engine N4 rules out.</li>
+</ul>
+<p>The first is the one consistent with the PRD, and it is mostly a naming
+convention plus a screen that shows what a server offers.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="still-missing-its-own-screen">Still missing: its own screen</h3><a class="sl-anchor-link" href="#still-missing-its-own-screen"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Still missing: its own screen”</span></a></div>
+<p>The handoff gives Integrations a top-level view with its own title, a
+<code dir="auto">Connect system</code> primary action and a <code dir="auto">Recent syncs</code> table. Ours is a tab
+inside Administração. Promoting it is small; the syncs table is the part with
+no data behind it, and the honest substitute is the health reading already
+recorded — when a server was last reached, by which worker, and how many tools
+it offered.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="what-was-delivered">What was delivered</h3><a class="sl-anchor-link" href="#what-was-delivered"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “What was delivered”</span></a></div>
+<div class="sl-heading-wrapper level-h3"><h3 id="what-existed">What existed</h3><a class="sl-anchor-link" href="#what-existed"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “What existed”</span></a></div>
+<p>MCP servers and model providers are configurable from Administration, with
+forms, credential storage in the vault, and an administrative trail. The
+mechanism is complete.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="what-the-handoff-asks-for-8">What the handoff asks for (§8)</h3><a class="sl-anchor-link" href="#what-the-handoff-asks-for-8"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “What the handoff asks for (§8)”</span></a></div>
+<p>Connected-system <strong>cards</strong> — icon tile, name and kind, state pill, description,
+scope badges, last sync — plus a <strong>recent syncs</strong> table.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="what-is-missing-1">What is missing</h3><a class="sl-anchor-link" href="#what-is-missing-1"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “What is missing”</span></a></div>
+<p>Mostly presentation, with one real gap: <strong>there is no sync</strong>. Nothing polls a
+connected system or records when it last answered. “Last sync” and “recent
+syncs” describe a liveness concept the platform does not have.</p>
+<p>Two ways to make it true rather than decorative:</p>
+<ul>
+<li><strong>Health rather than sync</strong>: when the server was last reached, whether its
+tool list changed, how many tools it offers. The worker already connects to
+every MCP server at start-up — recording that is small.</li>
+<li><strong>Actual scheduled syncs</strong>: a periodic tool-catalogue refresh with its own
+record. Larger, and it needs the same single-owner discipline as cron.</li>
+</ul>
+<div class="sl-heading-wrapper level-h3"><h3 id="settled-the-published-list-never-shrinks-and-now-says-so">Settled: the published list never shrinks, and now says so</h3><a class="sl-anchor-link" href="#settled-the-published-list-never-shrinks-and-now-says-so"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Settled: the published list never shrinks, and now says so”</span></a></div>
+<p>A server that is removed or switched off is disconnected within the reconcile
+interval, and its tools leave that worker’s catalogue — an agent can no longer
+call them, which is the half that matters. What does not happen is the
+administration area forgetting them: the tool list is published with upsert
+semantics, so publishing a smaller set changes nothing, and the console keeps
+listing tools nothing offers.</p>
+<p>Replacing wholesale is not the fix. Two workers connected to different servers
+each publish what they see, and a replace would have them delete each other’s
+tools on every pass — a worse failure than a stale row, and an intermittent
+one.</p>
+<p>The second option is what shipped: the list answers “what has this installation
+ever offered” and health answers “what answers now”, and one table was being
+asked both at once. Each tool now carries whether its server was observed
+reachable recently, and the tools screen marks the ones nothing offers.</p>
+<p>A stale observation counts as silence rather than as a yes. A worker that
+stopped observing — shut down, or reconfigured without that server — leaves its
+last reading behind, and trusting it for ever would report a server as
+answering years after it stopped existing.</p>
+<p>Ownership on a published entry is still the better answer if two workers ever
+need to disagree about the same server. It is not needed for this.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="queued-remote-tool-servers">Queued: remote tool servers</h3><a class="sl-anchor-link" href="#queued-remote-tool-servers"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Queued: remote tool servers”</span></a></div>
+<p><strong>Delivered.</strong> A server is now either a process this installation runs or an
+address it calls, the token for a remote one is sealed in the vault, and a
+reconciler keeps the connected set matching the configured one on a timer, so
+nothing waits for a restart. The development stack can serve MCP over HTTP with
+a bearer token, so the remote path is exercised locally rather than only in
+production.</p>
+<p>What follows is the original entry, kept because the reasoning is still the
+reasoning.</p>
+<p>Only one transport was wired. <code dir="auto">cmd/agentd</code> connected every MCP server with
+<code dir="auto">mcp.CommandTransport</code> over a locally executed command, so the form asked for a
+command and arguments because that was the only thing the platform could do.
+The SDK already in <code dir="auto">go.mod</code> ships <code dir="auto">StreamableClientTransport</code> and
+<code dir="auto">SSEClientTransport</code>; neither was used. Remote MCP was never decided against —
+it was not built.</p>
+<p>Three consequences, in the order they bit:</p>
+<ul>
+<li><strong>An installation cannot reach a hosted MCP server at all.</strong> The honest
+answer to “connect this to Google Sheets” is currently “write an MCP server”,
+which is a development project rather than a configuration.</li>
+<li><strong>A command with arguments is remote code execution by configuration.</strong>
+Whoever may register a server runs an arbitrary binary inside the worker’s
+container. In a product installed in the customer’s own environment that is a
+property worth being deliberate about, and it argues for the remote transport
+being the primary path rather than an addition to it.</li>
+<li><strong>A server registered from the console does nothing until the worker
+restarts.</strong> <code dir="auto">servers.connect</code> runs once at start-up; the tool rulings
+refresh on a timer, the servers themselves do not. Nothing on the screen says
+so, so the observed behaviour is a server that is configured and offers no
+tools.</li>
+</ul>
+<p>The work: a transport on the record (<code dir="auto">stdio | http</code>), a URL, the credential
+through the vault that already holds model provider keys, a branch at the
+connection point, and the form. Plus reconnecting without a restart, and the
+screen saying why a server the console does not own cannot be edited here —
+which today is a Portuguese literal in the component rather than a catalogue
+entry.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="connectors-reopened-argued-and-settled-for-now">Connectors: reopened, argued, and settled for now</h3><a class="sl-anchor-link" href="#connectors-reopened-argued-and-settled-for-now"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Connectors: reopened, argued, and settled for now”</span></a></div>
+<p><strong>Decision: a tool is an MCP server. Connectors are revisited only if the need
+turns up in practice.</strong></p>
+<p>The conversation was worth having, and it invalidated the reason N4 gives
+rather than its conclusion.</p>
+<p>N4 justifies refusing an integration engine with “heavy integration remains the
+FuseOne platform’s domain”. That is only a boundary if the FuseOne platform is
+on the other side of it, and it is not: this product is installed on its own,
+and an installation may have no FuseOne anywhere near it. Standalone, “remains
+the domain of” delegates nothing — it describes work that does not happen,
+while the customer hears “not our problem” from the only thing they installed.</p>
+<p>So the line was redrawn on grounds that stand without FuseOne: <strong>action per
+call belongs here; moving data in volume does not.</strong> An agent is the
+orchestrator — mapping a field, choosing a route, transforming a record is what
+it does by reasoning, and that is the premise of the product. What an agent is
+bad at is moving half a million rows every night: that is a pipe, and a pipe
+driven by a language model is expensive, slow and wrong.</p>
+<p>Most of what an EIP does either already exists here or is the agent itself:
+retry and backoff are the worker’s, scheduling is the cron trigger’s,
+orchestration is the loop, mapping is the reasoning. What is left is volume,
+and volume does not become an agent by decree.</p>
+<p><strong>Why not a generic HTTP tool</strong>, which is the obvious way to cover an API with
+no MCP server: the Gate decides per tool, and effect classification lives on
+the tool. One tool that can issue any request makes <code dir="auto">DELETE /customers/123</code>
+and <code dir="auto">GET /balance</code> the same entry in the pack, with the same classification. A
+policy saying “nothing destructive without approval” is a sentence about the
+catalogue, and a generic tool empties it. The trail would record “called
+http.request”, which tells an auditor nothing in two years.</p>
+<p><strong>If the need does turn up</strong>, the shape to reach for is a <em>declared</em> HTTP tool
+— name, method, URL, argument schema, credential and effect, configured rather
+than coded — served by a built-in MCP server. That keeps every property the
+Gate depends on and is not an integration engine: no field mapping, no
+transformation, no per-vendor semantics. It is a way of minting a tool without
+writing one.</p>
+<p><strong>What the closest adjacent product does.</strong> Tessera (tesseraagent.ai) presents
+named systems rather than a protocol: Salesforce, SAP, and an “API interna” of
+twelve REST routes, each with a state — connected, syncing, queued. MCP is not
+mentioned anywhere public.</p>
+<p>Two things are worth taking from it, and one thing is worth not taking.</p>
+<ul>
+<li><strong>The internal REST API is a first-class tile.</strong> A customer’s own service,
+with no MCP server and nobody to write one, is treated as a normal case
+rather than an edge. That is the same gap identified above, and it is
+evidence the gap is real rather than theoretical.</li>
+<li><strong>The states are sync states.</strong> “Syncing” and “queued” against an ERP
+describe data movement, not a tool being called. That is the other side of
+the line drawn above — they appear to be an agent platform <em>and</em> an
+integration engine, which is a larger product than this one has chosen to be.</li>
+<li><strong>What not to take: the screen is not the architecture.</strong> A tile reading
+“Salesforce · connected” looks identical whether it fronts a bespoke
+connector or an MCP server named after what it fronts — which is exactly the
+cheap option §4 above already recommends. Marketing pages do not distinguish
+the two, and this one does not.</li>
+</ul>
+<p>So it is evidence for the declared HTTP tool being the first thing to reach for
+when the need arrives, and not evidence for a per-system catalogue.</p>
+<p><strong>N4 needs rewriting rather than amending</strong>, because its stated reason is void.
+The conclusion survives on the new reasoning above.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="size-2">Size</h3><a class="sl-anchor-link" href="#size-2"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Size”</span></a></div>
+<p>Smallest of the four if it takes the health reading. The cost half of §8 is
+already delivered — spend KPIs, the fourteen-day chart, per-scope spend
+against caps.</p>
+<hr>
+<div class="sl-heading-wrapper level-h2"><h2 id="recommended-order">Recommended order</h2><a class="sl-anchor-link" href="#recommended-order"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Recommended order”</span></a></div>
+<ol>
+<li><del><strong>Integrations</strong></del> — delivered. The screen reports what the platform
+observed rather than only what was configured, and a server that will not
+answer no longer stops the worker from starting.</li>
+<li><strong>Policies</strong> — now unblocked, and it comes before agent authoring because
+the agent screen references policies in three places: the per-tool approval
+rule, the attached-policies list, and tools rendered unavailable with a
+policy code. Building the agent screen first means building those three
+inert and returning to them.</li>
+<li><strong>Agent create / edit</strong> — the form, publishing a new version, created
+paused.</li>
+<li><strong>The diagram</strong> — still waiting on the graph question, which the new
+handoff does not touch.</li>
+</ol>
+<p>Then i18n, by prior decision.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="order-within-policies">Order within policies</h3><a class="sl-anchor-link" href="#order-within-policies"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Order within policies”</span></a></div>
+<p>The screen implies more than a table of rules, and the parts are separable:</p>
+<ol>
+<li>The rule model, versioned storage, and a <code dir="auto">policy_hash</code> that names something
+retrievable — which is what makes the PRD’s replay promise keepable.</li>
+<li>Evaluation inside the Gate, at the existing fourth position, without
+loosening the seven-check order.</li>
+<li>Monitor mode: evaluated, recorded, obeyed by nothing.</li>
+<li>The compiled restatement, generated from the same structure the Gate reads.</li>
+<li>The screen.</li>
+<li>Simulation against recorded runs — last, and the piece that also serves the
+Auditor’s re-evaluation.</li>
+</ol>
+<hr>
+<div class="sl-heading-wrapper level-h2"><h2 id="open-decisions-collected">Open decisions, collected</h2><a class="sl-anchor-link" href="#open-decisions-collected"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Open decisions, collected”</span></a></div>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Decision</th>
+<th>Blocks</th>
+<th>State</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Decision table or expression language for rules</td>
+<td>Policies</td>
+<td><strong>Settled</strong> — decision table, by the handoff</td>
+</tr>
+<tr>
+<td>2</td>
+<td>How much of the Studio is in scope</td>
+<td>Agent authoring</td>
+<td><strong>Settled</strong> — the form, by the handoff</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Does the specification gain a graph</td>
+<td>The diagram, and FU-17’s wording</td>
+<td><strong>Answered</strong> — no. The handoff’s own node data is a run</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Health reading or scheduled syncs</td>
+<td>Integrations</td>
+<td><strong>Settled</strong> — health reading, delivered</td>
+</tr>
+</tbody>
+</table>
+<p>None left open. The diagram turns out to be a projection of the ledger, which
+is data that already exists.</p>
+</div><footer class="sl-flex astro-xhxjzfa7"><div class="meta sl-flex astro-xhxjzfa7"></div><div class="pagination-links print:hidden astro-jgq3vlii" dir="ltr"><a href="/fuseone-agents/docs/design/nt-001-integration-boundary-and-execution-model/" rel="prev" class="astro-jgq3vlii"><svg aria-hidden="true" class="astro-jgq3vlii astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.5rem;"><path d="M17 11H9.41l3.3-3.29a1.004 1.004 0 1 0-1.42-1.42l-5 5a1 1 0 0 0-.21.33 1 1 0 0 0 0 .76 1 1 0 0 0 .21.33l5 5a1.002 1.002 0 0 0 1.639-.325 1 1 0 0 0-.219-1.095L9.41 13H17a1 1 0 0 0 0-2Z"/></svg><span class="astro-jgq3vlii">Previous<br class="astro-jgq3vlii"><span class="link-title astro-jgq3vlii">NT-001 · Integration boundary and execution model</span></span></a><a href="/fuseone-agents/docs/design/nt-003-conversational-authoring/" rel="next" class="astro-jgq3vlii"><svg aria-hidden="true" class="astro-jgq3vlii astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.5rem;"><path d="M17.92 11.62a1.001 1.001 0 0 0-.21-.33l-5-5a1.003 1.003 0 1 0-1.42 1.42l3.3 3.29H7a1 1 0 0 0 0 2h7.59l-3.3 3.29a1.002 1.002 0 0 0 .325 1.639 1 1 0 0 0 1.095-.219l5-5a1 1 0 0 0 .21-.33 1 1 0 0 0 0-.76Z"/></svg><span class="astro-jgq3vlii">Next<br class="astro-jgq3vlii"><span class="link-title astro-jgq3vlii">NT-003 · Conversational authoring</span></span></a></div></footer></div></div></main></div></div></div></div></body></html>

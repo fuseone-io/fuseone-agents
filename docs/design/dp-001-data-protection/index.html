@@ -1,0 +1,350 @@
+<!DOCTYPE html><html lang="en" dir="ltr" data-theme="dark" data-has-toc data-has-sidebar class="astro-vdxcvpsm"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>DP-001 — Data protection | FuseOne Agents</title><link rel="canonical" href="https://fuseone-io.github.io/fuseone-agents/docs/design/dp-001-data-protection/"/><link rel="sitemap" href="/fuseone-agents/docs/sitemap-index.xml"/><link rel="icon" type="image/svg+xml" href="/fuseone-agents/docs/favicon.svg"/><link rel="shortcut icon" href="/fuseone-agents/docs/favicon.svg" type="image/svg+xml"/><meta name="generator" content="Astro v7.2.7"/><meta name="generator" content="Starlight v0.41.9"/><meta property="og:title" content="DP-001 — Data protection"/><meta property="og:type" content="article"/><meta property="og:url" content="https://fuseone-io.github.io/fuseone-agents/docs/design/dp-001-data-protection/"/><meta property="og:locale" content="en"/><meta property="og:description" content="Stored data, retention, erasure and boundaries."/><meta property="og:site_name" content="FuseOne Agents"/><meta name="twitter:card" content="summary_large_image"/><meta name="description" content="Stored data, retention, erasure and boundaries."/><script>
+	window.StarlightThemeProvider = (() => {
+		const storedTheme =
+			typeof localStorage !== 'undefined' && localStorage.getItem('starlight-theme');
+		const theme =
+			storedTheme ||
+			(window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+		document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark';
+		return {
+			updatePickers(theme = storedTheme || 'auto') {
+				document.querySelectorAll('starlight-theme-select').forEach((picker) => {
+					const select = picker.querySelector('select');
+					if (select) select.value = theme;
+					/** @type {HTMLTemplateElement | null} */
+					const tmpl = document.querySelector(`#theme-icons`);
+					const newIcon = tmpl && tmpl.content.querySelector('.' + theme);
+					if (newIcon) {
+						const oldIcon = picker.querySelector('svg.label-icon');
+						if (oldIcon) {
+							oldIcon.replaceChildren(...newIcon.cloneNode(true).childNodes);
+						}
+					}
+				});
+			},
+		};
+	})();
+</script><template id="theme-icons"><svg aria-hidden="true" class="light astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M5 12a1 1 0 0 0-1-1H3a1 1 0 0 0 0 2h1a1 1 0 0 0 1-1Zm.64 5-.71.71a1 1 0 0 0 0 1.41 1 1 0 0 0 1.41 0l.71-.71A1 1 0 0 0 5.64 17ZM12 5a1 1 0 0 0 1-1V3a1 1 0 0 0-2 0v1a1 1 0 0 0 1 1Zm5.66 2.34a1 1 0 0 0 .7-.29l.71-.71a1 1 0 1 0-1.41-1.41l-.66.71a1 1 0 0 0 0 1.41 1 1 0 0 0 .66.29Zm-12-.29a1 1 0 0 0 1.41 0 1 1 0 0 0 0-1.41l-.71-.71a1.004 1.004 0 1 0-1.43 1.41l.73.71ZM21 11h-1a1 1 0 0 0 0 2h1a1 1 0 0 0 0-2Zm-2.64 6A1 1 0 0 0 17 18.36l.71.71a1 1 0 0 0 1.41 0 1 1 0 0 0 0-1.41l-.76-.66ZM12 6.5a5.5 5.5 0 1 0 5.5 5.5A5.51 5.51 0 0 0 12 6.5Zm0 9a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Zm0 3.5a1 1 0 0 0-1 1v1a1 1 0 0 0 2 0v-1a1 1 0 0 0-1-1Z"/></svg><svg aria-hidden="true" class="dark astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21.64 13a1 1 0 0 0-1.05-.14 8.049 8.049 0 0 1-3.37.73 8.15 8.15 0 0 1-8.14-8.1 8.59 8.59 0 0 1 .25-2A1 1 0 0 0 8 2.36a10.14 10.14 0 1 0 14 11.69 1 1 0 0 0-.36-1.05Zm-9.5 6.69A8.14 8.14 0 0 1 7.08 5.22v.27a10.15 10.15 0 0 0 10.14 10.14 9.784 9.784 0 0 0 2.1-.22 8.11 8.11 0 0 1-7.18 4.32v-.04Z"/></svg><svg aria-hidden="true" class="auto astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21 14h-1V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v7H3a1 1 0 0 0-1 1v2a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3v-2a1 1 0 0 0-1-1ZM6 7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v7H6V7Zm14 10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-1h16v1Z"/></svg></template><link rel="stylesheet" href="/fuseone-agents/docs/_astro/print.ehPL0gv-.css" media="print"><link rel="stylesheet" href="/fuseone-agents/docs/_astro/common.DoXChnmr.css"><script type="module" src="/fuseone-agents/docs/_astro/page.Dwipeu-R.js"></script></head><body class="astro-vdxcvpsm"><a class="sl-skip-link astro-vxeigawq" href="#_top">Skip to content</a><div class="page sl-flex astro-gqpr5s5a"><header class="header astro-gqpr5s5a"><div class="header astro-nczgtkxc"><div class="title-wrapper sl-flex astro-nczgtkxc"><a href="/fuseone-agents/docs/" class="site-title sl-flex astro-clw6ags5"><img class="light:sl-hidden print:hidden astro-clw6ags5" alt src="/fuseone-agents/docs/_astro/logo-docs-dark.RgwYBWE_.svg" width="302" height="34"><img class="dark:sl-hidden print:block astro-clw6ags5" alt src="/fuseone-agents/docs/_astro/logo-docs-light.DMrXalo7.svg" width="302" height="34"><span class="sr-only astro-clw6ags5" translate="no">FuseOne Agents</span></a></div><div class="sl-flex print:hidden astro-nczgtkxc"><site-search class="astro-nczgtkxc astro-r5ar4xm7" data-translations="{&quot;placeholder&quot;:&quot;Search&quot;}"><button data-open-modal disabled aria-label="Search" aria-keyshortcuts="Control+K" class="astro-r5ar4xm7"><svg aria-hidden="true" class="astro-r5ar4xm7 astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21.71 20.29 18 16.61A9 9 0 1 0 16.61 18l3.68 3.68a.999.999 0 0 0 1.42 0 1 1 0 0 0 0-1.39ZM11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14Z"/></svg><span class="sl-hidden md:sl-block astro-r5ar4xm7" aria-hidden="true">Search</span><kbd class="sl-hidden md:sl-flex astro-r5ar4xm7" style="display: none;"><kbd class="astro-r5ar4xm7">Ctrl</kbd><kbd class="astro-r5ar4xm7">K</kbd></kbd></button><dialog style="padding:0" aria-label="Search" class="astro-r5ar4xm7"><div class="dialog-frame sl-flex astro-r5ar4xm7"><button data-close-modal class="sl-flex md:sl-hidden astro-r5ar4xm7">Cancel</button><div class="search-container astro-r5ar4xm7"><div id="starlight__search" class="astro-r5ar4xm7"></div></div></div></dialog></site-search><script>
+	(() => {
+		const openBtn = document.querySelector('button[data-open-modal]');
+		const shortcut = openBtn?.querySelector('kbd');
+		if (!openBtn || !(shortcut instanceof HTMLElement)) return;
+		const platformKey = shortcut.querySelector('kbd');
+		if (platformKey && /(Mac|iPhone|iPod|iPad)/i.test(navigator.platform)) {
+			platformKey.textContent = '⌘';
+			openBtn.setAttribute('aria-keyshortcuts', 'Meta+K');
+		}
+		shortcut.style.display = '';
+	})();
+</script><script type="module" src="/fuseone-agents/docs/_astro/Search.astro_astro_type_script_index_0_lang.9wMEBGHj.js"></script></div><div class="sl-hidden md:sl-flex print:hidden right-group astro-nczgtkxc"><div class="sl-flex social-icons astro-nczgtkxc"><a href="https://github.com/fuseone-io/fuseone-agents" rel="me" class="sl-flex astro-cg55etiy"><span class="sr-only astro-cg55etiy">GitHub</span><svg aria-hidden="true" class="astro-cg55etiy astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M12 .3a12 12 0 0 0-3.8 23.38c.6.12.83-.26.83-.57L9 21.07c-3.34.72-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.08-.74.09-.73.09-.73 1.2.09 1.83 1.24 1.83 1.24 1.08 1.83 2.81 1.3 3.5 1 .1-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.14-.3-.54-1.52.1-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.28-1.55 3.29-1.23 3.29-1.23.64 1.66.24 2.88.12 3.18a4.65 4.65 0 0 1 1.23 3.22c0 4.61-2.8 5.63-5.48 5.92.42.36.81 1.1.81 2.22l-.01 3.29c0 .31.2.69.82.57A12 12 0 0 0 12 .3Z"/></svg></a></div><starlight-theme-select><label style="--sl-select-width: 6.25em" class="astro-r2p65idu"><span class="sr-only astro-r2p65idu">Select theme</span><svg aria-hidden="true" class="icon label-icon astro-r2p65idu astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21 14h-1V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v7H3a1 1 0 0 0-1 1v2a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3v-2a1 1 0 0 0-1-1ZM6 7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v7H6V7Zm14 10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-1h16v1Z"/></svg><select autocomplete="off" class="astro-r2p65idu"><option value="dark" class="astro-r2p65idu">Dark</option><option value="light" class="astro-r2p65idu">Light</option><option value="auto" selected class="astro-r2p65idu">Auto</option></select><svg aria-hidden="true" class="icon caret astro-r2p65idu astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M17 9.17a1 1 0 0 0-1.41 0L12 12.71 8.46 9.17a1 1 0 1 0-1.41 1.42l4.24 4.24a1.002 1.002 0 0 0 1.42 0L17 10.59a1.002 1.002 0 0 0 0-1.42Z"/></svg></label></starlight-theme-select><script>
+	StarlightThemeProvider.updatePickers();
+</script><script type="module">var e=`starlight-theme`,t=e=>e===`auto`||e===`dark`||e===`light`?e:`auto`,n=()=>t(typeof localStorage<`u`&&localStorage.getItem(e));function r(t){typeof localStorage<`u`&&localStorage.setItem(e,t===`light`||t===`dark`?t:``)}var i=()=>matchMedia(`(prefers-color-scheme: light)`).matches?`light`:`dark`;function a(e){StarlightThemeProvider.updatePickers(e),document.documentElement.dataset.theme=e===`auto`?i():e,r(e)}matchMedia(`(prefers-color-scheme: light)`).addEventListener(`change`,()=>{n()===`auto`&&a(`auto`)});var o=class extends HTMLElement{constructor(){super(),a(n()),this.querySelector(`select`)?.addEventListener(`change`,e=>{e.currentTarget instanceof HTMLSelectElement&&a(t(e.currentTarget.value))})}};customElements.define(`starlight-theme-select`,o);</script><script type="module">var e=class extends HTMLElement{constructor(){super();let e=this.querySelector(`select`);e&&(e.addEventListener(`change`,e=>{e.currentTarget instanceof HTMLSelectElement&&(window.location.pathname=e.currentTarget.value)}),window.addEventListener(`pageshow`,t=>{if(!t.persisted)return;let n=e.querySelector(`option[selected]`)?.index;n!==e.selectedIndex&&(e.selectedIndex=n??0)}))}};customElements.define(`starlight-lang-select`,e);</script></div></div></header><nav class="sidebar print:hidden astro-gqpr5s5a" aria-label="Main"><starlight-menu-button class="print:hidden astro-vvx7mffu"><button aria-expanded="false" aria-label="Menu" aria-controls="starlight__sidebar" class="sl-flex md:sl-hidden astro-vvx7mffu"><svg aria-hidden="true" class="open-menu astro-vvx7mffu astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M3 8h18a1 1 0 1 0 0-2H3a1 1 0 0 0 0 2Zm18 8H3a1 1 0 0 0 0 2h18a1 1 0 0 0 0-2Zm0-5H3a1 1 0 0 0 0 2h18a1 1 0 0 0 0-2Z"/></svg><svg aria-hidden="true" class="close-menu astro-vvx7mffu astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="m13.41 12 6.3-6.29a1.004 1.004 0 1 0-1.42-1.42L12 10.59l-6.29-6.3a1.004 1.004 0 0 0-1.42 1.42l6.3 6.29-6.3 6.29a1 1 0 0 0 0 1.42.998.998 0 0 0 1.42 0l6.29-6.3 6.29 6.3a.999.999 0 0 0 1.42 0 1 1 0 0 0 0-1.42L13.41 12Z"/></svg></button></starlight-menu-button><script type="module">var e=class extends HTMLElement{btn=this.querySelector(`button`);constructor(){super(),this.btn.addEventListener(`click`,()=>this.toggleExpanded());let e=this.closest(`nav`);e&&e.addEventListener(`keyup`,e=>this.closeOnEscape(e)),matchMedia(`(min-width: 50em)`).addEventListener(`change`,()=>this.setExpanded(!1))}setExpanded(e){this.setAttribute(`aria-expanded`,String(e)),document.body.toggleAttribute(`data-mobile-menu-expanded`,e),document.querySelectorAll(`.main-frame, .sl-skip-link`).forEach(t=>{t.toggleAttribute(`inert`,e)})}toggleExpanded(){this.setExpanded(this.getAttribute(`aria-expanded`)!==`true`)}closeOnEscape(e){e.code===`Escape`&&(this.setExpanded(!1),this.btn.focus())}};customElements.define(`starlight-menu-button`,e);</script><div id="starlight__sidebar" class="sidebar-pane astro-gqpr5s5a"><div class="sidebar-content sl-flex astro-gqpr5s5a"><sl-sidebar-state-persist data-hash="0n3wi4j" class="astro-f5yvicm7"><script aria-hidden="true">
+		(() => {
+			try {
+				if (!matchMedia('(min-width: 50em)').matches) return;
+				/** @type {HTMLElement | null} */
+				const target = document.querySelector('sl-sidebar-state-persist');
+				const state = JSON.parse(sessionStorage.getItem('sl-sidebar-state') || '0');
+				if (!target || !state || target.dataset.hash !== state.hash) return;
+				window._starlightScrollRestore = state.scroll;
+				customElements.define(
+					'sl-sidebar-restore',
+					class SidebarRestore extends HTMLElement {
+						connectedCallback() {
+							try {
+								const idx = parseInt(this.dataset.index || '');
+								const details = this.closest('details');
+								if (details && typeof state.open[idx] === 'boolean') details.open = state.open[idx];
+							} catch {}
+						}
+					}
+				);
+			} catch {}
+		})();
+	</script><ul class="top-level astro-ojxuodky"><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Start</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="0"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/" class="astro-ojxuodky"><span class="astro-ojxuodky">What is FuseOne?</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/start/install/" class="astro-ojxuodky"><span class="astro-ojxuodky">Install</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/reference/helm-chart/" class="astro-ojxuodky"><span class="astro-ojxuodky">Helm chart</span></a></li></ul></details></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Core concepts</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="1"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/concepts/gate/" class="astro-ojxuodky"><span class="astro-ojxuodky">Gate and labels</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/concepts/integrations/" class="astro-ojxuodky"><span class="astro-ojxuodky">Integrations</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/concepts/duplicate-effects/" class="astro-ojxuodky"><span class="astro-ojxuodky">Duplicate effects</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/concepts/memory/" class="astro-ojxuodky"><span class="astro-ojxuodky">Governed memory</span></a></li></ul></details></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Operate</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="2"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/operate/runtime-finops/" class="astro-ojxuodky"><span class="astro-ojxuodky">Runtime and FinOps</span></a></li></ul></details></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Manual</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="3"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/" class="astro-ojxuodky"><span class="astro-ojxuodky">Manual overview</span></a></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">English</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="4"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/" class="astro-ojxuodky"><span class="astro-ojxuodky">English overview</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/first-agent/" class="astro-ojxuodky"><span class="astro-ojxuodky">Your first agent, end to end</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/agents-and-runs/" class="astro-ojxuodky"><span class="astro-ojxuodky">Agents, versions and runs</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/what-the-gate-stops/" class="astro-ojxuodky"><span class="astro-ojxuodky">What the platform stops before it happens</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/writing-agent-blocks/" class="astro-ojxuodky"><span class="astro-ojxuodky">Writing good blocks</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/slack-channels/" class="astro-ojxuodky"><span class="astro-ojxuodky">Slack and channels</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/mcp-and-credentials/" class="astro-ojxuodky"><span class="astro-ojxuodky">MCPs and credentials</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/costs-and-limits/" class="astro-ojxuodky"><span class="astro-ojxuodky">Costs and limits</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/policies/" class="astro-ojxuodky"><span class="astro-ojxuodky">Policies</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/autonomy-stages/" class="astro-ojxuodky"><span class="astro-ojxuodky">Draft, copilot and autonomous</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/scopes-and-roles/" class="astro-ojxuodky"><span class="astro-ojxuodky">Companies, areas and roles</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/approving/" class="astro-ojxuodky"><span class="astro-ojxuodky">Approving an action</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/reading-a-run/" class="astro-ojxuodky"><span class="astro-ojxuodky">Reading a run</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/data-barriers/" class="astro-ojxuodky"><span class="astro-ojxuodky">Data labels and barriers</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/context-sharing/" class="astro-ojxuodky"><span class="astro-ojxuodky">Context sharing between agents</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/simulation-and-regressions/" class="astro-ojxuodky"><span class="astro-ojxuodky">Simulation and regressions</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/auditor-guide/" class="astro-ojxuodky"><span class="astro-ojxuodky">Auditor guide</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/memory/" class="astro-ojxuodky"><span class="astro-ojxuodky">Governed memory</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/en-us/duplicate-effects/" class="astro-ojxuodky"><span class="astro-ojxuodky">Duplicate effect recognition</span></a></li></ul></details></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Portuguese</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="5"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/" class="astro-ojxuodky"><span class="astro-ojxuodky">Portuguese overview</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/first-agent/" class="astro-ojxuodky"><span class="astro-ojxuodky">Seu primeiro agente, do começo ao fim</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/agents-and-runs/" class="astro-ojxuodky"><span class="astro-ojxuodky">Agentes, versões e execuções</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/what-the-gate-stops/" class="astro-ojxuodky"><span class="astro-ojxuodky">O que a plataforma para antes de acontecer</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/writing-agent-blocks/" class="astro-ojxuodky"><span class="astro-ojxuodky">Como escrever bons blocos</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/slack-channels/" class="astro-ojxuodky"><span class="astro-ojxuodky">Slack e canais</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/mcp-and-credentials/" class="astro-ojxuodky"><span class="astro-ojxuodky">MCPs e credenciais</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/costs-and-limits/" class="astro-ojxuodky"><span class="astro-ojxuodky">Custos e limites</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/policies/" class="astro-ojxuodky"><span class="astro-ojxuodky">Políticas</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/autonomy-stages/" class="astro-ojxuodky"><span class="astro-ojxuodky">Rascunho, copiloto e autônomo</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/scopes-and-roles/" class="astro-ojxuodky"><span class="astro-ojxuodky">Empresas, áreas e papéis</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/approving/" class="astro-ojxuodky"><span class="astro-ojxuodky">Aprovar uma ação</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/reading-a-run/" class="astro-ojxuodky"><span class="astro-ojxuodky">Ler uma execução</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/data-barriers/" class="astro-ojxuodky"><span class="astro-ojxuodky">Labels e barreiras de dados</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/context-sharing/" class="astro-ojxuodky"><span class="astro-ojxuodky">Compartilhamento de contexto entre agentes</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/simulation-and-regressions/" class="astro-ojxuodky"><span class="astro-ojxuodky">Simulação e regressões</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/auditor-guide/" class="astro-ojxuodky"><span class="astro-ojxuodky">Guia do auditor</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/memory/" class="astro-ojxuodky"><span class="astro-ojxuodky">Memória governada</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/manual/pt-br/duplicate-effects/" class="astro-ojxuodky"><span class="astro-ojxuodky">Reconhecimento de efeito duplicado</span></a></li></ul></details></li></ul></details></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Design record</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="6"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/reference/manual-and-design-notes/" class="astro-ojxuodky"><span class="astro-ojxuodky">Manual and design notes</span></a></li><li class="astro-ojxuodky"><details open class="astro-ojxuodky"><summary class="astro-ojxuodky"><span class="group-label astro-ojxuodky"><span class="large astro-ojxuodky">Rendered source docs</span></span><svg aria-hidden="true" class="caret astro-ojxuodky astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="7"></sl-sidebar-restore><ul class="astro-ojxuodky"><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/prd-001-fuseone-agents/" class="astro-ojxuodky"><span class="astro-ojxuodky">PRD-001 · FuseOne Agents</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/dp-001-data-protection/" aria-current="page" class="astro-ojxuodky"><span class="astro-ojxuodky">DP-001 — Data protection</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/op-001-running-an-installation/" class="astro-ojxuodky"><span class="astro-ojxuodky">OP-001 — Running an installation</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-001-integration-boundary-and-execution-model/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-001 · Integration boundary and execution model</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-002-remaining-work/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-002 · What is left, and in what order</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-003-conversational-authoring/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-003 · Conversational authoring</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-004-ledger-volume-and-paging/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-004 · Ledger volume and paging</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-005-interaction-channels/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-005 · Interaction channels</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-006-evaluating-agents/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-006 · Evaluating agents</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-007-drawing-a-process/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-007 · Drawing a process</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-008-a-catalogue-by-shape/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-008 · A catalogue by shape</span></a></li><li class="astro-ojxuodky"><a href="/fuseone-agents/docs/design/nt-009-governed-connectors/" class="astro-ojxuodky"><span class="astro-ojxuodky">NT-009 — Governed connectors</span></a></li></ul></details></li></ul></details></li></ul><script aria-hidden="true">
+		(() => {
+			const scroller = document.getElementById('starlight__sidebar');
+			if (!window._starlightScrollRestore || !scroller) return;
+			scroller.scrollTop = window._starlightScrollRestore;
+			delete window._starlightScrollRestore;
+		})();
+	</script></sl-sidebar-state-persist><div class="md:sl-hidden"><div class="mobile-preferences sl-flex astro-b5gddk54"><div class="social-icons astro-b5gddk54"><a href="https://github.com/fuseone-io/fuseone-agents" rel="me" class="sl-flex astro-cg55etiy"><span class="sr-only astro-cg55etiy">GitHub</span><svg aria-hidden="true" class="astro-cg55etiy astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M12 .3a12 12 0 0 0-3.8 23.38c.6.12.83-.26.83-.57L9 21.07c-3.34.72-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.08-.74.09-.73.09-.73 1.2.09 1.83 1.24 1.83 1.24 1.08 1.83 2.81 1.3 3.5 1 .1-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.14-.3-.54-1.52.1-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.28-1.55 3.29-1.23 3.29-1.23.64 1.66.24 2.88.12 3.18a4.65 4.65 0 0 1 1.23 3.22c0 4.61-2.8 5.63-5.48 5.92.42.36.81 1.1.81 2.22l-.01 3.29c0 .31.2.69.82.57A12 12 0 0 0 12 .3Z"/></svg></a></div><starlight-theme-select><label style="--sl-select-width: 6.25em" class="astro-r2p65idu"><span class="sr-only astro-r2p65idu">Select theme</span><svg aria-hidden="true" class="icon label-icon astro-r2p65idu astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21 14h-1V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v7H3a1 1 0 0 0-1 1v2a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3v-2a1 1 0 0 0-1-1ZM6 7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v7H6V7Zm14 10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-1h16v1Z"/></svg><select autocomplete="off" class="astro-r2p65idu"><option value="dark" class="astro-r2p65idu">Dark</option><option value="light" class="astro-r2p65idu">Light</option><option value="auto" selected class="astro-r2p65idu">Auto</option></select><svg aria-hidden="true" class="icon caret astro-r2p65idu astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M17 9.17a1 1 0 0 0-1.41 0L12 12.71 8.46 9.17a1 1 0 1 0-1.41 1.42l4.24 4.24a1.002 1.002 0 0 0 1.42 0L17 10.59a1.002 1.002 0 0 0 0-1.42Z"/></svg></label></starlight-theme-select><script>
+	StarlightThemeProvider.updatePickers();
+</script></div></div></div></div></nav><div class="main-frame astro-gqpr5s5a"><script type="module">var e=document.getElementById(`starlight__sidebar`),t=e?.querySelector(`sl-sidebar-state-persist`),n=`sl-sidebar-state`,r=()=>{let r=[],i=t?.dataset.hash||``;try{let e=sessionStorage.getItem(n),t=JSON.parse(e||`{}`);Array.isArray(t.open)&&t.hash===i&&(r=t.open)}catch{}return{hash:i,open:r,scroll:e?.scrollTop||0}},i=e=>{try{sessionStorage.setItem(n,JSON.stringify(e))}catch{}},a=()=>i(r()),o=(e,t)=>{let n=r();n.open[t]=e,i(n)};t?.addEventListener(`click`,e=>{if(!(e.target instanceof Element))return;let t=e.target.closest(`summary`)?.closest(`details`);if(!t)return;let n=t.querySelector(`sl-sidebar-restore`),r=parseInt(n?.dataset.index||``);isNaN(r)||o(!t.open,r)}),addEventListener(`visibilitychange`,()=>{document.visibilityState===`hidden`&&a()});</script><div class="lg:sl-flex astro-abfeecmu"><aside class="right-sidebar-container print:hidden astro-abfeecmu"><div class="right-sidebar astro-abfeecmu"><div class="lg:sl-hidden astro-q5mffni3"><mobile-starlight-toc data-min-h="2" data-max-h="3" class="astro-5ulgm6bh"><nav aria-labelledby="starlight__on-this-page--mobile" class="astro-5ulgm6bh"><details id="starlight__mobile-toc" class="astro-5ulgm6bh"><summary id="starlight__on-this-page--mobile" class="sl-flex astro-5ulgm6bh"><span class="toggle sl-flex astro-5ulgm6bh">On this page<svg aria-hidden="true" class="caret astro-5ulgm6bh astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></span><span class="display-current astro-5ulgm6bh"></span></summary><div class="dropdown astro-5ulgm6bh"><ul class="isMobile astro-cxyftcne" style="--depth: 0;"><li style="--depth: 0;" class="astro-cxyftcne"><a href="#_top" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Overview</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#1-the-shape-that-decides-everything-else" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">1. The shape that decides everything else</span></a><ul class="isMobile astro-cxyftcne" style="--depth: 1;"><li style="--depth: 1;" class="astro-cxyftcne"><a href="#the-split-is-not-absolute-and-the-exception-matters" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">The split is not absolute, and the exception matters</span></a></li></ul></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#2-what-is-stored" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">2. What is stored</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#3-what-leaves-the-installation" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">3. What leaves the installation</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#4-erasing-a-persons-data" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">4. Erasing a person’s data</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#5-retention" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">5. Retention</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#6-secrets" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">6. Secrets</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#7-what-the-platform-does-not-do" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">7. What the platform does not do</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#8-what-this-document-has-not-established" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">8. What this document has not established</span></a></li></ul></div></details></nav></mobile-starlight-toc><script type="module" src="/fuseone-agents/docs/_astro/MobileTableOfContents.astro_astro_type_script_index_0_lang.BcSo_yiZ.js"></script></div><div class="right-sidebar-panel sl-hidden lg:sl-block astro-q5mffni3"><div class="sl-container astro-q5mffni3"><starlight-toc data-min-h="2" data-max-h="3"><nav aria-labelledby="starlight__on-this-page"><h2 id="starlight__on-this-page">On this page</h2><ul class="astro-cxyftcne" style="--depth: 0;"><li style="--depth: 0;" class="astro-cxyftcne"><a href="#_top" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">Overview</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#1-the-shape-that-decides-everything-else" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">1. The shape that decides everything else</span></a><ul class="astro-cxyftcne" style="--depth: 1;"><li style="--depth: 1;" class="astro-cxyftcne"><a href="#the-split-is-not-absolute-and-the-exception-matters" style="--depth: 1;" class="astro-cxyftcne"><span style="--depth: 1;" class="astro-cxyftcne">The split is not absolute, and the exception matters</span></a></li></ul></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#2-what-is-stored" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">2. What is stored</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#3-what-leaves-the-installation" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">3. What leaves the installation</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#4-erasing-a-persons-data" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">4. Erasing a person’s data</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#5-retention" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">5. Retention</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#6-secrets" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">6. Secrets</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#7-what-the-platform-does-not-do" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">7. What the platform does not do</span></a></li><li style="--depth: 0;" class="astro-cxyftcne"><a href="#8-what-this-document-has-not-established" style="--depth: 0;" class="astro-cxyftcne"><span style="--depth: 0;" class="astro-cxyftcne">8. What this document has not established</span></a></li></ul></nav></starlight-toc><script type="module" src="/fuseone-agents/docs/_astro/TableOfContents.astro_astro_type_script_index_0_lang.Csloo1VZ.js"></script></div></div></div></aside><div class="main-pane astro-abfeecmu"><main data-pagefind-body class="astro-vdxcvpsm" lang="en" dir="ltr"><div class="content-panel astro-oil7k7jf"><div class="sl-container astro-oil7k7jf"><h1 id="_top" class="astro-2sm4b3ln">DP-001 — Data protection</h1></div></div><div class="content-panel astro-oil7k7jf"><div class="sl-container astro-oil7k7jf"><div class="sl-markdown-content"><p>For a customer’s data protection officer, security reviewer or legal team,
+answering the questions asked before a pilot rather than after an incident:
+what this installation stores, what leaves it, what can be erased, and what
+this platform cannot do for you.</p>
+<p>Every statement below names the mechanism it rests on. Where a property is a
+consequence of how something is built, it says so; where it depends on a
+decision the customer makes, it says that instead. Section 8 lists what this
+document does <strong>not</strong> establish.</p>
+<p>Written in English because this repository is public and its documents are
+reviewed in English. If it is to be handed to a DPO who reads Portuguese, it
+needs a translation — that is a deliverable, not a formality, and pretending
+otherwise is how a document gets approved by people who did not read it.</p>
+<hr>
+<div class="sl-heading-wrapper level-h2"><h2 id="1-the-shape-that-decides-everything-else">1. The shape that decides everything else</h2><a class="sl-anchor-link" href="#1-the-shape-that-decides-everything-else"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “1. The shape that decides everything else”</span></a></div>
+<p>The installation keeps two things, and the difference between them is what
+makes erasure possible at all.</p>
+<p><strong>The chain.</strong> <code dir="auto">run_steps</code> records what happened, step by step, each step
+sealed against the one before it by a hash. It is append-only and the database
+enforces it: there is no <code dir="auto">UPDATE</code> and no <code dir="auto">DELETE</code>. A correction is a new step.</p>
+<p><strong>The content.</strong> <code dir="auto">run_content</code> holds the bulk of what a run touched — the text
+of a ticket the agent read, the arguments a tool was called with, a tool’s
+result. For these, the step carries a <strong>reference and a digest</strong>, and the bytes
+live where they can be erased.</p>
+<p>This is why an erasure does not break anything. Deleting that content leaves
+the chain untouched and still verifiable: every hash still checks, because no
+hash covered the bytes — it covered the reference to them.</p>
+<div class="sl-heading-wrapper level-h3"><h3 id="the-split-is-not-absolute-and-the-exception-matters">The split is not absolute, and the exception matters</h3><a class="sl-anchor-link" href="#the-split-is-not-absolute-and-the-exception-matters"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “The split is not absolute, and the exception matters”</span></a></div>
+<p>Some text is written <strong>into the step itself</strong>, and therefore into the
+append-only table. It is not covered by erasure and not covered by retention,
+because neither touches <code dir="auto">run_steps</code>. It is permanent.</p>
+<table>
+<thead>
+<tr>
+<th>Written into the step</th>
+<th>Where it comes from</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code dir="auto">RunFinishedPayload.Outcome</code> on older runs</td>
+<td><strong>The model’s final answer, verbatim</strong></td>
+</tr>
+<tr>
+<td><code dir="auto">ApprovalDecidedPayload</code> note</td>
+<td>Typed by the person approving</td>
+</tr>
+<tr>
+<td><code dir="auto">AbandonedPayload.Reason</code></td>
+<td>Typed by the person abandoning the run</td>
+</tr>
+<tr>
+<td>Resume note</td>
+<td>Typed by the person resuming</td>
+</tr>
+</tbody>
+</table>
+<p>The first row is the one a reviewer must weigh. It was a defect: an agent’s
+closing answer is free text produced by the model, and it can restate anything
+the agent read on the way — a name, an address, the body of a ticket. New runs
+store that answer in <code dir="auto">run_content</code> behind <code dir="auto">OutcomeRef</code> and <code dir="auto">OutcomeDigest</code>.
+Older runs cannot be rewritten without breaking the hash chain, so their inline
+answers remain permanent. A customer with historical runs should assume those
+old model answers survive erasure.</p>
+<hr>
+<div class="sl-heading-wrapper level-h2"><h2 id="2-what-is-stored">2. What is stored</h2><a class="sl-anchor-link" href="#2-what-is-stored"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “2. What is stored”</span></a></div>
+<p>Roughly thirty tables. The ones that can hold personal data:</p>
+<table>
+<thead>
+<tr>
+<th>Where</th>
+<th>What it can hold</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code dir="auto">run_content</code></td>
+<td>Everything an agent read or wrote: ticket text, email bodies, tool arguments, tool results and failure diagnostics, model replies</td>
+</tr>
+<tr>
+<td><code dir="auto">run_steps</code></td>
+<td>Who asked, which agent, which tool, what the Gate decided; data-flow labels for company, area, untrusted or personal origin; references and digests for bulk content and shared context artifacts — <strong>and the free text listed in section 1</strong>, permanently</td>
+</tr>
+<tr>
+<td><code dir="auto">runs.last_error</code></td>
+<td>Operational error text for the latest failed turn; classified model provider failures store only a stable code, but unclassified local or integration failures can still carry free text</td>
+</tr>
+<tr>
+<td><code dir="auto">principals</code>, <code dir="auto">sessions</code>, <code dir="auto">role_grants</code></td>
+<td>The people who use the console: identity from the customer’s own provider</td>
+</tr>
+<tr>
+<td><code dir="auto">channel_inbox</code>, <code dir="auto">channel_deliveries</code>, <code dir="auto">channel_delivery_failures</code></td>
+<td>Messages exchanged on a connected channel, what was sent back, optional thread context supplied to a run, and operational delivery failures tied to a run and conversation</td>
+</tr>
+<tr>
+<td><code dir="auto">mcp_egress_denials</code></td>
+<td>Stdio MCP proxy failures by configured server, host, port, stable code and timestamps; no URL path, query string, header, body, token or tool argument</td>
+</tr>
+<tr>
+<td><code dir="auto">memory_assertions</code>, <code dir="auto">memory_suggestions</code>, <code dir="auto">memory_assertion_events</code></td>
+<td>Human-reviewed or agent-suggested structured memory claims, source run/artifact/digest evidence, labels, actor, reason and timestamps</td>
+</tr>
+<tr>
+<td><code dir="auto">admin_events</code>, <code dir="auto">audit</code> records</td>
+<td>Who changed what configuration, and when</td>
+</tr>
+</tbody>
+</table>
+<p><code dir="auto">agent_specs</code>, <code dir="auto">policies</code>, <code dir="auto">areas</code>, <code dir="auto">scopes</code>, <code dir="auto">settings</code> and the trigger tables
+hold configuration written by the customer’s own staff. They can hold personal
+data only if somebody writes it into an instruction.</p>
+<p>The <code dir="auto">runs</code> row is a projection, not the audit chain and not the content store.
+Runtime dashboards read it because folding the chain during an outage would
+make the database do archival work at the worst possible time. That projection
+therefore has to stay low-cardinality where it can: typed model provider
+failures write codes such as <code dir="auto">model_auth_failed</code>, not the provider’s response
+body. Errors the platform has not classified can still leave their text in
+<code dir="auto">runs.last_error</code>, outside content retention and erasure.</p>
+<p>Data-flow labels are not message content. They are stored with steps so the
+Gate can refuse a later action when content from one company or area reaches a
+run outside that scope. They are also what makes shared context between agents
+auditable by reference instead of by copied prose: the ledger carries artifact
+name, source run, digest and labels, while the artifact bytes remain in
+<code dir="auto">run_content</code>.</p>
+<p>Everything is in the customer’s PostgreSQL, in the customer’s environment.
+Nothing is stored by the vendor, because there is no vendor-side component.</p>
+<hr>
+<div class="sl-heading-wrapper level-h2"><h2 id="3-what-leaves-the-installation">3. What leaves the installation</h2><a class="sl-anchor-link" href="#3-what-leaves-the-installation"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “3. What leaves the installation”</span></a></div>
+<p>This is the section that matters most, and the honest answer is that data does
+leave — deliberately, to places the customer chooses.</p>
+<p><strong>The model provider.</strong> An agent works by sending text to a large language
+model. That text is whatever the agent has read. The providers this platform
+can be pointed at are configured by the customer, and the built-in list spans
+several jurisdictions — <code dir="auto">api.openai.com</code>, <code dir="auto">api.anthropic.com</code>,
+<code dir="auto">api.mistral.ai</code>, <code dir="auto">api.groq.com</code>, <code dir="auto">api.x.ai</code>, <code dir="auto">api.together.xyz</code>,
+<code dir="auto">api.deepseek.com</code>, <code dir="auto">api.moonshot.cn</code>. <strong>The last two are outside the EU and
+the US</strong>, which is a fact a DPO needs before choosing, not after.</p>
+<p>Two further presets — <code dir="auto">vllm</code> and <code dir="auto">ollama</code> — carry no vendor endpoint. They
+exist for the customer that cannot let prompts leave its network at all: the
+base URL is the installation’s own, and nothing goes to a third party.</p>
+<p>FuseOne bundles no inference runtime of its own, so running a model locally
+means the customer runs it. The path is supported and configured; it is not the
+default, and choosing it is the decision that settles this section.</p>
+<p><strong>Remote MCP servers.</strong> A tool server reached over HTTP is a third party the
+customer connected, and tool arguments go to it. A tool server run locally over
+stdio does not leave the machine — and does not inherit the process
+environment: the child receives an allowlist (<code dir="auto">PATH</code>, <code dir="auto">HOME</code>, <code dir="auto">TMPDIR</code>, <code dir="auto">LANG</code>,
+<code dir="auto">LC_ALL</code>, <code dir="auto">TZ</code>) rather than the worker’s secrets.</p>
+<p><strong>Channels.</strong> A connected channel — Slack, for instance — carries messages to
+that provider under the customer’s own workspace agreement.</p>
+<p>A channel can also be configured to include prior Slack thread messages when a
+person mentions the agent inside a thread. That is not just “the message that
+mentioned the bot”: it can include text written by other people in the same
+thread. Those messages become run input, are stored as content behind a
+reference, are marked untrusted, and may be sent to the configured model
+provider along with the rest of the prompt. The checkbox that enables this is
+therefore a data-protection decision, not only an authoring convenience.</p>
+<p><strong>Sign-in.</strong> OIDC reaches the customer’s own identity provider: it fetches the
+issuer’s discovery document, and exchanges an authorisation code for a token on
+every sign-in. The destination is whichever provider the customer configured.</p>
+<p>There is no telemetry to the vendor, no usage reporting, no phone-home — the
+vendor receives nothing, because there is no vendor-side component to receive
+it. But “no outbound at all” is not something this platform can claim: a
+signed-in console has already talked to an identity provider, and a connected
+channel talks to its own.</p>
+<hr>
+<div class="sl-heading-wrapper level-h2"><h2 id="4-erasing-a-persons-data">4. Erasing a person’s data</h2><a class="sl-anchor-link" href="#4-erasing-a-persons-data"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “4. Erasing a person’s data”</span></a></div>
+<p>Two mechanisms, deliberately distinct.</p>
+<p><strong>On request.</strong> <code dir="auto">Erase(owner, reason)</code> clears the content of the runs an
+operator identified. The bytes become null; <code dir="auto">erased_at</code> and <code dir="auto">erased_reason</code>
+remain as a tombstone. Something that later resolves that reference gets a
+distinct error meaning <em>this was deliberately erased</em> — never confused with a
+reference that was always wrong.</p>
+<p>The erasure is itself recorded, as an admin event carrying the number of runs,
+the number of objects and the reason. That is on purpose: <strong>an erasure nobody
+can account for is indistinguishable from data loss</strong>, and a DPO asked to prove
+a request was honoured needs a record that it was.</p>
+<p><strong>Finding the runs is the operator’s work.</strong> The platform erases what it is
+given. It does not offer “everything about this person” as a query, because it
+does not index by data subject — a run is identified by agent, scope and time,
+not by whose data it touched.</p>
+<p><strong>What survives an erasure.</strong> The chain: that a run happened, which agent, which
+tool, what the Gate decided, and the digest of content that no longer exists.
+That much is the deliberate trade — a record of processing is what the platform
+is for.</p>
+<p>Operational rows survive a per-subject erasure too. They are not the chain, but
+they are not found by subject and most are not rewritten by the erasure job:
+<code dir="auto">channel_inbox</code>, <code dir="auto">channel_deliveries</code>, <code dir="auto">channel_delivery_failures</code> and
+<code dir="auto">mcp_egress_denials</code> age out through retention instead. Memory is the
+exception: an active assertion whose evidence points to an erased run is marked
+<code dir="auto">source_erased</code>, so it remains auditable but is no longer served as intact
+knowledge.</p>
+<p><strong>And, for older runs, more than that.</strong> The free text of section 1 survives too,
+including model answers recorded before <code dir="auto">OutcomeRef</code> existed. That part was not
+a trade anybody chose; it is historical behaviour that cannot be repaired by
+rewriting the chain.</p>
+<p>If a regulator requires that no trace of the processing survive, this platform
+does not meet that requirement, and no configuration changes it.</p>
+<hr>
+<div class="sl-heading-wrapper level-h2"><h2 id="5-retention">5. Retention</h2><a class="sl-anchor-link" href="#5-retention"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “5. Retention”</span></a></div>
+<p>Content ages out on a window the customer sets. A sweep runs daily and erases
+everything older, with the reason <code dir="auto">retention</code>, recording <code dir="auto">content.expired</code> when
+it erased anything.</p>
+<p>The window is read on every sweep rather than cached, so shortening retention
+takes effect on the next run.</p>
+<p>The same sweep deletes operational channel rows older than the window:
+<code dir="auto">channel_inbox</code> by arrival time, <code dir="auto">channel_deliveries</code> by post time, and
+<code dir="auto">channel_delivery_failures</code> by the last time that failure was seen. Open channel
+debts are kept until answered: a refused ask that still needs a reply, or an
+opened ask whose finished run still owes its closing answer, is current work
+even if the original message is older than the retention window. The failure
+case follows the same rule. A channel failure that began months ago but still
+failed this morning is current operational evidence, not expired history.
+Stdio MCP egress denials are also deleted by last-seen time, so a still-active
+egress problem remains visible until it stops recurring and then ages out.
+Memory assertions, memory suggestions and memory assertion events age out
+through the same sweep; expired assertions and suggestions are removed even
+when they were updated recently. A suggestion whose source evidence is erased
+is marked <code dir="auto">source_erased</code>, so it remains auditable until retention removes it
+and is no longer offered for review as intact knowledge.</p>
+<p>There is a floor. A window below 24 hours is refused, and it is checked twice —
+when the setting is written and again when the sweep reads it back. The second
+check is what stops a corrupted row from becoming an installation-wide delete.</p>
+<p><strong>The chain is not swept.</strong> Retention governs content and channel operational
+records, not the record that processing happened.</p>
+<hr>
+<div class="sl-heading-wrapper level-h2"><h2 id="6-secrets">6. Secrets</h2><a class="sl-anchor-link" href="#6-secrets"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “6. Secrets”</span></a></div>
+<p>Credentials — provider keys, tool server tokens, channel secrets — are sealed
+with AES-256-GCM under a master key supplied as an environment variable and
+never stored in the database.</p>
+<p>Sealing is bound to context: the key identifier and the credential’s context
+are authenticated alongside the ciphertext, so a sealed value lifted from one
+row and pasted into another fails to open rather than opening as something
+else.</p>
+<p>Sealed credentials are never returned by any endpoint that lists them. Revealing
+one is a separate, deliberate act.</p>
+<p><strong>The master key is not in the backup.</strong> A database backup restored without it
+yields an installation that cannot open any credential it holds.</p>
+<hr>
+<div class="sl-heading-wrapper level-h2"><h2 id="7-what-the-platform-does-not-do">7. What the platform does not do</h2><a class="sl-anchor-link" href="#7-what-the-platform-does-not-do"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “7. What the platform does not do”</span></a></div>
+<p>Stated plainly, because each of these gets assumed:</p>
+<ul>
+<li><strong>It does not narrow a credential.</strong> A token issued with more reach than an
+agent needs, reaches that far. Scope belongs where the credential is issued —
+in GitHub, in SAP, in the customer’s own systems.</li>
+<li><strong>It does not classify personal data.</strong> It does not know which field is a
+name. The taint mechanism marks content by <strong>origin</strong>, not by sensitivity.</li>
+<li><strong>It does not index by data subject.</strong> See section 4.</li>
+<li><strong>It does not log tool arguments — and cannot speak for what it runs.</strong>
+FuseOne’s own tool execution path emits no log lines at all. But a local MCP
+server is a separate process whose standard error is wired to the worker’s,
+so anything that integration chooses to print lands in the worker’s log,
+outside the retention window and outside this platform’s control. A remote
+MCP server logs whatever its operator decided. <strong>What a tool server logs is
+the integration’s responsibility, and has to be assessed per server.</strong></li>
+<li><strong>It does not anonymise or pseudonymise.</strong> What an agent reads is stored as
+it was read, until erased.</li>
+</ul>
+<hr>
+<div class="sl-heading-wrapper level-h2"><h2 id="8-what-this-document-has-not-established">8. What this document has not established</h2><a class="sl-anchor-link" href="#8-what-this-document-has-not-established"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “8. What this document has not established”</span></a></div>
+<ul>
+<li><strong>No independent audit.</strong> Everything here was verified by reading this
+repository. No third party has assessed it.</li>
+<li><strong>No DPIA, and no legal-basis analysis.</strong> Whether a given agent’s processing
+is lawful depends on what the customer configures it to read, and this
+document does not assess it.</li>
+<li><strong>Erasure has not been rehearsed at volume.</strong> The mechanism is tested; a
+subject request across a large installation has not been carried out.</li>
+<li><strong>No certification is claimed.</strong> Not ISO 27001, not SOC 2, not any other.</li>
+<li><strong>Historical inline outcomes have not been erased.</strong> New runs store the model’s
+closing answer where retention and erasure reach it. Old runs that already
+wrote that answer into <code dir="auto">run_steps</code> keep it there, because rewriting the chain
+would destroy the audit property the platform depends on.</li>
+<li><strong>The provider list may drift.</strong> Section 3 names what the built-in list
+carries today. An installation’s configuration is what actually governs where
+data goes, and it is the customer’s to read.</li>
+</ul>
+</div><footer class="sl-flex astro-xhxjzfa7"><div class="meta sl-flex astro-xhxjzfa7"></div><div class="pagination-links print:hidden astro-jgq3vlii" dir="ltr"><a href="/fuseone-agents/docs/design/prd-001-fuseone-agents/" rel="prev" class="astro-jgq3vlii"><svg aria-hidden="true" class="astro-jgq3vlii astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.5rem;"><path d="M17 11H9.41l3.3-3.29a1.004 1.004 0 1 0-1.42-1.42l-5 5a1 1 0 0 0-.21.33 1 1 0 0 0 0 .76 1 1 0 0 0 .21.33l5 5a1.002 1.002 0 0 0 1.639-.325 1 1 0 0 0-.219-1.095L9.41 13H17a1 1 0 0 0 0-2Z"/></svg><span class="astro-jgq3vlii">Previous<br class="astro-jgq3vlii"><span class="link-title astro-jgq3vlii">PRD-001 · FuseOne Agents</span></span></a><a href="/fuseone-agents/docs/design/op-001-running-an-installation/" rel="next" class="astro-jgq3vlii"><svg aria-hidden="true" class="astro-jgq3vlii astro-n5k4ipy7" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.5rem;"><path d="M17.92 11.62a1.001 1.001 0 0 0-.21-.33l-5-5a1.003 1.003 0 1 0-1.42 1.42l3.3 3.29H7a1 1 0 0 0 0 2h7.59l-3.3 3.29a1.002 1.002 0 0 0 .325 1.639 1 1 0 0 0 1.095-.219l5-5a1 1 0 0 0 .21-.33 1 1 0 0 0 0-.76Z"/></svg><span class="astro-jgq3vlii">Next<br class="astro-jgq3vlii"><span class="link-title astro-jgq3vlii">OP-001 — Running an installation</span></span></a></div></footer></div></div></main></div></div></div></div></body></html>
