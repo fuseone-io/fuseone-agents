@@ -589,7 +589,7 @@ func TestAdvance_memorySuggestionInReviewMode_entersTheReviewQueueWithoutApprova
 	}
 }
 
-func TestAdvance_memorySuggestionInAutoConfirmMode_stillNeedsApprovalWhenTainted(t *testing.T) {
+func TestAdvance_memorySuggestionInAutoConfirmModeWithUntrustedData_entersReviewQueue(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
@@ -616,15 +616,18 @@ func TestAdvance_memorySuggestionInAutoConfirmMode_stillNeedsApprovalWhenTainted
 		t.Fatalf("Advance: %v", err)
 	}
 
-	if got := h.tools.invocations; len(got) != 0 {
-		t.Fatalf("tool invocations = %v, want no memory suggestion before approval", got)
+	if got := h.tools.invocations; len(got) != 1 || got[0] != domain.ToolMemorySuggest {
+		t.Fatalf("tool invocations = %v, want untrusted auto-confirm suggestion to enter review queue", got)
 	}
 	var decided domain.GateDecidedPayload
 	if err := h.payloadOf(t, domain.StepGateDecided, &decided); err != nil {
 		t.Fatalf("gate payload: %v", err)
 	}
-	if decided.Verdict != domain.VerdictRequireApproval || decided.Rule != gate.RuleTaint {
-		t.Fatalf("decision = %s/%s, want require_approval/taint", decided.Verdict, decided.Rule)
+	if decided.Verdict != domain.VerdictAllow || decided.Rule != gate.RulePassed {
+		t.Fatalf("decision = %s/%s, want allow/passed", decided.Verdict, decided.Rule)
+	}
+	if _, err := h.stepOf(t, domain.StepApprovalRequested); err == nil {
+		t.Fatal("approval was requested before an untrusted suggestion that still needs memory review")
 	}
 }
 

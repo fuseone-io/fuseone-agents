@@ -237,6 +237,49 @@ func TestLayer_suggestAutoConfirmsOnlyAfterRepeatedObservations(t *testing.T) {
 	}
 }
 
+func TestLayer_suggestDoesNotAutoConfirmUntrustedObservations(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := memory.NewMemory()
+	content := engine.NewMemoryContent()
+	now := time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC)
+	policy := domain.MemoryLearningPolicy{
+		Mode: domain.MemoryLearningAutoConfirm, MinObservations: 2, TTLDays: 7,
+	}
+	labels := domain.NewLabels(domain.LabelUntrusted).Union(domain.ScopeLabels(platformScope))
+	layer := memory.NewLayer(nil, nil, content, store)
+
+	for i := range 2 {
+		result, err := layer.Invoke(ctx, engine.Call{
+			RunID: domain.RunID("run-untrusted-suggest-" + string(rune('a'+i))),
+			Seq:   int64(i + 1), Scope: platformScope, AgentID: "triage",
+			Tool: domain.ToolMemorySuggest, Args: suggestionArgs("grafana.datasource.down"),
+			Labels: labels, MemoryLearning: policy,
+			At: now.Add(time.Duration(i) * time.Minute),
+		})
+		if err != nil {
+			t.Fatalf("Invoke %d: %v", i, err)
+		}
+		if result.Failed {
+			t.Fatalf("result %d = %+v, want successful queued suggestion", i, result)
+		}
+	}
+
+	if found := findMemory(t, store, now.Add(time.Minute)); len(found) != 0 {
+		t.Fatalf("found = %+v, want untrusted observations to wait for review", found)
+	}
+	pending, err := store.ListSuggestions(ctx, memory.SuggestionFilter{
+		Scopes: []domain.Scope{platformScope}, Status: domain.MemorySuggestionPending,
+	})
+	if err != nil {
+		t.Fatalf("ListSuggestions: %v", err)
+	}
+	if len(pending) != 1 || pending[0].Observations != 2 ||
+		!pending[0].Labels.Has(domain.LabelUntrusted) {
+		t.Fatalf("pending = %+v, want merged untrusted suggestion still pending", pending)
+	}
+}
+
 func TestLayer_suggestCountsOneObservationPerRun(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

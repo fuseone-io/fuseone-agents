@@ -202,7 +202,7 @@ func (l *Layer) suggest(ctx context.Context, call engine.Call) (engine.ToolResul
 	if !valid || call.AgentID == "" || l.store == nil || l.content == nil {
 		return failed(CodeMemoryArgumentsInvalid), nil
 	}
-	policy := call.MemoryLearning.Normalize()
+	policy := call.MemoryLearning.ForSuggestion(call.Labels)
 	if !policy.Enabled() {
 		return failed(CodeMemoryLearningDisabled), nil
 	}

@@ -241,6 +241,25 @@ func (p MemoryLearningPolicy) AutoConfirms() bool {
 	return p.Normalize().Mode == MemoryLearningAutoConfirm
 }
 
+// ReviewRequired reports whether a suggestion can only enter the human review
+// queue. Untrusted observations are never auto-confirmed: the model may propose
+// them without a second runtime approval, but a person must decide before they
+// become active memory.
+func (p MemoryLearningPolicy) ReviewRequired(labels Labels) bool {
+	p = p.Normalize()
+	return p.Mode == MemoryLearningReview ||
+		(p.Mode == MemoryLearningAutoConfirm && labels.HasAny(LabelUntrusted))
+}
+
+// ForSuggestion is the policy a single suggested observation runs under.
+func (p MemoryLearningPolicy) ForSuggestion(labels Labels) MemoryLearningPolicy {
+	p = p.Normalize()
+	if p.Mode == MemoryLearningAutoConfirm && labels.HasAny(LabelUntrusted) {
+		p.Mode = MemoryLearningReview
+	}
+	return p
+}
+
 func (p MemoryLearningPolicy) ExpiresAt(now time.Time) *time.Time {
 	p = p.Normalize()
 	if p.Mode == MemoryLearningOff {
