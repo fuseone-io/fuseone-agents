@@ -436,6 +436,9 @@ func (r *Runner) invoke(
 		OnBehalfOf:       start.OnBehalfOf,
 		IdemKey:          idemKey,
 		ContextArtifacts: state.ContextArtifacts,
+		At:               r.deps.Clock.Now(),
+		Labels:           state.Labels.Clone(),
+		MemoryLearning:   start.MemoryLearning.Normalize(),
 	}
 	if err := r.deps.Tools.Reserve(ctx, call); err != nil {
 		return Status{}, err

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
+	"github.com/fuseone/agents/internal/gate"
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/memory"
 )
@@ -147,6 +149,151 @@ func TestLayer_rejectsMalformedFindArguments(t *testing.T) {
 	}
 }
 
+func TestLayer_suggestRecordsPendingMemoryWithoutServingIt(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := memory.NewMemory()
+	content := engine.NewMemoryContent()
+	labels := domain.NewLabels(domain.LabelUntrusted).Union(domain.ScopeLabels(platformScope))
+
+	result, err := memory.NewLayer(nil, nil, content, store).Invoke(ctx, engine.Call{
+		RunID: "run-suggest-1", Seq: 3, Scope: platformScope, AgentID: "triage",
+		Tool: domain.ToolMemorySuggest, Args: suggestionArgs("grafana.datasource.down"),
+		Labels: labels,
+		MemoryLearning: domain.MemoryLearningPolicy{
+			Mode: domain.MemoryLearningReview,
+		},
+		At: time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	if result.Failed || result.ResultRef == "" {
+		t.Fatalf("result = %+v, want stored suggestion result", result)
+	}
+	suggestions, err := store.ListSuggestions(ctx, memory.SuggestionFilter{
+		Scopes: []domain.Scope{platformScope}, Status: domain.MemorySuggestionPending,
+	})
+	if err != nil {
+		t.Fatalf("ListSuggestions: %v", err)
+	}
+	if len(suggestions) != 1 || suggestions[0].Observations != 1 ||
+		!suggestions[0].Labels.Has(domain.LabelUntrusted) {
+		t.Fatalf("suggestions = %+v, want one labelled pending suggestion", suggestions)
+	}
+	found, err := store.Find(ctx, domain.MemoryQuery{
+		Scope: platformScope, AgentID: "triage", Search: "grafana",
+		Now: time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if len(found) != 0 {
+		t.Fatalf("Find returned %+v, want pending suggestion invisible to recall", found)
+	}
+}
+
+func TestLayer_suggestAutoConfirmsOnlyAfterRepeatedObservations(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := memory.NewMemory()
+	content := engine.NewMemoryContent()
+	now := time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC)
+	policy := domain.MemoryLearningPolicy{
+		Mode: domain.MemoryLearningAutoConfirm, MinObservations: 3, TTLDays: 7,
+	}
+
+	for i := range 3 {
+		result, err := memory.NewLayer(nil, nil, content, store).Invoke(ctx, engine.Call{
+			RunID: domain.RunID("run-suggest-" + string(rune('a'+i))), Seq: int64(i + 1),
+			Scope: platformScope, AgentID: "triage", Tool: domain.ToolMemorySuggest,
+			Args: suggestionArgs("grafana.datasource.down"), Labels: domain.NewLabels(domain.LabelPersonal),
+			MemoryLearning: policy, At: now.Add(time.Duration(i) * time.Minute),
+		})
+		if err != nil {
+			t.Fatalf("Invoke %d: %v", i, err)
+		}
+		if result.Failed {
+			t.Fatalf("result %d = %+v, want successful suggestion", i, result)
+		}
+	}
+
+	found, err := store.Find(ctx, domain.MemoryQuery{
+		Scope: platformScope, AgentID: "triage", Search: "datasource", Now: now,
+	})
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if len(found) != 1 || found[0].Confirmed != 3 ||
+		!found[0].Labels.Has(domain.LabelPersonal) ||
+		found[0].ExpiresAt == nil ||
+		!found[0].ExpiresAt.Equal(now.Add(2*time.Minute).AddDate(0, 0, 7)) {
+		t.Fatalf("found = %+v, want auto-confirmed labelled memory with TTL", found)
+	}
+}
+
+func TestLayer_suggestCountsOneObservationPerRun(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := memory.NewMemory()
+	content := engine.NewMemoryContent()
+	now := time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC)
+	policy := domain.MemoryLearningPolicy{
+		Mode: domain.MemoryLearningAutoConfirm, MinObservations: 2, TTLDays: 7,
+	}
+	call := engine.Call{
+		RunID: "run-suggest-1", Seq: 1, Scope: platformScope, AgentID: "triage",
+		Tool: domain.ToolMemorySuggest, Args: suggestionArgs("grafana.datasource.down"),
+		MemoryLearning: policy, At: now,
+	}
+
+	layer := memory.NewLayer(nil, nil, content, store)
+	for i := range 2 {
+		call.Seq = int64(i + 1)
+		result, err := layer.Invoke(ctx, call)
+		if err != nil {
+			t.Fatalf("Invoke duplicate %d: %v", i, err)
+		}
+		if result.Failed {
+			t.Fatalf("result duplicate %d = %+v, want successful suggestion", i, result)
+		}
+	}
+	if found := findMemory(t, store, now); len(found) != 0 {
+		t.Fatalf("found = %+v, want repeated suggestion in the same run not auto-confirmed", found)
+	}
+
+	call.RunID, call.Seq, call.At = "run-suggest-2", 1, now.Add(time.Minute)
+	result, err := layer.Invoke(ctx, call)
+	if err != nil {
+		t.Fatalf("Invoke second run: %v", err)
+	}
+	if result.Failed {
+		t.Fatalf("result second run = %+v, want successful suggestion", result)
+	}
+	found := findMemory(t, store, now.Add(time.Minute))
+	if len(found) != 1 || found[0].Confirmed != 2 {
+		t.Fatalf("found = %+v, want auto-confirm after two distinct runs", found)
+	}
+}
+
+func TestLayer_suggestReportsStoreErrorsAsMemoryUnavailable(t *testing.T) {
+	t.Parallel()
+
+	result, err := memory.NewLayer(nil, nil, engine.NewMemoryContent(), failingStore{}).
+		Invoke(context.Background(), engine.Call{
+			RunID: "run-suggest-1", Seq: 3, Scope: platformScope, AgentID: "triage",
+			Tool: domain.ToolMemorySuggest, Args: suggestionArgs("grafana.datasource.down"),
+			MemoryLearning: domain.MemoryLearningPolicy{Mode: domain.MemoryLearningReview},
+			At:             time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC),
+		})
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	if !result.Failed || result.ErrorCode != memory.CodeMemoryUnavailable {
+		t.Fatalf("result = %+v, want memory unavailable tool failure", result)
+	}
+}
+
 func TestToolList_exposesMemoryAsANativeReadSource(t *testing.T) {
 	t.Parallel()
 	got, err := memory.NewToolList(toolSource([]domain.ToolEntry{
@@ -159,6 +306,42 @@ func TestToolList_exposesMemoryAsANativeReadSource(t *testing.T) {
 	if found.ID == "" || !found.Native || found.Effect != domain.EffectRead ||
 		!found.Untrusted || !found.Scope.Contains(platformScope) {
 		t.Fatalf("memory tool = %+v, want native read source", found)
+	}
+}
+
+func TestToolList_exposesMemorySuggestAsANativeWrite(t *testing.T) {
+	t.Parallel()
+	got, err := memory.NewToolList(nil).Tools(context.Background())
+	if err != nil {
+		t.Fatalf("Tools: %v", err)
+	}
+	found := entryNamed(got, domain.ToolMemorySuggest)
+	if found.ID == "" || !found.Native || found.Effect != domain.EffectWrite ||
+		found.Untrusted || !found.Scope.Contains(platformScope) {
+		t.Fatalf("memory suggest tool = %+v, want native state-writing suggestion tool", found)
+	}
+	layer := memory.NewLayer(nil, nil, nil, nil)
+	effect, ok := layer.Effect(domain.ToolMemorySuggest)
+	if !ok || effect != domain.EffectWrite {
+		t.Fatalf("Effect(%s) = %v/%v, want write/true", domain.ToolMemorySuggest, effect, ok)
+	}
+}
+
+func TestMemorySuggest_taintedSuggestionGoesThroughTheGateAsAWrite(t *testing.T) {
+	t.Parallel()
+	entry := memory.MemorySuggestToolEntry()
+	decision, err := gate.New().Evaluate(context.Background(), gate.Request{
+		Scope: platformScope, RunID: "run-suggest-gate", AgentID: "triage", Seq: 1,
+		Tool: entry.ID, Effect: entry.Effect, Args: suggestionArgs("grafana.datasource.down"),
+		ArgLabels: domain.NewLabels(domain.LabelUntrusted).Union(domain.ScopeLabels(platformScope)),
+		Pack:      gate.NewPack(entry.ID), Stage: domain.StageAutonomous,
+		Budget: domain.Budget{ToolCalls: 10}, Estimate: domain.Consumption{ToolCalls: 1},
+	})
+	if err != nil {
+		t.Fatalf("Evaluate: %v", err)
+	}
+	if decision.Verdict != domain.VerdictRequireApproval || decision.Rule != gate.RuleTaint {
+		t.Fatalf("decision = %+v, want tainted write to require approval", decision)
 	}
 }
 
@@ -267,6 +450,90 @@ func TestPostgresList_statusFilterUnderstandsVirtualExpiry(t *testing.T) {
 	}
 }
 
+func TestPostgresSuggest_acceptancePromotesOnlyPendingMemory(t *testing.T) {
+	ctx, store := postgresStore(t)
+	now := time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC)
+	first, err := store.Suggest(ctx, suggestion(func(s *domain.MemorySuggestion) {
+		s.Labels = domain.NewLabels(domain.LabelUntrusted)
+	}), domain.MemoryLearningPolicy{Mode: domain.MemoryLearningReview}, "agent:triage", now)
+	if err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+	second, err := store.Suggest(ctx, suggestion(func(s *domain.MemorySuggestion) {
+		s.Labels = domain.NewLabels(domain.LabelPersonal)
+		s.Evidence[0].RunID = "run-evidence-2"
+	}), domain.MemoryLearningPolicy{Mode: domain.MemoryLearningReview}, "agent:triage", now.Add(time.Minute))
+	if err != nil {
+		t.Fatalf("Suggest again: %v", err)
+	}
+	if second.Suggestion.ID != first.Suggestion.ID ||
+		second.Suggestion.Observations != 2 ||
+		!second.Suggestion.Labels.Has(domain.LabelUntrusted) ||
+		!second.Suggestion.Labels.Has(domain.LabelPersonal) {
+		t.Fatalf("suggestion = %+v, want repeated pending suggestion merged with labels", second.Suggestion)
+	}
+
+	accepted, err := store.AcceptSuggestion(ctx, first.Suggestion.ID, platformScope,
+		"usr_ana", "reviewed", now.Add(2*time.Minute))
+	if err != nil {
+		t.Fatalf("AcceptSuggestion: %v", err)
+	}
+	if accepted.Confirmed != 2 || !accepted.Labels.Has(domain.LabelUntrusted) ||
+		!accepted.Labels.Has(domain.LabelPersonal) {
+		t.Fatalf("accepted = %+v, want merged labelled assertion", accepted)
+	}
+	pending, err := store.ListSuggestions(ctx, memory.SuggestionFilter{
+		Scopes: []domain.Scope{platformScope}, Status: domain.MemorySuggestionPending,
+	})
+	if err != nil {
+		t.Fatalf("ListSuggestions pending: %v", err)
+	}
+	if len(pending) != 0 {
+		t.Fatalf("pending = %+v, want accepted suggestion removed from review queue", pending)
+	}
+}
+
+func TestPostgresSuggest_concurrentEquivalentSuggestionsMerge(t *testing.T) {
+	ctx, store := postgresStore(t)
+	const writers = 12
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	errs := make(chan error, writers)
+	now := time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC)
+	policy := domain.MemoryLearningPolicy{Mode: domain.MemoryLearningReview}
+
+	for i := range writers {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			<-start
+			_, err := store.Suggest(ctx, suggestion(func(s *domain.MemorySuggestion) {
+				s.Evidence[0].RunID = domain.RunID("run-concurrent-" + string(rune('a'+i)))
+			}), policy, "agent:triage", now.Add(time.Duration(i)*time.Second))
+			errs <- err
+		}(i)
+	}
+
+	close(start)
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("Suggest concurrent: %v", err)
+		}
+	}
+	got, err := store.ListSuggestions(ctx, memory.SuggestionFilter{
+		Scopes: []domain.Scope{platformScope}, Status: domain.MemorySuggestionPending,
+	})
+	if err != nil {
+		t.Fatalf("ListSuggestions: %v", err)
+	}
+	if len(got) != 1 || got[0].Observations != writers ||
+		len(got[0].Evidence) != domain.MaxMemoryEvidence {
+		t.Fatalf("suggestions = %+v, want one merged bounded suggestion", got)
+	}
+}
+
 func TestPostgresMemoryEvents_refuseUpdateButAllowRetentionDelete(t *testing.T) {
 	ctx, pool := postgresPool(t)
 	store := memory.NewPostgres(pool)
@@ -317,6 +584,46 @@ func (t toolSource) Tools(context.Context) ([]domain.ToolEntry, error) {
 	return append([]domain.ToolEntry(nil), t...), nil
 }
 
+type failingStore struct{}
+
+func (failingStore) Find(context.Context, domain.MemoryQuery) ([]domain.MemoryAssertion, error) {
+	return nil, errors.New("down")
+}
+
+func (failingStore) List(context.Context, memory.Filter) ([]domain.MemoryAssertion, error) {
+	return nil, errors.New("down")
+}
+
+func (failingStore) Assert(
+	context.Context, domain.MemoryAssertion, domain.UserID, string, time.Time,
+) (domain.MemoryAssertion, error) {
+	return domain.MemoryAssertion{}, errors.New("down")
+}
+
+func (failingStore) Disable(context.Context, string, domain.Scope, domain.UserID, string, time.Time) error {
+	return errors.New("down")
+}
+
+func (failingStore) Suggest(
+	context.Context, domain.MemorySuggestion, domain.MemoryLearningPolicy, domain.UserID, time.Time,
+) (domain.MemorySuggestionOutcome, error) {
+	return domain.MemorySuggestionOutcome{}, errors.New("down")
+}
+
+func (failingStore) ListSuggestions(context.Context, memory.SuggestionFilter) ([]domain.MemorySuggestion, error) {
+	return nil, errors.New("down")
+}
+
+func (failingStore) AcceptSuggestion(
+	context.Context, string, domain.Scope, domain.UserID, string, time.Time,
+) (domain.MemoryAssertion, error) {
+	return domain.MemoryAssertion{}, errors.New("down")
+}
+
+func (failingStore) DismissSuggestion(context.Context, string, domain.Scope, domain.UserID, string, time.Time) error {
+	return errors.New("down")
+}
+
 func entryNamed(entries []domain.ToolEntry, id domain.ToolID) domain.ToolEntry {
 	for _, entry := range entries {
 		if entry.ID == id {
@@ -340,6 +647,26 @@ func assertion(edit func(*domain.MemoryAssertion)) domain.MemoryAssertion {
 		edit(&a)
 	}
 	return a
+}
+
+func suggestion(edit func(*domain.MemorySuggestion)) domain.MemorySuggestion {
+	s := domain.MemorySuggestion{
+		Scope: platformScope, AgentID: "triage", Kind: "incident",
+		Subject: "grafana datasource", Signature: "grafana.datasource.down",
+		Claim: "datasource errors clear after refreshing the datasource token",
+		Evidence: []domain.MemoryEvidence{{
+			RunID: "run-evidence-1", Artifact: domain.ArtifactMemorySuggestion, Digest: "sha256:abcd",
+		}},
+	}
+	if edit != nil {
+		edit(&s)
+	}
+	return s
+}
+
+func suggestionArgs(signature string) []byte {
+	return []byte(`{"kind":"incident","subject":"grafana datasource","signature":"` +
+		signature + `","claim":"datasource errors clear after refreshing the datasource token"}`)
 }
 
 func postgresStore(t *testing.T) (context.Context, *memory.Postgres) {
@@ -366,7 +693,7 @@ func postgresPool(t *testing.T) (context.Context, *pgxpool.Pool) {
 	if err := ledger.Migrate(ctx, pool); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	if _, err := pool.Exec(ctx, `truncate memory_assertion_events, memory_assertions`); err != nil {
+	if _, err := pool.Exec(ctx, `truncate memory_assertion_events, memory_suggestions, memory_assertions`); err != nil {
 		t.Fatalf("clean: %v", err)
 	}
 	return ctx, pool
@@ -386,6 +713,17 @@ func list(t *testing.T, ctx context.Context, store *memory.Postgres, scopes []do
 		t.Fatalf("List: %v", err)
 	}
 	return got
+}
+
+func findMemory(t *testing.T, store *memory.Memory, now time.Time) []domain.MemoryAssertion {
+	t.Helper()
+	found, err := store.Find(context.Background(), domain.MemoryQuery{
+		Scope: platformScope, AgentID: "triage", Search: "datasource", Now: now,
+	})
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	return found
 }
 
 func subjects(assertions []domain.MemoryAssertion) []string {

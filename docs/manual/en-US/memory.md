@@ -80,6 +80,51 @@ Avoid memory for:
 - broad opinions such as "this system is unreliable";
 - approvals, permissions or decisions that belong in the Gate.
 
+## Agent-proposed memory
+
+An agent does not write active memory by default. Memory learning is an
+opt-in field on the published agent version, so changing it creates a new
+version and is visible in the publication review.
+
+```yaml
+memory_learning:
+  mode: review
+  ttl_days: 30
+```
+
+V1 is review mode. The agent can call `$fuseone.memory.suggest` with a
+structured assertion: kind, subject, signature and claim. The platform records
+that suggestion with the run labels and evidence, but `memory.find` does not
+return it yet. A person with publish permission in the scope must accept or
+dismiss it from the Memory page.
+
+Suggestion is a write effect. If the run has read untrusted data, the Gate
+treats the suggestion like any other tainted write and asks a person before it
+is recorded.
+
+V2 is auto-confirm mode. The same structured suggestion must be observed in
+the configured number of distinct runs before it becomes active memory. The
+count is derived by the platform. Repeating the same suggestion inside one run
+does not make the memory stronger. The model does not send confidence and does
+not choose the company, area or agent namespace.
+
+```yaml
+memory_learning:
+  mode: auto_confirm
+  min_observations: 3
+  ttl_days: 30
+```
+
+Both modes keep suggestions separate from active memory until the promotion
+rule is satisfied. A pending suggestion is review material, not remembered
+fact. If the source evidence is erased before review, the suggestion is marked
+source-erased and cannot be promoted.
+
+Use review mode first for agents that write, approve, disable accounts or
+touch production systems. Auto-confirm fits low-risk diagnostic memories where
+repetition is itself useful evidence and a wrong hint still has to pass the
+normal Gate path before any effect.
+
 ## Evidence can expire or be erased
 
 Memory follows retention and erasure. If the evidence behind an assertion is

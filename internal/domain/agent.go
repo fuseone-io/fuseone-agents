@@ -33,9 +33,10 @@ type AgentSummary struct {
 	Model    string
 	Effort   string
 
-	Tools    []ToolID
-	Budget   Budget
-	Triggers []AgentTrigger
+	Tools          []ToolID
+	Budget         Budget
+	MemoryLearning MemoryLearningPolicy
+	Triggers       []AgentTrigger
 
 	PublishedBy UserID
 	PublishedAt time.Time

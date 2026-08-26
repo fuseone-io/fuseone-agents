@@ -30,8 +30,9 @@ func agentFrom(a domain.AgentSummary) openapi.Agent {
 			ToolCalls: ptr(a.Budget.ToolCalls), Steps: ptr(a.Budget.Steps),
 			WallClockMs: ptr(a.Budget.WallClockMS),
 		},
-		PublishedAt: a.PublishedAt,
-		Latest:      a.Latest,
+		MemoryLearning: memoryLearningFrom(a.MemoryLearning),
+		PublishedAt:    a.PublishedAt,
+		Latest:         a.Latest,
 	}
 	agent.Stage = ptr(openapi.Stage(domain.StageOf(string(a.Stage))))
 	agent.Paused = ptr(!a.Started)
@@ -62,6 +63,18 @@ func agentFrom(a domain.AgentSummary) openapi.Agent {
 		agent.Triggers = &triggers
 	}
 	return agent
+}
+
+func memoryLearningFrom(p domain.MemoryLearningPolicy) *openapi.MemoryLearningPolicy {
+	normalized := p.Normalize()
+	if !normalized.Enabled() {
+		return nil
+	}
+	mode := openapi.MemoryLearningMode(normalized.Mode)
+	return &openapi.MemoryLearningPolicy{
+		Mode: &mode, MinObservations: ptr(normalized.MinObservations),
+		TtlDays: ptr(normalized.TTLDays),
+	}
 }
 
 func activityFrom(a domain.AgentActivity) openapi.AgentActivity {

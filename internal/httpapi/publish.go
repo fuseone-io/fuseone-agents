@@ -288,6 +288,7 @@ func renderAndParse(id string, in openapi.AgentDefinition) ([]byte, spec.Spec, e
 			WallClockMS: valueOr(in.Budget.WallClockMs),
 		}
 	}
+	draft.MemoryLearning = memoryLearningOf(in.MemoryLearning)
 	for _, t := range valueOr(in.Triggers) {
 		draft.Triggers = append(draft.Triggers, spec.Trigger{
 			Type: string(t.Type), Schedule: valueOr(t.Schedule),
@@ -307,6 +308,17 @@ func renderAndParse(id string, in openapi.AgentDefinition) ([]byte, spec.Spec, e
 		return nil, spec.Spec{}, err
 	}
 	return rendered, parsed, nil
+}
+
+func memoryLearningOf(in *openapi.MemoryLearningPolicy) domain.MemoryLearningPolicy {
+	if in == nil || in.Mode == nil {
+		return domain.MemoryLearningPolicy{Mode: domain.MemoryLearningOff}
+	}
+	return domain.MemoryLearningPolicy{
+		Mode:            domain.MemoryLearningMode(*in.Mode),
+		MinObservations: valueOr(in.MinObservations),
+		TTLDays:         valueOr(in.TtlDays),
+	}.Normalize()
 }
 
 func emitsOf(in *[]openapi.AgentEvent) spec.Emits {

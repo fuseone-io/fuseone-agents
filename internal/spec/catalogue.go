@@ -34,7 +34,7 @@ func (r *Registry) List(ctx context.Context, scope domain.Scope, allVersions boo
 		select distinct on (s.agent_id)
 		       s.agent_id, s.version_id, s.company_id, s.area_id, s.name,
 		       s.provider, s.model, s.effort, s.tools, s.budget, s.triggers,
-		       s.published_by, s.published_at, true
+		       s.memory_learning, s.published_by, s.published_at, true
 		from agent_specs s
 		left join agent_state st on st.agent_id = s.agent_id %s
 		order by s.agent_id, (st.current_version = s.version_id) desc nulls last,
@@ -43,7 +43,7 @@ func (r *Registry) List(ctx context.Context, scope domain.Scope, allVersions boo
 		selection = `
 			select s.agent_id, s.version_id, s.company_id, s.area_id, s.name,
 			       s.provider, s.model, s.effort, s.tools, s.budget, s.triggers,
-			       s.published_by, s.published_at,
+			       s.memory_learning, s.published_by, s.published_at,
 			       coalesce(st.current_version = s.version_id,
 			                s.published_at = max(s.published_at) over (partition by s.agent_id))
 			from agent_specs s
@@ -114,7 +114,7 @@ func (r *Registry) Versions(ctx context.Context, agent domain.AgentID) ([]domain
 	rows, err := r.pool.Query(ctx, `
 		select s.agent_id, s.version_id, s.company_id, s.area_id, s.name,
 		       s.provider, s.model, s.effort, s.tools, s.budget, s.triggers,
-		       s.published_by, s.published_at, false
+		       s.memory_learning, s.published_by, s.published_at, false
 		from agent_specs s
 		left join agent_state st on st.agent_id = s.agent_id
 		where s.agent_id = $1
@@ -199,10 +199,11 @@ func scanAgent(row interface{ Scan(...any) error }) (domain.AgentSummary, error)
 		by               string
 		tools            []string
 		budget, triggers []byte
+		learning         []byte
 	)
 	if err := row.Scan(&agent, &version, &company, &area, &s.Name,
 		&s.Provider, &s.Model, &s.Effort, &tools, &budget, &triggers,
-		&by, &s.PublishedAt, &s.Latest); err != nil {
+		&learning, &by, &s.PublishedAt, &s.Latest); err != nil {
 		return domain.AgentSummary{}, err
 	}
 
@@ -219,6 +220,10 @@ func scanAgent(row interface{ Scan(...any) error }) (domain.AgentSummary, error)
 	if err := json.Unmarshal(triggers, &s.Triggers); err != nil {
 		return domain.AgentSummary{}, fmt.Errorf("spec: decode triggers for %s: %w", agent, err)
 	}
+	if err := json.Unmarshal(learning, &s.MemoryLearning); err != nil {
+		return domain.AgentSummary{}, fmt.Errorf("spec: decode memory learning for %s: %w", agent, err)
+	}
+	s.MemoryLearning = s.MemoryLearning.Normalize()
 	return s, nil
 }
 

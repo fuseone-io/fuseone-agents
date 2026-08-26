@@ -4,15 +4,30 @@ import { useScopeFilter } from "@/features/scope/use-scope-filter";
 import type {
   MemoryAssertion,
   MemoryAssertionInput,
+  MemorySuggestion,
+  MemorySuggestionStatus,
   MemoryStatus,
 } from "@/lib/api/client";
 
-export type { MemoryAssertion, MemoryAssertionInput, MemoryStatus };
+export type {
+  MemoryAssertion,
+  MemoryAssertionInput,
+  MemorySuggestion,
+  MemorySuggestionStatus,
+  MemoryStatus,
+};
 
 export type MemoryStatusFilter = MemoryStatus | "all";
+export type MemorySuggestionStatusFilter = MemorySuggestionStatus | "all";
 
 export interface MemoryFilters {
   status: MemoryStatusFilter;
+  search: string;
+  agentId: string;
+}
+
+export interface MemorySuggestionFilters {
+  status: MemorySuggestionStatusFilter;
   search: string;
   agentId: string;
 }
@@ -23,6 +38,15 @@ export const memoryKeys = {
     [
       ...memoryKeys.all,
       "list",
+      scope,
+      filters.status,
+      filters.search.trim(),
+      filters.agentId.trim(),
+    ] as const,
+  suggestions: (scope: string, filters: MemorySuggestionFilters) =>
+    [
+      ...memoryKeys.all,
+      "suggestions",
       scope,
       filters.status,
       filters.search.trim(),
@@ -43,11 +67,72 @@ export function useMemoryAssertions(filters: MemoryFilters) {
   });
 }
 
+export function useMemorySuggestions(filters: MemorySuggestionFilters) {
+  const scope = useScopeFilter();
+  return useQuery({
+    queryKey: memoryKeys.suggestions(scope.key, filters),
+    queryFn: async () =>
+      unwrap(
+        await api.GET("/admin/memory/suggestions", {
+          params: { query: { ...scope.params, ...suggestionQueryOf(filters), limit: 100 } },
+        }),
+      ),
+  });
+}
+
 export function useCreateMemoryAssertion() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (body: MemoryAssertionInput) =>
       unwrap(await api.POST("/admin/memory/assertions", { body })),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({ queryKey: memoryKeys.all }),
+  });
+}
+
+export function useAcceptMemorySuggestion() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      id: string;
+      company: string;
+      area: string;
+      reason: string;
+    }) =>
+      unwrap(
+        await api.POST("/admin/memory/suggestions/{suggestionId}/accept", {
+          params: { path: { suggestionId: input.id } },
+          body: {
+            company: input.company,
+            area: input.area,
+            reason: input.reason,
+          },
+        }),
+      ),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({ queryKey: memoryKeys.all }),
+  });
+}
+
+export function useDismissMemorySuggestion() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      id: string;
+      company: string;
+      area: string;
+      reason: string;
+    }) =>
+      unwrap(
+        await api.POST("/admin/memory/suggestions/{suggestionId}/dismiss", {
+          params: { path: { suggestionId: input.id } },
+          body: {
+            company: input.company,
+            area: input.area,
+            reason: input.reason,
+          },
+        }),
+      ),
     onSuccess: () =>
       void queryClient.invalidateQueries({ queryKey: memoryKeys.all }),
   });
@@ -78,6 +163,14 @@ export function useDisableMemoryAssertion() {
 }
 
 function queryOf(filters: MemoryFilters) {
+  return {
+    status: filters.status === "all" ? undefined : filters.status,
+    q: clean(filters.search),
+    agentId: clean(filters.agentId),
+  };
+}
+
+function suggestionQueryOf(filters: MemorySuggestionFilters) {
   return {
     status: filters.status === "all" ? undefined : filters.status,
     q: clean(filters.search),

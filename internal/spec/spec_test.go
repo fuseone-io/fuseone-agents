@@ -345,6 +345,34 @@ func TestRender_companySurvivesTheRoundTrip(t *testing.T) {
 	}
 }
 
+func TestRender_memoryLearningSurvivesTheRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	source := spec.Spec{
+		ID: "triagem", Name: "Triagem", Company: "acme", Area: "platform",
+		Provider: "openai", Model: "gpt-4o-mini",
+		Tools: []domain.ToolID{"crm.lookup"}, Budget: domain.Budget{Micros: 100_000},
+		Instructions: "Triar o ticket.",
+		MemoryLearning: domain.MemoryLearningPolicy{
+			Mode: domain.MemoryLearningAutoConfirm, MinObservations: 4, TTLDays: 14,
+		},
+	}
+
+	rendered, err := spec.Render(source)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	again, err := spec.Parse("triagem.agent.md", rendered)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if again.MemoryLearning.Mode != domain.MemoryLearningAutoConfirm ||
+		again.MemoryLearning.MinObservations != 4 ||
+		again.MemoryLearning.TTLDays != 14 {
+		t.Fatalf("memory learning = %+v after round trip, want auto-confirm policy", again.MemoryLearning)
+	}
+}
+
 func TestRender_emitContext_survivesTheRoundTrip(t *testing.T) {
 	t.Parallel()
 

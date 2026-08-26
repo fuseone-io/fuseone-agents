@@ -3585,6 +3585,96 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /admin/memory/suggestions:
+    get:
+      tags: [admin]
+      operationId: listMemorySuggestions
+      summary: List governed memory suggestions
+      description: >
+        Structured assertions proposed by opted-in agents. They are not served
+        by the memory tool until a person accepts them, or until the agent's
+        versioned learning policy auto-confirms a repeated identical
+        suggestion. The response contains counters and evidence references
+        only; source content remains in the content store under retention and
+        erasure.
+      parameters:
+        - $ref: '#/components/parameters/CompanyScope'
+        - $ref: '#/components/parameters/Area'
+        - name: agentId
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/MemorySuggestionStatus' }
+        - name: q
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Memory suggestions visible to the caller.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MemorySuggestionPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/memory/suggestions/{suggestionId}/accept:
+    post:
+      tags: [admin]
+      operationId: acceptMemorySuggestion
+      summary: Promote a memory suggestion to active memory
+      description: >
+        Accepting a suggestion is a human governance act. The server derives
+        labels from the suggestion itself and records an append-only memory
+        event before projecting the active assertion.
+      parameters:
+        - name: suggestionId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MemorySuggestionReviewInput' }
+      responses:
+        '200':
+          description: The accepted assertion now projected for recall.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MemoryAssertion' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /admin/memory/suggestions/{suggestionId}/dismiss:
+    post:
+      tags: [admin]
+      operationId: dismissMemorySuggestion
+      summary: Dismiss a memory suggestion
+      description: >
+        Dismissing keeps the suggestion out of active memory and records who
+        reviewed it. The underlying evidence stays governed by the content
+        store's own retention and erasure rules.
+      parameters:
+        - name: suggestionId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MemorySuggestionReviewInput' }
+      responses:
+        '204': { description: The suggestion is dismissed. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /admin/events:
     get:
       tags: [admin]
@@ -3948,6 +4038,35 @@ components:
       type: string
       enum: [active, disabled, expired, source_erased]
 
+    MemorySuggestionStatus:
+      type: string
+      enum: [pending, accepted, dismissed, auto_confirmed, source_erased]
+
+    MemoryLearningMode:
+      type: string
+      enum: [off, review, auto_confirm]
+
+    MemoryLearningPolicy:
+      type: object
+      description: >
+        Versioned opt-in for agent-proposed memory. Review mode records
+        suggestions for a person. Auto-confirm mode only promotes an assertion
+        after the same structured suggestion has been observed repeatedly.
+      properties:
+        mode:
+          $ref: '#/components/schemas/MemoryLearningMode'
+        minObservations:
+          type: integer
+          format: int64
+          minimum: 2
+          maximum: 8
+          description: Required identical observations before auto-confirming.
+        ttlDays:
+          type: integer
+          minimum: 1
+          maximum: 365
+          description: How long an auto-confirmed assertion remains active.
+
     MemoryEvidence:
       type: object
       required: [runId, artifact, digest]
@@ -4044,6 +4163,62 @@ components:
           type: string
           description: Why a person disabled this assertion.
 
+    MemorySuggestion:
+      type: object
+      description: >
+        A structured assertion proposed by an opted-in agent. Pending
+        suggestions are review material, not remembered facts; the memory tool
+        only reads active MemoryAssertion rows.
+      required:
+        - id
+        - assertionId
+        - scope
+        - agentId
+        - kind
+        - subject
+        - signature
+        - claim
+        - evidence
+        - observations
+        - labels
+        - status
+        - createdBy
+        - createdAt
+        - updatedBy
+        - updatedAt
+      properties:
+        id: { type: string }
+        assertionId: { type: string }
+        scope: { $ref: '#/components/schemas/Scope' }
+        agentId: { type: string }
+        kind: { type: string }
+        subject: { type: string }
+        signature: { type: string }
+        claim: { type: string }
+        evidence:
+          type: array
+          items: { $ref: '#/components/schemas/MemoryEvidence' }
+        observations: { type: integer, format: int64 }
+        labels:
+          type: array
+          items: { type: string }
+        status: { $ref: '#/components/schemas/MemorySuggestionStatus' }
+        expiresAt: { type: string, format: date-time, nullable: true }
+        createdBy: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedBy: { type: string }
+        updatedAt: { type: string, format: date-time }
+
+    MemorySuggestionReviewInput:
+      type: object
+      required: [company, area, reason]
+      properties:
+        company: { type: string }
+        area: { type: string }
+        reason:
+          type: string
+          description: Why a person accepted or dismissed this suggestion.
+
     MemoryAssertionPage:
       type: object
       required: [items]
@@ -4051,6 +4226,14 @@ components:
         items:
           type: array
           items: { $ref: '#/components/schemas/MemoryAssertion' }
+
+    MemorySuggestionPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/MemorySuggestion' }
 
     Cost:
       type: object
@@ -6010,6 +6193,11 @@ components:
         triggers:
           type: array
           items: { $ref: '#/components/schemas/AgentTrigger' }
+        memoryLearning:
+          allOf: [{ $ref: '#/components/schemas/MemoryLearningPolicy' }]
+          description: >
+            Versioned policy that decides whether the platform-owned memory
+            suggestion tool is available to this agent. Absent means off.
         publishedBy: { type: string }
         publishedAt: { type: string, format: date-time }
         latest:
@@ -6064,6 +6252,12 @@ components:
         triggers:
           type: array
           items: { $ref: '#/components/schemas/AgentTrigger' }
+        memoryLearning:
+          allOf: [{ $ref: '#/components/schemas/MemoryLearningPolicy' }]
+          description: >
+            Optional. Off by default. When enabled, the agent may propose
+            structured memory through the platform-owned suggestion tool; the
+            platform still decides when a suggestion becomes active memory.
         emits:
           type: array
           description: |

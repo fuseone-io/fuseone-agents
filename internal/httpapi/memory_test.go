@@ -77,6 +77,60 @@ func TestCreateMemoryAssertion_withoutPublishPermissionDoesNotReadEvidence(t *te
 	}
 }
 
+func TestListMemorySuggestions_narrowsToReadableScopes(t *testing.T) {
+	t.Parallel()
+	memory := memstore.NewMemory()
+	suggest(t, memory, memorySuggestionFixture("cx", "cx suggestion", nil))
+	suggest(t, memory, memorySuggestionFixture("marketing", "marketing suggestion", nil))
+
+	resp, err := NewServer(ledger.NewMemory(), "test").WithMemory(memory).
+		ListMemorySuggestions(inArea("cx", domain.RoleAuthor), openapi.ListMemorySuggestionsRequestObject{})
+	if err != nil {
+		t.Fatalf("ListMemorySuggestions: %v", err)
+	}
+	page := resp.(openapi.ListMemorySuggestions200JSONResponse)
+	if len(page.Items) != 1 || page.Items[0].Subject != "cx suggestion" {
+		t.Fatalf("items = %+v, want only cx suggestions", page.Items)
+	}
+}
+
+func TestAcceptMemorySuggestion_promotesOnlyInsideTheReviewScope(t *testing.T) {
+	t.Parallel()
+	memory := memstore.NewMemory()
+	created := suggest(t, memory, memorySuggestionFixture("cx", "cx suggestion", func(s *domain.MemorySuggestion) {
+		s.Labels = domain.NewLabels(domain.LabelUntrusted)
+	}))
+
+	resp, err := NewServer(ledger.NewMemory(), "test").WithMemory(memory).WithClock(fixedAt{t: time.Unix(0, 0)}).
+		AcceptMemorySuggestion(inArea("marketing", domain.RoleAuthor), openapi.AcceptMemorySuggestionRequestObject{
+			SuggestionId: created.ID,
+			Body: &openapi.MemorySuggestionReviewInput{
+				Company: "acme", Area: "marketing", Reason: "reviewed",
+			},
+		})
+	if err != nil {
+		t.Fatalf("AcceptMemorySuggestion outside scope: %v", err)
+	}
+	if _, absent := resp.(openapi.AcceptMemorySuggestion404ApplicationProblemPlusJSONResponse); !absent {
+		t.Fatalf("response = %T, want 404 for suggestion outside review scope", resp)
+	}
+
+	resp, err = NewServer(ledger.NewMemory(), "test").WithMemory(memory).WithClock(fixedAt{t: time.Unix(0, 0)}).
+		AcceptMemorySuggestion(inArea("cx", domain.RoleAuthor), openapi.AcceptMemorySuggestionRequestObject{
+			SuggestionId: created.ID,
+			Body: &openapi.MemorySuggestionReviewInput{
+				Company: "acme", Area: "cx", Reason: "operator confirmed",
+			},
+		})
+	if err != nil {
+		t.Fatalf("AcceptMemorySuggestion: %v", err)
+	}
+	assertion := resp.(openapi.AcceptMemorySuggestion200JSONResponse)
+	if assertion.Subject != "cx suggestion" || !hasAll(assertion.Labels, domain.LabelUntrusted) {
+		t.Fatalf("assertion = %+v, want accepted suggestion labels preserved", assertion)
+	}
+}
+
 type readPanicker struct{ *ledger.Memory }
 
 func (readPanicker) Read(context.Context, domain.RunID, int64) ([]domain.Step, error) {
@@ -88,6 +142,17 @@ func remember(t *testing.T, memory *memstore.Memory, a domain.MemoryAssertion) {
 	if _, err := memory.Assert(context.Background(), a, "usr_ana", "reviewed", time.Unix(0, 0)); err != nil {
 		t.Fatalf("Assert: %v", err)
 	}
+}
+
+func suggest(t *testing.T, memory *memstore.Memory, s domain.MemorySuggestion) domain.MemorySuggestion {
+	t.Helper()
+	out, err := memory.Suggest(context.Background(), s, domain.MemoryLearningPolicy{
+		Mode: domain.MemoryLearningReview,
+	}, "agent:triage", time.Unix(0, 0))
+	if err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+	return out.Suggestion
 }
 
 func memoryAssertionFixture(area, subject string, edit func(*domain.MemoryAssertion)) domain.MemoryAssertion {
@@ -104,6 +169,22 @@ func memoryAssertionFixture(area, subject string, edit func(*domain.MemoryAssert
 		edit(&a)
 	}
 	return a
+}
+
+func memorySuggestionFixture(area, subject string, edit func(*domain.MemorySuggestion)) domain.MemorySuggestion {
+	s := domain.MemorySuggestion{
+		Scope: domain.Scope{Company: "acme", Area: domain.AreaID(area)}, AgentID: "triage",
+		Kind: "incident", Subject: subject, Signature: subject + ".signature",
+		Claim: "suggested operator-reviewed behaviour",
+		Evidence: []domain.MemoryEvidence{{
+			RunID: "run-evidence", Artifact: domain.ArtifactMemorySuggestion, Digest: "sha256:suggest",
+		}},
+		Labels: domain.ScopeLabels(domain.Scope{Company: "acme", Area: domain.AreaID(area)}),
+	}
+	if edit != nil {
+		edit(&s)
+	}
+	return s
 }
 
 func seedFinishedEvidence(

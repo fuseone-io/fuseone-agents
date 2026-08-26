@@ -27,6 +27,34 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Upgrade notes
+
+- **This release adds two migrations, neither on `run_steps`.** 0063 adds the
+  versioned memory-learning policy to published agent specs. 0064 creates the
+  governed memory suggestion queue and extends the memory event log actions.
+
+- **Existing agents do not start learning automatically.** Published versions
+  default to memory learning off. An agent can propose memory only after a new
+  version opts into review or auto-confirm mode.
+
+### Added
+
+- **Agents can propose governed memory without writing active memory directly.**
+  Review mode records structured suggestions for a person. Auto-confirm mode
+  promotes only the same suggestion observed across the configured number of
+  distinct runs. The model never chooses company, area, agent namespace or
+  confidence. The suggestion tool is still a write effect: tainted runs need
+  Gate approval before they can record one.
+
+- **The Memory page now has a suggestion review queue.** Operators can accept
+  or dismiss pending suggestions with a reason. Suggestions carry run labels
+  and ledger evidence, remain separate from active memory until promoted, and
+  become source-erased if their evidence is erased before review.
+
+- **The agent editor exposes memory learning as an explicit governance
+  setting.** The policy is versioned with the agent definition and appears in
+  the publish diff when it changes.
+
 ## [0.37.0] — 2026-08-26
 
 ### Upgrade notes

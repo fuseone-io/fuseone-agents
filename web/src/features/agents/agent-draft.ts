@@ -79,6 +79,7 @@ export function toDefinition(
     tools: agent.tools,
     budget: agent.budget,
     triggers: agent.triggers ?? [],
+    memoryLearning: agent.memoryLearning,
     // Everything the version holds, and not only what the form shows a field
     // for. What is not carried here is deleted the next time somebody
     // publishes — silently, on an edit they made for another reason.
@@ -136,6 +137,7 @@ export function changesBetween(
   compare("agents.fieldTools", before.tools, after.tools);
   compare("agents.fieldBudget", before.budget, after.budget);
   compare("agents.fieldTriggers", before.triggers, after.triggers);
+  compare("agents.fieldMemoryLearning", before.memoryLearning, after.memoryLearning);
   // The steps are a change worth naming: they are what the Gate is meant to
   // obey, and "0 changes" on a screen where somebody just redrew the process
   // is the summary telling them their work did not land.
