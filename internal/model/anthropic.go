@@ -124,6 +124,14 @@ func (a *Anthropic) Plan(ctx context.Context, in engine.PlanInput) (engine.Propo
 		System:    a.system(in, offered),
 		Messages:  messagesFrom(in.Transcript, offered),
 		Tools:     tools,
+		// The engine can execute at most one proposal per turn, and finishing
+		// is a platform tool. Requiring a single tool use prevents the model
+		// from returning free text that the ledger cannot record as an action.
+		ToolChoice: anthropic.ToolChoiceUnionParam{
+			OfAny: &anthropic.ToolChoiceAnyParam{
+				DisableParallelToolUse: anthropic.Bool(true),
+			},
+		},
 		// Adaptive is the only supported mode on current models; a fixed
 		// thinking budget is rejected.
 		Thinking: anthropic.ThinkingConfigParamUnion{

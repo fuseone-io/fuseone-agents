@@ -15,18 +15,19 @@ deve acontecer.
 O texto deve ser operacional: uma pessoa que executa o trabalho hoje precisa
 reconhecer o processo ali.
 
-## Uma resposta final termina a execução
+## A ação de finish termina a execução
 
-Quando o modelo devolve texto sem chamar ferramenta, a execução termina. Então
-evite frases como "vou consultar", "vou continuar" ou "farei a análise". Se a
-próxima ação exige uma ferramenta, o agente deve chamar a ferramenta naquele
-turno.
+Quando o modelo devolve texto sem chamar uma ferramenta ou a ação de finish, a
+execução estaciona para inspeção. Então evite frases como "vou consultar", "vou
+continuar" ou "farei a análise". Se a próxima ação exige uma ferramenta, o
+agente deve chamar a ferramenta naquele turno. Se o trabalho terminou, ele deve
+chamar a ação de finish.
 
 Escreva isso no bloco:
 
 ```text
 Não anuncie trabalho futuro. Se precisar consultar logs, métricas ou outro
-sistema, chame a ferramenta agora. Só escreva a resposta final quando a análise
+sistema, chame a ferramenta agora. Chame a ação de finish só quando a análise
 estiver concluída ou quando souber explicar por que não pode continuar.
 ```
 

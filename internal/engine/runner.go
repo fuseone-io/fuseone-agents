@@ -69,6 +69,11 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 	if state.Approved != nil {
 		return r.actApproved(ctx, state, start)
 	}
+	if next, st, ok, err := r.initialMemoryLookup(ctx, state, start); ok || err != nil {
+		return st, err
+	} else {
+		state = next
+	}
 
 	proposal, err := r.plan(ctx, state, start)
 	if err != nil {

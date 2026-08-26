@@ -184,7 +184,7 @@ func (l *Layer) find(ctx context.Context, call engine.Call) (engine.ToolResult, 
 	if err != nil {
 		return failed(CodeMemoryUnavailable), nil
 	}
-	body, labels, stats, err := memoryResult(found)
+	body, labels, stats, err := memoryResult(found, parseSearchTerms(args.Search))
 	returned, omitted = stats.Returned, stats.Omitted
 	if err != nil {
 		return engine.ToolResult{}, err
@@ -273,10 +273,14 @@ type resultAssertion struct {
 }
 
 type memoryResultPayload struct {
-	Assertions    []resultAssertion `json:"assertions"`
-	Omitted       int               `json:"omitted,omitempty"`
-	OmittedReason string            `json:"omitted_reason,omitempty"`
-	ByteBudget    int               `json:"byte_budget,omitempty"`
+	Assertions               []resultAssertion `json:"assertions"`
+	Omitted                  int               `json:"omitted,omitempty"`
+	OmittedReason            string            `json:"omitted_reason,omitempty"`
+	ByteBudget               int               `json:"byte_budget,omitempty"`
+	SearchTermsUsed          []string          `json:"search_terms_used,omitempty"`
+	SearchTermsOmitted       int               `json:"search_terms_omitted,omitempty"`
+	SearchTermsOmittedReason string            `json:"search_terms_omitted_reason,omitempty"`
+	SearchTermBudget         int               `json:"search_term_budget,omitempty"`
 }
 
 type memoryResultStats struct {
@@ -294,28 +298,28 @@ type memorySuggestPayload struct {
 
 const maxMemoryResultBytes = 16 * 1024
 
-func memoryResult(found []domain.MemoryAssertion) ([]byte, domain.Labels, memoryResultStats, error) {
+func memoryResult(
+	found []domain.MemoryAssertion, search parsedSearchTerms,
+) ([]byte, domain.Labels, memoryResultStats, error) {
 	assertions := make([]resultAssertion, 0, len(found))
 	var labels domain.Labels
 	for _, a := range found {
-		labels = labels.Union(a.Labels)
-	}
-	for _, a := range found {
 		next := append(assertions, resultAssertionFrom(a))
-		body, err := marshalMemoryResult(next, len(found))
+		body, err := marshalMemoryResult(next, len(found), search)
 		if err != nil {
 			return nil, domain.Labels{}, memoryResultStats{}, err
 		}
 		if len(body) > maxMemoryResultBytes {
 			if len(assertions) == 0 {
-				body, err := marshalMemoryResult(nil, len(found))
+				body, err := marshalMemoryResult(nil, len(found), search)
 				return body, labels, memoryResultStats{Omitted: len(found)}, err
 			}
 			break
 		}
 		assertions = next
+		labels = labels.Union(a.Labels)
 	}
-	body, err := marshalMemoryResult(assertions, len(found))
+	body, err := marshalMemoryResult(assertions, len(found), search)
 	stats := memoryResultStats{Returned: len(assertions), Omitted: len(found) - len(assertions)}
 	return body, labels, stats, err
 }
@@ -336,7 +340,9 @@ func resultAssertionFrom(a domain.MemoryAssertion) resultAssertion {
 	}
 }
 
-func marshalMemoryResult(assertions []resultAssertion, total int) ([]byte, error) {
+func marshalMemoryResult(
+	assertions []resultAssertion, total int, search parsedSearchTerms,
+) ([]byte, error) {
 	if assertions == nil {
 		assertions = []resultAssertion{}
 	}
@@ -345,6 +351,12 @@ func marshalMemoryResult(assertions []resultAssertion, total int) ([]byte, error
 		out.Omitted = omitted
 		out.OmittedReason = "result_byte_budget"
 		out.ByteBudget = maxMemoryResultBytes
+	}
+	if search.omitted > 0 {
+		out.SearchTermsUsed = slices.Clone(search.terms)
+		out.SearchTermsOmitted = search.omitted
+		out.SearchTermsOmittedReason = "search_term_budget"
+		out.SearchTermBudget = maxSearchTerms
 	}
 	return json.Marshal(out)
 }
@@ -373,7 +385,7 @@ func memoryFindSchema() map[string]any {
 		"kind":      text("Optional assertion kind to match exactly."),
 		"subject":   text("Optional subject to match exactly."),
 		"signature": text("Optional signature to match exactly."),
-		"search":    text("Optional text to search in subject, signature and claim."),
+		"search":    text("Optional space-separated terms to search across subject, signature and claim. Only a small normalized term budget is used; the result reports when extra terms were omitted."),
 		"limit": map[string]any{
 			"type": "integer", "minimum": 1, "maximum": domain.MaxMemoryFindLimit,
 			"description": "Maximum assertions to return.",

@@ -107,6 +107,11 @@ type State struct {
 	// the proposal moves it forward, so nothing has to judge whether a stage
 	// is finished.
 	Called []domain.ToolID
+	// Planned records that the model has already had its first turn. Platform
+	// preflight helpers, such as the initial memory lookup, only run before
+	// that point; once a plan exists they must not reappear just because the
+	// helper itself was skipped.
+	Planned bool
 
 	PendingApproval *PendingApproval
 	// Approved is a call a person cleared and the loop has not made yet.

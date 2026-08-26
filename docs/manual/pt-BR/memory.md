@@ -101,9 +101,15 @@ não a devolve. Uma pessoa com permissão de publicação no escopo precisa acei
 ou descartar a sugestão pela página de Memória.
 
 Quando aprendizado de memória está ligado, a plataforma também oferece
-`$fuseone.memory.find`. O agente deve usá-la antes de sugerir memória para um
-caso que talvez já esteja lembrado. O caminho de sugestão também consulta a
-memória ativa pelo mesmo tipo, assunto e assinatura, então um fato lembrado não
+`$fuseone.memory.find`. No começo de uma execução com entrada humana, o FuseOne
+faz uma busca de memória registrada antes da primeira chamada ao modelo, usando
+termos curtos dessa entrada. A busca continua sendo uma chamada de ferramenta:
+passa pelo Gate, aparece na trilha, e quaisquer labels da memória retornada
+viajam para a execução.
+
+O agente pode chamar `memory.find` de novo depois com tipo, assunto ou
+assinatura mais estreitos. O caminho de sugestão também consulta a memória
+ativa pelo mesmo tipo, assunto e assinatura, então um fato lembrado não
 continua criando itens de revisão só porque o modelo propôs outra redação.
 
 Sugestões em modo de revisão não pedem uma segunda aprovação antes de entrar
@@ -167,9 +173,23 @@ asserção mudou de estado.
 
 ## Busca e tamanho da resposta
 
-A busca de memória em runtime é indexada para buscas por trecho em assunto,
-assinatura e afirmação. Buscas amplas ainda retornam apenas um conjunto
-limitado.
+A busca de memória em runtime divide o texto livre em um conjunto pequeno de
+termos e ranqueia correspondências entre assunto, assinatura e afirmação.
+Identificadores fortes como `not_in_channel` ou `superset.alert.delivery` pesam
+mais; palavras comuns ainda precisam concordar com a asserção o bastante para
+ela ser retornada. Uma busca como `Slack not_in_channel` pode encontrar uma
+asserção cujo assunto nomeia Slack e cuja afirmação nomeia o código de erro.
+Buscas amplas ainda retornam apenas um conjunto limitado.
+
+A busca por texto livre também tem orçamento de termos. Identificadores fortes
+entram primeiro; depois entram termos comuns que não são ruído, até seis termos
+distintos normalizados. Palavras comuns em português e inglês são ignoradas,
+mas identificadores curtos como `s3`, `db` ou `qa` continuam buscáveis quando
+aparecem como termo próprio. Quando uma chamada de runtime envia mais que isso, a
+resposta nomeia os termos usados, quantos termos foram omitidos e o motivo
+`search_term_budget`. Assim uma busca limitada é diferente de "não existe
+memória"; o agente pode tentar de novo com identificadores mais fortes, como
+código de erro, nome de sistema ou assinatura.
 
 A ferramenta de memória também tem um orçamento de bytes para a resposta.
 Quando as asserções encontradas não cabem, a resposta diz quantas foram

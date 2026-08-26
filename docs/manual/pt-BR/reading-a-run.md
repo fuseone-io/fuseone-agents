@@ -25,13 +25,19 @@ Isso significa que a trilha não é uma versão simplificada do que aconteceu. *
 
 Argumentos e resultados não ficam no passo — o passo guarda **referência e digest**, e o conteúdo vive onde retenção e apagamento alcançam. Por isso abrir um passo é um ato deliberado, e por isso um conteúdo apagado aparece como *apagado* e não como vazio.
 
+Quando aprendizado de memória está ligado, uma execução com entrada humana pode
+começar com uma chamada de plataforma a `$fuseone.memory.find` antes do primeiro
+passo **O modelo propôs**. Isso não é uma proposta de modelo faltando. É a busca
+inicial de memória registrada como chamada normal de ferramenta, para que os
+labels de proveniência continuem viajando pela execução.
+
 ## Por que ela terminou
 
 É a pergunta mais comum, e a trilha responde de formas diferentes:
 
 **Terminou normalmente** — o agente respondeu. A resposta final fica no armazenamento de conteúdo, e a trilha diz isso.
 
-**O modelo não propôs outra ação** — ele devolveu texto em vez de chamar uma ferramenta, e texto encerra. Se o texto dizia "vou prosseguir", o agente pretendia continuar e não continuou: é caso de ajustar a instrução para chamar a ferramenta agora.
+**O modelo não propôs outra ação** — ele devolveu texto em vez de chamar uma ferramenta ou a ação de finish, então a execução estacionou para inspeção. Se o texto dizia "vou prosseguir", o agente pretendia continuar e não continuou: é caso de ajustar a instrução para chamar a ferramenta agora.
 
 **Parou esperando alguém** — está na fila humana.
 

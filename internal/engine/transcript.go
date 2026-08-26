@@ -86,7 +86,7 @@ func BuildTranscript(ctx context.Context, store ContentStore, steps []domain.Ste
 			// block, so it is also how a scheduled run dies before its first
 			// word.
 			if len(text) > 0 {
-				compacted, note := compactRunInputForTranscript(p.Trigger, text)
+				compacted, note := runInputForTranscript(p.Trigger, text)
 				if note != "" {
 					turns = append(turns, Turn{Kind: TurnNote, Text: note})
 				}
@@ -215,6 +215,66 @@ func compactRunInputForTranscript(trigger string, content []byte) ([]byte, strin
 		return compactRawChannelInput(content), channelInputCompactionNote(content, nil)
 	}
 	return out, channelInputCompactionNote(content, changes)
+}
+
+func runInputForTranscript(trigger string, content []byte) ([]byte, string) {
+	if trigger == "channel" {
+		if projected, ok := channelAskForTranscript(content); ok {
+			if len(projected) > channelInputCompactAfter {
+				return compactRawChannelInput(projected), channelInputCompactionNote(content, nil)
+			}
+			return projected, ""
+		}
+	}
+	return compactRunInputForTranscript(trigger, content)
+}
+
+type channelAskTranscript struct {
+	Subject *struct {
+		Kind string `json:"kind"`
+		Run  string `json:"run"`
+	} `json:"subject,omitempty"`
+	Text   string `json:"text"`
+	Thread *struct {
+		Messages []struct {
+			Source string `json:"source,omitempty"`
+			Text   string `json:"text"`
+		} `json:"messages,omitempty"`
+		Truncated   bool   `json:"truncated,omitempty"`
+		Unavailable string `json:"unavailable,omitempty"`
+	} `json:"thread,omitempty"`
+}
+
+func channelAskForTranscript(content []byte) ([]byte, bool) {
+	var ask channelAskTranscript
+	if err := json.Unmarshal(content, &ask); err != nil || ask.Text == "" {
+		return nil, false
+	}
+	var b strings.Builder
+	b.WriteString(ask.Text)
+	if ask.Subject != nil && ask.Subject.Kind == "run" && ask.Subject.Run != "" {
+		fmt.Fprintf(&b, "\n\nThread subject: run %s.", ask.Subject.Run)
+	}
+	if ask.Thread != nil {
+		if ask.Thread.Unavailable != "" {
+			fmt.Fprintf(&b, "\n\nThread context unavailable: %s", ask.Thread.Unavailable)
+		}
+		if len(ask.Thread.Messages) > 0 {
+			b.WriteString("\n\nEarlier thread messages:")
+			for _, msg := range ask.Thread.Messages {
+				b.WriteString("\n- ")
+				if msg.Source != "" {
+					b.WriteString(msg.Source)
+					b.WriteString(": ")
+				}
+				b.WriteString(msg.Text)
+			}
+		}
+		if ask.Thread.Truncated {
+			b.WriteString("\n\nEarlier thread messages were truncated.")
+		}
+	}
+	return []byte(b.String()), true
 }
 
 func channelInputCompactionNote(content []byte, fields []map[string]any) string {

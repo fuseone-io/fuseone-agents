@@ -25,13 +25,19 @@ Which means the trail is not a simplified version of what happened. **It is what
 
 Arguments and results do not live in the step — the step holds a **reference and a digest**, and the content lives where retention and erasure reach it. That is why opening a step is a deliberate act, and why erased content shows as *erased* rather than as empty.
 
+When memory learning is enabled, a run with human input may begin with a
+platform-owned `$fuseone.memory.find` call before the first **The model
+proposed** step. That is not a missing model proposal. It is the initial memory
+lookup being recorded as a normal tool call so provenance labels still travel
+through the run.
+
 ## Why it ended
 
 The most common question, and the trail answers it in different ways:
 
 **Finished normally** — the agent answered. The closing answer is in the content store, and the trail says so.
 
-**The model did not propose another action** — it returned text instead of calling a tool, and text ends a run. If the text said "I will continue", the agent meant to carry on and did not: that is a case for adjusting the instruction to call the tool now.
+**The model did not propose another action** — it returned text instead of calling a tool or the finish action, so the run parked for inspection. If the text said "I will continue", the agent meant to carry on and did not: that is a case for adjusting the instruction to call the tool now.
 
 **Stopped waiting for somebody** — it is in the human queue.
 

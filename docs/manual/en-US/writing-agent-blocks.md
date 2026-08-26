@@ -14,17 +14,19 @@ what to do, what evidence to collect, when to stop, and what must never happen.
 The text should be operational: the person doing the work today should
 recognise the process in it.
 
-## A final answer ends the run
+## The finish action ends the run
 
-When the model returns text without calling a tool, the run ends. Avoid
-sentences like "I will check", "I will continue" or "I will investigate". If
-the next action needs a tool, the agent must call the tool in that turn.
+When the model returns text without calling a tool or the finish action, the
+run parks for inspection. Avoid sentences like "I will check", "I will
+continue" or "I will investigate". If the next action needs a tool, the agent
+must call the tool in that turn. If the work is done, it must call the finish
+action.
 
 Write that explicitly:
 
 ```text
 Do not announce future work. If you need logs, metrics or another system, call
-the tool now. Write the final answer only when the analysis is complete or when
+the tool now. Call the finish action only when the analysis is complete or when
 you can explain why you cannot continue.
 ```
 

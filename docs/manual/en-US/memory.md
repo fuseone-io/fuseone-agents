@@ -99,10 +99,15 @@ return it yet. A person with publish permission in the scope must accept or
 dismiss it from the Memory page.
 
 When memory learning is enabled, the platform also offers
-`$fuseone.memory.find`. The agent should use it before suggesting memory for a
-case that may already be remembered. The suggestion path also checks active
-memory for the same kind, subject and signature, so a remembered fact does not
-keep creating review items just because the model proposes different wording.
+`$fuseone.memory.find`. At the start of a run with human input, FuseOne performs
+one recorded memory lookup before the first model call, using short terms from
+that input. The lookup is still a tool call: it crosses the Gate, appears in
+the trail, and any labels on returned memory travel into the run.
+
+The agent may call `memory.find` again later with a narrower kind, subject or
+signature. The suggestion path also checks active memory for the same kind,
+subject and signature, so a remembered fact does not keep creating review items
+just because the model proposes different wording.
 
 Review-mode suggestions do not ask for a second approval before entering that
 queue. The review queue is the approval point. The suggestion still carries
@@ -165,8 +170,24 @@ state.
 
 ## Search and response size
 
-Runtime memory search is indexed for substring matches across subject,
-signature and claim. Broad searches still return only a bounded result set.
+Runtime memory search splits free text into a small set of terms and ranks
+matches across subject, signature and claim. Strong identifiers such as
+`not_in_channel` or `superset.alert.delivery` carry more weight; ordinary words
+must still agree with enough of the assertion for it to be returned. A search
+like `Slack not_in_channel` can match an assertion whose subject names Slack and
+whose claim names the error code. Broad searches still return only a bounded
+result set.
+
+The free-text search also has a term budget. Strong identifiers are kept first,
+then ordinary non-filler terms are added up to six distinct normalized terms.
+Common Portuguese and English filler words are ignored, but short identifiers
+such as `s3`, `db` or `qa` are still searchable when they appear as their own
+term.
+When a runtime tool call includes more, the response names the terms used, how
+many terms were omitted and the reason
+`search_term_budget`. That makes a bounded search different from "no memory
+exists"; the agent can retry with stronger identifiers such as an error code,
+system name or signature.
 
 The memory tool also has a response byte budget. When matching assertions do
 not fit, the response says how many were omitted by the budget. The assertions

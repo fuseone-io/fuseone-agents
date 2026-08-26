@@ -199,7 +199,10 @@ func (s *State) applyKind(step domain.Step) error {
 		s.PendingApproval, s.requested, s.Approved = nil, nil, nil
 		s.Phase = PhaseFailed
 
-	case domain.StepPlanned, domain.StepCompensated:
+	case domain.StepPlanned:
+		s.Planned = true
+
+	case domain.StepCompensated:
 		// Recorded for the trail; they carry no state transition of their own.
 
 	default:

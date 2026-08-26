@@ -1599,6 +1599,7 @@
     "scope": "Scope",
     "search": "Search memory",
     "searchPlaceholder": "Search subject, signature or claim",
+    "searchTermBudgetNotice": "Only the first {{count}} search terms are used. Try stronger identifiers if nothing matches.",
     "shared": "shared",
     "signature": "Signature",
     "signatureHint": "Stable key for the condition being remembered.",

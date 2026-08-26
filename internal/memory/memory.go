@@ -35,7 +35,7 @@ func (m *Memory) Find(ctx context.Context, q domain.MemoryQuery) ([]domain.Memor
 			out = append(out, cloneAssertion(a))
 		}
 	}
-	sortAssertions(out)
+	sortFindAssertions(out, q.Search)
 	return first(out, domain.MemoryFindLimit(q.Limit)), nil
 }
 

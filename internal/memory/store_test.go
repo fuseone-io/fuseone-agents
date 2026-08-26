@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -106,11 +107,11 @@ func TestLayer_findNamesAssertionsOmittedByTheResponseBudget(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Invoke: %v", err)
 	}
-	if result.Failed || !result.Labels.Has(domain.LabelUntrusted) {
-		t.Fatalf("result = %+v, want success carrying labels from matched memory", result)
+	if result.Failed {
+		t.Fatalf("result = %+v, want successful memory find", result)
 	}
-	if !result.Labels.Has(domain.LabelPersonal) {
-		t.Fatalf("labels = %v, want labels from omitted memory to keep tainting the run", result.Labels)
+	if result.Labels.Has(domain.LabelUntrusted) || result.Labels.Has(domain.LabelPersonal) {
+		t.Fatalf("labels = %v, want only labels from assertions returned to the model", result.Labels)
 	}
 	body, err := content.Get(ctx, result.ResultRef)
 	if err != nil {
@@ -132,6 +133,117 @@ func TestLayer_findNamesAssertionsOmittedByTheResponseBudget(t *testing.T) {
 		payload.ByteBudget <= 0 {
 		t.Fatalf("payload = %s, want explicit memory budget omission", body)
 	}
+}
+
+func TestLayer_findNamesSearchTermsOmittedByTheTermBudget(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := memory.NewMemory()
+	content := engine.NewMemoryContent()
+	now := time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC)
+	if _, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Subject = "alertas do superset slack entregues"
+		a.Signature = "superset.alert.delivery"
+		a.Claim = "not_in_channel means the app must be invited to the alert channel"
+		a.Confirmed, a.Observations = 3, 3
+	}), "usr_ana", "reviewed", now); err != nil {
+		t.Fatalf("Assert memory: %v", err)
+	}
+
+	for _, tc := range []struct {
+		name        string
+		search      string
+		wantSubject string
+		wantUsed    string
+		wantOmitted int
+	}{
+		{
+			name:        "matching",
+			search:      "alertas do superset entregues no slack com erro not_in_channel hoje",
+			wantSubject: "alertas do superset slack entregues",
+			wantUsed:    "not_in_channel alertas superset entregues slack erro",
+			wantOmitted: 1,
+		},
+		{
+			name:        "empty",
+			search:      "foo bar baz quux quuz corge grault not_in_channel",
+			wantSubject: "",
+			wantUsed:    "not_in_channel foo bar baz quux quuz",
+			wantOmitted: 2,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := memory.NewLayer(nil, nil, content, store).Invoke(ctx, engine.Call{
+				RunID: "run-memory-1", Seq: 4, Scope: platformScope, AgentID: "triage",
+				Tool: domain.ToolMemoryFind,
+				Args: []byte(`{"search":` + strconv.Quote(tc.search) + `,"limit":10}`),
+			})
+			if err != nil {
+				t.Fatalf("Invoke: %v", err)
+			}
+			if result.Failed {
+				t.Fatalf("result = %+v, want successful memory find", result)
+			}
+			body, err := content.Get(ctx, result.ResultRef)
+			if err != nil {
+				t.Fatalf("Get result: %v", err)
+			}
+			var payload struct {
+				Assertions []struct {
+					Subject string `json:"subject"`
+				} `json:"assertions"`
+				SearchTermsUsed          []string `json:"search_terms_used"`
+				SearchTermsOmitted       int      `json:"search_terms_omitted"`
+				SearchTermsOmittedReason string   `json:"search_terms_omitted_reason"`
+				SearchTermBudget         int      `json:"search_term_budget"`
+			}
+			if err := json.Unmarshal(body, &payload); err != nil {
+				t.Fatalf("decode result: %v", err)
+			}
+			if tc.wantSubject == "" {
+				if len(payload.Assertions) != 0 {
+					t.Fatalf("payload = %s, want no matching memory", body)
+				}
+			} else if len(payload.Assertions) != 1 || payload.Assertions[0].Subject != tc.wantSubject {
+				t.Fatalf("payload = %s, want the bounded search to still return matching memory", body)
+			}
+			if strings.Join(payload.SearchTermsUsed, " ") != tc.wantUsed ||
+				payload.SearchTermsOmitted != tc.wantOmitted ||
+				payload.SearchTermsOmittedReason != "search_term_budget" || payload.SearchTermBudget != 6 {
+				t.Fatalf("payload = %s, want explicit search term budget omission", body)
+			}
+		})
+	}
+}
+
+func TestFind_searchMatchesSeparateTermsAcrossFields(t *testing.T) {
+	t.Parallel()
+	expectSearchMatchesSeparateTermsAcrossFields(t, context.Background(), memory.NewMemory())
+}
+
+func TestFind_modelChosenQueriesStillReachTheSameMemory(t *testing.T) {
+	t.Parallel()
+	expectModelChosenQueriesStillReachTheSameMemory(t, context.Background(), memory.NewMemory())
+}
+
+func TestFind_digitsDoNotOverrideTheRestOfTheSearch(t *testing.T) {
+	t.Parallel()
+	expectDigitsDoNotOverrideTheRestOfTheSearch(t, context.Background(), memory.NewMemory())
+}
+
+func TestFind_nonMatchingSearchDoesNotFailOpen(t *testing.T) {
+	t.Parallel()
+	expectNonMatchingSearchDoesNotFailOpen(t, context.Background(), memory.NewMemory())
+}
+
+func TestFind_strongSearchTermsSurviveTheTermBudget(t *testing.T) {
+	t.Parallel()
+	expectStrongSearchTermsSurviveTheTermBudget(t, context.Background(), memory.NewMemory())
+}
+
+func TestFind_shortIdentifiersAreSearchTerms(t *testing.T) {
+	t.Parallel()
+	expectShortIdentifiersAreSearchTerms(t, context.Background(), memory.NewMemory())
 }
 
 func TestLayer_rejectsMalformedFindArguments(t *testing.T) {
@@ -556,6 +668,36 @@ func TestPostgresSuggest_activeAssertionIdentityStopsDuplicateSuggestion(t *test
 	expectActiveIdentityStopsDuplicateSuggestion(t, ctx, store)
 }
 
+func TestPostgresFind_searchMatchesSeparateTermsAcrossFields(t *testing.T) {
+	ctx, store := postgresStore(t)
+	expectSearchMatchesSeparateTermsAcrossFields(t, ctx, store)
+}
+
+func TestPostgresFind_modelChosenQueriesStillReachTheSameMemory(t *testing.T) {
+	ctx, store := postgresStore(t)
+	expectModelChosenQueriesStillReachTheSameMemory(t, ctx, store)
+}
+
+func TestPostgresFind_digitsDoNotOverrideTheRestOfTheSearch(t *testing.T) {
+	ctx, store := postgresStore(t)
+	expectDigitsDoNotOverrideTheRestOfTheSearch(t, ctx, store)
+}
+
+func TestPostgresFind_nonMatchingSearchDoesNotFailOpen(t *testing.T) {
+	ctx, store := postgresStore(t)
+	expectNonMatchingSearchDoesNotFailOpen(t, ctx, store)
+}
+
+func TestPostgresFind_strongSearchTermsSurviveTheTermBudget(t *testing.T) {
+	ctx, store := postgresStore(t)
+	expectStrongSearchTermsSurviveTheTermBudget(t, ctx, store)
+}
+
+func TestPostgresFind_shortIdentifiersAreSearchTerms(t *testing.T) {
+	ctx, store := postgresStore(t)
+	expectShortIdentifiersAreSearchTerms(t, ctx, store)
+}
+
 func TestPostgresSuggest_sharedActiveAssertionStopsAgentScopedDuplicateSuggestion(t *testing.T) {
 	ctx, store := postgresStore(t)
 	expectSharedActiveAssertionStopsAgentScopedDuplicateSuggestion(t, ctx, store)
@@ -702,6 +844,240 @@ type suggestionStore interface {
 	Find(context.Context, domain.MemoryQuery) ([]domain.MemoryAssertion, error)
 	Suggest(context.Context, domain.MemorySuggestion, domain.MemoryLearningPolicy, domain.UserID, time.Time) (domain.MemorySuggestionOutcome, error)
 	ListSuggestions(context.Context, memory.SuggestionFilter) ([]domain.MemorySuggestion, error)
+}
+
+type findStore interface {
+	Assert(context.Context, domain.MemoryAssertion, domain.UserID, string, time.Time) (domain.MemoryAssertion, error)
+	Find(context.Context, domain.MemoryQuery) ([]domain.MemoryAssertion, error)
+}
+
+func expectSearchMatchesSeparateTermsAcrossFields(
+	t *testing.T,
+	ctx context.Context,
+	store findStore,
+) {
+	t.Helper()
+	now := time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC)
+	if _, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Subject = "superset slack alerts"
+		a.Signature = "superset.alert.delivery"
+		a.Claim = "the api returned not_in_channel while sending the alert"
+	}), "usr_ana", "reviewed", now); err != nil {
+		t.Fatalf("Assert matching: %v", err)
+	}
+	if _, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Subject = "superset slack impostor"
+		a.Signature = "superset.alert.delivery.wildcard"
+		a.Claim = "the api returned notXinXchannel while sending the alert"
+	}), "usr_ana", "reviewed", now); err != nil {
+		t.Fatalf("Assert impostor: %v", err)
+	}
+
+	found, err := store.Find(ctx, domain.MemoryQuery{
+		Scope: platformScope, AgentID: "triage", Search: "Slack not_in_channel", Now: now,
+	})
+	if err != nil {
+		t.Fatalf("Find terms: %v", err)
+	}
+	if got := subjects(found); len(got) != 1 || got[0] != "superset slack alerts" {
+		t.Fatalf("found = %v, want only the assertion matching both terms literally", got)
+	}
+}
+
+func expectModelChosenQueriesStillReachTheSameMemory(
+	t *testing.T,
+	ctx context.Context,
+	store findStore,
+) {
+	t.Helper()
+	now := time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC)
+	if _, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Subject = "alertas do superset slack entregues"
+		a.Signature = "superset.alert.delivery"
+		a.Claim = "o erro not_in_channel significa que o app precisa estar no canal"
+		a.Confirmed, a.Observations = 2, 2
+	}), "usr_ana", "reviewed", now); err != nil {
+		t.Fatalf("Assert matching: %v", err)
+	}
+	if _, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Subject = "slack onboarding"
+		a.Signature = "slack.channel.setup"
+		a.Claim = "invite the app before sending general announcements"
+		a.Confirmed, a.Observations = 9, 9
+	}), "usr_ana", "reviewed", now); err != nil {
+		t.Fatalf("Assert slack distractor: %v", err)
+	}
+
+	for _, search := range []string{"Slack not_in_channel", "Superset alerta Slack", "Superset alerta Slack 500"} {
+		found, err := store.Find(ctx, domain.MemoryQuery{
+			Scope: platformScope, AgentID: "triage", Search: search, Limit: 1, Now: now,
+		})
+		if err != nil {
+			t.Fatalf("Find %q: %v", search, err)
+		}
+		if got := subjects(found); len(got) != 1 || got[0] != "alertas do superset slack entregues" {
+			t.Fatalf("search %q found %v, want the stable incident memory first", search, got)
+		}
+	}
+}
+
+func expectDigitsDoNotOverrideTheRestOfTheSearch(
+	t *testing.T,
+	ctx context.Context,
+	store findStore,
+) {
+	t.Helper()
+	now := time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC)
+	for _, seed := range []struct {
+		subject string
+		claim   string
+	}{
+		{"superset slack alerts", "not_in_channel means the app is not in the alert channel"},
+		{"payroll ledger closing", "500 entries are waiting for settlement"},
+		{"vpn rollout", "the 2026 certificate migration is still pending"},
+	} {
+		if _, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+			a.Subject = seed.subject
+			a.Signature = strings.ReplaceAll(seed.subject, " ", ".")
+			a.Claim = seed.claim
+			a.Confirmed, a.Observations = 9, 9
+		}), "usr_ana", "reviewed", now); err != nil {
+			t.Fatalf("Assert %q: %v", seed.subject, err)
+		}
+	}
+
+	found, err := store.Find(ctx, domain.MemoryQuery{
+		Scope: platformScope, AgentID: "triage", Search: "superset alerta slack 500",
+		Limit: 1, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if got := subjects(found); len(got) != 1 || got[0] != "superset slack alerts" {
+		t.Fatalf("found = %v, want the memory matching the incident terms, not the numeric distractor", got)
+	}
+}
+
+func expectNonMatchingSearchDoesNotFailOpen(
+	t *testing.T,
+	ctx context.Context,
+	store findStore,
+) {
+	t.Helper()
+	now := time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC)
+	for _, subject := range []string{"superset slack alerts", "payroll ledger closing", "vpn rollout"} {
+		if _, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+			a.Subject = subject
+			a.Signature = strings.ReplaceAll(subject, " ", ".")
+		}), "usr_ana", "reviewed", now); err != nil {
+			t.Fatalf("Assert %q: %v", subject, err)
+		}
+	}
+
+	for _, search := range []string{
+		"???",
+		"https://example.internal/execution-log?tab=errors&token=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+	} {
+		found, err := store.Find(ctx, domain.MemoryQuery{
+			Scope: platformScope, AgentID: "triage", Search: search, Now: now,
+		})
+		if err != nil {
+			t.Fatalf("Find %q: %v", search, err)
+		}
+		if len(found) != 0 {
+			t.Fatalf("search %q found %v, want no fail-open list of the scope", search, subjects(found))
+		}
+	}
+}
+
+func expectStrongSearchTermsSurviveTheTermBudget(
+	t *testing.T,
+	ctx context.Context,
+	store findStore,
+) {
+	t.Helper()
+	now := time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC)
+	if _, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Subject = "superset slack alerts"
+		a.Signature = "superset.alert.delivery"
+		a.Claim = "not_in_channel is handled by inviting the app to the alert channel"
+	}), "usr_ana", "reviewed", now); err != nil {
+		t.Fatalf("Assert matching prefix: %v", err)
+	}
+
+	for _, search := range []string{
+		"alertas do superset entregues no slack com erro not_in_channel hoje",
+		"eu queria saber sobre aquele problema do not_in_channel",
+		"por favor procure qualquer coisa sobre superset.alert.delivery",
+	} {
+		found, err := store.Find(ctx, domain.MemoryQuery{
+			Scope: platformScope, AgentID: "triage", Search: search, Now: now,
+		})
+		if err != nil {
+			t.Fatalf("Find %q: %v", search, err)
+		}
+		if got := subjects(found); len(got) != 1 || got[0] != "superset slack alerts" {
+			t.Fatalf("search %q found %v, want the strong identifier to survive the budget", search, got)
+		}
+	}
+}
+
+func expectShortIdentifiersAreSearchTerms(
+	t *testing.T,
+	ctx context.Context,
+	store findStore,
+) {
+	t.Helper()
+	now := time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC)
+	if _, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Subject = "s3 bucket retention"
+		a.Signature = "storage.s3.lifecycle"
+		a.Claim = "s3 buckets keep incident artifacts for seven days"
+	}), "usr_ana", "reviewed", now); err != nil {
+		t.Fatalf("Assert s3: %v", err)
+	}
+	if _, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Subject = "slack channel setup"
+		a.Signature = "slack.channel.invite"
+		a.Claim = "invite the app before sending alerts"
+	}), "usr_ana", "reviewed", now); err != nil {
+		t.Fatalf("Assert slack: %v", err)
+	}
+	if _, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Subject = "database maintenance window"
+		a.Signature = "database.maintenance.window"
+		a.Claim = "the system pauses writes during the window"
+	}), "usr_ana", "reviewed", now); err != nil {
+		t.Fatalf("Assert database: %v", err)
+	}
+
+	for _, search := range []string{"s3", "sobre s3"} {
+		found, err := store.Find(ctx, domain.MemoryQuery{
+			Scope: platformScope, AgentID: "triage", Search: search, Now: now,
+		})
+		if err != nil {
+			t.Fatalf("Find %q: %v", search, err)
+		}
+		if got := subjects(found); len(got) != 1 || got[0] != "s3 bucket retention" {
+			t.Fatalf("search %q found %v, want the short identifier memory", search, got)
+		}
+	}
+
+	for _, search := range []string{
+		"do no",
+		"qual o status da fila em producao",
+		"what is it or an issue",
+	} {
+		found, err := store.Find(ctx, domain.MemoryQuery{
+			Scope: platformScope, AgentID: "triage", Search: search, Now: now,
+		})
+		if err != nil {
+			t.Fatalf("Find %q: %v", search, err)
+		}
+		if len(found) != 0 {
+			t.Fatalf("search %q found %v, want no fail-open or substring match", search, subjects(found))
+		}
+	}
 }
 
 func expectActiveIdentityStopsDuplicateSuggestion(

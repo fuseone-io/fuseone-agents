@@ -139,6 +139,21 @@ func TestAnthropic_toolUse_becomesAProposal(t *testing.T) {
 	}
 }
 
+func TestAnthropic_requiresExactlyOneToolUse(t *testing.T) {
+	t.Parallel()
+	c := serve(t, anthropicToolUse)
+
+	if _, err := plannerFor(t, model.KindAnthropic, c.server.URL, model.Config{}).
+		Plan(context.Background(), input()); err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+
+	choice, _ := c.body["tool_choice"].(map[string]any)
+	if choice["type"] != "any" || choice["disable_parallel_tool_use"] != true {
+		t.Fatalf("tool_choice = %+v, want any with parallel tool use disabled", choice)
+	}
+}
+
 func TestPlanner_reportsPromptCompositionBySource(t *testing.T) {
 	t.Parallel()
 
@@ -536,10 +551,12 @@ func TestMemoryTools_areExplainedOnlyWhenOffered(t *testing.T) {
 			for _, want := range []string{
 				"Governed memory lookup is available",
 				"_fuseone__memory__find",
+				"Search with short separate terms such as a service name plus an error code",
 				"Memory learning is enabled",
 				"_fuseone__memory__suggest",
 				"Search memory first when the subject or signature may already exist",
 				"Do not suggest one-off facts, secrets, approvals, permissions or broad opinions",
+				"After a memory suggestion result, do not retry the same suggestion in this run",
 			} {
 				if !strings.Contains(system, want) {
 					t.Errorf("system prompt does not contain %q:\n%s", want, system)

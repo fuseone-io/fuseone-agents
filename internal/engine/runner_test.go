@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -327,6 +328,75 @@ func (h *harness) kinds(t *testing.T) []domain.StepKind {
 	return out
 }
 
+func openRunWithInput(
+	t *testing.T,
+	h *harness,
+	start Start,
+	trigger string,
+	body []byte,
+	labels domain.Labels,
+) {
+	t.Helper()
+	ctx := context.Background()
+	ref, err := h.content.Put(ctx, start.RunID, domain.FirstSeq, body)
+	if err != nil {
+		t.Fatalf("store input: %v", err)
+	}
+	if _, err := h.ledger.Append(ctx, domain.Step{
+		RunID: start.RunID, Kind: domain.StepRunStarted,
+		Scope: start.Scope, AgentID: start.AgentID,
+		VersionID: start.VersionID, OnBehalfOf: start.OnBehalfOf,
+		Labels: labels,
+		Payload: mustJSON(domain.RunStartedPayload{
+			Trigger: trigger, InputRef: ref,
+		}),
+	}); err != nil {
+		t.Fatalf("open run: %v", err)
+	}
+}
+
+func memoryFindCallArgs(t *testing.T, call Call) struct {
+	Search string `json:"search"`
+	Limit  int    `json:"limit"`
+} {
+	t.Helper()
+	var args struct {
+		Search string `json:"search"`
+		Limit  int    `json:"limit"`
+	}
+	if err := json.Unmarshal(call.Args, &args); err != nil {
+		t.Fatalf("memory find args: %v", err)
+	}
+	if call.Tool != domain.ToolMemoryFind {
+		t.Fatalf("call tool = %s, want %s", call.Tool, domain.ToolMemoryFind)
+	}
+	if args.Limit != 10 {
+		t.Fatalf("memory find limit = %d, want 10", args.Limit)
+	}
+	return args
+}
+
+func mustJSONString(value string) string {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		panic(err)
+	}
+	return string(raw)
+}
+
+func supersetSlackAsk() string {
+	return `[ autor(a) ] @Example Reporter / Example Reporter
+[ ambiente ] production
+[ app / serviço ] Alertas no Superset
+[ descrição ]
+Queria entender o porquê um alerta está dando o erro: The request to the Slack API failed. (url:
+http
+) The server responded with: {'ok': False, 'error': 'not_in_channel'}
+[ fluxo esperado ]
+O envio do alerta no canal correspondente
+[ observações adicionais ]`
+}
+
 func generousBudget() domain.Budget {
 	return domain.Budget{Micros: 1_000_000, ToolCalls: 20, Steps: 50}
 }
@@ -628,6 +698,151 @@ func TestAdvance_memorySuggestionInAutoConfirmModeWithUntrustedData_entersReview
 	}
 	if _, err := h.stepOf(t, domain.StepApprovalRequested); err == nil {
 		t.Fatal("approval was requested before an untrusted suggestion that still needs memory review")
+	}
+}
+
+func TestAdvance_memoryLearningBeginsWithDeterministicLookup(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t, Proposal{Tool: "crm.lookup", Args: []byte(`{"id":"42"}`)})
+	h.runner.deps.Catalog = staticCatalog{
+		domain.ToolMemoryFind: domain.EffectRead,
+		"crm.lookup":          domain.EffectRead,
+	}
+	start := h.start(t, generousBudget())
+	start.MemoryLearning = domain.MemoryLearningPolicy{Mode: domain.MemoryLearningReview}
+	start.Pack = gate.NewPack("crm.lookup")
+	openRunWithInput(t, h, start, "manual", []byte(supersetSlackAsk()), domain.ScopeLabels(start.Scope))
+
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("Advance initial memory lookup: %v", err)
+	}
+	if h.planner.calls != 0 {
+		t.Fatalf("planner calls = %d, want memory lookup before the first model call", h.planner.calls)
+	}
+	if got := h.tools.invocations; len(got) != 1 || got[0] != domain.ToolMemoryFind {
+		t.Fatalf("tool invocations = %v, want initial memory find", got)
+	}
+	args := memoryFindCallArgs(t, h.tools.calls[0])
+	if terms := strings.Fields(args.Search); len(terms) > 6 {
+		t.Fatalf("initial search terms = %v, want at most 6 terms", terms)
+	}
+	for _, term := range []string{"not_in_channel", "superset", "slack"} {
+		if !strings.Contains(args.Search, term) {
+			t.Fatalf("initial search = %q, want term %q", args.Search, term)
+		}
+	}
+	for _, leaked := range []string{"example", "reporter", "asked_by", "source"} {
+		if strings.Contains(args.Search, leaked) {
+			t.Fatalf("initial search = %q, leaked low-signal envelope/person term %q",
+				args.Search, leaked)
+		}
+	}
+	if slices.Contains(h.kinds(t), domain.StepPlanned) {
+		t.Fatalf("ledger = %v, want the platform lookup recorded as a tool call before planning",
+			h.kinds(t))
+	}
+	if err := h.ledger.Verify(ctx, start.RunID); err != nil {
+		t.Fatalf("Verify after initial memory lookup: %v", err)
+	}
+
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("Advance after memory lookup: %v", err)
+	}
+	if h.planner.calls != 1 {
+		t.Fatalf("planner calls = %d, want normal planning after the memory lookup", h.planner.calls)
+	}
+	if got := h.tools.invocations; len(got) != 2 || got[1] != "crm.lookup" {
+		t.Fatalf("tool invocations = %v, want the planned tool after the lookup", got)
+	}
+}
+
+func TestAdvance_initialMemoryLookupDeniedByPolicyFallsThroughToPlanner(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t, Proposal{Tool: "crm.lookup", Args: []byte(`{"id":"42"}`)})
+	h.runner.deps.Catalog = staticCatalog{
+		domain.ToolMemoryFind: domain.EffectRead,
+		"crm.lookup":          domain.EffectRead,
+	}
+	h.runner.deps.Gate = gate.New().WithPolicies(gate.Policies{Hash: "pol_memory_denied", Set: []domain.Policy{{
+		Code: "POL-MEM", Resource: string(domain.ToolMemoryFind),
+		Effect: domain.PolicyDeny, Mode: domain.PolicyEnforce, Enabled: true,
+	}}})
+	start := h.start(t, generousBudget())
+	start.MemoryLearning = domain.MemoryLearningPolicy{Mode: domain.MemoryLearningReview}
+	start.Pack = gate.NewPack("crm.lookup")
+	openRunWithInput(t, h, start, "manual", []byte(supersetSlackAsk()), domain.ScopeLabels(start.Scope))
+
+	st, err := h.runner.Advance(ctx, start)
+	if err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+	if st.Phase == PhaseParked {
+		t.Fatalf("status = %+v, want the optional memory lookup denial to fall through to planning", st)
+	}
+	if h.planner.calls != 1 {
+		t.Fatalf("planner calls = %d, want normal planning after denied memory preflight", h.planner.calls)
+	}
+	if got := h.tools.invocations; len(got) != 1 || got[0] != "crm.lookup" {
+		t.Fatalf("tool invocations = %v, want planned tool without memory preflight", got)
+	}
+	steps, err := h.ledger.Read(ctx, start.RunID, domain.FirstSeq)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	for _, step := range steps {
+		if step.Kind != domain.StepGateDecided {
+			continue
+		}
+		var payload domain.GateDecidedPayload
+		if err := json.Unmarshal(step.Payload, &payload); err != nil {
+			t.Fatalf("decode gate payload: %v", err)
+		}
+		if payload.Tool == domain.ToolMemoryFind {
+			t.Fatalf("steps = %v, want denied optional memory lookup not recorded as planner no-progress", h.kinds(t))
+		}
+	}
+}
+
+func TestAdvance_initialMemoryLookupUsesTheSameQueryForChannelAndManualInput(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	manual := newHarness(t)
+	channel := newHarness(t)
+	for _, h := range []*harness{manual, channel} {
+		h.runner.deps.Catalog = staticCatalog{domain.ToolMemoryFind: domain.EffectRead}
+	}
+	manualStart := manual.start(t, generousBudget())
+	channelStart := channel.start(t, generousBudget())
+	manualStart.MemoryLearning = domain.MemoryLearningPolicy{Mode: domain.MemoryLearningReview}
+	channelStart.MemoryLearning = domain.MemoryLearningPolicy{Mode: domain.MemoryLearningReview}
+	text := supersetSlackAsk()
+	openRunWithInput(t, manual, manualStart, "manual", []byte(text), domain.ScopeLabels(manualStart.Scope))
+	openRunWithInput(t, channel, channelStart, "channel",
+		[]byte(`{"text":`+mustJSONString(text)+`,"asked_by":"usr_03ikjoe","source":"user:U09"}`),
+		domain.ScopeLabels(channelStart.Scope).Union(domain.NewLabels(domain.LabelUntrusted)))
+
+	if _, err := manual.runner.Advance(ctx, manualStart); err != nil {
+		t.Fatalf("manual advance: %v", err)
+	}
+	if _, err := channel.runner.Advance(ctx, channelStart); err != nil {
+		t.Fatalf("channel advance: %v", err)
+	}
+
+	manualSearch := memoryFindCallArgs(t, manual.tools.calls[0]).Search
+	channelSearch := memoryFindCallArgs(t, channel.tools.calls[0]).Search
+	if channelSearch != manualSearch {
+		t.Fatalf("channel search = %q, want the same query as manual input %q",
+			channelSearch, manualSearch)
+	}
+	for _, leaked := range []string{"asked_by", "usr_03ikjoe", "source", "u09"} {
+		if strings.Contains(channelSearch, leaked) {
+			t.Fatalf("channel search = %q, leaked envelope term %q", channelSearch, leaked)
+		}
 	}
 }
 

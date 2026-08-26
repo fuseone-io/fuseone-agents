@@ -27,6 +27,39 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.38.6] — 2026-08-26
+
+### Fixed
+
+- **Memory lookup now starts before the first model turn when learning is
+  enabled.** FuseOne records one `$fuseone.memory.find` call from the human
+  input before planning, so an agent gets a chance to reuse active memory
+  before it suggests the same fact again. The lookup still crosses the Gate,
+  appears in the trail and carries returned labels into the run.
+
+- **Channel input is projected to the same request text the console sends.**
+  Slack-style channel payloads are no longer shown to the model as wrapper JSON
+  when they are ordinary user requests. That keeps the same ticket from
+  producing a memory search in one run and a broader document search in another
+  just because one started from Slack and the other from the console.
+
+- **Long memory searches no longer drop the identifier that matters.** Search
+  terms are bounded, but strong identifiers such as `not_in_channel` or
+  `superset.alert.delivery` are kept before filler and ordinary words. When the
+  budget still omits terms, the memory tool says which terms were used, how
+  many were omitted and why, so a bounded lookup is not confused with missing
+  memory.
+
+- **Short identifiers match as their own terms instead of arbitrary
+  substrings.** Queries such as `s3`, `db` or `qa` can find memory that names
+  those systems, while short words no longer satisfy a search by matching
+  inside unrelated prose.
+
+- **Anthropic planning turns must choose a platform tool or finish action.**
+  The request now requires a single tool use, preventing free-text assistant
+  replies that the ledger cannot record as an action and that previously parked
+  the run as `no_finish_action`.
+
 ## [0.38.5] — 2026-08-26
 
 ### Fixed

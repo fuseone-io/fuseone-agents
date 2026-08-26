@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -21,19 +22,17 @@ func NewPostgres(pool *pgxpool.Pool) *Postgres { return &Postgres{pool: pool} }
 
 func (p *Postgres) Find(ctx context.Context, q domain.MemoryQuery) ([]domain.MemoryAssertion, error) {
 	q.Now = nowOrWall(q.Now)
+	where, args, searchOrder := findWhere(q)
+	args = append(args, domain.MemoryFindLimit(q.Limit))
+	order := "confirmed desc, observations desc, updated_at desc, assertion_id"
+	if searchOrder != "" {
+		order = searchOrder + " desc, " + order
+	}
 	rows, err := p.pool.Query(ctx, `
 		select `+columns+`
-		from memory_assertions
-		where company_id = $1 and area_id = $2
-		  and (agent_id = $3 or agent_id = '')
-		  and ($4 = '' or kind = $4)
-		  and ($5 = '' or subject = $5)
-		  and ($6 = '' or signature = $6)
-		  and ($7 = '' or subject ilike $8 or signature ilike $8 or claim ilike $8)
-		  and status = 'active'
-		  and (expires_at is null or expires_at > $9)
-		order by confirmed desc, observations desc, updated_at desc, assertion_id
-		limit $10`, postgresFindArgs(q)...)
+		from memory_assertions `+where+`
+		order by `+order+`
+		limit $`+fmt.Sprint(len(args)), args...)
 	if err != nil {
 		return nil, fmt.Errorf("memory: find: %w", err)
 	}
@@ -323,16 +322,6 @@ type db interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }
 
-func postgresFindArgs(q domain.MemoryQuery) []any {
-	search := "%" + strings.TrimSpace(q.Search) + "%"
-	return []any{
-		string(q.Scope.Company), string(q.Scope.Area), string(q.AgentID),
-		strings.TrimSpace(q.Kind), strings.TrimSpace(q.Subject),
-		strings.TrimSpace(q.Signature), strings.TrimSpace(q.Search),
-		search, q.Now.UTC(), domain.MemoryFindLimit(q.Limit),
-	}
-}
-
 func upsertAssertion(ctx context.Context, tx db, a domain.MemoryAssertion) error {
 	evidence, _ := json.Marshal(a.Evidence)
 	_, err := tx.Exec(ctx, `
@@ -595,11 +584,7 @@ func listWhere(f Filter) (string, []any) {
 	if f.Status.Valid() {
 		clauses = append(clauses, statusClause(f.Status, f.Now, &args))
 	}
-	if search := strings.TrimSpace(f.Search); search != "" {
-		args = append(args, "%"+search+"%")
-		n := fmt.Sprint(len(args))
-		clauses = append(clauses, "(subject ilike $"+n+" or signature ilike $"+n+" or claim ilike $"+n+")")
-	}
+	clauses = appendSearchClauses(clauses, &args, f.Search)
 	return "where " + strings.Join(clauses, " and "), args
 }
 
@@ -615,12 +600,140 @@ func suggestionWhere(f SuggestionFilter) (string, []any) {
 		args = append(args, string(f.Status))
 		clauses = append(clauses, "status = $"+fmt.Sprint(len(args)))
 	}
-	if search := strings.TrimSpace(f.Search); search != "" {
-		args = append(args, "%"+search+"%")
-		n := fmt.Sprint(len(args))
-		clauses = append(clauses, "(subject ilike $"+n+" or signature ilike $"+n+" or claim ilike $"+n+")")
-	}
+	clauses = appendSearchClauses(clauses, &args, f.Search)
 	return "where " + strings.Join(clauses, " and "), args
+}
+
+func findWhere(q domain.MemoryQuery) (string, []any, string) {
+	var clauses []string
+	var args []any
+	args = append(args, string(q.Scope.Company))
+	clauses = append(clauses, "company_id = $"+fmt.Sprint(len(args)))
+	args = append(args, string(q.Scope.Area))
+	clauses = append(clauses, "area_id = $"+fmt.Sprint(len(args)))
+	args = append(args, string(q.AgentID))
+	clauses = append(clauses, "(agent_id = $"+fmt.Sprint(len(args))+" or agent_id = '')")
+	if kind := strings.TrimSpace(q.Kind); kind != "" {
+		args = append(args, kind)
+		clauses = append(clauses, "kind = $"+fmt.Sprint(len(args)))
+	}
+	if subject := strings.TrimSpace(q.Subject); subject != "" {
+		args = append(args, subject)
+		clauses = append(clauses, "subject = $"+fmt.Sprint(len(args)))
+	}
+	if signature := strings.TrimSpace(q.Signature); signature != "" {
+		args = append(args, signature)
+		clauses = append(clauses, "signature = $"+fmt.Sprint(len(args)))
+	}
+	var searchOrder string
+	clauses, searchOrder = appendFindSearchClause(clauses, &args, q.Search)
+	args = append(args, q.Now.UTC())
+	clauses = append(clauses, "status = 'active'")
+	clauses = append(clauses, "(expires_at is null or expires_at > $"+fmt.Sprint(len(args))+")")
+	return "where " + strings.Join(clauses, " and "), args, searchOrder
+}
+
+func appendSearchClauses(clauses []string, args *[]any, search string) []string {
+	parsed := parseSearchTerms(search)
+	if !parsed.hasInput {
+		return clauses
+	}
+	if len(parsed.terms) == 0 {
+		return append(clauses, "false")
+	}
+	for _, term := range parsed.terms {
+		*args = append(*args, searchPattern(term))
+		n := fmt.Sprint(len(*args))
+		clauses = append(clauses,
+			searchTermCondition(n, term))
+	}
+	return clauses
+}
+
+func appendFindSearchClause(clauses []string, args *[]any, search string) ([]string, string) {
+	parsed := parseSearchTerms(search)
+	terms := parsed.terms
+	if !parsed.hasInput {
+		return clauses, ""
+	}
+	if len(terms) == 0 {
+		return append(clauses, "false"), ""
+	}
+	conds := make([]string, 0, len(terms))
+	scoreParts := make([]string, 0, len(terms))
+	strongConds := []string{}
+	for _, term := range terms {
+		*args = append(*args, searchPattern(term))
+		cond := searchTermCondition(fmt.Sprint(len(*args)), term)
+		conds = append(conds, cond)
+		scoreParts = append(scoreParts,
+			fmt.Sprintf("(case when %s then %d else 0 end)", cond, searchTermWeight(term)))
+		if strongSearchTerm(term) {
+			strongConds = append(strongConds, cond)
+		}
+	}
+	// The broad OR is deliberately separate from the match-count predicate:
+	// PostgreSQL can turn this plain boolean shape into BitmapOr over the
+	// trigram indexes, then apply the stricter count as a filter.
+	clauses = append(clauses, "("+strings.Join(conds, " or ")+")")
+	if len(strongConds) > 0 {
+		clauses = append(clauses, "("+strings.Join(strongConds, " or ")+")")
+	}
+	clauses = append(clauses, searchTermsMatchedClause(conds, minFindSearchMatches(len(terms))))
+	score := strings.Join(scoreParts, " + ")
+	return clauses, score
+}
+
+func searchTermsMatchedClause(conds []string, required int) string {
+	if required <= 1 || len(conds) == 1 {
+		return "(" + strings.Join(conds, " or ") + ")"
+	}
+	if required >= len(conds) {
+		return "(" + strings.Join(conds, " and ") + ")"
+	}
+	var pairs []string
+	for i := range conds {
+		for j := i + 1; j < len(conds); j++ {
+			pairs = append(pairs, "("+conds[i]+" and "+conds[j]+")")
+		}
+	}
+	return "(" + strings.Join(pairs, " or ") + ")"
+}
+
+func searchTermCondition(n string, term string) string {
+	if shortSearchTerm(term) {
+		return "(subject ~* $" + n + " or " +
+			"signature ~* $" + n + " or " +
+			"claim ~* $" + n + ")"
+	}
+	return "(subject ilike $" + n + " escape '\\' or " +
+		"signature ilike $" + n + " escape '\\' or " +
+		"claim ilike $" + n + " escape '\\')"
+}
+
+func searchPattern(term string) string {
+	if shortSearchTerm(term) {
+		return searchRegexPattern(term)
+	}
+	return likePattern(term)
+}
+
+func searchRegexPattern(term string) string {
+	return "(^|[^[:alnum:]])" + regexp.QuoteMeta(term) + "([^[:alnum:]]|$)"
+}
+
+func likePattern(term string) string {
+	var b strings.Builder
+	b.Grow(len(term) + 2)
+	b.WriteByte('%')
+	for _, r := range term {
+		if r == '%' || r == '_' || r == '\\' {
+			b.WriteByte('\\')
+		}
+		b.WriteRune(r)
+	}
+	b.WriteByte('%')
+	return b.String()
 }
 
 func statusClause(status domain.MemoryStatus, now time.Time, args *[]any) string {

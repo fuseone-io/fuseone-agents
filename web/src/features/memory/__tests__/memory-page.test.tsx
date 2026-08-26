@@ -71,6 +71,24 @@ describe("governed memory page", () => {
     expect(screen.getByRole("button", { name: "Load more" })).toBeInTheDocument();
   });
 
+  it("explains when a manual search exceeds the term budget", async () => {
+    const user = userEvent.setup();
+    render(<MemoryPage />);
+
+    expect(
+      screen.queryByText("Only the first 6 search terms are used. Try stronger identifiers if nothing matches."),
+    ).not.toBeInTheDocument();
+
+    await user.type(
+      screen.getByRole("searchbox", { name: "Search memory" }),
+      "alertas do superset entregues no slack com erro not_in_channel hoje",
+    );
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Only the first 6 search terms are used. Try stronger identifiers if nothing matches.",
+    );
+  });
+
   it("keeps remembered assertions compact until one is selected", async () => {
     const user = userEvent.setup();
     hooks.items = Array.from({ length: 3 }, (_, index) => ({

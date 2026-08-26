@@ -1599,6 +1599,7 @@
     "scope": "Escopo",
     "search": "Buscar memória",
     "searchPlaceholder": "Buscar assunto, assinatura ou afirmação",
+    "searchTermBudgetNotice": "Só os primeiros {{count}} termos da busca são usados. Tente identificadores mais fortes se nada aparecer.",
     "shared": "compartilhada",
     "signature": "Assinatura",
     "signatureHint": "Chave estável da condição lembrada.",

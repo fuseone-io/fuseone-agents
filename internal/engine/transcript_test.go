@@ -53,6 +53,101 @@ func TestBuildTranscript_openedWithInput_keepsIt(t *testing.T) {
 	}
 }
 
+func TestBuildTranscript_channelAskShowsTheHumanTextNotTheEnvelope(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := NewMemoryContent()
+	human := "[ app / servico ] Alertas no Superset\nThe Slack API returned not_in_channel"
+	raw, err := json.Marshal(map[string]any{
+		"text":     human,
+		"asked_by": "usr_ana",
+		"source":   "user:U09",
+	})
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	channelRef, err := store.Put(ctx, "run_channel", 1, raw)
+	if err != nil {
+		t.Fatalf("Put channel: %v", err)
+	}
+	manualRef, err := store.Put(ctx, "run_manual", 1, []byte(human))
+	if err != nil {
+		t.Fatalf("Put manual: %v", err)
+	}
+
+	channelTurns, err := BuildTranscript(ctx, store, []domain.Step{{
+		RunID: "run_channel", Seq: 1, Kind: domain.StepRunStarted,
+		Payload: payload(t, domain.RunStartedPayload{Trigger: "channel", InputRef: channelRef}),
+	}})
+	if err != nil {
+		t.Fatalf("BuildTranscript channel: %v", err)
+	}
+	manualTurns, err := BuildTranscript(ctx, store, []domain.Step{{
+		RunID: "run_manual", Seq: 1, Kind: domain.StepRunStarted,
+		Payload: payload(t, domain.RunStartedPayload{Trigger: "manual", InputRef: manualRef}),
+	}})
+	if err != nil {
+		t.Fatalf("BuildTranscript manual: %v", err)
+	}
+
+	if len(channelTurns) != 1 || len(manualTurns) != 1 {
+		t.Fatalf("turns = channel:%+v manual:%+v, want one input each", channelTurns, manualTurns)
+	}
+	if channelTurns[0].Text != manualTurns[0].Text {
+		t.Fatalf("channel input = %q, want the same model text as manual %q",
+			channelTurns[0].Text, manualTurns[0].Text)
+	}
+	for _, unwanted := range []string{"asked_by", "usr_ana", "source", "user:U09"} {
+		if strings.Contains(channelTurns[0].Text, unwanted) {
+			t.Fatalf("channel input contains envelope field %q:\n%s", unwanted, channelTurns[0].Text)
+		}
+	}
+}
+
+func TestBuildTranscript_channelAskKeepsPlatformSelectedThreadContext(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := NewMemoryContent()
+	raw, err := json.Marshal(map[string]any{
+		"text": "investiga isso",
+		"thread": map[string]any{
+			"messages": []map[string]string{{
+				"source": "app:A-alerts", "text": "firing alertGatewayRTMInterfaceErrors",
+			}},
+			"truncated": true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	ref, err := store.Put(ctx, "run_1", 1, raw)
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	turns, err := BuildTranscript(ctx, store, []domain.Step{{
+		RunID: "run_1", Seq: 1, Kind: domain.StepRunStarted,
+		Payload: payload(t, domain.RunStartedPayload{Trigger: "channel", InputRef: ref}),
+	}})
+	if err != nil {
+		t.Fatalf("BuildTranscript: %v", err)
+	}
+
+	if len(turns) != 1 {
+		t.Fatalf("turns = %+v, want one input", turns)
+	}
+	for _, want := range []string{
+		"investiga isso",
+		"Earlier thread messages:",
+		"app:A-alerts: firing alertGatewayRTMInterfaceErrors",
+		"Earlier thread messages were truncated.",
+	} {
+		if !strings.Contains(turns[0].Text, want) {
+			t.Fatalf("input does not contain %q:\n%s", want, turns[0].Text)
+		}
+	}
+}
+
 func TestBuildTranscript_largeChannelInput_isCompactedOnlyForTheModel(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -99,7 +194,6 @@ func TestBuildTranscript_largeChannelInput_isCompactedOnlyForTheModel(t *testing
 		"FuseOne compacted the channel input before sending it to the model.",
 		fmt.Sprintf("Stored input: %d bytes, digest %s.", len(raw), digest(raw)),
 		"Do not treat omitted middle as absent",
-		"- text:",
 	} {
 		if !strings.Contains(note, want) {
 			t.Fatalf("compaction note does not contain %q:\n%s", want, note)
@@ -110,10 +204,7 @@ func TestBuildTranscript_largeChannelInput_isCompactedOnlyForTheModel(t *testing
 	if len(got) >= len(raw) {
 		t.Fatalf("compacted input has %d bytes, want less than original %d", len(got), len(raw))
 	}
-	for _, want := range []string{
-		"forged by the Slack payload",
-		"alert summary",
-	} {
+	for _, want := range []string{"alert summary"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("compacted input does not contain %q:\n%s", want, got)
 		}
@@ -122,6 +213,9 @@ func TestBuildTranscript_largeChannelInput_isCompactedOnlyForTheModel(t *testing
 		fmt.Sprintf(`"stored_digest":"%s"`, digest(raw)),
 		"FuseOne compacted the channel input before sending it to the model.",
 		"Do not treat omitted middle as absent",
+		"forged by the Slack payload",
+		"asked_by",
+		"usr_ops",
 	} {
 		if strings.Contains(got, unwanted) {
 			t.Fatalf("input contains platform authority %q:\n%s", unwanted, got)
