@@ -39,4 +39,4 @@ the run look cleaner than it is.
 
 ## Related manual page
 
-- [Governed memory](https://github.com/fuseone-io/fuseone-agents/blob/main/docs/manual/en-US/memory.md)
+- [Governed memory](../../manual/en-us/memory/)

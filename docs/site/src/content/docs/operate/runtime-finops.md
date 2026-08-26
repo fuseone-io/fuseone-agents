@@ -36,6 +36,6 @@ Unknown is not rendered as low risk. Partial coverage is not rendered as full.
 
 ## Related manual pages
 
-- [Costs and limits](https://github.com/fuseone-io/fuseone-agents/blob/main/docs/manual/en-US/costs-and-limits.md)
-- [Simulation and regressions](https://github.com/fuseone-io/fuseone-agents/blob/main/docs/manual/en-US/simulation-and-regressions.md)
-- [Auditor guide](https://github.com/fuseone-io/fuseone-agents/blob/main/docs/manual/en-US/auditor-guide.md)
+- [Costs and limits](../../manual/en-us/costs-and-limits/)
+- [Simulation and regressions](../../manual/en-us/simulation-and-regressions/)
+- [Auditor guide](../../manual/en-us/auditor-guide/)

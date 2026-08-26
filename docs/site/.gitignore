@@ -1,2 +1,5 @@
 dist/
 .astro/
+src/content/docs/design/
+src/content/docs/manual/
+src/content/docs/reference/helm-chart.md

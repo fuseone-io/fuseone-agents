@@ -24,11 +24,11 @@ cosign verify ghcr.io/fuseone-io/fuseone-agents:<version> \
 
 ## Operator reference
 
-The detailed install and operations guide lives in the repository:
+The detailed install and operations guides are rendered in this site:
 
-- [Helm chart README](https://github.com/fuseone-io/fuseone-agents/blob/main/deploy/helm/fuseone-agents/README.md)
-- [OP-001: running an installation](https://github.com/fuseone-io/fuseone-agents/blob/main/docs/OP-001-running-an-installation.md)
-- [DP-001: data protection](https://github.com/fuseone-io/fuseone-agents/blob/main/docs/DP-001-data-protection.md)
+- [Helm chart reference](../../reference/helm-chart/)
+- [OP-001: running an installation](../../design/op-001-running-an-installation/)
+- [DP-001: data protection](../../design/dp-001-data-protection/)
 
 ## Local development
 
