@@ -147,6 +147,9 @@ func (o *OpenAICompatible) chatMessages(in engine.PlanInput, offered names) []ch
 	if in.Step != "" {
 		system += "\n\n" + stepNote(in)
 	}
+	if note := memoryToolsNote(in, o.tools, offered); note != "" {
+		system += "\n\n" + note
+	}
 	if note := budgetNote(in); note != "" {
 		system += "\n\n" + note
 	}

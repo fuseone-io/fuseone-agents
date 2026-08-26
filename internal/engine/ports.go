@@ -39,6 +39,10 @@ type PlanInput struct {
 	// cut off mid-thought.
 	Remaining domain.Consumption
 	Tools     []domain.ToolID
+	// MemoryLearning is the version-pinned policy that decides whether the
+	// platform-owned suggestion tool may record anything. The tool can appear in
+	// a legacy pack, but only this policy turns learning on.
+	MemoryLearning domain.MemoryLearningPolicy
 
 	// Step is where the run is, in the author's words, and StopsWhen is the
 	// exception that step declared. Both empty for an agent with no steps.

@@ -121,7 +121,7 @@ func (a *Anthropic) Plan(ctx context.Context, in engine.PlanInput) (engine.Propo
 		// route an installation's traffic wherever its author liked.
 		Model:     anthropic.Model(or(in.Model, a.cfg.Model)),
 		MaxTokens: a.cfg.MaxTokens,
-		System:    a.system(in),
+		System:    a.system(in, offered),
 		Messages:  messagesFrom(in.Transcript, offered),
 		Tools:     tools,
 		// Adaptive is the only supported mode on current models; a fixed
@@ -160,7 +160,7 @@ func (a *Anthropic) Plan(ctx context.Context, in engine.PlanInput) (engine.Propo
 // before it. Nothing volatile goes in here — no timestamps, no run identifiers
 // — or the prefix changes on every request and nothing is ever read from cache
 // (PRD FO-09).
-func (a *Anthropic) system(in engine.PlanInput) []anthropic.TextBlockParam {
+func (a *Anthropic) system(in engine.PlanInput, offered names) []anthropic.TextBlockParam {
 	blocks := []anthropic.TextBlockParam{{Text: a.cfg.SystemPrompt}}
 	blocks = append(blocks, anthropic.TextBlockParam{Text: loopContract})
 
@@ -172,6 +172,9 @@ func (a *Anthropic) system(in engine.PlanInput) []anthropic.TextBlockParam {
 	// the cached prefix because it changes as the run advances.
 	if in.Step != "" {
 		blocks = append(blocks, anthropic.TextBlockParam{Text: stepNote(in)})
+	}
+	if note := memoryToolsNote(in, a.tools, offered); note != "" {
+		blocks = append(blocks, anthropic.TextBlockParam{Text: note})
 	}
 
 	if note := budgetNote(in); note != "" {

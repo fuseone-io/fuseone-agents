@@ -65,6 +65,27 @@ func TestEnvelopeOf_aToolInNoStep_isReachableNowhere(t *testing.T) {
 	}
 }
 
+func TestEnvelopeForState_memorySuggestRequiresLearningPolicy(t *testing.T) {
+	t.Parallel()
+
+	start := Start{
+		Pack: gate.NewPack("crm.lookup", domain.ToolMemorySuggest),
+	}
+	got := envelopeForState(start, State{})
+	if got.Allows(domain.ToolMemorySuggest) {
+		t.Fatal("memory suggest was offered from the pack while memory learning was off")
+	}
+	if !got.Allows("crm.lookup") {
+		t.Fatal("ordinary pack tool was removed while filtering memory suggest")
+	}
+
+	start.MemoryLearning = domain.MemoryLearningPolicy{Mode: domain.MemoryLearningReview}
+	got = envelopeForState(start, State{})
+	if !got.Allows(domain.ToolMemorySuggest) {
+		t.Fatal("memory suggest was not offered when memory learning was enabled")
+	}
+}
+
 func TestSpendAt_pricesTheStepBeingEnteredNotTheOneJustFinished(t *testing.T) {
 	t.Parallel()
 

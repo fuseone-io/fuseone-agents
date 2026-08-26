@@ -304,9 +304,9 @@
     "launchGuideTitle": "Ready to validate",
     "memoryLearning": "Memory learning",
     "memoryLearningExplains": {
-      "auto_confirm": "The agent may propose structured assertions. Repeated identical suggestions are promoted only after the configured observation count.",
+      "auto_confirm": "The agent may propose structured assertions. Identical suggestions in distinct runs are promoted only after the configured observation count; suggestions derived from untrusted data may still ask for approval before they count.",
       "off": "The agent can read governed memory, but it will not propose new assertions.",
-      "review": "The agent may propose structured assertions. A person must accept them before they become active memory."
+      "review": "The agent may propose structured assertions. A person must accept them before they become active memory; if the run read untrusted data, the Gate may ask for approval before recording the suggestion."
     },
     "memoryLearningHint": "Opt in per version. Suggestions inherit the run's labels and never become prompt instructions.",
     "memoryLearningMin": "Auto-confirm after",

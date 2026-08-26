@@ -44,7 +44,7 @@ func envelopeOf(start Start, called []domain.ToolID) gate.Pack {
 }
 
 func envelopeForState(start Start, state State) gate.Pack {
-	pack := envelopeOf(start, state.Called)
+	pack := withoutTool(envelopeOf(start, state.Called), domain.ToolMemorySuggest)
 	if start.MemoryLearning.Enabled() {
 		pack = gate.NewPack(append(pack.Tools(), domain.ToolMemorySuggest)...)
 	}
@@ -52,6 +52,17 @@ func envelopeForState(start Start, state State) gate.Pack {
 		return pack
 	}
 	return gate.NewPack(append(pack.Tools(), domain.ToolContextRead)...)
+}
+
+func withoutTool(pack gate.Pack, remove domain.ToolID) gate.Pack {
+	tools := pack.Tools()
+	out := tools[:0]
+	for _, tool := range tools {
+		if tool != remove {
+			out = append(out, tool)
+		}
+	}
+	return gate.NewPack(out...)
 }
 
 // StepAt is the step a run has advanced to: the furthest one whose tools it

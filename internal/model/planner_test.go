@@ -23,11 +23,24 @@ import (
 type schemas struct{}
 
 func (schemas) Schema(id domain.ToolID) (string, string, map[string]any, bool) {
-	if id != "crm.lookup" {
+	switch id {
+	case "crm.lookup":
+		return "crm.lookup", "Look a customer up by email.",
+			map[string]any{"email": map[string]any{"type": "string"}}, true
+	case domain.ToolMemoryFind:
+		return string(id), "Find governed structured memory assertions.",
+			map[string]any{"search": map[string]any{"type": "string"}}, true
+	case domain.ToolMemorySuggest:
+		return string(id), "Suggest a structured memory assertion.",
+			map[string]any{
+				"kind":      map[string]any{"type": "string"},
+				"subject":   map[string]any{"type": "string"},
+				"signature": map[string]any{"type": "string"},
+				"claim":     map[string]any{"type": "string"},
+			}, true
+	default:
 		return "", "", nil, false
 	}
-	return "crm.lookup", "Look a customer up by email.",
-		map[string]any{"email": map[string]any{"type": "string"}}, true
 }
 
 // capture records the request body a planner sent, so a test can assert on the
@@ -456,6 +469,95 @@ func TestLoopContract_tellsTheModelToFinishWithTheFinishTool(t *testing.T) {
 				if !strings.Contains(system, want) {
 					t.Errorf("system prompt does not contain %q:\n%s", want, system)
 				}
+			}
+		})
+	}
+}
+
+func TestMemoryTools_areExplainedOnlyWhenOffered(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name     string
+		kind     model.Kind
+		response string
+		system   func(map[string]any) string
+	}{
+		{
+			name:     "anthropic",
+			kind:     model.KindAnthropic,
+			response: anthropicToolUse,
+			system: func(body map[string]any) string {
+				blocks, _ := body["system"].([]any)
+				var text strings.Builder
+				for _, b := range blocks {
+					m, _ := b.(map[string]any)
+					text.WriteString(" ")
+					text.WriteString(asString(m["text"]))
+				}
+				return text.String()
+			},
+		},
+		{
+			name:     "openai-compatible",
+			kind:     model.KindOpenAICompatible,
+			response: openAIToolCall,
+			system: func(body map[string]any) string {
+				msgs, _ := body["messages"].([]any)
+				first, _ := msgs[0].(map[string]any)
+				return asString(first["content"])
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			without := serve(t, tc.response)
+			base, err := plannerFor(t, tc.kind, without.server.URL, model.Config{}).
+				Plan(context.Background(), input())
+			if err != nil {
+				t.Fatalf("Plan without memory: %v", err)
+			}
+			if strings.Contains(tc.system(without.body), "Memory learning is enabled") {
+				t.Fatalf("memory learning note was sent without a memory tool:\n%s", tc.system(without.body))
+			}
+
+			with := serve(t, tc.response)
+			in := input()
+			in.Tools = append(in.Tools, domain.ToolMemoryFind, domain.ToolMemorySuggest)
+			in.MemoryLearning = domain.MemoryLearningPolicy{Mode: domain.MemoryLearningReview}
+			got, err := plannerFor(t, tc.kind, with.server.URL, model.Config{}).Plan(context.Background(), in)
+			if err != nil {
+				t.Fatalf("Plan with memory: %v", err)
+			}
+			system := tc.system(with.body)
+			for _, want := range []string{
+				"Governed memory lookup is available",
+				"_fuseone__memory__find",
+				"Memory learning is enabled",
+				"_fuseone__memory__suggest",
+				"Do not suggest one-off facts, secrets, approvals, permissions or broad opinions",
+			} {
+				if !strings.Contains(system, want) {
+					t.Errorf("system prompt does not contain %q:\n%s", want, system)
+				}
+			}
+			if got.Prompt.Platform <= base.Prompt.Platform {
+				t.Errorf("platform prompt bytes = %d, want more than %d after adding the memory note",
+					got.Prompt.Platform, base.Prompt.Platform)
+			}
+
+			disabled := serve(t, tc.response)
+			in.MemoryLearning = domain.MemoryLearningPolicy{Mode: domain.MemoryLearningOff}
+			if _, err := plannerFor(t, tc.kind, disabled.server.URL, model.Config{}).
+				Plan(context.Background(), in); err != nil {
+				t.Fatalf("Plan with manually granted memory suggest but learning off: %v", err)
+			}
+			system = tc.system(disabled.body)
+			if strings.Contains(system, "Memory learning is enabled") {
+				t.Fatalf("memory learning note was sent while learning was off:\n%s", system)
 			}
 		})
 	}

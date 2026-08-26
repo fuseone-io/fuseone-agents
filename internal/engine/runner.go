@@ -204,15 +204,16 @@ func (r *Runner) plan(ctx context.Context, state State, start Start) (Proposal, 
 	// could not happen.
 	at := StepAt(start, state.Called)
 	p, err := r.deps.Planner.Plan(ctx, PlanInput{
-		State:      state,
-		Transcript: transcript,
-		Budget:     start.Budget,
-		Remaining:  remaining(start.Budget, state.Committed()),
-		Tools:      envelopeForState(start, state).Tools(),
-		Model:      model,
-		Effort:     effort,
-		Step:       StepNameAt(start, state.Called),
-		StopsWhen:  stopsWhenAt(start, at),
+		State:          state,
+		Transcript:     transcript,
+		Budget:         start.Budget,
+		Remaining:      remaining(start.Budget, state.Committed()),
+		Tools:          envelopeForState(start, state).Tools(),
+		MemoryLearning: start.MemoryLearning.Normalize(),
+		Model:          model,
+		Effort:         effort,
+		Step:           StepNameAt(start, state.Called),
+		StopsWhen:      stopsWhenAt(start, at),
 	})
 	if err != nil {
 		return Proposal{}, fmt.Errorf("engine: plan: %w", err)

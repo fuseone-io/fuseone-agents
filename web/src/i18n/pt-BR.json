@@ -304,9 +304,9 @@
     "launchGuideTitle": "Pronto para validar",
     "memoryLearning": "Aprendizado de memória",
     "memoryLearningExplains": {
-      "auto_confirm": "O agente pode propor asserções estruturadas. Sugestões idênticas repetidas só são promovidas depois da contagem configurada.",
+      "auto_confirm": "O agente pode propor asserções estruturadas. Sugestões idênticas em runs distintas só são promovidas depois da contagem configurada; sugestões vindas de dado não confiável ainda podem pedir aprovação antes de contar.",
       "off": "O agente pode ler memória governada, mas não vai propor novas asserções.",
-      "review": "O agente pode propor asserções estruturadas. Uma pessoa precisa aceitá-las antes que virem memória ativa."
+      "review": "O agente pode propor asserções estruturadas. Uma pessoa precisa aceitá-las antes que virem memória ativa; se a run leu dado não confiável, o Gate pode pedir aprovação antes de registrar a sugestão."
     },
     "memoryLearningHint": "Opt-in por versão. Sugestões herdam os labels da run e nunca viram instruções de prompt.",
     "memoryLearningMin": "Auto-confirmar após",
