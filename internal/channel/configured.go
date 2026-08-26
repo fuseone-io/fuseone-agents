@@ -171,7 +171,8 @@ func (c *Configured) For(ctx context.Context, scope domain.Scope) ([]Conversatio
 			continue
 		}
 		out = append(out, Conversation{
-			Channel: v.Channel, ID: s.Name, Label: v.Label, Wants: v.Wants,
+			Channel: v.Channel, ID: s.Name, Label: v.Label,
+			Agent: v.Agent, Wants: v.Wants,
 		})
 	}
 	return out, nil

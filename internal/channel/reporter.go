@@ -124,7 +124,7 @@ func (r *Reporter) announce(ctx context.Context, report Report) (sent, told int,
 	failures := []error{}
 	deliveryFailures := []DeliveryFailure{}
 	for _, place := range places {
-		if !place.wants(report.Event) {
+		if !place.wants(report.Event) || !place.reportsAgent(report.AgentID) {
 			continue
 		}
 		// Owed a message, whether or not one goes out now: a conversation

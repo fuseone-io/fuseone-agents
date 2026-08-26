@@ -104,6 +104,31 @@ func TestWatchFor_aConfiguredSourceAnswersTheAutomation(t *testing.T) {
 	}
 }
 
+func TestFor_keepsTheWatchedAgentForOutboundFiltering(t *testing.T) {
+	store, channels := configuredChannels(t)
+
+	if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+		ID: "C07-ticketito", Label: "#tickets", Enabled: true,
+		Scope:   domain.Scope{Company: "acme", Area: "ops"},
+		Mode:    channel.ConversationWatch,
+		Sources: []string{"B-ticketito"},
+		Agent:   "ticketito", RunAs: "usr_opsbot",
+	}, "usr_ana"); err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+
+	places, err := store.For(t.Context(), domain.Scope{Company: "acme", Area: "ops"})
+	if err != nil {
+		t.Fatalf("For: %v", err)
+	}
+	for _, place := range places {
+		if place.ID == "C07-ticketito" && place.Agent == "ticketito" {
+			return
+		}
+	}
+	t.Fatalf("places = %+v, want the outbound route to keep its watched agent", places)
+}
+
 func TestWatchFor_bothModeAlsoAnswersTheAutomation(t *testing.T) {
 	store, channels := configuredChannels(t)
 

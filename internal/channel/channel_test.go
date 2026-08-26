@@ -41,6 +41,58 @@ func TestSweep_runIsWaitingOnSomebody_reportsToTheConversationsInItsScope(t *tes
 	}
 }
 
+func TestSweep_agentScopedConversationOnlyHearsItsAgent(t *testing.T) {
+	t.Parallel()
+	posts := &recorder{}
+	r := channel.NewReporter(
+		&fixedReports{reports: []channel.Report{
+			report("run-1", "acme", "ops", channel.EventParked),
+		}},
+		multiConversations{places: []channel.Conversation{
+			{Channel: "acme-slack", ID: "C07-ticketito", Label: "#ticketito",
+				Agent: "ticketito", Wants: []channel.Event{channel.EventParked}},
+			{Channel: "acme-slack", ID: "C08-triage", Label: "#triage",
+				Agent: "triage", Wants: []channel.Event{channel.EventParked}},
+		}},
+		posts,
+		func() time.Time { return noon },
+		nil,
+	).WithDeliveries(&memoryDeliveries{})
+
+	if _, err := r.Sweep(t.Context(), 50); err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	if len(posts.sent) != 1 || posts.sent[0].conversation.ID != "C08-triage" {
+		t.Fatalf("sent = %+v, want only the conversation plugged into triage", posts.sent)
+	}
+}
+
+func TestSweep_unscopedConversationStillHearsTheScope(t *testing.T) {
+	t.Parallel()
+	posts := &recorder{}
+	r := channel.NewReporter(
+		&fixedReports{reports: []channel.Report{
+			report("run-1", "acme", "ops", channel.EventParked),
+		}},
+		multiConversations{places: []channel.Conversation{
+			{Channel: "acme-slack", ID: "C07-broadcast", Label: "#ops",
+				Wants: []channel.Event{channel.EventParked}},
+			{Channel: "acme-slack", ID: "C08-other", Label: "#other",
+				Agent: "ticketito", Wants: []channel.Event{channel.EventParked}},
+		}},
+		posts,
+		func() time.Time { return noon },
+		nil,
+	).WithDeliveries(&memoryDeliveries{})
+
+	if _, err := r.Sweep(t.Context(), 50); err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	if len(posts.sent) != 1 || posts.sent[0].conversation.ID != "C07-broadcast" {
+		t.Fatalf("sent = %+v, want the scope broadcast conversation", posts.sent)
+	}
+}
+
 func TestSweep_runIsInAnotherArea_reportsNowhere(t *testing.T) {
 	t.Parallel()
 	// The conversation carries the scope (NT-005 §4). A channel that received
@@ -301,6 +353,60 @@ func TestNotice_gateRefusalRidesWithFailedNotifications(t *testing.T) {
 	}
 	if len(posts.sent) != 0 {
 		t.Fatalf("sent %d messages to a conversation that only asked for parked events", len(posts.sent))
+	}
+}
+
+func TestNotice_agentScopedConversationOnlyHearsItsAgent(t *testing.T) {
+	t.Parallel()
+
+	posts := &recorder{}
+	notice := channel.NewNotice(
+		multiConversations{places: []channel.Conversation{
+			{Channel: "acme-slack", ID: "C07-ticketito", Label: "#ticketito",
+				Agent: "ticketito", Wants: []channel.Event{channel.EventDrifted}},
+			{Channel: "acme-slack", ID: "C08-triage", Label: "#triage",
+				Agent: "triage", Wants: []channel.Event{channel.EventDrifted}},
+		}},
+		posts,
+	)
+
+	n, err := notice.AnnounceCount(t.Context(),
+		domain.Scope{Company: "acme", Area: "ops"},
+		channel.Message{Event: channel.EventDrifted, Agent: "triage"},
+	)
+	if err != nil {
+		t.Fatalf("Announce: %v", err)
+	}
+	if n != 1 || len(posts.sent) != 1 || posts.sent[0].conversation.ID != "C08-triage" {
+		t.Fatalf("sent = %+v, n = %d, want only the conversation plugged into triage",
+			posts.sent, n)
+	}
+}
+
+func TestNotice_scopeWideMessageReachesAgentScopedConversations(t *testing.T) {
+	t.Parallel()
+
+	posts := &recorder{}
+	notice := channel.NewNotice(
+		multiConversations{places: []channel.Conversation{
+			{Channel: "acme-slack", ID: "C07-ticketito", Label: "#ticketito",
+				Agent: "ticketito", Wants: []channel.Event{channel.EventFailed}},
+			{Channel: "acme-slack", ID: "C08-triage", Label: "#triage",
+				Agent: "triage", Wants: []channel.Event{channel.EventFailed}},
+		}},
+		posts,
+	)
+
+	n, err := notice.AnnounceCount(t.Context(),
+		domain.Scope{Company: "acme", Area: "ops"},
+		channel.Message{Event: channel.EventGateRefusal, Tool: "crm.delete_account"},
+	)
+	if err != nil {
+		t.Fatalf("Announce: %v", err)
+	}
+	if n != 2 || len(posts.sent) != 2 {
+		t.Fatalf("sent = %+v, n = %d, want a scope-wide message to reach both agents",
+			posts.sent, n)
 	}
 }
 

@@ -47,7 +47,7 @@ func (n *Notice) AnnounceCount(ctx context.Context, scope domain.Scope, m Messag
 	sent := 0
 	failures := []error{}
 	for _, place := range places {
-		if !place.wants(m.Event) {
+		if !place.wants(m.Event) || !place.reportsAgent(m.Agent) {
 			continue
 		}
 		if _, err := n.poster.Post(ctx, place, m); err != nil {

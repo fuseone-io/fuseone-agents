@@ -72,10 +72,13 @@ func refusalAlertMessage(form policy.RefusalForm, baseURL string) channel.Messag
 	if form.Effect.String() != "" {
 		reason = fmt.Sprintf("%s blocked %s", reasonOrUnknown(reason), form.Effect)
 	}
+	// A refusal form is grouped by scope, rule, tool, effect and verdict; the
+	// first agent is only the example that produced the link. Leaving Agent
+	// empty keeps the notice scope-wide, so agent-specific conversations in the
+	// same scope all hear about the shared Gate shape.
 	m := channel.Message{
 		Event:  channel.EventGateRefusal,
 		RunID:  form.FirstRunID,
-		Agent:  form.FirstAgentID,
 		Scope:  form.Scope,
 		Tool:   string(form.Tool),
 		Reason: reason,

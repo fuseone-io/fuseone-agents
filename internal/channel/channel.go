@@ -74,6 +74,10 @@ type Conversation struct {
 	ID string
 	// Label is what a person calls it, for the console and for logs.
 	Label string
+	// Agent names the agent this conversation starts from watched messages,
+	// when it is plugged into one. Empty means a scope-level broadcast
+	// conversation.
+	Agent domain.AgentID
 	// Wants is which events reach it. Empty means the defaults.
 	Wants []Event
 }
@@ -94,6 +98,10 @@ func (c Conversation) wants(e Event) bool {
 		}
 	}
 	return false
+}
+
+func (c Conversation) reportsAgent(agent domain.AgentID) bool {
+	return c.Agent == "" || agent == "" || c.Agent == agent
 }
 
 func failedFamily(e Event) Event {
