@@ -27,6 +27,8 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.38.0] — 2026-08-26
+
 ### Upgrade notes
 
 - **This release adds two migrations, neither on `run_steps`.** 0063 adds the
