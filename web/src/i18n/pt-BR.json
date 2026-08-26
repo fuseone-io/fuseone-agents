@@ -1595,6 +1595,7 @@
     "record": "Registrar memória",
     "recorded": "Memória registrada",
     "reviewReasonPlaceholder": "revisado a partir da fila de sugestões",
+    "saveMemory": "Salvar memória",
     "scope": "Escopo",
     "search": "Buscar memória",
     "searchPlaceholder": "Buscar assunto, assinatura ou afirmação",
@@ -1624,7 +1625,8 @@
     "title": "Memória",
     "noSuggestions": "Nenhuma sugestão de memória pendente encontrada",
     "noSuggestionsHint": "Agentes com opt-in podem propor asserções estruturadas. Elas aparecem aqui para revisão antes de virarem memória ativa.",
-    "updated": "Atualizada {{seen}}"
+    "updated": "Atualizada {{seen}}",
+    "viewFilter": "Visão da memória"
   },
   "nav": {
     "admin": "Administração",

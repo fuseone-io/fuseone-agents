@@ -1595,6 +1595,7 @@
     "record": "Record memory",
     "recorded": "Memory recorded",
     "reviewReasonPlaceholder": "reviewed from the suggestion queue",
+    "saveMemory": "Save memory",
     "scope": "Scope",
     "search": "Search memory",
     "searchPlaceholder": "Search subject, signature or claim",
@@ -1624,7 +1625,8 @@
     "title": "Memory",
     "noSuggestions": "No pending memory suggestion matches",
     "noSuggestionsHint": "Opted-in agents can propose structured assertions. They appear here for review before they become active memory.",
-    "updated": "Updated {{seen}}"
+    "updated": "Updated {{seen}}",
+    "viewFilter": "Memory view"
   },
   "nav": {
     "admin": "Administration",

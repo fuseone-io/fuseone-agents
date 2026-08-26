@@ -128,8 +128,7 @@ func (m *Memory) alreadyActiveSuggestion(
 	s domain.MemorySuggestion, now time.Time,
 ) (domain.MemorySuggestionOutcome, bool) {
 	active, ok := m.values[s.AssertionID]
-	if !ok || active.Status != domain.MemoryActive || active.Claim != s.Claim ||
-		expired(active, nowOrWall(now)) {
+	if !ok || active.Status != domain.MemoryActive || expired(active, nowOrWall(now)) {
 		return domain.MemorySuggestionOutcome{}, false
 	}
 	active = cloneAssertion(active)

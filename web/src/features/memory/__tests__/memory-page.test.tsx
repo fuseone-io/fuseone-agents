@@ -98,9 +98,10 @@ describe("governed memory page", () => {
   it("records a reviewed assertion with ledger evidence", async () => {
     const user = userEvent.setup();
     render(<MemoryPage />);
+    await user.click(screen.getByRole("button", { name: "Record memory" }));
     await fillAssertion(user);
 
-    await user.click(screen.getByRole("button", { name: "Record memory" }));
+    await user.click(screen.getByRole("button", { name: "Save memory" }));
 
     expect(hooks.create).toHaveBeenCalledWith({
       company: "acme", area: "ops", agentId: "triage", kind: "incident",
@@ -170,6 +171,7 @@ describe("governed memory page", () => {
     hooks.suggestions = [memorySuggestion(0)];
     render(<MemoryPage />);
 
+    await user.click(screen.getByRole("tab", { name: "Suggested memory" }));
     await user.click(screen.getByRole("button", { name: "Accept suggestion" }));
     const dialog = screen.getByRole("alertdialog");
     expect(
@@ -185,31 +187,35 @@ describe("governed memory page", () => {
     });
   });
 
-  it("shows that more memory suggestions exist instead of cutting silently", () => {
+  it("shows that more memory suggestions exist instead of cutting silently", async () => {
+    const user = userEvent.setup();
     hooks.suggestions = Array.from({ length: 9 }, (_, index) =>
       memorySuggestion(index),
     );
 
     render(<MemoryPage />);
 
-    expect(screen.getByText("suggested-subject-0")).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Suggested memory" }));
+    expect(screen.getAllByText("suggested-subject-0").length).toBeGreaterThan(0);
     expect(screen.getByText("suggested-subject-7")).toBeInTheDocument();
     expect(screen.queryByText("suggested-subject-8")).not.toBeInTheDocument();
     expect(screen.getByText("8 of 9")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Load more" })).toBeInTheDocument();
   });
 
-  it("keeps write controls out for read-only callers", () => {
+  it("keeps write controls out for read-only callers", async () => {
+    const user = userEvent.setup();
     hooks.can = ["agent:read"];
     hooks.items = [memoryAssertion(0)];
     hooks.suggestions = [memorySuggestion(0)];
 
     render(<MemoryPage />);
 
-    expect(screen.getByText("Read-only memory")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Record memory" })).toBeNull();
     expect(screen.queryByText("New memory")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Correct" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Disable" })).toBeNull();
+    await user.click(screen.getByRole("tab", { name: "Suggested memory" }));
     expect(screen.queryByRole("button", { name: "Accept suggestion" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Dismiss suggestion" })).toBeNull();
   });

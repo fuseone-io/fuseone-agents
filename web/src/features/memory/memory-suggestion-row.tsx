@@ -2,20 +2,20 @@ import { CircleCheck, ShieldAlert } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { MemoryAssertion } from "@/features/memory/api";
+import type { MemorySuggestion } from "@/features/memory/api";
 import { cn } from "@/lib/utils";
 
-export function MemoryAssertionRow({
-  assertion,
+export function MemorySuggestionRow({
+  suggestion,
   selected,
   onSelect,
 }: {
-  assertion: MemoryAssertion;
+  suggestion: MemorySuggestion;
   selected: boolean;
   onSelect: () => void;
 }) {
   const { t } = useTranslation();
-  const untrusted = assertion.labels.includes("untrusted");
+  const untrusted = suggestion.labels.includes("untrusted");
   return (
     <Button
       type="button"
@@ -31,7 +31,7 @@ export function MemoryAssertionRow({
     >
       <div className="flex min-w-0 items-center gap-2">
         <span className="min-w-0 flex-1 truncate text-sm font-medium">
-          {assertion.subject}
+          {suggestion.subject}
         </span>
         {untrusted && (
           <Badge className="h-5 shrink-0 bg-warning-surface text-warning">
@@ -41,20 +41,20 @@ export function MemoryAssertionRow({
         )}
         <span className="inline-flex shrink-0 items-center gap-1 font-mono text-2xs text-muted-foreground">
           <CircleCheck className="size-3" aria-hidden />
-          {assertion.confirmed}
+          {suggestion.observations}
         </span>
       </div>
       <div className="flex min-w-0 items-center gap-2">
         <span className="max-w-[150px] shrink-0 truncate font-mono text-2xs text-text-accent">
-          {assertion.kind}
+          {suggestion.kind}
         </span>
         <span className="size-1 shrink-0 rounded-full bg-border-strong" />
         <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-          {assertion.claim}
+          {suggestion.claim}
         </span>
       </div>
       <p className="truncate font-mono text-2xs text-muted-foreground">
-        {assertion.signature}
+        {suggestion.signature}
       </p>
     </Button>
   );

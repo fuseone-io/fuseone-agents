@@ -1,14 +1,17 @@
 import { useState } from "react";
+import { Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
-import { Panel } from "@/components/shared/panel";
+import { Button } from "@/components/ui/button";
 import { MemoryCorrectDialog } from "@/features/memory/memory-correct-dialog";
-import { MemoryCreatePanel } from "@/features/memory/memory-create-panel";
 import { MemoryDisableDialog } from "@/features/memory/memory-disable-dialog";
 import { MemoryListPanel } from "@/features/memory/memory-list-panel";
 import { MemorySuggestionReviewDialog } from "@/features/memory/memory-suggestion-review-dialog";
-import { MemorySuggestionsPanel } from "@/features/memory/memory-suggestions-panel";
+import {
+  memoryStatusForView,
+  type MemoryView,
+} from "@/features/memory/memory-view";
 import {
   useMemoryAssertions,
   useMemorySuggestions,
@@ -27,6 +30,8 @@ const DEFAULT_FILTERS: MemoryFilters = {
 export function MemoryPage() {
   const { t } = useTranslation();
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  const [view, setView] = useState<MemoryView>("active");
+  const [composing, setComposing] = useState(false);
   const [correcting, setCorrecting] = useState<MemoryAssertion | null>(null);
   const [disabling, setDisabling] = useState<MemoryAssertion | null>(null);
   const [reviewing, setReviewing] = useState<{
@@ -42,33 +47,50 @@ export function MemoryPage() {
   const { data: me } = useMe();
   const canPublish = me === null || Boolean(me?.can.includes("agent:publish"));
 
+  function changeView(next: MemoryView) {
+    setView(next);
+    setComposing(false);
+    if (next !== "suggested") {
+      setFilters((current) => ({
+        ...current,
+        status: memoryStatusForView(next),
+      }));
+    }
+  }
+
+  function finishComposing() {
+    setComposing(false);
+    changeView("active");
+  }
+
   return (
     <>
       <PageHeader
         icon={PAGE_ICONS.memory}
         title={t("memory.title")}
         description={t("memory.subtitle")}
-      />
+      >
+        {canPublish && (
+          <Button type="button" size="sm" onClick={() => setComposing(true)}>
+            <Plus className="size-4" aria-hidden />
+            {t("memory.record")}
+          </Button>
+        )}
+      </PageHeader>
 
-      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]">
-        <MemoryListPanel
-          filters={filters}
-          onFilters={setFilters}
-          query={assertions}
-          canDisable={canPublish}
-          onCorrect={setCorrecting}
-          onDisable={setDisabling}
-        />
-        <div className="grid min-w-0 content-start gap-4">
-          <MemorySuggestionsPanel
-            query={suggestions}
-            canReview={canPublish}
-            onAccept={(suggestion) => setReviewing({ suggestion, action: "accept" })}
-            onDismiss={(suggestion) => setReviewing({ suggestion, action: "dismiss" })}
-          />
-          {canPublish ? <MemoryCreatePanel /> : <MemoryReadOnlyPanel />}
-        </div>
-      </div>
+      <MemoryListPanel
+        filters={filters}
+        onFilters={setFilters}
+        state={{ view, composing }}
+        queries={{ assertions, suggestions }}
+        canPublish={canPublish}
+        onView={changeView}
+        onComposeDone={finishComposing}
+        onCorrect={setCorrecting}
+        onDisable={setDisabling}
+        onAccept={(suggestion) => setReviewing({ suggestion, action: "accept" })}
+        onDismiss={(suggestion) => setReviewing({ suggestion, action: "dismiss" })}
+      />
 
       {correcting && (
         <MemoryCorrectDialog
@@ -90,16 +112,5 @@ export function MemoryPage() {
         />
       )}
     </>
-  );
-}
-
-function MemoryReadOnlyPanel() {
-  const { t } = useTranslation();
-  return (
-    <Panel title={t("memory.readOnlyTitle")}>
-      <p className="text-sm text-muted-foreground">
-        {t("memory.readOnlyHint")}
-      </p>
-    </Panel>
   );
 }

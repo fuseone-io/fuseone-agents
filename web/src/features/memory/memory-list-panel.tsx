@@ -1,155 +1,250 @@
-import { useState } from "react";
-import { useTranslation } from "react-i18next";
+import { useState, type ReactNode } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
-import { Search } from "lucide-react";
+import { Lightbulb, Search } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/shared/states";
 import { LoadMore } from "@/components/shared/load-more";
 import { Panel } from "@/components/shared/panel";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { MemoryAssertionCard } from "@/features/memory/memory-assertion-card";
-import { MemoryAssertionRow } from "@/features/memory/memory-assertion-row";
+import { MemoryAssertionIndex } from "@/features/memory/memory-assertion-index";
+import { MemoryBrowserToolbar } from "@/features/memory/memory-browser-toolbar";
+import { MemoryCreatePanel } from "@/features/memory/memory-create-panel";
+import { MemorySuggestionCard } from "@/features/memory/memory-suggestion-card";
+import { MemorySuggestionIndex } from "@/features/memory/memory-suggestion-index";
 import type {
   MemoryAssertion,
   MemoryFilters,
-  MemoryStatusFilter,
+  MemorySuggestion,
 } from "@/features/memory/api";
-import { MEMORY_STATUS_LABELS } from "@/features/memory/memory-status";
+import type { MemoryView } from "@/features/memory/memory-view";
 import { useVisibleItems } from "@/hooks/use-visible-items";
 
 const PAGE_SIZE = 8;
-const STATUSES: MemoryStatusFilter[] = [
-  "active",
-  "disabled",
-  "expired",
-  "source_erased",
-  "all",
-];
 
-export function MemoryListPanel({
-  filters,
-  onFilters,
-  query,
-  canDisable,
-  onCorrect,
-  onDisable,
-}: {
+interface MemoryListPanelProps {
   filters: MemoryFilters;
+  state: { view: MemoryView; composing: boolean };
+  queries: {
+    assertions: UseQueryResult<{ items: MemoryAssertion[] }, Error>;
+    suggestions: UseQueryResult<{ items: MemorySuggestion[] }, Error>;
+  };
+  canPublish: boolean;
   onFilters: (filters: MemoryFilters) => void;
-  query: UseQueryResult<{ items: MemoryAssertion[] }, Error>;
-  canDisable: boolean;
+  onView: (view: MemoryView) => void;
+  onComposeDone: () => void;
   onCorrect?: (assertion: MemoryAssertion) => void;
   onDisable: (assertion: MemoryAssertion) => void;
-}) {
+  onAccept: (suggestion: MemorySuggestion) => void;
+  onDismiss: (suggestion: MemorySuggestion) => void;
+}
+
+export function MemoryListPanel(props: MemoryListPanelProps) {
   const { t } = useTranslation();
-  const items = query.data?.items ?? [];
-  const page = useVisibleItems(items, PAGE_SIZE);
-  const [selectedID, setSelectedID] = useState<string | null>(null);
-  const selected =
-    page.visible.find((assertion) => assertion.id === selectedID) ??
-    page.visible[0] ??
+  const assertions = props.queries.assertions.data?.items ?? [];
+  const suggestions = props.queries.suggestions.data?.items ?? [];
+  const assertionPage = useVisibleItems(assertions, PAGE_SIZE);
+  const suggestionPage = useVisibleItems(suggestions, PAGE_SIZE);
+  const [selectedAssertionID, setSelectedAssertionID] = useState<string | null>(null);
+  const [selectedSuggestionID, setSelectedSuggestionID] = useState<string | null>(null);
+  const selectedAssertion =
+    assertionPage.visible.find((item) => item.id === selectedAssertionID) ??
+    assertionPage.visible[0] ??
+    null;
+  const selectedSuggestion =
+    suggestionPage.visible.find((item) => item.id === selectedSuggestionID) ??
+    suggestionPage.visible[0] ??
     null;
 
   return (
-    <Panel title={t("memory.assertions")}>
-      <MemoryFiltersBar filters={filters} onFilters={onFilters} />
-      {query.isLoading ? (
-        <LoadingRows rows={5} />
-      ) : query.error ? (
-        <ErrorState error={query.error} onRetry={() => void query.refetch()} />
-      ) : page.visible.length === 0 ? (
-        <EmptyState
-          icon={<Search className="size-6" />}
-          title={t("memory.emptyTitle")}
-          hint={t("memory.emptyHint")}
-        />
-      ) : (
-        <>
-          <div className="grid min-w-0 gap-4 2xl:grid-cols-[minmax(0,1fr)_minmax(360px,440px)]">
-            <div className="grid min-w-0 content-start gap-2">
-              {page.visible.map((assertion) => (
-                <MemoryAssertionRow
-                  key={assertion.id}
-                  assertion={assertion}
-                  selected={assertion.id === selected?.id}
-                  onSelect={() => setSelectedID(assertion.id)}
-                />
-              ))}
-            </div>
-            {selected && (
-              <div className="min-w-0 2xl:sticky 2xl:top-4 2xl:self-start">
-                <MemoryAssertionCard
-                  assertion={selected}
-                  canDisable={canDisable}
-                  onCorrect={onCorrect}
-                  onDisable={onDisable}
-                />
-              </div>
-            )}
-          </div>
-          <LoadMore
-            loaded={page.loaded}
-            total={page.total}
-            hasMore={page.hasMore}
-            isLoading={false}
-            onLoad={page.loadMore}
+    <Panel title={t("memory.assertions")} flush>
+      <MemoryBrowserToolbar
+        filters={props.filters}
+        view={props.state.view}
+        onFilters={props.onFilters}
+        onView={props.onView}
+      />
+      <div className="grid min-h-[620px] min-w-0 lg:grid-cols-[minmax(0,370px)_minmax(0,1fr)]">
+        <aside className="min-h-0 min-w-0 border-b lg:border-r lg:border-b-0">
+          <ScrollArea className="h-[620px]">
+            <ListSide
+              props={props}
+              assertionPage={assertionPage}
+              suggestionPage={suggestionPage}
+              selectedAssertionID={selectedAssertion?.id}
+              selectedSuggestionID={selectedSuggestion?.id}
+              onAssertionSelect={setSelectedAssertionID}
+              onSuggestionSelect={setSelectedSuggestionID}
+            />
+          </ScrollArea>
+        </aside>
+        <section className="min-h-0 min-w-0 overflow-y-auto p-4">
+          <ReaderSide
+            props={props}
+            selectedAssertion={selectedAssertion}
+            selectedSuggestion={selectedSuggestion}
           />
-        </>
-      )}
+        </section>
+      </div>
     </Panel>
   );
 }
 
-function MemoryFiltersBar({
-  filters,
-  onFilters,
+function ListSide({
+  props,
+  assertionPage,
+  suggestionPage,
+  selectedAssertionID,
+  selectedSuggestionID,
+  onAssertionSelect,
+  onSuggestionSelect,
 }: {
-  filters: MemoryFilters;
-  onFilters: (filters: MemoryFilters) => void;
+  props: MemoryListPanelProps;
+  assertionPage: ReturnType<typeof useVisibleItems<MemoryAssertion>>;
+  suggestionPage: ReturnType<typeof useVisibleItems<MemorySuggestion>>;
+  selectedAssertionID?: string;
+  selectedSuggestionID?: string;
+  onAssertionSelect: (id: string) => void;
+  onSuggestionSelect: (id: string) => void;
 }) {
-  const { t } = useTranslation();
+  if (props.state.view === "suggested") {
+    return (
+      <SuggestionList
+        query={props.queries.suggestions}
+        page={suggestionPage}
+        selectedID={selectedSuggestionID}
+        onSelect={(item) => onSuggestionSelect(item.id)}
+      />
+    );
+  }
   return (
-    <div className="mb-4 grid min-w-0 gap-2 md:grid-cols-[minmax(0,1fr)_180px_180px]">
-      <Input
-        type="search"
-        aria-label={t("memory.search")}
-        placeholder={t("memory.searchPlaceholder")}
-        value={filters.search}
-        onChange={(event) => onFilters({ ...filters, search: event.target.value })}
-      />
-      <Input
-        aria-label={t("memory.agentFilter")}
-        placeholder={t("memory.agentFilterPlaceholder")}
-        value={filters.agentId}
-        onChange={(event) => onFilters({ ...filters, agentId: event.target.value })}
-      />
-      <Select
-        value={filters.status}
-        onValueChange={(status) =>
-          onFilters({ ...filters, status: status as MemoryStatusFilter })
-        }
-      >
-        <SelectTrigger aria-label={t("memory.statusFilter")}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {STATUSES.map((status) => (
-            <SelectItem key={status} value={status}>
-              {t(statusLabel(status))}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
+    <AssertionList
+      query={props.queries.assertions}
+      page={assertionPage}
+      selectedID={selectedAssertionID}
+      onSelect={(item) => onAssertionSelect(item.id)}
+    />
   );
 }
 
-function statusLabel(status: MemoryStatusFilter): string {
-  return status === "all" ? "memory.status.all" : MEMORY_STATUS_LABELS[status];
+function ReaderSide({
+  props,
+  selectedAssertion,
+  selectedSuggestion,
+}: {
+  props: MemoryListPanelProps;
+  selectedAssertion: MemoryAssertion | null;
+  selectedSuggestion: MemorySuggestion | null;
+}) {
+  if (props.state.composing) {
+    return <MemoryCreatePanel framed={false} onDone={props.onComposeDone} />;
+  }
+  if (props.state.view === "suggested") {
+    if (!selectedSuggestion) return <ReaderEmpty kind="suggestions" />;
+    return (
+      <MemorySuggestionCard
+        suggestion={selectedSuggestion}
+        canReview={props.canPublish}
+        onAccept={props.onAccept}
+        onDismiss={props.onDismiss}
+      />
+    );
+  }
+  if (!selectedAssertion) return <ReaderEmpty kind="assertions" />;
+  return (
+    <MemoryAssertionCard
+      assertion={selectedAssertion}
+      canDisable={props.canPublish}
+      onCorrect={props.onCorrect}
+      onDisable={props.onDisable}
+    />
+  );
+}
+
+function AssertionList({
+  query,
+  page,
+  selectedID,
+  onSelect,
+}: {
+  query: UseQueryResult<{ items: MemoryAssertion[] }, Error>;
+  page: ReturnType<typeof useVisibleItems<MemoryAssertion>>;
+  selectedID?: string;
+  onSelect: (assertion: MemoryAssertion) => void;
+}) {
+  if (query.isLoading) return <Padded><LoadingRows rows={6} /></Padded>;
+  if (query.error) {
+    return <Padded><ErrorState error={query.error} onRetry={() => void query.refetch()} /></Padded>;
+  }
+  if (page.visible.length === 0) return <Padded><ReaderEmpty kind="assertions" /></Padded>;
+  return (
+    <>
+      <MemoryAssertionIndex
+        assertions={page.visible}
+        selectedID={selectedID}
+        onSelect={onSelect}
+      />
+      <Padded>
+        <LoadMore
+          loaded={page.loaded}
+          total={page.total}
+          hasMore={page.hasMore}
+          isLoading={false}
+          onLoad={page.loadMore}
+        />
+      </Padded>
+    </>
+  );
+}
+
+function SuggestionList({
+  query,
+  page,
+  selectedID,
+  onSelect,
+}: {
+  query: UseQueryResult<{ items: MemorySuggestion[] }, Error>;
+  page: ReturnType<typeof useVisibleItems<MemorySuggestion>>;
+  selectedID?: string;
+  onSelect: (suggestion: MemorySuggestion) => void;
+}) {
+  if (query.isLoading) return <Padded><LoadingRows rows={6} /></Padded>;
+  if (query.error) {
+    return <Padded><ErrorState error={query.error} onRetry={() => void query.refetch()} /></Padded>;
+  }
+  if (page.visible.length === 0) return <Padded><ReaderEmpty kind="suggestions" /></Padded>;
+  return (
+    <>
+      <MemorySuggestionIndex
+        suggestions={page.visible}
+        selectedID={selectedID}
+        onSelect={onSelect}
+      />
+      <Padded>
+        <LoadMore
+          loaded={page.loaded}
+          total={page.total}
+          hasMore={page.hasMore}
+          isLoading={false}
+          onLoad={page.loadMore}
+        />
+      </Padded>
+    </>
+  );
+}
+
+function ReaderEmpty({ kind }: { kind: "assertions" | "suggestions" }) {
+  const { t } = useTranslation();
+  const icon = kind === "suggestions" ? <Lightbulb className="size-6" /> : <Search className="size-6" />;
+  return (
+    <EmptyState
+      icon={icon}
+      title={t(kind === "suggestions" ? "memory.noSuggestions" : "memory.emptyTitle")}
+      hint={t(kind === "suggestions" ? "memory.noSuggestionsHint" : "memory.emptyHint")}
+    />
+  );
+}
+
+function Padded({ children }: { children: ReactNode }) {
+  return <div className="p-4">{children}</div>;
 }

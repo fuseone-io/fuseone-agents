@@ -2,8 +2,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Form } from "@/components/ui/form";
 import { Panel } from "@/components/shared/panel";
 import { useActiveScope } from "@/features/scope/active-scope";
 import { useCreateMemoryAssertion } from "@/features/memory/api";
@@ -11,18 +9,20 @@ import {
   memoryDefaults,
   toMemoryAssertionInput,
 } from "@/features/memory/memory-create-model";
-import { EvidenceFields } from "@/features/memory/memory-evidence-fields";
-import {
-  MemoryInputField,
-  MemoryTextareaField,
-} from "@/features/memory/memory-form-fields";
+import { MemoryCreateForm } from "@/features/memory/memory-create-form";
 import {
   memoryFormSchema,
   type MemoryFormValues,
 } from "@/features/memory/memory-form-schema";
 import { problemMessage } from "@/lib/api/problem-message";
 
-export function MemoryCreatePanel() {
+export function MemoryCreatePanel({
+  framed = true,
+  onDone,
+}: {
+  framed?: boolean;
+  onDone?: () => void;
+}) {
   const { t } = useTranslation();
   const create = useCreateMemoryAssertion();
   const activeCompany = useActiveScope((s) => s.company);
@@ -38,93 +38,39 @@ export function MemoryCreatePanel() {
       await create.mutateAsync(toMemoryAssertionInput(values));
       toast.success(t("memory.recorded"));
       form.reset(memoryDefaults(values.company.trim(), values.area.trim()));
+      onDone?.();
     } catch (error) {
       toast.error(problemMessage(error, t));
     }
   }
 
-  return (
-    <Panel title={t("memory.newAssertion")}>
+  const content = (
+    <>
       <p className="mb-4 text-sm text-muted-foreground">
         {t("memory.createHint")}
       </p>
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(submit)} className="grid gap-4">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <MemoryInputField
-              control={form.control}
-              name="company"
-              label="admin.company"
-              className="font-mono"
-            />
-            <MemoryInputField
-              control={form.control}
-              name="area"
-              label="admin.area"
-              className="font-mono"
-            />
-          </div>
-          <MemoryInputField
-            control={form.control}
-            name="agentId"
-            label="memory.agentOptional"
-            description="memory.agentHint"
-            className="font-mono"
-          />
-          <MemoryInputField
-            control={form.control}
-            name="kind"
-            label="memory.kind"
-            placeholder="memory.kindPlaceholder"
-          />
-          <MemoryInputField
-            control={form.control}
-            name="subject"
-            label="memory.subject"
-            placeholder="memory.subjectPlaceholder"
-          />
-          <MemoryInputField
-            control={form.control}
-            name="signature"
-            label="memory.signature"
-            description="memory.signatureHint"
-            className="font-mono"
-          />
-          <MemoryTextareaField
-            control={form.control}
-            name="claim"
-            label="memory.claim"
-            description="memory.claimHint"
-          />
-          <div className="grid gap-3 sm:grid-cols-2">
-            <MemoryInputField
-              control={form.control}
-              name="observations"
-              label="memory.observations"
-              className="font-mono"
-            />
-            <MemoryInputField
-              control={form.control}
-              name="confirmed"
-              label="memory.confirmed"
-              className="font-mono"
-            />
-          </div>
-          <EvidenceFields control={form.control} />
-          <MemoryInputField
-            control={form.control}
-            name="reason"
-            label="memory.reason"
-            placeholder="memory.reasonPlaceholder"
-          />
-          <Button
-            type="submit"
-            disabled={!form.formState.isValid || create.isPending}
-          >
-            {t("memory.record")}
-          </Button>
-        </form>
-      </Form>
+      <MemoryCreateForm
+        form={form}
+        isPending={create.isPending}
+        onSubmit={submit}
+      />
+    </>
+  );
+
+  if (!framed) {
+    return (
+      <section className="mx-auto w-full max-w-[820px] min-w-0">
+        <header className="mb-4">
+          <h2 className="text-base font-medium">{t("memory.newAssertion")}</h2>
+        </header>
+        {content}
+      </section>
+    );
+  }
+
+  return (
+    <Panel title={t("memory.newAssertion")}>
+      {content}
     </Panel>
   );
 }

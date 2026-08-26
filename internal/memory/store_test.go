@@ -193,6 +193,11 @@ func TestLayer_suggestRecordsPendingMemoryWithoutServingIt(t *testing.T) {
 	}
 }
 
+func TestSuggest_activeAssertionIdentityStopsDuplicateSuggestion(t *testing.T) {
+	t.Parallel()
+	expectActiveIdentityStopsDuplicateSuggestion(t, context.Background(), memory.NewMemory())
+}
+
 func TestLayer_suggestAutoConfirmsOnlyAfterRepeatedObservations(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -493,6 +498,11 @@ func TestPostgresSuggest_acceptancePromotesOnlyPendingMemory(t *testing.T) {
 	}
 }
 
+func TestPostgresSuggest_activeAssertionIdentityStopsDuplicateSuggestion(t *testing.T) {
+	ctx, store := postgresStore(t)
+	expectActiveIdentityStopsDuplicateSuggestion(t, ctx, store)
+}
+
 func TestPostgresSuggest_concurrentEquivalentSuggestionsMerge(t *testing.T) {
 	ctx, store := postgresStore(t)
 	const writers = 12
@@ -622,6 +632,47 @@ func (failingStore) AcceptSuggestion(
 
 func (failingStore) DismissSuggestion(context.Context, string, domain.Scope, domain.UserID, string, time.Time) error {
 	return errors.New("down")
+}
+
+type suggestionStore interface {
+	Assert(context.Context, domain.MemoryAssertion, domain.UserID, string, time.Time) (domain.MemoryAssertion, error)
+	Suggest(context.Context, domain.MemorySuggestion, domain.MemoryLearningPolicy, domain.UserID, time.Time) (domain.MemorySuggestionOutcome, error)
+	ListSuggestions(context.Context, memory.SuggestionFilter) ([]domain.MemorySuggestion, error)
+}
+
+func expectActiveIdentityStopsDuplicateSuggestion(
+	t *testing.T,
+	ctx context.Context,
+	store suggestionStore,
+) {
+	t.Helper()
+	now := time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC)
+	active, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Claim = "the active memory is the reviewed claim"
+	}), "usr_ana", "reviewed", now)
+	if err != nil {
+		t.Fatalf("Assert: %v", err)
+	}
+	out, err := store.Suggest(ctx, suggestion(func(s *domain.MemorySuggestion) {
+		s.Claim = "the agent proposed a different wording for the same case"
+		s.Evidence[0].RunID = "run-evidence-2"
+	}), domain.MemoryLearningPolicy{Mode: domain.MemoryLearningReview}, "agent:triage", now.Add(time.Minute))
+	if err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+	if out.Result != domain.MemorySuggestAlreadyActive || out.Assertion == nil ||
+		out.Assertion.ID != active.ID || out.Assertion.Claim != active.Claim {
+		t.Fatalf("out = %+v, want the active assertion instead of a queued duplicate", out)
+	}
+	pending, err := store.ListSuggestions(ctx, memory.SuggestionFilter{
+		Scopes: []domain.Scope{platformScope}, Status: domain.MemorySuggestionPending,
+	})
+	if err != nil {
+		t.Fatalf("ListSuggestions: %v", err)
+	}
+	if len(pending) != 0 {
+		t.Fatalf("pending = %+v, want no suggestion for an active assertion identity", pending)
+	}
 }
 
 func entryNamed(entries []domain.ToolEntry, id domain.ToolID) domain.ToolEntry {

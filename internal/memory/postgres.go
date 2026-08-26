@@ -157,7 +157,7 @@ func (s suggestionTx) alreadyActive(
 	if err != nil {
 		return domain.MemorySuggestionOutcome{}, false, err
 	}
-	if !found || active.Claim != prepared.Claim {
+	if !found {
 		return domain.MemorySuggestionOutcome{}, false, nil
 	}
 	if err := s.tx.Commit(ctx); err != nil {
