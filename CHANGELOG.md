@@ -42,7 +42,9 @@ field" is a commit message.
   migration enables it with `create extension if not exists pg_trgm` and builds
   GIN indexes on `subject`, `signature` and `claim`. This keeps the existing
   substring search semantics while giving larger memory sets an index the
-  runtime can use.
+  runtime can use. If the application database role cannot create extensions,
+  the migration fails and the release does not roll out; have a DBA create
+  `pg_trgm` in the database before upgrading, and the migration will reuse it.
 
 - **Retention and erasure now reach governed memory.** Memory assertion events
   and active assertions are swept by the normal retention job. When an erasure

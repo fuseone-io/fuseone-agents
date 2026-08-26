@@ -86,7 +86,7 @@ func TestLayer_findNamesAssertionsOmittedByTheResponseBudget(t *testing.T) {
 	}
 	if _, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
 		a.Subject, a.Confirmed, a.Observations = "budget large", 2, 2
-		a.Labels = domain.NewLabels(domain.LabelUntrusted)
+		a.Labels = domain.NewLabels(domain.LabelPersonal, domain.LabelUntrusted)
 		a.Evidence[0].Artifact = strings.Repeat("large-artifact-name", 1600)
 	}), "usr_ana", "reviewed", now); err != nil {
 		t.Fatalf("Assert large: %v", err)
@@ -106,6 +106,9 @@ func TestLayer_findNamesAssertionsOmittedByTheResponseBudget(t *testing.T) {
 	}
 	if result.Failed || !result.Labels.Has(domain.LabelUntrusted) {
 		t.Fatalf("result = %+v, want success carrying labels from matched memory", result)
+	}
+	if !result.Labels.Has(domain.LabelPersonal) {
+		t.Fatalf("labels = %v, want labels from omitted memory to keep tainting the run", result.Labels)
 	}
 	body, err := content.Get(ctx, result.ResultRef)
 	if err != nil {
