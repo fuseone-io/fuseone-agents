@@ -2238,6 +2238,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/memory/assertions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List governed memory assertions
+         * @description Structured assertions agents may recall through the platform-owned memory tool. The response contains claims, counters and evidence references only; source content remains in the content store under its own retention and erasure rules.
+         */
+        get: operations["listMemoryAssertions"];
+        put?: never;
+        /**
+         * Record or correct a governed memory assertion
+         * @description Creates a new assertion or corrects the assertion with the same company, area, agent, kind, subject and signature. Labels are derived from the cited ledger evidence, never accepted from the client.
+         */
+        post: operations["createMemoryAssertion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/memory/assertions/{assertionId}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Disable a governed memory assertion
+         * @description Disabling is another append-only memory event. The projected row stops being recalled, while the trail of who disabled it and why remains.
+         */
+        post: operations["disableMemoryAssertion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/events": {
         parameters: {
             query?: never;
@@ -2437,6 +2481,75 @@ export interface components {
         Scope: {
             company: string;
             area: string;
+        };
+        /** @enum {string} */
+        MemoryStatus: "active" | "disabled" | "expired" | "source_erased";
+        MemoryEvidence: {
+            runId: string;
+            /** @description The platform-authored artifact name shown in the trail. */
+            artifact: string;
+            /** @description Digest of the cited artifact as recorded with the evidence. */
+            digest: string;
+        };
+        /** @description A structured remembered fact. The claim is small text for the model; evidence points back to ledger/content records, and labels tell the Gate what trust boundary the remembered fact carries. */
+        MemoryAssertion: {
+            id: string;
+            scope: components["schemas"]["Scope"];
+            agentId: string;
+            kind: string;
+            subject: string;
+            signature: string;
+            claim: string;
+            evidence: components["schemas"]["MemoryEvidence"][];
+            /** Format: int64 */
+            observations: number;
+            /** Format: int64 */
+            confirmed: number;
+            labels: string[];
+            status: components["schemas"]["MemoryStatus"];
+            /** Format: date-time */
+            expiresAt?: string | null;
+            createdBy: string;
+            /** Format: date-time */
+            createdAt: string;
+            updatedBy: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        /** @description A human-curated memory assertion. Labels are deliberately absent: the server derives them from evidence in the immutable run ledger. */
+        MemoryAssertionInput: {
+            company: string;
+            area: string;
+            /** @description Omit for memory shared by agents in the same scope. */
+            agentId?: string;
+            kind: string;
+            subject: string;
+            signature: string;
+            claim: string;
+            evidence: components["schemas"]["MemoryEvidence"][];
+            /**
+             * Format: int64
+             * @default 1
+             */
+            observations: number;
+            /**
+             * Format: int64
+             * @default 1
+             */
+            confirmed: number;
+            /** Format: date-time */
+            expiresAt?: string | null;
+            /** @description Why a person decided this assertion should be remembered. */
+            reason: string;
+        };
+        MemoryDisableInput: {
+            company: string;
+            area: string;
+            /** @description Why a person disabled this assertion. */
+            reason: string;
+        };
+        MemoryAssertionPage: {
+            items: components["schemas"]["MemoryAssertion"][];
         };
         /**
          * @description Cache tokens are reported separately from input tokens: a cache read
@@ -7808,6 +7921,91 @@ export interface operations {
                 };
                 content?: never;
             };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listMemoryAssertions: {
+        parameters: {
+            query?: {
+                /** @description Company scope. A single value until multi-company (PRD 3.1). */
+                company?: components["parameters"]["CompanyScope"];
+                area?: components["parameters"]["Area"];
+                agentId?: string;
+                status?: components["schemas"]["MemoryStatus"];
+                q?: string;
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Memory assertions visible to the caller. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryAssertionPage"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    createMemoryAssertion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemoryAssertionInput"];
+            };
+        };
+        responses: {
+            /** @description The assertion now projected for recall. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryAssertion"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    disableMemoryAssertion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assertionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemoryDisableInput"];
+            };
+        };
+        responses: {
+            /** @description The assertion is disabled. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];

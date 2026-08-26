@@ -108,6 +108,7 @@ type Server struct {
 	// batteries is where the last run of it against a version is found.
 	regressions Regressions
 	batteries   LastBattery
+	memory      Memory
 	// retention and erasures decide whether content survives.
 	retention      Retention
 	money          Money

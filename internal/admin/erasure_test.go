@@ -5,6 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+
 	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/ledger"
@@ -20,6 +23,8 @@ func erasuresFor(t *testing.T, now func() time.Time) (*admin.Erasures, *ledger.C
 		 delete from channel_inbox;
 		 delete from channel_deliveries;
 		 delete from channel_delivery_failures;
+		 delete from memory_assertion_events;
+		 delete from memory_assertions;
 		 delete from runs where run_id like 'run-retention-%';
 		 delete from settings where kind = 'retention'`); err != nil {
 		t.Fatalf("clean: %v", err)
@@ -179,6 +184,46 @@ func TestSweep_pastTheWindowDeletesChannelOperationalRecords(t *testing.T) {
 	}
 }
 
+func TestSweep_pastTheWindowDeletesMemoryOperationalRecords(t *testing.T) {
+	now := time.Date(2032, 8, 23, 12, 0, 0, 0, time.UTC)
+	erasures, _ := erasuresFor(t, func() time.Time { return now })
+	pool := openPool(t)
+	ctx := context.Background()
+	old, recent := now.Add(-6*365*24*time.Hour), now.Add(-time.Hour)
+
+	seedMemoryAssertion(t, pool, "mem-old", old, nil)
+	seedMemoryAssertion(t, pool, "mem-expired", recent, &old)
+	seedMemoryAssertion(t, pool, "mem-recent", recent, nil)
+	if _, err := pool.Exec(ctx, `
+		insert into memory_assertion_events (
+			assertion_id, action, company_id, area_id, principal_id, reason, detail, at)
+		values
+			('mem-old', 'asserted', 'acme', 'ops', 'usr_ana', 'old', '{}', $1),
+			('mem-recent', 'asserted', 'acme', 'ops', 'usr_ana', 'recent', '{}', $2)`,
+		old, recent); err != nil {
+		t.Fatalf("seed memory events: %v", err)
+	}
+
+	erased, err := erasures.Sweep(ctx)
+	if err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if erased != 3 {
+		t.Fatalf("erased %d, want old event and two memory assertions", erased)
+	}
+
+	var assertions, events int
+	if err := pool.QueryRow(ctx, `select count(*) from memory_assertions`).Scan(&assertions); err != nil {
+		t.Fatalf("count memory assertions: %v", err)
+	}
+	if err := pool.QueryRow(ctx, `select count(*) from memory_assertion_events`).Scan(&events); err != nil {
+		t.Fatalf("count memory events: %v", err)
+	}
+	if assertions != 1 || events != 1 {
+		t.Fatalf("remaining assertions=%d events=%d, want only recent memory", assertions, events)
+	}
+}
+
 func TestForSubject_erasesTheRunsItWasGivenAndNoOthers(t *testing.T) {
 	erasures, content := erasuresFor(t, time.Now)
 	ctx := context.Background()
@@ -199,4 +244,90 @@ func TestForSubject_erasesTheRunsItWasGivenAndNoOthers(t *testing.T) {
 	if _, err := content.Get(ctx, theirs); err != nil {
 		t.Errorf("Get(theirs) = %v, want it untouched", err)
 	}
+}
+
+func TestForSubject_marksMemoryFromErasedRunsUnavailable(t *testing.T) {
+	now := time.Date(2032, 8, 23, 12, 0, 0, 0, time.UTC)
+	erasures, content := erasuresFor(t, func() time.Time { return now })
+	pool := openPool(t)
+	ctx := context.Background()
+
+	_, _ = content.Put(ctx, "run-mine", 1, []byte("mine"))
+	_, _ = content.Put(ctx, "run-theirs", 1, []byte("theirs"))
+	seedMemoryAssertionForRun(t, pool, "mem-mine", "run-mine")
+	seedMemoryAssertionForRun(t, pool, "mem-theirs", "run-theirs")
+
+	if _, err := erasures.ForSubject(ctx, "usr_ana", domain.Scope{},
+		[]domain.RunID{"run-mine"}, "titular pediu"); err != nil {
+		t.Fatalf("ForSubject: %v", err)
+	}
+
+	statusMine := memoryStatus(t, pool, "mem-mine")
+	statusTheirs := memoryStatus(t, pool, "mem-theirs")
+	if statusMine != "source_erased" || statusTheirs != "active" {
+		t.Fatalf("statuses mine=%s theirs=%s, want source_erased and active", statusMine, statusTheirs)
+	}
+	if got := memoryEventCount(t, pool, "source_erased"); got != 1 {
+		t.Fatalf("source_erased events = %d, want 1", got)
+	}
+}
+
+func seedMemoryAssertion(t *testing.T, pool interface {
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+}, id string, updated time.Time, expires *time.Time) {
+	t.Helper()
+	if _, err := pool.Exec(context.Background(), `
+		insert into memory_assertions (
+			assertion_id, company_id, area_id, agent_id, kind, subject,
+			signature, claim, evidence, observations, confirmed, labels,
+			status, expires_at, created_by, created_at, updated_by, updated_at)
+		values (
+			$1, 'acme', 'ops', 'triage', 'incident', $1,
+			$1, 'known incident behaviour', '[]', 1, 1, '{}',
+			'active', $2, 'usr_ana', $3, 'usr_ana', $3)`,
+		id, expires, updated); err != nil {
+		t.Fatalf("seed memory assertion %s: %v", id, err)
+	}
+}
+
+func seedMemoryAssertionForRun(t *testing.T, pool interface {
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+}, id string, run domain.RunID) {
+	t.Helper()
+	if _, err := pool.Exec(context.Background(), `
+		insert into memory_assertions (
+			assertion_id, company_id, area_id, agent_id, kind, subject,
+			signature, claim, evidence, observations, confirmed, labels,
+			status, created_by, created_at, updated_by, updated_at)
+		values (
+			$1, 'acme', 'ops', 'triage', 'incident', $1,
+			$1, 'known incident behaviour', $2::jsonb, 1, 1, '{}',
+			'active', 'usr_ana', now(), 'usr_ana', now())`,
+		id, `[{"run_id":"`+string(run)+`","artifact":"final_answer","digest":"sha256:answer"}]`); err != nil {
+		t.Fatalf("seed memory assertion %s: %v", id, err)
+	}
+}
+
+func memoryStatus(t *testing.T, pool interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}, id string) string {
+	t.Helper()
+	var status string
+	if err := pool.QueryRow(context.Background(),
+		`select status from memory_assertions where assertion_id = $1`, id).Scan(&status); err != nil {
+		t.Fatalf("memory status %s: %v", id, err)
+	}
+	return status
+}
+
+func memoryEventCount(t *testing.T, pool interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}, action string) int {
+	t.Helper()
+	var count int
+	if err := pool.QueryRow(context.Background(),
+		`select count(*) from memory_assertion_events where action = $1`, action).Scan(&count); err != nil {
+		t.Fatalf("memory event count: %v", err)
+	}
+	return count
 }

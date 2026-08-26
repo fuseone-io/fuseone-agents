@@ -60,7 +60,7 @@ old model answers survive erasure.
 
 ## 2. What is stored
 
-Roughly twenty-five tables. The ones that can hold personal data:
+Roughly thirty tables. The ones that can hold personal data:
 
 | Where | What it can hold |
 |---|---|
@@ -70,6 +70,7 @@ Roughly twenty-five tables. The ones that can hold personal data:
 | `principals`, `sessions`, `role_grants` | The people who use the console: identity from the customer's own provider |
 | `channel_inbox`, `channel_deliveries`, `channel_delivery_failures` | Messages exchanged on a connected channel, what was sent back, optional thread context supplied to a run, and operational delivery failures tied to a run and conversation |
 | `mcp_egress_denials` | Stdio MCP proxy failures by configured server, host, port, stable code and timestamps; no URL path, query string, header, body, token or tool argument |
+| `memory_assertions`, `memory_assertion_events` | Human-reviewed structured memory claims, source run/artifact/digest evidence, labels, actor, reason and timestamps |
 | `admin_events`, `audit` records | Who changed what configuration, and when |
 
 `agent_specs`, `policies`, `areas`, `scopes`, `settings` and the trigger tables
@@ -171,11 +172,13 @@ tool, what the Gate decided, and the digest of content that no longer exists.
 That much is the deliberate trade — a record of processing is what the platform
 is for.
 
-Operational channel rows survive a per-subject erasure too. They are not the
-chain, but they are not found by subject and they are not rewritten by the
-erasure job: `channel_inbox`, `channel_deliveries`,
-`channel_delivery_failures` and `mcp_egress_denials` age out through retention
-instead.
+Operational rows survive a per-subject erasure too. They are not the chain, but
+they are not found by subject and most are not rewritten by the erasure job:
+`channel_inbox`, `channel_deliveries`, `channel_delivery_failures` and
+`mcp_egress_denials` age out through retention instead. Memory is the
+exception: an active assertion whose evidence points to an erased run is marked
+`source_erased`, so it remains auditable but is no longer served as intact
+knowledge.
 
 **And, for older runs, more than that.** The free text of section 1 survives too,
 including model answers recorded before `OutcomeRef` existed. That part was not
@@ -206,6 +209,8 @@ case follows the same rule. A channel failure that began months ago but still
 failed this morning is current operational evidence, not expired history.
 Stdio MCP egress denials are also deleted by last-seen time, so a still-active
 egress problem remains visible until it stops recurring and then ages out.
+Memory assertions and memory assertion events age out through the same sweep;
+expired assertions are removed even when they were updated recently.
 
 There is a floor. A window below 24 hours is refused, and it is checked twice —
 when the setting is written and again when the sweep reads it back. The second
