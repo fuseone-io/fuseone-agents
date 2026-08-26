@@ -27,6 +27,17 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.38.2] — 2026-08-26
+
+### Fixed
+
+- **A long tool description no longer pushes the classify button out of the
+  row.** The table of tools waiting for a ruling sized itself from its content,
+  so one verbose description could carry the action off the visible area and
+  leave a tool nobody could classify. The table now has fixed columns, the
+  long fields truncate inside their cell, and the full description is still
+  readable on hover.
+
 ## [0.38.1] — 2026-08-26
 
 ### Added
