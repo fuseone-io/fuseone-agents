@@ -112,6 +112,10 @@ func (s staticCatalog) Effect(id domain.ToolID) (domain.Effect, bool) {
 	return e, ok
 }
 
+func (s staticCatalog) Dedupe(domain.ToolID) (domain.ToolDedupe, bool) {
+	return domain.ToolDedupe{}, false
+}
+
 type stubPlanner struct {
 	proposals []engine.Proposal
 	turn      int

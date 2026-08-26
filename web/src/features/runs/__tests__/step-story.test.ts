@@ -149,6 +149,59 @@ describe("a run parked by a ceiling", () => {
   });
 });
 
+describe("a duplicated effect", () => {
+  it("points to the recorded source when the ledger carries it", () => {
+    const line = detailOf({
+      seq: 8,
+      kind: "gate_decided",
+      at: "2026-08-25T12:00:00Z",
+      hash: "h",
+      payload: {
+        tool: "github.create_issue",
+        verdict: "duplicate",
+        rule: "idempotency",
+        duplicate: { run_id: "run-old", seq: 17 },
+      },
+    } as never);
+
+    expect(line.key).toBe("runs.storyDuplicateSource");
+    expect(line.values).toMatchObject({ run: "run-old", seq: 17 });
+  });
+
+  it("falls back to the stable Gate explanation when old entries have no source", () => {
+    const line = detailOf({
+      seq: 8,
+      kind: "gate_decided",
+      at: "2026-08-25T12:00:00Z",
+      hash: "h",
+      payload: {
+        tool: "github.create_issue",
+        verdict: "duplicate",
+        rule: "idempotency",
+      },
+    } as never);
+
+    expect(line.key).toBe("gate.duplicate");
+  });
+
+  it("does not render a bogus step zero when a source is malformed", () => {
+    const line = detailOf({
+      seq: 8,
+      kind: "gate_decided",
+      at: "2026-08-25T12:00:00Z",
+      hash: "h",
+      payload: {
+        tool: "github.create_issue",
+        verdict: "duplicate",
+        rule: "idempotency",
+        duplicate: { run_id: "run-old", seq: 0 },
+      },
+    } as never);
+
+    expect(line.key).toBe("gate.duplicate");
+  });
+});
+
 describe("a cached tool result", () => {
   it("says the server was not called for this answer", () => {
     const step = {

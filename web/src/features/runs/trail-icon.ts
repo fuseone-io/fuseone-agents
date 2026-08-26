@@ -60,6 +60,7 @@ const VERDICT_TONE: Record<string, TileTone> = {
   constrain: "escalate",
   require_approval: "escalate",
   block: "block",
+  duplicate: "neutral",
 };
 
 const VERDICT_ICON: Record<string, LucideIcon> = {
@@ -67,6 +68,7 @@ const VERDICT_ICON: Record<string, LucideIcon> = {
   constrain: ShieldAlert,
   require_approval: ShieldAlert,
   block: ShieldX,
+  duplicate: CircleSlash,
 };
 
 export function tileOf(

@@ -1764,6 +1764,8 @@ paths:
                     what the original call returned. Empty means an act by this
                     tool cannot be undone by machine — which abandoning a run
                     reports rather than hides.
+                dedupe:
+                  $ref: '#/components/schemas/ToolDedupe'
                 digest:
                   type: string
                   description: |
@@ -3769,7 +3771,7 @@ components:
 
     Verdict:
       type: string
-      enum: [allow, constrain, require_approval, block]
+      enum: [allow, constrain, require_approval, block, duplicate]
 
     Effect:
       type: string
@@ -3778,6 +3780,29 @@ components:
         deliberately absent here: it is the zero value that makes an
         unclassified tool fail closed, and nobody may claim it.
       enum: [read, write, destructive, financial]
+
+    ToolDedupe:
+      type: object
+      required: [windowSeconds, argPaths]
+      description: |
+        The Curator's declaration of what makes two effectful calls the same
+        external act across runs. Company, area, agent and tool are
+        platform-owned key prefixes; this object names only stable fields
+        inside the proposed arguments. It is not a result cache.
+      properties:
+        windowSeconds:
+          type: integer
+          minimum: 1
+          maximum: 31536000
+          description: How long a confirmed effect suppresses the same semantic call.
+        argPaths:
+          type: array
+          minItems: 1
+          maxItems: 8
+          items:
+            type: string
+            pattern: '^[A-Za-z_][A-Za-z0-9_-]*(?:\.[A-Za-z_][A-Za-z0-9_-]*)*$'
+          description: Stable dotted argument paths that identify the external act.
 
     ToolSuggestion:
       type: object
@@ -4257,6 +4282,8 @@ components:
         compensatedBy:
           type: string
           description: The tool that undoes this one, when the Curator has said which does.
+        dedupe:
+          $ref: '#/components/schemas/ToolDedupe'
         suggested:
           $ref: '#/components/schemas/ToolSuggestion'
         digest:

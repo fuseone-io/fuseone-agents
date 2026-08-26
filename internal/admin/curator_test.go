@@ -82,6 +82,7 @@ func TestClassify_survivesTheProcessThatMadeIt(t *testing.T) {
 	// every tool to unclassified, and every agent stopped at its first call.
 	if err := admin.NewCurator(pool).Classify(ctx, platform, domain.ToolClassification{
 		Tool: "crm.note", Effect: domain.EffectWrite, By: "usr_ana", Reason: "escreve nota interna",
+		Dedupe: domain.ToolDedupe{WindowSeconds: 3600, ArgPaths: []string{"customer_id", "note.title"}},
 	}); err != nil {
 		t.Fatalf("Classify: %v", err)
 	}
@@ -96,6 +97,10 @@ func TestClassify_survivesTheProcessThatMadeIt(t *testing.T) {
 	}
 	if rulings[0].By != "usr_ana" {
 		t.Errorf("By = %q, want the person who ruled", rulings[0].By)
+	}
+	if got := rulings[0].Dedupe; got.WindowSeconds != 3600 ||
+		len(got.ArgPaths) != 2 || got.ArgPaths[0] != "customer_id" || got.ArgPaths[1] != "note.title" {
+		t.Errorf("Dedupe = %+v, want the Curator's semantic key", got)
 	}
 }
 
@@ -174,6 +179,26 @@ func TestClassify_unknownEffect_isRefusedRatherThanStored(t *testing.T) {
 	}
 }
 
+func TestClassify_invalidDedupe_isRefusedRatherThanStored(t *testing.T) {
+	pool := freshPool(t)
+
+	err := admin.NewCurator(pool).Classify(context.Background(), platform,
+		domain.ToolClassification{
+			Tool: "crm.note", Effect: domain.EffectWrite, By: "usr_ana",
+			Dedupe: domain.ToolDedupe{WindowSeconds: 60, ArgPaths: []string{"ticket/id"}},
+		})
+	if err == nil {
+		t.Fatal("Classify accepted a dedupe key that is not a stable argument path")
+	}
+
+	var stored int
+	_ = pool.QueryRow(context.Background(),
+		`select count(*) from settings where kind = 'tool_classification' and name = 'crm.note'`).Scan(&stored)
+	if stored != 0 {
+		t.Fatalf("stored rows = %d, want the invalid ruling refused", stored)
+	}
+}
+
 func TestClassify_twice_keepsTheLatestAndBothRecords(t *testing.T) {
 	pool := freshPool(t)
 	ctx := context.Background()
@@ -214,6 +239,7 @@ func TestTools_carryTheUndoTheCuratorDeclared(t *testing.T) {
 	if err := curator.Classify(ctx, platform, domain.ToolClassification{
 		Tool: "crm.note", Effect: domain.EffectWrite, By: "usr_ana",
 		CompensatedBy: "crm.note.delete",
+		Dedupe:        domain.ToolDedupe{WindowSeconds: 3600, ArgPaths: []string{"customer_id", "note.title"}},
 	}); err != nil {
 		t.Fatalf("Classify: %v", err)
 	}
@@ -230,6 +256,10 @@ func TestTools_carryTheUndoTheCuratorDeclared(t *testing.T) {
 	note := find(t, entries, "crm.note")
 	if note.CompensatedBy != "crm.note.delete" {
 		t.Errorf("CompensatedBy = %q, want the tool that undoes it", note.CompensatedBy)
+	}
+	if got := note.Dedupe; got.WindowSeconds != 3600 ||
+		len(got.ArgPaths) != 2 || got.ArgPaths[0] != "customer_id" || got.ArgPaths[1] != "note.title" {
+		t.Errorf("Dedupe = %+v, want the Curator's semantic key", got)
 	}
 }
 

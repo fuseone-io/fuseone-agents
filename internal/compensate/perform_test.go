@@ -23,6 +23,10 @@ func (e effects) Effect(t domain.ToolID) (domain.Effect, bool) {
 	return effect, ok
 }
 
+func (e effects) Dedupe(domain.ToolID) (domain.ToolDedupe, bool) {
+	return domain.ToolDedupe{}, false
+}
+
 type recorder struct {
 	calls  []engine.Call
 	fail   map[domain.ToolID]bool

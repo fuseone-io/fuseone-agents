@@ -47,6 +47,10 @@ const VERDICT_CHIP: Record<string, { text: string; className: string }> = {
     className: "bg-warning-surface text-warning",
   },
   block: { text: "verdict.block", className: "bg-danger-surface text-danger" },
+  duplicate: {
+    text: "verdict.duplicate",
+    className: "bg-muted text-muted-foreground",
+  },
 };
 
 const PARKED: Record<string, string> = {
@@ -126,6 +130,15 @@ export function detailOf(step: Step): Line {
       // reader knows what to change. An allowed call has no rule to explain —
       // it says which effect was inside which pack, which is the fact an
       // auditor is checking.
+      if (payload.verdict === "duplicate") {
+        const source = duplicateSource(payload.duplicate);
+        if (source) {
+          return {
+            key: "runs.storyDuplicateSource",
+            values: { run: source.run, seq: source.seq },
+          };
+        }
+      }
       const rule = typeof payload.rule === "string" ? payload.rule : "";
       const budget = budgetLine(payload);
       if (rule === "budget" && budget) return budget;
@@ -382,6 +395,19 @@ export function summaryOf(step: Step): Line {
     default:
       return { key: TITLES[step.kind] };
   }
+}
+
+function duplicateSource(value: unknown): { run: string; seq: number } | null {
+  if (!value || typeof value !== "object") return null;
+  const source = value as Record<string, unknown>;
+  if (
+    typeof source.run_id !== "string" ||
+    typeof source.seq !== "number" ||
+    source.seq <= 0
+  ) {
+    return null;
+  }
+  return { run: source.run_id, seq: source.seq };
 }
 
 function isContextArtifact(value: unknown): value is {

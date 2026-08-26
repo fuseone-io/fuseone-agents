@@ -262,7 +262,7 @@ func TestEvaluate_budgetBlockNamesTheDimensionAndNumbers(t *testing.T) {
 	}
 }
 
-func TestEvaluate_alreadyExecutedIdempotencyKey_blockedAsDuplicate(t *testing.T) {
+func TestEvaluate_alreadyExecutedIdempotencyKey_returnsDuplicate(t *testing.T) {
 	t.Parallel()
 
 	r := request()
@@ -270,11 +270,43 @@ func TestEvaluate_alreadyExecutedIdempotencyKey_blockedAsDuplicate(t *testing.T)
 
 	d := evaluate(t, New(), r)
 
-	if d.Verdict != domain.VerdictBlock {
-		t.Errorf("Verdict = %v, want block", d.Verdict)
+	if d.Verdict != domain.VerdictDuplicate {
+		t.Errorf("Verdict = %v, want duplicate", d.Verdict)
 	}
 	if d.Rule != RuleIdempotency {
 		t.Errorf("Rule = %q, want %q", d.Rule, RuleIdempotency)
+	}
+}
+
+func TestEvaluate_duplicateDoesNotConsumeTheRunCeiling(t *testing.T) {
+	t.Parallel()
+
+	r := request()
+	r.AlreadyExecuted = true
+	r.Budget.ToolCalls = 1
+	r.Committed.ToolCalls = 1
+	r.Estimate.ToolCalls = 1
+
+	d := evaluate(t, New(), r)
+
+	if d.Verdict != domain.VerdictDuplicate || d.Rule != RuleIdempotency {
+		t.Fatalf("decision = %s/%s, want duplicate/idempotency", d.Verdict, d.Rule)
+	}
+}
+
+func TestEvaluate_duplicateDoesNotHideAnEarlierGovernanceBlock(t *testing.T) {
+	t.Parallel()
+
+	r := request()
+	r.AlreadyExecuted = true
+	r.Tool = "crm.refund"
+	r.Effect = domain.EffectFinancial
+	r.ArgLabels = domain.NewLabels(domain.LabelUntrusted)
+
+	d := evaluate(t, New(), r)
+
+	if d.Verdict != domain.VerdictBlock || d.Rule != RuleTaint {
+		t.Fatalf("decision = %s/%s, want block/taint", d.Verdict, d.Rule)
 	}
 }
 

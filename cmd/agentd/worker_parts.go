@@ -12,6 +12,7 @@ import (
 	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/connectortools"
 	"github.com/fuseone/agents/internal/contextshare"
+	effectdedupe "github.com/fuseone/agents/internal/dedupe"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/egress"
 	"github.com/fuseone/agents/internal/engine"
@@ -65,6 +66,7 @@ type workerParts struct {
 	settings *settings.Store
 	health   healthRecorder
 	egress   *egress.Postgres
+	dedupe   *effectdedupe.Postgres
 	known    *known.Servers
 }
 
@@ -116,6 +118,7 @@ func openWorkerParts(ctx context.Context, dsn string) (*workerParts, error) {
 	}
 	parts.health = healthOf(parts.configPool)
 	parts.egress = egress.NewPostgres(parts.configPool)
+	parts.dedupe = effectdedupe.NewPostgres(parts.configPool)
 	parts.catalog.WithToolCallHealth(parts.health, hostname())
 	return parts, nil
 }
@@ -262,5 +265,6 @@ func (p *workerParts) deps(gate engine.Gate) engine.Deps {
 		Catalog: contextTools,
 		Content: p.content,
 		Clock:   engine.SystemClock{},
+		Dedupe:  p.dedupe,
 	}
 }

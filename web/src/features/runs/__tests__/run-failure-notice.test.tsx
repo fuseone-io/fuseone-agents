@@ -49,4 +49,25 @@ describe("a run parked by a model provider failure", () => {
       screen.getByText(/provedor desconhecido retornou sem status/i),
     ).toBeInTheDocument();
   });
+
+  it("explains dedupe contention without pretending it came from an upstream provider", () => {
+    render(
+      <RunFailureNotice
+        run={runWithFailure({
+          code: "dedupe_in_flight",
+          provider: undefined,
+          status: undefined,
+          requestId: undefined,
+        })}
+      />,
+    );
+
+    expect(
+      screen.getByText("Efeito duplicado ainda em andamento"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Outra execução ainda mantinha a reserva do mesmo efeito/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/provedor desconhecido retornou/i)).not.toBeInTheDocument();
+  });
 });

@@ -154,7 +154,7 @@ func checkBudget(r Request) result {
 
 func checkIdempotency(r Request) result {
 	if r.AlreadyExecuted {
-		return stop("this exact call is already recorded; replaying it would duplicate the effect")
+		return duplicate("this effect is already recorded; replaying it would duplicate the effect")
 	}
 	return pass()
 }

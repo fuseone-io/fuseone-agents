@@ -48,6 +48,12 @@ func (s *Server) ClassifyTool(ctx context.Context, req openapi.ClassifyToolReque
 	if req.Body.CompensatedBy != nil {
 		ruling.CompensatedBy = domain.ToolID(*req.Body.CompensatedBy)
 	}
+	if req.Body.Dedupe != nil {
+		ruling.Dedupe = domain.ToolDedupe{
+			WindowSeconds: req.Body.Dedupe.WindowSeconds,
+			ArgPaths:      append([]string(nil), req.Body.Dedupe.ArgPaths...),
+		}
+	}
 
 	if req.Body.Digest != nil {
 		ruling.Digest = *req.Body.Digest

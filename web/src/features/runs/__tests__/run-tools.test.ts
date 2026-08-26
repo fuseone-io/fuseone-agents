@@ -13,6 +13,7 @@ function step(kind: StepKind, payload: Record<string, unknown>): Step {
 // reported that it had changed a real system.
 const READ = 1;
 const WRITE = 2;
+const DUPLICATE = 5;
 
 describe("what a run touched", () => {
   it("reports no write when every call was a read", () => {
@@ -41,5 +42,13 @@ describe("what a run touched", () => {
     ]);
 
     expect(tools[0]?.escalated).toBe(true);
+  });
+
+  it("does not mark a skipped duplicate as an escalation", () => {
+    const tools = toolsOf([
+      step("gate_decided", { tool: "crm.lookup", verdict: DUPLICATE }),
+    ]);
+
+    expect(tools[0]).toMatchObject({ name: "crm.lookup", escalated: false });
   });
 });

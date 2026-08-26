@@ -12,6 +12,7 @@ const VERDICT: Record<
     variant: "outline",
   },
   block: { label: "simulation.verdictBlock", variant: "destructive" },
+  duplicate: { label: "simulation.verdictDuplicate", variant: "outline" },
 };
 
 /** The Gate's ruling, as a word beside its colour — a chip that read only red

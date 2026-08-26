@@ -117,6 +117,12 @@ func (s *Server) ListTools(ctx context.Context, _ openapi.ListToolsRequestObject
 		if e.CompensatedBy != "" {
 			tool.CompensatedBy = ptr(string(e.CompensatedBy))
 		}
+		if e.Dedupe.Enabled() {
+			tool.Dedupe = &openapi.ToolDedupe{
+				WindowSeconds: e.Dedupe.WindowSeconds,
+				ArgPaths:      append([]string(nil), e.Dedupe.ArgPaths...),
+			}
+		}
 		// What the platform already knows about this server, resolved on read
 		// rather than stored. It is derived from a table shipped in the
 		// binary, and a derived value persisted is one that goes stale against

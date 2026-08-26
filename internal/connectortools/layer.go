@@ -62,6 +62,16 @@ func (l *Layer) Effect(id domain.ToolID) (domain.Effect, bool) {
 	return l.catalog.Effect(id)
 }
 
+func (l *Layer) Dedupe(id domain.ToolID) (domain.ToolDedupe, bool) {
+	if _, _, ok := l.native(id); ok {
+		return domain.ToolDedupe{}, false
+	}
+	if l.catalog == nil {
+		return domain.ToolDedupe{}, false
+	}
+	return l.catalog.Dedupe(id)
+}
+
 func (l *Layer) Schema(id domain.ToolID) (string, string, map[string]any, bool) {
 	instance, op, ok := l.native(id)
 	if ok {

@@ -15,6 +15,10 @@ const (
 	VerdictConstrain
 	VerdictRequireApproval
 	VerdictBlock
+	// VerdictDuplicate means the Gate recognised the proposed effect as
+	// already recorded. Nothing leaves the platform, but this is not a
+	// refusal: the run should continue without repeating the effect.
+	VerdictDuplicate
 )
 
 var verdictNames = map[Verdict]string{
@@ -23,6 +27,7 @@ var verdictNames = map[Verdict]string{
 	VerdictConstrain:       "constrain",
 	VerdictRequireApproval: "require_approval",
 	VerdictBlock:           "block",
+	VerdictDuplicate:       "duplicate",
 }
 
 func (v Verdict) String() string {
@@ -41,7 +46,7 @@ func (v Verdict) Executable() bool {
 
 // Terminal reports whether the ruling ends evaluation without executing.
 func (v Verdict) Terminal() bool {
-	return v == VerdictBlock
+	return v == VerdictBlock || v == VerdictDuplicate
 }
 
 func ParseVerdict(s string) (Verdict, error) {

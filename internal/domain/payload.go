@@ -151,6 +151,10 @@ type GateDecidedPayload struct {
 	// and the trail says so — otherwise a screen shows a rule denying things
 	// beside a run that carried on, and somebody spends an afternoon on it.
 	Monitored []MonitoredPolicy `json:"monitored,omitempty"`
+	// Duplicate names the earlier step that recorded the same semantic effect.
+	// It is only present when the platform knows the source; older per-run
+	// idempotency can still recognise a duplicate without a cross-run pointer.
+	Duplicate *DuplicateEffect `json:"duplicate,omitempty"`
 
 	// Stage is how far the agent was trusted when this was decided. Recorded
 	// because it is state beside the specification rather than in it: it
@@ -181,6 +185,11 @@ type GateDecidedPayload struct {
 	Estimate  *Consumption `json:"estimate,omitempty"`
 	Projected *Consumption `json:"projected,omitempty"`
 	Breached  string       `json:"breached,omitempty"`
+}
+
+type DuplicateEffect struct {
+	RunID RunID `json:"run_id,omitempty"`
+	Seq   int64 `json:"seq,omitempty"`
 }
 
 type BudgetReservedPayload struct {

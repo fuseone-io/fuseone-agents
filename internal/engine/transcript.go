@@ -148,6 +148,14 @@ func BuildTranscript(ctx context.Context, store ContentStore, steps []domain.Ste
 			if p.Verdict.Executable() {
 				continue
 			}
+			if p.Verdict == domain.VerdictDuplicate {
+				turns = append(turns, Turn{
+					Kind: TurnNote,
+					Text: fmt.Sprintf("The platform skipped the call to %s (%s): %s. Continue without calling it again.",
+						p.Tool, p.Rule, p.Reason),
+				})
+				continue
+			}
 			turns = append(turns, Turn{
 				Kind: TurnNote,
 				Text: fmt.Sprintf("The platform refused the call to %s (%s): %s. Choose a different approach.",

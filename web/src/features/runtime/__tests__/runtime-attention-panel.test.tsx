@@ -108,6 +108,30 @@ test("orders items without timestamps deterministically", () => {
   ]);
 });
 
+test("shows dedupe contention as coordination rather than provider failure", () => {
+  setLocale("en-US");
+  const health = runtimeHealth({
+    failures: [
+      {
+        code: "dedupe_in_flight",
+        retryable: true,
+        runs: 2,
+        lastAt: "2026-08-24T12:00:00.000Z",
+      },
+    ],
+  });
+
+  expect(runtimeAttention(health).map(({ id, kind }) => ({ id, kind }))).toEqual([
+    { id: "coordination:dedupe_in_flight", kind: "coordination" },
+  ]);
+
+  render(<RuntimeAttentionPanel health={health} />);
+
+  expect(screen.getByText("Duplicate effect still in flight")).toBeInTheDocument();
+  expect(screen.getByText(/2 run\(s\) waiting on another run's effect reservation/)).toBeInTheDocument();
+  expect(screen.queryByText(/2 run\(s\) parked or failed on the provider/)).not.toBeInTheDocument();
+});
+
 function runtimeHealth(input: Partial<RuntimeHealth>): RuntimeHealth {
   return {
     byPhase: {},
