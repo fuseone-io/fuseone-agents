@@ -59,6 +59,23 @@ func prepareSuggestion(
 	return s, nil
 }
 
+// A suggestion is duplicate if it matches active memory the same run could
+// read: first the agent namespace, then the shared namespace in the same scope.
+func activeAssertionIDsForSuggestion(s domain.MemorySuggestion) []string {
+	ids := []string{s.AssertionID}
+	if s.AgentID == "" {
+		return ids
+	}
+	shared := domain.MemoryAssertionID(domain.MemoryAssertion{
+		Scope: s.Scope, Kind: s.Kind, Subject: s.Subject,
+		Signature: s.Signature,
+	})
+	if shared != s.AssertionID {
+		ids = append(ids, shared)
+	}
+	return ids
+}
+
 func memoryFindMatches(a domain.MemoryAssertion, q domain.MemoryQuery) bool {
 	if a.Scope != q.Scope || !(a.AgentID == "" || a.AgentID == q.AgentID) {
 		return false

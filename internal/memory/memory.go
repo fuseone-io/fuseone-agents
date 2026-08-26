@@ -127,14 +127,17 @@ func (m *Memory) Suggest(
 func (m *Memory) alreadyActiveSuggestion(
 	s domain.MemorySuggestion, now time.Time,
 ) (domain.MemorySuggestionOutcome, bool) {
-	active, ok := m.values[s.AssertionID]
-	if !ok || active.Status != domain.MemoryActive || expired(active, nowOrWall(now)) {
-		return domain.MemorySuggestionOutcome{}, false
+	for _, id := range activeAssertionIDsForSuggestion(s) {
+		active, ok := m.values[id]
+		if !ok || active.Status != domain.MemoryActive || expired(active, nowOrWall(now)) {
+			continue
+		}
+		active = cloneAssertion(active)
+		return domain.MemorySuggestionOutcome{
+			Suggestion: s, Assertion: &active, Result: domain.MemorySuggestAlreadyActive,
+		}, true
 	}
-	active = cloneAssertion(active)
-	return domain.MemorySuggestionOutcome{
-		Suggestion: s, Assertion: &active, Result: domain.MemorySuggestAlreadyActive,
-	}, true
+	return domain.MemorySuggestionOutcome{}, false
 }
 
 func (m *Memory) autoConfirmSuggestion(s domain.MemorySuggestion, now time.Time) domain.MemorySuggestionOutcome {

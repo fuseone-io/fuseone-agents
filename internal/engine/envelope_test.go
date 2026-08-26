@@ -86,6 +86,25 @@ func TestEnvelopeForState_memorySuggestRequiresLearningPolicy(t *testing.T) {
 	}
 }
 
+func TestEnvelopeForState_memoryLearningOffersMemoryLookup(t *testing.T) {
+	t.Parallel()
+
+	start := Start{
+		Pack:           gate.NewPack("crm.lookup"),
+		MemoryLearning: domain.MemoryLearningPolicy{Mode: domain.MemoryLearningReview},
+	}
+	got := envelopeForState(start, State{})
+	if !got.Allows(domain.ToolMemoryFind) {
+		t.Fatal("memory find was not offered when memory learning was enabled")
+	}
+	if !got.Allows(domain.ToolMemorySuggest) {
+		t.Fatal("memory suggest was not offered when memory learning was enabled")
+	}
+	if !got.Allows("crm.lookup") {
+		t.Fatal("ordinary pack tool was removed while adding memory tools")
+	}
+}
+
 func TestSpendAt_pricesTheStepBeingEnteredNotTheOneJustFinished(t *testing.T) {
 	t.Parallel()
 

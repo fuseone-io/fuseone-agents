@@ -100,6 +100,12 @@ registra a sugestão com os labels e a evidência da run, mas `memory.find` aind
 não a devolve. Uma pessoa com permissão de publicação no escopo precisa aceitar
 ou descartar a sugestão pela página de Memória.
 
+Quando aprendizado de memória está ligado, a plataforma também oferece
+`$fuseone.memory.find`. O agente deve usá-la antes de sugerir memória para um
+caso que talvez já esteja lembrado. O caminho de sugestão também consulta a
+memória ativa pelo mesmo tipo, assunto e assinatura, então um fato lembrado não
+continua criando itens de revisão só porque o modelo propôs outra redação.
+
 Sugestões em modo de revisão não pedem uma segunda aprovação antes de entrar
 nessa fila. A fila de revisão é o ponto de aprovação. A sugestão ainda carrega
 os labels da run, e uma policy explícita, capacidade ausente ou violação de
@@ -112,9 +118,9 @@ de uma run não torna a memória mais forte. O modelo não envia confiança e n�
 escolhe empresa, área ou namespace de agente.
 
 Sugestões em auto-confirmação são efeitos de escrita no caminho normal do
-Gate. Se uma run leu dado não confiável, o Gate pode pedir uma pessoa antes de
-contar a sugestão, porque sugestões repetidas podem promover memória sem um
-clique posterior de revisão.
+Gate. Se a observação veio de dado não confiável, ela é rebaixada para revisão
+naquela sugestão: a run pode colocá-la na fila sem uma segunda aprovação, mas
+uma pessoa precisa aceitá-la antes de virar memória ativa.
 
 ```yaml
 memory_learning:

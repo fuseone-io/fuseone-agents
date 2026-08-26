@@ -538,6 +538,7 @@ func TestMemoryTools_areExplainedOnlyWhenOffered(t *testing.T) {
 				"_fuseone__memory__find",
 				"Memory learning is enabled",
 				"_fuseone__memory__suggest",
+				"Search memory first when the subject or signature may already exist",
 				"Do not suggest one-off facts, secrets, approvals, permissions or broad opinions",
 			} {
 				if !strings.Contains(system, want) {

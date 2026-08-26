@@ -153,9 +153,17 @@ func (s suggestionTx) alreadyActive(
 	ctx context.Context,
 	prepared domain.MemorySuggestion,
 ) (domain.MemorySuggestionOutcome, bool, error) {
-	active, found, err := readActiveAssertionTx(ctx, s.tx, prepared.AssertionID, prepared.Scope, s.now)
-	if err != nil {
-		return domain.MemorySuggestionOutcome{}, false, err
+	var active domain.MemoryAssertion
+	var found bool
+	for _, id := range activeAssertionIDsForSuggestion(prepared) {
+		got, ok, err := readActiveAssertionTx(ctx, s.tx, id, prepared.Scope, s.now)
+		if err != nil {
+			return domain.MemorySuggestionOutcome{}, false, err
+		}
+		if ok {
+			active, found = got, true
+			break
+		}
 	}
 	if !found {
 		return domain.MemorySuggestionOutcome{}, false, nil

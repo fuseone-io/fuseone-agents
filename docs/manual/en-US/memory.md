@@ -98,6 +98,12 @@ that suggestion with the run labels and evidence, but `memory.find` does not
 return it yet. A person with publish permission in the scope must accept or
 dismiss it from the Memory page.
 
+When memory learning is enabled, the platform also offers
+`$fuseone.memory.find`. The agent should use it before suggesting memory for a
+case that may already be remembered. The suggestion path also checks active
+memory for the same kind, subject and signature, so a remembered fact does not
+keep creating review items just because the model proposes different wording.
+
 Review-mode suggestions do not ask for a second approval before entering that
 queue. The review queue is the approval point. The suggestion still carries
 the run's labels, and an authored policy, missing capability or data-barrier
@@ -109,9 +115,10 @@ count is derived by the platform. Repeating the same suggestion inside one run
 does not make the memory stronger. The model does not send confidence and does
 not choose the company, area or agent namespace.
 
-Auto-confirm suggestions are write effects in the ordinary Gate path. If a run
-read untrusted data, the Gate can ask a person before counting the suggestion,
-because repeated suggestions can promote memory without a later review click.
+Auto-confirm suggestions are write effects in the ordinary Gate path. If the
+observation came from untrusted data, it is downgraded to review mode for that
+suggestion: the run may enqueue it without a second approval, but a person must
+accept it before it becomes active memory.
 
 ```yaml
 memory_learning:

@@ -198,6 +198,11 @@ func TestSuggest_activeAssertionIdentityStopsDuplicateSuggestion(t *testing.T) {
 	expectActiveIdentityStopsDuplicateSuggestion(t, context.Background(), memory.NewMemory())
 }
 
+func TestSuggest_sharedActiveAssertionStopsAgentScopedDuplicateSuggestion(t *testing.T) {
+	t.Parallel()
+	expectSharedActiveAssertionStopsAgentScopedDuplicateSuggestion(t, context.Background(), memory.NewMemory())
+}
+
 func TestLayer_suggestAutoConfirmsOnlyAfterRepeatedObservations(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -546,6 +551,11 @@ func TestPostgresSuggest_activeAssertionIdentityStopsDuplicateSuggestion(t *test
 	expectActiveIdentityStopsDuplicateSuggestion(t, ctx, store)
 }
 
+func TestPostgresSuggest_sharedActiveAssertionStopsAgentScopedDuplicateSuggestion(t *testing.T) {
+	ctx, store := postgresStore(t)
+	expectSharedActiveAssertionStopsAgentScopedDuplicateSuggestion(t, ctx, store)
+}
+
 func TestPostgresSuggest_concurrentEquivalentSuggestionsMerge(t *testing.T) {
 	ctx, store := postgresStore(t)
 	const writers = 12
@@ -715,6 +725,43 @@ func expectActiveIdentityStopsDuplicateSuggestion(
 	}
 	if len(pending) != 0 {
 		t.Fatalf("pending = %+v, want no suggestion for an active assertion identity", pending)
+	}
+}
+
+func expectSharedActiveAssertionStopsAgentScopedDuplicateSuggestion(
+	t *testing.T,
+	ctx context.Context,
+	store suggestionStore,
+) {
+	t.Helper()
+	now := time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC)
+	active, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.AgentID = ""
+		a.Claim = "the shared memory is the reviewed claim"
+	}), "usr_ana", "reviewed", now)
+	if err != nil {
+		t.Fatalf("Assert shared: %v", err)
+	}
+	out, err := store.Suggest(ctx, suggestion(func(s *domain.MemorySuggestion) {
+		s.AgentID = "triage"
+		s.Claim = "the agent proposed another wording for the same shared memory"
+		s.Evidence[0].RunID = "run-evidence-2"
+	}), domain.MemoryLearningPolicy{Mode: domain.MemoryLearningReview}, "agent:triage", now.Add(time.Minute))
+	if err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+	if out.Result != domain.MemorySuggestAlreadyActive || out.Assertion == nil ||
+		out.Assertion.ID != active.ID || out.Assertion.AgentID != "" {
+		t.Fatalf("out = %+v, want the visible shared assertion instead of a queued duplicate", out)
+	}
+	pending, err := store.ListSuggestions(ctx, memory.SuggestionFilter{
+		Scopes: []domain.Scope{platformScope}, Status: domain.MemorySuggestionPending,
+	})
+	if err != nil {
+		t.Fatalf("ListSuggestions: %v", err)
+	}
+	if len(pending) != 0 {
+		t.Fatalf("pending = %+v, want no suggestion for a visible shared assertion", pending)
 	}
 }
 
