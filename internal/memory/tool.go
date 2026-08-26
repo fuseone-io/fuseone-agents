@@ -386,15 +386,10 @@ func memorySuggestSchema() map[string]any {
 		return map[string]any{"type": "string", "maxLength": max, "description": description}
 	}
 	return map[string]any{
-		"type":                 "object",
-		"required":             []string{"kind", "subject", "signature", "claim"},
-		"additionalProperties": false,
-		"properties": map[string]any{
-			"kind":      text("Stable assertion kind.", domain.MaxMemoryKindBytes),
-			"subject":   text("Thing this assertion is about.", domain.MaxMemorySubjectBytes),
-			"signature": text("Stable key for the repeated situation.", domain.MaxMemorySignatureBytes),
-			"claim":     text("Small falsifiable claim to remember.", domain.MaxMemoryClaimBytes),
-		},
+		"kind":      text("Stable assertion kind.", domain.MaxMemoryKindBytes),
+		"subject":   text("Thing this assertion is about.", domain.MaxMemorySubjectBytes),
+		"signature": text("Stable key for the repeated situation.", domain.MaxMemorySignatureBytes),
+		"claim":     text("Small falsifiable claim to remember.", domain.MaxMemoryClaimBytes),
 	}
 }
 
