@@ -122,6 +122,11 @@ structured assertion: kind, subject, signature and claim. The platform records
 that suggestion with the run labels and evidence, but <code dir="auto">memory.find</code> does not
 return it yet. A person with publish permission in the scope must accept or
 dismiss it from the Memory page.</p>
+<p>When memory learning is enabled, the platform also offers
+<code dir="auto">$fuseone.memory.find</code>. The agent should use it before suggesting memory for a
+case that may already be remembered. The suggestion path also checks active
+memory for the same kind, subject and signature, so a remembered fact does not
+keep creating review items just because the model proposes different wording.</p>
 <p>Review-mode suggestions do not ask for a second approval before entering that
 queue. The review queue is the approval point. The suggestion still carries
 the run’s labels, and an authored policy, missing capability or data-barrier
@@ -131,9 +136,13 @@ the configured number of distinct runs before it becomes active memory. The
 count is derived by the platform. Repeating the same suggestion inside one run
 does not make the memory stronger. The model does not send confidence and does
 not choose the company, area or agent namespace.</p>
-<p>Auto-confirm suggestions are write effects in the ordinary Gate path. If a run
-read untrusted data, the Gate can ask a person before counting the suggestion,
-because repeated suggestions can promote memory without a later review click.</p>
+<p>Auto-confirm suggestions are write effects in the ordinary Gate path. If the
+observation came from untrusted data, it is downgraded to review mode for that
+suggestion: the run may enqueue it without a second approval, but a person must
+accept it before it becomes active memory.</p>
+<p>The downgrade follows the accumulated suggestion, not only the latest run. If
+one observation came from untrusted data, later clean observations do not wash
+that label away; the suggestion stays in human review.</p>
 <div class="expressive-code"><figure class="frame not-content"><figcaption class="header"></figcaption><pre data-language="yaml"><code><div class="ec-line"><div class="code"><span style="--0:#7FDBCA;--1:#111111">memory_learning</span><span style="--0:#D6DEEB;--1:#403F53">:</span></div></div><div class="ec-line"><div class="code"><span class="indent">  </span><span style="--0:#7FDBCA;--1:#111111">mode</span><span style="--0:#D6DEEB;--1:#403F53">: </span><span style="--0:#ECC48D;--1:#3B61B0">auto_confirm</span></div></div><div class="ec-line"><div class="code"><span class="indent">  </span><span style="--0:#7FDBCA;--1:#111111">min_observations</span><span style="--0:#D6DEEB;--1:#403F53">: </span><span style="--0:#F78C6C;--1:#AA0982">3</span></div></div><div class="ec-line"><div class="code"><span class="indent">  </span><span style="--0:#7FDBCA;--1:#111111">ttl_days</span><span style="--0:#D6DEEB;--1:#403F53">: </span><span style="--0:#F78C6C;--1:#AA0982">30</span></div></div></code></pre><div class="copy"><div aria-live="polite"></div><button title="Copy to clipboard" data-copied="Copied!" data-code="memory_learning:  mode: auto_confirm  min_observations: 3  ttl_days: 30"><div></div></button></div></figure></div>
 <p>Both modes keep suggestions separate from active memory until the promotion
 rule is satisfied. A pending suggestion is review material, not remembered

@@ -124,6 +124,11 @@ asserção estruturada: tipo, assunto, assinatura e afirmação. A plataforma
 registra a sugestão com os labels e a evidência da run, mas <code dir="auto">memory.find</code> ainda
 não a devolve. Uma pessoa com permissão de publicação no escopo precisa aceitar
 ou descartar a sugestão pela página de Memória.</p>
+<p>Quando aprendizado de memória está ligado, a plataforma também oferece
+<code dir="auto">$fuseone.memory.find</code>. O agente deve usá-la antes de sugerir memória para um
+caso que talvez já esteja lembrado. O caminho de sugestão também consulta a
+memória ativa pelo mesmo tipo, assunto e assinatura, então um fato lembrado não
+continua criando itens de revisão só porque o modelo propôs outra redação.</p>
 <p>Sugestões em modo de revisão não pedem uma segunda aprovação antes de entrar
 nessa fila. A fila de revisão é o ponto de aprovação. A sugestão ainda carrega
 os labels da run, e uma policy explícita, capacidade ausente ou violação de
@@ -134,9 +139,12 @@ ativa. A contagem é derivada pela plataforma. Repetir a mesma sugestão dentro
 de uma run não torna a memória mais forte. O modelo não envia confiança e não
 escolhe empresa, área ou namespace de agente.</p>
 <p>Sugestões em auto-confirmação são efeitos de escrita no caminho normal do
-Gate. Se uma run leu dado não confiável, o Gate pode pedir uma pessoa antes de
-contar a sugestão, porque sugestões repetidas podem promover memória sem um
-clique posterior de revisão.</p>
+Gate. Se a observação veio de dado não confiável, ela é rebaixada para revisão
+naquela sugestão: a run pode colocá-la na fila sem uma segunda aprovação, mas
+uma pessoa precisa aceitá-la antes de virar memória ativa.</p>
+<p>Esse rebaixamento acompanha a sugestão acumulada, não só a run mais recente.
+Se uma observação veio de dado não confiável, observações limpas posteriores
+não lavam esse label; a sugestão continua na revisão humana.</p>
 <div class="expressive-code"><figure class="frame not-content"><figcaption class="header"></figcaption><pre data-language="yaml"><code><div class="ec-line"><div class="code"><span style="--0:#7FDBCA;--1:#111111">memory_learning</span><span style="--0:#D6DEEB;--1:#403F53">:</span></div></div><div class="ec-line"><div class="code"><span class="indent">  </span><span style="--0:#7FDBCA;--1:#111111">mode</span><span style="--0:#D6DEEB;--1:#403F53">: </span><span style="--0:#ECC48D;--1:#3B61B0">auto_confirm</span></div></div><div class="ec-line"><div class="code"><span class="indent">  </span><span style="--0:#7FDBCA;--1:#111111">min_observations</span><span style="--0:#D6DEEB;--1:#403F53">: </span><span style="--0:#F78C6C;--1:#AA0982">3</span></div></div><div class="ec-line"><div class="code"><span class="indent">  </span><span style="--0:#7FDBCA;--1:#111111">ttl_days</span><span style="--0:#D6DEEB;--1:#403F53">: </span><span style="--0:#F78C6C;--1:#AA0982">30</span></div></div></code></pre><div class="copy"><div aria-live="polite"></div><button title="Copy to clipboard" data-copied="Copied!" data-code="memory_learning:  mode: auto_confirm  min_observations: 3  ttl_days: 30"><div></div></button></div></figure></div>
 <p>Nos dois modos, sugestões ficam separadas da memória ativa até que a regra de
 promoção seja satisfeita. Uma sugestão pendente é material de revisão, não fato
