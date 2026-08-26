@@ -120,6 +120,10 @@ observation came from untrusted data, it is downgraded to review mode for that
 suggestion: the run may enqueue it without a second approval, but a person must
 accept it before it becomes active memory.
 
+The downgrade follows the accumulated suggestion, not only the latest run. If
+one observation came from untrusted data, later clean observations do not wash
+that label away; the suggestion stays in human review.
+
 ```yaml
 memory_learning:
   mode: auto_confirm

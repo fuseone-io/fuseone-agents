@@ -199,7 +199,7 @@ func (s suggestionTx) finish(
 	if err := s.recordSuggested(ctx, stored); err != nil {
 		return domain.MemorySuggestionOutcome{}, err
 	}
-	if policy.AutoConfirms() && stored.Observations >= policy.MinObservations {
+	if policy.AutoConfirms(stored.Labels) && stored.Observations >= policy.MinObservations {
 		return s.autoConfirm(ctx, stored)
 	}
 	if err := s.tx.Commit(ctx); err != nil {

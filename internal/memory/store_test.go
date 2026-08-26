@@ -285,6 +285,11 @@ func TestLayer_suggestDoesNotAutoConfirmUntrustedObservations(t *testing.T) {
 	}
 }
 
+func TestSuggest_mixedTrustObservationsDoNotAutoConfirm(t *testing.T) {
+	t.Parallel()
+	expectMixedTrustObservationsDoNotAutoConfirm(t, context.Background(), memory.NewMemory())
+}
+
 func TestLayer_suggestCountsOneObservationPerRun(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -556,6 +561,11 @@ func TestPostgresSuggest_sharedActiveAssertionStopsAgentScopedDuplicateSuggestio
 	expectSharedActiveAssertionStopsAgentScopedDuplicateSuggestion(t, ctx, store)
 }
 
+func TestPostgresSuggest_mixedTrustObservationsDoNotAutoConfirm(t *testing.T) {
+	ctx, store := postgresStore(t)
+	expectMixedTrustObservationsDoNotAutoConfirm(t, ctx, store)
+}
+
 func TestPostgresSuggest_concurrentEquivalentSuggestionsMerge(t *testing.T) {
 	ctx, store := postgresStore(t)
 	const writers = 12
@@ -689,6 +699,7 @@ func (failingStore) DismissSuggestion(context.Context, string, domain.Scope, dom
 
 type suggestionStore interface {
 	Assert(context.Context, domain.MemoryAssertion, domain.UserID, string, time.Time) (domain.MemoryAssertion, error)
+	Find(context.Context, domain.MemoryQuery) ([]domain.MemoryAssertion, error)
 	Suggest(context.Context, domain.MemorySuggestion, domain.MemoryLearningPolicy, domain.UserID, time.Time) (domain.MemorySuggestionOutcome, error)
 	ListSuggestions(context.Context, memory.SuggestionFilter) ([]domain.MemorySuggestion, error)
 }
@@ -762,6 +773,60 @@ func expectSharedActiveAssertionStopsAgentScopedDuplicateSuggestion(
 	}
 	if len(pending) != 0 {
 		t.Fatalf("pending = %+v, want no suggestion for a visible shared assertion", pending)
+	}
+}
+
+func expectMixedTrustObservationsDoNotAutoConfirm(
+	t *testing.T,
+	ctx context.Context,
+	store suggestionStore,
+) {
+	t.Helper()
+	now := time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC)
+	autoConfirm := domain.MemoryLearningPolicy{
+		Mode: domain.MemoryLearningAutoConfirm, MinObservations: 3, TTLDays: 7,
+	}
+	labels := []domain.Labels{
+		nil,
+		nil,
+		domain.NewLabels(domain.LabelUntrusted),
+		nil,
+	}
+
+	var last domain.MemorySuggestionOutcome
+	for i, label := range labels {
+		policy := autoConfirm.ForSuggestion(label)
+		out, err := store.Suggest(ctx, suggestion(func(s *domain.MemorySuggestion) {
+			s.Labels = label
+			s.Evidence[0].RunID = domain.RunID("run-mixed-trust-" + string(rune('a'+i)))
+		}), policy, "agent:triage", now.Add(time.Duration(i)*time.Minute))
+		if err != nil {
+			t.Fatalf("Suggest %d: %v", i, err)
+		}
+		last = out
+	}
+
+	if last.Result != domain.MemorySuggestPending {
+		t.Fatalf("last result = %+v, want accumulated untrusted suggestion kept for review", last)
+	}
+	found, err := store.Find(ctx, domain.MemoryQuery{
+		Scope: platformScope, AgentID: "triage", Search: "datasource", Now: now.Add(4 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if len(found) != 0 {
+		t.Fatalf("found = %+v, want no active memory after an untrusted contribution", found)
+	}
+	pending, err := store.ListSuggestions(ctx, memory.SuggestionFilter{
+		Scopes: []domain.Scope{platformScope}, Status: domain.MemorySuggestionPending,
+	})
+	if err != nil {
+		t.Fatalf("ListSuggestions: %v", err)
+	}
+	if len(pending) != 1 || pending[0].Observations != 4 ||
+		!pending[0].Labels.Has(domain.LabelUntrusted) {
+		t.Fatalf("pending = %+v, want one accumulated tainted suggestion still pending", pending)
 	}
 }
 

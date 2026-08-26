@@ -237,8 +237,11 @@ func (p MemoryLearningPolicy) Enabled() bool {
 	}
 }
 
-func (p MemoryLearningPolicy) AutoConfirms() bool {
-	return p.Normalize().Mode == MemoryLearningAutoConfirm
+// AutoConfirms reports whether a suggestion carrying labels may become active
+// without human review. Labels are the accumulated suggestion labels, not only
+// the labels of the latest run.
+func (p MemoryLearningPolicy) AutoConfirms(labels Labels) bool {
+	return p.Normalize().Mode == MemoryLearningAutoConfirm && !labels.HasAny(LabelUntrusted)
 }
 
 // ReviewRequired reports whether a suggestion can only enter the human review

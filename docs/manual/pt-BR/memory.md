@@ -122,6 +122,10 @@ Gate. Se a observação veio de dado não confiável, ela é rebaixada para revi
 naquela sugestão: a run pode colocá-la na fila sem uma segunda aprovação, mas
 uma pessoa precisa aceitá-la antes de virar memória ativa.
 
+Esse rebaixamento acompanha a sugestão acumulada, não só a run mais recente.
+Se uma observação veio de dado não confiável, observações limpas posteriores
+não lavam esse label; a sugestão continua na revisão humana.
+
 ```yaml
 memory_learning:
   mode: auto_confirm

@@ -117,7 +117,7 @@ func (m *Memory) Suggest(
 		m.suggestions[prepared.ID] = cloneSuggestion(prepared)
 		return domain.MemorySuggestionOutcome{Suggestion: prepared, Result: domain.MemorySuggestIgnored}, nil
 	}
-	if policy.AutoConfirms() && prepared.Observations >= policy.MinObservations {
+	if policy.AutoConfirms(prepared.Labels) && prepared.Observations >= policy.MinObservations {
 		return m.autoConfirmSuggestion(prepared, now), nil
 	}
 	m.suggestions[prepared.ID] = cloneSuggestion(prepared)
