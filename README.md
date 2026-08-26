@@ -1,32 +1,53 @@
 # FuseOne Agents
 
-FuseOne Agents is a control plane for AI agents that work inside real business
-operations: reading systems, proposing actions, asking for approval when the
-risk calls for it, and leaving a traceable record of what happened.
+FuseOne Agents is a governed runtime and control plane for AI agents that work
+inside real business operations: reading systems, proposing actions, asking for
+approval when the risk calls for it, and leaving a traceable record of what
+happened.
 
 It is built for agents that touch CRM, ERP, support queues, observability
-systems, internal APIs and legacy tools. The product is not a connector suite
-and not a generic chat shell: MCP servers are tools, channels are how people
-talk to agents, and the Gate is the boundary every external effect crosses.
+systems, internal APIs, secret stores and legacy tools. The product is not a
+generic chat shell and not a vendor connector marketplace. MCP servers,
+governed connector instances, channels and native platform tools are
+capabilities that must be scoped, classified and evaluated before they can
+change the outside world.
 
 It installs into the customer's own environment. One binary, one PostgreSQL,
 one Helm chart.
 
-## What it does
+## What it does today
 
 - Runs authored agents from manual starts, webhooks, events and channels.
 - Connects MCP tool servers, discovers their tools, lets an operator choose
   the surface area, and requires a Curator to classify what each tool can do.
-- Evaluates every tool call through a deterministic Gate before anything
+- Hosts governed connector instances, beginning with Vault, and exposes a
+  connector catalogue for common governed shapes such as secrets, SQL reads,
+  object storage, identity actions, DNS, Kubernetes, SMTP and governed HTTP.
+- Evaluates every external effect through a deterministic Gate before anything
   reaches the outside world.
-- Carries untrusted labels from inputs, logs, tool results and agent-to-agent
-  events so a later write cannot quietly launder risky context.
+- Applies autonomy stages, approval policy, data barriers, taint labels,
+  budgets, rate limits, duplicate-effect recognition and compensation before an
+  agent acts.
+- Carries labels from inputs, artifacts, memory, tool results and
+  agent-to-agent events so a later write cannot quietly launder risky context.
 - Records runs in an append-only, hash-chained ledger for replay, audit,
-  budget accounting and incident review.
+  simulation, regression checks, budget accounting and incident review.
 - Stores large or sensitive run content behind references, so retention and
   erasure can remove what a run carried without rewriting the audit chain.
-- Ships with a console for authoring, approvals, run inspection, MCP
-  governance, audit trail, data retention, branding and the in-product manual.
+- Shares context between runs and agents through named artifacts whose refs,
+  digests, scope labels and origin labels are controlled by the platform.
+- Maintains governed memory as structured assertions, not remembered prose:
+  evidence, labels, retention and erasure travel with the memory, and reading
+  it can taint the next action.
+- Explains cost and usage with FinOps views: prompt composition by source and
+  tool, cache hits, compaction savings, price provenance, run spend, aggregate
+  spend by model and agent, and simulation exposure before a run starts.
+- Provides operational visibility through Prometheus metrics, durable runtime
+  projections, a Needs attention cockpit and a Trust Center whose judgement is
+  computed on the server.
+- Ships with a console for authoring, approvals, run inspection, MCP and
+  connector governance, audit trail, data retention, branding and the
+  in-product manual.
 
 ## Why it is different
 
@@ -34,11 +55,16 @@ Most automation platforms ask whether an integration can call an API. FuseOne
 asks a different question first: who decided this agent may do this thing, with
 this input, in this scope, at this cost?
 
-Everything important is a projection of the same ledger. The audit trail, a
-run's current state, cost accounting, replay and simulation are reads over one
-record, not parallel systems that have to stay in sync. The Gate's ruling is
-written before the effect happens, and a grant can release an action that only
-needed approval; it cannot override a check that blocked it.
+The run ledger is the source of truth for execution. Projections make expensive
+questions fast to answer - cost, runtime health, memory, duplicate effects,
+simulation and trust - but they carry coverage, scope and provenance instead of
+pretending unknown is low or partial is complete.
+
+The Gate's ruling is written before the effect happens. A grant can release an
+action that only needed approval; it cannot override a check that blocked it.
+Duplicate-effect recognition, memory, context sharing and connector calls all
+keep that same rule: the platform decides what can be said, read, skipped or
+written, and the model does not get to invent authority by text.
 
 Functional reference: [docs/PRD-001-fuseone-agents.md](docs/PRD-001-fuseone-agents.md).
 
@@ -52,12 +78,12 @@ helm install agents oci://ghcr.io/fuseone-io/charts/fuseone-agents \
 ```
 
 Images are built in the open for `linux/amd64` and `linux/arm64`, and signed
-with no key at all — the signature's identity is the workflow that built it.
+with no key at all - the signature's identity is the workflow that built it.
 This runs inside your network where you cannot watch it build, so check it
 before it does:
 
 ```sh
-cosign verify ghcr.io/fuseone-io/fuseone-agents:0.3.3 \
+cosign verify ghcr.io/fuseone-io/fuseone-agents:<version> \
   --certificate-identity-regexp '^https://github.com/fuseone-io/fuseone-agents/' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
@@ -98,15 +124,24 @@ cmd/devstack/   local stand-ins for a model provider and an MCP server
 internal/
   domain/       core types. No I/O, stdlib only
   ledger/       the append-only hash-chained ledger and its projections
-  gate/         the seven checks and four verdicts
+  gate/         deterministic checks and verdicts before external effects
   engine/       the loop: fold the ledger, decide the next action
   worker/       leases runs and advances them
+  model/        provider adapters, prices and prompt assembly
+  tools/        MCP catalogue, reservations, cache, egress and invocation
+  connectors/   governed connector shapes and catalogue entries
+  connectortools/ runtime bridge for governed connector instances
+  memory/       governed memory assertions, suggestions, labels and retention
+  dedupe/       cross-run duplicate-effect recognition
+  contextshare/ named artifacts shared between runs and agents
+  finops/       spend projections and aggregates
+  channel/      channel inbox, delivery, reporter and operational evidence
   admin/        what operators change, and the record that they did
   auth/         OIDC, sessions, delegation
   httpapi/      HTTP + the OpenAPI contract's implementation
 api/            openapi.yaml — the contract both sides are generated from
 web/            the console: React 19 + Vite + shadcn/ui
-docs/           the PRD and the notes that argue each design decision
+docs/           PRD, data protection, operator docs, notes and manual pages
 ```
 
 ## The reasoning, written down
@@ -121,14 +156,16 @@ whether this design fits their problem.
 | [DP-001](docs/DP-001-data-protection.md) | What is stored, what leaves the installation, and what can be erased |
 | [OP-001](docs/OP-001-running-an-installation.md) | Installing it, the decisions an operator owns, and what to expect when something is wrong |
 | [NT-001](docs/NT-001-integration-boundary-and-execution-model.md) | Where MCP ends and integration begins |
+| [NT-002](docs/NT-002-remaining-work.md) | The remaining product work and why it is ordered that way |
 | [NT-003](docs/NT-003-conversational-authoring.md) | Authoring an agent by conversation |
 | [NT-004](docs/NT-004-ledger-volume-and-paging.md) | What the ledger costs at volume, measured, and why it is partitioned on the run's opening time |
 | [NT-005](docs/NT-005-interaction-channels.md) | Channels, and why Slack and WhatsApp are two products |
 | [NT-006](docs/NT-006-evaluating-agents.md) | Evaluating agents, and why not to adopt a harness |
 | [NT-007](docs/NT-007-drawing-a-process.md) | A canvas that authors the stages, without the specification becoming a picture |
 | [NT-008](docs/NT-008-a-catalogue-by-shape.md) | The tool servers to ship, chosen by shape and never by vendor |
+| [NT-009](docs/NT-009-governed-connectors.md) | First-party connector shapes, and why runtime comes only after governance |
 
 Engineering rules are in [CLAUDE.md](CLAUDE.md) for the Go core and
-[web/CLAUDE.md](web/CLAUDE.md) for the console. Everything written down is in
-English, including commits and these documents: the repository is public, and a
-document half its readers cannot read is one that does not get reviewed.
+[web/CLAUDE.md](web/CLAUDE.md) for the console. Design notes and commits are in
+English so public review has one shared language. The product manual lives in
+[docs/manual](docs/manual) and is bilingual where the console needs it.
