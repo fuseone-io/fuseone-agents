@@ -38,6 +38,9 @@ func Render(s Spec) ([]byte, error) {
 		Emits:    s.Emits,
 		Steps:    s.Steps,
 	}
+	if learning := s.MemoryLearning.Normalize(); learning.Enabled() {
+		fm.MemoryLearning = &learning
+	}
 	for _, t := range s.Tools {
 		fm.Tools = append(fm.Tools, string(t))
 	}

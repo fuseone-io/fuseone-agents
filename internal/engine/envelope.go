@@ -45,6 +45,9 @@ func envelopeOf(start Start, called []domain.ToolID) gate.Pack {
 
 func envelopeForState(start Start, state State) gate.Pack {
 	pack := envelopeOf(start, state.Called)
+	if start.MemoryLearning.Enabled() {
+		pack = gate.NewPack(append(pack.Tools(), domain.ToolMemorySuggest)...)
+	}
 	if len(state.ContextArtifacts) == 0 {
 		return pack
 	}

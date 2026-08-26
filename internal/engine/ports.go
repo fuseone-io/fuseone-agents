@@ -119,6 +119,16 @@ type Call struct {
 	// ContextArtifacts is the event-supplied contract this run may retrieve
 	// through the platform-owned context reader.
 	ContextArtifacts []domain.ContextArtifact
+	// At is the engine clock instant for this call. Native tools that persist
+	// platform state record this rather than reading the wall clock themselves.
+	At time.Time
+	// Labels is the run's accumulated origin at the moment of the call.
+	// Platform-owned tools that persist derived records use it to keep AU-17
+	// mechanical: labels are copied from the run, never supplied by the model.
+	Labels domain.Labels
+	// MemoryLearning is the version-pinned policy for platform-owned memory
+	// suggestions. Tool arguments never carry this permission.
+	MemoryLearning domain.MemoryLearningPolicy
 }
 
 type ToolResult struct {
@@ -193,6 +203,10 @@ type Start struct {
 	// so it arrives with the run rather than with the definition.
 	Stage   domain.Stage
 	Trigger string
+	// MemoryLearning is versioned with the agent definition. A run pinned to an
+	// older version does not begin learning because somebody published a later
+	// toggle.
+	MemoryLearning domain.MemoryLearningPolicy
 }
 
 // Status is the outcome of one Advance.

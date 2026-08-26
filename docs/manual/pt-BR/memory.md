@@ -82,6 +82,50 @@ Evite memória para:
 - opiniões amplas como "este sistema não é confiável";
 - aprovações, permissões ou decisões que pertencem ao Gate.
 
+## Memória proposta pelo agente
+
+Um agente não escreve memória ativa por padrão. Aprendizado de memória é um
+opt-in na versão publicada do agente; mudar essa política cria uma versão nova
+e aparece na revisão de publicação.
+
+```yaml
+memory_learning:
+  mode: review
+  ttl_days: 30
+```
+
+V1 é modo de revisão. O agente pode chamar `$fuseone.memory.suggest` com uma
+asserção estruturada: tipo, assunto, assinatura e afirmação. A plataforma
+registra a sugestão com os labels e a evidência da run, mas `memory.find` ainda
+não a devolve. Uma pessoa com permissão de publicação no escopo precisa aceitar
+ou descartar a sugestão pela página de Memória.
+
+Sugestão é efeito de escrita. Se a run leu dado não confiável, o Gate trata a
+sugestão como qualquer escrita contaminada e pede uma pessoa antes de gravá-la.
+
+V2 é modo de auto-confirmação. A mesma sugestão estruturada precisa ser
+observada na quantidade configurada de runs distintas antes de virar memória
+ativa. A contagem é derivada pela plataforma. Repetir a mesma sugestão dentro
+de uma run não torna a memória mais forte. O modelo não envia confiança e não
+escolhe empresa, área ou namespace de agente.
+
+```yaml
+memory_learning:
+  mode: auto_confirm
+  min_observations: 3
+  ttl_days: 30
+```
+
+Nos dois modos, sugestões ficam separadas da memória ativa até que a regra de
+promoção seja satisfeita. Uma sugestão pendente é material de revisão, não fato
+lembrado. Se a evidência de origem é apagada antes da revisão, a sugestão é
+marcada como origem apagada e não pode ser promovida.
+
+Use modo de revisão primeiro para agentes que escrevem, aprovam, desabilitam
+contas ou tocam produção. Auto-confirmação combina com memórias diagnósticas de
+baixo risco, onde repetição já é evidência útil e uma pista errada ainda passa
+pelo Gate normal antes de qualquer efeito.
+
 ## Evidência pode expirar ou ser apagada
 
 Memória segue retenção e apagamento. Se a evidência por trás de uma asserção é

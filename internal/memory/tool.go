@@ -3,6 +3,8 @@ package memory
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,10 +18,12 @@ import (
 
 const (
 	CodeMemoryArgumentsInvalid = "memory_arguments_invalid"
+	CodeMemoryLearningDisabled = "memory_learning_disabled"
 	CodeMemoryUnavailable      = "memory_unavailable"
 )
 
 const memoryToolDescription = "Find governed structured memory assertions for this agent and scope."
+const memorySuggestDescription = "Suggest a structured memory assertion for review or automatic confirmation."
 
 type ToolSource interface {
 	Tools(ctx context.Context) ([]domain.ToolEntry, error)
@@ -38,7 +42,7 @@ func (l *ToolList) Tools(ctx context.Context) ([]domain.ToolEntry, error) {
 		}
 		out = append(out, base...)
 	}
-	return sortedToolEntries(append(out, MemoryToolEntry())), nil
+	return sortedToolEntries(append(out, MemoryToolEntry(), MemorySuggestToolEntry())), nil
 }
 
 func MemoryToolEntry() domain.ToolEntry {
@@ -47,6 +51,17 @@ func MemoryToolEntry() domain.ToolEntry {
 		Description: memoryToolDescription,
 		Effect:      domain.EffectRead,
 		Untrusted:   true,
+		Native:      true,
+		Scope:       domain.Scope{Company: domain.Installation},
+		OnSurface:   true,
+	}
+}
+
+func MemorySuggestToolEntry() domain.ToolEntry {
+	return domain.ToolEntry{
+		ID: domain.ToolMemorySuggest, Server: "fuseone:memory",
+		Description: memorySuggestDescription,
+		Effect:      domain.EffectWrite,
 		Native:      true,
 		Scope:       domain.Scope{Company: domain.Installation},
 		OnSurface:   true,
@@ -79,6 +94,9 @@ func (l *Layer) Effect(id domain.ToolID) (domain.Effect, bool) {
 	if id == domain.ToolMemoryFind {
 		return domain.EffectRead, true
 	}
+	if id == domain.ToolMemorySuggest {
+		return domain.EffectWrite, true
+	}
 	if l.catalog == nil {
 		return domain.EffectUnknown, false
 	}
@@ -86,7 +104,7 @@ func (l *Layer) Effect(id domain.ToolID) (domain.Effect, bool) {
 }
 
 func (l *Layer) Dedupe(id domain.ToolID) (domain.ToolDedupe, bool) {
-	if id == domain.ToolMemoryFind || l.catalog == nil {
+	if id == domain.ToolMemoryFind || id == domain.ToolMemorySuggest || l.catalog == nil {
 		return domain.ToolDedupe{}, false
 	}
 	return l.catalog.Dedupe(id)
@@ -95,6 +113,9 @@ func (l *Layer) Dedupe(id domain.ToolID) (domain.ToolDedupe, bool) {
 func (l *Layer) Schema(id domain.ToolID) (string, string, map[string]any, bool) {
 	if id == domain.ToolMemoryFind {
 		return string(id), memoryToolDescription, memoryFindSchema(), true
+	}
+	if id == domain.ToolMemorySuggest {
+		return string(id), memorySuggestDescription, memorySuggestSchema(), true
 	}
 	if schemas, ok := l.catalog.(interface {
 		Schema(domain.ToolID) (string, string, map[string]any, bool)
@@ -105,7 +126,7 @@ func (l *Layer) Schema(id domain.ToolID) (string, string, map[string]any, bool) 
 }
 
 func (l *Layer) Reserve(ctx context.Context, call engine.Call) error {
-	if call.Tool == domain.ToolMemoryFind {
+	if call.Tool == domain.ToolMemoryFind || call.Tool == domain.ToolMemorySuggest {
 		return nil
 	}
 	if l.base == nil {
@@ -115,6 +136,9 @@ func (l *Layer) Reserve(ctx context.Context, call engine.Call) error {
 }
 
 func (l *Layer) Invoke(ctx context.Context, call engine.Call) (engine.ToolResult, error) {
+	if call.Tool == domain.ToolMemorySuggest {
+		return l.suggest(ctx, call)
+	}
 	if call.Tool != domain.ToolMemoryFind {
 		if l.base == nil {
 			return engine.ToolResult{}, fmt.Errorf("memory: no tool layer for %s", call.Tool)
@@ -130,6 +154,13 @@ type findArgs struct {
 	Signature string `json:"signature,omitempty"`
 	Search    string `json:"search,omitempty"`
 	Limit     int    `json:"limit,omitempty"`
+}
+
+type suggestArgs struct {
+	Kind      string `json:"kind"`
+	Subject   string `json:"subject"`
+	Signature string `json:"signature"`
+	Claim     string `json:"claim"`
 }
 
 func (l *Layer) find(ctx context.Context, call engine.Call) (engine.ToolResult, error) {
@@ -166,6 +197,45 @@ func (l *Layer) find(ctx context.Context, call engine.Call) (engine.ToolResult, 
 	return engine.ToolResult{ResultRef: ref, Labels: labels}, nil
 }
 
+func (l *Layer) suggest(ctx context.Context, call engine.Call) (engine.ToolResult, error) {
+	args, valid := decodeSuggestArgs(call.Args)
+	if !valid || call.AgentID == "" || l.store == nil || l.content == nil {
+		return failed(CodeMemoryArgumentsInvalid), nil
+	}
+	policy := call.MemoryLearning.Normalize()
+	if !policy.Enabled() {
+		return failed(CodeMemoryLearningDisabled), nil
+	}
+	now := nowOrWall(call.At)
+	suggestion := domain.MemorySuggestion{
+		Scope: call.Scope, AgentID: call.AgentID,
+		Kind: args.Kind, Subject: args.Subject, Signature: args.Signature,
+		Claim: args.Claim, Labels: call.Labels.Clone(),
+		ExpiresAt: policy.ExpiresAt(now),
+		Evidence: []domain.MemoryEvidence{{
+			RunID: call.RunID, Artifact: domain.ArtifactMemorySuggestion,
+			Digest: digestBytes(call.Args),
+		}},
+	}
+	by := domain.UserID("agent:" + string(call.AgentID))
+	if _, err := prepareSuggestion(suggestion, by, now); err != nil {
+		return failed(CodeMemoryArgumentsInvalid), nil
+	}
+	out, err := l.store.Suggest(ctx, suggestion, policy, by, now)
+	if err != nil {
+		return failed(CodeMemoryUnavailable), nil
+	}
+	body, err := json.Marshal(memorySuggestResult(out))
+	if err != nil {
+		return engine.ToolResult{}, err
+	}
+	ref, err := l.content.Put(ctx, call.RunID, call.Seq, body)
+	if err != nil {
+		return engine.ToolResult{}, fmt.Errorf("memory: store suggestion result: %w", err)
+	}
+	return engine.ToolResult{ResultRef: ref}, nil
+}
+
 func decodeFindArgs(raw []byte) (findArgs, bool) {
 	if len(bytes.TrimSpace(raw)) == 0 {
 		return findArgs{}, true
@@ -175,6 +245,16 @@ func decodeFindArgs(raw []byte) (findArgs, bool) {
 	var args findArgs
 	if err := dec.Decode(&args); err != nil {
 		return findArgs{}, false
+	}
+	return args, dec.Decode(&struct{}{}) == io.EOF
+}
+
+func decodeSuggestArgs(raw []byte) (suggestArgs, bool) {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	var args suggestArgs
+	if err := dec.Decode(&args); err != nil {
+		return suggestArgs{}, false
 	}
 	return args, dec.Decode(&struct{}{}) == io.EOF
 }
@@ -202,6 +282,14 @@ type memoryResultPayload struct {
 type memoryResultStats struct {
 	Returned int
 	Omitted  int
+}
+
+type memorySuggestPayload struct {
+	Status       string `json:"status"`
+	SuggestionID string `json:"suggestion_id,omitempty"`
+	AssertionID  string `json:"assertion_id,omitempty"`
+	Observations int64  `json:"observations,omitempty"`
+	Confirmed    int64  `json:"confirmed,omitempty"`
 }
 
 const maxMemoryResultBytes = 16 * 1024
@@ -261,6 +349,20 @@ func marshalMemoryResult(assertions []resultAssertion, total int) ([]byte, error
 	return json.Marshal(out)
 }
 
+func memorySuggestResult(out domain.MemorySuggestionOutcome) memorySuggestPayload {
+	payload := memorySuggestPayload{
+		Status:       string(out.Result),
+		SuggestionID: out.Suggestion.ID,
+		AssertionID:  out.Suggestion.AssertionID,
+		Observations: out.Suggestion.Observations,
+	}
+	if out.Assertion != nil {
+		payload.AssertionID = out.Assertion.ID
+		payload.Confirmed = out.Assertion.Confirmed
+	}
+	return payload
+}
+
 const timeFormat = "2006-01-02T15:04:05Z"
 
 func memoryFindSchema() map[string]any {
@@ -279,8 +381,30 @@ func memoryFindSchema() map[string]any {
 	}
 }
 
+func memorySuggestSchema() map[string]any {
+	text := func(description string, max int) map[string]any {
+		return map[string]any{"type": "string", "maxLength": max, "description": description}
+	}
+	return map[string]any{
+		"type":                 "object",
+		"required":             []string{"kind", "subject", "signature", "claim"},
+		"additionalProperties": false,
+		"properties": map[string]any{
+			"kind":      text("Stable assertion kind.", domain.MaxMemoryKindBytes),
+			"subject":   text("Thing this assertion is about.", domain.MaxMemorySubjectBytes),
+			"signature": text("Stable key for the repeated situation.", domain.MaxMemorySignatureBytes),
+			"claim":     text("Small falsifiable claim to remember.", domain.MaxMemoryClaimBytes),
+		},
+	}
+}
+
 func failed(code string) engine.ToolResult {
 	return engine.ToolResult{Failed: true, ErrorCode: code}
+}
+
+func digestBytes(b []byte) string {
+	sum := sha256.Sum256(b)
+	return "sha256:" + hex.EncodeToString(sum[:])[:16]
 }
 
 func sortedToolEntries(in []domain.ToolEntry) []domain.ToolEntry {

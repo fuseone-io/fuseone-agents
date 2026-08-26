@@ -147,13 +147,21 @@ undoes requirements written a day earlier.
 | Proposed | Verdict | Why |
 |---|---|---|
 | `remembered.find` | **A tool.** Ships | Reading what the agent knows is a read, and the agent choosing when to look is correct |
-| `remembered.assert` | **Not a tool** | As a tool, memory becomes an effect the model proposes, written by a model call and stored wherever the server keeps it — a mutable store beside the Ledger, which [AU-14](PRD-001-fuseone-agents.md#76-what-an-agent-remembers-between-runs) forbids. What is remembered is derived from the effects that actually happened, not from the model asserting they did |
+| `remembered.assert` | **Not a tool** | As a tool, memory becomes active because the model said so, written by a model call and stored wherever the server keeps it — a mutable store beside the Ledger, which [AU-14](PRD-001-fuseone-agents.md#76-what-an-agent-remembers-between-runs) forbids. What is remembered is derived from reviewed or repeatedly observed evidence, not from the model asserting it |
 | `dedupe.check` | **The Gate** | As a tool, the agent has to remember to check. [SE-11](PRD-001-fuseone-agents.md#76-what-an-agent-remembers-between-runs) makes the idempotency check span the agent, which is a guarantee of the platform — and a call the model may forget is not a guarantee, it is a duplicate waiting for a bad day |
 
 The distinction generalises, and it is the same one [NT-005 §10](NT-005-interaction-channels.md)
 makes about channels: **what the agent chooses is a tool; what the platform
 owes is not.** An agent choosing to recall is reasoning. An agent being unable
 to do the same thing twice is a property somebody bought.
+
+The later `$fuseone.memory.suggest` tool keeps that boundary by being a write
+effect that writes review material, not active memory. A pending suggestion is
+invisible to `memory.find`; promotion happens only by human review or by a
+versioned auto-confirm policy that counts distinct runs. The tool is a way for
+an opted-in agent to point at a candidate assertion, not a way for it to write
+remembered truth. Because it persists state, tainted context reaches it through
+the normal Gate path as a tainted write.
 
 ---
 

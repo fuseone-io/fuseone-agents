@@ -70,7 +70,7 @@ Roughly thirty tables. The ones that can hold personal data:
 | `principals`, `sessions`, `role_grants` | The people who use the console: identity from the customer's own provider |
 | `channel_inbox`, `channel_deliveries`, `channel_delivery_failures` | Messages exchanged on a connected channel, what was sent back, optional thread context supplied to a run, and operational delivery failures tied to a run and conversation |
 | `mcp_egress_denials` | Stdio MCP proxy failures by configured server, host, port, stable code and timestamps; no URL path, query string, header, body, token or tool argument |
-| `memory_assertions`, `memory_assertion_events` | Human-reviewed structured memory claims, source run/artifact/digest evidence, labels, actor, reason and timestamps |
+| `memory_assertions`, `memory_suggestions`, `memory_assertion_events` | Human-reviewed or agent-suggested structured memory claims, source run/artifact/digest evidence, labels, actor, reason and timestamps |
 | `admin_events`, `audit` records | Who changed what configuration, and when |
 
 `agent_specs`, `policies`, `areas`, `scopes`, `settings` and the trigger tables
@@ -209,8 +209,11 @@ case follows the same rule. A channel failure that began months ago but still
 failed this morning is current operational evidence, not expired history.
 Stdio MCP egress denials are also deleted by last-seen time, so a still-active
 egress problem remains visible until it stops recurring and then ages out.
-Memory assertions and memory assertion events age out through the same sweep;
-expired assertions are removed even when they were updated recently.
+Memory assertions, memory suggestions and memory assertion events age out
+through the same sweep; expired assertions and suggestions are removed even
+when they were updated recently. A suggestion whose source evidence is erased
+is marked `source_erased`, so it remains auditable until retention removes it
+and is no longer offered for review as intact knowledge.
 
 There is a floor. A window below 24 hours is refused, and it is checked twice —
 when the setting is written and again when the sweep reads it back. The second

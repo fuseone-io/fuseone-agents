@@ -4,14 +4,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryPage } from "@/features/memory/memory-page";
 import { useActiveScope } from "@/features/scope/active-scope";
 import { setLocale } from "@/i18n";
-import type { MemoryAssertion } from "@/features/memory/api";
+import type { MemoryAssertion, MemorySuggestion } from "@/features/memory/api";
 
 const hooks = vi.hoisted(() => ({
   items: [] as MemoryAssertion[],
+  suggestions: [] as MemorySuggestion[],
   can: ["agent:read", "agent:publish"] as string[],
   create: vi.fn(),
   disable: vi.fn(),
+  accept: vi.fn(),
+  dismiss: vi.fn(),
   refetch: vi.fn(),
+  suggestionsRefetch: vi.fn(),
 }));
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
@@ -30,8 +34,16 @@ vi.mock("@/features/memory/api", async (importOriginal) => {
       error: null,
       refetch: hooks.refetch,
     }),
+    useMemorySuggestions: () => ({
+      data: { items: hooks.suggestions },
+      isLoading: false,
+      error: null,
+      refetch: hooks.suggestionsRefetch,
+    }),
     useCreateMemoryAssertion: () => ({ mutateAsync: hooks.create, isPending: false }),
     useDisableMemoryAssertion: () => ({ mutate: hooks.disable, isPending: false }),
+    useAcceptMemorySuggestion: () => ({ mutate: hooks.accept, isPending: false }),
+    useDismissMemorySuggestion: () => ({ mutate: hooks.dismiss, isPending: false }),
   };
 });
 
@@ -39,9 +51,12 @@ describe("governed memory page", () => {
   beforeEach(() => {
     setLocale("en-US");
     hooks.items = [];
+    hooks.suggestions = [];
     hooks.can = ["agent:read", "agent:publish"];
     hooks.create.mockReset().mockResolvedValue(memoryAssertion(0));
     hooks.disable.mockReset();
+    hooks.accept.mockReset();
+    hooks.dismiss.mockReset();
     useActiveScope.setState({ company: "acme", area: "ops" });
   });
 
@@ -88,15 +103,52 @@ describe("governed memory page", () => {
     });
   });
 
+  it("reviews a pending suggestion inside its own scope", async () => {
+    const user = userEvent.setup();
+    hooks.suggestions = [memorySuggestion(0)];
+    render(<MemoryPage />);
+
+    await user.click(screen.getByRole("button", { name: "Accept suggestion" }));
+    const dialog = screen.getByRole("alertdialog");
+    expect(
+      within(dialog).getByRole("button", { name: "Accept suggestion" }),
+    ).toBeDisabled();
+    await user.type(within(dialog).getByLabelText("Why"), "observed twice");
+    await user.click(
+      within(dialog).getByRole("button", { name: "Accept suggestion" }),
+    );
+
+    expect(hooks.accept.mock.calls[0]?.[0]).toEqual({
+      id: "suggestion_0", company: "acme", area: "ops", reason: "observed twice",
+    });
+  });
+
+  it("shows that more memory suggestions exist instead of cutting silently", () => {
+    hooks.suggestions = Array.from({ length: 9 }, (_, index) =>
+      memorySuggestion(index),
+    );
+
+    render(<MemoryPage />);
+
+    expect(screen.getByText("suggested-subject-0")).toBeInTheDocument();
+    expect(screen.getByText("suggested-subject-7")).toBeInTheDocument();
+    expect(screen.queryByText("suggested-subject-8")).not.toBeInTheDocument();
+    expect(screen.getByText("8 of 9")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Load more" })).toBeInTheDocument();
+  });
+
   it("keeps write controls out for read-only callers", () => {
     hooks.can = ["agent:read"];
     hooks.items = [memoryAssertion(0)];
+    hooks.suggestions = [memorySuggestion(0)];
 
     render(<MemoryPage />);
 
     expect(screen.getByText("Read-only memory")).toBeInTheDocument();
     expect(screen.queryByText("New memory")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Disable" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Accept suggestion" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Dismiss suggestion" })).toBeNull();
   });
 });
 
@@ -128,6 +180,27 @@ function memoryAssertion(index: number): MemoryAssertion {
     createdBy: "usr_ana",
     createdAt: "2026-08-25T12:00:00Z",
     updatedBy: "usr_ana",
+    updatedAt: "2026-08-25T12:00:00Z",
+  };
+}
+
+function memorySuggestion(index: number): MemorySuggestion {
+  return {
+    id: `suggestion_${index}`,
+    assertionId: `mem_${index}`,
+    scope: { company: "acme", area: "ops" },
+    agentId: "triage",
+    kind: "incident",
+    subject: `suggested-subject-${index}`,
+    signature: `suggested-signature-${index}`,
+    claim: "Try the known datasource-token remediation first.",
+    evidence: [{ runId: `run_s_${index}`, artifact: "memory_suggestion", digest: "sha256:bcde" }],
+    observations: 2,
+    labels: ["untrusted", "scope:acme/ops"],
+    status: "pending",
+    createdBy: "agent:triage",
+    createdAt: "2026-08-25T12:00:00Z",
+    updatedBy: "agent:triage",
     updatedAt: "2026-08-25T12:00:00Z",
   };
 }

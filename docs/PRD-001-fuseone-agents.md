@@ -544,6 +544,11 @@ structured and scoped — *this error signature was filed as issue 412* — neve
 the model's prose. Prose remembered is prose re-read as instruction, and the
 next section says why that is the dangerous case.
 
+A model may propose a candidate assertion only into a governed suggestion
+queue. The suggestion is not active memory until a person accepts it or the
+versioned learning policy confirms repeated equivalent observations. Confidence
+is counted by the platform, not supplied by the model.
+
 **AU-16.** Memory lives under the same retention and the same per-subject
 erasure as any other content ([AU-11](#75-retention-and-export)). An agent that
 remembers a customer must forget them when the customer asks.

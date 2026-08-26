@@ -16,6 +16,13 @@ const (
 	// Gate records the read and the labels on remembered data keep flowing into
 	// later actions.
 	ToolMemoryFind ToolID = "$fuseone.memory.find"
+	// ToolMemorySuggest lets an opted-in agent propose a structured assertion.
+	//
+	// A suggestion is not remembered truth. It enters a review/confirmation
+	// queue, carries the run's labels, and is invisible to ToolMemoryFind until
+	// a person accepts it or the agent's learning policy confirms repeated
+	// observations.
+	ToolMemorySuggest ToolID = "$fuseone.memory.suggest"
 
 	MaxMemoryKindBytes      = 64
 	MaxMemorySubjectBytes   = 200
@@ -24,6 +31,12 @@ const (
 	MaxMemoryEvidence       = 8
 	MaxMemoryFindLimit      = 10
 	MaxMemoryListLimit      = 100
+	MaxMemorySuggestLimit   = 100
+
+	// ArtifactMemorySuggestion names the tool-call arguments that produced a
+	// memory suggestion. The bytes live in the run's argument content record;
+	// the memory evidence carries only the digest and the run/step reference.
+	ArtifactMemorySuggestion = "memory_suggestion"
 )
 
 type MemoryStatus string
@@ -33,6 +46,42 @@ const (
 	MemoryDisabled     MemoryStatus = "disabled"
 	MemoryExpired      MemoryStatus = "expired"
 	MemorySourceErased MemoryStatus = "source_erased"
+)
+
+type MemorySuggestionStatus string
+
+const (
+	MemorySuggestionPending       MemorySuggestionStatus = "pending"
+	MemorySuggestionAccepted      MemorySuggestionStatus = "accepted"
+	MemorySuggestionDismissed     MemorySuggestionStatus = "dismissed"
+	MemorySuggestionAutoConfirmed MemorySuggestionStatus = "auto_confirmed"
+	MemorySuggestionSourceErased  MemorySuggestionStatus = "source_erased"
+)
+
+type MemoryLearningMode string
+
+const (
+	MemoryLearningOff         MemoryLearningMode = "off"
+	MemoryLearningReview      MemoryLearningMode = "review"
+	MemoryLearningAutoConfirm MemoryLearningMode = "auto_confirm"
+)
+
+// MemoryLearningPolicy is versioned with the agent definition.
+//
+// The model never supplies it. It says whether the platform may accept memory
+// suggestions from this agent, and whether repeated equivalent suggestions may
+// become active without a separate human review.
+type MemoryLearningPolicy struct {
+	Mode            MemoryLearningMode `json:"mode" yaml:"mode,omitempty"`
+	MinObservations int64              `json:"min_observations,omitempty" yaml:"min_observations,omitempty"`
+	TTLDays         int                `json:"ttl_days,omitempty" yaml:"ttl_days,omitempty"`
+}
+
+const (
+	DefaultMemoryLearningMinObservations int64 = 3
+	DefaultMemoryLearningTTLDays               = 30
+	MaxMemoryLearningMinObservations     int64 = MaxMemoryEvidence
+	MaxMemoryLearningTTLDays                   = 365
 )
 
 type MemoryEvidence struct {
@@ -68,6 +117,47 @@ type MemoryAssertion struct {
 	UpdatedAt time.Time    `json:"updated_at"`
 }
 
+// MemorySuggestion is a proposed assertion that has not necessarily become
+// active memory.
+//
+// Its ID includes Claim, unlike MemoryAssertionID. Repeated suggestions of the
+// same subject/signature but a different claim must not be counted as evidence
+// for the old claim.
+type MemorySuggestion struct {
+	ID           string                 `json:"id"`
+	AssertionID  string                 `json:"assertion_id"`
+	Scope        Scope                  `json:"scope"`
+	AgentID      AgentID                `json:"agent_id"`
+	Kind         string                 `json:"kind"`
+	Subject      string                 `json:"subject"`
+	Signature    string                 `json:"signature"`
+	Claim        string                 `json:"claim"`
+	Evidence     []MemoryEvidence       `json:"evidence"`
+	Observations int64                  `json:"observations"`
+	Labels       Labels                 `json:"labels"`
+	Status       MemorySuggestionStatus `json:"status"`
+	ExpiresAt    *time.Time             `json:"expires_at,omitempty"`
+	CreatedBy    UserID                 `json:"created_by"`
+	CreatedAt    time.Time              `json:"created_at"`
+	UpdatedBy    UserID                 `json:"updated_by"`
+	UpdatedAt    time.Time              `json:"updated_at"`
+}
+
+type MemorySuggestResult string
+
+const (
+	MemorySuggestPending       MemorySuggestResult = "pending"
+	MemorySuggestAutoConfirmed MemorySuggestResult = "auto_confirmed"
+	MemorySuggestAlreadyActive MemorySuggestResult = "already_active"
+	MemorySuggestIgnored       MemorySuggestResult = "ignored"
+)
+
+type MemorySuggestionOutcome struct {
+	Suggestion MemorySuggestion
+	Assertion  *MemoryAssertion
+	Result     MemorySuggestResult
+}
+
 type MemoryQuery struct {
 	Scope     Scope
 	AgentID   AgentID
@@ -88,6 +178,93 @@ func (s MemoryStatus) Valid() bool {
 	default:
 		return false
 	}
+}
+
+func (s MemorySuggestionStatus) Valid() bool {
+	switch s {
+	case MemorySuggestionPending, MemorySuggestionAccepted,
+		MemorySuggestionDismissed, MemorySuggestionAutoConfirmed,
+		MemorySuggestionSourceErased:
+		return true
+	default:
+		return false
+	}
+}
+
+func (m MemoryLearningMode) Valid() bool {
+	switch m {
+	case MemoryLearningOff, MemoryLearningReview, MemoryLearningAutoConfirm:
+		return true
+	default:
+		return false
+	}
+}
+
+func (p MemoryLearningPolicy) Normalize() MemoryLearningPolicy {
+	if !p.Mode.Valid() {
+		p.Mode = MemoryLearningOff
+	}
+	if p.Mode == "" {
+		p.Mode = MemoryLearningOff
+	}
+	if p.Mode == MemoryLearningOff {
+		return MemoryLearningPolicy{Mode: MemoryLearningOff}
+	}
+	if p.MinObservations <= 0 {
+		p.MinObservations = DefaultMemoryLearningMinObservations
+	}
+	if p.MinObservations < 2 {
+		p.MinObservations = 2
+	}
+	if p.MinObservations > MaxMemoryLearningMinObservations {
+		p.MinObservations = MaxMemoryLearningMinObservations
+	}
+	if p.TTLDays <= 0 {
+		p.TTLDays = DefaultMemoryLearningTTLDays
+	}
+	if p.TTLDays > MaxMemoryLearningTTLDays {
+		p.TTLDays = MaxMemoryLearningTTLDays
+	}
+	return p
+}
+
+func (p MemoryLearningPolicy) Enabled() bool {
+	switch p.Normalize().Mode {
+	case MemoryLearningReview, MemoryLearningAutoConfirm:
+		return true
+	default:
+		return false
+	}
+}
+
+func (p MemoryLearningPolicy) AutoConfirms() bool {
+	return p.Normalize().Mode == MemoryLearningAutoConfirm
+}
+
+func (p MemoryLearningPolicy) ExpiresAt(now time.Time) *time.Time {
+	p = p.Normalize()
+	if p.Mode == MemoryLearningOff {
+		return nil
+	}
+	expires := now.UTC().AddDate(0, 0, p.TTLDays)
+	return &expires
+}
+
+func (p MemoryLearningPolicy) Validate() error {
+	if p.Mode != "" && !p.Mode.Valid() {
+		return fmt.Errorf("memory learning mode is invalid")
+	}
+	p = p.Normalize()
+	if p.Mode == MemoryLearningOff {
+		return nil
+	}
+	if p.MinObservations < 2 || p.MinObservations > MaxMemoryLearningMinObservations {
+		return fmt.Errorf("memory learning min_observations must be 2-%d", MaxMemoryLearningMinObservations)
+	}
+	if p.TTLDays < 1 || p.TTLDays > MaxMemoryLearningTTLDays {
+		return fmt.Errorf("memory learning ttl_days must be 1-%d", MaxMemoryLearningTTLDays)
+	}
+	return nil
 }
 
 func (a MemoryAssertion) Validate() error {
@@ -126,6 +303,31 @@ func (a MemoryAssertion) Validate() error {
 	return nil
 }
 
+func (s MemorySuggestion) Validate() error {
+	a := MemoryAssertion{
+		ID: s.AssertionID, Scope: s.Scope, AgentID: s.AgentID,
+		Kind: s.Kind, Subject: s.Subject, Signature: s.Signature,
+		Claim: s.Claim, Evidence: s.Evidence,
+		Observations: s.Observations, Confirmed: 0,
+		Labels: s.Labels, Status: MemoryActive, ExpiresAt: s.ExpiresAt,
+		CreatedBy: s.CreatedBy, CreatedAt: s.CreatedAt,
+		UpdatedBy: s.UpdatedBy, UpdatedAt: s.UpdatedAt,
+	}
+	if err := a.Validate(); err != nil {
+		return err
+	}
+	if s.ID == "" || s.AssertionID == "" {
+		return fmt.Errorf("memory suggestion id is required")
+	}
+	if s.Status == "" {
+		s.Status = MemorySuggestionPending
+	}
+	if !s.Status.Valid() {
+		return fmt.Errorf("memory suggestion status is invalid")
+	}
+	return nil
+}
+
 func MemoryAssertionID(a MemoryAssertion) string {
 	h := sha256.New()
 	writeMemoryPart(h, string(a.Scope.Company))
@@ -137,12 +339,35 @@ func MemoryAssertionID(a MemoryAssertion) string {
 	return "mem_" + hex.EncodeToString(h.Sum(nil))[:24]
 }
 
+func MemorySuggestionID(s MemorySuggestion) string {
+	h := sha256.New()
+	writeMemoryPart(h, string(s.Scope.Company))
+	writeMemoryPart(h, string(s.Scope.Area))
+	writeMemoryPart(h, string(s.AgentID))
+	writeMemoryPart(h, s.Kind)
+	writeMemoryPart(h, s.Subject)
+	writeMemoryPart(h, s.Signature)
+	writeMemoryPart(h, s.Claim)
+	return "mems_" + hex.EncodeToString(h.Sum(nil))[:24]
+}
+
 func MemoryFindLimit(limit int) int {
 	switch {
 	case limit <= 0:
 		return MaxMemoryFindLimit
 	case limit > MaxMemoryFindLimit:
 		return MaxMemoryFindLimit
+	default:
+		return limit
+	}
+}
+
+func MemorySuggestLimit(limit int) int {
+	switch {
+	case limit <= 0:
+		return MaxMemorySuggestLimit
+	case limit > MaxMemorySuggestLimit:
+		return MaxMemorySuggestLimit
 	default:
 		return limit
 	}

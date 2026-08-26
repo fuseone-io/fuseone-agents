@@ -24,6 +24,7 @@ func erasuresFor(t *testing.T, now func() time.Time) (*admin.Erasures, *ledger.C
 		 delete from channel_deliveries;
 		 delete from channel_delivery_failures;
 		 delete from memory_assertion_events;
+		 delete from memory_suggestions;
 		 delete from memory_assertions;
 		 delete from runs where run_id like 'run-retention-%';
 		 delete from settings where kind = 'retention'`); err != nil {
@@ -194,6 +195,9 @@ func TestSweep_pastTheWindowDeletesMemoryOperationalRecords(t *testing.T) {
 	seedMemoryAssertion(t, pool, "mem-old", old, nil)
 	seedMemoryAssertion(t, pool, "mem-expired", recent, &old)
 	seedMemoryAssertion(t, pool, "mem-recent", recent, nil)
+	seedMemorySuggestion(t, pool, "mems-old", "mem-suggest-old", old, nil)
+	seedMemorySuggestion(t, pool, "mems-expired", "mem-suggest-expired", recent, &old)
+	seedMemorySuggestion(t, pool, "mems-recent", "mem-suggest-recent", recent, nil)
 	if _, err := pool.Exec(ctx, `
 		insert into memory_assertion_events (
 			assertion_id, action, company_id, area_id, principal_id, reason, detail, at)
@@ -208,19 +212,22 @@ func TestSweep_pastTheWindowDeletesMemoryOperationalRecords(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Sweep: %v", err)
 	}
-	if erased != 3 {
-		t.Fatalf("erased %d, want old event and two memory assertions", erased)
+	if erased != 5 {
+		t.Fatalf("erased %d, want old event, two assertions and two suggestions", erased)
 	}
 
-	var assertions, events int
+	var assertions, suggestions, events int
 	if err := pool.QueryRow(ctx, `select count(*) from memory_assertions`).Scan(&assertions); err != nil {
 		t.Fatalf("count memory assertions: %v", err)
+	}
+	if err := pool.QueryRow(ctx, `select count(*) from memory_suggestions`).Scan(&suggestions); err != nil {
+		t.Fatalf("count memory suggestions: %v", err)
 	}
 	if err := pool.QueryRow(ctx, `select count(*) from memory_assertion_events`).Scan(&events); err != nil {
 		t.Fatalf("count memory events: %v", err)
 	}
-	if assertions != 1 || events != 1 {
-		t.Fatalf("remaining assertions=%d events=%d, want only recent memory", assertions, events)
+	if assertions != 1 || suggestions != 1 || events != 1 {
+		t.Fatalf("remaining assertions=%d suggestions=%d events=%d, want only recent memory", assertions, suggestions, events)
 	}
 }
 
@@ -256,6 +263,8 @@ func TestForSubject_marksMemoryFromErasedRunsUnavailable(t *testing.T) {
 	_, _ = content.Put(ctx, "run-theirs", 1, []byte("theirs"))
 	seedMemoryAssertionForRun(t, pool, "mem-mine", "run-mine")
 	seedMemoryAssertionForRun(t, pool, "mem-theirs", "run-theirs")
+	seedMemorySuggestionForRun(t, pool, "mems-mine", "mem-suggest-mine", "run-mine")
+	seedMemorySuggestionForRun(t, pool, "mems-theirs", "mem-suggest-theirs", "run-theirs")
 
 	if _, err := erasures.ForSubject(ctx, "usr_ana", domain.Scope{},
 		[]domain.RunID{"run-mine"}, "titular pediu"); err != nil {
@@ -264,11 +273,15 @@ func TestForSubject_marksMemoryFromErasedRunsUnavailable(t *testing.T) {
 
 	statusMine := memoryStatus(t, pool, "mem-mine")
 	statusTheirs := memoryStatus(t, pool, "mem-theirs")
-	if statusMine != "source_erased" || statusTheirs != "active" {
-		t.Fatalf("statuses mine=%s theirs=%s, want source_erased and active", statusMine, statusTheirs)
+	suggestionMine := memorySuggestionStatus(t, pool, "mems-mine")
+	suggestionTheirs := memorySuggestionStatus(t, pool, "mems-theirs")
+	if statusMine != "source_erased" || statusTheirs != "active" ||
+		suggestionMine != "source_erased" || suggestionTheirs != "pending" {
+		t.Fatalf("statuses mine=%s theirs=%s suggestionMine=%s suggestionTheirs=%s, want erased rows marked and neighbours kept",
+			statusMine, statusTheirs, suggestionMine, suggestionTheirs)
 	}
-	if got := memoryEventCount(t, pool, "source_erased"); got != 1 {
-		t.Fatalf("source_erased events = %d, want 1", got)
+	if got := memoryEventCount(t, pool, "source_erased"); got != 2 {
+		t.Fatalf("source_erased events = %d, want assertion and suggestion events", got)
 	}
 }
 
@@ -308,6 +321,42 @@ func seedMemoryAssertionForRun(t *testing.T, pool interface {
 	}
 }
 
+func seedMemorySuggestion(t *testing.T, pool interface {
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+}, id string, assertionID string, updated time.Time, expires *time.Time) {
+	t.Helper()
+	if _, err := pool.Exec(context.Background(), `
+		insert into memory_suggestions (
+			suggestion_id, assertion_id, company_id, area_id, agent_id,
+			kind, subject, signature, claim, evidence, observations, labels,
+			status, expires_at, created_by, created_at, updated_by, updated_at)
+		values (
+			$1, $2, 'acme', 'ops', 'triage',
+			'incident', $2, $2, 'suggested incident behaviour', '[]', 1, '{}',
+			'pending', $3, 'agent:triage', $4, 'agent:triage', $4)`,
+		id, assertionID, expires, updated); err != nil {
+		t.Fatalf("seed memory suggestion %s: %v", id, err)
+	}
+}
+
+func seedMemorySuggestionForRun(t *testing.T, pool interface {
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+}, id string, assertionID string, run domain.RunID) {
+	t.Helper()
+	if _, err := pool.Exec(context.Background(), `
+		insert into memory_suggestions (
+			suggestion_id, assertion_id, company_id, area_id, agent_id,
+			kind, subject, signature, claim, evidence, observations, labels,
+			status, created_by, created_at, updated_by, updated_at)
+		values (
+			$1, $2, 'acme', 'ops', 'triage',
+			'incident', $2, $2, 'suggested incident behaviour', $3::jsonb, 1, '{}',
+			'pending', 'agent:triage', now(), 'agent:triage', now())`,
+		id, assertionID, `[{"run_id":"`+string(run)+`","artifact":"memory_suggestion","digest":"sha256:answer"}]`); err != nil {
+		t.Fatalf("seed memory suggestion %s: %v", id, err)
+	}
+}
+
 func memoryStatus(t *testing.T, pool interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }, id string) string {
@@ -316,6 +365,18 @@ func memoryStatus(t *testing.T, pool interface {
 	if err := pool.QueryRow(context.Background(),
 		`select status from memory_assertions where assertion_id = $1`, id).Scan(&status); err != nil {
 		t.Fatalf("memory status %s: %v", id, err)
+	}
+	return status
+}
+
+func memorySuggestionStatus(t *testing.T, pool interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}, id string) string {
+	t.Helper()
+	var status string
+	if err := pool.QueryRow(context.Background(),
+		`select status from memory_suggestions where suggestion_id = $1`, id).Scan(&status); err != nil {
+		t.Fatalf("memory suggestion status %s: %v", id, err)
 	}
 	return status
 }

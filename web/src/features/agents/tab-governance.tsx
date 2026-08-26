@@ -1,4 +1,5 @@
 import { AgentBudgetSection } from "@/features/agents/agent-budget-section";
+import { AgentMemoryLearningSection } from "@/features/agents/agent-memory-learning-section";
 import { AgentTriggersSection } from "@/features/agents/agent-triggers-section";
 import { NarrativeCard } from "@/features/agents/narrative-card";
 import type { AgentDefinition } from "@/lib/api/client";
@@ -25,6 +26,7 @@ export function TabGovernance({
     <>
       <AgentTriggersSection draft={draft} patch={patch} />
       <AgentBudgetSection draft={draft} patch={patch} />
+      <AgentMemoryLearningSection draft={draft} patch={patch} />
       <NarrativeCard draft={draft} />
     </>
   );

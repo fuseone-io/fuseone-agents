@@ -12,6 +12,7 @@ const cobranca = {
     model: "devstack",
     tools: ["crm.lookup"],
     budget: { micros: 500_000, steps: 60 },
+    memoryLearning: { mode: "review", ttlDays: 45 },
   },
   instructions: "Cobre com educação.",
 } as unknown as AgentDetail;
@@ -35,6 +36,7 @@ describe("the agent draft", () => {
       company: "default",
       area: "financeiro",
       instructions: "Cobre com educação.",
+      memoryLearning: { mode: "review", ttlDays: 45 },
     });
   });
 
@@ -51,5 +53,29 @@ describe("the agent draft", () => {
     rerender({ loaded: cobranca });
 
     expect(result.current.draft.name).toBe("Cobrança firme");
+  });
+
+  it("names memory learning as a published change", () => {
+    const { result, rerender } = renderHook(
+      ({ loaded }) => useAgentDraft(loaded),
+      {
+        initialProps: { loaded: undefined as AgentDetail | undefined },
+      },
+    );
+
+    rerender({ loaded: cobranca });
+    act(() =>
+      result.current.patch({
+        memoryLearning: {
+          mode: "auto_confirm",
+          minObservations: 4,
+          ttlDays: 30,
+        },
+      }),
+    );
+
+    expect(result.current.changes).toContainEqual(
+      expect.objectContaining({ field: "agents.fieldMemoryLearning" }),
+    );
   });
 });

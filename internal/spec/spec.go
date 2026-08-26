@@ -42,8 +42,9 @@ type Spec struct {
 
 	// Tools is the capability pack, resolved to concrete tool ids. The author
 	// picks a pack; this is what the pack expanded to (PRD SE-03).
-	Tools  []domain.ToolID
-	Budget domain.Budget
+	Tools          []domain.ToolID
+	Budget         domain.Budget
+	MemoryLearning domain.MemoryLearningPolicy
 
 	Triggers []Trigger
 
@@ -98,6 +99,7 @@ type frontmatter struct {
 		Steps       int64 `yaml:"steps"`
 		WallClockMS int64 `yaml:"wall_clock_ms"`
 	} `yaml:"budget"`
+	MemoryLearning *domain.MemoryLearningPolicy `yaml:"memory_learning,omitempty"`
 }
 
 // Parse reads one agent definition.
@@ -112,20 +114,26 @@ func Parse(source string, data []byte) (Spec, error) {
 		return Spec{}, fmt.Errorf("%s: %w: %v", source, ErrInvalid, err)
 	}
 
+	learning := domain.MemoryLearningPolicy{Mode: domain.MemoryLearningOff}
+	if fm.MemoryLearning != nil {
+		learning = fm.MemoryLearning.Normalize()
+	}
+
 	s := Spec{
-		ID:           domain.AgentID(fm.ID),
-		Name:         fm.Name,
-		Company:      domain.CompanyID(fm.Company),
-		Area:         domain.AreaID(fm.Area),
-		Version:      versionOf(data),
-		Provider:     fm.Provider,
-		Model:        fm.Model,
-		Effort:       fm.Effort,
-		Triggers:     fm.Triggers,
-		Emits:        fm.Emits,
-		Steps:        fm.Steps,
-		Instructions: strings.TrimSpace(string(body)),
-		Source:       source,
+		ID:             domain.AgentID(fm.ID),
+		Name:           fm.Name,
+		Company:        domain.CompanyID(fm.Company),
+		Area:           domain.AreaID(fm.Area),
+		Version:        versionOf(data),
+		Provider:       fm.Provider,
+		Model:          fm.Model,
+		Effort:         fm.Effort,
+		Triggers:       fm.Triggers,
+		Emits:          fm.Emits,
+		Steps:          fm.Steps,
+		Instructions:   strings.TrimSpace(string(body)),
+		MemoryLearning: learning,
+		Source:         source,
 		Budget: domain.Budget{
 			Micros:      fm.Budget.Micros,
 			Tokens:      fm.Budget.Tokens,
@@ -178,6 +186,9 @@ func (s Spec) validate() error {
 	}
 	problems = append(problems, triggerProblems(s.Triggers)...)
 	problems = append(problems, emitProblems(s.Emits)...)
+	if err := s.MemoryLearning.Validate(); err != nil {
+		problems = append(problems, err.Error())
+	}
 
 	if len(problems) > 0 {
 		return fmt.Errorf("%w: %s", ErrInvalid, strings.Join(problems, "; "))

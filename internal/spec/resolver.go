@@ -77,10 +77,11 @@ func (r *Resolver) Resolve(ctx context.Context, agent domain.AgentID, version do
 		Start: engine.Start{
 			// The pack is frozen here, at the start of the run, and only ever
 			// shrinks from this point (PRD SE-04).
-			Pack:    gate.NewPack(spec.Tools...),
-			Steps:   envelopes(spec),
-			Budget:  spec.Budget,
-			Trigger: "worker",
+			Pack:           gate.NewPack(spec.Tools...),
+			Steps:          envelopes(spec),
+			Budget:         spec.Budget,
+			Trigger:        "worker",
+			MemoryLearning: spec.MemoryLearning.Normalize(),
 		},
 		Planner: planner,
 	}, nil

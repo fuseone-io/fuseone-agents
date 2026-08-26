@@ -2282,6 +2282,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/memory/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List governed memory suggestions
+         * @description Structured assertions proposed by opted-in agents. They are not served by the memory tool until a person accepts them, or until the agent's versioned learning policy auto-confirms a repeated identical suggestion. The response contains counters and evidence references only; source content remains in the content store under retention and erasure.
+         */
+        get: operations["listMemorySuggestions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/memory/suggestions/{suggestionId}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Promote a memory suggestion to active memory
+         * @description Accepting a suggestion is a human governance act. The server derives labels from the suggestion itself and records an append-only memory event before projecting the active assertion.
+         */
+        post: operations["acceptMemorySuggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/memory/suggestions/{suggestionId}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss a memory suggestion
+         * @description Dismissing keeps the suggestion out of active memory and records who reviewed it. The underlying evidence stays governed by the content store's own retention and erasure rules.
+         */
+        post: operations["dismissMemorySuggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/events": {
         parameters: {
             query?: never;
@@ -2484,6 +2544,21 @@ export interface components {
         };
         /** @enum {string} */
         MemoryStatus: "active" | "disabled" | "expired" | "source_erased";
+        /** @enum {string} */
+        MemorySuggestionStatus: "pending" | "accepted" | "dismissed" | "auto_confirmed" | "source_erased";
+        /** @enum {string} */
+        MemoryLearningMode: "off" | "review" | "auto_confirm";
+        /** @description Versioned opt-in for agent-proposed memory. Review mode records suggestions for a person. Auto-confirm mode only promotes an assertion after the same structured suggestion has been observed repeatedly. */
+        MemoryLearningPolicy: {
+            mode?: components["schemas"]["MemoryLearningMode"];
+            /**
+             * Format: int64
+             * @description Required identical observations before auto-confirming.
+             */
+            minObservations?: number;
+            /** @description How long an auto-confirmed assertion remains active. */
+            ttlDays?: number;
+        };
         MemoryEvidence: {
             runId: string;
             /** @description The platform-authored artifact name shown in the trail. */
@@ -2548,8 +2623,41 @@ export interface components {
             /** @description Why a person disabled this assertion. */
             reason: string;
         };
+        /** @description A structured assertion proposed by an opted-in agent. Pending suggestions are review material, not remembered facts; the memory tool only reads active MemoryAssertion rows. */
+        MemorySuggestion: {
+            id: string;
+            assertionId: string;
+            scope: components["schemas"]["Scope"];
+            agentId: string;
+            kind: string;
+            subject: string;
+            signature: string;
+            claim: string;
+            evidence: components["schemas"]["MemoryEvidence"][];
+            /** Format: int64 */
+            observations: number;
+            labels: string[];
+            status: components["schemas"]["MemorySuggestionStatus"];
+            /** Format: date-time */
+            expiresAt?: string | null;
+            createdBy: string;
+            /** Format: date-time */
+            createdAt: string;
+            updatedBy: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        MemorySuggestionReviewInput: {
+            company: string;
+            area: string;
+            /** @description Why a person accepted or dismissed this suggestion. */
+            reason: string;
+        };
         MemoryAssertionPage: {
             items: components["schemas"]["MemoryAssertion"][];
+        };
+        MemorySuggestionPage: {
+            items: components["schemas"]["MemorySuggestion"][];
         };
         /**
          * @description Cache tokens are reported separately from input tokens: a cache read
@@ -3862,6 +3970,8 @@ export interface components {
             tools: string[];
             budget: components["schemas"]["Budget"];
             triggers?: components["schemas"]["AgentTrigger"][];
+            /** @description Versioned policy that decides whether the platform-owned memory suggestion tool is available to this agent. Absent means off. */
+            memoryLearning?: components["schemas"]["MemoryLearningPolicy"];
             publishedBy?: string;
             /** Format: date-time */
             publishedAt: string;
@@ -3905,6 +4015,8 @@ export interface components {
             tools?: string[];
             budget?: components["schemas"]["Budget"];
             triggers?: components["schemas"]["AgentTrigger"][];
+            /** @description Optional. Off by default. When enabled, the agent may propose structured memory through the platform-owned suggestion tool; the platform still decides when a suggestion becomes active memory. */
+            memoryLearning?: components["schemas"]["MemoryLearningPolicy"];
             /**
              * @description Events a finished run of this agent publishes (PRD SE-10). Declared
              *     rather than called: an agent that chose when to emit would make the
@@ -7999,6 +8111,94 @@ export interface operations {
         };
         responses: {
             /** @description The assertion is disabled. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listMemorySuggestions: {
+        parameters: {
+            query?: {
+                /** @description Company scope. A single value until multi-company (PRD 3.1). */
+                company?: components["parameters"]["CompanyScope"];
+                area?: components["parameters"]["Area"];
+                agentId?: string;
+                status?: components["schemas"]["MemorySuggestionStatus"];
+                q?: string;
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Memory suggestions visible to the caller. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemorySuggestionPage"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    acceptMemorySuggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suggestionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemorySuggestionReviewInput"];
+            };
+        };
+        responses: {
+            /** @description The accepted assertion now projected for recall. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryAssertion"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    dismissMemorySuggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suggestionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemorySuggestionReviewInput"];
+            };
+        };
+        responses: {
+            /** @description The suggestion is dismissed. */
             204: {
                 headers: {
                     [name: string]: unknown;
