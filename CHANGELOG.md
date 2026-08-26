@@ -27,16 +27,14 @@ field" is a commit message.
 
 ## [Unreleased]
 
-## [0.36.0] — 2026-08-26
+## [0.37.0] — 2026-08-26
 
 ### Upgrade notes
 
-- **This release adds four migrations, none of them on `run_steps`.** 0059
-  creates the cross-run effect dedupe registry, 0060 creates the governed
-  memory tables, 0061 makes the memory event log append-only, and 0062 adds
-  trigram indexes for memory search. Unlike the recent FinOps and runtime
-  releases, these migrations do not build indexes on the partitioned run-step
-  ledger.
+- **This release adds one migration, not on `run_steps`.** 0062 enables
+  trigram search for governed memory by building GIN indexes on `subject`,
+  `signature` and `claim`. Unlike the recent FinOps and runtime releases, this
+  migration does not build indexes on the partitioned run-step ledger.
 
 - **Memory search now requires the PostgreSQL `pg_trgm` extension.** The
   migration enables it with `create extension if not exists pg_trgm` and builds
@@ -45,6 +43,37 @@ field" is a commit message.
   runtime can use. If the application database role cannot create extensions,
   the migration fails and the release does not roll out; have a DBA create
   `pg_trgm` in the database before upgrading, and the migration will reuse it.
+
+### Added
+
+- **The manual now explains governed memory and duplicate effects.** Both
+  locales document what memory stores, how labels travel through a memory read,
+  how retention and erasure affect assertions, and why duplicate effect
+  recognition is different from cache or memory.
+
+- **The Connections page can prepare governed connector instances.** The page
+  now separates runnable Vault instances from connector shapes that are still
+  planned. A Vault instance can be scoped, pointed at an endpoint and mount,
+  limited to approved path prefixes, and given a sealed token. The token is
+  never returned to the browser; the API reports only whether one is stored.
+
+### Changed
+
+- **Memory reads now have a prompt-size budget and worker metrics.** The memory
+  tool records call count, latency, returned assertions and assertions omitted
+  by the response budget on the worker metrics endpoint. The labels are fixed:
+  no agent, scope, search text, assertion id or claim can become a Prometheus
+  label.
+
+## [0.36.0] — 2026-08-26
+
+### Upgrade notes
+
+- **This release adds three migrations, none of them on `run_steps`.** 0059
+  creates the cross-run effect dedupe registry, 0060 creates the governed
+  memory tables, and 0061 makes the memory event log append-only. Unlike the
+  recent FinOps and runtime releases, these migrations do not build indexes on
+  the partitioned run-step ledger.
 
 - **Retention and erasure now reach governed memory.** Memory assertion events
   and active assertions are swept by the normal retention job. When an erasure
@@ -80,23 +109,6 @@ field" is a commit message.
   reviewed assertions from ledger evidence, see active and retired assertions,
   and disable an assertion with a reason. Lists page visibly instead of cutting
   silently.
-
-- **The manual now explains governed memory and duplicate effects.** Both
-  locales document what memory stores, how labels travel through a memory read,
-  how retention and erasure affect assertions, and why duplicate effect
-  recognition is different from cache or memory.
-
-- **The Connections page can prepare governed connector instances.** The page
-  now separates runnable Vault instances from connector shapes that are still
-  planned. A Vault instance can be scoped, pointed at an endpoint and mount,
-  limited to approved path prefixes, and given a sealed token. The token is
-  never returned to the browser; the API reports only whether one is stored.
-
-- **Memory reads now have a prompt-size budget and worker metrics.** The memory
-  tool records call count, latency, returned assertions and assertions omitted
-  by the response budget on the worker metrics endpoint. The labels are fixed:
-  no agent, scope, search text, assertion id or claim can become a Prometheus
-  label.
 
 ### Fixed
 
