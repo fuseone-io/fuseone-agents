@@ -111,7 +111,15 @@ export function ToolsPanel() {
         </div>
       ) : (
         <>
-          <Table className="min-w-[760px]">
+          <Table className="min-w-[1040px] table-fixed">
+            <colgroup>
+              <col className="w-[400px]" />
+              <col className="w-[160px]" />
+              <col className="w-[112px]" />
+              <col className="w-[96px]" />
+              <col className="w-[152px]" />
+              <col className="w-[120px]" />
+            </colgroup>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead className={HEAD}>{t("admin.tool")}</TableHead>
@@ -128,14 +136,21 @@ export function ToolsPanel() {
                   key={tool.toolId}
                   className="h-10 border-border-subtle"
                 >
-                  <TableCell>
+                  <TableCell className="max-w-0">
                     <Mono
-                      className={tool.offered === false ? "opacity-60" : ""}
+                      className={
+                        tool.offered === false
+                          ? "block truncate opacity-60"
+                          : "block truncate"
+                      }
                     >
                       {tool.toolId}
                     </Mono>
                     {tool.description && (
-                      <div className="truncate text-xs text-muted-foreground">
+                      <div
+                        className="truncate text-xs text-muted-foreground"
+                        title={tool.description}
+                      >
                         {tool.description}
                       </div>
                     )}
@@ -148,11 +163,11 @@ export function ToolsPanel() {
                   {/* Where the decision belongs. The queue says what is
                     waiting; the server's own page is where the rest of the
                     context is. */}
-                  <TableCell className="text-muted-foreground">
-                    <span className="flex items-center gap-1.5">
+                  <TableCell className="max-w-0 text-muted-foreground">
+                    <span className="flex min-w-0 items-center gap-1.5">
                       <Link
                         to={`/integrations/mcp/${tool.server}`}
-                        className="underline underline-offset-2"
+                        className="min-w-0 truncate underline underline-offset-2"
                       >
                         {tool.server}
                       </Link>

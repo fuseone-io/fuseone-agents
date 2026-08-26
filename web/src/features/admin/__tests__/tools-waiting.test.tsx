@@ -1,8 +1,14 @@
-import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
-import { Waiting } from "@/features/admin/tools-panel";
+import { describe, expect, it, vi } from "vitest";
+import { render, screen, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import { ToolsPanel, Waiting } from "@/features/admin/tools-panel";
 import { waitingFor } from "@/features/admin/waiting-tools";
-import type { Tool } from "@/features/admin/api";
+import { useTools, type Tool } from "@/features/admin/api";
+
+vi.mock("@/features/admin/api", () => ({
+  useTools: vi.fn(),
+  useClassifyTool: vi.fn(() => ({ isPending: false, mutateAsync: vi.fn() })),
+}));
 
 function tool(toolId: string, effect: Tool["effect"]): Tool {
   return { toolId, server: "crm", effect, untrusted: false };
@@ -70,5 +76,58 @@ describe("what the queue holds", () => {
       { ...tool("crm.changed", "write"), stale: true },
     ]);
     expect(held.map((one) => one.toolId)).toEqual(["crm.new", "crm.changed"]);
+  });
+});
+
+describe("the tools waiting table", () => {
+  it("keeps the classification action visible when a tool description is long", () => {
+    const description =
+      "Add a comment and/or reaction to a specific issue or issue comment in a GitHub repository. Use this tool with pull requests as well and only when the requester really asked for it.";
+    vi.mocked(useTools).mockReturnValue({
+      data: {
+        items: [
+          {
+            ...tool("github.add_issue_comment", "unknown"),
+            server: "github",
+            description,
+          },
+        ],
+      },
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useTools>);
+
+    render(
+      <MemoryRouter>
+        <ToolsPanel />
+      </MemoryRouter>,
+    );
+
+    const table = screen.getByRole("table");
+    expect(table).toHaveClass("min-w-[1040px]", "table-fixed");
+    const columns = table.querySelectorAll("col");
+    expect([...columns].map((column) => column.className)).toEqual([
+      "w-[400px]",
+      "w-[160px]",
+      "w-[112px]",
+      "w-[96px]",
+      "w-[152px]",
+      "w-[120px]",
+    ]);
+    const text = screen.getByText(description);
+    expect(text).toHaveClass("truncate");
+    expect(text.closest("td")).toHaveClass("max-w-0");
+    const row = text.closest("tr");
+    expect(row).not.toBeNull();
+    expect(screen.getAllByRole("columnheader")).toHaveLength(columns.length);
+    expect((row as HTMLTableRowElement).querySelectorAll("td")).toHaveLength(
+      columns.length,
+    );
+    expect(
+      within(row as HTMLTableRowElement).getByRole("button", {
+        name: /classificar/i,
+      }),
+    ).toBeInTheDocument();
   });
 });
