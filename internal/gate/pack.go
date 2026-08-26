@@ -99,4 +99,11 @@ type Request struct {
 	// ApprovalGranted is set when a human has already cleared this action and
 	// the Gate is being re-evaluated to let it through.
 	ApprovalGranted bool
+
+	// PendingReview is set when a memory suggestion can only create a review
+	// item and cannot become active platform state without a later human
+	// decision. The effect stays write for the trail and for authored denies;
+	// this only prevents the Gate from asking for a second approval before the
+	// review queue gets the item it exists to inspect.
+	PendingReview bool
 }

@@ -38,7 +38,7 @@ const (
 
 // policyVersion must be bumped whenever the semantics of a built-in check
 // change, even when the rule names stay the same.
-const policyVersion = "builtin/v2"
+const policyVersion = "builtin/v3"
 
 // result is a check's answer: a verdict plus why.
 type result struct {
@@ -84,10 +84,10 @@ var checkOrder = []check{
 	{RuleAutonomy, checkAutonomy},
 }
 
-// Gate evaluates requests against the seven checks and the authored policies.
+// Gate evaluates requests against the built-in checks and the authored policies.
 //
 // Approval is not among them. It is what a check can require, and a human
-// grant is released after all seven have run — the only order in which a
+// grant is released after all built-in checks have run — the only order in which a
 // grant cannot let through what another check blocked.
 type Gate struct {
 	policyHash string

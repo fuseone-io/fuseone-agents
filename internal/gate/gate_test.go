@@ -173,6 +173,54 @@ func TestEvaluate_readWithUntrustedArguments_stillAllowed(t *testing.T) {
 	}
 }
 
+func TestEvaluate_pendingReviewWrite_doesNotNeedASecondApproval(t *testing.T) {
+	t.Parallel()
+
+	r := request()
+	r.Tool, r.Effect = domain.ToolMemorySuggest, domain.EffectWrite
+	r.Pack = NewPack(domain.ToolMemorySuggest)
+	r.Stage = domain.StageCopilot
+	r.ArgLabels = domain.NewLabels(domain.LabelUntrusted)
+	r.PendingReview = true
+
+	d := evaluate(t, New(), r)
+
+	if d.Verdict != domain.VerdictAllow {
+		t.Fatalf("decision = %s/%s, want allow for a write that only enters a review queue", d.Verdict, d.Rule)
+	}
+}
+
+func TestEvaluate_pendingReviewWrite_doesNotExcuseAnotherTool(t *testing.T) {
+	t.Parallel()
+
+	r := request()
+	r.Tool, r.Effect = "crm.note", domain.EffectWrite
+	r.ArgLabels = domain.NewLabels(domain.LabelUntrusted)
+	r.PendingReview = true
+
+	d := evaluate(t, New(), r)
+
+	if d.Verdict != domain.VerdictRequireApproval || d.Rule != RuleTaint {
+		t.Fatalf("decision = %s/%s, want require_approval/taint for a non-memory write", d.Verdict, d.Rule)
+	}
+}
+
+func TestEvaluate_pendingReviewWrite_doesNotBypassDataBarrier(t *testing.T) {
+	t.Parallel()
+
+	r := request()
+	r.Tool, r.Effect = domain.ToolMemorySuggest, domain.EffectWrite
+	r.Pack = NewPack(domain.ToolMemorySuggest)
+	r.ArgLabels = domain.ScopeLabels(domain.Scope{Company: "acme", Area: "finance"})
+	r.PendingReview = true
+
+	d := evaluate(t, New(), r)
+
+	if d.Verdict != domain.VerdictBlock || d.Rule != RuleDataBarrier {
+		t.Fatalf("decision = %s/%s, want block/data_barrier", d.Verdict, d.Rule)
+	}
+}
+
 func TestEvaluate_sameScopeData_allowed(t *testing.T) {
 	t.Parallel()
 

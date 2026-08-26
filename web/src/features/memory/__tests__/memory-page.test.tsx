@@ -87,6 +87,44 @@ describe("governed memory page", () => {
     });
   });
 
+  it("corrects a remembered assertion without dropping its evidence or expiry", async () => {
+    const user = userEvent.setup();
+    hooks.items = [
+      {
+        ...memoryAssertion(0),
+        evidence: [
+          { runId: "run_1", artifact: "final_answer", digest: "sha256:abcd" },
+          { runId: "run_2", artifact: "memory_suggestion", digest: "sha256:bcde" },
+        ],
+        expiresAt: "2026-09-25T12:00:00Z",
+      },
+    ];
+    render(<MemoryPage />);
+
+    await user.click(screen.getByRole("button", { name: "Correct" }));
+    const dialog = screen.getByRole("alertdialog");
+    expect(within(dialog).getByRole("button", { name: "Correct" })).toBeDisabled();
+    await user.clear(within(dialog).getByLabelText("Claim"));
+    await user.type(
+      within(dialog).getByLabelText("Claim"),
+      "Refresh the datasource token, then verify the datasource health endpoint.",
+    );
+    await user.type(within(dialog).getByLabelText("Why"), "runbook narrowed");
+    await user.click(within(dialog).getByRole("button", { name: "Correct" }));
+
+    expect(hooks.create).toHaveBeenCalledWith({
+      company: "acme", area: "ops", agentId: "triage", kind: "incident",
+      subject: "subject-0", signature: "signature-0",
+      claim: "Refresh the datasource token, then verify the datasource health endpoint.",
+      observations: 2, confirmed: 1, reason: "runbook narrowed",
+      evidence: [
+        { runId: "run_1", artifact: "final_answer", digest: "sha256:abcd" },
+        { runId: "run_2", artifact: "memory_suggestion", digest: "sha256:bcde" },
+      ],
+      expiresAt: "2026-09-25T12:00:00Z",
+    });
+  });
+
   it("requires a reason before disabling a remembered assertion", async () => {
     const user = userEvent.setup();
     hooks.items = [memoryAssertion(0)];
@@ -146,6 +184,7 @@ describe("governed memory page", () => {
 
     expect(screen.getByText("Read-only memory")).toBeInTheDocument();
     expect(screen.queryByText("New memory")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Correct" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Disable" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Accept suggestion" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Dismiss suggestion" })).toBeNull();

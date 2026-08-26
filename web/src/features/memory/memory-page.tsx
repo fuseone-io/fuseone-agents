@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
 import { Panel } from "@/components/shared/panel";
+import { MemoryCorrectDialog } from "@/features/memory/memory-correct-dialog";
 import { MemoryCreatePanel } from "@/features/memory/memory-create-panel";
 import { MemoryDisableDialog } from "@/features/memory/memory-disable-dialog";
 import { MemoryListPanel } from "@/features/memory/memory-list-panel";
@@ -26,6 +27,7 @@ const DEFAULT_FILTERS: MemoryFilters = {
 export function MemoryPage() {
   const { t } = useTranslation();
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  const [correcting, setCorrecting] = useState<MemoryAssertion | null>(null);
   const [disabling, setDisabling] = useState<MemoryAssertion | null>(null);
   const [reviewing, setReviewing] = useState<{
     suggestion: MemorySuggestion;
@@ -54,6 +56,7 @@ export function MemoryPage() {
           onFilters={setFilters}
           query={assertions}
           canDisable={canPublish}
+          onCorrect={setCorrecting}
           onDisable={setDisabling}
         />
         <div className="grid min-w-0 content-start gap-4">
@@ -67,6 +70,12 @@ export function MemoryPage() {
         </div>
       </div>
 
+      {correcting && (
+        <MemoryCorrectDialog
+          assertion={correcting}
+          onClose={() => setCorrecting(null)}
+        />
+      )}
       {disabling && (
         <MemoryDisableDialog
           assertion={disabling}

@@ -306,7 +306,7 @@
     "memoryLearningExplains": {
       "auto_confirm": "O agente pode propor asserções estruturadas. Sugestões idênticas em runs distintas só são promovidas depois da contagem configurada; sugestões vindas de dado não confiável ainda podem pedir aprovação antes de contar.",
       "off": "O agente pode ler memória governada, mas não vai propor novas asserções.",
-      "review": "O agente pode propor asserções estruturadas. Uma pessoa precisa aceitá-las antes que virem memória ativa; se a run leu dado não confiável, o Gate pode pedir aprovação antes de registrar a sugestão."
+      "review": "O agente pode propor asserções estruturadas para a fila de revisão sem aprovação extra em runtime. Uma pessoa precisa aceitá-las antes que virem memória ativa."
     },
     "memoryLearningHint": "Opt-in por versão. Sugestões herdam os labels da run e nunca viram instruções de prompt.",
     "memoryLearningMin": "Auto-confirmar após",
@@ -1561,6 +1561,11 @@
     "claim": "Afirmação",
     "claimHint": "Texto estruturado pequeno que o modelo pode recordar. Ele continua marcado pela evidência de onde veio.",
     "confirmed": "Confirmadas",
+    "correct": "Corrigir",
+    "corrected": "Memória corrigida",
+    "correctHint": "A assertiva é regravada pelo mesmo caminho governado. Escopo, assinatura, evidência, labels e expiração são preservados.",
+    "correctReasonPlaceholder": "nova evidência refinou a afirmação",
+    "correctTitle": "Corrigir esta memória?",
     "createHint": "Registre apenas fatos revisados por uma pessoa. As marcas vêm do artefato citado no ledger; não são digitadas aqui.",
     "disable": "Desativar",
     "disabled": "Memória desativada",

@@ -545,6 +545,89 @@ func TestAdvance_recordsApprovalInputLabelsOnTheTrail(t *testing.T) {
 	}
 }
 
+func TestAdvance_memorySuggestionInReviewMode_entersTheReviewQueueWithoutApproval(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t, Proposal{
+		Tool: domain.ToolMemorySuggest,
+		Args: []byte(`{"kind":"incident","subject":"grafana","signature":"datasource","claim":"refresh token"}`),
+	})
+	h.runner.deps.Catalog = staticCatalog{domain.ToolMemorySuggest: domain.EffectWrite}
+	start := h.start(t, generousBudget())
+	start.Pack = gate.NewPack(domain.ToolMemorySuggest)
+	start.Stage = domain.StageCopilot
+	start.MemoryLearning = domain.MemoryLearningPolicy{Mode: domain.MemoryLearningReview}
+	labels := domain.ScopeLabels(start.Scope).Union(domain.NewLabels(domain.LabelUntrusted))
+	if _, err := h.ledger.Append(ctx, domain.Step{
+		RunID: start.RunID, Kind: domain.StepRunStarted,
+		Scope: start.Scope, AgentID: start.AgentID,
+		VersionID: start.VersionID, OnBehalfOf: start.OnBehalfOf,
+		Labels: labels, Payload: mustJSON(domain.RunStartedPayload{Trigger: "channel"}),
+	}); err != nil {
+		t.Fatalf("open run: %v", err)
+	}
+
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+
+	if got := h.tools.invocations; len(got) != 1 || got[0] != domain.ToolMemorySuggest {
+		t.Fatalf("tool invocations = %v, want memory suggest to enter the review queue", got)
+	}
+	var decided domain.GateDecidedPayload
+	if err := h.payloadOf(t, domain.StepGateDecided, &decided); err != nil {
+		t.Fatalf("gate payload: %v", err)
+	}
+	if decided.Verdict != domain.VerdictAllow || decided.Rule != gate.RulePassed ||
+		decided.Effect != domain.EffectWrite {
+		t.Fatalf("decision = %s/%s effect=%s, want allow/passed with write recorded",
+			decided.Verdict, decided.Rule, decided.Effect)
+	}
+	if _, err := h.stepOf(t, domain.StepApprovalRequested); err == nil {
+		t.Fatal("approval was requested before a suggestion that still needs memory review")
+	}
+}
+
+func TestAdvance_memorySuggestionInAutoConfirmMode_stillNeedsApprovalWhenTainted(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t, Proposal{
+		Tool: domain.ToolMemorySuggest,
+		Args: []byte(`{"kind":"incident","subject":"grafana","signature":"datasource","claim":"refresh token"}`),
+	})
+	h.runner.deps.Catalog = staticCatalog{domain.ToolMemorySuggest: domain.EffectWrite}
+	start := h.start(t, generousBudget())
+	start.Pack = gate.NewPack(domain.ToolMemorySuggest)
+	start.Stage = domain.StageCopilot
+	start.MemoryLearning = domain.MemoryLearningPolicy{Mode: domain.MemoryLearningAutoConfirm}
+	labels := domain.ScopeLabels(start.Scope).Union(domain.NewLabels(domain.LabelUntrusted))
+	if _, err := h.ledger.Append(ctx, domain.Step{
+		RunID: start.RunID, Kind: domain.StepRunStarted,
+		Scope: start.Scope, AgentID: start.AgentID,
+		VersionID: start.VersionID, OnBehalfOf: start.OnBehalfOf,
+		Labels: labels, Payload: mustJSON(domain.RunStartedPayload{Trigger: "channel"}),
+	}); err != nil {
+		t.Fatalf("open run: %v", err)
+	}
+
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+
+	if got := h.tools.invocations; len(got) != 0 {
+		t.Fatalf("tool invocations = %v, want no memory suggestion before approval", got)
+	}
+	var decided domain.GateDecidedPayload
+	if err := h.payloadOf(t, domain.StepGateDecided, &decided); err != nil {
+		t.Fatalf("gate payload: %v", err)
+	}
+	if decided.Verdict != domain.VerdictRequireApproval || decided.Rule != gate.RuleTaint {
+		t.Fatalf("decision = %s/%s, want require_approval/taint", decided.Verdict, decided.Rule)
+	}
+}
+
 func TestAdvance_reserveFailureDoesNotRecordAToolCall(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

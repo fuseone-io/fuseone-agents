@@ -98,15 +98,20 @@ that suggestion with the run labels and evidence, but `memory.find` does not
 return it yet. A person with publish permission in the scope must accept or
 dismiss it from the Memory page.
 
-Suggestion is a write effect. If the run has read untrusted data, the Gate
-treats the suggestion like any other tainted write and asks a person before it
-is recorded.
+Review-mode suggestions do not ask for a second approval before entering that
+queue. The review queue is the approval point. The suggestion still carries
+the run's labels, and an authored policy, missing capability or data-barrier
+violation can still stop it.
 
 V2 is auto-confirm mode. The same structured suggestion must be observed in
 the configured number of distinct runs before it becomes active memory. The
 count is derived by the platform. Repeating the same suggestion inside one run
 does not make the memory stronger. The model does not send confidence and does
 not choose the company, area or agent namespace.
+
+Auto-confirm suggestions are write effects in the ordinary Gate path. If a run
+read untrusted data, the Gate can ask a person before counting the suggestion,
+because repeated suggestions can promote memory without a later review click.
 
 ```yaml
 memory_learning:
@@ -124,6 +129,17 @@ Use review mode first for agents that write, approve, disable accounts or
 touch production systems. Auto-confirm fits low-risk diagnostic memories where
 repetition is itself useful evidence and a wrong hint still has to pass the
 normal Gate path before any effect.
+
+## Correcting active memory
+
+Active memory is corrected, not silently edited. The Memory page lets a person
+rewrite the claim while keeping the same scope, agent namespace, kind, subject,
+signature, evidence, labels and expiry. The correction must include a reason
+and is recorded as a new memory event.
+
+If the remembered condition itself was keyed incorrectly, disable that
+assertion and record a new one with the right signature. Changing the signature
+means changing what future runs search for, so it should be a new assertion.
 
 ## Evidence can expire or be erased
 

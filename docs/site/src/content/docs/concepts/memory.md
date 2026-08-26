@@ -23,11 +23,18 @@ That is enforcement, not a prompt instruction.
 ## Agent-proposed memory
 
 Agents can suggest memory only when the published version opts in. In review
-mode, a person accepts or dismisses the suggestion. In auto-confirm mode, the
-same assertion must appear across the configured number of distinct runs before
-it becomes active.
+mode, the suggestion enters the review queue without an extra runtime approval;
+a person accepts or dismisses it before it becomes active. In auto-confirm
+mode, the same assertion must appear across the configured number of distinct
+runs before it becomes active, so tainted suggestions can still require Gate
+approval before they count.
 
 The model does not send confidence. Counts are derived by the platform.
+
+Active memory is corrected through the governed record path, not edited in
+place. A correction rewrites the claim, keeps the same signature and evidence,
+and records a new event with the person's reason. If the signature is wrong,
+disable the assertion and record a new one.
 
 ## Search and budget
 

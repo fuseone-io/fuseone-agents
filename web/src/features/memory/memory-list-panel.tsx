@@ -35,12 +35,14 @@ export function MemoryListPanel({
   onFilters,
   query,
   canDisable,
+  onCorrect,
   onDisable,
 }: {
   filters: MemoryFilters;
   onFilters: (filters: MemoryFilters) => void;
   query: UseQueryResult<{ items: MemoryAssertion[] }, Error>;
   canDisable: boolean;
+  onCorrect?: (assertion: MemoryAssertion) => void;
   onDisable: (assertion: MemoryAssertion) => void;
 }) {
   const { t } = useTranslation();
@@ -68,6 +70,7 @@ export function MemoryListPanel({
                 key={assertion.id}
                 assertion={assertion}
                 canDisable={canDisable}
+                onCorrect={onCorrect}
                 onDisable={onDisable}
               />
             ))}

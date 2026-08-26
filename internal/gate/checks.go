@@ -18,11 +18,14 @@ The checks themselves.
 
 Each one answers a single question about a single call and returns the same
 three shapes, so the order they run in is data rather than control flow and
-adding a ninth check is a line in the table, not a branch in a function.
+adding another check is a line in the table, not a branch in a function.
 */
 // checkAutonomy asks a person for anything an agent not yet trusted alone
 // would do to the world.
 func checkAutonomy(r Request) result {
+	if reviewQueueWrite(r) && r.Stage == domain.StageCopilot {
+		return pass()
+	}
 	if r.Stage.NeedsApproval(r.Effect) || (!r.Stage.Valid() && r.Effect != domain.EffectRead) {
 		return needsHuman("gate.autonomy.copilot")
 	}
@@ -93,6 +96,9 @@ func checkTaint(r Request) result {
 	if !r.ArgLabels.HasAny(domain.LabelUntrusted) {
 		return pass()
 	}
+	if reviewQueueWrite(r) {
+		return pass()
+	}
 	switch {
 	case r.Effect == domain.EffectRead:
 		// A read causes no effect to steer.
@@ -119,6 +125,9 @@ func checkPolicy(r Request) result {
 	if r.Compensating != "" {
 		return pass()
 	}
+	if reviewQueueWrite(r) {
+		return pass()
+	}
 
 	switch r.Effect {
 	case domain.EffectRead:
@@ -128,6 +137,12 @@ func checkPolicy(r Request) result {
 	default:
 		return stop("destructive and financial effects are denied by default")
 	}
+}
+
+func reviewQueueWrite(r Request) bool {
+	return r.PendingReview &&
+		r.Tool == domain.ToolMemorySuggest &&
+		r.Effect == domain.EffectWrite
 }
 
 func checkBudget(r Request) result {

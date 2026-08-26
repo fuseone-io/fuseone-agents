@@ -100,14 +100,21 @@ registra a sugestão com os labels e a evidência da run, mas `memory.find` aind
 não a devolve. Uma pessoa com permissão de publicação no escopo precisa aceitar
 ou descartar a sugestão pela página de Memória.
 
-Sugestão é efeito de escrita. Se a run leu dado não confiável, o Gate trata a
-sugestão como qualquer escrita contaminada e pede uma pessoa antes de gravá-la.
+Sugestões em modo de revisão não pedem uma segunda aprovação antes de entrar
+nessa fila. A fila de revisão é o ponto de aprovação. A sugestão ainda carrega
+os labels da run, e uma policy explícita, capacidade ausente ou violação de
+barreira de dados ainda pode pará-la.
 
 V2 é modo de auto-confirmação. A mesma sugestão estruturada precisa ser
 observada na quantidade configurada de runs distintas antes de virar memória
 ativa. A contagem é derivada pela plataforma. Repetir a mesma sugestão dentro
 de uma run não torna a memória mais forte. O modelo não envia confiança e não
 escolhe empresa, área ou namespace de agente.
+
+Sugestões em auto-confirmação são efeitos de escrita no caminho normal do
+Gate. Se uma run leu dado não confiável, o Gate pode pedir uma pessoa antes de
+contar a sugestão, porque sugestões repetidas podem promover memória sem um
+clique posterior de revisão.
 
 ```yaml
 memory_learning:
@@ -125,6 +132,17 @@ Use modo de revisão primeiro para agentes que escrevem, aprovam, desabilitam
 contas ou tocam produção. Auto-confirmação combina com memórias diagnósticas de
 baixo risco, onde repetição já é evidência útil e uma pista errada ainda passa
 pelo Gate normal antes de qualquer efeito.
+
+## Corrigir memória ativa
+
+Memória ativa é corrigida, não editada em silêncio. A página de Memória permite
+que uma pessoa reescreva a afirmação mantendo o mesmo escopo, namespace de
+agente, tipo, assunto, assinatura, evidência, labels e expiração. A correção
+precisa de um motivo e é registrada como um novo evento de memória.
+
+Se a própria condição lembrada foi chaveada errado, desative essa asserção e
+registre outra com a assinatura certa. Mudar a assinatura significa mudar o que
+runs futuras vão buscar, então deve ser uma nova asserção.
 
 ## Evidência pode expirar ou ser apagada
 

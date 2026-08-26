@@ -181,6 +181,7 @@ func (r *Runner) decide(
 		Estimate:        withThisCall(p.Estimate),
 		IdemKey:         idemKey,
 		AlreadyExecuted: already,
+		PendingReview:   pendingReviewWrite(start, p, effect),
 		// Only for the exact call that was cleared. A grant that travelled to
 		// a different tool, or to the same tool with different arguments,
 		// would be the platform doing something nobody agreed to.
@@ -188,6 +189,12 @@ func (r *Runner) decide(
 			state.Approved.Tool == p.Tool &&
 			state.Approved.ArgsDigest == digest(p.Args),
 	})
+}
+
+func pendingReviewWrite(start Start, p Proposal, effect domain.Effect) bool {
+	return p.Tool == domain.ToolMemorySuggest &&
+		effect == domain.EffectWrite &&
+		start.MemoryLearning.Normalize().Mode == domain.MemoryLearningReview
 }
 
 func (r *Runner) appendGateDecision(

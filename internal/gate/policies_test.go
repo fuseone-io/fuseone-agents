@@ -123,6 +123,28 @@ func TestEvaluate_allowWhoseConditionsDoNotHold_leavesTheFloorInPlace(t *testing
 	}
 }
 
+func TestEvaluate_pendingReviewWrite_stillObeysAuthoredDeny(t *testing.T) {
+	t.Parallel()
+
+	g := withPolicies(authored("POL-MEM", func(p *domain.Policy) {
+		p.Resource = "$fuseone.memory.suggest"
+	}))
+	got := decide(t, g, request(func(r *gate.Request) {
+		r.Tool = domain.ToolMemorySuggest
+		r.Effect = domain.EffectWrite
+		r.Pack = gate.NewPack(domain.ToolMemorySuggest)
+		r.PendingReview = true
+		r.ArgLabels = domain.NewLabels(domain.LabelUntrusted)
+	}))
+
+	if got.Verdict != domain.VerdictBlock || got.Rule != gate.RulePolicy {
+		t.Fatalf("decision = %s/%s, want the authored deny to still win", got.Verdict, got.Rule)
+	}
+	if got.PolicyCode != "POL-MEM" {
+		t.Fatalf("policyCode = %q, want POL-MEM", got.PolicyCode)
+	}
+}
+
 func TestEvaluate_allowNeverBeatsADenyFromAnotherCheck(t *testing.T) {
 	t.Parallel()
 

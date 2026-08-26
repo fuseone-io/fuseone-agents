@@ -306,7 +306,7 @@
     "memoryLearningExplains": {
       "auto_confirm": "The agent may propose structured assertions. Identical suggestions in distinct runs are promoted only after the configured observation count; suggestions derived from untrusted data may still ask for approval before they count.",
       "off": "The agent can read governed memory, but it will not propose new assertions.",
-      "review": "The agent may propose structured assertions. A person must accept them before they become active memory; if the run read untrusted data, the Gate may ask for approval before recording the suggestion."
+      "review": "The agent may propose structured assertions into the review queue without an extra runtime approval. A person must accept them before they become active memory."
     },
     "memoryLearningHint": "Opt in per version. Suggestions inherit the run's labels and never become prompt instructions.",
     "memoryLearningMin": "Auto-confirm after",
@@ -1561,6 +1561,11 @@
     "claim": "Claim",
     "claimHint": "Small structured text the model may recall. It is still labelled by the evidence it came from.",
     "confirmed": "Confirmed",
+    "correct": "Correct",
+    "corrected": "Memory corrected",
+    "correctHint": "The assertion is rewritten through the same governed record path. Scope, signature, evidence, labels and expiry are preserved.",
+    "correctReasonPlaceholder": "new evidence narrowed the claim",
+    "correctTitle": "Correct this memory?",
     "createHint": "Record only facts a person has reviewed. Labels are copied from the cited ledger artifact; they are not typed here.",
     "disable": "Disable",
     "disabled": "Memory disabled",

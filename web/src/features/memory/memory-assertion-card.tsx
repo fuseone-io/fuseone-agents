@@ -9,10 +9,12 @@ import type { MemoryAssertion } from "@/features/memory/api";
 export function MemoryAssertionCard({
   assertion,
   canDisable,
+  onCorrect,
   onDisable,
 }: {
   assertion: MemoryAssertion;
   canDisable: boolean;
+  onCorrect?: (assertion: MemoryAssertion) => void;
   onDisable: (assertion: MemoryAssertion) => void;
 }) {
   const { t } = useTranslation();
@@ -36,14 +38,26 @@ export function MemoryAssertionCard({
           </p>
         </div>
         {canDisable && assertion.status === "active" && (
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => onDisable(assertion)}
-          >
-            {t("memory.disable")}
-          </Button>
+          <div className="flex shrink-0 items-center gap-2">
+            {onCorrect && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => onCorrect(assertion)}
+              >
+                {t("memory.correct")}
+              </Button>
+            )}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => onDisable(assertion)}
+            >
+              {t("memory.disable")}
+            </Button>
+          </div>
         )}
       </header>
 
