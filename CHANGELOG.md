@@ -27,6 +27,38 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.38.4] — 2026-08-26
+
+### Fixed
+
+- **Memory suggestions in review mode no longer require a second human
+  approval before reaching the review queue.** Suggesting memory is still a
+  write, and auto-confirmed learning still goes through the Gate, but review
+  mode now treats the memory queue itself as the place where a person decides
+  whether the fact should become active.
+
+- **Approved memory can be corrected without changing what it is.** Operators
+  can improve the remembered claim while keeping the assertion identity,
+  evidence, labels and expiry intact, so a clearer human wording does not turn
+  into a new fact.
+
+- **The Memory page now scales as an index and reader instead of a wall of
+  cards.** Active, disabled, suggested and all memory entries share the same
+  searchable list, with details shown beside the selected item. Untrusted
+  origin stays visible in the compact row, because reviewing a suggestion only
+  makes sense when the reviewer can see what kind of evidence produced it.
+
+- **A memory suggestion is no longer duplicated when only the wording changes.**
+  Existing active memory is matched by kind, subject and signature, so a model
+  proposing a better or different claim for the same remembered situation does
+  not create another pending item.
+
+- **Channel notices are routed to the conversation plugged into the agent that
+  produced them.** Agent-specific Slack conversations no longer receive run
+  notices from every agent in the same area. Scope-wide governance alerts remain
+  scope-wide, so aggregated policy refusals still reach every relevant
+  conversation.
+
 ## [0.38.3] — 2026-08-26
 
 ### Fixed
