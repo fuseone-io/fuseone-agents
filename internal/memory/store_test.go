@@ -3,10 +3,12 @@ package memory_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/domain"
@@ -199,6 +201,27 @@ func TestPostgresList_statusFilterUnderstandsVirtualExpiry(t *testing.T) {
 	}
 }
 
+func TestPostgresMemoryEvents_refuseUpdateButAllowRetentionDelete(t *testing.T) {
+	ctx, pool := postgresPool(t)
+	store := memory.NewPostgres(pool)
+	created, err := store.Assert(ctx, assertion(nil), "usr_ana", "reviewed", time.Unix(0, 0))
+	if err != nil {
+		t.Fatalf("Assert: %v", err)
+	}
+
+	_, err = pool.Exec(ctx,
+		`update memory_assertion_events set reason = 'edited' where assertion_id = $1`,
+		created.ID)
+	if !isRestrictViolation(err) {
+		t.Fatalf("update event err = %v, want restrict_violation", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`delete from memory_assertion_events where assertion_id = $1`,
+		created.ID); err != nil {
+		t.Fatalf("delete event: %v", err)
+	}
+}
+
 type toolSource []domain.ToolEntry
 
 func (t toolSource) Tools(context.Context) ([]domain.ToolEntry, error) {
@@ -232,6 +255,12 @@ func assertion(edit func(*domain.MemoryAssertion)) domain.MemoryAssertion {
 
 func postgresStore(t *testing.T) (context.Context, *memory.Postgres) {
 	t.Helper()
+	ctx, pool := postgresPool(t)
+	return ctx, memory.NewPostgres(pool)
+}
+
+func postgresPool(t *testing.T) (context.Context, *pgxpool.Pool) {
+	t.Helper()
 	dsn := os.Getenv("TEST_DATABASE_URL")
 	if dsn == "" {
 		if os.Getenv("REQUIRE_DATABASE") != "" {
@@ -251,7 +280,7 @@ func postgresStore(t *testing.T) (context.Context, *memory.Postgres) {
 	if _, err := pool.Exec(ctx, `truncate memory_assertion_events, memory_assertions`); err != nil {
 		t.Fatalf("clean: %v", err)
 	}
-	return ctx, memory.NewPostgres(pool)
+	return ctx, pool
 }
 
 func assertAt(t *testing.T, store *memory.Postgres, a domain.MemoryAssertion, now time.Time) {
@@ -293,4 +322,9 @@ func sameStrings(got, want []string) bool {
 		seen[v]--
 	}
 	return true
+}
+
+func isRestrictViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23001"
 }
