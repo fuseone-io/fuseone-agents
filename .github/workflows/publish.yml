@@ -13,6 +13,9 @@ on:
   push:
     branches: [main]
     tags: ["v*"]
+    paths-ignore:
+      - "docs/**"
+      - ".github/workflows/docs.yml"
   # For rebuilding a release without a new commit, which is what happens when a
   # base image is patched.
   workflow_dispatch:
