@@ -18,6 +18,7 @@ import (
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/known"
 	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/memory"
 	"github.com/fuseone/agents/internal/policy"
 	"github.com/fuseone/agents/internal/settings"
 	"github.com/fuseone/agents/internal/spec"
@@ -50,6 +51,7 @@ type workerParts struct {
 	durable *ledger.Content
 	catalog *tools.Catalog
 	native  *connectortools.Layer
+	memory  memory.Store
 
 	// configPool outlives the call that opens it: the sweeps need it after the
 	// configuration is read, and opening a second pool for the same database
@@ -89,6 +91,7 @@ func openWorkerParts(ctx context.Context, dsn string) (*workerParts, error) {
 	// tool cannot be resumed by any other process without its earlier content
 	// — including this same worker after a restart (PRD NF-02, DE-15).
 	parts.content = engine.NewMemoryContent()
+	parts.memory = memory.NewMemory()
 	pool, err := contentPool(ctx, dsn)
 	if err != nil {
 		return nil, err
@@ -119,6 +122,7 @@ func openWorkerParts(ctx context.Context, dsn string) (*workerParts, error) {
 	parts.health = healthOf(parts.configPool)
 	parts.egress = egress.NewPostgres(parts.configPool)
 	parts.dedupe = effectdedupe.NewPostgres(parts.configPool)
+	parts.memory = memory.NewPostgres(parts.configPool)
 	parts.catalog.WithToolCallHealth(parts.health, hostname())
 	return parts, nil
 }
@@ -258,13 +262,39 @@ func (p *workerParts) deps(gate engine.Gate) engine.Deps {
 		catalog = p.native
 	}
 	contextTools := contextshare.New(tools, catalog, p.content)
+	memoryTools := memory.NewLayer(contextTools, contextTools, p.content, p.memory)
 	return engine.Deps{
 		Ledger:  p.store,
 		Gate:    gate,
-		Tools:   contextTools,
-		Catalog: contextTools,
+		Tools:   memoryTools,
+		Catalog: memoryTools,
 		Content: p.content,
 		Clock:   engine.SystemClock{},
 		Dedupe:  p.dedupe,
 	}
+}
+
+func (p *workerParts) toolSchemas() toolSchemas {
+	var schemas toolSchemas = p.catalog
+	if p.native != nil {
+		schemas = p.native
+	}
+	return memory.NewLayer(nil, schemaCatalog{schemas: schemas}, p.content, p.memory)
+}
+
+type schemaCatalog struct{ schemas toolSchemas }
+
+func (s schemaCatalog) Effect(domain.ToolID) (domain.Effect, bool) {
+	return domain.EffectUnknown, false
+}
+
+func (s schemaCatalog) Dedupe(domain.ToolID) (domain.ToolDedupe, bool) {
+	return domain.ToolDedupe{}, false
+}
+
+func (s schemaCatalog) Schema(id domain.ToolID) (string, string, map[string]any, bool) {
+	if s.schemas == nil {
+		return "", "", nil, false
+	}
+	return s.schemas.Schema(id)
 }

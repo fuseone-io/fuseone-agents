@@ -103,6 +103,9 @@ type Call struct {
 	RunID domain.RunID
 	Seq   int64
 	Scope domain.Scope
+	// AgentID is the agent whose pack proposed the call. Platform-owned tools
+	// use it to scope their own state; the model never supplies it.
+	AgentID domain.AgentID
 
 	Tool domain.ToolID
 	Args []byte

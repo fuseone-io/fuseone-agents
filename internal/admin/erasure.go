@@ -61,15 +61,38 @@ func (e *Erasures) ForSubject(
 		erased += count
 	}
 
-	// Recorded as one act, because that is what it was: a request about a
-	// person, covering the runs the operator found. An erasure nobody can
-	// account for is indistinguishable from data loss.
-	if err := e.record(ctx, by, scope, "content.erased", map[string]any{
-		"runs": len(runs), "objects": erased, "reason": reason,
-	}); err != nil {
+	if err := e.recordSubjectErasure(ctx, by, scope, runs, erased, reason); err != nil {
 		return erased, err
 	}
 	return erased, nil
+}
+
+func (e *Erasures) recordSubjectErasure(
+	ctx context.Context, by domain.UserID, scope domain.Scope,
+	runs []domain.RunID, erased int, reason string,
+) error {
+	tx, err := e.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("admin: begin subject erasure record: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	memoryRecords, err := e.markMemorySourcesErased(ctx, tx, runs, by, e.clock())
+	if err != nil {
+		return err
+	}
+	// Recorded as one act, because that is what it was: a request about a
+	// person, covering the runs the operator found. An erasure nobody can
+	// account for is indistinguishable from data loss.
+	if err := Record(ctx, tx, Event{
+		Principal: by, Scope: scope, Action: "content.erased", Target: "content",
+		Detail: map[string]any{
+			"runs": len(runs), "objects": erased, "reason": reason,
+			"memoryRecords": memoryRecords,
+		},
+	}); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 /*
@@ -111,7 +134,11 @@ func (e *Erasures) Sweep(ctx context.Context) (int, error) {
 	if err != nil {
 		return erased, err
 	}
-	total := erased + channelRecords + egressRecords
+	memoryRecords, err := e.eraseMemoryRows(ctx, tx, before)
+	if err != nil {
+		return erased, err
+	}
+	total := erased + channelRecords + egressRecords + memoryRecords
 	if total == 0 {
 		// Nothing aged out, which is the ordinary case. Recording it would
 		// bury the sweeps that did something under thousands that did not.
@@ -123,6 +150,7 @@ func (e *Erasures) Sweep(ctx context.Context) (int, error) {
 		Detail: map[string]any{
 			"objects": erased, "channelRecords": channelRecords,
 			"egressRecords":  egressRecords,
+			"memoryRecords":  memoryRecords,
 			"olderThanHours": int64(window / time.Hour),
 		},
 	}); err != nil {
@@ -136,6 +164,7 @@ func (e *Erasures) Sweep(ctx context.Context) (int, error) {
 
 const retentionChannelBatch = 5_000
 const retentionEgressBatch = 5_000
+const retentionMemoryBatch = 5_000
 
 func (e *Erasures) eraseChannelOperationalRows(ctx context.Context, conn db, before time.Time) (int, error) {
 	total := int64(0)
