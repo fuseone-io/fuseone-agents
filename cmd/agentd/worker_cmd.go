@@ -96,7 +96,7 @@ func workerCmd(args []string) error {
 		return err
 	}
 
-	w, sim := parts.pools(cfg, parts.deps(gate), specs, metrics)
+	w, sim := parts.pools(cfg, parts.deps(gate, metrics), specs, metrics)
 	parts.startLoops(ctx, cfg, sim, metrics)
 
 	slog.Info("worker started", "owner", cfg.owner, "concurrency", cfg.concurrency)

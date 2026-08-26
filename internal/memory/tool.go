@@ -8,6 +8,7 @@ import (
 	"io"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
@@ -58,10 +59,20 @@ type Layer struct {
 	catalog engine.Catalog
 	content engine.ContentStore
 	store   Store
+	metrics Metrics
 }
 
 func NewLayer(base engine.Tools, catalog engine.Catalog, content engine.ContentStore, store Store) *Layer {
 	return &Layer{base: base, catalog: catalog, content: content, store: store}
+}
+
+type Metrics interface {
+	MemoryFind(duration time.Duration, returned int, omitted int, failed bool)
+}
+
+func (l *Layer) WithMetrics(metrics Metrics) *Layer {
+	l.metrics = metrics
+	return l
 }
 
 func (l *Layer) Effect(id domain.ToolID) (domain.Effect, bool) {
@@ -122,8 +133,16 @@ type findArgs struct {
 }
 
 func (l *Layer) find(ctx context.Context, call engine.Call) (engine.ToolResult, error) {
-	args, ok := decodeFindArgs(call.Args)
-	if !ok || call.AgentID == "" || l.store == nil || l.content == nil {
+	start := time.Now()
+	var returned, omitted int
+	succeeded := false
+	defer func() {
+		if l.metrics != nil {
+			l.metrics.MemoryFind(time.Since(start), returned, omitted, !succeeded)
+		}
+	}()
+	args, valid := decodeFindArgs(call.Args)
+	if !valid || call.AgentID == "" || l.store == nil || l.content == nil {
 		return failed(CodeMemoryArgumentsInvalid), nil
 	}
 	found, err := l.store.Find(ctx, domain.MemoryQuery{
@@ -134,7 +153,8 @@ func (l *Layer) find(ctx context.Context, call engine.Call) (engine.ToolResult, 
 	if err != nil {
 		return failed(CodeMemoryUnavailable), nil
 	}
-	body, labels, err := memoryResult(found)
+	body, labels, stats, err := memoryResult(found)
+	returned, omitted = stats.Returned, stats.Omitted
 	if err != nil {
 		return engine.ToolResult{}, err
 	}
@@ -142,6 +162,7 @@ func (l *Layer) find(ctx context.Context, call engine.Call) (engine.ToolResult, 
 	if err != nil {
 		return engine.ToolResult{}, fmt.Errorf("memory: store result: %w", err)
 	}
+	succeeded = true
 	return engine.ToolResult{ResultRef: ref, Labels: labels}, nil
 }
 
@@ -171,29 +192,73 @@ type resultAssertion struct {
 	UpdatedAt    string                  `json:"updated_at"`
 }
 
-func memoryResult(found []domain.MemoryAssertion) ([]byte, domain.Labels, error) {
-	out := struct {
-		Assertions []resultAssertion `json:"assertions"`
-	}{Assertions: make([]resultAssertion, 0, len(found))}
+type memoryResultPayload struct {
+	Assertions    []resultAssertion `json:"assertions"`
+	Omitted       int               `json:"omitted,omitempty"`
+	OmittedReason string            `json:"omitted_reason,omitempty"`
+	ByteBudget    int               `json:"byte_budget,omitempty"`
+}
+
+type memoryResultStats struct {
+	Returned int
+	Omitted  int
+}
+
+const maxMemoryResultBytes = 16 * 1024
+
+func memoryResult(found []domain.MemoryAssertion) ([]byte, domain.Labels, memoryResultStats, error) {
+	assertions := make([]resultAssertion, 0, len(found))
 	var labels domain.Labels
 	for _, a := range found {
-		expires := ""
-		var expiresAt *string
-		if a.ExpiresAt != nil {
-			expires = a.ExpiresAt.UTC().Format(timeFormat)
-			expiresAt = &expires
-		}
-		out.Assertions = append(out.Assertions, resultAssertion{
-			ID: a.ID, Kind: a.Kind, Subject: a.Subject,
-			Signature: a.Signature, Claim: a.Claim,
-			Evidence:     slices.Clone(a.Evidence),
-			Observations: a.Observations, Confirmed: a.Confirmed,
-			ExpiresAt: expiresAt, UpdatedAt: a.UpdatedAt.UTC().Format(timeFormat),
-		})
 		labels = labels.Union(a.Labels)
 	}
-	body, err := json.Marshal(out)
-	return body, labels, err
+	for _, a := range found {
+		next := append(assertions, resultAssertionFrom(a))
+		body, err := marshalMemoryResult(next, len(found))
+		if err != nil {
+			return nil, domain.Labels{}, memoryResultStats{}, err
+		}
+		if len(body) > maxMemoryResultBytes {
+			if len(assertions) == 0 {
+				body, err := marshalMemoryResult(nil, len(found))
+				return body, labels, memoryResultStats{Omitted: len(found)}, err
+			}
+			break
+		}
+		assertions = next
+	}
+	body, err := marshalMemoryResult(assertions, len(found))
+	stats := memoryResultStats{Returned: len(assertions), Omitted: len(found) - len(assertions)}
+	return body, labels, stats, err
+}
+
+func resultAssertionFrom(a domain.MemoryAssertion) resultAssertion {
+	expires := ""
+	var expiresAt *string
+	if a.ExpiresAt != nil {
+		expires = a.ExpiresAt.UTC().Format(timeFormat)
+		expiresAt = &expires
+	}
+	return resultAssertion{
+		ID: a.ID, Kind: a.Kind, Subject: a.Subject,
+		Signature: a.Signature, Claim: a.Claim,
+		Evidence:     slices.Clone(a.Evidence),
+		Observations: a.Observations, Confirmed: a.Confirmed,
+		ExpiresAt: expiresAt, UpdatedAt: a.UpdatedAt.UTC().Format(timeFormat),
+	}
+}
+
+func marshalMemoryResult(assertions []resultAssertion, total int) ([]byte, error) {
+	if assertions == nil {
+		assertions = []resultAssertion{}
+	}
+	out := memoryResultPayload{Assertions: assertions}
+	if omitted := total - len(assertions); omitted > 0 {
+		out.Omitted = omitted
+		out.OmittedReason = "result_byte_budget"
+		out.ByteBudget = maxMemoryResultBytes
+	}
+	return json.Marshal(out)
 }
 
 const timeFormat = "2006-01-02T15:04:05Z"

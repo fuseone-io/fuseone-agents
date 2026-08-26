@@ -93,6 +93,23 @@ o registro que a justificava se foi. O histórico de eventos continua append-onl
 até a retenção removê-lo, então um auditor ainda consegue ver por que a
 asserção mudou de estado.
 
+## Busca e tamanho da resposta
+
+A busca de memória em runtime é indexada para buscas por trecho em assunto,
+assinatura e afirmação. Buscas amplas ainda retornam apenas um conjunto
+limitado.
+
+A ferramenta de memória também tem um orçamento de bytes para a resposta.
+Quando as asserções encontradas não cabem, a resposta diz quantas foram
+omitidas pelo orçamento. As asserções continuam armazenadas; o agente pode
+fazer uma consulta mais estreita por tipo, assunto ou assinatura se a primeira
+resposta não for específica o bastante.
+
+As métricas do worker reportam quantidade de leituras de memória, latência,
+asserções retornadas e asserções omitidas. Essas métricas deliberadamente não
+incluem nome de agente, escopo, texto de busca, id de asserção ou afirmação em
+labels.
+
 ## O que esperar
 
 Memória reduz investigação repetida. Ela não garante que o caso de hoje é

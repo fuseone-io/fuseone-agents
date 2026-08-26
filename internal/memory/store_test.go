@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -36,7 +37,8 @@ func TestLayer_findStoresAClaimCheckAndPropagatesLabels(t *testing.T) {
 		t.Fatalf("Assert: %v", err)
 	}
 
-	result, err := memory.NewLayer(nil, nil, content, store).Invoke(ctx, engine.Call{
+	metrics := &recordingMemoryMetrics{}
+	result, err := memory.NewLayer(nil, nil, content, store).WithMetrics(metrics).Invoke(ctx, engine.Call{
 		RunID: "run-memory-1", Seq: 4, Scope: platformScope, AgentID: "triage",
 		Tool: domain.ToolMemoryFind, Args: []byte(`{"search":"datasource"}`),
 	})
@@ -63,6 +65,67 @@ func TestLayer_findStoresAClaimCheckAndPropagatesLabels(t *testing.T) {
 	}
 	if len(payload.Assertions) != 1 || payload.Assertions[0].Claim == "" {
 		t.Fatalf("payload = %s, want one structured assertion", body)
+	}
+	if len(metrics.finds) != 1 || metrics.finds[0].returned != 1 ||
+		metrics.finds[0].omitted != 0 || metrics.finds[0].failed {
+		t.Fatalf("metrics = %+v, want successful memory find", metrics.finds)
+	}
+}
+
+func TestLayer_findNamesAssertionsOmittedByTheResponseBudget(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := memory.NewMemory()
+	content := engine.NewMemoryContent()
+	now := time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC)
+	if _, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Subject, a.Confirmed, a.Observations = "budget first", 3, 3
+		a.Claim = "small remembered fact"
+	}), "usr_ana", "reviewed", now); err != nil {
+		t.Fatalf("Assert first: %v", err)
+	}
+	if _, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Subject, a.Confirmed, a.Observations = "budget large", 2, 2
+		a.Labels = domain.NewLabels(domain.LabelUntrusted)
+		a.Evidence[0].Artifact = strings.Repeat("large-artifact-name", 1600)
+	}), "usr_ana", "reviewed", now); err != nil {
+		t.Fatalf("Assert large: %v", err)
+	}
+	if _, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Subject, a.Confirmed, a.Observations = "budget later", 1, 1
+	}), "usr_ana", "reviewed", now); err != nil {
+		t.Fatalf("Assert later: %v", err)
+	}
+
+	result, err := memory.NewLayer(nil, nil, content, store).Invoke(ctx, engine.Call{
+		RunID: "run-memory-1", Seq: 4, Scope: platformScope, AgentID: "triage",
+		Tool: domain.ToolMemoryFind, Args: []byte(`{"search":"budget","limit":10}`),
+	})
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	if result.Failed || !result.Labels.Has(domain.LabelUntrusted) {
+		t.Fatalf("result = %+v, want success carrying labels from matched memory", result)
+	}
+	body, err := content.Get(ctx, result.ResultRef)
+	if err != nil {
+		t.Fatalf("Get result: %v", err)
+	}
+	var payload struct {
+		Assertions []struct {
+			Subject string `json:"subject"`
+		} `json:"assertions"`
+		Omitted       int    `json:"omitted"`
+		OmittedReason string `json:"omitted_reason"`
+		ByteBudget    int    `json:"byte_budget"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatalf("decode result: %v", err)
+	}
+	if len(payload.Assertions) != 1 || payload.Assertions[0].Subject != "budget first" ||
+		payload.Omitted != 2 || payload.OmittedReason != "result_byte_budget" ||
+		payload.ByteBudget <= 0 {
+		t.Fatalf("payload = %s, want explicit memory budget omission", body)
 	}
 }
 
@@ -222,6 +285,29 @@ func TestPostgresMemoryEvents_refuseUpdateButAllowRetentionDelete(t *testing.T) 
 	}
 }
 
+func TestPostgresMigration_addsTrigramIndexesForMemorySearch(t *testing.T) {
+	ctx, pool := postgresPool(t)
+	for index, column := range map[string]string{
+		"memory_assertions_subject_trgm_idx":   "subject gin_trgm_ops",
+		"memory_assertions_signature_trgm_idx": "signature gin_trgm_ops",
+		"memory_assertions_claim_trgm_idx":     "claim gin_trgm_ops",
+	} {
+		var definition string
+		err := pool.QueryRow(ctx, `
+			select indexdef
+			from pg_indexes
+			where schemaname = current_schema() and indexname = $1`, index).Scan(&definition)
+		if err != nil {
+			t.Fatalf("check %s: %v", index, err)
+		}
+		if !strings.Contains(definition, "USING gin") ||
+			!strings.Contains(definition, column) ||
+			!strings.Contains(definition, "WHERE (status = 'active'::text)") {
+			t.Fatalf("%s = %s, want active trigram GIN index on %s", index, definition, column)
+		}
+	}
+}
+
 type toolSource []domain.ToolEntry
 
 func (t toolSource) Tools(context.Context) ([]domain.ToolEntry, error) {
@@ -327,4 +413,16 @@ func sameStrings(got, want []string) bool {
 func isRestrictViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23001"
+}
+
+type recordingMemoryMetrics struct{ finds []memoryFindMetric }
+
+type memoryFindMetric struct {
+	returned int
+	omitted  int
+	failed   bool
+}
+
+func (r *recordingMemoryMetrics) MemoryFind(_ time.Duration, returned int, omitted int, failed bool) {
+	r.finds = append(r.finds, memoryFindMetric{returned: returned, omitted: omitted, failed: failed})
 }

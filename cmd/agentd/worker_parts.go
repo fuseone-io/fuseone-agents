@@ -254,7 +254,7 @@ func (p *workerParts) gate(ctx context.Context) (*policy.Enforcer, error) {
 }
 
 // deps is what the loop runs on.
-func (p *workerParts) deps(gate engine.Gate) engine.Deps {
+func (p *workerParts) deps(gate engine.Gate, metrics *worker.MetricsRegistry) engine.Deps {
 	tools := engine.Tools(p.catalog)
 	catalog := engine.Catalog(p.catalog)
 	if p.native != nil {
@@ -262,7 +262,7 @@ func (p *workerParts) deps(gate engine.Gate) engine.Deps {
 		catalog = p.native
 	}
 	contextTools := contextshare.New(tools, catalog, p.content)
-	memoryTools := memory.NewLayer(contextTools, contextTools, p.content, p.memory)
+	memoryTools := memory.NewLayer(contextTools, contextTools, p.content, p.memory).WithMetrics(metrics)
 	return engine.Deps{
 		Ledger:  p.store,
 		Gate:    gate,

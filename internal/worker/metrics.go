@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/egressmetrics"
@@ -26,6 +27,7 @@ type MetricsRegistry struct {
 	channelFailures        map[channelFailureMetric]uint64
 	channelItems           map[string]uint64
 	stdioEgressDenials     map[string]uint64
+	memoryFinds            map[memoryFindMetric]memoryFindCounters
 }
 
 func NewMetricsRegistry() *MetricsRegistry {
@@ -37,6 +39,7 @@ func NewMetricsRegistry() *MetricsRegistry {
 		channelFailures:        map[channelFailureMetric]uint64{},
 		channelItems:           map[string]uint64{},
 		stdioEgressDenials:     map[string]uint64{},
+		memoryFinds:            map[memoryFindMetric]memoryFindCounters{},
 	}
 }
 
@@ -70,6 +73,7 @@ func (r *MetricsRegistry) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	renderMCPMetrics(w, snap)
 	renderChannelMetrics(w, snap)
 	renderStdioEgressMetrics(w, snap)
+	renderMemoryMetrics(w, snap)
 }
 
 func renderWorkerMetrics(w http.ResponseWriter, snap []poolSnapshot) {
@@ -180,6 +184,42 @@ func renderStdioEgressMetrics(w http.ResponseWriter, snap registrySnapshot) {
 	}
 }
 
+func renderMemoryMetrics(w http.ResponseWriter, snap registrySnapshot) {
+	fmt.Fprintln(w, "# HELP fuseone_memory_find_total Memory find tool calls by result and whether assertions were omitted by the response budget.")
+	fmt.Fprintln(w, "# TYPE fuseone_memory_find_total counter")
+	for _, key := range sortedMemoryFindKeys(snap.memoryFinds) {
+		counters := snap.memoryFinds[key]
+		fmt.Fprintf(w, "fuseone_memory_find_total{result=%s,omitted=%s} %d\n",
+			label(key.result), label(key.omitted), counters.calls)
+	}
+
+	fmt.Fprintln(w, "# HELP fuseone_memory_find_duration_seconds Memory find latency accumulated by result.")
+	fmt.Fprintln(w, "# TYPE fuseone_memory_find_duration_seconds summary")
+	for _, key := range sortedMemoryFindKeys(snap.memoryFinds) {
+		counters := snap.memoryFinds[key]
+		fmt.Fprintf(w, "fuseone_memory_find_duration_seconds_sum{result=%s,omitted=%s} %.6f\n",
+			label(key.result), label(key.omitted), float64(counters.durationMicros)/1_000_000)
+		fmt.Fprintf(w, "fuseone_memory_find_duration_seconds_count{result=%s,omitted=%s} %d\n",
+			label(key.result), label(key.omitted), counters.calls)
+	}
+
+	fmt.Fprintln(w, "# HELP fuseone_memory_find_returned_assertions_total Memory assertions returned to the model.")
+	fmt.Fprintln(w, "# TYPE fuseone_memory_find_returned_assertions_total counter")
+	for _, key := range sortedMemoryFindKeys(snap.memoryFinds) {
+		counters := snap.memoryFinds[key]
+		fmt.Fprintf(w, "fuseone_memory_find_returned_assertions_total{result=%s,omitted=%s} %d\n",
+			label(key.result), label(key.omitted), counters.returned)
+	}
+
+	fmt.Fprintln(w, "# HELP fuseone_memory_find_omitted_assertions_total Memory assertions omitted from the tool response by the byte budget.")
+	fmt.Fprintln(w, "# TYPE fuseone_memory_find_omitted_assertions_total counter")
+	for _, key := range sortedMemoryFindKeys(snap.memoryFinds) {
+		counters := snap.memoryFinds[key]
+		fmt.Fprintf(w, "fuseone_memory_find_omitted_assertions_total{result=%s,omitted=%s} %d\n",
+			label(key.result), label(key.omitted), counters.omitted)
+	}
+}
+
 type poolSnapshot struct {
 	pool     string
 	slots    int
@@ -197,6 +237,7 @@ type registrySnapshot struct {
 	channelFailures        map[channelFailureMetric]uint64
 	channelItems           map[string]uint64
 	stdioEgressDenials     map[string]uint64
+	memoryFinds            map[memoryFindMetric]memoryFindCounters
 }
 
 func (r *MetricsRegistry) snapshot() registrySnapshot {
@@ -212,6 +253,7 @@ func (r *MetricsRegistry) snapshot() registrySnapshot {
 		channelFailures:        copyChannelFailureCounters(r.channelFailures),
 		channelItems:           copyStringCounters(r.channelItems),
 		stdioEgressDenials:     copyStringCounters(r.stdioEgressDenials),
+		memoryFinds:            copyMemoryFindCounters(r.memoryFinds),
 	}
 	r.mu.Unlock()
 
@@ -242,6 +284,18 @@ type channelSweepMetric struct {
 type channelFailureMetric struct {
 	task string
 	code string
+}
+
+type memoryFindMetric struct {
+	result  string
+	omitted string
+}
+
+type memoryFindCounters struct {
+	calls          uint64
+	durationMicros uint64
+	returned       uint64
+	omitted        uint64
 }
 
 const metricOther = "other"
@@ -307,6 +361,31 @@ func (r *MetricsRegistry) StdioEgressDenial(code string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.stdioEgressDenials[code]++
+}
+
+func (r *MetricsRegistry) MemoryFind(duration time.Duration, returned int, omitted int, failed bool) {
+	if r == nil {
+		return
+	}
+	result := "ok"
+	if failed {
+		result = "error"
+	}
+	key := memoryFindMetric{result: result, omitted: fmt.Sprint(omitted > 0)}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	counters := r.memoryFinds[key]
+	counters.calls++
+	if duration > 0 {
+		counters.durationMicros += uint64(duration.Microseconds())
+	}
+	if returned > 0 {
+		counters.returned += uint64(returned)
+	}
+	if omitted > 0 {
+		counters.omitted += uint64(omitted)
+	}
+	r.memoryFinds[key] = counters
 }
 
 func boundedMetricValue(value string, allowed map[string]bool) string {
@@ -416,6 +495,14 @@ func copyChannelFailureCounters(in map[channelFailureMetric]uint64) map[channelF
 	return out
 }
 
+func copyMemoryFindCounters(in map[memoryFindMetric]memoryFindCounters) map[memoryFindMetric]memoryFindCounters {
+	out := make(map[memoryFindMetric]memoryFindCounters, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
+}
+
 func sortedKeys(m map[string]uint64) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
@@ -480,6 +567,20 @@ func sortedChannelFailureKeys(m map[channelFailureMetric]uint64) []channelFailur
 			return keys[i].task < keys[j].task
 		}
 		return keys[i].code < keys[j].code
+	})
+	return keys
+}
+
+func sortedMemoryFindKeys(m map[memoryFindMetric]memoryFindCounters) []memoryFindMetric {
+	keys := make([]memoryFindMetric, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].result != keys[j].result {
+			return keys[i].result < keys[j].result
+		}
+		return keys[i].omitted < keys[j].omitted
 	})
 	return keys
 }

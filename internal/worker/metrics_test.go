@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestMetricsRegistry_rendersOnlyLowCardinalityWorkerFacts(t *testing.T) {
@@ -28,6 +29,9 @@ func TestMetricsRegistry_rendersOnlyLowCardinalityWorkerFacts(t *testing.T) {
 	reg.ChannelFailure("slack-team-alerts", "slack-team-alerts")
 	reg.StdioEgressDenial("stdio_egress_destination_denied")
 	reg.StdioEgressDenial("crm.internal:443/path")
+	reg.MemoryFind(1200*time.Millisecond, 3, 0, false)
+	reg.MemoryFind(800*time.Millisecond, 1, 2, false)
+	reg.MemoryFind(10*time.Millisecond, 0, 0, true)
 
 	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
 	rec := httptest.NewRecorder()
@@ -55,6 +59,13 @@ func TestMetricsRegistry_rendersOnlyLowCardinalityWorkerFacts(t *testing.T) {
 		`fuseone_channel_items_total{task="other"} 1`,
 		`fuseone_stdio_egress_denials_total{code="other"} 1`,
 		`fuseone_stdio_egress_denials_total{code="stdio_egress_destination_denied"} 1`,
+		`fuseone_memory_find_total{result="error",omitted="false"} 1`,
+		`fuseone_memory_find_total{result="ok",omitted="false"} 1`,
+		`fuseone_memory_find_total{result="ok",omitted="true"} 1`,
+		`fuseone_memory_find_duration_seconds_sum{result="ok",omitted="false"} 1.200000`,
+		`fuseone_memory_find_duration_seconds_count{result="ok",omitted="true"} 1`,
+		`fuseone_memory_find_returned_assertions_total{result="ok",omitted="true"} 1`,
+		`fuseone_memory_find_omitted_assertions_total{result="ok",omitted="true"} 2`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("metrics body missing %q:\n%s", want, body)

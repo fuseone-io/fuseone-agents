@@ -91,6 +91,20 @@ record that justified it is gone. The event history remains append-only until
 retention removes it, so an auditor can still see why the assertion changed
 state.
 
+## Search and response size
+
+Runtime memory search is indexed for substring matches across subject,
+signature and claim. Broad searches still return only a bounded result set.
+
+The memory tool also has a response byte budget. When matching assertions do
+not fit, the response says how many were omitted by the budget. The assertions
+remain stored; the agent can call a narrower query by kind, subject or
+signature if the first response is not specific enough.
+
+Worker metrics report memory read count, latency, returned assertions and
+omitted assertions. Those metrics deliberately do not include agent names,
+scopes, search text, assertion ids or claims as labels.
+
 ## What to expect
 
 Memory reduces repeated investigation. It does not guarantee that today's case
