@@ -64,11 +64,35 @@ describe("governed memory page", () => {
     hooks.items = Array.from({ length: 9 }, (_, index) => memoryAssertion(index));
     render(<MemoryPage />);
 
-    expect(screen.getByText("subject-0")).toBeInTheDocument();
+    expect(screen.getAllByText("subject-0").length).toBeGreaterThan(0);
     expect(screen.getByText("subject-7")).toBeInTheDocument();
     expect(screen.queryByText("subject-8")).not.toBeInTheDocument();
     expect(screen.getByText("8 of 9")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Load more" })).toBeInTheDocument();
+  });
+
+  it("keeps remembered assertions compact until one is selected", async () => {
+    const user = userEvent.setup();
+    hooks.items = Array.from({ length: 3 }, (_, index) => ({
+      ...memoryAssertion(index),
+      claim: `Claim ${index}`,
+      evidence: [{
+        runId: `run_${index}`,
+        artifact: "final_answer",
+        digest: `sha256:${index}`,
+      }],
+    }));
+    render(<MemoryPage />);
+
+    const third = screen.getByRole("button", { name: /subject-2/ });
+    expect(within(third).getByText("Outside data")).toBeInTheDocument();
+    expect(screen.getByText("run_0 · final_answer · sha256:0")).toBeInTheDocument();
+    expect(screen.queryByText("run_2 · final_answer · sha256:2")).not.toBeInTheDocument();
+
+    await user.click(third);
+
+    expect(screen.getByText("run_2 · final_answer · sha256:2")).toBeInTheDocument();
+    expect(screen.queryByText("run_0 · final_answer · sha256:0")).not.toBeInTheDocument();
   });
 
   it("records a reviewed assertion with ledger evidence", async () => {

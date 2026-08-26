@@ -1587,6 +1587,7 @@
     "newAssertion": "Nova memória",
     "observed": "Observado",
     "observations": "Observadas",
+    "outsideData": "Dado de fora",
     "readOnlyHint": "Você pode inspecionar a memória governada, mas alterar exige permissão para publicar agentes no escopo alvo.",
     "readOnlyTitle": "Memória somente leitura",
     "reason": "Por quê",

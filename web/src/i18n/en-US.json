@@ -1587,6 +1587,7 @@
     "newAssertion": "New memory",
     "observed": "Observed",
     "observations": "Observed",
+    "outsideData": "Outside data",
     "readOnlyHint": "You can inspect governed memory, but changing it requires permission to publish agents in the target scope.",
     "readOnlyTitle": "Read-only memory",
     "reason": "Why",

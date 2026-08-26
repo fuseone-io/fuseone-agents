@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { Search } from "lucide-react";
@@ -13,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { MemoryAssertionCard } from "@/features/memory/memory-assertion-card";
+import { MemoryAssertionRow } from "@/features/memory/memory-assertion-row";
 import type {
   MemoryAssertion,
   MemoryFilters,
@@ -48,6 +50,11 @@ export function MemoryListPanel({
   const { t } = useTranslation();
   const items = query.data?.items ?? [];
   const page = useVisibleItems(items, PAGE_SIZE);
+  const [selectedID, setSelectedID] = useState<string | null>(null);
+  const selected =
+    page.visible.find((assertion) => assertion.id === selectedID) ??
+    page.visible[0] ??
+    null;
 
   return (
     <Panel title={t("memory.assertions")}>
@@ -64,16 +71,27 @@ export function MemoryListPanel({
         />
       ) : (
         <>
-          <div className="grid min-w-0 gap-3">
-            {page.visible.map((assertion) => (
-              <MemoryAssertionCard
-                key={assertion.id}
-                assertion={assertion}
-                canDisable={canDisable}
-                onCorrect={onCorrect}
-                onDisable={onDisable}
-              />
-            ))}
+          <div className="grid min-w-0 gap-4 2xl:grid-cols-[minmax(0,1fr)_minmax(360px,440px)]">
+            <div className="grid min-w-0 content-start gap-2">
+              {page.visible.map((assertion) => (
+                <MemoryAssertionRow
+                  key={assertion.id}
+                  assertion={assertion}
+                  selected={assertion.id === selected?.id}
+                  onSelect={() => setSelectedID(assertion.id)}
+                />
+              ))}
+            </div>
+            {selected && (
+              <div className="min-w-0 2xl:sticky 2xl:top-4 2xl:self-start">
+                <MemoryAssertionCard
+                  assertion={selected}
+                  canDisable={canDisable}
+                  onCorrect={onCorrect}
+                  onDisable={onDisable}
+                />
+              </div>
+            )}
           </div>
           <LoadMore
             loaded={page.loaded}
