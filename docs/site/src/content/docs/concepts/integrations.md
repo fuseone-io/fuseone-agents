@@ -42,5 +42,5 @@ external integrations.
 
 ## Related notes
 
-- [NT-001: integration boundary and execution model](https://github.com/fuseone-io/fuseone-agents/blob/main/docs/NT-001-integration-boundary-and-execution-model.md)
-- [NT-009: governed connectors](https://github.com/fuseone-io/fuseone-agents/blob/main/docs/NT-009-governed-connectors.md)
+- [NT-001: integration boundary and execution model](../../design/nt-001-integration-boundary-and-execution-model/)
+- [NT-009: governed connectors](../../design/nt-009-governed-connectors/)

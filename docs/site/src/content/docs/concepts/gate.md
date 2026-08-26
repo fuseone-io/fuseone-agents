@@ -32,6 +32,6 @@ effect must not leave the worker.
 
 ## Related manual pages
 
-- [What the Gate stops](https://github.com/fuseone-io/fuseone-agents/blob/main/docs/manual/en-US/what-the-gate-stops.md)
-- [Approving](https://github.com/fuseone-io/fuseone-agents/blob/main/docs/manual/en-US/approving.md)
-- [Data barriers](https://github.com/fuseone-io/fuseone-agents/blob/main/docs/manual/en-US/data-barriers.md)
+- [What the Gate stops](../../manual/en-us/what-the-gate-stops/)
+- [Approving](../../manual/en-us/approving/)
+- [Data barriers](../../manual/en-us/data-barriers/)

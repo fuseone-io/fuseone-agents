@@ -32,4 +32,4 @@ intervene.
 
 ## Related manual page
 
-- [Duplicate effect recognition](https://github.com/fuseone-io/fuseone-agents/blob/main/docs/manual/en-US/duplicate-effects.md)
+- [Duplicate effect recognition](../../manual/en-us/duplicate-effects/)

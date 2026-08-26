@@ -1,0 +1,19 @@
+<svg width="302" height="34" viewBox="0 0 302 34" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <g transform="translate(1 0.6) scale(0.68)">
+    <g transform="translate(0 5)">
+      <rect x="8" y="13" width="4.5" height="10" rx="2.25" fill="#8FDCDC" stroke="#0A757F" stroke-width="2.5"></rect>
+      <rect x="35.5" y="13" width="4.5" height="10" rx="2.25" fill="#8FDCDC" stroke="#0A757F" stroke-width="2.5"></rect>
+      <rect x="11.5" y="8" width="25" height="24" rx="10" fill="#FFFFFF" stroke="#0A757F" stroke-width="2.5"></rect>
+      <path d="M24 8V5.6" stroke="#0A757F" stroke-width="2.5" stroke-linecap="round"></path>
+      <circle cx="24" cy="3.6" r="2.6" fill="#22AEB3" stroke="#0A757F" stroke-width="2.5"></circle>
+      <rect x="17.8" y="16.6" width="3.6" height="6.4" rx="1.8" fill="#0A757F"></rect>
+      <rect x="26.6" y="16.6" width="3.6" height="6.4" rx="1.8" fill="#0A757F"></rect>
+    </g>
+  </g>
+  <text y="24" font-family="Geist, ui-sans-serif, system-ui, sans-serif" font-size="22" letter-spacing="0">
+    <tspan x="42" font-weight="300" fill="#3B4B4E">Fuse</tspan><tspan font-weight="600" fill="#131F21">One</tspan>
+  </text>
+  <text x="152" y="24" font-family="Geist, ui-sans-serif, system-ui, sans-serif" font-size="22" font-weight="400" letter-spacing="0" fill="#0A757F">Agents</text>
+  <rect x="244" y="7" width="52" height="21" rx="10.5" fill="#E6F6F5" stroke="#A8DDDB"></rect>
+  <text x="258" y="22" font-family="Geist, ui-sans-serif, system-ui, sans-serif" font-size="13" font-weight="600" fill="#0A757F">Docs</text>
+</svg>
