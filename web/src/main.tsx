@@ -26,6 +26,7 @@ import { RunDetailPage } from "@/features/runs/run-detail-page";
 import { RuntimePage } from "@/features/runtime/runtime-page";
 import { ApprovalsPage } from "@/features/approvals/approvals-page";
 import { CostPage } from "@/features/cost/cost-page";
+import { MemoryPage } from "@/features/memory/memory-page";
 import { ManualIndexPage } from "@/features/manual/manual-index-page";
 import { ManualReadPage } from "@/features/manual/manual-page";
 import { AdminPage } from "@/features/admin/admin-page";
@@ -76,6 +77,7 @@ createRoot(document.getElementById("root")!).render(
                   <Route path="/runtime" element={<RuntimePage />} />
                   <Route path="/approvals" element={<ApprovalsPage />} />
                   <Route path="/cost" element={<CostPage />} />
+                  <Route path="/memory" element={<MemoryPage />} />
                   <Route path="/policies" element={<PoliciesPage />} />
                   <Route path="/policies/:code" element={<PolicyEditorPage />} />
                   <Route path="/audit" element={<AuditPage />} />

@@ -33,6 +33,7 @@ import (
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/known"
 	"github.com/fuseone/agents/internal/ledger"
+	"github.com/fuseone/agents/internal/memory"
 	"github.com/fuseone/agents/internal/policy"
 	"github.com/fuseone/agents/internal/regression"
 	"github.com/fuseone/agents/internal/scope"
@@ -134,7 +135,9 @@ func serve(args []string) error {
 		api = api.WithChannels(channels, channel.NewRouter(drivers)).
 			WithChannelListing(drivers).
 			WithCompanies(admin.NewCompanies(identity.pool)).
-			WithAdministration(curator, connectortools.NewToolList(curator, connectorSettings), integrations).
+			WithAdministration(curator,
+				memory.NewToolList(connectortools.NewToolList(curator, connectorSettings)),
+				integrations).
 			WithConnectorInstances(connectorInstances).
 			WithAgents(spec.NewRegistry(identity.pool)).
 			// The stages a version declares, read one version at a time.
@@ -148,6 +151,7 @@ func serve(args []string) error {
 			// against. A set is real customer records and belongs under the
 			// installation's retention like every other bulky payload (AU-04).
 			WithCases(ledger.NewContent(identity.pool)).
+			WithMemory(memory.NewPostgres(identity.pool)).
 			// The corrections a future version is checked against (FU-12),
 			// and the last battery run against a version — which is what
 			// stands between a broken corpus and somebody starting the agent.

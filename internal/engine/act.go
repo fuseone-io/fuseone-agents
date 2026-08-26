@@ -429,9 +429,10 @@ func (r *Runner) invoke(
 	semantic semanticDedupe, reservation dedupeReservation,
 ) (Status, error) {
 	call := Call{
-		RunID: start.RunID,
-		Scope: start.Scope,
-		Tool:  p.Tool, Args: p.Args,
+		RunID:   start.RunID,
+		Scope:   start.Scope,
+		AgentID: start.AgentID,
+		Tool:    p.Tool, Args: p.Args,
 		OnBehalfOf:       start.OnBehalfOf,
 		IdemKey:          idemKey,
 		ContextArtifacts: state.ContextArtifacts,

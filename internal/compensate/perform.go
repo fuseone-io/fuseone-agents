@@ -118,7 +118,8 @@ func performOne(
 	}
 
 	call := engine.Call{
-		RunID: start.RunID, Seq: seq, Tool: act.Undo, Args: args,
+		RunID: start.RunID, Seq: seq, Scope: start.Scope,
+		AgentID: start.AgentID, Tool: act.Undo, Args: args,
 		OnBehalfOf: start.OnBehalfOf,
 		IdemKey:    fmt.Sprintf("compensate:%s:%d", start.RunID, act.Seq),
 	}
