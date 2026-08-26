@@ -24,7 +24,10 @@ import { ProviderCard } from "@/features/integrations/provider-card";
 import {
   useIntegrations,
   useConnectorCatalog,
+  useConnectorInstances,
+  useDeleteConnectorInstance,
   useMCPUserCredentials,
+  usePutConnectorInstance,
   type MCPServer,
   type ModelProvider,
 } from "@/features/integrations/api";
@@ -66,6 +69,9 @@ export function IntegrationsPage({
   const channels = useChannels();
   const credentials = useMCPUserCredentials();
   const connectorCatalog = useConnectorCatalog(section === "connectors");
+  const connectorInstances = useConnectorInstances(section === "connectors");
+  const putConnectorInstance = usePutConnectorInstance();
+  const deleteConnectorInstance = useDeleteConnectorInstance();
   const [editing, setEditing] = useState<Editing | null>(null);
 
   const servers = integrations.data?.mcpServers ?? [];
@@ -197,10 +203,21 @@ export function IntegrationsPage({
           />
         ) : section === "connectors" ? (
           <ConnectorCatalogPanel
-            connectors={connectorCatalog.data?.items ?? []}
-            isLoading={connectorCatalog.isLoading}
-            error={connectorCatalog.error}
-            onRetry={() => void connectorCatalog.refetch()}
+            data={{
+              connectors: connectorCatalog.data?.items ?? [],
+              instances: connectorInstances.data?.items ?? [],
+              catalogLoading: connectorCatalog.isLoading,
+              instancesLoading: connectorInstances.isLoading,
+              catalogError: connectorCatalog.error,
+              instancesError: connectorInstances.error,
+            }}
+            actions={{
+              retryCatalog: () => void connectorCatalog.refetch(),
+              retryInstances: () => void connectorInstances.refetch(),
+              saveInstance: (input) => putConnectorInstance.mutateAsync(input),
+              deleteInstance: (instance) =>
+                void deleteConnectorInstance.mutate(instance),
+            }}
           />
         ) : section === "credentials" ? (
           <UserCredentialsPanel

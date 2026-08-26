@@ -1,35 +1,89 @@
-import { ShieldCheck, Workflow } from "lucide-react";
+import { Plus, ShieldCheck, Workflow } from "lucide-react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/shared/states";
 import { LoadMore } from "@/components/shared/load-more";
-import type { GovernedConnector } from "@/features/integrations/api";
+import type {
+  ConnectorInstance,
+  GovernedConnector,
+} from "@/features/integrations/api";
+import { ConnectorInstanceForm } from "@/features/integrations/connectors/connector-instance-form";
+import { ConnectorInstancesPanel } from "@/features/integrations/connectors/connector-instances-panel";
+import type { ConnectorInstanceSaver } from "@/features/integrations/connectors/connector-instance-model";
 import { useVisibleItems } from "@/hooks/use-visible-items";
 import { cn } from "@/lib/utils";
 
 export function ConnectorCatalogPanel({
-  connectors,
-  isLoading,
-  error,
-  onRetry,
+  data,
+  actions,
 }: {
-  connectors: GovernedConnector[];
-  isLoading: boolean;
-  error: unknown;
-  onRetry: () => void;
+  data: ConnectorPanelData;
+  actions: ConnectorPanelActions;
 }) {
-  const page = useVisibleItems(connectors, 8);
+  const [editing, setEditing] = useState<ConnectorInstance | null | false>(false);
+  const page = useVisibleItems(data.connectors, 8);
 
-  if (isLoading) return <LoadingRows rows={4} />;
-  if (error) return <ErrorState error={error} onRetry={onRetry} />;
+  const close = () => setEditing(false);
 
   return (
     <section className="flex flex-col gap-3">
       <ConnectorIntro />
-      <ConnectorCatalogBody connectors={connectors} page={page} />
+      <ConnectorInstancesPanel
+        view={{
+          instances: data.instances,
+          isLoading: data.instancesLoading,
+          error: data.instancesError,
+        }}
+        actions={{
+          retry: actions.retryInstances,
+          createVault: () => setEditing(null),
+          edit: setEditing,
+          remove: actions.deleteInstance,
+        }}
+      />
+      {data.catalogLoading ? (
+        <LoadingRows rows={4} />
+      ) : data.catalogError ? (
+        <ErrorState error={data.catalogError} onRetry={actions.retryCatalog} />
+      ) : (
+        <ConnectorCatalogBody
+          connectors={data.connectors}
+          page={page}
+          onConfigure={(connector) => {
+            if (connector.id === "vault" && connector.maturity === "runtime") {
+              setEditing(null);
+            }
+          }}
+        />
+      )}
+      {editing !== false && (
+        <ConnectorInstanceForm
+          instance={editing}
+          onClose={close}
+          onSave={actions.saveInstance}
+        />
+      )}
     </section>
   );
 }
+
+export type ConnectorPanelData = {
+  connectors: GovernedConnector[];
+  instances: ConnectorInstance[];
+  catalogLoading: boolean;
+  instancesLoading: boolean;
+  catalogError: unknown;
+  instancesError: unknown;
+};
+
+export type ConnectorPanelActions = {
+  retryCatalog: () => void;
+  retryInstances: () => void;
+  saveInstance: ConnectorInstanceSaver;
+  deleteInstance: (instance: ConnectorInstance) => void;
+};
 
 function ConnectorIntro() {
   const { t } = useTranslation();
@@ -53,9 +107,11 @@ function ConnectorIntro() {
 function ConnectorCatalogBody({
   connectors,
   page,
+  onConfigure,
 }: {
   connectors: GovernedConnector[];
   page: ReturnType<typeof useVisibleItems<GovernedConnector>>;
+  onConfigure: (connector: GovernedConnector) => void;
 }) {
   const { t } = useTranslation();
   if (connectors.length === 0) {
@@ -71,7 +127,11 @@ function ConnectorCatalogBody({
     <>
       <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(min(100%,308px),1fr))]">
         {page.visible.map((connector) => (
-          <ConnectorCard key={connector.id} connector={connector} />
+          <ConnectorCard
+            key={connector.id}
+            connector={connector}
+            onConfigure={() => onConfigure(connector)}
+          />
         ))}
       </div>
       <LoadMore {...page} isLoading={false} onLoad={page.loadMore} />
@@ -79,10 +139,16 @@ function ConnectorCatalogBody({
   );
 }
 
-function ConnectorCard({ connector }: { connector: GovernedConnector }) {
+function ConnectorCard({
+  connector,
+  onConfigure,
+}: {
+  connector: GovernedConnector;
+  onConfigure: () => void;
+}) {
   return (
     <article className="flex min-h-[22rem] flex-col overflow-hidden rounded-lg border bg-card">
-      <ConnectorCardHeader connector={connector} />
+      <ConnectorCardHeader connector={connector} onConfigure={onConfigure} />
 
       <div className="flex flex-1 flex-col gap-4 p-4">
         <ConnectorOperations connector={connector} />
@@ -92,7 +158,13 @@ function ConnectorCard({ connector }: { connector: GovernedConnector }) {
   );
 }
 
-function ConnectorCardHeader({ connector }: { connector: GovernedConnector }) {
+function ConnectorCardHeader({
+  connector,
+  onConfigure,
+}: {
+  connector: GovernedConnector;
+  onConfigure: () => void;
+}) {
   const { t } = useTranslation();
   return (
     <div className="flex items-start gap-3 border-b p-4">
@@ -109,6 +181,18 @@ function ConnectorCardHeader({ connector }: { connector: GovernedConnector }) {
         <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
           {connector.summary}
         </p>
+        {connector.maturity === "runtime" && (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="mt-3"
+            onClick={onConfigure}
+          >
+            <Plus className="size-3.5" aria-hidden />
+            {t("connectors.configure")}
+          </Button>
+        )}
       </div>
     </div>
   );

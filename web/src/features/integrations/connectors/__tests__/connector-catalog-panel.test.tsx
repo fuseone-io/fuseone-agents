@@ -1,7 +1,10 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ConnectorCatalogPanel } from "@/features/integrations/connectors/connector-catalog-panel";
-import type { GovernedConnector } from "@/features/integrations/api";
+import type {
+  ConnectorInstance,
+  GovernedConnector,
+} from "@/features/integrations/api";
 
 const vault: GovernedConnector = {
   id: "vault",
@@ -26,14 +29,61 @@ const vault: GovernedConnector = {
   ],
 };
 
+const planned: GovernedConnector = {
+  ...vault,
+  id: "sql",
+  name: "Governed SQL",
+  maturity: "planned",
+  operations: [
+    {
+      id: "sql.query_template",
+      name: "Run template",
+      summary: "Runs a declared read-only SQL template.",
+      effects: ["read"],
+      approval: "policy",
+      secretHandling: "reference_only",
+    },
+  ],
+};
+
+const instance: ConnectorInstance = {
+  name: "prod",
+  connector: "vault",
+  enabled: true,
+  scopeKind: "area",
+  company: "acme",
+  area: "platform",
+  hasToken: true,
+  updatedAt: "2026-08-25T12:00:00Z",
+  vault: {
+    address: "https://vault.example.com",
+    mount: "secret",
+    allowedPathPrefixes: ["certificates"],
+  },
+};
+
+function actions() {
+  return {
+    retryCatalog: vi.fn(),
+    retryInstances: vi.fn(),
+    saveInstance: vi.fn(),
+    deleteInstance: vi.fn(),
+  };
+}
+
 describe("governed connector catalogue", () => {
-  it("shows connector contracts without offering to configure an instance", () => {
+  it("separates executable runtime connectors from planned shapes", () => {
     render(
       <ConnectorCatalogPanel
-        connectors={[vault]}
-        isLoading={false}
-        error={null}
-        onRetry={vi.fn()}
+        data={{
+          connectors: [vault, planned],
+          instances: [],
+          catalogLoading: false,
+          instancesLoading: false,
+          catalogError: null,
+          instancesError: null,
+        }}
+        actions={actions()}
       />,
     );
 
@@ -41,8 +91,72 @@ describe("governed connector catalogue", () => {
       screen.getByRole("heading", { name: "Vault secret storage" }),
     ).toBeInTheDocument();
     expect(screen.getByText("Executável")).toBeInTheDocument();
-    expect(screen.getByText("segredos por referência")).toBeInTheDocument();
-    expect(screen.getByText("política")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /conectar/i })).toBeNull();
+    expect(screen.getByText("Planejado")).toBeInTheDocument();
+    expect(screen.getAllByText("segredos por referência")).toHaveLength(2);
+    expect(screen.getAllByText("política")).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Configurar" })).toHaveLength(
+      1,
+    );
+  });
+
+  it("shows configured instances as executable endpoints", () => {
+    render(
+      <ConnectorCatalogPanel
+        data={{
+          connectors: [vault],
+          instances: [instance],
+          catalogLoading: false,
+          instancesLoading: false,
+          catalogError: null,
+          instancesError: null,
+        }}
+        actions={actions()}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "prod" })).toBeInTheDocument();
+    expect(screen.getByText("vault em acme/platform")).toBeInTheDocument();
+    expect(screen.getByText("selado")).toBeInTheDocument();
+    expect(screen.getByText("certificates")).toBeInTheDocument();
+  });
+
+  it("keeps the catalogue visible when configured instances fail to load", () => {
+    render(
+      <ConnectorCatalogPanel
+        data={{
+          connectors: [vault],
+          instances: [],
+          catalogLoading: false,
+          instancesLoading: false,
+          catalogError: null,
+          instancesError: new Error("instances failed"),
+        }}
+        actions={actions()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Vault secret storage" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+  });
+
+  it("keeps configured instances visible when the catalogue fails to load", () => {
+    render(
+      <ConnectorCatalogPanel
+        data={{
+          connectors: [],
+          instances: [instance],
+          catalogLoading: false,
+          instancesLoading: false,
+          catalogError: new Error("catalogue failed"),
+          instancesError: null,
+        }}
+        actions={actions()}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "prod" })).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toBeInTheDocument();
   });
 });

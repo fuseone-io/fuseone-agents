@@ -8,6 +8,11 @@ export type MCPOAuthGrant = components["schemas"]["MCPOAuthGrant"];
 export type ModelProvider = components["schemas"]["ModelProvider"];
 export type IntegrationHealth = components["schemas"]["IntegrationHealth"];
 export type GovernedConnector = components["schemas"]["GovernedConnector"];
+export type ConnectorInstance = components["schemas"]["ConnectorInstance"];
+export type ConnectorInstanceInput =
+  components["schemas"]["ConnectorInstanceInput"];
+export type ConnectorScopeKind = components["schemas"]["ConnectorScopeKind"];
+export type ConnectorVaultConfig = components["schemas"]["ConnectorVaultConfig"];
 
 export const integrationKeys = {
   all: ["integrations"] as const,
@@ -15,6 +20,8 @@ export const integrationKeys = {
   mcpCredentials: () => [...integrationKeys.all, "mcp-credentials"] as const,
   connectorCatalog: () =>
     [...integrationKeys.all, "connectors", "catalog"] as const,
+  connectorInstances: () =>
+    [...integrationKeys.all, "connectors", "instances"] as const,
 };
 
 export function useIntegrations() {
@@ -135,6 +142,54 @@ export function useConnectorCatalog(enabled = true) {
     queryFn: async () =>
       unwrap(await api.GET("/admin/integrations/connectors/catalog")),
     enabled,
+  });
+}
+
+export function useConnectorInstances(enabled = true) {
+  return useQuery({
+    queryKey: integrationKeys.connectorInstances(),
+    queryFn: async () =>
+      unwrap(await api.GET("/admin/integrations/connectors/instances")),
+    enabled,
+  });
+}
+
+export function usePutConnectorInstance() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      name: string;
+      body: ConnectorInstanceInput;
+    }) =>
+      unwrap(
+        await api.PUT("/admin/integrations/connectors/instances/{name}", {
+          params: { path: { name: input.name } },
+          body: input.body,
+        }),
+      ),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({ queryKey: integrationKeys.all }),
+  });
+}
+
+export function useDeleteConnectorInstance() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (instance: ConnectorInstance) =>
+      unwrap(
+        await api.DELETE("/admin/integrations/connectors/instances/{name}", {
+          params: {
+            path: { name: instance.name },
+            query: {
+              scopeKind: instance.scopeKind,
+              company: instance.company,
+              area: instance.area,
+            },
+          },
+        }),
+      ),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({ queryKey: integrationKeys.all }),
   });
 }
 

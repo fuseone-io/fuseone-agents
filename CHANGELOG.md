@@ -72,6 +72,17 @@ field" is a commit message.
   and disable an assertion with a reason. Lists page visibly instead of cutting
   silently.
 
+- **The manual now explains governed memory and duplicate effects.** Both
+  locales document what memory stores, how labels travel through a memory read,
+  how retention and erasure affect assertions, and why duplicate effect
+  recognition is different from cache or memory.
+
+- **The Connections page can prepare governed connector instances.** The page
+  now separates runnable Vault instances from connector shapes that are still
+  planned. A Vault instance can be scoped, pointed at an endpoint and mount,
+  limited to approved path prefixes, and given a sealed token. The token is
+  never returned to the browser; the API reports only whether one is stored.
+
 ### Fixed
 
 - **Pending dedupe waits no longer depend on scheduler timing in tests.** The
