@@ -27,6 +27,58 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.36.0] — 2026-08-26
+
+### Upgrade notes
+
+- **This release adds three migrations, none of them on `run_steps`.** 0059
+  creates the cross-run effect dedupe registry, 0060 creates the governed
+  memory tables, and 0061 makes the memory event log append-only. Unlike the
+  recent FinOps and runtime releases, these migrations do not build indexes on
+  the partitioned run-step ledger.
+
+- **Retention and erasure now reach governed memory.** Memory assertion events
+  and active assertions are swept by the normal retention job. When an erasure
+  removes run content that an assertion used as evidence, the assertion is
+  marked `source_erased` and stops being returned to agents. The row is kept
+  long enough to explain why the memory disappeared from reads.
+
+### Added
+
+- **Agents can skip repeating the same governed effect across runs.** Tool
+  classification can now declare a semantic dedupe key: stable argument paths
+  and a window. The platform prefixes that key with company, area, agent and
+  tool, so dedupe cannot cross tenants or agents and the operator cannot remove
+  those boundaries.
+
+  The Gate stays in the path and still records a decision. Lookup happens before
+  the Gate, reservation happens only after the Gate allows the call, success
+  confirms the effect, and failure releases the reservation. A duplicate is not
+  cache and not a policy block: it means the platform already recorded that
+  effect and did not send it again.
+
+- **Governed memory gives agents remembered assertions without remembered
+  prose.** A reviewed assertion is structured by kind, subject and signature,
+  points at ledger evidence, carries data labels, and can be shared at the
+  agent or area level.
+
+  Memory is not remembered text the model promises to treat carefully. It
+  carries origin and labels; reading it taints the run, and the Gate refuses the
+  next write without asking anyone. That makes the guard mechanical rather than
+  prompt-shaped.
+
+- **The console has a Memory page.** Operators with publish permission can add
+  reviewed assertions from ledger evidence, see active and retired assertions,
+  and disable an assertion with a reason. Lists page visibly instead of cutting
+  silently.
+
+### Fixed
+
+- **Pending dedupe waits no longer depend on scheduler timing in tests.** The
+  supervision test now keeps another run's reservation pending until the
+  deadline, instead of racing a one-millisecond timer against a one-millisecond
+  ticker.
+
 ## [0.35.0] — 2026-08-25
 
 ### Added
