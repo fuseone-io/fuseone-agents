@@ -123,10 +123,14 @@ that suggestion with the run labels and evidence, but <code dir="auto">memory.fi
 return it yet. A person with publish permission in the scope must accept or
 dismiss it from the Memory page.</p>
 <p>When memory learning is enabled, the platform also offers
-<code dir="auto">$fuseone.memory.find</code>. The agent should use it before suggesting memory for a
-case that may already be remembered. The suggestion path also checks active
-memory for the same kind, subject and signature, so a remembered fact does not
-keep creating review items just because the model proposes different wording.</p>
+<code dir="auto">$fuseone.memory.find</code>. At the start of a run with human input, FuseOne performs
+one recorded memory lookup before the first model call, using short terms from
+that input. The lookup is still a tool call: it crosses the Gate, appears in
+the trail, and any labels on returned memory travel into the run.</p>
+<p>The agent may call <code dir="auto">memory.find</code> again later with a narrower kind, subject or
+signature. The suggestion path also checks active memory for the same kind,
+subject and signature, so a remembered fact does not keep creating review items
+just because the model proposes different wording.</p>
 <p>Review-mode suggestions do not ask for a second approval before entering that
 queue. The review queue is the approval point. The suggestion still carries
 the run’s labels, and an authored policy, missing capability or data-barrier
@@ -169,8 +173,23 @@ record that justified it is gone. The event history remains append-only until
 retention removes it, so an auditor can still see why the assertion changed
 state.</p>
 <div class="sl-heading-wrapper level-h2"><h2 id="search-and-response-size">Search and response size</h2><a class="sl-anchor-link" href="#search-and-response-size"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Search and response size”</span></a></div>
-<p>Runtime memory search is indexed for substring matches across subject,
-signature and claim. Broad searches still return only a bounded result set.</p>
+<p>Runtime memory search splits free text into a small set of terms and ranks
+matches across subject, signature and claim. Strong identifiers such as
+<code dir="auto">not_in_channel</code> or <code dir="auto">superset.alert.delivery</code> carry more weight; ordinary words
+must still agree with enough of the assertion for it to be returned. A search
+like <code dir="auto">Slack not_in_channel</code> can match an assertion whose subject names Slack and
+whose claim names the error code. Broad searches still return only a bounded
+result set.</p>
+<p>The free-text search also has a term budget. Strong identifiers are kept first,
+then ordinary non-filler terms are added up to six distinct normalized terms.
+Common Portuguese and English filler words are ignored, but short identifiers
+such as <code dir="auto">s3</code>, <code dir="auto">db</code> or <code dir="auto">qa</code> are still searchable when they appear as their own
+term.
+When a runtime tool call includes more, the response names the terms used, how
+many terms were omitted and the reason
+<code dir="auto">search_term_budget</code>. That makes a bounded search different from “no memory
+exists”; the agent can retry with stronger identifiers such as an error code,
+system name or signature.</p>
 <p>The memory tool also has a response byte budget. When matching assertions do
 not fit, the response says how many were omitted by the budget. The assertions
 remain stored; the agent can call a narrower query by kind, subject or

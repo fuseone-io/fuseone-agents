@@ -109,10 +109,15 @@
 </tbody>
 </table>
 <p>Argumentos e resultados não ficam no passo — o passo guarda <strong>referência e digest</strong>, e o conteúdo vive onde retenção e apagamento alcançam. Por isso abrir um passo é um ato deliberado, e por isso um conteúdo apagado aparece como <em>apagado</em> e não como vazio.</p>
+<p>Quando aprendizado de memória está ligado, uma execução com entrada humana pode
+começar com uma chamada de plataforma a <code dir="auto">$fuseone.memory.find</code> antes do primeiro
+passo <strong>O modelo propôs</strong>. Isso não é uma proposta de modelo faltando. É a busca
+inicial de memória registrada como chamada normal de ferramenta, para que os
+labels de proveniência continuem viajando pela execução.</p>
 <div class="sl-heading-wrapper level-h2"><h2 id="por-que-ela-terminou">Por que ela terminou</h2><a class="sl-anchor-link" href="#por-que-ela-terminou"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Por que ela terminou”</span></a></div>
 <p>É a pergunta mais comum, e a trilha responde de formas diferentes:</p>
 <p><strong>Terminou normalmente</strong> — o agente respondeu. A resposta final fica no armazenamento de conteúdo, e a trilha diz isso.</p>
-<p><strong>O modelo não propôs outra ação</strong> — ele devolveu texto em vez de chamar uma ferramenta, e texto encerra. Se o texto dizia “vou prosseguir”, o agente pretendia continuar e não continuou: é caso de ajustar a instrução para chamar a ferramenta agora.</p>
+<p><strong>O modelo não propôs outra ação</strong> — ele devolveu texto em vez de chamar uma ferramenta ou a ação de finish, então a execução estacionou para inspeção. Se o texto dizia “vou prosseguir”, o agente pretendia continuar e não continuou: é caso de ajustar a instrução para chamar a ferramenta agora.</p>
 <p><strong>Parou esperando alguém</strong> — está na fila humana.</p>
 <p><strong>Bateu um teto</strong> — custo, passos, tokens ou chamadas. A recusa carrega o teto, o gasto e a estimativa da chamada que cruzou.</p>
 <p><strong>Falha do provedor</strong> — sobrecarga, limite de taxa, chave inválida. A causa aparece com o provedor e o código, e a tela <code dir="auto">Runtime</code> mostra se está acontecendo com todo mundo.</p>

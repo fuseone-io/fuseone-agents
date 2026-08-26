@@ -109,10 +109,15 @@
 </tbody>
 </table>
 <p>Arguments and results do not live in the step — the step holds a <strong>reference and a digest</strong>, and the content lives where retention and erasure reach it. That is why opening a step is a deliberate act, and why erased content shows as <em>erased</em> rather than as empty.</p>
+<p>When memory learning is enabled, a run with human input may begin with a
+platform-owned <code dir="auto">$fuseone.memory.find</code> call before the first <strong>The model
+proposed</strong> step. That is not a missing model proposal. It is the initial memory
+lookup being recorded as a normal tool call so provenance labels still travel
+through the run.</p>
 <div class="sl-heading-wrapper level-h2"><h2 id="why-it-ended">Why it ended</h2><a class="sl-anchor-link" href="#why-it-ended"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Why it ended”</span></a></div>
 <p>The most common question, and the trail answers it in different ways:</p>
 <p><strong>Finished normally</strong> — the agent answered. The closing answer is in the content store, and the trail says so.</p>
-<p><strong>The model did not propose another action</strong> — it returned text instead of calling a tool, and text ends a run. If the text said “I will continue”, the agent meant to carry on and did not: that is a case for adjusting the instruction to call the tool now.</p>
+<p><strong>The model did not propose another action</strong> — it returned text instead of calling a tool or the finish action, so the run parked for inspection. If the text said “I will continue”, the agent meant to carry on and did not: that is a case for adjusting the instruction to call the tool now.</p>
 <p><strong>Stopped waiting for somebody</strong> — it is in the human queue.</p>
 <p><strong>Hit a ceiling</strong> — cost, steps, tokens or calls. The refusal carries the ceiling, the spend against it, and the estimate for the call that crossed.</p>
 <p><strong>A provider failure</strong> — overloaded, rate limited, a rejected key. The cause appears with the provider and a code, and the <code dir="auto">Runtime</code> screen shows whether it is happening to everybody.</p>

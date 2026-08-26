@@ -125,9 +125,14 @@ registra a sugestão com os labels e a evidência da run, mas <code dir="auto">m
 não a devolve. Uma pessoa com permissão de publicação no escopo precisa aceitar
 ou descartar a sugestão pela página de Memória.</p>
 <p>Quando aprendizado de memória está ligado, a plataforma também oferece
-<code dir="auto">$fuseone.memory.find</code>. O agente deve usá-la antes de sugerir memória para um
-caso que talvez já esteja lembrado. O caminho de sugestão também consulta a
-memória ativa pelo mesmo tipo, assunto e assinatura, então um fato lembrado não
+<code dir="auto">$fuseone.memory.find</code>. No começo de uma execução com entrada humana, o FuseOne
+faz uma busca de memória registrada antes da primeira chamada ao modelo, usando
+termos curtos dessa entrada. A busca continua sendo uma chamada de ferramenta:
+passa pelo Gate, aparece na trilha, e quaisquer labels da memória retornada
+viajam para a execução.</p>
+<p>O agente pode chamar <code dir="auto">memory.find</code> de novo depois com tipo, assunto ou
+assinatura mais estreitos. O caminho de sugestão também consulta a memória
+ativa pelo mesmo tipo, assunto e assinatura, então um fato lembrado não
 continua criando itens de revisão só porque o modelo propôs outra redação.</p>
 <p>Sugestões em modo de revisão não pedem uma segunda aprovação antes de entrar
 nessa fila. A fila de revisão é o ponto de aprovação. A sugestão ainda carrega
@@ -171,9 +176,22 @@ o registro que a justificava se foi. O histórico de eventos continua append-onl
 até a retenção removê-lo, então um auditor ainda consegue ver por que a
 asserção mudou de estado.</p>
 <div class="sl-heading-wrapper level-h2"><h2 id="busca-e-tamanho-da-resposta">Busca e tamanho da resposta</h2><a class="sl-anchor-link" href="#busca-e-tamanho-da-resposta"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Busca e tamanho da resposta”</span></a></div>
-<p>A busca de memória em runtime é indexada para buscas por trecho em assunto,
-assinatura e afirmação. Buscas amplas ainda retornam apenas um conjunto
-limitado.</p>
+<p>A busca de memória em runtime divide o texto livre em um conjunto pequeno de
+termos e ranqueia correspondências entre assunto, assinatura e afirmação.
+Identificadores fortes como <code dir="auto">not_in_channel</code> ou <code dir="auto">superset.alert.delivery</code> pesam
+mais; palavras comuns ainda precisam concordar com a asserção o bastante para
+ela ser retornada. Uma busca como <code dir="auto">Slack not_in_channel</code> pode encontrar uma
+asserção cujo assunto nomeia Slack e cuja afirmação nomeia o código de erro.
+Buscas amplas ainda retornam apenas um conjunto limitado.</p>
+<p>A busca por texto livre também tem orçamento de termos. Identificadores fortes
+entram primeiro; depois entram termos comuns que não são ruído, até seis termos
+distintos normalizados. Palavras comuns em português e inglês são ignoradas,
+mas identificadores curtos como <code dir="auto">s3</code>, <code dir="auto">db</code> ou <code dir="auto">qa</code> continuam buscáveis quando
+aparecem como termo próprio. Quando uma chamada de runtime envia mais que isso, a
+resposta nomeia os termos usados, quantos termos foram omitidos e o motivo
+<code dir="auto">search_term_budget</code>. Assim uma busca limitada é diferente de “não existe
+memória”; o agente pode tentar de novo com identificadores mais fortes, como
+código de erro, nome de sistema ou assinatura.</p>
 <p>A ferramenta de memória também tem um orçamento de bytes para a resposta.
 Quando as asserções encontradas não cabem, a resposta diz quantas foram
 omitidas pelo orçamento. As asserções continuam armazenadas; o agente pode
