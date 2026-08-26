@@ -30,7 +30,7 @@ A good situation is the thing the agent will actually receive:
   "message": "@FuseOneAgent investigate alert #175979",
   "thread": [
     "alertNodeDownProdUS severity=critical",
-    "namespace=cora job=engineering-ai-agents instance=172.16.109.29:8080"
+    "namespace=payments job=engineering-ai-agents instance=172.16.109.29:8080"
   ]
 }
 ```

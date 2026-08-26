@@ -37,7 +37,7 @@ func TestLabels_scopeBoundaryBlocksSiblingAreasAndOtherCompanies(t *testing.T) {
 	labels := domain.ScopeLabels(domain.Scope{Company: "acme", Area: "platform"})
 	for _, target := range []domain.Scope{
 		{Company: "acme", Area: "finance"},
-		{Company: "cora", Area: "platform"},
+		{Company: "globex", Area: "platform"},
 		{},
 	} {
 		if _, blocked := labels.ScopeBoundaryViolation(target); !blocked {

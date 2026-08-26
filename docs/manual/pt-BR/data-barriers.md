@@ -26,7 +26,7 @@ Uma execução só pode carregar dados de escopos que ela alcança.
 | `area:acme/platform` | `acme/platform` | permitido |
 | `area:acme/platform` | `acme` | permitido |
 | `area:acme/platform` | `acme/finance` | bloqueado |
-| `area:acme/platform` | `cora/platform` | bloqueado |
+| `area:acme/platform` | `globex/platform` | bloqueado |
 
 É a mesma regra de containment usada nos grants: instalação alcança todas as
 empresas, uma empresa alcança suas áreas, e uma área nunca alcança a irmã.

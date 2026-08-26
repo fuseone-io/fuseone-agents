@@ -427,7 +427,7 @@ func TestInvoke_successfulReadCanBeServedFromTheResultCache(t *testing.T) {
 
 	firstCall := engine.Call{
 		RunID: "run-1", Seq: 7, Tool: "crm.lookup",
-		Scope: domain.Scope{Company: "cora", Area: "platform"},
+		Scope: domain.Scope{Company: "acme", Area: "platform"},
 		Args:  []byte(`{"email":"a@b.com"}`),
 	}
 	if err := c.Reserve(ctx, firstCall); err != nil {
@@ -441,7 +441,7 @@ func TestInvoke_successfulReadCanBeServedFromTheResultCache(t *testing.T) {
 
 	secondCall := engine.Call{
 		RunID: "run-2", Seq: 3, Tool: "crm.lookup",
-		Scope: domain.Scope{Company: "cora", Area: "platform"},
+		Scope: domain.Scope{Company: "acme", Area: "platform"},
 		Args:  []byte(`{"email":"a@b.com"}`),
 	}
 	if err := c.Reserve(ctx, secondCall); err != nil {
@@ -487,9 +487,9 @@ func TestInvoke_resultCacheIsSeparatedByPrincipalAndScope(t *testing.T) {
 	}
 
 	calls := []engine.Call{
-		{RunID: "run-1", Seq: 1, Tool: "crm.lookup", Scope: domain.Scope{Company: "cora", Area: "platform"}, OnBehalfOf: "ana", Args: []byte(`{}`)},
-		{RunID: "run-2", Seq: 1, Tool: "crm.lookup", Scope: domain.Scope{Company: "cora", Area: "platform"}, OnBehalfOf: "bruno", Args: []byte(`{}`)},
-		{RunID: "run-3", Seq: 1, Tool: "crm.lookup", Scope: domain.Scope{Company: "cora", Area: "finance"}, OnBehalfOf: "ana", Args: []byte(`{}`)},
+		{RunID: "run-1", Seq: 1, Tool: "crm.lookup", Scope: domain.Scope{Company: "acme", Area: "platform"}, OnBehalfOf: "ana", Args: []byte(`{}`)},
+		{RunID: "run-2", Seq: 1, Tool: "crm.lookup", Scope: domain.Scope{Company: "acme", Area: "platform"}, OnBehalfOf: "bruno", Args: []byte(`{}`)},
+		{RunID: "run-3", Seq: 1, Tool: "crm.lookup", Scope: domain.Scope{Company: "acme", Area: "finance"}, OnBehalfOf: "ana", Args: []byte(`{}`)},
 	}
 	for _, call := range calls {
 		if res, err := c.Invoke(ctx, call); err != nil || res.Cached {

@@ -143,7 +143,7 @@ describe("the guided first-agent path", () => {
   it("checks that a channel trigger has a conversation in the same scope", () => {
     const draft = publishableDraft({
       triggers: [{ type: "channel" }],
-      company: "cora",
+      company: "acme",
       area: "platform",
     });
     const wrongScope = channel({
@@ -163,7 +163,7 @@ describe("the guided first-agent path", () => {
       agentId: "sre",
       channels: [
         channel({
-          scope: { company: "cora", area: "platform" },
+          scope: { company: "acme", area: "platform" },
           mode: "mentions",
         }),
       ],
@@ -221,14 +221,14 @@ function channel(
   conversation: Partial<components["schemas"]["ChannelConversation"]>,
 ): components["schemas"]["Channel"] {
   return {
-    name: "cora-slack",
+    name: "acme-slack",
     kind: "slack",
     enabled: true,
     hasCredential: true,
     conversations: [
       {
         id: "C01",
-        scope: { company: "cora", area: "platform" },
+        scope: { company: "acme", area: "platform" },
         enabled: true,
         ...conversation,
       },

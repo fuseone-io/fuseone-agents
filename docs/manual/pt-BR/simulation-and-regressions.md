@@ -30,7 +30,7 @@ Uma boa situação é o que o agente vai receber de verdade:
   "message": "@FuseOneAgent investigue o alerta #175979",
   "thread": [
     "alertNodeDownProdUS severity=critical",
-    "namespace=cora job=engineering-ai-agents instance=172.16.109.29:8080"
+    "namespace=payments job=engineering-ai-agents instance=172.16.109.29:8080"
   ]
 }
 ```

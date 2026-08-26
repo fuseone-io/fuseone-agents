@@ -25,7 +25,7 @@ A run may carry data only from scopes it reaches.
 | `area:acme/platform` | `acme/platform` | allowed |
 | `area:acme/platform` | `acme` | allowed |
 | `area:acme/platform` | `acme/finance` | blocked |
-| `area:acme/platform` | `cora/platform` | blocked |
+| `area:acme/platform` | `globex/platform` | blocked |
 
 This is the same containment rule used for grants: installation reaches every
 company, a company reaches its areas, and an area never reaches a sibling.
