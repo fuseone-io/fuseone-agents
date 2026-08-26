@@ -914,15 +914,15 @@ func TestAdvance_pendingSemanticDedupeTimeoutIsRetryableSupervisionState(t *test
 	t.Parallel()
 	ctx := context.Background()
 
+	pending := effectdedupe.Record{State: effectdedupe.StatePending, RunID: "run-old"}
 	h := newHarness(t, Proposal{Tool: "crm.lookup", Args: []byte(`{"id":"42"}`)})
 	dedupeStore := &fakeDedupeStore{
-		lookupFound: []bool{false},
-		reserveRecords: []effectdedupe.Record{{
-			State: effectdedupe.StatePending, RunID: "run-old",
-		}},
+		lookupFound:    slices.Repeat([]bool{true}, 64),
+		lookupRecords:  slices.Repeat([]effectdedupe.Record{pending}, 64),
+		reserveRecords: []effectdedupe.Record{pending},
 	}
 	enableDedupe(h, dedupeStore)
-	h.runner.deps.DedupePendingWait = time.Millisecond
+	h.runner.deps.DedupePendingWait = 20 * time.Millisecond
 	h.runner.deps.DedupePendingPoll = time.Millisecond
 
 	_, err := h.runner.Advance(ctx, h.start(t, generousBudget()))
