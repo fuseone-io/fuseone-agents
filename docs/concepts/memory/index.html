@@ -84,10 +84,16 @@ write with them.</p>
 <p>That is enforcement, not a prompt instruction.</p>
 <div class="sl-heading-wrapper level-h2"><h2 id="agent-proposed-memory">Agent-proposed memory</h2><a class="sl-anchor-link" href="#agent-proposed-memory"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Agent-proposed memory”</span></a></div>
 <p>Agents can suggest memory only when the published version opts in. In review
-mode, a person accepts or dismisses the suggestion. In auto-confirm mode, the
-same assertion must appear across the configured number of distinct runs before
-it becomes active.</p>
+mode, the suggestion enters the review queue without an extra runtime approval;
+a person accepts or dismisses it before it becomes active. In auto-confirm
+mode, the same assertion must appear across the configured number of distinct
+runs before it becomes active, so tainted suggestions can still require Gate
+approval before they count.</p>
 <p>The model does not send confidence. Counts are derived by the platform.</p>
+<p>Active memory is corrected through the governed record path, not edited in
+place. A correction rewrites the claim, keeps the same signature and evidence,
+and records a new event with the person’s reason. If the signature is wrong,
+disable the assertion and record a new one.</p>
 <div class="sl-heading-wrapper level-h2"><h2 id="search-and-budget">Search and budget</h2><a class="sl-anchor-link" href="#search-and-budget"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Search and budget”</span></a></div>
 <p>Memory search is indexed for broad substring matching, but responses are still
 bounded. If matching assertions do not fit the response budget, the tool says
