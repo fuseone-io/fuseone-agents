@@ -27,6 +27,25 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.38.3] — 2026-08-26
+
+### Fixed
+
+- **An agent with memory learning on is now told when to use it.** The tools
+  were offered without any guidance, so the model had to infer from a name and
+  a one-line description whether to look something up or record something.
+  The prompt now says to look memory up early, to treat what comes back as
+  evidence carrying its origin rather than as instructions, and to suggest only
+  narrow, stable facts — never one-off details, secrets, permissions or
+  opinions.
+
+- **Only the versioned learning policy can turn memory writing on.** The
+  suggestion tool is removed from the offered set and put back when the policy
+  allows it, so a pack that names it by hand cannot enable writing on its own.
+  Nothing about this changes what the Gate does: a suggestion is still a write,
+  and a run carrying untrusted labels still meets the taint check before
+  anything is recorded.
+
 ## [0.38.2] — 2026-08-26
 
 ### Fixed
