@@ -27,6 +27,28 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.38.1] — 2026-08-26
+
+### Added
+
+- **The GitHub Pages documentation site now carries the full product
+  documentation.** The online site renders the manual, design notes and Helm
+  chart reference with the FuseOne docs branding, so operators do not have to
+  browse raw Markdown files to understand the platform.
+
+### Fixed
+
+- **Memory learning no longer sends a double-wrapped tool schema to model
+  providers.** Agents with memory learning set to review or auto-confirm mode
+  offer `$fuseone.memory.suggest` as provider properties, not as a complete
+  JSON Schema nested inside another provider envelope. Anthropic no longer
+  rejects those runs with a 400 before the agent can act.
+
+- **Native tool schemas now have a provider-envelope contract.** The tests
+  reject top-level `type`, `properties`, `required` and
+  `additionalProperties` on FuseOne-owned native schemas while still allowing
+  nested object schemas to use those keywords.
+
 ## [0.38.0] — 2026-08-26
 
 ### Upgrade notes
