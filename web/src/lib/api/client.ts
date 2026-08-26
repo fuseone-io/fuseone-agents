@@ -81,6 +81,10 @@ export type Simulation = components["schemas"]["Simulation"];
 export type AgentDefinition = components["schemas"]["AgentDefinition"];
 export type AgentDetail = components["schemas"]["AgentDetail"];
 export type ModelProvider = components["schemas"]["ModelProvider"];
+export type MemoryAssertion = components["schemas"]["MemoryAssertion"];
+export type MemoryAssertionInput = components["schemas"]["MemoryAssertionInput"];
+export type MemoryEvidence = components["schemas"]["MemoryEvidence"];
+export type MemoryStatus = components["schemas"]["MemoryStatus"];
 export type Problem = components["schemas"]["Problem"];
 
 /**

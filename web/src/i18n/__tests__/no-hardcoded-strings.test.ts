@@ -73,6 +73,7 @@ const SAMPLES = new Set([
   "https://api.openai.com/v1",
   "/usr/local/bin/crm-mcp",
   "--config /etc/crm.yaml",
+  "final_answer",
 ]);
 
 /**

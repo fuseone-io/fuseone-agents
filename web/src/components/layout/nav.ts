@@ -2,6 +2,7 @@ import {
   BookOpen,
   Activity,
   Bot,
+  Brain,
   Hand,
   LayoutDashboard,
   Plug,
@@ -96,6 +97,12 @@ export const NAV: NavGroup[] = [
         icon: ScrollText,
         permission: "audit:read",
       },
+      {
+        to: "/memory",
+        label: "nav.memory",
+        icon: Brain,
+        permission: "agent:read",
+      },
       { to: "/cost", label: "nav.cost", icon: Wallet, permission: "cost:read" },
       {
         to: "/integrations",
@@ -147,6 +154,7 @@ export function navItemVisible(
  */
 export const PAGE_ICONS: Record<string, LucideIcon> = {
   manual: BookOpen,
+  memory: Brain,
   overview: LayoutDashboard,
   agents: Bot,
   runs: Activity,
@@ -164,6 +172,7 @@ export const PAGE_ICONS: Record<string, LucideIcon> = {
 export const PAGE_TITLES: Record<string, string> = {
   overview: "nav.overview",
   manual: "nav.manual",
+  memory: "nav.memory",
   agents: "nav.agents",
   runs: "nav.runs",
   runtime: "nav.runtime",
