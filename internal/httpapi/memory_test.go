@@ -546,6 +546,112 @@ func TestCreateMemoryAssertion_acknowledgingDoesNotClearACertainSecret(t *testin
 	}
 }
 
+/*
+The match answers the three states apart, and refuses a question nobody asked.
+
+Own, shared and pending mean different things to whoever is composing: theirs to
+correct, everybody's to improve deliberately, and a proposal already waiting.
+Collapsing them would put a correction of shared memory behind a button that
+says "correct this".
+
+The namespace is asked for here rather than derived, because nothing has been
+composed yet and there is no evidence to read an agent from — so the two fields
+have to agree between themselves.
+*/
+func TestMatchMemory_answersEachStateApart(t *testing.T) {
+	t.Parallel()
+	store := memstore.NewMemory()
+	remember(t, store, memoryAssertionFixture("cx", "grafana datasource",
+		func(a *domain.MemoryAssertion) { a.AgentID = "" }))
+
+	resp := matchAgainst(t, store, nil)
+	found, ok := resp.(openapi.MatchMemory200JSONResponse)
+	if !ok {
+		t.Fatalf("response = %T, want the match", resp)
+	}
+	if found.Own != nil {
+		t.Errorf("own = %+v, want nothing in the agent's own namespace", found.Own)
+	}
+	if found.Shared == nil {
+		t.Fatal("shared = nil, want the memory every agent reads")
+	}
+	if found.Shared.Subject != "grafana datasource" {
+		t.Errorf("shared = %+v, want the memory already holding this identity", found.Shared)
+	}
+}
+
+func TestMatchMemory_refusesANamespaceThatContradictsItself(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct {
+		name string
+		edit func(*openapi.MemoryMatchInput)
+	}{
+		{"no namespace", func(in *openapi.MemoryMatchInput) { in.Namespace = "" }},
+		{"shared naming an agent", func(in *openapi.MemoryMatchInput) {
+			in.Namespace = openapi.MemoryMatchInputNamespaceShared
+			in.AgentId = ptr("triage")
+		}},
+		{"agent naming none", func(in *openapi.MemoryMatchInput) {
+			in.Namespace = openapi.MemoryMatchInputNamespaceAgent
+			in.AgentId = nil
+		}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			resp := matchAgainst(t, memstore.NewMemory(), c.edit)
+			if _, bad := resp.(openapi.MatchMemory400ApplicationProblemPlusJSONResponse); !bad {
+				t.Fatalf("response = %T, want the contradiction refused", resp)
+			}
+		})
+	}
+}
+
+// Reading what is already here needs no more than reading the list it is in.
+// Asking for publish would refuse the question to somebody who can read the
+// answer another way — an auditor, for one, who can already list every memory
+// in the scope.
+func TestMatchMemory_needsOnlyReadPermission(t *testing.T) {
+	t.Parallel()
+	resp, err := NewServer(ledger.NewMemory(), "test").WithMemory(memstore.NewMemory()).
+		WithClock(fixedAt{t: time.Unix(0, 0)}).
+		MatchMemory(inArea("cx", domain.RoleAuditor), openapi.MatchMemoryRequestObject{
+			Body: matchBody(nil),
+		})
+	if err != nil {
+		t.Fatalf("MatchMemory: %v", err)
+	}
+	if _, ok := resp.(openapi.MatchMemory200JSONResponse); !ok {
+		t.Fatalf("response = %T, want a reader answered", resp)
+	}
+}
+
+func matchAgainst(
+	t *testing.T, store Memory, edit func(*openapi.MemoryMatchInput),
+) openapi.MatchMemoryResponseObject {
+	t.Helper()
+	resp, err := NewServer(ledger.NewMemory(), "test").WithMemory(store).
+		WithClock(fixedAt{t: time.Unix(0, 0)}).
+		MatchMemory(inArea("cx", domain.RoleAuthor),
+			openapi.MatchMemoryRequestObject{Body: matchBody(edit)})
+	if err != nil {
+		t.Fatalf("MatchMemory: %v", err)
+	}
+	return resp
+}
+
+func matchBody(edit func(*openapi.MemoryMatchInput)) *openapi.MemoryMatchInput {
+	in := openapi.MemoryMatchInput{
+		Company: "acme", Area: "cx",
+		Namespace: openapi.MemoryMatchInputNamespaceAgent, AgentId: ptr("triage"),
+		Kind: "incident", Subject: "Grafana  Datasource",
+		Signature: "grafana datasource.signature",
+	}
+	if edit != nil {
+		edit(&in)
+	}
+	return &in
+}
+
 func createAgainst(
 	t *testing.T, store Memory, edit func(*openapi.MemoryAssertionInput),
 ) openapi.CreateMemoryAssertionResponseObject {
@@ -599,6 +705,12 @@ func (unavailableMemory) Disable(
 	context.Context, string, domain.Scope, domain.UserID, string, time.Time,
 ) error {
 	return errMemoryUnreachable
+}
+
+func (unavailableMemory) Match(
+	context.Context, memstore.MatchInput,
+) (memstore.Match, error) {
+	return memstore.Match{}, errMemoryUnreachable
 }
 
 func (unavailableMemory) ListSuggestions(

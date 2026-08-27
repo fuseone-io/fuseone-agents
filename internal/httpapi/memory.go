@@ -26,6 +26,7 @@ type Memory interface {
 		now time.Time) (domain.MemoryAssertion, error)
 	Disable(ctx context.Context, id string, scope domain.Scope, by domain.UserID,
 		reason string, now time.Time) error
+	Match(ctx context.Context, in memstore.MatchInput) (memstore.Match, error)
 	ListSuggestions(ctx context.Context, f memstore.SuggestionFilter) ([]domain.MemorySuggestion, error)
 	AcceptSuggestion(ctx context.Context, id string, scope domain.Scope, by domain.UserID,
 		reason string, now time.Time) (domain.MemoryAssertion, error)

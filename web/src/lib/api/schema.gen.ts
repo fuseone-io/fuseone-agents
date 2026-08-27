@@ -2282,6 +2282,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/memory/match": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * What the platform already holds for an identity
+         * @description Asked while somebody is composing a memory, so they can see what they are about to duplicate. Keyed on the canonical identity, so a fact taught as "Grafana Datasource" answers somebody typing "grafana  datasource".
+         *     Every state, including the ones recall will not return: an expired memory is why the fact looks unknown, and a disabled one says somebody decided against it. Shared memory is answered apart from the agent's own, because improving it is an act taken against the shared row.
+         *     POST rather than GET: the subject and signature are what somebody typed into a memory, and a query string puts them in browser history, proxy logs and access logs. Nothing here writes, and it is not on the path a run takes to recall memory.
+         */
+        post: operations["matchMemory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/memory/assertions/{assertionId}/reactivate": {
         parameters: {
             query?: never;
@@ -2629,6 +2651,29 @@ export interface components {
             reason: string;
             /** @description Record this even though it looks like it may contain a credential. An override, not a receipt: the server does not and cannot know that a person was shown `fuseone:memory-secret-warned` first, so this is simply somebody with publish permission taking responsibility. The assertion is labelled `secret` when it is used, which is what makes the decision visible afterwards in the row and in the audit event. Content that certainly is a key is refused whatever this says. */
             overrideSecretWarning?: boolean;
+        };
+        MemoryMatchInput: {
+            company: string;
+            area: string;
+            /**
+             * @description The namespace being taught, which decides what covers it.
+             * @enum {string}
+             */
+            namespace: "agent" | "shared";
+            /** @description Whose namespace, when `namespace` is `agent`. Unlike creation, this is asked for rather than derived: there is no evidence yet to read an agent from, because nothing has been composed. */
+            agentId?: string;
+            kind: string;
+            subject: string;
+            signature: string;
+        };
+        /** @description What is already here. Every field may be absent, and all three absent means the fact is new. */
+        MemoryMatch: {
+            /** @description The memory in the namespace being taught. */
+            own?: components["schemas"]["MemoryAssertion"] | null;
+            /** @description The memory every agent in the scope reads, when an agent-scoped question is covered by one. Never set for a shared question. */
+            shared?: components["schemas"]["MemoryAssertion"] | null;
+            /** @description The proposal nobody has decided yet. */
+            pending?: components["schemas"]["MemorySuggestion"] | null;
         };
         MemoryDisableInput: {
             company: string;
@@ -8156,6 +8201,47 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    matchMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemoryMatchInput"];
+            };
+        };
+        responses: {
+            /** @description What is already here for this identity. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryMatch"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /**
+             * @description More than one row is this identity. Duplicates written before the
+             *     canonical key existed cannot be told apart by a machine, and showing
+             *     whichever sorted first would present half the problem as the whole
+             *     of it.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     reactivateMemoryAssertion: {
