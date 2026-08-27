@@ -238,6 +238,13 @@ func (p *Postgres) hydrateSuggestion(
 		if err := updateSuggestion(ctx, tx, current); err != nil {
 			return false, err
 		}
+		// Repairing a proposal writes no event; ending one does. Without it the
+		// proposal simply stopped being in the queue — no refusal, no
+		// acceptance, nothing saying where it went — while the administrative
+		// erasure recorded exactly this transition for exactly these rows.
+		if err := recordSuggestionEnded(ctx, tx, current); err != nil {
+			return false, err
+		}
 		if err := tx.Commit(ctx); err != nil {
 			return false, fmt.Errorf("memory: commit suggestion source erased: %w", err)
 		}

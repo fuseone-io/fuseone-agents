@@ -463,6 +463,33 @@ func disableAssertion(ctx context.Context, tx db, id string, by domain.UserID, n
 	return nil
 }
 
+/*
+recordSuggestionEnded writes the terminal event of a proposal.
+
+Its own function because the detail is the suggestion and not an assertion. The
+other suggestion events describe the assertion the proposal would become, which
+is the right shape while it might still become one — but a proposal the platform
+ended never will, and an assertion-shaped detail would say active about
+something terminal.
+
+The same shape the administrative erasure writes for the same act, so the two
+routes into this state leave the trail one story rather than two.
+*/
+func recordSuggestionEnded(ctx context.Context, tx db, s domain.MemorySuggestion) error {
+	detail, _ := json.Marshal(s)
+	_, err := tx.Exec(ctx, `
+		insert into memory_assertion_events
+			(assertion_id, action, company_id, area_id, agent_id, principal_id, reason, detail, at)
+		values ($1,'source_erased',$2,$3,$4,$5,$6,$7,$8)`,
+		s.AssertionID, string(s.Scope.Company), string(s.Scope.Area), string(s.AgentID),
+		string(systemMemory), "the source the evidence names is no longer there",
+		detail, s.UpdatedAt)
+	if err != nil {
+		return fmt.Errorf("memory: record suggestion source_erased: %w", err)
+	}
+	return nil
+}
+
 func recordEvent(ctx context.Context, tx db, a domain.MemoryAssertion, by domain.UserID, reason, action string) error {
 	detail, _ := json.Marshal(a)
 	_, err := tx.Exec(ctx, `

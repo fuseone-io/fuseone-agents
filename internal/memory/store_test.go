@@ -2640,6 +2640,121 @@ func TestPostgresHydrateSuggestions_recordNoEvent(t *testing.T) {
 }
 
 /*
+A proposal the platform ends leaves the trail an explanation.
+
+The repair of a proposal writes no event, and that is right: filling a field the
+platform can now derive is not something anybody decided. Ending one is. Without
+this the proposal simply stopped being in the queue — no refusal, no acceptance,
+nothing in the ledger saying where it went — while the administrative erasure
+recorded exactly this transition for exactly these rows.
+
+The detail is the suggestion itself, which is the shape the erasure writes for
+the same act. An assertion-shaped detail would describe a row that was never
+created and would say active about something terminal.
+*/
+func TestPostgresHydrateSuggestions_sourceGone_recordsTheEndingInTheTrail(t *testing.T) {
+	ctx, pool := postgresPool(t)
+	store := memory.NewPostgres(pool)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	run, seed := legacySuggestion(t)
+	out, err := store.Suggest(ctx, seed, reviewPolicy, "agent:triage",
+		now.Add(-180*24*time.Hour))
+	if err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+	if _, err := run.content.Erase(ctx, string(run.id), "the subject asked"); err != nil {
+		t.Fatalf("Erase: %v", err)
+	}
+
+	if _, err := store.HydrateSuggestions(ctx, run.resolver(),
+		memory.HydratePage{Limit: 10, Now: now}); err != nil {
+		t.Fatalf("HydrateSuggestions: %v", err)
+	}
+
+	if got := memorySuggestionStatusOf(t, ctx, store, out.Suggestion.ID, now); got !=
+		domain.MemorySuggestionSourceErased {
+		t.Fatalf("status = %s, want the proposal ended", got)
+	}
+
+	var at time.Time
+	var principal string
+	var detail []byte
+	if err := pool.QueryRow(ctx, `
+		select at, principal_id, detail from memory_assertion_events
+		where assertion_id = $1 and action = 'source_erased'`,
+		out.Suggestion.AssertionID).Scan(&at, &principal, &detail); err != nil {
+		t.Fatalf("read the event: %v", err)
+	}
+	if !at.UTC().Equal(now) {
+		t.Errorf("event at %s, want the moment the sweep discovered it", at.UTC())
+	}
+	if principal != "system:memory" {
+		t.Errorf("principal = %s, want the platform: nobody decided this", principal)
+	}
+	if !strings.Contains(string(detail), out.Suggestion.ID) {
+		t.Errorf("detail = %s, want the suggestion that was ended", detail)
+	}
+}
+
+// The ending and the row move together, or neither does. A queue that empties
+// while the ledger says nothing is the defect this event exists to close, and a
+// projection that commits without it would reopen it on the first failure.
+func TestPostgresHydrateSuggestions_endingFailsToRecord_leavesTheProposal(t *testing.T) {
+	ctx, pool := postgresPool(t)
+	store := memory.NewPostgres(pool)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	run, seed := legacySuggestion(t)
+	out, err := store.Suggest(ctx, seed, reviewPolicy, "agent:triage", now)
+	if err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+	if _, err := run.content.Erase(ctx, string(run.id), "the subject asked"); err != nil {
+		t.Fatalf("Erase: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		create or replace function refuse_memory_event() returns trigger as $$
+		begin raise exception 'refused for the test'; end; $$ language plpgsql;
+		create trigger refuse_memory_event before insert on memory_assertion_events
+		for each row execute function refuse_memory_event();`); err != nil {
+		t.Fatalf("install trigger: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = pool.Exec(context.Background(),
+			`drop trigger if exists refuse_memory_event on memory_assertion_events`)
+	})
+
+	if _, err := store.HydrateSuggestions(ctx, run.resolver(),
+		memory.HydratePage{Limit: 10, Now: now}); err == nil {
+		t.Fatal("the sweep ended a proposal while the event was being refused")
+	}
+	if got := memorySuggestionStatusOf(t, ctx, store, out.Suggestion.ID, now); got !=
+		domain.MemorySuggestionPending {
+		t.Errorf("status = %s, want the proposal left in the queue", got)
+	}
+}
+
+func memorySuggestionStatusOf(
+	t *testing.T, ctx context.Context, store *memory.Postgres, id string, now time.Time,
+) domain.MemorySuggestionStatus {
+	t.Helper()
+	found, err := store.ListSuggestions(ctx, memory.SuggestionFilter{
+		Scopes: []domain.Scope{{Company: "acme", Area: "ops"}}, Limit: 50, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("ListSuggestions: %v", err)
+	}
+	for _, s := range found {
+		if s.ID == id {
+			return s.Status
+		}
+	}
+	t.Fatalf("suggestion %s is not in the store any more", id)
+	return ""
+}
+
+/*
 A repair of a proposal gives way to the observation that overtook it.
 
 Same shape as the assertion case and the same stake: the ledger is read outside

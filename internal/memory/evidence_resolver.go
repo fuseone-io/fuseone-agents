@@ -42,7 +42,7 @@ memory on that would record a retention event for a mistake.
 Distinct from infrastructure because the store answered. It said the source is
 not there, which is a fact, not a failure to reach it.
 */
-var ErrEvidenceSourceAbsent = errors.New("memory: the run the evidence names is gone")
+var ErrEvidenceSourceAbsent = errors.New("memory: the source the evidence names is gone")
 
 /*
 EvidenceLedger and EvidenceContent are what proving a citation needs, declared
