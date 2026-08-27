@@ -38,6 +38,14 @@ const SKIP = [
   the correct answer.
   */
   "agents/instruction-blocks",
+  /*
+  Linguistic tokens, not interface copy.
+
+  The drift detector compares words in authored instructions. Its stopwords
+  must stay readable as words, otherwise the test would force them into string
+  tricks that are harder to review than the vocabulary itself.
+  */
+  "agents/steps-drift",
 ];
 
 const PROPS =

@@ -77,12 +77,10 @@ export function contradictions(
       }
     }
 
-    const stopsWhen = (step.stopsWhen ?? "").toLowerCase();
-    for (const term of forbidden.words) {
-      if (hasWord(stopsWhen, term)) {
-        out.push({ at, why: "forbiddenStop", term });
-        break;
-      }
+    const stopsWhen = canonicalText(step.stopsWhen ?? "");
+    const stopTerm = forbiddenStopTerm(stopsWhen, forbidden);
+    if (stopTerm) {
+      out.push({ at, why: "forbiddenStop", term: stopTerm });
     }
   });
 
@@ -90,13 +88,17 @@ export function contradictions(
 }
 
 function forbiddenTerms(instructions: string, catalogue: Tool[]) {
-  const words = new Set<string>();
+  const words = new Map<string, string>();
+  const counts = new Map<string, number>();
   const tools = new Set<string>();
   const never = parse(instructions).filter((block) => block.kind === "never");
 
   for (const block of never) {
-    const text = block.text.toLowerCase();
-    for (const word of wordsOf(text)) words.add(word);
+    const text = canonicalText(block.text);
+    for (const word of wordsOf(text)) {
+      words.set(word, word);
+      counts.set(word, (counts.get(word) ?? 0) + 1);
+    }
 
     for (const tool of catalogue) {
       const short = shortName(tool.toolId);
@@ -110,7 +112,13 @@ function forbiddenTerms(instructions: string, catalogue: Tool[]) {
     }
   }
 
-  return { words, tools };
+  return {
+    words,
+    repeatedWords: new Set(
+      [...counts].filter(([, count]) => count > 1).map(([word]) => word),
+    ),
+    tools,
+  };
 }
 
 function wordsOf(text: string): string[] {
@@ -120,6 +128,30 @@ function wordsOf(text: string): string[] {
     if (!STOP_WORDS.has(word)) out.push(word);
   }
   return out;
+}
+
+function forbiddenStopTerm(
+  stopsWhen: string,
+  forbidden: ReturnType<typeof forbiddenTerms>,
+): string | undefined {
+  if (missingInformationStop(stopsWhen)) return undefined;
+  const matched = [...forbidden.words.keys()].filter((term) =>
+    hasWord(stopsWhen, term),
+  );
+  if (matched.length === 0) return undefined;
+  return (
+    matched.find((term) => strongStopTerm(term, forbidden.repeatedWords)) ??
+    (matched.length >= 2 ? matched[0] : undefined)
+  );
+}
+
+function strongStopTerm(term: string, repeated: Set<string>): boolean {
+  return repeated.has(term) || term.length >= 8 || /[_-]|\d/.test(term);
+}
+
+function missingInformationStop(text: string): boolean {
+  if (!MISSING_INFORMATION.test(text)) return false;
+  return !EXTERNAL_ACTION.test(text);
 }
 
 function hasWord(text: string, word: string): boolean {
@@ -138,9 +170,25 @@ function escape(word: string): string {
   return word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function canonicalText(text: string): string {
+  return text
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase();
+}
+
+const EXTERNAL_ACTION =
+  /\b(call|chamar|consultar|create|criar|delete|deletar|enviar|export|exportar|fetch|ler|list|listar|query|read|update|usar|use|write)\b/u;
+
+// `text` is already canonicalized before this runs, so accented Portuguese
+// forms are intentionally listed without marks.
+const MISSING_INFORMATION =
+  /\b(cannot be found|faltam?|faltar|faltando|falta|incomplete|insufficient|lack|missing|nao houver|not found|sem (acesso|dados|informacao|informacoes|permissao|permissoes))\b/u;
+
 const STOP_WORDS = new Set([
   "about",
   "analisar",
+  "antes",
   "avoid",
   "campo",
   "campos",
@@ -149,19 +197,29 @@ const STOP_WORDS = new Set([
   "could",
   "deve",
   "deveria",
+  "enviar",
   "essa",
+  "este",
+  "executar",
+  "exportar",
+  "faca",
   "fazer",
   "ferramenta",
   "ferramentas",
+  "houver",
   "ignore",
   "muito",
   "never",
   "nunca",
   "parte",
+  "para",
   "prosseguir",
   "query",
   "queries",
   "read",
+  "responda",
+  "suficiente",
+  "suficientes",
   "tente",
   "that",
   "this",
@@ -173,10 +231,3 @@ const STOP_WORDS = new Set([
   "verify",
   "with",
 ]);
-
-for (const word of [
-  ["est", "e"],
-  ["par", "a"],
-]) {
-  STOP_WORDS.add(word.join(""));
-}

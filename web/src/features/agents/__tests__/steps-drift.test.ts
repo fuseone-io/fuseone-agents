@@ -78,6 +78,70 @@ describe("what Never forbids and the stages still carry", () => {
     ).toEqual([]);
   });
 
+  it("does not treat a generic condition word as a forbidden stop subject", () => {
+    expect(
+      contradictions(
+        [
+          {
+            name: "Identificar",
+            stopsWhen:
+              "Se não houver aplicação, namespace ou horário suficiente, responda pedindo os dados.",
+          },
+        ],
+        [
+          "Nunca",
+          "Nunca responda diagnóstico antes de executar consultas necessárias quando houver dados suficientes.",
+        ].join("\n"),
+        [],
+      ),
+    ).toEqual([]);
+  });
+
+  it("does not treat missing information as doing the forbidden thing", () => {
+    expect(
+      contradictions(
+        [
+          {
+            name: "Pedir contexto",
+            stopsWhen: "Quando faltar dados do cliente, pare e peça contexto.",
+          },
+        ],
+        "Nunca\nNunca envie dados do cliente para fora.",
+        [],
+      ),
+    ).toEqual([]);
+  });
+
+  it("does not let a broad preposition hide a specific forbidden stop subject", () => {
+    expect(
+      contradictions(
+        [
+          {
+            name: "Revisar decisão",
+            stopsWhen: "Quando o reembolso for aprovado sem revisão, siga.",
+          },
+        ],
+        "Nunca\nNunca faça reembolso automático.",
+        [],
+      ),
+    ).toEqual([{ at: 0, why: "forbiddenStop", term: "reembolso" }]);
+  });
+
+  it("still names a specific forbidden subject the stage stops on", () => {
+    expect(
+      contradictions(
+        [
+          {
+            name: "Revisar decisão",
+            stopsWhen: "Quando o reembolso for aprovado, siga o fluxo.",
+          },
+        ],
+        "Nunca\nNunca faça reembolso automático.",
+        [],
+      ),
+    ).toEqual([{ at: 0, why: "forbiddenStop", term: "reembolso" }]);
+  });
+
   it("names a tool the stage can still reach after Never names it", () => {
     const catalogue: Tool[] = [
       {
