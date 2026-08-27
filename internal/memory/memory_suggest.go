@@ -69,7 +69,7 @@ func (m *Memory) alreadyActiveSuggestion(
 func (m *Memory) autoConfirmSuggestion(
 	s domain.MemorySuggestion, now time.Time,
 ) (domain.MemorySuggestionOutcome, error) {
-	assertion := assertionFromSuggestion(s, s.Observations, domain.UserID("system:memory"), now)
+	assertion := assertionFromSuggestion(s, s.Observations, systemMemory, now)
 	merged, outcome, err := m.mergeInto(assertion, OriginAutoConfirm)
 	if err != nil {
 		return domain.MemorySuggestionOutcome{}, err

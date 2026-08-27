@@ -218,7 +218,7 @@ func (s suggestionTx) finish(
 func (s suggestionTx) autoConfirm(
 	ctx context.Context, stored domain.MemorySuggestion,
 ) (domain.MemorySuggestionOutcome, error) {
-	assertion := assertionFromSuggestion(stored, stored.Observations, domain.UserID("system:memory"), s.now)
+	assertion := assertionFromSuggestion(stored, stored.Observations, systemMemory, s.now)
 	merged, outcome, err := mergeInto(ctx, s.tx, assertion, OriginAutoConfirm,
 		assertion.UpdatedBy, "auto-confirmed repeated suggestions", "auto_confirmed")
 	if err != nil {
