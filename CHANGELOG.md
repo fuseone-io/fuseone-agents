@@ -27,6 +27,37 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.38.7] — 2026-08-27
+
+### Added
+
+- **The published definition shows the steps it declares.** The prose is still
+  exactly what the author wrote and the stages are still exactly what the Gate
+  uses, but the read view now names both. A stage could change while the
+  definition looked untouched, which made a real edit read as a lost one.
+
+- **A clean rehearsal can be saved as a regression case.** One click records
+  the baseline the run already demonstrated, so an agent stops reporting that
+  it has no corpus the moment somebody agrees with a result. A case that came
+  from the corpus does not offer to be saved again — it is already there, and
+  saving it would grow the corpus with copies of itself.
+
+### Changed
+
+- **`@` offers what the agent can actually call.** Inside "How to act" the
+  picker lists the agent's enabled pack, because there the gesture is a
+  shortcut for a tool the run will really be offered. Everywhere else it still
+  lists the whole catalogue, so prose may name a tool the agent does not hold
+  and the lint can mark that sentence rather than the editor preventing it.
+
+### Fixed
+
+- **Budget reconciliation stops inventing zeros.** A reconciliation step
+  carries what is given back; what was spent is recorded on the tool's own
+  step, so a run that reconciled without a cost was being narrated as
+  "$0.00 spent". It now says only what it knows: the reconciliation alone, or
+  the amount released, or both when the step really carries a cost.
+
 ## [0.38.6] — 2026-08-26
 
 ### Fixed
