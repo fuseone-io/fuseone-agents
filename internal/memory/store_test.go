@@ -1572,3 +1572,140 @@ func TestPostgresAccept_onADisabledAssertion_consumesNothing(t *testing.T) {
 	ctx, store := postgresStore(t)
 	expectAcceptOnADisabledAssertionConsumesNothing(t, ctx, store)
 }
+
+/*
+A write that fails after projecting leaves nothing behind.
+
+The proof has to come from inside the transaction, not before it: a failure that
+happens before the first write proves only that nothing started. So the event
+insert is refused by a trigger, which fires after the projection has already
+been written — and if any of it survived, the suggestion would be accepted
+beside a memory nobody agreed to.
+*/
+func TestPostgresAccept_failureAfterProjecting_leavesNothing(t *testing.T) {
+	ctx, pool := postgresPool(t)
+	store := memory.NewPostgres(pool)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	out, err := store.Suggest(ctx, suggestion(nil), reviewPolicy, "agent:triage", now)
+	if err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+
+	if _, err := pool.Exec(ctx, `
+		create or replace function refuse_memory_event() returns trigger as $$
+		begin raise exception 'refused for the test'; end; $$ language plpgsql;
+		create trigger refuse_memory_event before insert on memory_assertion_events
+		for each row execute function refuse_memory_event();`); err != nil {
+		t.Fatalf("install trigger: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = pool.Exec(context.Background(),
+			`drop trigger if exists refuse_memory_event on memory_assertion_events`)
+	})
+
+	if _, err := store.AcceptSuggestion(ctx, out.Suggestion.ID, platformScope,
+		"usr_ana", "agreed", now); err == nil {
+		t.Fatal("accept succeeded while the event was being refused")
+	}
+
+	found, err := store.Find(ctx, domain.MemoryQuery{
+		Scope: platformScope, AgentID: "triage", Now: now,
+	})
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if len(found) != 0 {
+		t.Errorf("assertions = %d, want the projection rolled back with the event", len(found))
+	}
+
+	pending, err := store.ListSuggestions(ctx, memory.SuggestionFilter{
+		Scopes: []domain.Scope{platformScope}, Status: domain.MemorySuggestionPending, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("ListSuggestions: %v", err)
+	}
+	if len(pending) != 1 {
+		t.Errorf("pending = %d, want the suggestion untouched", len(pending))
+	}
+}
+
+/*
+A person accepting while the agent reaches its auto-confirm threshold.
+
+Both orders are correct and the test accepts either, because the platform has
+not decided that active memory keeps accumulating observations. If the accept
+lands first the suggestion is spent and the concurrent observation meets active
+memory, which Suggest reports as already-active and does not record. If the
+auto-confirm lands first the accept meets a memory that already holds the fact.
+
+What must hold in both is the same: one assertion, the suggestion in a terminal
+state that matches what happened, and neither writer waiting on the other.
+
+Whether an already-active memory should still count a sighting is a real
+question — Find ranks on observations, so a memory freezes its rank the moment
+it becomes active — but it is a decision about what observations mean, not
+something to settle inside a test.
+*/
+func TestPostgresAccept_racingAutoConfirm_leavesOneMemoryAndOneEnding(t *testing.T) {
+	ctx, store := postgresStore(t)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+	policy := domain.MemoryLearningPolicy{
+		Mode: domain.MemoryLearningAutoConfirm, MinObservations: 2,
+	}
+
+	out, err := store.Suggest(ctx, suggestion(func(s *domain.MemorySuggestion) {
+		s.Evidence = []domain.MemoryEvidence{{
+			RunID: "run-1", Seq: 1, Artifact: domain.ArtifactMemorySuggestion, Digest: "sha256:1",
+		}}
+	}), policy, "agent:triage", now)
+	if err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+
+	errs := make(chan error, 2)
+	var start sync.WaitGroup
+	start.Add(1)
+	go func() {
+		start.Wait()
+		_, err := store.AcceptSuggestion(ctx, out.Suggestion.ID, platformScope, "usr_ana", "agreed", now)
+		errs <- err
+	}()
+	go func() {
+		start.Wait()
+		// The second observation, which takes the suggestion to its threshold.
+		_, err := store.Suggest(ctx, suggestion(func(s *domain.MemorySuggestion) {
+			s.Evidence = []domain.MemoryEvidence{{
+				RunID: "run-2", Seq: 1, Artifact: domain.ArtifactMemorySuggestion, Digest: "sha256:2",
+			}}
+		}), policy, "agent:triage", now)
+		errs <- err
+	}()
+	start.Done()
+	for range 2 {
+		// Either order is fine; a deadlock or a lost writer is not.
+		if err := <-errs; err != nil && !errors.Is(err, memory.ErrNotFound) {
+			t.Fatalf("racing writers: %v", err)
+		}
+	}
+
+	found, err := store.Find(ctx, domain.MemoryQuery{
+		Scope: platformScope, AgentID: "triage", Now: now,
+	})
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if len(found) != 1 {
+		t.Fatalf("assertions = %d, want exactly one memory of one fact", len(found))
+	}
+
+	pending, err := store.ListSuggestions(ctx, memory.SuggestionFilter{
+		Scopes: []domain.Scope{platformScope}, Status: domain.MemorySuggestionPending, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("ListSuggestions: %v", err)
+	}
+	if len(pending) != 0 {
+		t.Errorf("pending = %d, want the suggestion to have an ending", len(pending))
+	}
+}

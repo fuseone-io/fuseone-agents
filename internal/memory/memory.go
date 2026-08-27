@@ -2,7 +2,6 @@ package memory
 
 import (
 	"context"
-	"fmt"
 	"slices"
 	"sync"
 	"time"
@@ -205,11 +204,11 @@ func (m *Memory) autoConfirmSuggestion(
 		return domain.MemorySuggestionOutcome{}, err
 	}
 	if outcome == Covered {
-		// Nothing was written, so the suggestion is not spent. It waits for a
-		// person.
+		s.Status, s.CoveredBy = domain.MemorySuggestionCovered, merged.ID
+		s.UpdatedBy, s.UpdatedAt = merged.UpdatedBy, merged.UpdatedAt
 		m.suggestions[s.ID] = cloneSuggestion(s)
 		return domain.MemorySuggestionOutcome{
-			Suggestion: s, Result: domain.MemorySuggestPending,
+			Suggestion: s, Assertion: &merged, Result: domain.MemorySuggestAlreadyActive,
 		}, nil
 	}
 	s.Status = domain.MemorySuggestionAutoConfirmed
@@ -254,7 +253,14 @@ func (m *Memory) AcceptSuggestion(
 		return domain.MemoryAssertion{}, err
 	}
 	if outcome == Covered {
-		return domain.MemoryAssertion{}, fmt.Errorf("%w: shared memory already covers it", ErrCovered)
+		// The proposal is finished even though nothing was written: memory that
+		// was already there answered it. Leaving it pending would be a queue
+		// item with no honest exit; dismissing it would record a refusal nobody
+		// made.
+		s.Status, s.CoveredBy = domain.MemorySuggestionCovered, merged.ID
+		s.UpdatedBy, s.UpdatedAt = by, now.UTC()
+		m.suggestions[id] = cloneSuggestion(s)
+		return merged, nil
 	}
 	// After the merge: a suggestion marked accepted beside an assertion that
 	// was never written is a queue that empties while nothing is learned.

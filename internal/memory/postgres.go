@@ -211,12 +211,16 @@ func (s suggestionTx) autoConfirm(
 		return domain.MemorySuggestionOutcome{}, err
 	}
 	if outcome == Covered {
-		// Nothing was written, so the suggestion is not spent. It stays pending
-		// and a person decides.
+		if err := closeAsCovered(ctx, s.tx, stored, merged, assertion.UpdatedBy, s.now); err != nil {
+			return domain.MemorySuggestionOutcome{}, err
+		}
 		if err := s.tx.Commit(ctx); err != nil {
 			return domain.MemorySuggestionOutcome{}, fmt.Errorf("memory: commit suggestion: %w", err)
 		}
-		return domain.MemorySuggestionOutcome{Suggestion: stored, Result: domain.MemorySuggestPending}, nil
+		covered := merged
+		return domain.MemorySuggestionOutcome{
+			Suggestion: stored, Assertion: &covered, Result: domain.MemorySuggestAlreadyActive,
+		}, nil
 	}
 	assertion = merged
 	stored.Status = domain.MemorySuggestionAutoConfirmed
@@ -267,10 +271,17 @@ func (p *Postgres) AcceptSuggestion(
 		return domain.MemoryAssertion{}, err
 	}
 	if outcome == Covered {
-		// Shared memory already answers this, and it was not modified. Nothing
-		// was written, so nothing is consumed: the suggestion stays pending and
-		// the caller is told to improve the shared memory deliberately.
-		return domain.MemoryAssertion{}, fmt.Errorf("%w: shared memory already covers it", ErrCovered)
+		// Shared memory already answers this and was not modified. The proposal
+		// is finished all the same: leaving it pending would be a queue item
+		// with no honest exit, and dismissing it would record a refusal nobody
+		// made about a fact the platform already holds.
+		if err := closeAsCovered(ctx, tx, s, stored, by, now); err != nil {
+			return domain.MemoryAssertion{}, err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return domain.MemoryAssertion{}, fmt.Errorf("memory: commit accept suggestion: %w", err)
+		}
+		return stored, nil
 	}
 	// After the merge, in the same transaction: a suggestion marked accepted
 	// beside an assertion that was never written is a queue that empties while
@@ -319,7 +330,8 @@ const columns = `assertion_id, company_id, area_id, agent_id, kind, subject,
 
 const suggestionColumns = `suggestion_id, assertion_id, company_id, area_id,
 	agent_id, kind, subject, signature, claim, evidence, observations, labels,
-	status, expires_at, created_by, created_at, updated_by, updated_at`
+	status, expires_at, created_by, created_at, updated_by, updated_at,
+	covered_by`
 
 type db interface {
 	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
@@ -380,15 +392,33 @@ func insertSuggestion(ctx context.Context, tx db, s domain.MemorySuggestion) err
 	evidence, _ := json.Marshal(s.Evidence)
 	_, err := tx.Exec(ctx, `
 		insert into memory_suggestions (`+suggestionColumns+`)
-		values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
+		values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,
+		        nullif($19, ''))`,
 		s.ID, s.AssertionID, string(s.Scope.Company), string(s.Scope.Area),
 		string(s.AgentID), s.Kind, s.Subject, s.Signature, s.Claim, evidence,
 		s.Observations, []string(s.Labels), string(s.Status), s.ExpiresAt,
-		string(s.CreatedBy), s.CreatedAt, string(s.UpdatedBy), s.UpdatedAt)
+		string(s.CreatedBy), s.CreatedAt, string(s.UpdatedBy), s.UpdatedAt,
+		s.CoveredBy)
 	if err != nil {
 		return fmt.Errorf("memory: insert suggestion %s: %w", s.ID, err)
 	}
 	return nil
+}
+
+/*
+closeAsCovered ends a suggestion that memory already there answered.
+
+Only the suggestion changes. The assertion that covered it is not touched, gets
+no event and keeps its updated_at: it was not modified, and recording that it
+was would put a mutation in the trail that never happened.
+*/
+func closeAsCovered(
+	ctx context.Context, tx db, s domain.MemorySuggestion,
+	by domain.MemoryAssertion, actor domain.UserID, now time.Time,
+) error {
+	s.Status, s.CoveredBy = domain.MemorySuggestionCovered, by.ID
+	s.UpdatedBy, s.UpdatedAt = actor, now.UTC()
+	return updateSuggestion(ctx, tx, s)
 }
 
 func updateSuggestion(ctx context.Context, tx db, s domain.MemorySuggestion) error {
@@ -396,10 +426,11 @@ func updateSuggestion(ctx context.Context, tx db, s domain.MemorySuggestion) err
 	_, err := tx.Exec(ctx, `
 		update memory_suggestions
 		set claim = $2, evidence = $3, observations = $4, labels = $5,
-		    status = $6, expires_at = $7, updated_by = $8, updated_at = $9
+		    status = $6, expires_at = $7, updated_by = $8, updated_at = $9,
+		    covered_by = nullif($10, '')
 		where suggestion_id = $1`,
 		s.ID, s.Claim, evidence, s.Observations, []string(s.Labels),
-		string(s.Status), s.ExpiresAt, string(s.UpdatedBy), s.UpdatedAt)
+		string(s.Status), s.ExpiresAt, string(s.UpdatedBy), s.UpdatedAt, s.CoveredBy)
 	if err != nil {
 		return fmt.Errorf("memory: update suggestion %s: %w", s.ID, err)
 	}
@@ -559,18 +590,23 @@ func scanAssertion(row scanner) (domain.MemoryAssertion, error) {
 func scanSuggestion(row scanner) (domain.MemorySuggestion, error) {
 	var s domain.MemorySuggestion
 	var company, area, agent, status, createdBy, updatedBy string
+	var coveredBy *string
 	var evidence []byte
 	var labels []string
 	err := row.Scan(
 		&s.ID, &s.AssertionID, &company, &area, &agent, &s.Kind, &s.Subject,
 		&s.Signature, &s.Claim, &evidence, &s.Observations, &labels,
-		&status, &s.ExpiresAt, &createdBy, &s.CreatedAt, &updatedBy, &s.UpdatedAt)
+		&status, &s.ExpiresAt, &createdBy, &s.CreatedAt, &updatedBy, &s.UpdatedAt,
+		&coveredBy)
 	if err != nil {
 		return domain.MemorySuggestion{}, err
 	}
 	s.Scope = domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)}
 	s.AgentID = domain.AgentID(agent)
 	s.Status = domain.MemorySuggestionStatus(status)
+	if coveredBy != nil {
+		s.CoveredBy = *coveredBy
+	}
 	s.CreatedBy, s.UpdatedBy = domain.UserID(createdBy), domain.UserID(updatedBy)
 	if err := json.Unmarshal(evidence, &s.Evidence); err != nil {
 		return domain.MemorySuggestion{}, fmt.Errorf("memory: decode suggestion evidence: %w", err)
