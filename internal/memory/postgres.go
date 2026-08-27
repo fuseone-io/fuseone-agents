@@ -66,13 +66,7 @@ func (p *Postgres) Assert(
 		return domain.MemoryAssertion{}, fmt.Errorf("memory: begin assert: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if err := recordEvent(ctx, tx, prepared, by, reason, "asserted"); err != nil {
-		return domain.MemoryAssertion{}, err
-	}
-	if err := upsertAssertion(ctx, tx, prepared); err != nil {
-		return domain.MemoryAssertion{}, err
-	}
-	stored, err := readAssertionTx(ctx, tx, prepared.ID, prepared.Scope)
+	stored, _, err := mergeInto(ctx, tx, prepared, OriginHuman, by, reason, "asserted")
 	if err != nil {
 		return domain.MemoryAssertion{}, err
 	}
@@ -325,9 +319,10 @@ type db interface {
 func upsertAssertion(ctx context.Context, tx db, a domain.MemoryAssertion) error {
 	evidence, _ := json.Marshal(a.Evidence)
 	_, err := tx.Exec(ctx, `
-		insert into memory_assertions (`+columns+`)
-		values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+		insert into memory_assertions (`+columns+`, canonical_identity_key)
+		values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
 		on conflict (assertion_id) do update set
+			canonical_identity_key = excluded.canonical_identity_key,
 			claim = excluded.claim, evidence = excluded.evidence,
 			observations = excluded.observations, confirmed = excluded.confirmed,
 			labels = excluded.labels, status = excluded.status,
@@ -336,7 +331,8 @@ func upsertAssertion(ctx context.Context, tx db, a domain.MemoryAssertion) error
 		a.ID, string(a.Scope.Company), string(a.Scope.Area), string(a.AgentID),
 		a.Kind, a.Subject, a.Signature, a.Claim, evidence, a.Observations,
 		a.Confirmed, []string(a.Labels), string(a.Status), a.ExpiresAt,
-		string(a.CreatedBy), a.CreatedAt, string(a.UpdatedBy), a.UpdatedAt)
+		string(a.CreatedBy), a.CreatedAt, string(a.UpdatedBy), a.UpdatedAt,
+		domain.CanonicalIdentityKey(a))
 	if err != nil {
 		return fmt.Errorf("memory: project assertion %s: %w", a.ID, err)
 	}

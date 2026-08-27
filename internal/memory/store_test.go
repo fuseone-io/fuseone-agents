@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -1348,4 +1349,93 @@ type memoryFindMetric struct {
 
 func (r *recordingMemoryMetrics) MemoryFind(_ time.Duration, returned int, omitted int, failed bool) {
 	r.finds = append(r.finds, memoryFindMetric{returned: returned, omitted: omitted, failed: failed})
+}
+
+/*
+Two people teaching the same fact at the same time leave one memory holding
+both.
+
+Cardinality alone would not prove it: a single row with the second writer lost
+is exactly what a lock in the wrong place produces, and it satisfies "one row"
+perfectly. So this asserts what the row contains — both labels, both citations,
+the higher counts — and that the trail's last event shows that same projection
+rather than whichever write arrived last.
+
+The two spellings differ only in case and spacing, which is the case the
+canonical identity exists for: locking the assertion id would give each writer
+its own lock and let both insert.
+*/
+func TestPostgresAssert_concurrentCorrectionsOfOneFact_loseNothing(t *testing.T) {
+	ctx, store := postgresStore(t)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	write := func(subject, claim, run, label string, observations int64) error {
+		a := assertion(func(a *domain.MemoryAssertion) {
+			a.Subject = subject
+			a.Claim = claim
+			a.Observations, a.Confirmed = observations, observations
+			a.Labels = domain.NewLabels(label)
+			a.Evidence = []domain.MemoryEvidence{{
+				RunID: domain.RunID(run), Seq: 2, Artifact: "final_answer",
+				Digest: "sha256:" + run, Labels: domain.NewLabels(label),
+			}}
+		})
+		_, err := store.Assert(ctx, a, domain.UserID("usr_"+run), "corrected", now)
+		return err
+	}
+
+	// One pair rarely interleaves: whichever writer commits first is usually
+	// read by the second, and the race never shows. Repeating it is what makes
+	// the window happen — and what makes a missing lock fail here rather than
+	// on the afternoon two operators happen to collide.
+	for round := range 40 {
+		subject := fmt.Sprintf("Grafana Datasource %d", round)
+		errs := make(chan error, 2)
+		var start sync.WaitGroup
+		start.Add(1)
+		for _, w := range []struct {
+			spelling, claim, run, label string
+			observations                int64
+		}{
+			{subject, "the token expired", "ana", domain.LabelUntrusted, 5},
+			{"  " + strings.ToLower(subject) + " ", "the pool was exhausted", "bruno", domain.LabelPersonal, 3},
+		} {
+			go func() {
+				start.Wait()
+				errs <- write(w.spelling, w.claim, w.run, w.label, w.observations)
+			}()
+		}
+		start.Done()
+		for range 2 {
+			if err := <-errs; err != nil {
+				t.Fatalf("Assert: %v", err)
+			}
+		}
+	}
+
+	found, err := store.List(ctx, memory.Filter{
+		Scopes: []domain.Scope{platformScope}, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(found) != 40 {
+		t.Fatalf("rows = %d, want one memory per round", len(found))
+	}
+
+	got := found[0]
+	if !got.Labels.HasAny(domain.LabelUntrusted) || !got.Labels.HasAny(domain.LabelPersonal) {
+		t.Errorf("labels = %v, want both writers' labels", got.Labels)
+	}
+	runs := map[domain.RunID]bool{}
+	for _, ev := range got.Evidence {
+		runs[ev.RunID] = true
+	}
+	if !runs["ana"] || !runs["bruno"] {
+		t.Errorf("evidence cites %v, want both writers' runs", runs)
+	}
+	if got.Observations != 5 || got.Confirmed != 5 {
+		t.Errorf("observations/confirmed = %d/%d, want the higher of the two",
+			got.Observations, got.Confirmed)
+	}
 }

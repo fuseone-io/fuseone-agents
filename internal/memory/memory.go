@@ -68,9 +68,64 @@ func (m *Memory) Assert(
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	prepared = preserveCreatedBy(m.values[prepared.ID], prepared)
-	m.values[prepared.ID] = cloneAssertion(prepared)
-	return prepared, nil
+	merged, _, err := m.mergeInto(prepared, OriginHuman)
+	return merged, err
+}
+
+/*
+mergeInto is the only way an assertion reaches the map, and the same decision
+the durable store makes.
+
+The mutex is already held by every caller, which is this store's whole
+transaction: read, merge and write cannot interleave. What it has to match is
+the order, not the mechanism — read after taking the lock, never before.
+*/
+func (m *Memory) mergeInto(
+	incoming domain.MemoryAssertion, origin MergeOrigin,
+) (domain.MemoryAssertion, MergeOutcome, error) {
+	stored, covering := m.neighbours(incoming)
+	merged, outcome, err := Merge(MergeInput{
+		Incoming: incoming, Stored: stored, Covering: covering,
+		Origin: origin, Now: incoming.UpdatedAt,
+	})
+	if err != nil {
+		return domain.MemoryAssertion{}, "", err
+	}
+	if outcome == Covered {
+		return merged, outcome, nil
+	}
+	m.values[merged.ID] = cloneAssertion(merged)
+	return merged, outcome, nil
+}
+
+// neighbours finds the row this write may merge into and the shared row that
+// may already cover it, by either name an identity has.
+func (m *Memory) neighbours(
+	a domain.MemoryAssertion,
+) (stored, covering *domain.MemoryAssertion) {
+	if found := m.byIdentity(a); found != nil {
+		return found, nil
+	}
+	if a.AgentID == "" {
+		return nil, nil
+	}
+	shared := a
+	shared.AgentID = ""
+	return nil, m.byIdentity(shared)
+}
+
+func (m *Memory) byIdentity(a domain.MemoryAssertion) *domain.MemoryAssertion {
+	key := domain.CanonicalIdentityKey(a)
+	for _, held := range m.values {
+		if held.Scope != a.Scope || held.AgentID != a.AgentID {
+			continue
+		}
+		if held.ID == a.ID || domain.CanonicalIdentityKey(held) == key {
+			found := cloneAssertion(held)
+			return &found
+		}
+	}
+	return nil
 }
 
 func (m *Memory) Disable(
