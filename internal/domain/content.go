@@ -14,6 +14,14 @@ import "errors"
 // a trail pointing at neither has to say which.
 var ErrContentErased = errors.New("content was erased")
 
+// ErrContentAbsent means the reference points at nothing that was ever stored.
+//
+// Here for the same reason ErrContentErased is: both stores raise it, and a
+// caller deciding between "this citation is wrong" and "the store is away" has
+// to match one value. Two sentinels for one fact is a caller that handles the
+// durable store and not the fake, and finds out in production.
+var ErrContentAbsent = errors.New("content was never stored")
+
 /*
 ContentMetadata is what a stored payload says about itself without being read.
 

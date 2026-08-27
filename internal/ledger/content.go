@@ -16,7 +16,7 @@ import (
 
 var (
 	// ErrNoContent means the reference points at nothing.
-	ErrNoContent = errors.New("ledger: no content at that reference")
+	ErrNoContent = domain.ErrContentAbsent
 	// ErrErased is the domain's, so a caller matching it handles this store
 	// and the in-memory one with the same line.
 	ErrErased = domain.ErrContentErased

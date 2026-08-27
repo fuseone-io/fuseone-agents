@@ -3,10 +3,24 @@ package memory
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/fuseone/agents/internal/domain"
 )
+
+/*
+ErrEvidenceInvalid means the citation is wrong, not that the platform is unwell.
+
+The reconciliation job repairs rows one at a time and has to tell those apart:
+a citation that does not match the ledger is refused and the job moves on, an
+unavailable dependency is tried again. Collapsing them would make the job skip
+rows it should have retried and record that it had checked them.
+
+So every semantic refusal below wraps this, and every infrastructure failure
+wraps the error it came from instead.
+*/
+var ErrEvidenceInvalid = errors.New("memory: evidence does not match the ledger")
 
 /*
 EvidenceLedger and EvidenceContent are what proving a citation needs, declared
@@ -85,11 +99,14 @@ func (r *Resolver) stepsOf(
 		return held, nil
 	}
 	steps, err := r.ledger.Read(ctx, run, domain.FirstSeq)
-	if err != nil || len(steps) == 0 {
-		return nil, fmt.Errorf("memory evidence names no readable run %s", run)
+	if err != nil {
+		return nil, fmt.Errorf("memory: read run %s for evidence: %w", run, err)
+	}
+	if len(steps) == 0 {
+		return nil, fmt.Errorf("%w: no run %s", ErrEvidenceInvalid, run)
 	}
 	if !scope.Contains(steps[0].Scope) {
-		return nil, fmt.Errorf("memory evidence names a run outside the scope")
+		return nil, fmt.Errorf("%w: run %s is outside the scope", ErrEvidenceInvalid, run)
 	}
 	cache[run] = steps
 	return steps, nil
@@ -112,13 +129,18 @@ func (r *Resolver) prove(
 
 	meta, err := r.content.Metadata(ctx, cite.ref)
 	if err != nil {
-		return domain.MemoryEvidence{}, fmt.Errorf("memory evidence names content that is not stored")
+		// Absent content is a wrong citation; anything else is the store being
+		// away, and the difference is what a retry is decided on.
+		if errors.Is(err, domain.ErrContentAbsent) {
+			return domain.MemoryEvidence{}, fmt.Errorf("%w: nothing stored at the reference", ErrEvidenceInvalid)
+		}
+		return domain.MemoryEvidence{}, fmt.Errorf("memory: read content metadata: %w", err)
 	}
 	if meta.Erased {
-		return domain.MemoryEvidence{}, fmt.Errorf("memory evidence names content that was erased")
+		return domain.MemoryEvidence{}, fmt.Errorf("%w: the content was erased", ErrEvidenceInvalid)
 	}
-	if cite.digest != "" && !sameDigest(cite.digest, meta.Digest) {
-		return domain.MemoryEvidence{}, fmt.Errorf("memory evidence does not match the ledger")
+	if !sameDigest(cite.digest, meta.Digest) {
+		return domain.MemoryEvidence{}, fmt.Errorf("%w: the digest disagrees with the ledger", ErrEvidenceInvalid)
 	}
 
 	return domain.MemoryEvidence{
@@ -157,7 +179,7 @@ func citedStep(steps []domain.Step, ev domain.MemoryEvidence) (int, citation, er
 		}
 		return at, cite, nil
 	}
-	return 0, citation{}, fmt.Errorf("memory evidence names no such step in the run")
+	return 0, citation{}, fmt.Errorf("%w: no such step in the run", ErrEvidenceInvalid)
 }
 
 /*
@@ -180,11 +202,11 @@ func citationIn(step domain.Step, artifact string) (citation, bool) {
 			return citation{}, false
 		}
 		if artifact == domain.ArtifactFinalAnswer {
-			return citation{ref: p.OutcomeRef, digest: p.OutcomeDigest}, p.OutcomeRef != ""
+			return proved(citation{ref: p.OutcomeRef, digest: p.OutcomeDigest})
 		}
 		for _, a := range p.Artifacts {
 			if a.Name == artifact {
-				return citation{ref: a.Ref, digest: a.Digest, sourceRun: a.SourceRun}, a.Ref != ""
+				return proved(citation{ref: a.Ref, digest: a.Digest, sourceRun: a.SourceRun})
 			}
 		}
 
@@ -196,12 +218,28 @@ func citationIn(step domain.Step, artifact string) (citation, bool) {
 		if json.Unmarshal(step.Payload, &p) != nil {
 			return citation{}, false
 		}
-		if p.Tool != domain.ToolMemorySuggest || p.ArgsRef == "" {
+		if p.Tool != domain.ToolMemorySuggest {
 			return citation{}, false
 		}
-		return citation{ref: p.ArgsRef, digest: p.ArgsDigest}, true
+		return proved(citation{ref: p.ArgsRef, digest: p.ArgsDigest})
 	}
 	return citation{}, false
+}
+
+/*
+proved refuses a citation the ledger only half recorded.
+
+Reference and digest are written together about the same bytes, so one without
+the other is not a shape production writes.
+
+Not load-bearing, deliberately: an empty digest would also fail the comparison
+in prove, since the store's digest can never equal "". This refuses earlier and
+says why — "the ledger recorded no digest" rather than "the digest disagrees",
+which are different things for whoever reads the error. The guarantee lives in
+prove; this is the sentence that explains it.
+*/
+func proved(c citation) (citation, bool) {
+	return c, c.ref != "" && c.digest != ""
 }
 
 // labelsUpTo folds the run to the step cited. What a step produced is not what

@@ -105,7 +105,7 @@ func (m *MemoryContent) Get(ctx context.Context, ref string) ([]byte, error) {
 
 	held, ok := m.data[ref]
 	if !ok {
-		return nil, fmt.Errorf("content: no object at %s", ref)
+		return nil, fmt.Errorf("%w: %s", domain.ErrContentAbsent, ref)
 	}
 	if held.erased {
 		// The same distinction the durable store makes: erased and
@@ -133,7 +133,7 @@ func (m *MemoryContent) Metadata(ctx context.Context, ref string) (domain.Conten
 
 	held, ok := m.data[ref]
 	if !ok {
-		return domain.ContentMetadata{}, fmt.Errorf("content: no object at %s", ref)
+		return domain.ContentMetadata{}, fmt.Errorf("%w: %s", domain.ErrContentAbsent, ref)
 	}
 	return domain.ContentMetadata{Digest: held.digest, Erased: held.erased}, nil
 }

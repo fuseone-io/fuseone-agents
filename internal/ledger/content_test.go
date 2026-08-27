@@ -362,3 +362,26 @@ func TestContentMetadataContract(t *testing.T) {
 		})
 	}
 }
+
+// Absence has to be matchable from either store, for the same reason erasure
+// does: a caller deciding between "this citation is wrong" and "the store is
+// away" matches one value, and two sentinels for one fact is a caller that
+// works against Postgres and not against the fake.
+func TestContentAbsenceContract(t *testing.T) {
+	for name, open := range contentStores(t) {
+		t.Run(name+"/absence is the domain's sentinel", func(t *testing.T) {
+			store := open(t)
+			ctx := context.Background()
+
+			_, getErr := store.Get(ctx, "run://run-1/9/deadbeef")
+			_, metaErr := store.Metadata(ctx, "run://run-1/9/deadbeef")
+
+			if !errors.Is(getErr, domain.ErrContentAbsent) {
+				t.Errorf("Get error = %v, want it to match ErrContentAbsent", getErr)
+			}
+			if !errors.Is(metaErr, domain.ErrContentAbsent) {
+				t.Errorf("Metadata error = %v, want it to match ErrContentAbsent", metaErr)
+			}
+		})
+	}
+}
