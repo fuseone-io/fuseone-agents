@@ -77,7 +77,11 @@ func (s *Server) CreateMemoryAssertion(
 	// namespace left out arrives as the empty string and an unknown one arrives
 	// as itself — and both used to be read as the narrow value, which is the
 	// safe direction for one of those mistakes and luck for the other.
-	if !memoryNamespaceValid(req.Body.Namespace) {
+	//
+	// The generated Valid rather than a copy of the two values: the enum is the
+	// contract's, and a second list here would be the thing that still says two
+	// when the spec says three.
+	if !req.Body.Namespace.Valid() {
 		return badMemoryCreate("namespace must be agent or shared"), nil
 	}
 	agent, labels, err := s.originOfMemoryEvidence(ctx, scope, req.Body.Namespace, req.Body.Evidence)
@@ -158,18 +162,6 @@ func memoryRefusal(err error) int {
 		return http.StatusBadRequest
 	}
 	return 0
-}
-
-// memoryNamespaceValid is the enum the contract declares, enforced. A caller
-// that meant nothing by leaving it out gets told so, rather than being given
-// whichever value the zero value happens to be.
-func memoryNamespaceValid(n openapi.MemoryAssertionInputNamespace) bool {
-	switch n {
-	case openapi.MemoryAssertionInputNamespaceAgent,
-		openapi.MemoryAssertionInputNamespaceShared:
-		return true
-	}
-	return false
 }
 
 func badMemoryCreate(detail string) openapi.CreateMemoryAssertion400ApplicationProblemPlusJSONResponse {

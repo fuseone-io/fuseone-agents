@@ -378,9 +378,13 @@ func TestCreateMemoryAssertion_sharedAcceptsEveryAgentsEvidence(t *testing.T) {
 	t.Parallel()
 	scope := domain.Scope{Company: "acme", Area: "cx"}
 	led := ledger.NewMemory()
+	// A label each, and neither run carries the other's. A union that kept only
+	// the first citation's labels would still satisfy an assertion about labels
+	// the first one already had — which is what this test used to be.
 	seedFinishedEvidence(t, led, "run-evidence", scope,
 		domain.NewLabels(domain.LabelUntrusted).Union(domain.ScopeLabels(scope)), "sha256:answer")
-	seedFinishedEvidenceFor(t, led, "run-other", scope, "billing", "sha256:other")
+	seedFinishedEvidenceLabelled(t, led, "run-other", scope, "billing",
+		domain.NewLabels(domain.LabelPersonal).Union(domain.ScopeLabels(scope)), "sha256:other")
 
 	req := memoryCreateRequest("sha256:answer")
 	req.Body.Namespace = openapi.MemoryAssertionInputNamespaceShared
@@ -400,7 +404,10 @@ func TestCreateMemoryAssertion_sharedAcceptsEveryAgentsEvidence(t *testing.T) {
 	if created.AgentId != "" {
 		t.Errorf("agent = %q, want shared memory to belong to none of them", created.AgentId)
 	}
-	if !hasAll(created.Labels, domain.LabelUntrusted, domain.LabelArea(scope)) {
+	// Both, not either. A label present only in the second contribution going
+	// missing is how personal data stops being marked as personal.
+	if !hasAll(created.Labels, domain.LabelUntrusted, domain.LabelPersonal,
+		domain.LabelArea(scope)) {
 		t.Errorf("labels = %v, want every citation's labels kept", created.Labels)
 	}
 }
@@ -595,10 +602,19 @@ func seedFinishedEvidenceFor(
 	agent domain.AgentID, digest string,
 ) {
 	t.Helper()
+	seedFinishedEvidenceLabelled(t, store, run, scope, agent,
+		domain.ScopeLabels(scope), digest)
+}
+
+func seedFinishedEvidenceLabelled(
+	t *testing.T, store *ledger.Memory, run domain.RunID, scope domain.Scope,
+	agent domain.AgentID, labels domain.Labels, digest string,
+) {
+	t.Helper()
 	appendMemoryStep(t, store, domain.Step{RunID: run, Kind: domain.StepRunStarted,
-		Scope: scope, AgentID: agent, VersionID: "v1", Labels: domain.ScopeLabels(scope)})
+		Scope: scope, AgentID: agent, VersionID: "v1", Labels: labels})
 	appendMemoryStep(t, store, domain.Step{RunID: run, Kind: domain.StepRunFinished,
-		Scope: scope, AgentID: agent, VersionID: "v1", Labels: domain.ScopeLabels(scope),
+		Scope: scope, AgentID: agent, VersionID: "v1", Labels: labels,
 		Payload: jsonPayload(t, domain.RunFinishedPayload{OutcomeDigest: digest})})
 }
 
