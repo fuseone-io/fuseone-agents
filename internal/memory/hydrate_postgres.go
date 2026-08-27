@@ -38,6 +38,13 @@ func (p *Postgres) Hydrate(
 			out.SourceGone++
 		}
 		repaired, err := p.hydrateOne(ctx, stored, resolved, got)
+		// The row has a twin, so there is nothing to derive for it — but that
+		// is a fact about one identity, not about the sweep. Ending here would
+		// stop the repair on the very rows it walks.
+		if errors.Is(err, ErrCanonicalConflict) {
+			out.Conflicted++
+			continue
+		}
 		if err != nil {
 			return out, err
 		}

@@ -2,11 +2,8 @@ package memory
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"slices"
-
-	"github.com/jackc/pgx/v5"
 
 	"github.com/fuseone/agents/internal/domain"
 )
@@ -112,25 +109,43 @@ byIdentityTx finds the row that is this identity, by either name it has.
 The canonical key is the identity a duplicate check can trust, and the assertion
 id is what a row written before that key existed is called. Matching both is
 what lets the two live side by side while the older rows are filled in.
+
+Two rows, not one. "Which row is this identity" has no answer the moment there
+is more than one, and a limit of one cannot tell the only row from the first of
+several — it returned the keyed row and hid the legacy one behind an ordering
+nobody chose. Reading one more is what turns a silent choice into a refusal.
+
+The order is what makes the refusal stable: the same pair is named every time,
+and by the id both stores sort on, so two people reading the same error are
+looking at the same two rows whichever store answered.
 */
 func byIdentityTx(
 	ctx context.Context, tx db, a domain.MemoryAssertion,
 ) (*domain.MemoryAssertion, error) {
-	row := tx.QueryRow(ctx, `
+	key := domain.CanonicalIdentityKey(a)
+	rows, err := tx.Query(ctx, `
 		select `+columns+` from memory_assertions
 		where company_id = $1 and area_id = $2 and agent_id = $3
 		  and (canonical_identity_key = $4 or assertion_id = $5)
-		order by canonical_identity_key nulls last
-		limit 1`,
+		order by assertion_id
+		limit 2`,
 		string(a.Scope.Company), string(a.Scope.Area), string(a.AgentID),
-		domain.CanonicalIdentityKey(a), a.ID)
-
-	found, err := scanAssertion(row)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil
-	}
+		key, a.ID)
 	if err != nil {
 		return nil, fmt.Errorf("memory: read identity: %w", err)
 	}
-	return &found, nil
+	defer rows.Close()
+
+	var found []domain.MemoryAssertion
+	for rows.Next() {
+		one, err := scanAssertion(rows)
+		if err != nil {
+			return nil, fmt.Errorf("memory: read identity: %w", err)
+		}
+		found = append(found, one)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("memory: read identity: %w", err)
+	}
+	return oneOf(found, key)
 }

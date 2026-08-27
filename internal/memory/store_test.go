@@ -1554,6 +1554,226 @@ func expectAcceptOnADisabledAssertionConsumesNothing(t *testing.T, ctx context.C
 	}
 }
 
+/*
+A row that carries the key beside the same row that does not is one identity
+under two names, and a write refuses both.
+
+This is the shape an upgrade actually produces, and the one the old query hid
+best: the legacy row answers to its assertion id, the newer row answers to the
+canonical key, and ordering the keyed one first made the query return an answer
+that was true about half the table. The correction then landed on the newer row
+while the legacy one stayed active, saying something else, in the same scope,
+for the same agent.
+
+Nothing is written on the way out — not the projection, not an event, not
+updated_at. A refusal that still moved a timestamp would be a change nobody
+asked for, on a row nobody chose.
+*/
+func TestPostgresAssert_aKeyedRowBesideItsLegacyTwin_refusesToChoose(t *testing.T) {
+	ctx, pool := postgresPool(t)
+	store := memory.NewPostgres(pool)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	legacy, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Subject = "Grafana Datasource"
+	}), "usr_ana", "reviewed", now)
+	if err != nil {
+		t.Fatalf("Assert the legacy row: %v", err)
+	}
+	unkey(t, ctx, pool, legacy.ID)
+
+	// Written by somebody who spelled it differently. The legacy row has no key
+	// and a different id, so nothing connects them and a second row is born.
+	newer, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Subject = "grafana  datasource"
+	}), "usr_bruno", "reviewed", now)
+	if err != nil {
+		t.Fatalf("Assert the second spelling: %v", err)
+	}
+	if newer.ID == legacy.ID {
+		t.Fatal("the fixture produced one row; two spellings must be two rows here")
+	}
+
+	before := snapshotRows(t, ctx, pool, legacy.ID, newer.ID)
+	_, err = store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Subject = "Grafana Datasource"
+		a.Claim = "a correction that must not land on half the fact"
+	}), "usr_ana", "correcting the claim", now.Add(time.Hour))
+	if !errors.Is(err, memory.ErrCanonicalConflict) {
+		t.Fatalf("Assert = %v, want the write refused rather than one row chosen", err)
+	}
+	if after := snapshotRows(t, ctx, pool, legacy.ID, newer.ID); !slices.Equal(after, before) {
+		t.Errorf("rows went %v -> %v, want nothing changed by a refusal", before, after)
+	}
+	if n := countEvents(t, ctx, pool, legacy.ID) + countEvents(t, ctx, pool, newer.ID); n != 2 {
+		t.Errorf("events = %d, want only the two that created the rows", n)
+	}
+}
+
+// Two rows that both carry the key are the same refusal. Unreachable through
+// the write path once the lock and this rule are in place, which is exactly why
+// it is planted: "nothing can produce it" is a property of today's code, and
+// the row that outlives today's code is the one nobody checked.
+func TestPostgresAssert_twoKeyedRowsOfOneIdentity_refusesToChoose(t *testing.T) {
+	ctx, pool := postgresPool(t)
+	store := memory.NewPostgres(pool)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	first, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Subject = "Grafana Datasource"
+	}), "usr_ana", "reviewed", now)
+	if err != nil {
+		t.Fatalf("Assert the first row: %v", err)
+	}
+	unkey(t, ctx, pool, first.ID)
+	second, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Subject = "grafana  datasource"
+	}), "usr_bruno", "reviewed", now)
+	if err != nil {
+		t.Fatalf("Assert the second row: %v", err)
+	}
+	// Copied from the row that has it rather than spelled out here: a test that
+	// wrote the hash itself would be a second implementation of the key, and it
+	// would keep passing after the real one changed.
+	if _, err := pool.Exec(ctx, `
+		update memory_assertions set canonical_identity_key =
+			(select canonical_identity_key from memory_assertions where assertion_id = $2)
+		where assertion_id = $1`, first.ID, second.ID); err != nil {
+		t.Fatalf("give the legacy row its key: %v", err)
+	}
+
+	before := snapshotRows(t, ctx, pool, first.ID, second.ID)
+	if _, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Subject = "Grafana Datasource"
+		a.Claim = "a correction that must not land on half the fact"
+	}), "usr_ana", "correcting the claim", now.Add(time.Hour)); !errors.Is(
+		err, memory.ErrCanonicalConflict) {
+		t.Fatalf("Assert = %v, want the write refused rather than one row chosen", err)
+	}
+	if after := snapshotRows(t, ctx, pool, first.ID, second.ID); !slices.Equal(after, before) {
+		t.Errorf("rows went %v -> %v, want nothing changed by a refusal", before, after)
+	}
+}
+
+/*
+A conflicted pair ends that row's repair and not the sweep.
+
+The same defect the purged run had: hydration exists to walk rows written before
+this work, and duplicate spellings are exactly what those rows are. Aborting on
+the first pair would stop the repair on the population it was built for, and the
+rows after it would stay unkeyed for ever while the job reported an error every
+night.
+*/
+func TestPostgresHydrate_conflictedPair_endsThatRowAndNotTheSweep(t *testing.T) {
+	ctx, pool := postgresPool(t)
+	store := memory.NewPostgres(pool)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	run, cited := legacyRun(t, "run-legacy")
+	first, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Scope, a.Subject = run.scope, "Grafana Datasource"
+		a.Evidence = []domain.MemoryEvidence{cited}
+	}), "usr_ana", "reviewed", now)
+	if err != nil {
+		t.Fatalf("Assert the first row: %v", err)
+	}
+	unkey(t, ctx, pool, first.ID)
+	second, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Scope, a.Subject = run.scope, "grafana  datasource"
+		a.Evidence = []domain.MemoryEvidence{cited}
+	}), "usr_bruno", "reviewed", now)
+	if err != nil {
+		t.Fatalf("Assert the second row: %v", err)
+	}
+	// A third row of its own identity, sorting after both, so the sweep has
+	// somewhere to get to once the pair has been refused.
+	unkey(t, ctx, pool, second.ID)
+	innocent, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Scope, a.Subject = run.scope, "loki ingester"
+		a.Evidence = []domain.MemoryEvidence{cited}
+	}), "usr_ana", "reviewed", now)
+	if err != nil {
+		t.Fatalf("Assert the unrelated row: %v", err)
+	}
+	unkey(t, ctx, pool, innocent.ID)
+
+	out, err := store.Hydrate(ctx, memory.NewResolver(run.ledger, run.content),
+		memory.HydratePage{Limit: 10, Now: now})
+	if err != nil {
+		t.Fatalf("Hydrate: %v", err)
+	}
+	if out.Scanned != 3 {
+		t.Fatalf("scanned = %d, want the sweep to have reached every row", out.Scanned)
+	}
+	if out.Conflicted != 1 {
+		t.Errorf("conflicted = %d, want the pair counted once it was refused", out.Conflicted)
+	}
+	// One of the pair is keyed — whichever the sweep reached first, since until
+	// it is keyed the other is invisible. What must not happen is the sweep
+	// stopping, so the row that has nothing to do with the pair is repaired.
+	if keyed := hasKey(t, ctx, pool, innocent.ID); !keyed {
+		t.Error("the unrelated row was left unkeyed, so the pair stopped the sweep")
+	}
+}
+
+func unkey(t *testing.T, ctx context.Context, pool *pgxpool.Pool, id string) {
+	t.Helper()
+	if _, err := pool.Exec(ctx,
+		`update memory_assertions set canonical_identity_key = null where assertion_id = $1`,
+		id); err != nil {
+		t.Fatalf("clear the key of %s: %v", id, err)
+	}
+}
+
+func hasKey(t *testing.T, ctx context.Context, pool *pgxpool.Pool, id string) bool {
+	t.Helper()
+	var key *string
+	if err := pool.QueryRow(ctx,
+		`select canonical_identity_key from memory_assertions where assertion_id = $1`,
+		id).Scan(&key); err != nil {
+		t.Fatalf("read the key of %s: %v", id, err)
+	}
+	return key != nil
+}
+
+// snapshotRows is everything a merge would have moved, so "nothing changed" is
+// asserted against the row rather than against one field somebody remembered.
+func snapshotRows(
+	t *testing.T, ctx context.Context, pool *pgxpool.Pool, ids ...string,
+) []string {
+	t.Helper()
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		var claim, updatedBy string
+		var labels []string
+		var updatedAt time.Time
+		var key *string
+		if err := pool.QueryRow(ctx, `
+			select claim, labels, updated_by, updated_at, canonical_identity_key
+			from memory_assertions where assertion_id = $1`, id).Scan(
+			&claim, &labels, &updatedBy, &updatedAt, &key); err != nil {
+			t.Fatalf("read %s: %v", id, err)
+		}
+		stored := "unkeyed"
+		if key != nil {
+			stored = *key
+		}
+		out = append(out, fmt.Sprintf("%s|%s|%v|%s|%s|%s",
+			id, claim, labels, updatedBy, updatedAt.UTC(), stored))
+	}
+	return out
+}
+
+func countEvents(t *testing.T, ctx context.Context, pool *pgxpool.Pool, id string) int {
+	t.Helper()
+	var n int
+	if err := pool.QueryRow(ctx,
+		`select count(*) from memory_assertion_events where assertion_id = $1`, id).Scan(&n); err != nil {
+		t.Fatalf("count events of %s: %v", id, err)
+	}
+	return n
+}
+
 func TestAccept_mergesIntoTheStoredAssertion(t *testing.T) {
 	t.Parallel()
 	expectAcceptMergesIntoTheStoredAssertion(t, context.Background(), memory.NewMemory())

@@ -336,6 +336,7 @@ const suggestionColumns = `suggestion_id, assertion_id, company_id, area_id,
 type db interface {
 	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
 	QueryRow(context.Context, string, ...any) pgx.Row
+	Query(context.Context, string, ...any) (pgx.Rows, error)
 }
 
 func upsertAssertion(ctx context.Context, tx db, a domain.MemoryAssertion) error {

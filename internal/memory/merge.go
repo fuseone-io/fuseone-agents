@@ -33,7 +33,33 @@ var (
 	// per label the assertion carries. Storing it anyway would keep a taint
 	// while dropping the only citation that shows where it came from.
 	ErrEvidenceCannotExplain = errors.New("memory: evidence cannot explain every label")
+	// ErrCanonicalConflict means more than one row is this identity, and no
+	// write may proceed until a person says which. The duplicates predate the
+	// canonical key — the index that reveals them is deliberately not unique,
+	// because a constraint would have refused the upgrade instead of surfacing
+	// what was already in the table. Choosing one of them would correct half a
+	// fact and leave the other half active, saying something else.
+	ErrCanonicalConflict = errors.New("memory: more than one row is this identity")
 )
+
+/*
+oneOf is what both stores do with the rows they matched, in one place.
+
+Two implementations of "is there exactly one" is one implementation and one
+place for it to drift, and the store that drifts is whichever one has fewer
+tests. Sorted by the caller before it gets here, so the pair named in the
+refusal is the same pair whichever store answered.
+*/
+func oneOf(found []domain.MemoryAssertion, key string) (*domain.MemoryAssertion, error) {
+	switch len(found) {
+	case 0:
+		return nil, nil
+	case 1:
+		return &found[0], nil
+	}
+	return nil, fmt.Errorf("%w: %s and %s are both %s",
+		ErrCanonicalConflict, found[0].ID, found[1].ID, key)
+}
 
 // MergeOrigin is which act is writing, because the expiry rule differs and
 // nothing else does. It is not a permission: the caller has already decided

@@ -44,6 +44,12 @@ type HydrateResult struct {
 	// marked source_erased rather than left readable: the memory is not wrong,
 	// its source was taken.
 	SourceGone int
+	// Conflicted counts rows the repair refused to touch because more than one
+	// row is that identity. Nothing can be derived for either of them until a
+	// person says which is the fact, and the sweep carries on: duplicate
+	// spellings are exactly what the rows this job walks are made of, so
+	// stopping on the first pair would abandon the population it exists for.
+	Conflicted int
 	// Unproved counts rows whose citations the ledger would not vouch for. It
 	// is not the opposite of Repaired and both can count the same row: the
 	// canonical identity derives from the row's own fields, so it is written

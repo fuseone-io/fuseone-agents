@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -83,7 +84,10 @@ the order, not the mechanism — read after taking the lock, never before.
 func (m *Memory) mergeInto(
 	incoming domain.MemoryAssertion, origin MergeOrigin,
 ) (domain.MemoryAssertion, MergeOutcome, error) {
-	stored, covering := m.neighbours(incoming)
+	stored, covering, err := m.neighbours(incoming)
+	if err != nil {
+		return domain.MemoryAssertion{}, "", err
+	}
 	merged, outcome, err := Merge(MergeInput{
 		Incoming: incoming, Stored: stored, Covering: covering,
 		Origin: origin, Now: incoming.UpdatedAt,
@@ -102,30 +106,37 @@ func (m *Memory) mergeInto(
 // may already cover it, by either name an identity has.
 func (m *Memory) neighbours(
 	a domain.MemoryAssertion,
-) (stored, covering *domain.MemoryAssertion) {
-	if found := m.byIdentity(a); found != nil {
-		return found, nil
-	}
-	if a.AgentID == "" {
-		return nil, nil
+) (stored, covering *domain.MemoryAssertion, err error) {
+	stored, err = m.byIdentity(a)
+	if err != nil || a.AgentID == "" || stored != nil {
+		return stored, nil, err
 	}
 	shared := a
 	shared.AgentID = ""
-	return nil, m.byIdentity(shared)
+	covering, err = m.byIdentity(shared)
+	return nil, covering, err
 }
 
-func (m *Memory) byIdentity(a domain.MemoryAssertion) *domain.MemoryAssertion {
+// byIdentity applies the same rule the durable store applies, from the same
+// place: more than one row is this identity and there is no answer to give.
+//
+// Sorted before the rule, because a map has no order and a refusal that named a
+// different pair each time would be a refusal nobody could act on.
+func (m *Memory) byIdentity(a domain.MemoryAssertion) (*domain.MemoryAssertion, error) {
 	key := domain.CanonicalIdentityKey(a)
+	var found []domain.MemoryAssertion
 	for _, held := range m.values {
 		if held.Scope != a.Scope || held.AgentID != a.AgentID {
 			continue
 		}
 		if held.ID == a.ID || domain.CanonicalIdentityKey(held) == key {
-			found := cloneAssertion(held)
-			return &found
+			found = append(found, cloneAssertion(held))
 		}
 	}
-	return nil
+	slices.SortFunc(found, func(x, y domain.MemoryAssertion) int {
+		return strings.Compare(x.ID, y.ID)
+	})
+	return oneOf(found, key)
 }
 
 func (m *Memory) Disable(
