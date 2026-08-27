@@ -2709,6 +2709,58 @@ Two rows in one page: the first cites a run that is not there, the second is
 whole. The first ends source_erased, the second is hydrated, and neither
 prevents the other.
 */
+/*
+An active memory whose bytes were erased is ended by the sweep.
+
+The half-finished erasure again: the content is gone and the row still says
+active, so a run recalls a memory the platform cannot show the source of. The
+citation is not wrong — the run is there, the step is there, the reference is
+there — which is why classifying erased bytes as an invalid citation left this
+state with nothing to converge it.
+*/
+func TestHydrate_contentErasedUnderneath_endsTheMemory(t *testing.T) {
+	t.Parallel()
+	expectHydrationEndsAnErasedMemory(t, context.Background(), memory.NewMemory())
+}
+
+func TestPostgresHydrate_contentErasedUnderneath_endsTheMemory(t *testing.T) {
+	ctx, store := postgresStore(t)
+	expectHydrationEndsAnErasedMemory(t, ctx, store)
+}
+
+func expectHydrationEndsAnErasedMemory(t *testing.T, ctx context.Context, store hydrateStore) {
+	t.Helper()
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+	r, cited := legacyRun(t, "run-erased-content")
+	if _, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Scope = r.scope
+		a.Evidence = []domain.MemoryEvidence{cited}
+	}), "usr_ana", "reviewed", now); err != nil {
+		t.Fatalf("Assert: %v", err)
+	}
+	if _, err := r.content.Erase(ctx, string(r.id), "the subject asked"); err != nil {
+		t.Fatalf("Erase: %v", err)
+	}
+
+	out, err := store.Hydrate(ctx, r.resolver(), memory.HydratePage{Limit: 10, Now: now})
+	if err != nil {
+		t.Fatalf("Hydrate: %v", err)
+	}
+	if out.SourceGone != 1 {
+		t.Errorf("source gone = %d, want the row whose bytes were erased", out.SourceGone)
+	}
+
+	readable, err := store.Find(ctx, domain.MemoryQuery{
+		Scope: r.scope, AgentID: "triage", Now: now,
+	})
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if len(readable) != 0 {
+		t.Errorf("find returned %d, want nothing whose bytes are gone", len(readable))
+	}
+}
+
 func TestPostgresHydrate_runGoneEndsThatRowAndNotTheSweep(t *testing.T) {
 	ctx, store := postgresStore(t)
 	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)

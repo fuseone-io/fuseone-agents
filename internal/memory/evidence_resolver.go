@@ -24,16 +24,23 @@ wraps the error it came from instead.
 var ErrEvidenceInvalid = errors.New("memory: evidence does not match the ledger")
 
 /*
-ErrEvidenceSourceAbsent means the run a citation names is not there any more.
+ErrEvidenceSourceAbsent means the source a citation rests on has been taken:
+the run is no longer in the ledger, or the bytes it produced were erased.
 
 Distinct from an invalid citation because the answers differ. A citation that
-never matched is a mistake to refuse; a run that retention has taken is a source
-that existed and is gone, and the platform already has a word for a memory in
-that state. Letting the sweep merely continue past it would leave active memory
-whose source we know does not exist.
+never matched is a mistake to refuse; a source that existed and is gone has a
+status of its own, and the platform ends the memory rather than leaving it
+readable. Filing an erasure under the first left active memory whose bytes we
+know were deleted, with a sweep that would never converge it — and that state is
+reachable without anybody doing anything strange, since erasing content and
+marking the memories are two transactions and only the first may have run.
 
-Distinct from infrastructure because the ledger answered. It said the run is not
-there, which is a fact, not a failure to reach it.
+A reference that never held anything is the other case and stays invalid: the
+bytes were not taken, the citation names somewhere they never were, and ending a
+memory on that would record a retention event for a mistake.
+
+Distinct from infrastructure because the store answered. It said the source is
+not there, which is a fact, not a failure to reach it.
 */
 var ErrEvidenceSourceAbsent = errors.New("memory: the run the evidence names is gone")
 
@@ -155,7 +162,7 @@ func (r *Resolver) prove(
 		return domain.MemoryEvidence{}, fmt.Errorf("memory: read content metadata: %w", err)
 	}
 	if meta.Erased {
-		return domain.MemoryEvidence{}, fmt.Errorf("%w: the content was erased", ErrEvidenceInvalid)
+		return domain.MemoryEvidence{}, fmt.Errorf("%w: the content was erased", ErrEvidenceSourceAbsent)
 	}
 	if !sameDigest(cite.digest, meta.Digest) {
 		return domain.MemoryEvidence{}, fmt.Errorf("%w: the digest disagrees with the ledger", ErrEvidenceInvalid)

@@ -199,6 +199,47 @@ func expectUnprovableReactivationIsRefused(t *testing.T, ctx context.Context, st
 }
 
 /*
+Erased bytes end the memory, whether it is on or off.
+
+The two halves of an erasure are two transactions: the content goes, and then
+the memories that cite it are marked. If the second never ran, the installation
+is left with memory whose bytes are deleted and whose status says otherwise —
+and nothing converges it, because the citation still names a run the ledger
+still has.
+
+So the proof treats erased bytes as a source that is gone, and both doors act on
+it: the sweep ends an active memory, and a reactivation ends the disabled one it
+was asked to bring back.
+*/
+func TestReactivate_contentErasedUnderneath_endsTheMemory(t *testing.T) {
+	t.Parallel()
+	expectErasedContentEndsTheMemory(t, context.Background(), memory.NewMemory())
+}
+
+func TestPostgresReactivate_contentErasedUnderneath_endsTheMemory(t *testing.T) {
+	ctx, store := postgresStore(t)
+	expectErasedContentEndsTheMemory(t, ctx, store)
+}
+
+func expectErasedContentEndsTheMemory(t *testing.T, ctx context.Context, store reactivateStore) {
+	t.Helper()
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+	r, disabled := disabledMemory(t, ctx, store, now)
+	if _, err := r.content.Erase(ctx, string(r.id), "the subject asked"); err != nil {
+		t.Fatalf("Erase: %v", err)
+	}
+
+	if _, err := store.Reactivate(ctx, r.resolver(), memory.ReactivateInput{
+		ID: disabled.ID, Scope: r.scope, By: "usr_bruno", Reason: "again", Now: now,
+	}); !errors.Is(err, memory.ErrMemoryTerminal) {
+		t.Fatalf("Reactivate = %v, want a memory whose bytes are gone refused", err)
+	}
+	if status := statusOf(t, ctx, store, r.scope, disabled.ID); status != domain.MemorySourceErased {
+		t.Errorf("status = %s, want the row to say its source is gone", status)
+	}
+}
+
+/*
 A reactivation nobody explained is not a governance act.
 
 The event carries the reason, and recordEvent trims and accepts an empty one —

@@ -227,17 +227,45 @@ func TestResolve_citingAnotherScope_refused(t *testing.T) {
 	}
 }
 
-func TestResolve_erasedContent_refused(t *testing.T) {
+/*
+Erased bytes are a source that is gone, not a citation that was wrong.
+
+Both refuse, so for a long time the difference did not show. It shows in what
+the platform does next: an invalid citation leaves the memory as it is and hopes
+somebody looks, while a source that has been taken has a status of its own and
+ends the memory. Filing erasure under the first left active memory whose bytes
+we know were deleted, readable, with a sweep that would never converge it.
+
+Reachable without anybody doing anything strange: ForSubject erases the content
+and then opens a second transaction to mark the memories. If that second step
+fails, this is exactly the state the installation is in.
+*/
+func TestResolve_erasedContent_isASourceThatIsGone(t *testing.T) {
 	t.Parallel()
 	r, cited := finished(t, "run-1")
 	if _, err := r.content.Erase(context.Background(), "run-1", "subject"); err != nil {
 		t.Fatalf("Erase: %v", err)
 	}
 
-	// Fail closed: the bytes that would explain this memory are gone, so the
-	// citation cannot be proved even though the ledger still names it.
-	if _, err := r.resolver().Resolve(context.Background(), r.scope, []domain.MemoryEvidence{cited}); err == nil {
-		t.Error("resolved a citation whose content was erased")
+	_, err := r.resolver().Resolve(context.Background(), r.scope, []domain.MemoryEvidence{cited})
+	if !errors.Is(err, memory.ErrEvidenceSourceAbsent) {
+		t.Fatalf("Resolve = %v, want the erased bytes reported as a source that is gone", err)
+	}
+}
+
+// Nothing ever stored at the reference stays an invalid citation. The bytes
+// were not taken; the citation names somewhere they never were, and ending a
+// memory on that would be the platform recording a retention event for a
+// mistake.
+func TestResolve_referenceThatNeverHeldAnything_isAnInvalidCitation(t *testing.T) {
+	t.Parallel()
+	r, cited := finished(t, "run-1")
+	r.content = engine.NewMemoryContent()
+
+	_, err := memory.NewResolver(r.ledger, r.content).
+		Resolve(context.Background(), r.scope, []domain.MemoryEvidence{cited})
+	if !errors.Is(err, memory.ErrEvidenceInvalid) {
+		t.Fatalf("Resolve = %v, want a reference that never held anything refused as invalid", err)
 	}
 }
 
