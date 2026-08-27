@@ -9,10 +9,17 @@ import (
 MemoryEvidence is one citation: which bytes in the ledger a memory rests on.
 
 Seq and SourceRunID are omitempty because evidence written before they existed
-has neither, and a citation must not change identity because the platform
-learned to record more about it. Seq zero means "the run, not a step of it",
-which is what the older shape meant; an absent SourceRunID means the run that
-produced the bytes is the run that cited them.
+has neither. Seq zero means "the run, not a step of it", which is what the older
+shape meant; an absent SourceRunID means the run that produced the bytes is the
+run that cited them.
+
+Those two are not the same kind of absence. An absent source is answerable from
+the record itself, so SourceRun resolves it and Key never sees the difference.
+An absent Seq is not: nothing in the row says which step, and the digest stored
+with it is the truncated one from the reference. So a legacy citation and its
+hydrated form have different keys, deliberately — hydration recognises the older
+shape and replaces it, rather than pretending the two were always one. Key
+identifies the complete form.
 
 Labels are what the cited step had accumulated at that point, resolved from the
 ledger and never accepted from a caller. They live on the citation rather than

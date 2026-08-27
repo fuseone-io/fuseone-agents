@@ -1709,3 +1709,147 @@ func TestPostgresAccept_racingAutoConfirm_leavesOneMemoryAndOneEnding(t *testing
 		t.Errorf("pending = %d, want the suggestion to have an ending", len(pending))
 	}
 }
+
+// hydrateStore is the repair door: it may complete what the platform can derive
+// and nothing else.
+type hydrateStore interface {
+	Assert(context.Context, domain.MemoryAssertion, domain.UserID, string, time.Time) (domain.MemoryAssertion, error)
+	Hydrate(context.Context, *memory.Resolver, memory.HydratePage) (memory.HydrateResult, error)
+	Find(context.Context, domain.MemoryQuery) ([]domain.MemoryAssertion, error)
+}
+
+/*
+A citation goes in legacy and comes out complete, still one record.
+
+This is the whole of hydration in one assertion. The old shape named a run and
+an artifact; the new one names the step, the run that produced the bytes, the
+whole digest and the labels the run had accumulated. Replacing rather than
+adding is what keeps it one citation — the two forms have different keys, so a
+merge would have kept both and doubled every record it repaired.
+
+And a second pass changes nothing. A repair that is not idempotent is a repair
+that cannot be run twice, which means it cannot be run at all on a schedule.
+*/
+func expectHydrationCompletesACitationInPlace(
+	t *testing.T, ctx context.Context, store hydrateStore, resolver *memory.Resolver,
+	seeded domain.MemoryAssertion, now time.Time,
+) {
+	t.Helper()
+
+	first, err := store.Hydrate(ctx, resolver, memory.HydratePage{Limit: 10, Now: now})
+	if err != nil {
+		t.Fatalf("Hydrate: %v", err)
+	}
+	if first.Repaired != 1 {
+		t.Fatalf("repaired = %d, want the one legacy row", first.Repaired)
+	}
+
+	found, err := store.Find(ctx, domain.MemoryQuery{
+		Scope: seeded.Scope, AgentID: seeded.AgentID, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if len(found) != 1 {
+		t.Fatalf("assertions = %d, want the one that was there", len(found))
+	}
+	got := found[0]
+
+	if len(got.Evidence) != 1 {
+		t.Fatalf("evidence = %d records, want the legacy citation replaced and not joined",
+			len(got.Evidence))
+	}
+	ev := got.Evidence[0]
+	if ev.Seq == 0 {
+		t.Error("the citation still does not say which step it names")
+	}
+	if len(ev.Digest) != 64 {
+		t.Errorf("digest = %q, want the whole one the store recorded", ev.Digest)
+	}
+	if !ev.Labels.Has(domain.LabelUntrusted) || !got.Labels.Has(domain.LabelUntrusted) {
+		t.Errorf("labels = %v / %v, want the taint the run carried", ev.Labels, got.Labels)
+	}
+
+	// Nothing a person decided may move.
+	if got.Claim != seeded.Claim || got.Observations != seeded.Observations ||
+		got.Confirmed != seeded.Confirmed || got.CreatedBy != seeded.CreatedBy {
+		t.Errorf("hydration changed what somebody decided: %+v", got)
+	}
+
+	second, err := store.Hydrate(ctx, resolver, memory.HydratePage{Limit: 10, Now: now})
+	if err != nil {
+		t.Fatalf("Hydrate again: %v", err)
+	}
+	if second.Repaired != 0 {
+		t.Errorf("second pass repaired %d, want a no-op", second.Repaired)
+	}
+
+	after, err := store.Find(ctx, domain.MemoryQuery{
+		Scope: seeded.Scope, AgentID: seeded.AgentID, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("Find after: %v", err)
+	}
+	// Compared against what was seeded, not against the first pass: a repair
+	// that moved the timestamp on the way in would move it for both reads and
+	// look stationary.
+	if !got.UpdatedAt.Equal(seeded.UpdatedAt) || !after[0].UpdatedAt.Equal(seeded.UpdatedAt) {
+		t.Errorf("updated_at moved for a repair nobody made: %v then %v, want %v",
+			got.UpdatedAt, after[0].UpdatedAt, seeded.UpdatedAt)
+	}
+}
+
+func TestHydrate_completesALegacyCitationInPlace(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := memory.NewMemory()
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	run, cited := legacyRun(t, "run-legacy")
+	seed := assertion(func(a *domain.MemoryAssertion) {
+		a.Scope = run.scope
+		a.Evidence = []domain.MemoryEvidence{cited}
+	})
+	seeded, err := store.Assert(ctx, seed, "usr_ana", "reviewed", now)
+	if err != nil {
+		t.Fatalf("Assert: %v", err)
+	}
+
+	expectHydrationCompletesACitationInPlace(t, ctx, store, run.resolver(), seeded, now)
+}
+
+func TestPostgresHydrate_completesALegacyCitationInPlace(t *testing.T) {
+	ctx, store := postgresStore(t)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	run, cited := legacyRun(t, "run-legacy")
+	seed := assertion(func(a *domain.MemoryAssertion) {
+		a.Scope = run.scope
+		a.Evidence = []domain.MemoryEvidence{cited}
+	})
+	seeded, err := store.Assert(ctx, seed, "usr_ana", "reviewed", now)
+	if err != nil {
+		t.Fatalf("Assert: %v", err)
+	}
+
+	expectHydrationCompletesACitationInPlace(t, ctx, store, run.resolver(), seeded, now)
+}
+
+// legacyRun seeds a tainted run and the citation a row written before this work
+// would have carried: a run and an artifact, no step, and the truncated digest
+// the reference happens to hold.
+func legacyRun(t *testing.T, id domain.RunID) (*run, domain.MemoryEvidence) {
+	t.Helper()
+	r, cited := finished(t, id)
+	full := cited
+	resolved, err := r.resolver().Resolve(context.Background(), r.scope,
+		[]domain.MemoryEvidence{full})
+	if err != nil {
+		t.Fatalf("resolve for the fixture: %v", err)
+	}
+	// What a row written before this work carries: the run and the artifact,
+	// the whole digest the handler checked against the payload, and no step.
+	return r, domain.MemoryEvidence{
+		RunID: id, Artifact: domain.ArtifactFinalAnswer, Digest: resolved[0].Digest,
+	}
+}

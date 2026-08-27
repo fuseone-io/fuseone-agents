@@ -254,11 +254,21 @@ func labelsUpTo(steps []domain.Step, at int) domain.Labels {
 	return out
 }
 
-// sameDigest compares what the ledger recorded with what the store holds. The
-// ledger's copy is written with a "sha256:" prefix in some payloads and without
-// it in others, and a citation must not fail because of a prefix.
+/*
+sameDigest compares what the ledger recorded with what the store holds.
+
+Two spellings of the same number are in circulation. Some payloads carry the
+"sha256:" prefix and some do not, and the engine's own digest helper truncates
+to sixteen hex — which is what a memory suggestion's citation has always
+carried. A citation must not fail to resolve because of a prefix or because the
+part it kept is shorter than the part it is being compared to.
+*/
 func sameDigest(a, b string) bool {
-	return trimDigest(a) == trimDigest(b)
+	x, y := trimDigest(a), trimDigest(b)
+	if len(x) > len(y) {
+		x, y = y, x
+	}
+	return x != "" && y[:len(x)] == x
 }
 
 func trimDigest(v string) string {
