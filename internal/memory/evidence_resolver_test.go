@@ -91,6 +91,32 @@ func (r *run) put(seq int64, data []byte) (string, string) {
 	return ref, meta.Digest
 }
 
+/*
+A citation that names its step still has to be right about what it cites.
+
+The digest was compared only for the older shape, where it was also the thing
+that told one step from another answering to the same artifact. Once a citation
+carried a seq that ambiguity was gone — and with it, by accident, the check.
+A stored citation could then name a step and claim any digest at all, and the
+resolver would vouch for it and hand back the real one, so nothing downstream
+could tell that what the memory says it saw is not what the run produced.
+
+Needing something for disambiguation and needing it to be true are different
+requirements, and only the first of them depends on the seq.
+*/
+func TestResolve_citationNamesItsStepAndTheWrongBytes_isNotProved(t *testing.T) {
+	t.Parallel()
+	r, cited := finished(t, "run-wrong-digest")
+	cited.Seq = 2
+	cited.Digest = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+
+	_, err := r.resolver().Resolve(context.Background(), r.scope,
+		[]domain.MemoryEvidence{cited})
+	if !errors.Is(err, memory.ErrEvidenceInvalid) {
+		t.Fatalf("Resolve = %v, want the citation refused as unproved", err)
+	}
+}
+
 func (r *run) resolver() *memory.Resolver {
 	return memory.NewResolver(r.ledger, r.content)
 }
@@ -147,20 +173,40 @@ func TestResolve_labelsFromTheCallerAreDiscarded(t *testing.T) {
 	}
 }
 
-// The digest is the store's, never the caller's: a citation is checked against
-// what was recorded, not against what it claims about itself.
+/*
+The digest that comes back is the store's, never the caller's.
+
+Cited here as the truncation a reference carries, which is what a row written
+before this work holds and which the comparison accepts. What must not happen is
+that spelling surviving into the resolved citation: everything downstream — the
+identity of a record, the eviction that folds two citations of the same bytes —
+compares digests, and two spellings of one digest are two records of one fact.
+
+Not to be confused with tolerating a digest that is wrong. A shorter true
+spelling passes; a false one does not, seq or no seq.
+*/
 func TestResolve_digestIsTheStoresNotTheCallers(t *testing.T) {
 	t.Parallel()
 	r, cited := finished(t, "run-1")
-	cited.Digest = "sha256:0000000000000000"
+	whole := resolveOne(t, r, cited).Digest
+	cited.Digest = whole[:16]
 
 	got, err := r.resolver().Resolve(context.Background(), r.scope, []domain.MemoryEvidence{cited})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
-	if got[0].Digest == "sha256:0000000000000000" {
-		t.Error("the caller's digest survived into the resolved citation")
+	if got[0].Digest != whole {
+		t.Errorf("digest = %s, want the whole one the store holds", got[0].Digest)
 	}
+}
+
+func resolveOne(t *testing.T, r *run, ev domain.MemoryEvidence) domain.MemoryEvidence {
+	t.Helper()
+	got, err := r.resolver().Resolve(context.Background(), r.scope, []domain.MemoryEvidence{ev})
+	if err != nil {
+		t.Fatalf("resolve for the fixture: %v", err)
+	}
+	return got[0]
 }
 
 func TestResolve_citingAnotherScope_refused(t *testing.T) {

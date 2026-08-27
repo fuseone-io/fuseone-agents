@@ -190,9 +190,13 @@ func citedStep(steps []domain.Step, ev domain.MemoryEvidence) (int, citation, er
 		if !ok {
 			continue
 		}
-		// The older shape carried the digest, and it is the only thing tying it
-		// to one step among several that could answer to the same artifact.
-		if ev.Seq == 0 && ev.Digest != "" && !sameDigest(ev.Digest, cite.digest) {
+		// Whenever the citation carries a digest, seq or no seq. Without a seq it
+		// is also what tells one step from another answering to the same
+		// artifact, and conditioning the comparison on that need is what let a
+		// citation that names its step claim any digest at all: needing
+		// something for disambiguation and needing it to be true are different
+		// requirements, and only the first of them depends on the seq.
+		if ev.Digest != "" && !sameDigest(ev.Digest, cite.digest) {
 			continue
 		}
 		return at, cite, nil
