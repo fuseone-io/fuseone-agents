@@ -37,6 +37,10 @@ func TestLooksLikeSecret(t *testing.T) {
 		{"a certificate header", "-----BEGIN CERTIFICATE-----", domain.SecretSuspected},
 		{"a truncated token", "the key starts with ghp_ and I did not copy it", domain.SecretSuspected},
 		{"an unrecognised opaque run", "aB3" + strings.Repeat("xY7z", 10), domain.SecretSuspected},
+		// The dots between the segments are what let this through as prose until
+		// the shape was named.
+		{"a bearer token", "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0." +
+			"dBjftJeZ4CVPmB92K27uhbUJU1p1r_wW1gFWFOEjXk", domain.SecretSuspected},
 
 		// Everything a memory is actually made of.
 		{"a claim", "restart the api deployment after the datasource error clears", domain.SecretNone},

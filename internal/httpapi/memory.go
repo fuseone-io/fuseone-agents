@@ -183,10 +183,16 @@ The detail names the risk and never the text. An error quoting the token would
 copy it into a log, an audit event and whatever bug report somebody pastes it
 into, which is three more places than the one it was already in.
 
-Certain is refused outright and no acknowledgement clears it. A warning can be
-answered, once a person has actually been shown it: the flag exists so the
-console can carry that answer back, not so a client can pre-emptively opt out of
-being asked.
+Certain is refused outright and nothing clears it. A warning can be overridden,
+and the flag is named for what it actually is: the server cannot know that
+anybody was shown the warning first, so this is somebody with publish permission
+taking responsibility, not a receipt for having been asked. Building a receipt
+would mean issuing a confirmation bound to the content and the caller, which is
+a real mechanism and not one a boolean can stand in for.
+
+What makes the decision visible afterwards is the label, not the flag: the flag
+is discarded at the edge, and an override nobody could see later would be a
+guard that quietly stopped applying.
 */
 func memorySecretRefusal(in openapi.MemoryAssertionInput) *openapi.Problem {
 	switch domain.LooksLikeSecret(in.Kind, in.Subject, in.Signature, in.Claim, in.Reason) {
@@ -195,7 +201,7 @@ func memorySecretRefusal(in openapi.MemoryAssertionInput) *openapi.Problem {
 			"a private key or a complete token was recognised")
 		return &p
 	case domain.SecretSuspected:
-		if in.AcknowledgedSecretWarning != nil && *in.AcknowledgedSecretWarning {
+		if overridesSecretWarning(in) {
 			return nil
 		}
 		p := refusal(http.StatusBadRequest, CodeMemorySecretWarned, "May be a credential",
@@ -203,6 +209,12 @@ func memorySecretRefusal(in openapi.MemoryAssertionInput) *openapi.Problem {
 		return &p
 	}
 	return nil
+}
+
+// overridesSecretWarning is somebody taking responsibility for text the
+// platform could not tell apart from a credential.
+func overridesSecretWarning(in openapi.MemoryAssertionInput) bool {
+	return in.OverrideSecretWarning != nil && *in.OverrideSecretWarning
 }
 
 func badMemoryCreate(detail string) openapi.CreateMemoryAssertion400ApplicationProblemPlusJSONResponse {

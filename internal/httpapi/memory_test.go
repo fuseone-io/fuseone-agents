@@ -475,14 +475,19 @@ func TestCreateMemoryAssertion_secretShapedText_isRefusedWithoutRepeatingIt(t *t
 }
 
 /*
-A warning is a question, and only a person who was asked may answer it.
+A warning can be overridden, and the override is written down.
 
 Long random text is a password, a hash, a correlation id or somebody's example.
 Refusing all of them teaches people to work around the check; accepting all of
-them makes the check decorative. So the console is told, in a code it can act
-on, and carries the answer back.
+them makes the check decorative. So the console is told in a code it can act on,
+and somebody with publish permission can take responsibility.
+
+What is not claimed is that they were asked first. The server cannot know that,
+and a boolean cannot prove it. What it can do is make the decision visible
+afterwards, which is the label — because an override nobody can see later is a
+guard that quietly stopped applying.
 */
-func TestCreateMemoryAssertion_suspectedSecret_asksBeforeItRefuses(t *testing.T) {
+func TestCreateMemoryAssertion_suspectedSecret_warnsAndCanBeOverridden(t *testing.T) {
 	t.Parallel()
 	suspect := "aB3" + strings.Repeat("xY7z", 10)
 
@@ -499,10 +504,28 @@ func TestCreateMemoryAssertion_suspectedSecret_asksBeforeItRefuses(t *testing.T)
 
 	answered := createAgainst(t, memstore.NewMemory(), func(in *openapi.MemoryAssertionInput) {
 		in.Claim = "the correlation id was " + suspect
-		in.AcknowledgedSecretWarning = ptr(true)
+		in.OverrideSecretWarning = ptr(true)
 	})
-	if _, stored := answered.(openapi.CreateMemoryAssertion200JSONResponse); !stored {
-		t.Fatalf("response = %T, want the answered warning to let it through", answered)
+	stored, ok := answered.(openapi.CreateMemoryAssertion200JSONResponse)
+	if !ok {
+		t.Fatalf("response = %T, want the override to let it through", answered)
+	}
+	if !hasAll(stored.Labels, domain.LabelSecret) {
+		t.Errorf("labels = %v, want the row to carry that the question was raised", stored.Labels)
+	}
+}
+
+// And a memory nobody had to override carries no such label. Marking every
+// memory would make the mark mean nothing.
+func TestCreateMemoryAssertion_ordinaryText_isNotLabelledSecret(t *testing.T) {
+	t.Parallel()
+	resp := createAgainst(t, memstore.NewMemory(), nil)
+	created, ok := resp.(openapi.CreateMemoryAssertion200JSONResponse)
+	if !ok {
+		t.Fatalf("response = %T, want an ordinary memory", resp)
+	}
+	if hasAll(created.Labels, domain.LabelSecret) {
+		t.Errorf("labels = %v, want nothing claiming a question was raised", created.Labels)
 	}
 }
 
@@ -512,7 +535,7 @@ func TestCreateMemoryAssertion_acknowledgingDoesNotClearACertainSecret(t *testin
 	t.Parallel()
 	resp := createAgainst(t, memstore.NewMemory(), func(in *openapi.MemoryAssertionInput) {
 		in.Claim = "use ghp_" + strings.Repeat("a1B2", 9)
-		in.AcknowledgedSecretWarning = ptr(true)
+		in.OverrideSecretWarning = ptr(true)
 	})
 	bad, ok := resp.(openapi.CreateMemoryAssertion400ApplicationProblemPlusJSONResponse)
 	if !ok {

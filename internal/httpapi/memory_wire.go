@@ -114,11 +114,20 @@ func memoryAssertionInput(
 	in openapi.MemoryAssertionInput, scope domain.Scope, derived memoryOrigin,
 ) domain.MemoryAssertion {
 	expires := derived.now.Add(memstore.DefaultMemoryTTL)
+	labels := derived.labels
+	if overridesSecretWarning(in) {
+		// The one label a caller's decision may add, and it adds it against
+		// them: somebody said this is not a credential, and the row says the
+		// question was raised. The event detail marshals the assertion, so the
+		// trail carries it too — otherwise an override would be a guard that
+		// stopped applying with nothing recording that it had.
+		labels = labels.Union(domain.NewLabels(domain.LabelSecret))
+	}
 	return domain.MemoryAssertion{
 		Scope: scope, AgentID: derived.agent,
 		Kind: in.Kind, Subject: in.Subject, Signature: in.Signature, Claim: in.Claim,
 		Evidence: memoryEvidenceFrom(in.Evidence), Observations: 1,
-		Confirmed: 1, Labels: derived.labels, Status: domain.MemoryActive,
+		Confirmed: 1, Labels: labels, Status: domain.MemoryActive,
 		ExpiresAt: &expires,
 	}
 }

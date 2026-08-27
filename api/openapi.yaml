@@ -4219,13 +4219,16 @@ components:
         reason:
           type: string
           description: Why a person decided this assertion should be remembered.
-        acknowledgedSecretWarning:
+        overrideSecretWarning:
           type: boolean
           description: >
-            Set only after a person has been shown `fuseone:memory-secret-warned`
-            and decided the text is not a credential. It clears the warning and
-            nothing else: content that certainly is a key is refused whatever
-            this says.
+            Record this even though it looks like it may contain a credential.
+            An override, not a receipt: the server does not and cannot know that
+            a person was shown `fuseone:memory-secret-warned` first, so this is
+            simply somebody with publish permission taking responsibility. The
+            assertion is labelled `secret` when it is used, which is what makes
+            the decision visible afterwards in the row and in the audit event.
+            Content that certainly is a key is refused whatever this says.
 
     MemoryDisableInput:
       type: object

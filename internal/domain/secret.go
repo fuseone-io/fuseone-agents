@@ -72,6 +72,12 @@ a token they nearly pasted.
 var suspectSecret = []*regexp.Regexp{
 	regexp.MustCompile(`-----BEGIN [A-Z ]+-----`),
 	regexp.MustCompile(`\b(gh[pousr]_|xox[baprs]-|sk_live_|rk_live_|sk-ant-|AKIA)`),
+	// A JWT: three base64url segments, the first two opening with the encoded
+	// `{"` every header and payload starts with. Suspected rather than certain
+	// because plenty of them carry nothing private — and the dots between the
+	// segments are exactly what makes the opaque-run rule below walk past it,
+	// so without naming the shape a bearer token reads as ordinary prose.
+	regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}`),
 }
 
 func riskOf(value string) SecretRisk {
