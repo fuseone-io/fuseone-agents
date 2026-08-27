@@ -62,6 +62,22 @@ describe("what Never forbids and the stages still carry", () => {
     ).toEqual([{ at: 0, why: "forbiddenStop", term: "runbook" }]);
   });
 
+  it("does not treat generic action verbs in Never as forbidden subjects", () => {
+    expect(
+      contradictions(
+        [
+          {
+            name: "Identificar",
+            stopsWhen:
+              "Se faltar namespace ou horário para consultar com segurança, responda pedindo os dados.",
+          },
+        ],
+        "Nunca\nNunca diga vou analisar, vou consultar, vou verificar ou vou prosseguir.",
+        [],
+      ),
+    ).toEqual([]);
+  });
+
   it("names a tool the stage can still reach after Never names it", () => {
     const catalogue: Tool[] = [
       {

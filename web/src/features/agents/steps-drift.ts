@@ -140,9 +140,12 @@ function escape(word: string): string {
 
 const STOP_WORDS = new Set([
   "about",
+  "analisar",
   "avoid",
   "campo",
   "campos",
+  "check",
+  "consultar",
   "could",
   "deve",
   "deveria",
@@ -155,6 +158,7 @@ const STOP_WORDS = new Set([
   "never",
   "nunca",
   "parte",
+  "prosseguir",
   "query",
   "queries",
   "read",
@@ -165,6 +169,8 @@ const STOP_WORDS = new Set([
   "tools",
   "usar",
   "utilizar",
+  "verificar",
+  "verify",
   "with",
 ]);
 
