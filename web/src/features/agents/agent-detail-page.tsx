@@ -71,7 +71,7 @@ export function AgentDetailPage() {
   return (
     <Tabs
       defaultValue="runs"
-      className="mx-auto flex w-full max-w-[1500px] min-w-0 flex-col gap-4"
+      className="flex w-full min-w-0 flex-col gap-4"
     >
       <AgentOverviewHeader
         agent={published}

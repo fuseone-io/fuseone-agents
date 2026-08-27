@@ -1,9 +1,10 @@
 import { useTranslation } from "react-i18next";
-import { FileText } from "lucide-react";
+import { FileText, UserRoundCheck } from "lucide-react";
 import { Mono } from "@/components/shared/mono";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AgentFlow } from "@/features/agents/agent-flow";
 import { InstructionsRead } from "@/features/agents/instructions-read";
+import { StepReaches } from "@/features/agents/step-reaches";
 import type { components } from "@/lib/api/schema.gen";
 
 /**
@@ -49,7 +50,7 @@ export function AgentDefinition({
       {view === "steps" ? (
         <StepsOnly steps={declared} />
       ) : view === "instructions" ? (
-        <Prose instructions={instructions} />
+        <Prose instructions={instructions} steps={declared} />
       ) : showTabs ? (
         <Tabs defaultValue="prose">
           <TabsList className="h-8">
@@ -57,14 +58,14 @@ export function AgentDefinition({
             <TabsTrigger value="flow">{t("agents.asFlow")}</TabsTrigger>
           </TabsList>
           <TabsContent value="prose">
-            <Prose instructions={instructions} />
+            <Prose instructions={instructions} steps={declared} />
           </TabsContent>
           <TabsContent value="flow" className="pt-1">
             <AgentFlow steps={declared} />
           </TabsContent>
         </Tabs>
       ) : (
-        <Prose instructions={instructions} />
+        <Prose instructions={instructions} steps={declared} />
       )}
     </section>
   );
@@ -88,25 +89,85 @@ function StepsOnly({ steps }: { steps: components["schemas"]["AgentStep"][] }) {
 }
 
 /**
- * The words, which are what the model reads.
+ * The words, plus the stages the published version declared.
  *
- * Kept apart from the steps deliberately: the prose is the instruction and
- * the steps are what the Gate is meant to obey. Showing them as one document
- * would hide that they are two different things with two different readers.
+ * Kept as two sections rather than generated prose: the body remains exactly
+ * what the author wrote, and the stage list remains exactly what the Gate
+ * uses. The read view still has to show both, otherwise changing a stage looks
+ * like it never changed the definition.
  *
  * Laid out the way it was written, labels in the margin. The editor gives a
  * prompt its own hierarchy and a version rendered as one paragraph throws it
  * away — at the moment somebody is working out what the agent was told.
  */
-function Prose({ instructions }: { instructions?: string }) {
+function Prose({
+  instructions,
+  steps,
+}: {
+  instructions?: string;
+  steps: components["schemas"]["AgentStep"][];
+}) {
   const { t } = useTranslation();
-  if (!instructions) {
-    return (
-      <p className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
-        <FileText className="size-4" aria-hidden />
-        {t("agents.publishedWithout")}
-      </p>
-    );
-  }
-  return <InstructionsRead instructions={instructions} />;
+  return (
+    <div className="min-w-0">
+      {instructions ? (
+        <InstructionsRead instructions={instructions} />
+      ) : (
+        <p className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
+          <FileText className="size-4" aria-hidden />
+          {t("agents.publishedWithout")}
+        </p>
+      )}
+      <DeclaredStepsRead steps={steps} />
+    </div>
+  );
+}
+
+function DeclaredStepsRead({
+  steps,
+}: {
+  steps: components["schemas"]["AgentStep"][];
+}) {
+  const { t } = useTranslation();
+  if (steps.length === 0) return null;
+
+  return (
+    <section className="mt-4 min-w-0 border-t border-border pt-4">
+      <h3 className="mb-2 text-2xs font-medium uppercase tracking-label text-muted-foreground">
+        {t("agents.asFlow")}
+      </h3>
+      <ol className="flex min-w-0 flex-col gap-2">
+        {steps.map((step, at) => (
+          <li
+            key={at}
+            className="grid min-w-0 grid-cols-[22px_minmax(0,1fr)] items-start gap-3 border-b border-border-subtle pb-2 last:border-0 last:pb-0"
+          >
+            <span className="grid size-[22px] place-items-center rounded-pill border border-border bg-muted font-mono text-[11px] tabular-nums text-muted-foreground">
+              {at + 1}
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-pretty">
+                {step.name || (
+                  <span className="italic text-muted-foreground">
+                    {t("agents.unnamedStep")}
+                  </span>
+                )}
+              </p>
+              <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
+                <StepReaches reaches={step.reaches} />
+                {step.stopsWhen && (
+                  <span className="inline-flex min-w-0 items-center gap-1.5 text-2xs text-warning">
+                    <UserRoundCheck className="size-3.5 shrink-0" aria-hidden />
+                    <span className="truncate">
+                      {t("agents.stopsWhen", { what: step.stopsWhen })}
+                    </span>
+                  </span>
+                )}
+              </div>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
 }

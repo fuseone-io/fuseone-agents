@@ -3,12 +3,11 @@ import { describe, expect, it } from "vitest";
 import { AgentDefinition } from "@/features/agents/agent-definition";
 
 /*
-The steps are not a prettier rendering of the prose.
+The published definition has two authored parts: prose and declared steps.
 
-The prose is what the model reads; the steps are what the Gate is meant to
-obey — `reaches` is the permission while a run sits at one, narrower than the
-capability pack. Showing them as one document would hide that they are two
-things with two readers.
+They stay distinct because the prose is the body the author wrote and the
+steps are the envelopes the Gate uses. The read view still has to name both,
+otherwise a published step can change while the definition looks unchanged.
 */
 
 describe("an agent's definition", () => {
@@ -46,5 +45,23 @@ describe("an agent's definition", () => {
     );
 
     expect(screen.getByRole("tab", { name: "Passos" })).toBeInTheDocument();
+  });
+
+  it("includes declared steps in the instruction view", () => {
+    render(
+      <AgentDefinition
+        view="instructions"
+        instructions="Diagnosticar alertas recebidos no Slack."
+        steps={[{ name: "Teste" }]}
+      />,
+    );
+
+    expect(
+      screen.getByText("Diagnosticar alertas recebidos no Slack."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Teste")).toBeInTheDocument();
+    expect(
+      screen.getByText("não chama nenhuma ferramenta — o agente pensando"),
+    ).toBeInTheDocument();
   });
 });

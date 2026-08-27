@@ -156,8 +156,12 @@ describe("the agent overview", () => {
   });
 
   it("opens on runs and leaves the definition behind a tab", async () => {
-    showDetail();
+    const { container } = showDetail();
 
+    const page = container.firstElementChild as HTMLElement;
+    expect(page).toHaveClass("w-full");
+    expect(page).not.toHaveClass("mx-auto");
+    expect(page).not.toHaveClass("max-w-[1500px]");
     expect(screen.getByRole("tab", { name: /Runs 19/ })).toHaveAttribute(
       "data-state",
       "active",

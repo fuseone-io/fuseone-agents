@@ -1,8 +1,8 @@
 import { useTranslation } from "react-i18next";
-import { CircleAlert, CircleDot, Wrench } from "lucide-react";
+import { CircleAlert, CircleDot } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { StepStrip } from "@/features/agents/step-strip";
-import { Mono } from "@/components/shared/mono";
+import { StepReaches } from "@/features/agents/step-reaches";
 import type { components } from "@/lib/api/schema.gen";
 
 type AgentStep = components["schemas"]["AgentStep"];
@@ -37,41 +37,30 @@ export function AgentFlow({ steps }: { steps: AgentStep[] }) {
       </div>
 
       <ol className="flex flex-col">
-      {steps.map((step, at) => (
-        <li key={`${step.name}-${at}`} className="flex gap-3">
-          <Rail last={at === steps.length - 1} index={at + 1} />
-          <div className="min-w-0 flex-1 pb-5">
-            <p className="text-sm font-medium">{step.name}</p>
+        {steps.map((step, at) => (
+          <li key={`${step.name}-${at}`} className="flex gap-3">
+            <Rail last={at === steps.length - 1} index={at + 1} />
+            <div className="min-w-0 flex-1 pb-5">
+              <p className="text-sm font-medium">{step.name}</p>
 
-            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-              {(step.reaches ?? []).length === 0 ? (
-                <span className="text-2xs text-muted-foreground">
-                  {t("agents.reachesNothing")}
-                </span>
-              ) : (
-                (step.reaches ?? []).map((tool) => (
-                  <Badge key={tool} variant="outline" className="gap-1">
-                    <Wrench className="size-3" aria-hidden />
-                    <Mono className="text-2xs">{tool}</Mono>
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                <StepReaches reaches={step.reaches} />
+                {step.model && (
+                  <Badge variant="secondary" className="text-2xs">
+                    {t("agents.stepModel", { model: step.model })}
                   </Badge>
-                ))
-              )}
-              {step.model && (
-                <Badge variant="secondary" className="text-2xs">
-                  {t("agents.stepModel", { model: step.model })}
-                </Badge>
+                )}
+              </div>
+
+              {step.stopsWhen && (
+                <p className="mt-1.5 flex items-start gap-1.5 text-2xs text-muted-foreground">
+                  <CircleAlert className="mt-px size-3.5 shrink-0" aria-hidden />
+                  {t("agents.stopsWhen", { what: step.stopsWhen })}
+                </p>
               )}
             </div>
-
-            {step.stopsWhen && (
-              <p className="mt-1.5 flex items-start gap-1.5 text-2xs text-muted-foreground">
-                <CircleAlert className="mt-px size-3.5 shrink-0" aria-hidden />
-                {t("agents.stopsWhen", { what: step.stopsWhen })}
-              </p>
-            )}
-          </div>
-        </li>
-      ))}
+          </li>
+        ))}
       </ol>
     </div>
   );
