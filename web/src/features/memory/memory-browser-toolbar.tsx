@@ -1,4 +1,4 @@
-import { AlertTriangle, Search } from "lucide-react";
+import { AlertTriangle, Archive, CircleCheck, List, Search, Sparkles } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -6,6 +6,12 @@ import type { MemoryFilters } from "@/features/memory/api";
 import type { MemoryView } from "@/features/memory/memory-view";
 
 const MAX_MEMORY_SEARCH_TERMS = 6;
+const VIEW_ICONS = {
+  active: CircleCheck,
+  disabled: Archive,
+  suggested: Sparkles,
+  all: List,
+} satisfies Record<MemoryView, typeof Search>;
 const MEMORY_SEARCH_ENGLISH_STOPWORDS = new Set([
   "about",
   "anything",
@@ -74,10 +80,19 @@ export function MemoryBrowserToolbar({
       />
       <Tabs value={view} onValueChange={(next) => onView(next as MemoryView)}>
         <TabsList className="h-8" aria-label={t("memory.viewFilter")}>
-          <TabsTrigger value="active">{t("memory.status.active")}</TabsTrigger>
-          <TabsTrigger value="disabled">{t("memory.status.disabled")}</TabsTrigger>
-          <TabsTrigger value="suggested">{t("memory.suggestions")}</TabsTrigger>
-          <TabsTrigger value="all">{t("memory.status.all")}</TabsTrigger>
+          {(["active", "disabled", "suggested", "all"] as const).map((option) => {
+            const Icon = VIEW_ICONS[option];
+            const label =
+              option === "suggested"
+                ? t("memory.suggestions")
+                : t(`memory.status.${option}`);
+            return (
+              <TabsTrigger key={option} value={option}>
+                <Icon aria-hidden />
+                {label}
+              </TabsTrigger>
+            );
+          })}
         </TabsList>
       </Tabs>
       {budget.omitted > 0 ? (

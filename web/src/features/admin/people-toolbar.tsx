@@ -1,4 +1,4 @@
-import { Search } from "lucide-react";
+import { KeyRound, Search, UserRoundCheck, UserRoundX, Users } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
@@ -6,6 +6,13 @@ import {
   type PeopleView,
 } from "@/features/admin/people-filters";
 import { cn } from "@/lib/utils";
+
+const VIEW_ICONS = {
+  all: Users,
+  provider: UserRoundCheck,
+  local: KeyRound,
+  noRole: UserRoundX,
+} satisfies Record<PeopleView, typeof Search>;
 
 export function PeopleToolbar({
   search,
@@ -45,22 +52,12 @@ export function PeopleToolbar({
         aria-label={t("people.viewFilter")}
       >
         {PEOPLE_VIEWS.map((candidate) => (
-          <Button
+          <PeopleViewButton
             key={candidate}
-            type="button"
-            variant="ghost"
-            size="xs"
-            aria-pressed={view === candidate}
+            view={candidate}
+            active={view === candidate}
             onClick={() => onView(candidate)}
-            className={cn(
-              "h-6 rounded-md px-2.5 text-xs transition-colors",
-              view === candidate
-                ? "border border-border bg-card text-foreground shadow-sm hover:bg-card hover:text-foreground"
-                : "border border-transparent text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {t(`people.views.${candidate}`)}
-          </Button>
+          />
         ))}
       </div>
 
@@ -68,5 +65,37 @@ export function PeopleToolbar({
         {t("people.summary", { noRole, local })}
       </span>
     </div>
+  );
+}
+
+function PeopleViewButton({
+  view,
+  active,
+  onClick,
+}: {
+  view: PeopleView;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const { t } = useTranslation();
+  const Icon = VIEW_ICONS[view];
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="xs"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        "h-6 rounded-md px-2.5 text-xs transition-colors",
+        active
+          ? "border border-border bg-card text-foreground shadow-sm hover:bg-card hover:text-foreground"
+          : "border border-transparent text-muted-foreground hover:text-foreground",
+      )}
+    >
+      <Icon className="size-3.5" aria-hidden />
+      {t(`people.views.${view}`)}
+    </Button>
   );
 }

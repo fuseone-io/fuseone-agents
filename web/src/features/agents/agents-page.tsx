@@ -1,9 +1,8 @@
 import { useTranslation } from "react-i18next";
 import { usePreferences, useTab } from "@/features/preferences/use-preferences";
 import { useMemo, useState } from "react";
-import { Bot } from "lucide-react";
 import { Link } from "react-router-dom";
-import { MessagesSquare, Plus } from "lucide-react";
+import { Bot, History, MessagesSquare, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PAGE_ICONS } from "@/components/layout/nav";
 import { LoadMore } from "@/components/shared/load-more";
@@ -98,8 +97,14 @@ export function AgentsPage() {
           <>
             <Tabs {...history}>
               <TabsList>
-                <TabsTrigger value="latest">{t("agents.current")}</TabsTrigger>
-                <TabsTrigger value="all">{t("agents.history")}</TabsTrigger>
+                <TabsTrigger value="latest">
+                  <Bot aria-hidden />
+                  {t("agents.current")}
+                </TabsTrigger>
+                <TabsTrigger value="all">
+                  <History aria-hidden />
+                  {t("agents.history")}
+                </TabsTrigger>
               </TabsList>
             </Tabs>
             <AgentsViewToggle view={view} onChange={setView} />

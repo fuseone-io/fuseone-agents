@@ -27,6 +27,16 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.38.10] — 2026-08-27
+
+### Changed
+
+- **Console tabs and segmented filters now carry matching icons.** The agent,
+  memory, available MCP servers, people and companies screens now use icons
+  beside their tab text, including the smaller filters inside those pages. The
+  labels stay the same, and the icons use the shared tab sizing so the controls
+  scan consistently across the console.
+
 ## [0.38.9] — 2026-08-27
 
 ### Fixed

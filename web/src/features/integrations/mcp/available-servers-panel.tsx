@@ -1,11 +1,16 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
+  Archive,
   BookOpen,
+  CircleCheck,
   KeyRound,
   LinkIcon,
+  List,
+  PackageOpen,
   Plug,
   Plus,
+  RefreshCw,
   Server,
   ShieldCheck,
   X,
@@ -47,6 +52,12 @@ import { cn } from "@/lib/utils";
 
 const ORIGINS = ["all", "published", "reference", "archived"] as const;
 type OriginFilter = (typeof ORIGINS)[number];
+const ORIGIN_ICONS = {
+  all: List,
+  published: CircleCheck,
+  reference: BookOpen,
+  archived: Archive,
+} satisfies Record<OriginFilter, typeof Server>;
 
 /**
  * The MCP catalogue, in the handoff shape: shelves on the left, servers in the
@@ -217,18 +228,21 @@ function CatalogueTabs({
         to="/integrations"
         className="inline-flex h-11 items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
       >
+        <Server aria-hidden />
         {t("integrations.connected")}
         <span className="rounded bg-muted px-1.5 font-mono text-2xs">
           {connected}
         </span>
       </Link>
       <span className="inline-flex h-11 items-center gap-2 border-b-2 border-primary text-sm font-medium">
+        <PackageOpen aria-hidden />
         {t("mcp.catalogueTab")}
         <span className="rounded bg-primary/10 px-1.5 font-mono text-2xs text-primary">
           {total}
         </span>
       </span>
-      <span className="inline-flex h-11 items-center text-sm text-muted-foreground">
+      <span className="inline-flex h-11 items-center gap-2 text-sm text-muted-foreground">
+        <RefreshCw aria-hidden />
         {t("mcp.syncTab")}
       </span>
       <span className="ml-auto hidden text-xs text-muted-foreground lg:block">
@@ -245,23 +259,44 @@ function OriginFilter({
   value: OriginFilter;
   onChange: (value: OriginFilter) => void;
 }) {
-  const { t } = useTranslation();
   return (
     <div className="flex h-8 items-center gap-1 rounded-md border bg-muted p-1">
       {ORIGINS.map((one) => (
-        <button
+        <OriginButton
           key={one}
-          type="button"
+          origin={one}
+          active={value === one}
           onClick={() => onChange(one)}
-          className={cn(
-            "h-6 rounded px-2 text-xs text-muted-foreground",
-            value === one && "bg-card font-medium text-foreground shadow-xs",
-          )}
-        >
-          {t(`mcp.originFilter.${one}`)}
-        </button>
+        />
       ))}
     </div>
+  );
+}
+
+function OriginButton({
+  origin,
+  active,
+  onClick,
+}: {
+  origin: OriginFilter;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const { t } = useTranslation();
+  const Icon = ORIGIN_ICONS[origin];
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "inline-flex h-6 items-center gap-1.5 rounded px-2 text-xs text-muted-foreground",
+        active && "bg-card font-medium text-foreground shadow-xs",
+      )}
+    >
+      <Icon className="size-3.5" aria-hidden />
+      {t(`mcp.originFilter.${origin}`)}
+    </button>
   );
 }
 

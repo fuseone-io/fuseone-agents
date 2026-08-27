@@ -31,7 +31,12 @@ describe("an agent's definition", () => {
       />,
     );
 
-    expect(screen.getByRole("tab", { name: "Passos" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("tab", { name: "Instruções" }).querySelector("svg"),
+    ).not.toBeNull();
+    expect(
+      screen.getByRole("tab", { name: "Passos" }).querySelector("svg"),
+    ).not.toBeNull();
   });
 
   it("says a step that calls nothing is the agent thinking", () => {

@@ -76,11 +76,11 @@ export function TabSteps({
         >
           <TabsList className="h-8">
             <TabsTrigger value="text">
-              <List className="size-3.5" aria-hidden />
+              <List aria-hidden />
               {t("agents.asText")}
             </TabsTrigger>
             <TabsTrigger value="flow">
-              <Workflow className="size-3.5" aria-hidden />
+              <Workflow aria-hidden />
               {t("agents.asFlowView")}
             </TabsTrigger>
           </TabsList>

@@ -64,6 +64,9 @@ describe("governed memory page", () => {
     hooks.items = Array.from({ length: 9 }, (_, index) => memoryAssertion(index));
     render(<MemoryPage />);
 
+    for (const name of ["Active", "Disabled", "Suggested memory", "All states"]) {
+      expect(screen.getByRole("tab", { name }).querySelector("svg")).not.toBeNull();
+    }
     expect(screen.getAllByText("subject-0").length).toBeGreaterThan(0);
     expect(screen.getByText("subject-7")).toBeInTheDocument();
     expect(screen.queryByText("subject-8")).not.toBeInTheDocument();

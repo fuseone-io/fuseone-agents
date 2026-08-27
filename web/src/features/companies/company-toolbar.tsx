@@ -1,4 +1,4 @@
-import { Search } from "lucide-react";
+import { Archive, Building2, CircleCheck, Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
@@ -6,6 +6,12 @@ import {
   type CompanyView,
 } from "@/features/companies/company-filters";
 import { cn } from "@/lib/utils";
+
+const VIEW_ICONS = {
+  all: Building2,
+  active: CircleCheck,
+  withdrawn: Archive,
+} satisfies Record<CompanyView, typeof Search>;
 
 export function CompanyToolbar({
   search,
@@ -42,22 +48,12 @@ export function CompanyToolbar({
         aria-label={t("companies.viewFilter")}
       >
         {COMPANY_VIEWS.map((candidate) => (
-          <Button
+          <CompanyViewButton
             key={candidate}
-            type="button"
-            variant="ghost"
-            size="xs"
-            aria-pressed={view === candidate}
+            view={candidate}
+            active={view === candidate}
             onClick={() => onView(candidate)}
-            className={cn(
-              "h-6 rounded-md px-2.5 text-xs transition-colors",
-              view === candidate
-                ? "border border-border bg-card text-foreground shadow-sm hover:bg-card hover:text-foreground"
-                : "border border-transparent text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {t(`companies.views.${candidate}`)}
-          </Button>
+          />
         ))}
       </div>
 
@@ -65,5 +61,37 @@ export function CompanyToolbar({
         {t("companies.summary", { active, withdrawn })}
       </span>
     </div>
+  );
+}
+
+function CompanyViewButton({
+  view,
+  active,
+  onClick,
+}: {
+  view: CompanyView;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const { t } = useTranslation();
+  const Icon = VIEW_ICONS[view];
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="xs"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        "h-6 rounded-md px-2.5 text-xs transition-colors",
+        active
+          ? "border border-border bg-card text-foreground shadow-sm hover:bg-card hover:text-foreground"
+          : "border border-transparent text-muted-foreground hover:text-foreground",
+      )}
+    >
+      <Icon className="size-3.5" aria-hidden />
+      {t(`companies.views.${view}`)}
+    </Button>
   );
 }

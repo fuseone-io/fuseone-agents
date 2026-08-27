@@ -31,16 +31,16 @@ export function InstructionsViewTabs({
     <Tabs value={view} onValueChange={(next) => onChange(next as InstructionsView)}>
       <TabsList className="h-8">
         <TabsTrigger value="write">
-          <Pencil className="size-3.5" aria-hidden />
+          <Pencil aria-hidden />
           {t("agents.writeIt")}
         </TabsTrigger>
         <TabsTrigger value="read">
-          <Eye className="size-3.5" aria-hidden />
+          <Eye aria-hidden />
           {t("agents.readAsAgent")}
         </TabsTrigger>
         {changed && (
           <TabsTrigger value="diff">
-            <GitCompare className="size-3.5" aria-hidden />
+            <GitCompare aria-hidden />
             {t("agents.whatChanged")}
           </TabsTrigger>
         )}

@@ -1,10 +1,16 @@
 import { useTranslation } from "react-i18next";
+import { Bot, Pencil, UserRoundCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSetStage, type Stage } from "@/features/agents/stage-api";
 import { problemMessage } from "@/lib/api/problem-message";
 
 const ORDER: Stage[] = ["draft", "copilot", "autonomous"];
+const ICONS = {
+  draft: Pencil,
+  copilot: UserRoundCheck,
+  autonomous: Bot,
+} satisfies Record<Stage, typeof Bot>;
 
 // Written out so the guard that checks every key exists can see them.
 const NAMES: Record<Stage, string> = {
@@ -56,11 +62,15 @@ export function StageControl({
   return (
     <Tabs value={current} onValueChange={change}>
       <TabsList className="h-8" aria-label={t("stage.label")}>
-        {ORDER.map((option) => (
-          <TabsTrigger key={option} value={option} disabled={set.isPending}>
-            {t(NAMES[option])}
-          </TabsTrigger>
-        ))}
+        {ORDER.map((option) => {
+          const Icon = ICONS[option];
+          return (
+            <TabsTrigger key={option} value={option} disabled={set.isPending}>
+              <Icon aria-hidden />
+              {t(NAMES[option])}
+            </TabsTrigger>
+          );
+        })}
       </TabsList>
     </Tabs>
   );

@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { FileText, UserRoundCheck } from "lucide-react";
+import { FileText, UserRoundCheck, Workflow } from "lucide-react";
 import { Mono } from "@/components/shared/mono";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AgentFlow } from "@/features/agents/agent-flow";
@@ -54,8 +54,14 @@ export function AgentDefinition({
       ) : showTabs ? (
         <Tabs defaultValue="prose">
           <TabsList className="h-8">
-            <TabsTrigger value="prose">{t("agents.asProse")}</TabsTrigger>
-            <TabsTrigger value="flow">{t("agents.asFlow")}</TabsTrigger>
+            <TabsTrigger value="prose">
+              <FileText aria-hidden />
+              {t("agents.asProse")}
+            </TabsTrigger>
+            <TabsTrigger value="flow">
+              <Workflow aria-hidden />
+              {t("agents.asFlow")}
+            </TabsTrigger>
           </TabsList>
           <TabsContent value="prose">
             <Prose instructions={instructions} steps={declared} />

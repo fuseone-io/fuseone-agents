@@ -1,4 +1,4 @@
-import { Plug, Search } from "lucide-react";
+import { Eye, List, Pencil, Plug, Search, UserRoundCheck } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
@@ -19,6 +19,12 @@ import {
 import type { Policy, Tool } from "@/lib/api/client";
 
 const FILTERS: ToolFilter[] = ["all", "read", "write", "asks"];
+const FILTER_ICONS = {
+  all: List,
+  read: Eye,
+  write: Pencil,
+  asks: UserRoundCheck,
+} satisfies Record<ToolFilter, typeof Search>;
 
 /**
  * What this agent may call, and what will happen when it does.
@@ -126,11 +132,15 @@ export function AgentToolsSection({
               onValueChange={(next) => setFilter(next as ToolFilter)}
             >
               <TabsList>
-                {FILTERS.map((option) => (
-                  <TabsTrigger key={option} value={option}>
-                    {t(`agents.filter.${option}`)}
-                  </TabsTrigger>
-                ))}
+                {FILTERS.map((option) => {
+                  const Icon = FILTER_ICONS[option];
+                  return (
+                    <TabsTrigger key={option} value={option}>
+                      <Icon aria-hidden />
+                      {t(`agents.filter.${option}`)}
+                    </TabsTrigger>
+                  );
+                })}
               </TabsList>
             </Tabs>
           </div>

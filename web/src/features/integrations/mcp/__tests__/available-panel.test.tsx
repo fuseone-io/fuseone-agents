@@ -152,6 +152,14 @@ describe("available MCP servers", () => {
     expect(
       container.querySelector('[data-mcp-icon="stripe"] svg'),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /Conectados/ }).querySelector("svg"),
+    ).not.toBeNull();
+    expect(screen.getByText("Catálogo MCP").querySelector("svg")).not.toBeNull();
+    expect(screen.getByText("Sincronizações").querySelector("svg")).not.toBeNull();
+    for (const name of ["Todos", "Publicados", "Referência", "Arquivados"]) {
+      expect(screen.getByRole("button", { name }).querySelector("svg")).not.toBeNull();
+    }
 
     await userEvent.click(
       screen.getByRole("button", { name: "Conectar Stripe" }),

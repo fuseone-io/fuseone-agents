@@ -50,6 +50,9 @@ describe("company administration", () => {
     render(<CompaniesPanel />);
 
     expect(screen.getByRole("searchbox")).toBeInTheDocument();
+    for (const name of ["Todas", "Ativas", "Retiradas"]) {
+      expect(screen.getByRole("button", { name }).querySelector("svg")).not.toBeNull();
+    }
     expect(screen.getByText("Acme")).toBeInTheDocument();
     expect(screen.getByText("Legacy")).toBeInTheDocument();
 
