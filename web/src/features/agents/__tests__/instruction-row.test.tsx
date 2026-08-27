@@ -222,6 +222,14 @@ describe("a block of an instruction", () => {
     });
 
     expect(await screen.findByText("crm.lookup")).toBeInTheDocument();
+    const anchor = document.querySelector(
+      '[data-cite-anchor="tool"]',
+    ) as HTMLElement | null;
+    expect(anchor).not.toBeNull();
+    expect(anchor?.style.position).toBe("absolute");
+    expect(
+      document.querySelector('[data-cite-mirror="tool"]')?.textContent,
+    ).toBe("Use @ antes de responder.");
 
     await userEvent.click(screen.getByText("crm.lookup"));
 

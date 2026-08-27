@@ -54,7 +54,7 @@ export function InstructionRow({
   const [writing, setWriting] = useState(false);
   const [citing, setCiting] = useState(false);
   const [citeAt, setCiteAt] = useState<number | null>(null);
-  const [pendingCaret, setPendingCaret] = useState<number | null>(null);
+  const [pendingCaret, setPendingCaret] = useState<CaretTarget | null>(null);
   const latestText = useRef(block.text);
 
   useEffect(() => {
@@ -86,12 +86,12 @@ export function InstructionRow({
       const next = `${text.slice(0, marker)}${tool}${text.slice(marker + 1)}`;
       latestText.current = next;
       on.change(next);
-      setPendingCaret(marker + tool.length);
+      setPendingCaret({ at: marker + tool.length, text: next });
     } else {
       const next = `${text}${tool}`;
       latestText.current = next;
       on.change(next);
-      setPendingCaret(next.length);
+      setPendingCaret({ at: next.length, text: next });
     }
     setCiteAt(null);
     setCiting(false);
@@ -173,4 +173,9 @@ export function InstructionRow({
 function markerBeforeCursor(text: string, cursor?: number): number | null {
   const at = cursor === undefined ? text.length - 1 : cursor - 1;
   return at >= 0 && text[at] === "@" ? at : null;
+}
+
+interface CaretTarget {
+  at: number;
+  text: string;
 }

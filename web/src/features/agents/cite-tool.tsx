@@ -31,12 +31,14 @@ import type { Tool } from "@/lib/api/client";
 export function CiteTool({
   open,
   catalogue,
+  anchor,
   onPick,
   onClose,
   children,
 }: {
   open: boolean;
   catalogue: Tool[];
+  anchor?: React.ReactNode;
   onPick: (tool: string) => void;
   onClose: () => void;
   children: React.ReactNode;
@@ -45,11 +47,19 @@ export function CiteTool({
 
   return (
     <Popover open={open} onOpenChange={(next) => !next && onClose()}>
-      <PopoverAnchor asChild>{children}</PopoverAnchor>
+      {anchor ? (
+        <div className="relative min-w-0">
+          {children}
+          <PopoverAnchor asChild>{anchor}</PopoverAnchor>
+        </div>
+      ) : (
+        <PopoverAnchor asChild>{children}</PopoverAnchor>
+      )}
       <PopoverContent
         align="start"
         className="w-[300px] p-0"
         onOpenAutoFocus={(e) => e.preventDefault()}
+        onCloseAutoFocus={(e) => e.preventDefault()}
       >
         <Command>
           <CommandInput placeholder={t("agents.citeATool")} autoFocus />
