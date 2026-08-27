@@ -93,26 +93,49 @@ func (m *Memory) Match(ctx context.Context, in MatchInput) (Match, error) {
 	if err != nil {
 		return Match{}, err
 	}
-	out.Own = own
+	out.Own = asOf(own, in.Now)
 	if in.AgentID != "" {
 		shared, err := m.byIdentity(in.identityOf(""))
 		if err != nil {
 			return Match{}, err
 		}
-		out.Shared = shared
+		out.Shared = asOf(shared, in.Now)
 	}
 	out.Pending = m.pendingFor(in)
 	return out, nil
 }
 
+// pendingFor is the proposal nobody has decided yet, found by identity rather
+// than by the id its own spelling hashes to. A queue searchable only by exact
+// spelling would let somebody teach a fact an agent proposed an hour ago in
+// slightly different words.
 func (m *Memory) pendingFor(in MatchInput) *domain.MemorySuggestion {
-	want := in.identityOf(in.AgentID).ID
+	want := domain.CanonicalIdentityKey(in.identityOf(in.AgentID))
 	for _, held := range m.suggestions {
-		if held.Status != domain.MemorySuggestionPending || held.AssertionID != want {
+		if held.Status != domain.MemorySuggestionPending {
+			continue
+		}
+		if domain.CanonicalIdentityKey(assertionOf(held)) != want {
 			continue
 		}
 		found := cloneSuggestion(held)
 		return &found
 	}
 	return nil
+}
+
+/*
+asOf is the status a reader should see, which is not always the one stored.
+
+An expired memory is stored active and projected expired, because expiry is a
+moment passing rather than something anybody did. Find and List already apply
+this; a match that did not would tell somebody their memory is active while the
+screen beside it says nothing is there.
+*/
+func asOf(a *domain.MemoryAssertion, now time.Time) *domain.MemoryAssertion {
+	if a == nil {
+		return nil
+	}
+	seen := effectiveStatus(*a, nowOrWall(now))
+	return &seen
 }

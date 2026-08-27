@@ -111,6 +111,159 @@ func expectMatchShowsTerminalStates(t *testing.T, ctx context.Context, store mat
 }
 
 /*
+A row written before the canonical key is found under a different spelling too.
+
+The lookup matches the key or the raw assertion id, and a legacy row has neither
+that answers to a new spelling — so the person most likely to be told "already
+here" by the merge a moment later was the one told "nothing here" by the screen.
+The write path has compared identities in Go since lazy keying; the read had
+not.
+*/
+func TestPostgresMatch_aLegacyRowUnderAnotherSpelling_isFound(t *testing.T) {
+	ctx, pool := postgresPool(t)
+	store := memory.NewPostgres(pool)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	stored, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Subject = "Grafana Datasource"
+	}), "usr_ana", "reviewed", now)
+	if err != nil {
+		t.Fatalf("Assert: %v", err)
+	}
+	unkey(t, ctx, pool, stored.ID)
+
+	got, err := store.Match(ctx, matchFor(func(in *memory.MatchInput) {
+		in.Subject = "grafana  datasource"
+	}))
+	if err != nil {
+		t.Fatalf("Match: %v", err)
+	}
+	if got.Own == nil || got.Own.ID != stored.ID {
+		t.Fatalf("own = %+v, want the keyless row found by its identity", got.Own)
+	}
+	// And still keyless: this is the read a screen makes on every keystroke, and
+	// keying a row is a write.
+	if hasKey(t, ctx, pool, stored.ID) {
+		t.Error("the match repaired the row it was only asked about")
+	}
+}
+
+/*
+A proposal is found by identity, not by the id its own spelling hashes to.
+
+Otherwise somebody teaches a fact an agent proposed an hour ago in slightly
+different words, the accept later merges the two, and the queue keeps an item
+whose reason for existing was answered somewhere they could not see.
+*/
+func TestMatch_aProposalUnderAnotherSpelling_isFound(t *testing.T) {
+	t.Parallel()
+	expectMatchFindsAnotherSpellingOfAProposal(t, context.Background(), memory.NewMemory())
+}
+
+func TestPostgresMatch_aProposalUnderAnotherSpelling_isFound(t *testing.T) {
+	ctx, store := postgresStore(t)
+	expectMatchFindsAnotherSpellingOfAProposal(t, ctx, store)
+}
+
+func expectMatchFindsAnotherSpellingOfAProposal(
+	t *testing.T, ctx context.Context, store matchStore,
+) {
+	t.Helper()
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+	out, err := store.Suggest(ctx, suggestion(func(s *domain.MemorySuggestion) {
+		s.Subject = "Grafana Datasource"
+	}), reviewPolicy, "agent:triage", now)
+	if err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+
+	got, err := store.Match(ctx, matchFor(func(in *memory.MatchInput) {
+		in.Subject = "grafana  datasource"
+	}))
+	if err != nil {
+		t.Fatalf("Match: %v", err)
+	}
+	if got.Pending == nil || got.Pending.ID != out.Suggestion.ID {
+		t.Fatalf("pending = %+v, want the proposal found by its identity", got.Pending)
+	}
+}
+
+/*
+A proposal is recorded with its canonical key, so the index can serve the match.
+
+The unkeyed fallback would find it either way, which is exactly why this needs
+its own accuser: a column that stops being written keeps working, slowly, by
+scanning every pending row in the namespace on every keystroke — and nothing
+fails until somebody has enough of them for it to matter.
+*/
+func TestPostgresSuggest_recordsTheCanonicalIdentityKey(t *testing.T) {
+	ctx, pool := postgresPool(t)
+	store := memory.NewPostgres(pool)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	out, err := store.Suggest(ctx, suggestion(nil), reviewPolicy, "agent:triage", now)
+	if err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+	var key *string
+	if err := pool.QueryRow(ctx,
+		`select canonical_identity_key from memory_suggestions where suggestion_id = $1`,
+		out.Suggestion.ID).Scan(&key); err != nil {
+		t.Fatalf("read the key: %v", err)
+	}
+	if key == nil {
+		t.Fatal("the proposal was recorded without its key, so every match scans for it")
+	}
+	if *key != domain.CanonicalIdentityKey(domain.MemoryAssertion{
+		Scope: out.Suggestion.Scope, AgentID: out.Suggestion.AgentID,
+		Kind: out.Suggestion.Kind, Subject: out.Suggestion.Subject,
+		Signature: out.Suggestion.Signature,
+	}) {
+		t.Errorf("key = %q, want the identity the assertions are keyed by", *key)
+	}
+}
+
+/*
+An expired memory says expired, and one whose source was erased says that.
+
+Expiry is a moment passing rather than something anybody did, so it is stored
+active and projected. A match that returned the stored value would tell somebody
+their memory is active while the screen beside it shows nothing — which is the
+exact confusion this endpoint exists to end.
+*/
+func TestMatch_expiryAndErasureAreProjected(t *testing.T) {
+	t.Parallel()
+	expectMatchProjectsTerminalStates(t, context.Background(), memory.NewMemory())
+}
+
+func TestPostgresMatch_expiryAndErasureAreProjected(t *testing.T) {
+	ctx, store := postgresStore(t)
+	expectMatchProjectsTerminalStates(t, ctx, store)
+}
+
+func expectMatchProjectsTerminalStates(t *testing.T, ctx context.Context, store matchStore) {
+	t.Helper()
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+	gone := now.Add(-time.Hour)
+	if _, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.ExpiresAt = &gone
+	}), "usr_ana", "reviewed", now.Add(-48*time.Hour)); err != nil {
+		t.Fatalf("Assert: %v", err)
+	}
+
+	got, err := store.Match(ctx, matchFor(nil))
+	if err != nil {
+		t.Fatalf("Match: %v", err)
+	}
+	if got.Own == nil {
+		t.Fatal("own = nil, want the expired memory shown rather than hidden")
+	}
+	if got.Own.Status != domain.MemoryExpired {
+		t.Errorf("status = %s, want the state that explains why Find is silent", got.Own.Status)
+	}
+}
+
+/*
 Shared memory is answered separately from the agent's own.
 
 The two mean different things to whoever asked. Their own memory is theirs to

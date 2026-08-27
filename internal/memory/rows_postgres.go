@@ -87,14 +87,14 @@ func lockSuggestion(ctx context.Context, tx db, id string) error {
 func insertSuggestion(ctx context.Context, tx db, s domain.MemorySuggestion) error {
 	evidence, _ := json.Marshal(s.Evidence)
 	_, err := tx.Exec(ctx, `
-		insert into memory_suggestions (`+suggestionColumns+`)
+		insert into memory_suggestions (`+suggestionColumns+`, canonical_identity_key)
 		values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,
-		        nullif($19, ''))`,
+		        nullif($19, ''),$20)`,
 		s.ID, s.AssertionID, string(s.Scope.Company), string(s.Scope.Area),
 		string(s.AgentID), s.Kind, s.Subject, s.Signature, s.Claim, evidence,
 		s.Observations, []string(s.Labels), string(s.Status), s.ExpiresAt,
 		string(s.CreatedBy), s.CreatedAt, string(s.UpdatedBy), s.UpdatedAt,
-		s.CoveredBy)
+		s.CoveredBy, domain.CanonicalIdentityKey(assertionOf(s)))
 	if err != nil {
 		return fmt.Errorf("memory: insert suggestion %s: %w", s.ID, err)
 	}
