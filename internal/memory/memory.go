@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"sync"
 	"time"
@@ -173,7 +174,7 @@ func (m *Memory) Suggest(
 		return domain.MemorySuggestionOutcome{Suggestion: prepared, Result: domain.MemorySuggestIgnored}, nil
 	}
 	if policy.AutoConfirms(prepared.Labels) && prepared.Observations >= policy.MinObservations {
-		return m.autoConfirmSuggestion(prepared, now), nil
+		return m.autoConfirmSuggestion(prepared, now)
 	}
 	m.suggestions[prepared.ID] = cloneSuggestion(prepared)
 	return domain.MemorySuggestionOutcome{Suggestion: prepared, Result: domain.MemorySuggestPending}, nil
@@ -195,16 +196,28 @@ func (m *Memory) alreadyActiveSuggestion(
 	return domain.MemorySuggestionOutcome{}, false
 }
 
-func (m *Memory) autoConfirmSuggestion(s domain.MemorySuggestion, now time.Time) domain.MemorySuggestionOutcome {
+func (m *Memory) autoConfirmSuggestion(
+	s domain.MemorySuggestion, now time.Time,
+) (domain.MemorySuggestionOutcome, error) {
 	assertion := assertionFromSuggestion(s, s.Observations, domain.UserID("system:memory"), now)
-	assertion = preserveCreatedBy(m.values[assertion.ID], assertion)
-	m.values[assertion.ID] = cloneAssertion(assertion)
+	merged, outcome, err := m.mergeInto(assertion, OriginAutoConfirm)
+	if err != nil {
+		return domain.MemorySuggestionOutcome{}, err
+	}
+	if outcome == Covered {
+		// Nothing was written, so the suggestion is not spent. It waits for a
+		// person.
+		m.suggestions[s.ID] = cloneSuggestion(s)
+		return domain.MemorySuggestionOutcome{
+			Suggestion: s, Result: domain.MemorySuggestPending,
+		}, nil
+	}
 	s.Status = domain.MemorySuggestionAutoConfirmed
-	s.UpdatedBy, s.UpdatedAt = assertion.UpdatedBy, assertion.UpdatedAt
+	s.UpdatedBy, s.UpdatedAt = merged.UpdatedBy, merged.UpdatedAt
 	m.suggestions[s.ID] = cloneSuggestion(s)
 	return domain.MemorySuggestionOutcome{
-		Suggestion: s, Assertion: &assertion, Result: domain.MemorySuggestAutoConfirmed,
-	}
+		Suggestion: s, Assertion: &merged, Result: domain.MemorySuggestAutoConfirmed,
+	}, nil
 }
 
 func (m *Memory) ListSuggestions(ctx context.Context, f SuggestionFilter) ([]domain.MemorySuggestion, error) {
@@ -236,11 +249,18 @@ func (m *Memory) AcceptSuggestion(
 		return domain.MemoryAssertion{}, ErrNotFound
 	}
 	assertion := assertionFromSuggestion(s, s.Observations, by, now)
-	assertion = preserveCreatedBy(m.values[assertion.ID], assertion)
-	m.values[assertion.ID] = cloneAssertion(assertion)
+	merged, outcome, err := m.mergeInto(assertion, OriginAccept)
+	if err != nil {
+		return domain.MemoryAssertion{}, err
+	}
+	if outcome == Covered {
+		return domain.MemoryAssertion{}, fmt.Errorf("%w: shared memory already covers it", ErrCovered)
+	}
+	// After the merge: a suggestion marked accepted beside an assertion that
+	// was never written is a queue that empties while nothing is learned.
 	s.Status, s.UpdatedBy, s.UpdatedAt = domain.MemorySuggestionAccepted, by, now.UTC()
 	m.suggestions[id] = cloneSuggestion(s)
-	return assertion, nil
+	return merged, nil
 }
 
 func (m *Memory) DismissSuggestion(

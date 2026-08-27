@@ -1439,3 +1439,136 @@ func TestPostgresAssert_concurrentCorrectionsOfOneFact_loseNothing(t *testing.T)
 			got.Observations, got.Confirmed)
 	}
 }
+
+// mergeStore is every path that writes an assertion, which is what the matrix
+// below is about: one decision, reached three ways.
+type mergeStore interface {
+	Assert(context.Context, domain.MemoryAssertion, domain.UserID, string, time.Time) (domain.MemoryAssertion, error)
+	Suggest(context.Context, domain.MemorySuggestion, domain.MemoryLearningPolicy, domain.UserID, time.Time) (domain.MemorySuggestionOutcome, error)
+	AcceptSuggestion(context.Context, string, domain.Scope, domain.UserID, string, time.Time) (domain.MemoryAssertion, error)
+	ListSuggestions(context.Context, memory.SuggestionFilter) ([]domain.MemorySuggestion, error)
+	Find(context.Context, domain.MemoryQuery) ([]domain.MemoryAssertion, error)
+}
+
+var reviewPolicy = domain.MemoryLearningPolicy{Mode: domain.MemoryLearningReview}
+
+/*
+Accepting a suggestion merges into what is there; it does not replace it.
+
+Before this, accept wrote the suggestion over the stored row: a memory somebody
+had corrected, carrying a taint from the run that taught it, came back clean and
+shorter-lived because a later suggestion happened to be accepted.
+*/
+func expectAcceptMergesIntoTheStoredAssertion(t *testing.T, ctx context.Context, store mergeStore) {
+	t.Helper()
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+	far := now.Add(240 * time.Hour)
+
+	// The agent suggests first: Suggest refuses to open a suggestion against an
+	// identity that is already active, so this is the only order in which an
+	// accept can ever meet a stored assertion.
+	out, err := store.Suggest(ctx, suggestion(func(s *domain.MemorySuggestion) {
+		s.Claim = "a later wording the agent proposed"
+		s.Evidence = []domain.MemoryEvidence{{
+			RunID: "run-new", Seq: 4, Artifact: domain.ArtifactMemorySuggestion, Digest: "sha256:n",
+		}}
+	}), reviewPolicy, "agent:triage", now)
+	if err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+
+	// Then somebody writes the memory by hand, with a taint and a long life.
+	if _, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Labels = domain.NewLabels(domain.LabelUntrusted)
+		a.ExpiresAt = &far
+		a.Evidence = []domain.MemoryEvidence{{
+			RunID: "run-old", Seq: 1, Artifact: "final_answer", Digest: "sha256:o",
+			Labels: domain.NewLabels(domain.LabelUntrusted),
+		}}
+	}), "usr_ana", "reviewed", now); err != nil {
+		t.Fatalf("Assert: %v", err)
+	}
+
+	got, err := store.AcceptSuggestion(ctx, out.Suggestion.ID, platformScope, "usr_ana", "agreed", now)
+	if err != nil {
+		t.Fatalf("AcceptSuggestion: %v", err)
+	}
+
+	if !got.Labels.HasAny(domain.LabelUntrusted) {
+		t.Errorf("labels = %v, want the stored taint to survive the accept", got.Labels)
+	}
+	if got.ExpiresAt == nil || !got.ExpiresAt.Equal(far) {
+		t.Errorf("expiry = %v, want the stored one kept even though the suggestion cited something new",
+			got.ExpiresAt)
+	}
+	if len(got.Evidence) != 2 {
+		t.Errorf("evidence = %d records, want both the stored and the accepted citation", len(got.Evidence))
+	}
+}
+
+/*
+A terminal memory refuses the accept and the suggestion is not spent.
+
+The dangerous shape is the quiet one: the suggestion marked accepted, the queue
+emptied, and the assertion still disabled — nobody learns anything and nothing
+says so.
+*/
+func expectAcceptOnADisabledAssertionConsumesNothing(t *testing.T, ctx context.Context, store mergeStore) {
+	t.Helper()
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	stored, err := store.Assert(ctx, assertion(nil), "usr_ana", "reviewed", now)
+	if err != nil {
+		t.Fatalf("Assert: %v", err)
+	}
+	disabler, ok := store.(interface {
+		Disable(context.Context, string, domain.Scope, domain.UserID, string, time.Time) error
+	})
+	if !ok {
+		t.Fatal("store cannot disable")
+	}
+	if err := disabler.Disable(ctx, stored.ID, platformScope, "usr_ana", "wrong", now); err != nil {
+		t.Fatalf("Disable: %v", err)
+	}
+
+	out, err := store.Suggest(ctx, suggestion(func(s *domain.MemorySuggestion) {
+		s.Claim = "the agent proposes it again"
+	}), reviewPolicy, "agent:triage", now)
+	if err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+
+	if _, err := store.AcceptSuggestion(ctx, out.Suggestion.ID, platformScope, "usr_ana", "agreed", now); err == nil {
+		t.Fatal("accepted onto a disabled memory")
+	}
+
+	pending, err := store.ListSuggestions(ctx, memory.SuggestionFilter{
+		Scopes: []domain.Scope{platformScope}, Status: domain.MemorySuggestionPending, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("ListSuggestions: %v", err)
+	}
+	if len(pending) != 1 {
+		t.Errorf("pending = %d, want the suggestion left for somebody to decide", len(pending))
+	}
+}
+
+func TestAccept_mergesIntoTheStoredAssertion(t *testing.T) {
+	t.Parallel()
+	expectAcceptMergesIntoTheStoredAssertion(t, context.Background(), memory.NewMemory())
+}
+
+func TestPostgresAccept_mergesIntoTheStoredAssertion(t *testing.T) {
+	ctx, store := postgresStore(t)
+	expectAcceptMergesIntoTheStoredAssertion(t, ctx, store)
+}
+
+func TestAccept_onADisabledAssertion_consumesNothing(t *testing.T) {
+	t.Parallel()
+	expectAcceptOnADisabledAssertionConsumesNothing(t, context.Background(), memory.NewMemory())
+}
+
+func TestPostgresAccept_onADisabledAssertion_consumesNothing(t *testing.T) {
+	ctx, store := postgresStore(t)
+	expectAcceptOnADisabledAssertionConsumesNothing(t, ctx, store)
+}

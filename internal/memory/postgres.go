@@ -205,13 +205,20 @@ func (s suggestionTx) autoConfirm(
 	ctx context.Context, stored domain.MemorySuggestion,
 ) (domain.MemorySuggestionOutcome, error) {
 	assertion := assertionFromSuggestion(stored, stored.Observations, domain.UserID("system:memory"), s.now)
-	if err := recordEvent(ctx, s.tx, assertion, assertion.UpdatedBy,
-		"auto-confirmed repeated suggestions", "auto_confirmed"); err != nil {
+	merged, outcome, err := mergeInto(ctx, s.tx, assertion, OriginAutoConfirm,
+		assertion.UpdatedBy, "auto-confirmed repeated suggestions", "auto_confirmed")
+	if err != nil {
 		return domain.MemorySuggestionOutcome{}, err
 	}
-	if err := upsertAssertion(ctx, s.tx, assertion); err != nil {
-		return domain.MemorySuggestionOutcome{}, err
+	if outcome == Covered {
+		// Nothing was written, so the suggestion is not spent. It stays pending
+		// and a person decides.
+		if err := s.tx.Commit(ctx); err != nil {
+			return domain.MemorySuggestionOutcome{}, fmt.Errorf("memory: commit suggestion: %w", err)
+		}
+		return domain.MemorySuggestionOutcome{Suggestion: stored, Result: domain.MemorySuggestPending}, nil
 	}
+	assertion = merged
 	stored.Status = domain.MemorySuggestionAutoConfirmed
 	stored.UpdatedBy, stored.UpdatedAt = assertion.UpdatedBy, assertion.UpdatedAt
 	if err := updateSuggestion(ctx, s.tx, stored); err != nil {
@@ -255,18 +262,21 @@ func (p *Postgres) AcceptSuggestion(
 		return domain.MemoryAssertion{}, ErrNotFound
 	}
 	assertion := assertionFromSuggestion(s, s.Observations, by, now)
-	if err := recordEvent(ctx, tx, assertion, by, reason, "accepted"); err != nil {
+	stored, outcome, err := mergeInto(ctx, tx, assertion, OriginAccept, by, reason, "accepted")
+	if err != nil {
 		return domain.MemoryAssertion{}, err
 	}
-	if err := upsertAssertion(ctx, tx, assertion); err != nil {
-		return domain.MemoryAssertion{}, err
+	if outcome == Covered {
+		// Shared memory already answers this, and it was not modified. Nothing
+		// was written, so nothing is consumed: the suggestion stays pending and
+		// the caller is told to improve the shared memory deliberately.
+		return domain.MemoryAssertion{}, fmt.Errorf("%w: shared memory already covers it", ErrCovered)
 	}
+	// After the merge, in the same transaction: a suggestion marked accepted
+	// beside an assertion that was never written is a queue that empties while
+	// nothing is learned.
 	s.Status, s.UpdatedBy, s.UpdatedAt = domain.MemorySuggestionAccepted, by, now.UTC()
 	if err := updateSuggestion(ctx, tx, s); err != nil {
-		return domain.MemoryAssertion{}, err
-	}
-	stored, err := readAssertionTx(ctx, tx, assertion.ID, assertion.Scope)
-	if err != nil {
 		return domain.MemoryAssertion{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {

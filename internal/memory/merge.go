@@ -20,6 +20,10 @@ var (
 	// erased, and a write is not how either is undone. Reactivation is a
 	// separate act with its own reason and its own event.
 	ErrMemoryTerminal = errors.New("memory: the assertion is not active")
+	// ErrCovered means an equivalent shared memory already answers this write.
+	// Nothing was modified and nothing is consumed: correcting the shared
+	// memory is a separate act, taken against the shared memory itself.
+	ErrCovered = errors.New("memory: shared memory already covers this identity")
 	// ErrMergeOrigin means the caller did not say which act is writing. The
 	// field decides whether the expiry may be renewed, and its zero value is
 	// the most permissive answer — so a caller that forgot it would change what
