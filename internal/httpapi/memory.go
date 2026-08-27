@@ -84,19 +84,23 @@ func (s *Server) CreateMemoryAssertion(
 	if !req.Body.Namespace.Valid() {
 		return badMemoryCreate("namespace must be agent or shared"), nil
 	}
-	if refused := memorySecretRefusal(*req.Body); refused != nil {
-		return openapi.CreateMemoryAssertion400ApplicationProblemPlusJSONResponse{
-			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(*refused),
-		}, nil
-	}
 	agent, labels, err := s.originOfMemoryEvidence(ctx, scope, req.Body.Namespace, req.Body.Evidence)
 	if err != nil {
 		return badMemoryCreate(err.Error()), nil
 	}
 	now := clockOr(s.clock).Now()
-	assertion, err := s.memory.Assert(ctx,
+	// The same policy the accept applies, from the same function, on the
+	// assertion this is about to write rather than on the request that
+	// described it.
+	proposed, err := memstore.SecretDecision(
 		memoryAssertionInput(*req.Body, scope, memoryOrigin{agent: agent, labels: labels, now: now}),
-		callerOf(ctx), req.Body.Reason, now)
+		overridesSecretWarning(*req.Body), req.Body.Reason)
+	if refused := memorySecretProblem(err); refused != nil {
+		return openapi.CreateMemoryAssertion400ApplicationProblemPlusJSONResponse{
+			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(*refused),
+		}, nil
+	}
+	assertion, err := s.memory.Assert(ctx, proposed, callerOf(ctx), req.Body.Reason, now)
 	switch memoryRefusal(err) {
 	case http.StatusConflict:
 		return openapi.CreateMemoryAssertion409ApplicationProblemPlusJSONResponse(
@@ -170,48 +174,20 @@ func memoryRefusal(err error) int {
 }
 
 /*
-memorySecretRefusal answers what the text somebody typed looks like.
+memorySecretProblem is how the store's two secret refusals reach a caller.
 
-The fields a model can read, and only those: a memory is quoted back into a run,
-so a credential in one of them is a credential the platform hands to a model.
-The evidence is left out because nothing a person composes goes in it — but that
-is a narrowing, not a protection. What keeps a digest from being read as a
-credential is the rule itself, which is blind to hexadecimal, and that is where
-it is tested.
-
-The detail names the risk and never the text. An error quoting the token would
-copy it into a log, an audit event and whatever bug report somebody pastes it
-into, which is three more places than the one it was already in.
-
-Certain is refused outright and nothing clears it. A warning can be overridden,
-and the flag is named for what it actually is: the server cannot know that
-anybody was shown the warning first, so this is somebody with publish permission
-taking responsibility, not a receipt for having been asked. Building a receipt
-would mean issuing a confirmation bound to the content and the caller, which is
-a real mechanism and not one a boolean can stand in for.
-
-What makes the decision visible afterwards is the label, not the flag: the flag
-is discarded at the edge, and an override nobody could see later would be a
-guard that quietly stopped applying.
+Codes rather than sentences, and neither carries the text that triggered it: an
+error quoting the token would copy it into a log, an audit event and whatever
+bug report somebody pastes it into, which is three more places than the one it
+was already in.
 */
-func memorySecretRefusal(in openapi.MemoryAssertionInput) *openapi.Problem {
-	return secretRefusal(overridesSecretWarning(in),
-		in.Kind, in.Subject, in.Signature, in.Claim, in.Reason)
-}
-
-// secretRefusal is the classifier and the override rule, in one place, so
-// creating a memory and agreeing to one cannot grow different policies about
-// what a credential is.
-func secretRefusal(override bool, values ...string) *openapi.Problem {
-	switch domain.LooksLikeSecret(values...) {
-	case domain.SecretCertain:
+func memorySecretProblem(err error) *openapi.Problem {
+	switch {
+	case errors.Is(err, memstore.ErrSecret):
 		p := refusal(http.StatusBadRequest, CodeMemorySecret, "Looks like a credential",
 			"a private key or a complete token was recognised")
 		return &p
-	case domain.SecretSuspected:
-		if override {
-			return nil
-		}
+	case errors.Is(err, memstore.ErrSecretSuspected):
 		p := refusal(http.StatusBadRequest, CodeMemorySecretWarned, "May be a credential",
 			"text long enough and random enough to be one")
 		return &p
@@ -219,8 +195,6 @@ func secretRefusal(override bool, values ...string) *openapi.Problem {
 	return nil
 }
 
-// overridesSecretWarning is somebody taking responsibility for text the
-// platform could not tell apart from a credential.
 func overridesSecretWarning(in openapi.MemoryAssertionInput) bool {
 	return in.OverrideSecretWarning != nil && *in.OverrideSecretWarning
 }

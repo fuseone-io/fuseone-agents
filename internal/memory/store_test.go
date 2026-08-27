@@ -1310,6 +1310,8 @@ func findMemory(t *testing.T, store *memory.Memory, now time.Time) []domain.Memo
 	return found
 }
 
+func ptrTo[T any](v T) *T { return &v }
+
 func subjects(assertions []domain.MemoryAssertion) []string {
 	out := make([]string, 0, len(assertions))
 	for _, a := range assertions {
@@ -2065,7 +2067,7 @@ func expectAcceptTakesTheCorrectedClaim(t *testing.T, ctx context.Context, store
 
 	accepted, err := store.AcceptSuggestion(ctx, memory.AcceptInput{
 		ID: out.Suggestion.ID, Scope: platformScope, By: "usr_ana",
-		Reason: "the runbook narrowed it", Claim: better, Now: now,
+		Reason: "the runbook narrowed it", Claim: &better, Now: now,
 	})
 	if err != nil {
 		t.Fatalf("AcceptSuggestion: %v", err)
@@ -2127,7 +2129,13 @@ func TestAccept_withoutAReasonOrWithAnImpossibleClaim_isRefused(t *testing.T) {
 		}},
 		{"a claim nobody could read", memory.AcceptInput{
 			ID: out.Suggestion.ID, Scope: platformScope, By: "usr_ana",
-			Reason: "agreed", Claim: strings.Repeat("a longer claim ", 200), Now: now,
+			Reason: "agreed", Claim: ptrTo(strings.Repeat("a longer claim ", 200)), Now: now,
+		}},
+		// Present and empty is not omitted. Clearing the box and confirming
+		// would otherwise record an agreement to the text just deleted.
+		{"a claim somebody cleared", memory.AcceptInput{
+			ID: out.Suggestion.ID, Scope: platformScope, By: "usr_ana",
+			Reason: "agreed", Claim: ptrTo("   "), Now: now,
 		}},
 	} {
 		t.Run(c.name, func(t *testing.T) {

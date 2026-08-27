@@ -21,10 +21,19 @@ type AcceptInput struct {
 	Scope  domain.Scope
 	By     domain.UserID
 	Reason string
-	// Claim replaces what the agent proposed, when somebody rewrote it. Empty
-	// means they agreed with the words as well as the fact.
-	Claim string
-	Now   time.Time
+	/*
+		Claim replaces what the agent proposed, when somebody rewrote it.
+
+		A pointer because absent and empty are different answers. Absent means
+		they agreed with the words as well as the fact; empty means they cleared
+		the box, and silently keeping the text they just deleted would record an
+		agreement to exactly what they refused.
+	*/
+	Claim *string
+	// Override records this even though it looks like it may contain a
+	// credential. Same meaning as on creation, and it marks the assertion.
+	Override bool
+	Now      time.Time
 }
 
 func (in AcceptInput) validate() error {
@@ -34,7 +43,18 @@ func (in AcceptInput) validate() error {
 	if strings.TrimSpace(in.Reason) == "" {
 		return fmt.Errorf("%w: an accept needs a reason", ErrInvalid)
 	}
-	if len(in.Claim) > domain.MaxMemoryClaimBytes {
+	if in.Claim == nil {
+		return nil
+	}
+	// Refused here for the sentence, not for the protection: a cleared claim
+	// reaches Validate as an empty one and is refused there anyway. What this
+	// adds is telling the person what to do about it — "omit it" rather than
+	// "claim is required", when what they did was empty a box.
+	if strings.TrimSpace(*in.Claim) == "" {
+		return fmt.Errorf("%w: a corrected claim cannot be empty; omit it to keep the wording",
+			ErrInvalid)
+	}
+	if len(*in.Claim) > domain.MaxMemoryClaimBytes {
 		return fmt.Errorf("%w: a claim must fit %d bytes",
 			ErrInvalid, domain.MaxMemoryClaimBytes)
 	}
@@ -56,11 +76,16 @@ something the store will not take, reached the merge unchecked.
 */
 func accepted(s domain.MemorySuggestion, in AcceptInput) (domain.MemoryAssertion, error) {
 	a := assertionFromSuggestion(s, s.Observations, in.By, in.Now)
-	if claim := clean(in.Claim); claim != "" {
-		a.Claim = claim
+	if in.Claim != nil {
+		a.Claim = clean(*in.Claim)
 	}
 	if err := a.Validate(); err != nil {
 		return domain.MemoryAssertion{}, fmt.Errorf("%w: %v", ErrInvalid, err)
 	}
-	return a, nil
+	// On the finished assertion, not on the request. Accepting without
+	// rewriting produces a claim, a subject and a signature that came from a
+	// row read under the lock — and the queue is not scanned when a proposal is
+	// recorded, so this is the first and only place a key in one of them is
+	// seen.
+	return SecretDecision(a, in.Override, in.Reason)
 }

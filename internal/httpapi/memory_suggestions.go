@@ -51,24 +51,23 @@ func (s *Server) AcceptMemorySuggestion(
 	if err := auth.Require(ctx, domain.PermAgentPublish, scope); err != nil {
 		return forbiddenMemorySuggestionAccept(domain.PermAgentPublish, scope), nil
 	}
-	// The same classifier and the same override as creation, on the words being
-	// agreed to. A memory reached through the queue is quoted back into runs
-	// exactly like one somebody typed, so a policy that applied to only one of
-	// the two doors would be a policy with a door around it.
-	claim := valueOr(req.Body.Claim)
-	override := req.Body.OverrideSecretWarning != nil && *req.Body.OverrideSecretWarning
-	if refused := secretRefusal(override, claim, req.Body.Reason); refused != nil {
-		return openapi.AcceptMemorySuggestion400ApplicationProblemPlusJSONResponse{
-			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(*refused),
-		}, nil
-	}
+	// The secret policy runs in the store, on the finished assertion. Accepting
+	// without rewriting produces a claim that came from a row read under the
+	// lock, and a check here would have inspected an empty one.
 	assertion, err := s.memory.AcceptSuggestion(ctx, memstore.AcceptInput{
 		ID: req.SuggestionId, Scope: scope, By: callerOf(ctx),
-		Reason: req.Body.Reason, Claim: claim, Now: clockOr(s.clock).Now(),
+		Reason: req.Body.Reason, Claim: req.Body.Claim,
+		Override: req.Body.OverrideSecretWarning != nil && *req.Body.OverrideSecretWarning,
+		Now:      clockOr(s.clock).Now(),
 	})
 	if errors.Is(err, memstore.ErrNotFound) {
 		return openapi.AcceptMemorySuggestion404ApplicationProblemPlusJSONResponse{
 			NotFoundApplicationProblemPlusJSONResponse: notFound(req.SuggestionId),
+		}, nil
+	}
+	if refused := memorySecretProblem(err); refused != nil {
+		return openapi.AcceptMemorySuggestion400ApplicationProblemPlusJSONResponse{
+			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(*refused),
 		}, nil
 	}
 	switch memoryRefusal(err) {
