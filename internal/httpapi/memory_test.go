@@ -445,6 +445,84 @@ func TestCreateMemoryAssertion_namespaceMissingOrUnknown_isRefused(t *testing.T)
 	}
 }
 
+/*
+Text shaped like a credential is refused, and the refusal never repeats it.
+
+A memory is quoted back into a run, so a key in one of these fields is a key the
+platform hands to a model — and it is written into a record built to be read
+back and kept for years. What must not happen alongside the refusal is the
+platform copying the thing into a log and an audit event on its way to saying no.
+*/
+func TestCreateMemoryAssertion_secretShapedText_isRefusedWithoutRepeatingIt(t *testing.T) {
+	t.Parallel()
+	key := "-----BEGIN RSA PRIVATE KEY-----"
+	resp := createAgainst(t, memstore.NewMemory(), func(in *openapi.MemoryAssertionInput) {
+		in.Claim = "the datasource cert is " + key
+	})
+	bad, ok := resp.(openapi.CreateMemoryAssertion400ApplicationProblemPlusJSONResponse)
+	if !ok {
+		t.Fatalf("response = %T, want the write refused", resp)
+	}
+	if bad.Type == nil || *bad.Type != string(CodeMemorySecret) {
+		t.Errorf("type = %v, want the stable secret code", bad.Type)
+	}
+	if bad.Detail != nil && strings.Contains(*bad.Detail, key) {
+		t.Errorf("detail = %q, want the refusal not to repeat what it refused", *bad.Detail)
+	}
+	if strings.Contains(bad.Title, key) {
+		t.Errorf("title = %q, want the refusal not to repeat what it refused", bad.Title)
+	}
+}
+
+/*
+A warning is a question, and only a person who was asked may answer it.
+
+Long random text is a password, a hash, a correlation id or somebody's example.
+Refusing all of them teaches people to work around the check; accepting all of
+them makes the check decorative. So the console is told, in a code it can act
+on, and carries the answer back.
+*/
+func TestCreateMemoryAssertion_suspectedSecret_asksBeforeItRefuses(t *testing.T) {
+	t.Parallel()
+	suspect := "aB3" + strings.Repeat("xY7z", 10)
+
+	resp := createAgainst(t, memstore.NewMemory(), func(in *openapi.MemoryAssertionInput) {
+		in.Claim = "the correlation id was " + suspect
+	})
+	warned, ok := resp.(openapi.CreateMemoryAssertion400ApplicationProblemPlusJSONResponse)
+	if !ok {
+		t.Fatalf("response = %T, want the write held for an answer", resp)
+	}
+	if warned.Type == nil || *warned.Type != string(CodeMemorySecretWarned) {
+		t.Fatalf("type = %v, want the warning code the console can answer", warned.Type)
+	}
+
+	answered := createAgainst(t, memstore.NewMemory(), func(in *openapi.MemoryAssertionInput) {
+		in.Claim = "the correlation id was " + suspect
+		in.AcknowledgedSecretWarning = ptr(true)
+	})
+	if _, stored := answered.(openapi.CreateMemoryAssertion200JSONResponse); !stored {
+		t.Fatalf("response = %T, want the answered warning to let it through", answered)
+	}
+}
+
+// Nothing clears a certainty. The acknowledgement exists so somebody can say a
+// guess was wrong, not so a client can opt out of being asked at all.
+func TestCreateMemoryAssertion_acknowledgingDoesNotClearACertainSecret(t *testing.T) {
+	t.Parallel()
+	resp := createAgainst(t, memstore.NewMemory(), func(in *openapi.MemoryAssertionInput) {
+		in.Claim = "use ghp_" + strings.Repeat("a1B2", 9)
+		in.AcknowledgedSecretWarning = ptr(true)
+	})
+	bad, ok := resp.(openapi.CreateMemoryAssertion400ApplicationProblemPlusJSONResponse)
+	if !ok {
+		t.Fatalf("response = %T, want a recognised token refused whatever the caller says", resp)
+	}
+	if bad.Type == nil || *bad.Type != string(CodeMemorySecret) {
+		t.Errorf("type = %v, want the refusal, not the warning", bad.Type)
+	}
+}
+
 func createAgainst(
 	t *testing.T, store Memory, edit func(*openapi.MemoryAssertionInput),
 ) openapi.CreateMemoryAssertionResponseObject {

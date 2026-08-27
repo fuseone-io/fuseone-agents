@@ -1894,7 +1894,9 @@
     "sign-in-failed": "Sign-in failed: {{detail}}",
     "unavailable": "Unavailable right now: {{detail}}",
     "upstream-busy": "The system on the other side is busy: {{detail}} — try again in a moment.",
-    "upstream-refused": "The system on the other side refused: {{detail}}"
+    "upstream-refused": "The system on the other side refused: {{detail}}",
+    "memory-secret": "That text contains a private key or a complete access token. Memory is quoted back to agents and kept for years, so it cannot hold one.",
+    "memory-secret-warned": "Part of that text is long and random enough to be a credential. Check it, then confirm if it is not one."
   },
   "retention": {
     "byDefault": "default, nobody chose it",

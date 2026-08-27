@@ -4219,6 +4219,13 @@ components:
         reason:
           type: string
           description: Why a person decided this assertion should be remembered.
+        acknowledgedSecretWarning:
+          type: boolean
+          description: >
+            Set only after a person has been shown `fuseone:memory-secret-warned`
+            and decided the text is not a credential. It clears the warning and
+            nothing else: content that certainly is a key is refused whatever
+            this says.
 
     MemoryDisableInput:
       type: object

@@ -2627,6 +2627,8 @@ export interface components {
             evidence: components["schemas"]["MemoryEvidence"][];
             /** @description Why a person decided this assertion should be remembered. */
             reason: string;
+            /** @description Set only after a person has been shown `fuseone:memory-secret-warned` and decided the text is not a credential. It clears the warning and nothing else: content that certainly is a key is refused whatever this says. */
+            acknowledgedSecretWarning?: boolean;
         };
         MemoryDisableInput: {
             company: string;

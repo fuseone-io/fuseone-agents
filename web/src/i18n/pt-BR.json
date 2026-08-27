@@ -1894,7 +1894,9 @@
     "sign-in-failed": "Não foi possível entrar: {{detail}}",
     "unavailable": "Indisponível no momento: {{detail}}",
     "upstream-busy": "O sistema do outro lado está sobrecarregado: {{detail}} — tente novamente em instantes.",
-    "upstream-refused": "O sistema do outro lado recusou: {{detail}}"
+    "upstream-refused": "O sistema do outro lado recusou: {{detail}}",
+    "memory-secret": "Esse texto contém uma chave privada ou um token de acesso completo. A memória é citada de volta para os agentes e guardada por anos, então não pode conter um.",
+    "memory-secret-warned": "Parte desse texto é longa e aleatória o bastante para ser uma credencial. Confira e, se não for, confirme."
   },
   "retention": {
     "byDefault": "padrão, ninguém escolheu",

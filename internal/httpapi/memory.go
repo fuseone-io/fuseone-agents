@@ -84,6 +84,11 @@ func (s *Server) CreateMemoryAssertion(
 	if !req.Body.Namespace.Valid() {
 		return badMemoryCreate("namespace must be agent or shared"), nil
 	}
+	if refused := memorySecretRefusal(*req.Body); refused != nil {
+		return openapi.CreateMemoryAssertion400ApplicationProblemPlusJSONResponse{
+			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(*refused),
+		}, nil
+	}
 	agent, labels, err := s.originOfMemoryEvidence(ctx, scope, req.Body.Namespace, req.Body.Evidence)
 	if err != nil {
 		return badMemoryCreate(err.Error()), nil
@@ -162,6 +167,42 @@ func memoryRefusal(err error) int {
 		return http.StatusBadRequest
 	}
 	return 0
+}
+
+/*
+memorySecretRefusal answers what the text somebody typed looks like.
+
+The fields a model can read, and only those: a memory is quoted back into a run,
+so a credential in one of them is a credential the platform hands to a model.
+The evidence is left out because nothing a person composes goes in it — but that
+is a narrowing, not a protection. What keeps a digest from being read as a
+credential is the rule itself, which is blind to hexadecimal, and that is where
+it is tested.
+
+The detail names the risk and never the text. An error quoting the token would
+copy it into a log, an audit event and whatever bug report somebody pastes it
+into, which is three more places than the one it was already in.
+
+Certain is refused outright and no acknowledgement clears it. A warning can be
+answered, once a person has actually been shown it: the flag exists so the
+console can carry that answer back, not so a client can pre-emptively opt out of
+being asked.
+*/
+func memorySecretRefusal(in openapi.MemoryAssertionInput) *openapi.Problem {
+	switch domain.LooksLikeSecret(in.Kind, in.Subject, in.Signature, in.Claim, in.Reason) {
+	case domain.SecretCertain:
+		p := refusal(http.StatusBadRequest, CodeMemorySecret, "Looks like a credential",
+			"a private key or a complete token was recognised")
+		return &p
+	case domain.SecretSuspected:
+		if in.AcknowledgedSecretWarning != nil && *in.AcknowledgedSecretWarning {
+			return nil
+		}
+		p := refusal(http.StatusBadRequest, CodeMemorySecretWarned, "May be a credential",
+			"text long enough and random enough to be one")
+		return &p
+	}
+	return nil
 }
 
 func badMemoryCreate(detail string) openapi.CreateMemoryAssertion400ApplicationProblemPlusJSONResponse {
