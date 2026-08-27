@@ -2068,6 +2068,7 @@
     "storyPromptComposition": "Conteúdo do prompt: {{total}} medidos · {{toolResults}} de resultados de ferramenta · {{input}} da entrada · {{instructions}} das instruções",
     "storyProposed": "Modelo propôs",
     "storyReconciledWith": "Orçamento reconciliado · {{spent}}",
+    "storyReleased": "{{released}} devolvidos",
     "storyRefused": "recusado por política",
     "storyRefusedBy": "recusada por {{who}}",
     "storyResumed": "Retomada por uma pessoa",

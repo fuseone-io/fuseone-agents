@@ -160,6 +160,14 @@ export function detailOf(step: Step): Line {
         typeof payload.released_micros === "number"
           ? payload.released_micros
           : 0;
+      const spent = step.cost?.micros ?? 0;
+      if (spent <= 0 && released <= 0) return { key: "runs.storyBudgetReconciled" };
+      if (spent <= 0) {
+        return {
+          key: "runs.storyReleased",
+          values: { released: formatMicros(released) },
+        };
+      }
       return {
         key: "runs.storySpentReleased",
         values: { spent: formatCost(step.cost), released: formatMicros(released) },
@@ -388,6 +396,9 @@ export function summaryOf(step: Step): Line {
           }
         : { key: "runs.storyBudgetReserved" };
     case "budget_reconciled":
+      if ((step.cost?.micros ?? 0) <= 0) {
+        return { key: "runs.storyBudgetReconciled" };
+      }
       return {
         key: "runs.storyReconciledWith",
         values: { spent: formatCost(step.cost) },

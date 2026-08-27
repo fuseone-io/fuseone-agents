@@ -228,6 +228,56 @@ describe("a cached tool result", () => {
   });
 });
 
+describe("budget reconciliation", () => {
+  it("does not invent zero spend when nothing was charged or released", () => {
+    const step = {
+      seq: 7,
+      kind: "budget_reconciled",
+      at: "2026-08-22T12:00:00Z",
+      hash: "h",
+      payload: {},
+    } as never;
+
+    expect(detailOf(step)).toEqual({ key: "runs.storyBudgetReconciled" });
+    expect(summaryOf(step)).toEqual({ key: "runs.storyBudgetReconciled" });
+  });
+
+  it("names released reservation separately from actual spend", () => {
+    const step = {
+      seq: 7,
+      kind: "budget_reconciled",
+      at: "2026-08-22T12:00:00Z",
+      hash: "h",
+      payload: { released_micros: 42_000 },
+    } as never;
+
+    expect(detailOf(step)).toEqual({
+      key: "runs.storyReleased",
+      values: { released: expect.any(String) },
+    });
+  });
+
+  it("keeps real spend when the reconciled step carries it", () => {
+    const step = {
+      seq: 7,
+      kind: "budget_reconciled",
+      at: "2026-08-22T12:00:00Z",
+      hash: "h",
+      cost: { micros: 12_000 },
+      payload: { released_micros: 30_000 },
+    } as never;
+
+    expect(detailOf(step)).toEqual({
+      key: "runs.storySpentReleased",
+      values: { spent: expect.any(String), released: expect.any(String) },
+    });
+    expect(summaryOf(step)).toEqual({
+      key: "runs.storyReconciledWith",
+      values: { spent: expect.any(String) },
+    });
+  });
+});
+
 describe("a context tool result", () => {
   it("links the result to the source run and artifact digest", () => {
     const step = {

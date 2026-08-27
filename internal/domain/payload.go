@@ -197,8 +197,9 @@ type BudgetReservedPayload struct {
 	Tokens int64 `json:"tokens,omitempty"`
 }
 
-// BudgetReconciledPayload releases a reservation. The step's Cost field holds
-// what was actually spent; these fields hold what is being given back.
+// BudgetReconciledPayload releases a reservation. Current runs record the
+// tool's spent Cost on tool_returned so a crash before reconciliation does not
+// erase the spend; these fields hold what is being given back.
 type BudgetReconciledPayload struct {
 	ReleasedMicros int64 `json:"released_micros,omitempty"`
 	ReleasedTokens int64 `json:"released_tokens,omitempty"`
