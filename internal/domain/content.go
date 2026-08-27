@@ -22,6 +22,15 @@ var ErrContentErased = errors.New("content was erased")
 // durable store and not the fake, and finds out in production.
 var ErrContentAbsent = errors.New("content was never stored")
 
+// ErrRunNotFound means the ledger holds no run under that id — never opened, or
+// taken by retention.
+//
+// Here for the same reason the content sentinels are: a caller deciding between
+// "this citation is wrong", "its source is gone" and "the database is away" has
+// to match one value, and a sentinel per store is a caller that works against
+// one of them.
+var ErrRunNotFound = errors.New("run not found")
+
 /*
 ContentMetadata is what a stored payload says about itself without being read.
 

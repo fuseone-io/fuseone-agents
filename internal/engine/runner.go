@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -289,6 +290,13 @@ func pricePayload(p domain.ModelPriceUse) *domain.ModelPriceUse {
 	return &p
 }
 
+// isNotFound asks the error what it is rather than what it says.
+//
+// It compared the message text, which made the sentence a contract nobody could
+// see: rewording it — or pointing the ledger's sentinel at the shared one, as
+// telling a purged run from an unreachable database required — silently turned
+// "this run has not started" into a fatal read error, and a first Advance could
+// no longer open a run.
 func isNotFound(err error) bool {
-	return err != nil && err.Error() == "ledger: run not found"
+	return errors.Is(err, domain.ErrRunNotFound)
 }

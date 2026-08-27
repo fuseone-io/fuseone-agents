@@ -24,6 +24,20 @@ wraps the error it came from instead.
 var ErrEvidenceInvalid = errors.New("memory: evidence does not match the ledger")
 
 /*
+ErrEvidenceSourceAbsent means the run a citation names is not there any more.
+
+Distinct from an invalid citation because the answers differ. A citation that
+never matched is a mistake to refuse; a run that retention has taken is a source
+that existed and is gone, and the platform already has a word for a memory in
+that state. Letting the sweep merely continue past it would leave active memory
+whose source we know does not exist.
+
+Distinct from infrastructure because the ledger answered. It said the run is not
+there, which is a fact, not a failure to reach it.
+*/
+var ErrEvidenceSourceAbsent = errors.New("memory: the run the evidence names is gone")
+
+/*
 EvidenceLedger and EvidenceContent are what proving a citation needs, declared
 here because this is what uses them.
 
@@ -100,11 +114,14 @@ func (r *Resolver) stepsOf(
 		return held, nil
 	}
 	steps, err := r.ledger.Read(ctx, run, domain.FirstSeq)
+	if errors.Is(err, domain.ErrRunNotFound) {
+		return nil, fmt.Errorf("%w: %s", ErrEvidenceSourceAbsent, run)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("memory: read run %s for evidence: %w", run, err)
 	}
 	if len(steps) == 0 {
-		return nil, fmt.Errorf("%w: no run %s", ErrEvidenceInvalid, run)
+		return nil, fmt.Errorf("%w: %s", ErrEvidenceSourceAbsent, run)
 	}
 	if !scope.Contains(steps[0].Scope) {
 		return nil, fmt.Errorf("%w: run %s is outside the scope", ErrEvidenceInvalid, run)

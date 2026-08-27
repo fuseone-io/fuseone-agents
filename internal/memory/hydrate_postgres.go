@@ -27,14 +27,17 @@ func (p *Postgres) Hydrate(
 		out.Scanned++
 		out.Cursor = stored.ID
 
-		resolved, proved, err := resolveFor(ctx, r, stored)
+		resolved, got, err := resolveFor(ctx, r, stored)
 		if err != nil {
 			return out, err
 		}
-		if !proved {
+		switch got {
+		case proofUnproved:
 			out.Unproved++
+		case proofSourceAbsent:
+			out.SourceGone++
 		}
-		repaired, err := p.hydrateOne(ctx, stored, resolved, proved)
+		repaired, err := p.hydrateOne(ctx, stored, resolved, got)
 		if err != nil {
 			return out, err
 		}
@@ -50,7 +53,7 @@ func (p *Postgres) Hydrate(
 
 func (p *Postgres) hydrateOne(
 	ctx context.Context, snapshot domain.MemoryAssertion,
-	resolved []domain.MemoryEvidence, proved bool,
+	resolved []domain.MemoryEvidence, got proof,
 ) (bool, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -72,10 +75,23 @@ func (p *Postgres) hydrateOne(
 	// this repair's, so the citations are left alone. The canonical identity
 	// still derives from the row's own fields and is written anyway.
 	if !sameEvidence(current.Evidence, snapshot.Evidence) {
-		proved = false
+		got = proofUnproved
 	}
 
-	h := hydrated(*current, resolved, proved, true)
+	// The run is gone, so the memory stops being readable. The platform already
+	// has this state and the transition is the one it always was; hydration is
+	// only the thing that noticed.
+	if got == proofSourceAbsent && current.Status == domain.MemoryActive {
+		if err := markSourceErased(ctx, tx, *current); err != nil {
+			return false, err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return false, fmt.Errorf("memory: commit source erased: %w", err)
+		}
+		return true, nil
+	}
+
+	h := hydrated(*current, resolved, got == proofProved, true)
 	if !h.writes() {
 		return false, nil
 	}
@@ -159,14 +175,17 @@ func (p *Postgres) HydrateSuggestions(
 		out.Scanned++
 		out.Cursor = stored.ID
 
-		resolved, proved, err := resolveEvidence(ctx, r, stored.Scope, stored.Evidence)
+		resolved, got, err := resolveEvidence(ctx, r, stored.Scope, stored.Evidence)
 		if err != nil {
 			return out, err
 		}
-		if !proved {
+		switch got {
+		case proofUnproved:
 			out.Unproved++
+		case proofSourceAbsent:
+			out.SourceGone++
 		}
-		repaired, err := p.hydrateSuggestion(ctx, stored, resolved, proved)
+		repaired, err := p.hydrateSuggestion(ctx, stored, resolved, got)
 		if err != nil {
 			return out, err
 		}
@@ -182,7 +201,7 @@ func (p *Postgres) HydrateSuggestions(
 
 func (p *Postgres) hydrateSuggestion(
 	ctx context.Context, snapshot domain.MemorySuggestion,
-	resolved []domain.MemoryEvidence, proved bool,
+	resolved []domain.MemoryEvidence, got proof,
 ) (bool, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -203,12 +222,22 @@ func (p *Postgres) hydrateSuggestion(
 	// Overtaken: another observation merged into this proposal while the ledger
 	// was being read, and its citations are newer than this snapshot's.
 	if !sameEvidence(current.Evidence, snapshot.Evidence) {
-		proved = false
+		got = proofUnproved
+	}
+	if got == proofSourceAbsent && current.Status == domain.MemorySuggestionPending {
+		current.Status = domain.MemorySuggestionSourceErased
+		if err := updateSuggestion(ctx, tx, current); err != nil {
+			return false, err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return false, fmt.Errorf("memory: commit suggestion source erased: %w", err)
+		}
+		return true, nil
 	}
 
 	evidence, labels := current.Evidence, current.Labels
 	changed := false
-	if proved {
+	if got == proofProved {
 		evidence, labels, changed = hydratedProvenance(current.Evidence, current.Labels, resolved)
 	}
 	// Every row this sweep sees is one the page found missing something — a
@@ -261,4 +290,21 @@ func assertionOf(s domain.MemorySuggestion) domain.MemoryAssertion {
 		Scope: s.Scope, AgentID: s.AgentID,
 		Kind: s.Kind, Subject: s.Subject, Signature: s.Signature,
 	}
+}
+
+// markSourceErased is the transition retention already performs, reached from
+// the other direction: retention knows which runs it erased, and hydration
+// discovers a run that is no longer there. The state and the event are the same
+// ones, because what happened is the same thing.
+func markSourceErased(ctx context.Context, tx db, a domain.MemoryAssertion) error {
+	if _, err := tx.Exec(ctx, `
+		update memory_assertions
+		set status = 'source_erased', canonical_identity_key = $2
+		where assertion_id = $1`,
+		a.ID, domain.CanonicalIdentityKey(a)); err != nil {
+		return fmt.Errorf("memory: mark %s source erased: %w", a.ID, err)
+	}
+	a.Status = domain.MemorySourceErased
+	return recordEvent(ctx, tx, a, "system:memory",
+		"the run the evidence names is no longer in the ledger", "source_erased")
 }

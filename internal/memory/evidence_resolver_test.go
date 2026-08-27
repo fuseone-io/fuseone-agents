@@ -32,7 +32,10 @@ func (l *countingLedger) Read(
 		}
 	}
 	if len(out) == 0 {
-		return nil, errors.New("no such run")
+		// The sentinel both real ledgers raise. A double that invented its own
+		// would let the resolver's handling of a purged run pass here and fail
+		// against either store.
+		return nil, domain.ErrRunNotFound
 	}
 	return out, nil
 }

@@ -40,6 +40,10 @@ type HydrateResult struct {
 	Scanned int
 	// Repaired counts rows something was written to, whatever it was.
 	Repaired int
+	// SourceGone counts rows whose run the ledger no longer holds. They are
+	// marked source_erased rather than left readable: the memory is not wrong,
+	// its source was taken.
+	SourceGone int
 	// Unproved counts rows whose citations the ledger would not vouch for. It
 	// is not the opposite of Repaired and both can count the same row: the
 	// canonical identity derives from the row's own fields, so it is written
@@ -149,18 +153,25 @@ func (m *Memory) HydrateSuggestions(
 		out.Scanned++
 		out.Cursor = stored.ID
 
-		resolved, proved, err := resolveEvidence(ctx, r, stored.Scope, stored.Evidence)
+		resolved, got, err := resolveEvidence(ctx, r, stored.Scope, stored.Evidence)
 		if err != nil {
 			return out, err
 		}
-		if !proved {
+		if got == proofUnproved {
 			out.Unproved++
 			continue
 		}
 
 		m.mu.Lock()
 		current, held := m.suggestions[stored.ID]
-		if held && sameEvidence(current.Evidence, stored.Evidence) {
+		if got == proofSourceAbsent {
+			out.SourceGone++
+			if held && current.Status == domain.MemorySuggestionPending {
+				current.Status = domain.MemorySuggestionSourceErased
+				m.suggestions[stored.ID] = cloneSuggestion(current)
+				out.Repaired++
+			}
+		} else if held && sameEvidence(current.Evidence, stored.Evidence) {
 			evidence, labels, changed := hydratedProvenance(
 				current.Evidence, current.Labels, resolved)
 			if changed {
@@ -225,21 +236,43 @@ the next pass tries again instead of recording that it checked.
 */
 func resolveFor(
 	ctx context.Context, r *Resolver, a domain.MemoryAssertion,
-) ([]domain.MemoryEvidence, bool, error) {
+) ([]domain.MemoryEvidence, proof, error) {
 	return resolveEvidence(ctx, r, a.Scope, a.Evidence)
 }
 
+/*
+proof is what the ledger had to say about one row's citations.
+
+Three answers, not two. Proved is the ordinary one. Unproved means the citation
+does not match what the ledger holds — a mistake to leave alone. SourceAbsent
+means the run itself is gone, which the platform already has a word for: the
+memory is not wrong, its source was taken, and it stops being readable.
+
+Collapsing the last two would leave active memory whose source we know does not
+exist. Collapsing either into an error would stop the sweep on the population it
+exists to repair, because a purged run is exactly what old rows cite.
+*/
+type proof int
+
+const (
+	proofUnproved proof = iota
+	proofProved
+	proofSourceAbsent
+)
+
 func resolveEvidence(
 	ctx context.Context, r *Resolver, scope domain.Scope, in []domain.MemoryEvidence,
-) ([]domain.MemoryEvidence, bool, error) {
+) ([]domain.MemoryEvidence, proof, error) {
 	resolved, err := r.Resolve(ctx, scope, in)
-	if errors.Is(err, ErrEvidenceInvalid) {
-		return nil, false, nil
+	switch {
+	case errors.Is(err, ErrEvidenceSourceAbsent):
+		return nil, proofSourceAbsent, nil
+	case errors.Is(err, ErrEvidenceInvalid):
+		return nil, proofUnproved, nil
+	case err != nil:
+		return nil, proofUnproved, err
 	}
-	if err != nil {
-		return nil, false, err
-	}
-	return resolved, true, nil
+	return resolved, proofProved, nil
 }
 
 func nowOr(t time.Time) time.Time {
@@ -276,12 +309,15 @@ func (m *Memory) Hydrate(
 
 		// Outside the lock: reading the ledger is I/O, and holding an identity
 		// across it would block every writer of the same fact.
-		resolved, proved, err := resolveFor(ctx, r, stored)
+		resolved, got, err := resolveFor(ctx, r, stored)
 		if err != nil {
 			return out, err
 		}
-		if !proved {
+		switch got {
+		case proofUnproved:
 			out.Unproved++
+		case proofSourceAbsent:
+			out.SourceGone++
 		}
 
 		m.mu.Lock()
@@ -292,7 +328,11 @@ func (m *Memory) Hydrate(
 		// The canonical key is a column the durable store keeps; this one
 		// computes it when it looks, so it can never be the thing missing.
 		if held && sameEvidence(current.Evidence, stored.Evidence) {
-			if h := hydrated(current, resolved, proved, false); h.writes() {
+			if got == proofSourceAbsent && current.Status == domain.MemoryActive {
+				current.Status = domain.MemorySourceErased
+				m.values[stored.ID] = cloneAssertion(current)
+				out.Repaired++
+			} else if h := hydrated(current, resolved, got == proofProved, false); h.writes() {
 				m.values[stored.ID] = cloneAssertion(h.next)
 				out.Repaired++
 			}

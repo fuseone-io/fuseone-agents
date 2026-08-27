@@ -2217,3 +2217,60 @@ func TestPostgresHydrateSuggestions_overtaken_doesNotLoseTheNewCitation(t *testi
 		t.Errorf("evidence cites %v, want the observation that arrived mid-repair", runs)
 	}
 }
+
+/*
+A memory whose run is gone stops being readable, and the sweep carries on.
+
+The population hydration exists to repair is the oldest one, so a run that
+retention has taken is the likeliest thing it will meet. Treating that as a
+failure stopped the sweep on the first such row — every row after it stayed
+unrepaired for ever. Treating it as merely unprovable would have left active
+memory whose source we know does not exist.
+
+Two rows in one page: the first cites a run that is not there, the second is
+whole. The first ends source_erased, the second is hydrated, and neither
+prevents the other.
+*/
+func TestPostgresHydrate_runGoneEndsThatRowAndNotTheSweep(t *testing.T) {
+	ctx, store := postgresStore(t)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	run, cited := legacyRun(t, "run-legacy")
+	gone := assertion(func(a *domain.MemoryAssertion) {
+		a.Scope, a.Subject = run.scope, "aaa first by id"
+		a.Evidence = []domain.MemoryEvidence{{
+			RunID: "run-taken-by-retention", Artifact: domain.ArtifactFinalAnswer,
+			Digest: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+		}}
+	})
+	whole := assertion(func(a *domain.MemoryAssertion) {
+		a.Scope, a.Subject = run.scope, "zzz second by id"
+		a.Evidence = []domain.MemoryEvidence{cited}
+	})
+	for _, a := range []domain.MemoryAssertion{gone, whole} {
+		if _, err := store.Assert(ctx, a, "usr_ana", "reviewed", now); err != nil {
+			t.Fatalf("Assert: %v", err)
+		}
+	}
+
+	out, err := store.Hydrate(ctx, run.resolver(), memory.HydratePage{Limit: 10, Now: now})
+	if err != nil {
+		t.Fatalf("Hydrate stopped on a run that is gone: %v", err)
+	}
+	if out.SourceGone != 1 {
+		t.Errorf("source gone = %d, want the one whose run was taken", out.SourceGone)
+	}
+
+	readable, err := store.Find(ctx, domain.MemoryQuery{
+		Scope: run.scope, AgentID: "triage", Now: now,
+	})
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if len(readable) != 1 || readable[0].Subject != "zzz second by id" {
+		t.Fatalf("readable = %+v, want only the memory whose run is still there", readable)
+	}
+	if readable[0].Evidence[0].Seq == 0 {
+		t.Error("the surviving memory was not hydrated")
+	}
+}
