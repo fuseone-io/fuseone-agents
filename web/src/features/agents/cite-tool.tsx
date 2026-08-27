@@ -23,9 +23,10 @@ import type { Tool } from "@/lib/api/client";
  * a rendering, and an editor that inserted anything else would be writing
  * something the payload does not contain.
  *
- * It offers the whole catalogue rather than this agent's pack: prose is
- * allowed to mention a tool the agent does not hold, and that sentence is
- * exactly the one worth marking rather than preventing.
+ * The caller chooses the catalogue slice to show. Some writing surfaces use
+ * the whole catalogue so lint can mark tools outside the pack; the guided
+ * instruction editor uses the enabled pack so `@` is a shortcut for tools the
+ * agent can actually call.
  */
 export function CiteTool({
   open,

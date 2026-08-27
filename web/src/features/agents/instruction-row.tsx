@@ -48,7 +48,7 @@ export function InstructionRow({
       onDrop: () => void;
     };
   };
-  tools: { catalogue: Tool[]; policies: Policy[] };
+  tools: { catalogue: Tool[]; policies: Policy[]; enabled?: string[] };
   findings: Finding[];
 }) {
   const [writing, setWriting] = useState(false);

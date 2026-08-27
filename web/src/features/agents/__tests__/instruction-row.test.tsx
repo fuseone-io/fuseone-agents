@@ -110,6 +110,69 @@ describe("a block of an instruction", () => {
 
     expect(onChange).toHaveBeenCalledWith("Compare os dois lados.!");
   });
+
+  it("opens the enabled tool picker from a how-to-act block", async () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <InstructionRow
+        block={{ kind: "howToAct", text: "Use " }}
+        at={0}
+        tools={{ catalogue: CATALOGUE, policies: [], enabled: ["crm.lookup"] }}
+        findings={[]}
+        on={{
+          change: onChange,
+          remove: vi.fn(),
+          keep: vi.fn(),
+          enable: vi.fn(),
+          relabel: vi.fn(),
+          split: vi.fn(),
+          slash: vi.fn(),
+          drag: STILL,
+        }}
+      />,
+    );
+
+    await user.click(screen.getByRole("textbox"));
+    await user.type(screen.getByRole("textbox"), "@");
+
+    expect(await screen.findByText("crm.lookup")).toBeInTheDocument();
+    expect(screen.queryByText("erp.refund")).not.toBeInTheDocument();
+
+    await user.click(screen.getByText("crm.lookup"));
+
+    expect(onChange).toHaveBeenLastCalledWith("Use crm.lookup");
+  });
+
+  it("keeps the full catalogue picker outside the how-to-act block", async () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <InstructionRow
+        block={{ kind: "objective", text: "Cover " }}
+        at={0}
+        tools={{ catalogue: CATALOGUE, policies: [], enabled: ["crm.lookup"] }}
+        findings={[]}
+        on={{
+          change: vi.fn(),
+          remove: vi.fn(),
+          keep: vi.fn(),
+          enable: vi.fn(),
+          relabel: vi.fn(),
+          split: vi.fn(),
+          slash: vi.fn(),
+          drag: STILL,
+        }}
+      />,
+    );
+
+    await user.click(screen.getByRole("textbox"));
+    await user.type(screen.getByRole("textbox"), "@");
+
+    expect(await screen.findByText("crm.lookup")).toBeInTheDocument();
+    expect(screen.getByText("erp.refund")).toBeInTheDocument();
+  });
 });
 
 describe("a sentence the policy refuses", () => {

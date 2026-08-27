@@ -26,12 +26,16 @@ export function BlockText({
   block: Block;
   writing: boolean;
   onWriting: (writing: boolean) => void;
-  tools: { catalogue: Tool[]; policies: Policy[] };
+  tools: { catalogue: Tool[]; policies: Policy[]; enabled?: string[] };
   typed: (text: string) => void;
   cite: { open: boolean; onPick: (tool: string) => void; onClose: () => void };
 }) {
   const { t, i18n } = useTranslation();
   const label = labelOf(block.kind, i18n.language) || t("agents.blockProse");
+  const citable =
+    block.kind === "howToAct"
+      ? citableTools(tools.catalogue, tools.enabled)
+      : tools.catalogue;
 
   if (!writing) {
     return (
@@ -61,7 +65,7 @@ export function BlockText({
   return (
     <CiteTool
       open={cite.open}
-      catalogue={tools.catalogue}
+      catalogue={citable}
       onPick={cite.onPick}
       onClose={cite.onClose}
     >
@@ -77,4 +81,10 @@ export function BlockText({
       />
     </CiteTool>
   );
+}
+
+function citableTools(catalogue: Tool[], enabled?: string[]): Tool[] {
+  if (!enabled) return catalogue;
+  const pack = new Set(enabled);
+  return catalogue.filter((tool) => pack.has(tool.toolId));
 }
