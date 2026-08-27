@@ -6,7 +6,7 @@ import (
 	"github.com/fuseone/agents/internal/domain"
 )
 
-func citation(run domain.RunID, seq int64, labels ...string) domain.MemoryEvidence {
+func cited(run domain.RunID, seq int64, labels ...string) domain.MemoryEvidence {
 	ev := domain.MemoryEvidence{
 		RunID: run, Seq: seq, Artifact: "result", Digest: "sha256:abcd",
 	}
@@ -29,8 +29,8 @@ func TestBoundedEvidence_sameCitationTwice_isOneRecordWithBothLabels(t *testing.
 	t.Parallel()
 
 	got := boundedEvidence([]domain.MemoryEvidence{
-		citation("run-1", 4),
-		citation("run-1", 4, domain.LabelUntrusted),
+		cited("run-1", 4),
+		cited("run-1", 4, domain.LabelUntrusted),
 	})
 
 	if len(got) != 1 {
@@ -47,8 +47,8 @@ func TestBoundedEvidence_twoStepsOfOneRun_areTwoRecords(t *testing.T) {
 	t.Parallel()
 
 	got := boundedEvidence([]domain.MemoryEvidence{
-		citation("run-1", 4),
-		citation("run-1", 9),
+		cited("run-1", 4),
+		cited("run-1", 9),
 	})
 
 	if len(got) != 2 {
@@ -61,7 +61,7 @@ func TestBoundedEvidence_neverKeepsMoreThanTheCap(t *testing.T) {
 
 	in := make([]domain.MemoryEvidence, 0, domain.MaxMemoryEvidence+3)
 	for seq := range int64(domain.MaxMemoryEvidence + 3) {
-		in = append(in, citation("run-1", seq))
+		in = append(in, cited("run-1", seq))
 	}
 
 	if got := boundedEvidence(in); len(got) != domain.MaxMemoryEvidence {
@@ -81,7 +81,7 @@ func TestCloneAssertion_evidenceLabelsAreNotShared(t *testing.T) {
 	t.Parallel()
 
 	stored := domain.MemoryAssertion{
-		Evidence: []domain.MemoryEvidence{citation("run-1", 4, domain.LabelUntrusted)},
+		Evidence: []domain.MemoryEvidence{cited("run-1", 4, domain.LabelUntrusted)},
 	}
 
 	copied := cloneAssertion(stored)
@@ -97,7 +97,7 @@ func TestCloneSuggestion_evidenceLabelsAreNotShared(t *testing.T) {
 	t.Parallel()
 
 	stored := domain.MemorySuggestion{
-		Evidence: []domain.MemoryEvidence{citation("run-1", 4, domain.LabelUntrusted)},
+		Evidence: []domain.MemoryEvidence{cited("run-1", 4, domain.LabelUntrusted)},
 	}
 
 	copied := cloneSuggestion(stored)
