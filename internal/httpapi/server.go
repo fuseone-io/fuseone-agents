@@ -12,6 +12,7 @@ import (
 	"github.com/fuseone/agents/internal/audit"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
+	memstore "github.com/fuseone/agents/internal/memory"
 	"github.com/fuseone/agents/internal/trigger"
 )
 
@@ -60,7 +61,10 @@ type Server struct {
 	agents       Agents
 	ceilings     Ceilings
 	content      Content
-	webhooks     trigger.Webhooks
+	// memoryEvidence is what a memory is proved against when it is brought
+	// back. Nil is an installation that cannot reactivate, which is a refusal.
+	memoryEvidence *memstore.Resolver
+	webhooks       trigger.Webhooks
 	// schedules is where a version's cron trigger becomes a moment the worker
 	// will reach. Without it, publishing from the console recorded a trigger
 	// no clock ever knew about.

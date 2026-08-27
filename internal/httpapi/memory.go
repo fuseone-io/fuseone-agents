@@ -26,62 +26,13 @@ type Memory interface {
 		reason string, now time.Time) (domain.MemoryAssertion, error)
 	DismissSuggestion(ctx context.Context, id string, scope domain.Scope, by domain.UserID,
 		reason string, now time.Time) error
+	Reactivate(ctx context.Context, r *memstore.Resolver,
+		in memstore.ReactivateInput) (domain.MemoryAssertion, error)
 }
 
 func (s *Server) WithMemory(memory Memory) *Server {
 	s.memory = memory
 	return s
-}
-
-func (s *Server) ListMemoryAssertions(
-	ctx context.Context, req openapi.ListMemoryAssertionsRequestObject,
-) (openapi.ListMemoryAssertionsResponseObject, error) {
-	scopes, refused := memoryReadableScopes(ctx, req.Params)
-	if refused != nil {
-		return openapi.ListMemoryAssertions403ApplicationProblemPlusJSONResponse{
-			ForbiddenApplicationProblemPlusJSONResponse: *refused,
-		}, nil
-	}
-	if s.memory == nil {
-		return openapi.ListMemoryAssertions200JSONResponse{Items: []openapi.MemoryAssertion{}}, nil
-	}
-	items, err := s.memory.List(ctx, memoryFilter(scopes, req.Params))
-	if err != nil {
-		return nil, fmt.Errorf("list memory assertions: %w", err)
-	}
-	return openapi.ListMemoryAssertions200JSONResponse{Items: memoryAssertions(items)}, nil
-}
-
-func (s *Server) CreateMemoryAssertion(
-	ctx context.Context, req openapi.CreateMemoryAssertionRequestObject,
-) (openapi.CreateMemoryAssertionResponseObject, error) {
-	if s.memory == nil || req.Body == nil {
-		return badMemoryCreate("memory assertion body is required"), nil
-	}
-	scope, err := inputScope(req.Body.Company, req.Body.Area)
-	if err != nil {
-		return badMemoryCreate(err.Error()), nil
-	}
-	if err := auth.Require(ctx, domain.PermAgentPublish, scope); err != nil {
-		return forbiddenMemoryCreate(domain.PermAgentPublish, scope), nil
-	}
-	labels, err := s.labelsFromMemoryEvidence(ctx, scope, req.Body.Evidence)
-	if err != nil {
-		return badMemoryCreate(err.Error()), nil
-	}
-	assertion, err := s.memory.Assert(ctx, memoryAssertionInput(*req.Body, scope, labels),
-		callerOf(ctx), req.Body.Reason, clockOr(s.clock).Now())
-	switch memoryRefusal(err) {
-	case http.StatusConflict:
-		return openapi.CreateMemoryAssertion409ApplicationProblemPlusJSONResponse(
-			conflicted(err.Error())), nil
-	case http.StatusBadRequest:
-		return badMemoryCreate(err.Error()), nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("create memory assertion: %w", err)
-	}
-	return openapi.CreateMemoryAssertion200JSONResponse(memoryAssertion(assertion)), nil
 }
 
 func (s *Server) DisableMemoryAssertion(
@@ -431,7 +382,9 @@ func memoryRefusal(err error) int {
 	case errors.Is(err, memstore.ErrCanonicalConflict),
 		errors.Is(err, memstore.ErrMemoryTerminal),
 		errors.Is(err, memstore.ErrCovered),
-		errors.Is(err, memstore.ErrEvidenceCannotExplain):
+		errors.Is(err, memstore.ErrEvidenceCannotExplain),
+		errors.Is(err, memstore.ErrEvidenceInvalid),
+		errors.Is(err, memstore.ErrMovedMeanwhile):
 		return http.StatusConflict
 	case errors.Is(err, memstore.ErrInvalid):
 		return http.StatusBadRequest

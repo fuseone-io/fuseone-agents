@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/httpapi/openapi"
 	"github.com/fuseone/agents/internal/ledger"
 	memstore "github.com/fuseone/agents/internal/memory"
@@ -306,6 +308,12 @@ func (unavailableMemory) DismissSuggestion(
 	return errMemoryUnreachable
 }
 
+func (unavailableMemory) Reactivate(
+	context.Context, *memstore.Resolver, memstore.ReactivateInput,
+) (domain.MemoryAssertion, error) {
+	return domain.MemoryAssertion{}, errMemoryUnreachable
+}
+
 func remember(t *testing.T, memory *memstore.Memory, a domain.MemoryAssertion) {
 	t.Helper()
 	if _, err := memory.Assert(context.Background(), a, "usr_ana", "reviewed", time.Unix(0, 0)); err != nil {
@@ -448,4 +456,129 @@ func TestCreateMemoryAssertion_citingTheFinalAnswerOfATaintedRun_inheritsUntrust
 	if !hasAll(created.Labels, domain.LabelUntrusted) {
 		t.Errorf("labels = %v, want the taint the run opened with", created.Labels)
 	}
+}
+
+/*
+Reactivation is refused when the platform cannot prove the memory.
+
+The endpoint answers with the state that refused it rather than with "invalid
+input", which is the difference between a person knowing to go and look at the
+shared memory and a person retyping a form that was never wrong. And an
+installation with no evidence resolver refuses outright: reactivating without
+checking the citations is the thing this act exists to prevent.
+*/
+func TestReactivateMemoryAssertion_answersWithTheStateThatRefusedIt(t *testing.T) {
+	t.Parallel()
+
+	t.Run("a memory that is not disabled is a conflict", func(t *testing.T) {
+		t.Parallel()
+		store := memstore.NewMemory()
+		stored := memoryAssertionFixture("cx", "grafana datasource", nil)
+		remember(t, store, stored)
+
+		resp := reactivateAgainst(t, store, domain.MemoryAssertionID(stored), "it is true again")
+		if _, conflict := resp.(openapi.ReactivateMemoryAssertion409ApplicationProblemPlusJSONResponse); !conflict {
+			t.Fatalf("response = %T, want 409", resp)
+		}
+	})
+
+	t.Run("a memory nobody has is not found", func(t *testing.T) {
+		t.Parallel()
+		resp := reactivateAgainst(t, memstore.NewMemory(), "mem_absent", "it is true again")
+		if _, missing := resp.(openapi.ReactivateMemoryAssertion404ApplicationProblemPlusJSONResponse); !missing {
+			t.Fatalf("response = %T, want 404", resp)
+		}
+	})
+
+	t.Run("no reason is a bad request", func(t *testing.T) {
+		t.Parallel()
+		store := memstore.NewMemory()
+		stored := memoryAssertionFixture("cx", "grafana datasource", nil)
+		remember(t, store, stored)
+
+		resp := reactivateAgainst(t, store, domain.MemoryAssertionID(stored), "  ")
+		if _, bad := resp.(openapi.ReactivateMemoryAssertion400ApplicationProblemPlusJSONResponse); !bad {
+			t.Fatalf("response = %T, want 400", resp)
+		}
+	})
+
+	t.Run("an installation with no resolver refuses rather than skipping the proof", func(t *testing.T) {
+		t.Parallel()
+		resp, err := NewServer(ledger.NewMemory(), "test").WithMemory(memstore.NewMemory()).
+			ReactivateMemoryAssertion(inArea("cx", domain.RoleAuthor),
+				openapi.ReactivateMemoryAssertionRequestObject{
+					AssertionId: "mem_whatever",
+					Body: &openapi.MemoryReactivateInput{
+						Company: "acme", Area: "cx", Reason: "it is true again",
+					},
+				})
+		if err == nil {
+			t.Fatalf("response = %T, want the missing resolver to refuse", resp)
+		}
+	})
+}
+
+/*
+Every state the store can refuse with reaches the caller as a conflict.
+
+Named one by one rather than through a scenario each, because what is under test
+is the mapping: a sentinel added to the store and forgotten here would come back
+as "invalid input", and the console would tell somebody to check a form that was
+never the problem. Only the endpoint's own body validation is a 400.
+*/
+func TestReactivateMemoryAssertion_everyRefusedStateIsAConflict(t *testing.T) {
+	t.Parallel()
+	for _, refusal := range []struct {
+		name string
+		err  error
+	}{
+		{"not disabled", memstore.ErrMemoryTerminal},
+		{"the citations no longer prove it", memstore.ErrEvidenceInvalid},
+		{"shared memory answers it", memstore.ErrCovered},
+		{"somebody moved it meanwhile", memstore.ErrMovedMeanwhile},
+		{"two rows are this identity", memstore.ErrCanonicalConflict},
+	} {
+		t.Run(refusal.name, func(t *testing.T) {
+			t.Parallel()
+			resp := reactivateAgainst(t, refusingMemory{err: refusal.err},
+				"mem_whatever", "it is true again")
+			if _, conflict := resp.(openapi.ReactivateMemoryAssertion409ApplicationProblemPlusJSONResponse); !conflict {
+				t.Fatalf("response = %T, want %v answered as 409", resp, refusal.err)
+			}
+		})
+	}
+}
+
+// refusingMemory answers one chosen refusal, so the mapping can be asked about
+// each state without a scenario that produces it.
+type refusingMemory struct {
+	unavailableMemory
+	err error
+}
+
+func (m refusingMemory) Reactivate(
+	context.Context, *memstore.Resolver, memstore.ReactivateInput,
+) (domain.MemoryAssertion, error) {
+	return domain.MemoryAssertion{}, fmt.Errorf("%w: for the test", m.err)
+}
+
+func reactivateAgainst(
+	t *testing.T, store Memory, id, reason string,
+) openapi.ReactivateMemoryAssertionResponseObject {
+	t.Helper()
+	led := ledger.NewMemory()
+	resp, err := NewServer(led, "test").WithMemory(store).
+		WithMemoryEvidence(led, engine.NewMemoryContent()).
+		WithClock(fixedAt{t: time.Unix(0, 0)}).
+		ReactivateMemoryAssertion(inArea("cx", domain.RoleAuthor),
+			openapi.ReactivateMemoryAssertionRequestObject{
+				AssertionId: id,
+				Body: &openapi.MemoryReactivateInput{
+					Company: "acme", Area: "cx", Reason: reason,
+				},
+			})
+	if err != nil {
+		t.Fatalf("ReactivateMemoryAssertion: %v", err)
+	}
+	return resp
 }
