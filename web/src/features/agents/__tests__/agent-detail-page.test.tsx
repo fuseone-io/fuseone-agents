@@ -181,15 +181,16 @@ describe("the agent overview", () => {
       "no",
     );
     expect(screen.queryByText("The definition is not the landing view.")).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Continue: Rehearsal" })).toHaveAttribute(
+    expect(
+      screen.queryByRole("link", { name: "Continue: Rehearsal" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Simulate" })).toHaveAttribute(
       "href",
       "/agents/troubleshooting-devops/simulate",
     );
-    expect(screen.queryByRole("link", { name: "Simulate" })).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Simulate from menu" })).toHaveAttribute(
-      "href",
-      "/agents/troubleshooting-devops/simulate",
-    );
+    expect(
+      screen.queryByRole("link", { name: "Simulate from menu" }),
+    ).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("tab", { name: "Definition" }));
 
@@ -222,5 +223,33 @@ describe("the agent overview", () => {
       "/agents/troubleshooting-devops/simulate",
     );
     expect(screen.queryByRole("link", { name: "Simulate from menu" })).not.toBeInTheDocument();
+  });
+
+  it("moves the simulation shortcut into the guide until trust sees a good battery", () => {
+    if (detail.trust) {
+      detail.trust.status = "needs_review";
+      detail.trust.recommendation = "review";
+      detail.trust.summary = "review";
+      detail.trust.evidence = [
+        {
+          id: "simulation",
+          status: "bad",
+          code: "simulation_broken",
+          values: { cases: 1, broken: 1 },
+        },
+      ];
+    }
+
+    showDetail();
+
+    expect(screen.getByRole("link", { name: "Continue: Rehearsal" })).toHaveAttribute(
+      "href",
+      "/agents/troubleshooting-devops/simulate",
+    );
+    expect(screen.queryByRole("link", { name: "Simulate" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Simulate from menu" })).toHaveAttribute(
+      "href",
+      "/agents/troubleshooting-devops/simulate",
+    );
   });
 });

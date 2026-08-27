@@ -1763,15 +1763,25 @@ started on the strength of having been used.
 func TestLatestBatteryContract(t *testing.T) {
 	base := time.Date(2026, 8, 12, 9, 0, 0, 0, time.UTC)
 
-	opened := func(
-		id domain.RunID, at time.Time, version domain.VersionID, simulation string,
+	openedWithCase := func(
+		id domain.RunID, at time.Time, version domain.VersionID, simulation, kase string,
 	) domain.Step {
 		st := startedAt(id, at)
 		st.IdemKey, st.VersionID = string(id), version
 		st.Payload = mustJSON(t, domain.RunStartedPayload{
 			Trigger: "simulation", Simulated: simulation != "", Simulation: simulation,
+			Case: kase,
 		})
 		return st
+	}
+	opened := func(
+		id domain.RunID, at time.Time, version domain.VersionID, simulation string,
+	) domain.Step {
+		kase := ""
+		if simulation != "" {
+			kase = string(id)
+		}
+		return openedWithCase(id, at, version, simulation, kase)
 	}
 
 	run(t, "the newest battery against this version, not an older one", func(t *testing.T, s Store) {
@@ -1808,6 +1818,20 @@ func TestLatestBatteryContract(t *testing.T) {
 			t.Errorf("Latest = %q found=%v err=%v, want nothing", got, found, err)
 		}
 	})
+
+	run(t, "an ad-hoc simulation is not a corpus battery", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		mustAppend(t, s, opened("run-corpus", base, "v3", "sim-corpus"))
+		mustAppend(t, s, openedWithCase("run-ad-hoc", base.Add(time.Hour), "v3", "sim-ad-hoc", ""))
+
+		got, found, err := s.Latest(ctx, "triage", "v3")
+		if err != nil || !found {
+			t.Fatalf("Latest: %q found=%v err=%v", got, found, err)
+		}
+		if got != "sim-corpus" {
+			t.Errorf("simulation = %q, want the saved corpus battery", got)
+		}
+	})
 }
 
 /*
@@ -1820,13 +1844,17 @@ it. That reading only works if "the one before this one" is answerable.
 func TestBatteriesContract(t *testing.T) {
 	base := time.Date(2026, 8, 12, 9, 0, 0, 0, time.UTC)
 
-	opened := func(id domain.RunID, at time.Time, simulation string) domain.Step {
+	openedWithCase := func(id domain.RunID, at time.Time, simulation, kase string) domain.Step {
 		st := startedAt(id, at)
 		st.IdemKey = string(id)
 		st.Payload = mustJSON(t, domain.RunStartedPayload{
 			Trigger: "simulation", Simulated: true, Simulation: simulation,
+			Case: kase,
 		})
 		return st
+	}
+	opened := func(id domain.RunID, at time.Time, simulation string) domain.Step {
+		return openedWithCase(id, at, simulation, string(id))
 	}
 
 	run(t, "newest first, one entry per battery however many runs it opened", func(t *testing.T, s Store) {
@@ -1860,6 +1888,21 @@ func TestBatteriesContract(t *testing.T) {
 			t.Errorf("batteries = %v, want the two newest", got)
 		}
 	})
+
+	run(t, "ad-hoc simulations do not hide the last corpus battery", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		mustAppend(t, s, opened("run-corpus", base, "sim-corpus"))
+		mustAppend(t, s, openedWithCase("run-ad-hoc", base.Add(time.Hour), "sim-ad-hoc", ""))
+
+		got, err := s.Batteries(ctx, "triage", "v3", 10)
+		if err != nil {
+			t.Fatalf("Batteries: %v", err)
+		}
+		if len(got) != 1 || got[0] != "sim-corpus" {
+			t.Errorf("batteries = %v, want only the saved corpus battery", got)
+		}
+	})
 }
 
 /*
@@ -1873,13 +1916,21 @@ that exists would open a second one every pass.
 func TestLastBatteryAtContract(t *testing.T) {
 	base := time.Date(2026, 8, 12, 9, 0, 0, 0, time.UTC)
 
-	opened := func(id domain.RunID, at time.Time, simulation string) domain.Step {
+	openedWithCase := func(id domain.RunID, at time.Time, simulation, kase string) domain.Step {
 		st := startedAt(id, at)
 		st.IdemKey = string(id)
 		st.Payload = mustJSON(t, domain.RunStartedPayload{
 			Trigger: "simulation", Simulated: simulation != "", Simulation: simulation,
+			Case: kase,
 		})
 		return st
+	}
+	opened := func(id domain.RunID, at time.Time, simulation string) domain.Step {
+		kase := ""
+		if simulation != "" {
+			kase = string(id)
+		}
+		return openedWithCase(id, at, simulation, kase)
 	}
 
 	run(t, "the newest battery, whatever ran since", func(t *testing.T, s Store) {
@@ -1889,6 +1940,8 @@ func TestLastBatteryAtContract(t *testing.T) {
 		mustAppend(t, s, opened("run-2", base.Add(time.Hour), "sim-new"))
 		// A real run afterwards is not a battery and must not push the clock.
 		mustAppend(t, s, opened("run-3", base.Add(2*time.Hour), ""))
+		// An ad-hoc rehearsal afterwards is not a corpus battery either.
+		mustAppend(t, s, openedWithCase("run-4", base.Add(3*time.Hour), "sim-ad-hoc", ""))
 
 		at, ran, err := s.LastBatteryAt(ctx, "triage", "v3")
 		if err != nil || !ran {

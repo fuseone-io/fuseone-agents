@@ -62,6 +62,7 @@ export function AgentDetailPage() {
     recipes: recipes.data?.items,
     credentials: credentials.data?.items,
     channels: channels.data?.items,
+    trust: trust.data,
     simulationTo: `/agents/${agentId}/simulate`,
   });
   const nextGuide = guidedAgentProgress(guide).next;

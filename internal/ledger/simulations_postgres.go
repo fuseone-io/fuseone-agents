@@ -64,14 +64,15 @@ func (p *Postgres) HasSimulation(ctx context.Context, agent domain.AgentID) (boo
 }
 
 /*
-Batteries are the simulations run against one version, newest first.
+Batteries are the corpus simulations run against one version, newest first.
 
 Derived from the runs rather than tracked beside them, like everything else
 here: a simulation is exactly the set of runs that name it, and a table
 recording it could disagree with them.
 
-Simulated runs only. A real run is not a rehearsal and counting one would let
-an agent be started on the strength of having been used.
+Simulated corpus runs only. A real run is not a rehearsal, and an ad-hoc
+simulation is not evidence about the saved corpus. Counting either one would
+let an agent be started on the strength of something the corpus never checked.
 */
 func (p *Postgres) Batteries(
 	ctx context.Context, agent domain.AgentID, version domain.VersionID, limit int,
@@ -80,10 +81,18 @@ func (p *Postgres) Batteries(
 		return nil, nil
 	}
 	rows, err := p.pool.Query(ctx, `
-		select simulation, max(started_at) as opened from runs
-		where agent_id = $1 and version_id = $2 and simulated and simulation <> ''
-		group by simulation
-		order by opened desc
+		select r.simulation, max(r.started_at) as opened from runs r
+		where r.agent_id = $1 and r.version_id = $2
+		  and r.simulated and r.simulation <> ''
+		  and exists (
+		    select 1 from run_steps s
+		    where s.run_id = r.run_id
+		      and s.seq = 1
+		      and s.kind = 'run_started'
+		      and coalesce(s.payload->>'case', '') <> ''
+		  )
+		group by r.simulation
+		order by opened desc, r.simulation desc
 		limit $3`, string(agent), string(version), limit)
 	if err != nil {
 		return nil, fmt.Errorf("batteries of %s@%s: %w", agent, version, err)
@@ -102,7 +111,7 @@ func (p *Postgres) Batteries(
 	return out, rows.Err()
 }
 
-// Latest is the newest battery run against one version.
+// Latest is the newest corpus battery run against one version.
 func (p *Postgres) Latest(
 	ctx context.Context, agent domain.AgentID, version domain.VersionID,
 ) (string, bool, error) {
@@ -113,8 +122,8 @@ func (p *Postgres) Latest(
 	return found[0], true, nil
 }
 
-// LastBatteryAt is when a version's corpus last ran, which is what decides
-// whether it runs again tonight.
+// LastBatteryAt is when a version's saved corpus last ran, which is what
+// decides whether it runs again tonight.
 //
 // The moment the newest battery opened, not the moment it finished: a battery
 // still being advanced is one that has already been paid for, and a clock
@@ -127,8 +136,16 @@ func (p *Postgres) LastBatteryAt(
 	// query when it means "this corpus has never run".
 	var at *time.Time
 	err := p.pool.QueryRow(ctx, `
-		select max(started_at) from runs
-		where agent_id = $1 and version_id = $2 and simulated and simulation <> ''`,
+		select max(r.started_at) from runs r
+		where r.agent_id = $1 and r.version_id = $2
+		  and r.simulated and r.simulation <> ''
+		  and exists (
+		    select 1 from run_steps s
+		    where s.run_id = r.run_id
+		      and s.seq = 1
+		      and s.kind = 'run_started'
+		      and coalesce(s.payload->>'case', '') <> ''
+		  )`,
 		string(agent), string(version)).Scan(&at)
 
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && at == nil) {

@@ -5,7 +5,7 @@ import {
 import type { EditorTab } from "@/features/agents/editor-tabs";
 import type { MCPUserCredential } from "@/features/integrations/api";
 import type { ServerRecipe } from "@/features/integrations/mcp/api";
-import type { Agent, AgentDefinition, Tool } from "@/lib/api/client";
+import type { Agent, AgentDefinition, AgentTrust, Tool } from "@/lib/api/client";
 import type { components } from "@/lib/api/schema.gen";
 
 export type GuidedAgentStepID =
@@ -35,6 +35,7 @@ export interface GuidedAgentContext {
   recipes?: ServerRecipe[];
   credentials?: MCPUserCredential[];
   channels?: Channel[];
+  trust?: AgentTrust;
   simulationTo?: string;
 }
 
@@ -153,7 +154,7 @@ export function publishedAgentGuideSteps(
       id: "simulation",
       labelKey: "agents.guideSimulation",
       bodyKey: "agents.guideSimulationPublishedHint",
-      done: false,
+      done: simulationEvidenceReady(context.trust),
       optional: true,
       to: context.simulationTo ?? `/agents/${agent.agentId}/simulate`,
     },
@@ -173,6 +174,14 @@ export function guidedAgentProgress(steps: GuidedAgentStep[]) {
     total: required.length,
     next: steps.find((step) => !step.done),
   };
+}
+
+function simulationEvidenceReady(trust?: AgentTrust): boolean {
+  return (
+    trust?.evidence?.some(
+      (item) => item.id === "simulation" && item.status === "good",
+    ) ?? false
+  );
 }
 
 function toolStep(

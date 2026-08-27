@@ -38,6 +38,48 @@ func TestGetAgentTrust_withoutSimulationCorpusAsksForEvidence(t *testing.T) {
 		openapi.AgentTrustEvidenceStatusMissing, openapi.SimulationMissingCorpus)
 }
 
+func TestGetAgentTrust_savedCaseThatStillHoldsMarksSimulationReady(t *testing.T) {
+	t.Parallel()
+
+	store := ledger.NewMemory()
+	batteryFor(t, store, "v2", "sim-green", "saved-case")
+
+	trust := readTrust(t, trustableWithCorpus(t, store, []domain.RegressionCase{{
+		ID: "saved-case", Agent: "triage",
+		Expectations: []domain.Expectation{{Kind: domain.ExpectSettles, Value: "finished"}},
+	}}), "triage", "")
+	assertEvidence(t, trust, openapi.AgentTrustEvidenceIdSimulation,
+		openapi.AgentTrustEvidenceStatusGood, openapi.SimulationReady)
+}
+
+func TestGetAgentTrust_adHocSimulationDoesNotBreakSavedCorpusEvidence(t *testing.T) {
+	t.Parallel()
+
+	store := ledger.NewMemory()
+	base := time.Now().Add(-time.Hour)
+	appendAt(t, store, "run-corpus", "v2", domain.StepRunStarted,
+		domain.RunStartedPayload{
+			Trigger: "simulation", Simulated: true,
+			Simulation: "sim-corpus", Case: "saved-case",
+		}, base)
+	appendAt(t, store, "run-corpus", "v2", domain.StepRunFinished,
+		domain.RunFinishedPayload{Outcome: "answered"}, base.Add(time.Second))
+	appendAt(t, store, "run-ad-hoc", "v2", domain.StepRunStarted,
+		domain.RunStartedPayload{
+			Trigger: "simulation", Simulated: true,
+			Simulation: "sim-ad-hoc",
+		}, base.Add(30*time.Minute))
+	appendAt(t, store, "run-ad-hoc", "v2", domain.StepRunFinished,
+		domain.RunFinishedPayload{Outcome: "answered"}, base.Add(30*time.Minute+time.Second))
+
+	trust := readTrust(t, trustableWithCorpus(t, store, []domain.RegressionCase{{
+		ID: "saved-case", Agent: "triage",
+		Expectations: []domain.Expectation{{Kind: domain.ExpectSettles, Value: "finished"}},
+	}}), "triage", "")
+	assertEvidence(t, trust, openapi.AgentTrustEvidenceIdSimulation,
+		openapi.AgentTrustEvidenceStatusGood, openapi.SimulationReady)
+}
+
 func TestGetAgentTrust_aPendingApprovalIsGovernanceNotFailure(t *testing.T) {
 	t.Parallel()
 

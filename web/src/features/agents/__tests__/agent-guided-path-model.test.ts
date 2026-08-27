@@ -6,7 +6,7 @@ import {
   guidedAgentSteps,
   publishedAgentGuideSteps,
 } from "@/features/agents/agent-guided-path-model";
-import type { Agent, AgentDefinition, Tool } from "@/lib/api/client";
+import type { Agent, AgentDefinition, AgentTrust, Tool } from "@/lib/api/client";
 import type { MCPUserCredential } from "@/features/integrations/api";
 import type { ServerRecipe } from "@/features/integrations/mcp/api";
 import type { components } from "@/lib/api/schema.gen";
@@ -186,6 +186,24 @@ describe("the guided first-agent path", () => {
       ["launch", false, undefined],
     ]);
   });
+
+  it("marks published rehearsal done only from good trust evidence", () => {
+    const missing = publishedAgentGuideSteps(agent(), "Do work.", {
+      catalogue: [tool("github.list_issues")],
+      trust: trustEvidence("missing"),
+    });
+    expect(missing.find((step) => step.id === "simulation")).toMatchObject({
+      done: false,
+    });
+
+    const ready = publishedAgentGuideSteps(agent(), "Do work.", {
+      catalogue: [tool("github.list_issues")],
+      trust: trustEvidence("good"),
+    });
+    expect(ready.find((step) => step.id === "simulation")).toMatchObject({
+      done: true,
+    });
+  });
 });
 
 function publishableDraft(
@@ -250,5 +268,26 @@ function agent(overrides: Partial<Agent> = {}): Agent {
     publishedAt: "2026-08-20T12:00:00Z",
     latest: true,
     ...overrides,
+  };
+}
+
+function trustEvidence(status: AgentTrust["evidence"][number]["status"]): AgentTrust {
+  return {
+    versionId: "v123",
+    status: status === "good" ? "ready" : "needs_evidence",
+    recommendation: status === "good" ? "autonomous" : "collect",
+    summary: status === "good" ? "ready" : "evidence",
+    window: {
+      from: "2026-08-01T00:00:00.000Z",
+      until: "2026-08-31T00:00:00.000Z",
+    },
+    evidence: [
+      {
+        id: "simulation",
+        status,
+        code: status === "good" ? "simulation_ready" : "simulation_not_run",
+        values: {},
+      },
+    ],
   };
 }

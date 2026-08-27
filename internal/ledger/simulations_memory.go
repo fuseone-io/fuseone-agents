@@ -86,10 +86,11 @@ func startedPayload(opening domain.Step) domain.RunStartedPayload {
 }
 
 /*
-Batteries are the simulations run against one version, newest first.
+Batteries are the corpus simulations run against one version, newest first.
 
-The fake enforces the same rule as the store: simulated runs only. A fake that
-counted a real run would let a suite certify a gate production does not have.
+The fake enforces the same rule as the store: simulated runs that name saved
+cases only. A fake that counted a real run or an ad-hoc simulation would let a
+suite certify a gate production does not have.
 */
 func (m *Memory) Batteries(
 	ctx context.Context, agent domain.AgentID, version domain.VersionID, limit int,
@@ -117,7 +118,7 @@ func (m *Memory) Batteries(
 		if err := json.Unmarshal(first.Payload, &started); err != nil {
 			continue
 		}
-		if !started.Simulated || started.Simulation == "" {
+		if !started.Simulated || started.Simulation == "" || started.Case == "" {
 			continue
 		}
 		if at, seen := opened[started.Simulation]; !seen || first.At.After(at) {
@@ -144,7 +145,7 @@ func (m *Memory) Batteries(
 	return out, nil
 }
 
-// Latest is the newest battery run against one version.
+// Latest is the newest corpus battery run against one version.
 func (m *Memory) Latest(
 	ctx context.Context, agent domain.AgentID, version domain.VersionID,
 ) (string, bool, error) {
@@ -155,7 +156,7 @@ func (m *Memory) Latest(
 	return found[0], true, nil
 }
 
-// LastBatteryAt is when a version's corpus last ran.
+// LastBatteryAt is when a version's saved corpus last ran.
 //
 // The fake answers the same question the store does, from the same fact: the
 // moment the newest battery opened.
@@ -182,7 +183,7 @@ func (m *Memory) LastBatteryAt(
 		if err := json.Unmarshal(first.Payload, &started); err != nil {
 			continue
 		}
-		if !started.Simulated || started.Simulation == "" {
+		if !started.Simulated || started.Simulation == "" || started.Case == "" {
 			continue
 		}
 		if first.At.After(newest) {
