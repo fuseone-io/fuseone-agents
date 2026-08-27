@@ -9,7 +9,21 @@ import (
 	"github.com/fuseone/agents/internal/domain"
 )
 
-var ErrNotFound = errors.New("memory: assertion not found")
+var (
+	ErrNotFound = errors.New("memory: assertion not found")
+	/*
+		ErrInvalid means the caller's own input is wrong, as opposed to the state
+		it arrived at or the database being unreachable.
+
+		Three kinds of no came out of this package as the same untyped error, and
+		the edge answered all of them with 400: a missing subject, a memory
+		somebody had disabled, and Postgres not answering. A person correcting a
+		fact was told their input was invalid while the truth was that two rows
+		claim that identity — and the console could show nothing better, because
+		the difference was in prose it was not allowed to parse.
+	*/
+	ErrInvalid = errors.New("memory: the input is not valid")
+)
 
 type Store interface {
 	Find(ctx context.Context, q domain.MemoryQuery) ([]domain.MemoryAssertion, error)

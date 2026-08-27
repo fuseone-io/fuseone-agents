@@ -69,8 +69,14 @@ func (m *Memory) Assert(
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	merged, _, err := m.mergeInto(prepared, OriginHuman)
-	return merged, err
+	merged, outcome, err := m.mergeInto(prepared, OriginHuman)
+	if err != nil {
+		return domain.MemoryAssertion{}, err
+	}
+	if outcome == Covered {
+		return domain.MemoryAssertion{}, coveredBy(merged)
+	}
+	return merged, nil
 }
 
 /*

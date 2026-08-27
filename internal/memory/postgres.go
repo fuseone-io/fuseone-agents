@@ -66,9 +66,12 @@ func (p *Postgres) Assert(
 		return domain.MemoryAssertion{}, fmt.Errorf("memory: begin assert: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	stored, _, err := mergeInto(ctx, tx, prepared, OriginHuman, by, reason, "asserted")
+	stored, outcome, err := mergeInto(ctx, tx, prepared, OriginHuman, by, reason, "asserted")
 	if err != nil {
 		return domain.MemoryAssertion{}, err
+	}
+	if outcome == Covered {
+		return domain.MemoryAssertion{}, coveredBy(stored)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return domain.MemoryAssertion{}, fmt.Errorf("memory: commit assert: %w", err)

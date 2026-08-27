@@ -43,6 +43,24 @@ var (
 )
 
 /*
+coveredBy is what a direct write gets when shared memory already answers it.
+
+An outcome for a suggestion and a refusal for a person, which is not an
+inconsistency: accepting a proposal that shared memory covers has an honest
+ending — the proposal is closed and nothing is learned twice. A person
+correcting a fact has no such ending. They were told the correction worked while
+the row they meant to change was never touched, because the shared memory an
+agent-scoped write covers is the memory every agent reads, and rewriting it from
+one agent's context is not something to do quietly.
+
+So the write says whose memory answers it, and the caller goes and improves that
+one deliberately.
+*/
+func coveredBy(covering domain.MemoryAssertion) error {
+	return fmt.Errorf("%w: %s", ErrCovered, covering.ID)
+}
+
+/*
 oneOf is what both stores do with the rows they matched, in one place.
 
 Two implementations of "is there exactly one" is one implementation and one

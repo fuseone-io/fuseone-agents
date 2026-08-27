@@ -3559,6 +3559,17 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: |
+            The write contradicts the memory that is already there: more than
+            one row is this identity, the assertion it would correct is
+            disabled or its source was erased, shared memory already answers
+            it, or the evidence budget cannot hold a citation for every label
+            the assertion carries. None of these is a bad request — the body
+            was understood, and the state refused it.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
 
   /admin/memory/assertions/{assertionId}/disable:
     post:
@@ -3648,6 +3659,15 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: |
+            The memory the suggestion would become refuses the write: more than
+            one row is this identity, the assertion is disabled or its source
+            was erased, or the evidence budget cannot hold a citation for every
+            label. The proposal is left pending — nothing was consumed.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
 
   /admin/memory/suggestions/{suggestionId}/dismiss:
     post:

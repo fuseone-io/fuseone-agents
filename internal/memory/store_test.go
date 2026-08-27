@@ -1705,6 +1705,64 @@ func TestPostgresHydrate_conflictedPair_endsThatRowAndNotTheSweep(t *testing.T) 
 }
 
 /*
+Covering is not correcting, and the write says so instead of looking like one.
+
+A run reads its own memory and the shared memory, so an equivalent shared fact
+answers an agent-scoped creation — but it is the memory every agent in the scope
+reads, and rewriting it from one agent's context is not something to do quietly.
+So nothing is written.
+
+What was wrong was the answer: the shared row came back with a 200 and the
+person was told their correction had landed, on a row that was never touched.
+The proposal path is different and stays different — accepting something shared
+memory already covers has an honest ending, and there the suggestion is closed.
+*/
+func TestAssert_sharedMemoryAlreadyAnswersIt_refusesInsteadOfLookingLikeAWrite(t *testing.T) {
+	t.Parallel()
+	expectCoveredAssertIsRefused(t, context.Background(), memory.NewMemory())
+}
+
+func TestPostgresAssert_sharedMemoryAlreadyAnswersIt_refusesInsteadOfLookingLikeAWrite(t *testing.T) {
+	ctx, store := postgresStore(t)
+	expectCoveredAssertIsRefused(t, ctx, store)
+}
+
+func expectCoveredAssertIsRefused(t *testing.T, ctx context.Context, store mergeStore) {
+	t.Helper()
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	shared, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.AgentID = ""
+	}), "usr_ana", "reviewed", now)
+	if err != nil {
+		t.Fatalf("Assert shared: %v", err)
+	}
+
+	_, err = store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Claim = "a correction meant for the agent, landing nowhere"
+	}), "usr_bruno", "correcting", now.Add(time.Hour))
+	if !errors.Is(err, memory.ErrCovered) {
+		t.Fatalf("Assert = %v, want the write refused as covered", err)
+	}
+	if !strings.Contains(err.Error(), shared.ID) {
+		t.Errorf("error = %v, want it to name the shared memory to go and improve", err)
+	}
+
+	found, err := store.Find(ctx, domain.MemoryQuery{
+		Scope: platformScope, AgentID: "triage", Now: now.Add(time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if len(found) != 1 || found[0].ID != shared.ID {
+		t.Fatalf("memory = %+v, want only the shared row", subjects(found))
+	}
+	if found[0].Claim == "a correction meant for the agent, landing nowhere" {
+		t.Error("the shared memory was corrected from an agent's context")
+	}
+}
+
+/*
 A row written before the key, met by somebody who spells it differently, is one
 memory with both citations.
 

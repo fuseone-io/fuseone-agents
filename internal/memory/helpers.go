@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -26,7 +27,7 @@ func prepareAssertion(
 		a.Status = domain.MemoryActive
 	}
 	if err := a.Validate(); err != nil {
-		return domain.MemoryAssertion{}, err
+		return domain.MemoryAssertion{}, fmt.Errorf("%w: %v", ErrInvalid, err)
 	}
 	a.ID = domain.MemoryAssertionID(a)
 	a.CreatedBy, a.UpdatedBy = by, by
@@ -61,7 +62,7 @@ func prepareSuggestion(
 	s.Labels = s.Labels.Union(domain.ScopeLabels(s.Scope))
 	s.Evidence = boundedEvidence(s.Evidence)
 	if err := s.Validate(); err != nil {
-		return domain.MemorySuggestion{}, err
+		return domain.MemorySuggestion{}, fmt.Errorf("%w: %v", ErrInvalid, err)
 	}
 	return s, nil
 }

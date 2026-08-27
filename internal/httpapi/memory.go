@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -70,8 +71,15 @@ func (s *Server) CreateMemoryAssertion(
 	}
 	assertion, err := s.memory.Assert(ctx, memoryAssertionInput(*req.Body, scope, labels),
 		callerOf(ctx), req.Body.Reason, clockOr(s.clock).Now())
-	if err != nil {
+	switch memoryRefusal(err) {
+	case http.StatusConflict:
+		return openapi.CreateMemoryAssertion409ApplicationProblemPlusJSONResponse(
+			conflicted(err.Error())), nil
+	case http.StatusBadRequest:
 		return badMemoryCreate(err.Error()), nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("create memory assertion: %w", err)
 	}
 	return openapi.CreateMemoryAssertion200JSONResponse(memoryAssertion(assertion)), nil
 }
@@ -95,8 +103,11 @@ func (s *Server) DisableMemoryAssertion(
 			NotFoundApplicationProblemPlusJSONResponse: notFound(req.AssertionId),
 		}, nil
 	}
-	if err != nil {
+	if memoryRefusal(err) == http.StatusBadRequest {
 		return badMemoryDisable(err.Error()), nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("disable memory assertion %s: %w", req.AssertionId, err)
 	}
 	return openapi.DisableMemoryAssertion204Response{}, nil
 }
@@ -140,8 +151,15 @@ func (s *Server) AcceptMemorySuggestion(
 			NotFoundApplicationProblemPlusJSONResponse: notFound(req.SuggestionId),
 		}, nil
 	}
-	if err != nil {
+	switch memoryRefusal(err) {
+	case http.StatusConflict:
+		return openapi.AcceptMemorySuggestion409ApplicationProblemPlusJSONResponse(
+			conflicted(err.Error())), nil
+	case http.StatusBadRequest:
 		return badMemorySuggestionAccept(err.Error()), nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("accept memory suggestion %s: %w", req.SuggestionId, err)
 	}
 	return openapi.AcceptMemorySuggestion200JSONResponse(memoryAssertion(assertion)), nil
 }
@@ -166,8 +184,11 @@ func (s *Server) DismissMemorySuggestion(
 			NotFoundApplicationProblemPlusJSONResponse: notFound(req.SuggestionId),
 		}, nil
 	}
-	if err != nil {
+	if memoryRefusal(err) == http.StatusBadRequest {
 		return badMemorySuggestionDismiss(err.Error()), nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("dismiss memory suggestion %s: %w", req.SuggestionId, err)
 	}
 	return openapi.DismissMemorySuggestion204Response{}, nil
 }
@@ -387,6 +408,35 @@ func memoryEvidenceTo(in []domain.MemoryEvidence) []openapi.MemoryEvidence {
 		})
 	}
 	return out
+}
+
+/*
+memoryRefusal says which kind of no the store gave, or zero when it is not one.
+
+Three answers used to be one. A body the server would not accept, a state that
+contradicts the write, and a database that is not answering all left here as
+400 with a sentence — so the console offered "check what you typed" to somebody
+whose installation was down, and the same thing to somebody whose memory holds
+two rows claiming one identity, which is the only one of the three a person can
+go and fix.
+
+Zero is deliberately the answer for an error this package does not recognise.
+An unrecognised failure is the installation's, and it belongs in the logs as a
+failure rather than on the screen as the caller's mistake.
+*/
+func memoryRefusal(err error) int {
+	switch {
+	case err == nil:
+		return 0
+	case errors.Is(err, memstore.ErrCanonicalConflict),
+		errors.Is(err, memstore.ErrMemoryTerminal),
+		errors.Is(err, memstore.ErrCovered),
+		errors.Is(err, memstore.ErrEvidenceCannotExplain):
+		return http.StatusConflict
+	case errors.Is(err, memstore.ErrInvalid):
+		return http.StatusBadRequest
+	}
+	return 0
 }
 
 func badMemoryCreate(detail string) openapi.CreateMemoryAssertion400ApplicationProblemPlusJSONResponse {

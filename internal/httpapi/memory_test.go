@@ -3,6 +3,8 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -135,6 +137,173 @@ type readPanicker struct{ *ledger.Memory }
 
 func (readPanicker) Read(context.Context, domain.RunID, int64) ([]domain.Step, error) {
 	panic("evidence was read before authorisation")
+}
+
+/*
+Three kinds of no, told apart.
+
+They used to be one. A body the server would not accept, a state that
+contradicts the write, and a database that is not answering all came back as
+400 with a sentence, so the console could offer nothing better than "check your
+input" to somebody whose installation was down — and nothing at all to somebody
+whose memory has two rows claiming one identity, which is the one case where
+there is something for a person to go and fix.
+*/
+func TestCreateMemoryAssertion_tellsInvalidFromConflictedFromUnavailable(t *testing.T) {
+	t.Parallel()
+
+	t.Run("a claim the store will not accept is a bad request", func(t *testing.T) {
+		t.Parallel()
+		resp := createAgainst(t, memstore.NewMemory(), func(in *openapi.MemoryAssertionInput) {
+			in.Claim = strings.Repeat("a claim nobody could read ", 100)
+		})
+		if _, bad := resp.(openapi.CreateMemoryAssertion400ApplicationProblemPlusJSONResponse); !bad {
+			t.Fatalf("response = %T, want 400", resp)
+		}
+	})
+
+	t.Run("shared memory already answering it is a conflict", func(t *testing.T) {
+		t.Parallel()
+		store := memstore.NewMemory()
+		// Shared memory, which the agent-scoped write covers rather than
+		// corrects: it is what every agent in the scope reads.
+		remember(t, store, memoryAssertionFixture("cx", "grafana datasource",
+			func(a *domain.MemoryAssertion) {
+				a.AgentID, a.Signature = "", "grafana.datasource.down"
+			}))
+		assertMemoryConflict(t, createAgainst(t, store, nil))
+	})
+
+	t.Run("a database that does not answer is not the caller's fault", func(t *testing.T) {
+		t.Parallel()
+		resp := createAgainst(t, unavailableMemory{}, nil)
+		if resp != nil {
+			t.Fatalf("response = %T, want the error propagated as an internal failure", resp)
+		}
+	})
+}
+
+func TestAcceptMemorySuggestion_tellsConflictFromUnavailable(t *testing.T) {
+	t.Parallel()
+
+	t.Run("a disabled assertion refuses the accept", func(t *testing.T) {
+		t.Parallel()
+		store := memstore.NewMemory()
+		stored := memoryAssertionFixture("cx", "grafana datasource", nil)
+		remember(t, store, stored)
+		id := domain.MemoryAssertionID(stored)
+		if err := store.Disable(context.Background(), id,
+			domain.Scope{Company: "acme", Area: "cx"}, "usr_ana", "wrong", time.Unix(0, 0)); err != nil {
+			t.Fatalf("Disable: %v", err)
+		}
+		pending := suggest(t, store, memorySuggestionFixture("cx", "grafana datasource",
+			func(s *domain.MemorySuggestion) { s.Signature = "grafana datasource.signature" }))
+
+		resp, err := NewServer(ledger.NewMemory(), "test").WithMemory(store).
+			AcceptMemorySuggestion(inArea("cx", domain.RoleAuthor),
+				openapi.AcceptMemorySuggestionRequestObject{
+					SuggestionId: pending.ID,
+					Body: &openapi.MemorySuggestionReviewInput{
+						Company: "acme", Area: "cx", Reason: "agreed",
+					},
+				})
+		if err != nil {
+			t.Fatalf("AcceptMemorySuggestion: %v", err)
+		}
+		if _, conflict := resp.(openapi.AcceptMemorySuggestion409ApplicationProblemPlusJSONResponse); !conflict {
+			t.Fatalf("response = %T, want 409", resp)
+		}
+	})
+
+	t.Run("a database that does not answer is not the caller's fault", func(t *testing.T) {
+		t.Parallel()
+		resp, err := NewServer(ledger.NewMemory(), "test").WithMemory(unavailableMemory{}).
+			AcceptMemorySuggestion(inArea("cx", domain.RoleAuthor),
+				openapi.AcceptMemorySuggestionRequestObject{
+					SuggestionId: "mems_whatever",
+					Body: &openapi.MemorySuggestionReviewInput{
+						Company: "acme", Area: "cx", Reason: "agreed",
+					},
+				})
+		if err == nil {
+			t.Fatalf("response = %T, want the error propagated as an internal failure", resp)
+		}
+	})
+}
+
+// createAgainst runs a creation whose evidence the ledger vouches for, so the
+// only thing under test is what the store answered.
+func createAgainst(
+	t *testing.T, store Memory, edit func(*openapi.MemoryAssertionInput),
+) openapi.CreateMemoryAssertionResponseObject {
+	t.Helper()
+	scope := domain.Scope{Company: "acme", Area: "cx"}
+	led := ledger.NewMemory()
+	seedFinishedEvidence(t, led, "run-evidence", scope, domain.ScopeLabels(scope), "sha256:answer")
+
+	req := memoryCreateRequest("sha256:answer")
+	if edit != nil {
+		edit(req.Body)
+	}
+	resp, err := NewServer(led, "test").WithMemory(store).
+		WithClock(fixedAt{t: time.Unix(0, 0)}).
+		CreateMemoryAssertion(inArea("cx", domain.RoleAuthor), req)
+	if err != nil {
+		return nil
+	}
+	return resp
+}
+
+func assertMemoryConflict(t *testing.T, resp openapi.CreateMemoryAssertionResponseObject) {
+	t.Helper()
+	conflict, ok := resp.(openapi.CreateMemoryAssertion409ApplicationProblemPlusJSONResponse)
+	if !ok {
+		t.Fatalf("response = %T, want 409", resp)
+	}
+	if conflict.Type == nil || *conflict.Type != string(CodeConflict) {
+		t.Errorf("type = %v, want the stable conflict code", conflict.Type)
+	}
+}
+
+// unavailableMemory is the installation not answering: every call fails the way
+// an unreachable database does, with nothing the caller could have done
+// differently.
+type unavailableMemory struct{}
+
+var errMemoryUnreachable = errors.New("dial tcp: connection refused")
+
+func (unavailableMemory) List(context.Context, memstore.Filter) ([]domain.MemoryAssertion, error) {
+	return nil, errMemoryUnreachable
+}
+
+func (unavailableMemory) Assert(
+	context.Context, domain.MemoryAssertion, domain.UserID, string, time.Time,
+) (domain.MemoryAssertion, error) {
+	return domain.MemoryAssertion{}, errMemoryUnreachable
+}
+
+func (unavailableMemory) Disable(
+	context.Context, string, domain.Scope, domain.UserID, string, time.Time,
+) error {
+	return errMemoryUnreachable
+}
+
+func (unavailableMemory) ListSuggestions(
+	context.Context, memstore.SuggestionFilter,
+) ([]domain.MemorySuggestion, error) {
+	return nil, errMemoryUnreachable
+}
+
+func (unavailableMemory) AcceptSuggestion(
+	context.Context, string, domain.Scope, domain.UserID, string, time.Time,
+) (domain.MemoryAssertion, error) {
+	return domain.MemoryAssertion{}, errMemoryUnreachable
+}
+
+func (unavailableMemory) DismissSuggestion(
+	context.Context, string, domain.Scope, domain.UserID, string, time.Time,
+) error {
+	return errMemoryUnreachable
 }
 
 func remember(t *testing.T, memory *memstore.Memory, a domain.MemoryAssertion) {
