@@ -67,11 +67,8 @@ func TestReconcileOutcome_anythingElse_failsTheRelease(t *testing.T) {
 func TestReport_incompleteRun_keepsTheCountsAndSaysSo(t *testing.T) {
 	t.Parallel()
 	var out bytes.Buffer
-	restore := slog.Default()
-	slog.SetDefault(slog.New(slog.NewTextHandler(&out, nil)))
-	t.Cleanup(func() { slog.SetDefault(restore) })
-
-	report("memory", memory.Totals{Pages: 7, Scanned: 600, Repaired: 588, Conflicted: 2}, true)
+	report(slog.New(slog.NewTextHandler(&out, nil)), "memory",
+		memory.Totals{Pages: 7, Scanned: 600, Repaired: 588, Conflicted: 2}, true)
 
 	logged := out.String()
 	for _, want := range []string{"incomplete=true", "repaired=588", "conflicted=2", "needs_review=true"} {
@@ -90,11 +87,8 @@ func TestReport_incompleteRun_keepsTheCountsAndSaysSo(t *testing.T) {
 func TestReport_saysNothingAboutWhichRowsTheyWere(t *testing.T) {
 	t.Parallel()
 	var out bytes.Buffer
-	restore := slog.Default()
-	slog.SetDefault(slog.New(slog.NewTextHandler(&out, nil)))
-	t.Cleanup(func() { slog.SetDefault(restore) })
-
-	report("memory", memory.Totals{Pages: 2, Scanned: 100, Repaired: 4, Unproved: 1}, false)
+	report(slog.New(slog.NewTextHandler(&out, nil)), "memory",
+		memory.Totals{Pages: 2, Scanned: 100, Repaired: 4, Unproved: 1}, false)
 
 	logged := out.String()
 	for _, forbidden := range []string{"mem_", "mems_", "cursor", "subject", "claim"} {

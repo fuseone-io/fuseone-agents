@@ -61,8 +61,8 @@ func reconcileMemory(args []string) error {
 	incomplete, fatal := outcome(err)
 	// Reported either way. A run that stopped halfway still repaired what it
 	// reached, and an operator reading only the error would think it had not.
-	report("memory", assertions, incomplete)
-	report("memory suggestions", suggestions, incomplete)
+	report(slog.Default(), "memory", assertions, incomplete)
+	report(slog.Default(), "memory suggestions", suggestions, incomplete)
 	return fatal
 }
 
@@ -107,8 +107,13 @@ resolve nothing.
 
 A run cut short by its own deadline is a warning too, and for the same reason:
 the counts are what it managed, and the next release carries on from there.
+
+The logger is a parameter, as it is everywhere else here that logs something
+worth reading back. Reaching for the package default would make what this wrote
+observable only through process-wide state, which is a thing a test can only
+check by swapping that state out from under whatever else is running.
 */
-func report(what string, totals memory.Totals, incomplete bool) {
+func report(log *slog.Logger, what string, totals memory.Totals, incomplete bool) {
 	fields := []any{
 		"table", what,
 		"pages", totals.Pages,
@@ -124,11 +129,11 @@ func report(what string, totals memory.Totals, incomplete bool) {
 	}
 	switch {
 	case incomplete:
-		slog.Warn("memory reconciliation stopped at its deadline; the next run continues",
+		log.Warn("memory reconciliation stopped at its deadline; the next run continues",
 			append(fields, "incomplete", true)...)
 	case totals.NeedsReview():
-		slog.Warn("memory reconciled, and some rows need a person", fields...)
+		log.Warn("memory reconciled, and some rows need a person", fields...)
 	default:
-		slog.Info("memory reconciled", fields...)
+		log.Info("memory reconciled", fields...)
 	}
 }
