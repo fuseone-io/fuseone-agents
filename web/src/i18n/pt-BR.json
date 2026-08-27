@@ -1552,8 +1552,6 @@
     "agent": "Agente",
     "agentFilter": "Filtrar por agente",
     "agentFilterPlaceholder": "triage",
-    "agentHint": "Vazio compartilha com os agentes deste escopo.",
-    "agentOptional": "Agente (opcional)",
     "assertions": "Assertivas lembradas",
     "acceptHint": "Aceitar promove esta sugestão estruturada para memória ativa. Ela será devolvida aos agentes com os labels mostrados aqui.",
     "acceptSuggestion": "Aceitar sugestão",
@@ -1628,7 +1626,11 @@
     "noSuggestions": "Nenhuma sugestão de memória pendente encontrada",
     "noSuggestionsHint": "Agentes com opt-in podem propor asserções estruturadas. Elas aparecem aqui para revisão antes de virarem memória ativa.",
     "updated": "Atualizada {{seen}}",
-    "viewFilter": "Visão da memória"
+    "viewFilter": "Visão da memória",
+    "namespace": "Quem lê isto",
+    "namespace_agent": "O agente do run de onde isto veio",
+    "namespace_shared": "Todos os agentes deste escopo",
+    "namespaceHint": "Memória compartilhada é lembrada por todos os agentes daqui. O agente vem do run que a evidência nomeia."
   },
   "nav": {
     "admin": "Administração",

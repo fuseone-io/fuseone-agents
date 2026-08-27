@@ -1552,8 +1552,6 @@
     "agent": "Agent",
     "agentFilter": "Filter by agent",
     "agentFilterPlaceholder": "triage",
-    "agentHint": "Empty makes it shared by agents in this scope.",
-    "agentOptional": "Agent (optional)",
     "assertions": "Remembered assertions",
     "acceptHint": "Accepting promotes this structured suggestion to active memory. It will be returned to agents with the labels shown here.",
     "acceptSuggestion": "Accept suggestion",
@@ -1628,7 +1626,11 @@
     "noSuggestions": "No pending memory suggestion matches",
     "noSuggestionsHint": "Opted-in agents can propose structured assertions. They appear here for review before they become active memory.",
     "updated": "Updated {{seen}}",
-    "viewFilter": "Memory view"
+    "viewFilter": "Memory view",
+    "namespace": "Who reads this",
+    "namespace_agent": "The agent whose run this came from",
+    "namespace_shared": "Every agent in this scope",
+    "namespaceHint": "Shared memory is recalled by every agent here. The agent is taken from the run the evidence names."
   },
   "nav": {
     "admin": "Administration",

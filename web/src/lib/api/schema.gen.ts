@@ -2282,6 +2282,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/memory/assertions/{assertionId}/reactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bring a disabled memory assertion back
+         * @description Reactivation is a new governance act, not the undoing of the disable. The server proves every citation against the ledger again before the assertion becomes recallable, sets a fresh expiry from this decision, and records an append-only memory event. A memory whose source run was erased never comes back.
+         */
+        post: operations["reactivateMemoryAssertion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/memory/suggestions": {
         parameters: {
             query?: never;
@@ -2591,29 +2611,20 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
-        /** @description A human-curated memory assertion. Labels are deliberately absent: the server derives them from evidence in the immutable run ledger. */
+        /** @description A human-curated memory assertion, in the fields a person can answer. Labels, the agent, the counters and the expiry are all absent on purpose: the server derives them from the run the evidence names and from policy, because every one of them changes what the memory means and none of them is something a caller should be able to assert about itself. */
         MemoryAssertionInput: {
             company: string;
             area: string;
-            /** @description Omit for memory shared by agents in the same scope. */
-            agentId?: string;
+            /**
+             * @description Who reads this memory. `agent` is the agent whose run the evidence names; `shared` is every agent in the scope. An explicit choice rather than an omitted field, because shared memory is what every agent reads and nobody should reach it by leaving something blank.
+             * @enum {string}
+             */
+            namespace: "agent" | "shared";
             kind: string;
             subject: string;
             signature: string;
             claim: string;
             evidence: components["schemas"]["MemoryEvidence"][];
-            /**
-             * Format: int64
-             * @default 1
-             */
-            observations: number;
-            /**
-             * Format: int64
-             * @default 1
-             */
-            confirmed: number;
-            /** Format: date-time */
-            expiresAt?: string | null;
             /** @description Why a person decided this assertion should be remembered. */
             reason: string;
         };
@@ -2621,6 +2632,12 @@ export interface components {
             company: string;
             area: string;
             /** @description Why a person disabled this assertion. */
+            reason: string;
+        };
+        MemoryReactivateInput: {
+            company: string;
+            area: string;
+            /** @description Why a person is bringing this assertion back. Required: the event is what makes reactivation an act rather than an update. */
             reason: string;
         };
         /** @description A structured assertion proposed by an opted-in agent. Pending suggestions are review material, not remembered facts; the memory tool only reads active MemoryAssertion rows. */
@@ -8093,6 +8110,22 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            /**
+             * @description The write contradicts the memory that is already there: more than
+             *     one row is this identity, the assertion it would correct is
+             *     disabled or its source was erased, shared memory already answers
+             *     it, or the evidence budget cannot hold a citation for every label
+             *     the assertion carries. None of these is a bad request — the body
+             *     was understood, and the state refused it.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     disableMemoryAssertion: {
@@ -8121,6 +8154,50 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    reactivateMemoryAssertion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assertionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemoryReactivateInput"];
+            };
+        };
+        responses: {
+            /** @description The assertion now projected for recall again. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryAssertion"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /**
+             * @description The memory is not one this decision can bring back: it is not
+             *     disabled, its source run is gone, its citations no longer prove it,
+             *     shared memory already answers the same identity, or somebody moved
+             *     it while this was being decided.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     listMemorySuggestions: {
@@ -8181,6 +8258,20 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            /**
+             * @description The memory the suggestion would become refuses the write: more than
+             *     one row is this identity, the assertion is disabled or its source
+             *     was erased, or the evidence budget cannot hold a citation for every
+             *     label. The proposal is left pending — nothing was consumed.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     dismissMemorySuggestion: {

@@ -7,6 +7,7 @@ import {
   MemoryInputField,
   MemoryTextareaField,
 } from "@/features/memory/memory-form-fields";
+import { MemoryNamespaceField } from "@/features/memory/memory-namespace-field";
 import type { MemoryFormValues } from "@/features/memory/memory-form-schema";
 
 export function MemoryCreateForm({
@@ -36,13 +37,7 @@ export function MemoryCreateForm({
             className="font-mono"
           />
         </div>
-        <MemoryInputField
-          control={form.control}
-          name="agentId"
-          label="memory.agentOptional"
-          description="memory.agentHint"
-          className="font-mono"
-        />
+        <MemoryNamespaceField control={form.control} />
         <MemoryInputField
           control={form.control}
           name="kind"
@@ -68,20 +63,6 @@ export function MemoryCreateForm({
           label="memory.claim"
           description="memory.claimHint"
         />
-        <div className="grid gap-3 sm:grid-cols-2">
-          <MemoryInputField
-            control={form.control}
-            name="observations"
-            label="memory.observations"
-            className="font-mono"
-          />
-          <MemoryInputField
-            control={form.control}
-            name="confirmed"
-            label="memory.confirmed"
-            className="font-mono"
-          />
-        </div>
         <EvidenceFields control={form.control} />
         <MemoryInputField
           control={form.control}

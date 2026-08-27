@@ -72,12 +72,21 @@ func (s *Server) CreateMemoryAssertion(
 	if err := auth.Require(ctx, domain.PermAgentPublish, scope); err != nil {
 		return forbiddenMemoryCreate(domain.PermAgentPublish, scope), nil
 	}
-	labels, err := s.labelsFromMemoryEvidence(ctx, scope, req.Body.Evidence)
+	agent, labels, err := s.originOfMemoryEvidence(ctx, scope, req.Body.Evidence)
 	if err != nil {
 		return badMemoryCreate(err.Error()), nil
 	}
-	assertion, err := s.memory.Assert(ctx, memoryAssertionInput(*req.Body, scope, labels),
-		callerOf(ctx), req.Body.Reason, clockOr(s.clock).Now())
+	// Shared is a choice somebody made, never a field they left out. The agent
+	// the run names is dropped here rather than never read: refusing the write
+	// when the two disagree would refuse every shared memory taught from a run,
+	// which is most of them.
+	if req.Body.Namespace == openapi.MemoryAssertionInputNamespaceShared {
+		agent = ""
+	}
+	now := clockOr(s.clock).Now()
+	assertion, err := s.memory.Assert(ctx,
+		memoryAssertionInput(*req.Body, scope, memoryOrigin{agent: agent, labels: labels, now: now}),
+		callerOf(ctx), req.Body.Reason, now)
 	switch memoryRefusal(err) {
 	case http.StatusConflict:
 		return openapi.CreateMemoryAssertion409ApplicationProblemPlusJSONResponse(

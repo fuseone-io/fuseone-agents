@@ -4189,15 +4189,24 @@ components:
     MemoryAssertionInput:
       type: object
       description: >
-        A human-curated memory assertion. Labels are deliberately absent: the
-        server derives them from evidence in the immutable run ledger.
-      required: [company, area, kind, subject, signature, claim, evidence, reason]
+        A human-curated memory assertion, in the fields a person can answer.
+        Labels, the agent, the counters and the expiry are all absent on
+        purpose: the server derives them from the run the evidence names and
+        from policy, because every one of them changes what the memory means
+        and none of them is something a caller should be able to assert about
+        itself.
+      required: [company, area, namespace, kind, subject, signature, claim, evidence, reason]
       properties:
         company: { type: string }
         area: { type: string }
-        agentId:
+        namespace:
           type: string
-          description: Omit for memory shared by agents in the same scope.
+          enum: [agent, shared]
+          description: >
+            Who reads this memory. `agent` is the agent whose run the evidence
+            names; `shared` is every agent in the scope. An explicit choice
+            rather than an omitted field, because shared memory is what every
+            agent reads and nobody should reach it by leaving something blank.
         kind: { type: string }
         subject: { type: string }
         signature: { type: string }
@@ -4207,9 +4216,6 @@ components:
           minItems: 1
           maxItems: 8
           items: { $ref: '#/components/schemas/MemoryEvidence' }
-        observations: { type: integer, format: int64, minimum: 0, default: 1 }
-        confirmed: { type: integer, format: int64, minimum: 0, default: 1 }
-        expiresAt: { type: string, format: date-time, nullable: true }
         reason:
           type: string
           description: Why a person decided this assertion should be remembered.

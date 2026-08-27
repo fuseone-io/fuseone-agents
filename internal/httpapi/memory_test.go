@@ -235,6 +235,110 @@ func TestAcceptMemorySuggestion_tellsConflictFromUnavailable(t *testing.T) {
 
 // createAgainst runs a creation whose evidence the ledger vouches for, so the
 // only thing under test is what the store answered.
+/*
+The agent, the counters and the expiry are the platform's, not the caller's.
+
+Each of them changes what a memory means: which runs may recall it, how it ranks
+against its neighbours, and how long it lasts. A caller that could assert them
+about itself could write a memory that outranks, outlives and reaches further
+than the ones the platform derived — without any of that showing up as a
+permission it was refused.
+
+The agent in particular comes from the run the evidence names. There is always
+one, because evidence is required and names a run, so an agent-scoped memory
+cannot be filed against an agent whose run never produced it.
+*/
+func TestCreateMemoryAssertion_platformOwnsAgentCountersAndExpiry(t *testing.T) {
+	t.Parallel()
+	scope := domain.Scope{Company: "acme", Area: "cx"}
+	led := ledger.NewMemory()
+	seedFinishedEvidence(t, led, "run-evidence", scope, domain.ScopeLabels(scope), "sha256:answer")
+
+	at := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+	resp, err := NewServer(led, "test").WithMemory(memstore.NewMemory()).
+		WithClock(fixedAt{t: at}).
+		CreateMemoryAssertion(inArea("cx", domain.RoleAuthor), memoryCreateRequest("sha256:answer"))
+	if err != nil {
+		t.Fatalf("CreateMemoryAssertion: %v", err)
+	}
+	created, ok := resp.(openapi.CreateMemoryAssertion200JSONResponse)
+	if !ok {
+		t.Fatalf("response = %T, want the assertion", resp)
+	}
+
+	// seedFinishedEvidence opens the run for "triage"; nothing in the request
+	// says so, and the memory is filed against it anyway.
+	if created.AgentId != "triage" {
+		t.Errorf("agent = %q, want the one whose run the evidence names", created.AgentId)
+	}
+	if created.Observations != 1 || created.Confirmed != 1 {
+		t.Errorf("counters = %d/%d, want a first sighting", created.Observations, created.Confirmed)
+	}
+	if created.ExpiresAt == nil || !created.ExpiresAt.Equal(at.Add(memstore.DefaultMemoryTTL)) {
+		t.Errorf("expiry = %v, want thirty days from the decision", created.ExpiresAt)
+	}
+}
+
+/*
+Shared memory is chosen, never arrived at by leaving a field blank.
+
+It is what every agent in the scope reads, so the difference between "for this
+agent" and "for everybody" cannot be the difference between filling something in
+and forgetting to. The field is required and has two values; there is no third
+meaning nothing.
+*/
+func TestCreateMemoryAssertion_sharedIsAnExplicitChoice(t *testing.T) {
+	t.Parallel()
+	scope := domain.Scope{Company: "acme", Area: "cx"}
+	led := ledger.NewMemory()
+	seedFinishedEvidence(t, led, "run-evidence", scope, domain.ScopeLabels(scope), "sha256:answer")
+
+	req := memoryCreateRequest("sha256:answer")
+	req.Body.Namespace = openapi.MemoryAssertionInputNamespaceShared
+	resp, err := NewServer(led, "test").WithMemory(memstore.NewMemory()).
+		WithClock(fixedAt{t: time.Unix(0, 0)}).
+		CreateMemoryAssertion(inArea("cx", domain.RoleAuthor), req)
+	if err != nil {
+		t.Fatalf("CreateMemoryAssertion: %v", err)
+	}
+	created, ok := resp.(openapi.CreateMemoryAssertion200JSONResponse)
+	if !ok {
+		t.Fatalf("response = %T, want the assertion", resp)
+	}
+	if created.AgentId != "" {
+		t.Errorf("agent = %q, want shared memory to belong to none of them", created.AgentId)
+	}
+}
+
+/*
+Evidence from two agents' runs is refused rather than attributed to one.
+
+An agent-scoped memory belongs to one agent. Taking whichever run came first
+would decide that silently, and the memory would be recalled by an agent whose
+run only half explains it.
+*/
+func TestCreateMemoryAssertion_evidenceFromTwoAgents_isRefused(t *testing.T) {
+	t.Parallel()
+	scope := domain.Scope{Company: "acme", Area: "cx"}
+	led := ledger.NewMemory()
+	seedFinishedEvidence(t, led, "run-evidence", scope, domain.ScopeLabels(scope), "sha256:answer")
+	seedFinishedEvidenceFor(t, led, "run-other", scope, "billing", "sha256:other")
+
+	req := memoryCreateRequest("sha256:answer")
+	req.Body.Evidence = append(req.Body.Evidence, openapi.MemoryEvidence{
+		RunId: "run-other", Artifact: domain.ArtifactFinalAnswer, Digest: "sha256:other",
+	})
+	resp, err := NewServer(led, "test").WithMemory(memstore.NewMemory()).
+		WithClock(fixedAt{t: time.Unix(0, 0)}).
+		CreateMemoryAssertion(inArea("cx", domain.RoleAuthor), req)
+	if err != nil {
+		t.Fatalf("CreateMemoryAssertion: %v", err)
+	}
+	if _, bad := resp.(openapi.CreateMemoryAssertion400ApplicationProblemPlusJSONResponse); !bad {
+		t.Fatalf("response = %T, want the ambiguous attribution refused", resp)
+	}
+}
+
 func createAgainst(
 	t *testing.T, store Memory, edit func(*openapi.MemoryAssertionInput),
 ) openapi.CreateMemoryAssertionResponseObject {
@@ -387,6 +491,18 @@ func seedFinishedEvidence(
 		Payload: jsonPayload(t, domain.RunFinishedPayload{OutcomeDigest: digest})})
 }
 
+func seedFinishedEvidenceFor(
+	t *testing.T, store *ledger.Memory, run domain.RunID, scope domain.Scope,
+	agent domain.AgentID, digest string,
+) {
+	t.Helper()
+	appendMemoryStep(t, store, domain.Step{RunID: run, Kind: domain.StepRunStarted,
+		Scope: scope, AgentID: agent, VersionID: "v1", Labels: domain.ScopeLabels(scope)})
+	appendMemoryStep(t, store, domain.Step{RunID: run, Kind: domain.StepRunFinished,
+		Scope: scope, AgentID: agent, VersionID: "v1", Labels: domain.ScopeLabels(scope),
+		Payload: jsonPayload(t, domain.RunFinishedPayload{OutcomeDigest: digest})})
+}
+
 func appendMemoryStep(t *testing.T, store *ledger.Memory, step domain.Step) {
 	t.Helper()
 	if _, err := store.Append(context.Background(), step); err != nil {
@@ -396,8 +512,9 @@ func appendMemoryStep(t *testing.T, store *ledger.Memory, step domain.Step) {
 
 func memoryCreateRequest(digest string) openapi.CreateMemoryAssertionRequestObject {
 	return openapi.CreateMemoryAssertionRequestObject{Body: &openapi.MemoryAssertionInput{
-		Company: "acme", Area: "cx", AgentId: ptr("triage"), Kind: "incident",
-		Subject: "grafana datasource", Signature: "grafana.datasource.down",
+		Company: "acme", Area: "cx", Kind: "incident",
+		Namespace: openapi.MemoryAssertionInputNamespaceAgent,
+		Subject:   "grafana datasource", Signature: "grafana.datasource.down",
 		Claim: "refreshing the datasource token cleared this failure",
 		Evidence: []openapi.MemoryEvidence{{
 			RunId: "run-evidence", Artifact: domain.ArtifactFinalAnswer, Digest: digest,
