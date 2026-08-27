@@ -108,7 +108,7 @@ func TestAcceptMemorySuggestion_promotesOnlyInsideTheReviewScope(t *testing.T) {
 	resp, err := NewServer(ledger.NewMemory(), "test").WithMemory(memory).WithClock(fixedAt{t: time.Unix(0, 0)}).
 		AcceptMemorySuggestion(inArea("marketing", domain.RoleAuthor), openapi.AcceptMemorySuggestionRequestObject{
 			SuggestionId: created.ID,
-			Body: &openapi.MemorySuggestionReviewInput{
+			Body: &openapi.MemorySuggestionAcceptInput{
 				Company: "acme", Area: "marketing", Reason: "reviewed",
 			},
 		})
@@ -122,7 +122,7 @@ func TestAcceptMemorySuggestion_promotesOnlyInsideTheReviewScope(t *testing.T) {
 	resp, err = NewServer(ledger.NewMemory(), "test").WithMemory(memory).WithClock(fixedAt{t: time.Unix(0, 0)}).
 		AcceptMemorySuggestion(inArea("cx", domain.RoleAuthor), openapi.AcceptMemorySuggestionRequestObject{
 			SuggestionId: created.ID,
-			Body: &openapi.MemorySuggestionReviewInput{
+			Body: &openapi.MemorySuggestionAcceptInput{
 				Company: "acme", Area: "cx", Reason: "operator confirmed",
 			},
 		})
@@ -205,7 +205,7 @@ func TestAcceptMemorySuggestion_tellsConflictFromUnavailable(t *testing.T) {
 			AcceptMemorySuggestion(inArea("cx", domain.RoleAuthor),
 				openapi.AcceptMemorySuggestionRequestObject{
 					SuggestionId: pending.ID,
-					Body: &openapi.MemorySuggestionReviewInput{
+					Body: &openapi.MemorySuggestionAcceptInput{
 						Company: "acme", Area: "cx", Reason: "agreed",
 					},
 				})
@@ -223,7 +223,7 @@ func TestAcceptMemorySuggestion_tellsConflictFromUnavailable(t *testing.T) {
 			AcceptMemorySuggestion(inArea("cx", domain.RoleAuthor),
 				openapi.AcceptMemorySuggestionRequestObject{
 					SuggestionId: "mems_whatever",
-					Body: &openapi.MemorySuggestionReviewInput{
+					Body: &openapi.MemorySuggestionAcceptInput{
 						Company: "acme", Area: "cx", Reason: "agreed",
 					},
 				})
@@ -660,6 +660,41 @@ func matchBody(edit func(*openapi.MemoryMatchInput)) *openapi.MemoryMatchInput {
 	return &in
 }
 
+/*
+The queue is the same door, so it gets the same secret policy.
+
+A memory reached through an accept is quoted back into runs exactly like one
+somebody typed, and the corrected claim is text a person wrote in the moment.
+The classifier and the override are shared with creation, because a policy that
+applied to only one of the two doors would be a policy with a door around it.
+*/
+func TestAcceptMemorySuggestion_aCorrectedClaimShapedLikeACredential_isRefused(t *testing.T) {
+	t.Parallel()
+	store := memstore.NewMemory()
+	pending := suggest(t, store, memorySuggestionFixture("cx", "grafana datasource", nil))
+
+	resp, err := NewServer(ledger.NewMemory(), "test").WithMemory(store).
+		WithClock(fixedAt{t: time.Unix(0, 0)}).
+		AcceptMemorySuggestion(inArea("cx", domain.RoleAuthor),
+			openapi.AcceptMemorySuggestionRequestObject{
+				SuggestionId: pending.ID,
+				Body: &openapi.MemorySuggestionAcceptInput{
+					Company: "acme", Area: "cx", Reason: "agreed",
+					Claim: ptr("the token is ghp_" + strings.Repeat("a1B2", 9)),
+				},
+			})
+	if err != nil {
+		t.Fatalf("AcceptMemorySuggestion: %v", err)
+	}
+	bad, ok := resp.(openapi.AcceptMemorySuggestion400ApplicationProblemPlusJSONResponse)
+	if !ok {
+		t.Fatalf("response = %T, want the corrected claim refused", resp)
+	}
+	if bad.Type == nil || *bad.Type != string(CodeMemorySecret) {
+		t.Errorf("type = %v, want the same code creation answers with", bad.Type)
+	}
+}
+
 func createAgainst(
 	t *testing.T, store Memory, edit func(*openapi.MemoryAssertionInput),
 ) openapi.CreateMemoryAssertionResponseObject {
@@ -728,7 +763,7 @@ func (unavailableMemory) ListSuggestions(
 }
 
 func (unavailableMemory) AcceptSuggestion(
-	context.Context, string, domain.Scope, domain.UserID, string, time.Time,
+	context.Context, memstore.AcceptInput,
 ) (domain.MemoryAssertion, error) {
 	return domain.MemoryAssertion{}, errMemoryUnreachable
 }

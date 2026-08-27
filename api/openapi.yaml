@@ -3733,7 +3733,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/MemorySuggestionReviewInput' }
+            schema: { $ref: '#/components/schemas/MemorySuggestionAcceptInput' }
       responses:
         '200':
           description: The accepted assertion now projected for recall.
@@ -4393,6 +4393,34 @@ components:
         reason:
           type: string
           description: Why a person accepted or dismissed this suggestion.
+
+    MemorySuggestionAcceptInput:
+      type: object
+      required: [company, area, reason]
+      properties:
+        company: { type: string }
+        area: { type: string }
+        reason:
+          type: string
+          description: Why a person agreed to this suggestion.
+        claim:
+          type: string
+          maxLength: 1200
+          description: >
+            The claim in the words being agreed to, when a person rewrote what
+            the agent proposed. Omit to accept the wording as well as the fact.
+
+            Only the claim. Subject, signature and kind are the identity:
+            changing one here would not correct this memory, it would create a
+            different one and mark this proposal accepted for a fact nobody
+            proposed. Somebody who means that dismisses the proposal and teaches
+            the other fact, which is two acts because it is two decisions.
+        overrideSecretWarning:
+          type: boolean
+          description: >
+            Record this even though the corrected claim looks like it may
+            contain a credential. Same meaning as on creation: an override, not
+            a receipt, and the assertion is labelled `secret` when it is used.
 
     MemoryAssertionPage:
       type: object

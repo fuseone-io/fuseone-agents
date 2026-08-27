@@ -107,18 +107,25 @@ func (m *Memory) ListSuggestions(ctx context.Context, f SuggestionFilter) ([]dom
 }
 
 func (m *Memory) AcceptSuggestion(
-	ctx context.Context, id string, scope domain.Scope, by domain.UserID, reason string, now time.Time,
+	ctx context.Context, in AcceptInput,
 ) (domain.MemoryAssertion, error) {
 	if err := ctx.Err(); err != nil {
 		return domain.MemoryAssertion{}, err
 	}
+	if err := in.validate(); err != nil {
+		return domain.MemoryAssertion{}, err
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	s, ok := m.suggestions[id]
-	if !ok || !scope.Contains(s.Scope) || s.Status != domain.MemorySuggestionPending {
+	s, ok := m.suggestions[in.ID]
+	if !ok || !in.Scope.Contains(s.Scope) || s.Status != domain.MemorySuggestionPending {
 		return domain.MemoryAssertion{}, ErrNotFound
 	}
-	assertion := assertionFromSuggestion(s, s.Observations, by, now)
+	assertion, err := accepted(s, in)
+	if err != nil {
+		return domain.MemoryAssertion{}, err
+	}
+	by, now, id := in.By, in.Now, in.ID
 	merged, outcome, err := m.mergeInto(assertion, OriginAccept)
 	if err != nil {
 		return domain.MemoryAssertion{}, err

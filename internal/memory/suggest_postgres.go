@@ -178,22 +178,33 @@ func (p *Postgres) ListSuggestions(ctx context.Context, f SuggestionFilter) ([]d
 }
 
 func (p *Postgres) AcceptSuggestion(
-	ctx context.Context, id string, scope domain.Scope, by domain.UserID, reason string, now time.Time,
+	ctx context.Context, in AcceptInput,
 ) (domain.MemoryAssertion, error) {
+	if err := in.validate(); err != nil {
+		return domain.MemoryAssertion{}, err
+	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return domain.MemoryAssertion{}, fmt.Errorf("memory: begin accept suggestion: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	s, err := readSuggestionTx(ctx, tx, id, scope, true)
+	s, err := readSuggestionTx(ctx, tx, in.ID, in.Scope, true)
 	if err != nil {
 		return domain.MemoryAssertion{}, err
 	}
 	if s.Status != domain.MemorySuggestionPending {
 		return domain.MemoryAssertion{}, ErrNotFound
 	}
-	assertion := assertionFromSuggestion(s, s.Observations, by, now)
-	stored, outcome, err := mergeInto(ctx, tx, assertion, OriginAccept, by, reason, "accepted")
+	// The claim the person signed, inside the same transaction and under the
+	// same lock as the merge. Rewriting it first and merging after would be two
+	// acts, and a failure between them would leave the queue emptied against a
+	// memory nobody agreed to.
+	assertion, err := accepted(s, in)
+	if err != nil {
+		return domain.MemoryAssertion{}, err
+	}
+	by, now := in.By, in.Now
+	stored, outcome, err := mergeInto(ctx, tx, assertion, OriginAccept, by, in.Reason, "accepted")
 	if err != nil {
 		return domain.MemoryAssertion{}, err
 	}

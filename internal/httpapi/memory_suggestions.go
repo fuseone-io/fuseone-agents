@@ -51,8 +51,21 @@ func (s *Server) AcceptMemorySuggestion(
 	if err := auth.Require(ctx, domain.PermAgentPublish, scope); err != nil {
 		return forbiddenMemorySuggestionAccept(domain.PermAgentPublish, scope), nil
 	}
-	assertion, err := s.memory.AcceptSuggestion(ctx, req.SuggestionId, scope,
-		callerOf(ctx), req.Body.Reason, clockOr(s.clock).Now())
+	// The same classifier and the same override as creation, on the words being
+	// agreed to. A memory reached through the queue is quoted back into runs
+	// exactly like one somebody typed, so a policy that applied to only one of
+	// the two doors would be a policy with a door around it.
+	claim := valueOr(req.Body.Claim)
+	override := req.Body.OverrideSecretWarning != nil && *req.Body.OverrideSecretWarning
+	if refused := secretRefusal(override, claim, req.Body.Reason); refused != nil {
+		return openapi.AcceptMemorySuggestion400ApplicationProblemPlusJSONResponse{
+			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(*refused),
+		}, nil
+	}
+	assertion, err := s.memory.AcceptSuggestion(ctx, memstore.AcceptInput{
+		ID: req.SuggestionId, Scope: scope, By: callerOf(ctx),
+		Reason: req.Body.Reason, Claim: claim, Now: clockOr(s.clock).Now(),
+	})
 	if errors.Is(err, memstore.ErrNotFound) {
 		return openapi.AcceptMemorySuggestion404ApplicationProblemPlusJSONResponse{
 			NotFoundApplicationProblemPlusJSONResponse: notFound(req.SuggestionId),

@@ -28,8 +28,7 @@ type Memory interface {
 		reason string, now time.Time) error
 	Match(ctx context.Context, in memstore.MatchInput) (memstore.Match, error)
 	ListSuggestions(ctx context.Context, f memstore.SuggestionFilter) ([]domain.MemorySuggestion, error)
-	AcceptSuggestion(ctx context.Context, id string, scope domain.Scope, by domain.UserID,
-		reason string, now time.Time) (domain.MemoryAssertion, error)
+	AcceptSuggestion(ctx context.Context, in memstore.AcceptInput) (domain.MemoryAssertion, error)
 	DismissSuggestion(ctx context.Context, id string, scope domain.Scope, by domain.UserID,
 		reason string, now time.Time) error
 	Reactivate(ctx context.Context, r *memstore.Resolver,
@@ -196,13 +195,21 @@ is discarded at the edge, and an override nobody could see later would be a
 guard that quietly stopped applying.
 */
 func memorySecretRefusal(in openapi.MemoryAssertionInput) *openapi.Problem {
-	switch domain.LooksLikeSecret(in.Kind, in.Subject, in.Signature, in.Claim, in.Reason) {
+	return secretRefusal(overridesSecretWarning(in),
+		in.Kind, in.Subject, in.Signature, in.Claim, in.Reason)
+}
+
+// secretRefusal is the classifier and the override rule, in one place, so
+// creating a memory and agreeing to one cannot grow different policies about
+// what a credential is.
+func secretRefusal(override bool, values ...string) *openapi.Problem {
+	switch domain.LooksLikeSecret(values...) {
 	case domain.SecretCertain:
 		p := refusal(http.StatusBadRequest, CodeMemorySecret, "Looks like a credential",
 			"a private key or a complete token was recognised")
 		return &p
 	case domain.SecretSuspected:
-		if overridesSecretWarning(in) {
+		if override {
 			return nil
 		}
 		p := refusal(http.StatusBadRequest, CodeMemorySecretWarned, "May be a credential",

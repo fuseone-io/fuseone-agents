@@ -645,8 +645,8 @@ func TestPostgresSuggest_acceptancePromotesOnlyPendingMemory(t *testing.T) {
 		t.Fatalf("suggestion = %+v, want repeated pending suggestion merged with labels", second.Suggestion)
 	}
 
-	accepted, err := store.AcceptSuggestion(ctx, first.Suggestion.ID, platformScope,
-		"usr_ana", "reviewed", now.Add(2*time.Minute))
+	accepted, err := store.AcceptSuggestion(ctx, memory.AcceptInput{
+		ID: first.Suggestion.ID, Scope: platformScope, By: "usr_ana", Reason: "reviewed", Now: now.Add(2 * time.Minute)})
 	if err != nil {
 		t.Fatalf("AcceptSuggestion: %v", err)
 	}
@@ -832,7 +832,7 @@ func (failingStore) ListSuggestions(context.Context, memory.SuggestionFilter) ([
 }
 
 func (failingStore) AcceptSuggestion(
-	context.Context, string, domain.Scope, domain.UserID, string, time.Time,
+	context.Context, memory.AcceptInput,
 ) (domain.MemoryAssertion, error) {
 	return domain.MemoryAssertion{}, errors.New("down")
 }
@@ -1446,7 +1446,7 @@ func TestPostgresAssert_concurrentCorrectionsOfOneFact_loseNothing(t *testing.T)
 type mergeStore interface {
 	Assert(context.Context, domain.MemoryAssertion, domain.UserID, string, time.Time) (domain.MemoryAssertion, error)
 	Suggest(context.Context, domain.MemorySuggestion, domain.MemoryLearningPolicy, domain.UserID, time.Time) (domain.MemorySuggestionOutcome, error)
-	AcceptSuggestion(context.Context, string, domain.Scope, domain.UserID, string, time.Time) (domain.MemoryAssertion, error)
+	AcceptSuggestion(context.Context, memory.AcceptInput) (domain.MemoryAssertion, error)
 	ListSuggestions(context.Context, memory.SuggestionFilter) ([]domain.MemorySuggestion, error)
 	Find(context.Context, domain.MemoryQuery) ([]domain.MemoryAssertion, error)
 }
@@ -1490,7 +1490,7 @@ func expectAcceptMergesIntoTheStoredAssertion(t *testing.T, ctx context.Context,
 		t.Fatalf("Assert: %v", err)
 	}
 
-	got, err := store.AcceptSuggestion(ctx, out.Suggestion.ID, platformScope, "usr_ana", "agreed", now)
+	got, err := store.AcceptSuggestion(ctx, memory.AcceptInput{ID: out.Suggestion.ID, Scope: platformScope, By: "usr_ana", Reason: "agreed", Now: now})
 	if err != nil {
 		t.Fatalf("AcceptSuggestion: %v", err)
 	}
@@ -1539,7 +1539,7 @@ func expectAcceptOnADisabledAssertionConsumesNothing(t *testing.T, ctx context.C
 		t.Fatalf("Suggest: %v", err)
 	}
 
-	if _, err := store.AcceptSuggestion(ctx, out.Suggestion.ID, platformScope, "usr_ana", "agreed", now); err == nil {
+	if _, err := store.AcceptSuggestion(ctx, memory.AcceptInput{ID: out.Suggestion.ID, Scope: platformScope, By: "usr_ana", Reason: "agreed", Now: now}); err == nil {
 		t.Fatal("accepted onto a disabled memory")
 	}
 
@@ -2032,6 +2032,112 @@ func countEvents(t *testing.T, ctx context.Context, pool *pgxpool.Pool, id strin
 	return n
 }
 
+/*
+Accepting with better words is one act, not two.
+
+The person agreeing is often the one who can say it more clearly than the agent
+did, and making them accept first and correct afterwards would put a memory
+nobody quite meant in front of every run in between — and leave the queue
+emptied against it if the second act never happened.
+
+So the claim is signed inside the same transaction, under the same lock, through
+the same merge. What comes back is the assertion in the words that were agreed
+to; the proposal keeps what the agent actually said.
+*/
+func TestAccept_withACorrectedClaim_writesTheWordsThatWereAgreed(t *testing.T) {
+	t.Parallel()
+	expectAcceptTakesTheCorrectedClaim(t, context.Background(), memory.NewMemory())
+}
+
+func TestPostgresAccept_withACorrectedClaim_writesTheWordsThatWereAgreed(t *testing.T) {
+	ctx, store := postgresStore(t)
+	expectAcceptTakesTheCorrectedClaim(t, ctx, store)
+}
+
+func expectAcceptTakesTheCorrectedClaim(t *testing.T, ctx context.Context, store mergeStore) {
+	t.Helper()
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+	out, err := store.Suggest(ctx, suggestion(nil), reviewPolicy, "agent:triage", now)
+	if err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+	better := "refresh the datasource token, then check the health endpoint"
+
+	accepted, err := store.AcceptSuggestion(ctx, memory.AcceptInput{
+		ID: out.Suggestion.ID, Scope: platformScope, By: "usr_ana",
+		Reason: "the runbook narrowed it", Claim: better, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("AcceptSuggestion: %v", err)
+	}
+	if accepted.Claim != better {
+		t.Errorf("claim = %q, want the words that were agreed to", accepted.Claim)
+	}
+	// The identity is not the claim's to change: the memory answers the same
+	// question, in better words.
+	if accepted.Subject != out.Suggestion.Subject ||
+		accepted.Signature != out.Suggestion.Signature ||
+		accepted.Kind != out.Suggestion.Kind {
+		t.Errorf("identity moved to %s/%s/%s", accepted.Kind, accepted.Subject, accepted.Signature)
+	}
+
+	// The proposal keeps what the agent said. A queue that rewrote itself to
+	// match the decision would lose the only record of what was proposed.
+	found, err := store.ListSuggestions(ctx, memory.SuggestionFilter{
+		Scopes: []domain.Scope{platformScope}, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("ListSuggestions: %v", err)
+	}
+	if len(found) != 1 {
+		t.Fatalf("suggestions = %d, want the one that was decided", len(found))
+	}
+	if found[0].Claim != out.Suggestion.Claim {
+		t.Errorf("the proposal now reads %q, want what the agent proposed", found[0].Claim)
+	}
+	if found[0].Status != domain.MemorySuggestionAccepted {
+		t.Errorf("status = %s, want the proposal spent", found[0].Status)
+	}
+}
+
+/*
+An accept nobody explained, and a claim the store would not take, are refused.
+
+Both used to reach the merge unchecked: assertionFromSuggestion never validated,
+so a proposal recorded before a rule existed — or a claim somebody replaced with
+something too long — arrived as an assertion the store had never agreed to hold.
+*/
+func TestAccept_withoutAReasonOrWithAnImpossibleClaim_isRefused(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := memory.NewMemory()
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+	out, err := store.Suggest(ctx, suggestion(nil), reviewPolicy, "agent:triage", now)
+	if err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+
+	for _, c := range []struct {
+		name string
+		in   memory.AcceptInput
+	}{
+		{"no reason", memory.AcceptInput{
+			ID: out.Suggestion.ID, Scope: platformScope, By: "usr_ana",
+			Reason: "   ", Now: now,
+		}},
+		{"a claim nobody could read", memory.AcceptInput{
+			ID: out.Suggestion.ID, Scope: platformScope, By: "usr_ana",
+			Reason: "agreed", Claim: strings.Repeat("a longer claim ", 200), Now: now,
+		}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if _, err := store.AcceptSuggestion(ctx, c.in); !errors.Is(err, memory.ErrInvalid) {
+				t.Fatalf("AcceptSuggestion = %v, want the accept refused", err)
+			}
+		})
+	}
+}
+
 func TestAccept_mergesIntoTheStoredAssertion(t *testing.T) {
 	t.Parallel()
 	expectAcceptMergesIntoTheStoredAssertion(t, context.Background(), memory.NewMemory())
@@ -2083,8 +2189,8 @@ func TestPostgresAccept_failureAfterProjecting_leavesNothing(t *testing.T) {
 			`drop trigger if exists refuse_memory_event on memory_assertion_events`)
 	})
 
-	if _, err := store.AcceptSuggestion(ctx, out.Suggestion.ID, platformScope,
-		"usr_ana", "agreed", now); err == nil {
+	if _, err := store.AcceptSuggestion(ctx, memory.AcceptInput{
+		ID: out.Suggestion.ID, Scope: platformScope, By: "usr_ana", Reason: "agreed", Now: now}); err == nil {
 		t.Fatal("accept succeeded while the event was being refused")
 	}
 
@@ -2147,7 +2253,7 @@ func TestPostgresAccept_racingAutoConfirm_leavesOneMemoryAndOneEnding(t *testing
 	start.Add(1)
 	go func() {
 		start.Wait()
-		_, err := store.AcceptSuggestion(ctx, out.Suggestion.ID, platformScope, "usr_ana", "agreed", now)
+		_, err := store.AcceptSuggestion(ctx, memory.AcceptInput{ID: out.Suggestion.ID, Scope: platformScope, By: "usr_ana", Reason: "agreed", Now: now})
 		errs <- err
 	}()
 	go func() {

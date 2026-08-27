@@ -2717,6 +2717,19 @@ export interface components {
             /** @description Why a person accepted or dismissed this suggestion. */
             reason: string;
         };
+        MemorySuggestionAcceptInput: {
+            company: string;
+            area: string;
+            /** @description Why a person agreed to this suggestion. */
+            reason: string;
+            /**
+             * @description The claim in the words being agreed to, when a person rewrote what the agent proposed. Omit to accept the wording as well as the fact.
+             *     Only the claim. Subject, signature and kind are the identity: changing one here would not correct this memory, it would create a different one and mark this proposal accepted for a fact nobody proposed. Somebody who means that dismisses the proposal and teaches the other fact, which is two acts because it is two decisions.
+             */
+            claim?: string;
+            /** @description Record this even though the corrected claim looks like it may contain a credential. Same meaning as on creation: an override, not a receipt, and the assertion is labelled `secret` when it is used. */
+            overrideSecretWarning?: boolean;
+        };
         MemoryAssertionPage: {
             items: components["schemas"]["MemoryAssertion"][];
         };
@@ -8329,7 +8342,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["MemorySuggestionReviewInput"];
+                "application/json": components["schemas"]["MemorySuggestionAcceptInput"];
             };
         };
         responses: {
