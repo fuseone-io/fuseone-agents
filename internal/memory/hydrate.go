@@ -94,16 +94,105 @@ func hydrated(
 	if !proved {
 		return out
 	}
-	out.next.Evidence = dedupeEvidence(resolved)
+	out.next.Evidence, out.next.Labels, out.provenance =
+		hydratedProvenance(stored.Evidence, stored.Labels, resolved)
+	return out
+}
+
+/*
+hydratedProvenance completes one record's citations and the labels they derive.
+
+Shared by assertions and suggestions because it is the same repair: the evidence
+a row carries, described as fully as the ledger now allows, and the labels that
+follow from it. What differs between the two is what else may be written, which
+is the caller's business and deliberately not this function's.
+*/
+func hydratedProvenance(
+	stored []domain.MemoryEvidence, labels domain.Labels, resolved []domain.MemoryEvidence,
+) ([]domain.MemoryEvidence, domain.Labels, bool) {
+	evidence := dedupeEvidence(resolved)
 
 	var derived domain.Labels
-	for _, ev := range out.next.Evidence {
+	for _, ev := range evidence {
 		derived = derived.Union(ev.Labels)
 	}
-	out.next.Labels = stored.Labels.Union(derived)
+	next := labels.Union(derived)
 
-	out.provenance = !sameEvidence(stored.Evidence, out.next.Evidence) ||
-		!slices.Equal(stored.Labels, out.next.Labels)
+	changed := !sameEvidence(stored, evidence) || !slices.Equal(labels, next)
+	return evidence, next, changed
+}
+
+/*
+HydrateSuggestions completes pending proposals, on a cursor of their own.
+
+Separate from the assertion sweep rather than sharing one, because a single
+cursor cannot say how far two tables have got: a pass that finished assertions
+and stopped halfway through suggestions has nothing to write down that would
+resume both.
+
+No event is recorded. hydrated in memory_assertion_events would be ambiguous —
+the row carries no suggestion id, no status and no covered_by, so a reader could
+not tell a repaired memory from a repaired proposal, and could not reconstruct
+the suggestion projection from it either. The existing actions are acts:
+suggested, accepted, dismissed, auto-confirmed. Completing the record of an act
+is not another act, and when the proposal is accepted the merge writes the event
+with the evidence already whole — which is the hole this closes.
+*/
+func (m *Memory) HydrateSuggestions(
+	ctx context.Context, r *Resolver, page HydratePage,
+) (HydrateResult, error) {
+	if err := ctx.Err(); err != nil {
+		return HydrateResult{}, err
+	}
+	var out HydrateResult
+	for _, stored := range m.suggestionPage(page) {
+		out.Scanned++
+		out.Cursor = stored.ID
+
+		resolved, proved, err := resolveEvidence(ctx, r, stored.Scope, stored.Evidence)
+		if err != nil {
+			return out, err
+		}
+		if !proved {
+			out.Unproved++
+			continue
+		}
+
+		m.mu.Lock()
+		current, held := m.suggestions[stored.ID]
+		if held && sameEvidence(current.Evidence, stored.Evidence) {
+			evidence, labels, changed := hydratedProvenance(
+				current.Evidence, current.Labels, resolved)
+			if changed {
+				current.Evidence, current.Labels = evidence, labels
+				m.suggestions[stored.ID] = cloneSuggestion(current)
+				out.Repaired++
+			}
+		}
+		m.mu.Unlock()
+	}
+	if out.Scanned < page.limit() {
+		out.Cursor = ""
+	}
+	return out, nil
+}
+
+func (m *Memory) suggestionPage(page HydratePage) []domain.MemorySuggestion {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var out []domain.MemorySuggestion
+	for _, held := range m.suggestions {
+		if held.ID > page.After {
+			out = append(out, cloneSuggestion(held))
+		}
+	}
+	slices.SortFunc(out, func(a, b domain.MemorySuggestion) int {
+		return strings.Compare(a.ID, b.ID)
+	})
+	if len(out) > page.limit() {
+		out = out[:page.limit()]
+	}
 	return out
 }
 
@@ -137,7 +226,13 @@ the next pass tries again instead of recording that it checked.
 func resolveFor(
 	ctx context.Context, r *Resolver, a domain.MemoryAssertion,
 ) ([]domain.MemoryEvidence, bool, error) {
-	resolved, err := r.Resolve(ctx, a.Scope, a.Evidence)
+	return resolveEvidence(ctx, r, a.Scope, a.Evidence)
+}
+
+func resolveEvidence(
+	ctx context.Context, r *Resolver, scope domain.Scope, in []domain.MemoryEvidence,
+) ([]domain.MemoryEvidence, bool, error) {
+	resolved, err := r.Resolve(ctx, scope, in)
 	if errors.Is(err, ErrEvidenceInvalid) {
 		return nil, false, nil
 	}

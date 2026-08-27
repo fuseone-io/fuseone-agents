@@ -2039,3 +2039,181 @@ func countHydratedEvents(
 	}
 	return n
 }
+
+/*
+A pending proposal is repaired too, and nothing else about it moves.
+
+A suggestion written before this work carries the older citation, and accepting
+it after the rollout puts it through the merge with labels it cannot explain —
+which the eviction rule refuses. So the queue has to be repaired as well, or the
+first accept after an upgrade fails on a proposal somebody made weeks ago.
+
+What must not move is everything a person or a policy decided: the status, the
+claim, the count of observations, the expiry, who wrote it and when it was last
+touched.
+*/
+func expectSuggestionHydrationCompletesTheCitation(
+	t *testing.T, ctx context.Context, store suggestionHydrator,
+	resolver *memory.Resolver, seeded domain.MemorySuggestion, now time.Time,
+) {
+	t.Helper()
+
+	if _, err := store.HydrateSuggestions(ctx, resolver,
+		memory.HydratePage{Limit: 10, Now: now}); err != nil {
+		t.Fatalf("HydrateSuggestions: %v", err)
+	}
+
+	found, err := store.ListSuggestions(ctx, memory.SuggestionFilter{
+		Scopes: []domain.Scope{seeded.Scope}, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("ListSuggestions: %v", err)
+	}
+	if len(found) != 1 {
+		t.Fatalf("suggestions = %d, want the one that was there", len(found))
+	}
+	got := found[0]
+
+	if len(got.Evidence) != 1 || got.Evidence[0].Seq == 0 {
+		t.Errorf("evidence = %+v, want one citation that says which step it names", got.Evidence)
+	}
+	if !got.Labels.Has(domain.LabelUntrusted) {
+		t.Errorf("labels = %v, want the taint the run carried", got.Labels)
+	}
+	if got.Status != seeded.Status || got.Claim != seeded.Claim ||
+		got.Observations != seeded.Observations || got.CreatedBy != seeded.CreatedBy ||
+		!got.UpdatedAt.Equal(seeded.UpdatedAt) {
+		t.Errorf("hydration changed what somebody decided: %+v", got)
+	}
+}
+
+type suggestionHydrator interface {
+	HydrateSuggestions(context.Context, *memory.Resolver, memory.HydratePage) (memory.HydrateResult, error)
+	ListSuggestions(context.Context, memory.SuggestionFilter) ([]domain.MemorySuggestion, error)
+}
+
+func legacySuggestion(t *testing.T) (*run, domain.MemorySuggestion) {
+	t.Helper()
+	r := newRun(t, "run-suggest")
+	r.step(domain.StepRunStarted, domain.RunStartedPayload{Trigger: "channel"}, domain.LabelUntrusted)
+	ref, digest := r.put(2, []byte(`{"kind":"incident","subject":"slack"}`))
+	r.step(domain.StepToolCalled, domain.ToolCalledPayload{
+		Tool: domain.ToolMemorySuggest, Effect: domain.EffectWrite,
+		ArgsRef: ref, ArgsDigest: digest,
+	})
+	return r, suggestion(func(s *domain.MemorySuggestion) {
+		s.Scope = r.scope
+		// The older shape: run and artifact, no step.
+		s.Evidence = []domain.MemoryEvidence{{
+			RunID: "run-suggest", Artifact: domain.ArtifactMemorySuggestion, Digest: digest,
+		}}
+	})
+}
+
+func TestHydrateSuggestions_completesTheCitation(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := memory.NewMemory()
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	run, seed := legacySuggestion(t)
+	out, err := store.Suggest(ctx, seed, reviewPolicy, "agent:triage", now)
+	if err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+	expectSuggestionHydrationCompletesTheCitation(t, ctx, store, run.resolver(), out.Suggestion, now)
+}
+
+func TestPostgresHydrateSuggestions_completesTheCitation(t *testing.T) {
+	ctx, store := postgresStore(t)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	run, seed := legacySuggestion(t)
+	out, err := store.Suggest(ctx, seed, reviewPolicy, "agent:triage", now)
+	if err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+	expectSuggestionHydrationCompletesTheCitation(t, ctx, store, run.resolver(), out.Suggestion, now)
+}
+
+// hydrated in memory_assertion_events would be ambiguous: the row carries no
+// suggestion id, no status and no covered_by, so a reader could not tell a
+// repaired memory from a repaired proposal, nor rebuild either from it.
+func TestPostgresHydrateSuggestions_recordNoEvent(t *testing.T) {
+	ctx, pool := postgresPool(t)
+	store := memory.NewPostgres(pool)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	run, seed := legacySuggestion(t)
+	out, err := store.Suggest(ctx, seed, reviewPolicy, "agent:triage", now)
+	if err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+	before := countHydratedEvents(t, ctx, pool, out.Suggestion.AssertionID)
+
+	if _, err := store.HydrateSuggestions(ctx, run.resolver(),
+		memory.HydratePage{Limit: 10, Now: now}); err != nil {
+		t.Fatalf("HydrateSuggestions: %v", err)
+	}
+	if after := countHydratedEvents(t, ctx, pool, out.Suggestion.AssertionID); after != before {
+		t.Errorf("hydrated events went %d -> %d, want a repair to write none", before, after)
+	}
+}
+
+/*
+A repair of a proposal gives way to the observation that overtook it.
+
+Same shape as the assertion case and the same stake: the ledger is read outside
+the lock, so another run can merge a citation into the proposal while the repair
+is still reading. Writing the snapshot's version over it would delete an
+observation that had just been counted.
+*/
+func TestPostgresHydrateSuggestions_overtaken_doesNotLoseTheNewCitation(t *testing.T) {
+	ctx, store := postgresStore(t)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	run, seed := legacySuggestion(t)
+	if _, err := store.Suggest(ctx, seed, reviewPolicy, "agent:triage", now); err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+
+	blocked := &blockingContent{
+		inner: run.content, entered: make(chan struct{}), release: make(chan struct{}),
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := store.HydrateSuggestions(ctx, memory.NewResolver(run.ledger, blocked),
+			memory.HydratePage{Limit: 10, Now: now})
+		done <- err
+	}()
+
+	<-blocked.entered
+	// A second run observes the same fact while the repair is reading.
+	second := seed
+	second.Evidence = []domain.MemoryEvidence{{
+		RunID: "run-second", Seq: 3, Artifact: domain.ArtifactMemorySuggestion,
+		Digest: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+	}}
+	if _, err := store.Suggest(ctx, second, reviewPolicy, "agent:triage", now); err != nil {
+		t.Fatalf("Suggest while hydrating: %v", err)
+	}
+	close(blocked.release)
+
+	if err := <-done; err != nil {
+		t.Fatalf("HydrateSuggestions: %v", err)
+	}
+
+	found, err := store.ListSuggestions(ctx, memory.SuggestionFilter{
+		Scopes: []domain.Scope{run.scope}, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("ListSuggestions: %v", err)
+	}
+	var runs []domain.RunID
+	for _, ev := range found[0].Evidence {
+		runs = append(runs, ev.RunID)
+	}
+	if !slices.Contains(runs, "run-second") {
+		t.Errorf("evidence cites %v, want the observation that arrived mid-repair", runs)
+	}
+}
