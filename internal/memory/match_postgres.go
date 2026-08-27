@@ -21,6 +21,9 @@ Deliberately not on the Gate's path. A run recalls memory through Find; this
 exists so a person composing one is shown what they are about to duplicate.
 */
 func (p *Postgres) Match(ctx context.Context, in MatchInput) (Match, error) {
+	if err := in.Validate(); err != nil {
+		return Match{}, err
+	}
 	var out Match
 	own, err := p.matchOne(ctx, in.identityOf(in.AgentID))
 	if err != nil {

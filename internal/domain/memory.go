@@ -291,7 +291,16 @@ func (p MemoryLearningPolicy) Validate() error {
 	return nil
 }
 
-func (a MemoryAssertion) Validate() error {
+/*
+ValidateIdentity is the half of Validate that says which memory this is.
+
+Its own function because it is asked twice: once when a memory is written, and
+once before it is, by whoever wants to know whether it is already here. Two
+copies of these rules would be a preflight that answers "nothing here" to an
+identity the write is about to refuse — the person is told the fact is new, and
+then told it is invalid, about the same three fields.
+*/
+func (a MemoryAssertion) ValidateIdentity() error {
 	if !a.Scope.Valid() {
 		return fmt.Errorf("memory scope is required")
 	}
@@ -303,6 +312,13 @@ func (a MemoryAssertion) Validate() error {
 	}
 	if strings.TrimSpace(a.Signature) == "" || len(a.Signature) > MaxMemorySignatureBytes {
 		return fmt.Errorf("memory signature is required and must fit %d bytes", MaxMemorySignatureBytes)
+	}
+	return nil
+}
+
+func (a MemoryAssertion) Validate() error {
+	if err := a.ValidateIdentity(); err != nil {
+		return err
 	}
 	if strings.TrimSpace(a.Claim) == "" || len(a.Claim) > MaxMemoryClaimBytes {
 		return fmt.Errorf("memory claim is required and must fit %d bytes", MaxMemoryClaimBytes)

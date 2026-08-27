@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/fuseone/agents/internal/domain"
@@ -64,6 +65,20 @@ Claim and evidence are absent because neither is part of the identity: two
 people teaching the same fact in different words are teaching the same fact, and
 that is the whole reason the canonical key exists.
 */
+/*
+Validate refuses an identity the write would refuse.
+
+Asked here so the preflight and the write cannot disagree. Without it somebody
+is told the fact is new, and then told the same three fields are invalid — and
+the expensive lookup runs first, on input nothing could ever have matched.
+*/
+func (in MatchInput) Validate() error {
+	if err := in.identityOf(in.AgentID).ValidateIdentity(); err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalid, err)
+	}
+	return nil
+}
+
 func (in MatchInput) identityOf(agent domain.AgentID) domain.MemoryAssertion {
 	a := domain.MemoryAssertion{
 		Scope: in.Scope, AgentID: agent, Kind: clean(in.Kind),
@@ -83,6 +98,9 @@ add a database read to every decision the Gate makes.
 */
 func (m *Memory) Match(ctx context.Context, in MatchInput) (Match, error) {
 	if err := ctx.Err(); err != nil {
+		return Match{}, err
+	}
+	if err := in.Validate(); err != nil {
 		return Match{}, err
 	}
 	m.mu.RLock()

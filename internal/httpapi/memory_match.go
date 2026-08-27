@@ -48,9 +48,12 @@ func (s *Server) MatchMemory(
 		Subject: req.Body.Subject, Signature: req.Body.Signature,
 		Now: clockOr(s.clock).Now(),
 	})
-	if memoryRefusal(err) == http.StatusConflict {
+	switch memoryRefusal(err) {
+	case http.StatusConflict:
 		return openapi.MatchMemory409ApplicationProblemPlusJSONResponse(
 			conflicted(err.Error())), nil
+	case http.StatusBadRequest:
+		return badMemoryMatch(err.Error()), nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("match memory: %w", err)

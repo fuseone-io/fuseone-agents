@@ -595,6 +595,14 @@ func TestMatchMemory_refusesANamespaceThatContradictsItself(t *testing.T) {
 			in.Namespace = openapi.MemoryMatchInputNamespaceAgent
 			in.AgentId = nil
 		}},
+		// The identity rules the write applies. A preflight that answered
+		// "nothing here" would tell somebody the fact is new and then tell them
+		// the same three fields are invalid.
+		{"no kind", func(in *openapi.MemoryMatchInput) { in.Kind = "" }},
+		{"no signature", func(in *openapi.MemoryMatchInput) { in.Signature = "  " }},
+		{"a subject nobody could read", func(in *openapi.MemoryMatchInput) {
+			in.Subject = strings.Repeat("grafana datasource ", 20)
+		}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
