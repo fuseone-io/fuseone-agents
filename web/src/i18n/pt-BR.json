@@ -992,6 +992,7 @@
     "recorded": "Correção guardada",
     "recordedHint": "Este caso entra na bateria a partir de agora.",
     "runBattery": "Rodar a bateria",
+    "saveCase": "Salvar caso",
     "shouldAsk": "deveria parar e perguntar",
     "shouldCall": "deveria conseguir chamar",
     "shouldFinish": "deveria concluir sozinho",

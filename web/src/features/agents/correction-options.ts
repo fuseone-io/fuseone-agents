@@ -73,3 +73,8 @@ export function correctionOptions(entry: SimulationCase): CorrectionOption[] {
 
   return [...seen.values()];
 }
+
+export function baselineExpectations(entry: SimulationCase): Expectation[] {
+  if (entry.settled !== "finished") return [];
+  return [{ kind: "settles", value: "finished" }];
+}

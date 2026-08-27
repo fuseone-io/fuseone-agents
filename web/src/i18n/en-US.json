@@ -992,6 +992,7 @@
     "recorded": "Correction recorded",
     "recordedHint": "This case joins the battery from now on.",
     "runBattery": "Run the battery",
+    "saveCase": "Save case",
     "shouldAsk": "should stop and ask",
     "shouldCall": "should be able to call",
     "shouldFinish": "should finish on its own",

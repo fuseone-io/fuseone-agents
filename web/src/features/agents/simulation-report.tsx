@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ClipboardCheck, Pencil } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   EmptyState,
@@ -11,9 +12,12 @@ import {
 import { Mono } from "@/components/shared/mono";
 import { CaseRow } from "@/features/agents/simulation-case";
 import { CorrectionDialog } from "@/features/agents/correction-dialog";
+import { baselineExpectations } from "@/features/agents/correction-options";
+import { useRecordRegression } from "@/features/agents/regressions-api";
 import { VersionComparison } from "@/features/agents/version-comparison";
 import { caseNeedsLook, tally } from "@/features/agents/simulation-tally";
 import { formatMicros } from "@/lib/format";
+import { problemMessage } from "@/lib/api/problem-message";
 import type { SimulationCase } from "@/features/agents/simulation-api";
 import type { useSimulation } from "@/features/agents/simulation-api";
 
@@ -33,6 +37,8 @@ export function SimulationReportView({
 }) {
   const { t } = useTranslation();
   const [correcting, setCorrecting] = useState<SimulationCase | null>(null);
+  const [savingRuns, setSavingRuns] = useState<Set<string>>(() => new Set());
+  const record = useRecordRegression(agentId);
 
   if (report.isLoading) return <LoadingRows rows={6} />;
   if (report.error) {
@@ -57,6 +63,31 @@ export function SimulationReportView({
   const reachedTools = report.data.cases.filter((entry) =>
     (entry.acted ?? []).some((act) => act.reached),
   ).length;
+  const saveCase = (entry: SimulationCase) => {
+    const expectations = baselineExpectations(entry);
+    if (!entry.runId || expectations.length === 0) return;
+    const runId = entry.runId;
+    setSavingRuns((current) => new Set(current).add(runId));
+    record.mutate(
+      { runId, expectations },
+      {
+        onSuccess: () =>
+          toast.success(t("correction.recorded"), {
+            description: t("correction.recordedHint"),
+          }),
+        onError: (error) =>
+          toast.error(t("correction.failed"), {
+            description: problemMessage(error, t),
+          }),
+        onSettled: () =>
+          setSavingRuns((current) => {
+            const next = new Set(current);
+            next.delete(runId);
+            return next;
+          }),
+      },
+    );
+  };
 
   return (
     <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_316px] lg:items-start">
@@ -80,17 +111,30 @@ export function SimulationReportView({
             )}
           </header>
           <ul className="divide-y">
-            {report.data.cases.map((entry, i) => (
-              <li key={entry.runId ?? entry.id ?? i}>
-                <CaseRow
-                  index={i + 1}
-                  entry={entry}
-                  // A case with no run behind it never happened, and there is
-                  // nothing to say should have been true of it.
-                  onCorrect={entry.runId ? () => setCorrecting(entry) : undefined}
-                />
-              </li>
-            ))}
+            {report.data.cases.map((entry, i) => {
+              const needsLook = caseNeedsLook(entry);
+              const canSave =
+                !entry.id && !needsLook && baselineExpectations(entry).length > 0;
+              return (
+                <li key={entry.runId ?? entry.id ?? i}>
+                  {/* Correct stays available for every real run: a clean
+                      outcome can still be wrong to a person. Save only appears
+                      for new rehearsal output; corpus rows already have a
+                      durable case id and must not be recorded again. */}
+                  <CaseRow
+                    index={i + 1}
+                    entry={entry}
+                    onCorrect={entry.runId ? () => setCorrecting(entry) : undefined}
+                    onSaveCase={
+                      entry.runId && canSave ? () => saveCase(entry) : undefined
+                    }
+                    savingCase={
+                      entry.runId ? savingRuns.has(entry.runId) : false
+                    }
+                  />
+                </li>
+              );
+            })}
           </ul>
         </section>
 

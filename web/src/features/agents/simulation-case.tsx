@@ -39,11 +39,16 @@ export function CaseRow({
   index,
   entry,
   onCorrect,
+  onSaveCase,
+  savingCase = false,
 }: {
   index: number;
   entry: SimulationCase;
   /** Absent when the case has no run to correct from. */
   onCorrect?: () => void;
+  /** Absent when the case is not a clean baseline worth saving as-is. */
+  onSaveCase?: () => void;
+  savingCase?: boolean;
 }) {
   const { t } = useTranslation();
   const acts = entry.acted ?? [];
@@ -93,6 +98,17 @@ export function CaseRow({
             onClick={onCorrect}
           >
             {t("correction.correct")}
+          </Button>
+        )}
+        {onSaveCase && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 shrink-0 text-muted-foreground"
+            onClick={onSaveCase}
+            disabled={savingCase}
+          >
+            {t("correction.saveCase")}
           </Button>
         )}
       </div>

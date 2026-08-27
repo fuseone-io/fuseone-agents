@@ -38,10 +38,12 @@ export function useRecordRegression(agentId: string) {
           body: input,
         }),
       ),
-    onSuccess: () =>
+    onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: regressionKeys.of(agentId),
-      }),
+      });
+      void queryClient.invalidateQueries({ queryKey: agentKeys.all });
+    },
   });
 }
 
