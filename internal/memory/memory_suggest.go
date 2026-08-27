@@ -30,8 +30,8 @@ func (m *Memory) Suggest(
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if out, ok := m.alreadyActiveSuggestion(prepared, now); ok {
-		return out, nil
+	if out, done, err := m.alreadyActiveSuggestion(prepared, now); done || err != nil {
+		return out, err
 	}
 	if old, ok := m.suggestions[prepared.ID]; ok {
 		prepared = mergeSuggestion(old, prepared)
@@ -49,18 +49,21 @@ func (m *Memory) Suggest(
 
 func (m *Memory) alreadyActiveSuggestion(
 	s domain.MemorySuggestion, now time.Time,
-) (domain.MemorySuggestionOutcome, bool) {
-	for _, id := range activeAssertionIDsForSuggestion(s) {
-		active, ok := m.values[id]
-		if !ok || active.Status != domain.MemoryActive || expired(active, nowOrWall(now)) {
+) (domain.MemorySuggestionOutcome, bool, error) {
+	for _, identity := range identitiesForSuggestion(s) {
+		active, err := m.byIdentity(identity)
+		if err != nil {
+			return domain.MemorySuggestionOutcome{}, false, err
+		}
+		if active == nil || active.Status != domain.MemoryActive ||
+			expired(*active, nowOrWall(now)) {
 			continue
 		}
-		active = cloneAssertion(active)
 		return domain.MemorySuggestionOutcome{
-			Suggestion: s, Assertion: &active, Result: domain.MemorySuggestAlreadyActive,
-		}, true
+			Suggestion: s, Assertion: active, Result: domain.MemorySuggestAlreadyActive,
+		}, true, nil
 	}
-	return domain.MemorySuggestionOutcome{}, false
+	return domain.MemorySuggestionOutcome{}, false, nil
 }
 
 func (m *Memory) autoConfirmSuggestion(

@@ -66,21 +66,30 @@ func prepareSuggestion(
 	return s, nil
 }
 
-// A suggestion is duplicate if it matches active memory the same run could
-// read: first the agent namespace, then the shared namespace in the same scope.
-func activeAssertionIDsForSuggestion(s domain.MemorySuggestion) []string {
-	ids := []string{s.AssertionID}
+/*
+identitiesForSuggestion is where an equivalent memory could already be: the
+agent's own namespace first, then the shared one every agent in the scope reads.
+
+Identities rather than assertion ids. The id hashes the strings as typed, so a
+memory somebody wrote as "Grafana Datasource" was invisible to an agent that
+proposed "grafana  datasource" — and the queue filled with proposals for a fact
+the platform already knew, each of which a person had to read and dismiss. The
+id travels along because a row written before the canonical key answers to
+nothing else.
+*/
+func identitiesForSuggestion(s domain.MemorySuggestion) []domain.MemoryAssertion {
+	own := domain.MemoryAssertion{
+		Scope: s.Scope, AgentID: s.AgentID, Kind: s.Kind,
+		Subject: s.Subject, Signature: s.Signature,
+	}
+	own.ID = domain.MemoryAssertionID(own)
 	if s.AgentID == "" {
-		return ids
+		return []domain.MemoryAssertion{own}
 	}
-	shared := domain.MemoryAssertionID(domain.MemoryAssertion{
-		Scope: s.Scope, Kind: s.Kind, Subject: s.Subject,
-		Signature: s.Signature,
-	})
-	if shared != s.AssertionID {
-		ids = append(ids, shared)
-	}
-	return ids
+	shared := own
+	shared.AgentID = ""
+	shared.ID = domain.MemoryAssertionID(shared)
+	return []domain.MemoryAssertion{own, shared}
 }
 
 func memoryFindMatches(a domain.MemoryAssertion, q domain.MemoryQuery) bool {

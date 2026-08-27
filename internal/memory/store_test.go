@@ -1574,27 +1574,22 @@ func TestPostgresAssert_aKeyedRowBesideItsLegacyTwin_refusesToChoose(t *testing.
 	store := memory.NewPostgres(pool)
 	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
 
-	legacy, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+	keyed, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
 		a.Subject = "Grafana Datasource"
 	}), "usr_ana", "reviewed", now)
 	if err != nil {
-		t.Fatalf("Assert the legacy row: %v", err)
+		t.Fatalf("Assert the keyed row: %v", err)
 	}
-	unkey(t, ctx, pool, legacy.ID)
-
-	// Written by somebody who spelled it differently. The legacy row has no key
-	// and a different id, so nothing connects them and a second row is born.
-	newer, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
-		a.Subject = "grafana  datasource"
+	// Its twin, from before any key existed to connect the two.
+	legacy, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Subject = "an unrelated subject"
 	}), "usr_bruno", "reviewed", now)
 	if err != nil {
-		t.Fatalf("Assert the second spelling: %v", err)
+		t.Fatalf("Assert the row that becomes the twin: %v", err)
 	}
-	if newer.ID == legacy.ID {
-		t.Fatal("the fixture produced one row; two spellings must be two rows here")
-	}
+	legacyTwin(t, ctx, pool, legacy.ID, "grafana  datasource")
 
-	before := snapshotRows(t, ctx, pool, legacy.ID, newer.ID)
+	before := snapshotRows(t, ctx, pool, legacy.ID, keyed.ID)
 	_, err = store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
 		a.Subject = "Grafana Datasource"
 		a.Claim = "a correction that must not land on half the fact"
@@ -1602,10 +1597,10 @@ func TestPostgresAssert_aKeyedRowBesideItsLegacyTwin_refusesToChoose(t *testing.
 	if !errors.Is(err, memory.ErrCanonicalConflict) {
 		t.Fatalf("Assert = %v, want the write refused rather than one row chosen", err)
 	}
-	if after := snapshotRows(t, ctx, pool, legacy.ID, newer.ID); !slices.Equal(after, before) {
+	if after := snapshotRows(t, ctx, pool, legacy.ID, keyed.ID); !slices.Equal(after, before) {
 		t.Errorf("rows went %v -> %v, want nothing changed by a refusal", before, after)
 	}
-	if n := countEvents(t, ctx, pool, legacy.ID) + countEvents(t, ctx, pool, newer.ID); n != 2 {
+	if n := countEvents(t, ctx, pool, legacy.ID) + countEvents(t, ctx, pool, keyed.ID); n != 2 {
 		t.Errorf("events = %d, want only the two that created the rows", n)
 	}
 }
@@ -1625,21 +1620,22 @@ func TestPostgresAssert_twoKeyedRowsOfOneIdentity_refusesToChoose(t *testing.T) 
 	if err != nil {
 		t.Fatalf("Assert the first row: %v", err)
 	}
-	unkey(t, ctx, pool, first.ID)
 	second, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
-		a.Subject = "grafana  datasource"
+		a.Subject = "an unrelated subject"
 	}), "usr_bruno", "reviewed", now)
 	if err != nil {
 		t.Fatalf("Assert the second row: %v", err)
 	}
-	// Copied from the row that has it rather than spelled out here: a test that
-	// wrote the hash itself would be a second implementation of the key, and it
-	// would keep passing after the real one changed.
+	// Spelled like the first and carrying its key, which is copied from the row
+	// that has it: a test that wrote the hash itself would be a second
+	// implementation of the key, and it would keep passing after the real one
+	// changed.
 	if _, err := pool.Exec(ctx, `
-		update memory_assertions set canonical_identity_key =
-			(select canonical_identity_key from memory_assertions where assertion_id = $2)
-		where assertion_id = $1`, first.ID, second.ID); err != nil {
-		t.Fatalf("give the legacy row its key: %v", err)
+		update memory_assertions set subject = 'grafana  datasource',
+			canonical_identity_key =
+				(select canonical_identity_key from memory_assertions where assertion_id = $2)
+		where assertion_id = $1`, second.ID, first.ID); err != nil {
+		t.Fatalf("plant the second keyed row: %v", err)
 	}
 
 	before := snapshotRows(t, ctx, pool, first.ID, second.ID)
@@ -1670,32 +1666,22 @@ func TestPostgresHydrate_conflictedPair_endsThatRowAndNotTheSweep(t *testing.T) 
 	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
 
 	run, cited := legacyRun(t, "run-legacy")
-	first, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
-		a.Scope, a.Subject = run.scope, "Grafana Datasource"
-		a.Evidence = []domain.MemoryEvidence{cited}
-	}), "usr_ana", "reviewed", now)
-	if err != nil {
-		t.Fatalf("Assert the first row: %v", err)
+	var ids []string
+	for _, subject := range []string{"first subject", "second subject", "loki ingester"} {
+		written, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+			a.Scope, a.Subject = run.scope, subject
+			a.Evidence = []domain.MemoryEvidence{cited}
+		}), "usr_ana", "reviewed", now)
+		if err != nil {
+			t.Fatalf("Assert %q: %v", subject, err)
+		}
+		ids = append(ids, written.ID)
 	}
-	unkey(t, ctx, pool, first.ID)
-	second, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
-		a.Scope, a.Subject = run.scope, "grafana  datasource"
-		a.Evidence = []domain.MemoryEvidence{cited}
-	}), "usr_bruno", "reviewed", now)
-	if err != nil {
-		t.Fatalf("Assert the second row: %v", err)
-	}
-	// A third row of its own identity, sorting after both, so the sweep has
-	// somewhere to get to once the pair has been refused.
-	unkey(t, ctx, pool, second.ID)
-	innocent, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
-		a.Scope, a.Subject = run.scope, "loki ingester"
-		a.Evidence = []domain.MemoryEvidence{cited}
-	}), "usr_ana", "reviewed", now)
-	if err != nil {
-		t.Fatalf("Assert the unrelated row: %v", err)
-	}
-	unkey(t, ctx, pool, innocent.ID)
+	legacyTwin(t, ctx, pool, ids[0], "Grafana Datasource")
+	legacyTwin(t, ctx, pool, ids[1], "grafana  datasource")
+	// A third row of its own identity, so the sweep has somewhere to get to once
+	// the pair has been refused.
+	unkey(t, ctx, pool, ids[2])
 
 	out, err := store.Hydrate(ctx, memory.NewResolver(run.ledger, run.content),
 		memory.HydratePage{Limit: 10, Now: now})
@@ -1705,14 +1691,228 @@ func TestPostgresHydrate_conflictedPair_endsThatRowAndNotTheSweep(t *testing.T) 
 	if out.Scanned != 3 {
 		t.Fatalf("scanned = %d, want the sweep to have reached every row", out.Scanned)
 	}
-	if out.Conflicted != 1 {
-		t.Errorf("conflicted = %d, want the pair counted once it was refused", out.Conflicted)
+	if out.Conflicted != 1 || out.Repaired != 2 {
+		t.Errorf("conflicted = %d and repaired = %d, want the pair refused once and the other two done",
+			out.Conflicted, out.Repaired)
 	}
 	// One of the pair is keyed — whichever the sweep reached first, since until
-	// it is keyed the other is invisible. What must not happen is the sweep
-	// stopping, so the row that has nothing to do with the pair is repaired.
-	if keyed := hasKey(t, ctx, pool, innocent.ID); !keyed {
+	// it is keyed the other is invisible to the lookup. What must not happen is
+	// the sweep stopping, so the row that has nothing to do with the pair is
+	// repaired.
+	if !hasKey(t, ctx, pool, ids[2]) {
 		t.Error("the unrelated row was left unkeyed, so the pair stopped the sweep")
+	}
+}
+
+/*
+A row written before the key, met by somebody who spells it differently, is one
+memory with both citations.
+
+Without this the second spelling is a second row: the legacy row has no key to
+match and an assertion id nobody will type again, so the lookup finds nothing
+and inserts. Then the fact is remembered twice, each half carrying the citations
+the other does not, and Find returns whichever ranks higher.
+
+The repair belongs on the write path and not only in the sweep, because a pod
+running the old image can write a keyless row after the job has passed. The job
+shortens the queue; it cannot close it.
+*/
+func TestPostgresAssert_aLegacyRowMeetsANewSpelling_staysOneMemory(t *testing.T) {
+	ctx, pool := postgresPool(t)
+	store := memory.NewPostgres(pool)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	legacy, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Subject = "Grafana Datasource"
+	}), "usr_ana", "reviewed", now)
+	if err != nil {
+		t.Fatalf("Assert the legacy row: %v", err)
+	}
+	unkey(t, ctx, pool, legacy.ID)
+
+	merged, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Subject = "grafana  datasource"
+		a.Evidence = []domain.MemoryEvidence{{
+			RunID: "run-evidence-2", Artifact: "final_answer", Digest: "sha256:beef",
+		}}
+	}), "usr_bruno", "same fact, spelled differently", now.Add(time.Hour))
+	if err != nil {
+		t.Fatalf("Assert the second spelling: %v", err)
+	}
+	if merged.ID != legacy.ID {
+		t.Errorf("wrote %s, want the merge to land on the row that was already there (%s)",
+			merged.ID, legacy.ID)
+	}
+
+	all := list(t, ctx, store, []domain.Scope{platformScope})
+	if len(all) != 1 {
+		t.Fatalf("rows = %v, want one memory for one fact", subjects(all))
+	}
+	var runs []domain.RunID
+	for _, ev := range all[0].Evidence {
+		runs = append(runs, ev.RunID)
+	}
+	if !slices.Contains(runs, "run-evidence-1") || !slices.Contains(runs, "run-evidence-2") {
+		t.Errorf("evidence cites %v, want both citations kept", runs)
+	}
+	if !hasKey(t, ctx, pool, legacy.ID) {
+		t.Error("the legacy row was merged into without gaining its key")
+	}
+}
+
+/*
+Active memory spelled differently still stops the proposal.
+
+The duplicate check asked for the row by the id the suggestion's own spelling
+hashes to, so a memory somebody wrote as "Grafana Datasource" was invisible to
+an agent that said "grafana  datasource" — and the queue filled with proposals
+for a fact the platform already knew, each of which a person had to read and
+dismiss.
+*/
+func TestSuggest_activeMemorySpelledDifferently_opensNoProposal(t *testing.T) {
+	t.Parallel()
+	expectSuggestFindsTheOtherSpelling(t, context.Background(), memory.NewMemory(), nil)
+}
+
+func TestPostgresSuggest_activeMemorySpelledDifferently_opensNoProposal(t *testing.T) {
+	ctx, pool := postgresPool(t)
+	expectSuggestFindsTheOtherSpelling(t, ctx, memory.NewPostgres(pool),
+		func(id string) { unkey(t, ctx, pool, id) })
+}
+
+// The same for shared memory, which an agent-scoped proposal must also find.
+// A run reads its own memory and the shared memory, so a shared fact answers
+// the need — and the platform saying otherwise is the console filling up with
+// proposals nobody can accept without creating a second copy.
+func TestSuggest_sharedMemorySpelledDifferently_opensNoProposal(t *testing.T) {
+	t.Parallel()
+	expectSharedSuggestFindsTheOtherSpelling(t, context.Background(), memory.NewMemory(), nil)
+}
+
+func TestPostgresSuggest_sharedMemorySpelledDifferently_opensNoProposal(t *testing.T) {
+	ctx, pool := postgresPool(t)
+	expectSharedSuggestFindsTheOtherSpelling(t, ctx, memory.NewPostgres(pool),
+		func(id string) { unkey(t, ctx, pool, id) })
+}
+
+// makeLegacy is how a store that keeps the key on the row is put back in the
+// state an upgrade inherits. The fake computes the key when it looks, so it has
+// no such state and passes nil: what both must agree on is the answer, not the
+// column.
+func expectSuggestFindsTheOtherSpelling(
+	t *testing.T, ctx context.Context, store mergeStore, makeLegacy func(string),
+) {
+	t.Helper()
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	active, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Subject = "Grafana Datasource"
+	}), "usr_ana", "reviewed", now)
+	if err != nil {
+		t.Fatalf("Assert: %v", err)
+	}
+	if makeLegacy != nil {
+		makeLegacy(active.ID)
+	}
+
+	out, err := store.Suggest(ctx, suggestion(func(s *domain.MemorySuggestion) {
+		s.Subject = "grafana  datasource"
+	}), reviewPolicy, "agent:triage", now)
+	if err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+	if out.Result != domain.MemorySuggestAlreadyActive {
+		t.Errorf("result = %s, want the proposal answered by the memory already there", out.Result)
+	}
+	if out.Assertion == nil || out.Assertion.ID != active.ID {
+		t.Errorf("assertion = %+v, want the row that was already active", out.Assertion)
+	}
+
+	pending, err := store.ListSuggestions(ctx, memory.SuggestionFilter{
+		Scopes: []domain.Scope{platformScope}, Status: domain.MemorySuggestionPending, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("ListSuggestions: %v", err)
+	}
+	if len(pending) != 0 {
+		t.Errorf("pending = %d, want nothing for somebody to decide", len(pending))
+	}
+}
+
+func expectSharedSuggestFindsTheOtherSpelling(
+	t *testing.T, ctx context.Context, store mergeStore, makeLegacy func(string),
+) {
+	t.Helper()
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	shared, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.AgentID, a.Subject = "", "Grafana Datasource"
+	}), "usr_ana", "reviewed", now)
+	if err != nil {
+		t.Fatalf("Assert shared: %v", err)
+	}
+	if makeLegacy != nil {
+		makeLegacy(shared.ID)
+	}
+
+	out, err := store.Suggest(ctx, suggestion(func(s *domain.MemorySuggestion) {
+		s.Subject = "grafana  datasource"
+	}), reviewPolicy, "agent:triage", now)
+	if err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+	if out.Result != domain.MemorySuggestAlreadyActive {
+		t.Errorf("result = %s, want the shared memory to answer the proposal", out.Result)
+	}
+	if out.Assertion == nil || out.Assertion.ID != shared.ID {
+		t.Errorf("assertion = %+v, want the shared row", out.Assertion)
+	}
+}
+
+/*
+Two keyless rows of one identity fail closed once the write path can see them.
+
+Before the key was filled they were invisible to each other and to the lookup,
+so a write inserted a third. Filling the key is what reveals the pair — and
+having revealed it, the write must refuse rather than merge into whichever the
+ordering put first.
+*/
+func TestPostgresAssert_twoLegacyRowsOfOneIdentity_refusesToChoose(t *testing.T) {
+	ctx, pool := postgresPool(t)
+	store := memory.NewPostgres(pool)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	for i, subject := range []string{"grafana  datasource", "GRAFANA DATASOURCE"} {
+		written, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+			a.Subject = fmt.Sprintf("grafana datasource %d", i)
+		}), "usr_ana", "reviewed", now)
+		if err != nil {
+			t.Fatalf("Assert %q: %v", subject, err)
+		}
+		legacyTwin(t, ctx, pool, written.ID, subject)
+	}
+
+	if _, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Subject = "Grafana Datasource"
+	}), "usr_bruno", "a third spelling of the same fact", now.Add(time.Hour)); !errors.Is(
+		err, memory.ErrCanonicalConflict) {
+		t.Fatalf("Assert = %v, want the write refused rather than one row chosen", err)
+	}
+	if all := list(t, ctx, store, []domain.Scope{platformScope}); len(all) != 2 {
+		t.Errorf("rows = %v, want the two that were there and no third", subjects(all))
+	}
+}
+
+// legacyTwin puts a row back in the state an upgrade inherits: written under a
+// spelling of its own, before any key existed to connect it to the other one.
+// The write path can no longer produce this, which is exactly the point — it is
+// what the table already holds.
+func legacyTwin(t *testing.T, ctx context.Context, pool *pgxpool.Pool, id, subject string) {
+	t.Helper()
+	if _, err := pool.Exec(ctx, `
+		update memory_assertions set subject = $2, canonical_identity_key = null
+		where assertion_id = $1`, id, subject); err != nil {
+		t.Fatalf("plant the legacy twin of %s: %v", id, err)
 	}
 }
 

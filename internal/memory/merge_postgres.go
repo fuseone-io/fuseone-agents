@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/fuseone/agents/internal/domain"
 )
@@ -26,6 +27,9 @@ func mergeInto(
 	origin MergeOrigin, by domain.UserID, reason, action string,
 ) (domain.MemoryAssertion, MergeOutcome, error) {
 	if err := lockIdentity(ctx, tx, incoming); err != nil {
+		return domain.MemoryAssertion{}, "", err
+	}
+	if err := keyLegacyIdentities(ctx, tx, incoming); err != nil {
 		return domain.MemoryAssertion{}, "", err
 	}
 	stored, covering, err := neighboursTx(ctx, tx, incoming)
@@ -70,21 +74,101 @@ decides whether this write is covered. Both are taken in sorted order, which is
 what stops two writers holding one each and waiting for the other.
 */
 func lockIdentity(ctx context.Context, tx db, a domain.MemoryAssertion) error {
-	keys := []string{domain.CanonicalIdentityKey(a)}
-	if a.AgentID != "" {
-		shared := a
-		shared.AgentID = ""
-		keys = append(keys, domain.CanonicalIdentityKey(shared))
-	}
-	slices.Sort(keys)
-
-	for _, key := range keys {
+	for _, identity := range lockedIdentities(a) {
 		if _, err := tx.Exec(ctx,
-			`select pg_advisory_xact_lock(hashtextextended($1, 0))`, key); err != nil {
+			`select pg_advisory_xact_lock(hashtextextended($1, 0))`,
+			domain.CanonicalIdentityKey(identity)); err != nil {
 			return fmt.Errorf("memory: lock identity: %w", err)
 		}
 	}
 	return nil
+}
+
+// lockedIdentities is every identity this write depends on, in the order every
+// writer takes them.
+func lockedIdentities(a domain.MemoryAssertion) []domain.MemoryAssertion {
+	out := []domain.MemoryAssertion{a}
+	if a.AgentID != "" {
+		shared := a
+		shared.AgentID = ""
+		out = append(out, shared)
+	}
+	slices.SortFunc(out, func(x, y domain.MemoryAssertion) int {
+		return strings.Compare(domain.CanonicalIdentityKey(x), domain.CanonicalIdentityKey(y))
+	})
+	return out
+}
+
+/*
+keyLegacyIdentities gives the canonical key to the rows this write is about.
+
+A row written before the key has nothing to be found by except an assertion id
+nobody will type again, so a second spelling of the same fact matches nothing and
+inserts a duplicate. The sweep shortens that queue; it cannot close it, because a
+pod still running the old image writes keyless rows after the job has passed. So
+the write path repairs what it is about to look at, and the sweep is what stops
+the repair from being paid for one row at a time for ever.
+
+Only the rows whose identity is one this transaction already holds. Keying a row
+of some other identity would be arithmetic nobody can argue with, performed while
+holding the wrong lock — a write racing that identity's writer.
+
+No event, and nothing else touched. The key is derived from the row's own
+fields, changes nothing anybody decided, and is recalculable from the row.
+*/
+func keyLegacyIdentities(ctx context.Context, tx db, a domain.MemoryAssertion) error {
+	for _, identity := range lockedIdentities(a) {
+		ids, err := unkeyedRowsOf(ctx, tx, identity)
+		if err != nil {
+			return err
+		}
+		if len(ids) == 0 {
+			continue
+		}
+		if _, err := tx.Exec(ctx, `
+			update memory_assertions set canonical_identity_key = $2
+			where assertion_id = any($1)`,
+			ids, domain.CanonicalIdentityKey(identity)); err != nil {
+			return fmt.Errorf("memory: key legacy rows: %w", err)
+		}
+	}
+	return nil
+}
+
+// unkeyedRowsOf is the keyless rows in this namespace that are this identity.
+//
+// The comparison is in Go and cannot be pushed into the query: the rule is NFC
+// then case folding, and Postgres has no NFC — an accent typed as a combining
+// mark would compare unequal to the same letter precomposed, which in Portuguese
+// is an ordinary Tuesday. Only the fields that form the key are read, so the
+// scan the partial index serves stays narrow.
+func unkeyedRowsOf(ctx context.Context, tx db, a domain.MemoryAssertion) ([]string, error) {
+	rows, err := tx.Query(ctx, `
+		select assertion_id, kind, subject, signature from memory_assertions
+		where company_id = $1 and area_id = $2 and agent_id = $3
+		  and canonical_identity_key is null`,
+		string(a.Scope.Company), string(a.Scope.Area), string(a.AgentID))
+	if err != nil {
+		return nil, fmt.Errorf("memory: read unkeyed rows: %w", err)
+	}
+	defer rows.Close()
+
+	key := domain.CanonicalIdentityKey(a)
+	var ids []string
+	for rows.Next() {
+		var id string
+		held := domain.MemoryAssertion{Scope: a.Scope, AgentID: a.AgentID}
+		if err := rows.Scan(&id, &held.Kind, &held.Subject, &held.Signature); err != nil {
+			return nil, fmt.Errorf("memory: read unkeyed rows: %w", err)
+		}
+		if domain.CanonicalIdentityKey(held) == key {
+			ids = append(ids, id)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("memory: read unkeyed rows: %w", err)
+	}
+	return ids, nil
 }
 
 // neighboursTx reads the row this write may merge into and the shared row that

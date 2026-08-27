@@ -120,11 +120,23 @@ func (p *Postgres) Suggest(
 	defer func() { _ = tx.Rollback(ctx) }()
 	flow := suggestionTx{tx: tx, by: by, now: now}
 
-	if out, done, err := flow.alreadyActive(ctx, prepared); done || err != nil {
-		return out, err
-	}
+	// Suggestion first, then identity, and the duplicate check after both. The
+	// order is the one every other path takes — auto-confirm reaches the
+	// identity from inside this transaction — and asking whether memory already
+	// covers this before holding the identity would be asking about rows another
+	// writer is in the middle of changing.
 	if err := lockSuggestion(ctx, tx, prepared.ID); err != nil {
 		return domain.MemorySuggestionOutcome{}, err
+	}
+	identity := identitiesForSuggestion(prepared)[0]
+	if err := lockIdentity(ctx, tx, identity); err != nil {
+		return domain.MemorySuggestionOutcome{}, err
+	}
+	if err := keyLegacyIdentities(ctx, tx, identity); err != nil {
+		return domain.MemorySuggestionOutcome{}, err
+	}
+	if out, done, err := flow.alreadyActive(ctx, prepared); done || err != nil {
+		return out, err
 	}
 	stored, err := upsertSuggestion(ctx, tx, prepared)
 	if err != nil {
@@ -146,19 +158,18 @@ func (s suggestionTx) alreadyActive(
 	ctx context.Context,
 	prepared domain.MemorySuggestion,
 ) (domain.MemorySuggestionOutcome, bool, error) {
-	var active domain.MemoryAssertion
-	var found bool
-	for _, id := range activeAssertionIDsForSuggestion(prepared) {
-		got, ok, err := readActiveAssertionTx(ctx, s.tx, id, prepared.Scope, s.now)
+	var active *domain.MemoryAssertion
+	for _, identity := range identitiesForSuggestion(prepared) {
+		found, err := byIdentityTx(ctx, s.tx, identity)
 		if err != nil {
 			return domain.MemorySuggestionOutcome{}, false, err
 		}
-		if ok {
-			active, found = got, true
+		if found != nil && found.Status == domain.MemoryActive && !expired(*found, s.now) {
+			active = found
 			break
 		}
 	}
-	if !found {
+	if active == nil {
 		return domain.MemorySuggestionOutcome{}, false, nil
 	}
 	if err := s.tx.Commit(ctx); err != nil {
@@ -166,7 +177,7 @@ func (s suggestionTx) alreadyActive(
 			fmt.Errorf("memory: commit already active suggestion: %w", err)
 	}
 	return domain.MemorySuggestionOutcome{
-		Suggestion: prepared, Assertion: &active, Result: domain.MemorySuggestAlreadyActive,
+		Suggestion: prepared, Assertion: active, Result: domain.MemorySuggestAlreadyActive,
 	}, true, nil
 }
 
@@ -477,27 +488,6 @@ func readAssertionTx(ctx context.Context, tx interface {
 		return domain.MemoryAssertion{}, ErrNotFound
 	}
 	return a, nil
-}
-
-func readActiveAssertionTx(ctx context.Context, tx interface {
-	QueryRow(context.Context, string, ...any) pgx.Row
-}, id string, scope domain.Scope, now time.Time) (domain.MemoryAssertion, bool, error) {
-	a, err := scanAssertion(tx.QueryRow(ctx, `
-		select `+columns+` from memory_assertions
-		where assertion_id = $1
-		  and status = 'active'
-		  and (expires_at is null or expires_at > $2)`,
-		id, now.UTC()))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return domain.MemoryAssertion{}, false, nil
-	}
-	if err != nil {
-		return domain.MemoryAssertion{}, false, fmt.Errorf("memory: read active %s: %w", id, err)
-	}
-	if !scope.Contains(a.Scope) {
-		return domain.MemoryAssertion{}, false, nil
-	}
-	return a, true, nil
 }
 
 func readSuggestionTx(
