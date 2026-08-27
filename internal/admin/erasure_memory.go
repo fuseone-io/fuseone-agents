@@ -68,7 +68,13 @@ const eraseMemorySourcesSQL = `
 	with updated_assertions as (
 		update memory_assertions m
 		set status = 'source_erased', updated_by = $2, updated_at = $3
-		where m.status = 'active'
+		-- Disabled as well as active. Disabled is somebody having turned a
+		-- memory off and source_erased is the platform having lost the proof:
+		-- which one a row is in is decided by what happened to it, not by
+		-- whether it happened to be readable when the erasure ran. Leaving a
+		-- disabled row merely disabled makes reactivation a way around
+		-- retention.
+		where m.status in ('active', 'disabled')
 		  and exists (
 		    select 1 from jsonb_array_elements(m.evidence) ev
 		    where ev->>'run_id' = any($1::text[])
