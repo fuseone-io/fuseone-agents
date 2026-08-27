@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/fuseone/agents/internal/domain"
 )
@@ -27,15 +26,14 @@ func (p *Postgres) Hydrate(
 		out.Scanned++
 		out.Cursor = stored.ID
 
-		resolved, ok, err := resolveFor(ctx, r, stored)
+		resolved, proved, err := resolveFor(ctx, r, stored)
 		if err != nil {
 			return out, err
 		}
-		if !ok {
-			out.Skipped++
-			continue
+		if !proved {
+			out.Unproved++
 		}
-		repaired, err := p.hydrateOne(ctx, stored, resolved, nowOr(page.Now))
+		repaired, err := p.hydrateOne(ctx, stored, resolved, proved)
 		if err != nil {
 			return out, err
 		}
@@ -51,7 +49,7 @@ func (p *Postgres) Hydrate(
 
 func (p *Postgres) hydrateOne(
 	ctx context.Context, snapshot domain.MemoryAssertion,
-	resolved []domain.MemoryEvidence, now time.Time,
+	resolved []domain.MemoryEvidence, proved bool,
 ) (bool, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -66,23 +64,32 @@ func (p *Postgres) hydrateOne(
 	if err != nil {
 		return false, err
 	}
-	// Gone, or written by somebody else since the snapshot. Either way this
-	// repair is describing a row that no longer exists as it was.
-	if current == nil || !sameEvidence(current.Evidence, snapshot.Evidence) {
+	if current == nil {
 		return false, nil
+	}
+	// Written by somebody else since the snapshot: their version is newer than
+	// this repair's, so the citations are left alone. The canonical identity
+	// still derives from the row's own fields and is written anyway.
+	if !sameEvidence(current.Evidence, snapshot.Evidence) {
+		proved = false
 	}
 
-	next, changed := hydrated(*current, resolved, true)
-	if !changed {
+	h := hydrated(*current, resolved, proved, true)
+	if !h.writes() {
 		return false, nil
 	}
-	if err := writeDerived(ctx, tx, next); err != nil {
+	if err := writeDerived(ctx, tx, h.next); err != nil {
 		return false, err
 	}
-	// In the same transaction, or the log stops being able to reconstruct the
-	// evidence the projection now shows.
-	if err := recordEvent(ctx, tx, next, "system:memory", "hydrated from the ledger", "hydrated"); err != nil {
-		return false, err
+	// Only when the provenance moved, and in the same transaction: otherwise
+	// the log stops being able to reconstruct the evidence the projection now
+	// shows. A key-only write needs none — it is recalculable and does not
+	// appear in the event detail.
+	if h.provenance {
+		if err := recordEvent(ctx, tx, h.next, "system:memory",
+			"hydrated from the ledger", "hydrated"); err != nil {
+			return false, err
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return false, fmt.Errorf("memory: commit hydrate: %w", err)

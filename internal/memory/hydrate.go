@@ -37,12 +37,16 @@ type HydratePage struct {
 }
 
 type HydrateResult struct {
-	Scanned  int
+	Scanned int
+	// Repaired counts rows something was written to, whatever it was.
 	Repaired int
-	// Skipped counts rows whose citations the ledger will not vouch for. They
-	// are left exactly as they are: a citation that cannot be proved is not a
-	// citation to rewrite.
-	Skipped int
+	// Unproved counts rows whose citations the ledger would not vouch for. It
+	// is not the opposite of Repaired and both can count the same row: the
+	// canonical identity derives from the row's own fields, so it is written
+	// even when the evidence cannot be proved. Otherwise a citation that was
+	// erased, or was never true, would keep its row in the unkeyed index for
+	// ever.
+	Unproved int
 	// Cursor is where the next page starts, empty when the sweep is done.
 	Cursor string
 }
@@ -61,25 +65,46 @@ the resolver itself: the ledger is read outside the lock, and holding an
 identity across that I/O would block every writer of the same fact for as long
 as a database takes to answer.
 */
+/*
+hydration is what one row becomes and how much of it has to be written.
+
+Provenance and identity are separated because they are answerable from different
+places. The canonical key derives from the row's own fields, so it can always be
+written; the evidence has to be proved against the ledger, and sometimes cannot
+be. A row whose citation was erased still gets its key — otherwise it sits in
+the unkeyed index for ever, waiting for a proof that will never come.
+*/
+type hydration struct {
+	next domain.MemoryAssertion
+	// provenance is true when the citations or the labels changed, which is
+	// what the trail has to be able to reconstruct.
+	provenance bool
+	// key is true when the canonical identity still has to be stored. It needs
+	// no event: it is recalculable from the row and does not appear in one.
+	key bool
+}
+
+func (h hydration) writes() bool { return h.provenance || h.key }
+
 func hydrated(
-	stored domain.MemoryAssertion, resolved []domain.MemoryEvidence, keyMissing bool,
-) (domain.MemoryAssertion, bool) {
-	out := stored
-	out.Evidence = dedupeEvidence(resolved)
+	stored domain.MemoryAssertion, resolved []domain.MemoryEvidence,
+	proved, keyMissing bool,
+) hydration {
+	out := hydration{next: stored, key: keyMissing}
+	if !proved {
+		return out
+	}
+	out.next.Evidence = dedupeEvidence(resolved)
 
 	var derived domain.Labels
-	for _, ev := range out.Evidence {
+	for _, ev := range out.next.Evidence {
 		derived = derived.Union(ev.Labels)
 	}
-	out.Labels = stored.Labels.Union(derived)
+	out.next.Labels = stored.Labels.Union(derived)
 
-	// Whether the canonical key is stored is a fact about the projection, not
-	// about the assertion, so the store is what knows it.
-	if !keyMissing && sameEvidence(stored.Evidence, out.Evidence) &&
-		slices.Equal(stored.Labels, out.Labels) {
-		return stored, false
-	}
-	return out, true
+	out.provenance = !sameEvidence(stored.Evidence, out.next.Evidence) ||
+		!slices.Equal(stored.Labels, out.next.Labels)
+	return out
 }
 
 // sameEvidence compares citations field by field, because hydration changes the
@@ -156,13 +181,12 @@ func (m *Memory) Hydrate(
 
 		// Outside the lock: reading the ledger is I/O, and holding an identity
 		// across it would block every writer of the same fact.
-		resolved, ok, err := resolveFor(ctx, r, stored)
+		resolved, proved, err := resolveFor(ctx, r, stored)
 		if err != nil {
 			return out, err
 		}
-		if !ok {
-			out.Skipped++
-			continue
+		if !proved {
+			out.Unproved++
 		}
 
 		m.mu.Lock()
@@ -170,11 +194,11 @@ func (m *Memory) Hydrate(
 		// Somebody may have written between the read and here. Their version is
 		// newer than this repair's snapshot, so it is left alone and the next
 		// pass will look again.
+		// The canonical key is a column the durable store keeps; this one
+		// computes it when it looks, so it can never be the thing missing.
 		if held && sameEvidence(current.Evidence, stored.Evidence) {
-			// The canonical key is a column the durable store keeps; this one
-			// computes it when it looks, so it can never be the thing missing.
-			if next, changed := hydrated(current, resolved, false); changed {
-				m.values[stored.ID] = cloneAssertion(next)
+			if h := hydrated(current, resolved, proved, false); h.writes() {
+				m.values[stored.ID] = cloneAssertion(h.next)
 				out.Repaired++
 			}
 		}

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -1852,4 +1853,189 @@ func legacyRun(t *testing.T, id domain.RunID) (*run, domain.MemoryEvidence) {
 	return r, domain.MemoryEvidence{
 		RunID: id, Artifact: domain.ArtifactFinalAnswer, Digest: resolved[0].Digest,
 	}
+}
+
+// blockingContent lets a test stop a hydration in the middle of reading the
+// ledger, which is the only moment where another writer can slip past it.
+type blockingContent struct {
+	inner   memory.EvidenceContent
+	entered chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func (c *blockingContent) Metadata(
+	ctx context.Context, ref string,
+) (domain.ContentMetadata, error) {
+	c.once.Do(func() {
+		close(c.entered)
+		<-c.release
+	})
+	return c.inner.Metadata(ctx, ref)
+}
+
+/*
+A hydration that was overtaken does not undo the writer that overtook it.
+
+The repair reads the ledger outside the lock, so a correction can land between
+the snapshot and the write. Its citations are newer than what this pass is
+describing, and writing the snapshot's version over them would delete a citation
+somebody just made — the repair silently losing a write is worse than the row
+staying unrepaired for one more pass.
+*/
+func expectHydrationOvertakenDoesNotLoseTheNewCitation(
+	t *testing.T, ctx context.Context, store hydrateStore,
+	blocked *blockingContent, ledger memory.EvidenceLedger,
+	seeded domain.MemoryAssertion, now time.Time,
+) {
+	t.Helper()
+	done := make(chan error, 1)
+	go func() {
+		_, err := store.Hydrate(ctx, memory.NewResolver(ledger, blocked),
+			memory.HydratePage{Limit: 10, Now: now})
+		done <- err
+	}()
+
+	<-blocked.entered
+	// A second citation arrives while the repair is still reading.
+	second := seeded
+	second.Evidence = append(slices.Clone(seeded.Evidence), domain.MemoryEvidence{
+		RunID: "run-later", Seq: 7, Artifact: "final_answer",
+		Digest: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+	})
+	if _, err := store.Assert(ctx, second, "usr_bruno", "another citation", now); err != nil {
+		t.Fatalf("Assert while hydrating: %v", err)
+	}
+	close(blocked.release)
+
+	if err := <-done; err != nil {
+		t.Fatalf("Hydrate: %v", err)
+	}
+
+	found, err := store.Find(ctx, domain.MemoryQuery{
+		Scope: seeded.Scope, AgentID: seeded.AgentID, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	var runs []domain.RunID
+	for _, ev := range found[0].Evidence {
+		runs = append(runs, ev.RunID)
+	}
+	if !slices.Contains(runs, "run-later") {
+		t.Errorf("evidence cites %v, want the citation that arrived mid-repair", runs)
+	}
+}
+
+func TestHydrate_overtakenByAWriter_doesNotLoseTheNewCitation(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := memory.NewMemory()
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	run, cited := legacyRun(t, "run-legacy")
+	seeded, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Scope = run.scope
+		a.Evidence = []domain.MemoryEvidence{cited}
+	}), "usr_ana", "reviewed", now)
+	if err != nil {
+		t.Fatalf("Assert: %v", err)
+	}
+
+	blocked := &blockingContent{
+		inner: run.content, entered: make(chan struct{}), release: make(chan struct{}),
+	}
+	expectHydrationOvertakenDoesNotLoseTheNewCitation(
+		t, ctx, store, blocked, run.ledger, seeded, now)
+}
+
+func TestPostgresHydrate_overtakenByAWriter_doesNotLoseTheNewCitation(t *testing.T) {
+	ctx, store := postgresStore(t)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	run, cited := legacyRun(t, "run-legacy")
+	seeded, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Scope = run.scope
+		a.Evidence = []domain.MemoryEvidence{cited}
+	}), "usr_ana", "reviewed", now)
+	if err != nil {
+		t.Fatalf("Assert: %v", err)
+	}
+
+	blocked := &blockingContent{
+		inner: run.content, entered: make(chan struct{}), release: make(chan struct{}),
+	}
+	expectHydrationOvertakenDoesNotLoseTheNewCitation(
+		t, ctx, store, blocked, run.ledger, seeded, now)
+}
+
+/*
+Filling only the canonical key writes no event, and it should not.
+
+The key is recalculable from the row's own fields and does not appear in an
+event's detail, so an event about it would say nothing a reader could act on —
+it would be noise in the one log an auditor reads to reconstruct what a memory
+rests on. Events are for provenance moving; identity is arithmetic.
+
+The row is made legacy the only way this case exists: complete evidence, key
+cleared, exactly what a row written before the key existed looks like once its
+citations were already whole.
+*/
+func TestPostgresHydrate_fillingOnlyTheKey_recordsNoEvent(t *testing.T) {
+	ctx, pool := postgresPool(t)
+	store := memory.NewPostgres(pool)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	run, cited := finished(t, "run-whole")
+	resolved, err := memory.NewResolver(run.ledger, run.content).
+		Resolve(ctx, run.scope, []domain.MemoryEvidence{cited})
+	if err != nil {
+		t.Fatalf("resolve for the fixture: %v", err)
+	}
+	created, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Scope = run.scope
+		a.Evidence = resolved
+		a.Labels = resolved[0].Labels
+	}), "usr_ana", "reviewed", now)
+	if err != nil {
+		t.Fatalf("Assert: %v", err)
+	}
+
+	if _, err := pool.Exec(ctx,
+		`update memory_assertions set canonical_identity_key = null where assertion_id = $1`,
+		created.ID); err != nil {
+		t.Fatalf("clear the key: %v", err)
+	}
+
+	before := countHydratedEvents(t, ctx, pool, created.ID)
+	if _, err := store.Hydrate(ctx, memory.NewResolver(run.ledger, run.content),
+		memory.HydratePage{Limit: 10, Now: now}); err != nil {
+		t.Fatalf("Hydrate: %v", err)
+	}
+
+	var key *string
+	if err := pool.QueryRow(ctx,
+		`select canonical_identity_key from memory_assertions where assertion_id = $1`,
+		created.ID).Scan(&key); err != nil {
+		t.Fatalf("read the key: %v", err)
+	}
+	if key == nil {
+		t.Fatal("the key was not filled")
+	}
+	if after := countHydratedEvents(t, ctx, pool, created.ID); after != before {
+		t.Errorf("hydrated events went %d -> %d, want none for arithmetic", before, after)
+	}
+}
+
+func countHydratedEvents(
+	t *testing.T, ctx context.Context, pool *pgxpool.Pool, id string,
+) int {
+	t.Helper()
+	var n int
+	if err := pool.QueryRow(ctx,
+		`select count(*) from memory_assertion_events where assertion_id = $1 and action = 'hydrated'`,
+		id).Scan(&n); err != nil {
+		t.Fatalf("count events: %v", err)
+	}
+	return n
 }
