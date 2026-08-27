@@ -132,6 +132,18 @@ func (s suggestionTx) autoConfirm(
 	ctx context.Context, stored domain.MemorySuggestion,
 ) (domain.MemorySuggestionOutcome, error) {
 	assertion := assertionFromSuggestion(stored, stored.Observations, systemMemory, s.now)
+	// The third door into active memory, and the one with nobody standing in
+	// it. A proposal the platform cannot tell apart from a credential waits for
+	// a person rather than becoming readable to every run for having been made
+	// twice.
+	if heldForReview(assertion) {
+		if err := s.tx.Commit(ctx); err != nil {
+			return domain.MemorySuggestionOutcome{}, fmt.Errorf("memory: commit suggestion: %w", err)
+		}
+		return domain.MemorySuggestionOutcome{
+			Suggestion: stored, Result: domain.MemorySuggestPending,
+		}, nil
+	}
 	merged, outcome, err := mergeInto(ctx, s.tx, assertion, OriginAutoConfirm,
 		assertion.UpdatedBy, "auto-confirmed repeated suggestions", "auto_confirmed")
 	if err != nil {

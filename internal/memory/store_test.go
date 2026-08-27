@@ -2035,6 +2035,110 @@ func countEvents(t *testing.T, ctx context.Context, pool *pgxpool.Pool, id strin
 }
 
 /*
+Auto-confirm is the third door, and it has nobody standing in it.
+
+A policy confirming a repeated observation writes active memory with no person
+involved — so a proposal carrying a private key would become readable to every
+run on the strength of having been made twice, with no refusal, no override and
+no label anywhere. There is no override on this path because there is nobody to
+give one.
+
+It waits instead. Not an error: failing would fail the tool call inside a run
+that did nothing wrong. The proposal stays in the queue, which is where somebody
+can see it.
+*/
+func TestSuggest_autoConfirmingSomethingShapedLikeACredential_waitsForAPerson(t *testing.T) {
+	t.Parallel()
+	for name, claim := range credentialShapes {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			expectAutoConfirmHoldsACredential(t, context.Background(), memory.NewMemory(), claim)
+		})
+	}
+}
+
+func TestPostgresSuggest_autoConfirmingSomethingShapedLikeACredential_waitsForAPerson(t *testing.T) {
+	for name, claim := range credentialShapes {
+		t.Run(name, func(t *testing.T) {
+			ctx, store := postgresStore(t)
+			expectAutoConfirmHoldsACredential(t, ctx, store, claim)
+		})
+	}
+}
+
+/*
+Both levels wait, and the second is the one worth naming.
+
+A recognised key is refused whatever anybody says, so it would still have waited
+here if this path had been given an override it has no person for. Text that is
+merely long and random is the level an override clears — and on this path there
+is nobody to give one.
+*/
+var credentialShapes = map[string]string{
+	"a recognised key": "the deploy key is -----BEGIN RSA PRIVATE KEY-----",
+	"something opaque": "the correlation id was aB3" + strings.Repeat("xY7z", 10),
+}
+
+func expectAutoConfirmHoldsACredential(
+	t *testing.T, ctx context.Context, store mergeStore, credentialShaped string,
+) {
+	t.Helper()
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+	policy := domain.MemoryLearningPolicy{
+		Mode: domain.MemoryLearningAutoConfirm, MinObservations: 2,
+	}
+	carries := func(s *domain.MemorySuggestion) { s.Claim = credentialShaped }
+
+	var out domain.MemorySuggestionOutcome
+	for i, run := range []domain.RunID{"run-1", "run-2"} {
+		var err error
+		out, err = store.Suggest(ctx, suggestion(func(s *domain.MemorySuggestion) {
+			carries(s)
+			s.Evidence = []domain.MemoryEvidence{{
+				RunID: run, Seq: 1, Artifact: domain.ArtifactMemorySuggestion,
+				Digest: "sha256:abcd",
+			}}
+		}), policy, "agent:triage", now.Add(time.Duration(i)*time.Minute))
+		if err != nil {
+			t.Fatalf("Suggest %s: %v", run, err)
+		}
+	}
+
+	// The threshold was reached: without this rule the second sighting would
+	// have confirmed it.
+	if out.Suggestion.Observations < policy.MinObservations {
+		t.Fatalf("observations = %d, want the threshold met", out.Suggestion.Observations)
+	}
+	if out.Result != domain.MemorySuggestPending {
+		t.Errorf("result = %s, want it left for somebody to read", out.Result)
+	}
+	if out.Assertion != nil {
+		t.Errorf("assertion = %+v, want nothing written", out.Assertion)
+	}
+
+	readable, err := store.Find(ctx, domain.MemoryQuery{
+		Scope: platformScope, AgentID: "triage", Now: now.Add(time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if len(readable) != 0 {
+		t.Errorf("find returned %d, want no run able to recall it", len(readable))
+	}
+
+	pending, err := store.ListSuggestions(ctx, memory.SuggestionFilter{
+		Scopes: []domain.Scope{platformScope},
+		Status: domain.MemorySuggestionPending, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("ListSuggestions: %v", err)
+	}
+	if len(pending) != 1 {
+		t.Errorf("pending = %d, want the proposal waiting for a person", len(pending))
+	}
+}
+
+/*
 Accepting with better words is one act, not two.
 
 The person agreeing is often the one who can say it more clearly than the agent

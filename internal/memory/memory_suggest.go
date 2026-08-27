@@ -70,6 +70,12 @@ func (m *Memory) autoConfirmSuggestion(
 	s domain.MemorySuggestion, now time.Time,
 ) (domain.MemorySuggestionOutcome, error) {
 	assertion := assertionFromSuggestion(s, s.Observations, systemMemory, now)
+	if heldForReview(assertion) {
+		m.suggestions[s.ID] = cloneSuggestion(s)
+		return domain.MemorySuggestionOutcome{
+			Suggestion: s, Result: domain.MemorySuggestPending,
+		}, nil
+	}
 	merged, outcome, err := m.mergeInto(assertion, OriginAutoConfirm)
 	if err != nil {
 		return domain.MemorySuggestionOutcome{}, err

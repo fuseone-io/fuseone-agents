@@ -53,3 +53,21 @@ func SecretDecision(
 	}
 	return a, nil
 }
+
+/*
+heldForReview is what auto-confirm does when a proposal looks like a credential.
+
+There is no override on this path, because there is nobody on it: the policy
+confirmed a repeated observation and no person read it. Both levels stop here
+for the same reason — a memory the platform cannot tell apart from a credential
+should not become readable to every run on the strength of having been proposed
+twice.
+
+It is not an error. Failing the call would fail the tool call inside a run, and
+the run did nothing wrong; the proposal simply stays in the queue, which is
+where a person can see it.
+*/
+func heldForReview(a domain.MemoryAssertion) bool {
+	_, err := SecretDecision(a, false)
+	return err != nil
+}
