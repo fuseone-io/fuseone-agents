@@ -27,6 +27,29 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.38.9] — 2026-08-27
+
+### Fixed
+
+- **The tool picker opens where the `@` was typed.** Long instruction blocks
+  could anchor the picker near the top of the editor instead of beside the
+  marker, especially when the marker was in the middle of a paragraph. The
+  editor now measures the typed marker in the same coordinate system as the
+  popover, keeps the mirror text complete, and inserts the tool without moving
+  another `@` already in the block.
+
+- **`Never` drift warnings stop treating missing context as a conflict.** A
+  step that says "stop when information is missing" should not conflict with a
+  `Never` block that forbids acting on that subject. The detector now requires
+  a stronger signal before warning, preserves real conflicts such as
+  "reembolso sem revisão", and keeps warnings actionable instead of training
+  authors to ignore them.
+
+### Changed
+
+- **Agent tabs now carry matching icons.** Runs, definition and steps use the
+  shared tab icon sizing so the page reads like the rest of the console.
+
 ## [0.38.8] — 2026-08-27
 
 ### Fixed
