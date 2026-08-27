@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/fuseone/agents/internal/domain"
@@ -332,4 +334,55 @@ func TestResolve_ledgerUnavailable_isNotAnInvalidCitation(t *testing.T) {
 	if errors.Is(err, memory.ErrEvidenceInvalid) {
 		t.Error("an unreachable ledger was reported as an invalid citation")
 	}
+}
+
+/*
+Tolerating the legacy spelling is not tolerating any prefix.
+
+Two forms are in circulation and both are exact: the whole SHA-256, and the
+sixteen hex the engine's digest helper produces, either optionally prefixed. A
+comparison that accepted any prefix would accept a single nibble as proof, which
+turns migrating a format into weakening the check.
+*/
+func TestResolve_digestsThatAreNotOneOfTheTwoForms_refused(t *testing.T) {
+	t.Parallel()
+
+	// Truncations of the digest the store actually recorded, so each one is a
+	// genuine prefix of it. A comparison that accepted any prefix would take
+	// every one of these as proof; only 16 and 64 are forms that exist.
+	for _, cut := range []int{2, 14, 18, 62} {
+		t.Run(fmt.Sprintf("%d hex of the real digest", cut), func(t *testing.T) {
+			t.Parallel()
+
+			r := newRun(t, "run-1")
+			r.step(domain.StepRunStarted, domain.RunStartedPayload{Trigger: "channel"})
+			ref, digest := r.put(2, []byte("the answer"))
+			r.step(domain.StepRunFinished, domain.RunFinishedPayload{
+				OutcomeRef: ref, OutcomeDigest: digest[:cut],
+			})
+
+			_, err := r.resolver().Resolve(context.Background(), r.scope,
+				[]domain.MemoryEvidence{{RunID: "run-1", Seq: 2, Artifact: domain.ArtifactFinalAnswer}})
+			if !errors.Is(err, memory.ErrEvidenceInvalid) {
+				t.Errorf("err = %v, want %d hex of the digest refused as proof", err, cut)
+			}
+		})
+	}
+
+	t.Run("the right length but not hexadecimal", func(t *testing.T) {
+		t.Parallel()
+
+		r := newRun(t, "run-1")
+		r.step(domain.StepRunStarted, domain.RunStartedPayload{Trigger: "channel"})
+		ref, _ := r.put(2, []byte("the answer"))
+		r.step(domain.StepRunFinished, domain.RunFinishedPayload{
+			OutcomeRef: ref, OutcomeDigest: strings.Repeat("z", 16),
+		})
+
+		_, err := r.resolver().Resolve(context.Background(), r.scope,
+			[]domain.MemoryEvidence{{RunID: "run-1", Seq: 2, Artifact: domain.ArtifactFinalAnswer}})
+		if !errors.Is(err, memory.ErrEvidenceInvalid) {
+			t.Errorf("err = %v, want a non-hexadecimal digest refused", err)
+		}
+	})
 }

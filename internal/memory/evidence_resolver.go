@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -264,11 +265,32 @@ carried. A citation must not fail to resolve because of a prefix or because the
 part it kept is shorter than the part it is being compared to.
 */
 func sameDigest(a, b string) bool {
-	x, y := trimDigest(a), trimDigest(b)
+	x, ok := digestForm(a)
+	if !ok {
+		return false
+	}
+	y, ok := digestForm(b)
+	if !ok {
+		return false
+	}
 	if len(x) > len(y) {
 		x, y = y, x
 	}
-	return x != "" && y[:len(x)] == x
+	return y[:len(x)] == x
+}
+
+// digestForm accepts the two spellings that exist and nothing else: the whole
+// SHA-256, and the sixteen hex the engine's digest helper keeps. Any other
+// length would let a shorter prefix stand in as proof.
+func digestForm(v string) (string, bool) {
+	v = trimDigest(v)
+	if len(v) != 64 && len(v) != 16 {
+		return "", false
+	}
+	if _, err := hex.DecodeString(v); err != nil {
+		return "", false
+	}
+	return v, true
 }
 
 func trimDigest(v string) string {
