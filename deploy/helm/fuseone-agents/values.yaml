@@ -76,6 +76,20 @@ migrations:
   enabled: true
   backoffLimit: 3
 
+# Memory written before the platform could derive what it now derives, filled in
+# between the schema and the rollout. The runtime repairs a row as it touches
+# one, so this is an optimisation rather than a guarantee — turning it off makes
+# the repair slower, not absent.
+memoryReconcile:
+  enabled: true
+  backoffLimit: 2
+  # The release's patience. The work is resumable and idempotent: a run cut
+  # short is not a run lost, and the next one pays only for what is left.
+  activeDeadlineSeconds: 900
+  # The job's own deadline, inside the pod's. Shorter, so the sweep reports what
+  # it reached instead of being killed with nothing in the log.
+  timeout: 14m
+
 service:
   type: ClusterIP
   port: 80

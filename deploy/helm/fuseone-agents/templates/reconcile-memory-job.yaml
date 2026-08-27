@@ -1,0 +1,70 @@
+{{- if .Values.memoryReconcile.enabled }}
+{{/*
+Memory reconciled between the schema and the rollout.
+
+Weight -4, so it runs after the migration at -5 and before anything serves: the
+columns it fills have to exist, and filling them before the new pods start is
+what stops the first accept after an upgrade meeting a proposal the new merge
+cannot explain.
+
+Not a guarantee, and it does not need to be. The runtime repairs a row as it
+touches it, so a keyless row written by an old pod after this ran is still found
+and still merged. What the job buys is that the repair is not paid one row at a
+time, for ever, on the write path.
+
+Exits zero when it meets rows a person has to resolve. Two rows claiming one
+identity, or a citation the ledger will not vouch for, do not improve by being
+read again — failing here would fail the release, retry the same reading until
+the backoff limit, and leave the operator an exit code instead of a count. The
+warning carries the counts and needs_review, and nothing else: what those rows
+are belongs on a screen, not in a release log.
+*/}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "fuseone.fullname" . }}-reconcile-memory
+  labels: {{- include "fuseone.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-4"
+    # Kept after a failure, like the migration: the log is the account of what
+    # the sweep reached before it stopped.
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: {{ .Values.memoryReconcile.backoffLimit }}
+  # The release will not wait longer than this. The work is resumable and
+  # idempotent, so a run cut short is not a run lost: the next one begins again
+  # and pays only for what is left.
+  activeDeadlineSeconds: {{ .Values.memoryReconcile.activeDeadlineSeconds }}
+  template:
+    metadata:
+      labels: {{- include "fuseone.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: reconcile-memory
+    spec:
+      restartPolicy: Never
+      # No token, for the same reason the migration has none: a pre-install
+      # hook runs before the release's own ServiceAccount exists, and this
+      # talks to Postgres and never to the Kubernetes API.
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: reconcile-memory
+          image: {{ include "fuseone.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - reconcile-memory
+            - --timeout={{ .Values.memoryReconcile.timeout }}
+          env: {{- include "fuseone.env" . | nindent 12 }}
+          securityContext: {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+      {{- with .Values.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
