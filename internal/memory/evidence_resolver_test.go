@@ -117,6 +117,14 @@ func TestResolve_citationNamesItsStepAndTheWrongBytes_isNotProved(t *testing.T) 
 	}
 }
 
+// erase takes the run out of the ledger, which is what retention does to it.
+// The steps go and the content goes with them, so every citation that named
+// this run stops being provable — the state a memory finds itself in when
+// somebody tries to bring it back months later.
+func (r *run) erase() {
+	delete(r.ledger.steps, r.id)
+}
+
 func (r *run) resolver() *memory.Resolver {
 	return memory.NewResolver(r.ledger, r.content)
 }
