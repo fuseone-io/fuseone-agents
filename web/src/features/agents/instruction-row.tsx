@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   type Block,
   type BlockKind,
@@ -53,21 +53,56 @@ export function InstructionRow({
 }) {
   const [writing, setWriting] = useState(false);
   const [citing, setCiting] = useState(false);
+  const [citeAt, setCiteAt] = useState<number | null>(null);
+  const [pendingCaret, setPendingCaret] = useState<number | null>(null);
+  const latestText = useRef(block.text);
+
+  useEffect(() => {
+    latestText.current = block.text;
+  }, [block.text]);
 
   /*
   `@` opens the catalogue, and picking one writes the identifier in place of
-  it. The `@` never reaches the payload: it is the gesture, not the text.
+  that marker. The `@` never reaches the payload: it is the gesture, not the
+  text.
   */
-  const typed = (next: string) => {
+  const typed = (next: string, cursor?: number) => {
+    latestText.current = next;
     on.change(next);
-    if (next.endsWith("@")) setCiting(true);
+    const marker = markerBeforeCursor(next, cursor);
+    if (marker !== null) {
+      setCiteAt(marker);
+      setCiting(true);
+    }
     // `/` at the start of a line, which is where somebody reaches for a menu
     // rather than a slash. Mid-sentence it is a slash and stays one.
     if (next.endsWith("/") && /(^|\n)\/$/.test(next)) on.slash();
   };
 
   const cite = (tool: string) => {
-    on.change(`${block.text.replace(/@$/, "")}${tool}`);
+    const text = latestText.current;
+    const marker = citeAt ?? text.lastIndexOf("@");
+    if (marker >= 0 && text[marker] === "@") {
+      const next = `${text.slice(0, marker)}${tool}${text.slice(marker + 1)}`;
+      latestText.current = next;
+      on.change(next);
+      setPendingCaret(marker + tool.length);
+    } else {
+      const next = `${text}${tool}`;
+      latestText.current = next;
+      on.change(next);
+      setPendingCaret(next.length);
+    }
+    setCiteAt(null);
+    setCiting(false);
+  };
+
+  const clearPendingCaret = useCallback(() => {
+    setPendingCaret(null);
+  }, []);
+
+  const closeCitation = () => {
+    setCiteAt(null);
     setCiting(false);
   };
 
@@ -99,7 +134,9 @@ export function InstructionRow({
         onWriting={setWriting}
         tools={tools}
         typed={typed}
-        cite={{ open: citing, onPick: cite, onClose: () => setCiting(false) }}
+        pendingCaret={pendingCaret}
+        onCaretApplied={clearPendingCaret}
+        cite={{ open: citing, onPick: cite, onClose: closeCitation }}
       />
 
       <BlockControls
@@ -131,4 +168,9 @@ export function InstructionRow({
       )}
     </div>
   );
+}
+
+function markerBeforeCursor(text: string, cursor?: number): number | null {
+  const at = cursor === undefined ? text.length - 1 : cursor - 1;
+  return at >= 0 && text[at] === "@" ? at : null;
 }

@@ -39,8 +39,8 @@ export function BlockLabel({
     <DropdownMenu>
       <DropdownMenuTrigger
         className={cn(
-          "pt-[3px] text-right text-[10px]/5 font-medium uppercase tracking-label transition-colors hover:text-foreground",
-          kind === "never" ? "text-danger" : "text-muted-foreground",
+          "rounded-sm px-1.5 py-0.5 text-right text-[11px]/5 font-semibold uppercase tracking-label transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring",
+          kind === "never" ? "text-danger" : "text-foreground",
         )}
       >
         {label}

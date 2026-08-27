@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Textarea } from "@/components/ui/textarea";
 import { CiteTool } from "@/features/agents/cite-tool";
@@ -21,21 +22,50 @@ export function BlockText({
   onWriting,
   tools,
   typed,
+  pendingCaret,
+  onCaretApplied,
   cite,
 }: {
   block: Block;
   writing: boolean;
   onWriting: (writing: boolean) => void;
   tools: { catalogue: Tool[]; policies: Policy[]; enabled?: string[] };
-  typed: (text: string) => void;
+  typed: (text: string, cursor?: number) => void;
+  pendingCaret: number | null;
+  onCaretApplied: () => void;
   cite: { open: boolean; onPick: (tool: string) => void; onClose: () => void };
 }) {
   const { t, i18n } = useTranslation();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const focusedWriting = useRef(false);
   const label = labelOf(block.kind, i18n.language) || t("agents.blockProse");
   const citable =
     block.kind === "howToAct"
       ? citableTools(tools.catalogue, tools.enabled)
       : tools.catalogue;
+
+  useEffect(() => {
+    if (!writing) {
+      focusedWriting.current = false;
+      return;
+    }
+    if (cite.open) return;
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.focus();
+    if (pendingCaret !== null) {
+      const at = Math.min(pendingCaret, textarea.value.length);
+      textarea.setSelectionRange(at, at);
+      focusedWriting.current = true;
+      onCaretApplied();
+      return;
+    }
+    if (!focusedWriting.current) {
+      const end = textarea.value.length;
+      textarea.setSelectionRange(end, end);
+      focusedWriting.current = true;
+    }
+  }, [writing, cite.open, pendingCaret, onCaretApplied]);
 
   if (!writing) {
     return (
@@ -70,9 +100,9 @@ export function BlockText({
       onClose={cite.onClose}
     >
       <Textarea
-        autoFocus
+        ref={textareaRef}
         value={block.text}
-        onChange={(e) => typed(e.target.value)}
+        onChange={(e) => typed(e.target.value, e.target.selectionStart)}
         onBlur={() => !cite.open && onWriting(false)}
         placeholder={t("agents.blockPlaceholder")}
         aria-label={label}
