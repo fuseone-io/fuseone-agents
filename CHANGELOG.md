@@ -27,6 +27,32 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.38.8] — 2026-08-27
+
+### Fixed
+
+- **A rehearsal nobody saved no longer speaks for the corpus.** Every simulated
+  run was being counted as a battery, so an ad-hoc rehearsal run after the
+  saved cases could become the newest one the Trust Center read — and it
+  reported "1 of 1 saved case(s) broke" about cases that had not been checked
+  at all. A battery is now only the simulated runs that name a saved case, in
+  the store and in the fake alike. With the evidence right, the published
+  agent's guide also stops asking for a rehearsal once the corpus has run and
+  held.
+
+- **A tool can be cited where the `@` was typed.** The picker used to write the
+  identifier at the end of the block, so citing mid-sentence moved the tool to
+  the wrong place. It now replaces the marker the person actually typed —
+  including when the block already holds another `@`, such as an email address
+  — and leaves the cursor after the identifier it inserted. Clicking a block to
+  edit it now puts the caret in the text rather than in a row that looks
+  editable and is not.
+
+- **Generic verbs stop reading as a conflict with `Never`.** "Consultar",
+  "verificar", "analisar" and "prosseguir" are how a step describes itself, not
+  a promise to do the thing a `Never` block forbids. A warning that fires on
+  ordinary prose teaches people to ignore warnings.
+
 ## [0.38.7] — 2026-08-27
 
 ### Added
