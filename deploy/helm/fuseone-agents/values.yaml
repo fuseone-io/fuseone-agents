@@ -97,7 +97,9 @@ memoryReconcile:
   # The outermost is not the chart's to set: `helm install` and `helm upgrade`
   # default to five minutes, which is less than any of these. See the README —
   # a release run without --timeout can fail at five minutes while this is
-  # still working normally, and nothing here can prevent that.
+  # still working normally, and nothing here can prevent that. Argo CD does not
+  # use that client and does not time a sync out by default; OP-001 says what to
+  # check there.
   #
   # None of it loses work. The walk is resumable and idempotent: a run cut
   # short is not a run lost, and the next one pays only for what is left.

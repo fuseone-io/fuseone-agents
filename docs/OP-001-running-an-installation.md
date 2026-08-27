@@ -110,11 +110,16 @@ and the process, which sit inside it. Deadlines, outermost first:
 | `memoryReconcile.activeDeadlineSeconds` | 20m | Kubernetes kills the pod, no summary |
 | `memoryReconcile.timeout` | 14m | the sweep stops, prints its totals, exits 0 |
 
-Argo CD applies the same hooks as sync waves and does not use Helm's client, so
-there is no `--timeout` to pass. What it needs instead is a sync timeout above
-the same 25 minutes — `controller.sync.timeout` on the controller, or a longer
-`--timeout` on `argocd app sync`. An `Application` that syncs with the default
-gives up while the reconciliation is still working.
+Argo CD runs the chart's hooks as its own and does not use Helm's client, so
+there is no `--timeout` to pass and the five-minute default does not apply. Two
+places to check instead:
+
+- **The controller does not time a sync out by default.**
+  `controller.sync.timeout.seconds` in `argocd-cmd-params-cm` defaults to `0`,
+  meaning no limit, so a stock `Application` waits. If your installation has set
+  it, raise it above 1500.
+- **The CLI does.** `argocd app sync` takes `--timeout` in seconds, so use
+  `--timeout 1500` or more when syncing by hand.
 
 Nothing is lost either way: both jobs are resumable and idempotent, so running
 the release again continues where it stopped rather than starting over.

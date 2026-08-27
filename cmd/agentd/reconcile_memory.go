@@ -58,14 +58,37 @@ func reconcileMemory(args []string) error {
 
 	assertions, suggestions, err := memory.Reconcile(
 		ctx, memory.NewPostgres(pool), resolver, started)
-	// Reported either way. A run that failed halfway still repaired what it
+	incomplete, fatal := outcome(err)
+	// Reported either way. A run that stopped halfway still repaired what it
 	// reached, and an operator reading only the error would think it had not.
-	report("memory", assertions)
-	report("memory suggestions", suggestions)
-	if err != nil {
-		return fmt.Errorf("reconcile memory: %w", err)
+	report("memory", assertions, incomplete)
+	report("memory suggestions", suggestions, incomplete)
+	return fatal
+}
+
+/*
+outcome is what a run means to the release.
+
+The deadline this command set for itself is a stopping point, not a failure. The
+work is resumable and the runtime repairs a row as it touches one, so a sweep
+that ran out of time has done real work and left the rest for the next release —
+and failing here would be worse than useless: Kubernetes would retry inside what
+is left of the pod's own deadline, and the second attempt would be killed before
+it reached the point where it prints anything.
+
+Everything else still fails. A store that will not answer and a cursor that does
+not move are both things a person has to know about, and neither is what a
+deadline looks like. So is cancellation: nothing cancels this today, but a run
+somebody stopped is not a run that finished early.
+*/
+func outcome(err error) (incomplete bool, fatal error) {
+	switch {
+	case err == nil:
+		return false, nil
+	case errors.Is(err, context.DeadlineExceeded):
+		return true, nil
 	}
-	return nil
+	return false, fmt.Errorf("reconcile memory: %w", err)
 }
 
 /*
@@ -81,8 +104,11 @@ a retry: a conflicted identity is two rows somebody has to choose between, and
 an unproved citation is evidence the ledger will not vouch for. Exiting non-zero
 would fail the release, repeat the same reading until the backoff limit, and
 resolve nothing.
+
+A run cut short by its own deadline is a warning too, and for the same reason:
+the counts are what it managed, and the next release carries on from there.
 */
-func report(what string, totals memory.Totals) {
+func report(what string, totals memory.Totals, incomplete bool) {
 	fields := []any{
 		"table", what,
 		"pages", totals.Pages,
@@ -90,13 +116,19 @@ func report(what string, totals memory.Totals) {
 		"repaired", totals.Repaired,
 		"source_gone", totals.SourceGone,
 	}
-	if !totals.NeedsReview() {
-		slog.Info("memory reconciled", fields...)
-		return
-	}
-	slog.Warn("memory reconciled, and some rows need a person",
-		append(fields,
+	if totals.NeedsReview() {
+		fields = append(fields,
 			"conflicted", totals.Conflicted,
 			"unproved", totals.Unproved,
-			"needs_review", true)...)
+			"needs_review", true)
+	}
+	switch {
+	case incomplete:
+		slog.Warn("memory reconciliation stopped at its deadline; the next run continues",
+			append(fields, "incomplete", true)...)
+	case totals.NeedsReview():
+		slog.Warn("memory reconciled, and some rows need a person", fields...)
+	default:
+		slog.Info("memory reconciled", fields...)
+	}
 }
