@@ -115,6 +115,33 @@ func (c *Content) Get(ctx context.Context, ref string) ([]byte, error) {
 }
 
 /*
+Metadata answers what a reference says about itself without reading the bytes.
+
+The reference carries only the first 16 hex of the digest; this is the whole
+SHA-256 the store recorded over the whole payload, which is the number a
+citation has to be checked against. Re-hashing what Get returns would disagree
+with it for anything the limit truncated.
+
+Erased is reported rather than raised: the digest outlives the bytes, so a
+caller can still tell a citation whose content was erased from one that was
+never true.
+*/
+func (c *Content) Metadata(ctx context.Context, ref string) (domain.ContentMetadata, error) {
+	var out domain.ContentMetadata
+	var erased *time.Time
+	err := c.pool.QueryRow(ctx,
+		`select digest, erased_at from run_content where ref = $1`, ref).Scan(&out.Digest, &erased)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.ContentMetadata{}, fmt.Errorf("%w: %s", ErrNoContent, ref)
+	}
+	if err != nil {
+		return domain.ContentMetadata{}, fmt.Errorf("ledger: read content metadata %s: %w", ref, err)
+	}
+	out.Erased = erased != nil
+	return out, nil
+}
+
+/*
 Erase removes everything one owner's content holds, leaving a tombstone.
 
 This is per-subject erasure (NF-09), and it reaches the referenced content

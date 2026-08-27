@@ -23,6 +23,7 @@ type ContentStore interface {
 	Put(ctx context.Context, runID domain.RunID, seq int64, data []byte) (string, error)
 	PutFor(ctx context.Context, kind, owner string, seq int64, data []byte) (string, error)
 	Get(ctx context.Context, ref string) ([]byte, error)
+	Metadata(ctx context.Context, ref string) (domain.ContentMetadata, error)
 	Erase(ctx context.Context, owner string, reason string) (int, error)
 	ErasePast(ctx context.Context, before time.Time, reason string) (int, error)
 }
@@ -287,6 +288,76 @@ func TestPut_beyondTheLimit_keepsAPrefixAndSaysSo(t *testing.T) {
 			whole := sha256.Sum256(huge)
 			if !strings.Contains(ref, hex.EncodeToString(whole[:])[:16]) {
 				t.Errorf("ref = %q, want it to carry the digest of the whole payload", ref)
+			}
+		})
+	}
+}
+
+/*
+Metadata is what the evidence resolver asks before it trusts a citation.
+
+It exists because the reference carries only the first 16 hex of the digest
+while the store holds the whole SHA-256, and because re-hashing the bytes read
+back would disagree with the record for any payload the limit truncated. The
+digest a citation is checked against has to be the one the store wrote down.
+*/
+func TestContentMetadataContract(t *testing.T) {
+	for name, open := range contentStores(t) {
+		t.Run(name+"/the digest is the whole payload's, not the reference's prefix", func(t *testing.T) {
+			store := open(t)
+			ctx := context.Background()
+
+			payload := []byte(`{"ok":false,"error":"not_in_channel"}`)
+			ref, err := store.PutFor(ctx, "run", "run-1", 4, payload)
+			if err != nil {
+				t.Fatalf("PutFor: %v", err)
+			}
+
+			got, err := store.Metadata(ctx, ref)
+			if err != nil {
+				t.Fatalf("Metadata: %v", err)
+			}
+			sum := sha256.Sum256(payload)
+			if want := hex.EncodeToString(sum[:]); got.Digest != want {
+				t.Errorf("digest = %q, want the whole payload's %q", got.Digest, want)
+			}
+			if !strings.HasPrefix(got.Digest, strings.Split(ref, "/")[len(strings.Split(ref, "/"))-1]) {
+				t.Errorf("digest %q does not extend the reference %q", got.Digest, ref)
+			}
+		})
+
+		t.Run(name+"/erased content still answers, and says so", func(t *testing.T) {
+			store := open(t)
+			ctx := context.Background()
+
+			ref, err := store.PutFor(ctx, "run", "run-1", 4, []byte("subject data"))
+			if err != nil {
+				t.Fatalf("PutFor: %v", err)
+			}
+			if _, err := store.Erase(ctx, "run-1", "subject"); err != nil {
+				t.Fatalf("Erase: %v", err)
+			}
+
+			// The digest survives erasure — the step keeps its reference and the
+			// chain is untouched — so a resolver can still tell "this citation
+			// was real and its bytes are gone" from "this citation is wrong".
+			got, err := store.Metadata(ctx, ref)
+			if err != nil {
+				t.Fatalf("Metadata after erase: %v", err)
+			}
+			if !got.Erased {
+				t.Error("metadata does not report the content as erased")
+			}
+			if got.Digest == "" {
+				t.Error("digest was dropped with the bytes")
+			}
+		})
+
+		t.Run(name+"/a reference nothing was stored under is an error", func(t *testing.T) {
+			store := open(t)
+
+			if _, err := store.Metadata(context.Background(), "run://run-1/9/deadbeef"); err == nil {
+				t.Error("Metadata invented a record for a reference nothing was stored under")
 			}
 		})
 	}
