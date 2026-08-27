@@ -20,33 +20,48 @@ import (
 
 /*
 originOfMemoryEvidence reads the ledger for everything a creation does not get
-to assert about itself.
+to assert about itself: the labels of every citation, unioned, and which agent
+the memory belongs to.
 
-The labels of every citation, unioned, and the agent whose run produced them.
 Both come from the same read, because they are answers to the same question —
-what actually happened — and separating them would be two chances for the
-memory to be filed against one run and coloured by another.
+what actually happened — and separating them would be two chances for the memory
+to be filed against one run and coloured by another.
 
-Citations from more than one agent's runs are refused. An agent-scoped memory
-belongs to one agent, and picking whichever run came first would decide that
-silently.
+What "which agent" means depends on the namespace, and the two are opposites.
+An agent-scoped memory belongs to one agent, so citations naming two of them are
+refused rather than attributed to whichever came first, and a run naming none is
+refused rather than widened into memory every agent reads. Shared memory belongs
+to no agent, so two agents observing the same fact is not a conflict — it is what
+shared memory is, and refusing it made shared memory impossible to correct once
+a second agent had contributed a citation to it.
 */
 func (s *Server) originOfMemoryEvidence(
-	ctx context.Context, scope domain.Scope, evidence []openapi.MemoryEvidence,
+	ctx context.Context, scope domain.Scope,
+	namespace openapi.MemoryAssertionInputNamespace, evidence []openapi.MemoryEvidence,
 ) (domain.AgentID, domain.Labels, error) {
 	var labels domain.Labels
-	var agent domain.AgentID
-	for i, ev := range evidence {
-		seenAgent, seen, err := s.memoryEvidenceOrigin(ctx, scope, ev)
+	agents := map[domain.AgentID]bool{}
+	for _, ev := range evidence {
+		agent, seen, err := s.memoryEvidenceOrigin(ctx, scope, ev)
 		if err != nil {
 			return "", nil, err
 		}
-		if i > 0 && seenAgent != agent {
-			return "", nil, fmt.Errorf("memory evidence names more than one agent")
-		}
-		agent, labels = seenAgent, labels.Union(seen)
+		agents[agent] = true
+		labels = labels.Union(seen)
 	}
-	return agent, labels, nil
+	if namespace == openapi.MemoryAssertionInputNamespaceShared {
+		return "", labels, nil
+	}
+	if len(agents) != 1 {
+		return "", nil, fmt.Errorf("memory evidence names %d agents; one is required for agent memory", len(agents))
+	}
+	for agent := range agents {
+		if agent == "" {
+			return "", nil, fmt.Errorf("the run this evidence names has no agent")
+		}
+		return agent, labels, nil
+	}
+	return "", nil, fmt.Errorf("memory evidence names no run")
 }
 
 func (s *Server) memoryEvidenceOrigin(

@@ -72,16 +72,17 @@ func (s *Server) CreateMemoryAssertion(
 	if err := auth.Require(ctx, domain.PermAgentPublish, scope); err != nil {
 		return forbiddenMemoryCreate(domain.PermAgentPublish, scope), nil
 	}
-	agent, labels, err := s.originOfMemoryEvidence(ctx, scope, req.Body.Evidence)
+	// Checked here because nothing else does. The generated strict handler
+	// decodes the body and validates neither required fields nor enums, so a
+	// namespace left out arrives as the empty string and an unknown one arrives
+	// as itself — and both used to be read as the narrow value, which is the
+	// safe direction for one of those mistakes and luck for the other.
+	if !memoryNamespaceValid(req.Body.Namespace) {
+		return badMemoryCreate("namespace must be agent or shared"), nil
+	}
+	agent, labels, err := s.originOfMemoryEvidence(ctx, scope, req.Body.Namespace, req.Body.Evidence)
 	if err != nil {
 		return badMemoryCreate(err.Error()), nil
-	}
-	// Shared is a choice somebody made, never a field they left out. The agent
-	// the run names is dropped here rather than never read: refusing the write
-	// when the two disagree would refuse every shared memory taught from a run,
-	// which is most of them.
-	if req.Body.Namespace == openapi.MemoryAssertionInputNamespaceShared {
-		agent = ""
 	}
 	now := clockOr(s.clock).Now()
 	assertion, err := s.memory.Assert(ctx,
@@ -157,6 +158,18 @@ func memoryRefusal(err error) int {
 		return http.StatusBadRequest
 	}
 	return 0
+}
+
+// memoryNamespaceValid is the enum the contract declares, enforced. A caller
+// that meant nothing by leaving it out gets told so, rather than being given
+// whichever value the zero value happens to be.
+func memoryNamespaceValid(n openapi.MemoryAssertionInputNamespace) bool {
+	switch n {
+	case openapi.MemoryAssertionInputNamespaceAgent,
+		openapi.MemoryAssertionInputNamespaceShared:
+		return true
+	}
+	return false
 }
 
 func badMemoryCreate(detail string) openapi.CreateMemoryAssertion400ApplicationProblemPlusJSONResponse {

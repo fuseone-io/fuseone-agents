@@ -339,6 +339,105 @@ func TestCreateMemoryAssertion_evidenceFromTwoAgents_isRefused(t *testing.T) {
 	}
 }
 
+/*
+An agent-scoped memory whose run names no agent is refused, not quietly shared.
+
+The ledger allows an empty agent — a legacy run, or one that never got that far
+— and the handler only had a special case for shared. So a creation that said
+"this agent" and met a run with none produced memory every agent in the scope
+recalls, answered 200, and told nobody. Widening reach is the one direction a
+missing value must never fail in.
+*/
+func TestCreateMemoryAssertion_agentScopedButTheRunNamesNoAgent_isRefused(t *testing.T) {
+	t.Parallel()
+	scope := domain.Scope{Company: "acme", Area: "cx"}
+	led := ledger.NewMemory()
+	seedFinishedEvidenceFor(t, led, "run-evidence", scope, "", "sha256:answer")
+
+	resp, err := NewServer(led, "test").WithMemory(memstore.NewMemory()).
+		WithClock(fixedAt{t: time.Unix(0, 0)}).
+		CreateMemoryAssertion(inArea("cx", domain.RoleAuthor), memoryCreateRequest("sha256:answer"))
+	if err != nil {
+		t.Fatalf("CreateMemoryAssertion: %v", err)
+	}
+	if _, bad := resp.(openapi.CreateMemoryAssertion400ApplicationProblemPlusJSONResponse); !bad {
+		t.Fatalf("response = %T, want the write refused rather than made shared", resp)
+	}
+}
+
+/*
+Shared memory accepts evidence from more than one agent, and unions its labels.
+
+Refusing two agents is right for an agent-scoped memory, which belongs to one of
+them. For shared memory it is the opposite: two agents observing the same fact
+is what shared memory is, and the merge keeps both citations — so the correction
+dialog resends both, and the rule that protects one namespace was making the
+other impossible to correct.
+*/
+func TestCreateMemoryAssertion_sharedAcceptsEveryAgentsEvidence(t *testing.T) {
+	t.Parallel()
+	scope := domain.Scope{Company: "acme", Area: "cx"}
+	led := ledger.NewMemory()
+	seedFinishedEvidence(t, led, "run-evidence", scope,
+		domain.NewLabels(domain.LabelUntrusted).Union(domain.ScopeLabels(scope)), "sha256:answer")
+	seedFinishedEvidenceFor(t, led, "run-other", scope, "billing", "sha256:other")
+
+	req := memoryCreateRequest("sha256:answer")
+	req.Body.Namespace = openapi.MemoryAssertionInputNamespaceShared
+	req.Body.Evidence = append(req.Body.Evidence, openapi.MemoryEvidence{
+		RunId: "run-other", Artifact: domain.ArtifactFinalAnswer, Digest: "sha256:other",
+	})
+	resp, err := NewServer(led, "test").WithMemory(memstore.NewMemory()).
+		WithClock(fixedAt{t: time.Unix(0, 0)}).
+		CreateMemoryAssertion(inArea("cx", domain.RoleAuthor), req)
+	if err != nil {
+		t.Fatalf("CreateMemoryAssertion: %v", err)
+	}
+	created, ok := resp.(openapi.CreateMemoryAssertion200JSONResponse)
+	if !ok {
+		t.Fatalf("response = %T, want shared memory from two agents accepted", resp)
+	}
+	if created.AgentId != "" {
+		t.Errorf("agent = %q, want shared memory to belong to none of them", created.AgentId)
+	}
+	if !hasAll(created.Labels, domain.LabelUntrusted, domain.LabelArea(scope)) {
+		t.Errorf("labels = %v, want every citation's labels kept", created.Labels)
+	}
+}
+
+/*
+A namespace the contract does not define is refused, not read as the narrow one.
+
+The generated strict handler decodes the body and checks nothing: a required
+field left out arrives as the zero value, and an unknown value arrives as
+itself. Both used to mean "agent" by accident, which is the safe direction for
+exactly one of the two possible mistakes and pure luck for the other.
+*/
+func TestCreateMemoryAssertion_namespaceMissingOrUnknown_isRefused(t *testing.T) {
+	t.Parallel()
+	scope := domain.Scope{Company: "acme", Area: "cx"}
+	for _, given := range []openapi.MemoryAssertionInputNamespace{"", "everyone"} {
+		t.Run(string(given), func(t *testing.T) {
+			t.Parallel()
+			led := ledger.NewMemory()
+			seedFinishedEvidence(t, led, "run-evidence", scope,
+				domain.ScopeLabels(scope), "sha256:answer")
+
+			req := memoryCreateRequest("sha256:answer")
+			req.Body.Namespace = given
+			resp, err := NewServer(led, "test").WithMemory(memstore.NewMemory()).
+				WithClock(fixedAt{t: time.Unix(0, 0)}).
+				CreateMemoryAssertion(inArea("cx", domain.RoleAuthor), req)
+			if err != nil {
+				t.Fatalf("CreateMemoryAssertion: %v", err)
+			}
+			if _, bad := resp.(openapi.CreateMemoryAssertion400ApplicationProblemPlusJSONResponse); !bad {
+				t.Fatalf("response = %T, want %q refused", resp, given)
+			}
+		})
+	}
+}
+
 func createAgainst(
 	t *testing.T, store Memory, edit func(*openapi.MemoryAssertionInput),
 ) openapi.CreateMemoryAssertionResponseObject {
