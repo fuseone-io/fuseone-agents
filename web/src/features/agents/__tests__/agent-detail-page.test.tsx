@@ -166,6 +166,15 @@ describe("the agent overview", () => {
       "data-state",
       "active",
     );
+    expect(
+      screen.getByRole("tab", { name: /Runs 19/ }).querySelector("svg"),
+    ).not.toBeNull();
+    expect(
+      screen.getByRole("tab", { name: "Definition" }).querySelector("svg"),
+    ).not.toBeNull();
+    expect(
+      screen.getByRole("tab", { name: "Steps (0)" }).querySelector("svg"),
+    ).not.toBeNull();
     for (const tab of screen.getAllByRole("tab")) {
       expect(tab).toHaveClass("flex-none");
       expect(tab.className).toContain(

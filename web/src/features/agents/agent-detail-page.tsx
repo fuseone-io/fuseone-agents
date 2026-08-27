@@ -1,5 +1,6 @@
 import { useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { Activity, FileText, ListChecks } from "lucide-react";
 import { ErrorState, LoadingRows } from "@/components/shared/states";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAgent, useAgentTrust } from "@/features/agents/agent-detail-api";
@@ -85,15 +86,18 @@ export function AgentDetailPage() {
             aria-label={t("agents.agentSections")}
           >
             <TabsTrigger value="runs" className="flex-none px-3">
+              <Activity aria-hidden />
               {t("agents.runs")}
               <span className="rounded-full bg-muted px-1.5 text-2xs text-muted-foreground">
                 {published.activity?.runs ?? 0}
               </span>
             </TabsTrigger>
             <TabsTrigger value="definition" className="flex-none px-3">
+              <FileText aria-hidden />
               {t("agents.definition")}
             </TabsTrigger>
             <TabsTrigger value="steps" className="flex-none px-3">
+              <ListChecks aria-hidden />
               {t("agents.asSteps_other", { count: steps?.length ?? 0 })}
             </TabsTrigger>
           </TabsList>
