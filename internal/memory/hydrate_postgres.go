@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/fuseone/agents/internal/domain"
 )
@@ -37,7 +38,7 @@ func (p *Postgres) Hydrate(
 		case proofSourceAbsent:
 			out.SourceGone++
 		}
-		repaired, err := p.hydrateOne(ctx, stored, resolved, got)
+		repaired, err := p.hydrateOne(ctx, stored, proven{resolved, got, page.Now})
 		// The row has a twin, so there is nothing to derive for it — but that
 		// is a fact about one identity, not about the sweep. Ending here would
 		// stop the repair on the very rows it walks.
@@ -59,9 +60,9 @@ func (p *Postgres) Hydrate(
 }
 
 func (p *Postgres) hydrateOne(
-	ctx context.Context, snapshot domain.MemoryAssertion,
-	resolved []domain.MemoryEvidence, got proof,
+	ctx context.Context, snapshot domain.MemoryAssertion, said proven,
 ) (bool, error) {
+	resolved, got := said.evidence, said.got
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return false, fmt.Errorf("memory: begin hydrate: %w", err)
@@ -89,7 +90,7 @@ func (p *Postgres) hydrateOne(
 	// has this state and the transition is the one it always was; hydration is
 	// only the thing that noticed.
 	if got == proofSourceAbsent && current.Status == domain.MemoryActive {
-		if err := markSourceErased(ctx, tx, *current); err != nil {
+		if err := markSourceErased(ctx, tx, *current, said.now); err != nil {
 			return false, err
 		}
 		if err := tx.Commit(ctx); err != nil {
@@ -192,7 +193,7 @@ func (p *Postgres) HydrateSuggestions(
 		case proofSourceAbsent:
 			out.SourceGone++
 		}
-		repaired, err := p.hydrateSuggestion(ctx, stored, resolved, got)
+		repaired, err := p.hydrateSuggestion(ctx, stored, proven{resolved, got, page.Now})
 		if err != nil {
 			return out, err
 		}
@@ -207,9 +208,9 @@ func (p *Postgres) HydrateSuggestions(
 }
 
 func (p *Postgres) hydrateSuggestion(
-	ctx context.Context, snapshot domain.MemorySuggestion,
-	resolved []domain.MemoryEvidence, got proof,
+	ctx context.Context, snapshot domain.MemorySuggestion, said proven,
 ) (bool, error) {
+	resolved, got := said.evidence, said.got
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return false, fmt.Errorf("memory: begin hydrate suggestion: %w", err)
@@ -233,6 +234,7 @@ func (p *Postgres) hydrateSuggestion(
 	}
 	if got == proofSourceAbsent && current.Status == domain.MemorySuggestionPending {
 		current.Status = domain.MemorySuggestionSourceErased
+		current.UpdatedBy, current.UpdatedAt = systemMemory, nowOr(said.now)
 		if err := updateSuggestion(ctx, tx, current); err != nil {
 			return false, err
 		}
@@ -299,19 +301,36 @@ func assertionOf(s domain.MemorySuggestion) domain.MemoryAssertion {
 	}
 }
 
-// markSourceErased is the transition retention already performs, reached from
-// the other direction: retention knows which runs it erased, and hydration
-// discovers a run that is no longer there. The state and the event are the same
-// ones, because what happened is the same thing.
-func markSourceErased(ctx context.Context, tx db, a domain.MemoryAssertion) error {
+/*
+markSourceErased is the transition retention already performs, reached from the
+other direction: retention knows which runs it erased, and a sweep or a
+reactivation discovers a source that is no longer there. The state and the event
+are the same ones, because what happened is the same thing.
+
+Dated when it was discovered, not when the memory was last decided about. The
+row kept its own updated_at and recordEvent writes that value as the moment the
+event happened, so a sweep finding today that a run was taken filed the event
+under the last human decision — months back, out of order in the trail, and old
+enough for the retention of events to delete it before anybody read it.
+
+Authored by the platform for the same reason. Nobody decided this; something
+noticed it.
+
+Unlike the repair in writeDerived, which deliberately leaves updated_at alone:
+filling a field the platform can now derive is not a change to the memory, and a
+status becoming terminal is.
+*/
+func markSourceErased(ctx context.Context, tx db, a domain.MemoryAssertion, now time.Time) error {
+	a.Status = domain.MemorySourceErased
+	a.UpdatedBy, a.UpdatedAt = systemMemory, nowOr(now)
 	if _, err := tx.Exec(ctx, `
 		update memory_assertions
-		set status = 'source_erased', canonical_identity_key = $2
+		set status = $2, canonical_identity_key = $3, updated_by = $4, updated_at = $5
 		where assertion_id = $1`,
-		a.ID, domain.CanonicalIdentityKey(a)); err != nil {
+		a.ID, string(a.Status), domain.CanonicalIdentityKey(a),
+		string(a.UpdatedBy), a.UpdatedAt); err != nil {
 		return fmt.Errorf("memory: mark %s source erased: %w", a.ID, err)
 	}
-	a.Status = domain.MemorySourceErased
-	return recordEvent(ctx, tx, a, "system:memory",
-		"the run the evidence names is no longer in the ledger", "source_erased")
+	return recordEvent(ctx, tx, a, a.UpdatedBy,
+		"the source the evidence names is no longer there", "source_erased")
 }

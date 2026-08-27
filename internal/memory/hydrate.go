@@ -174,6 +174,7 @@ func (m *Memory) HydrateSuggestions(
 			out.SourceGone++
 			if held && current.Status == domain.MemorySuggestionPending {
 				current.Status = domain.MemorySuggestionSourceErased
+				current.UpdatedBy, current.UpdatedAt = systemMemory, nowOr(page.Now)
 				m.suggestions[stored.ID] = cloneSuggestion(current)
 				out.Repaired++
 			}
@@ -258,6 +259,24 @@ Collapsing the last two would leave active memory whose source we know does not
 exist. Collapsing either into an error would stop the sweep on the population it
 exists to repair, because a purged run is exactly what old rows cite.
 */
+/*
+proven is what the ledger answered about one row's citations, and when it was
+asked.
+
+Together because they travel together: the moment matters only to the
+transitions the answer causes, and a transition dated by the row it changes is
+how a discovery made today gets filed under a decision from months ago.
+*/
+type proven struct {
+	evidence []domain.MemoryEvidence
+	got      proof
+	now      time.Time
+}
+
+// systemMemory is the author of everything nobody decided. A run was taken and
+// something noticed; there is no person to name.
+const systemMemory domain.UserID = "system:memory"
+
 type proof int
 
 const (
@@ -336,6 +355,7 @@ func (m *Memory) Hydrate(
 		if held && sameEvidence(current.Evidence, stored.Evidence) {
 			if got == proofSourceAbsent && current.Status == domain.MemoryActive {
 				current.Status = domain.MemorySourceErased
+				current.UpdatedBy, current.UpdatedAt = systemMemory, nowOr(page.Now)
 				m.values[stored.ID] = cloneAssertion(current)
 				out.Repaired++
 			} else if h := hydrated(current, resolved, got == proofProved, false); h.writes() {

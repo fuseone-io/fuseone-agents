@@ -46,7 +46,7 @@ func (p *Postgres) Reactivate(
 		return domain.MemoryAssertion{}, err
 	}
 	if got == proofSourceAbsent {
-		return domain.MemoryAssertion{}, p.recordSourceGone(ctx, tx, snapshot, current)
+		return domain.MemoryAssertion{}, p.recordSourceGone(ctx, tx, in, snapshot, current)
 	}
 
 	covering, err := coveringActiveTx(ctx, tx, current, in.Now)
@@ -77,13 +77,14 @@ func (p *Postgres) Reactivate(
 // platform lost the proof when the run was erased; this only noticed, and
 // saying so once means the next attempt reads the reason off the memory.
 func (p *Postgres) recordSourceGone(
-	ctx context.Context, tx pgx.Tx, snapshot, current domain.MemoryAssertion,
+	ctx context.Context, tx pgx.Tx, in ReactivateInput,
+	snapshot, current domain.MemoryAssertion,
 ) error {
 	if current.Status != domain.MemoryDisabled ||
 		!sameEvidence(current.Evidence, snapshot.Evidence) {
 		return sourceGone()
 	}
-	if err := markSourceErased(ctx, tx, current); err != nil {
+	if err := markSourceErased(ctx, tx, current, in.Now); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {

@@ -131,6 +131,7 @@ func (m *Memory) Reactivate(
 		// the next person can read off the memory itself.
 		if current.Status == domain.MemoryDisabled && sameEvidence(current.Evidence, snapshot.Evidence) {
 			current.Status = domain.MemorySourceErased
+			current.UpdatedBy, current.UpdatedAt = systemMemory, nowOrWall(in.Now)
 			m.values[in.ID] = cloneAssertion(current)
 		}
 		return domain.MemoryAssertion{}, sourceGone()

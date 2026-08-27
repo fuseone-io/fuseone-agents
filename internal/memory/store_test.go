@@ -2195,6 +2195,7 @@ type hydrateStore interface {
 	Assert(context.Context, domain.MemoryAssertion, domain.UserID, string, time.Time) (domain.MemoryAssertion, error)
 	Hydrate(context.Context, *memory.Resolver, memory.HydratePage) (memory.HydrateResult, error)
 	Find(context.Context, domain.MemoryQuery) ([]domain.MemoryAssertion, error)
+	List(context.Context, memory.Filter) ([]domain.MemoryAssertion, error)
 }
 
 /*
@@ -2731,11 +2732,13 @@ func TestPostgresHydrate_contentErasedUnderneath_endsTheMemory(t *testing.T) {
 func expectHydrationEndsAnErasedMemory(t *testing.T, ctx context.Context, store hydrateStore) {
 	t.Helper()
 	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+	long := now.Add(-180 * 24 * time.Hour)
 	r, cited := legacyRun(t, "run-erased-content")
-	if _, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+	stored, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
 		a.Scope = r.scope
 		a.Evidence = []domain.MemoryEvidence{cited}
-	}), "usr_ana", "reviewed", now); err != nil {
+	}), "usr_ana", "reviewed", long)
+	if err != nil {
 		t.Fatalf("Assert: %v", err)
 	}
 	if _, err := r.content.Erase(ctx, string(r.id), "the subject asked"); err != nil {
@@ -2758,6 +2761,80 @@ func expectHydrationEndsAnErasedMemory(t *testing.T, ctx context.Context, store 
 	}
 	if len(readable) != 0 {
 		t.Errorf("find returned %d, want nothing whose bytes are gone", len(readable))
+	}
+
+	// Dated when it was discovered and authored by the platform. Keeping the
+	// row's own stamp would file today's discovery under a decision from six
+	// months ago, and every screen that sorts by it would say nothing happened.
+	rows, err := store.List(ctx, memory.Filter{Scopes: []domain.Scope{r.scope}, Limit: 50})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	for _, row := range rows {
+		if row.ID != stored.ID {
+			continue
+		}
+		if !row.UpdatedAt.Equal(now) || row.UpdatedBy != "system:memory" {
+			t.Errorf("stamped %s by %s, want the moment it was discovered, by the platform",
+				row.UpdatedAt, row.UpdatedBy)
+		}
+	}
+}
+
+/*
+A source discovered gone is dated when it was discovered.
+
+The transition kept the row's own updated_at, and recordEvent writes that value
+as the moment the event happened. So a sweep finding today that a run was erased
+filed the event under the last human decision about that memory — months back,
+out of order in the trail, and old enough that the retention of events could
+delete it before anybody read it.
+
+The author is the platform for the same reason. Nobody decided this: the run was
+taken, and a sweep is what noticed.
+*/
+func TestPostgresHydrate_sourceGone_isDatedWhenItWasDiscovered(t *testing.T) {
+	ctx, pool := postgresPool(t)
+	store := memory.NewPostgres(pool)
+	long := time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC)
+	today := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	r, cited := legacyRun(t, "run-dated")
+	stored, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Scope = r.scope
+		a.Evidence = []domain.MemoryEvidence{cited}
+	}), "usr_ana", "reviewed", long)
+	if err != nil {
+		t.Fatalf("Assert: %v", err)
+	}
+	if _, err := r.content.Erase(ctx, string(r.id), "the subject asked"); err != nil {
+		t.Fatalf("Erase: %v", err)
+	}
+
+	if _, err := store.Hydrate(ctx, r.resolver(),
+		memory.HydratePage{Limit: 10, Now: today}); err != nil {
+		t.Fatalf("Hydrate: %v", err)
+	}
+
+	var at, updatedAt time.Time
+	var principal, updatedBy string
+	if err := pool.QueryRow(ctx, `
+		select e.at, e.principal_id, m.updated_at, m.updated_by
+		from memory_assertion_events e
+		join memory_assertions m on m.assertion_id = e.assertion_id
+		where e.assertion_id = $1 and e.action = 'source_erased'`,
+		stored.ID).Scan(&at, &principal, &updatedAt, &updatedBy); err != nil {
+		t.Fatalf("read the event: %v", err)
+	}
+	if !at.UTC().Equal(today) {
+		t.Errorf("event at %s, want the moment the sweep discovered it (%s)", at.UTC(), today)
+	}
+	if !updatedAt.UTC().Equal(today) {
+		t.Errorf("projection updated at %s, want the same moment", updatedAt.UTC())
+	}
+	if principal != "system:memory" || updatedBy != "system:memory" {
+		t.Errorf("author was %s/%s, want the platform: nobody decided this",
+			principal, updatedBy)
 	}
 }
 
