@@ -84,12 +84,6 @@ const (
 	MaxMemoryLearningTTLDays                   = 365
 )
 
-type MemoryEvidence struct {
-	RunID    RunID  `json:"run_id"`
-	Artifact string `json:"artifact"`
-	Digest   string `json:"digest"`
-}
-
 // MemoryAssertion is one structured remembered fact.
 //
 // The assertion is deliberately not free-form memory prose. Claim is the small
