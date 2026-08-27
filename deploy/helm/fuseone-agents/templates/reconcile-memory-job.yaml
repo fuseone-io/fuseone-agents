@@ -12,6 +12,10 @@ touches it, so a keyless row written by an old pod after this ran is still found
 and still merged. What the job buys is that the repair is not paid one row at a
 time, for ever, on the write path.
 
+Helm's own --timeout is the deadline outside all of these, it defaults to five
+minutes, and no chart can change it. A release run without it can abandon this
+hook while the sweep is working normally, so the README asks for --timeout 25m.
+
 Exits zero when it meets rows a person has to resolve. Two rows claiming one
 identity, or a citation the ledger will not vouch for, do not improve by being
 read again — failing here would fail the release, retry the same reading until
@@ -32,9 +36,11 @@ metadata:
     helm.sh/hook-delete-policy: before-hook-creation
 spec:
   backoffLimit: {{ .Values.memoryReconcile.backoffLimit }}
-  # The release will not wait longer than this. The work is resumable and
-  # idempotent, so a run cut short is not a run lost: the next one begins again
-  # and pays only for what is left.
+  # Kubernetes gives up here, and it counts scheduling, image pull and backoff
+  # as well as the work — which is why it is well clear of the process's own
+  # --timeout rather than a minute above it. The inner deadline is the one meant
+  # to fire: it stops, prints the totals and exits zero. This one kills the pod
+  # with nothing in the log.
   activeDeadlineSeconds: {{ .Values.memoryReconcile.activeDeadlineSeconds }}
   template:
     metadata:
@@ -57,7 +63,7 @@ spec:
           args:
             - reconcile-memory
             - --timeout={{ .Values.memoryReconcile.timeout }}
-          env: {{- include "fuseone.env" . | nindent 12 }}
+          env: {{- include "fuseone.databaseEnv" . | nindent 12 }}
           securityContext: {{- toYaml .Values.containerSecurityContext | nindent 12 }}
           resources:
             requests: { cpu: 50m, memory: 64Mi }

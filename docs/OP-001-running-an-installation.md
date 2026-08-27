@@ -87,7 +87,7 @@ bytes, base64** — `agentd keygen` prints one.
 
 ```
 helm upgrade --install fuseone-agents deploy/helm/fuseone-agents \
-  -n <namespace> --create-namespace \
+  -n <namespace> --create-namespace --timeout 25m \
   --set image.tag=0.3.3 \
   --set secret.existingSecret=<secret> \
   --set ingress.enabled=true --set ingress.host=<host> \
@@ -95,7 +95,34 @@ helm upgrade --install fuseone-agents deploy/helm/fuseone-agents \
 ```
 
 Migrations run as a job before the pods that need them, and take an advisory
-lock, so a second one waits rather than racing.
+lock, so a second one waits rather than racing. Memory reconciliation runs as a
+second job right after, filling in what the platform can now derive about
+memory written before it could.
+
+**`--timeout 25m` matters.** Helm waits five minutes for hooks by default and
+then abandons the release, and neither `activeDeadlineSeconds` nor the job's own
+`--timeout` can change what the client is willing to wait — they bound the pod
+and the process, which sit inside it. Deadlines, outermost first:
+
+| bound | default | what happens when it fires |
+|---|---|---|
+| `helm --timeout` | 5m | the release fails; the hook may still be running |
+| `memoryReconcile.activeDeadlineSeconds` | 20m | Kubernetes kills the pod, no summary |
+| `memoryReconcile.timeout` | 14m | the sweep stops, prints its totals, exits 0 |
+
+Argo CD applies the same hooks as sync waves and does not use Helm's client, so
+there is no `--timeout` to pass. What it needs instead is a sync timeout above
+the same 25 minutes — `controller.sync.timeout` on the controller, or a longer
+`--timeout` on `argocd app sync`. An `Application` that syncs with the default
+gives up while the reconciliation is still working.
+
+Nothing is lost either way: both jobs are resumable and idempotent, so running
+the release again continues where it stopped rather than starting over.
+
+The reconciliation exits zero even when it finds memory that needs a person —
+two rows claiming one identity, or a citation the ledger will not vouch for.
+Neither improves by being retried, so they are logged as a warning carrying
+`needs_review=true` and counts rather than failing the release.
 
 **The first person to open the console claims the installation** with a setup
 token the API prints once at start-up:
@@ -157,7 +184,7 @@ else — it is where a release says what it stops.
 
 ```
 helm upgrade fuseone-agents deploy/helm/fuseone-agents \
-  -n <namespace> --reuse-values --set image.tag=<version>
+  -n <namespace> --reuse-values --timeout 25m --set image.tag=<version>
 ```
 
 Known, and learned the hard way:

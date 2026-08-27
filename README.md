@@ -72,10 +72,17 @@ Functional reference: [docs/PRD-001-fuseone-agents.md](docs/PRD-001-fuseone-agen
 
 ```sh
 helm install agents oci://ghcr.io/fuseone-io/charts/fuseone-agents \
-  --namespace fuseone --create-namespace \
+  --namespace fuseone --create-namespace --timeout 25m \
   --set secret.existingSecret=fuseone-agents \
   --set baseUrl=https://agents.example.com
 ```
+
+`--timeout 25m` is not optional on an installation with memory to reconcile.
+Helm defaults to five minutes and abandons the release when its hooks take
+longer — the schema and the memory reconciliation both run as hooks, and no
+chart can raise a client's timeout for it. Nothing is lost when that happens:
+both hooks are resumable and running the command again continues where it
+stopped. What is lost is the release.
 
 Images are built in the open for `linux/amd64` and `linux/arm64`, and signed
 with no key at all - the signature's identity is the workflow that built it.
