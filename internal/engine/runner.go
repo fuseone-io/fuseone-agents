@@ -114,6 +114,12 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 		}
 		state, err = r.append(ctx, state, start, domain.Step{
 			Kind: domain.StepRunFinished,
+			// What the run had learned by the time it answered. Every other
+			// step that matters carries this, and the closing answer is the one
+			// a memory is most often taught from — so leaving it bare meant a
+			// fact remembered from an answer that restated untrusted input was
+			// remembered as trustworthy.
+			Labels: state.Labels.Clone(),
 			Payload: mustJSON(domain.RunFinishedPayload{
 				OutcomeRef:    ref,
 				OutcomeDigest: digest([]byte(proposal.Outcome)),

@@ -187,15 +187,26 @@ func memorySuggestionFixture(area, subject string, edit func(*domain.MemorySugge
 	return s
 }
 
+/*
+seedFinishedEvidence builds a run the way the runner builds one.
+
+The taint is named once, on the step that brought it in, and the closing answer
+carries what the run had accumulated by then. Stamping both from the same
+literal was how this fixture used to be written, and it hid a live bug for
+releases: the runner did not label the finish step at all, so the assertion that
+labels reach memory passed against a shape production never wrote.
+*/
 func seedFinishedEvidence(
 	t *testing.T, store *ledger.Memory, run domain.RunID, scope domain.Scope,
-	labels domain.Labels, digest string,
+	openedWith domain.Labels, digest string,
 ) {
 	t.Helper()
 	appendMemoryStep(t, store, domain.Step{RunID: run, Kind: domain.StepRunStarted,
-		Scope: scope, AgentID: "triage", VersionID: "v1", Labels: labels})
+		Scope: scope, AgentID: "triage", VersionID: "v1", Labels: openedWith})
+
+	accumulated := domain.ScopeLabels(scope).Union(openedWith)
 	appendMemoryStep(t, store, domain.Step{RunID: run, Kind: domain.StepRunFinished,
-		Scope: scope, AgentID: "triage", VersionID: "v1", Labels: labels,
+		Scope: scope, AgentID: "triage", VersionID: "v1", Labels: accumulated,
 		Payload: jsonPayload(t, domain.RunFinishedPayload{OutcomeDigest: digest})})
 }
 
@@ -238,4 +249,34 @@ func hasAll(values []string, expected ...string) bool {
 		}
 	}
 	return true
+}
+
+/*
+A memory taught from the answer of a tainted run inherits the taint.
+
+This is the shape the console cites by default and the one that was broken: the
+run opened untrusted, the answer restated what arrived, and the assertion came
+out clean because the finish step carried no labels for the handler to copy.
+The taint is set here only where it enters, so nothing but the run's own fold
+can put it on the memory.
+*/
+func TestCreateMemoryAssertion_citingTheFinalAnswerOfATaintedRun_inheritsUntrusted(t *testing.T) {
+	t.Parallel()
+
+	// The area the create request names; memoryCreateRequest fixes it.
+	scope := domain.Scope{Company: "acme", Area: "cx"}
+	store := ledger.NewMemory()
+	seedFinishedEvidence(t, store, "run-evidence", scope,
+		domain.NewLabels(domain.LabelUntrusted), "sha256:answer")
+
+	resp, err := NewServer(store, "test").WithMemory(memstore.NewMemory()).
+		WithClock(fixedAt{t: time.Unix(0, 0)}).
+		CreateMemoryAssertion(inArea("cx", domain.RoleAuthor), memoryCreateRequest("sha256:answer"))
+	if err != nil {
+		t.Fatalf("CreateMemoryAssertion: %v", err)
+	}
+	created := resp.(openapi.CreateMemoryAssertion200JSONResponse)
+	if !hasAll(created.Labels, domain.LabelUntrusted) {
+		t.Errorf("labels = %v, want the taint the run opened with", created.Labels)
+	}
 }
