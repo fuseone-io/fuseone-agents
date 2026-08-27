@@ -65,17 +65,32 @@ func (p *Postgres) matchOne(
 		return found, err
 	}
 	ids, err := unkeyedRowsOf(ctx, p.pool, identity)
-	if err != nil || len(ids) == 0 {
-		return nil, err
-	}
-	legacy, err := readAssertionTx(ctx, p.pool, ids[0], identity.Scope)
-	if errors.Is(err, ErrNotFound) {
-		return nil, nil
-	}
 	if err != nil {
 		return nil, err
 	}
-	return &legacy, nil
+	if len(ids) == 0 {
+		// Nothing keyless either — but the two reads are separate snapshots,
+		// and the repair job may have filled the key between them. Asking the
+		// index once more costs one lookup and closes the window in which a row
+		// is invisible for being neither yet nor still.
+		return byIdentityTx(ctx, p.pool, identity)
+	}
+
+	var legacy []domain.MemoryAssertion
+	for _, id := range ids {
+		one, err := readAssertionTx(ctx, p.pool, id, identity.Scope)
+		if errors.Is(err, ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		legacy = append(legacy, one)
+	}
+	// The same rule the write path applies, from the same function. Two keyless
+	// rows of one identity is a question a person has to answer, and a screen
+	// showing whichever sorted first would be showing half the problem.
+	return oneOf(legacy, domain.CanonicalIdentityKey(identity))
 }
 
 /*
@@ -91,6 +106,26 @@ func (p *Postgres) matchPending(
 	ctx context.Context, in MatchInput,
 ) (*domain.MemorySuggestion, error) {
 	identity := in.identityOf(in.AgentID)
+	found, err := p.keyedPending(ctx, in)
+	if err == nil && found != nil {
+		return found, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	keyless, err := p.unkeyedPending(ctx, identity)
+	if err != nil || keyless != nil {
+		return keyless, err
+	}
+	// Same window as matchOne: the repair may have keyed the row between the
+	// indexed read and the keyless one, leaving it in neither snapshot.
+	return p.keyedPending(ctx, in)
+}
+
+func (p *Postgres) keyedPending(
+	ctx context.Context, in MatchInput,
+) (*domain.MemorySuggestion, error) {
+	identity := in.identityOf(in.AgentID)
 	found, err := scanSuggestion(p.pool.QueryRow(ctx, `
 		select `+suggestionColumns+` from memory_suggestions
 		where company_id = $1 and area_id = $2 and agent_id = $3 and status = 'pending'
@@ -99,13 +134,13 @@ func (p *Postgres) matchPending(
 		limit 1`,
 		string(in.Scope.Company), string(in.Scope.Area), string(in.AgentID),
 		domain.CanonicalIdentityKey(identity), identity.ID))
-	if err == nil {
-		return &found, nil
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
 	}
-	if !errors.Is(err, pgx.ErrNoRows) {
+	if err != nil {
 		return nil, fmt.Errorf("memory: read pending for identity: %w", err)
 	}
-	return p.unkeyedPending(ctx, identity)
+	return &found, nil
 }
 
 func (p *Postgres) unkeyedPending(

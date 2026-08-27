@@ -146,7 +146,8 @@ func unkeyedRowsOf(ctx context.Context, tx db, a domain.MemoryAssertion) ([]stri
 	rows, err := tx.Query(ctx, `
 		select assertion_id, kind, subject, signature from memory_assertions
 		where company_id = $1 and area_id = $2 and agent_id = $3
-		  and canonical_identity_key is null`,
+		  and canonical_identity_key is null
+		order by assertion_id`,
 		string(a.Scope.Company), string(a.Scope.Area), string(a.AgentID))
 	if err != nil {
 		return nil, fmt.Errorf("memory: read unkeyed rows: %w", err)

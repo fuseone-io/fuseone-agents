@@ -2,6 +2,8 @@ package memory_test
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -149,6 +151,36 @@ func TestPostgresMatch_aLegacyRowUnderAnotherSpelling_isFound(t *testing.T) {
 }
 
 /*
+Two keyless rows of one identity are refused here too, not chosen between.
+
+The write path has refused this since the canonical conflict landed. A read that
+answered anyway would show whichever sorted first, which is half the problem
+presented as the whole of it — and the person would correct one row while the
+other went on saying something else.
+*/
+func TestPostgresMatch_twoLegacyRowsOfOneIdentity_refuseToChoose(t *testing.T) {
+	ctx, pool := postgresPool(t)
+	store := memory.NewPostgres(pool)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	for i, subject := range []string{"grafana  datasource", "GRAFANA DATASOURCE"} {
+		written, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+			a.Subject = fmt.Sprintf("grafana datasource %d", i)
+		}), "usr_ana", "reviewed", now)
+		if err != nil {
+			t.Fatalf("Assert %q: %v", subject, err)
+		}
+		legacyTwin(t, ctx, pool, written.ID, subject)
+	}
+
+	if _, err := store.Match(ctx, matchFor(func(in *memory.MatchInput) {
+		in.Subject = "Grafana Datasource"
+	})); !errors.Is(err, memory.ErrCanonicalConflict) {
+		t.Fatalf("Match = %v, want the pair refused rather than one of them shown", err)
+	}
+}
+
+/*
 A proposal is found by identity, not by the id its own spelling hashes to.
 
 Otherwise somebody teaches a fact an agent proposed an hour ago in slightly
@@ -224,19 +256,20 @@ func TestPostgresSuggest_recordsTheCanonicalIdentityKey(t *testing.T) {
 }
 
 /*
-An expired memory says expired, and one whose source was erased says that.
+An expired memory says expired.
 
 Expiry is a moment passing rather than something anybody did, so it is stored
 active and projected. A match that returned the stored value would tell somebody
 their memory is active while the screen beside it shows nothing — which is the
-exact confusion this endpoint exists to end.
+exact confusion this exists to end. The other terminal states are stored as
+themselves and need no projection; disabled is covered above.
 */
-func TestMatch_expiryAndErasureAreProjected(t *testing.T) {
+func TestMatch_anExpiredMemorySaysExpired(t *testing.T) {
 	t.Parallel()
 	expectMatchProjectsTerminalStates(t, context.Background(), memory.NewMemory())
 }
 
-func TestPostgresMatch_expiryAndErasureAreProjected(t *testing.T) {
+func TestPostgresMatch_anExpiredMemorySaysExpired(t *testing.T) {
 	ctx, store := postgresStore(t)
 	expectMatchProjectsTerminalStates(t, ctx, store)
 }
