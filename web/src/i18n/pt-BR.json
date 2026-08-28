@@ -2138,6 +2138,7 @@
     "taintedArguments": "Os argumentos derivam de dado marcado <l>{{labels}}</l> em um passo anterior desta execução.",
     "tokensSplit": "{{input}} entrada · {{output}} saída",
     "toolsUsed": "Ferramentas usadas",
+    "runSections": "Seções da execução",
     "trail": "Trilha",
     "verbAbandoned": "encerrou",
     "verbAllowed": "permitiu",

@@ -2138,6 +2138,7 @@
     "taintedArguments": "The arguments derive from data marked <l>{{labels}}</l> at an earlier step of this run.",
     "tokensSplit": "{{input}} in · {{output}} out",
     "toolsUsed": "Tools used",
+    "runSections": "Run sections",
     "trail": "Trail",
     "verbAbandoned": "ended",
     "verbAllowed": "allowed",
