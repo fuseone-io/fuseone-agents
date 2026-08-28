@@ -59,6 +59,25 @@ describe("what a step offers a memory to cite", () => {
       citationsOf(finished(9, { outcome_digest: "ab".repeat(32) })),
     ).toEqual([]);
   });
+
+  // Present is not the same question as recorded. A field that arrives empty,
+  // or as something other than text, is a field the ledger did not write — and
+  // treating it as written is how a button appears over a citation the server
+  // refuses. Every part goes through one rule so no part gets a weaker one.
+  it("treats an empty or mistyped field as one the ledger never wrote", () => {
+    const broken = [
+      { ...ANSWER, outcome_digest: "" },
+      { ...ANSWER, outcome_ref: "" },
+      { ...ANSWER, outcome_ref: 7 },
+      { artifacts: [{ name: "", ref: "run://x/9/cd", digest: "cd" }] },
+      { artifacts: [{ name: "report", ref: "", digest: "cd" }] },
+      { artifacts: [{ name: "report", ref: true, digest: "cd" }] },
+      { artifacts: [{ name: "report", ref: "run://x/9/cd", digest: "" }] },
+    ];
+    for (const payload of broken) {
+      expect(citationsOf(finished(9, payload))).toEqual([]);
+    }
+  });
 });
 
 describe("whether the screen offers to teach from a step", () => {

@@ -46,21 +46,50 @@ export function citationsOf(step: Step): Citation[] {
   if (step.kind !== "run_finished") return [];
   const payload = (step.payload ?? {}) as Record<string, unknown>;
   const out: Citation[] = [];
-  if (payload.outcome_ref && typeof payload.outcome_digest === "string") {
-    out.push({
-      seq: step.seq,
-      artifact: FINAL_ANSWER,
-      digest: payload.outcome_digest,
-    });
-  }
+
+  const answer = cite(step.seq, FINAL_ANSWER, payload.outcome_ref, payload.outcome_digest);
+  if (answer) out.push(answer);
+
   const artifacts = Array.isArray(payload.artifacts) ? payload.artifacts : [];
   for (const entry of artifacts) {
     const a = (entry ?? {}) as Record<string, unknown>;
-    if (typeof a.name !== "string" || typeof a.digest !== "string") continue;
-    if (!a.ref || !a.digest) continue;
-    out.push({ seq: step.seq, artifact: a.name, digest: a.digest });
+    const named = recorded(a.name);
+    if (named === undefined) continue;
+    const artifact = cite(step.seq, named, a.ref, a.digest);
+    if (artifact) out.push(artifact);
   }
   return out;
+}
+
+/**
+ * One citation, or nothing when the ledger did not finish writing it.
+ *
+ * Both halves through the same test and compared against undefined rather than
+ * for truth. Written as `if (ref && digest)` the emptiness rule would live at
+ * the call site instead of in `recorded`, which is how a rule ends up at two
+ * strengths — and a sabotage that removed it from `recorded` went unnoticed,
+ * because the call site was quietly enforcing it a second time.
+ */
+function cite(
+  seq: number, artifact: string, ref: unknown, digest: unknown,
+): Citation | undefined {
+  const held = recorded(digest);
+  if (recorded(ref) === undefined || held === undefined) return undefined;
+  return { seq, artifact, digest: held };
+}
+
+/**
+ * The value a ledger field holds, or undefined when it holds nothing.
+ *
+ * One rule for every part of a citation, because written as separate checks
+ * they came out at three different strengths: a reference that only had to be
+ * truthy, a digest that only had to be a string and so could be empty, and a
+ * name that was never checked for content at all. Each of those produced a
+ * citation the server refuses — the safe direction of the asymmetry, and still
+ * a button offered over a record the ledger did not finish writing.
+ */
+function recorded(value: unknown): string | undefined {
+  return typeof value === "string" && value !== "" ? value : undefined;
 }
 
 /**
