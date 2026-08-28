@@ -121,6 +121,16 @@ describe("global memory authoring", () => {
     expect(screen.getByRole("button", { name: "Save memory" })).toBeEnabled();
   });
 
+  it("explains why memory cannot be saved across every company", () => {
+    useActiveScope.setState({ company: "*", area: "ops" });
+    renderPanel();
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Choose a company before saving. Memory cannot be recorded across every company.",
+    );
+    expect(screen.getByLabelText("Company")).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Save memory" })).toBeDisabled();
+  });
 });
 
 type RequestRecord = { kind: "run" } | { kind: "match"; body: unknown };

@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Trash2, X } from "lucide-react";
+import { Trash2, TriangleAlert, X } from "lucide-react";
 import { useEffect } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
@@ -61,6 +61,12 @@ export function MemoryCreatePanel({
   const isDirty = form.formState.isDirty;
 
   useEffect(() => {
+    const scope = memoryDefaults(activeCompany, activeArea);
+    form.resetField("company", { defaultValue: scope.company });
+    form.resetField("area", { defaultValue: scope.area });
+  }, [activeArea, activeCompany, form]);
+
+  useEffect(() => {
     onDirtyChange?.(isDirty);
   }, [isDirty, onDirtyChange]);
 
@@ -85,6 +91,15 @@ export function MemoryCreatePanel({
       <p className="mb-4 text-sm text-muted-foreground">
         {t("memory.createHint")}
       </p>
+      {activeCompany === "*" && (
+        <p
+          role="status"
+          className="mb-4 flex items-start gap-2 rounded-md bg-warning-surface px-3 py-2 text-xs text-warning"
+        >
+          <TriangleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+          <span>{t("memory.companyRequiredForCreation")}</span>
+        </p>
+      )}
       <MemoryCreateForm
         form={form}
         isPending={create.isPending || (match.required && !match.ready)}

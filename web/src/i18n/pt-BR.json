@@ -1564,6 +1564,7 @@
     "claim": "Afirmação",
     "claimHint": "Texto estruturado pequeno que o modelo pode recordar. Ele continua marcado pela evidência de onde veio.",
     "closingAnswer": "resposta final",
+    "companyRequiredForCreation": "Escolha uma empresa antes de salvar. A memória não pode ser registrada em todas as empresas.",
     "confirmed": "Confirmadas",
     "continueDraft": "Continuar rascunho",
     "correct": "Corrigir",

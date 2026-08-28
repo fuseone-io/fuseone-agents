@@ -1564,6 +1564,7 @@
     "claim": "Claim",
     "claimHint": "Small structured text the model may recall. It is still labelled by the evidence it came from.",
     "closingAnswer": "closing answer",
+    "companyRequiredForCreation": "Choose a company before saving. Memory cannot be recorded across every company.",
     "confirmed": "Confirmed",
     "continueDraft": "Continue draft",
     "correct": "Correct",

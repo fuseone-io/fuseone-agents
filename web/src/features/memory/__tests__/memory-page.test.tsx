@@ -239,6 +239,22 @@ describe("governed memory page", () => {
     expect(screen.getByLabelText("Subject")).toHaveValue("grafana datasource");
   });
 
+  it("moves a preserved draft to the newly active scope", async () => {
+    const user = userEvent.setup();
+    hooks.items = [memoryAssertion(0)];
+    renderMemoryPageWithClient();
+
+    await user.click(screen.getByRole("button", { name: "Record memory" }));
+    await user.type(screen.getByLabelText("Subject"), "grafana datasource");
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    act(() => useActiveScope.setState({ company: "globex", area: "security" }));
+    await user.click(screen.getByRole("button", { name: "Continue draft" }));
+
+    expect(screen.getByLabelText("Company")).toHaveValue("globex");
+    expect(screen.getByLabelText("Area")).toHaveValue("security");
+    expect(screen.getByLabelText("Subject")).toHaveValue("grafana datasource");
+  });
+
   it("does not inspect a creation draft while its panel is hidden", async () => {
     const user = userEvent.setup();
     const fetch = vi.fn(async () => json({}));
