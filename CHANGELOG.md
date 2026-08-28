@@ -27,6 +27,15 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.39.4] — 2026-08-28
+
+### Fixed
+
+- **Memory creation no longer traps people in the form or silently keeps stale
+  context.** A draft can be closed, resumed or explicitly discarded; hidden
+  drafts stop querying the server, and preserved drafts follow the active
+  company and area before they are saved.
+
 ## [0.39.3] — 2026-08-28
 
 ### Fixed
