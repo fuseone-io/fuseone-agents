@@ -52,19 +52,75 @@ func TestCreateMemoryAssertion_copiesLabelsFromLedgerEvidence(t *testing.T) {
 	}
 }
 
+/*
+A citation naming something the run never produced is refused.
+
+The digest used to be how this was caught, and it was sixty-four characters
+somebody had to copy out of one screen into another to be compared against the
+record it came from. What actually distinguishes one output from another is its
+name, and the ledger holds the rest.
+*/
 func TestCreateMemoryAssertion_refusesEvidenceThatDoesNotMatchTheLedger(t *testing.T) {
 	t.Parallel()
 	store := ledger.NewMemory()
 	scope := domain.Scope{Company: "acme", Area: "cx"}
 	seedFinishedEvidence(t, store, "run-evidence", scope, domain.ScopeLabels(scope), "sha256:answer")
 
+	// The run publishes one artifact, so the loop that matches names actually
+	// runs: without a published one it falls through for the wrong reason and a
+	// rule that accepted any name would still pass this.
+	appendMemoryStep(t, store, domain.Step{
+		RunID: "run-published", Kind: domain.StepRunStarted,
+		Scope: scope, AgentID: "triage", VersionID: "v1", Labels: domain.ScopeLabels(scope),
+	})
+	appendMemoryStep(t, store, domain.Step{
+		RunID: "run-published", Kind: domain.StepRunFinished,
+		Scope: scope, AgentID: "triage", VersionID: "v1", Labels: domain.ScopeLabels(scope),
+		Payload: jsonPayload(t, domain.RunFinishedPayload{
+			OutcomeDigest: "sha256:answer",
+			Artifacts: []domain.ContextArtifact{{
+				Name: "incident report", Digest: "sha256:report",
+			}},
+		}),
+	})
+
+	req := memoryCreateRequest("sha256:answer")
+	req.Body.Evidence = []openapi.MemoryEvidenceInput{
+		{RunId: "run-published", Artifact: ptr("a report nobody published")},
+	}
 	resp, err := NewServer(store, "test").WithMemory(memstore.NewMemory()).
-		CreateMemoryAssertion(inArea("cx", domain.RoleAuthor), memoryCreateRequest("sha256:other"))
+		CreateMemoryAssertion(inArea("cx", domain.RoleAuthor), req)
 	if err != nil {
 		t.Fatalf("CreateMemoryAssertion: %v", err)
 	}
 	if _, bad := resp.(openapi.CreateMemoryAssertion400ApplicationProblemPlusJSONResponse); !bad {
 		t.Fatalf("response = %T, want 400", resp)
+	}
+}
+
+// And the digest a memory carries is the ledger's, never the caller's: nothing
+// in the request says what it is any more.
+func TestCreateMemoryAssertion_theCitationCarriesTheLedgersDigest(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	scope := domain.Scope{Company: "acme", Area: "cx"}
+	seedFinishedEvidence(t, store, "run-evidence", scope, domain.ScopeLabels(scope), "sha256:answer")
+
+	resp, err := NewServer(store, "test").WithMemory(memstore.NewMemory()).
+		WithClock(fixedAt{t: time.Unix(0, 0)}).
+		CreateMemoryAssertion(inArea("cx", domain.RoleAuthor), memoryCreateRequest("sha256:answer"))
+	if err != nil {
+		t.Fatalf("CreateMemoryAssertion: %v", err)
+	}
+	created, ok := resp.(openapi.CreateMemoryAssertion200JSONResponse)
+	if !ok {
+		t.Fatalf("response = %T, want the assertion", resp)
+	}
+	if len(created.Evidence) != 1 || created.Evidence[0].Digest != "sha256:answer" {
+		t.Errorf("evidence = %+v, want the digest the run recorded", created.Evidence)
+	}
+	if created.Evidence[0].Artifact != domain.ArtifactFinalAnswer {
+		t.Errorf("artifact = %q, want the closing answer by default", created.Evidence[0].Artifact)
 	}
 }
 
@@ -325,9 +381,8 @@ func TestCreateMemoryAssertion_evidenceFromTwoAgents_isRefused(t *testing.T) {
 	seedFinishedEvidenceFor(t, led, "run-other", scope, "billing", "sha256:other")
 
 	req := memoryCreateRequest("sha256:answer")
-	req.Body.Evidence = append(req.Body.Evidence, openapi.MemoryEvidence{
-		RunId: "run-other", Artifact: domain.ArtifactFinalAnswer, Digest: "sha256:other",
-	})
+	req.Body.Evidence = append(req.Body.Evidence,
+		openapi.MemoryEvidenceInput{RunId: "run-other"})
 	resp, err := NewServer(led, "test").WithMemory(memstore.NewMemory()).
 		WithClock(fixedAt{t: time.Unix(0, 0)}).
 		CreateMemoryAssertion(inArea("cx", domain.RoleAuthor), req)
@@ -388,9 +443,8 @@ func TestCreateMemoryAssertion_sharedAcceptsEveryAgentsEvidence(t *testing.T) {
 
 	req := memoryCreateRequest("sha256:answer")
 	req.Body.Namespace = openapi.MemoryAssertionInputNamespaceShared
-	req.Body.Evidence = append(req.Body.Evidence, openapi.MemoryEvidence{
-		RunId: "run-other", Artifact: domain.ArtifactFinalAnswer, Digest: "sha256:other",
-	})
+	req.Body.Evidence = append(req.Body.Evidence,
+		openapi.MemoryEvidenceInput{RunId: "run-other"})
 	resp, err := NewServer(led, "test").WithMemory(memstore.NewMemory()).
 		WithClock(fixedAt{t: time.Unix(0, 0)}).
 		CreateMemoryAssertion(inArea("cx", domain.RoleAuthor), req)
@@ -886,11 +940,9 @@ func memoryCreateRequest(digest string) openapi.CreateMemoryAssertionRequestObje
 		Company: "acme", Area: "cx", Kind: "incident",
 		Namespace: openapi.MemoryAssertionInputNamespaceAgent,
 		Subject:   "grafana datasource", Signature: "grafana.datasource.down",
-		Claim: "refreshing the datasource token cleared this failure",
-		Evidence: []openapi.MemoryEvidence{{
-			RunId: "run-evidence", Artifact: domain.ArtifactFinalAnswer, Digest: digest,
-		}},
-		Reason: "operator reviewed the incident",
+		Claim:    "refreshing the datasource token cleared this failure",
+		Evidence: []openapi.MemoryEvidenceInput{{RunId: "run-evidence"}},
+		Reason:   "operator reviewed the incident",
 	}}
 }
 

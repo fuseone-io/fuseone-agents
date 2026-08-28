@@ -4259,7 +4259,7 @@ components:
           type: array
           minItems: 1
           maxItems: 8
-          items: { $ref: '#/components/schemas/MemoryEvidence' }
+          items: { $ref: '#/components/schemas/MemoryEvidenceInput' }
         reason:
           type: string
           description: Why a person decided this assertion should be remembered.
@@ -4273,6 +4273,22 @@ components:
             assertion is labelled `secret` when it is used, which is what makes
             the decision visible afterwards in the row and in the audit event.
             Content that certainly is a key is refused whatever this says.
+
+    MemoryEvidenceInput:
+      type: object
+      required: [runId]
+      description: >
+        Which run, and which of the things it produced. The digest is absent on
+        purpose: it is sixty-four characters nobody knows by heart, the ledger
+        already holds it, and asking a person to copy it is asking them to
+        retype something the platform is about to check against its own record.
+      properties:
+        runId: { type: string }
+        artifact:
+          type: string
+          description: >
+            Which of the run's outputs. Defaults to the closing answer, which is
+            what a memory taught from a run almost always cites.
 
     MemoryMatchInput:
       type: object

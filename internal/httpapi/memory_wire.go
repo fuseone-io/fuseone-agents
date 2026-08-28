@@ -37,65 +37,96 @@ a second agent had contributed a citation to it.
 */
 func (s *Server) originOfMemoryEvidence(
 	ctx context.Context, scope domain.Scope,
-	namespace openapi.MemoryAssertionInputNamespace, evidence []openapi.MemoryEvidence,
-) (domain.AgentID, domain.Labels, error) {
+	namespace openapi.MemoryAssertionInputNamespace, evidence []openapi.MemoryEvidenceInput,
+) (domain.AgentID, domain.Labels, []domain.MemoryEvidence, error) {
 	var labels domain.Labels
 	agents := map[domain.AgentID]bool{}
+	cited := make([]domain.MemoryEvidence, 0, len(evidence))
+
 	for _, ev := range evidence {
-		agent, seen, err := s.memoryEvidenceOrigin(ctx, scope, ev)
+		agent, seen, digest, err := s.memoryEvidenceOrigin(ctx, scope, ev)
 		if err != nil {
-			return "", nil, err
+			return "", nil, nil, err
 		}
 		agents[agent] = true
 		labels = labels.Union(seen)
+		cited = append(cited, domain.MemoryEvidence{
+			RunID: domain.RunID(ev.RunId), Artifact: citedArtifact(ev), Digest: digest,
+		})
 	}
+
 	if namespace == openapi.MemoryAssertionInputNamespaceShared {
-		return "", labels, nil
+		return "", labels, cited, nil
 	}
 	if len(agents) != 1 {
-		return "", nil, fmt.Errorf("memory evidence names %d agents; one is required for agent memory", len(agents))
+		return "", nil, nil, fmt.Errorf(
+			"memory evidence names %d agents; one is required for agent memory", len(agents))
 	}
 	for agent := range agents {
 		if agent == "" {
-			return "", nil, fmt.Errorf("the run this evidence names has no agent")
+			return "", nil, nil, fmt.Errorf("the run this evidence names has no agent")
 		}
-		return agent, labels, nil
+		return agent, labels, cited, nil
 	}
-	return "", nil, fmt.Errorf("memory evidence names no run")
+	return "", nil, nil, fmt.Errorf("memory evidence names no run")
+}
+
+// citedArtifact is which of a run's outputs a citation names. The closing
+// answer by default: it is what a memory taught from a run almost always cites,
+// and the console's ordinary path never names anything else.
+func citedArtifact(ev openapi.MemoryEvidenceInput) string {
+	if named := valueOr(ev.Artifact); named != "" {
+		return named
+	}
+	return domain.ArtifactFinalAnswer
 }
 
 func (s *Server) memoryEvidenceOrigin(
-	ctx context.Context, scope domain.Scope, ev openapi.MemoryEvidence,
-) (domain.AgentID, domain.Labels, error) {
+	ctx context.Context, scope domain.Scope, ev openapi.MemoryEvidenceInput,
+) (domain.AgentID, domain.Labels, string, error) {
 	steps, err := s.store.Read(ctx, domain.RunID(ev.RunId), domain.FirstSeq)
 	if err != nil || len(steps) == 0 || !scope.Contains(steps[0].Scope) {
-		return "", nil, fmt.Errorf("memory evidence is outside scope or absent")
+		return "", nil, "", fmt.Errorf("memory evidence is outside scope or absent")
 	}
 	for _, step := range steps {
 		if step.Kind != domain.StepRunFinished {
 			continue
 		}
-		if labels, ok := finishedArtifactLabels(step, ev); ok {
-			return steps[0].AgentID, labels, nil
+		if labels, digest, ok := finishedArtifactLabels(step, ev); ok {
+			return steps[0].AgentID, labels, digest, nil
 		}
 	}
-	return "", nil, fmt.Errorf("memory evidence artifact does not match the ledger")
+	return "", nil, "", fmt.Errorf("memory evidence artifact does not match the ledger")
 }
 
-func finishedArtifactLabels(step domain.Step, ev openapi.MemoryEvidence) (domain.Labels, bool) {
+/*
+finishedArtifactLabels reads the step for the artifact a citation names, and
+answers with what the ledger holds rather than checking what the caller sent.
+
+The digest used to be part of the request, and matching on it was how a citation
+was tied to one artifact. It was also sixty-four characters somebody had to copy
+out of a screen into a form, to be compared against the record it came from —
+which is a person doing by hand what the platform is about to do anyway. The
+artifact name is what distinguishes them; the digest is what the ledger says
+about it.
+*/
+func finishedArtifactLabels(
+	step domain.Step, ev openapi.MemoryEvidenceInput,
+) (domain.Labels, string, bool) {
 	var p domain.RunFinishedPayload
 	if err := json.Unmarshal(step.Payload, &p); err != nil {
-		return nil, false
+		return nil, "", false
 	}
-	if ev.Artifact == domain.ArtifactFinalAnswer && ev.Digest == p.OutcomeDigest {
-		return step.Labels.Clone(), true
+	wanted := citedArtifact(ev)
+	if wanted == domain.ArtifactFinalAnswer && p.OutcomeDigest != "" {
+		return step.Labels.Clone(), p.OutcomeDigest, true
 	}
 	for _, artifact := range p.Artifacts {
-		if artifact.Name == ev.Artifact && artifact.Digest == ev.Digest {
-			return artifact.Labels.Clone(), true
+		if artifact.Name == wanted {
+			return artifact.Labels.Clone(), artifact.Digest, true
 		}
 	}
-	return nil, false
+	return nil, "", false
 }
 
 /*
@@ -117,7 +148,7 @@ func memoryAssertionInput(
 	return domain.MemoryAssertion{
 		Scope: scope, AgentID: derived.agent,
 		Kind: in.Kind, Subject: in.Subject, Signature: in.Signature, Claim: in.Claim,
-		Evidence: memoryEvidenceFrom(in.Evidence), Observations: 1,
+		Evidence: derived.cited, Observations: 1,
 		Confirmed: 1, Labels: derived.labels, Status: domain.MemoryActive,
 		ExpiresAt: &expires,
 	}
@@ -133,7 +164,11 @@ is always a ledger answer, and taking it means an agent-scoped memory cannot be
 filed against an agent whose run never produced it.
 */
 type memoryOrigin struct {
-	agent  domain.AgentID
+	agent domain.AgentID
+	// cited is the citation as the ledger describes it, digest included. What
+	// the request named is a run and an artifact; what a memory carries is what
+	// that run actually produced.
+	cited  []domain.MemoryEvidence
 	labels domain.Labels
 	now    time.Time
 }
@@ -181,16 +216,6 @@ func memorySuggestion(s domain.MemorySuggestion) openapi.MemorySuggestion {
 		ExpiresAt: s.ExpiresAt, CreatedBy: string(s.CreatedBy), CreatedAt: s.CreatedAt,
 		UpdatedBy: string(s.UpdatedBy), UpdatedAt: s.UpdatedAt,
 	}
-}
-
-func memoryEvidenceFrom(in []openapi.MemoryEvidence) []domain.MemoryEvidence {
-	out := make([]domain.MemoryEvidence, 0, len(in))
-	for _, ev := range in {
-		out = append(out, domain.MemoryEvidence{
-			RunID: domain.RunID(ev.RunId), Artifact: ev.Artifact, Digest: ev.Digest,
-		})
-	}
-	return out
 }
 
 func memoryEvidenceTo(in []domain.MemoryEvidence) []openapi.MemoryEvidence {

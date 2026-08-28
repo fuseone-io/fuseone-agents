@@ -84,7 +84,7 @@ func (s *Server) CreateMemoryAssertion(
 	if !req.Body.Namespace.Valid() {
 		return badMemoryCreate("namespace must be agent or shared"), nil
 	}
-	agent, labels, err := s.originOfMemoryEvidence(ctx, scope, req.Body.Namespace, req.Body.Evidence)
+	agent, labels, cited, err := s.originOfMemoryEvidence(ctx, scope, req.Body.Namespace, req.Body.Evidence)
 	if err != nil {
 		return badMemoryCreate(err.Error()), nil
 	}
@@ -93,7 +93,7 @@ func (s *Server) CreateMemoryAssertion(
 	// assertion this is about to write rather than on the request that
 	// described it.
 	proposed, err := memstore.SecretDecision(
-		memoryAssertionInput(*req.Body, scope, memoryOrigin{agent: agent, labels: labels, now: now}),
+		memoryAssertionInput(*req.Body, scope, memoryOrigin{agent: agent, labels: labels, cited: cited, now: now}),
 		overridesSecretWarning(*req.Body), req.Body.Reason)
 	if refused := memorySecretProblem(err); refused != nil {
 		return openapi.CreateMemoryAssertion400ApplicationProblemPlusJSONResponse{

@@ -9,8 +9,6 @@ export const memoryFormSchema = z.object({
   signature: z.string().min(1),
   claim: z.string().min(1).max(1200),
   evidenceRunId: z.string().min(1),
-  evidenceArtifact: z.string().min(1),
-  evidenceDigest: z.string().min(1),
   reason: z.string().min(1),
 });
 

@@ -171,9 +171,9 @@ describe("governed memory page", () => {
       signature: "grafana.datasource.down",
       claim: "Refresh the datasource token before restarting the worker.",
       reason: "Reviewed after close",
-      evidence: [
-        { runId: "run_1", artifact: "final_answer", digest: "sha256:abcd" },
-      ],
+      // The run, and nothing else: the artifact defaults to the closing answer
+      // and the digest is the ledger's to say.
+      evidence: [{ runId: "run_1" }],
     });
   });
 
@@ -328,7 +328,6 @@ async function fillAssertion(user: ReturnType<typeof userEvent.setup>) {
     "Refresh the datasource token before restarting the worker.",
   );
   await user.type(screen.getByLabelText("Run"), "run_1");
-  await user.type(screen.getByLabelText("Digest"), "sha256:abcd");
   await user.type(screen.getByLabelText("Why"), "Reviewed after close");
 }
 

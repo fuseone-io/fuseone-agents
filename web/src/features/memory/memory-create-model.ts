@@ -14,8 +14,6 @@ export function memoryDefaults(
     signature: "",
     claim: "",
     evidenceRunId: "",
-    evidenceArtifact: "final_answer",
-    evidenceDigest: "",
     reason: "",
   };
 }
@@ -31,13 +29,11 @@ export function toMemoryAssertionInput(
     subject: values.subject.trim(),
     signature: values.signature.trim(),
     claim: values.claim.trim(),
-    evidence: [
-      {
-        runId: values.evidenceRunId.trim(),
-        artifact: values.evidenceArtifact.trim(),
-        digest: values.evidenceDigest.trim(),
-      },
-    ],
+    // The run, and nothing else. Which of its outputs defaults to the closing
+    // answer, and the digest is the ledger's to say — asking a person to copy
+    // sixty-four characters into a form was asking them to do by hand what the
+    // server does anyway.
+    evidence: [{ runId: values.evidenceRunId.trim() }],
     reason: values.reason.trim(),
   };
 }

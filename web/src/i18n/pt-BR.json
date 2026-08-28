@@ -1630,7 +1630,8 @@
     "namespace": "Quem lê isto",
     "namespace_agent": "O agente do run de onde isto veio",
     "namespace_shared": "Todos os agentes deste escopo",
-    "namespaceHint": "Memória compartilhada é lembrada por todos os agentes daqui. O agente vem do run que a evidência nomeia."
+    "namespaceHint": "Memória compartilhada é lembrada por todos os agentes daqui. O agente vem do run que a evidência nomeia.",
+    "evidenceHint": "O run de onde isto foi aprendido. A resposta final dele vira a citação, com os labels que o run carregava."
   },
   "nav": {
     "admin": "Administração",

@@ -1630,7 +1630,8 @@
     "namespace": "Who reads this",
     "namespace_agent": "The agent whose run this came from",
     "namespace_shared": "Every agent in this scope",
-    "namespaceHint": "Shared memory is recalled by every agent here. The agent is taken from the run the evidence names."
+    "namespaceHint": "Shared memory is recalled by every agent here. The agent is taken from the run the evidence names.",
+    "evidenceHint": "The run this was learned from. Its closing answer becomes the citation, with the labels the run carried."
   },
   "nav": {
     "admin": "Administration",

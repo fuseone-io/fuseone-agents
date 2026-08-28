@@ -2646,11 +2646,17 @@ export interface components {
             subject: string;
             signature: string;
             claim: string;
-            evidence: components["schemas"]["MemoryEvidence"][];
+            evidence: components["schemas"]["MemoryEvidenceInput"][];
             /** @description Why a person decided this assertion should be remembered. */
             reason: string;
             /** @description Record this even though it looks like it may contain a credential. An override, not a receipt: the server does not and cannot know that a person was shown `fuseone:memory-secret-warned` first, so this is simply somebody with publish permission taking responsibility. The assertion is labelled `secret` when it is used, which is what makes the decision visible afterwards in the row and in the audit event. Content that certainly is a key is refused whatever this says. */
             overrideSecretWarning?: boolean;
+        };
+        /** @description Which run, and which of the things it produced. The digest is absent on purpose: it is sixty-four characters nobody knows by heart, the ledger already holds it, and asking a person to copy it is asking them to retype something the platform is about to check against its own record. */
+        MemoryEvidenceInput: {
+            runId: string;
+            /** @description Which of the run's outputs. Defaults to the closing answer, which is what a memory taught from a run almost always cites. */
+            artifact?: string;
         };
         MemoryMatchInput: {
             company: string;
