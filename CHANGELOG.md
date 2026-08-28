@@ -27,6 +27,15 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.39.2] — 2026-08-28
+
+### Changed
+
+- **Run investigation now opens directly on the trail.** The trail and its
+  summary cards share one tab, while detailed cost and prompt composition live
+  in a separate Cost tab. Identity, pending decisions and the run KPIs remain
+  visible in both views.
+
 ## [0.39.1] — 2026-08-28
 
 ### Fixed
