@@ -40,10 +40,22 @@ vi.mock("@/features/memory/api", async (importOriginal) => {
       error: null,
       refetch: hooks.suggestionsRefetch,
     }),
-    useCreateMemoryAssertion: () => ({ mutateAsync: hooks.create, isPending: false }),
-    useDisableMemoryAssertion: () => ({ mutate: hooks.disable, isPending: false }),
-    useAcceptMemorySuggestion: () => ({ mutate: hooks.accept, isPending: false }),
-    useDismissMemorySuggestion: () => ({ mutate: hooks.dismiss, isPending: false }),
+    useCreateMemoryAssertion: () => ({
+      mutateAsync: hooks.create,
+      isPending: false,
+    }),
+    useDisableMemoryAssertion: () => ({
+      mutate: hooks.disable,
+      isPending: false,
+    }),
+    useAcceptMemorySuggestion: () => ({
+      mutate: hooks.accept,
+      isPending: false,
+    }),
+    useDismissMemorySuggestion: () => ({
+      mutate: hooks.dismiss,
+      isPending: false,
+    }),
   };
 });
 
@@ -61,17 +73,28 @@ describe("governed memory page", () => {
   });
 
   it("shows that more remembered assertions exist instead of cutting silently", () => {
-    hooks.items = Array.from({ length: 9 }, (_, index) => memoryAssertion(index));
+    hooks.items = Array.from({ length: 9 }, (_, index) =>
+      memoryAssertion(index),
+    );
     render(<MemoryPage />);
 
-    for (const name of ["Active", "Disabled", "Suggested memory", "All states"]) {
-      expect(screen.getByRole("tab", { name }).querySelector("svg")).not.toBeNull();
+    for (const name of [
+      "Active",
+      "Disabled",
+      "Suggested memory",
+      "All states",
+    ]) {
+      expect(
+        screen.getByRole("tab", { name }).querySelector("svg"),
+      ).not.toBeNull();
     }
     expect(screen.getAllByText("subject-0").length).toBeGreaterThan(0);
     expect(screen.getByText("subject-7")).toBeInTheDocument();
     expect(screen.queryByText("subject-8")).not.toBeInTheDocument();
     expect(screen.getByText("8 of 9")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Load more" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Load more" }),
+    ).toBeInTheDocument();
   });
 
   it("explains when a manual search exceeds the term budget", async () => {
@@ -79,7 +102,9 @@ describe("governed memory page", () => {
     render(<MemoryPage />);
 
     expect(
-      screen.queryByText("Only the first 6 search terms are used. Try stronger identifiers if nothing matches."),
+      screen.queryByText(
+        "Only the first 6 search terms are used. Try stronger identifiers if nothing matches.",
+      ),
     ).not.toBeInTheDocument();
 
     await user.type(
@@ -97,23 +122,33 @@ describe("governed memory page", () => {
     hooks.items = Array.from({ length: 3 }, (_, index) => ({
       ...memoryAssertion(index),
       claim: `Claim ${index}`,
-      evidence: [{
-        runId: `run_${index}`,
-        artifact: "final_answer",
-        digest: `sha256:${index}`,
-      }],
+      evidence: [
+        {
+          runId: `run_${index}`,
+          artifact: "final_answer",
+          digest: `sha256:${index}`,
+        },
+      ],
     }));
     render(<MemoryPage />);
 
     const third = screen.getByRole("button", { name: /subject-2/ });
     expect(within(third).getByText("Outside data")).toBeInTheDocument();
-    expect(screen.getByText("run_0 · final_answer · sha256:0")).toBeInTheDocument();
-    expect(screen.queryByText("run_2 · final_answer · sha256:2")).not.toBeInTheDocument();
+    expect(
+      screen.getByText("run_0 · final_answer · sha256:0"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("run_2 · final_answer · sha256:2"),
+    ).not.toBeInTheDocument();
 
     await user.click(third);
 
-    expect(screen.getByText("run_2 · final_answer · sha256:2")).toBeInTheDocument();
-    expect(screen.queryByText("run_0 · final_answer · sha256:0")).not.toBeInTheDocument();
+    expect(
+      screen.getByText("run_2 · final_answer · sha256:2"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("run_0 · final_answer · sha256:0"),
+    ).not.toBeInTheDocument();
   });
 
   it("records a reviewed assertion with ledger evidence", async () => {
@@ -124,23 +159,36 @@ describe("governed memory page", () => {
 
     await user.click(screen.getByRole("button", { name: "Save memory" }));
 
+    // No agent, no counters, no expiry: the server reads the agent off the run
+    // the evidence names and owns the rest. The form asks only what a person
+    // can answer.
     expect(hooks.create).toHaveBeenCalledWith({
-      company: "acme", area: "ops", agentId: "triage", kind: "incident",
-      subject: "grafana datasource", signature: "grafana.datasource.down",
+      company: "acme",
+      area: "ops",
+      namespace: "agent",
+      kind: "incident",
+      subject: "grafana datasource",
+      signature: "grafana.datasource.down",
       claim: "Refresh the datasource token before restarting the worker.",
-      observations: 1, confirmed: 1, reason: "Reviewed after close",
-      evidence: [{ runId: "run_1", artifact: "final_answer", digest: "sha256:abcd" }],
+      reason: "Reviewed after close",
+      // The run, and nothing else: the artifact defaults to the closing answer
+      // and the digest is the ledger's to say.
+      evidence: [{ runId: "run_1" }],
     });
   });
 
-  it("corrects a remembered assertion without dropping its evidence or expiry", async () => {
+  it("corrects a remembered assertion without dropping its evidence or its namespace", async () => {
     const user = userEvent.setup();
     hooks.items = [
       {
         ...memoryAssertion(0),
         evidence: [
           { runId: "run_1", artifact: "final_answer", digest: "sha256:abcd" },
-          { runId: "run_2", artifact: "memory_suggestion", digest: "sha256:bcde" },
+          {
+            runId: "run_2",
+            artifact: "memory_suggestion",
+            digest: "sha256:bcde",
+          },
         ],
         expiresAt: "2026-09-25T12:00:00Z",
       },
@@ -149,7 +197,9 @@ describe("governed memory page", () => {
 
     await user.click(screen.getByRole("button", { name: "Correct" }));
     const dialog = screen.getByRole("alertdialog");
-    expect(within(dialog).getByRole("button", { name: "Correct" })).toBeDisabled();
+    expect(
+      within(dialog).getByRole("button", { name: "Correct" }),
+    ).toBeDisabled();
     await user.clear(within(dialog).getByLabelText("Claim"));
     await user.type(
       within(dialog).getByLabelText("Claim"),
@@ -159,15 +209,23 @@ describe("governed memory page", () => {
     await user.click(within(dialog).getByRole("button", { name: "Correct" }));
 
     expect(hooks.create).toHaveBeenCalledWith({
-      company: "acme", area: "ops", agentId: "triage", kind: "incident",
-      subject: "subject-0", signature: "signature-0",
-      claim: "Refresh the datasource token, then verify the datasource health endpoint.",
-      observations: 2, confirmed: 1, reason: "runbook narrowed",
+      company: "acme",
+      area: "ops",
+      namespace: "agent",
+      kind: "incident",
+      subject: "subject-0",
+      signature: "signature-0",
+      claim:
+        "Refresh the datasource token, then verify the datasource health endpoint.",
+      reason: "runbook narrowed",
       evidence: [
         { runId: "run_1", artifact: "final_answer", digest: "sha256:abcd" },
-        { runId: "run_2", artifact: "memory_suggestion", digest: "sha256:bcde" },
+        {
+          runId: "run_2",
+          artifact: "memory_suggestion",
+          digest: "sha256:bcde",
+        },
       ],
-      expiresAt: "2026-09-25T12:00:00Z",
     });
   });
 
@@ -178,12 +236,17 @@ describe("governed memory page", () => {
 
     await user.click(screen.getByRole("button", { name: "Disable" }));
     const dialog = screen.getByRole("alertdialog");
-    expect(within(dialog).getByRole("button", { name: "Disable" })).toBeDisabled();
+    expect(
+      within(dialog).getByRole("button", { name: "Disable" }),
+    ).toBeDisabled();
     await user.type(within(dialog).getByLabelText("Why"), "superseded");
     await user.click(within(dialog).getByRole("button", { name: "Disable" }));
 
     expect(hooks.disable.mock.calls[0]?.[0]).toEqual({
-      id: "mem_0", company: "acme", area: "ops", reason: "superseded",
+      id: "mem_0",
+      company: "acme",
+      area: "ops",
+      reason: "superseded",
     });
   });
 
@@ -204,7 +267,10 @@ describe("governed memory page", () => {
     );
 
     expect(hooks.accept.mock.calls[0]?.[0]).toEqual({
-      id: "suggestion_0", company: "acme", area: "ops", reason: "observed twice",
+      id: "suggestion_0",
+      company: "acme",
+      area: "ops",
+      reason: "observed twice",
     });
   });
 
@@ -217,11 +283,15 @@ describe("governed memory page", () => {
     render(<MemoryPage />);
 
     await user.click(screen.getByRole("tab", { name: "Suggested memory" }));
-    expect(screen.getAllByText("suggested-subject-0").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("suggested-subject-0").length).toBeGreaterThan(
+      0,
+    );
     expect(screen.getByText("suggested-subject-7")).toBeInTheDocument();
     expect(screen.queryByText("suggested-subject-8")).not.toBeInTheDocument();
     expect(screen.getByText("8 of 9")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Load more" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Load more" }),
+    ).toBeInTheDocument();
   });
 
   it("keeps write controls out for read-only callers", async () => {
@@ -237,19 +307,27 @@ describe("governed memory page", () => {
     expect(screen.queryByRole("button", { name: "Correct" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Disable" })).toBeNull();
     await user.click(screen.getByRole("tab", { name: "Suggested memory" }));
-    expect(screen.queryByRole("button", { name: "Accept suggestion" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Dismiss suggestion" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Accept suggestion" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Dismiss suggestion" }),
+    ).toBeNull();
   });
 });
 
 async function fillAssertion(user: ReturnType<typeof userEvent.setup>) {
-  await user.type(screen.getByLabelText("Agent (optional)"), "triage");
   await user.type(screen.getByLabelText("Kind"), "incident");
   await user.type(screen.getByLabelText("Subject"), "grafana datasource");
-  await user.type(screen.getByLabelText("Signature"), "grafana.datasource.down");
-  await user.type(screen.getByLabelText("Claim"), "Refresh the datasource token before restarting the worker.");
+  await user.type(
+    screen.getByLabelText("Signature"),
+    "grafana.datasource.down",
+  );
+  await user.type(
+    screen.getByLabelText("Claim"),
+    "Refresh the datasource token before restarting the worker.",
+  );
   await user.type(screen.getByLabelText("Run"), "run_1");
-  await user.type(screen.getByLabelText("Digest"), "sha256:abcd");
   await user.type(screen.getByLabelText("Why"), "Reviewed after close");
 }
 
@@ -262,7 +340,13 @@ function memoryAssertion(index: number): MemoryAssertion {
     subject: `subject-${index}`,
     signature: `signature-${index}`,
     claim: "Refresh the datasource token before restarting the worker.",
-    evidence: [{ runId: `run_${index}`, artifact: "final_answer", digest: "sha256:abcd" }],
+    evidence: [
+      {
+        runId: `run_${index}`,
+        artifact: "final_answer",
+        digest: "sha256:abcd",
+      },
+    ],
     observations: 2,
     confirmed: 1,
     labels: ["untrusted", "scope:acme/ops"],
@@ -284,7 +368,13 @@ function memorySuggestion(index: number): MemorySuggestion {
     subject: `suggested-subject-${index}`,
     signature: `suggested-signature-${index}`,
     claim: "Try the known datasource-token remediation first.",
-    evidence: [{ runId: `run_s_${index}`, artifact: "memory_suggestion", digest: "sha256:bcde" }],
+    evidence: [
+      {
+        runId: `run_s_${index}`,
+        artifact: "memory_suggestion",
+        digest: "sha256:bcde",
+      },
+    ],
     observations: 2,
     labels: ["untrusted", "scope:acme/ops"],
     status: "pending",

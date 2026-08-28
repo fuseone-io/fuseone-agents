@@ -80,6 +80,113 @@ Avoid memory for:
 - broad opinions such as "this system is unreliable";
 - approvals, permissions or decisions that belong in the Gate.
 
+## Teaching from a run
+
+Every memory comes from a run. There are two routes and both are governed.
+
+**"Remember this", in the run's trail.** The button appears on the closing step
+of a run that produced something citable, and only for whoever can publish. It
+opens a sheet where the platform has already answered everything it can: the
+scope and the run come from the record being read, the citation from the step,
+the labels from the trail, and the agent is read from the ledger when the
+request arrives.
+
+**The Memory page.** The same form, with one difference: there a person writes
+the run identifier, because no run is on screen.
+
+Either way, what is asked for is what only a person knows:
+
+| Asked for | Derived by the platform |
+|---|---|
+| kind, subject, signature | the agent, from the cited run |
+| the claim | labels, folded from the trail up to the cited step |
+| who reads it (agent or shared) | the citation's digest and step |
+| the reason | the opening counters and the 30-day expiry |
+
+### The evidence is read, not typed
+
+The sheet shows the run, the step, the artifact and the digest, and lets none of
+them be changed. This is not a convenience restriction: every part is the
+ledger's answer, and a field somebody can change is one they can change to
+something the run never produced — the server refuses that, so an editable box
+there would only ever lead to a refusal.
+
+When the run published more than one citable output, the person picks among the
+**names the ledger recorded**. Never types one.
+
+### The vocabulary of artifacts
+
+A citation names a run and one of its outputs:
+
+- **`final_answer`** — the closing answer. The default and the common case. No
+  run may publish an artifact under this name; it is reserved.
+- **a published artifact** — named outputs the run shared by reference with
+  whoever listens for the event.
+- **`memory_suggestion`** — the arguments of a proposal the agent itself made.
+  The platform resolves this form so older proposals have provenance, but the
+  console does **not** offer "Remember this" on it: that proposal is already in
+  the review queue, and accepting it is how it becomes memory.
+
+### Labels are on screen before the decision
+
+The sheet shows the labels the run had accumulated **up to the cited step**, not
+those of the step alone. A clean answer inside a poisoned run is a fact the
+poison reached, and remembering it as trustworthy is the inference the Gate
+refuses to make.
+
+While the trail is still loading, the sheet says it is reading — never that
+there are no labels. Absent and none are different answers.
+
+## What already answers this
+
+Before saving, the sheet says what the platform already holds about that
+identity. It is not a block: teaching a fact that already exists **corrects**
+it, and that is usually what somebody means. What they cannot tell from the form
+is which of the two they are doing.
+
+| State | What is offered |
+|---|---|
+| active | saving corrects the wording, keeping counters, authorship and evidence |
+| disabled | **reactivate** — the server will not merge into a disabled row |
+| expired | saving with this evidence **renews** it for 30 days |
+| source erased | nothing. That is the honest answer |
+| covered by shared | **improve the shared one**, explicitly |
+| pending proposal | nothing here; it is decided in the review queue |
+
+**Covering is not correcting.** An equivalent shared memory covers a creation in
+an agent's namespace, and stays byte for byte the same. Improving it is a button
+that switches the form's namespace — never something that happens underneath an
+agent write.
+
+## Expiry
+
+Memory lasts **30 days** from the decision that wrote it. Once expired it is no
+longer recalled by runs, but it stays visible and stays the same memory.
+
+| Transition | Expiry |
+|---|---|
+| correcting an active memory | preserved |
+| reasserting with new evidence | renews for 30 days |
+| auto-confirming after new observations | renews for 30 days |
+| reactivating a disabled one | renews for 30 days |
+| accepting a proposal over an active memory | preserved, never shortened |
+
+## Content shaped like a secret
+
+The platform refuses memory carrying a private key or a complete token in a
+recognised format. Nothing clears that refusal, and the refusal **never repeats
+the value it refused** — not in the message, not in the log, not in the event.
+
+Text long and random enough to be a credential raises a warning, which a person
+with publish permission may override. The override is not a receipt: it marks
+the assertion with the `secret` label, which shows on the row, in the list and
+in the event detail. An override nobody can see afterwards is a guard that
+quietly stopped applying.
+
+Auto-confirmation has no override, because it has nobody on it. A proposal the
+platform cannot tell apart from a credential stays pending for review rather
+than becoming readable to every run for having been made twice.
+
 ## Agent-proposed memory
 
 An agent does not write active memory by default. Memory learning is an

@@ -57,6 +57,21 @@ func finishProposal(
 	return base
 }
 
+/*
+cleanArtifacts is what the model asked to publish, minus what it may not.
+
+The reserved name is the part that is not tidying. `final_answer` is what a
+citation calls the run's closing answer, and the resolver answers it from
+OutcomeRef before it looks at anything the run published — so an artifact under
+that name is bytes no citation can reach. Unreachable would be harmless on its
+own; the harm is that a screen listing what this run offers would show two
+entries with one name, and a memory taught from the second would cite the
+first. The name is taken here rather than compared later, because comparing
+later means every reader has to know.
+
+Dropped rather than refused. Asking for a name it cannot have is not a reason
+to fail a run that has already produced its answer.
+*/
 func cleanArtifacts(in map[string]string) map[string]string {
 	if len(in) == 0 {
 		return nil
@@ -66,6 +81,9 @@ func cleanArtifacts(in map[string]string) map[string]string {
 		name = strings.TrimSpace(name)
 		body = strings.TrimSpace(body)
 		if name == "" || body == "" {
+			continue
+		}
+		if strings.EqualFold(name, domain.ArtifactFinalAnswer) {
 			continue
 		}
 		out[name] = body

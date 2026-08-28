@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap } from "@/lib/api/client";
+import { useSettled } from "@/hooks/use-settled";
 import { useScopeFilter } from "@/features/scope/use-scope-filter";
 import type {
   MemoryAssertion,
@@ -7,6 +8,8 @@ import type {
   MemorySuggestion,
   MemorySuggestionStatus,
   MemoryStatus,
+  MemoryMatch,
+  MemoryMatchInput,
 } from "@/lib/api/client";
 
 export type {
@@ -15,6 +18,8 @@ export type {
   MemorySuggestion,
   MemorySuggestionStatus,
   MemoryStatus,
+  MemoryMatch,
+  MemoryMatchInput,
 };
 
 export type MemoryStatusFilter = MemoryStatus | "all";
@@ -34,6 +39,20 @@ export interface MemorySuggestionFilters {
 
 export const memoryKeys = {
   all: ["memory"] as const,
+  /** Keyed on the identity itself: the answer is about this fact, and two
+   *  spellings of one identity are two questions until the server folds them. */
+  match: (input: MemoryMatchInput) =>
+    [
+      ...memoryKeys.all,
+      "match",
+      input.company,
+      input.area,
+      input.namespace,
+      input.agentId ?? "",
+      input.kind,
+      input.subject,
+      input.signature,
+    ] as const,
   list: (scope: string, filters: MemoryFilters) =>
     [
       ...memoryKeys.all,
@@ -136,6 +155,90 @@ export function useDismissMemorySuggestion() {
     onSuccess: () =>
       void queryClient.invalidateQueries({ queryKey: memoryKeys.all }),
   });
+}
+
+/**
+ * Bringing back a memory somebody disabled.
+ *
+ * A separate act from creating one, and deliberately not reachable by
+ * re-teaching the same fact: the server refuses to merge into a disabled row,
+ * so without this the only way past a disabled memory would be to teach a
+ * different one and leave two records of the same thing.
+ */
+export function useReactivateMemoryAssertion() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      id: string;
+      company: string;
+      area: string;
+      reason: string;
+    }) =>
+      unwrap(
+        await api.POST("/admin/memory/assertions/{assertionId}/reactivate", {
+          params: { path: { assertionId: input.id } },
+          body: {
+            company: input.company,
+            area: input.area,
+            reason: input.reason,
+          },
+        }),
+      ),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({ queryKey: memoryKeys.all }),
+  });
+}
+
+/**
+ * What the platform already holds about this identity.
+ *
+ * Asked while somebody types, so it is debounced: the identity is not a fact
+ * until they stop, and a request per keystroke would ask the server about
+ * prefixes nobody means. Four hundred milliseconds is long enough that the
+ * common case is one question and short enough that the answer arrives before
+ * the decision.
+ *
+ * Disabled until the identity is complete. An incomplete one has no answer —
+ * the server refuses it — and asking anyway would spend the round trip to be
+ * told what the form already knows.
+ */
+export function useMemoryMatch(input: MemoryMatchInput) {
+  // Settled on the identity as one string rather than on the object: a new
+  // object every render never equals the last, so waiting on the object itself
+  // would wait for ever and ask nothing.
+  const settled = useSettled(memoryKeys.match(input).join("\u0000"), 400);
+  const asked = matchFromKey(settled);
+  const complete = Boolean(
+    asked.company && asked.area && asked.kind && asked.subject && asked.signature,
+  );
+  return useQuery({
+    queryKey: memoryKeys.match(asked),
+    enabled: complete,
+    queryFn: async () =>
+      unwrap(await api.POST("/admin/memory/match", { body: asked })),
+  });
+}
+
+/**
+ * The identity back out of its key.
+ *
+ * The key is what settles, so it is also what the request has to be built from
+ * — reading the live input here instead would ask about the identity the person
+ * is typing now while the query is filed under the one they had stopped at, and
+ * the answer would be cached against the wrong fact.
+ */
+function matchFromKey(key: string): MemoryMatchInput {
+  const [, , company, area, namespace, agentId, kind, subject, signature] =
+    key.split("\u0000");
+  return {
+    company: company ?? "",
+    area: area ?? "",
+    namespace: (namespace ?? "agent") as MemoryMatchInput["namespace"],
+    agentId: agentId || undefined,
+    kind: kind ?? "",
+    subject: subject ?? "",
+    signature: signature ?? "",
+  };
 }
 
 export function useDisableMemoryAssertion() {

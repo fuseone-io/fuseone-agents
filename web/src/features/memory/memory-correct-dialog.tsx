@@ -37,7 +37,9 @@ export function MemoryCorrectDialog({
 
   async function submit() {
     try {
-      await correct.mutateAsync(correctionInput(assertion, cleanClaim, cleanReason));
+      await correct.mutateAsync(
+        correctionInput(assertion, cleanClaim, cleanReason),
+      );
       toast.success(t("memory.corrected"));
       onClose();
     } catch (error) {
@@ -77,7 +79,10 @@ export function MemoryCorrectDialog({
         <AlertDialogFooter>
           <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
           <AlertDialogAction
-            disabled={!canSubmit(assertion.claim, cleanClaim, cleanReason) || correct.isPending}
+            disabled={
+              !canSubmit(assertion.claim, cleanClaim, cleanReason) ||
+              correct.isPending
+            }
             onClick={(event) => {
               event.preventDefault();
               void submit();
@@ -103,15 +108,15 @@ function correctionInput(
   return {
     company: assertion.scope.company,
     area: assertion.scope.area,
-    agentId: assertion.agentId === "" ? undefined : assertion.agentId,
+    // The namespace the memory already has, not a new decision. A correction
+    // moving a memory from one agent to everybody would be a different act,
+    // and it would arrive looking like a reworded claim.
+    namespace: assertion.agentId === "" ? "shared" : "agent",
     kind: assertion.kind,
     subject: assertion.subject,
     signature: assertion.signature,
     claim,
-    observations: assertion.observations,
-    confirmed: assertion.confirmed,
     evidence: assertion.evidence,
-    expiresAt: assertion.expiresAt ?? undefined,
     reason,
   };
 }

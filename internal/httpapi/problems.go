@@ -47,6 +47,12 @@ const (
 	// rather than a sentence: an agent leaves Draft by being simulated, and
 	// the useful reply is the way to do that.
 	CodeNotSimulated Code = "fuseone:not-simulated"
+	// The two the memory form answers when what somebody typed looks like a
+	// credential. Separate codes because the console does different things: one
+	// is a refusal to explain, the other a question to ask. Neither carries the
+	// text that triggered it.
+	CodeMemorySecret       Code = "fuseone:memory-secret"
+	CodeMemorySecretWarned Code = "fuseone:memory-secret-warned"
 	// The two the sign-in flow answers with. Separate from the generic
 	// refusals because the console does something with them rather than
 	// showing them: one offers the sign-in button again, the other is what
