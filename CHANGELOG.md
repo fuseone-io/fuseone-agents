@@ -27,6 +27,14 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.39.3] — 2026-08-28
+
+### Fixed
+
+- **A policy opens with its stored values on the first edit.** The editor now
+  waits for the selected policy before creating its draft, instead of keeping
+  the empty draft that existed while the first request was loading.
+
 ## [0.39.2] — 2026-08-28
 
 ### Changed
