@@ -11,7 +11,17 @@ import type { Step } from "@/lib/api/client";
  * the resolver.
  */
 
-/** The name the platform gives a run's closing answer. */
+/**
+ * The name the platform gives a run's closing answer, and one no published
+ * artifact may take.
+ *
+ * A citation naming it is resolved from the finished step's outcome_ref before
+ * the server looks at what the run published (citationIn), so an artifact under
+ * this name is bytes no citation can reach. The engine now refuses to publish
+ * one, but runs that finished earlier still carry them and the ledger does not
+ * change — and listing one here would show two entries under a single name,
+ * with the memory taught from the second citing the first.
+ */
 export const FINAL_ANSWER = "final_answer";
 
 export interface Citation {
@@ -54,7 +64,7 @@ export function citationsOf(step: Step): Citation[] {
   for (const entry of artifacts) {
     const a = (entry ?? {}) as Record<string, unknown>;
     const named = recorded(a.name);
-    if (named === undefined) continue;
+    if (named === undefined || named === FINAL_ANSWER) continue;
     const artifact = cite(step.seq, named, a.ref, a.digest);
     if (artifact) out.push(artifact);
   }

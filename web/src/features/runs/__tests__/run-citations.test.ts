@@ -60,6 +60,40 @@ describe("what a step offers a memory to cite", () => {
     ).toEqual([]);
   });
 
+  // The name belongs to the closing answer, and the server resolves it from
+  // outcome_ref before it looks at what the run published — so an artifact
+  // under it can never be cited. Runs finished before the platform reserved the
+  // name still carry one, and the ledger does not change, so listing it would
+  // show two options with one name and record a memory citing the other.
+  it("leaves out an artifact whose name the closing answer already holds", () => {
+    const cites = citationsOf(
+      finished(9, {
+        ...ANSWER,
+        artifacts: [
+          { name: "final_answer", ref: "run://x/9/cd", digest: "cd".repeat(32) },
+          { name: "report", ref: "run://x/9/ef", digest: "ef".repeat(32) },
+        ],
+      }),
+    );
+    expect(cites.map((c) => c.artifact)).toEqual(["final_answer", "report"]);
+    expect(cites[0]?.digest).toBe("ab".repeat(32));
+  });
+
+  // Even with no closing answer to shadow it: the server reads that name off
+  // outcome_ref, finds nothing recorded, and refuses without ever reaching the
+  // published artifacts.
+  it("leaves it out even when the run recorded no closing answer", () => {
+    expect(
+      citationsOf(
+        finished(9, {
+          artifacts: [
+            { name: "final_answer", ref: "run://x/9/cd", digest: "cd".repeat(32) },
+          ],
+        }),
+      ),
+    ).toEqual([]);
+  });
+
   // Present is not the same question as recorded. A field that arrives empty,
   // or as something other than text, is a field the ledger did not write — and
   // treating it as written is how a button appears over a citation the server
