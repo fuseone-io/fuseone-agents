@@ -603,6 +603,43 @@ func TestMemoryTools_areExplainedOnlyWhenOffered(t *testing.T) {
 	}
 }
 
+func TestMemoryFindGuidanceChangesAfterTheRunAlreadyLooked(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name     string
+		kind     model.Kind
+		response string
+		prompt   func(map[string]any) string
+	}{
+		{name: "anthropic", kind: model.KindAnthropic, response: anthropicToolUse, prompt: anthropicPromptText},
+		{name: "openai-compatible", kind: model.KindOpenAICompatible, response: openAIToolCall, prompt: openAIPromptText},
+	} {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			c := serve(t, tc.response)
+			in := input()
+			in.Tools = append(in.Tools, domain.ToolMemoryFind)
+			in.State.Called = []domain.ToolID{domain.ToolMemoryFind}
+
+			if _, err := plannerFor(t, tc.kind, c.server.URL, model.Config{}).
+				Plan(context.Background(), in); err != nil {
+				t.Fatalf("Plan: %v", err)
+			}
+			prompt := tc.prompt(c.body)
+			for _, want := range []string{"already searched", "materially narrower", "equivalent search"} {
+				if !strings.Contains(prompt, want) {
+					t.Errorf("prompt does not contain %q:\n%s", want, prompt)
+				}
+			}
+			if strings.Contains(prompt, "Use it early") {
+				t.Fatalf("prompt still asks for the initial memory lookup after it ran:\n%s", prompt)
+			}
+		})
+	}
+}
+
 func TestOpenAICompatible_finishTool_becomesTheSameFinishedProposal(t *testing.T) {
 	t.Parallel()
 	c := serve(t, `{
@@ -655,6 +692,17 @@ func anthropicPromptText(body map[string]any) string {
 			text.WriteString(" ")
 			text.WriteString(asString(item["text"]))
 		}
+	}
+	return text.String()
+}
+
+func openAIPromptText(body map[string]any) string {
+	var text strings.Builder
+	messages, _ := body["messages"].([]any)
+	for _, message := range messages {
+		m, _ := message.(map[string]any)
+		text.WriteString(" ")
+		text.WriteString(asString(m["content"]))
 	}
 	return text.String()
 }

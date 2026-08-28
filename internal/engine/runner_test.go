@@ -758,6 +758,54 @@ func TestAdvance_memoryLearningBeginsWithDeterministicLookup(t *testing.T) {
 	}
 }
 
+func TestAdvance_memoryLookupSkipsEquivalentRetryAndAllowsMaterialRefinement(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t)
+	h.runner.deps.Catalog = staticCatalog{domain.ToolMemoryFind: domain.EffectRead}
+	start := h.start(t, generousBudget())
+	start.MemoryLearning = domain.MemoryLearningPolicy{Mode: domain.MemoryLearningReview}
+	start.Pack = gate.NewPack()
+	openRunWithInput(t, h, start, "manual", []byte(supersetSlackAsk()), domain.ScopeLabels(start.Scope))
+
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("Advance initial lookup: %v", err)
+	}
+	initial := memoryFindCallArgs(t, h.tools.calls[0])
+	h.planner.proposals = []Proposal{
+		{Tool: domain.ToolMemoryFind, Args: []byte(fmt.Sprintf(
+			`{ "limit": 10, "search": %s }`, mustJSONString(initial.Search)))},
+		{Tool: domain.ToolMemoryFind, Args: []byte(fmt.Sprintf(
+			`{"search":%s,"limit":10}`, mustJSONString(initial.Search+" channel membership")))},
+	}
+
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("Advance equivalent retry: %v", err)
+	}
+	if got := len(h.tools.invocations); got != 1 {
+		t.Fatalf("tool invocations = %d, want the equivalent retry skipped", got)
+	}
+	var duplicate domain.GateDecidedPayload
+	if err := h.lastPayloadOf(t, domain.StepGateDecided, &duplicate); err != nil {
+		t.Fatalf("gate payload: %v", err)
+	}
+	if duplicate.Verdict != domain.VerdictDuplicate {
+		t.Fatalf("equivalent retry verdict = %s, want duplicate", duplicate.Verdict)
+	}
+
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("Advance refined lookup: %v", err)
+	}
+	if got := h.tools.invocations; len(got) != 2 || got[1] != domain.ToolMemoryFind {
+		t.Fatalf("tool invocations = %v, want the materially refined lookup executed", got)
+	}
+	refined := memoryFindCallArgs(t, h.tools.calls[1])
+	if !strings.Contains(refined.Search, "channel membership") {
+		t.Fatalf("refined search = %q, want the new material terms", refined.Search)
+	}
+}
+
 func TestAdvance_initialMemoryLookupDeniedByPolicyFallsThroughToPlanner(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
