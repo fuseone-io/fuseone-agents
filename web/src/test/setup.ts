@@ -45,3 +45,10 @@ if (!globalThis.ResizeObserver) {
   };
 }
 
+/**
+ * jsdom does not implement scrollIntoView. Searchable command lists use it to
+ * keep the highlighted option visible; layout is not what these tests assert.
+ */
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {};
+}

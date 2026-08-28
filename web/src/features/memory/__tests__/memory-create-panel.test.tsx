@@ -6,6 +6,21 @@ import { MemoryCreatePanel } from "@/features/memory/memory-create-panel";
 import { useActiveScope } from "@/features/scope/active-scope";
 import { setLocale } from "@/i18n";
 
+const scopeHooks = vi.hoisted(() => ({
+  items: [
+    { company: "acme", area: "ops", label: "Operations" },
+    { company: "globex", area: "security", label: "Security" },
+  ],
+}));
+
+vi.mock("@/features/scope/api", () => ({
+  useScopes: () => ({
+    data: { items: scopeHooks.items },
+    isLoading: false,
+    isError: false,
+  }),
+}));
+
 const MATCH = {
   own: {
     id: "mem_1",
@@ -69,6 +84,34 @@ describe("global memory authoring", () => {
     expect(matches(requests)[1]).toEqual(matchBody("shared"));
   });
 
+  it("chooses an accessible company and area as one scope", async () => {
+    const requests: RequestRecord[] = [];
+    stubNetwork(requests, {
+      run: Promise.resolve(
+        json(runRecord("triage", { company: "globex", area: "security" })),
+      ),
+    });
+    const user = userEvent.setup();
+    renderPanel();
+
+    await user.click(screen.getByRole("combobox", { name: "Scope" }));
+    expect(screen.getByPlaceholderText("Search company or area")).toBeVisible();
+    await user.click(
+      await screen.findByRole("option", { name: /security.*Security/i }),
+    );
+    expect(screen.getByRole("combobox", { name: "Scope" })).toHaveTextContent(
+      "globex/security",
+    );
+
+    fillMemory();
+    await waitFor(() => expect(matches(requests)).toHaveLength(1));
+    expect(matches(requests)[0]).toEqual({
+      ...matchBody("agent", "triage"),
+      company: "globex",
+      area: "security",
+    });
+  });
+
   it("keeps save blocked when the evidence run cannot be inspected", async () => {
     const requests: RequestRecord[] = [];
     stubNetwork(requests, {
@@ -121,15 +164,24 @@ describe("global memory authoring", () => {
     expect(screen.getByRole("button", { name: "Save memory" })).toBeEnabled();
   });
 
-  it("explains why memory cannot be saved across every company", () => {
+  it("asks a global viewer to choose one accessible scope", async () => {
     useActiveScope.setState({ company: "*", area: "ops" });
+    const user = userEvent.setup();
     renderPanel();
 
     expect(screen.getByRole("status")).toHaveTextContent(
-      "Choose a company before saving. Memory cannot be recorded across every company.",
+      "Choose a company and area before saving. Memory cannot be recorded across every company.",
     );
-    expect(screen.getByLabelText("Company")).toHaveValue("");
+    expect(screen.getByRole("combobox", { name: "Scope" })).toHaveTextContent(
+      "Choose a company and area",
+    );
     expect(screen.getByRole("button", { name: "Save memory" })).toBeDisabled();
+
+    await user.click(screen.getByRole("combobox", { name: "Scope" }));
+    await user.click(
+      await screen.findByRole("option", { name: /ops.*Operations/i }),
+    );
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 });
 
@@ -194,11 +246,14 @@ function matchBody(namespace: "agent" | "shared", agentId?: string) {
   };
 }
 
-function runRecord(agentId: string | null = "triage") {
+function runRecord(
+  agentId: string | null = "triage",
+  scope = { company: "acme", area: "ops" },
+) {
   return {
     runId: "run_1",
     ...(agentId ? { agentId } : {}),
-    scope: { company: "acme", area: "ops" },
+    scope,
   };
 }
 

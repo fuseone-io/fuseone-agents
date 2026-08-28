@@ -7,6 +7,7 @@ import { EvidenceFields } from "@/features/memory/memory-evidence-fields";
 import { MemoryFactFields } from "@/features/memory/memory-fact-fields";
 import { MemoryInputField } from "@/features/memory/memory-form-fields";
 import { MemoryNamespaceField } from "@/features/memory/memory-namespace-field";
+import { MemoryScopeField } from "@/features/memory/memory-scope-field";
 import type { MemoryFormValues } from "@/features/memory/memory-form-schema";
 
 export function MemoryCreateForm({
@@ -24,20 +25,7 @@ export function MemoryCreateForm({
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-4">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <MemoryInputField
-            control={form.control}
-            name="company"
-            label="admin.company"
-            className="font-mono"
-          />
-          <MemoryInputField
-            control={form.control}
-            name="area"
-            label="admin.area"
-            className="font-mono"
-          />
-        </div>
+        <MemoryScopeField form={form} />
         <MemoryNamespaceField control={form.control} />
         <MemoryFactFields control={form.control} />
         <EvidenceFields control={form.control} />

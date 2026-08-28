@@ -58,6 +58,8 @@ export function MemoryCreatePanel({
   });
   const match = useMemoryCreateMatch(form, { enabled: visible });
   const reason = useWatch({ control: form.control, name: "reason" });
+  const company = useWatch({ control: form.control, name: "company" });
+  const area = useWatch({ control: form.control, name: "area" });
   const isDirty = form.formState.isDirty;
 
   useEffect(() => {
@@ -91,7 +93,7 @@ export function MemoryCreatePanel({
       <p className="mb-4 text-sm text-muted-foreground">
         {t("memory.createHint")}
       </p>
-      {activeCompany === "*" && (
+      {(!company || !area) && (
         <p
           role="status"
           className="mb-4 flex items-start gap-2 rounded-md bg-warning-surface px-3 py-2 text-xs text-warning"

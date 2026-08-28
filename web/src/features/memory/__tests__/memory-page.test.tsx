@@ -19,6 +19,19 @@ const hooks = vi.hoisted(() => ({
   suggestionsRefetch: vi.fn(),
 }));
 
+vi.mock("@/features/scope/api", () => ({
+  useScopes: () => ({
+    data: {
+      items: [
+        { company: "acme", area: "ops", label: "Operations" },
+        { company: "globex", area: "security", label: "Security" },
+      ],
+    },
+    isLoading: false,
+    isError: false,
+  }),
+}));
+
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 vi.mock("@/features/session/api", () => ({
@@ -250,8 +263,9 @@ describe("governed memory page", () => {
     act(() => useActiveScope.setState({ company: "globex", area: "security" }));
     await user.click(screen.getByRole("button", { name: "Continue draft" }));
 
-    expect(screen.getByLabelText("Company")).toHaveValue("globex");
-    expect(screen.getByLabelText("Area")).toHaveValue("security");
+    expect(screen.getByRole("combobox", { name: "Scope" })).toHaveTextContent(
+      "globex/security",
+    );
     expect(screen.getByLabelText("Subject")).toHaveValue("grafana datasource");
   });
 
