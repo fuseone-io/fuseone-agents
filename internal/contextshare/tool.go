@@ -101,9 +101,8 @@ func (l *Layer) read(ctx context.Context, call engine.Call) (engine.ToolResult, 
 
 	contextArtifact := artifact
 	return engine.ToolResult{
-		ResultRef: ref,
-		Labels:    artifact.Labels.Clone(),
-		Context:   &contextArtifact,
+		ResultRef: ref, ResultDigest: engine.ResultDigest(body), ResultBytes: int64(len(body)),
+		Labels: artifact.Labels.Clone(), Context: &contextArtifact,
 	}, nil
 }
 

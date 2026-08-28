@@ -88,6 +88,8 @@ func (c *Catalog) Invoke(ctx context.Context, call engine.Call) (engine.ToolResu
 				return engine.ToolResult{}, fmt.Errorf("tools: store cached result of %s: %w", call.Tool, err)
 			}
 			out.ResultRef = ref
+			out.ResultDigest = engine.ResultDigest(cached.body)
+			out.ResultBytes = int64(len(cached.body))
 			out.Labels = cached.labels.Clone()
 			out.Cached = true
 			out.CachedFromRun = cached.sourceRun
@@ -135,8 +137,12 @@ func (c *Catalog) Invoke(ctx context.Context, call engine.Call) (engine.ToolResu
 	}
 
 	text := flatten(res)
-	if content != nil && text != "" {
-		body := []byte(text)
+	body := []byte(text)
+	if !out.Failed {
+		out.ResultDigest = engine.ResultDigest(body)
+		out.ResultBytes = int64(len(body))
+	}
+	if content != nil && len(body) > 0 {
 		ref, err := content.Put(ctx, call.RunID, call.Seq, body)
 		if err != nil {
 			return engine.ToolResult{}, fmt.Errorf("tools: store result of %s: %w", call.Tool, err)

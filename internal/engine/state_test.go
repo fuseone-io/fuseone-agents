@@ -463,6 +463,61 @@ func TestFold_resumed_forgetsTheRefusalsThatCausedTheParking(t *testing.T) {
 	}
 }
 
+func TestFold_failedReadDoesNotCountAsRepeatedEvidence(t *testing.T) {
+	t.Parallel()
+
+	result := domain.ToolReturnedPayload{
+		Tool: "kb.search", ResultDigest: ResultDigest([]byte(`{"same":true}`)), ResultBytes: 13,
+	}
+	steps := []domain.Step{{Kind: domain.StepRunStarted, AgentID: "suporte", Payload: []byte(`{}`)}}
+	addRead := func(key string, returned domain.ToolReturnedPayload) {
+		steps = append(steps,
+			domain.Step{Kind: domain.StepToolCalled, IdemKey: key, Payload: payload(t, domain.ToolCalledPayload{
+				Tool: "kb.search", Effect: domain.EffectRead,
+			})},
+			domain.Step{Kind: domain.StepToolReturned, Payload: payload(t, returned)},
+		)
+	}
+	addRead("one", result)
+	addRead("two", result)
+	failed := result
+	failed.Failed = true
+	addRead("three", failed)
+	addRead("four", result)
+	addRead("five", result)
+
+	s := mustFold(t, chain(t, steps...))
+	if summary, stalled := s.stalledInvestigation(); stalled {
+		t.Fatalf("stalled after a failed result reset the evidence: %+v", summary)
+	}
+}
+
+func TestFold_resumedForgetsTheStalledInvestigation(t *testing.T) {
+	t.Parallel()
+
+	result := domain.ToolReturnedPayload{
+		Tool: "kb.search", ResultDigest: ResultDigest([]byte(`{"same":true}`)), ResultBytes: 13,
+	}
+	steps := []domain.Step{{Kind: domain.StepRunStarted, AgentID: "suporte", Payload: []byte(`{}`)}}
+	for _, key := range []string{"one", "two", "three"} {
+		steps = append(steps,
+			domain.Step{Kind: domain.StepToolCalled, IdemKey: key, Payload: payload(t, domain.ToolCalledPayload{
+				Tool: "kb.search", Effect: domain.EffectRead,
+			})},
+			domain.Step{Kind: domain.StepToolReturned, Payload: payload(t, result)},
+		)
+	}
+	steps = append(steps,
+		domain.Step{Kind: domain.StepParked, Payload: payload(t, domain.ParkedPayload{Reason: "investigation_stalled"})},
+		domain.Step{Kind: domain.StepResumed, Payload: payload(t, domain.ResumedPayload{By: "ana", Note: "refined query"})},
+	)
+
+	s := mustFold(t, chain(t, steps...))
+	if summary, stalled := s.stalledInvestigation(); stalled {
+		t.Fatalf("stalled investigation survived a person's intervention: %+v", summary)
+	}
+}
+
 func TestFold_wallClock_accumulatesFromTheRunsOwnInstants(t *testing.T) {
 	t.Parallel()
 

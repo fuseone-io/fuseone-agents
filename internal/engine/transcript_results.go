@@ -39,9 +39,9 @@ func compactToolResult(tool domain.ToolID, content []byte, elided *int64) []byte
 }
 
 // boundToolResultTranscript keeps recent evidence useful while older results
-// become receipts. The full bytes remain in the content store, and Elided is
-// set from the original result so run-spend diagnostics attribute the saving
-// to the tool that produced it.
+// become receipts. The stored copy remains subject to the installation content
+// limit, and Elided is set from the original result so run-spend diagnostics
+// attribute the saving to the tool that produced it.
 func boundToolResultTranscript(turns []Turn) {
 	type candidate struct {
 		index   int
@@ -70,17 +70,23 @@ func boundToolResultTranscript(turns []Turn) {
 			continue
 		}
 		turn.Content = candidate.receipt
-		turn.Elided = turn.OriginalBytes
+		turn.Elided = max(int64(0), turn.OriginalBytes-int64(len(candidate.receipt)))
 	}
 }
 
 func toolResultBudgetReceipt(turn Turn) []byte {
+	probe := formatToolResultBudgetReceipt(turn, 0)
+	omitted := max(int64(0), turn.OriginalBytes-int64(len(probe)))
+	return formatToolResultBudgetReceipt(turn, omitted)
+}
+
+func formatToolResultBudgetReceipt(turn Turn, omitted int64) []byte {
 	return []byte(fmt.Sprintf(
-		"FuseOne omitted this earlier %s result from the transcript result budget.\n"+
-			"Stored result: %d bytes, digest %s.\n"+
-			"Omitted result bytes: %d. The full result remains in the content store. "+
+		"FuseOne truncated this earlier %s result to a receipt because it did not fit the transcript result budget.\n"+
+			"Original result: %d bytes, digest %s.\n"+
+			"Omitted result bytes: %20d. The stored copy remains in the content store under the installation content limit. "+
 			"Do not treat omitted content as absent; make another call only with a materially narrower query.",
-		turn.Tool, turn.OriginalBytes, turn.ContentDigest, turn.OriginalBytes,
+		turn.Tool, turn.OriginalBytes, turn.ContentDigest, omitted,
 	))
 }
 

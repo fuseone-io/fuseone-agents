@@ -109,18 +109,22 @@ type dedupeReservation struct {
 func (r *Runner) act(ctx context.Context, state State, start Start, p Proposal) (Status, error) {
 	effect, _ := r.deps.Catalog.Effect(p.Tool)
 	idemKey := idempotencyKey(start.RunID, p.Tool, p.Args)
+	perRunDuplicate := state.AlreadyExecuted(idemKey)
 	semantic, err := r.semanticDedupe(ctx, start, p)
 	if err != nil {
 		return Status{}, err
 	}
 
 	decision, err := r.decide(ctx, state, start, p, effect, idemKey,
-		state.AlreadyExecuted(idemKey) || semantic.already)
+		perRunDuplicate || semantic.already)
 	if err != nil {
 		return Status{}, fmt.Errorf("engine: gate: %w", err)
 	}
 
 	if !decision.Verdict.Executable() || decision.Verdict == domain.VerdictRequireApproval {
+		if perRunDuplicate && decision.Verdict == domain.VerdictDuplicate && r.deps.Metrics != nil {
+			r.deps.Metrics.CanonicalDuplicate()
+		}
 		state, err = r.appendGateDecision(ctx, state, start, p, effect, decision, semantic.source)
 		if err != nil {
 			return Status{}, err
@@ -482,7 +486,10 @@ func (r *Runner) invoke(
 
 	call.Seq = state.Seq
 	result, invokeErr := r.deps.Tools.Invoke(ctx, call)
-	returned := domain.ToolReturnedPayload{Tool: p.Tool, ResultRef: result.ResultRef}
+	returned := domain.ToolReturnedPayload{
+		Tool: p.Tool, ResultRef: result.ResultRef,
+		ResultDigest: result.ResultDigest, ResultBytes: result.ResultBytes,
+	}
 	if result.Cached {
 		returned.Cached = true
 		returned.CachedFromRun = result.CachedFromRun

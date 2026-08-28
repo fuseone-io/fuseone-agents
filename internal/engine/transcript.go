@@ -47,9 +47,10 @@ type Turn struct {
 	// model, in content bytes. Counted at the cut so the saving is something
 	// the run measured rather than a subtraction across two records.
 	Elided int64
-	// OriginalBytes and ContentDigest describe the full result held in the
-	// content store. They let the transcript replace an older result with an
-	// honest receipt after per-result compaction has already happened.
+	// OriginalBytes and ContentDigest describe the complete result returned by
+	// the tool. The content store may retain only a bounded copy; these fields
+	// let the transcript replace an older result with an honest receipt after
+	// per-result compaction has already happened.
 	OriginalBytes int64
 	ContentDigest string
 }
@@ -128,6 +129,12 @@ func BuildTranscript(ctx context.Context, store ContentStore, steps []domain.Ste
 			}
 			originalBytes := int64(len(content))
 			contentDigest := digest(content)
+			if p.ResultBytes > 0 {
+				originalBytes = p.ResultBytes
+			}
+			if p.ResultDigest != "" {
+				contentDigest = p.ResultDigest
+			}
 			var elided int64
 			if !p.Failed {
 				content = compactToolResult(p.Tool, content, &elided)

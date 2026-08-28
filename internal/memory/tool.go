@@ -194,7 +194,10 @@ func (l *Layer) find(ctx context.Context, call engine.Call) (engine.ToolResult, 
 		return engine.ToolResult{}, fmt.Errorf("memory: store result: %w", err)
 	}
 	succeeded = true
-	return engine.ToolResult{ResultRef: ref, Labels: labels}, nil
+	return engine.ToolResult{
+		ResultRef: ref, ResultDigest: engine.ResultDigest(body), ResultBytes: int64(len(body)),
+		Labels: labels,
+	}, nil
 }
 
 func (l *Layer) suggest(ctx context.Context, call engine.Call) (engine.ToolResult, error) {
@@ -233,7 +236,9 @@ func (l *Layer) suggest(ctx context.Context, call engine.Call) (engine.ToolResul
 	if err != nil {
 		return engine.ToolResult{}, fmt.Errorf("memory: store suggestion result: %w", err)
 	}
-	return engine.ToolResult{ResultRef: ref}, nil
+	return engine.ToolResult{
+		ResultRef: ref, ResultDigest: engine.ResultDigest(body), ResultBytes: int64(len(body)),
+	}, nil
 }
 
 func decodeFindArgs(raw []byte) (findArgs, bool) {

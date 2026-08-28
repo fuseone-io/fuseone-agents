@@ -145,6 +145,9 @@ type State struct {
 	// executed holds the idempotency keys the ledger has already recorded, so
 	// a resumed run never causes the same effect twice (PRD DE-16).
 	executed map[string]struct{}
+
+	pendingInvestigation *investigationCall
+	investigation        investigationStreak
 }
 
 // Committed is settled spend plus outstanding reservations. This is the figure

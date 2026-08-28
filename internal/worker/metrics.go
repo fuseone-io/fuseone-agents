@@ -82,6 +82,7 @@ func renderWorkerMetrics(w http.ResponseWriter, snap []poolSnapshot) {
 	renderWorkerAdvances(w, snap)
 	renderWorkerFailures(w, snap)
 	renderWorkerParks(w, snap)
+	renderRuntimeEfficiencyMetrics(w, snap)
 }
 
 func renderWorkerSlots(w http.ResponseWriter, snap []poolSnapshot) {
@@ -227,6 +228,7 @@ type poolSnapshot struct {
 	advances map[string]uint64
 	failures map[failureMetric]uint64
 	parks    map[string]uint64
+	runtime  runtimeCounters
 }
 
 type registrySnapshot struct {
@@ -404,6 +406,7 @@ type PoolMetrics struct {
 	advances map[string]uint64
 	failures map[failureMetric]uint64
 	parks    map[string]uint64
+	runtime  runtimeCounters
 }
 
 func (m *PoolMetrics) Claim(result string) {
@@ -452,6 +455,7 @@ func (m *PoolMetrics) snapshot() poolSnapshot {
 		advances: copyStringCounters(m.advances),
 		failures: copyFailureCounters(m.failures),
 		parks:    copyStringCounters(m.parks),
+		runtime:  m.runtime,
 	}
 }
 

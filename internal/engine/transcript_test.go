@@ -519,11 +519,14 @@ func TestBuildTranscript_manyMediumResults_haveABoundedPromptContribution(t *tes
 		if strings.Contains(string(turn.Content), "transcript result budget") {
 			receipts++
 			for _, want := range []string{
-				"outline.list_documents", "Stored result:", "digest sha256:", "Omitted result bytes:",
+				"outline.list_documents", "Original result:", "digest sha256:", "Omitted result bytes:",
 			} {
 				if !strings.Contains(string(turn.Content), want) {
 					t.Fatalf("receipt missing %q:\n%s", want, turn.Content)
 				}
+			}
+			if want := turn.OriginalBytes - int64(len(turn.Content)); turn.Elided != want {
+				t.Fatalf("elided = %d, want original minus receipt = %d", turn.Elided, want)
 			}
 		}
 	}

@@ -108,12 +108,18 @@ func (s *State) applyKind(step domain.Step) error {
 		s.Called = append(s.Called, p.Tool)
 		s.PendingTool = p.Tool
 		s.Phase = PhaseAwaitingTool
+		s.recordInvestigationCall(p, step.IdemKey)
 		// A call that reached the Gate's far side is progress, whatever it
 		// returns: the planner is no longer stuck on a refusal.
 		s.ConsecutiveBlocks = 0
 		s.ConsecutiveSkips = 0
 
 	case domain.StepToolReturned:
+		var p domain.ToolReturnedPayload
+		if err := decode(step, &p); err != nil {
+			return err
+		}
+		s.recordInvestigationResult(p)
 		s.PendingTool = ""
 		s.Phase = PhaseRunning
 
@@ -159,6 +165,7 @@ func (s *State) applyKind(step domain.Step) error {
 		// the attempts the supervision policy allows.
 		s.ConsecutiveBlocks = 0
 		s.ConsecutiveSkips = 0
+		s.resetInvestigation()
 		s.Phase = PhaseRunning
 
 	case domain.StepRunFinished:

@@ -34,6 +34,20 @@ type scriptedPlanner struct {
 	calls     int
 }
 
+type recordingRuntimeMetrics struct {
+	planning   int
+	duplicates int
+	stalls     int
+}
+
+func (m *recordingRuntimeMetrics) Planning(domain.PromptInputBreakdown, domain.Cost) {
+	m.planning++
+}
+
+func (m *recordingRuntimeMetrics) CanonicalDuplicate() { m.duplicates++ }
+
+func (m *recordingRuntimeMetrics) InvestigationStalled() { m.stalls++ }
+
 func (p *scriptedPlanner) Plan(context.Context, PlanInput) (Proposal, error) {
 	p.calls++
 	if p.calls > len(p.proposals) {
@@ -53,10 +67,12 @@ type countingTools struct {
 	calls       []Call
 	content     ContentStore
 	body        []byte
+	bodies      [][]byte
 	reserveErr  error
 	err         error
 	failed      bool
 	errorCode   string
+	cached      bool
 }
 
 func (c *countingTools) Reserve(context.Context, Call) error {
@@ -66,9 +82,17 @@ func (c *countingTools) Reserve(context.Context, Call) error {
 func (c *countingTools) Invoke(ctx context.Context, call Call) (ToolResult, error) {
 	c.invocations = append(c.invocations, call.Tool)
 	c.calls = append(c.calls, call)
-	result := ToolResult{Failed: c.failed, ErrorCode: c.errorCode}
-	if len(c.body) > 0 {
-		ref, err := c.content.Put(ctx, call.RunID, call.Seq, c.body)
+	result := ToolResult{Failed: c.failed, ErrorCode: c.errorCode, Cached: c.cached}
+	body := c.body
+	if i := len(c.invocations) - 1; i < len(c.bodies) {
+		body = c.bodies[i]
+	}
+	if !result.Failed {
+		result.ResultDigest = ResultDigest(body)
+		result.ResultBytes = int64(len(body))
+	}
+	if len(body) > 0 {
+		ref, err := c.content.Put(ctx, call.RunID, call.Seq, body)
 		if err != nil {
 			return ToolResult{}, err
 		}
@@ -1625,6 +1649,117 @@ func TestAdvance_planKeepsProposingADuplicateCall_parksInsteadOfLooping(t *testi
 	}
 	if len(h.tools.invocations) != 1 {
 		t.Errorf("tool invocations = %d, want only the original call", len(h.tools.invocations))
+	}
+}
+
+func TestAdvance_distinctReadCallsReturningTheSameResult_parkBeforeAnotherPaidTurn(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	proposals := []Proposal{
+		{Tool: "crm.lookup", Args: []byte(`{"query":"first"}`), Cost: domain.Cost{Micros: 900_000}},
+		{Tool: "crm.lookup", Args: []byte(`{"query":"second"}`), Cost: domain.Cost{Micros: 900_000}},
+		{Tool: "crm.lookup", Args: []byte(`{"query":"third"}`), Cost: domain.Cost{Micros: 900_000}},
+	}
+	h := newHarness(t, proposals...)
+	metrics := &recordingRuntimeMetrics{}
+	h.runner.deps.Metrics = metrics
+	h.tools.cached = true
+	start := h.start(t, domain.Budget{Micros: 5_000_000, ToolCalls: 20, Steps: 50})
+
+	for range proposals {
+		if _, err := h.runner.Advance(ctx, start); err != nil {
+			t.Fatalf("Advance: %v", err)
+		}
+	}
+	st, err := h.runner.Advance(ctx, start)
+	if err != nil {
+		t.Fatalf("stalled Advance: %v", err)
+	}
+
+	if st.Phase != PhaseParked {
+		t.Fatalf("Phase = %v, want parked; steps: %v", st.Phase, h.kinds(t))
+	}
+	if h.planner.calls != len(proposals) {
+		t.Fatalf("planner calls = %d, want %d before parking", h.planner.calls, len(proposals))
+	}
+	if len(h.tools.invocations) != len(proposals) {
+		t.Fatalf("tool calls = %d, want %d", len(h.tools.invocations), len(proposals))
+	}
+	if metrics.planning != len(proposals) || metrics.stalls != 1 {
+		t.Fatalf("metrics = %+v, want %d plans and one stall", metrics, len(proposals))
+	}
+	var parked domain.ParkedPayload
+	if err := h.lastPayloadOf(t, domain.StepParked, &parked); err != nil {
+		t.Fatalf("parked payload: %v", err)
+	}
+	if parked.Reason != "investigation_stalled" {
+		t.Errorf("reason = %q, want investigation_stalled", parked.Reason)
+	}
+	if parked.Investigation == nil || parked.Investigation.Tool != "crm.lookup" ||
+		parked.Investigation.Calls != len(proposals) || parked.Investigation.ResultBytes == 0 ||
+		parked.Investigation.CachedCalls != len(proposals) || parked.Investigation.ResultDigest == "" {
+		t.Fatalf("investigation = %+v", parked.Investigation)
+	}
+}
+
+func TestAdvance_canonicalDuplicate_recordsTheEfficiencyEvent(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t,
+		Proposal{Tool: "crm.lookup", Args: []byte(`{"id":42,"active":true}`)},
+		Proposal{Tool: "crm.lookup", Args: []byte("{\n  \"active\": true, \"id\": 42\n}")},
+	)
+	metrics := &recordingRuntimeMetrics{}
+	h.runner.deps.Metrics = metrics
+	start := h.start(t, generousBudget())
+
+	for range 2 {
+		if _, err := h.runner.Advance(ctx, start); err != nil {
+			t.Fatalf("Advance: %v", err)
+		}
+	}
+
+	if len(h.tools.invocations) != 1 {
+		t.Fatalf("tool calls = %d, want one", len(h.tools.invocations))
+	}
+	if metrics.duplicates != 1 || metrics.planning != 2 {
+		t.Fatalf("metrics = %+v, want one canonical duplicate and two plans", metrics)
+	}
+}
+
+func TestAdvance_readResultChanges_resetsTheStalledInvestigation(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	proposals := []Proposal{
+		{Tool: "crm.lookup", Args: []byte(`{"query":"first"}`)},
+		{Tool: "crm.lookup", Args: []byte(`{"query":"second"}`)},
+		{Tool: "crm.lookup", Args: []byte(`{"query":"third"}`)},
+		{Tool: "crm.lookup", Args: []byte(`{"query":"fourth"}`)},
+	}
+	h := newHarness(t, proposals...)
+	h.tools.bodies = [][]byte{
+		[]byte(`{"page":1}`), []byte(`{"page":1}`),
+		[]byte(`{"page":2}`), []byte(`{"page":2}`),
+	}
+	start := h.start(t, generousBudget())
+
+	var st Status
+	for range len(proposals) + 1 {
+		var err error
+		st, err = h.runner.Advance(ctx, start)
+		if err != nil {
+			t.Fatalf("Advance: %v", err)
+		}
+	}
+
+	if st.Phase != PhaseFinished {
+		t.Fatalf("Phase = %v, want finished; steps: %v", st.Phase, h.kinds(t))
+	}
+	if len(h.tools.invocations) != len(proposals) {
+		t.Fatalf("tool calls = %d, want %d", len(h.tools.invocations), len(proposals))
 	}
 }
 
