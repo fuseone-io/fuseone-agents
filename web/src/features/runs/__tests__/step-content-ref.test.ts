@@ -36,4 +36,22 @@ describe("what a step offers", () => {
       citableAsEvidence(step("tool_returned", { result_ref: "run://x/2/ab" })),
     ).toBe(false);
   });
+
+  // The server resolves this one — a memory_suggestion citation points at these
+  // arguments — and the screen still does not offer it. That proposal is in the
+  // review queue: accepting it is how it becomes memory. A second door here
+  // would write the fact while leaving the proposal pending against it. Anyone
+  // widening this rule to match the server has to delete this test first, which
+  // is the point of it being here.
+  it("does not offer to teach from a proposal already in the queue", () => {
+    expect(
+      citableAsEvidence(
+        step("tool_called", {
+          tool: "$fuseone.memory.suggest",
+          args_ref: "run://x/4/cd",
+          args_digest: "cd".repeat(8),
+        }),
+      ),
+    ).toBe(false);
+  });
 });
