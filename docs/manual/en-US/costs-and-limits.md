@@ -70,6 +70,12 @@ input, output, cache read and cache write because they do not cost the same.
 Even when cache read is cheap, it is still consumption. A good optimisation is
 one that appears in accounting, not one that disappears from it.
 
+For Anthropic, FuseOne marks the stable system text and the previous
+ledger-derived transcript prefix as cacheable. Step guidance, memory guidance
+and remaining-budget notes stay after that cached prefix because they can
+change on every turn. Cache read and cache write tokens remain visible in the
+run and in low-cardinality worker metrics.
+
 ## Finding what made the prompt large
 
 The run trail shows prompt content on each model proposal: instructions, input,
@@ -90,12 +96,23 @@ long fields shortened and a separate platform note with the stored size and a
 digest. This is most visible when a Slack alert or thread carries a large
 payload before the agent has called any tool.
 
-Large Grafana Loki and Prometheus query results, and large GitHub pull-request
-diffs, file contents, commits and logs, are compacted before they are shown to
-the model on later turns. The full tool result remains in the run content store
-and trail; the model receives a compact view with the beginning, the end, the
-stored size and a digest. This keeps observability dumps and PR diffs from
-crowding out the next decision without changing the audit record.
+Large Grafana Loki and Prometheus results, GitHub review material and Outline
+fetch, list and search results are compacted before later model turns. The full
+result size and digest remain in the run trail; the content store keeps its
+bounded copy under the installation content limit. The model receives a compact
+view with the beginning, the end, the original size and the digest.
+
+There is also a total tool-result transcript budget. Recent evidence is kept;
+older results become explicit receipts naming the tool, original result size,
+digest and omitted bytes. A receipt never means the content was absent, and it
+does not delete the stored copy. It tells the model to make another call only
+when it can materially narrow the query.
+
+Worker metrics expose aggregate prompt result bytes with `sent` and `elided`
+dispositions, provider cache tokens with `read` and `write` operations,
+canonical duplicate skips and stalled investigations. They deliberately omit
+run, agent, tool, user and query labels; tool attribution stays in each run's
+trail.
 
 ## Configuration checklist
 

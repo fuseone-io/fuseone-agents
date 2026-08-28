@@ -70,6 +70,12 @@ output, cache read e cache write porque eles não custam igual.
 Mesmo quando cache read é barato, ele ainda é consumo. Otimização boa é aquela
 que aparece na contabilidade, não a que desaparece dela.
 
+Para Anthropic, o FuseOne marca como cacheáveis o texto de sistema estável e o
+prefixo anterior da trilha reconstruída. Orientação da etapa, orientação de
+memória e nota de orçamento restante ficam depois desse prefixo, porque podem
+mudar a cada turno. Tokens de cache read e cache write continuam visíveis na
+execução e nas métricas de baixa cardinalidade do worker.
+
 ## Descobrir o que deixou o prompt grande
 
 A trilha da run mostra o conteúdo do prompt em cada proposta do modelo:
@@ -92,13 +98,24 @@ com tamanho guardado e digest. Isso aparece principalmente quando um alerta ou
 thread do Slack traz um payload grande antes de o agente chamar qualquer
 ferramenta.
 
-Resultados grandes de consultas Grafana Loki e Prometheus, e leituras grandes
-de GitHub para pull request, diff, conteúdo de arquivo, commits e logs, são
-compactados antes de serem mostrados ao modelo nos turnos seguintes. O
-resultado completo continua no content store da run e na trilha; o modelo
-recebe uma visão compacta com o começo, o fim, o tamanho guardado e um digest.
-Isso impede que dumps de observabilidade e diffs de PR ocupem a próxima
-decisão sem mudar o registro de auditoria.
+Resultados grandes de Grafana Loki e Prometheus, material de revisão do GitHub
+e resultados de fetch, list e search do Outline são compactados antes dos
+turnos seguintes do modelo. Tamanho e digest do resultado completo continuam na
+trilha; o content store mantém sua cópia limitada pelo teto da instalação. O
+modelo recebe uma visão compacta com começo, fim, tamanho original e digest.
+
+Também existe um orçamento total para resultados no transcript. Evidência
+recente é preservada; resultados antigos viram recibos explícitos com
+ferramenta, tamanho do resultado original, digest e bytes omitidos. Recibo nunca
+significa que o conteúdo não existia e não apaga a cópia armazenada. Ele orienta
+o modelo a fazer outra chamada somente quando conseguir restringir
+materialmente a consulta.
+
+Métricas do worker expõem bytes agregados de resultados no prompt como `sent`
+e `elided`, tokens de cache como `read` e `write`, duplicatas canônicas puladas
+e investigações estacionadas. Elas deliberadamente não usam execução, agente,
+ferramenta, pessoa ou consulta como label; a atribuição por ferramenta fica na
+trilha de cada execução.
 
 ## Checklist de configuração
 

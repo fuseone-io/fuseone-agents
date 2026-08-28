@@ -43,6 +43,13 @@ The most common question, and the trail answers it in different ways:
 
 **Hit a ceiling** — cost, steps, tokens or calls. The refusal carries the ceiling, the spend against it, and the estimate for the call that crossed.
 
+**The investigation stopped making progress** — three canonically different
+calls to the same read tool returned the same complete result. The platform
+parks before buying another model turn. The parked step names the tool, call
+count, original result size, cache-hit count and result digest. Resume after
+narrowing the investigation or checking why the source keeps returning the
+same evidence.
+
 **A provider failure** — overloaded, rate limited, a rejected key. The cause appears with the provider and a code, and the `Runtime` screen shows whether it is happening to everybody.
 
 ## Cost reads zero
@@ -65,6 +72,11 @@ It probably did not. An instruction guides the model, but **a step's `stopsWhen`
 
 ### The run got expensive
 
-Look at the steps: several identical calls in a row usually mean the agent retrying without progressing. A step ceiling exists for that.
+Open the **The model proposed** steps and compare prompt composition. The trail
+separates tool-result bytes sent to the model from bytes omitted by compaction,
+and attributes them by tool. Several equivalent calls are skipped by canonical
+call identity. Different read calls that repeatedly produce the same complete
+result park as `investigation_stalled` before the money ceiling becomes the
+only stop.
 
 What decides each stop is in [What the platform stops before it happens](what-the-gate-stops.md) and in [Policies](policies.md).
