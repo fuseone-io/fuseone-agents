@@ -34,12 +34,14 @@ import { problemMessage } from "@/lib/api/problem-message";
 
 export function MemoryCreatePanel({
   framed = true,
+  visible = true,
   onExit,
   onDone,
   onDiscard,
   onDirtyChange,
 }: {
   framed?: boolean;
+  visible?: boolean;
   onExit?: () => void;
   onDone?: () => void;
   onDiscard?: () => void;
@@ -54,7 +56,7 @@ export function MemoryCreatePanel({
     mode: "onChange",
     defaultValues: memoryDefaults(activeCompany, activeArea),
   });
-  const match = useMemoryCreateMatch(form);
+  const match = useMemoryCreateMatch(form, { enabled: visible });
   const reason = useWatch({ control: form.control, name: "reason" });
   const isDirty = form.formState.isDirty;
 

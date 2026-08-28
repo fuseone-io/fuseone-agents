@@ -155,6 +155,7 @@ function ReaderSide({
         <div className={props.state.composing ? undefined : "hidden"}>
           <MemoryCreatePanel
             framed={false}
+            visible={props.state.composing}
             onExit={props.onComposeExit}
             onDone={props.onComposeDone}
             onDiscard={props.onComposeDiscard}

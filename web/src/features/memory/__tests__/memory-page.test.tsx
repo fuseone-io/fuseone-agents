@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryPage } from "@/features/memory/memory-page";
@@ -239,6 +239,24 @@ describe("governed memory page", () => {
     expect(screen.getByLabelText("Subject")).toHaveValue("grafana datasource");
   });
 
+  it("does not inspect a creation draft while its panel is hidden", async () => {
+    const user = userEvent.setup();
+    const fetch = vi.fn(async () => json({}));
+    vi.stubGlobal("fetch", fetch);
+    hooks.items = [memoryAssertion(0)];
+    renderMemoryPageWithClient();
+
+    await user.click(screen.getByRole("button", { name: "Record memory" }));
+    await fillMemoryIdentity(user);
+    await user.type(screen.getByLabelText("Run"), "run_1");
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    });
+
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("records a reviewed assertion with ledger evidence", async () => {
     stubMemoryAuthoringNetwork();
     const user = userEvent.setup();
@@ -461,6 +479,12 @@ async function fillAssertion(user: ReturnType<typeof userEvent.setup>) {
   );
   await user.type(screen.getByLabelText("Run"), "run_1");
   await user.type(screen.getByLabelText("Why"), "Reviewed after close");
+}
+
+async function fillMemoryIdentity(user: ReturnType<typeof userEvent.setup>) {
+  await user.type(screen.getByLabelText("Kind"), "incident");
+  await user.type(screen.getByLabelText("Subject"), "grafana datasource");
+  await user.type(screen.getByLabelText("Signature"), "grafana.datasource.down");
 }
 
 function memoryAssertion(index: number): MemoryAssertion {
