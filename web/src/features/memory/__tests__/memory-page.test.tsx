@@ -266,12 +266,52 @@ describe("governed memory page", () => {
       within(dialog).getByRole("button", { name: "Accept suggestion" }),
     );
 
+    // No claim: they agreed with the wording as well as with the fact, and
+    // sending back the text they did not touch would record a different
+    // agreement from the one they made.
     expect(hooks.accept.mock.calls[0]?.[0]).toEqual({
       id: "suggestion_0",
       company: "acme",
       area: "ops",
       reason: "observed twice",
     });
+  });
+
+  it("accepts a suggestion in better words", async () => {
+    const user = userEvent.setup();
+    hooks.suggestions = [memorySuggestion(0)];
+    render(<MemoryPage />);
+
+    await user.click(screen.getByRole("tab", { name: "Suggested memory" }));
+    await user.click(screen.getByRole("button", { name: "Accept suggestion" }));
+    const dialog = screen.getByRole("alertdialog");
+    const claim = within(dialog).getByLabelText("Claim");
+    await user.clear(claim);
+    await user.type(claim, "the refund ceiling is R$ 500");
+    await user.type(within(dialog).getByLabelText("Why"), "clearer wording");
+    await user.click(
+      within(dialog).getByRole("button", { name: "Accept suggestion" }),
+    );
+
+    expect(hooks.accept.mock.calls[0]?.[0]).toMatchObject({
+      claim: "the refund ceiling is R$ 500",
+      reason: "clearer wording",
+    });
+  });
+
+  // The identity is what runs search for. Rewriting it here would mark this
+  // proposal accepted for a fact nobody proposed, so it is not offered.
+  it("does not offer to rewrite the identity of a proposal", async () => {
+    const user = userEvent.setup();
+    hooks.suggestions = [memorySuggestion(0)];
+    render(<MemoryPage />);
+
+    await user.click(screen.getByRole("tab", { name: "Suggested memory" }));
+    await user.click(screen.getByRole("button", { name: "Accept suggestion" }));
+    const dialog = screen.getByRole("alertdialog");
+
+    expect(within(dialog).queryByLabelText("Subject")).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText("Signature")).not.toBeInTheDocument();
   });
 
   it("shows that more memory suggestions exist instead of cutting silently", async () => {
