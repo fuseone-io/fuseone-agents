@@ -16,6 +16,27 @@
   --sl-color-text-accent: #7ee5de;
 }
 
+@media (min-width: 50rem) {
+  :root {
+    --sl-sidebar-width: 17rem;
+    --sl-sidebar-pad-x: 0.75rem;
+  }
+
+  #starlight__sidebar a {
+    font-size: 0.8125rem;
+  }
+
+  #starlight__sidebar .large {
+    font-size: 0.9375rem;
+  }
+}
+
+@media (min-width: 72rem) {
+  [data-has-sidebar][data-has-toc] .main-pane {
+    --sl-content-margin-inline: auto;
+  }
+}
+
 .mermaid-diagram {
   width: 100%;
   margin: 1.5rem 0;
