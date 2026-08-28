@@ -3596,6 +3596,50 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /admin/memory/match:
+    post:
+      tags: [admin]
+      operationId: matchMemory
+      summary: What the platform already holds for an identity
+      description: >
+        Asked while somebody is composing a memory, so they can see what they
+        are about to duplicate. Keyed on the canonical identity, so a fact
+        taught as "Grafana Datasource" answers somebody typing
+        "grafana  datasource".
+
+        Every state, including the ones recall will not return: an expired
+        memory is why the fact looks unknown, and a disabled one says somebody
+        decided against it. Shared memory is answered apart from the agent's
+        own, because improving it is an act taken against the shared row.
+
+        POST rather than GET: the subject and signature are what somebody typed
+        into a memory, and a query string puts them in browser history, proxy
+        logs and access logs. Nothing here writes, and it is not on the path a
+        run takes to recall memory.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MemoryMatchInput' }
+      responses:
+        '200':
+          description: What is already here for this identity.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MemoryMatch' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: |
+            More than one row is this identity. Duplicates written before the
+            canonical key existed cannot be told apart by a machine, and showing
+            whichever sorted first would present half the problem as the whole
+            of it.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
   /admin/memory/assertions/{assertionId}/reactivate:
     post:
       tags: [admin]
@@ -3689,7 +3733,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/MemorySuggestionReviewInput' }
+            schema: { $ref: '#/components/schemas/MemorySuggestionAcceptInput' }
       responses:
         '200':
           description: The accepted assertion now projected for recall.
@@ -4189,15 +4233,24 @@ components:
     MemoryAssertionInput:
       type: object
       description: >
-        A human-curated memory assertion. Labels are deliberately absent: the
-        server derives them from evidence in the immutable run ledger.
-      required: [company, area, kind, subject, signature, claim, evidence, reason]
+        A human-curated memory assertion, in the fields a person can answer.
+        Labels, the agent, the counters and the expiry are all absent on
+        purpose: the server derives them from the run the evidence names and
+        from policy, because every one of them changes what the memory means
+        and none of them is something a caller should be able to assert about
+        itself.
+      required: [company, area, namespace, kind, subject, signature, claim, evidence, reason]
       properties:
         company: { type: string }
         area: { type: string }
-        agentId:
+        namespace:
           type: string
-          description: Omit for memory shared by agents in the same scope.
+          enum: [agent, shared]
+          description: >
+            Who reads this memory. `agent` is the agent whose run the evidence
+            names; `shared` is every agent in the scope. An explicit choice
+            rather than an omitted field, because shared memory is what every
+            agent reads and nobody should reach it by leaving something blank.
         kind: { type: string }
         subject: { type: string }
         signature: { type: string }
@@ -4206,13 +4259,77 @@ components:
           type: array
           minItems: 1
           maxItems: 8
-          items: { $ref: '#/components/schemas/MemoryEvidence' }
-        observations: { type: integer, format: int64, minimum: 0, default: 1 }
-        confirmed: { type: integer, format: int64, minimum: 0, default: 1 }
-        expiresAt: { type: string, format: date-time, nullable: true }
+          items: { $ref: '#/components/schemas/MemoryEvidenceInput' }
         reason:
           type: string
           description: Why a person decided this assertion should be remembered.
+        overrideSecretWarning:
+          type: boolean
+          description: >
+            Record this even though it looks like it may contain a credential.
+            An override, not a receipt: the server does not and cannot know that
+            a person was shown `fuseone:memory-secret-warned` first, so this is
+            simply somebody with publish permission taking responsibility. The
+            assertion is labelled `secret` when it is used, which is what makes
+            the decision visible afterwards in the row and in the audit event.
+            Content that certainly is a key is refused whatever this says.
+
+    MemoryEvidenceInput:
+      type: object
+      required: [runId]
+      description: >
+        Which run, and which of the things it produced. The digest is absent on
+        purpose: it is sixty-four characters nobody knows by heart, the ledger
+        already holds it, and asking a person to copy it is asking them to
+        retype something the platform is about to check against its own record.
+      properties:
+        runId: { type: string }
+        artifact:
+          type: string
+          description: >
+            Which of the run's outputs. Defaults to the closing answer, which is
+            what a memory taught from a run almost always cites.
+
+    MemoryMatchInput:
+      type: object
+      required: [company, area, namespace, kind, subject, signature]
+      properties:
+        company: { type: string }
+        area: { type: string }
+        namespace:
+          type: string
+          enum: [agent, shared]
+          description: The namespace being taught, which decides what covers it.
+        agentId:
+          type: string
+          description: >
+            Whose namespace, when `namespace` is `agent`. Unlike creation, this
+            is asked for rather than derived: there is no evidence yet to read
+            an agent from, because nothing has been composed.
+        kind: { type: string }
+        subject: { type: string }
+        signature: { type: string }
+
+    MemoryMatch:
+      type: object
+      description: >
+        What is already here. Every field may be absent, and all three absent
+        means the fact is new.
+      properties:
+        own:
+          allOf: [{ $ref: '#/components/schemas/MemoryAssertion' }]
+          nullable: true
+          description: The memory in the namespace being taught.
+        shared:
+          allOf: [{ $ref: '#/components/schemas/MemoryAssertion' }]
+          nullable: true
+          description: >
+            The memory every agent in the scope reads, when an agent-scoped
+            question is covered by one. Never set for a shared question.
+        pending:
+          allOf: [{ $ref: '#/components/schemas/MemorySuggestion' }]
+          nullable: true
+          description: The proposal nobody has decided yet.
 
     MemoryDisableInput:
       type: object
@@ -4292,6 +4409,34 @@ components:
         reason:
           type: string
           description: Why a person accepted or dismissed this suggestion.
+
+    MemorySuggestionAcceptInput:
+      type: object
+      required: [company, area, reason]
+      properties:
+        company: { type: string }
+        area: { type: string }
+        reason:
+          type: string
+          description: Why a person agreed to this suggestion.
+        claim:
+          type: string
+          maxLength: 1200
+          description: >
+            The claim in the words being agreed to, when a person rewrote what
+            the agent proposed. Omit to accept the wording as well as the fact.
+
+            Only the claim. Subject, signature and kind are the identity:
+            changing one here would not correct this memory, it would create a
+            different one and mark this proposal accepted for a fact nobody
+            proposed. Somebody who means that dismisses the proposal and teaches
+            the other fact, which is two acts because it is two decisions.
+        overrideSecretWarning:
+          type: boolean
+          description: >
+            Record this even though the corrected claim looks like it may
+            contain a credential. Same meaning as on creation: an override, not
+            a receipt, and the assertion is labelled `secret` when it is used.
 
     MemoryAssertionPage:
       type: object

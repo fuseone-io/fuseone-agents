@@ -645,8 +645,8 @@ func TestPostgresSuggest_acceptancePromotesOnlyPendingMemory(t *testing.T) {
 		t.Fatalf("suggestion = %+v, want repeated pending suggestion merged with labels", second.Suggestion)
 	}
 
-	accepted, err := store.AcceptSuggestion(ctx, first.Suggestion.ID, platformScope,
-		"usr_ana", "reviewed", now.Add(2*time.Minute))
+	accepted, err := store.AcceptSuggestion(ctx, memory.AcceptInput{
+		ID: first.Suggestion.ID, Scope: platformScope, By: "usr_ana", Reason: "reviewed", Now: now.Add(2 * time.Minute)})
 	if err != nil {
 		t.Fatalf("AcceptSuggestion: %v", err)
 	}
@@ -832,7 +832,7 @@ func (failingStore) ListSuggestions(context.Context, memory.SuggestionFilter) ([
 }
 
 func (failingStore) AcceptSuggestion(
-	context.Context, string, domain.Scope, domain.UserID, string, time.Time,
+	context.Context, memory.AcceptInput,
 ) (domain.MemoryAssertion, error) {
 	return domain.MemoryAssertion{}, errors.New("down")
 }
@@ -1310,6 +1310,8 @@ func findMemory(t *testing.T, store *memory.Memory, now time.Time) []domain.Memo
 	return found
 }
 
+func ptrTo[T any](v T) *T { return &v }
+
 func subjects(assertions []domain.MemoryAssertion) []string {
 	out := make([]string, 0, len(assertions))
 	for _, a := range assertions {
@@ -1446,7 +1448,7 @@ func TestPostgresAssert_concurrentCorrectionsOfOneFact_loseNothing(t *testing.T)
 type mergeStore interface {
 	Assert(context.Context, domain.MemoryAssertion, domain.UserID, string, time.Time) (domain.MemoryAssertion, error)
 	Suggest(context.Context, domain.MemorySuggestion, domain.MemoryLearningPolicy, domain.UserID, time.Time) (domain.MemorySuggestionOutcome, error)
-	AcceptSuggestion(context.Context, string, domain.Scope, domain.UserID, string, time.Time) (domain.MemoryAssertion, error)
+	AcceptSuggestion(context.Context, memory.AcceptInput) (domain.MemoryAssertion, error)
 	ListSuggestions(context.Context, memory.SuggestionFilter) ([]domain.MemorySuggestion, error)
 	Find(context.Context, domain.MemoryQuery) ([]domain.MemoryAssertion, error)
 }
@@ -1490,7 +1492,7 @@ func expectAcceptMergesIntoTheStoredAssertion(t *testing.T, ctx context.Context,
 		t.Fatalf("Assert: %v", err)
 	}
 
-	got, err := store.AcceptSuggestion(ctx, out.Suggestion.ID, platformScope, "usr_ana", "agreed", now)
+	got, err := store.AcceptSuggestion(ctx, memory.AcceptInput{ID: out.Suggestion.ID, Scope: platformScope, By: "usr_ana", Reason: "agreed", Now: now})
 	if err != nil {
 		t.Fatalf("AcceptSuggestion: %v", err)
 	}
@@ -1539,7 +1541,7 @@ func expectAcceptOnADisabledAssertionConsumesNothing(t *testing.T, ctx context.C
 		t.Fatalf("Suggest: %v", err)
 	}
 
-	if _, err := store.AcceptSuggestion(ctx, out.Suggestion.ID, platformScope, "usr_ana", "agreed", now); err == nil {
+	if _, err := store.AcceptSuggestion(ctx, memory.AcceptInput{ID: out.Suggestion.ID, Scope: platformScope, By: "usr_ana", Reason: "agreed", Now: now}); err == nil {
 		t.Fatal("accepted onto a disabled memory")
 	}
 
@@ -2032,6 +2034,222 @@ func countEvents(t *testing.T, ctx context.Context, pool *pgxpool.Pool, id strin
 	return n
 }
 
+/*
+Auto-confirm is the third door, and it has nobody standing in it.
+
+A policy confirming a repeated observation writes active memory with no person
+involved — so a proposal carrying a private key would become readable to every
+run on the strength of having been made twice, with no refusal, no override and
+no label anywhere. There is no override on this path because there is nobody to
+give one.
+
+It waits instead. Not an error: failing would fail the tool call inside a run
+that did nothing wrong. The proposal stays in the queue, which is where somebody
+can see it.
+*/
+func TestSuggest_autoConfirmingSomethingShapedLikeACredential_waitsForAPerson(t *testing.T) {
+	t.Parallel()
+	for name, claim := range credentialShapes {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			expectAutoConfirmHoldsACredential(t, context.Background(), memory.NewMemory(), claim)
+		})
+	}
+}
+
+func TestPostgresSuggest_autoConfirmingSomethingShapedLikeACredential_waitsForAPerson(t *testing.T) {
+	for name, claim := range credentialShapes {
+		t.Run(name, func(t *testing.T) {
+			ctx, store := postgresStore(t)
+			expectAutoConfirmHoldsACredential(t, ctx, store, claim)
+		})
+	}
+}
+
+/*
+Both levels wait, and the second is the one worth naming.
+
+A recognised key is refused whatever anybody says, so it would still have waited
+here if this path had been given an override it has no person for. Text that is
+merely long and random is the level an override clears — and on this path there
+is nobody to give one.
+*/
+var credentialShapes = map[string]string{
+	"a recognised key": "the deploy key is -----BEGIN RSA PRIVATE KEY-----",
+	"something opaque": "the correlation id was aB3" + strings.Repeat("xY7z", 10),
+}
+
+func expectAutoConfirmHoldsACredential(
+	t *testing.T, ctx context.Context, store mergeStore, credentialShaped string,
+) {
+	t.Helper()
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+	policy := domain.MemoryLearningPolicy{
+		Mode: domain.MemoryLearningAutoConfirm, MinObservations: 2,
+	}
+	carries := func(s *domain.MemorySuggestion) { s.Claim = credentialShaped }
+
+	var out domain.MemorySuggestionOutcome
+	for i, run := range []domain.RunID{"run-1", "run-2"} {
+		var err error
+		out, err = store.Suggest(ctx, suggestion(func(s *domain.MemorySuggestion) {
+			carries(s)
+			s.Evidence = []domain.MemoryEvidence{{
+				RunID: run, Seq: 1, Artifact: domain.ArtifactMemorySuggestion,
+				Digest: "sha256:abcd",
+			}}
+		}), policy, "agent:triage", now.Add(time.Duration(i)*time.Minute))
+		if err != nil {
+			t.Fatalf("Suggest %s: %v", run, err)
+		}
+	}
+
+	// The threshold was reached: without this rule the second sighting would
+	// have confirmed it.
+	if out.Suggestion.Observations < policy.MinObservations {
+		t.Fatalf("observations = %d, want the threshold met", out.Suggestion.Observations)
+	}
+	if out.Result != domain.MemorySuggestPending {
+		t.Errorf("result = %s, want it left for somebody to read", out.Result)
+	}
+	if out.Assertion != nil {
+		t.Errorf("assertion = %+v, want nothing written", out.Assertion)
+	}
+
+	readable, err := store.Find(ctx, domain.MemoryQuery{
+		Scope: platformScope, AgentID: "triage", Now: now.Add(time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if len(readable) != 0 {
+		t.Errorf("find returned %d, want no run able to recall it", len(readable))
+	}
+
+	pending, err := store.ListSuggestions(ctx, memory.SuggestionFilter{
+		Scopes: []domain.Scope{platformScope},
+		Status: domain.MemorySuggestionPending, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("ListSuggestions: %v", err)
+	}
+	if len(pending) != 1 {
+		t.Errorf("pending = %d, want the proposal waiting for a person", len(pending))
+	}
+}
+
+/*
+Accepting with better words is one act, not two.
+
+The person agreeing is often the one who can say it more clearly than the agent
+did, and making them accept first and correct afterwards would put a memory
+nobody quite meant in front of every run in between — and leave the queue
+emptied against it if the second act never happened.
+
+So the claim is signed inside the same transaction, under the same lock, through
+the same merge. What comes back is the assertion in the words that were agreed
+to; the proposal keeps what the agent actually said.
+*/
+func TestAccept_withACorrectedClaim_writesTheWordsThatWereAgreed(t *testing.T) {
+	t.Parallel()
+	expectAcceptTakesTheCorrectedClaim(t, context.Background(), memory.NewMemory())
+}
+
+func TestPostgresAccept_withACorrectedClaim_writesTheWordsThatWereAgreed(t *testing.T) {
+	ctx, store := postgresStore(t)
+	expectAcceptTakesTheCorrectedClaim(t, ctx, store)
+}
+
+func expectAcceptTakesTheCorrectedClaim(t *testing.T, ctx context.Context, store mergeStore) {
+	t.Helper()
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+	out, err := store.Suggest(ctx, suggestion(nil), reviewPolicy, "agent:triage", now)
+	if err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+	better := "refresh the datasource token, then check the health endpoint"
+
+	accepted, err := store.AcceptSuggestion(ctx, memory.AcceptInput{
+		ID: out.Suggestion.ID, Scope: platformScope, By: "usr_ana",
+		Reason: "the runbook narrowed it", Claim: &better, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("AcceptSuggestion: %v", err)
+	}
+	if accepted.Claim != better {
+		t.Errorf("claim = %q, want the words that were agreed to", accepted.Claim)
+	}
+	// The identity is not the claim's to change: the memory answers the same
+	// question, in better words.
+	if accepted.Subject != out.Suggestion.Subject ||
+		accepted.Signature != out.Suggestion.Signature ||
+		accepted.Kind != out.Suggestion.Kind {
+		t.Errorf("identity moved to %s/%s/%s", accepted.Kind, accepted.Subject, accepted.Signature)
+	}
+
+	// The proposal keeps what the agent said. A queue that rewrote itself to
+	// match the decision would lose the only record of what was proposed.
+	found, err := store.ListSuggestions(ctx, memory.SuggestionFilter{
+		Scopes: []domain.Scope{platformScope}, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("ListSuggestions: %v", err)
+	}
+	if len(found) != 1 {
+		t.Fatalf("suggestions = %d, want the one that was decided", len(found))
+	}
+	if found[0].Claim != out.Suggestion.Claim {
+		t.Errorf("the proposal now reads %q, want what the agent proposed", found[0].Claim)
+	}
+	if found[0].Status != domain.MemorySuggestionAccepted {
+		t.Errorf("status = %s, want the proposal spent", found[0].Status)
+	}
+}
+
+/*
+An accept nobody explained, and a claim the store would not take, are refused.
+
+Both used to reach the merge unchecked: assertionFromSuggestion never validated,
+so a proposal recorded before a rule existed — or a claim somebody replaced with
+something too long — arrived as an assertion the store had never agreed to hold.
+*/
+func TestAccept_withoutAReasonOrWithAnImpossibleClaim_isRefused(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := memory.NewMemory()
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+	out, err := store.Suggest(ctx, suggestion(nil), reviewPolicy, "agent:triage", now)
+	if err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+
+	for _, c := range []struct {
+		name string
+		in   memory.AcceptInput
+	}{
+		{"no reason", memory.AcceptInput{
+			ID: out.Suggestion.ID, Scope: platformScope, By: "usr_ana",
+			Reason: "   ", Now: now,
+		}},
+		{"a claim nobody could read", memory.AcceptInput{
+			ID: out.Suggestion.ID, Scope: platformScope, By: "usr_ana",
+			Reason: "agreed", Claim: ptrTo(strings.Repeat("a longer claim ", 200)), Now: now,
+		}},
+		// Present and empty is not omitted. Clearing the box and confirming
+		// would otherwise record an agreement to the text just deleted.
+		{"a claim somebody cleared", memory.AcceptInput{
+			ID: out.Suggestion.ID, Scope: platformScope, By: "usr_ana",
+			Reason: "agreed", Claim: ptrTo("   "), Now: now,
+		}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if _, err := store.AcceptSuggestion(ctx, c.in); !errors.Is(err, memory.ErrInvalid) {
+				t.Fatalf("AcceptSuggestion = %v, want the accept refused", err)
+			}
+		})
+	}
+}
+
 func TestAccept_mergesIntoTheStoredAssertion(t *testing.T) {
 	t.Parallel()
 	expectAcceptMergesIntoTheStoredAssertion(t, context.Background(), memory.NewMemory())
@@ -2083,8 +2301,8 @@ func TestPostgresAccept_failureAfterProjecting_leavesNothing(t *testing.T) {
 			`drop trigger if exists refuse_memory_event on memory_assertion_events`)
 	})
 
-	if _, err := store.AcceptSuggestion(ctx, out.Suggestion.ID, platformScope,
-		"usr_ana", "agreed", now); err == nil {
+	if _, err := store.AcceptSuggestion(ctx, memory.AcceptInput{
+		ID: out.Suggestion.ID, Scope: platformScope, By: "usr_ana", Reason: "agreed", Now: now}); err == nil {
 		t.Fatal("accept succeeded while the event was being refused")
 	}
 
@@ -2147,7 +2365,7 @@ func TestPostgresAccept_racingAutoConfirm_leavesOneMemoryAndOneEnding(t *testing
 	start.Add(1)
 	go func() {
 		start.Wait()
-		_, err := store.AcceptSuggestion(ctx, out.Suggestion.ID, platformScope, "usr_ana", "agreed", now)
+		_, err := store.AcceptSuggestion(ctx, memory.AcceptInput{ID: out.Suggestion.ID, Scope: platformScope, By: "usr_ana", Reason: "agreed", Now: now})
 		errs <- err
 	}()
 	go func() {
