@@ -80,9 +80,48 @@ describe("global memory authoring", () => {
 
     await fillMemory(user);
 
-    expect(await screen.findByText("Existing memory could not be checked")).toBeVisible();
+    expect(await screen.findByText("The evidence run could not be inspected")).toBeVisible();
     expect(screen.getByRole("button", { name: "Try again" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Save memory" })).toBeDisabled();
+  });
+
+  it("keeps save available when only the duplicate check fails", async () => {
+    const requests: RequestRecord[] = [];
+    stubNetwork(requests, {
+      match: Promise.resolve(new Response("{}", { status: 500 })),
+    });
+    const user = userEvent.setup();
+    renderPanel();
+
+    await fillMemory(user);
+
+    expect(await screen.findByText("Existing memory could not be checked")).toBeVisible();
+    expect(screen.getByText(
+      "You can retry or save; the server will still merge matching memory and reject conflicts.",
+    )).toBeVisible();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Save memory" })).toBeEnabled();
+  });
+
+  it("does not offer retry when an agent-scoped memory cites an agentless run", async () => {
+    const requests: RequestRecord[] = [];
+    stubNetwork(requests, { run: Promise.resolve(json(runRecord(null))) });
+    const user = userEvent.setup();
+    renderPanel();
+
+    await fillMemory(user);
+
+    expect(await screen.findByText("The evidence run has no agent")).toBeVisible();
+    expect(screen.getByText(
+      "Choose another run, or make this memory shared.",
+    )).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save memory" })).toBeDisabled();
+
+    await user.click(screen.getByRole("radio", { name: "Every agent in this scope" }));
+
+    await waitFor(() => expect(matches(requests)).toHaveLength(1));
+    expect(screen.getByRole("button", { name: "Save memory" })).toBeEnabled();
   });
 });
 
@@ -142,10 +181,10 @@ function matchBody(namespace: "agent" | "shared", agentId?: string) {
   };
 }
 
-function runRecord() {
+function runRecord(agentId: string | null = "triage") {
   return {
     runId: "run_1",
-    agentId: "triage",
+    ...(agentId ? { agentId } : {}),
     scope: { company: "acme", area: "ops" },
   };
 }

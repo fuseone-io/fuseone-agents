@@ -28,17 +28,38 @@ export function MemoryCreateMatchNotice({
       </div>
     );
   }
-  if (state.error) {
+  if (state.issue) {
+    const copy = {
+      run: {
+        title: "memory.evidenceRunCheckFailed",
+        hint: "memory.evidenceRunCheckFailedHint",
+      },
+      agent: {
+        title: "memory.evidenceRunAgentMissing",
+        hint: "memory.evidenceRunAgentMissingHint",
+      },
+      match: {
+        title: "memory.matchCheckFailed",
+        hint: "memory.matchCheckFailedHint",
+      },
+    }[state.issue.kind];
     return (
-      <Alert variant="destructive">
+      <Alert variant={state.issue.kind === "match" ? "default" : "destructive"}>
         <AlertCircle aria-hidden />
-        <AlertTitle>{t("memory.matchCheckFailed")}</AlertTitle>
+        <AlertTitle>{t(copy.title)}</AlertTitle>
         <AlertDescription className="grid gap-2">
-          <span>{t("memory.matchCheckFailedHint")}</span>
-          <Button type="button" size="sm" variant="outline" onClick={state.retry}>
-            <RefreshCw aria-hidden />
-            {t("common.retry")}
-          </Button>
+          <span>{t(copy.hint)}</span>
+          {"retry" in state.issue ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={state.issue.retry}
+            >
+              <RefreshCw aria-hidden />
+              {t("common.retry")}
+            </Button>
+          ) : null}
         </AlertDescription>
       </Alert>
     );

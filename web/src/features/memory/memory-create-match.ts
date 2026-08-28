@@ -4,6 +4,11 @@ import type { MemoryFormValues } from "@/features/memory/memory-form-schema";
 import { useRun } from "@/features/runs/api";
 import { useSettled } from "@/hooks/use-settled";
 
+type MemoryCreateMatchIssue =
+  | { kind: "run"; retry: () => void }
+  | { kind: "agent" }
+  | { kind: "match"; retry: () => void };
+
 /**
  * Resolves the evidence run before asking what the platform already knows.
  *
@@ -57,22 +62,25 @@ export function useMemoryCreateMatch(form: UseFormReturn<MemoryFormValues>) {
     },
     { enabled: runReady && identityInputSettled, settle: false },
   );
+  const matchSettled = match.isSuccess || match.isError;
   const ready =
     !identityComplete ||
-    (runReady && identityInputSettled && match.isSuccess);
-  const error = runInputSettled
-    ? run.error ??
-      (agentMissing ? new Error("memory: evidence run has no agent") : null) ??
-      (identityInputSettled ? match.error : null)
-    : null;
+    (runReady && identityInputSettled && !agentMissing && matchSettled);
+  let issue: MemoryCreateMatchIssue | null = null;
+  if (runInputSettled && run.error) {
+    issue = { kind: "run", retry: () => void run.refetch() };
+  } else if (agentMissing) {
+    issue = { kind: "agent" };
+  } else if (identityInputSettled && match.error) {
+    // Match is advisory. The write still merges identities and rejects conflicts.
+    issue = { kind: "match", retry: () => void match.refetch() };
+  }
 
   return {
-    data: ready ? match.data : undefined,
+    data: match.isSuccess ? match.data : undefined,
     required: identityComplete,
     ready,
-    loading: identityComplete && !ready && !error,
-    error,
-    retry: () =>
-      void (run.error || agentMissing ? run.refetch() : match.refetch()),
+    loading: identityComplete && !ready && !issue,
+    issue,
   };
 }
