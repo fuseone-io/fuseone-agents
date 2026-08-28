@@ -413,7 +413,32 @@ func TestBuildTranscript_largeNonCompactableResult_staysWhole(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	store := NewMemoryContent()
-	body := []byte(strings.Repeat("document ", 6<<10))
+	body := []byte(strings.Repeat("customer record ", 3<<10))
+	ref, err := store.Put(ctx, "run_1", 2, body)
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	turns, err := BuildTranscript(ctx, store, []domain.Step{{
+		RunID: "run_1", Seq: 2, Kind: domain.StepToolReturned,
+		Payload: payload(t, domain.ToolReturnedPayload{
+			Tool: "crm.lookup", ResultRef: ref,
+		}),
+	}})
+	if err != nil {
+		t.Fatalf("BuildTranscript: %v", err)
+	}
+
+	if len(turns) != 1 || string(turns[0].Content) != string(body) {
+		t.Fatalf("turns = %+v, want the non-compactable result untouched", turns)
+	}
+}
+
+func TestBuildTranscript_largeOutlineResult_isCompactedOnlyForTheModel(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := NewMemoryContent()
+	body := []byte(strings.Repeat("document body ", 7<<10))
 	ref, err := store.Put(ctx, "run_1", 2, body)
 	if err != nil {
 		t.Fatalf("Put: %v", err)
@@ -428,9 +453,96 @@ func TestBuildTranscript_largeNonCompactableResult_staysWhole(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildTranscript: %v", err)
 	}
+	if len(turns) != 1 || len(turns[0].Content) >= len(body) {
+		t.Fatalf("turns = %+v, want one compacted Outline result", turns)
+	}
+	got := string(turns[0].Content)
+	for _, want := range []string{"outline.fetch", digest(body), "--- omitted "} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("compacted result missing %q:\n%s", want, got)
+		}
+	}
+	stored, err := store.Get(ctx, ref)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if string(stored) != string(body) {
+		t.Fatal("the full Outline result did not remain in the content store")
+	}
+}
 
-	if len(turns) != 1 || string(turns[0].Content) != string(body) {
-		t.Fatalf("turns = %+v, want the non-compactable result untouched", turns)
+func TestBuildTranscript_manyMediumResults_haveABoundedPromptContribution(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := NewMemoryContent()
+	steps := []domain.Step{{
+		RunID: "run_1", Seq: 1, Kind: domain.StepRunStarted,
+		Payload: payload(t, domain.RunStartedPayload{Trigger: "cron"}),
+	}}
+
+	const results = 8
+	for i := 0; i < results; i++ {
+		calledSeq := int64(2 + i*2)
+		returnedSeq := calledSeq + 1
+		body := []byte(fmt.Sprintf("result-%d\n%s", i, strings.Repeat(string(rune('a'+i)), 20<<10)))
+		ref, err := store.Put(ctx, "run_1", returnedSeq, body)
+		if err != nil {
+			t.Fatalf("Put result %d: %v", i, err)
+		}
+		steps = append(steps,
+			domain.Step{
+				RunID: "run_1", Seq: calledSeq, Kind: domain.StepToolCalled,
+				IdemKey: fmt.Sprintf("call-%d", i),
+				Payload: payload(t, domain.ToolCalledPayload{Tool: "outline.list_documents"}),
+			},
+			domain.Step{
+				RunID: "run_1", Seq: returnedSeq, Kind: domain.StepToolReturned,
+				Labels: domain.NewLabels(domain.LabelUntrusted),
+				Payload: payload(t, domain.ToolReturnedPayload{
+					Tool: "outline.list_documents", ResultRef: ref,
+				}),
+			},
+		)
+	}
+
+	turns, err := BuildTranscript(ctx, store, steps)
+	if err != nil {
+		t.Fatalf("BuildTranscript: %v", err)
+	}
+	var sent int
+	var receipts int
+	for _, turn := range turns {
+		if turn.Kind != TurnToolResult {
+			continue
+		}
+		sent += len(turn.Content)
+		if strings.Contains(string(turn.Content), "transcript result budget") {
+			receipts++
+			for _, want := range []string{
+				"outline.list_documents", "Stored result:", "digest sha256:", "Omitted result bytes:",
+			} {
+				if !strings.Contains(string(turn.Content), want) {
+					t.Fatalf("receipt missing %q:\n%s", want, turn.Content)
+				}
+			}
+		}
+	}
+	if sent > toolResultTranscriptBudget {
+		t.Fatalf("tool result bytes = %d, want at most %d", sent, toolResultTranscriptBudget)
+	}
+	if receipts == 0 {
+		t.Fatal("no earlier result was replaced by a receipt")
+	}
+	if got := string(turns[len(turns)-1].Content); !strings.Contains(got, "result-7") {
+		t.Fatalf("latest result was not preserved:\n%s", got)
+	}
+
+	state, err := Fold(steps)
+	if err != nil {
+		t.Fatalf("Fold: %v", err)
+	}
+	if !state.Labels.Has(domain.LabelUntrusted) {
+		t.Fatalf("labels = %v, want omitted results to keep tainting the run", state.Labels)
 	}
 }
 
@@ -438,7 +550,9 @@ func TestBuildTranscript_largeGitHubIssueResult_staysWhole(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	store := NewMemoryContent()
-	body := []byte(strings.Repeat("issue body ", 6<<10))
+	// Stay below the aggregate transcript budget: this test names which GitHub
+	// results receive per-result compaction, not what the aggregate budget does.
+	body := []byte(strings.Repeat("issue body ", 5<<10))
 	ref, err := store.Put(ctx, "run_1", 2, body)
 	if err != nil {
 		t.Fatalf("Put: %v", err)

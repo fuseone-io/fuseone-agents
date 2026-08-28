@@ -2,10 +2,7 @@ package engine
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"strings"
-	"unicode/utf8"
 
 	"github.com/fuseone/agents/internal/domain"
 )
@@ -50,6 +47,11 @@ type Turn struct {
 	// model, in content bytes. Counted at the cut so the saving is something
 	// the run measured rather than a subtraction across two records.
 	Elided int64
+	// OriginalBytes and ContentDigest describe the full result held in the
+	// content store. They let the transcript replace an older result with an
+	// honest receipt after per-result compaction has already happened.
+	OriginalBytes int64
+	ContentDigest string
 }
 
 // ContentStore holds payloads too large or too sensitive for the ledger.
@@ -124,6 +126,8 @@ func BuildTranscript(ctx context.Context, store ContentStore, steps []domain.Ste
 			if p.Failed && len(content) == 0 {
 				content = []byte("the tool failed: " + p.ErrorCode)
 			}
+			originalBytes := int64(len(content))
+			contentDigest := digest(content)
 			var elided int64
 			if !p.Failed {
 				content = compactToolResult(p.Tool, content, &elided)
@@ -131,11 +135,13 @@ func BuildTranscript(ctx context.Context, store ContentStore, steps []domain.Ste
 			turns = append(turns, Turn{
 				Kind: TurnToolResult,
 				// Pairs with the call one step earlier.
-				CallID:  CallID(step.RunID, step.Seq-1),
-				Tool:    p.Tool,
-				Failed:  p.Failed,
-				Content: content,
-				Elided:  elided,
+				CallID:        CallID(step.RunID, step.Seq-1),
+				Tool:          p.Tool,
+				Failed:        p.Failed,
+				Content:       content,
+				Elided:        elided,
+				OriginalBytes: originalBytes,
+				ContentDigest: contentDigest,
 			})
 
 		case domain.StepGateDecided:
@@ -175,262 +181,8 @@ func BuildTranscript(ctx context.Context, store ContentStore, steps []domain.Ste
 			}
 		}
 	}
+	boundToolResultTranscript(turns)
 	return turns, nil
-}
-
-const (
-	channelInputCompactAfter = 32 << 10
-	inputFieldCompactAfter   = 16 << 10
-	inputFieldHeadBytes      = 10 << 10
-	inputFieldTailBytes      = 4 << 10
-
-	toolResultCompactAfter = 32 << 10
-	toolResultHeadBytes    = 16 << 10
-	toolResultTailBytes    = 8 << 10
-)
-
-func compactRunInputForTranscript(trigger string, content []byte) ([]byte, string) {
-	if trigger != "channel" || len(content) <= channelInputCompactAfter {
-		return content, ""
-	}
-
-	var input any
-	if err := json.Unmarshal(content, &input); err != nil {
-		return compactRawChannelInput(content), channelInputCompactionNote(content, nil)
-	}
-
-	changes := []map[string]any{}
-	compacted := compactJSONStrings(input, "", &changes)
-	if len(changes) == 0 {
-		return content, ""
-	}
-
-	obj, ok := compacted.(map[string]any)
-	if !ok {
-		return compactRawChannelInput(content), channelInputCompactionNote(content, nil)
-	}
-
-	out, err := json.Marshal(obj)
-	if err != nil {
-		return compactRawChannelInput(content), channelInputCompactionNote(content, nil)
-	}
-	return out, channelInputCompactionNote(content, changes)
-}
-
-func runInputForTranscript(trigger string, content []byte) ([]byte, string) {
-	if trigger == "channel" {
-		if projected, ok := channelAskForTranscript(content); ok {
-			if len(projected) > channelInputCompactAfter {
-				return compactRawChannelInput(projected), channelInputCompactionNote(content, nil)
-			}
-			return projected, ""
-		}
-	}
-	return compactRunInputForTranscript(trigger, content)
-}
-
-type channelAskTranscript struct {
-	Subject *struct {
-		Kind string `json:"kind"`
-		Run  string `json:"run"`
-	} `json:"subject,omitempty"`
-	Text   string `json:"text"`
-	Thread *struct {
-		Messages []struct {
-			Source string `json:"source,omitempty"`
-			Text   string `json:"text"`
-		} `json:"messages,omitempty"`
-		Truncated   bool   `json:"truncated,omitempty"`
-		Unavailable string `json:"unavailable,omitempty"`
-	} `json:"thread,omitempty"`
-}
-
-func channelAskForTranscript(content []byte) ([]byte, bool) {
-	var ask channelAskTranscript
-	if err := json.Unmarshal(content, &ask); err != nil || ask.Text == "" {
-		return nil, false
-	}
-	var b strings.Builder
-	b.WriteString(ask.Text)
-	if ask.Subject != nil && ask.Subject.Kind == "run" && ask.Subject.Run != "" {
-		fmt.Fprintf(&b, "\n\nThread subject: run %s.", ask.Subject.Run)
-	}
-	if ask.Thread != nil {
-		if ask.Thread.Unavailable != "" {
-			fmt.Fprintf(&b, "\n\nThread context unavailable: %s", ask.Thread.Unavailable)
-		}
-		if len(ask.Thread.Messages) > 0 {
-			b.WriteString("\n\nEarlier thread messages:")
-			for _, msg := range ask.Thread.Messages {
-				b.WriteString("\n- ")
-				if msg.Source != "" {
-					b.WriteString(msg.Source)
-					b.WriteString(": ")
-				}
-				b.WriteString(msg.Text)
-			}
-		}
-		if ask.Thread.Truncated {
-			b.WriteString("\n\nEarlier thread messages were truncated.")
-		}
-	}
-	return []byte(b.String()), true
-}
-
-func channelInputCompactionNote(content []byte, fields []map[string]any) string {
-	var b strings.Builder
-	b.WriteString("FuseOne compacted the channel input before sending it to the model.\n")
-	fmt.Fprintf(&b, "Stored input: %d bytes, digest %s.\n", len(content), digest(content))
-	b.WriteString("Only the beginning and end of compacted content are shown. Do not treat omitted middle as absent; use a narrower ask or fetch the original source if this is not enough.")
-	if len(fields) > 0 {
-		b.WriteString("\nCompacted fields:")
-		for _, field := range fields {
-			fmt.Fprintf(&b, "\n- %v: %v bytes stored, %v bytes shown",
-				field["path"], field["original_bytes"], field["shown_bytes"])
-		}
-	}
-	return b.String()
-}
-
-func compactJSONStrings(v any, path string, changes *[]map[string]any) any {
-	switch x := v.(type) {
-	case map[string]any:
-		for k, child := range x {
-			x[k] = compactJSONStrings(child, jsonPath(path, k), changes)
-		}
-		return x
-	case []any:
-		for i, child := range x {
-			x[i] = compactJSONStrings(child, fmt.Sprintf("%s[%d]", path, i), changes)
-		}
-		return x
-	case string:
-		if len(x) <= inputFieldCompactAfter {
-			return x
-		}
-		compacted := compactTextField(x)
-		*changes = append(*changes, map[string]any{
-			"path":           path,
-			"original_bytes": len(x),
-			"shown_bytes":    len(compacted),
-		})
-		return compacted
-	default:
-		return v
-	}
-}
-
-func compactTextField(text string) string {
-	head := utf8Prefix([]byte(text), inputFieldHeadBytes)
-	tail := utf8Suffix([]byte(text), inputFieldTailBytes)
-
-	var b strings.Builder
-	fmt.Fprintf(&b, "--- first %d bytes ---\n%s\n\n", len(head), head)
-	fmt.Fprintf(&b, "--- omitted %d bytes ---\n\n", max(0, len(text)-len(head)-len(tail)))
-	fmt.Fprintf(&b, "--- last %d bytes ---\n%s", len(tail), tail)
-	return b.String()
-}
-
-func compactRawChannelInput(content []byte) []byte {
-	head := utf8Prefix(content, inputFieldHeadBytes)
-	tail := utf8Suffix(content, inputFieldTailBytes)
-
-	var b strings.Builder
-	fmt.Fprintf(&b, "--- first %d bytes ---\n%s\n\n", len(head), head)
-	fmt.Fprintf(&b, "--- omitted %d bytes ---\n\n", max(0, len(content)-len(head)-len(tail)))
-	fmt.Fprintf(&b, "--- last %d bytes ---\n%s", len(tail), tail)
-	return []byte(b.String())
-}
-
-func jsonPath(parent, key string) string {
-	if parent == "" {
-		return key
-	}
-	return parent + "." + key
-}
-
-func compactToolResultForTranscript(tool domain.ToolID, content []byte) []byte {
-	var ignored int64
-	return compactToolResult(tool, content, &ignored)
-}
-
-/*
-compactToolResult shortens a large result and records what it removed.
-
-The saving is counted here rather than worked out later. What was sent is in
-the run's composition and the whole is in the content store, so a screen could
-subtract one from the other — but that is arithmetic across two records kept
-for different reasons, and it drifts the first time either changes. Measured at
-the cut, the number is something the run observed.
-*/
-func compactToolResult(tool domain.ToolID, content []byte, elided *int64) []byte {
-	if len(content) <= toolResultCompactAfter || !compactableLargeToolResult(tool) {
-		return content
-	}
-	head := utf8Prefix(content, toolResultHeadBytes)
-	tail := utf8Suffix(content, toolResultTailBytes)
-
-	var b strings.Builder
-	fmt.Fprintf(&b, "FuseOne compacted this %s result before sending it back to the model.\n", tool)
-	fmt.Fprintf(&b, "Stored result: %d bytes, digest %s.\n", len(content), digest(content))
-	b.WriteString("Only the beginning and end are shown here. Do not treat the omitted middle as absent; call a narrower query if this is not enough.\n\n")
-	fmt.Fprintf(&b, "--- first %d bytes ---\n%s\n\n", len(head), head)
-	removed := max(0, len(content)-len(head)-len(tail))
-	*elided += int64(removed)
-	fmt.Fprintf(&b, "--- omitted %d bytes ---\n\n", removed)
-	fmt.Fprintf(&b, "--- last %d bytes ---\n%s", len(tail), tail)
-	return []byte(b.String())
-}
-
-func compactableLargeToolResult(tool domain.ToolID) bool {
-	return compactableObservabilityTool(tool) || compactableGitHubReviewTool(tool)
-}
-
-func compactableObservabilityTool(tool domain.ToolID) bool {
-	name := string(tool)
-	if !strings.HasPrefix(name, "grafana.") {
-		return false
-	}
-	return strings.HasPrefix(name, "grafana.query_loki") ||
-		strings.HasPrefix(name, "grafana.query_prometheus")
-}
-
-func compactableGitHubReviewTool(tool domain.ToolID) bool {
-	name := string(tool)
-	if !strings.HasPrefix(name, "github.") {
-		return false
-	}
-	remote := strings.TrimPrefix(name, "github.")
-	return strings.HasPrefix(remote, "get_pull_request") ||
-		strings.HasPrefix(remote, "list_pull_request") ||
-		remote == "search_pull_requests" ||
-		remote == "get_file_contents" ||
-		remote == "search_code" ||
-		remote == "get_commit" ||
-		remote == "list_commits" ||
-		strings.HasSuffix(remote, "_logs")
-}
-
-func utf8Prefix(content []byte, limit int) string {
-	if len(content) <= limit {
-		return string(content)
-	}
-	part := content[:limit]
-	for len(part) > 0 && !utf8.Valid(part) {
-		part = part[:len(part)-1]
-	}
-	return string(part)
-}
-
-func utf8Suffix(content []byte, limit int) string {
-	if len(content) <= limit {
-		return string(content)
-	}
-	part := content[len(content)-limit:]
-	for len(part) > 0 && !utf8.Valid(part) {
-		part = part[1:]
-	}
-	return string(part)
 }
 
 // CallID derives the identifier that pairs a tool call with its result.
