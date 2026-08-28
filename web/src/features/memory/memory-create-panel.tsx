@@ -64,6 +64,7 @@ export function MemoryCreatePanel({
 
   useEffect(() => {
     const scope = memoryDefaults(activeCompany, activeArea);
+    form.resetField("evidenceRunId", { defaultValue: "" });
     form.resetField("company", { defaultValue: scope.company });
     form.resetField("area", { defaultValue: scope.area });
   }, [activeArea, activeCompany, form]);

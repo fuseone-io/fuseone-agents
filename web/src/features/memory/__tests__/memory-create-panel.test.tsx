@@ -249,6 +249,27 @@ describe("global memory authoring", () => {
     ).toBeVisible();
   });
 
+  it("clears a selected evidence run when the scope changes", async () => {
+    const requests: RequestRecord[] = [];
+    stubNetwork(requests);
+    const user = userEvent.setup();
+    renderPanel();
+
+    await chooseEvidenceRun(user);
+    expect(screen.getByRole("combobox", { name: "Evidence run" })).toHaveTextContent(
+      "run_1",
+    );
+
+    await user.click(screen.getByRole("combobox", { name: "Scope" }));
+    await user.click(
+      await screen.findByRole("option", { name: /security.*Security/i }),
+    );
+
+    expect(screen.getByRole("combobox", { name: "Evidence run" })).toHaveTextContent(
+      "Choose a finished run",
+    );
+  });
+
 });
 
 type RequestRecord =

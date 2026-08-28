@@ -254,11 +254,13 @@ describe("governed memory page", () => {
 
   it("moves a preserved draft to the newly active scope", async () => {
     const user = userEvent.setup();
+    stubMemoryAuthoringNetwork();
     hooks.items = [memoryAssertion(0)];
     renderMemoryPageWithClient();
 
     await user.click(screen.getByRole("button", { name: "Record memory" }));
     await user.type(screen.getByLabelText("Subject"), "grafana datasource");
+    await chooseEvidenceRun(user);
     await user.click(screen.getByRole("button", { name: "Close" }));
     act(() => useActiveScope.setState({ company: "globex", area: "security" }));
     await user.click(screen.getByRole("button", { name: "Continue draft" }));
@@ -267,6 +269,9 @@ describe("governed memory page", () => {
       "globex/security",
     );
     expect(screen.getByLabelText("Subject")).toHaveValue("grafana datasource");
+    expect(screen.getByRole("combobox", { name: "Evidence run" })).toHaveTextContent(
+      "Choose a finished run",
+    );
   });
 
   it("does not inspect a creation draft while its panel is hidden", async () => {

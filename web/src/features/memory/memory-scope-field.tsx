@@ -42,6 +42,9 @@ export function MemoryScopeField({
       : "";
 
   function pick(scope: RegisteredScope) {
+    // A run proves one concrete scope. Clear it in the same act that changes
+    // that scope so no render can pair old evidence with the new destination.
+    form.resetField("evidenceRunId", { defaultValue: "" });
     company.field.onChange(scope.company);
     area.field.onChange(scope.area);
     setOpen(false);
