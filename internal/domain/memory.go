@@ -55,7 +55,12 @@ const (
 	MemorySuggestionAccepted      MemorySuggestionStatus = "accepted"
 	MemorySuggestionDismissed     MemorySuggestionStatus = "dismissed"
 	MemorySuggestionAutoConfirmed MemorySuggestionStatus = "auto_confirmed"
-	MemorySuggestionSourceErased  MemorySuggestionStatus = "source_erased"
+	// MemorySuggestionCovered means memory that was already there answered the
+	// proposal. Nothing was written and nobody refused it, which is why it
+	// needs an ending of its own: dismissing it would record a refusal that did
+	// not happen, and leaving it pending is a queue item with no honest exit.
+	MemorySuggestionCovered      MemorySuggestionStatus = "covered"
+	MemorySuggestionSourceErased MemorySuggestionStatus = "source_erased"
 )
 
 type MemoryLearningMode string
@@ -83,12 +88,6 @@ const (
 	MaxMemoryLearningMinObservations     int64 = MaxMemoryEvidence
 	MaxMemoryLearningTTLDays                   = 365
 )
-
-type MemoryEvidence struct {
-	RunID    RunID  `json:"run_id"`
-	Artifact string `json:"artifact"`
-	Digest   string `json:"digest"`
-}
 
 // MemoryAssertion is one structured remembered fact.
 //
@@ -136,11 +135,14 @@ type MemorySuggestion struct {
 	Observations int64                  `json:"observations"`
 	Labels       Labels                 `json:"labels"`
 	Status       MemorySuggestionStatus `json:"status"`
-	ExpiresAt    *time.Time             `json:"expires_at,omitempty"`
-	CreatedBy    UserID                 `json:"created_by"`
-	CreatedAt    time.Time              `json:"created_at"`
-	UpdatedBy    UserID                 `json:"updated_by"`
-	UpdatedAt    time.Time              `json:"updated_at"`
+	// CoveredBy names the assertion that already answered this proposal, when
+	// the outcome was covered.
+	CoveredBy string     `json:"covered_by,omitempty"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	CreatedBy UserID     `json:"created_by"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedBy UserID     `json:"updated_by"`
+	UpdatedAt time.Time  `json:"updated_at"`
 }
 
 type MemorySuggestResult string
@@ -184,7 +186,7 @@ func (s MemorySuggestionStatus) Valid() bool {
 	switch s {
 	case MemorySuggestionPending, MemorySuggestionAccepted,
 		MemorySuggestionDismissed, MemorySuggestionAutoConfirmed,
-		MemorySuggestionSourceErased:
+		MemorySuggestionCovered, MemorySuggestionSourceErased:
 		return true
 	default:
 		return false

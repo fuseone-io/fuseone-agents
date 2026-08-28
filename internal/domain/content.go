@@ -13,3 +13,39 @@ import "errors"
 // somebody performed and the other is a reference that was always wrong, and
 // a trail pointing at neither has to say which.
 var ErrContentErased = errors.New("content was erased")
+
+// ErrContentAbsent means the reference points at nothing that was ever stored.
+//
+// Here for the same reason ErrContentErased is: both stores raise it, and a
+// caller deciding between "this citation is wrong" and "the store is away" has
+// to match one value. Two sentinels for one fact is a caller that handles the
+// durable store and not the fake, and finds out in production.
+var ErrContentAbsent = errors.New("content was never stored")
+
+// ErrRunNotFound means the ledger holds no run under that id — never opened, or
+// taken by retention.
+//
+// Here for the same reason the content sentinels are: a caller deciding between
+// "this citation is wrong", "its source is gone" and "the database is away" has
+// to match one value, and a sentinel per store is a caller that works against
+// one of them.
+var ErrRunNotFound = errors.New("run not found")
+
+/*
+ContentMetadata is what a stored payload says about itself without being read.
+
+The reference carries only the first 16 hex of the digest, and re-hashing the
+bytes read back would disagree with the record for any payload the store
+truncated. So a caller checking a citation against the ledger asks for this
+rather than computing it: the digest here is the one the store wrote down, over
+the whole payload, at the moment it was written.
+
+Erased is a value rather than an error because erasure and absence are different
+facts and both have to be answerable. The bytes are gone; the digest is not, and
+the step that referenced them still carries it, so a reader can tell a citation
+whose content was erased from a citation that was never true.
+*/
+type ContentMetadata struct {
+	Digest string
+	Erased bool
+}

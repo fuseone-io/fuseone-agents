@@ -22,7 +22,7 @@ var (
 	ErrSeqConflict = errors.New("ledger: sequence already claimed by another writer")
 	// ErrIdemConflict means the same idempotency key was already recorded.
 	ErrIdemConflict = errors.New("ledger: idempotency key already used")
-	ErrNotFound     = errors.New("ledger: run not found")
+	ErrNotFound     = domain.ErrRunNotFound
 )
 
 // Memory is an in-memory ledger used by tests and by single-node development.

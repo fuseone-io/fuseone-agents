@@ -285,6 +285,59 @@ func TestForSubject_marksMemoryFromErasedRunsUnavailable(t *testing.T) {
 	}
 }
 
+/*
+A memory somebody disabled still loses its source when the run goes.
+
+The sweep only reached active rows, so a disabled memory whose run was erased
+stayed merely disabled — indistinguishable from one somebody turned off last
+Tuesday and can turn back on. Reactivation would then be a way around retention:
+the status flips, the row becomes readable again, and the evidence points at a
+run that no longer exists.
+
+Disabled is not a terminal state and source_erased is. Which one a row is in has
+to be decided by what happened to it, not by whether it happened to be readable
+at the moment the erasure ran.
+*/
+func TestForSubject_marksDisabledMemoryFromErasedRunsUnavailable(t *testing.T) {
+	now := time.Date(2032, 8, 23, 12, 0, 0, 0, time.UTC)
+	erasures, content := erasuresFor(t, func() time.Time { return now })
+	pool := openPool(t)
+	ctx := context.Background()
+
+	_, _ = content.Put(ctx, "run-mine", 1, []byte("mine"))
+	seedMemoryAssertionForRun(t, pool, "mem-off", "run-mine")
+	seedMemoryAssertionForRun(t, pool, "mem-gone", "run-mine")
+	for _, id := range []string{"mem-off", "mem-gone"} {
+		if _, err := pool.Exec(ctx,
+			`update memory_assertions set status = 'disabled' where assertion_id = $1`, id); err != nil {
+			t.Fatalf("disable %s: %v", id, err)
+		}
+	}
+	// One of them is disabled and keeps its run, so the test also says what the
+	// erasure must not do: turn every disabled row terminal.
+	if _, err := pool.Exec(ctx, `
+		update memory_assertions
+		set evidence = '[{"run_id":"run-kept","artifact":"final_answer","digest":"sha256:answer"}]'
+		where assertion_id = 'mem-off'`); err != nil {
+		t.Fatalf("repoint mem-off: %v", err)
+	}
+
+	if _, err := erasures.ForSubject(ctx, "usr_ana", domain.Scope{},
+		[]domain.RunID{"run-mine"}, "titular pediu"); err != nil {
+		t.Fatalf("ForSubject: %v", err)
+	}
+
+	if got := memoryStatus(t, pool, "mem-gone"); got != "source_erased" {
+		t.Errorf("status = %s, want the disabled memory to lose its source too", got)
+	}
+	if got := memoryStatus(t, pool, "mem-off"); got != "disabled" {
+		t.Errorf("status = %s, want a disabled memory whose run remains left alone", got)
+	}
+	if got := memoryEventCount(t, pool, "source_erased"); got != 1 {
+		t.Errorf("source_erased events = %d, want one for the row that lost its run", got)
+	}
+}
+
 func seedMemoryAssertion(t *testing.T, pool interface {
 	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
 }, id string, updated time.Time, expires *time.Time) {

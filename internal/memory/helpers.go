@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -26,7 +27,7 @@ func prepareAssertion(
 		a.Status = domain.MemoryActive
 	}
 	if err := a.Validate(); err != nil {
-		return domain.MemoryAssertion{}, err
+		return domain.MemoryAssertion{}, fmt.Errorf("%w: %v", ErrInvalid, err)
 	}
 	a.ID = domain.MemoryAssertionID(a)
 	a.CreatedBy, a.UpdatedBy = by, by
@@ -61,26 +62,35 @@ func prepareSuggestion(
 	s.Labels = s.Labels.Union(domain.ScopeLabels(s.Scope))
 	s.Evidence = boundedEvidence(s.Evidence)
 	if err := s.Validate(); err != nil {
-		return domain.MemorySuggestion{}, err
+		return domain.MemorySuggestion{}, fmt.Errorf("%w: %v", ErrInvalid, err)
 	}
 	return s, nil
 }
 
-// A suggestion is duplicate if it matches active memory the same run could
-// read: first the agent namespace, then the shared namespace in the same scope.
-func activeAssertionIDsForSuggestion(s domain.MemorySuggestion) []string {
-	ids := []string{s.AssertionID}
+/*
+identitiesForSuggestion is where an equivalent memory could already be: the
+agent's own namespace first, then the shared one every agent in the scope reads.
+
+Identities rather than assertion ids. The id hashes the strings as typed, so a
+memory somebody wrote as "Grafana Datasource" was invisible to an agent that
+proposed "grafana  datasource" — and the queue filled with proposals for a fact
+the platform already knew, each of which a person had to read and dismiss. The
+id travels along because a row written before the canonical key answers to
+nothing else.
+*/
+func identitiesForSuggestion(s domain.MemorySuggestion) []domain.MemoryAssertion {
+	own := domain.MemoryAssertion{
+		Scope: s.Scope, AgentID: s.AgentID, Kind: s.Kind,
+		Subject: s.Subject, Signature: s.Signature,
+	}
+	own.ID = domain.MemoryAssertionID(own)
 	if s.AgentID == "" {
-		return ids
+		return []domain.MemoryAssertion{own}
 	}
-	shared := domain.MemoryAssertionID(domain.MemoryAssertion{
-		Scope: s.Scope, Kind: s.Kind, Subject: s.Subject,
-		Signature: s.Signature,
-	})
-	if shared != s.AssertionID {
-		ids = append(ids, shared)
-	}
-	return ids
+	shared := own
+	shared.AgentID = ""
+	shared.ID = domain.MemoryAssertionID(shared)
+	return []domain.MemoryAssertion{own, shared}
 }
 
 func memoryFindMatches(a domain.MemoryAssertion, q domain.MemoryQuery) bool {
@@ -457,28 +467,52 @@ func firstSuggestions(in []domain.MemorySuggestion, n int) []domain.MemorySugges
 
 func cloneAssertion(a domain.MemoryAssertion) domain.MemoryAssertion {
 	a.Labels = a.Labels.Clone()
-	a.Evidence = slices.Clone(a.Evidence)
+	a.Evidence = cloneEvidence(a.Evidence)
 	return a
 }
 
 func cloneSuggestion(s domain.MemorySuggestion) domain.MemorySuggestion {
 	s.Labels = s.Labels.Clone()
-	s.Evidence = slices.Clone(s.Evidence)
+	s.Evidence = cloneEvidence(s.Evidence)
 	return s
 }
 
+// cloneEvidence copies the labels inside each citation too. Cloning only the
+// slice of records leaves every Labels sharing its backing array, and the
+// in-memory store hands out what it holds — so a reader mutating a returned
+// citation would be editing the stored taint in place.
+func cloneEvidence(in []domain.MemoryEvidence) []domain.MemoryEvidence {
+	out := slices.Clone(in)
+	for i := range out {
+		out[i].Labels = out[i].Labels.Clone()
+	}
+	return out
+}
+
+/*
+boundedEvidence folds repeated citations and holds the record count to the cap.
+
+Folded by MemoryEvidence.Key rather than by the whole record, because the labels
+are resolved from the ledger at the moment somebody asks: the same step comes
+back clean today and tainted once the run that produced it gained a label, and
+those are one citation read twice. Keeping both would spend the budget on a
+duplicate of itself; keeping only the first would discard the later, fuller
+reading. So the labels are unioned, which is also the direction that never loses
+a taint.
+*/
 func boundedEvidence(in []domain.MemoryEvidence) []domain.MemoryEvidence {
 	out := make([]domain.MemoryEvidence, 0, min(len(in), domain.MaxMemoryEvidence))
-	seen := map[domain.MemoryEvidence]bool{}
+	at := map[string]int{}
 	for _, ev := range in {
-		if seen[ev] {
+		if i, seen := at[ev.Key()]; seen {
+			out[i].Labels = out[i].Labels.Union(ev.Labels)
 			continue
 		}
-		seen[ev] = true
-		out = append(out, ev)
 		if len(out) == domain.MaxMemoryEvidence {
-			break
+			continue
 		}
+		at[ev.Key()] = len(out)
+		out = append(out, ev)
 	}
 	return out
 }

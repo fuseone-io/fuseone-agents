@@ -1302,6 +1302,44 @@ func TestAdvance_resumedWithOrphanedToolCall_closesItAndReleasesBudget(t *testin
 	}
 }
 
+/*
+The closing answer carries what the run had learned, or memory built on it is
+clean.
+
+Every other step that matters is stamped with the accumulated labels — the gate
+decision, the approval request, the tool call and its result — and the finish
+step was not. It is the one the console cites by default when somebody
+remembers a run, so a memory taught from an answer that restated attacker text
+inherited no taint at all, and the Gate later read it as trustworthy.
+
+Asserted on the step itself rather than through whatever reads it. A resolver
+folds the run to the step it was given, so it would recover the taint from
+run_started and report the right answer while the finish step stayed empty —
+the bug intact behind a passing test.
+*/
+func TestAdvance_finishStepCarriesTheRunsAccumulatedLabels(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t) // no proposals: the planner reports done immediately
+	start := h.start(t, generousBudget())
+	openRunWithInput(t, h, start, "channel", []byte("investiga isso"),
+		domain.NewLabels(domain.LabelUntrusted))
+
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+
+	finished, err := h.stepOf(t, domain.StepRunFinished)
+	if err != nil {
+		t.Fatalf("step: %v", err)
+	}
+	if !finished.Labels.Has(domain.LabelUntrusted) {
+		t.Errorf("finish step labels = %v, want the taint the run opened with",
+			finished.Labels)
+	}
+}
+
 func TestAdvance_plannerReportsDone_finishesRun(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

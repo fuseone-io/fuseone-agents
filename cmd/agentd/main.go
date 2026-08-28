@@ -55,6 +55,8 @@ func run(args []string) error {
 		return bootstrapCmd(args[1:])
 	case "migrate":
 		return migrate(args[1:])
+	case "reconcile-memory":
+		return reconcileMemory(args[1:])
 	case "verify":
 		return verifyCmd(args[1:])
 	case "version":
@@ -75,6 +77,9 @@ usage:
   agentd keygen          print a new master key for sealing credentials
   agentd bootstrap --dsn apply or reissue the first-run setup token
   agentd migrate --dsn   apply pending database migrations
+  agentd reconcile-memory --dsn
+                         fill in what the platform can now derive about memory
+                         written before it could
   agentd verify <file>   check a signed ledger export
   agentd version         print the build version
 `)

@@ -76,6 +76,36 @@ migrations:
   enabled: true
   backoffLimit: 3
 
+# Memory written before the platform could derive what it now derives, filled in
+# between the schema and the rollout. The runtime repairs a row as it touches
+# one, so this is an optimisation rather than a guarantee — turning it off makes
+# the repair slower, not absent.
+memoryReconcile:
+  enabled: true
+  backoffLimit: 2
+  # Three deadlines, and only the innermost one ends the work tidily.
+  #
+  #   process   --timeout        14m   stops, prints the totals, exits 0
+  #   Job       activeDeadline    20m  kills the pod, no summary
+  #   helm      --timeout         25m  abandons the hook, fails the release
+  #
+  # The margins are not decoration. activeDeadlineSeconds counts scheduling,
+  # image pull, backoff and retries as well as the work, so a pod that takes a
+  # minute to start would otherwise be killed at the same moment the process
+  # was about to report — and the log would say nothing at all.
+  #
+  # The outermost is not the chart's to set: `helm install` and `helm upgrade`
+  # default to five minutes, which is less than any of these. See the README —
+  # a release run without --timeout can fail at five minutes while this is
+  # still working normally, and nothing here can prevent that. Argo CD does not
+  # use that client and does not time a sync out by default; OP-001 says what to
+  # check there.
+  #
+  # None of it loses work. The walk is resumable and idempotent: a run cut
+  # short is not a run lost, and the next one pays only for what is left.
+  activeDeadlineSeconds: 1200
+  timeout: 14m
+
 service:
   type: ClusterIP
   port: 80

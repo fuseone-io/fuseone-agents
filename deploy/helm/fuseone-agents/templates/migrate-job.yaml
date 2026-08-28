@@ -48,7 +48,7 @@ spec:
           image: {{ include "fuseone.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args: ["migrate"]
-          env: {{- include "fuseone.env" . | nindent 12 }}
+          env: {{- include "fuseone.databaseEnv" . | nindent 12 }}
           securityContext: {{- toYaml .Values.containerSecurityContext | nindent 12 }}
           resources:
             requests: { cpu: 50m, memory: 64Mi }

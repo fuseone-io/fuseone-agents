@@ -16,7 +16,7 @@ import (
 
 var (
 	// ErrNoContent means the reference points at nothing.
-	ErrNoContent = errors.New("ledger: no content at that reference")
+	ErrNoContent = domain.ErrContentAbsent
 	// ErrErased is the domain's, so a caller matching it handles this store
 	// and the in-memory one with the same line.
 	ErrErased = domain.ErrContentErased
@@ -112,6 +112,33 @@ func (c *Content) Get(ctx context.Context, ref string) ([]byte, error) {
 		return nil, fmt.Errorf("ledger: read content %s: %w", ref, err)
 	}
 	return data, nil
+}
+
+/*
+Metadata answers what a reference says about itself without reading the bytes.
+
+The reference carries only the first 16 hex of the digest; this is the whole
+SHA-256 the store recorded over the whole payload, which is the number a
+citation has to be checked against. Re-hashing what Get returns would disagree
+with it for anything the limit truncated.
+
+Erased is reported rather than raised: the digest outlives the bytes, so a
+caller can still tell a citation whose content was erased from one that was
+never true.
+*/
+func (c *Content) Metadata(ctx context.Context, ref string) (domain.ContentMetadata, error) {
+	var out domain.ContentMetadata
+	var erased *time.Time
+	err := c.pool.QueryRow(ctx,
+		`select digest, erased_at from run_content where ref = $1`, ref).Scan(&out.Digest, &erased)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.ContentMetadata{}, fmt.Errorf("%w: %s", ErrNoContent, ref)
+	}
+	if err != nil {
+		return domain.ContentMetadata{}, fmt.Errorf("ledger: read content metadata %s: %w", ref, err)
+	}
+	out.Erased = erased != nil
+	return out, nil
 }
 
 /*

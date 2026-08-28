@@ -90,8 +90,12 @@ At ~250 lines in a Go file, **stop and refactor before continuing**.
 
 ### Principles
 
-- **`internal/domain` imports nothing but the stdlib.** If a type there needs a
-  driver, an HTTP client or an ORM, it is in the wrong package.
+- **`internal/domain` does no I/O and knows no infrastructure.** If a type there
+  needs a driver, an HTTP client or an ORM, it is in the wrong package. A pure
+  library is allowed where the stdlib genuinely lacks the answer — today that is
+  `golang.org/x/text/unicode/norm`, because Unicode normalisation is a table the
+  stdlib does not ship and memory identity is wrong without it. Reach for this
+  rarely, and say in the code why the stdlib was not enough.
 - **Dependencies point inward:** `httpapi` → `engine` → `ledger` → `domain`.
   Never the reverse.
 - **Interfaces are declared by the consumer, not the implementer.** The

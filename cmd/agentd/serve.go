@@ -152,6 +152,10 @@ func serve(args []string) error {
 			// installation's retention like every other bulky payload (AU-04).
 			WithCases(ledger.NewContent(identity.pool)).
 			WithMemory(memory.NewPostgres(identity.pool)).
+			// What a memory is proved against when somebody brings it back:
+			// the run it cites and the bytes that run produced. Without this
+			// the console can disable a memory and never reactivate one.
+			WithMemoryEvidence(runs, ledger.NewContent(identity.pool)).
 			// The corrections a future version is checked against (FU-12),
 			// and the last battery run against a version — which is what
 			// stands between a broken corpus and somebody starting the agent.

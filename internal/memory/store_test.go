@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -1348,4 +1350,1649 @@ type memoryFindMetric struct {
 
 func (r *recordingMemoryMetrics) MemoryFind(_ time.Duration, returned int, omitted int, failed bool) {
 	r.finds = append(r.finds, memoryFindMetric{returned: returned, omitted: omitted, failed: failed})
+}
+
+/*
+Two people teaching the same fact at the same time leave one memory holding
+both.
+
+Cardinality alone would not prove it: a single row with the second writer lost
+is exactly what a lock in the wrong place produces, and it satisfies "one row"
+perfectly. So this asserts what the row contains — both labels, both citations,
+the higher counts — and that the trail's last event shows that same projection
+rather than whichever write arrived last.
+
+The two spellings differ only in case and spacing, which is the case the
+canonical identity exists for: locking the assertion id would give each writer
+its own lock and let both insert.
+*/
+func TestPostgresAssert_concurrentCorrectionsOfOneFact_loseNothing(t *testing.T) {
+	ctx, store := postgresStore(t)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	write := func(subject, claim, run, label string, observations int64) error {
+		a := assertion(func(a *domain.MemoryAssertion) {
+			a.Subject = subject
+			a.Claim = claim
+			a.Observations, a.Confirmed = observations, observations
+			a.Labels = domain.NewLabels(label)
+			a.Evidence = []domain.MemoryEvidence{{
+				RunID: domain.RunID(run), Seq: 2, Artifact: "final_answer",
+				Digest: "sha256:" + run, Labels: domain.NewLabels(label),
+			}}
+		})
+		_, err := store.Assert(ctx, a, domain.UserID("usr_"+run), "corrected", now)
+		return err
+	}
+
+	// One pair rarely interleaves: whichever writer commits first is usually
+	// read by the second, and the race never shows. Repeating it is what makes
+	// the window happen — and what makes a missing lock fail here rather than
+	// on the afternoon two operators happen to collide.
+	for round := range 40 {
+		subject := fmt.Sprintf("Grafana Datasource %d", round)
+		errs := make(chan error, 2)
+		var start sync.WaitGroup
+		start.Add(1)
+		for _, w := range []struct {
+			spelling, claim, run, label string
+			observations                int64
+		}{
+			{subject, "the token expired", "ana", domain.LabelUntrusted, 5},
+			{"  " + strings.ToLower(subject) + " ", "the pool was exhausted", "bruno", domain.LabelPersonal, 3},
+		} {
+			go func() {
+				start.Wait()
+				errs <- write(w.spelling, w.claim, w.run, w.label, w.observations)
+			}()
+		}
+		start.Done()
+		for range 2 {
+			if err := <-errs; err != nil {
+				t.Fatalf("Assert: %v", err)
+			}
+		}
+	}
+
+	found, err := store.List(ctx, memory.Filter{
+		Scopes: []domain.Scope{platformScope}, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(found) != 40 {
+		t.Fatalf("rows = %d, want one memory per round", len(found))
+	}
+
+	got := found[0]
+	if !got.Labels.HasAny(domain.LabelUntrusted) || !got.Labels.HasAny(domain.LabelPersonal) {
+		t.Errorf("labels = %v, want both writers' labels", got.Labels)
+	}
+	runs := map[domain.RunID]bool{}
+	for _, ev := range got.Evidence {
+		runs[ev.RunID] = true
+	}
+	if !runs["ana"] || !runs["bruno"] {
+		t.Errorf("evidence cites %v, want both writers' runs", runs)
+	}
+	if got.Observations != 5 || got.Confirmed != 5 {
+		t.Errorf("observations/confirmed = %d/%d, want the higher of the two",
+			got.Observations, got.Confirmed)
+	}
+}
+
+// mergeStore is every path that writes an assertion, which is what the matrix
+// below is about: one decision, reached three ways.
+type mergeStore interface {
+	Assert(context.Context, domain.MemoryAssertion, domain.UserID, string, time.Time) (domain.MemoryAssertion, error)
+	Suggest(context.Context, domain.MemorySuggestion, domain.MemoryLearningPolicy, domain.UserID, time.Time) (domain.MemorySuggestionOutcome, error)
+	AcceptSuggestion(context.Context, string, domain.Scope, domain.UserID, string, time.Time) (domain.MemoryAssertion, error)
+	ListSuggestions(context.Context, memory.SuggestionFilter) ([]domain.MemorySuggestion, error)
+	Find(context.Context, domain.MemoryQuery) ([]domain.MemoryAssertion, error)
+}
+
+var reviewPolicy = domain.MemoryLearningPolicy{Mode: domain.MemoryLearningReview}
+
+/*
+Accepting a suggestion merges into what is there; it does not replace it.
+
+Before this, accept wrote the suggestion over the stored row: a memory somebody
+had corrected, carrying a taint from the run that taught it, came back clean and
+shorter-lived because a later suggestion happened to be accepted.
+*/
+func expectAcceptMergesIntoTheStoredAssertion(t *testing.T, ctx context.Context, store mergeStore) {
+	t.Helper()
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+	far := now.Add(240 * time.Hour)
+
+	// The agent suggests first: Suggest refuses to open a suggestion against an
+	// identity that is already active, so this is the only order in which an
+	// accept can ever meet a stored assertion.
+	out, err := store.Suggest(ctx, suggestion(func(s *domain.MemorySuggestion) {
+		s.Claim = "a later wording the agent proposed"
+		s.Evidence = []domain.MemoryEvidence{{
+			RunID: "run-new", Seq: 4, Artifact: domain.ArtifactMemorySuggestion, Digest: "sha256:n",
+		}}
+	}), reviewPolicy, "agent:triage", now)
+	if err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+
+	// Then somebody writes the memory by hand, with a taint and a long life.
+	if _, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Labels = domain.NewLabels(domain.LabelUntrusted)
+		a.ExpiresAt = &far
+		a.Evidence = []domain.MemoryEvidence{{
+			RunID: "run-old", Seq: 1, Artifact: "final_answer", Digest: "sha256:o",
+			Labels: domain.NewLabels(domain.LabelUntrusted),
+		}}
+	}), "usr_ana", "reviewed", now); err != nil {
+		t.Fatalf("Assert: %v", err)
+	}
+
+	got, err := store.AcceptSuggestion(ctx, out.Suggestion.ID, platformScope, "usr_ana", "agreed", now)
+	if err != nil {
+		t.Fatalf("AcceptSuggestion: %v", err)
+	}
+
+	if !got.Labels.HasAny(domain.LabelUntrusted) {
+		t.Errorf("labels = %v, want the stored taint to survive the accept", got.Labels)
+	}
+	if got.ExpiresAt == nil || !got.ExpiresAt.Equal(far) {
+		t.Errorf("expiry = %v, want the stored one kept even though the suggestion cited something new",
+			got.ExpiresAt)
+	}
+	if len(got.Evidence) != 2 {
+		t.Errorf("evidence = %d records, want both the stored and the accepted citation", len(got.Evidence))
+	}
+}
+
+/*
+A terminal memory refuses the accept and the suggestion is not spent.
+
+The dangerous shape is the quiet one: the suggestion marked accepted, the queue
+emptied, and the assertion still disabled — nobody learns anything and nothing
+says so.
+*/
+func expectAcceptOnADisabledAssertionConsumesNothing(t *testing.T, ctx context.Context, store mergeStore) {
+	t.Helper()
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	stored, err := store.Assert(ctx, assertion(nil), "usr_ana", "reviewed", now)
+	if err != nil {
+		t.Fatalf("Assert: %v", err)
+	}
+	disabler, ok := store.(interface {
+		Disable(context.Context, string, domain.Scope, domain.UserID, string, time.Time) error
+	})
+	if !ok {
+		t.Fatal("store cannot disable")
+	}
+	if err := disabler.Disable(ctx, stored.ID, platformScope, "usr_ana", "wrong", now); err != nil {
+		t.Fatalf("Disable: %v", err)
+	}
+
+	out, err := store.Suggest(ctx, suggestion(func(s *domain.MemorySuggestion) {
+		s.Claim = "the agent proposes it again"
+	}), reviewPolicy, "agent:triage", now)
+	if err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+
+	if _, err := store.AcceptSuggestion(ctx, out.Suggestion.ID, platformScope, "usr_ana", "agreed", now); err == nil {
+		t.Fatal("accepted onto a disabled memory")
+	}
+
+	pending, err := store.ListSuggestions(ctx, memory.SuggestionFilter{
+		Scopes: []domain.Scope{platformScope}, Status: domain.MemorySuggestionPending, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("ListSuggestions: %v", err)
+	}
+	if len(pending) != 1 {
+		t.Errorf("pending = %d, want the suggestion left for somebody to decide", len(pending))
+	}
+}
+
+/*
+A row that carries the key beside the same row that does not is one identity
+under two names, and a write refuses both.
+
+This is the shape an upgrade actually produces, and the one the old query hid
+best: the legacy row answers to its assertion id, the newer row answers to the
+canonical key, and ordering the keyed one first made the query return an answer
+that was true about half the table. The correction then landed on the newer row
+while the legacy one stayed active, saying something else, in the same scope,
+for the same agent.
+
+Nothing is written on the way out — not the projection, not an event, not
+updated_at. A refusal that still moved a timestamp would be a change nobody
+asked for, on a row nobody chose.
+*/
+func TestPostgresAssert_aKeyedRowBesideItsLegacyTwin_refusesToChoose(t *testing.T) {
+	ctx, pool := postgresPool(t)
+	store := memory.NewPostgres(pool)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	keyed, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Subject = "Grafana Datasource"
+	}), "usr_ana", "reviewed", now)
+	if err != nil {
+		t.Fatalf("Assert the keyed row: %v", err)
+	}
+	// Its twin, from before any key existed to connect the two.
+	legacy, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Subject = "an unrelated subject"
+	}), "usr_bruno", "reviewed", now)
+	if err != nil {
+		t.Fatalf("Assert the row that becomes the twin: %v", err)
+	}
+	legacyTwin(t, ctx, pool, legacy.ID, "grafana  datasource")
+
+	before := snapshotRows(t, ctx, pool, legacy.ID, keyed.ID)
+	_, err = store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Subject = "Grafana Datasource"
+		a.Claim = "a correction that must not land on half the fact"
+	}), "usr_ana", "correcting the claim", now.Add(time.Hour))
+	if !errors.Is(err, memory.ErrCanonicalConflict) {
+		t.Fatalf("Assert = %v, want the write refused rather than one row chosen", err)
+	}
+	if after := snapshotRows(t, ctx, pool, legacy.ID, keyed.ID); !slices.Equal(after, before) {
+		t.Errorf("rows went %v -> %v, want nothing changed by a refusal", before, after)
+	}
+	if n := countEvents(t, ctx, pool, legacy.ID) + countEvents(t, ctx, pool, keyed.ID); n != 2 {
+		t.Errorf("events = %d, want only the two that created the rows", n)
+	}
+}
+
+// Two rows that both carry the key are the same refusal. Unreachable through
+// the write path once the lock and this rule are in place, which is exactly why
+// it is planted: "nothing can produce it" is a property of today's code, and
+// the row that outlives today's code is the one nobody checked.
+func TestPostgresAssert_twoKeyedRowsOfOneIdentity_refusesToChoose(t *testing.T) {
+	ctx, pool := postgresPool(t)
+	store := memory.NewPostgres(pool)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	first, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Subject = "Grafana Datasource"
+	}), "usr_ana", "reviewed", now)
+	if err != nil {
+		t.Fatalf("Assert the first row: %v", err)
+	}
+	second, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Subject = "an unrelated subject"
+	}), "usr_bruno", "reviewed", now)
+	if err != nil {
+		t.Fatalf("Assert the second row: %v", err)
+	}
+	// Spelled like the first and carrying its key, which is copied from the row
+	// that has it: a test that wrote the hash itself would be a second
+	// implementation of the key, and it would keep passing after the real one
+	// changed.
+	if _, err := pool.Exec(ctx, `
+		update memory_assertions set subject = 'grafana  datasource',
+			canonical_identity_key =
+				(select canonical_identity_key from memory_assertions where assertion_id = $2)
+		where assertion_id = $1`, second.ID, first.ID); err != nil {
+		t.Fatalf("plant the second keyed row: %v", err)
+	}
+
+	before := snapshotRows(t, ctx, pool, first.ID, second.ID)
+	if _, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Subject = "Grafana Datasource"
+		a.Claim = "a correction that must not land on half the fact"
+	}), "usr_ana", "correcting the claim", now.Add(time.Hour)); !errors.Is(
+		err, memory.ErrCanonicalConflict) {
+		t.Fatalf("Assert = %v, want the write refused rather than one row chosen", err)
+	}
+	if after := snapshotRows(t, ctx, pool, first.ID, second.ID); !slices.Equal(after, before) {
+		t.Errorf("rows went %v -> %v, want nothing changed by a refusal", before, after)
+	}
+}
+
+/*
+A conflicted pair ends that row's repair and not the sweep.
+
+The same defect the purged run had: hydration exists to walk rows written before
+this work, and duplicate spellings are exactly what those rows are. Aborting on
+the first pair would stop the repair on the population it was built for, and the
+rows after it would stay unkeyed for ever while the job reported an error every
+night.
+*/
+func TestPostgresHydrate_conflictedPair_endsThatRowAndNotTheSweep(t *testing.T) {
+	ctx, pool := postgresPool(t)
+	store := memory.NewPostgres(pool)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	run, cited := legacyRun(t, "run-legacy")
+	var ids []string
+	for _, subject := range []string{"first subject", "second subject", "loki ingester"} {
+		written, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+			a.Scope, a.Subject = run.scope, subject
+			a.Evidence = []domain.MemoryEvidence{cited}
+		}), "usr_ana", "reviewed", now)
+		if err != nil {
+			t.Fatalf("Assert %q: %v", subject, err)
+		}
+		ids = append(ids, written.ID)
+	}
+	legacyTwin(t, ctx, pool, ids[0], "Grafana Datasource")
+	legacyTwin(t, ctx, pool, ids[1], "grafana  datasource")
+	// A third row of its own identity, so the sweep has somewhere to get to once
+	// the pair has been refused.
+	unkey(t, ctx, pool, ids[2])
+
+	out, err := store.Hydrate(ctx, memory.NewResolver(run.ledger, run.content),
+		memory.HydratePage{Limit: 10, Now: now})
+	if err != nil {
+		t.Fatalf("Hydrate: %v", err)
+	}
+	if out.Scanned != 3 {
+		t.Fatalf("scanned = %d, want the sweep to have reached every row", out.Scanned)
+	}
+	if out.Conflicted != 1 || out.Repaired != 2 {
+		t.Errorf("conflicted = %d and repaired = %d, want the pair refused once and the other two done",
+			out.Conflicted, out.Repaired)
+	}
+	// One of the pair is keyed — whichever the sweep reached first, since until
+	// it is keyed the other is invisible to the lookup. What must not happen is
+	// the sweep stopping, so the row that has nothing to do with the pair is
+	// repaired.
+	if !hasKey(t, ctx, pool, ids[2]) {
+		t.Error("the unrelated row was left unkeyed, so the pair stopped the sweep")
+	}
+}
+
+/*
+Covering is not correcting, and the write says so instead of looking like one.
+
+A run reads its own memory and the shared memory, so an equivalent shared fact
+answers an agent-scoped creation — but it is the memory every agent in the scope
+reads, and rewriting it from one agent's context is not something to do quietly.
+So nothing is written.
+
+What was wrong was the answer: the shared row came back with a 200 and the
+person was told their correction had landed, on a row that was never touched.
+The proposal path is different and stays different — accepting something shared
+memory already covers has an honest ending, and there the suggestion is closed.
+*/
+func TestAssert_sharedMemoryAlreadyAnswersIt_refusesInsteadOfLookingLikeAWrite(t *testing.T) {
+	t.Parallel()
+	expectCoveredAssertIsRefused(t, context.Background(), memory.NewMemory())
+}
+
+func TestPostgresAssert_sharedMemoryAlreadyAnswersIt_refusesInsteadOfLookingLikeAWrite(t *testing.T) {
+	ctx, store := postgresStore(t)
+	expectCoveredAssertIsRefused(t, ctx, store)
+}
+
+func expectCoveredAssertIsRefused(t *testing.T, ctx context.Context, store mergeStore) {
+	t.Helper()
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	shared, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.AgentID = ""
+	}), "usr_ana", "reviewed", now)
+	if err != nil {
+		t.Fatalf("Assert shared: %v", err)
+	}
+
+	_, err = store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Claim = "a correction meant for the agent, landing nowhere"
+	}), "usr_bruno", "correcting", now.Add(time.Hour))
+	if !errors.Is(err, memory.ErrCovered) {
+		t.Fatalf("Assert = %v, want the write refused as covered", err)
+	}
+	if !strings.Contains(err.Error(), shared.ID) {
+		t.Errorf("error = %v, want it to name the shared memory to go and improve", err)
+	}
+
+	found, err := store.Find(ctx, domain.MemoryQuery{
+		Scope: platformScope, AgentID: "triage", Now: now.Add(time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if len(found) != 1 || found[0].ID != shared.ID {
+		t.Fatalf("memory = %+v, want only the shared row", subjects(found))
+	}
+	if found[0].Claim == "a correction meant for the agent, landing nowhere" {
+		t.Error("the shared memory was corrected from an agent's context")
+	}
+}
+
+/*
+A row written before the key, met by somebody who spells it differently, is one
+memory with both citations.
+
+Without this the second spelling is a second row: the legacy row has no key to
+match and an assertion id nobody will type again, so the lookup finds nothing
+and inserts. Then the fact is remembered twice, each half carrying the citations
+the other does not, and Find returns whichever ranks higher.
+
+The repair belongs on the write path and not only in the sweep, because a pod
+running the old image can write a keyless row after the job has passed. The job
+shortens the queue; it cannot close it.
+*/
+func TestPostgresAssert_aLegacyRowMeetsANewSpelling_staysOneMemory(t *testing.T) {
+	ctx, pool := postgresPool(t)
+	store := memory.NewPostgres(pool)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	legacy, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Subject = "Grafana Datasource"
+	}), "usr_ana", "reviewed", now)
+	if err != nil {
+		t.Fatalf("Assert the legacy row: %v", err)
+	}
+	unkey(t, ctx, pool, legacy.ID)
+
+	merged, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Subject = "grafana  datasource"
+		a.Evidence = []domain.MemoryEvidence{{
+			RunID: "run-evidence-2", Artifact: "final_answer", Digest: "sha256:beef",
+		}}
+	}), "usr_bruno", "same fact, spelled differently", now.Add(time.Hour))
+	if err != nil {
+		t.Fatalf("Assert the second spelling: %v", err)
+	}
+	if merged.ID != legacy.ID {
+		t.Errorf("wrote %s, want the merge to land on the row that was already there (%s)",
+			merged.ID, legacy.ID)
+	}
+
+	all := list(t, ctx, store, []domain.Scope{platformScope})
+	if len(all) != 1 {
+		t.Fatalf("rows = %v, want one memory for one fact", subjects(all))
+	}
+	var runs []domain.RunID
+	for _, ev := range all[0].Evidence {
+		runs = append(runs, ev.RunID)
+	}
+	if !slices.Contains(runs, "run-evidence-1") || !slices.Contains(runs, "run-evidence-2") {
+		t.Errorf("evidence cites %v, want both citations kept", runs)
+	}
+	if !hasKey(t, ctx, pool, legacy.ID) {
+		t.Error("the legacy row was merged into without gaining its key")
+	}
+}
+
+/*
+Active memory spelled differently still stops the proposal.
+
+The duplicate check asked for the row by the id the suggestion's own spelling
+hashes to, so a memory somebody wrote as "Grafana Datasource" was invisible to
+an agent that said "grafana  datasource" — and the queue filled with proposals
+for a fact the platform already knew, each of which a person had to read and
+dismiss.
+*/
+func TestSuggest_activeMemorySpelledDifferently_opensNoProposal(t *testing.T) {
+	t.Parallel()
+	expectSuggestFindsTheOtherSpelling(t, context.Background(), memory.NewMemory(), nil)
+}
+
+func TestPostgresSuggest_activeMemorySpelledDifferently_opensNoProposal(t *testing.T) {
+	ctx, pool := postgresPool(t)
+	expectSuggestFindsTheOtherSpelling(t, ctx, memory.NewPostgres(pool),
+		func(id string) { unkey(t, ctx, pool, id) })
+}
+
+// The same for shared memory, which an agent-scoped proposal must also find.
+// A run reads its own memory and the shared memory, so a shared fact answers
+// the need — and the platform saying otherwise is the console filling up with
+// proposals nobody can accept without creating a second copy.
+func TestSuggest_sharedMemorySpelledDifferently_opensNoProposal(t *testing.T) {
+	t.Parallel()
+	expectSharedSuggestFindsTheOtherSpelling(t, context.Background(), memory.NewMemory(), nil)
+}
+
+func TestPostgresSuggest_sharedMemorySpelledDifferently_opensNoProposal(t *testing.T) {
+	ctx, pool := postgresPool(t)
+	expectSharedSuggestFindsTheOtherSpelling(t, ctx, memory.NewPostgres(pool),
+		func(id string) { unkey(t, ctx, pool, id) })
+}
+
+// makeLegacy is how a store that keeps the key on the row is put back in the
+// state an upgrade inherits. The fake computes the key when it looks, so it has
+// no such state and passes nil: what both must agree on is the answer, not the
+// column.
+func expectSuggestFindsTheOtherSpelling(
+	t *testing.T, ctx context.Context, store mergeStore, makeLegacy func(string),
+) {
+	t.Helper()
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	active, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Subject = "Grafana Datasource"
+	}), "usr_ana", "reviewed", now)
+	if err != nil {
+		t.Fatalf("Assert: %v", err)
+	}
+	if makeLegacy != nil {
+		makeLegacy(active.ID)
+	}
+
+	out, err := store.Suggest(ctx, suggestion(func(s *domain.MemorySuggestion) {
+		s.Subject = "grafana  datasource"
+	}), reviewPolicy, "agent:triage", now)
+	if err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+	if out.Result != domain.MemorySuggestAlreadyActive {
+		t.Errorf("result = %s, want the proposal answered by the memory already there", out.Result)
+	}
+	if out.Assertion == nil || out.Assertion.ID != active.ID {
+		t.Errorf("assertion = %+v, want the row that was already active", out.Assertion)
+	}
+
+	pending, err := store.ListSuggestions(ctx, memory.SuggestionFilter{
+		Scopes: []domain.Scope{platformScope}, Status: domain.MemorySuggestionPending, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("ListSuggestions: %v", err)
+	}
+	if len(pending) != 0 {
+		t.Errorf("pending = %d, want nothing for somebody to decide", len(pending))
+	}
+}
+
+func expectSharedSuggestFindsTheOtherSpelling(
+	t *testing.T, ctx context.Context, store mergeStore, makeLegacy func(string),
+) {
+	t.Helper()
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	shared, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.AgentID, a.Subject = "", "Grafana Datasource"
+	}), "usr_ana", "reviewed", now)
+	if err != nil {
+		t.Fatalf("Assert shared: %v", err)
+	}
+	if makeLegacy != nil {
+		makeLegacy(shared.ID)
+	}
+
+	out, err := store.Suggest(ctx, suggestion(func(s *domain.MemorySuggestion) {
+		s.Subject = "grafana  datasource"
+	}), reviewPolicy, "agent:triage", now)
+	if err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+	if out.Result != domain.MemorySuggestAlreadyActive {
+		t.Errorf("result = %s, want the shared memory to answer the proposal", out.Result)
+	}
+	if out.Assertion == nil || out.Assertion.ID != shared.ID {
+		t.Errorf("assertion = %+v, want the shared row", out.Assertion)
+	}
+}
+
+/*
+Two keyless rows of one identity fail closed once the write path can see them.
+
+Before the key was filled they were invisible to each other and to the lookup,
+so a write inserted a third. Filling the key is what reveals the pair — and
+having revealed it, the write must refuse rather than merge into whichever the
+ordering put first.
+*/
+func TestPostgresAssert_twoLegacyRowsOfOneIdentity_refusesToChoose(t *testing.T) {
+	ctx, pool := postgresPool(t)
+	store := memory.NewPostgres(pool)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	for i, subject := range []string{"grafana  datasource", "GRAFANA DATASOURCE"} {
+		written, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+			a.Subject = fmt.Sprintf("grafana datasource %d", i)
+		}), "usr_ana", "reviewed", now)
+		if err != nil {
+			t.Fatalf("Assert %q: %v", subject, err)
+		}
+		legacyTwin(t, ctx, pool, written.ID, subject)
+	}
+
+	if _, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Subject = "Grafana Datasource"
+	}), "usr_bruno", "a third spelling of the same fact", now.Add(time.Hour)); !errors.Is(
+		err, memory.ErrCanonicalConflict) {
+		t.Fatalf("Assert = %v, want the write refused rather than one row chosen", err)
+	}
+	if all := list(t, ctx, store, []domain.Scope{platformScope}); len(all) != 2 {
+		t.Errorf("rows = %v, want the two that were there and no third", subjects(all))
+	}
+}
+
+// legacyTwin puts a row back in the state an upgrade inherits: written under a
+// spelling of its own, before any key existed to connect it to the other one.
+// The write path can no longer produce this, which is exactly the point — it is
+// what the table already holds.
+func legacyTwin(t *testing.T, ctx context.Context, pool *pgxpool.Pool, id, subject string) {
+	t.Helper()
+	if _, err := pool.Exec(ctx, `
+		update memory_assertions set subject = $2, canonical_identity_key = null
+		where assertion_id = $1`, id, subject); err != nil {
+		t.Fatalf("plant the legacy twin of %s: %v", id, err)
+	}
+}
+
+func unkey(t *testing.T, ctx context.Context, pool *pgxpool.Pool, id string) {
+	t.Helper()
+	if _, err := pool.Exec(ctx,
+		`update memory_assertions set canonical_identity_key = null where assertion_id = $1`,
+		id); err != nil {
+		t.Fatalf("clear the key of %s: %v", id, err)
+	}
+}
+
+func hasKey(t *testing.T, ctx context.Context, pool *pgxpool.Pool, id string) bool {
+	t.Helper()
+	var key *string
+	if err := pool.QueryRow(ctx,
+		`select canonical_identity_key from memory_assertions where assertion_id = $1`,
+		id).Scan(&key); err != nil {
+		t.Fatalf("read the key of %s: %v", id, err)
+	}
+	return key != nil
+}
+
+// snapshotRows is everything a merge would have moved, so "nothing changed" is
+// asserted against the row rather than against one field somebody remembered.
+func snapshotRows(
+	t *testing.T, ctx context.Context, pool *pgxpool.Pool, ids ...string,
+) []string {
+	t.Helper()
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		var claim, updatedBy string
+		var labels []string
+		var updatedAt time.Time
+		var key *string
+		if err := pool.QueryRow(ctx, `
+			select claim, labels, updated_by, updated_at, canonical_identity_key
+			from memory_assertions where assertion_id = $1`, id).Scan(
+			&claim, &labels, &updatedBy, &updatedAt, &key); err != nil {
+			t.Fatalf("read %s: %v", id, err)
+		}
+		stored := "unkeyed"
+		if key != nil {
+			stored = *key
+		}
+		out = append(out, fmt.Sprintf("%s|%s|%v|%s|%s|%s",
+			id, claim, labels, updatedBy, updatedAt.UTC(), stored))
+	}
+	return out
+}
+
+func countEvents(t *testing.T, ctx context.Context, pool *pgxpool.Pool, id string) int {
+	t.Helper()
+	var n int
+	if err := pool.QueryRow(ctx,
+		`select count(*) from memory_assertion_events where assertion_id = $1`, id).Scan(&n); err != nil {
+		t.Fatalf("count events of %s: %v", id, err)
+	}
+	return n
+}
+
+func TestAccept_mergesIntoTheStoredAssertion(t *testing.T) {
+	t.Parallel()
+	expectAcceptMergesIntoTheStoredAssertion(t, context.Background(), memory.NewMemory())
+}
+
+func TestPostgresAccept_mergesIntoTheStoredAssertion(t *testing.T) {
+	ctx, store := postgresStore(t)
+	expectAcceptMergesIntoTheStoredAssertion(t, ctx, store)
+}
+
+func TestAccept_onADisabledAssertion_consumesNothing(t *testing.T) {
+	t.Parallel()
+	expectAcceptOnADisabledAssertionConsumesNothing(t, context.Background(), memory.NewMemory())
+}
+
+func TestPostgresAccept_onADisabledAssertion_consumesNothing(t *testing.T) {
+	ctx, store := postgresStore(t)
+	expectAcceptOnADisabledAssertionConsumesNothing(t, ctx, store)
+}
+
+/*
+A write that fails after projecting leaves nothing behind.
+
+The proof has to come from inside the transaction, not before it: a failure that
+happens before the first write proves only that nothing started. So the event
+insert is refused by a trigger, which fires after the projection has already
+been written — and if any of it survived, the suggestion would be accepted
+beside a memory nobody agreed to.
+*/
+func TestPostgresAccept_failureAfterProjecting_leavesNothing(t *testing.T) {
+	ctx, pool := postgresPool(t)
+	store := memory.NewPostgres(pool)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	out, err := store.Suggest(ctx, suggestion(nil), reviewPolicy, "agent:triage", now)
+	if err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+
+	if _, err := pool.Exec(ctx, `
+		create or replace function refuse_memory_event() returns trigger as $$
+		begin raise exception 'refused for the test'; end; $$ language plpgsql;
+		create trigger refuse_memory_event before insert on memory_assertion_events
+		for each row execute function refuse_memory_event();`); err != nil {
+		t.Fatalf("install trigger: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = pool.Exec(context.Background(),
+			`drop trigger if exists refuse_memory_event on memory_assertion_events`)
+	})
+
+	if _, err := store.AcceptSuggestion(ctx, out.Suggestion.ID, platformScope,
+		"usr_ana", "agreed", now); err == nil {
+		t.Fatal("accept succeeded while the event was being refused")
+	}
+
+	found, err := store.Find(ctx, domain.MemoryQuery{
+		Scope: platformScope, AgentID: "triage", Now: now,
+	})
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if len(found) != 0 {
+		t.Errorf("assertions = %d, want the projection rolled back with the event", len(found))
+	}
+
+	pending, err := store.ListSuggestions(ctx, memory.SuggestionFilter{
+		Scopes: []domain.Scope{platformScope}, Status: domain.MemorySuggestionPending, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("ListSuggestions: %v", err)
+	}
+	if len(pending) != 1 {
+		t.Errorf("pending = %d, want the suggestion untouched", len(pending))
+	}
+}
+
+/*
+A person accepting while the agent reaches its auto-confirm threshold.
+
+Both orders are correct and the test accepts either, because the platform has
+not decided that active memory keeps accumulating observations. If the accept
+lands first the suggestion is spent and the concurrent observation meets active
+memory, which Suggest reports as already-active and does not record. If the
+auto-confirm lands first the accept meets a memory that already holds the fact.
+
+What must hold in both is the same: one assertion, the suggestion in a terminal
+state that matches what happened, and neither writer waiting on the other.
+
+Whether an already-active memory should still count a sighting is a real
+question — Find ranks on observations, so a memory freezes its rank the moment
+it becomes active — but it is a decision about what observations mean, not
+something to settle inside a test.
+*/
+func TestPostgresAccept_racingAutoConfirm_leavesOneMemoryAndOneEnding(t *testing.T) {
+	ctx, store := postgresStore(t)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+	policy := domain.MemoryLearningPolicy{
+		Mode: domain.MemoryLearningAutoConfirm, MinObservations: 2,
+	}
+
+	out, err := store.Suggest(ctx, suggestion(func(s *domain.MemorySuggestion) {
+		s.Evidence = []domain.MemoryEvidence{{
+			RunID: "run-1", Seq: 1, Artifact: domain.ArtifactMemorySuggestion, Digest: "sha256:1",
+		}}
+	}), policy, "agent:triage", now)
+	if err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+
+	errs := make(chan error, 2)
+	var start sync.WaitGroup
+	start.Add(1)
+	go func() {
+		start.Wait()
+		_, err := store.AcceptSuggestion(ctx, out.Suggestion.ID, platformScope, "usr_ana", "agreed", now)
+		errs <- err
+	}()
+	go func() {
+		start.Wait()
+		// The second observation, which takes the suggestion to its threshold.
+		_, err := store.Suggest(ctx, suggestion(func(s *domain.MemorySuggestion) {
+			s.Evidence = []domain.MemoryEvidence{{
+				RunID: "run-2", Seq: 1, Artifact: domain.ArtifactMemorySuggestion, Digest: "sha256:2",
+			}}
+		}), policy, "agent:triage", now)
+		errs <- err
+	}()
+	start.Done()
+	for range 2 {
+		// Either order is fine; a deadlock or a lost writer is not.
+		if err := <-errs; err != nil && !errors.Is(err, memory.ErrNotFound) {
+			t.Fatalf("racing writers: %v", err)
+		}
+	}
+
+	found, err := store.Find(ctx, domain.MemoryQuery{
+		Scope: platformScope, AgentID: "triage", Now: now,
+	})
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if len(found) != 1 {
+		t.Fatalf("assertions = %d, want exactly one memory of one fact", len(found))
+	}
+
+	pending, err := store.ListSuggestions(ctx, memory.SuggestionFilter{
+		Scopes: []domain.Scope{platformScope}, Status: domain.MemorySuggestionPending, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("ListSuggestions: %v", err)
+	}
+	if len(pending) != 0 {
+		t.Errorf("pending = %d, want the suggestion to have an ending", len(pending))
+	}
+}
+
+// hydrateStore is the repair door: it may complete what the platform can derive
+// and nothing else.
+type hydrateStore interface {
+	Assert(context.Context, domain.MemoryAssertion, domain.UserID, string, time.Time) (domain.MemoryAssertion, error)
+	Hydrate(context.Context, *memory.Resolver, memory.HydratePage) (memory.HydrateResult, error)
+	Find(context.Context, domain.MemoryQuery) ([]domain.MemoryAssertion, error)
+	List(context.Context, memory.Filter) ([]domain.MemoryAssertion, error)
+}
+
+/*
+A citation goes in legacy and comes out complete, still one record.
+
+This is the whole of hydration in one assertion. The old shape named a run and
+an artifact; the new one names the step, the run that produced the bytes, the
+whole digest and the labels the run had accumulated. Replacing rather than
+adding is what keeps it one citation — the two forms have different keys, so a
+merge would have kept both and doubled every record it repaired.
+
+And a second pass changes nothing. A repair that is not idempotent is a repair
+that cannot be run twice, which means it cannot be run at all on a schedule.
+*/
+func expectHydrationCompletesACitationInPlace(
+	t *testing.T, ctx context.Context, store hydrateStore, resolver *memory.Resolver,
+	seeded domain.MemoryAssertion, now time.Time,
+) {
+	t.Helper()
+
+	first, err := store.Hydrate(ctx, resolver, memory.HydratePage{Limit: 10, Now: now})
+	if err != nil {
+		t.Fatalf("Hydrate: %v", err)
+	}
+	if first.Repaired != 1 {
+		t.Fatalf("repaired = %d, want the one legacy row", first.Repaired)
+	}
+
+	found, err := store.Find(ctx, domain.MemoryQuery{
+		Scope: seeded.Scope, AgentID: seeded.AgentID, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if len(found) != 1 {
+		t.Fatalf("assertions = %d, want the one that was there", len(found))
+	}
+	got := found[0]
+
+	if len(got.Evidence) != 1 {
+		t.Fatalf("evidence = %d records, want the legacy citation replaced and not joined",
+			len(got.Evidence))
+	}
+	ev := got.Evidence[0]
+	if ev.Seq == 0 {
+		t.Error("the citation still does not say which step it names")
+	}
+	if len(ev.Digest) != 64 {
+		t.Errorf("digest = %q, want the whole one the store recorded", ev.Digest)
+	}
+	if !ev.Labels.Has(domain.LabelUntrusted) || !got.Labels.Has(domain.LabelUntrusted) {
+		t.Errorf("labels = %v / %v, want the taint the run carried", ev.Labels, got.Labels)
+	}
+
+	// Nothing a person decided may move.
+	if got.Claim != seeded.Claim || got.Observations != seeded.Observations ||
+		got.Confirmed != seeded.Confirmed || got.CreatedBy != seeded.CreatedBy {
+		t.Errorf("hydration changed what somebody decided: %+v", got)
+	}
+
+	second, err := store.Hydrate(ctx, resolver, memory.HydratePage{Limit: 10, Now: now})
+	if err != nil {
+		t.Fatalf("Hydrate again: %v", err)
+	}
+	if second.Repaired != 0 {
+		t.Errorf("second pass repaired %d, want a no-op", second.Repaired)
+	}
+
+	after, err := store.Find(ctx, domain.MemoryQuery{
+		Scope: seeded.Scope, AgentID: seeded.AgentID, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("Find after: %v", err)
+	}
+	// Compared against what was seeded, not against the first pass: a repair
+	// that moved the timestamp on the way in would move it for both reads and
+	// look stationary.
+	if !got.UpdatedAt.Equal(seeded.UpdatedAt) || !after[0].UpdatedAt.Equal(seeded.UpdatedAt) {
+		t.Errorf("updated_at moved for a repair nobody made: %v then %v, want %v",
+			got.UpdatedAt, after[0].UpdatedAt, seeded.UpdatedAt)
+	}
+}
+
+func TestHydrate_completesALegacyCitationInPlace(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := memory.NewMemory()
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	run, cited := legacyRun(t, "run-legacy")
+	seed := assertion(func(a *domain.MemoryAssertion) {
+		a.Scope = run.scope
+		a.Evidence = []domain.MemoryEvidence{cited}
+	})
+	seeded, err := store.Assert(ctx, seed, "usr_ana", "reviewed", now)
+	if err != nil {
+		t.Fatalf("Assert: %v", err)
+	}
+
+	expectHydrationCompletesACitationInPlace(t, ctx, store, run.resolver(), seeded, now)
+}
+
+func TestPostgresHydrate_completesALegacyCitationInPlace(t *testing.T) {
+	ctx, store := postgresStore(t)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	run, cited := legacyRun(t, "run-legacy")
+	seed := assertion(func(a *domain.MemoryAssertion) {
+		a.Scope = run.scope
+		a.Evidence = []domain.MemoryEvidence{cited}
+	})
+	seeded, err := store.Assert(ctx, seed, "usr_ana", "reviewed", now)
+	if err != nil {
+		t.Fatalf("Assert: %v", err)
+	}
+
+	expectHydrationCompletesACitationInPlace(t, ctx, store, run.resolver(), seeded, now)
+}
+
+// legacyRun seeds a tainted run and the citation a row written before this work
+// would have carried: a run and an artifact, no step, and the truncated digest
+// the reference happens to hold.
+func legacyRun(t *testing.T, id domain.RunID) (*run, domain.MemoryEvidence) {
+	t.Helper()
+	r, cited := finished(t, id)
+	full := cited
+	resolved, err := r.resolver().Resolve(context.Background(), r.scope,
+		[]domain.MemoryEvidence{full})
+	if err != nil {
+		t.Fatalf("resolve for the fixture: %v", err)
+	}
+	// What a row written before this work carries: the run and the artifact,
+	// the whole digest the handler checked against the payload, and no step.
+	return r, domain.MemoryEvidence{
+		RunID: id, Artifact: domain.ArtifactFinalAnswer, Digest: resolved[0].Digest,
+	}
+}
+
+// blockingContent lets a test stop a hydration in the middle of reading the
+// ledger, which is the only moment where another writer can slip past it.
+type blockingContent struct {
+	inner   memory.EvidenceContent
+	entered chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func (c *blockingContent) Metadata(
+	ctx context.Context, ref string,
+) (domain.ContentMetadata, error) {
+	c.once.Do(func() {
+		close(c.entered)
+		<-c.release
+	})
+	return c.inner.Metadata(ctx, ref)
+}
+
+/*
+A hydration that was overtaken does not undo the writer that overtook it.
+
+The repair reads the ledger outside the lock, so a correction can land between
+the snapshot and the write. Its citations are newer than what this pass is
+describing, and writing the snapshot's version over them would delete a citation
+somebody just made — the repair silently losing a write is worse than the row
+staying unrepaired for one more pass.
+*/
+func expectHydrationOvertakenDoesNotLoseTheNewCitation(
+	t *testing.T, ctx context.Context, store hydrateStore,
+	blocked *blockingContent, ledger memory.EvidenceLedger,
+	seeded domain.MemoryAssertion, now time.Time,
+) {
+	t.Helper()
+	done := make(chan error, 1)
+	go func() {
+		_, err := store.Hydrate(ctx, memory.NewResolver(ledger, blocked),
+			memory.HydratePage{Limit: 10, Now: now})
+		done <- err
+	}()
+
+	<-blocked.entered
+	// A second citation arrives while the repair is still reading.
+	second := seeded
+	second.Evidence = append(slices.Clone(seeded.Evidence), domain.MemoryEvidence{
+		RunID: "run-later", Seq: 7, Artifact: "final_answer",
+		Digest: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+	})
+	if _, err := store.Assert(ctx, second, "usr_bruno", "another citation", now); err != nil {
+		t.Fatalf("Assert while hydrating: %v", err)
+	}
+	close(blocked.release)
+
+	if err := <-done; err != nil {
+		t.Fatalf("Hydrate: %v", err)
+	}
+
+	found, err := store.Find(ctx, domain.MemoryQuery{
+		Scope: seeded.Scope, AgentID: seeded.AgentID, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	var runs []domain.RunID
+	for _, ev := range found[0].Evidence {
+		runs = append(runs, ev.RunID)
+	}
+	if !slices.Contains(runs, "run-later") {
+		t.Errorf("evidence cites %v, want the citation that arrived mid-repair", runs)
+	}
+}
+
+func TestHydrate_overtakenByAWriter_doesNotLoseTheNewCitation(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := memory.NewMemory()
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	run, cited := legacyRun(t, "run-legacy")
+	seeded, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Scope = run.scope
+		a.Evidence = []domain.MemoryEvidence{cited}
+	}), "usr_ana", "reviewed", now)
+	if err != nil {
+		t.Fatalf("Assert: %v", err)
+	}
+
+	blocked := &blockingContent{
+		inner: run.content, entered: make(chan struct{}), release: make(chan struct{}),
+	}
+	expectHydrationOvertakenDoesNotLoseTheNewCitation(
+		t, ctx, store, blocked, run.ledger, seeded, now)
+}
+
+func TestPostgresHydrate_overtakenByAWriter_doesNotLoseTheNewCitation(t *testing.T) {
+	ctx, store := postgresStore(t)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	run, cited := legacyRun(t, "run-legacy")
+	seeded, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Scope = run.scope
+		a.Evidence = []domain.MemoryEvidence{cited}
+	}), "usr_ana", "reviewed", now)
+	if err != nil {
+		t.Fatalf("Assert: %v", err)
+	}
+
+	blocked := &blockingContent{
+		inner: run.content, entered: make(chan struct{}), release: make(chan struct{}),
+	}
+	expectHydrationOvertakenDoesNotLoseTheNewCitation(
+		t, ctx, store, blocked, run.ledger, seeded, now)
+}
+
+/*
+Filling only the canonical key writes no event, and it should not.
+
+The key is recalculable from the row's own fields and does not appear in an
+event's detail, so an event about it would say nothing a reader could act on —
+it would be noise in the one log an auditor reads to reconstruct what a memory
+rests on. Events are for provenance moving; identity is arithmetic.
+
+The row is made legacy the only way this case exists: complete evidence, key
+cleared, exactly what a row written before the key existed looks like once its
+citations were already whole.
+*/
+func TestPostgresHydrate_fillingOnlyTheKey_recordsNoEvent(t *testing.T) {
+	ctx, pool := postgresPool(t)
+	store := memory.NewPostgres(pool)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	run, cited := finished(t, "run-whole")
+	resolved, err := memory.NewResolver(run.ledger, run.content).
+		Resolve(ctx, run.scope, []domain.MemoryEvidence{cited})
+	if err != nil {
+		t.Fatalf("resolve for the fixture: %v", err)
+	}
+	created, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Scope = run.scope
+		a.Evidence = resolved
+		a.Labels = resolved[0].Labels
+	}), "usr_ana", "reviewed", now)
+	if err != nil {
+		t.Fatalf("Assert: %v", err)
+	}
+
+	if _, err := pool.Exec(ctx,
+		`update memory_assertions set canonical_identity_key = null where assertion_id = $1`,
+		created.ID); err != nil {
+		t.Fatalf("clear the key: %v", err)
+	}
+
+	before := countHydratedEvents(t, ctx, pool, created.ID)
+	if _, err := store.Hydrate(ctx, memory.NewResolver(run.ledger, run.content),
+		memory.HydratePage{Limit: 10, Now: now}); err != nil {
+		t.Fatalf("Hydrate: %v", err)
+	}
+
+	var key *string
+	if err := pool.QueryRow(ctx,
+		`select canonical_identity_key from memory_assertions where assertion_id = $1`,
+		created.ID).Scan(&key); err != nil {
+		t.Fatalf("read the key: %v", err)
+	}
+	if key == nil {
+		t.Fatal("the key was not filled")
+	}
+	if after := countHydratedEvents(t, ctx, pool, created.ID); after != before {
+		t.Errorf("hydrated events went %d -> %d, want none for arithmetic", before, after)
+	}
+}
+
+func countHydratedEvents(
+	t *testing.T, ctx context.Context, pool *pgxpool.Pool, id string,
+) int {
+	t.Helper()
+	var n int
+	if err := pool.QueryRow(ctx,
+		`select count(*) from memory_assertion_events where assertion_id = $1 and action = 'hydrated'`,
+		id).Scan(&n); err != nil {
+		t.Fatalf("count events: %v", err)
+	}
+	return n
+}
+
+/*
+A pending proposal is repaired too, and nothing else about it moves.
+
+A suggestion written before this work carries the older citation, and accepting
+it after the rollout puts it through the merge with labels it cannot explain —
+which the eviction rule refuses. So the queue has to be repaired as well, or the
+first accept after an upgrade fails on a proposal somebody made weeks ago.
+
+What must not move is everything a person or a policy decided: the status, the
+claim, the count of observations, the expiry, who wrote it and when it was last
+touched.
+*/
+func expectSuggestionHydrationCompletesTheCitation(
+	t *testing.T, ctx context.Context, store suggestionHydrator,
+	resolver *memory.Resolver, seeded domain.MemorySuggestion, now time.Time,
+) {
+	t.Helper()
+
+	if _, err := store.HydrateSuggestions(ctx, resolver,
+		memory.HydratePage{Limit: 10, Now: now}); err != nil {
+		t.Fatalf("HydrateSuggestions: %v", err)
+	}
+
+	found, err := store.ListSuggestions(ctx, memory.SuggestionFilter{
+		Scopes: []domain.Scope{seeded.Scope}, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("ListSuggestions: %v", err)
+	}
+	if len(found) != 1 {
+		t.Fatalf("suggestions = %d, want the one that was there", len(found))
+	}
+	got := found[0]
+
+	if len(got.Evidence) != 1 || got.Evidence[0].Seq == 0 {
+		t.Errorf("evidence = %+v, want one citation that says which step it names", got.Evidence)
+	}
+	if !got.Labels.Has(domain.LabelUntrusted) {
+		t.Errorf("labels = %v, want the taint the run carried", got.Labels)
+	}
+	if got.Status != seeded.Status || got.Claim != seeded.Claim ||
+		got.Observations != seeded.Observations || got.CreatedBy != seeded.CreatedBy ||
+		!got.UpdatedAt.Equal(seeded.UpdatedAt) {
+		t.Errorf("hydration changed what somebody decided: %+v", got)
+	}
+}
+
+type suggestionHydrator interface {
+	HydrateSuggestions(context.Context, *memory.Resolver, memory.HydratePage) (memory.HydrateResult, error)
+	ListSuggestions(context.Context, memory.SuggestionFilter) ([]domain.MemorySuggestion, error)
+}
+
+func legacySuggestion(t *testing.T) (*run, domain.MemorySuggestion) {
+	t.Helper()
+	r := newRun(t, "run-suggest")
+	r.step(domain.StepRunStarted, domain.RunStartedPayload{Trigger: "channel"}, domain.LabelUntrusted)
+	ref, digest := r.put(2, []byte(`{"kind":"incident","subject":"slack"}`))
+	r.step(domain.StepToolCalled, domain.ToolCalledPayload{
+		Tool: domain.ToolMemorySuggest, Effect: domain.EffectWrite,
+		ArgsRef: ref, ArgsDigest: digest,
+	})
+	return r, suggestion(func(s *domain.MemorySuggestion) {
+		s.Scope = r.scope
+		// The older shape: run and artifact, no step.
+		s.Evidence = []domain.MemoryEvidence{{
+			RunID: "run-suggest", Artifact: domain.ArtifactMemorySuggestion, Digest: digest,
+		}}
+	})
+}
+
+func TestHydrateSuggestions_completesTheCitation(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := memory.NewMemory()
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	run, seed := legacySuggestion(t)
+	out, err := store.Suggest(ctx, seed, reviewPolicy, "agent:triage", now)
+	if err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+	expectSuggestionHydrationCompletesTheCitation(t, ctx, store, run.resolver(), out.Suggestion, now)
+}
+
+func TestPostgresHydrateSuggestions_completesTheCitation(t *testing.T) {
+	ctx, store := postgresStore(t)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	run, seed := legacySuggestion(t)
+	out, err := store.Suggest(ctx, seed, reviewPolicy, "agent:triage", now)
+	if err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+	expectSuggestionHydrationCompletesTheCitation(t, ctx, store, run.resolver(), out.Suggestion, now)
+}
+
+// hydrated in memory_assertion_events would be ambiguous: the row carries no
+// suggestion id, no status and no covered_by, so a reader could not tell a
+// repaired memory from a repaired proposal, nor rebuild either from it.
+func TestPostgresHydrateSuggestions_recordNoEvent(t *testing.T) {
+	ctx, pool := postgresPool(t)
+	store := memory.NewPostgres(pool)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	run, seed := legacySuggestion(t)
+	out, err := store.Suggest(ctx, seed, reviewPolicy, "agent:triage", now)
+	if err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+	before := countHydratedEvents(t, ctx, pool, out.Suggestion.AssertionID)
+
+	if _, err := store.HydrateSuggestions(ctx, run.resolver(),
+		memory.HydratePage{Limit: 10, Now: now}); err != nil {
+		t.Fatalf("HydrateSuggestions: %v", err)
+	}
+	if after := countHydratedEvents(t, ctx, pool, out.Suggestion.AssertionID); after != before {
+		t.Errorf("hydrated events went %d -> %d, want a repair to write none", before, after)
+	}
+}
+
+/*
+A proposal the platform ends leaves the trail an explanation.
+
+The repair of a proposal writes no event, and that is right: filling a field the
+platform can now derive is not something anybody decided. Ending one is. Without
+this the proposal simply stopped being in the queue — no refusal, no acceptance,
+nothing in the ledger saying where it went — while the administrative erasure
+recorded exactly this transition for exactly these rows.
+
+The detail is the suggestion itself, which is the shape the erasure writes for
+the same act. An assertion-shaped detail would describe a row that was never
+created and would say active about something terminal.
+*/
+func TestPostgresHydrateSuggestions_sourceGone_recordsTheEndingInTheTrail(t *testing.T) {
+	ctx, pool := postgresPool(t)
+	store := memory.NewPostgres(pool)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	run, seed := legacySuggestion(t)
+	out, err := store.Suggest(ctx, seed, reviewPolicy, "agent:triage",
+		now.Add(-180*24*time.Hour))
+	if err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+	if _, err := run.content.Erase(ctx, string(run.id), "the subject asked"); err != nil {
+		t.Fatalf("Erase: %v", err)
+	}
+
+	if _, err := store.HydrateSuggestions(ctx, run.resolver(),
+		memory.HydratePage{Limit: 10, Now: now}); err != nil {
+		t.Fatalf("HydrateSuggestions: %v", err)
+	}
+
+	if got := memorySuggestionStatusOf(t, ctx, store, out.Suggestion.ID, now); got !=
+		domain.MemorySuggestionSourceErased {
+		t.Fatalf("status = %s, want the proposal ended", got)
+	}
+
+	var at time.Time
+	var principal string
+	var detail []byte
+	if err := pool.QueryRow(ctx, `
+		select at, principal_id, detail from memory_assertion_events
+		where assertion_id = $1 and action = 'source_erased'`,
+		out.Suggestion.AssertionID).Scan(&at, &principal, &detail); err != nil {
+		t.Fatalf("read the event: %v", err)
+	}
+	if !at.UTC().Equal(now) {
+		t.Errorf("event at %s, want the moment the sweep discovered it", at.UTC())
+	}
+	if principal != "system:memory" {
+		t.Errorf("principal = %s, want the platform: nobody decided this", principal)
+	}
+	if !strings.Contains(string(detail), out.Suggestion.ID) {
+		t.Errorf("detail = %s, want the suggestion that was ended", detail)
+	}
+}
+
+// The ending and the row move together, or neither does. A queue that empties
+// while the ledger says nothing is the defect this event exists to close, and a
+// projection that commits without it would reopen it on the first failure.
+func TestPostgresHydrateSuggestions_endingFailsToRecord_leavesTheProposal(t *testing.T) {
+	ctx, pool := postgresPool(t)
+	store := memory.NewPostgres(pool)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	run, seed := legacySuggestion(t)
+	out, err := store.Suggest(ctx, seed, reviewPolicy, "agent:triage", now)
+	if err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+	if _, err := run.content.Erase(ctx, string(run.id), "the subject asked"); err != nil {
+		t.Fatalf("Erase: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		create or replace function refuse_memory_event() returns trigger as $$
+		begin raise exception 'refused for the test'; end; $$ language plpgsql;
+		create trigger refuse_memory_event before insert on memory_assertion_events
+		for each row execute function refuse_memory_event();`); err != nil {
+		t.Fatalf("install trigger: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = pool.Exec(context.Background(),
+			`drop trigger if exists refuse_memory_event on memory_assertion_events`)
+	})
+
+	if _, err := store.HydrateSuggestions(ctx, run.resolver(),
+		memory.HydratePage{Limit: 10, Now: now}); err == nil {
+		t.Fatal("the sweep ended a proposal while the event was being refused")
+	}
+	if got := memorySuggestionStatusOf(t, ctx, store, out.Suggestion.ID, now); got !=
+		domain.MemorySuggestionPending {
+		t.Errorf("status = %s, want the proposal left in the queue", got)
+	}
+}
+
+func memorySuggestionStatusOf(
+	t *testing.T, ctx context.Context, store *memory.Postgres, id string, now time.Time,
+) domain.MemorySuggestionStatus {
+	t.Helper()
+	found, err := store.ListSuggestions(ctx, memory.SuggestionFilter{
+		Scopes: []domain.Scope{{Company: "acme", Area: "ops"}}, Limit: 50, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("ListSuggestions: %v", err)
+	}
+	for _, s := range found {
+		if s.ID == id {
+			return s.Status
+		}
+	}
+	t.Fatalf("suggestion %s is not in the store any more", id)
+	return ""
+}
+
+/*
+A repair of a proposal gives way to the observation that overtook it.
+
+Same shape as the assertion case and the same stake: the ledger is read outside
+the lock, so another run can merge a citation into the proposal while the repair
+is still reading. Writing the snapshot's version over it would delete an
+observation that had just been counted.
+*/
+func TestPostgresHydrateSuggestions_overtaken_doesNotLoseTheNewCitation(t *testing.T) {
+	ctx, store := postgresStore(t)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	run, seed := legacySuggestion(t)
+	if _, err := store.Suggest(ctx, seed, reviewPolicy, "agent:triage", now); err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+
+	blocked := &blockingContent{
+		inner: run.content, entered: make(chan struct{}), release: make(chan struct{}),
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := store.HydrateSuggestions(ctx, memory.NewResolver(run.ledger, blocked),
+			memory.HydratePage{Limit: 10, Now: now})
+		done <- err
+	}()
+
+	<-blocked.entered
+	// A second run observes the same fact while the repair is reading.
+	second := seed
+	second.Evidence = []domain.MemoryEvidence{{
+		RunID: "run-second", Seq: 3, Artifact: domain.ArtifactMemorySuggestion,
+		Digest: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+	}}
+	if _, err := store.Suggest(ctx, second, reviewPolicy, "agent:triage", now); err != nil {
+		t.Fatalf("Suggest while hydrating: %v", err)
+	}
+	close(blocked.release)
+
+	if err := <-done; err != nil {
+		t.Fatalf("HydrateSuggestions: %v", err)
+	}
+
+	found, err := store.ListSuggestions(ctx, memory.SuggestionFilter{
+		Scopes: []domain.Scope{run.scope}, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("ListSuggestions: %v", err)
+	}
+	var runs []domain.RunID
+	for _, ev := range found[0].Evidence {
+		runs = append(runs, ev.RunID)
+	}
+	if !slices.Contains(runs, "run-second") {
+		t.Errorf("evidence cites %v, want the observation that arrived mid-repair", runs)
+	}
+}
+
+/*
+A memory whose run is gone stops being readable, and the sweep carries on.
+
+The population hydration exists to repair is the oldest one, so a run that
+retention has taken is the likeliest thing it will meet. Treating that as a
+failure stopped the sweep on the first such row — every row after it stayed
+unrepaired for ever. Treating it as merely unprovable would have left active
+memory whose source we know does not exist.
+
+Two rows in one page: the first cites a run that is not there, the second is
+whole. The first ends source_erased, the second is hydrated, and neither
+prevents the other.
+*/
+/*
+An active memory whose bytes were erased is ended by the sweep.
+
+The half-finished erasure again: the content is gone and the row still says
+active, so a run recalls a memory the platform cannot show the source of. The
+citation is not wrong — the run is there, the step is there, the reference is
+there — which is why classifying erased bytes as an invalid citation left this
+state with nothing to converge it.
+*/
+func TestHydrate_contentErasedUnderneath_endsTheMemory(t *testing.T) {
+	t.Parallel()
+	expectHydrationEndsAnErasedMemory(t, context.Background(), memory.NewMemory())
+}
+
+func TestPostgresHydrate_contentErasedUnderneath_endsTheMemory(t *testing.T) {
+	ctx, store := postgresStore(t)
+	expectHydrationEndsAnErasedMemory(t, ctx, store)
+}
+
+func expectHydrationEndsAnErasedMemory(t *testing.T, ctx context.Context, store hydrateStore) {
+	t.Helper()
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+	long := now.Add(-180 * 24 * time.Hour)
+	r, cited := legacyRun(t, "run-erased-content")
+	stored, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Scope = r.scope
+		a.Evidence = []domain.MemoryEvidence{cited}
+	}), "usr_ana", "reviewed", long)
+	if err != nil {
+		t.Fatalf("Assert: %v", err)
+	}
+	if _, err := r.content.Erase(ctx, string(r.id), "the subject asked"); err != nil {
+		t.Fatalf("Erase: %v", err)
+	}
+
+	out, err := store.Hydrate(ctx, r.resolver(), memory.HydratePage{Limit: 10, Now: now})
+	if err != nil {
+		t.Fatalf("Hydrate: %v", err)
+	}
+	if out.SourceGone != 1 {
+		t.Errorf("source gone = %d, want the row whose bytes were erased", out.SourceGone)
+	}
+
+	readable, err := store.Find(ctx, domain.MemoryQuery{
+		Scope: r.scope, AgentID: "triage", Now: now,
+	})
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if len(readable) != 0 {
+		t.Errorf("find returned %d, want nothing whose bytes are gone", len(readable))
+	}
+
+	// Dated when it was discovered and authored by the platform. Keeping the
+	// row's own stamp would file today's discovery under a decision from six
+	// months ago, and every screen that sorts by it would say nothing happened.
+	rows, err := store.List(ctx, memory.Filter{Scopes: []domain.Scope{r.scope}, Limit: 50})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	for _, row := range rows {
+		if row.ID != stored.ID {
+			continue
+		}
+		if !row.UpdatedAt.Equal(now) || row.UpdatedBy != "system:memory" {
+			t.Errorf("stamped %s by %s, want the moment it was discovered, by the platform",
+				row.UpdatedAt, row.UpdatedBy)
+		}
+	}
+}
+
+/*
+A source discovered gone is dated when it was discovered.
+
+The transition kept the row's own updated_at, and recordEvent writes that value
+as the moment the event happened. So a sweep finding today that a run was erased
+filed the event under the last human decision about that memory — months back,
+out of order in the trail, and old enough that the retention of events could
+delete it before anybody read it.
+
+The author is the platform for the same reason. Nobody decided this: the run was
+taken, and a sweep is what noticed.
+*/
+func TestPostgresHydrate_sourceGone_isDatedWhenItWasDiscovered(t *testing.T) {
+	ctx, pool := postgresPool(t)
+	store := memory.NewPostgres(pool)
+	long := time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC)
+	today := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	r, cited := legacyRun(t, "run-dated")
+	stored, err := store.Assert(ctx, assertion(func(a *domain.MemoryAssertion) {
+		a.Scope = r.scope
+		a.Evidence = []domain.MemoryEvidence{cited}
+	}), "usr_ana", "reviewed", long)
+	if err != nil {
+		t.Fatalf("Assert: %v", err)
+	}
+	if _, err := r.content.Erase(ctx, string(r.id), "the subject asked"); err != nil {
+		t.Fatalf("Erase: %v", err)
+	}
+
+	if _, err := store.Hydrate(ctx, r.resolver(),
+		memory.HydratePage{Limit: 10, Now: today}); err != nil {
+		t.Fatalf("Hydrate: %v", err)
+	}
+
+	var at, updatedAt time.Time
+	var principal, updatedBy string
+	if err := pool.QueryRow(ctx, `
+		select e.at, e.principal_id, m.updated_at, m.updated_by
+		from memory_assertion_events e
+		join memory_assertions m on m.assertion_id = e.assertion_id
+		where e.assertion_id = $1 and e.action = 'source_erased'`,
+		stored.ID).Scan(&at, &principal, &updatedAt, &updatedBy); err != nil {
+		t.Fatalf("read the event: %v", err)
+	}
+	if !at.UTC().Equal(today) {
+		t.Errorf("event at %s, want the moment the sweep discovered it (%s)", at.UTC(), today)
+	}
+	if !updatedAt.UTC().Equal(today) {
+		t.Errorf("projection updated at %s, want the same moment", updatedAt.UTC())
+	}
+	if principal != "system:memory" || updatedBy != "system:memory" {
+		t.Errorf("author was %s/%s, want the platform: nobody decided this",
+			principal, updatedBy)
+	}
+}
+
+func TestPostgresHydrate_runGoneEndsThatRowAndNotTheSweep(t *testing.T) {
+	ctx, store := postgresStore(t)
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	run, cited := legacyRun(t, "run-legacy")
+	gone := assertion(func(a *domain.MemoryAssertion) {
+		a.Scope, a.Subject = run.scope, "aaa first by id"
+		a.Evidence = []domain.MemoryEvidence{{
+			RunID: "run-taken-by-retention", Artifact: domain.ArtifactFinalAnswer,
+			Digest: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+		}}
+	})
+	whole := assertion(func(a *domain.MemoryAssertion) {
+		a.Scope, a.Subject = run.scope, "zzz second by id"
+		a.Evidence = []domain.MemoryEvidence{cited}
+	})
+	for _, a := range []domain.MemoryAssertion{gone, whole} {
+		if _, err := store.Assert(ctx, a, "usr_ana", "reviewed", now); err != nil {
+			t.Fatalf("Assert: %v", err)
+		}
+	}
+
+	out, err := store.Hydrate(ctx, run.resolver(), memory.HydratePage{Limit: 10, Now: now})
+	if err != nil {
+		t.Fatalf("Hydrate stopped on a run that is gone: %v", err)
+	}
+	if out.SourceGone != 1 {
+		t.Errorf("source gone = %d, want the one whose run was taken", out.SourceGone)
+	}
+
+	readable, err := store.Find(ctx, domain.MemoryQuery{
+		Scope: run.scope, AgentID: "triage", Now: now,
+	})
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if len(readable) != 1 || readable[0].Subject != "zzz second by id" {
+		t.Fatalf("readable = %+v, want only the memory whose run is still there", readable)
+	}
+	if readable[0].Evidence[0].Seq == 0 {
+		t.Error("the surviving memory was not hydrated")
+	}
 }

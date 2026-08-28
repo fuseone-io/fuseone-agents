@@ -3559,6 +3559,17 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: |
+            The write contradicts the memory that is already there: more than
+            one row is this identity, the assertion it would correct is
+            disabled or its source was erased, shared memory already answers
+            it, or the evidence budget cannot hold a citation for every label
+            the assertion carries. None of these is a bad request — the body
+            was understood, and the state refused it.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
 
   /admin/memory/assertions/{assertionId}/disable:
     post:
@@ -3584,6 +3595,47 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+
+  /admin/memory/assertions/{assertionId}/reactivate:
+    post:
+      tags: [admin]
+      operationId: reactivateMemoryAssertion
+      summary: Bring a disabled memory assertion back
+      description: >
+        Reactivation is a new governance act, not the undoing of the disable.
+        The server proves every citation against the ledger again before the
+        assertion becomes recallable, sets a fresh expiry from this decision,
+        and records an append-only memory event. A memory whose source run was
+        erased never comes back.
+      parameters:
+        - name: assertionId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MemoryReactivateInput' }
+      responses:
+        '200':
+          description: The assertion now projected for recall again.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MemoryAssertion' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: |
+            The memory is not one this decision can bring back: it is not
+            disabled, its source run is gone, its citations no longer prove it,
+            shared memory already answers the same identity, or somebody moved
+            it while this was being decided.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
 
   /admin/memory/suggestions:
     get:
@@ -3648,6 +3700,15 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: |
+            The memory the suggestion would become refuses the write: more than
+            one row is this identity, the assertion is disabled or its source
+            was erased, or the evidence budget cannot hold a citation for every
+            label. The proposal is left pending — nothing was consumed.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
 
   /admin/memory/suggestions/{suggestionId}/dismiss:
     post:
@@ -4162,6 +4223,19 @@ components:
         reason:
           type: string
           description: Why a person disabled this assertion.
+
+    MemoryReactivateInput:
+      type: object
+      required: [company, area, reason]
+      properties:
+        company: { type: string }
+        area: { type: string }
+        reason:
+          type: string
+          minLength: 1
+          description: >
+            Why a person is bringing this assertion back. Required: the event
+            is what makes reactivation an act rather than an update.
 
     MemorySuggestion:
       type: object

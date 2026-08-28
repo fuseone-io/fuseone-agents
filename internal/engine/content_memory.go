@@ -41,7 +41,11 @@ func (m *MemoryContent) WithLimit(bytes int) *MemoryContent {
 // object is one stored payload and when it was put there, so the fake can
 // answer retention the way the durable store does.
 type object struct {
-	bytes  []byte
+	bytes []byte
+	// digest is of the whole payload, kept beside the truncated bytes for the
+	// same reason the durable store keeps it in a column: what the record says
+	// it is must not change because only part of it was retained.
+	digest string
 	owner  string
 	at     time.Time
 	erased bool
@@ -84,7 +88,10 @@ func (m *MemoryContent) PutFor(
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.data[ref] = object{
-		bytes: append([]byte(nil), stored...), owner: owner, at: time.Now(),
+		bytes:  append([]byte(nil), stored...),
+		digest: hex.EncodeToString(sum[:]),
+		owner:  owner,
+		at:     time.Now(),
 	}
 	return ref, nil
 }
@@ -98,7 +105,7 @@ func (m *MemoryContent) Get(ctx context.Context, ref string) ([]byte, error) {
 
 	held, ok := m.data[ref]
 	if !ok {
-		return nil, fmt.Errorf("content: no object at %s", ref)
+		return nil, fmt.Errorf("%w: %s", domain.ErrContentAbsent, ref)
 	}
 	if held.erased {
 		// The same distinction the durable store makes: erased and
@@ -107,6 +114,28 @@ func (m *MemoryContent) Get(ctx context.Context, ref string) ([]byte, error) {
 		return nil, fmt.Errorf("%w: %s", domain.ErrContentErased, ref)
 	}
 	return append([]byte(nil), held.bytes...), nil
+}
+
+/*
+Metadata answers what a reference says about itself without reading the bytes.
+
+The whole digest, not the reference's 16-hex prefix, and reported even after
+erasure — the same two facts the durable store answers, because a resolver that
+worked against the fake and not against Postgres would be a resolver nobody
+tested.
+*/
+func (m *MemoryContent) Metadata(ctx context.Context, ref string) (domain.ContentMetadata, error) {
+	if err := ctx.Err(); err != nil {
+		return domain.ContentMetadata{}, err
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	held, ok := m.data[ref]
+	if !ok {
+		return domain.ContentMetadata{}, fmt.Errorf("%w: %s", domain.ErrContentAbsent, ref)
+	}
+	return domain.ContentMetadata{Digest: held.digest, Erased: held.erased}, nil
 }
 
 // Erase removes one owner's content, leaving a tombstone.
@@ -132,7 +161,13 @@ func (m *MemoryContent) erase(ctx context.Context, matches func(object) bool) (i
 		if held.erased || !matches(held) {
 			continue
 		}
-		m.data[ref] = object{owner: held.owner, at: held.at, erased: true}
+		// The bytes go; the digest stays, as it does in the durable store where
+		// erasure sets a timestamp and leaves the row's digest alone. The step
+		// that referenced this content still carries that number, so a reader
+		// can tell "the bytes were erased" from "this citation was never true".
+		m.data[ref] = object{
+			digest: held.digest, owner: held.owner, at: held.at, erased: true,
+		}
 		count++
 	}
 	return count, nil
