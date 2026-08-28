@@ -13,6 +13,7 @@ import { titleOf, detailOf, chipsOf, line } from "@/features/runs/step-story";
 import { cn } from "@/lib/utils";
 import { formatTime, shortHash } from "@/lib/format";
 import { hasContent } from "@/features/runs/step-content-ref";
+import { RememberThisButton } from "@/features/runs/remember-this-button";
 import type { Step } from "@/lib/api/client";
 
 /**
@@ -110,6 +111,7 @@ export function TrailEvent({
         ) : (
           body
         )}
+        <RememberThisButton runId={runId} step={step} />
       </div>
 
       <div className="pt-1 text-right">
