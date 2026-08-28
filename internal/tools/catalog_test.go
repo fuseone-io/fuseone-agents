@@ -428,7 +428,7 @@ func TestInvoke_successfulReadCanBeServedFromTheResultCache(t *testing.T) {
 	firstCall := engine.Call{
 		RunID: "run-1", Seq: 7, Tool: "crm.lookup",
 		Scope: domain.Scope{Company: "acme", Area: "platform"},
-		Args:  []byte(`{"email":"a@b.com"}`),
+		Args:  []byte(`{"email":"a@b.com","limit":10}`),
 	}
 	if err := c.Reserve(ctx, firstCall); err != nil {
 		t.Fatalf("first Reserve: %v", err)
@@ -442,7 +442,7 @@ func TestInvoke_successfulReadCanBeServedFromTheResultCache(t *testing.T) {
 	secondCall := engine.Call{
 		RunID: "run-2", Seq: 3, Tool: "crm.lookup",
 		Scope: domain.Scope{Company: "acme", Area: "platform"},
-		Args:  []byte(`{"email":"a@b.com"}`),
+		Args:  []byte(" { \"limit\" : 10, \"email\" : \"a@b.com\" } "),
 	}
 	if err := c.Reserve(ctx, secondCall); err != nil {
 		t.Fatalf("second Reserve = %v, want the cache hit not to spend a rate-limit token", err)

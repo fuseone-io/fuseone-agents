@@ -981,6 +981,48 @@ func TestResume_crashedAfterToolCall_doesNotInvokeTheToolAgain(t *testing.T) {
 	}
 }
 
+func TestAdvance_semanticallyIdenticalJSONCall_executesOnce(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t,
+		Proposal{Tool: "crm.lookup", Args: []byte(`{"search":"erro","limit":10}`)},
+		Proposal{Tool: "crm.lookup", Args: []byte(" { \"limit\" : 10, \"search\" : \"erro\" } ")},
+	)
+	start := h.start(t, generousBudget())
+
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("first Advance: %v", err)
+	}
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("second Advance: %v", err)
+	}
+
+	if len(h.tools.invocations) != 1 {
+		t.Fatalf("tool invocations = %d, want equivalent JSON arguments executed once", len(h.tools.invocations))
+	}
+	steps, err := h.ledger.Read(ctx, start.RunID, domain.FirstSeq)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	got := 0
+	for _, step := range steps {
+		if step.Kind == domain.StepToolCalled {
+			got++
+		}
+	}
+	if got != 1 {
+		t.Fatalf("tool_called steps = %d, want one", got)
+	}
+	var decided domain.GateDecidedPayload
+	if err := h.lastPayloadOf(t, domain.StepGateDecided, &decided); err != nil {
+		t.Fatalf("gate payload: %v", err)
+	}
+	if decided.Verdict != domain.VerdictDuplicate || decided.Rule != gate.RuleIdempotency {
+		t.Fatalf("decision = %s/%s, want duplicate/idempotency", decided.Verdict, decided.Rule)
+	}
+}
+
 func TestAdvance_confirmedSemanticDedupe_recordsDuplicateWithoutCallingTool(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

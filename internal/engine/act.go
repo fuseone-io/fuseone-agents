@@ -572,7 +572,7 @@ func (r *Runner) store(ctx context.Context, runID domain.RunID, seq int64, args 
 func idempotencyKey(runID domain.RunID, tool domain.ToolID, args []byte) string {
 	h := sha256.New()
 	fmt.Fprintf(h, "%s|%s|", runID, tool)
-	_, _ = h.Write(args)
+	_, _ = h.Write(domain.CanonicalCallArguments(args))
 	return hex.EncodeToString(h.Sum(nil))[:32]
 }
 
