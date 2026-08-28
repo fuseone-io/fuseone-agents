@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryPage } from "@/features/memory/memory-page";
@@ -151,6 +151,126 @@ describe("governed memory page", () => {
     expect(
       screen.queryByText("run_0 · final_answer · sha256:0"),
     ).not.toBeInTheDocument();
+  });
+
+  it("leaves creation when a remembered assertion is selected", async () => {
+    const user = userEvent.setup();
+    hooks.items = [memoryAssertion(0), memoryAssertion(1)];
+    renderMemoryPageWithClient();
+
+    await user.click(screen.getByRole("button", { name: "Record memory" }));
+    await user.click(screen.getByRole("button", { name: /subject-1/ }));
+
+    expect(screen.queryByText("New memory")).not.toBeInTheDocument();
+    expect(screen.getByText("run_1 · final_answer · sha256:abcd")).toBeInTheDocument();
+  });
+
+  it("leaves creation when a pending suggestion is selected", async () => {
+    const user = userEvent.setup();
+    hooks.suggestions = [memorySuggestion(0), memorySuggestion(1)];
+    renderMemoryPageWithClient();
+
+    await user.click(screen.getByRole("tab", { name: "Suggested memory" }));
+    await user.click(screen.getByRole("button", { name: "Record memory" }));
+    await user.click(screen.getByRole("button", { name: /suggested-subject-1/ }));
+
+    expect(screen.queryByText("New memory")).not.toBeInTheDocument();
+    expect(screen.getByText("run_s_1 · memory_suggestion · sha256:bcde")).toBeInTheDocument();
+  });
+
+  it("discards an untouched creation panel when it is closed", async () => {
+    const user = userEvent.setup();
+    renderMemoryPageWithClient();
+
+    await user.click(screen.getByRole("button", { name: "Record memory" }));
+    expect(screen.queryByRole("button", { name: "Discard draft" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(screen.queryByText("New memory")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Record memory" })).toBeVisible();
+  });
+
+  it("discards a dirty draft only after confirmation", async () => {
+    const user = userEvent.setup();
+    renderMemoryPageWithClient();
+
+    await user.click(screen.getByRole("button", { name: "Record memory" }));
+    await user.type(screen.getByLabelText("Subject"), "grafana datasource");
+    await user.click(screen.getByRole("button", { name: "Discard draft" }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByLabelText("Subject")).toHaveValue("grafana datasource");
+
+    await user.click(screen.getByRole("button", { name: "Discard draft" }));
+    await user.click(screen.getByRole("button", { name: "Discard draft" }));
+    expect(screen.queryByText("New memory")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Record memory" }));
+    expect(screen.getByLabelText("Subject")).toHaveValue("");
+  });
+
+  it("keeps the suggested view after discarding a draft", async () => {
+    const user = userEvent.setup();
+    hooks.suggestions = [memorySuggestion(0)];
+    renderMemoryPageWithClient();
+
+    await user.click(screen.getByRole("tab", { name: "Suggested memory" }));
+    await user.click(screen.getByRole("button", { name: "Record memory" }));
+    await user.type(screen.getByLabelText("Subject"), "grafana datasource");
+    await user.click(screen.getByRole("button", { name: "Discard draft" }));
+    const dialog = screen.getByRole("alertdialog");
+    await user.click(within(dialog).getByRole("button", { name: "Discard draft" }));
+
+    expect(screen.getByRole("tab", { name: "Suggested memory" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByText("run_s_0 · memory_suggestion · sha256:bcde")).toBeVisible();
+  });
+
+  it("returns to memory without discarding the creation draft", async () => {
+    const user = userEvent.setup();
+    hooks.items = [memoryAssertion(0)];
+    renderMemoryPageWithClient();
+
+    await user.click(screen.getByRole("button", { name: "Record memory" }));
+    await user.type(screen.getByLabelText("Subject"), "grafana datasource");
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    await user.click(screen.getByRole("button", { name: "Continue draft" }));
+
+    expect(screen.getByLabelText("Subject")).toHaveValue("grafana datasource");
+  });
+
+  it("moves a preserved draft to the newly active scope", async () => {
+    const user = userEvent.setup();
+    hooks.items = [memoryAssertion(0)];
+    renderMemoryPageWithClient();
+
+    await user.click(screen.getByRole("button", { name: "Record memory" }));
+    await user.type(screen.getByLabelText("Subject"), "grafana datasource");
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    act(() => useActiveScope.setState({ company: "globex", area: "security" }));
+    await user.click(screen.getByRole("button", { name: "Continue draft" }));
+
+    expect(screen.getByLabelText("Company")).toHaveValue("globex");
+    expect(screen.getByLabelText("Area")).toHaveValue("security");
+    expect(screen.getByLabelText("Subject")).toHaveValue("grafana datasource");
+  });
+
+  it("does not inspect a creation draft while its panel is hidden", async () => {
+    const user = userEvent.setup();
+    const fetch = vi.fn(async () => json({}));
+    vi.stubGlobal("fetch", fetch);
+    hooks.items = [memoryAssertion(0)];
+    renderMemoryPageWithClient();
+
+    await user.click(screen.getByRole("button", { name: "Record memory" }));
+    await fillMemoryIdentity(user);
+    await user.type(screen.getByLabelText("Run"), "run_1");
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    });
+
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("records a reviewed assertion with ledger evidence", async () => {
@@ -375,6 +495,12 @@ async function fillAssertion(user: ReturnType<typeof userEvent.setup>) {
   );
   await user.type(screen.getByLabelText("Run"), "run_1");
   await user.type(screen.getByLabelText("Why"), "Reviewed after close");
+}
+
+async function fillMemoryIdentity(user: ReturnType<typeof userEvent.setup>) {
+  await user.type(screen.getByLabelText("Kind"), "incident");
+  await user.type(screen.getByLabelText("Subject"), "grafana datasource");
+  await user.type(screen.getByLabelText("Signature"), "grafana.datasource.down");
 }
 
 function memoryAssertion(index: number): MemoryAssertion {

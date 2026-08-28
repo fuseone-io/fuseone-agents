@@ -17,12 +17,16 @@ type MemoryCreateMatchIssue =
  * about different identities. The run id settles first to avoid one 404 for
  * every prefix while somebody types or pastes it.
  */
-export function useMemoryCreateMatch(form: UseFormReturn<MemoryFormValues>) {
+export function useMemoryCreateMatch(
+  form: UseFormReturn<MemoryFormValues>,
+  options: { enabled?: boolean } = {},
+) {
+  const { enabled = true } = options;
   const values = useWatch({ control: form.control });
   const rawRunID = values.evidenceRunId?.trim() ?? "";
   const runID = useSettled(rawRunID, 400);
   const runInputSettled = rawRunID === runID;
-  const run = useRun(runID, runInputSettled && Boolean(runID));
+  const run = useRun(runID, enabled && runInputSettled && Boolean(runID));
   const currentIdentity = JSON.stringify([
     values.company?.trim() ?? "",
     values.area?.trim() ?? "",
@@ -60,18 +64,19 @@ export function useMemoryCreateMatch(form: UseFormReturn<MemoryFormValues>) {
       subject: subject ?? "",
       signature: signature ?? "",
     },
-    { enabled: runReady && identityInputSettled, settle: false },
+    { enabled: enabled && runReady && identityInputSettled, settle: false },
   );
   const matchSettled = match.isSuccess || match.isError;
   const ready =
+    !enabled ||
     !identityComplete ||
     (runReady && identityInputSettled && !agentMissing && matchSettled);
   let issue: MemoryCreateMatchIssue | null = null;
-  if (runInputSettled && run.error) {
+  if (enabled && runInputSettled && run.error) {
     issue = { kind: "run", retry: () => void run.refetch() };
-  } else if (agentMissing) {
+  } else if (enabled && agentMissing) {
     issue = { kind: "agent" };
-  } else if (identityInputSettled && match.error) {
+  } else if (enabled && identityInputSettled && match.error) {
     // Match is advisory. The write still merges identities and rejects conflicts.
     issue = { kind: "match", retry: () => void match.refetch() };
   }
