@@ -27,6 +27,21 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.39.1] — 2026-08-28
+
+### Fixed
+
+- **Agent validation no longer covers every operational tab.** Readiness and
+  trust evidence now live in a dedicated Control center tab, while Runs,
+  Definition and Steps open directly on their own content.
+- **Agent cost now says what it measures.** The header reports average cost per
+  run and names the recorded total and run count instead of labeling the total
+  as per-run cost.
+- **Missing trust evidence explains how it appears.** Version and cost
+  comparisons identify the baseline they need, while absent human decisions
+  are labeled as not observed and explain that there is no manual action to
+  trigger.
+
 ## [0.39.0] — 2026-08-28
 
 Teaching an agent a fact no longer means filling a ledger record, and a run that
