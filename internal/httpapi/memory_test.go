@@ -99,6 +99,86 @@ func TestCreateMemoryAssertion_refusesEvidenceThatDoesNotMatchTheLedger(t *testi
 	}
 }
 
+/*
+A platform that could not answer is not a form somebody filled in wrongly.
+
+Every error from resolving the evidence used to come back as 400. An
+installation wired without a resolver, a content store that did not reply, a
+ledger away — all of them told the person to check what they typed, which is the
+oldest way to waste an afternoon.
+*/
+func TestCreateMemoryAssertion_withNothingToProveItAgainst_isNotTheCallersFault(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	scope := domain.Scope{Company: "acme", Area: "cx"}
+	seedFinishedEvidence(t, store, "run-evidence", scope, domain.ScopeLabels(scope), "sha256:answer")
+
+	// Memory wired, and nothing wired to prove it against.
+	resp, err := NewServer(store, "test").WithMemory(memstore.NewMemory()).
+		WithClock(fixedAt{t: time.Unix(0, 0)}).
+		CreateMemoryAssertion(inArea("cx", domain.RoleAuthor), memoryCreateRequest())
+	if err == nil {
+		t.Fatalf("response = %T, want the misconfiguration raised, not answered", resp)
+	}
+}
+
+/*
+A new memory's citation is complete, not the legacy shape.
+
+This is what the whole of PR 1 exists to produce, and until now nothing asked
+for it: the step it names, the run that produced the bytes, the labels that run
+had accumulated, and the whole digest. A citation missing any of them is one the
+reconciliation job has to repair — and one that cannot explain the taint its
+assertion inherited, so the eviction rule may drop the record that showed where
+it came from.
+*/
+func TestCreateMemoryAssertion_theCitationIsComplete(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	scope := domain.Scope{Company: "acme", Area: "cx"}
+	seedFinishedEvidence(t, store, "run-evidence", scope,
+		domain.NewLabels(domain.LabelUntrusted), "sha256:answer")
+
+	memory := memstore.NewMemory()
+	resp, err := memoryServer(store, memory).WithClock(fixedAt{t: time.Unix(0, 0)}).
+		CreateMemoryAssertion(inArea("cx", domain.RoleAuthor), memoryCreateRequest())
+	if err != nil {
+		t.Fatalf("CreateMemoryAssertion: %v", err)
+	}
+	if _, ok := resp.(openapi.CreateMemoryAssertion200JSONResponse); !ok {
+		t.Fatalf("response = %T, want the assertion", resp)
+	}
+
+	// Read back from the store, because what matters is what was written and
+	// not what the response happened to render.
+	stored, err := memory.List(context.Background(), memstore.Filter{
+		Scopes: []domain.Scope{scope}, Limit: 10,
+	})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(stored) != 1 || len(stored[0].Evidence) != 1 {
+		t.Fatalf("stored = %+v, want one memory with one citation", stored)
+	}
+	cited := stored[0].Evidence[0]
+
+	if cited.Seq == 0 {
+		t.Error("the citation does not say which step it names")
+	}
+	if cited.SourceRun() != cited.RunID {
+		t.Errorf("source run = %s, want the run that produced the bytes", cited.SourceRun())
+	}
+	if !cited.Labels.Has(domain.LabelUntrusted) {
+		t.Errorf("citation labels = %v, want it able to explain the taint", cited.Labels)
+	}
+	if len(cited.Digest) != 64 {
+		t.Errorf("digest = %q, want the whole one the content store holds", cited.Digest)
+	}
+	if !stored[0].Labels.Has(domain.LabelUntrusted) {
+		t.Errorf("labels = %v, want the taint the run carried", stored[0].Labels)
+	}
+}
+
 // And the digest a memory carries is the ledger's, never the caller's: nothing
 // in the request says what it is any more.
 func TestCreateMemoryAssertion_theCitationCarriesTheLedgersDigest(t *testing.T) {
@@ -942,12 +1022,12 @@ func seedFinishedEvidence(
 	openedWith domain.Labels, digest string,
 ) {
 	t.Helper()
+	// Both steps carry the accumulated set, which is what the runner writes:
+	// a run that opened untrusted stays untrusted, and the closing answer says
+	// so. Naming the taint once and folding it forward is what the resolver
+	// does when it reads; this seeds the result of that, not the process.
 	seedFinishedEvidenceLabelled(t, store, run, scope, "triage",
 		domain.ScopeLabels(scope).Union(openedWith), digest)
-	// The run opened with what it was given, which is where the taint enters.
-	// Rewritten after the fact because the labelled seeder opens with the
-	// accumulated set, and only this one distinguishes the two.
-	_ = openedWith
 }
 
 func seedFinishedEvidenceFor(

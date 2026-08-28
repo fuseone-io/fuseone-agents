@@ -85,8 +85,11 @@ func (s *Server) CreateMemoryAssertion(
 		return badMemoryCreate("namespace must be agent or shared"), nil
 	}
 	agent, labels, cited, err := s.originOfMemoryEvidence(ctx, scope, req.Body.Namespace, req.Body.Evidence)
-	if err != nil {
+	if evidenceRefused(err) {
 		return badMemoryCreate(err.Error()), nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("resolve memory evidence: %w", err)
 	}
 	now := clockOr(s.clock).Now()
 	// The same policy the accept applies, from the same function, on the
@@ -156,6 +159,26 @@ Zero is deliberately the answer for an error this package does not recognise.
 An unrecognised failure is the installation's, and it belongs in the logs as a
 failure rather than on the screen as the caller's mistake.
 */
+/*
+evidenceRefused is a citation the caller can fix, as opposed to a platform that
+could not answer.
+
+The same sentinels mean different things at different doors, which is why this
+is not memoryRefusal. On a creation the citation is input: naming an artifact
+the run never published, or one whose bytes are gone, is something the person
+typed and can retype. On a reactivation the same sentinels describe stored state
+somebody has to decide about, and that is a conflict.
+
+Everything else — the ledger unreachable, the content store away, no resolver
+wired at all — is the installation's, and telling somebody to check their form
+about it is the oldest way to waste an afternoon.
+*/
+func evidenceRefused(err error) bool {
+	return errors.Is(err, memstore.ErrInvalid) ||
+		errors.Is(err, memstore.ErrEvidenceInvalid) ||
+		errors.Is(err, memstore.ErrEvidenceSourceAbsent)
+}
+
 func memoryRefusal(err error) int {
 	switch {
 	case err == nil:

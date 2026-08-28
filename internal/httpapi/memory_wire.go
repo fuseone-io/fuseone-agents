@@ -52,6 +52,10 @@ func (s *Server) originOfMemoryEvidence(
 			RunID: domain.RunID(ev.RunId), Artifact: citedArtifact(ev),
 		})
 	}
+	// Wrapped, never flattened: the resolver tells a citation that does not
+	// match the ledger from a content store that did not answer, and the caller
+	// decides what each means. Turning both into one sentence is how a database
+	// being away became a message about the form.
 	cited, err := s.memoryEvidence.Resolve(ctx, scope, refs)
 	if err != nil {
 		return "", nil, nil, fmt.Errorf("memory evidence: %w", err)
@@ -72,16 +76,17 @@ func (s *Server) originOfMemoryEvidence(
 		return "", labels, cited, nil
 	}
 	if len(agents) != 1 {
-		return "", nil, nil, fmt.Errorf(
-			"memory evidence names %d agents; one is required for agent memory", len(agents))
+		return "", nil, nil, fmt.Errorf("%w: memory evidence names %d agents; one is required for agent memory",
+			memstore.ErrInvalid, len(agents))
 	}
 	for agent := range agents {
 		if agent == "" {
-			return "", nil, nil, fmt.Errorf("the run this evidence names has no agent")
+			return "", nil, nil, fmt.Errorf(
+				"%w: the run this evidence names has no agent", memstore.ErrInvalid)
 		}
 		return agent, labels, cited, nil
 	}
-	return "", nil, nil, fmt.Errorf("memory evidence names no run")
+	return "", nil, nil, fmt.Errorf("%w: memory evidence names no run", memstore.ErrInvalid)
 }
 
 // errNoEvidenceResolver is an installation that wired memory without what
@@ -97,8 +102,14 @@ func (s *Server) agentOfRun(
 	ctx context.Context, scope domain.Scope, run domain.RunID,
 ) (domain.AgentID, error) {
 	steps, err := s.store.Read(ctx, run, domain.FirstSeq)
-	if err != nil || len(steps) == 0 || !scope.Contains(steps[0].Scope) {
-		return "", fmt.Errorf("memory evidence is outside scope or absent")
+	// The ledger being unreachable and the run not being there are different
+	// answers, and flattening them told somebody to check their input while the
+	// database was down.
+	if err != nil {
+		return "", fmt.Errorf("read the run a citation names: %w", err)
+	}
+	if len(steps) == 0 || !scope.Contains(steps[0].Scope) {
+		return "", fmt.Errorf("%w: memory evidence is outside scope or absent", memstore.ErrInvalid)
 	}
 	return steps[0].AgentID, nil
 }
