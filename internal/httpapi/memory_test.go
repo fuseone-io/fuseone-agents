@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -22,7 +23,7 @@ func TestListMemoryAssertions_narrowsToReadableScopes(t *testing.T) {
 	remember(t, memory, memoryAssertionFixture("cx", "cx fact", nil))
 	remember(t, memory, memoryAssertionFixture("marketing", "marketing fact", nil))
 
-	resp, err := NewServer(ledger.NewMemory(), "test").WithMemory(memory).
+	resp, err := memoryServer(ledger.NewMemory(), memory).
 		ListMemoryAssertions(inArea("cx", domain.RoleAuthor), openapi.ListMemoryAssertionsRequestObject{})
 	if err != nil {
 		t.Fatalf("ListMemoryAssertions: %v", err)
@@ -41,8 +42,8 @@ func TestCreateMemoryAssertion_copiesLabelsFromLedgerEvidence(t *testing.T) {
 	seedFinishedEvidence(t, store, "run-evidence", scope, labels, "sha256:answer")
 	memory := memstore.NewMemory()
 
-	resp, err := NewServer(store, "test").WithMemory(memory).WithClock(fixedAt{t: time.Unix(0, 0)}).
-		CreateMemoryAssertion(inArea("cx", domain.RoleAuthor), memoryCreateRequest("sha256:answer"))
+	resp, err := memoryServer(store, memory).WithClock(fixedAt{t: time.Unix(0, 0)}).
+		CreateMemoryAssertion(inArea("cx", domain.RoleAuthor), memoryCreateRequest())
 	if err != nil {
 		t.Fatalf("CreateMemoryAssertion: %v", err)
 	}
@@ -84,11 +85,11 @@ func TestCreateMemoryAssertion_refusesEvidenceThatDoesNotMatchTheLedger(t *testi
 		}),
 	})
 
-	req := memoryCreateRequest("sha256:answer")
+	req := memoryCreateRequest()
 	req.Body.Evidence = []openapi.MemoryEvidenceInput{
 		{RunId: "run-published", Artifact: ptr("a report nobody published")},
 	}
-	resp, err := NewServer(store, "test").WithMemory(memstore.NewMemory()).
+	resp, err := memoryServer(store, memstore.NewMemory()).
 		CreateMemoryAssertion(inArea("cx", domain.RoleAuthor), req)
 	if err != nil {
 		t.Fatalf("CreateMemoryAssertion: %v", err)
@@ -106,9 +107,9 @@ func TestCreateMemoryAssertion_theCitationCarriesTheLedgersDigest(t *testing.T) 
 	scope := domain.Scope{Company: "acme", Area: "cx"}
 	seedFinishedEvidence(t, store, "run-evidence", scope, domain.ScopeLabels(scope), "sha256:answer")
 
-	resp, err := NewServer(store, "test").WithMemory(memstore.NewMemory()).
+	resp, err := memoryServer(store, memstore.NewMemory()).
 		WithClock(fixedAt{t: time.Unix(0, 0)}).
-		CreateMemoryAssertion(inArea("cx", domain.RoleAuthor), memoryCreateRequest("sha256:answer"))
+		CreateMemoryAssertion(inArea("cx", domain.RoleAuthor), memoryCreateRequest())
 	if err != nil {
 		t.Fatalf("CreateMemoryAssertion: %v", err)
 	}
@@ -116,8 +117,11 @@ func TestCreateMemoryAssertion_theCitationCarriesTheLedgersDigest(t *testing.T) 
 	if !ok {
 		t.Fatalf("response = %T, want the assertion", resp)
 	}
-	if len(created.Evidence) != 1 || created.Evidence[0].Digest != "sha256:answer" {
-		t.Errorf("evidence = %+v, want the digest the run recorded", created.Evidence)
+	// Whatever the run stored, which the fixture does not spell out: a test
+	// that repeated the digest would be a second copy of what the ledger says.
+	if len(created.Evidence) != 1 || created.Evidence[0].Digest == "" ||
+		created.Evidence[0].Digest == "sha256:answer" {
+		t.Errorf("evidence = %+v, want the digest the content store holds", created.Evidence)
 	}
 	if created.Evidence[0].Artifact != domain.ArtifactFinalAnswer {
 		t.Errorf("artifact = %q, want the closing answer by default", created.Evidence[0].Artifact)
@@ -128,7 +132,7 @@ func TestCreateMemoryAssertion_withoutPublishPermissionDoesNotReadEvidence(t *te
 	t.Parallel()
 	resp, err := NewServer(readPanicker{Memory: ledger.NewMemory()}, "test").
 		WithMemory(memstore.NewMemory()).
-		CreateMemoryAssertion(context.Background(), memoryCreateRequest("sha256:answer"))
+		CreateMemoryAssertion(context.Background(), memoryCreateRequest())
 	if err != nil {
 		t.Fatalf("CreateMemoryAssertion: %v", err)
 	}
@@ -143,7 +147,7 @@ func TestListMemorySuggestions_narrowsToReadableScopes(t *testing.T) {
 	suggest(t, memory, memorySuggestionFixture("cx", "cx suggestion", nil))
 	suggest(t, memory, memorySuggestionFixture("marketing", "marketing suggestion", nil))
 
-	resp, err := NewServer(ledger.NewMemory(), "test").WithMemory(memory).
+	resp, err := memoryServer(ledger.NewMemory(), memory).
 		ListMemorySuggestions(inArea("cx", domain.RoleAuthor), openapi.ListMemorySuggestionsRequestObject{})
 	if err != nil {
 		t.Fatalf("ListMemorySuggestions: %v", err)
@@ -161,7 +165,7 @@ func TestAcceptMemorySuggestion_promotesOnlyInsideTheReviewScope(t *testing.T) {
 		s.Labels = domain.NewLabels(domain.LabelUntrusted)
 	}))
 
-	resp, err := NewServer(ledger.NewMemory(), "test").WithMemory(memory).WithClock(fixedAt{t: time.Unix(0, 0)}).
+	resp, err := memoryServer(ledger.NewMemory(), memory).WithClock(fixedAt{t: time.Unix(0, 0)}).
 		AcceptMemorySuggestion(inArea("marketing", domain.RoleAuthor), openapi.AcceptMemorySuggestionRequestObject{
 			SuggestionId: created.ID,
 			Body: &openapi.MemorySuggestionAcceptInput{
@@ -175,7 +179,7 @@ func TestAcceptMemorySuggestion_promotesOnlyInsideTheReviewScope(t *testing.T) {
 		t.Fatalf("response = %T, want 404 for suggestion outside review scope", resp)
 	}
 
-	resp, err = NewServer(ledger.NewMemory(), "test").WithMemory(memory).WithClock(fixedAt{t: time.Unix(0, 0)}).
+	resp, err = memoryServer(ledger.NewMemory(), memory).WithClock(fixedAt{t: time.Unix(0, 0)}).
 		AcceptMemorySuggestion(inArea("cx", domain.RoleAuthor), openapi.AcceptMemorySuggestionRequestObject{
 			SuggestionId: created.ID,
 			Body: &openapi.MemorySuggestionAcceptInput{
@@ -257,7 +261,7 @@ func TestAcceptMemorySuggestion_tellsConflictFromUnavailable(t *testing.T) {
 		pending := suggest(t, store, memorySuggestionFixture("cx", "grafana datasource",
 			func(s *domain.MemorySuggestion) { s.Signature = "grafana datasource.signature" }))
 
-		resp, err := NewServer(ledger.NewMemory(), "test").WithMemory(store).
+		resp, err := memoryServer(ledger.NewMemory(), store).
 			AcceptMemorySuggestion(inArea("cx", domain.RoleAuthor),
 				openapi.AcceptMemorySuggestionRequestObject{
 					SuggestionId: pending.ID,
@@ -275,7 +279,7 @@ func TestAcceptMemorySuggestion_tellsConflictFromUnavailable(t *testing.T) {
 
 	t.Run("a database that does not answer is not the caller's fault", func(t *testing.T) {
 		t.Parallel()
-		resp, err := NewServer(ledger.NewMemory(), "test").WithMemory(unavailableMemory{}).
+		resp, err := memoryServer(ledger.NewMemory(), unavailableMemory{}).
 			AcceptMemorySuggestion(inArea("cx", domain.RoleAuthor),
 				openapi.AcceptMemorySuggestionRequestObject{
 					SuggestionId: "mems_whatever",
@@ -311,9 +315,9 @@ func TestCreateMemoryAssertion_platformOwnsAgentCountersAndExpiry(t *testing.T) 
 	seedFinishedEvidence(t, led, "run-evidence", scope, domain.ScopeLabels(scope), "sha256:answer")
 
 	at := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
-	resp, err := NewServer(led, "test").WithMemory(memstore.NewMemory()).
+	resp, err := memoryServer(led, memstore.NewMemory()).
 		WithClock(fixedAt{t: at}).
-		CreateMemoryAssertion(inArea("cx", domain.RoleAuthor), memoryCreateRequest("sha256:answer"))
+		CreateMemoryAssertion(inArea("cx", domain.RoleAuthor), memoryCreateRequest())
 	if err != nil {
 		t.Fatalf("CreateMemoryAssertion: %v", err)
 	}
@@ -349,9 +353,9 @@ func TestCreateMemoryAssertion_sharedIsAnExplicitChoice(t *testing.T) {
 	led := ledger.NewMemory()
 	seedFinishedEvidence(t, led, "run-evidence", scope, domain.ScopeLabels(scope), "sha256:answer")
 
-	req := memoryCreateRequest("sha256:answer")
+	req := memoryCreateRequest()
 	req.Body.Namespace = openapi.MemoryAssertionInputNamespaceShared
-	resp, err := NewServer(led, "test").WithMemory(memstore.NewMemory()).
+	resp, err := memoryServer(led, memstore.NewMemory()).
 		WithClock(fixedAt{t: time.Unix(0, 0)}).
 		CreateMemoryAssertion(inArea("cx", domain.RoleAuthor), req)
 	if err != nil {
@@ -380,10 +384,10 @@ func TestCreateMemoryAssertion_evidenceFromTwoAgents_isRefused(t *testing.T) {
 	seedFinishedEvidence(t, led, "run-evidence", scope, domain.ScopeLabels(scope), "sha256:answer")
 	seedFinishedEvidenceFor(t, led, "run-other", scope, "billing", "sha256:other")
 
-	req := memoryCreateRequest("sha256:answer")
+	req := memoryCreateRequest()
 	req.Body.Evidence = append(req.Body.Evidence,
 		openapi.MemoryEvidenceInput{RunId: "run-other"})
-	resp, err := NewServer(led, "test").WithMemory(memstore.NewMemory()).
+	resp, err := memoryServer(led, memstore.NewMemory()).
 		WithClock(fixedAt{t: time.Unix(0, 0)}).
 		CreateMemoryAssertion(inArea("cx", domain.RoleAuthor), req)
 	if err != nil {
@@ -409,9 +413,9 @@ func TestCreateMemoryAssertion_agentScopedButTheRunNamesNoAgent_isRefused(t *tes
 	led := ledger.NewMemory()
 	seedFinishedEvidenceFor(t, led, "run-evidence", scope, "", "sha256:answer")
 
-	resp, err := NewServer(led, "test").WithMemory(memstore.NewMemory()).
+	resp, err := memoryServer(led, memstore.NewMemory()).
 		WithClock(fixedAt{t: time.Unix(0, 0)}).
-		CreateMemoryAssertion(inArea("cx", domain.RoleAuthor), memoryCreateRequest("sha256:answer"))
+		CreateMemoryAssertion(inArea("cx", domain.RoleAuthor), memoryCreateRequest())
 	if err != nil {
 		t.Fatalf("CreateMemoryAssertion: %v", err)
 	}
@@ -441,11 +445,11 @@ func TestCreateMemoryAssertion_sharedAcceptsEveryAgentsEvidence(t *testing.T) {
 	seedFinishedEvidenceLabelled(t, led, "run-other", scope, "billing",
 		domain.NewLabels(domain.LabelPersonal).Union(domain.ScopeLabels(scope)), "sha256:other")
 
-	req := memoryCreateRequest("sha256:answer")
+	req := memoryCreateRequest()
 	req.Body.Namespace = openapi.MemoryAssertionInputNamespaceShared
 	req.Body.Evidence = append(req.Body.Evidence,
 		openapi.MemoryEvidenceInput{RunId: "run-other"})
-	resp, err := NewServer(led, "test").WithMemory(memstore.NewMemory()).
+	resp, err := memoryServer(led, memstore.NewMemory()).
 		WithClock(fixedAt{t: time.Unix(0, 0)}).
 		CreateMemoryAssertion(inArea("cx", domain.RoleAuthor), req)
 	if err != nil {
@@ -484,9 +488,9 @@ func TestCreateMemoryAssertion_namespaceMissingOrUnknown_isRefused(t *testing.T)
 			seedFinishedEvidence(t, led, "run-evidence", scope,
 				domain.ScopeLabels(scope), "sha256:answer")
 
-			req := memoryCreateRequest("sha256:answer")
+			req := memoryCreateRequest()
 			req.Body.Namespace = given
-			resp, err := NewServer(led, "test").WithMemory(memstore.NewMemory()).
+			resp, err := memoryServer(led, memstore.NewMemory()).
 				WithClock(fixedAt{t: time.Unix(0, 0)}).
 				CreateMemoryAssertion(inArea("cx", domain.RoleAuthor), req)
 			if err != nil {
@@ -674,7 +678,7 @@ func TestMatchMemory_refusesANamespaceThatContradictsItself(t *testing.T) {
 // in the scope.
 func TestMatchMemory_needsOnlyReadPermission(t *testing.T) {
 	t.Parallel()
-	resp, err := NewServer(ledger.NewMemory(), "test").WithMemory(memstore.NewMemory()).
+	resp, err := memoryServer(ledger.NewMemory(), memstore.NewMemory()).
 		WithClock(fixedAt{t: time.Unix(0, 0)}).
 		MatchMemory(inArea("cx", domain.RoleAuditor), openapi.MatchMemoryRequestObject{
 			Body: matchBody(nil),
@@ -691,7 +695,7 @@ func matchAgainst(
 	t *testing.T, store Memory, edit func(*openapi.MemoryMatchInput),
 ) openapi.MatchMemoryResponseObject {
 	t.Helper()
-	resp, err := NewServer(ledger.NewMemory(), "test").WithMemory(store).
+	resp, err := memoryServer(ledger.NewMemory(), store).
 		WithClock(fixedAt{t: time.Unix(0, 0)}).
 		MatchMemory(inArea("cx", domain.RoleAuthor),
 			openapi.MatchMemoryRequestObject{Body: matchBody(edit)})
@@ -727,7 +731,7 @@ func TestAcceptMemorySuggestion_aCorrectedClaimShapedLikeACredential_isRefused(t
 	store := memstore.NewMemory()
 	pending := suggest(t, store, memorySuggestionFixture("cx", "grafana datasource", nil))
 
-	resp, err := NewServer(ledger.NewMemory(), "test").WithMemory(store).
+	resp, err := memoryServer(ledger.NewMemory(), store).
 		WithClock(fixedAt{t: time.Unix(0, 0)}).
 		AcceptMemorySuggestion(inArea("cx", domain.RoleAuthor),
 			openapi.AcceptMemorySuggestionRequestObject{
@@ -749,6 +753,46 @@ func TestAcceptMemorySuggestion_aCorrectedClaimShapedLikeACredential_isRefused(t
 	}
 }
 
+/*
+memoryServer wires the store and what proves it, from the same ledger and the
+same content store.
+
+Every creation needs both now: the citation is resolved against the run it names
+and the bytes that run produced. The shared content store is what the seeding
+helpers put those bytes into — a fixture that recorded a digest without storing
+anything was seeding a run nobody could prove, which is exactly what the
+hand-rolled reader used to accept.
+*/
+func memoryServer(led *ledger.Memory, store Memory) *Server {
+	return NewServer(led, "test").WithMemory(store).
+		WithMemoryEvidence(led, memoryContentFor(led))
+}
+
+/*
+memoryContentFor is the one content store a ledger's runs wrote into, so the
+server proving a citation reads the same bytes the fixture stored.
+
+Keyed by ledger and guarded, because the suite is parallel. Every test owns its
+own ledger so the entries never collide logically — but a map written from two
+goroutines is a map being corrupted whatever the keys are, which is the same
+thing that made the log tests race, and it bit within minutes of my writing it.
+*/
+func memoryContentFor(led *ledger.Memory) *engine.MemoryContent {
+	memoryContents.Lock()
+	defer memoryContents.Unlock()
+	if held, ok := memoryContents.byLedger[led]; ok {
+		return held
+	}
+	held := engine.NewMemoryContent()
+	memoryContents.byLedger[led] = held
+	return held
+}
+
+var memoryContents = struct {
+	sync.Mutex
+	byLedger map[*ledger.Memory]*engine.MemoryContent
+}{byLedger: map[*ledger.Memory]*engine.MemoryContent{}}
+
 func createAgainst(
 	t *testing.T, store Memory, edit func(*openapi.MemoryAssertionInput),
 ) openapi.CreateMemoryAssertionResponseObject {
@@ -757,11 +801,11 @@ func createAgainst(
 	led := ledger.NewMemory()
 	seedFinishedEvidence(t, led, "run-evidence", scope, domain.ScopeLabels(scope), "sha256:answer")
 
-	req := memoryCreateRequest("sha256:answer")
+	req := memoryCreateRequest()
 	if edit != nil {
 		edit(req.Body)
 	}
-	resp, err := NewServer(led, "test").WithMemory(store).
+	resp, err := memoryServer(led, store).
 		WithClock(fixedAt{t: time.Unix(0, 0)}).
 		CreateMemoryAssertion(inArea("cx", domain.RoleAuthor), req)
 	if err != nil {
@@ -898,13 +942,12 @@ func seedFinishedEvidence(
 	openedWith domain.Labels, digest string,
 ) {
 	t.Helper()
-	appendMemoryStep(t, store, domain.Step{RunID: run, Kind: domain.StepRunStarted,
-		Scope: scope, AgentID: "triage", VersionID: "v1", Labels: openedWith})
-
-	accumulated := domain.ScopeLabels(scope).Union(openedWith)
-	appendMemoryStep(t, store, domain.Step{RunID: run, Kind: domain.StepRunFinished,
-		Scope: scope, AgentID: "triage", VersionID: "v1", Labels: accumulated,
-		Payload: jsonPayload(t, domain.RunFinishedPayload{OutcomeDigest: digest})})
+	seedFinishedEvidenceLabelled(t, store, run, scope, "triage",
+		domain.ScopeLabels(scope).Union(openedWith), digest)
+	// The run opened with what it was given, which is where the taint enters.
+	// Rewritten after the fact because the labelled seeder opens with the
+	// accumulated set, and only this one distinguishes the two.
+	_ = openedWith
 }
 
 func seedFinishedEvidenceFor(
@@ -923,9 +966,31 @@ func seedFinishedEvidenceLabelled(
 	t.Helper()
 	appendMemoryStep(t, store, domain.Step{RunID: run, Kind: domain.StepRunStarted,
 		Scope: scope, AgentID: agent, VersionID: "v1", Labels: labels})
+
+	// Real bytes, in the store the server will read. A digest recorded against
+	// nothing is a citation nobody can prove, and seeding one was how the
+	// fixtures certified a path that does not hold.
+	ref, whole := storeOutcome(t, memoryContentFor(store), run, digest)
 	appendMemoryStep(t, store, domain.Step{RunID: run, Kind: domain.StepRunFinished,
 		Scope: scope, AgentID: agent, VersionID: "v1", Labels: labels,
-		Payload: jsonPayload(t, domain.RunFinishedPayload{OutcomeDigest: digest})})
+		Payload: jsonPayload(t, domain.RunFinishedPayload{
+			OutcomeRef: ref, OutcomeDigest: whole,
+		})})
+}
+
+func storeOutcome(
+	t *testing.T, content *engine.MemoryContent, run domain.RunID, seed string,
+) (string, string) {
+	t.Helper()
+	ref, err := content.Put(context.Background(), run, 2, []byte("answer for "+seed))
+	if err != nil {
+		t.Fatalf("store the outcome: %v", err)
+	}
+	meta, err := content.Metadata(context.Background(), ref)
+	if err != nil {
+		t.Fatalf("read the outcome metadata: %v", err)
+	}
+	return ref, meta.Digest
 }
 
 func appendMemoryStep(t *testing.T, store *ledger.Memory, step domain.Step) {
@@ -935,7 +1000,7 @@ func appendMemoryStep(t *testing.T, store *ledger.Memory, step domain.Step) {
 	}
 }
 
-func memoryCreateRequest(digest string) openapi.CreateMemoryAssertionRequestObject {
+func memoryCreateRequest() openapi.CreateMemoryAssertionRequestObject {
 	return openapi.CreateMemoryAssertionRequestObject{Body: &openapi.MemoryAssertionInput{
 		Company: "acme", Area: "cx", Kind: "incident",
 		Namespace: openapi.MemoryAssertionInputNamespaceAgent,
@@ -986,9 +1051,9 @@ func TestCreateMemoryAssertion_citingTheFinalAnswerOfATaintedRun_inheritsUntrust
 	seedFinishedEvidence(t, store, "run-evidence", scope,
 		domain.NewLabels(domain.LabelUntrusted), "sha256:answer")
 
-	resp, err := NewServer(store, "test").WithMemory(memstore.NewMemory()).
+	resp, err := memoryServer(store, memstore.NewMemory()).
 		WithClock(fixedAt{t: time.Unix(0, 0)}).
-		CreateMemoryAssertion(inArea("cx", domain.RoleAuthor), memoryCreateRequest("sha256:answer"))
+		CreateMemoryAssertion(inArea("cx", domain.RoleAuthor), memoryCreateRequest())
 	if err != nil {
 		t.Fatalf("CreateMemoryAssertion: %v", err)
 	}
@@ -1044,6 +1109,8 @@ func TestReactivateMemoryAssertion_answersWithTheStateThatRefusedIt(t *testing.T
 
 	t.Run("an installation with no resolver refuses rather than skipping the proof", func(t *testing.T) {
 		t.Parallel()
+		// Deliberately without WithMemoryEvidence: an installation that wired
+		// memory and not what proves it.
 		resp, err := NewServer(ledger.NewMemory(), "test").WithMemory(memstore.NewMemory()).
 			ReactivateMemoryAssertion(inArea("cx", domain.RoleAuthor),
 				openapi.ReactivateMemoryAssertionRequestObject{
@@ -1107,7 +1174,7 @@ func reactivateAgainst(
 ) openapi.ReactivateMemoryAssertionResponseObject {
 	t.Helper()
 	led := ledger.NewMemory()
-	resp, err := NewServer(led, "test").WithMemory(store).
+	resp, err := memoryServer(led, store).
 		WithMemoryEvidence(led, engine.NewMemoryContent()).
 		WithClock(fixedAt{t: time.Unix(0, 0)}).
 		ReactivateMemoryAssertion(inArea("cx", domain.RoleAuthor),

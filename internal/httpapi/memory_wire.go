@@ -2,7 +2,7 @@ package httpapi
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -19,40 +19,53 @@ import (
 // because here is where the caller's shape stops being trusted.
 
 /*
-originOfMemoryEvidence reads the ledger for everything a creation does not get
-to assert about itself: the labels of every citation, unioned, and which agent
-the memory belongs to.
+originOfMemoryEvidence proves what a creation cites, and reads who it belongs to.
 
-Both come from the same read, because they are answers to the same question —
-what actually happened — and separating them would be two chances for the memory
-to be filed against one run and coloured by another.
+The proving is the Resolver's, which is the whole reason it exists: it reads the
+run, checks the scope, finds the step and the artifact, asks the content store
+whether the bytes are still there, and answers with the digest, the step, the
+run that produced it, and the labels the run had accumulated by then.
 
-What "which agent" means depends on the namespace, and the two are opposites.
-An agent-scoped memory belongs to one agent, so citations naming two of them are
-refused rather than attributed to whichever came first, and a run naming none is
-refused rather than widened into memory every agent reads. Shared memory belongs
-to no agent, so two agents observing the same fact is not a conflict — it is what
-shared memory is, and refusing it made shared memory impossible to correct once
-a second agent had contributed a citation to it.
+This used to do a smaller version of that by hand — matching an artifact name in
+the run_finished payload and trusting what it found. It never asked the content
+store, so a reference to bytes that were erased or never stored sustained an
+active memory. And the citation it built carried no step and no labels, which is
+the legacy shape the whole of PR 1 exists to fill in: a memory created that way
+is one the reconciliation job has to repair, and that job runs on a release
+rather than after every creation. A citation that carries no labels also cannot
+explain the taint the assertion inherited, so the eviction rule could drop the
+one record that showed where it came from.
+
+The agent is the one thing the Resolver does not answer, so it is still read
+here — from the first step of the run, which is where a run says whose it is.
 */
 func (s *Server) originOfMemoryEvidence(
 	ctx context.Context, scope domain.Scope,
 	namespace openapi.MemoryAssertionInputNamespace, evidence []openapi.MemoryEvidenceInput,
 ) (domain.AgentID, domain.Labels, []domain.MemoryEvidence, error) {
+	if s.memoryEvidence == nil {
+		return "", nil, nil, errNoEvidenceResolver
+	}
+	refs := make([]domain.MemoryEvidence, 0, len(evidence))
+	for _, ev := range evidence {
+		refs = append(refs, domain.MemoryEvidence{
+			RunID: domain.RunID(ev.RunId), Artifact: citedArtifact(ev),
+		})
+	}
+	cited, err := s.memoryEvidence.Resolve(ctx, scope, refs)
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("memory evidence: %w", err)
+	}
+
 	var labels domain.Labels
 	agents := map[domain.AgentID]bool{}
-	cited := make([]domain.MemoryEvidence, 0, len(evidence))
-
-	for _, ev := range evidence {
-		agent, seen, digest, err := s.memoryEvidenceOrigin(ctx, scope, ev)
+	for i, ev := range cited {
+		agent, err := s.agentOfRun(ctx, scope, refs[i].RunID)
 		if err != nil {
 			return "", nil, nil, err
 		}
 		agents[agent] = true
-		labels = labels.Union(seen)
-		cited = append(cited, domain.MemoryEvidence{
-			RunID: domain.RunID(ev.RunId), Artifact: citedArtifact(ev), Digest: digest,
-		})
+		labels = labels.Union(ev.Labels)
 	}
 
 	if namespace == openapi.MemoryAssertionInputNamespaceShared {
@@ -71,6 +84,25 @@ func (s *Server) originOfMemoryEvidence(
 	return "", nil, nil, fmt.Errorf("memory evidence names no run")
 }
 
+// errNoEvidenceResolver is an installation that wired memory without what
+// proves it. A refusal rather than a fallback: writing a memory without
+// checking the run it cites is what this path exists to prevent.
+var errNoEvidenceResolver = errors.New(
+	"httpapi: no evidence resolver to prove this memory against")
+
+// agentOfRun is whose run this was, which the ledger records on the step that
+// opened it. The Resolver answers everything else about a citation and not
+// this, because it is a fact about the run rather than about the bytes.
+func (s *Server) agentOfRun(
+	ctx context.Context, scope domain.Scope, run domain.RunID,
+) (domain.AgentID, error) {
+	steps, err := s.store.Read(ctx, run, domain.FirstSeq)
+	if err != nil || len(steps) == 0 || !scope.Contains(steps[0].Scope) {
+		return "", fmt.Errorf("memory evidence is outside scope or absent")
+	}
+	return steps[0].AgentID, nil
+}
+
 // citedArtifact is which of a run's outputs a citation names. The closing
 // answer by default: it is what a memory taught from a run almost always cites,
 // and the console's ordinary path never names anything else.
@@ -79,54 +111,6 @@ func citedArtifact(ev openapi.MemoryEvidenceInput) string {
 		return named
 	}
 	return domain.ArtifactFinalAnswer
-}
-
-func (s *Server) memoryEvidenceOrigin(
-	ctx context.Context, scope domain.Scope, ev openapi.MemoryEvidenceInput,
-) (domain.AgentID, domain.Labels, string, error) {
-	steps, err := s.store.Read(ctx, domain.RunID(ev.RunId), domain.FirstSeq)
-	if err != nil || len(steps) == 0 || !scope.Contains(steps[0].Scope) {
-		return "", nil, "", fmt.Errorf("memory evidence is outside scope or absent")
-	}
-	for _, step := range steps {
-		if step.Kind != domain.StepRunFinished {
-			continue
-		}
-		if labels, digest, ok := finishedArtifactLabels(step, ev); ok {
-			return steps[0].AgentID, labels, digest, nil
-		}
-	}
-	return "", nil, "", fmt.Errorf("memory evidence artifact does not match the ledger")
-}
-
-/*
-finishedArtifactLabels reads the step for the artifact a citation names, and
-answers with what the ledger holds rather than checking what the caller sent.
-
-The digest used to be part of the request, and matching on it was how a citation
-was tied to one artifact. It was also sixty-four characters somebody had to copy
-out of a screen into a form, to be compared against the record it came from —
-which is a person doing by hand what the platform is about to do anyway. The
-artifact name is what distinguishes them; the digest is what the ledger says
-about it.
-*/
-func finishedArtifactLabels(
-	step domain.Step, ev openapi.MemoryEvidenceInput,
-) (domain.Labels, string, bool) {
-	var p domain.RunFinishedPayload
-	if err := json.Unmarshal(step.Payload, &p); err != nil {
-		return nil, "", false
-	}
-	wanted := citedArtifact(ev)
-	if wanted == domain.ArtifactFinalAnswer && p.OutcomeDigest != "" {
-		return step.Labels.Clone(), p.OutcomeDigest, true
-	}
-	for _, artifact := range p.Artifacts {
-		if artifact.Name == wanted {
-			return artifact.Labels.Clone(), artifact.Digest, true
-		}
-	}
-	return nil, "", false
 }
 
 /*
