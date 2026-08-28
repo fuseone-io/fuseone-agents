@@ -13,6 +13,7 @@ import { PolicySideRail } from "@/features/policies/policy-side-rail";
 import { usePolicyDraft } from "@/features/policies/policy-form";
 import { usePolicies, usePutPolicy } from "@/features/policies/api";
 import { useCode } from "@/features/policies/use-code";
+import type { Policy } from "@/lib/api/client";
 
 /**
  * One rule, written or rewritten.
@@ -24,13 +25,9 @@ export function PolicyEditorPage() {
   const { t } = useTranslation();
   const { code: routeCode } = useParams();
   const creating = routeCode === undefined || routeCode === "new";
-  const navigate = useNavigate();
 
   const { data, isLoading, error, refetch } = usePolicies();
   const loaded = data?.items.find((p) => p.code === routeCode);
-  const { code, setCode } = useCode(creating, data?.items ?? [], routeCode);
-  const { draft, patch, changes } = usePolicyDraft(loaded);
-  const save = usePutPolicy();
 
   if (isLoading) return <LoadingRows rows={6} />;
   if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
@@ -41,6 +38,34 @@ export function PolicyEditorPage() {
       />
     );
   }
+
+  return (
+    <PolicyForm
+      key={creating ? "new" : loaded!.code}
+      creating={creating}
+      loaded={loaded}
+      policies={data?.items ?? []}
+      routeCode={routeCode}
+    />
+  );
+}
+
+function PolicyForm({
+  creating,
+  loaded,
+  policies,
+  routeCode,
+}: {
+  creating: boolean;
+  loaded?: Policy;
+  policies: Policy[];
+  routeCode?: string;
+}) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { code, setCode } = useCode(creating, policies, routeCode);
+  const { draft, patch, changes } = usePolicyDraft(loaded);
+  const save = usePutPolicy();
 
   const submit = () => {
     save.mutate(
