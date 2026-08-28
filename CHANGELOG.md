@@ -27,6 +27,14 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.39.5] — 2026-08-28
+
+### Changed
+
+- **Memory scope is now chosen from the companies and areas the caller can
+  reach.** The creation form offers one searchable company/area picker instead
+  of two free-text fields, preventing typos and invalid cross-company pairs.
+
 ## [0.39.4] — 2026-08-28
 
 ### Fixed
