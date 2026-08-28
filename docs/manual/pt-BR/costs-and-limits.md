@@ -70,11 +70,18 @@ output, cache read e cache write porque eles não custam igual.
 Mesmo quando cache read é barato, ele ainda é consumo. Otimização boa é aquela
 que aparece na contabilidade, não a que desaparece dela.
 
-Para Anthropic, o FuseOne marca como cacheáveis o texto de sistema estável e o
-prefixo anterior da trilha reconstruída. Orientação da etapa, orientação de
-memória e nota de orçamento restante ficam depois desse prefixo, porque podem
-mudar a cada turno. Tokens de cache read e cache write continuam visíveis na
-execução e nas métricas de baixa cardinalidade do worker.
+Todo provider de modelo recebe o mesmo transcript limitado, identidade canônica
+de chamada, orientação de memória consciente do estado e supervisão de falta de
+progresso. O FuseOne também mantém reutilizáveis as instruções estáveis e o
+transcript anterior reconstruído da trilha. Anthropic marca esse prefixo com
+breakpoints explícitos e põe orientação mutável depois dele. Providers
+OpenAI-compatible recebem orientação estável por etapa com o teto fixo da run,
+então quem oferece cache automático consegue reutilizar o crescimento normal do
+transcript. Quando o orçamento troca resultados antigos por recibos, essa
+projeção limitada inicia um prefixo novo em vez de preservar um sem limite.
+Providers sem cache de prompt ainda economizam chamadas e bytes reenviados.
+Tokens reportados de cache read e cache write continuam visíveis na execução e
+nas métricas de baixa cardinalidade do worker.
 
 ## Descobrir o que deixou o prompt grande
 

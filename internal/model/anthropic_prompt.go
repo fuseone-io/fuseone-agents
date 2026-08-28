@@ -17,11 +17,13 @@ func (a *Anthropic) system() []anthropic.TextBlockParam {
 }
 
 // messages caches the ledger prefix and places changing guidance after it.
-func (a *Anthropic) messages(in engine.PlanInput, offered names) []anthropic.MessageParam {
+func (a *Anthropic) messages(
+	in engine.PlanInput, offered names, guidance string,
+) []anthropic.MessageParam {
 	messages := messagesFrom(in.Transcript, offered)
 	cacheMessageTail(messages)
-	if note := volatilePlanningNote(in, a.tools, offered); note != "" {
-		messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(note)))
+	if guidance != "" {
+		messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(guidance)))
 	}
 	return messages
 }

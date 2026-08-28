@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -47,6 +48,7 @@ func (schemas) Schema(id domain.ToolID) (string, string, map[string]any, bool) {
 // wire shape rather than only on the parsed result.
 type capture struct {
 	body   map[string]any
+	bodies []map[string]any
 	server *httptest.Server
 }
 
@@ -55,7 +57,10 @@ func serve(t *testing.T, response string) *capture {
 	c := &capture{}
 	c.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw, _ := io.ReadAll(r.Body)
-		_ = json.Unmarshal(raw, &c.body)
+		var body map[string]any
+		_ = json.Unmarshal(raw, &body)
+		c.body = body
+		c.bodies = append(c.bodies, body)
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, response)
 	}))
@@ -459,6 +464,46 @@ func TestAnthropic_previousTranscriptPrefixIsCachedBeforeVolatileNotes(t *testin
 	}
 }
 
+func TestOpenAICompatible_transcriptGrowthWithinBudgetPreservesThePreviousRequestPrefix(t *testing.T) {
+	t.Parallel()
+	c := serve(t, openAIToolCall)
+	planner := plannerFor(t, model.KindOpenAICompatible, c.server.URL, model.Config{})
+	first := input()
+	first.Step = "Investigate the alert"
+	first.StopsWhen = "the cause is supported by evidence"
+	first.Tools = append(first.Tools, domain.ToolMemoryFind)
+	first.State.Called = []domain.ToolID{domain.ToolMemoryFind}
+	first.Remaining.Micros = 400_000
+
+	if _, err := planner.Plan(context.Background(), first); err != nil {
+		t.Fatalf("first Plan: %v", err)
+	}
+	second := first
+	second.Remaining.Micros = 100_000
+	second.Transcript = append(slices.Clone(first.Transcript),
+		engine.Turn{Kind: engine.TurnToolUse, CallID: "call_1", Tool: "crm.lookup", Args: []byte(`{"email":"a@b.com"}`)},
+		engine.Turn{Kind: engine.TurnToolResult, CallID: "call_1", Tool: "crm.lookup", Content: []byte(`{"id":42}`)},
+	)
+	if _, err := planner.Plan(context.Background(), second); err != nil {
+		t.Fatalf("second Plan: %v", err)
+	}
+	if len(c.bodies) != 2 {
+		t.Fatalf("requests = %d, want two", len(c.bodies))
+	}
+	firstMessages, _ := c.bodies[0]["messages"].([]any)
+	secondMessages, _ := c.bodies[1]["messages"].([]any)
+	if len(secondMessages) <= len(firstMessages) ||
+		!reflect.DeepEqual(firstMessages, secondMessages[:len(firstMessages)]) {
+		t.Fatalf("first request is not the prefix of the second:\nfirst:  %+v\nsecond: %+v",
+			firstMessages, secondMessages)
+	}
+	system, _ := firstMessages[0].(map[string]any)
+	text := asString(system["content"])
+	if !strings.Contains(text, "Budget ceiling for this run") || strings.Contains(text, "Budget remaining") {
+		t.Fatalf("system guidance is not stable across spend: %s", text)
+	}
+}
+
 func TestLoopContract_tellsTheModelToFinishWithTheFinishTool(t *testing.T) {
 	t.Parallel()
 
@@ -539,11 +584,7 @@ func TestMemoryTools_areExplainedOnlyWhenOffered(t *testing.T) {
 			name:     "openai-compatible",
 			kind:     model.KindOpenAICompatible,
 			response: openAIToolCall,
-			system: func(body map[string]any) string {
-				msgs, _ := body["messages"].([]any)
-				first, _ := msgs[0].(map[string]any)
-				return asString(first["content"])
-			},
+			system:   openAIPromptText,
 		},
 	}
 

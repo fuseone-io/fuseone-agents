@@ -46,13 +46,14 @@ func (o *OpenAICompatible) Plan(ctx context.Context, in engine.PlanInput) (engin
 	// Built once for this request and used in both directions: the names the
 	// provider is offered, and the identifier a proposal is read back as.
 	offered := namesFor(in)
-	prompt := promptInputBreakdown(in, o.cfg, o.tools, offered)
+	guidance := prefixStablePlanningNote(in, o.tools, offered)
+	prompt := promptInputBreakdown(in, o.cfg, o.tools, offered, guidance)
 	body := chatRequest{
 		// Not overridable here, unlike the Anthropic path: this client sends
 		// the planner's model and nothing reads in.Model, so cfg.Model is the
 		// effective one and every figure below belongs to it.
 		Model:     o.cfg.Model,
-		Messages:  o.chatMessages(in, offered),
+		Messages:  o.chatMessages(in, offered, guidance),
 		Tools:     o.chatTools(in.Tools, offered),
 		MaxTokens: o.cfg.MaxTokens,
 	}
@@ -139,24 +140,18 @@ func (o *OpenAICompatible) cost(u chatUsage) domain.Cost {
 	}
 }
 
-func (o *OpenAICompatible) chatMessages(in engine.PlanInput, offered names) []chatMessage {
+func (o *OpenAICompatible) chatMessages(
+	in engine.PlanInput, offered names, guidance string,
+) []chatMessage {
+	// OpenAI-compatible endpoints do not share an explicit cache-breakpoint
+	// field. Keep per-stage guidance stable so normal transcript growth preserves
+	// an exact prefix without sending a field that stricter compatible endpoints
+	// reject. Crossing the transcript budget may replace old results with receipts
+	// and deliberately starts a new, bounded prefix.
 	system := o.cfg.SystemPrompt + "\n\n" + loopContract
-	// Where the run is, and the exception its author wrote for that step.
-	// After the contract rather than inside it: this changes as the run
-	// advances, and what a provider caches is the prefix that does not.
-	if in.Step != "" {
-		system += "\n\n" + stepNote(in)
+	if guidance != "" {
+		system += "\n\n" + guidance
 	}
-	if note := memoryToolsNote(in, o.tools, offered); note != "" {
-		system += "\n\n" + note
-	}
-	if note := budgetNote(in); note != "" {
-		system += "\n\n" + note
-	}
-
-	// The system turn stays first and byte-stable across turns: every provider
-	// with prompt caching keys on the prefix, and none of them expose explicit
-	// breakpoints, so a stable prefix is the only lever available.
 	msgs := []chatMessage{{Role: "system", Content: system}}
 
 	for _, t := range in.Transcript {

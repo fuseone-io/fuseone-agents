@@ -60,7 +60,7 @@ large because of instructions, channel input, platform notes, arguments or
 tool results.
 */
 func promptInputBreakdown(
-	in engine.PlanInput, cfg Config, toolSchemas ToolSchemas, offered names,
+	in engine.PlanInput, cfg Config, toolSchemas ToolSchemas, offered names, guidance string,
 ) domain.PromptInputBreakdown {
 	out := domain.PromptInputBreakdown{
 		Unit:                    promptBreakdownUnit,
@@ -71,15 +71,7 @@ func promptInputBreakdown(
 		ToolResultsElidedByTool: map[domain.ToolID]int64{},
 	}
 
-	if in.Step != "" {
-		out.Platform += int64(len(stepNote(in)))
-	}
-	if note := memoryToolsNote(in, toolSchemas, offered); note != "" {
-		out.Platform += int64(len(note))
-	}
-	if note := budgetNote(in); note != "" {
-		out.Platform += int64(len(note))
-	}
+	out.Platform += int64(len(guidance))
 	out.ToolSchemas = toolSchemaBytes(in.Tools, toolSchemas, offered) + finishToolSchemaBytes(offered)
 
 	for _, turn := range in.Transcript {
@@ -208,4 +200,23 @@ func budgetNote(in engine.PlanInput) string {
 	}
 	return "Budget remaining for this run: " + formatMicros(in.Remaining.Micros) +
 		". Pace yourself and finish cleanly rather than being cut off."
+}
+
+// prefixStablePlanningNote lets OpenAI-compatible endpoints preserve an exact
+// prefix during normal transcript growth while a run remains in the same
+// authored step. The monetary ceiling is stable; putting the changing
+// remainder here would invalidate the automatic cache before every new result.
+func prefixStablePlanningNote(in engine.PlanInput, schemas ToolSchemas, offered names) string {
+	var notes []string
+	if in.Step != "" {
+		notes = append(notes, stepNote(in))
+	}
+	if note := memoryToolsNote(in, schemas, offered); note != "" {
+		notes = append(notes, note)
+	}
+	if in.Budget.Micros > 0 {
+		notes = append(notes, "Budget ceiling for this run: "+formatMicros(in.Budget.Micros)+
+			". Use bounded queries and finish cleanly before the platform enforces it.")
+	}
+	return strings.Join(notes, "\n\n")
 }
