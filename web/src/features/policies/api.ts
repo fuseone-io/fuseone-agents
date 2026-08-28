@@ -66,7 +66,9 @@ export function useDeletePolicy() {
       unwrap(
         await api.DELETE("/policies/{code}", { params: { path: { code } } }),
       ),
+    // Returning the promise keeps the mutation pending until active policy
+    // lists have refetched, so the removed row cannot linger as a finished act.
     onSuccess: () =>
-      void queryClient.invalidateQueries({ queryKey: policyKeys.all }),
+      queryClient.invalidateQueries({ queryKey: policyKeys.all }),
   });
 }

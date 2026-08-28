@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Plus, Scale } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { PAGE_ICONS } from "@/components/layout/nav";
 import { LoadMore } from "@/components/shared/load-more";
@@ -15,7 +16,8 @@ import {
 } from "@/components/shared/states";
 import { PoliciesTable } from "@/features/policies/policies-table";
 import { tallyOf } from "@/features/policies/policy-tally";
-import { usePolicies } from "@/features/policies/api";
+import { useDeletePolicy, usePolicies } from "@/features/policies/api";
+import { useMe } from "@/features/session/api";
 import { sinceFor } from "@/features/runs/runs-filters";
 import { useVisibleItems } from "@/hooks/use-visible-items";
 
@@ -31,6 +33,9 @@ export function PoliciesPage() {
   const [period] = useState("7");
   const since = useMemo(() => sinceFor(period), [period]);
   const { data, isLoading, error, refetch } = usePolicies(since);
+  const remove = useDeletePolicy();
+  const { data: me } = useMe();
+  const canManage = me === null || Boolean(me?.can.includes("policy:write"));
 
   const policies = data?.items ?? [];
   const tally = tallyOf(policies);
@@ -43,12 +48,14 @@ export function PoliciesPage() {
         title={t("nav.policies")}
         description={t("policies.subtitle")}
       >
-        <Button size="sm" asChild>
-          <Link to="/policies/new">
-            <Plus className="size-4" aria-hidden />
-            {t("policies.newPolicy")}
-          </Link>
-        </Button>
+        {canManage && (
+          <Button size="sm" asChild>
+            <Link to="/policies/new">
+              <Plus className="size-4" aria-hidden />
+              {t("policies.newPolicy")}
+            </Link>
+          </Button>
+        )}
       </PageHeader>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -106,7 +113,22 @@ export function PoliciesPage() {
           </div>
         ) : (
           <>
-            <PoliciesTable policies={page.visible} />
+            <PoliciesTable
+              policies={page.visible}
+              canManage={canManage}
+              deletingCode={remove.isPending ? remove.variables : undefined}
+              onDelete={(code) =>
+                remove.mutate(code, {
+                  onSuccess: () =>
+                    toast.success(t("policies.removed", { code })),
+                  onError: (cause) =>
+                    toast.error(t("common.removeFailed"), {
+                      description:
+                        cause instanceof Error ? cause.message : undefined,
+                    }),
+                })
+              }
+            />
             <div className="px-4 pb-3">
               <LoadMore
                 loaded={page.loaded}
