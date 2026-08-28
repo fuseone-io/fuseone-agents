@@ -144,13 +144,13 @@ type stubTools struct {
 func (stubTools) Reserve(context.Context, engine.Call) error { return nil }
 
 func (s stubTools) Invoke(ctx context.Context, call engine.Call) (engine.ToolResult, error) {
-	ref, err := s.content.Put(ctx, s.runID, int64(len(call.Tool)),
-		[]byte(`{"demo":"`+string(call.Tool)+`"}`))
+	body := []byte(`{"demo":"` + string(call.Tool) + `"}`)
+	ref, err := s.content.Put(ctx, s.runID, int64(len(call.Tool)), body)
 	if err != nil {
 		return engine.ToolResult{}, fmt.Errorf("demo: store result: %w", err)
 	}
 	return engine.ToolResult{
-		ResultRef: ref,
+		ResultRef: ref, ResultDigest: engine.ResultDigest(body), ResultBytes: int64(len(body)),
 		// Everything a tool returns from outside the platform is untrusted by
 		// default; the label propagates from here through the run.
 		Labels: domain.NewLabels(domain.LabelUntrusted),

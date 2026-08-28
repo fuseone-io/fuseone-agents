@@ -70,6 +70,29 @@ output, cache read e cache write porque eles não custam igual.
 Mesmo quando cache read é barato, ele ainda é consumo. Otimização boa é aquela
 que aparece na contabilidade, não a que desaparece dela.
 
+Todo provider de modelo recebe o mesmo transcript limitado, identidade canônica
+de chamada, orientação de memória consciente do estado e supervisão de falta de
+progresso. O FuseOne também mantém reutilizáveis as instruções estáveis e o
+transcript anterior reconstruído da trilha. Todo provider recebe a mesma
+orientação estável por etapa, as mesmas regras de memória e o teto fixo da run.
+Anthropic marca esse prefixo com breakpoints explícitos e acrescenta o orçamento
+restante mutável depois do transcript cacheado. Providers OpenAI-compatible
+omitem esse saldo por turno porque o cache automático exige um prefixo comum
+exato; o Gate determinístico continua impondo o mesmo teto. Quando os resultados
+cruzam o orçamento do transcript, o FuseOne troca uma geração completa por
+recibos de uma vez. Isso inicia um prefixo limitado novo e o mantém estável até
+a próxima geração cruzar, em vez de mover a fronteira dos recibos a cada turno.
+Providers sem cache de prompt ainda economizam chamadas e bytes reenviados.
+Tokens reportados de cache read e cache write continuam visíveis na execução e
+nas métricas de baixa cardinalidade do worker.
+
+Leituras concluídas podem consultar novamente os mesmos argumentos porque a
+fonte pode mudar. Escritas, buscas equivalentes de memória governada e chamadas
+com desfecho desconhecido depois do reinício de um worker continuam
+idempotentes. Três leituras bem-sucedidas da mesma ferramenta que devolvem o
+mesmo digest completo ainda estacionam a run antes de um quarto turno do
+modelo, mesmo quando os argumentos eram idênticos.
+
 ## Descobrir o que deixou o prompt grande
 
 A trilha da run mostra o conteúdo do prompt em cada proposta do modelo:
@@ -92,13 +115,24 @@ com tamanho guardado e digest. Isso aparece principalmente quando um alerta ou
 thread do Slack traz um payload grande antes de o agente chamar qualquer
 ferramenta.
 
-Resultados grandes de consultas Grafana Loki e Prometheus, e leituras grandes
-de GitHub para pull request, diff, conteúdo de arquivo, commits e logs, são
-compactados antes de serem mostrados ao modelo nos turnos seguintes. O
-resultado completo continua no content store da run e na trilha; o modelo
-recebe uma visão compacta com o começo, o fim, o tamanho guardado e um digest.
-Isso impede que dumps de observabilidade e diffs de PR ocupem a próxima
-decisão sem mudar o registro de auditoria.
+Resultados grandes de Grafana Loki e Prometheus, material de revisão do GitHub
+e resultados de fetch, list e search do Outline são compactados antes dos
+turnos seguintes do modelo. Tamanho e digest do resultado completo continuam na
+trilha; o content store mantém sua cópia limitada pelo teto da instalação. O
+modelo recebe uma visão compacta com começo, fim, tamanho original e digest.
+
+Também existe um orçamento total para resultados no transcript. Evidência
+recente é preservada; resultados antigos viram recibos explícitos com
+ferramenta, tamanho do resultado original, digest e bytes omitidos. Recibo nunca
+significa que o conteúdo não existia e não apaga a cópia armazenada. Ele orienta
+o modelo a fazer outra chamada somente quando conseguir restringir
+materialmente a consulta.
+
+Métricas do worker expõem bytes agregados de resultados no prompt como `sent`
+e `elided`, tokens de cache como `read` e `write`, duplicatas canônicas puladas
+e investigações estacionadas. Elas deliberadamente não usam execução, agente,
+ferramenta, pessoa ou consulta como label; a atribuição por ferramenta fica na
+trilha de cada execução.
 
 ## Checklist de configuração
 

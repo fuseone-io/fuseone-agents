@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/fuseone/agents/internal/domain"
 )
 
 func TestMetricsRegistry_rendersOnlyLowCardinalityWorkerFacts(t *testing.T) {
@@ -17,6 +19,11 @@ func TestMetricsRegistry_rendersOnlyLowCardinalityWorkerFacts(t *testing.T) {
 	pool.Advance("parked")
 	pool.AdvanceFailure("model_provider_overloaded", true)
 	pool.Park("model_provider_overloaded")
+	pool.Planning(domain.PromptInputBreakdown{
+		ToolResults: 4096, ToolResultsElided: 8192,
+	}, domain.Cost{CacheReadTokens: 320, CacheWriteTokens: 640})
+	pool.CanonicalDuplicate()
+	pool.InvestigationStalled()
 	reg.MCPToolCall("error", "mcp_personal_credential_missing", false)
 	reg.MCPToolCall("ok", "cache_hit", true)
 	reg.MCPToolCall("error", "github-mcp.create_issue", false)
@@ -44,6 +51,12 @@ func TestMetricsRegistry_rendersOnlyLowCardinalityWorkerFacts(t *testing.T) {
 		`fuseone_worker_advances_total{pool="runs",phase="parked"} 1`,
 		`fuseone_worker_advance_failures_total{pool="runs",reason="model_provider_overloaded",parked="true"} 1`,
 		`fuseone_worker_parks_total{pool="runs",reason="model_provider_overloaded"} 1`,
+		`fuseone_worker_prompt_tool_result_bytes_total{pool="runs",disposition="sent"} 4096`,
+		`fuseone_worker_prompt_tool_result_bytes_total{pool="runs",disposition="elided"} 8192`,
+		`fuseone_worker_model_cache_tokens_total{pool="runs",operation="read"} 320`,
+		`fuseone_worker_model_cache_tokens_total{pool="runs",operation="write"} 640`,
+		`fuseone_worker_canonical_duplicates_total{pool="runs"} 1`,
+		`fuseone_worker_investigation_stalls_total{pool="runs"} 1`,
 		`fuseone_mcp_tool_calls_total{result="error",code="mcp_personal_credential_missing",cached="false"} 1`,
 		`fuseone_mcp_tool_calls_total{result="error",code="other",cached="false"} 1`,
 		`fuseone_mcp_tool_calls_total{result="ok",code="cache_hit",cached="true"} 1`,

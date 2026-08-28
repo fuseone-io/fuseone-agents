@@ -207,6 +207,26 @@ export function detailOf(step: Step): Line {
 
     case "parked": {
       const reason = typeof payload.reason === "string" ? payload.reason : "";
+      const investigation = payload.investigation;
+      if (
+        reason === "investigation_stalled" &&
+        investigation !== null &&
+        typeof investigation === "object"
+      ) {
+        const facts = investigation as Record<string, unknown>;
+        return {
+          key: "runs.storyInvestigationStalled",
+          values: {
+            tool: facts.tool ?? "",
+            calls: facts.calls ?? 0,
+            bytes: formatBytes(
+              typeof facts.result_bytes === "number" ? facts.result_bytes : 0,
+            ),
+            cached: facts.cached_calls ?? 0,
+            digest: facts.result_digest ?? "",
+          },
+        };
+      }
       // A reason this console does not know is shown as it came. The trail
       // outlives the console, and hiding a word it has not learned yet would
       // be the console editing history.

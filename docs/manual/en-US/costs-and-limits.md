@@ -70,6 +70,28 @@ input, output, cache read and cache write because they do not cost the same.
 Even when cache read is cheap, it is still consumption. A good optimisation is
 one that appears in accounting, not one that disappears from it.
 
+Every model provider receives the same bounded transcript, canonical call
+identity, state-aware memory guidance and no-progress supervision. FuseOne also
+keeps stable instructions and the previous ledger-derived transcript reusable.
+Every provider receives the same stable per-step guidance, memory rules and
+fixed run ceiling. Anthropic marks that prefix with explicit cache breakpoints
+and additionally places the changing remaining budget after the cached
+transcript. OpenAI-compatible providers omit that per-turn remainder because
+their automatic cache requires an exact common prefix; the deterministic Gate
+still enforces the same ceiling. When result bytes cross the transcript budget,
+FuseOne replaces a completed generation with receipts at once. That starts one
+new bounded prefix and keeps it stable until the next generation crosses,
+instead of moving the receipt boundary on every turn. Providers without prompt
+caching still benefit from fewer calls and fewer replayed bytes. Reported cache
+read and cache write tokens remain visible in the run and in low-cardinality
+worker metrics.
+
+Completed read calls may poll the same arguments again because the source can
+change. Writes, equivalent governed-memory lookups and calls with an unknown
+outcome after a worker restart remain idempotent. Three successful reads of the
+same tool that return the same complete digest still park the run before a
+fourth model turn, even when the arguments were identical.
+
 ## Finding what made the prompt large
 
 The run trail shows prompt content on each model proposal: instructions, input,
@@ -90,12 +112,23 @@ long fields shortened and a separate platform note with the stored size and a
 digest. This is most visible when a Slack alert or thread carries a large
 payload before the agent has called any tool.
 
-Large Grafana Loki and Prometheus query results, and large GitHub pull-request
-diffs, file contents, commits and logs, are compacted before they are shown to
-the model on later turns. The full tool result remains in the run content store
-and trail; the model receives a compact view with the beginning, the end, the
-stored size and a digest. This keeps observability dumps and PR diffs from
-crowding out the next decision without changing the audit record.
+Large Grafana Loki and Prometheus results, GitHub review material and Outline
+fetch, list and search results are compacted before later model turns. The full
+result size and digest remain in the run trail; the content store keeps its
+bounded copy under the installation content limit. The model receives a compact
+view with the beginning, the end, the original size and the digest.
+
+There is also a total tool-result transcript budget. Recent evidence is kept;
+older results become explicit receipts naming the tool, original result size,
+digest and omitted bytes. A receipt never means the content was absent, and it
+does not delete the stored copy. It tells the model to make another call only
+when it can materially narrow the query.
+
+Worker metrics expose aggregate prompt result bytes with `sent` and `elided`
+dispositions, provider cache tokens with `read` and `write` operations,
+canonical duplicate skips and stalled investigations. They deliberately omit
+run, agent, tool, user and query labels; tool attribution stays in each run's
+trail.
 
 ## Configuration checklist
 

@@ -92,6 +92,7 @@ func (w *Worker) turn(ctx context.Context, log *slog.Logger) (bool, error) {
 	// turn costs nothing and keeps each run on its own agent's planner.
 	deps := w.deps
 	deps.Planner = resolved.Planner
+	deps.Metrics = w.metrics
 	status, advErr := engine.NewRunner(deps).Advance(ctx, start)
 	if advErr != nil {
 		outcome := w.failure(claim, advErr)

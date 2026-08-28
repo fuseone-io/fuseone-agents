@@ -120,6 +120,38 @@ describe("a run parked because the model only returned text", () => {
   });
 });
 
+describe("a run parked because repeated reads found nothing new", () => {
+  it("names the tool, repeated bytes, cache use and result digest", () => {
+    expect(
+      detailOf({
+        seq: 21,
+        kind: "parked",
+        at: "2026-08-27T12:00:00Z",
+        hash: "h",
+        payload: {
+          reason: "investigation_stalled",
+          investigation: {
+            tool: "outline.fetch",
+            calls: 3,
+            result_bytes: 20_480,
+            cached_calls: 1,
+            result_digest: "sha256:abc123",
+          },
+        },
+      } as Step),
+    ).toEqual({
+      key: "runs.storyInvestigationStalled",
+      values: {
+        tool: "outline.fetch",
+        calls: 3,
+        bytes: "20 KiB",
+        cached: 1,
+        digest: "sha256:abc123",
+      },
+    });
+  });
+});
+
 describe("a run parked by a ceiling", () => {
   it("names the budget dimension instead of making a zero-cost run look impossible", () => {
     const line = detailOf({

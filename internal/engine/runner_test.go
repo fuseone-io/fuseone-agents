@@ -34,6 +34,20 @@ type scriptedPlanner struct {
 	calls     int
 }
 
+type recordingRuntimeMetrics struct {
+	planning   int
+	duplicates int
+	stalls     int
+}
+
+func (m *recordingRuntimeMetrics) Planning(domain.PromptInputBreakdown, domain.Cost) {
+	m.planning++
+}
+
+func (m *recordingRuntimeMetrics) CanonicalDuplicate() { m.duplicates++ }
+
+func (m *recordingRuntimeMetrics) InvestigationStalled() { m.stalls++ }
+
 func (p *scriptedPlanner) Plan(context.Context, PlanInput) (Proposal, error) {
 	p.calls++
 	if p.calls > len(p.proposals) {
@@ -53,10 +67,12 @@ type countingTools struct {
 	calls       []Call
 	content     ContentStore
 	body        []byte
+	bodies      [][]byte
 	reserveErr  error
 	err         error
 	failed      bool
 	errorCode   string
+	cached      bool
 }
 
 func (c *countingTools) Reserve(context.Context, Call) error {
@@ -66,9 +82,17 @@ func (c *countingTools) Reserve(context.Context, Call) error {
 func (c *countingTools) Invoke(ctx context.Context, call Call) (ToolResult, error) {
 	c.invocations = append(c.invocations, call.Tool)
 	c.calls = append(c.calls, call)
-	result := ToolResult{Failed: c.failed, ErrorCode: c.errorCode}
-	if len(c.body) > 0 {
-		ref, err := c.content.Put(ctx, call.RunID, call.Seq, c.body)
+	result := ToolResult{Failed: c.failed, ErrorCode: c.errorCode, Cached: c.cached}
+	body := c.body
+	if i := len(c.invocations) - 1; i < len(c.bodies) {
+		body = c.bodies[i]
+	}
+	if !result.Failed {
+		result.ResultDigest = ResultDigest(body)
+		result.ResultBytes = int64(len(body))
+	}
+	if len(body) > 0 {
+		ref, err := c.content.Put(ctx, call.RunID, call.Seq, body)
 		if err != nil {
 			return ToolResult{}, err
 		}
@@ -399,6 +423,16 @@ O envio do alerta no canal correspondente
 
 func generousBudget() domain.Budget {
 	return domain.Budget{Micros: 1_000_000, ToolCalls: 20, Steps: 50}
+}
+
+func allowCRMNote(h *harness) {
+	h.runner.deps.Gate = gate.New().WithPolicies(gate.Policies{
+		Hash: "pol_write_allowed",
+		Set: []domain.Policy{{
+			Code: "POL-WRITE", Resource: "crm.note", Reach: domain.ReachInstallation,
+			Effect: domain.PolicyAllow, Mode: domain.PolicyEnforce, Enabled: true,
+		}},
+	})
 }
 
 // --- tests -----------------------------------------------------------------
@@ -758,6 +792,54 @@ func TestAdvance_memoryLearningBeginsWithDeterministicLookup(t *testing.T) {
 	}
 }
 
+func TestAdvance_memoryLookupSkipsEquivalentRetryAndAllowsMaterialRefinement(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t)
+	h.runner.deps.Catalog = staticCatalog{domain.ToolMemoryFind: domain.EffectRead}
+	start := h.start(t, generousBudget())
+	start.MemoryLearning = domain.MemoryLearningPolicy{Mode: domain.MemoryLearningReview}
+	start.Pack = gate.NewPack()
+	openRunWithInput(t, h, start, "manual", []byte(supersetSlackAsk()), domain.ScopeLabels(start.Scope))
+
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("Advance initial lookup: %v", err)
+	}
+	initial := memoryFindCallArgs(t, h.tools.calls[0])
+	h.planner.proposals = []Proposal{
+		{Tool: domain.ToolMemoryFind, Args: []byte(fmt.Sprintf(
+			`{ "limit": 10, "search": %s }`, mustJSONString(initial.Search)))},
+		{Tool: domain.ToolMemoryFind, Args: []byte(fmt.Sprintf(
+			`{"search":%s,"limit":10}`, mustJSONString(initial.Search+" channel membership")))},
+	}
+
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("Advance equivalent retry: %v", err)
+	}
+	if got := len(h.tools.invocations); got != 1 {
+		t.Fatalf("tool invocations = %d, want the equivalent retry skipped", got)
+	}
+	var duplicate domain.GateDecidedPayload
+	if err := h.lastPayloadOf(t, domain.StepGateDecided, &duplicate); err != nil {
+		t.Fatalf("gate payload: %v", err)
+	}
+	if duplicate.Verdict != domain.VerdictDuplicate {
+		t.Fatalf("equivalent retry verdict = %s, want duplicate", duplicate.Verdict)
+	}
+
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("Advance refined lookup: %v", err)
+	}
+	if got := h.tools.invocations; len(got) != 2 || got[1] != domain.ToolMemoryFind {
+		t.Fatalf("tool invocations = %v, want the materially refined lookup executed", got)
+	}
+	refined := memoryFindCallArgs(t, h.tools.calls[1])
+	if !strings.Contains(refined.Search, "channel membership") {
+		t.Fatalf("refined search = %q, want the new material terms", refined.Search)
+	}
+}
+
 func TestAdvance_initialMemoryLookupDeniedByPolicyFallsThroughToPlanner(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -952,15 +1034,17 @@ func TestAdvance_budgetTooSmallForTheCall_parksResumably(t *testing.T) {
 	}
 }
 
-// The most expensive bug this architecture can have. A worker dies after the
-// tool call is recorded but before the result comes back; the run is picked up
-// again and must not bill the customer twice (PRD DE-16, NF-02).
-func TestResume_crashedAfterToolCall_doesNotInvokeTheToolAgain(t *testing.T) {
+// A completed write remains exactly-once when another worker replans the run.
+// The orphaned-call case is covered separately with a ledger stopped between
+// tool_called and tool_returned.
+func TestResume_completedWrite_doesNotInvokeTheToolAgain(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
-	h := newHarness(t, Proposal{Tool: "crm.lookup", Args: []byte(`{"id":"42"}`)})
+	h := newHarness(t, Proposal{Tool: "crm.note", Args: []byte(`{"id":"42"}`)})
+	allowCRMNote(h)
 	start := h.start(t, generousBudget())
+	start.Stage = domain.StageAutonomous
 
 	if _, err := h.runner.Advance(ctx, start); err != nil {
 		t.Fatalf("first Advance: %v", err)
@@ -978,6 +1062,118 @@ func TestResume_crashedAfterToolCall_doesNotInvokeTheToolAgain(t *testing.T) {
 	if len(h.tools.invocations) != 1 {
 		t.Errorf("invocations = %d after resume, want 1 — the effect was duplicated",
 			len(h.tools.invocations))
+	}
+}
+
+func TestResume_completedWriteReclassifiedAsRead_staysExactlyOnce(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	args := []byte(`{"id":"42"}`)
+	h := newHarness(t, Proposal{Tool: "crm.lookup", Args: args})
+	start := h.start(t, generousBudget())
+	key := idempotencyKey(start.RunID, "crm.lookup", args)
+
+	// The ledger records what the tool was when it ran. The harness catalogue
+	// now calls crm.lookup a read, which must not reinterpret the completed write
+	// as a poll that is safe to execute again.
+	for _, step := range []domain.Step{
+		{Kind: domain.StepRunStarted},
+		{Kind: domain.StepToolCalled, IdemKey: key,
+			Payload: mustJSON(domain.ToolCalledPayload{Tool: "crm.lookup", Effect: domain.EffectWrite})},
+		{Kind: domain.StepToolReturned,
+			Payload: mustJSON(domain.ToolReturnedPayload{Tool: "crm.lookup"})},
+	} {
+		step.RunID, step.Scope = start.RunID, start.Scope
+		step.At = time.Date(2026, 8, 10, 12, 0, 0, 0, time.UTC)
+		if _, err := h.ledger.Append(ctx, step); err != nil {
+			t.Fatalf("seed Append(%s): %v", step.Kind, err)
+		}
+	}
+
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+	if len(h.tools.invocations) != 0 {
+		t.Fatalf("reclassified write was executed again: %v", h.tools.invocations)
+	}
+	var decided domain.GateDecidedPayload
+	if err := h.lastPayloadOf(t, domain.StepGateDecided, &decided); err != nil {
+		t.Fatalf("gate payload: %v", err)
+	}
+	if decided.Verdict != domain.VerdictDuplicate || decided.Rule != gate.RuleIdempotency {
+		t.Fatalf("decision = %s/%s, want duplicate/idempotency", decided.Verdict, decided.Rule)
+	}
+}
+
+func TestAdvance_semanticallyIdenticalCompletedReadMayPollAgain(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t,
+		Proposal{Tool: "crm.lookup", Args: []byte(`{"search":"erro","limit":10}`)},
+		Proposal{Tool: "crm.lookup", Args: []byte(" { \"limit\" : 10, \"search\" : \"erro\" } ")},
+	)
+	start := h.start(t, generousBudget())
+
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("first Advance: %v", err)
+	}
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("second Advance: %v", err)
+	}
+
+	if len(h.tools.invocations) != 2 {
+		t.Fatalf("tool invocations = %d, want a completed read to be polled again", len(h.tools.invocations))
+	}
+	steps, err := h.ledger.Read(ctx, start.RunID, domain.FirstSeq)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	got := 0
+	for _, step := range steps {
+		if step.Kind == domain.StepToolCalled {
+			got++
+		}
+	}
+	if got != 2 {
+		t.Fatalf("tool_called steps = %d, want two completed reads", got)
+	}
+	var decided domain.GateDecidedPayload
+	if err := h.lastPayloadOf(t, domain.StepGateDecided, &decided); err != nil {
+		t.Fatalf("gate payload: %v", err)
+	}
+	if decided.Verdict != domain.VerdictAllow {
+		t.Fatalf("decision = %s/%s, want the completed read allowed", decided.Verdict, decided.Rule)
+	}
+}
+
+func TestAdvance_semanticallyIdenticalJSONWrite_executesOnce(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t,
+		Proposal{Tool: "crm.note", Args: []byte(`{"text":"erro","priority":10}`)},
+		Proposal{Tool: "crm.note", Args: []byte(" { \"priority\" : 10, \"text\" : \"erro\" } ")},
+	)
+	allowCRMNote(h)
+	start := h.start(t, generousBudget())
+	start.Stage = domain.StageAutonomous
+
+	for range 2 {
+		if _, err := h.runner.Advance(ctx, start); err != nil {
+			t.Fatalf("Advance: %v", err)
+		}
+	}
+	if len(h.tools.invocations) != 1 {
+		t.Fatalf("tool invocations = %d, want an equivalent write executed once", len(h.tools.invocations))
+	}
+	var decided domain.GateDecidedPayload
+	if err := h.lastPayloadOf(t, domain.StepGateDecided, &decided); err != nil {
+		t.Fatalf("gate payload: %v", err)
+	}
+	if decided.Verdict != domain.VerdictDuplicate || decided.Rule != gate.RuleIdempotency {
+		t.Fatalf("decision = %s/%s, want duplicate/idempotency", decided.Verdict, decided.Rule)
 	}
 }
 
@@ -1257,14 +1453,15 @@ func TestAdvance_resumedWithOrphanedToolCall_closesItAndReleasesBudget(t *testin
 
 	h := newHarness(t, Proposal{Tool: "crm.lookup", Args: []byte(`{}`)})
 	start := h.start(t, generousBudget())
+	orphanKey := idempotencyKey(start.RunID, "crm.lookup", []byte(`{}`))
 
 	// Hand-build the ledger of a run that crashed mid-call.
 	for _, s := range []domain.Step{
 		{Kind: domain.StepRunStarted},
 		{Kind: domain.StepBudgetReserved,
 			Payload: mustJSON(domain.BudgetReservedPayload{Micros: 30_000})},
-		{Kind: domain.StepToolCalled, IdemKey: "already-done",
-			Payload: mustJSON(domain.ToolCalledPayload{Tool: "crm.lookup"})},
+		{Kind: domain.StepToolCalled, IdemKey: orphanKey,
+			Payload: mustJSON(domain.ToolCalledPayload{Tool: "crm.lookup", Effect: domain.EffectRead})},
 	} {
 		s.RunID, s.Scope = start.RunID, start.Scope
 		s.At = time.Date(2026, 8, 10, 12, 0, 0, 0, time.UTC)
@@ -1297,8 +1494,23 @@ func TestAdvance_resumedWithOrphanedToolCall_closesItAndReleasesBudget(t *testin
 	}
 	// The recorded idempotency key survives the recovery, so a re-plan that
 	// proposes the same call still cannot repeat the effect.
-	if !state.AlreadyExecuted("already-done") {
+	if !state.AlreadyExecuted(orphanKey) {
 		t.Error("recovery lost the idempotency key of the orphaned call")
+	}
+
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("Advance after orphan recovery: %v", err)
+	}
+	if len(h.tools.invocations) != 0 {
+		t.Fatalf("orphaned read was replayed despite its unknown outcome: %v", h.tools.invocations)
+	}
+	var decided domain.GateDecidedPayload
+	if err := h.lastPayloadOf(t, domain.StepGateDecided, &decided); err != nil {
+		t.Fatalf("gate payload: %v", err)
+	}
+	if decided.Verdict != domain.VerdictDuplicate || decided.Rule != gate.RuleIdempotency {
+		t.Fatalf("decision = %s/%s, want duplicate/idempotency for the orphan",
+			decided.Verdict, decided.Rule)
 	}
 }
 
@@ -1517,9 +1729,11 @@ func TestAdvance_planKeepsProposingADuplicateCall_parksInsteadOfLooping(t *testi
 	// the planner sees a skip rather than a denial. If it keeps proposing the
 	// same skipped effect anyway, the run still has to stop spending model
 	// turns on a path that cannot make progress.
-	repeated := Proposal{Tool: "crm.lookup", Args: []byte(`{"id":"42"}`)}
+	repeated := Proposal{Tool: "crm.note", Args: []byte(`{"id":"42"}`)}
 	h := newHarness(t, slices.Repeat([]Proposal{repeated}, maxConsecutiveBlocks+2)...)
+	allowCRMNote(h)
 	start := h.start(t, generousBudget())
+	start.Stage = domain.StageAutonomous
 
 	var last Status
 	for range maxConsecutiveBlocks + 2 {
@@ -1535,6 +1749,145 @@ func TestAdvance_planKeepsProposingADuplicateCall_parksInsteadOfLooping(t *testi
 	}
 	if len(h.tools.invocations) != 1 {
 		t.Errorf("tool invocations = %d, want only the original call", len(h.tools.invocations))
+	}
+}
+
+func TestAdvance_distinctReadCallsReturningTheSameResult_parkBeforeAnotherPaidTurn(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	proposals := []Proposal{
+		{Tool: "crm.lookup", Args: []byte(`{"query":"first"}`), Cost: domain.Cost{Micros: 900_000}},
+		{Tool: "crm.lookup", Args: []byte(`{"query":"second"}`), Cost: domain.Cost{Micros: 900_000}},
+		{Tool: "crm.lookup", Args: []byte(`{"query":"third"}`), Cost: domain.Cost{Micros: 900_000}},
+	}
+	h := newHarness(t, proposals...)
+	metrics := &recordingRuntimeMetrics{}
+	h.runner.deps.Metrics = metrics
+	h.tools.cached = true
+	start := h.start(t, domain.Budget{Micros: 5_000_000, ToolCalls: 20, Steps: 50})
+
+	for range proposals {
+		if _, err := h.runner.Advance(ctx, start); err != nil {
+			t.Fatalf("Advance: %v", err)
+		}
+	}
+	st, err := h.runner.Advance(ctx, start)
+	if err != nil {
+		t.Fatalf("stalled Advance: %v", err)
+	}
+
+	if st.Phase != PhaseParked {
+		t.Fatalf("Phase = %v, want parked; steps: %v", st.Phase, h.kinds(t))
+	}
+	if h.planner.calls != len(proposals) {
+		t.Fatalf("planner calls = %d, want %d before parking", h.planner.calls, len(proposals))
+	}
+	if len(h.tools.invocations) != len(proposals) {
+		t.Fatalf("tool calls = %d, want %d", len(h.tools.invocations), len(proposals))
+	}
+	if metrics.planning != len(proposals) || metrics.stalls != 1 {
+		t.Fatalf("metrics = %+v, want %d plans and one stall", metrics, len(proposals))
+	}
+	var parked domain.ParkedPayload
+	if err := h.lastPayloadOf(t, domain.StepParked, &parked); err != nil {
+		t.Fatalf("parked payload: %v", err)
+	}
+	if parked.Reason != "investigation_stalled" {
+		t.Errorf("reason = %q, want investigation_stalled", parked.Reason)
+	}
+	if parked.Investigation == nil || parked.Investigation.Tool != "crm.lookup" ||
+		parked.Investigation.Calls != len(proposals) || parked.Investigation.ResultBytes == 0 ||
+		parked.Investigation.CachedCalls != len(proposals) || parked.Investigation.ResultDigest == "" {
+		t.Fatalf("investigation = %+v", parked.Investigation)
+	}
+}
+
+func TestAdvance_identicalReadCallsReturningTheSameResult_parkBeforeAnotherPaidTurn(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	repeated := Proposal{Tool: "crm.lookup", Args: []byte(`{"query":"same"}`)}
+	h := newHarness(t, slices.Repeat([]Proposal{repeated}, maxRepeatedReadResults)...)
+	start := h.start(t, domain.Budget{Micros: 5_000_000, ToolCalls: 20, Steps: 50})
+
+	for range maxRepeatedReadResults {
+		if _, err := h.runner.Advance(ctx, start); err != nil {
+			t.Fatalf("Advance read: %v", err)
+		}
+	}
+	st, err := h.runner.Advance(ctx, start)
+	if err != nil {
+		t.Fatalf("stalled Advance: %v", err)
+	}
+	if st.Phase != PhaseParked {
+		t.Fatalf("Phase = %v, want parked", st.Phase)
+	}
+	if h.planner.calls != maxRepeatedReadResults || len(h.tools.invocations) != maxRepeatedReadResults {
+		t.Fatalf("planner/tool calls = %d/%d, want %d/%d before parking",
+			h.planner.calls, len(h.tools.invocations), maxRepeatedReadResults, maxRepeatedReadResults)
+	}
+}
+
+func TestAdvance_canonicalDuplicate_recordsTheEfficiencyEvent(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t,
+		Proposal{Tool: "crm.note", Args: []byte(`{"id":42,"active":true}`)},
+		Proposal{Tool: "crm.note", Args: []byte("{\n  \"active\": true, \"id\": 42\n}")},
+	)
+	allowCRMNote(h)
+	metrics := &recordingRuntimeMetrics{}
+	h.runner.deps.Metrics = metrics
+	start := h.start(t, generousBudget())
+	start.Stage = domain.StageAutonomous
+
+	for range 2 {
+		if _, err := h.runner.Advance(ctx, start); err != nil {
+			t.Fatalf("Advance: %v", err)
+		}
+	}
+
+	if len(h.tools.invocations) != 1 {
+		t.Fatalf("tool calls = %d, want one", len(h.tools.invocations))
+	}
+	if metrics.duplicates != 1 || metrics.planning != 2 {
+		t.Fatalf("metrics = %+v, want one canonical duplicate and two plans", metrics)
+	}
+}
+
+func TestAdvance_readResultChanges_resetsTheStalledInvestigation(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	proposals := []Proposal{
+		{Tool: "crm.lookup", Args: []byte(`{"query":"first"}`)},
+		{Tool: "crm.lookup", Args: []byte(`{"query":"second"}`)},
+		{Tool: "crm.lookup", Args: []byte(`{"query":"third"}`)},
+		{Tool: "crm.lookup", Args: []byte(`{"query":"fourth"}`)},
+	}
+	h := newHarness(t, proposals...)
+	h.tools.bodies = [][]byte{
+		[]byte(`{"page":1}`), []byte(`{"page":1}`),
+		[]byte(`{"page":2}`), []byte(`{"page":2}`),
+	}
+	start := h.start(t, generousBudget())
+
+	var st Status
+	for range len(proposals) + 1 {
+		var err error
+		st, err = h.runner.Advance(ctx, start)
+		if err != nil {
+			t.Fatalf("Advance: %v", err)
+		}
+	}
+
+	if st.Phase != PhaseFinished {
+		t.Fatalf("Phase = %v, want finished; steps: %v", st.Phase, h.kinds(t))
+	}
+	if len(h.tools.invocations) != len(proposals) {
+		t.Fatalf("tool calls = %d, want %d", len(h.tools.invocations), len(proposals))
 	}
 }
 

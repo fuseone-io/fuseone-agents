@@ -19,6 +19,14 @@ type Planner interface {
 	Plan(ctx context.Context, in PlanInput) (Proposal, error)
 }
 
+// RuntimeMetrics observes aggregate efficiency facts. Implementations must
+// keep run, agent, tool and user identifiers out of metric labels.
+type RuntimeMetrics interface {
+	Planning(domain.PromptInputBreakdown, domain.Cost)
+	CanonicalDuplicate()
+	InvestigationStalled()
+}
+
 // PlanInput is what the model sees. It deliberately excludes the capability
 // pack's full tool list: the model is offered only the tools it may call, so
 // an unavailable tool cannot be proposed in the first place.
@@ -139,6 +147,12 @@ type ToolResult struct {
 	// ResultRef points at the payload in object storage. Results routinely
 	// carry personal data and never belong inline in the ledger (PRD AU-04).
 	ResultRef string
+	// ResultDigest and ResultBytes describe all bytes returned by the tool,
+	// before the content store may apply its installation limit. The
+	// ledger uses them to detect repeated reads that add no new evidence while
+	// the content itself remains erasable outside the ledger.
+	ResultDigest string
+	ResultBytes  int64
 	// Labels is the taint of the result. A tool reading external content
 	// returns LabelUntrusted, and it propagates from here.
 	Labels        domain.Labels

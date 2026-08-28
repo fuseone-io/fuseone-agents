@@ -217,8 +217,14 @@ type ToolCalledPayload struct {
 type ToolReturnedPayload struct {
 	Tool      ToolID `json:"tool"`
 	ResultRef string `json:"result_ref,omitempty"`
-	Failed    bool   `json:"failed,omitempty"`
-	ErrorCode string `json:"error_code,omitempty"`
+	// ResultDigest and ResultBytes identify the complete result returned by the
+	// tool, before an installation content limit may retain only a prefix.
+	// They do so without putting its contents in the ledger, and let supervision
+	// distinguish a refined investigation from calls that produced no new evidence.
+	ResultDigest string `json:"result_digest,omitempty"`
+	ResultBytes  int64  `json:"result_bytes,omitempty"`
+	Failed       bool   `json:"failed,omitempty"`
+	ErrorCode    string `json:"error_code,omitempty"`
 	// Cached says this run received a stored result instead of reaching the
 	// tool server. The fresh ResultRef belongs to this run; the source fields
 	// identify where the bytes first came from.
@@ -313,13 +319,25 @@ type FailureSummary struct {
 	Retryable bool   `json:"retryable,omitempty"`
 }
 
+// InvestigationSummary explains why repeated reads stopped being useful.
+// It contains no arguments or result content: those remain in the content
+// store under their ordinary access and retention rules.
+type InvestigationSummary struct {
+	Tool         ToolID `json:"tool"`
+	Calls        int    `json:"calls"`
+	ResultBytes  int64  `json:"result_bytes,omitempty"`
+	CachedCalls  int    `json:"cached_calls,omitempty"`
+	ResultDigest string `json:"result_digest,omitempty"`
+}
+
 // ParkedPayload records a run stopped awaiting human intervention. Parking is
 // resumable by design: a budget ceiling raise or a fixed upstream continues
 // the run from the exact step it stopped at (PRD FO-04, NF-14).
 type ParkedPayload struct {
-	Reason   string          `json:"reason"`
-	Attempts int             `json:"attempts,omitempty"`
-	Failure  *FailureSummary `json:"failure,omitempty"`
+	Reason        string                `json:"reason"`
+	Attempts      int                   `json:"attempts,omitempty"`
+	Failure       *FailureSummary       `json:"failure,omitempty"`
+	Investigation *InvestigationSummary `json:"investigation,omitempty"`
 }
 
 type RunFinishedReason string

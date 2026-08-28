@@ -108,19 +108,24 @@ type dedupeReservation struct {
 // act runs the proposal through the Gate and, if it survives, executes it.
 func (r *Runner) act(ctx context.Context, state State, start Start, p Proposal) (Status, error) {
 	effect, _ := r.deps.Catalog.Effect(p.Tool)
-	idemKey := idempotencyKey(start.RunID, p.Tool, p.Args)
+	baseIdemKey := idempotencyKey(start.RunID, p.Tool, p.Args)
+	idemKey := executionIdempotencyKey(state, effect, p.Tool, baseIdemKey)
+	perRunDuplicate := duplicateWithinRun(state, effect, p.Tool, idemKey)
 	semantic, err := r.semanticDedupe(ctx, start, p)
 	if err != nil {
 		return Status{}, err
 	}
 
 	decision, err := r.decide(ctx, state, start, p, effect, idemKey,
-		state.AlreadyExecuted(idemKey) || semantic.already)
+		perRunDuplicate || semantic.already)
 	if err != nil {
 		return Status{}, fmt.Errorf("engine: gate: %w", err)
 	}
 
 	if !decision.Verdict.Executable() || decision.Verdict == domain.VerdictRequireApproval {
+		if perRunDuplicate && decision.Verdict == domain.VerdictDuplicate && r.deps.Metrics != nil {
+			r.deps.Metrics.CanonicalDuplicate()
+		}
 		state, err = r.appendGateDecision(ctx, state, start, p, effect, decision, semantic.source)
 		if err != nil {
 			return Status{}, err
@@ -482,7 +487,10 @@ func (r *Runner) invoke(
 
 	call.Seq = state.Seq
 	result, invokeErr := r.deps.Tools.Invoke(ctx, call)
-	returned := domain.ToolReturnedPayload{Tool: p.Tool, ResultRef: result.ResultRef}
+	returned := domain.ToolReturnedPayload{
+		Tool: p.Tool, ResultRef: result.ResultRef,
+		ResultDigest: result.ResultDigest, ResultBytes: result.ResultBytes,
+	}
 	if result.Cached {
 		returned.Cached = true
 		returned.CachedFromRun = result.CachedFromRun
@@ -555,25 +563,6 @@ func (r *Runner) store(ctx context.Context, runID domain.RunID, seq int64, args 
 		return "", fmt.Errorf("engine: store arguments: %w", err)
 	}
 	return ref, nil
-}
-
-// idempotencyKey identifies an effect by what it does, not by where it sits.
-//
-// The step sequence is deliberately excluded. A resumed run re-plans and lands
-// at a different sequence number, so a position-dependent key would look new
-// on every retry and duplicate the effect — the exact failure this key exists
-// to prevent.
-//
-// The consequence is that an identical call with identical arguments inside
-// one run happens once. For reads that is a free cache hit; for writes a
-// second identical call is almost always a bug. A tool that genuinely needs to
-// repeat — polling, pagination — varies its arguments, and that is the
-// intended escape hatch.
-func idempotencyKey(runID domain.RunID, tool domain.ToolID, args []byte) string {
-	h := sha256.New()
-	fmt.Fprintf(h, "%s|%s|", runID, tool)
-	_, _ = h.Write(args)
-	return hex.EncodeToString(h.Sum(nil))[:32]
 }
 
 func firstNonEmpty(values ...string) string {

@@ -2093,6 +2093,7 @@
     "storyHeld": "{{amount}} retidos do teto da execução",
     "storyHumanDecided": "Decisão humana registrada",
     "storyInsisted": "o modelo insistiu numa chamada recusada e a execução foi interrompida",
+    "storyInvestigationStalled": "{{calls}} leituras diferentes de {{tool}} devolveram o mesmo resultado de {{bytes}} ({{cached}} em cache); resultado {{digest}}. Restrinja a investigação ou inspecione a fonte antes de retomar.",
     "storyNoFinishAction": "o modelo devolveu texto sem chamar ferramenta nem a ação de finalizar; uma pessoa precisa inspecionar a execução",
     "storyParked": "Execução estacionada",
     "storyPromptComposition": "Conteúdo do prompt: {{total}} medidos · {{toolResults}} de resultados de ferramenta · {{input}} da entrada · {{instructions}} das instruções",

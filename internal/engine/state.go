@@ -143,8 +143,22 @@ type State struct {
 	requested *ApprovedCall
 
 	// executed holds the idempotency keys the ledger has already recorded, so
-	// a resumed run never causes the same effect twice (PRD DE-16).
+	// a resumed run can distinguish a recorded call from a new one (PRD DE-16).
 	executed map[string]struct{}
+	// completed holds the recorded effect for calls whose real tool_returned
+	// step reached the ledger. A completed read may be polled again only while
+	// both the ledger and current catalogue still classify it as a read. This
+	// fails closed across reclassification; an orphan has no entry at all.
+	completed map[string]domain.Effect
+	// completedReads counts completed attempts by canonical call identity. It
+	// lets the next poll derive a new deterministic ledger key while a replay
+	// of an orphan derives the same key and remains blocked.
+	completedReads map[string]int
+	pendingIdemKey string
+	pendingEffect  domain.Effect
+
+	pendingInvestigation *investigationCall
+	investigation        investigationStreak
 }
 
 // Committed is settled spend plus outstanding reservations. This is the figure
@@ -165,6 +179,17 @@ func (s State) Committed() domain.Consumption {
 func (s State) AlreadyExecuted(key string) bool {
 	_, ok := s.executed[key]
 	return ok
+}
+
+// CompletedAs reports whether a real tool result reached the ledger with the
+// named effect. The synthetic result used to close an orphan does not count.
+func (s State) CompletedAs(key string, effect domain.Effect) bool {
+	recorded, ok := s.completed[key]
+	return ok && recorded == effect
+}
+
+func (s State) completedReadCount(key string) int {
+	return s.completedReads[key]
 }
 
 // Terminal reports whether the run has ended for good. Parked runs are not

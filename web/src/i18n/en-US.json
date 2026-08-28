@@ -2093,6 +2093,7 @@
     "storyHeld": "{{amount}} held from the run’s ceiling",
     "storyHumanDecided": "Human decision recorded",
     "storyInsisted": "the model insisted on a refused call and the run was interrupted",
+    "storyInvestigationStalled": "{{calls}} different {{tool}} reads returned the same {{bytes}} result ({{cached}} cached); result {{digest}}. Narrow the investigation or inspect the source before resuming.",
     "storyNoFinishAction": "the model returned text without calling a tool or the finish action; a person must inspect the run",
     "storyParked": "Run parked",
     "storyPromptComposition": "Prompt content: {{total}} measured · {{toolResults}} from tool results · {{input}} from input · {{instructions}} from instructions",

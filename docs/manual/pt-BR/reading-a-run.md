@@ -43,6 +43,13 @@ labels de proveniência continuem viajando pela execução.
 
 **Bateu um teto** — custo, passos, tokens ou chamadas. A recusa carrega o teto, o gasto e a estimativa da chamada que cruzou.
 
+**A investigação parou de progredir** — três chamadas canonicamente diferentes
+à mesma ferramenta de leitura devolveram o mesmo resultado completo. A
+plataforma estaciona antes de comprar outro turno do modelo. O passo
+estacionado nomeia ferramenta, quantidade de chamadas, tamanho original,
+acertos de cache e digest do resultado. Retome depois de restringir a
+investigação ou conferir por que a fonte continua devolvendo a mesma evidência.
+
 **Falha do provedor** — sobrecarga, limite de taxa, chave inválida. A causa aparece com o provedor e o código, e a tela `Runtime` mostra se está acontecendo com todo mundo.
 
 ## O custo aparece zerado
@@ -65,6 +72,13 @@ Provavelmente não ignorou. Instrução orienta o modelo, mas **`stopsWhen` de u
 
 ### A execução ficou cara
 
-Olhe os passos: várias chamadas iguais seguidas costumam ser o agente tentando de novo sem progredir. Teto de passos existe para isso.
+Abra os passos **O modelo propôs** e compare a composição do prompt. A trilha
+separa bytes de resultados enviados ao modelo dos bytes omitidos pela
+compactação, com atribuição por ferramenta. Escritas e buscas de memória
+equivalentes, além de chamadas cujo desfecho ficou desconhecido depois do
+reinício de um worker, são puladas pela identidade canônica. Leituras concluídas
+podem consultar novamente, mas três leituras consecutivas de uma ferramenta
+que produzam o mesmo resultado completo estacionam como
+`investigation_stalled` antes que o teto de dinheiro seja a única parada.
 
 O que decide cada parada está em [O que a plataforma para antes de acontecer](what-the-gate-stops.md) e em [Políticas](policies.md).

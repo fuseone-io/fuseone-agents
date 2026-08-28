@@ -64,7 +64,7 @@ func resultCacheable(
 }
 
 func resultCacheKeyOf(entry Entry, call engine.Call) resultCacheKey {
-	argsDigest := sha256.Sum256(call.Args)
+	argsDigest := sha256.Sum256(domain.CanonicalCallArguments(call.Args))
 	return resultCacheKey{
 		tool:       entry.ID,
 		digest:     entry.Digest,

@@ -219,6 +219,12 @@ assinatura mais estreitos. O caminho de sugestão também consulta a memória
 ativa pelo mesmo tipo, assunto e assinatura, então um fato lembrado não
 continua criando itens de revisão só porque o modelo propôs outra redação.
 
+A busca automática roda uma vez. Se depois o modelo propuser um
+`memory.find` equivalente, mudando apenas ordem ou espaços do JSON, a
+plataforma pula como a mesma chamada. Uma busca materialmente diferente ou
+mais estreita continua permitida; o agente pode sair de texto amplo para tipo,
+assunto ou assinatura sem que isso seja confundido com retry.
+
 Sugestões em modo de revisão não pedem uma segunda aprovação antes de entrar
 nessa fila. A fila de revisão é o ponto de aprovação. A sugestão ainda carrega
 os labels da run, e uma policy explícita, capacidade ausente ou violação de

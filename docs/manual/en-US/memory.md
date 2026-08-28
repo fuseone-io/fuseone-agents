@@ -216,6 +216,12 @@ signature. The suggestion path also checks active memory for the same kind,
 subject and signature, so a remembered fact does not keep creating review items
 just because the model proposes different wording.
 
+The automatic lookup runs once. If the model later proposes an equivalent
+`memory.find` call with only JSON ordering or whitespace changed, the platform
+skips it as the same call. A materially different or narrower lookup is still
+allowed; the agent can refine from broad search text to a kind, subject or
+signature without being mistaken for a retry.
+
 Review-mode suggestions do not ask for a second approval before entering that
 queue. The review queue is the approval point. The suggestion still carries
 the run's labels, and an authored policy, missing capability or data-barrier

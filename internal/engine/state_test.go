@@ -214,6 +214,27 @@ func TestFold_toolCalled_marksIdempotencyKeyExecuted(t *testing.T) {
 	}
 }
 
+func TestFold_legacyCompletedCallDoesNotBecomeAReadPoll(t *testing.T) {
+	t.Parallel()
+
+	const base = "0123456789abcdef0123456789abcdef"
+	steps := chain(t,
+		domain.Step{Kind: domain.StepRunStarted},
+		domain.Step{Kind: domain.StepToolCalled, IdemKey: base,
+			Payload: payload(t, domain.ToolCalledPayload{Tool: "crm.lookup"})},
+		domain.Step{Kind: domain.StepToolReturned,
+			Payload: payload(t, domain.ToolReturnedPayload{Tool: "crm.lookup"})},
+	)
+
+	s := mustFold(t, steps)
+	if got, want := executionIdempotencyKey(s, domain.EffectRead, "crm.lookup", base), base; got != want {
+		t.Fatalf("next read key = %q, want %q", got, want)
+	}
+	if !duplicateWithinRun(s, domain.EffectRead, "crm.lookup", base) {
+		t.Fatal("a completed legacy call was reopened as a read poll")
+	}
+}
+
 func TestFold_untrustedToolResult_taintsRunContext(t *testing.T) {
 	t.Parallel()
 
@@ -460,6 +481,61 @@ func TestFold_resumed_forgetsTheRefusalsThatCausedTheParking(t *testing.T) {
 
 	if s.ConsecutiveBlocks != 0 {
 		t.Errorf("ConsecutiveBlocks = %d, want the count forgotten", s.ConsecutiveBlocks)
+	}
+}
+
+func TestFold_failedReadDoesNotCountAsRepeatedEvidence(t *testing.T) {
+	t.Parallel()
+
+	result := domain.ToolReturnedPayload{
+		Tool: "kb.search", ResultDigest: ResultDigest([]byte(`{"same":true}`)), ResultBytes: 13,
+	}
+	steps := []domain.Step{{Kind: domain.StepRunStarted, AgentID: "suporte", Payload: []byte(`{}`)}}
+	addRead := func(key string, returned domain.ToolReturnedPayload) {
+		steps = append(steps,
+			domain.Step{Kind: domain.StepToolCalled, IdemKey: key, Payload: payload(t, domain.ToolCalledPayload{
+				Tool: "kb.search", Effect: domain.EffectRead,
+			})},
+			domain.Step{Kind: domain.StepToolReturned, Payload: payload(t, returned)},
+		)
+	}
+	addRead("one", result)
+	addRead("two", result)
+	failed := result
+	failed.Failed = true
+	addRead("three", failed)
+	addRead("four", result)
+	addRead("five", result)
+
+	s := mustFold(t, chain(t, steps...))
+	if summary, stalled := s.stalledInvestigation(); stalled {
+		t.Fatalf("stalled after a failed result reset the evidence: %+v", summary)
+	}
+}
+
+func TestFold_resumedForgetsTheStalledInvestigation(t *testing.T) {
+	t.Parallel()
+
+	result := domain.ToolReturnedPayload{
+		Tool: "kb.search", ResultDigest: ResultDigest([]byte(`{"same":true}`)), ResultBytes: 13,
+	}
+	steps := []domain.Step{{Kind: domain.StepRunStarted, AgentID: "suporte", Payload: []byte(`{}`)}}
+	for _, key := range []string{"one", "two", "three"} {
+		steps = append(steps,
+			domain.Step{Kind: domain.StepToolCalled, IdemKey: key, Payload: payload(t, domain.ToolCalledPayload{
+				Tool: "kb.search", Effect: domain.EffectRead,
+			})},
+			domain.Step{Kind: domain.StepToolReturned, Payload: payload(t, result)},
+		)
+	}
+	steps = append(steps,
+		domain.Step{Kind: domain.StepParked, Payload: payload(t, domain.ParkedPayload{Reason: "investigation_stalled"})},
+		domain.Step{Kind: domain.StepResumed, Payload: payload(t, domain.ResumedPayload{By: "ana", Note: "refined query"})},
+	)
+
+	s := mustFold(t, chain(t, steps...))
+	if summary, stalled := s.stalledInvestigation(); stalled {
+		t.Fatalf("stalled investigation survived a person's intervention: %+v", summary)
 	}
 }
 

@@ -107,13 +107,38 @@ func (s *State) applyKind(step domain.Step) error {
 		s.Spent.ToolCalls++
 		s.Called = append(s.Called, p.Tool)
 		s.PendingTool = p.Tool
+		s.pendingIdemKey = step.IdemKey
+		s.pendingEffect = p.Effect
 		s.Phase = PhaseAwaitingTool
+		s.recordInvestigationCall(p)
 		// A call that reached the Gate's far side is progress, whatever it
 		// returns: the planner is no longer stuck on a refusal.
 		s.ConsecutiveBlocks = 0
 		s.ConsecutiveSkips = 0
 
 	case domain.StepToolReturned:
+		var p domain.ToolReturnedPayload
+		if err := decode(step, &p); err != nil {
+			return err
+		}
+		if s.pendingIdemKey != "" && p.ErrorCode != unknownOutcomeAfterRestart {
+			if s.completed == nil {
+				s.completed = make(map[string]domain.Effect)
+			}
+			s.completed[s.pendingIdemKey] = s.pendingEffect
+			// Only a call recorded as a read can open another poll attempt. A
+			// missing legacy effect and a completed write both fail closed even if
+			// the current catalogue later classifies the tool as a read.
+			if s.pendingEffect == domain.EffectRead {
+				if s.completedReads == nil {
+					s.completedReads = make(map[string]int)
+				}
+				s.completedReads[readIdempotencyBase(s.pendingIdemKey)]++
+			}
+		}
+		s.pendingIdemKey = ""
+		s.pendingEffect = domain.EffectUnknown
+		s.recordInvestigationResult(p)
 		s.PendingTool = ""
 		s.Phase = PhaseRunning
 
@@ -159,6 +184,7 @@ func (s *State) applyKind(step domain.Step) error {
 		// the attempts the supervision policy allows.
 		s.ConsecutiveBlocks = 0
 		s.ConsecutiveSkips = 0
+		s.resetInvestigation()
 		s.Phase = PhaseRunning
 
 	case domain.StepRunFinished:

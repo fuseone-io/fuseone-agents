@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -47,6 +48,7 @@ func (schemas) Schema(id domain.ToolID) (string, string, map[string]any, bool) {
 // wire shape rather than only on the parsed result.
 type capture struct {
 	body   map[string]any
+	bodies []map[string]any
 	server *httptest.Server
 }
 
@@ -55,7 +57,10 @@ func serve(t *testing.T, response string) *capture {
 	c := &capture{}
 	c.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw, _ := io.ReadAll(r.Body)
-		_ = json.Unmarshal(raw, &c.body)
+		var body map[string]any
+		_ = json.Unmarshal(raw, &body)
+		c.body = body
+		c.bodies = append(c.bodies, body)
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, response)
 	}))
@@ -414,12 +419,104 @@ func TestAnthropic_systemPrompt_isCachedAndFreeOfVolatileText(t *testing.T) {
 	if cachedAt == -1 {
 		t.Fatal("no cache breakpoint on the system prompt")
 	}
+	var stable strings.Builder
 	for i := 0; i <= cachedAt; i++ {
 		m, _ := blocks[i].(map[string]any)
 		text, _ := m["text"].(string)
+		stable.WriteString(text)
 		if strings.Contains(text, "Budget remaining") {
 			t.Error("the per-turn budget note sits inside the cached prefix; it invalidates the cache every turn")
 		}
+	}
+	if !strings.Contains(stable.String(), "Budget ceiling for this run") {
+		t.Fatalf("cached system prompt has no provider-independent budget ceiling: %s", stable.String())
+	}
+}
+
+func TestAnthropic_previousTranscriptPrefixIsCachedBeforeVolatileNotes(t *testing.T) {
+	t.Parallel()
+	c := serve(t, anthropicToolUse)
+	in := input()
+	in.Step = "Investigate the alert"
+	in.StopsWhen = "the cause is supported by evidence"
+	in.Tools = append(in.Tools, domain.ToolMemoryFind)
+	in.Transcript = append(in.Transcript,
+		engine.Turn{Kind: engine.TurnToolUse, CallID: "call_1", Tool: "crm.lookup", Args: []byte(`{"email":"a@b.com"}`)},
+		engine.Turn{Kind: engine.TurnToolResult, CallID: "call_1", Tool: "crm.lookup", Content: []byte(`{"id":42}`)},
+	)
+
+	_, err := plannerFor(t, model.KindAnthropic, c.server.URL, model.Config{}).
+		Plan(context.Background(), in)
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+
+	messages, _ := c.body["messages"].([]any)
+	if len(messages) != 3 {
+		t.Fatalf("messages = %+v, want user/assistant/user without a consecutive guidance turn", messages)
+	}
+	wantRoles := []string{"user", "assistant", "user"}
+	for i, message := range messages {
+		m, _ := message.(map[string]any)
+		if role := asString(m["role"]); role != wantRoles[i] {
+			t.Fatalf("message %d role = %q, want %q", i, role, wantRoles[i])
+		}
+	}
+	last := messageContentBlocks(t, messages[len(messages)-1])
+	if len(last) != 2 || last[0]["type"] != "tool_result" || last[0]["cache_control"] == nil {
+		t.Fatalf("last user turn = %+v, want the tool result cached before guidance", last)
+	}
+	volatile := last[1]
+	if volatile["cache_control"] != nil || !strings.Contains(asString(volatile["text"]), "Budget remaining") {
+		t.Fatalf("volatile guidance = %+v, want only the uncached remaining budget", volatile)
+	}
+	stable := anthropicSystemText(c.body)
+	for _, want := range []string{
+		"Investigate the alert", "Governed memory lookup is available", "Budget ceiling",
+	} {
+		if !strings.Contains(stable, want) {
+			t.Errorf("stable system guidance does not contain %q:\n%s", want, stable)
+		}
+	}
+}
+
+func TestOpenAICompatible_transcriptGrowthWithinBudgetPreservesThePreviousRequestPrefix(t *testing.T) {
+	t.Parallel()
+	c := serve(t, openAIToolCall)
+	planner := plannerFor(t, model.KindOpenAICompatible, c.server.URL, model.Config{})
+	first := input()
+	first.Step = "Investigate the alert"
+	first.StopsWhen = "the cause is supported by evidence"
+	first.Tools = append(first.Tools, domain.ToolMemoryFind)
+	first.Remaining.Micros = 400_000
+
+	if _, err := planner.Plan(context.Background(), first); err != nil {
+		t.Fatalf("first Plan: %v", err)
+	}
+	second := first
+	second.State.Called = []domain.ToolID{domain.ToolMemoryFind}
+	second.Remaining.Micros = 100_000
+	second.Transcript = append(slices.Clone(first.Transcript),
+		engine.Turn{Kind: engine.TurnToolUse, CallID: "call_1", Tool: "crm.lookup", Args: []byte(`{"email":"a@b.com"}`)},
+		engine.Turn{Kind: engine.TurnToolResult, CallID: "call_1", Tool: "crm.lookup", Content: []byte(`{"id":42}`)},
+	)
+	if _, err := planner.Plan(context.Background(), second); err != nil {
+		t.Fatalf("second Plan: %v", err)
+	}
+	if len(c.bodies) != 2 {
+		t.Fatalf("requests = %d, want two", len(c.bodies))
+	}
+	firstMessages, _ := c.bodies[0]["messages"].([]any)
+	secondMessages, _ := c.bodies[1]["messages"].([]any)
+	if len(secondMessages) <= len(firstMessages) ||
+		!reflect.DeepEqual(firstMessages, secondMessages[:len(firstMessages)]) {
+		t.Fatalf("first request is not the prefix of the second:\nfirst:  %+v\nsecond: %+v",
+			firstMessages, secondMessages)
+	}
+	system, _ := firstMessages[0].(map[string]any)
+	text := asString(system["content"])
+	if !strings.Contains(text, "Budget ceiling for this run") || strings.Contains(text, "Budget remaining") {
+		t.Fatalf("system guidance is not stable across spend: %s", text)
 	}
 }
 
@@ -437,14 +534,7 @@ func TestLoopContract_tellsTheModelToFinishWithTheFinishTool(t *testing.T) {
 			kind:     model.KindAnthropic,
 			response: anthropicToolUse,
 			system: func(body map[string]any) string {
-				blocks, _ := body["system"].([]any)
-				var text strings.Builder
-				for _, b := range blocks {
-					m, _ := b.(map[string]any)
-					text.WriteString(" ")
-					text.WriteString(asString(m["text"]))
-				}
-				return text.String()
+				return anthropicPromptText(body)
 			},
 		},
 		{
@@ -503,25 +593,14 @@ func TestMemoryTools_areExplainedOnlyWhenOffered(t *testing.T) {
 			kind:     model.KindAnthropic,
 			response: anthropicToolUse,
 			system: func(body map[string]any) string {
-				blocks, _ := body["system"].([]any)
-				var text strings.Builder
-				for _, b := range blocks {
-					m, _ := b.(map[string]any)
-					text.WriteString(" ")
-					text.WriteString(asString(m["text"]))
-				}
-				return text.String()
+				return anthropicPromptText(body)
 			},
 		},
 		{
 			name:     "openai-compatible",
 			kind:     model.KindOpenAICompatible,
 			response: openAIToolCall,
-			system: func(body map[string]any) string {
-				msgs, _ := body["messages"].([]any)
-				first, _ := msgs[0].(map[string]any)
-				return asString(first["content"])
-			},
+			system:   openAIPromptText,
 		},
 	}
 
@@ -581,6 +660,52 @@ func TestMemoryTools_areExplainedOnlyWhenOffered(t *testing.T) {
 	}
 }
 
+func TestMemoryFindGuidanceStaysCacheableAfterTheRunAlreadyLooked(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name     string
+		kind     model.Kind
+		response string
+		stable   func(map[string]any) any
+		prompt   func(map[string]any) string
+	}{
+		{name: "anthropic", kind: model.KindAnthropic, response: anthropicToolUse,
+			stable: func(body map[string]any) any { return body["system"] }, prompt: anthropicPromptText},
+		{name: "openai-compatible", kind: model.KindOpenAICompatible, response: openAIToolCall,
+			stable: func(body map[string]any) any {
+				messages, _ := body["messages"].([]any)
+				return messages[0]
+			}, prompt: openAIPromptText},
+	} {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			c := serve(t, tc.response)
+			in := input()
+			in.Tools = append(in.Tools, domain.ToolMemoryFind)
+			planner := plannerFor(t, tc.kind, c.server.URL, model.Config{})
+			if _, err := planner.Plan(context.Background(), in); err != nil {
+				t.Fatalf("Plan before lookup: %v", err)
+			}
+			in.State.Called = []domain.ToolID{domain.ToolMemoryFind}
+			if _, err := planner.Plan(context.Background(), in); err != nil {
+				t.Fatalf("Plan after lookup: %v", err)
+			}
+			if !reflect.DeepEqual(tc.stable(c.bodies[0]), tc.stable(c.bodies[1])) {
+				t.Fatalf("stable provider prefix changed after memory.find:\nbefore: %+v\nafter:  %+v",
+					tc.stable(c.bodies[0]), tc.stable(c.bodies[1]))
+			}
+			prompt := tc.prompt(c.body)
+			for _, want := range []string{"may already have searched", "materially narrower", "equivalent search"} {
+				if !strings.Contains(prompt, want) {
+					t.Errorf("prompt does not contain %q:\n%s", want, prompt)
+				}
+			}
+		})
+	}
+}
+
 func TestOpenAICompatible_finishTool_becomesTheSameFinishedProposal(t *testing.T) {
 	t.Parallel()
 	c := serve(t, `{
@@ -602,6 +727,60 @@ func TestOpenAICompatible_finishTool_becomesTheSameFinishedProposal(t *testing.T
 func asString(v any) string {
 	s, _ := v.(string)
 	return s
+}
+
+func messageContentBlocks(t *testing.T, message any) []map[string]any {
+	t.Helper()
+	m, _ := message.(map[string]any)
+	raw, _ := m["content"].([]any)
+	blocks := make([]map[string]any, 0, len(raw))
+	for _, item := range raw {
+		block, _ := item.(map[string]any)
+		blocks = append(blocks, block)
+	}
+	return blocks
+}
+
+func anthropicSystemText(body map[string]any) string {
+	var text strings.Builder
+	blocks, _ := body["system"].([]any)
+	for _, block := range blocks {
+		m, _ := block.(map[string]any)
+		text.WriteString(asString(m["text"]))
+	}
+	return text.String()
+}
+
+func anthropicPromptText(body map[string]any) string {
+	var text strings.Builder
+	blocks, _ := body["system"].([]any)
+	for _, block := range blocks {
+		m, _ := block.(map[string]any)
+		text.WriteString(" ")
+		text.WriteString(asString(m["text"]))
+	}
+	messages, _ := body["messages"].([]any)
+	for _, message := range messages {
+		m, _ := message.(map[string]any)
+		content, _ := m["content"].([]any)
+		for _, block := range content {
+			item, _ := block.(map[string]any)
+			text.WriteString(" ")
+			text.WriteString(asString(item["text"]))
+		}
+	}
+	return text.String()
+}
+
+func openAIPromptText(body map[string]any) string {
+	var text strings.Builder
+	messages, _ := body["messages"].([]any)
+	for _, message := range messages {
+		m, _ := message.(map[string]any)
+		text.WriteString(" ")
+		text.WriteString(asString(m["content"]))
+	}
+	return text.String()
 }
 
 // --- OpenAI-compatible -------------------------------------------------------

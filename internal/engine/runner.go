@@ -30,6 +30,7 @@ type Deps struct {
 	// store means references never resolve, which is fine for a run whose
 	// tools return nothing bulky.
 	Content ContentStore
+	Metrics RuntimeMetrics
 }
 
 // maxConsecutiveBlocks bounds how long the platform argues with a planner that
@@ -70,6 +71,9 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 	if state.Approved != nil {
 		return r.actApproved(ctx, state, start)
 	}
+	if summary, stalled := state.stalledInvestigation(); stalled {
+		return r.parkInvestigation(ctx, state, start, summary)
+	}
 	if next, st, ok, err := r.initialMemoryLookup(ctx, state, start); ok || err != nil {
 		return st, err
 	} else {
@@ -79,6 +83,9 @@ func (r *Runner) Advance(ctx context.Context, start Start) (Status, error) {
 	proposal, err := r.plan(ctx, state, start)
 	if err != nil {
 		return Status{}, err
+	}
+	if r.deps.Metrics != nil {
+		r.deps.Metrics.Planning(proposal.Prompt, proposal.Cost)
 	}
 	planned := domain.PlannedPayload{
 		Node:     StepNameAt(start, state.Called),

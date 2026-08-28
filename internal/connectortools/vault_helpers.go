@@ -82,7 +82,10 @@ func (l *Layer) storeJSON(
 	if err != nil {
 		return engine.ToolResult{}, fmt.Errorf("connector: store result: %w", err)
 	}
-	return engine.ToolResult{ResultRef: ref, Labels: labels}, nil
+	return engine.ToolResult{
+		ResultRef: ref, ResultDigest: engine.ResultDigest(raw), ResultBytes: int64(len(raw)),
+		Labels: labels,
+	}, nil
 }
 
 func vaultWriteResponse(path string, fields map[string]vaultFieldValue, written VaultWriteResult) map[string]any {
