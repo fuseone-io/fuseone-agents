@@ -31,9 +31,12 @@ export function AgentKpis({ agent }: { agent: Agent }) {
         })}
       />
       <Kpi
-        label={t("agents.costPerRun")}
+        label={t("agents.averageCostPerRun")}
         value={perRun === undefined ? "—" : formatCost({ micros: perRun })}
-        note={`${formatCost({ micros: activity?.costMicros ?? 0 })} no total`}
+        note={t("agents.totalCostAcrossRuns", {
+          total: formatCost({ micros: activity?.costMicros ?? 0 }),
+          count: activity?.runs ?? 0,
+        })}
       />
       <Kpi
         label={t("agents.waitingPeople")}

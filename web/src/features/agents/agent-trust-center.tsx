@@ -116,7 +116,7 @@ function EvidenceCard({ agent, item }: { agent: Agent; item: TrustEvidence }) {
             {t(`agents.trustEvidence${titleID(item.id)}`)}
           </span>
           <Badge variant="outline" className={toneClass(item.status)}>
-            {t(statusKey(item.status))}
+            {t(evidenceStatusKey(item))}
           </Badge>
         </span>
         <span className="mt-1 block text-2xs leading-snug text-muted-foreground">
@@ -167,6 +167,13 @@ function trustValues(values?: Record<string, unknown>) {
 
 function statusKey(status: TrustEvidenceStatus | TrustStatus) {
   return `agents.trustStatus${titleID(status)}`;
+}
+
+function evidenceStatusKey(item: TrustEvidence) {
+  if (item.code === "decisions_missing") {
+    return "agents.trustStatusNotObserved";
+  }
+  return statusKey(item.status);
 }
 
 function toneClass(status: TrustEvidenceStatus | TrustStatus) {

@@ -125,7 +125,7 @@ describe("the agent overview", () => {
           runs: 19,
           finished: 17,
           waiting: 0,
-          costMicros: 0,
+          costMicros: 4_840_000,
           lastPhase: "finished",
           lastRunAt: "2026-08-20T00:28:33Z",
         },
@@ -175,6 +175,9 @@ describe("the agent overview", () => {
     expect(
       screen.getByRole("tab", { name: "Steps (0)" }).querySelector("svg"),
     ).not.toBeNull();
+    expect(
+      screen.getByRole("tab", { name: "Control center" }).querySelector("svg"),
+    ).not.toBeNull();
     for (const tab of screen.getAllByRole("tab")) {
       expect(tab).toHaveClass("flex-none");
       expect(tab.className).toContain(
@@ -189,7 +192,13 @@ describe("the agent overview", () => {
       "data-header",
       "no",
     );
+    expect(screen.getByText("R$0.25")).toBeInTheDocument();
+    expect(
+      screen.getByText("R$4.84 total across 19 runs"),
+    ).toBeInTheDocument();
     expect(screen.queryByText("The definition is not the landing view.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Ready to validate")).not.toBeInTheDocument();
+    expect(screen.queryByText("Trust center")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("link", { name: "Continue: Rehearsal" }),
     ).not.toBeInTheDocument();
@@ -200,6 +209,13 @@ describe("the agent overview", () => {
     expect(
       screen.queryByRole("link", { name: "Simulate from menu" }),
     ).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("tab", { name: "Control center" }));
+
+    expect(screen.getByText("Ready to validate")).toBeInTheDocument();
+    expect(screen.getByText("Trust center")).toBeInTheDocument();
+    expect(screen.queryByTestId("capability-rail")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("versions-rail")).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("tab", { name: "Definition" }));
 
@@ -216,12 +232,14 @@ describe("the agent overview", () => {
     );
   });
 
-  it("keeps the header simulation shortcut when the guide points elsewhere", () => {
+  it("keeps the header simulation shortcut when the guide points elsewhere", async () => {
     if (detail.data) {
       detail.data.agent.tools = ["grafana.missing_tool"];
     }
 
     showDetail();
+
+    await userEvent.click(screen.getByRole("tab", { name: "Control center" }));
 
     expect(screen.getByRole("link", { name: "Continue: Capability pack" })).toHaveAttribute(
       "href",
@@ -234,7 +252,7 @@ describe("the agent overview", () => {
     expect(screen.queryByRole("link", { name: "Simulate from menu" })).not.toBeInTheDocument();
   });
 
-  it("moves the simulation shortcut into the guide until trust sees a good battery", () => {
+  it("moves the simulation shortcut into the guide until trust sees a good battery", async () => {
     if (detail.trust) {
       detail.trust.status = "needs_review";
       detail.trust.recommendation = "review";
@@ -250,6 +268,8 @@ describe("the agent overview", () => {
     }
 
     showDetail();
+
+    await userEvent.click(screen.getByRole("tab", { name: "Control center" }));
 
     expect(screen.getByRole("link", { name: "Continue: Rehearsal" })).toHaveAttribute(
       "href",

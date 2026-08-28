@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { costPerRun } from "@/features/agents/activity";
 import { formatCost, formatRelative } from "@/lib/format";
 import type { Agent } from "@/lib/api/client";
 
@@ -12,6 +13,7 @@ import type { Agent } from "@/lib/api/client";
 export function AgentOverviewSummary({ agent }: { agent: Agent }) {
   const { t } = useTranslation();
   const activity = agent.activity;
+  const averageCost = costPerRun(agent);
 
   const stats = [
     {
@@ -35,9 +37,12 @@ export function AgentOverviewSummary({ agent }: { agent: Agent }) {
         : t("agents.neverRanLower"),
     },
     {
-      label: t("agents.costPerRun"),
-      value: formatCost({ micros: activity?.costMicros ?? 0 }),
-      note: t("agents.totalRecorded"),
+      label: t("agents.averageCostPerRun"),
+      value: averageCost === undefined ? "—" : formatCost({ micros: averageCost }),
+      note: t("agents.totalCostAcrossRuns", {
+        total: formatCost({ micros: activity?.costMicros ?? 0 }),
+        count: activity?.runs ?? 0,
+      }),
     },
   ];
 

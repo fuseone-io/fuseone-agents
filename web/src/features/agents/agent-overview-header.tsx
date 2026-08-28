@@ -6,6 +6,7 @@ import { Mono } from "@/components/shared/mono";
 import { StateDot } from "@/components/shared/state-dot";
 import { HeaderActions } from "@/features/agents/agent-overview-header-actions";
 import { StageControl } from "@/features/agents/stage-control";
+import { costPerRun } from "@/features/agents/activity";
 import { formatCost, formatInstant, formatRelative } from "@/lib/format";
 import { stateOfAgent } from "@/lib/agent-state";
 import type { Agent, AgentVersion, Phase } from "@/lib/api/client";
@@ -122,6 +123,7 @@ function AgentStatus({ agent }: { agent: Agent }) {
 function HeaderStats({ agent }: { agent: Agent }) {
   const { t } = useTranslation();
   const activity = agent.activity;
+  const averageCost = costPerRun(agent);
   const stats = [
     [
       t("runs.runs"),
@@ -144,9 +146,12 @@ function HeaderStats({ agent }: { agent: Agent }) {
         : t("agents.neverRanLower"),
     ],
     [
-      t("agents.costPerRun"),
-      formatCost({ micros: activity?.costMicros ?? 0 }),
-      t("agents.totalRecorded"),
+      t("agents.averageCostPerRun"),
+      averageCost === undefined ? "—" : formatCost({ micros: averageCost }),
+      t("agents.totalCostAcrossRuns", {
+        total: formatCost({ micros: activity?.costMicros ?? 0 }),
+        count: activity?.runs ?? 0,
+      }),
     ],
   ];
 

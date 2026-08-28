@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Activity, FileText, ListChecks } from "lucide-react";
+import { Activity, FileText, ListChecks, ShieldCheck } from "lucide-react";
 import { ErrorState, LoadingRows } from "@/components/shared/states";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAgent, useAgentTrust } from "@/features/agents/agent-detail-api";
@@ -33,6 +34,7 @@ import { useRecipes } from "@/features/integrations/mcp/api";
 export function AgentDetailPage() {
   const { agentId = "" } = useParams();
   const [params] = useSearchParams();
+  const [section, setSection] = useState("runs");
   const { t } = useTranslation();
   const version = params.get("version") ?? undefined;
 
@@ -72,7 +74,8 @@ export function AgentDetailPage() {
 
   return (
     <Tabs
-      defaultValue="runs"
+      value={section}
+      onValueChange={setSection}
       className="flex w-full min-w-0 flex-col gap-4"
     >
       <AgentOverviewHeader
@@ -100,57 +103,65 @@ export function AgentDetailPage() {
               <ListChecks aria-hidden />
               {t("agents.asSteps_other", { count: steps?.length ?? 0 })}
             </TabsTrigger>
+            <TabsTrigger value="control" className="flex-none px-3">
+              <ShieldCheck aria-hidden />
+              {t("agents.controlCenter")}
+            </TabsTrigger>
           </TabsList>
         }
       />
-      <AgentGuidedPath
-        steps={guide}
-        titleKey="agents.launchGuideTitle"
-        subtitleKey="agents.launchGuideSubtitle"
-        progressKey="agents.launchGuideProgress"
-      />
-      <AgentTrustCenter
-        agent={published}
-        trust={trust.data}
-        loading={trust.isLoading}
-        error={trust.error}
-        onRetry={() => void trust.refetch()}
-      />
+      <TabsContent value="control" className="mt-0 space-y-4">
+        <AgentGuidedPath
+          steps={guide}
+          titleKey="agents.launchGuideTitle"
+          subtitleKey="agents.launchGuideSubtitle"
+          progressKey="agents.launchGuideProgress"
+        />
+        <AgentTrustCenter
+          agent={published}
+          trust={trust.data}
+          loading={trust.isLoading}
+          error={trust.error}
+          onRetry={() => void trust.refetch()}
+        />
+      </TabsContent>
 
-      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_300px] xl:items-start">
-        <div className="min-w-0">
-          <TabsContent value="runs" className="mt-0">
-            <AgentRuns agentId={agentId} showHeader={false} />
-          </TabsContent>
-          <TabsContent value="definition" className="mt-0">
-            <AgentDefinition
-              instructions={instructions}
-              source={source}
-              steps={steps}
-              view="instructions"
+      {section !== "control" && (
+        <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_300px] xl:items-start">
+          <div className="min-w-0">
+            <TabsContent value="runs" className="mt-0">
+              <AgentRuns agentId={agentId} showHeader={false} />
+            </TabsContent>
+            <TabsContent value="definition" className="mt-0">
+              <AgentDefinition
+                instructions={instructions}
+                source={source}
+                steps={steps}
+                view="instructions"
+              />
+            </TabsContent>
+            <TabsContent value="steps" className="mt-0">
+              <AgentDefinition
+                instructions={instructions}
+                source={source}
+                steps={steps}
+                view="steps"
+              />
+            </TabsContent>
+          </div>
+
+          <aside className="flex min-w-0 flex-col gap-4">
+            <AgentCapabilities agent={published} compact />
+            <WebhooksPanel agentId={agentId} />
+            <AgentVersions
+              agentId={agentId}
+              versions={versions}
+              current={published.versionId}
+              compact
             />
-          </TabsContent>
-          <TabsContent value="steps" className="mt-0">
-            <AgentDefinition
-              instructions={instructions}
-              source={source}
-              steps={steps}
-              view="steps"
-            />
-          </TabsContent>
+          </aside>
         </div>
-
-        <aside className="flex min-w-0 flex-col gap-4">
-          <AgentCapabilities agent={published} compact />
-          <WebhooksPanel agentId={agentId} />
-          <AgentVersions
-            agentId={agentId}
-            versions={versions}
-            current={published.versionId}
-            compact
-          />
-        </aside>
-      </div>
+      )}
     </Tabs>
   );
 }
