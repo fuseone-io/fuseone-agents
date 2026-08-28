@@ -271,20 +271,27 @@ describe("governed memory page", () => {
 
   it("does not inspect a creation draft while its panel is hidden", async () => {
     const user = userEvent.setup();
-    const fetch = vi.fn(async () => json({}));
+    const fetch = vi.fn(async (request: Request) => {
+      const path = new URL(request.url).pathname;
+      if (path.endsWith("/runs")) return json({ items: [runSummary()] });
+      if (path.endsWith("/runs/run_1")) return json(runSummary());
+      if (path.endsWith("/memory/match")) return json({});
+      throw new Error(`unexpected request: ${path}`);
+    });
     vi.stubGlobal("fetch", fetch);
     hooks.items = [memoryAssertion(0)];
     renderMemoryPageWithClient();
 
     await user.click(screen.getByRole("button", { name: "Record memory" }));
     await fillMemoryIdentity(user);
-    await user.type(screen.getByLabelText("Run"), "run_1");
+    await chooseEvidenceRun(user);
     await user.click(screen.getByRole("button", { name: "Close" }));
+    const visibleRequests = fetch.mock.calls.length;
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 500));
     });
 
-    expect(fetch).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledTimes(visibleRequests);
   });
 
   it("records a reviewed assertion with ledger evidence", async () => {
@@ -507,8 +514,13 @@ async function fillAssertion(user: ReturnType<typeof userEvent.setup>) {
     screen.getByLabelText("Claim"),
     "Refresh the datasource token before restarting the worker.",
   );
-  await user.type(screen.getByLabelText("Run"), "run_1");
+  await chooseEvidenceRun(user);
   await user.type(screen.getByLabelText("Why"), "Reviewed after close");
+}
+
+async function chooseEvidenceRun(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("combobox", { name: "Evidence run" }));
+  await user.click(await screen.findByRole("option", { name: /run_1/ }));
 }
 
 async function fillMemoryIdentity(user: ReturnType<typeof userEvent.setup>) {
@@ -585,6 +597,7 @@ function renderMemoryPageWithClient() {
 function stubMemoryAuthoringNetwork() {
   vi.stubGlobal("fetch", vi.fn(async (request: Request) => {
     const path = new URL(request.url).pathname;
+    if (path.endsWith("/runs")) return json({ items: [runSummary()] });
     if (path.endsWith("/runs/run_1")) {
       return json({
         runId: "run_1",
@@ -595,6 +608,21 @@ function stubMemoryAuthoringNetwork() {
     if (path.endsWith("/memory/match")) return json({});
     throw new Error(`unexpected request: ${path}`);
   }));
+}
+
+function runSummary() {
+  return {
+    runId: "run_1",
+    agentId: "triage",
+    scope: { company: "acme", area: "ops" },
+    versionId: "v1",
+    phase: "finished",
+    seq: 8,
+    startedAt: "2026-08-28T12:00:00Z",
+    endedAt: "2026-08-28T12:01:00Z",
+    cost: { micros: 1000 },
+    labels: ["untrusted"],
+  };
 }
 
 function json(body: unknown) {

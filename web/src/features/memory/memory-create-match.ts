@@ -14,8 +14,8 @@ type MemoryCreateMatchIssue =
  *
  * Creation derives its agent from the ledger, so the preview must do the same.
  * Letting the form provide an agent would make the warning and the write ask
- * about different identities. The run id settles first to avoid one 404 for
- * every prefix while somebody types or pastes it.
+ * about different identities. The run id comes from an explicit picker, so it
+ * can be inspected immediately rather than debounced like free text.
  */
 export function useMemoryCreateMatch(
   form: UseFormReturn<MemoryFormValues>,
@@ -23,10 +23,8 @@ export function useMemoryCreateMatch(
 ) {
   const { enabled = true } = options;
   const values = useWatch({ control: form.control });
-  const rawRunID = values.evidenceRunId?.trim() ?? "";
-  const runID = useSettled(rawRunID, 400);
-  const runInputSettled = rawRunID === runID;
-  const run = useRun(runID, enabled && runInputSettled && Boolean(runID));
+  const runID = values.evidenceRunId?.trim() ?? "";
+  const run = useRun(runID, enabled && Boolean(runID));
   const currentIdentity = JSON.stringify([
     values.company?.trim() ?? "",
     values.area?.trim() ?? "",
@@ -47,9 +45,9 @@ export function useMemoryCreateMatch(
       values.kind?.trim() &&
       values.subject?.trim() &&
       values.signature?.trim() &&
-      rawRunID,
+      runID,
   );
-  const runReady = runInputSettled && run.isSuccess;
+  const runReady = run.isSuccess;
   const agentMissing =
     runReady && namespace === "agent" && !run.data.agentId;
   const match = useMemoryMatch(
@@ -72,7 +70,7 @@ export function useMemoryCreateMatch(
     !identityComplete ||
     (runReady && identityInputSettled && !agentMissing && matchSettled);
   let issue: MemoryCreateMatchIssue | null = null;
-  if (enabled && runInputSettled && run.error) {
+  if (enabled && run.error) {
     issue = { kind: "run", retry: () => void run.refetch() };
   } else if (enabled && agentMissing) {
     issue = { kind: "agent" };

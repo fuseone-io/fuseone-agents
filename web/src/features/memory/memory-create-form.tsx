@@ -28,7 +28,7 @@ export function MemoryCreateForm({
         <MemoryScopeField form={form} />
         <MemoryNamespaceField control={form.control} />
         <MemoryFactFields control={form.control} />
-        <EvidenceFields control={form.control} />
+        <EvidenceFields form={form} />
         {matchNotice}
         <MemoryInputField
           control={form.control}

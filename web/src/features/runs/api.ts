@@ -8,6 +8,7 @@ import { useEffect } from "react";
 import { api, unwrap, type Phase } from "@/lib/api/client";
 import { useScopeFilter } from "@/features/scope/use-scope-filter";
 import { usePagedQuery } from "@/features/runs/use-paged";
+import { useSettled } from "@/hooks/use-settled";
 
 // Query keys are centralised per feature so an invalidation cannot miss a
 // cache entry because two call sites spelled the key differently.
@@ -15,6 +16,8 @@ export const runKeys = {
   all: ["runs"] as const,
   list: (scope: string, filters: RunFilters) =>
     [...runKeys.all, "list", scope, filters] as const,
+  evidence: (company: string, area: string, search: string) =>
+    [...runKeys.all, "evidence", company, area, search] as const,
   detail: (runId: string) => [...runKeys.all, "detail", runId] as const,
   steps: (runId: string) => [...runKeys.all, "steps", runId] as const,
   verify: (runId: string) => [...runKeys.all, "verify", runId] as const,
@@ -45,6 +48,54 @@ export function useRuns(filters: RunFilters = {}) {
       }),
     ),
   );
+}
+
+/**
+ * Finished runs a person may cite while teaching memory.
+ *
+ * This takes the form's concrete scope rather than the page-wide scope: a
+ * global viewer may be composing for one company and area, and showing runs
+ * from every reachable scope would make a valid-looking choice fail later.
+ * Search settles before reaching the server because prefixes are not choices.
+ */
+export function useEvidenceRuns({
+  company,
+  area,
+  search,
+  enabled = true,
+}: {
+  company: string;
+  area: string;
+  search: string;
+  enabled?: boolean;
+}) {
+  const current = search.trim();
+  const settled = useSettled(current, 300);
+  const isSettling = current !== settled;
+  const query = useQuery({
+    queryKey: runKeys.evidence(company, area, settled),
+    enabled: enabled && Boolean(company && area) && !isSettling,
+    queryFn: async () =>
+      unwrap(
+        await api.GET("/runs", {
+          params: {
+            query: {
+              company,
+              area,
+              phase: "finished",
+              q: settled || undefined,
+              limit: 25,
+            },
+          },
+        }),
+      ),
+  });
+  return {
+    ...query,
+    items: query.data?.items ?? [],
+    hasMore: Boolean(query.data?.nextCursor),
+    isSettling,
+  };
 }
 
 export function useRun(runId: string, enabled = true) {

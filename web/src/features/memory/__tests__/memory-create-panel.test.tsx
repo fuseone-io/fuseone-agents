@@ -1,5 +1,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryCreatePanel } from "@/features/memory/memory-create-panel";
@@ -56,12 +63,12 @@ describe("global memory authoring", () => {
     stubNetwork(requests, { run: run.promise, match: match.promise });
     renderPanel();
 
-    fillMemory();
-    await waitFor(() => expect(requests).toEqual([{ kind: "run" }]));
+    await fillMemory();
+    await waitFor(() => expect(details(requests)).toHaveLength(1));
     expect(screen.getByRole("button", { name: "Save memory" })).toBeDisabled();
 
     await act(() => run.resolve(json(runRecord())));
-    await waitFor(() => expect(requests[1]?.kind).toBe("match"));
+    await waitFor(() => expect(matches(requests)).toHaveLength(1));
     expect(screen.getByRole("button", { name: "Save memory" })).toBeDisabled();
 
     await act(() => match.resolve(json(MATCH)));
@@ -75,7 +82,7 @@ describe("global memory authoring", () => {
     const user = userEvent.setup();
     renderPanel();
 
-    fillMemory();
+    await fillMemory();
     await waitFor(() => expect(matches(requests)).toHaveLength(1));
     expect(matches(requests)[0]).toEqual(matchBody("agent", "triage"));
 
@@ -103,7 +110,7 @@ describe("global memory authoring", () => {
       "globex/security",
     );
 
-    fillMemory();
+    await fillMemory();
     await waitFor(() => expect(matches(requests)).toHaveLength(1));
     expect(matches(requests)[0]).toEqual({
       ...matchBody("agent", "triage"),
@@ -119,7 +126,7 @@ describe("global memory authoring", () => {
     });
     renderPanel();
 
-    fillMemory();
+    await fillMemory();
 
     expect(await screen.findByText("The evidence run could not be inspected")).toBeVisible();
     expect(screen.getByRole("button", { name: "Try again" })).toBeEnabled();
@@ -133,7 +140,7 @@ describe("global memory authoring", () => {
     });
     renderPanel();
 
-    fillMemory();
+    await fillMemory();
 
     expect(await screen.findByText("Existing memory could not be checked")).toBeVisible();
     expect(screen.getByText(
@@ -149,7 +156,7 @@ describe("global memory authoring", () => {
     const user = userEvent.setup();
     renderPanel();
 
-    fillMemory();
+    await fillMemory();
 
     expect(await screen.findByText("The evidence run has no agent")).toBeVisible();
     expect(screen.getByText(
@@ -183,9 +190,71 @@ describe("global memory authoring", () => {
     );
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
+
+  it("resolves an exact finished run inside the chosen scope", async () => {
+    const requests: RequestRecord[] = [];
+    stubNetwork(requests);
+    const user = userEvent.setup();
+    renderPanel();
+
+    await user.click(screen.getByRole("combobox", { name: "Evidence run" }));
+    await waitFor(() => expect(lists(requests)).toHaveLength(1));
+    expect(lists(requests)[0]).toMatchObject({
+      company: "acme",
+      area: "ops",
+      phase: "finished",
+      limit: "25",
+    });
+
+    await user.type(
+      screen.getByPlaceholderText("Search run ID or agent"),
+      "run_ticketito_42",
+    );
+    await waitFor(() => expect(lists(requests)).toHaveLength(2));
+    expect(lists(requests)[1]).toMatchObject({
+      company: "acme",
+      area: "ops",
+      phase: "finished",
+      q: "run_ticketito_42",
+    });
+    const option = await screen.findByRole("option", {
+      name: /run_ticketito_42.*ticketito/i,
+    });
+    expect(within(option).getByText("Outside data")).toBeVisible();
+    await user.click(option);
+    expect(screen.getByRole("combobox", { name: "Evidence run" })).toHaveTextContent(
+      "run_ticketito_42",
+    );
+  });
+
+  it("says when more finished runs exist beyond the first page", async () => {
+    const requests: RequestRecord[] = [];
+    stubNetwork(requests, {
+      list: () => json({
+        items: Array.from({ length: 25 }, (_, index) =>
+          runSummary(`run_${index + 1}`),
+        ),
+        nextCursor: "run_25",
+      }),
+    });
+    const user = userEvent.setup();
+    renderPanel();
+
+    await user.click(screen.getByRole("combobox", { name: "Evidence run" }));
+
+    expect(
+      await screen.findByText(
+        "More finished runs exist. Refine the search to find them.",
+      ),
+    ).toBeVisible();
+  });
+
 });
 
-type RequestRecord = { kind: "run" } | { kind: "match"; body: unknown };
+type RequestRecord =
+  | { kind: "list"; query: Record<string, string> }
+  | { kind: "run" }
+  | { kind: "match"; body: unknown };
 
 function renderPanel() {
   const client = new QueryClient({
@@ -200,13 +269,31 @@ function renderPanel() {
 
 function stubNetwork(
   requests: RequestRecord[],
-  replies: { run?: Promise<Response>; match?: Promise<Response> } = {},
+  replies: {
+    list?: (url: URL) => Response | Promise<Response>;
+    run?: Promise<Response>;
+    match?: Promise<Response>;
+  } = {},
 ) {
   vi.stubGlobal("fetch", vi.fn(async (request: Request) => {
-    const path = new URL(request.url).pathname;
+    const url = new URL(request.url);
+    const path = url.pathname;
+    if (path.endsWith("/runs")) {
+      requests.push({ kind: "list", query: Object.fromEntries(url.searchParams) });
+      if (replies.list) return replies.list(url);
+      return json({
+        items: url.searchParams.get("q")
+          ? [runSummary("run_ticketito_42", "ticketito")]
+          : [runSummary()],
+      });
+    }
     if (path.endsWith("/runs/run_1")) {
       requests.push({ kind: "run" });
       return replies.run ?? json(runRecord());
+    }
+    if (path.endsWith("/runs/run_ticketito_42")) {
+      requests.push({ kind: "run" });
+      return json(runRecord("ticketito", undefined, "run_ticketito_42"));
     }
     if (path.endsWith("/memory/match")) {
       requests.push({ kind: "match", body: await request.clone().json() });
@@ -216,22 +303,35 @@ function stubNetwork(
   }));
 }
 
-function fillMemory() {
+async function fillMemory() {
   const fields = {
     Kind: "incident",
     Subject: "grafana datasource",
     Signature: "grafana.datasource.down",
     Claim: "Refresh the datasource token.",
-    Run: "run_1",
     Why: "Reviewed after close",
   };
   for (const [label, value] of Object.entries(fields)) {
     fireEvent.change(screen.getByLabelText(label), { target: { value } });
   }
+  await chooseEvidenceRun(userEvent.setup());
+}
+
+async function chooseEvidenceRun(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("combobox", { name: "Evidence run" }));
+  await user.click(await screen.findByRole("option", { name: /run_1/ }));
 }
 
 function matches(requests: RequestRecord[]) {
   return requests.flatMap((request) => request.kind === "match" ? [request.body] : []);
+}
+
+function details(requests: RequestRecord[]) {
+  return requests.filter((request) => request.kind === "run");
+}
+
+function lists(requests: RequestRecord[]) {
+  return requests.flatMap((request) => request.kind === "list" ? [request.query] : []);
 }
 
 function matchBody(namespace: "agent" | "shared", agentId?: string) {
@@ -249,11 +349,25 @@ function matchBody(namespace: "agent" | "shared", agentId?: string) {
 function runRecord(
   agentId: string | null = "triage",
   scope = { company: "acme", area: "ops" },
+  runId = "run_1",
 ) {
   return {
-    runId: "run_1",
+    runId,
     ...(agentId ? { agentId } : {}),
     scope,
+  };
+}
+
+function runSummary(runId = "run_1", agentId = "triage") {
+  return {
+    ...runRecord(agentId, undefined, runId),
+    versionId: "v1",
+    phase: "finished",
+    seq: 8,
+    startedAt: "2026-08-28T12:00:00Z",
+    endedAt: "2026-08-28T12:01:00Z",
+    cost: { micros: 1000 },
+    labels: ["untrusted"],
   };
 }
 
