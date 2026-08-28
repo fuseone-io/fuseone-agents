@@ -145,9 +145,58 @@ disables the thing that makes the platform worth installing.</p>
 <p>The chart is in <code dir="auto">deploy/helm/fuseone-agents</code>. Two secrets have no default and
 never will: <code dir="auto">DATABASE_URL</code> and <code dir="auto">FUSEONE_MASTER_KEY</code>. The master key is <strong>32
 bytes, base64</strong> — <code dir="auto">agentd keygen</code> prints one.</p>
-<div class="expressive-code"><link rel="stylesheet" href="/fuseone-agents/docs/_astro/ec.w36nc.css"><script type="module" src="/fuseone-agents/docs/_astro/ec.0vx5m.js"></script><figure class="frame not-content"><figcaption class="header"></figcaption><pre data-language="plaintext"><code><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">helm upgrade --install fuseone-agents deploy/helm/fuseone-agents \</span></div></div><div class="ec-line"><div class="code"><span class="indent"><span style="--0:#d6deeb;--1:#403f53">  </span></span><span style="--0:#d6deeb;--1:#403f53">-n &lt;namespace&gt; --create-namespace \</span></div></div><div class="ec-line"><div class="code"><span class="indent"><span style="--0:#d6deeb;--1:#403f53">  </span></span><span style="--0:#d6deeb;--1:#403f53">--set image.tag=0.3.3 \</span></div></div><div class="ec-line"><div class="code"><span class="indent"><span style="--0:#d6deeb;--1:#403f53">  </span></span><span style="--0:#d6deeb;--1:#403f53">--set secret.existingSecret=&lt;secret&gt; \</span></div></div><div class="ec-line"><div class="code"><span class="indent"><span style="--0:#d6deeb;--1:#403f53">  </span></span><span style="--0:#d6deeb;--1:#403f53">--set ingress.enabled=true --set ingress.host=&lt;host&gt; \</span></div></div><div class="ec-line"><div class="code"><span class="indent"><span style="--0:#d6deeb;--1:#403f53">  </span></span><span style="--0:#d6deeb;--1:#403f53">--set baseUrl=https://&lt;host&gt;</span></div></div></code></pre><div class="copy"><div aria-live="polite"></div><button title="Copy to clipboard" data-copied="Copied!" data-code="helm upgrade --install fuseone-agents deploy/helm/fuseone-agents \  -n <namespace> --create-namespace \  --set image.tag=0.3.3 \  --set secret.existingSecret=<secret> \  --set ingress.enabled=true --set ingress.host=<host> \  --set baseUrl=https://<host>"><div></div></button></div></figure></div>
+<div class="expressive-code"><link rel="stylesheet" href="/fuseone-agents/docs/_astro/ec.w36nc.css"><script type="module" src="/fuseone-agents/docs/_astro/ec.0vx5m.js"></script><figure class="frame not-content"><figcaption class="header"></figcaption><pre data-language="plaintext"><code><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">helm upgrade --install fuseone-agents deploy/helm/fuseone-agents \</span></div></div><div class="ec-line"><div class="code"><span class="indent"><span style="--0:#d6deeb;--1:#403f53">  </span></span><span style="--0:#d6deeb;--1:#403f53">-n &lt;namespace&gt; --create-namespace --timeout 25m \</span></div></div><div class="ec-line"><div class="code"><span class="indent"><span style="--0:#d6deeb;--1:#403f53">  </span></span><span style="--0:#d6deeb;--1:#403f53">--set image.tag=0.3.3 \</span></div></div><div class="ec-line"><div class="code"><span class="indent"><span style="--0:#d6deeb;--1:#403f53">  </span></span><span style="--0:#d6deeb;--1:#403f53">--set secret.existingSecret=&lt;secret&gt; \</span></div></div><div class="ec-line"><div class="code"><span class="indent"><span style="--0:#d6deeb;--1:#403f53">  </span></span><span style="--0:#d6deeb;--1:#403f53">--set ingress.enabled=true --set ingress.host=&lt;host&gt; \</span></div></div><div class="ec-line"><div class="code"><span class="indent"><span style="--0:#d6deeb;--1:#403f53">  </span></span><span style="--0:#d6deeb;--1:#403f53">--set baseUrl=https://&lt;host&gt;</span></div></div></code></pre><div class="copy"><div aria-live="polite"></div><button title="Copy to clipboard" data-copied="Copied!" data-code="helm upgrade --install fuseone-agents deploy/helm/fuseone-agents \  -n <namespace> --create-namespace --timeout 25m \  --set image.tag=0.3.3 \  --set secret.existingSecret=<secret> \  --set ingress.enabled=true --set ingress.host=<host> \  --set baseUrl=https://<host>"><div></div></button></div></figure></div>
 <p>Migrations run as a job before the pods that need them, and take an advisory
-lock, so a second one waits rather than racing.</p>
+lock, so a second one waits rather than racing. Memory reconciliation runs as a
+second job right after, filling in what the platform can now derive about
+memory written before it could.</p>
+<p><strong><code dir="auto">--timeout 25m</code> matters.</strong> Helm waits five minutes for hooks by default and
+then abandons the release, and neither <code dir="auto">activeDeadlineSeconds</code> nor the job’s own
+<code dir="auto">--timeout</code> can change what the client is willing to wait — they bound the pod
+and the process, which sit inside it. Deadlines, outermost first:</p>
+<table>
+<thead>
+<tr>
+<th>bound</th>
+<th>default</th>
+<th>what happens when it fires</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code dir="auto">helm --timeout</code></td>
+<td>5m</td>
+<td>the release fails; the hook may still be running</td>
+</tr>
+<tr>
+<td><code dir="auto">memoryReconcile.activeDeadlineSeconds</code></td>
+<td>20m</td>
+<td>Kubernetes kills the pod, no summary</td>
+</tr>
+<tr>
+<td><code dir="auto">memoryReconcile.timeout</code></td>
+<td>14m</td>
+<td>the sweep stops, prints its totals, exits 0</td>
+</tr>
+</tbody>
+</table>
+<p>Argo CD runs the chart’s hooks as its own and does not use Helm’s client, so
+there is no <code dir="auto">--timeout</code> to pass and the five-minute default does not apply. Two
+places to check instead:</p>
+<ul>
+<li><strong>The controller does not time a sync out by default.</strong>
+<code dir="auto">controller.sync.timeout.seconds</code> in <code dir="auto">argocd-cmd-params-cm</code> defaults to <code dir="auto">0</code>,
+meaning no limit, so a stock <code dir="auto">Application</code> waits. If your installation has set
+it, raise it above 1500.</li>
+<li><strong>The CLI does.</strong> <code dir="auto">argocd app sync</code> takes <code dir="auto">--timeout</code> in seconds, so use
+<code dir="auto">--timeout 1500</code> or more when syncing by hand.</li>
+</ul>
+<p>Nothing is lost either way: both jobs are resumable and idempotent, so running
+the release again continues where it stopped rather than starting over.</p>
+<p>The reconciliation exits zero even when it finds memory that needs a person —
+two rows claiming one identity, or a citation the ledger will not vouch for.
+Neither improves by being retried, so they are logged as a warning carrying
+<code dir="auto">needs_review=true</code> and counts rather than failing the release.</p>
 <p><strong>The first person to open the console claims the installation</strong> with a setup
 token the API prints once at start-up:</p>
 <div class="expressive-code"><figure class="frame not-content"><figcaption class="header"></figcaption><pre data-language="plaintext"><code><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">kubectl -n &lt;namespace&gt; logs -l app.kubernetes.io/component=serve --tail=100 | grep setup</span></div></div></code></pre><div class="copy"><div aria-live="polite"></div><button title="Copy to clipboard" data-copied="Copied!" data-code="kubectl -n <namespace> logs -l app.kubernetes.io/component=serve --tail=100 | grep setup"><div></div></button></div></figure></div>
@@ -190,7 +239,7 @@ means “leave what is stored”, so there has to be a way to say the other thin
 <div class="sl-heading-wrapper level-h2"><h2 id="5-upgrading">5. Upgrading</h2><a class="sl-anchor-link" href="#5-upgrading"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “5. Upgrading”</span></a></div>
 <p>Read <code dir="auto">CHANGELOG.md</code> first, and its <strong>Upgrade notes</strong> section before anything
 else — it is where a release says what it stops.</p>
-<div class="expressive-code"><figure class="frame not-content"><figcaption class="header"></figcaption><pre data-language="plaintext"><code><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">helm upgrade fuseone-agents deploy/helm/fuseone-agents \</span></div></div><div class="ec-line"><div class="code"><span class="indent"><span style="--0:#d6deeb;--1:#403f53">  </span></span><span style="--0:#d6deeb;--1:#403f53">-n &lt;namespace&gt; --reuse-values --set image.tag=&lt;version&gt;</span></div></div></code></pre><div class="copy"><div aria-live="polite"></div><button title="Copy to clipboard" data-copied="Copied!" data-code="helm upgrade fuseone-agents deploy/helm/fuseone-agents \  -n <namespace> --reuse-values --set image.tag=<version>"><div></div></button></div></figure></div>
+<div class="expressive-code"><figure class="frame not-content"><figcaption class="header"></figcaption><pre data-language="plaintext"><code><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">helm upgrade fuseone-agents deploy/helm/fuseone-agents \</span></div></div><div class="ec-line"><div class="code"><span class="indent"><span style="--0:#d6deeb;--1:#403f53">  </span></span><span style="--0:#d6deeb;--1:#403f53">-n &lt;namespace&gt; --reuse-values --timeout 25m --set image.tag=&lt;version&gt;</span></div></div></code></pre><div class="copy"><div aria-live="polite"></div><button title="Copy to clipboard" data-copied="Copied!" data-code="helm upgrade fuseone-agents deploy/helm/fuseone-agents \  -n <namespace> --reuse-values --timeout 25m --set image.tag=<version>"><div></div></button></div></figure></div>
 <p>Known, and learned the hard way:</p>
 <ul>
 <li><strong>0.2.0 and 0.3.0 cannot deploy</strong> unless <code dir="auto">worker.specs.configMap</code> is set. Go
