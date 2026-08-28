@@ -15,6 +15,51 @@ change the outside world.
 It installs into the customer's own environment. One binary, one PostgreSQL,
 one Helm chart.
 
+## The shape of it
+
+```mermaid
+flowchart LR
+  subgraph outside["Outside the boundary"]
+    people["People<br/>browser, Slack, email"]
+    systems["Business systems<br/>CRM, ERP, observability, APIs"]
+    providers["Model providers"]
+  end
+
+  subgraph install["The customer's environment"]
+    subgraph binary["agentd — one binary"]
+      serve["serve<br/>HTTP, SSE, console"]
+      worker["worker<br/>leases runs, advances them"]
+    end
+    postgres[("PostgreSQL<br/>ledger, projections, config")]
+    content[("Content store<br/>arguments, results, answers")]
+  end
+
+  people --> serve
+  serve --> postgres
+  worker --> postgres
+  worker --> content
+  serve --> content
+  worker -->|"every call, after the Gate"| systems
+  worker -->|"planning"| providers
+
+  classDef store fill:none,stroke-dasharray:4 3
+  class postgres,content store
+```
+
+One binary, one PostgreSQL, one Helm chart. `serve` answers people and `worker`
+advances runs; they are two commands of the same binary and share nothing but
+the database.
+
+**Two stores, deliberately.** The ledger is append-only and hash-chained, so it
+can never be edited — which is why the bulky, personal parts of a run live in
+the content store instead: tool arguments, tool results and closing answers are
+held by reference with a digest, under retention an erasure request can reach.
+A record that cannot be corrected must not be a record that cannot be emptied.
+
+**Nothing reaches a business system except through the Gate.** The arrow from
+`worker` to those systems passes seven deterministic checks first, and both the
+decision and its rule are appended to the ledger before the effect happens.
+
 ## What it does today
 
 - Runs authored agents from manual starts, webhooks, events and channels.

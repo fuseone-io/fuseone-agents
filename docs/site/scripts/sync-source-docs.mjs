@@ -23,6 +23,7 @@ const designDocs = [
   ["NT-007-drawing-a-process.md", "Process canvas and authored stages."],
   ["NT-008-a-catalogue-by-shape.md", "Tool catalogue chosen by shape."],
   ["NT-009-governed-connectors.md", "Governed connector shapes and runtime boundary."],
+  ["NT-010-the-shape-of-the-platform.md", "Topology, the run loop, layering and where data is written."],
 ];
 
 const manualLocales = [
