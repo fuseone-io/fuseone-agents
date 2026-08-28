@@ -27,6 +27,20 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.39.6] — 2026-08-28
+
+### Changed
+
+- **Memory evidence is now chosen from finished runs in the selected scope.**
+  The creation form lists recent runs, searches by run or agent identifier and
+  marks untrusted origins instead of asking someone to type a ledger id.
+
+### Fixed
+
+- **Changing the memory scope clears evidence from the previous scope.** This
+  applies both inside the form and when a preserved draft follows the page's
+  active scope, so old evidence cannot be paired with a new destination.
+
 ## [0.39.5] — 2026-08-28
 
 ### Changed
