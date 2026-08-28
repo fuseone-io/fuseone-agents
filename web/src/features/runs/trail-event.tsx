@@ -12,6 +12,7 @@ import { TILE, tileOf } from "@/features/runs/trail-icon";
 import { titleOf, detailOf, chipsOf, line } from "@/features/runs/step-story";
 import { cn } from "@/lib/utils";
 import { formatTime, shortHash } from "@/lib/format";
+import { hasContent } from "@/features/runs/step-content-ref";
 import type { Step } from "@/lib/api/client";
 
 /**
@@ -124,16 +125,5 @@ export function TrailEvent({
         )}
       </div>
     </li>
-  );
-}
-
-/** Only steps that reference stored content have anything to open. */
-function hasContent(step: Step): boolean {
-  const payload = (step.payload ?? {}) as Record<string, unknown>;
-  return Boolean(
-    payload.args_ref ||
-      payload.result_ref ||
-      payload.input_ref ||
-      payload.outcome_ref,
   );
 }
