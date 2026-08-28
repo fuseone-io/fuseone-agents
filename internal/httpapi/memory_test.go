@@ -113,13 +113,41 @@ func TestCreateMemoryAssertion_withNothingToProveItAgainst_isNotTheCallersFault(
 	scope := domain.Scope{Company: "acme", Area: "cx"}
 	seedFinishedEvidence(t, store, "run-evidence", scope, domain.ScopeLabels(scope), "sha256:answer")
 
-	// Memory wired, and nothing wired to prove it against.
-	resp, err := NewServer(store, "test").WithMemory(memstore.NewMemory()).
-		WithClock(fixedAt{t: time.Unix(0, 0)}).
-		CreateMemoryAssertion(inArea("cx", domain.RoleAuthor), memoryCreateRequest())
-	if err == nil {
-		t.Fatalf("response = %T, want the misconfiguration raised, not answered", resp)
-	}
+	t.Run("nothing wired to prove it against", func(t *testing.T) {
+		t.Parallel()
+		resp, err := NewServer(store, "test").WithMemory(memstore.NewMemory()).
+			WithClock(fixedAt{t: time.Unix(0, 0)}).
+			CreateMemoryAssertion(inArea("cx", domain.RoleAuthor), memoryCreateRequest())
+		if err == nil {
+			t.Fatalf("response = %T, want the misconfiguration raised, not answered", resp)
+		}
+	})
+
+	// The other half, and the one that actually happens in production: the
+	// resolver is wired and the store behind it does not answer. Both reach the
+	// same classification, and only the first was pinned — so wrapping every
+	// resolver failure as invalid input passed the suite.
+	t.Run("the content store does not answer", func(t *testing.T) {
+		t.Parallel()
+		resp, err := NewServer(store, "test").WithMemory(memstore.NewMemory()).
+			WithMemoryEvidence(store, awayContent{}).
+			WithClock(fixedAt{t: time.Unix(0, 0)}).
+			CreateMemoryAssertion(inArea("cx", domain.RoleAuthor), memoryCreateRequest())
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("err = %v (response %T), want the store's failure carried out whole", err, resp)
+		}
+		if resp != nil {
+			t.Errorf("response = %T, want nothing answered", resp)
+		}
+	})
+}
+
+// awayContent is the content store not answering — the shape a cancelled
+// request, a dropped connection or a timeout arrives in.
+type awayContent struct{}
+
+func (awayContent) Metadata(context.Context, string) (domain.ContentMetadata, error) {
+	return domain.ContentMetadata{}, context.Canceled
 }
 
 /*
