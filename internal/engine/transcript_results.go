@@ -13,6 +13,11 @@ const (
 	toolResultHeadBytes        = 16 << 10
 	toolResultTailBytes        = 8 << 10
 	toolResultTranscriptBudget = 64 << 10
+	// receiptOmittedWidth makes every int64 rendering the same width. The
+	// receipt computes omitted bytes from a zero-valued probe; without a fixed
+	// width, writing the real number would change the receipt length and make
+	// that count wrong.
+	receiptOmittedWidth = 20
 )
 
 func compactToolResultForTranscript(tool domain.ToolID, content []byte) []byte {
@@ -38,17 +43,23 @@ func compactToolResult(tool domain.ToolID, content []byte, elided *int64) []byte
 	return []byte(b.String())
 }
 
-// boundToolResultTranscript keeps recent evidence useful while older results
-// become receipts. The stored copy remains subject to the installation content
-// limit, and Elided is set from the original result so run-spend diagnostics
-// attribute the saving to the tool that produced it.
+// boundToolResultTranscript keeps result bytes bounded in stable generations.
+// A generation remains byte-for-byte unchanged while new results fit. When it
+// crosses the budget, the whole generation becomes receipts at once; rebuilding
+// a later turn therefore does not move the receipt boundary one result at a
+// time and invalidate the provider's prefix cache on every call.
+//
+// The stored copy remains subject to the installation content limit, and
+// Elided is set from the original result so run-spend diagnostics attribute
+// the saving to the tool that produced it.
 func boundToolResultTranscript(turns []Turn) {
 	type candidate struct {
 		index   int
 		receipt []byte
 	}
 	var candidates []candidate
-	base := 0
+	sent := 0
+	generationStart := 0
 	for i := range turns {
 		if turns[i].Kind != TurnToolResult || len(turns[i].Content) == 0 {
 			continue
@@ -58,19 +69,41 @@ func boundToolResultTranscript(turns []Turn) {
 			receipt = turns[i].Content
 		}
 		candidates = append(candidates, candidate{index: i, receipt: receipt})
-		base += len(receipt)
-	}
-	remaining := max(0, toolResultTranscriptBudget-base)
-	for i := len(candidates) - 1; i >= 0; i-- {
-		candidate := candidates[i]
-		turn := &turns[candidate.index]
-		extra := len(turn.Content) - len(candidate.receipt)
-		if extra <= remaining {
-			remaining -= extra
+		sent += len(turns[i].Content)
+		if sent <= toolResultTranscriptBudget {
 			continue
 		}
-		turn.Content = candidate.receipt
-		turn.Elided = max(int64(0), turn.OriginalBytes-int64(len(candidate.receipt)))
+
+		// Compact the completed generation but keep the newest result whole: it
+		// is the evidence the model just asked for. This leaves headroom for
+		// later turns while making each earlier generation immutable.
+		generationEnd := len(candidates) - 1
+		if generationStart == generationEnd {
+			// One result alone can exceed the aggregate ceiling when its tool has
+			// no safe per-result compactor. A receipt is the only bounded form.
+			generationEnd++
+		}
+		for j := generationStart; j < generationEnd; j++ {
+			candidate := candidates[j]
+			turn := &turns[candidate.index]
+			sent -= len(turn.Content)
+			turn.Content = candidate.receipt
+			turn.Elided = max(int64(0), turn.OriginalBytes-int64(len(candidate.receipt)))
+			sent += len(candidate.receipt)
+		}
+		generationStart = generationEnd
+
+		// A large receipt population can eventually leave less than one result
+		// of headroom. Keep the hard bound even then.
+		if sent > toolResultTranscriptBudget && generationStart < len(candidates) {
+			candidate := candidates[generationStart]
+			turn := &turns[candidate.index]
+			sent -= len(turn.Content)
+			turn.Content = candidate.receipt
+			turn.Elided = max(int64(0), turn.OriginalBytes-int64(len(candidate.receipt)))
+			sent += len(candidate.receipt)
+			generationStart++
+		}
 	}
 }
 
@@ -84,9 +117,9 @@ func formatToolResultBudgetReceipt(turn Turn, omitted int64) []byte {
 	return []byte(fmt.Sprintf(
 		"FuseOne truncated this earlier %s result to a receipt because it did not fit the transcript result budget.\n"+
 			"Original result: %d bytes, digest %s.\n"+
-			"Omitted result bytes: %20d. The stored copy remains in the content store under the installation content limit. "+
+			"Omitted result bytes: %*d. The stored copy remains in the content store under the installation content limit. "+
 			"Do not treat omitted content as absent; make another call only with a materially narrower query.",
-		turn.Tool, turn.OriginalBytes, turn.ContentDigest, omitted,
+		turn.Tool, turn.OriginalBytes, turn.ContentDigest, receiptOmittedWidth, omitted,
 	))
 }
 

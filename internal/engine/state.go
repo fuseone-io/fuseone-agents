@@ -143,8 +143,18 @@ type State struct {
 	requested *ApprovedCall
 
 	// executed holds the idempotency keys the ledger has already recorded, so
-	// a resumed run never causes the same effect twice (PRD DE-16).
+	// a resumed run can distinguish a recorded call from a new one (PRD DE-16).
 	executed map[string]struct{}
+	// completed holds calls whose real tool_returned step reached the ledger.
+	// A completed read may be polled again; an orphaned read remains protected
+	// because its external outcome and cost are unknown.
+	completed map[string]struct{}
+	// completedReads counts completed attempts by canonical call identity. It
+	// lets the next poll derive a new deterministic ledger key while a replay
+	// of an orphan derives the same key and remains blocked.
+	completedReads map[string]int
+	pendingIdemKey string
+	pendingEffect  domain.Effect
 
 	pendingInvestigation *investigationCall
 	investigation        investigationStreak
@@ -168,6 +178,17 @@ func (s State) Committed() domain.Consumption {
 func (s State) AlreadyExecuted(key string) bool {
 	_, ok := s.executed[key]
 	return ok
+}
+
+// CompletedCall reports whether the recorded call also has a real result.
+// The synthetic result used to close an orphan deliberately does not count.
+func (s State) CompletedCall(key string) bool {
+	_, ok := s.completed[key]
+	return ok
+}
+
+func (s State) completedReadCount(key string) int {
+	return s.completedReads[key]
 }
 
 // Terminal reports whether the run has ended for good. Parked runs are not

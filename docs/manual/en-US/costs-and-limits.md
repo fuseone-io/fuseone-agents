@@ -73,14 +73,24 @@ one that appears in accounting, not one that disappears from it.
 Every model provider receives the same bounded transcript, canonical call
 identity, state-aware memory guidance and no-progress supervision. FuseOne also
 keeps stable instructions and the previous ledger-derived transcript reusable.
-Anthropic marks that prefix with explicit cache breakpoints and places changing
-guidance after it. OpenAI-compatible providers receive stable per-step guidance
-with the fixed run ceiling, so providers with automatic prefix caching can
-reuse normal transcript growth. When the transcript budget replaces older
-results with receipts, that bounded projection starts a new prefix instead of
-preserving an unbounded one. Providers without prompt caching still benefit
-from fewer calls and fewer replayed bytes. Reported cache read and cache write
-tokens remain visible in the run and in low-cardinality worker metrics.
+Every provider receives the same stable per-step guidance, memory rules and
+fixed run ceiling. Anthropic marks that prefix with explicit cache breakpoints
+and additionally places the changing remaining budget after the cached
+transcript. OpenAI-compatible providers omit that per-turn remainder because
+their automatic cache requires an exact common prefix; the deterministic Gate
+still enforces the same ceiling. When result bytes cross the transcript budget,
+FuseOne replaces a completed generation with receipts at once. That starts one
+new bounded prefix and keeps it stable until the next generation crosses,
+instead of moving the receipt boundary on every turn. Providers without prompt
+caching still benefit from fewer calls and fewer replayed bytes. Reported cache
+read and cache write tokens remain visible in the run and in low-cardinality
+worker metrics.
+
+Completed read calls may poll the same arguments again because the source can
+change. Writes, equivalent governed-memory lookups and calls with an unknown
+outcome after a worker restart remain idempotent. Three successful reads of the
+same tool that return the same complete digest still park the run before a
+fourth model turn, even when the arguments were identical.
 
 ## Finding what made the prompt large
 

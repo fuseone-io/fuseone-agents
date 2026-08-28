@@ -146,8 +146,9 @@ func (o *OpenAICompatible) chatMessages(
 	// OpenAI-compatible endpoints do not share an explicit cache-breakpoint
 	// field. Keep per-stage guidance stable so normal transcript growth preserves
 	// an exact prefix without sending a field that stricter compatible endpoints
-	// reject. Crossing the transcript budget may replace old results with receipts
-	// and deliberately starts a new, bounded prefix.
+	// reject. Crossing the transcript budget compacts a completed result
+	// generation at once; that deliberately starts a new bounded prefix, then
+	// leaves it stable until the next generation crosses.
 	system := o.cfg.SystemPrompt + "\n\n" + loopContract
 	if guidance != "" {
 		system += "\n\n" + guidance

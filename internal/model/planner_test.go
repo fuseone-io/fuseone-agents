@@ -419,12 +419,17 @@ func TestAnthropic_systemPrompt_isCachedAndFreeOfVolatileText(t *testing.T) {
 	if cachedAt == -1 {
 		t.Fatal("no cache breakpoint on the system prompt")
 	}
+	var stable strings.Builder
 	for i := 0; i <= cachedAt; i++ {
 		m, _ := blocks[i].(map[string]any)
 		text, _ := m["text"].(string)
+		stable.WriteString(text)
 		if strings.Contains(text, "Budget remaining") {
 			t.Error("the per-turn budget note sits inside the cached prefix; it invalidates the cache every turn")
 		}
+	}
+	if !strings.Contains(stable.String(), "Budget ceiling for this run") {
+		t.Fatalf("cached system prompt has no provider-independent budget ceiling: %s", stable.String())
 	}
 }
 
@@ -435,6 +440,10 @@ func TestAnthropic_previousTranscriptPrefixIsCachedBeforeVolatileNotes(t *testin
 	in.Step = "Investigate the alert"
 	in.StopsWhen = "the cause is supported by evidence"
 	in.Tools = append(in.Tools, domain.ToolMemoryFind)
+	in.Transcript = append(in.Transcript,
+		engine.Turn{Kind: engine.TurnToolUse, CallID: "call_1", Tool: "crm.lookup", Args: []byte(`{"email":"a@b.com"}`)},
+		engine.Turn{Kind: engine.TurnToolResult, CallID: "call_1", Tool: "crm.lookup", Content: []byte(`{"id":42}`)},
+	)
 
 	_, err := plannerFor(t, model.KindAnthropic, c.server.URL, model.Config{}).
 		Plan(context.Background(), in)
@@ -443,23 +452,30 @@ func TestAnthropic_previousTranscriptPrefixIsCachedBeforeVolatileNotes(t *testin
 	}
 
 	messages, _ := c.body["messages"].([]any)
-	if len(messages) < 2 {
-		t.Fatalf("messages = %+v, want cached transcript followed by volatile notes", messages)
+	if len(messages) != 3 {
+		t.Fatalf("messages = %+v, want user/assistant/user without a consecutive guidance turn", messages)
 	}
-	previous := messageContentBlocks(t, messages[len(messages)-2])
-	if len(previous) == 0 || previous[len(previous)-1]["cache_control"] == nil {
-		t.Fatalf("previous transcript tail = %+v, want a cache breakpoint", previous)
+	wantRoles := []string{"user", "assistant", "user"}
+	for i, message := range messages {
+		m, _ := message.(map[string]any)
+		if role := asString(m["role"]); role != wantRoles[i] {
+			t.Fatalf("message %d role = %q, want %q", i, role, wantRoles[i])
+		}
 	}
-	volatile := messageContentBlocks(t, messages[len(messages)-1])
-	if len(volatile) != 1 || volatile[0]["cache_control"] != nil {
-		t.Fatalf("volatile note = %+v, want one uncached block", volatile)
+	last := messageContentBlocks(t, messages[len(messages)-1])
+	if len(last) != 2 || last[0]["type"] != "tool_result" || last[0]["cache_control"] == nil {
+		t.Fatalf("last user turn = %+v, want the tool result cached before guidance", last)
 	}
-	text := asString(volatile[0]["text"])
+	volatile := last[1]
+	if volatile["cache_control"] != nil || !strings.Contains(asString(volatile["text"]), "Budget remaining") {
+		t.Fatalf("volatile guidance = %+v, want only the uncached remaining budget", volatile)
+	}
+	stable := anthropicSystemText(c.body)
 	for _, want := range []string{
-		"Investigate the alert", "Governed memory lookup is available", "Budget remaining",
+		"Investigate the alert", "Governed memory lookup is available", "Budget ceiling",
 	} {
-		if !strings.Contains(text, want) {
-			t.Errorf("volatile note does not contain %q:\n%s", want, text)
+		if !strings.Contains(stable, want) {
+			t.Errorf("stable system guidance does not contain %q:\n%s", want, stable)
 		}
 	}
 }
@@ -472,13 +488,13 @@ func TestOpenAICompatible_transcriptGrowthWithinBudgetPreservesThePreviousReques
 	first.Step = "Investigate the alert"
 	first.StopsWhen = "the cause is supported by evidence"
 	first.Tools = append(first.Tools, domain.ToolMemoryFind)
-	first.State.Called = []domain.ToolID{domain.ToolMemoryFind}
 	first.Remaining.Micros = 400_000
 
 	if _, err := planner.Plan(context.Background(), first); err != nil {
 		t.Fatalf("first Plan: %v", err)
 	}
 	second := first
+	second.State.Called = []domain.ToolID{domain.ToolMemoryFind}
 	second.Remaining.Micros = 100_000
 	second.Transcript = append(slices.Clone(first.Transcript),
 		engine.Turn{Kind: engine.TurnToolUse, CallID: "call_1", Tool: "crm.lookup", Args: []byte(`{"email":"a@b.com"}`)},
@@ -644,17 +660,23 @@ func TestMemoryTools_areExplainedOnlyWhenOffered(t *testing.T) {
 	}
 }
 
-func TestMemoryFindGuidanceChangesAfterTheRunAlreadyLooked(t *testing.T) {
+func TestMemoryFindGuidanceStaysCacheableAfterTheRunAlreadyLooked(t *testing.T) {
 	t.Parallel()
 
 	for _, tc := range []struct {
 		name     string
 		kind     model.Kind
 		response string
+		stable   func(map[string]any) any
 		prompt   func(map[string]any) string
 	}{
-		{name: "anthropic", kind: model.KindAnthropic, response: anthropicToolUse, prompt: anthropicPromptText},
-		{name: "openai-compatible", kind: model.KindOpenAICompatible, response: openAIToolCall, prompt: openAIPromptText},
+		{name: "anthropic", kind: model.KindAnthropic, response: anthropicToolUse,
+			stable: func(body map[string]any) any { return body["system"] }, prompt: anthropicPromptText},
+		{name: "openai-compatible", kind: model.KindOpenAICompatible, response: openAIToolCall,
+			stable: func(body map[string]any) any {
+				messages, _ := body["messages"].([]any)
+				return messages[0]
+			}, prompt: openAIPromptText},
 	} {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
@@ -662,20 +684,23 @@ func TestMemoryFindGuidanceChangesAfterTheRunAlreadyLooked(t *testing.T) {
 			c := serve(t, tc.response)
 			in := input()
 			in.Tools = append(in.Tools, domain.ToolMemoryFind)
+			planner := plannerFor(t, tc.kind, c.server.URL, model.Config{})
+			if _, err := planner.Plan(context.Background(), in); err != nil {
+				t.Fatalf("Plan before lookup: %v", err)
+			}
 			in.State.Called = []domain.ToolID{domain.ToolMemoryFind}
-
-			if _, err := plannerFor(t, tc.kind, c.server.URL, model.Config{}).
-				Plan(context.Background(), in); err != nil {
-				t.Fatalf("Plan: %v", err)
+			if _, err := planner.Plan(context.Background(), in); err != nil {
+				t.Fatalf("Plan after lookup: %v", err)
+			}
+			if !reflect.DeepEqual(tc.stable(c.bodies[0]), tc.stable(c.bodies[1])) {
+				t.Fatalf("stable provider prefix changed after memory.find:\nbefore: %+v\nafter:  %+v",
+					tc.stable(c.bodies[0]), tc.stable(c.bodies[1]))
 			}
 			prompt := tc.prompt(c.body)
-			for _, want := range []string{"already searched", "materially narrower", "equivalent search"} {
+			for _, want := range []string{"may already have searched", "materially narrower", "equivalent search"} {
 				if !strings.Contains(prompt, want) {
 					t.Errorf("prompt does not contain %q:\n%s", want, prompt)
 				}
-			}
-			if strings.Contains(prompt, "Use it early") {
-				t.Fatalf("prompt still asks for the initial memory lookup after it ran:\n%s", prompt)
 			}
 		})
 	}
@@ -714,6 +739,16 @@ func messageContentBlocks(t *testing.T, message any) []map[string]any {
 		blocks = append(blocks, block)
 	}
 	return blocks
+}
+
+func anthropicSystemText(body map[string]any) string {
+	var text strings.Builder
+	blocks, _ := body["system"].([]any)
+	for _, block := range blocks {
+		m, _ := block.(map[string]any)
+		text.WriteString(asString(m["text"]))
+	}
+	return text.String()
 }
 
 func anthropicPromptText(body map[string]any) string {

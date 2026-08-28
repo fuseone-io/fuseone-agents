@@ -107,8 +107,10 @@ func (s *State) applyKind(step domain.Step) error {
 		s.Spent.ToolCalls++
 		s.Called = append(s.Called, p.Tool)
 		s.PendingTool = p.Tool
+		s.pendingIdemKey = step.IdemKey
+		s.pendingEffect = p.Effect
 		s.Phase = PhaseAwaitingTool
-		s.recordInvestigationCall(p, step.IdemKey)
+		s.recordInvestigationCall(p)
 		// A call that reached the Gate's far side is progress, whatever it
 		// returns: the planner is no longer stuck on a refusal.
 		s.ConsecutiveBlocks = 0
@@ -119,6 +121,23 @@ func (s *State) applyKind(step domain.Step) error {
 		if err := decode(step, &p); err != nil {
 			return err
 		}
+		if s.pendingIdemKey != "" && p.ErrorCode != unknownOutcomeAfterRestart {
+			if s.completed == nil {
+				s.completed = make(map[string]struct{})
+			}
+			s.completed[s.pendingIdemKey] = struct{}{}
+			// Older ledger rows may predate Effect on tool_called. If the tool is
+			// now classified as a read, treating that completed unknown call as
+			// the first poll is the only way to avoid reusing its unique key.
+			if s.pendingEffect == domain.EffectRead || s.pendingEffect == domain.EffectUnknown {
+				if s.completedReads == nil {
+					s.completedReads = make(map[string]int)
+				}
+				s.completedReads[readIdempotencyBase(s.pendingIdemKey)]++
+			}
+		}
+		s.pendingIdemKey = ""
+		s.pendingEffect = domain.EffectUnknown
 		s.recordInvestigationResult(p)
 		s.PendingTool = ""
 		s.Phase = PhaseRunning

@@ -11,9 +11,8 @@ import (
 const maxRepeatedReadResults = 3
 
 type investigationCall struct {
-	tool    domain.ToolID
-	effect  domain.Effect
-	idemKey string
+	tool   domain.ToolID
+	effect domain.Effect
 }
 
 type investigationStreak struct {
@@ -22,7 +21,6 @@ type investigationStreak struct {
 	resultBytes  int64
 	calls        int
 	cachedCalls  int
-	lastIdemKey  string
 }
 
 // ResultDigest identifies complete tool-result bytes without recording them
@@ -32,8 +30,8 @@ func ResultDigest(body []byte) string {
 	return "sha256:" + hex.EncodeToString(sum[:])
 }
 
-func (s *State) recordInvestigationCall(p domain.ToolCalledPayload, idemKey string) {
-	s.pendingInvestigation = &investigationCall{tool: p.Tool, effect: p.Effect, idemKey: idemKey}
+func (s *State) recordInvestigationCall(p domain.ToolCalledPayload) {
+	s.pendingInvestigation = &investigationCall{tool: p.Tool, effect: p.Effect}
 	if p.Effect != domain.EffectRead {
 		s.resetInvestigation()
 	}
@@ -52,12 +50,11 @@ func (s *State) recordInvestigationResult(p domain.ToolReturnedPayload) {
 		if p.Cached {
 			s.investigation.cachedCalls++
 		}
-		s.investigation.lastIdemKey = call.idemKey
 		return
 	}
 	s.investigation = investigationStreak{
 		tool: call.tool, resultDigest: p.ResultDigest, resultBytes: p.ResultBytes,
-		calls: 1, lastIdemKey: call.idemKey,
+		calls: 1,
 	}
 	if p.Cached {
 		s.investigation.cachedCalls = 1
@@ -66,7 +63,7 @@ func (s *State) recordInvestigationResult(p domain.ToolReturnedPayload) {
 
 func (s *State) sameInvestigationResult(call *investigationCall, p domain.ToolReturnedPayload) bool {
 	return s.investigation.calls > 0 && s.investigation.tool == call.tool &&
-		s.investigation.resultDigest == p.ResultDigest && s.investigation.lastIdemKey != call.idemKey
+		s.investigation.resultDigest == p.ResultDigest
 }
 
 func (s *State) resetInvestigation() {

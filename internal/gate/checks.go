@@ -169,6 +169,9 @@ func checkBudget(r Request) result {
 
 func checkIdempotency(r Request) result {
 	if r.AlreadyExecuted {
+		if r.Effect == domain.EffectRead {
+			return duplicate("this read is already recorded and is not safe to replay automatically")
+		}
 		return duplicate("this effect is already recorded; replaying it would duplicate the effect")
 	}
 	return pass()

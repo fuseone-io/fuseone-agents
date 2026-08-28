@@ -43,9 +43,11 @@ type Turn struct {
 	Args    []byte
 	Failed  bool
 	Content []byte
-	// Elided is what compaction removed before this turn was handed to the
-	// model, in content bytes. Counted at the cut so the saving is something
-	// the run measured rather than a subtraction across two records.
+	// Elided is the original result content omitted from this projected turn.
+	// Per-result compaction counts the removed middle; aggregate compaction
+	// replaces that count with original bytes minus the final receipt length.
+	// Both are measured where the projection is made rather than inferred later
+	// from the independently retained content-store copy.
 	Elided int64
 	// OriginalBytes and ContentDigest describe the complete result returned by
 	// the tool. The content store may retain only a bounded copy; these fields

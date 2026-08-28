@@ -112,8 +112,10 @@ func (a *Anthropic) Plan(ctx context.Context, in engine.PlanInput) (engine.Propo
 	// provider is offered, and the identifier a proposal is read back as.
 	offered := namesFor(in)
 	tools := a.toolParams(in.Tools, offered)
-	guidance := volatilePlanningNote(in, a.tools, offered)
-	prompt := promptInputBreakdown(in, a.cfg, a.tools, offered, guidance)
+	stableGuidance := prefixStablePlanningNote(in, a.tools, offered)
+	volatileGuidance := volatilePlanningNote(in)
+	promptGuidance := stableGuidance + volatileGuidance
+	prompt := promptInputBreakdown(in, a.cfg, a.tools, offered, promptGuidance)
 
 	resp, err := a.client.Messages.New(ctx, anthropic.MessageNewParams{
 		// The step's, when it named one. The provider is not overridable: it
@@ -121,8 +123,8 @@ func (a *Anthropic) Plan(ctx context.Context, in engine.PlanInput) (engine.Propo
 		// route an installation's traffic wherever its author liked.
 		Model:     anthropic.Model(or(in.Model, a.cfg.Model)),
 		MaxTokens: a.cfg.MaxTokens,
-		System:    a.system(),
-		Messages:  a.messages(in, offered, guidance),
+		System:    a.system(stableGuidance),
+		Messages:  a.messages(in, offered, volatileGuidance),
 		Tools:     tools,
 		// The engine can execute at most one proposal per turn, and finishing
 		// is a platform tool. Requiring a single tool use prevents the model

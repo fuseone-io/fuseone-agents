@@ -38,7 +38,7 @@ const (
 
 // policyVersion must be bumped whenever the semantics of a built-in check
 // change, even when the rule names stay the same.
-const policyVersion = "builtin/v3"
+const policyVersion = "builtin/v4"
 
 // result is a check's answer: a verdict plus why.
 type result struct {

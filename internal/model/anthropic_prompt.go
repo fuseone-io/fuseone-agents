@@ -2,16 +2,20 @@ package model
 
 import (
 	"encoding/json"
-	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
 
 	"github.com/fuseone/agents/internal/engine"
 )
 
-// system ends with a breakpoint covering tools and stable platform text.
-func (a *Anthropic) system() []anthropic.TextBlockParam {
+// system ends with a breakpoint covering tools and stable platform text. The
+// per-step note and fixed run ceiling are the same guidance sent to every
+// provider; only Anthropic's changing remaining budget stays outside it.
+func (a *Anthropic) system(guidance string) []anthropic.TextBlockParam {
 	blocks := []anthropic.TextBlockParam{{Text: a.cfg.SystemPrompt}, {Text: loopContract}}
+	if guidance != "" {
+		blocks = append(blocks, anthropic.TextBlockParam{Text: guidance})
+	}
 	blocks[len(blocks)-1].CacheControl = anthropic.NewCacheControlEphemeralParam()
 	return blocks
 }
@@ -23,23 +27,18 @@ func (a *Anthropic) messages(
 	messages := messagesFrom(in.Transcript, offered)
 	cacheMessageTail(messages)
 	if guidance != "" {
-		messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(guidance)))
+		block := anthropic.NewTextBlock(guidance)
+		if len(messages) > 0 && messages[len(messages)-1].Role == anthropic.MessageParamRoleUser {
+			messages[len(messages)-1].Content = append(messages[len(messages)-1].Content, block)
+		} else {
+			messages = append(messages, anthropic.NewUserMessage(block))
+		}
 	}
 	return messages
 }
 
-func volatilePlanningNote(in engine.PlanInput, schemas ToolSchemas, offered names) string {
-	var notes []string
-	if in.Step != "" {
-		notes = append(notes, stepNote(in))
-	}
-	if note := memoryToolsNote(in, schemas, offered); note != "" {
-		notes = append(notes, note)
-	}
-	if note := budgetNote(in); note != "" {
-		notes = append(notes, note)
-	}
-	return strings.Join(notes, "\n\n")
+func volatilePlanningNote(in engine.PlanInput) string {
+	return budgetNote(in)
 }
 
 func cacheMessageTail(messages []anthropic.MessageParam) {

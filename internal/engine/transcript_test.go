@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -546,6 +547,85 @@ func TestBuildTranscript_manyMediumResults_haveABoundedPromptContribution(t *tes
 	}
 	if !state.Labels.Has(domain.LabelUntrusted) {
 		t.Fatalf("labels = %v, want omitted results to keep tainting the run", state.Labels)
+	}
+}
+
+func TestBuildTranscript_resultBudgetChangesInStableGenerations(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := NewMemoryContent()
+	steps := []domain.Step{{
+		RunID: "run_1", Seq: 1, Kind: domain.StepRunStarted,
+		Payload: payload(t, domain.RunStartedPayload{Trigger: "cron"}),
+	}}
+
+	var previous []Turn
+	crossings := 0
+	for i := 0; i < 10; i++ {
+		calledSeq := int64(2 + i*2)
+		returnedSeq := calledSeq + 1
+		body := []byte(fmt.Sprintf("result-%d\n%s", i, strings.Repeat("x", 15<<10)))
+		ref, err := store.Put(ctx, "run_1", returnedSeq, body)
+		if err != nil {
+			t.Fatalf("Put result %d: %v", i, err)
+		}
+		steps = append(steps,
+			domain.Step{
+				RunID: "run_1", Seq: calledSeq, Kind: domain.StepToolCalled,
+				Payload: payload(t, domain.ToolCalledPayload{Tool: "crm.lookup"}),
+			},
+			domain.Step{
+				RunID: "run_1", Seq: returnedSeq, Kind: domain.StepToolReturned,
+				Payload: payload(t, domain.ToolReturnedPayload{
+					Tool: "crm.lookup", ResultRef: ref,
+				}),
+			},
+		)
+
+		turns, err := BuildTranscript(ctx, store, steps)
+		if err != nil {
+			t.Fatalf("BuildTranscript after result %d: %v", i, err)
+		}
+		var resultBytes int
+		for _, turn := range turns {
+			if turn.Kind == TurnToolResult {
+				resultBytes += len(turn.Content)
+			}
+		}
+		if resultBytes > toolResultTranscriptBudget {
+			t.Fatalf("result bytes after result %d = %d, want at most %d",
+				i, resultBytes, toolResultTranscriptBudget)
+		}
+
+		if previous != nil && !reflect.DeepEqual(previous, turns[:len(previous)]) {
+			crossings++
+		}
+		previous = turns
+	}
+
+	if crossings != 2 {
+		t.Fatalf("cache-prefix crossings = %d, want two coarse generation changes", crossings)
+	}
+}
+
+func TestToolResultBudgetReceipt_hasAStableLengthAndExactOmittedCount(t *testing.T) {
+	t.Parallel()
+	turn := Turn{
+		Tool: "crm.lookup", OriginalBytes: 100_000,
+		ContentDigest: "sha256:0123456789abcdef",
+	}
+	short := formatToolResultBudgetReceipt(turn, 0)
+	long := formatToolResultBudgetReceipt(turn, 9_000_000_000_000_000_000)
+	if len(short) != len(long) {
+		t.Fatalf("receipt lengths = %d and %d, want fixed-width omitted bytes",
+			len(short), len(long))
+	}
+
+	receipt := toolResultBudgetReceipt(turn)
+	wantOmitted := turn.OriginalBytes - int64(len(receipt))
+	wantLine := fmt.Sprintf("Omitted result bytes: %*d.", receiptOmittedWidth, wantOmitted)
+	if !strings.Contains(string(receipt), wantLine) {
+		t.Fatalf("receipt does not describe its own omitted bytes:\n%s", receipt)
 	}
 }
 

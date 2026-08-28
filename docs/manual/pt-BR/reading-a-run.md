@@ -74,9 +74,11 @@ Provavelmente não ignorou. Instrução orienta o modelo, mas **`stopsWhen` de u
 
 Abra os passos **O modelo propôs** e compare a composição do prompt. A trilha
 separa bytes de resultados enviados ao modelo dos bytes omitidos pela
-compactação, com atribuição por ferramenta. Chamadas equivalentes são puladas
-pela identidade canônica. Chamadas de leitura diferentes que repetem o mesmo
-resultado completo estacionam como `investigation_stalled` antes que o teto de
-dinheiro seja a única parada.
+compactação, com atribuição por ferramenta. Escritas e buscas de memória
+equivalentes, além de chamadas cujo desfecho ficou desconhecido depois do
+reinício de um worker, são puladas pela identidade canônica. Leituras concluídas
+podem consultar novamente, mas três leituras consecutivas de uma ferramenta
+que produzam o mesmo resultado completo estacionam como
+`investigation_stalled` antes que o teto de dinheiro seja a única parada.
 
 O que decide cada parada está em [O que a plataforma para antes de acontecer](what-the-gate-stops.md) e em [Políticas](policies.md).

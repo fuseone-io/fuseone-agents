@@ -73,15 +73,25 @@ que aparece na contabilidade, não a que desaparece dela.
 Todo provider de modelo recebe o mesmo transcript limitado, identidade canônica
 de chamada, orientação de memória consciente do estado e supervisão de falta de
 progresso. O FuseOne também mantém reutilizáveis as instruções estáveis e o
-transcript anterior reconstruído da trilha. Anthropic marca esse prefixo com
-breakpoints explícitos e põe orientação mutável depois dele. Providers
-OpenAI-compatible recebem orientação estável por etapa com o teto fixo da run,
-então quem oferece cache automático consegue reutilizar o crescimento normal do
-transcript. Quando o orçamento troca resultados antigos por recibos, essa
-projeção limitada inicia um prefixo novo em vez de preservar um sem limite.
+transcript anterior reconstruído da trilha. Todo provider recebe a mesma
+orientação estável por etapa, as mesmas regras de memória e o teto fixo da run.
+Anthropic marca esse prefixo com breakpoints explícitos e acrescenta o orçamento
+restante mutável depois do transcript cacheado. Providers OpenAI-compatible
+omitem esse saldo por turno porque o cache automático exige um prefixo comum
+exato; o Gate determinístico continua impondo o mesmo teto. Quando os resultados
+cruzam o orçamento do transcript, o FuseOne troca uma geração completa por
+recibos de uma vez. Isso inicia um prefixo limitado novo e o mantém estável até
+a próxima geração cruzar, em vez de mover a fronteira dos recibos a cada turno.
 Providers sem cache de prompt ainda economizam chamadas e bytes reenviados.
 Tokens reportados de cache read e cache write continuam visíveis na execução e
 nas métricas de baixa cardinalidade do worker.
+
+Leituras concluídas podem consultar novamente os mesmos argumentos porque a
+fonte pode mudar. Escritas, buscas equivalentes de memória governada e chamadas
+com desfecho desconhecido depois do reinício de um worker continuam
+idempotentes. Três leituras bem-sucedidas da mesma ferramenta que devolvem o
+mesmo digest completo ainda estacionam a run antes de um quarto turno do
+modelo, mesmo quando os argumentos eram idênticos.
 
 ## Descobrir o que deixou o prompt grande
 

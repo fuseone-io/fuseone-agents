@@ -74,9 +74,10 @@ It probably did not. An instruction guides the model, but **a step's `stopsWhen`
 
 Open the **The model proposed** steps and compare prompt composition. The trail
 separates tool-result bytes sent to the model from bytes omitted by compaction,
-and attributes them by tool. Several equivalent calls are skipped by canonical
-call identity. Different read calls that repeatedly produce the same complete
-result park as `investigation_stalled` before the money ceiling becomes the
-only stop.
+and attributes them by tool. Equivalent writes, memory lookups and calls whose
+outcome became unknown after a worker restart are skipped by canonical call
+identity. Completed reads may poll again, but three consecutive reads of one
+tool that produce the same complete result park as `investigation_stalled`
+before the money ceiling becomes the only stop.
 
 What decides each stop is in [What the platform stops before it happens](what-the-gate-stops.md) and in [Policies](policies.md).

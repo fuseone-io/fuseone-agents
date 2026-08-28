@@ -7,6 +7,8 @@ import (
 	"github.com/fuseone/agents/internal/domain"
 )
 
+const unknownOutcomeAfterRestart = "unknown_outcome_after_restart"
+
 // Resuming a run: rebuilding its state from the ledger and closing out
 // whatever the previous worker left half-done.
 
@@ -27,7 +29,7 @@ func (r *Runner) recoverOrphanedCall(ctx context.Context, state State, start Sta
 		Payload: mustJSON(domain.ToolReturnedPayload{
 			Tool:      state.PendingTool,
 			Failed:    true,
-			ErrorCode: "unknown_outcome_after_restart",
+			ErrorCode: unknownOutcomeAfterRestart,
 		}),
 	})
 	if err != nil {

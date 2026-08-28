@@ -214,6 +214,25 @@ func TestFold_toolCalled_marksIdempotencyKeyExecuted(t *testing.T) {
 	}
 }
 
+func TestFold_legacyCompletedReadAdvancesToANewPollKey(t *testing.T) {
+	t.Parallel()
+
+	const base = "0123456789abcdef0123456789abcdef"
+	steps := chain(t,
+		domain.Step{Kind: domain.StepRunStarted},
+		domain.Step{Kind: domain.StepToolCalled, IdemKey: base,
+			Payload: payload(t, domain.ToolCalledPayload{Tool: "crm.lookup"})},
+		domain.Step{Kind: domain.StepToolReturned,
+			Payload: payload(t, domain.ToolReturnedPayload{Tool: "crm.lookup"})},
+	)
+
+	s := mustFold(t, steps)
+	if got, want := executionIdempotencyKey(s, domain.EffectRead, "crm.lookup", base),
+		base+readPollSeparator+"2"; got != want {
+		t.Fatalf("next read key = %q, want %q", got, want)
+	}
+}
+
 func TestFold_untrustedToolResult_taintsRunContext(t *testing.T) {
 	t.Parallel()
 
