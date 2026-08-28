@@ -98,20 +98,31 @@ flowchart TB
   bytes -.->|"retention and erasure reach here"| bytes
 ```
 
-The split is not about size. Tool arguments and tool results routinely carry
-personal data, and `run_steps` is the one table an erasure request can never
-reach — so what an erasure has to be able to remove is never written there. The
-step keeps the digest, which is enough for an auditor to prove which arguments
-were used without the arguments surviving to prove it.
+The split is not about size. Tool arguments, tool results and closing answers
+routinely carry personal data, and `run_steps` is the one table an erasure
+request can never reach. The current engine therefore writes those three by
+reference and digest, never inline. The digest is enough for an auditor to
+prove which bytes were used without those bytes surviving to prove it.
+
+This is deliberately narrower than saying that no personal or authored text
+ever reaches the ledger. Scope and conversation identifiers, policy evidence,
+human decision notes and stable failure summaries are part of the audit record.
+There is also one historical exception: runs recorded before closing answers
+moved to the content store keep `RunFinishedPayload.Outcome` inline. The chain
+is immutable, so readers retain that legacy field while current writers never
+populate it.
 
 When the bytes are erased, anything resting on them is marked rather than left
 looking sound: a governed memory whose evidence was erased becomes
 `source_erased` and stops being recalled.
 
-*What proves it:* the retention and erasure tests in `internal/admin`, and the
-memory reconciliation suite, which drives an erased source through to the
-memory that cited it. The drawing itself has no accuser — it describes a
-convention held by review, not by a check.
+*What proves it:* `TestAdvance_erasableContentStaysOutsideTheLedger` runs a tool
+and finishes a run with distinct argument, result and answer markers. It proves
+that none enters a step payload, that every reference resolves before erasure,
+and that none resolves afterwards. The retention and erasure tests in
+`internal/admin`, and the memory reconciliation suite, drive an erased source
+through to the memory that cited it. The legacy outcome reader has its own
+compatibility test.
 
 ## Related
 
