@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryCreatePanel } from "@/features/memory/memory-create-panel";
@@ -39,10 +39,9 @@ describe("global memory authoring", () => {
     const match = deferred<Response>();
     const requests: RequestRecord[] = [];
     stubNetwork(requests, { run: run.promise, match: match.promise });
-    const user = userEvent.setup();
     renderPanel();
 
-    await fillMemory(user);
+    fillMemory();
     await waitFor(() => expect(requests).toEqual([{ kind: "run" }]));
     expect(screen.getByRole("button", { name: "Save memory" })).toBeDisabled();
 
@@ -61,7 +60,7 @@ describe("global memory authoring", () => {
     const user = userEvent.setup();
     renderPanel();
 
-    await fillMemory(user);
+    fillMemory();
     await waitFor(() => expect(matches(requests)).toHaveLength(1));
     expect(matches(requests)[0]).toEqual(matchBody("agent", "triage"));
 
@@ -75,10 +74,9 @@ describe("global memory authoring", () => {
     stubNetwork(requests, {
       run: Promise.resolve(new Response("{}", { status: 404 })),
     });
-    const user = userEvent.setup();
     renderPanel();
 
-    await fillMemory(user);
+    fillMemory();
 
     expect(await screen.findByText("The evidence run could not be inspected")).toBeVisible();
     expect(screen.getByRole("button", { name: "Try again" })).toBeEnabled();
@@ -90,10 +88,9 @@ describe("global memory authoring", () => {
     stubNetwork(requests, {
       match: Promise.resolve(new Response("{}", { status: 500 })),
     });
-    const user = userEvent.setup();
     renderPanel();
 
-    await fillMemory(user);
+    fillMemory();
 
     expect(await screen.findByText("Existing memory could not be checked")).toBeVisible();
     expect(screen.getByText(
@@ -109,7 +106,7 @@ describe("global memory authoring", () => {
     const user = userEvent.setup();
     renderPanel();
 
-    await fillMemory(user);
+    fillMemory();
 
     expect(await screen.findByText("The evidence run has no agent")).toBeVisible();
     expect(screen.getByText(
@@ -123,6 +120,7 @@ describe("global memory authoring", () => {
     await waitFor(() => expect(matches(requests)).toHaveLength(1));
     expect(screen.getByRole("button", { name: "Save memory" })).toBeEnabled();
   });
+
 });
 
 type RequestRecord = { kind: "run" } | { kind: "match"; body: unknown };
@@ -156,13 +154,18 @@ function stubNetwork(
   }));
 }
 
-async function fillMemory(user: ReturnType<typeof userEvent.setup>) {
-  await user.type(screen.getByLabelText("Kind"), "incident");
-  await user.type(screen.getByLabelText("Subject"), "grafana datasource");
-  await user.type(screen.getByLabelText("Signature"), "grafana.datasource.down");
-  await user.type(screen.getByLabelText("Claim"), "Refresh the datasource token.");
-  await user.type(screen.getByLabelText("Run"), "run_1");
-  await user.type(screen.getByLabelText("Why"), "Reviewed after close");
+function fillMemory() {
+  const fields = {
+    Kind: "incident",
+    Subject: "grafana datasource",
+    Signature: "grafana.datasource.down",
+    Claim: "Refresh the datasource token.",
+    Run: "run_1",
+    Why: "Reviewed after close",
+  };
+  for (const [label, value] of Object.entries(fields)) {
+    fireEvent.change(screen.getByLabelText(label), { target: { value } });
+  }
 }
 
 function matches(requests: RequestRecord[]) {

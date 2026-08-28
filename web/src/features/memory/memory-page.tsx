@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { FilePenLine, Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
@@ -32,6 +32,8 @@ export function MemoryPage() {
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [view, setView] = useState<MemoryView>("active");
   const [composing, setComposing] = useState(false);
+  const [composeStarted, setComposeStarted] = useState(false);
+  const [draftDirty, setDraftDirty] = useState(false);
   const [correcting, setCorrecting] = useState<MemoryAssertion | null>(null);
   const [disabling, setDisabling] = useState<MemoryAssertion | null>(null);
   const [reviewing, setReviewing] = useState<{
@@ -49,7 +51,7 @@ export function MemoryPage() {
 
   function changeView(next: MemoryView) {
     setView(next);
-    setComposing(false);
+    exitComposing();
     if (next !== "suggested") {
       setFilters((current) => ({
         ...current,
@@ -58,10 +60,30 @@ export function MemoryPage() {
     }
   }
 
+  function startComposing() {
+    setComposeStarted(true);
+    setComposing(true);
+  }
+
   function finishComposing() {
+    setComposeStarted(false);
     setComposing(false);
+    setDraftDirty(false);
     changeView("active");
   }
+
+  function exitComposing() {
+    setComposing(false);
+    if (!draftDirty) setComposeStarted(false);
+  }
+
+  function discardComposing() {
+    setComposeStarted(false);
+    setComposing(false);
+    setDraftDirty(false);
+  }
+
+  const hasDraft = composeStarted && draftDirty;
 
   return (
     <>
@@ -71,9 +93,13 @@ export function MemoryPage() {
         description={t("memory.subtitle")}
       >
         {canPublish && (
-          <Button type="button" size="sm" onClick={() => setComposing(true)}>
-            <Plus className="size-4" aria-hidden />
-            {t("memory.record")}
+          <Button type="button" size="sm" onClick={startComposing}>
+            {hasDraft ? (
+              <FilePenLine className="size-4" aria-hidden />
+            ) : (
+              <Plus className="size-4" aria-hidden />
+            )}
+            {t(hasDraft ? "memory.continueDraft" : "memory.record")}
           </Button>
         )}
       </PageHeader>
@@ -81,11 +107,14 @@ export function MemoryPage() {
       <MemoryListPanel
         filters={filters}
         onFilters={setFilters}
-        state={{ view, composing }}
+        state={{ view, composing, composeStarted }}
         queries={{ assertions, suggestions }}
         canPublish={canPublish}
         onView={changeView}
+        onComposeExit={exitComposing}
         onComposeDone={finishComposing}
+        onComposeDiscard={discardComposing}
+        onComposeDirty={setDraftDirty}
         onCorrect={setCorrecting}
         onDisable={setDisabling}
         onAccept={(suggestion) => setReviewing({ suggestion, action: "accept" })}

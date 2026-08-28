@@ -1,8 +1,22 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Trash2, X } from "lucide-react";
+import { useEffect } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Panel } from "@/components/shared/panel";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import { useActiveScope } from "@/features/scope/active-scope";
 import { useCreateMemoryAssertion } from "@/features/memory/api";
 import {
@@ -20,10 +34,16 @@ import { problemMessage } from "@/lib/api/problem-message";
 
 export function MemoryCreatePanel({
   framed = true,
+  onExit,
   onDone,
+  onDiscard,
+  onDirtyChange,
 }: {
   framed?: boolean;
+  onExit?: () => void;
   onDone?: () => void;
+  onDiscard?: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const { t } = useTranslation();
   const create = useCreateMemoryAssertion();
@@ -36,6 +56,11 @@ export function MemoryCreatePanel({
   });
   const match = useMemoryCreateMatch(form);
   const reason = useWatch({ control: form.control, name: "reason" });
+  const isDirty = form.formState.isDirty;
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
 
   async function submit(values: MemoryFormValues) {
     try {
@@ -46,6 +71,11 @@ export function MemoryCreatePanel({
     } catch (error) {
       toast.error(problemMessage(error, t));
     }
+  }
+
+  function discardDraft() {
+    form.reset(memoryDefaults(activeCompany, activeArea));
+    (onDiscard ?? onExit)?.();
   }
 
   const content = (
@@ -76,8 +106,45 @@ export function MemoryCreatePanel({
   if (!framed) {
     return (
       <section className="mx-auto w-full max-w-[820px] min-w-0">
-        <header className="mb-4">
+        <header className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-base font-medium">{t("memory.newAssertion")}</h2>
+          <div className="flex items-center gap-2">
+            {isDirty && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button type="button" variant="ghost" size="sm">
+                    <Trash2 aria-hidden />
+                    {t("memory.discardDraft")}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>
+                      {t("memory.discardDraftTitle")}
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {t("memory.discardDraftHint")}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+                    <AlertDialogAction
+                      variant="destructive"
+                      onClick={discardDraft}
+                    >
+                      {t("memory.discardDraft")}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+            {onExit && (
+              <Button type="button" variant="outline" size="sm" onClick={onExit}>
+                <X aria-hidden />
+                {t("common.close")}
+              </Button>
+            )}
+          </div>
         </header>
         {content}
       </section>

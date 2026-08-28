@@ -24,7 +24,7 @@ const PAGE_SIZE = 8;
 
 interface MemoryListPanelProps {
   filters: MemoryFilters;
-  state: { view: MemoryView; composing: boolean };
+  state: { view: MemoryView; composing: boolean; composeStarted: boolean };
   queries: {
     assertions: UseQueryResult<{ items: MemoryAssertion[] }, Error>;
     suggestions: UseQueryResult<{ items: MemorySuggestion[] }, Error>;
@@ -32,7 +32,10 @@ interface MemoryListPanelProps {
   canPublish: boolean;
   onFilters: (filters: MemoryFilters) => void;
   onView: (view: MemoryView) => void;
+  onComposeExit: () => void;
   onComposeDone: () => void;
+  onComposeDiscard: () => void;
+  onComposeDirty: (dirty: boolean) => void;
   onCorrect?: (assertion: MemoryAssertion) => void;
   onDisable: (assertion: MemoryAssertion) => void;
   onAccept: (suggestion: MemorySuggestion) => void;
@@ -56,6 +59,16 @@ export function MemoryListPanel(props: MemoryListPanelProps) {
     suggestionPage.visible[0] ??
     null;
 
+  function selectAssertion(id: string) {
+    setSelectedAssertionID(id);
+    props.onComposeExit();
+  }
+
+  function selectSuggestion(id: string) {
+    setSelectedSuggestionID(id);
+    props.onComposeExit();
+  }
+
   return (
     <Panel title={t("memory.assertions")} flush>
       <MemoryBrowserToolbar
@@ -73,8 +86,8 @@ export function MemoryListPanel(props: MemoryListPanelProps) {
               suggestionPage={suggestionPage}
               selectedAssertionID={selectedAssertion?.id}
               selectedSuggestionID={selectedSuggestion?.id}
-              onAssertionSelect={setSelectedAssertionID}
-              onSuggestionSelect={setSelectedSuggestionID}
+              onAssertionSelect={selectAssertion}
+              onSuggestionSelect={selectSuggestion}
             />
           </ScrollArea>
         </aside>
@@ -136,27 +149,73 @@ function ReaderSide({
   selectedAssertion: MemoryAssertion | null;
   selectedSuggestion: MemorySuggestion | null;
 }) {
-  if (props.state.composing) {
-    return <MemoryCreatePanel framed={false} onDone={props.onComposeDone} />;
-  }
-  if (props.state.view === "suggested") {
-    if (!selectedSuggestion) return <ReaderEmpty kind="suggestions" />;
+  return (
+    <>
+      {props.state.composeStarted && (
+        <div className={props.state.composing ? undefined : "hidden"}>
+          <MemoryCreatePanel
+            framed={false}
+            onExit={props.onComposeExit}
+            onDone={props.onComposeDone}
+            onDiscard={props.onComposeDiscard}
+            onDirtyChange={props.onComposeDirty}
+          />
+        </div>
+      )}
+      {!props.state.composing && (
+        <MemoryReader
+          view={props.state.view}
+          canPublish={props.canPublish}
+          selection={{ assertion: selectedAssertion, suggestion: selectedSuggestion }}
+          actions={{
+            correct: props.onCorrect,
+            disable: props.onDisable,
+            accept: props.onAccept,
+            dismiss: props.onDismiss,
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+function MemoryReader({
+  view,
+  canPublish,
+  selection,
+  actions,
+}: {
+  view: MemoryView;
+  canPublish: boolean;
+  selection: {
+    assertion: MemoryAssertion | null;
+    suggestion: MemorySuggestion | null;
+  };
+  actions: {
+    correct?: (assertion: MemoryAssertion) => void;
+    disable: (assertion: MemoryAssertion) => void;
+    accept: (suggestion: MemorySuggestion) => void;
+    dismiss: (suggestion: MemorySuggestion) => void;
+  };
+}) {
+  if (view === "suggested") {
+    if (!selection.suggestion) return <ReaderEmpty kind="suggestions" />;
     return (
       <MemorySuggestionCard
-        suggestion={selectedSuggestion}
-        canReview={props.canPublish}
-        onAccept={props.onAccept}
-        onDismiss={props.onDismiss}
+        suggestion={selection.suggestion}
+        canReview={canPublish}
+        onAccept={actions.accept}
+        onDismiss={actions.dismiss}
       />
     );
   }
-  if (!selectedAssertion) return <ReaderEmpty kind="assertions" />;
+  if (!selection.assertion) return <ReaderEmpty kind="assertions" />;
   return (
     <MemoryAssertionCard
-      assertion={selectedAssertion}
-      canDisable={props.canPublish}
-      onCorrect={props.onCorrect}
-      onDisable={props.onDisable}
+      assertion={selection.assertion}
+      canDisable={canPublish}
+      onCorrect={actions.correct}
+      onDisable={actions.disable}
     />
   );
 }
