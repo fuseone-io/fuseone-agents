@@ -27,6 +27,95 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.39.0] — 2026-08-28
+
+Teaching an agent a fact no longer means filling a ledger record, and a run that
+keeps re-reading the same thing now stops instead of buying another turn.
+
+### Upgrade notes
+
+- **Raise the Helm timeout to at least 25 minutes.** This release adds a
+  `reconcile-memory` Job as a `pre-install,pre-upgrade` hook, running after the
+  migration. Helm's default is five minutes and it abandons a hook that outlasts
+  it, failing the release while the work is still running. Pass
+  `--timeout 25m`. On Argo CD the equivalent is `controller.sync.timeout.seconds`
+  wherever it is set — its default is `0`, meaning no limit, so an Application
+  left at the default waits. The Job itself exits zero when it finds records it
+  cannot converge; it reports the counts and does not block the release.
+- **Three fields left the memory creation contract.** `POST /admin/memory/assertions`
+  no longer accepts `agentId`, `observations`, `confirmed` or `expiresAt`, and
+  `namespace` is now required and must be `agent` or `shared`. A client that
+  still sends the old shape is refused. The agent is read from the run the
+  evidence names, the counters start at one, and memory lasts 30 days from the
+  decision that wrote it. Nothing about existing stored memory changes.
+- **Memory creation now proves its evidence before writing.** A citation whose
+  run cannot be read, or whose bytes are no longer in the content store, is
+  refused instead of producing a memory nothing can support. Installations that
+  scripted memory creation against runs they later erased will see those calls
+  refused.
+- **The built-in policy version moved to `builtin/v4`.** Recorded decisions
+  carry the version that produced them, so old records stay readable and
+  comparable; nothing is rewritten.
+- **A run may no longer publish an artifact named `final_answer`.** That name
+  belongs to the run's closing answer, and an artifact under it could never be
+  cited. It is dropped from what the run publishes; the run still finishes.
+
+### Added
+
+- **"Remember this", from the run that showed it.** A step that a memory can
+  cite offers to teach one, for whoever can publish. The citation, the labels
+  and the agent come from the ledger and are shown without being editable; what
+  is asked for is what only a person knows.
+- **What already answers this, before it is taught again.** Both authoring paths
+  show the active, shared or pending memory with the same identity before
+  saving, and each state offers only what the platform will accept: correcting,
+  reactivating, renewing, improving the shared one explicitly, or reading the
+  review queue. An erased source is shown and offers nothing.
+- **A pending suggestion can be accepted in better words.** The claim is
+  editable; the subject, signature and kind are the identity and are not.
+- **A disabled memory can be brought back**, with a reason, recorded as its own
+  event.
+- **A run stops instead of re-reading.** Three consecutive read calls returning
+  the same result park the run for a person rather than buying another turn.
+- **An architecture drawing in the README and NT-010**, with a test that fails
+  if the package layering stops matching what is drawn.
+
+### Changed
+
+- **Prompt caching now works on every provider, not only Anthropic.** Per-stage
+  guidance is stable, so an OpenAI-compatible endpoint sees an exact growing
+  prefix; the changing budget remainder no longer sits inside it. Long runs keep
+  a bounded transcript in stable generations, so older results become receipts
+  in steps rather than one per turn.
+- **Repeated tool calls are recognised by what they say, not how they were
+  spelled.** Argument order and whitespace no longer make one call look like
+  two. A completed read may be repeated to observe a changing source; writes
+  stay exactly-once, and a call whose outcome never reached the ledger stays
+  blocked.
+- **Memory identity is canonical.** `"Slack Alerts"` and `" slack   alerts "`
+  are one fact, so correcting one no longer creates a second.
+
+### Fixed
+
+- **Policies can be edited and removed from the list again.** Editing works from
+  the row and from its icon, removal names the policy and asks first, and the
+  list refreshes after.
+- **Memory taught from a tainted run keeps the taint.** The closing step now
+  carries the labels the run had accumulated, so a fact learned inside a
+  poisoned run is no longer remembered as trustworthy.
+- **Erased evidence ends the memory that rested on it**, dated when the platform
+  found out rather than inheriting the last human decision's timestamp.
+
+### Security
+
+- **Memory that looks like a credential is refused.** A private key or a
+  complete recognised token is blocked outright; text long and random enough to
+  be a credential warns, and a person with publish permission may override it —
+  which marks the assertion with `secret` rather than clearing quietly. Nothing
+  repeats the refused value in an error, a log or an event. Automatic
+  confirmation has no override: such a proposal stays pending for review.
+
+
 ## [0.38.10] — 2026-08-27
 
 ### Changed
