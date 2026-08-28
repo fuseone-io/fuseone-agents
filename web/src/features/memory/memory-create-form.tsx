@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -11,10 +12,12 @@ import type { MemoryFormValues } from "@/features/memory/memory-form-schema";
 export function MemoryCreateForm({
   form,
   isPending,
+  matchNotice,
   onSubmit,
 }: {
   form: UseFormReturn<MemoryFormValues>;
   isPending: boolean;
+  matchNotice?: ReactNode;
   onSubmit: (values: MemoryFormValues) => void;
 }) {
   const { t } = useTranslation();
@@ -38,6 +41,7 @@ export function MemoryCreateForm({
         <MemoryNamespaceField control={form.control} />
         <MemoryFactFields control={form.control} />
         <EvidenceFields control={form.control} />
+        {matchNotice}
         <MemoryInputField
           control={form.control}
           name="reason"

@@ -1,6 +1,7 @@
-import { render, screen, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryPage } from "@/features/memory/memory-page";
 import { useActiveScope } from "@/features/scope/active-scope";
 import { setLocale } from "@/i18n";
@@ -71,6 +72,7 @@ describe("governed memory page", () => {
     hooks.dismiss.mockReset();
     useActiveScope.setState({ company: "acme", area: "ops" });
   });
+  afterEach(() => vi.unstubAllGlobals());
 
   it("shows that more remembered assertions exist instead of cutting silently", () => {
     hooks.items = Array.from({ length: 9 }, (_, index) =>
@@ -152,11 +154,15 @@ describe("governed memory page", () => {
   });
 
   it("records a reviewed assertion with ledger evidence", async () => {
+    stubMemoryAuthoringNetwork();
     const user = userEvent.setup();
-    render(<MemoryPage />);
+    renderMemoryPageWithClient();
     await user.click(screen.getByRole("button", { name: "Record memory" }));
     await fillAssertion(user);
 
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Save memory" })).toBeEnabled(),
+    );
     await user.click(screen.getByRole("button", { name: "Save memory" }));
 
     // No agent, no counters, no expiry: the server reads the agent off the run
@@ -423,4 +429,37 @@ function memorySuggestion(index: number): MemorySuggestion {
     updatedBy: "agent:triage",
     updatedAt: "2026-08-25T12:00:00Z",
   };
+}
+
+function renderMemoryPageWithClient() {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={client}>
+      <MemoryPage />
+    </QueryClientProvider>,
+  );
+}
+
+function stubMemoryAuthoringNetwork() {
+  vi.stubGlobal("fetch", vi.fn(async (request: Request) => {
+    const path = new URL(request.url).pathname;
+    if (path.endsWith("/runs/run_1")) {
+      return json({
+        runId: "run_1",
+        agentId: "triage",
+        scope: { company: "acme", area: "ops" },
+      });
+    }
+    if (path.endsWith("/memory/match")) return json({});
+    throw new Error(`unexpected request: ${path}`);
+  }));
+}
+
+function json(body: unknown) {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
 }

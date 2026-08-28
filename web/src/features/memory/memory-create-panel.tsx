@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Panel } from "@/components/shared/panel";
@@ -10,6 +10,8 @@ import {
   toMemoryAssertionInput,
 } from "@/features/memory/memory-create-model";
 import { MemoryCreateForm } from "@/features/memory/memory-create-form";
+import { useMemoryCreateMatch } from "@/features/memory/memory-create-match";
+import { MemoryCreateMatchNotice } from "@/features/memory/memory-create-match-notice";
 import {
   memoryFormSchema,
   type MemoryFormValues,
@@ -32,6 +34,8 @@ export function MemoryCreatePanel({
     mode: "onChange",
     defaultValues: memoryDefaults(activeCompany, activeArea),
   });
+  const match = useMemoryCreateMatch(form);
+  const reason = useWatch({ control: form.control, name: "reason" });
 
   async function submit(values: MemoryFormValues) {
     try {
@@ -51,7 +55,19 @@ export function MemoryCreatePanel({
       </p>
       <MemoryCreateForm
         form={form}
-        isPending={create.isPending}
+        isPending={create.isPending || (match.required && !match.ready)}
+        matchNotice={
+          <MemoryCreateMatchNotice
+            state={match}
+            reason={reason}
+            onImproveShared={() =>
+              form.setValue("namespace", "shared", {
+                shouldDirty: true,
+                shouldValidate: true,
+              })
+            }
+          />
+        }
         onSubmit={submit}
       />
     </>
