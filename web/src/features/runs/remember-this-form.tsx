@@ -4,7 +4,11 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Form } from "@/components/ui/form";
-import { useCreateMemoryAssertion } from "@/features/memory/api";
+import {
+  useCreateMemoryAssertion,
+  useMemoryMatch,
+} from "@/features/memory/api";
+import { MemoryDuplicateNotice } from "@/features/memory/memory-duplicate-notice";
 import { MemoryCitationField } from "@/features/memory/memory-citation-field";
 import { MemoryEvidenceChip } from "@/features/memory/memory-evidence-chip";
 import { MemoryFactFields } from "@/features/memory/memory-fact-fields";
@@ -35,14 +39,15 @@ import type { Run, Step } from "@/lib/api/client";
 export function RememberThisForm({
   runId,
   step,
-  scope,
+  run,
   onDone,
 }: {
   runId: string;
   step: Step;
-  scope: Run["scope"];
+  run: Pick<Run, "scope" | "agentId">;
   onDone: () => void;
 }) {
+  const { scope, agentId } = run;
   const { t } = useTranslation();
   const create = useCreateMemoryAssertion();
   const citations = citationsOf(step);
@@ -56,6 +61,19 @@ export function RememberThisForm({
   // rather than asking for a run the screen behind it is displaying.
   const trail = useRunSteps(runId);
   const chosen = form.watch("evidenceArtifact");
+  // Asked about what is being typed, so the answer is there before the decision
+  // rather than as a conflict afterwards. The agent is the run's own: unlike
+  // creation there is no evidence to read it from yet, because nothing has been
+  // composed, and the run in front of the person is whose namespace this is.
+  const match = useMemoryMatch({
+    company: scope.company,
+    area: scope.area,
+    namespace: form.watch("namespace"),
+    agentId: agentId || undefined,
+    kind: form.watch("kind"),
+    subject: form.watch("subject"),
+    signature: form.watch("signature"),
+  });
 
   // The button is only offered where there is something to cite, so this is an
   // impossible state rather than an empty one — and a form with no evidence
@@ -84,6 +102,11 @@ export function RememberThisForm({
           labels={labelsUpTo(trail.items, step.seq)}
         />
         <MemoryNamespaceField control={form.control} />
+        <MemoryDuplicateNotice
+          match={match.data}
+          reason={form.watch("reason")}
+          onImproveShared={() => form.setValue("namespace", "shared")}
+        />
         <MemoryFactFields control={form.control} />
         <MemoryInputField
           control={form.control}

@@ -63,7 +63,7 @@ export function RememberThisButton({
             <RememberThisForm
               runId={runId}
               step={step}
-              scope={run.data.scope}
+              run={run.data}
               onDone={() => setOpen(false)}
             />
           ) : run.error ? (
