@@ -1549,6 +1549,7 @@
     "unbounded": "Sem teto de custo nem de passos: nada o obriga a terminar."
   },
   "memory": {
+    "acceptClaimHint": "Reescreva se o texto puder ficar melhor. Tipo, assunto e assinatura são a identidade e não mudam aqui.",
     "acceptHint": "Aceitar promove esta sugestão estruturada para memória ativa. Ela será devolvida aos agentes com os labels mostrados aqui.",
     "acceptSuggestion": "Aceitar sugestão",
     "acceptTitle": "Aceitar esta sugestão de memória?",

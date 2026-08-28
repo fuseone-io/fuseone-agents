@@ -117,6 +117,13 @@ export function useAcceptMemorySuggestion() {
       company: string;
       area: string;
       reason: string;
+      /**
+       * The claim in better words, when somebody rewrote it. Omitted means
+       * they agreed with the wording as well as with the fact — which is a
+       * different thing to record, so the field is left out rather than sent
+       * as the text that was already there.
+       */
+      claim?: string;
     }) =>
       unwrap(
         await api.POST("/admin/memory/suggestions/{suggestionId}/accept", {
@@ -125,6 +132,7 @@ export function useAcceptMemorySuggestion() {
             company: input.company,
             area: input.area,
             reason: input.reason,
+            ...(input.claim === undefined ? {} : { claim: input.claim }),
           },
         }),
       ),

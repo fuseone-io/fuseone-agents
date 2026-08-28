@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RememberThisButton } from "@/features/runs/remember-this-button";
@@ -43,7 +43,7 @@ function json(body: unknown) {
  * both places would let the permission tests pass on whichever source the
  * component did not use.
  */
-function stubNetwork(posted: unknown[]) {
+function stubNetwork(posted: unknown[], matched: unknown[] = []) {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: Request | RequestInfo | URL, init?: RequestInit) => {
@@ -55,7 +55,19 @@ function stubNetwork(posted: unknown[]) {
       const path = new URL(url, "http://localhost").pathname;
       if (path.endsWith("/steps")) return json(TRAIL);
       if (path.endsWith("/runs/run-1")) {
-        return json({ runId: "run-1", scope: { company: "acme", area: "ops" } });
+        return json({
+          runId: "run-1",
+          agentId: "triage",
+          scope: { company: "acme", area: "ops" },
+        });
+      }
+      if (path.endsWith("/memory/match")) {
+        const body =
+          input instanceof Request
+            ? await input.clone().text()
+            : String(init?.body ?? "");
+        matched.push(JSON.parse(body));
+        return json({});
       }
       if (path.endsWith("/memory/assertions")) {
         // The client builds a Request, so the body is on it rather than in
@@ -206,6 +218,37 @@ describe("teaching a memory from a run", () => {
 
     await vi.waitFor(() => expect(posted).toHaveLength(1));
     expect((posted[0] as { namespace: string }).namespace).toBe("shared");
+  });
+
+  it("names an agent only while matching agent-scoped memory", async () => {
+    const matched: unknown[] = [];
+    stubNetwork([], matched);
+    const user = userEvent.setup();
+    renderButton();
+
+    const sheet = await openSheet();
+    await fillTheFact(user);
+    await waitFor(() => expect(matched).toHaveLength(1));
+    expect(matched[0]).toEqual({
+      company: "acme",
+      area: "ops",
+      namespace: "agent",
+      agentId: "triage",
+      kind: "policy",
+      subject: "refunds",
+      signature: "refund.limit",
+    });
+
+    await user.click(within(sheet).getByRole("radio", { name: /todos/i }));
+    await waitFor(() => expect(matched).toHaveLength(2));
+    expect(matched[1]).toEqual({
+      company: "acme",
+      area: "ops",
+      namespace: "shared",
+      kind: "policy",
+      subject: "refunds",
+      signature: "refund.limit",
+    });
   });
 
   // A trail that has not reached the cited step folds to fewer labels, not to

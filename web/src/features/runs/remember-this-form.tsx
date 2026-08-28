@@ -65,11 +65,12 @@ export function RememberThisForm({
   // rather than as a conflict afterwards. The agent is the run's own: unlike
   // creation there is no evidence to read it from yet, because nothing has been
   // composed, and the run in front of the person is whose namespace this is.
+  const namespace = form.watch("namespace");
   const match = useMemoryMatch({
     company: scope.company,
     area: scope.area,
-    namespace: form.watch("namespace"),
-    agentId: agentId || undefined,
+    namespace,
+    ...(namespace === "agent" && agentId ? { agentId } : {}),
     kind: form.watch("kind"),
     subject: form.watch("subject"),
     signature: form.watch("signature"),

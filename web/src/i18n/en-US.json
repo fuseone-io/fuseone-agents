@@ -1549,6 +1549,7 @@
     "unbounded": "No cost or step ceiling: nothing obliges it to finish."
   },
   "memory": {
+    "acceptClaimHint": "Rewrite it if the wording can be better. Kind, subject and signature are the identity and do not change here.",
     "acceptHint": "Accepting promotes this structured suggestion to active memory. It will be returned to agents with the labels shown here.",
     "acceptSuggestion": "Accept suggestion",
     "acceptTitle": "Accept this memory suggestion?",
