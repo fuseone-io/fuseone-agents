@@ -423,6 +423,42 @@ func TestAnthropic_systemPrompt_isCachedAndFreeOfVolatileText(t *testing.T) {
 	}
 }
 
+func TestAnthropic_previousTranscriptPrefixIsCachedBeforeVolatileNotes(t *testing.T) {
+	t.Parallel()
+	c := serve(t, anthropicToolUse)
+	in := input()
+	in.Step = "Investigate the alert"
+	in.StopsWhen = "the cause is supported by evidence"
+	in.Tools = append(in.Tools, domain.ToolMemoryFind)
+
+	_, err := plannerFor(t, model.KindAnthropic, c.server.URL, model.Config{}).
+		Plan(context.Background(), in)
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+
+	messages, _ := c.body["messages"].([]any)
+	if len(messages) < 2 {
+		t.Fatalf("messages = %+v, want cached transcript followed by volatile notes", messages)
+	}
+	previous := messageContentBlocks(t, messages[len(messages)-2])
+	if len(previous) == 0 || previous[len(previous)-1]["cache_control"] == nil {
+		t.Fatalf("previous transcript tail = %+v, want a cache breakpoint", previous)
+	}
+	volatile := messageContentBlocks(t, messages[len(messages)-1])
+	if len(volatile) != 1 || volatile[0]["cache_control"] != nil {
+		t.Fatalf("volatile note = %+v, want one uncached block", volatile)
+	}
+	text := asString(volatile[0]["text"])
+	for _, want := range []string{
+		"Investigate the alert", "Governed memory lookup is available", "Budget remaining",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("volatile note does not contain %q:\n%s", want, text)
+		}
+	}
+}
+
 func TestLoopContract_tellsTheModelToFinishWithTheFinishTool(t *testing.T) {
 	t.Parallel()
 
@@ -437,14 +473,7 @@ func TestLoopContract_tellsTheModelToFinishWithTheFinishTool(t *testing.T) {
 			kind:     model.KindAnthropic,
 			response: anthropicToolUse,
 			system: func(body map[string]any) string {
-				blocks, _ := body["system"].([]any)
-				var text strings.Builder
-				for _, b := range blocks {
-					m, _ := b.(map[string]any)
-					text.WriteString(" ")
-					text.WriteString(asString(m["text"]))
-				}
-				return text.String()
+				return anthropicPromptText(body)
 			},
 		},
 		{
@@ -503,14 +532,7 @@ func TestMemoryTools_areExplainedOnlyWhenOffered(t *testing.T) {
 			kind:     model.KindAnthropic,
 			response: anthropicToolUse,
 			system: func(body map[string]any) string {
-				blocks, _ := body["system"].([]any)
-				var text strings.Builder
-				for _, b := range blocks {
-					m, _ := b.(map[string]any)
-					text.WriteString(" ")
-					text.WriteString(asString(m["text"]))
-				}
-				return text.String()
+				return anthropicPromptText(body)
 			},
 		},
 		{
@@ -602,6 +624,39 @@ func TestOpenAICompatible_finishTool_becomesTheSameFinishedProposal(t *testing.T
 func asString(v any) string {
 	s, _ := v.(string)
 	return s
+}
+
+func messageContentBlocks(t *testing.T, message any) []map[string]any {
+	t.Helper()
+	m, _ := message.(map[string]any)
+	raw, _ := m["content"].([]any)
+	blocks := make([]map[string]any, 0, len(raw))
+	for _, item := range raw {
+		block, _ := item.(map[string]any)
+		blocks = append(blocks, block)
+	}
+	return blocks
+}
+
+func anthropicPromptText(body map[string]any) string {
+	var text strings.Builder
+	blocks, _ := body["system"].([]any)
+	for _, block := range blocks {
+		m, _ := block.(map[string]any)
+		text.WriteString(" ")
+		text.WriteString(asString(m["text"]))
+	}
+	messages, _ := body["messages"].([]any)
+	for _, message := range messages {
+		m, _ := message.(map[string]any)
+		content, _ := m["content"].([]any)
+		for _, block := range content {
+			item, _ := block.(map[string]any)
+			text.WriteString(" ")
+			text.WriteString(asString(item["text"]))
+		}
+	}
+	return text.String()
 }
 
 // --- OpenAI-compatible -------------------------------------------------------

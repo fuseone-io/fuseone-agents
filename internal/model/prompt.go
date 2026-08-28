@@ -12,6 +12,42 @@ import (
 const promptBreakdownUnit = "content_bytes"
 
 /*
+stepNote tells the model which stage it is in and what its author said would
+end it. Nothing is inferred from the response: the model must name the
+exception through the finish tool for the trail to record it.
+*/
+func stepNote(in engine.PlanInput) string {
+	if in.StopsWhen == "" {
+		return fmt.Sprintf("You are at the step called %q.", in.Step)
+	}
+	return fmt.Sprintf(
+		"You are at the step called %q. Its author wrote that it stops when: %s\n"+
+			"If that has happened, call the finish tool with `stopped_by` set to "+
+			"exactly `%s`, then explain in `summary` in your own words.",
+		in.Step, in.StopsWhen, in.StopsWhen)
+}
+
+// loopContract is stable across every agent and belongs in the cached prefix.
+const loopContract = `You are running inside a governed agent platform.
+
+Every action you propose passes through a deterministic gate before it happens.
+A refused call is reported back to you with the rule that refused it — treat
+that as final for this run and choose another approach rather than retrying.
+
+Propose one tool call at a time. When there is nothing left to do, call the
+finish tool with a short plain-text summary. That is the only way to finish.
+
+If more investigation requires a tool that is available to this run, call that
+tool now. Do not say that you will continue, check logs, inspect metrics, read
+documents, or use a tool later; text without a tool is not progress and the
+run will stop for a person to inspect.
+
+When the step you are at names the thing that ends it, and that thing has
+happened, you call the finish tool and set "stopped_by" to that step's own
+words, copied. The field is how the record says the run ended where its author
+said it would; without it the record says only that the run finished.`
+
+/*
 promptInputBreakdown measures the content the platform put in front of the
 model, grouped by where it came from.
 

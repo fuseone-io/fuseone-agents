@@ -8,7 +8,6 @@ package model
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -121,8 +120,8 @@ func (a *Anthropic) Plan(ctx context.Context, in engine.PlanInput) (engine.Propo
 		// route an installation's traffic wherever its author liked.
 		Model:     anthropic.Model(or(in.Model, a.cfg.Model)),
 		MaxTokens: a.cfg.MaxTokens,
-		System:    a.system(in, offered),
-		Messages:  messagesFrom(in.Transcript, offered),
+		System:    a.system(),
+		Messages:  a.messages(in, offered),
 		Tools:     tools,
 		// The engine can execute at most one proposal per turn, and finishing
 		// is a platform tool. Requiring a single tool use prevents the model
@@ -159,121 +158,6 @@ func (a *Anthropic) Plan(ctx context.Context, in engine.PlanInput) (engine.Propo
 	}
 
 	return a.proposalFrom(resp, offered, prompt, cost, price, model), nil
-}
-
-// system builds the system prompt.
-//
-// Order matters for caching: the API renders tools, then system, then
-// messages, and a cache breakpoint on the last system block covers everything
-// before it. Nothing volatile goes in here — no timestamps, no run identifiers
-// — or the prefix changes on every request and nothing is ever read from cache
-// (PRD FO-09).
-func (a *Anthropic) system(in engine.PlanInput, offered names) []anthropic.TextBlockParam {
-	blocks := []anthropic.TextBlockParam{{Text: a.cfg.SystemPrompt}}
-	blocks = append(blocks, anthropic.TextBlockParam{Text: loopContract})
-
-	// The breakpoint sits on the last stable block. The remaining-budget note
-	// below it changes every turn and is deliberately outside the cached span.
-	blocks[len(blocks)-1].CacheControl = anthropic.NewCacheControlEphemeralParam()
-
-	// Where the run is, and the exception the author wrote for it. Outside
-	// the cached prefix because it changes as the run advances.
-	if in.Step != "" {
-		blocks = append(blocks, anthropic.TextBlockParam{Text: stepNote(in)})
-	}
-	if note := memoryToolsNote(in, a.tools, offered); note != "" {
-		blocks = append(blocks, anthropic.TextBlockParam{Text: note})
-	}
-
-	if note := budgetNote(in); note != "" {
-		blocks = append(blocks, anthropic.TextBlockParam{Text: note})
-	}
-	return blocks
-}
-
-/*
-stepNote tells the model which stage it is in and what its author said would
-end it.
-
-The convention for answering is stated rather than inferred: a run that stops
-on the declared exception says so in a form that can be recorded verbatim. A
-model that ignores the convention simply produces no assertion, which is the
-right failure — a trail that guessed would be claiming the exception happened
-when nobody said it did.
-*/
-func stepNote(in engine.PlanInput) string {
-	if in.StopsWhen == "" {
-		return fmt.Sprintf("You are at the step called %q.", in.Step)
-	}
-	return fmt.Sprintf(
-		"You are at the step called %q. Its author wrote that it stops when: %s\n"+
-			"If that has happened, call the finish tool with `stopped_by` set to "+
-			"exactly `%s`, then explain in `summary` in your own words.",
-		in.Step, in.StopsWhen, in.StopsWhen)
-}
-
-// loopContract tells the model how this platform works. It is stable across
-// every agent, so it sits inside the cached prefix.
-const loopContract = `You are running inside a governed agent platform.
-
-Every action you propose passes through a deterministic gate before it happens.
-A refused call is reported back to you with the rule that refused it — treat
-that as final for this run and choose another approach rather than retrying.
-
-Propose one tool call at a time. When there is nothing left to do, call the
-finish tool with a short plain-text summary. That is the only way to finish.
-
-If more investigation requires a tool that is available to this run, call that
-tool now. Do not say that you will continue, check logs, inspect metrics, read
-documents, or use a tool later; text without a tool is not progress and the
-run will stop for a person to inspect.
-
-When the step you are at names the thing that ends it, and that thing has
-happened, you call the finish tool and set "stopped_by" to that step's own
-words, copied. The field is how the record says the run ended where its author
-said it would; without it the record says only that the run finished.`
-
-func (a *Anthropic) toolParams(ids []domain.ToolID, offered names) []anthropic.ToolUnionParam {
-	out := make([]anthropic.ToolUnionParam, 0, len(ids))
-	for _, id := range ids {
-		if isContextReadTool(id) {
-			out = append(out, contextReadToolParam(offered))
-			continue
-		}
-		if a.tools == nil {
-			continue
-		}
-		_, desc, schema, ok := a.tools.Schema(id)
-		if !ok {
-			continue
-		}
-		tool := anthropic.ToolParam{
-			Name:        offered.wire[id],
-			Description: anthropic.String(desc),
-			InputSchema: anthropic.ToolInputSchemaParam{Properties: schema},
-		}
-		out = append(out, anthropic.ToolUnionParam{OfTool: &tool})
-	}
-	out = append(out, finishToolParam(offered))
-	return out
-}
-
-func contextReadToolParam(offered names) anthropic.ToolUnionParam {
-	tool := anthropic.ToolParam{
-		Name:        offered.wire[domain.ToolContextRead],
-		Description: anthropic.String(contextReadToolDescription),
-		InputSchema: anthropic.ToolInputSchemaParam{Properties: contextReadToolSchema()},
-	}
-	return anthropic.ToolUnionParam{OfTool: &tool}
-}
-
-func finishToolParam(offered names) anthropic.ToolUnionParam {
-	tool := anthropic.ToolParam{
-		Name:        offered.wire[finishToolID],
-		Description: anthropic.String(finishToolDescription),
-		InputSchema: anthropic.ToolInputSchemaParam{Properties: finishToolSchema()},
-	}
-	return anthropic.ToolUnionParam{OfTool: &tool}
 }
 
 /*
@@ -349,44 +233,6 @@ func (a *Anthropic) cost(u anthropic.Usage, model string) domain.Cost {
 
 func formatMicros(m int64) string {
 	return fmt.Sprintf("%d.%06d", m/1_000_000, m%1_000_000)
-}
-
-// messagesFrom converts the ledger-derived transcript into the wire format.
-//
-// Tool calls and their results must pair by identifier, and the transcript
-// derives those identifiers from the run and sequence — so a rebuilt
-// transcript pairs identically to the one the previous worker sent.
-func messagesFrom(turns []engine.Turn, offered names) []anthropic.MessageParam {
-	var out []anthropic.MessageParam
-
-	for _, t := range turns {
-		switch t.Kind {
-		case engine.TurnInput:
-			out = append(out, anthropic.NewUserMessage(anthropic.NewTextBlock(t.Text)))
-
-		case engine.TurnNote:
-			out = append(out, anthropic.NewUserMessage(anthropic.NewTextBlock(t.Text)))
-
-		case engine.TurnToolUse:
-			var input any
-			if len(t.Args) > 0 {
-				_ = json.Unmarshal(t.Args, &input)
-			}
-			out = append(out, anthropic.NewAssistantMessage(
-				anthropic.NewToolUseBlock(t.CallID, input, offered.wire[t.Tool]),
-			))
-
-		case engine.TurnToolResult:
-			out = append(out, anthropic.NewUserMessage(
-				anthropic.NewToolResultBlock(t.CallID, toolResultContent(t), t.Failed),
-			))
-		}
-	}
-
-	if len(out) == 0 {
-		out = append(out, anthropic.NewUserMessage(anthropic.NewTextBlock(nothingSaid)))
-	}
-	return out
 }
 
 // or is the step's choice, falling back to the agent's. Almost every step
