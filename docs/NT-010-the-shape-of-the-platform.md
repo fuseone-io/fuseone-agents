@@ -13,6 +13,8 @@ rather than leaving the reader to assume one exists.
 
 ```mermaid
 sequenceDiagram
+  accTitle: One governed run from start to record
+  accDescr: A worker folds ledger steps, asks a model to plan, sends the proposal through the Gate, and records an allowed call or a refusal before repeating or finishing.
   participant W as worker
   participant L as ledger
   participant M as model provider
@@ -20,7 +22,7 @@ sequenceDiagram
   participant T as tool
 
   W->>L: read the run's steps
-  Note over W: fold them into state<br/>(no state is stored; it is derived)
+  Note over W: fold them into state<br/>(no state is stored, it is derived)
   W->>M: plan, given state and the tools this step may use
   M-->>W: one proposed call, or finish
   W->>G: evaluate(proposal, state, policy)
@@ -58,6 +60,8 @@ tests.
 
 ```mermaid
 flowchart RL
+  accTitle: Package dependency direction
+  accDescr: HTTP API may import engine, engine may import ledger, and ledger may import domain. Dependencies never point back toward the HTTP API.
   httpapi["httpapi<br/>HTTP, SSE, the OpenAPI contract"]
   engine["engine<br/>the loop, the fold, the ports"]
   ledger["ledger<br/>append-only steps, projections"]
@@ -87,6 +91,8 @@ reaches for a driver has put the driver in the package's world, but a ledger
 
 ```mermaid
 flowchart TB
+  accTitle: Ledger and erasable content stores
+  accDescr: An append-only ledger step holds a reference and digest that resolve to erasable argument, result, and closing-answer bytes in the content store.
   step["A step in the ledger<br/>kind, seq, labels, hash, small payload"]
   ref["A reference and a digest"]
   bytes["The bytes<br/>arguments, results, closing answers"]

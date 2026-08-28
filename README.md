@@ -19,6 +19,8 @@ one Helm chart.
 
 ```mermaid
 flowchart LR
+  accTitle: FuseOne Agents installation topology
+  accDescr: People reach the serving process. The worker plans with model providers and reaches business systems only after the Gate. Both processes share PostgreSQL and the content store.
   subgraph outside["Outside the boundary"]
     people["People<br/>browser, Slack, email"]
     systems["Business systems<br/>CRM, ERP, observability, APIs"]
