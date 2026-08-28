@@ -33,6 +33,10 @@ jobs:
         working-directory: docs/site
         run: npm ci
 
+      - name: Install Mermaid renderer
+        working-directory: docs/site
+        run: npx playwright install --with-deps chromium
+
       - name: Build
         working-directory: docs/site
         run: npm run build

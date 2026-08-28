@@ -1,8 +1,10 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
+import { unified } from "@astrojs/markdown-remark";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import staticMermaid from "./plugins/static-mermaid.mjs";
 
 const siteRoot = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(siteRoot, "..", "..");
@@ -60,6 +62,9 @@ function frontMatter(raw, file) {
 export default defineConfig({
   site: "https://fuseone-io.github.io",
   base: "/fuseone-agents/docs",
+  markdown: {
+    processor: unified({ rehypePlugins: [staticMermaid] }),
+  },
   integrations: [
     starlight({
       title: "FuseOne Agents",

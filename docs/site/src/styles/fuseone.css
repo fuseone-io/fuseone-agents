@@ -15,3 +15,33 @@
   --sl-color-bg-nav: #111919;
   --sl-color-text-accent: #7ee5de;
 }
+
+.mermaid-diagram {
+  width: 100%;
+  margin: 1.5rem 0;
+  overflow-x: auto;
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: 8px;
+  background: var(--sl-color-bg-nav);
+  padding: 1rem;
+}
+
+.mermaid-diagram__image {
+  display: block;
+  width: auto;
+  max-width: none;
+  height: auto;
+  margin-inline: auto;
+}
+
+.mermaid-diagram__image--dark {
+  display: none;
+}
+
+:root[data-theme="dark"] .mermaid-diagram__image--light {
+  display: none;
+}
+
+:root[data-theme="dark"] .mermaid-diagram__image--dark {
+  display: block;
+}

@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "node scripts/sync-source-docs.mjs && astro dev",
     "start": "node scripts/sync-source-docs.mjs && astro dev",
-    "build": "node scripts/sync-source-docs.mjs && astro build",
+    "build": "node scripts/sync-source-docs.mjs && astro build && node scripts/check-built-mermaid.mjs",
     "generate": "node scripts/sync-source-docs.mjs",
     "preview": "astro preview"
   },
@@ -13,6 +13,11 @@
     "@astrojs/starlight": "^0.41.9",
     "astro": "^7.2.7",
     "sharp": "^0.35.4"
+  },
+  "devDependencies": {
+    "@astrojs/markdown-remark": "^7.2.4",
+    "playwright": "^1.62.1",
+    "rehype-mermaid": "^3.0.0"
   },
   "allowScripts": {
     "esbuild@0.28.2": true
