@@ -208,23 +208,36 @@ export function useReactivateMemoryAssertion() {
  *
  * Disabled until the identity is complete. An incomplete one has no answer —
  * the server refuses it — and asking anyway would spend the round trip to be
- * told what the form already knows.
+ * told what the form already knows. Callers may also hold the query while
+ * resolving provenance the match request must carry, such as the run's agent.
  */
-export function useMemoryMatch(input: MemoryMatchInput) {
+export function useMemoryMatch(
+  input: MemoryMatchInput,
+  options: { enabled?: boolean; settle?: boolean } = {},
+) {
+  const { enabled = true, settle = true } = options;
   // Settled on the identity as one string rather than on the object: a new
   // object every render never equals the last, so waiting on the object itself
   // would wait for ever and ask nothing.
-  const settled = useSettled(memoryKeys.match(input).join("\u0000"), 400);
+  const current = memoryKeys.match(input).join("\u0000");
+  const delayed = useSettled(current, 400);
+  const settled = settle ? delayed : current;
   const asked = matchFromKey(settled);
   const complete = Boolean(
     asked.company && asked.area && asked.kind && asked.subject && asked.signature,
   );
-  return useQuery({
+  const namespaceComplete = asked.namespace === "shared" || Boolean(asked.agentId);
+  const isSettling = current !== settled;
+  const query = useQuery({
     queryKey: memoryKeys.match(asked),
-    enabled: complete,
+    enabled: enabled && !isSettling && complete && namespaceComplete,
     queryFn: async () =>
       unwrap(await api.POST("/admin/memory/match", { body: asked })),
   });
+  return {
+    ...query,
+    isSettling,
+  };
 }
 
 /**

@@ -47,9 +47,10 @@ export function useRuns(filters: RunFilters = {}) {
   );
 }
 
-export function useRun(runId: string) {
+export function useRun(runId: string, enabled = true) {
   return useQuery({
     queryKey: runKeys.detail(runId),
+    enabled: enabled && Boolean(runId),
     queryFn: async () =>
       unwrap(await api.GET("/runs/{runId}", { params: { path: { runId } } })),
   });
