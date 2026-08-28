@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { Pencil } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -8,7 +9,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
 import { Mono } from "@/components/shared/mono";
+import { RemoveButton } from "@/components/shared/remove-button";
 import { effectOf, stateOf } from "@/features/policies/policy-effect";
 import { cn } from "@/lib/utils";
 import type { Policy } from "@/lib/api/client";
@@ -20,8 +23,19 @@ import { draftSentence } from "@/features/policies/policy-sentence";
  * The sentence is the widest column because it is the rule: everything else on
  * the row — the code, the owner, the count — is how you find it again.
  */
-export function PoliciesTable({ policies }: { policies: Policy[] }) {
+export function PoliciesTable({
+  policies,
+  canManage,
+  deletingCode,
+  onDelete,
+}: {
+  policies: Policy[];
+  canManage: boolean;
+  deletingCode?: string;
+  onDelete: (code: string) => void;
+}) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   return (
     <Table>
       <TableHeader>
@@ -44,12 +58,24 @@ export function PoliciesTable({ policies }: { policies: Policy[] }) {
           <TableHead className="text-right text-2xs uppercase tracking-label">
             {t("policies.decisions")}
           </TableHead>
+          {canManage && (
+            <TableHead className="w-24 text-right text-2xs uppercase tracking-label">
+              {t("common.actions")}
+            </TableHead>
+          )}
         </TableRow>
       </TableHeader>
 
       <TableBody>
         {policies.map((policy) => (
-          <TableRow key={policy.code} className="h-11 border-border-subtle">
+          <TableRow
+            key={policy.code}
+            className="h-11 cursor-pointer border-border-subtle"
+            onClick={(event) => {
+              if ((event.target as HTMLElement).closest("a, button")) return;
+              void navigate(`/policies/${policy.code}`);
+            }}
+          >
             <TableCell>
               <Link to={`/policies/${policy.code}`} className="hover:underline">
                 <Mono>{policy.code}</Mono>
@@ -96,6 +122,32 @@ export function PoliciesTable({ policies }: { policies: Policy[] }) {
             <TableCell className="text-right">
               <Mono dim>{policy.hits ?? 0}</Mono>
             </TableCell>
+
+            {canManage && (
+              <TableCell className="text-right">
+                <div
+                  className="flex justify-end gap-1"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <Button variant="ghost" size="icon" asChild>
+                    <Link
+                      to={`/policies/${policy.code}`}
+                      aria-label={t("policies.editNamed", { name: policy.name })}
+                    >
+                      <Pencil className="size-4" aria-hidden />
+                    </Link>
+                  </Button>
+                  <RemoveButton
+                    title={t("policies.removeNamed", { name: policy.name })}
+                    description={t("policies.removeDescription", {
+                      code: policy.code,
+                    })}
+                    disabled={deletingCode === policy.code}
+                    onConfirm={() => onDelete(policy.code)}
+                  />
+                </div>
+              </TableCell>
+            )}
           </TableRow>
         ))}
       </TableBody>

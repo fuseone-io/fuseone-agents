@@ -14,16 +14,18 @@ import {
 } from "@/components/ui/alert-dialog";
 
 /**
- * Removing an integration changes what agents can do, so it asks first — and
- * the question says what breaks, not "tem certeza?".
+ * Removing durable configuration changes what agents can do, so it asks first
+ * and names the consequence instead of asking only "are you sure?".
  */
 export function RemoveButton({
   title,
   description,
+  disabled = false,
   onConfirm,
 }: {
   title: string;
   description: string;
+  disabled?: boolean;
   onConfirm: () => void;
 }) {
   const { t } = useTranslation();
@@ -31,7 +33,12 @@ export function RemoveButton({
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label={title}>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={title}
+          disabled={disabled}
+        >
           <Trash2 className="size-4" />
         </Button>
       </AlertDialogTrigger>
@@ -42,7 +49,7 @@ export function RemoveButton({
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
-          <AlertDialogAction onClick={onConfirm}>
+          <AlertDialogAction disabled={disabled} onClick={onConfirm}>
             {t("common.remove")}
           </AlertDialogAction>
         </AlertDialogFooter>
