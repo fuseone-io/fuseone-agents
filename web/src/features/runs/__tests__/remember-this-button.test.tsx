@@ -3,6 +3,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RememberThisButton } from "@/features/runs/remember-this-button";
+import { sessionKeys } from "@/features/session/api";
 import type { Step } from "@/lib/api/client";
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
@@ -33,9 +34,16 @@ function json(body: unknown) {
   });
 }
 
-/** Every request the sheet makes, answered at the network boundary. Posted
- *  bodies are collected so a test can assert what the console actually sent. */
-function stubNetwork(can: string[], posted: unknown[]) {
+/**
+ * Every request the sheet makes, answered at the network boundary. Posted
+ * bodies are collected so a test can assert what the console actually sent.
+ *
+ * The session is not among them: it is seeded into the cache below, and asking
+ * for it over the network fails here rather than falling back. Answering it in
+ * both places would let the permission tests pass on whichever source the
+ * component did not use.
+ */
+function stubNetwork(posted: unknown[]) {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: Request | RequestInfo | URL, init?: RequestInit) => {
@@ -45,7 +53,6 @@ function stubNetwork(can: string[], posted: unknown[]) {
       // session — and the test read the missing write as a form that never
       // submitted.
       const path = new URL(url, "http://localhost").pathname;
-      if (path.endsWith("/me")) return json({ id: "u", can });
       if (path.endsWith("/steps")) return json(TRAIL);
       if (path.endsWith("/runs/run-1")) {
         return json({ runId: "run-1", scope: { company: "acme", area: "ops" } });
@@ -66,10 +73,17 @@ function stubNetwork(can: string[], posted: unknown[]) {
   );
 }
 
-function renderButton(step: Step = FINISHED) {
+/**
+ * The session is seeded rather than awaited. In the product SessionGate has
+ * already resolved it before any run screen renders, so a test that lets it
+ * arrive mid-render is testing a state the console does not have — and it says
+ * so, by updating outside act.
+ */
+function renderButton(step: Step = FINISHED, can = ["agent:publish"]) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
+  client.setQueryData(sessionKeys.me, { id: "u", can });
   return render(
     <QueryClientProvider client={client}>
       <RememberThisButton runId="run-1" step={step} />
@@ -95,7 +109,7 @@ describe("teaching a memory from a run", () => {
 
   it("sends the run and the artifact, and never the digest or the labels", async () => {
     const posted: unknown[] = [];
-    stubNetwork(["agent:publish"], posted);
+    stubNetwork(posted);
     const user = userEvent.setup();
     renderButton();
 
@@ -123,7 +137,7 @@ describe("teaching a memory from a run", () => {
   // The taint of the run reaches the memory, so it is on screen before the
   // decision rather than in the record after it.
   it("shows the labels the run had accumulated by the cited step", async () => {
-    stubNetwork(["agent:publish"], []);
+    stubNetwork([]);
     renderButton();
     const sheet = await openSheet();
 
@@ -135,13 +149,63 @@ describe("teaching a memory from a run", () => {
   // — and a field somebody can change is one they can change to something the
   // run never produced.
   it("shows the citation without offering to edit it", async () => {
-    stubNetwork(["agent:publish"], []);
+    stubNetwork([]);
     renderButton();
     const sheet = await openSheet();
     const evidence = within(sheet).getByRole("region", { name: /evidência/i });
 
     expect(within(evidence).getByText(/run-1 · #3 · final_answer/)).toBeInTheDocument();
     expect(within(evidence).queryAllByRole("textbox")).toHaveLength(0);
+  });
+
+  // Picking among the names the ledger recorded. The chip has to follow the
+  // choice, and the request has to carry it — a selector the body ignores would
+  // record a memory citing the closing answer while the screen said otherwise.
+  it("cites the output that was chosen, not the one offered first", async () => {
+    const posted: unknown[] = [];
+    stubNetwork(posted);
+    const user = userEvent.setup();
+    renderButton({
+      ...FINISHED,
+      payload: {
+        ...FINISHED.payload,
+        artifacts: [
+          { name: "triage", ref: "run://run-1/3/cd", digest: "cd".repeat(32) },
+        ],
+      },
+    });
+
+    const sheet = await openSheet();
+    await user.click(within(sheet).getByRole("radio", { name: "triage" }));
+
+    expect(
+      within(sheet).getByText(/run-1 · #3 · triage · cdcdcdcd/),
+    ).toBeInTheDocument();
+
+    await fillTheFact(user);
+    await user.click(screen.getByRole("button", { name: /salvar memória/i }));
+
+    await vi.waitFor(() => expect(posted).toHaveLength(1));
+    expect((posted[0] as { evidence: unknown }).evidence).toEqual([
+      { runId: "run-1", artifact: "triage" },
+    ]);
+  });
+
+  // Shared memory is what every agent in the scope recalls, so it has to be
+  // reachable as well as never the default.
+  it("sends the shared namespace when somebody chooses it", async () => {
+    const posted: unknown[] = [];
+    stubNetwork(posted);
+    const user = userEvent.setup();
+    renderButton();
+
+    const sheet = await openSheet();
+    await user.click(within(sheet).getByRole("radio", { name: /todos/i }));
+    await fillTheFact(user);
+    await user.click(screen.getByRole("button", { name: /salvar memória/i }));
+
+    await vi.waitFor(() => expect(posted).toHaveLength(1));
+    expect((posted[0] as { namespace: string }).namespace).toBe("shared");
   });
 
   // A trail that has not reached the cited step folds to fewer labels, not to
@@ -153,7 +217,6 @@ describe("teaching a memory from a run", () => {
       vi.fn(async (input: Request | RequestInfo | URL) => {
         const url = input instanceof Request ? input.url : String(input);
         const path = new URL(url, "http://localhost").pathname;
-        if (path.endsWith("/me")) return json({ id: "u", can: ["agent:publish"] });
         // A page that does not start at the run's opening step: the console
         // holds part of the trail and cannot yet fold it.
         if (path.endsWith("/steps")) return json({ items: [FINISHED] });
@@ -169,19 +232,17 @@ describe("teaching a memory from a run", () => {
     expect(within(sheet).queryByText(/sem labels/i)).not.toBeInTheDocument();
   });
 
-  it("is not offered to somebody who cannot publish", async () => {
-    stubNetwork(["agent:read"], []);
-    renderButton();
+  it("is not offered to somebody who cannot publish", () => {
+    stubNetwork([]);
+    renderButton(FINISHED, ["agent:read"]);
 
-    await vi.waitFor(() =>
-      expect(
-        screen.queryByRole("button", { name: /lembrar disso/i }),
-      ).not.toBeInTheDocument(),
-    );
+    expect(
+      screen.queryByRole("button", { name: /lembrar disso/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("is not offered on a step no memory can cite", async () => {
-    stubNetwork(["agent:publish"], []);
+    stubNetwork([]);
     renderButton({
       seq: 2,
       kind: "tool_returned",
