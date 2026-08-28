@@ -136,6 +136,26 @@ recorded cost.</p>
 input, output, cache read and cache write because they do not cost the same.</p>
 <p>Even when cache read is cheap, it is still consumption. A good optimisation is
 one that appears in accounting, not one that disappears from it.</p>
+<p>Every model provider receives the same bounded transcript, canonical call
+identity, state-aware memory guidance and no-progress supervision. FuseOne also
+keeps stable instructions and the previous ledger-derived transcript reusable.
+Every provider receives the same stable per-step guidance, memory rules and
+fixed run ceiling. Anthropic marks that prefix with explicit cache breakpoints
+and additionally places the changing remaining budget after the cached
+transcript. OpenAI-compatible providers omit that per-turn remainder because
+their automatic cache requires an exact common prefix; the deterministic Gate
+still enforces the same ceiling. When result bytes cross the transcript budget,
+FuseOne replaces a completed generation with receipts at once. That starts one
+new bounded prefix and keeps it stable until the next generation crosses,
+instead of moving the receipt boundary on every turn. Providers without prompt
+caching still benefit from fewer calls and fewer replayed bytes. Reported cache
+read and cache write tokens remain visible in the run and in low-cardinality
+worker metrics.</p>
+<p>Completed read calls may poll the same arguments again because the source can
+change. Writes, equivalent governed-memory lookups and calls with an unknown
+outcome after a worker restart remain idempotent. Three successful reads of the
+same tool that return the same complete digest still park the run before a
+fourth model turn, even when the arguments were identical.</p>
 <div class="sl-heading-wrapper level-h2"><h2 id="finding-what-made-the-prompt-large">Finding what made the prompt large</h2><a class="sl-anchor-link" href="#finding-what-made-the-prompt-large"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Finding what made the prompt large”</span></a></div>
 <p>The run trail shows prompt content on each model proposal: instructions, input,
 platform notes and tool results.</p>
@@ -151,12 +171,21 @@ ask remains in the content store and trail; the model receives valid JSON with
 long fields shortened and a separate platform note with the stored size and a
 digest. This is most visible when a Slack alert or thread carries a large
 payload before the agent has called any tool.</p>
-<p>Large Grafana Loki and Prometheus query results, and large GitHub pull-request
-diffs, file contents, commits and logs, are compacted before they are shown to
-the model on later turns. The full tool result remains in the run content store
-and trail; the model receives a compact view with the beginning, the end, the
-stored size and a digest. This keeps observability dumps and PR diffs from
-crowding out the next decision without changing the audit record.</p>
+<p>Large Grafana Loki and Prometheus results, GitHub review material and Outline
+fetch, list and search results are compacted before later model turns. The full
+result size and digest remain in the run trail; the content store keeps its
+bounded copy under the installation content limit. The model receives a compact
+view with the beginning, the end, the original size and the digest.</p>
+<p>There is also a total tool-result transcript budget. Recent evidence is kept;
+older results become explicit receipts naming the tool, original result size,
+digest and omitted bytes. A receipt never means the content was absent, and it
+does not delete the stored copy. It tells the model to make another call only
+when it can materially narrow the query.</p>
+<p>Worker metrics expose aggregate prompt result bytes with <code dir="auto">sent</code> and <code dir="auto">elided</code>
+dispositions, provider cache tokens with <code dir="auto">read</code> and <code dir="auto">write</code> operations,
+canonical duplicate skips and stalled investigations. They deliberately omit
+run, agent, tool, user and query labels; tool attribution stays in each run’s
+trail.</p>
 <div class="sl-heading-wrapper level-h2"><h2 id="configuration-checklist">Configuration checklist</h2><a class="sl-anchor-link" href="#configuration-checklist"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Configuration checklist”</span></a></div>
 <ol>
 <li>Configure the installation currency.</li>

@@ -136,6 +136,27 @@ um registrar o custo.</p>
 output, cache read e cache write porque eles não custam igual.</p>
 <p>Mesmo quando cache read é barato, ele ainda é consumo. Otimização boa é aquela
 que aparece na contabilidade, não a que desaparece dela.</p>
+<p>Todo provider de modelo recebe o mesmo transcript limitado, identidade canônica
+de chamada, orientação de memória consciente do estado e supervisão de falta de
+progresso. O FuseOne também mantém reutilizáveis as instruções estáveis e o
+transcript anterior reconstruído da trilha. Todo provider recebe a mesma
+orientação estável por etapa, as mesmas regras de memória e o teto fixo da run.
+Anthropic marca esse prefixo com breakpoints explícitos e acrescenta o orçamento
+restante mutável depois do transcript cacheado. Providers OpenAI-compatible
+omitem esse saldo por turno porque o cache automático exige um prefixo comum
+exato; o Gate determinístico continua impondo o mesmo teto. Quando os resultados
+cruzam o orçamento do transcript, o FuseOne troca uma geração completa por
+recibos de uma vez. Isso inicia um prefixo limitado novo e o mantém estável até
+a próxima geração cruzar, em vez de mover a fronteira dos recibos a cada turno.
+Providers sem cache de prompt ainda economizam chamadas e bytes reenviados.
+Tokens reportados de cache read e cache write continuam visíveis na execução e
+nas métricas de baixa cardinalidade do worker.</p>
+<p>Leituras concluídas podem consultar novamente os mesmos argumentos porque a
+fonte pode mudar. Escritas, buscas equivalentes de memória governada e chamadas
+com desfecho desconhecido depois do reinício de um worker continuam
+idempotentes. Três leituras bem-sucedidas da mesma ferramenta que devolvem o
+mesmo digest completo ainda estacionam a run antes de um quarto turno do
+modelo, mesmo quando os argumentos eram idênticos.</p>
 <div class="sl-heading-wrapper level-h2"><h2 id="descobrir-o-que-deixou-o-prompt-grande">Descobrir o que deixou o prompt grande</h2><a class="sl-anchor-link" href="#descobrir-o-que-deixou-o-prompt-grande"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Descobrir o que deixou o prompt grande”</span></a></div>
 <p>A trilha da run mostra o conteúdo do prompt em cada proposta do modelo:
 instruções, entrada, notas da plataforma e resultados de ferramenta.</p>
@@ -153,13 +174,22 @@ um JSON válido com campos longos encurtados e uma nota separada da plataforma
 com tamanho guardado e digest. Isso aparece principalmente quando um alerta ou
 thread do Slack traz um payload grande antes de o agente chamar qualquer
 ferramenta.</p>
-<p>Resultados grandes de consultas Grafana Loki e Prometheus, e leituras grandes
-de GitHub para pull request, diff, conteúdo de arquivo, commits e logs, são
-compactados antes de serem mostrados ao modelo nos turnos seguintes. O
-resultado completo continua no content store da run e na trilha; o modelo
-recebe uma visão compacta com o começo, o fim, o tamanho guardado e um digest.
-Isso impede que dumps de observabilidade e diffs de PR ocupem a próxima
-decisão sem mudar o registro de auditoria.</p>
+<p>Resultados grandes de Grafana Loki e Prometheus, material de revisão do GitHub
+e resultados de fetch, list e search do Outline são compactados antes dos
+turnos seguintes do modelo. Tamanho e digest do resultado completo continuam na
+trilha; o content store mantém sua cópia limitada pelo teto da instalação. O
+modelo recebe uma visão compacta com começo, fim, tamanho original e digest.</p>
+<p>Também existe um orçamento total para resultados no transcript. Evidência
+recente é preservada; resultados antigos viram recibos explícitos com
+ferramenta, tamanho do resultado original, digest e bytes omitidos. Recibo nunca
+significa que o conteúdo não existia e não apaga a cópia armazenada. Ele orienta
+o modelo a fazer outra chamada somente quando conseguir restringir
+materialmente a consulta.</p>
+<p>Métricas do worker expõem bytes agregados de resultados no prompt como <code dir="auto">sent</code>
+e <code dir="auto">elided</code>, tokens de cache como <code dir="auto">read</code> e <code dir="auto">write</code>, duplicatas canônicas puladas
+e investigações estacionadas. Elas deliberadamente não usam execução, agente,
+ferramenta, pessoa ou consulta como label; a atribuição por ferramenta fica na
+trilha de cada execução.</p>
 <div class="sl-heading-wrapper level-h2"><h2 id="checklist-de-configuração">Checklist de configuração</h2><a class="sl-anchor-link" href="#checklist-de-configuração"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Checklist de configuração”</span></a></div>
 <ol>
 <li>Configure a moeda da instalação.</li>
