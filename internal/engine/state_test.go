@@ -214,7 +214,7 @@ func TestFold_toolCalled_marksIdempotencyKeyExecuted(t *testing.T) {
 	}
 }
 
-func TestFold_legacyCompletedReadAdvancesToANewPollKey(t *testing.T) {
+func TestFold_legacyCompletedCallDoesNotBecomeAReadPoll(t *testing.T) {
 	t.Parallel()
 
 	const base = "0123456789abcdef0123456789abcdef"
@@ -227,9 +227,11 @@ func TestFold_legacyCompletedReadAdvancesToANewPollKey(t *testing.T) {
 	)
 
 	s := mustFold(t, steps)
-	if got, want := executionIdempotencyKey(s, domain.EffectRead, "crm.lookup", base),
-		base+readPollSeparator+"2"; got != want {
+	if got, want := executionIdempotencyKey(s, domain.EffectRead, "crm.lookup", base), base; got != want {
 		t.Fatalf("next read key = %q, want %q", got, want)
+	}
+	if !duplicateWithinRun(s, domain.EffectRead, "crm.lookup", base) {
+		t.Fatal("a completed legacy call was reopened as a read poll")
 	}
 }
 

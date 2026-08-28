@@ -1065,6 +1065,47 @@ func TestResume_completedWrite_doesNotInvokeTheToolAgain(t *testing.T) {
 	}
 }
 
+func TestResume_completedWriteReclassifiedAsRead_staysExactlyOnce(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	args := []byte(`{"id":"42"}`)
+	h := newHarness(t, Proposal{Tool: "crm.lookup", Args: args})
+	start := h.start(t, generousBudget())
+	key := idempotencyKey(start.RunID, "crm.lookup", args)
+
+	// The ledger records what the tool was when it ran. The harness catalogue
+	// now calls crm.lookup a read, which must not reinterpret the completed write
+	// as a poll that is safe to execute again.
+	for _, step := range []domain.Step{
+		{Kind: domain.StepRunStarted},
+		{Kind: domain.StepToolCalled, IdemKey: key,
+			Payload: mustJSON(domain.ToolCalledPayload{Tool: "crm.lookup", Effect: domain.EffectWrite})},
+		{Kind: domain.StepToolReturned,
+			Payload: mustJSON(domain.ToolReturnedPayload{Tool: "crm.lookup"})},
+	} {
+		step.RunID, step.Scope = start.RunID, start.Scope
+		step.At = time.Date(2026, 8, 10, 12, 0, 0, 0, time.UTC)
+		if _, err := h.ledger.Append(ctx, step); err != nil {
+			t.Fatalf("seed Append(%s): %v", step.Kind, err)
+		}
+	}
+
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+	if len(h.tools.invocations) != 0 {
+		t.Fatalf("reclassified write was executed again: %v", h.tools.invocations)
+	}
+	var decided domain.GateDecidedPayload
+	if err := h.lastPayloadOf(t, domain.StepGateDecided, &decided); err != nil {
+		t.Fatalf("gate payload: %v", err)
+	}
+	if decided.Verdict != domain.VerdictDuplicate || decided.Rule != gate.RuleIdempotency {
+		t.Fatalf("decision = %s/%s, want duplicate/idempotency", decided.Verdict, decided.Rule)
+	}
+}
+
 func TestAdvance_semanticallyIdenticalCompletedReadMayPollAgain(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

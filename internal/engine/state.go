@@ -145,10 +145,11 @@ type State struct {
 	// executed holds the idempotency keys the ledger has already recorded, so
 	// a resumed run can distinguish a recorded call from a new one (PRD DE-16).
 	executed map[string]struct{}
-	// completed holds calls whose real tool_returned step reached the ledger.
-	// A completed read may be polled again; an orphaned read remains protected
-	// because its external outcome and cost are unknown.
-	completed map[string]struct{}
+	// completed holds the recorded effect for calls whose real tool_returned
+	// step reached the ledger. A completed read may be polled again only while
+	// both the ledger and current catalogue still classify it as a read. This
+	// fails closed across reclassification; an orphan has no entry at all.
+	completed map[string]domain.Effect
 	// completedReads counts completed attempts by canonical call identity. It
 	// lets the next poll derive a new deterministic ledger key while a replay
 	// of an orphan derives the same key and remains blocked.
@@ -180,11 +181,11 @@ func (s State) AlreadyExecuted(key string) bool {
 	return ok
 }
 
-// CompletedCall reports whether the recorded call also has a real result.
-// The synthetic result used to close an orphan deliberately does not count.
-func (s State) CompletedCall(key string) bool {
-	_, ok := s.completed[key]
-	return ok
+// CompletedAs reports whether a real tool result reached the ledger with the
+// named effect. The synthetic result used to close an orphan does not count.
+func (s State) CompletedAs(key string, effect domain.Effect) bool {
+	recorded, ok := s.completed[key]
+	return ok && recorded == effect
 }
 
 func (s State) completedReadCount(key string) int {

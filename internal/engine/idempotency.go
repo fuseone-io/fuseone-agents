@@ -55,7 +55,9 @@ func duplicateWithinRun(state State, effect domain.Effect, tool domain.ToolID, i
 	// Writes and irreversible effects remain exactly-once. The platform-owned
 	// memory lookup also refuses an equivalent retry because it is a snapshot
 	// of run memory, not a status poll. Other completed reads may legitimately
-	// observe a changing world; orphaned reads stay blocked because their
-	// external outcome and cost are unknown.
-	return effect != domain.EffectRead || tool == domain.ToolMemoryFind || !state.CompletedCall(idemKey)
+	// observe a changing world only if the ledger also recorded them as reads.
+	// Reclassified writes, legacy calls without an effect and orphaned reads all
+	// stay blocked because replaying their external outcome is not proven safe.
+	return effect != domain.EffectRead || tool == domain.ToolMemoryFind ||
+		!state.CompletedAs(idemKey, domain.EffectRead)
 }

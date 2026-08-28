@@ -123,13 +123,13 @@ func (s *State) applyKind(step domain.Step) error {
 		}
 		if s.pendingIdemKey != "" && p.ErrorCode != unknownOutcomeAfterRestart {
 			if s.completed == nil {
-				s.completed = make(map[string]struct{})
+				s.completed = make(map[string]domain.Effect)
 			}
-			s.completed[s.pendingIdemKey] = struct{}{}
-			// Older ledger rows may predate Effect on tool_called. If the tool is
-			// now classified as a read, treating that completed unknown call as
-			// the first poll is the only way to avoid reusing its unique key.
-			if s.pendingEffect == domain.EffectRead || s.pendingEffect == domain.EffectUnknown {
+			s.completed[s.pendingIdemKey] = s.pendingEffect
+			// Only a call recorded as a read can open another poll attempt. A
+			// missing legacy effect and a completed write both fail closed even if
+			// the current catalogue later classifies the tool as a read.
+			if s.pendingEffect == domain.EffectRead {
 				if s.completedReads == nil {
 					s.completedReads = make(map[string]int)
 				}
