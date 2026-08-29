@@ -105,6 +105,7 @@ export default defineConfig({
         {
           label: "Core concepts",
           items: [
+            { label: "Durable execution", link: "/concepts/durable-execution/" },
             { label: "Gate and labels", link: "/concepts/gate/" },
             { label: "Integrations", link: "/concepts/integrations/" },
             { label: "Duplicate effects", link: "/concepts/duplicate-effects/" },

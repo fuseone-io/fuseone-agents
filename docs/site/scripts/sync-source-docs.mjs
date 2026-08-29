@@ -24,6 +24,7 @@ const designDocs = [
   ["NT-008-a-catalogue-by-shape.md", "Tool catalogue chosen by shape."],
   ["NT-009-governed-connectors.md", "Governed connector shapes and runtime boundary."],
   ["NT-010-the-shape-of-the-platform.md", "Topology, the run loop, layering and where data is written."],
+  ["NT-011-durable-agent-execution-and-workflow-engines.md", "Durable agent execution and the workflow-engine boundary."],
 ];
 
 const manualLocales = [

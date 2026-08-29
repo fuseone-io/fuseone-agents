@@ -140,6 +140,7 @@ workflow engine beside it when the surrounding business process needs a
 general workflow language, long-lived timers, broad fan-out, workflow-level
 versioning or operational guarantees beyond the run loop FuseOne implements.
 
+Public guide: [Durable agent execution](docs/site/src/content/docs/concepts/durable-execution.md).
 Design boundary: [NT-011](docs/NT-011-durable-agent-execution-and-workflow-engines.md).
 
 Functional reference: [docs/PRD-001-fuseone-agents.md](docs/PRD-001-fuseone-agents.md).

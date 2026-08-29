@@ -35,6 +35,7 @@ allowed, needs approval, should be skipped as a duplicate, or must stop.
 ## Start here
 
 - [Install FuseOne Agents](start/install/)
+- [Understand durable execution](concepts/durable-execution/)
 - [Understand the Gate](concepts/gate/)
 - [Choose an integration path](concepts/integrations/)
 - [Use governed memory](concepts/memory/)
