@@ -341,6 +341,27 @@ func TestResolve_manyCitationsOfOneRun_readTheLedgerOnce(t *testing.T) {
 	}
 }
 
+func TestResolveWithOrigins_answersTheAgentFromTheSameLedgerRead(t *testing.T) {
+	t.Parallel()
+	r, cited := finished(t, "run-agent")
+	r.ledger.steps[r.id][0].AgentID = "triage"
+
+	got, err := r.resolver().ResolveWithOrigins(
+		context.Background(), r.scope, []domain.MemoryEvidence{cited})
+	if err != nil {
+		t.Fatalf("ResolveWithOrigins: %v", err)
+	}
+	if len(got) != 1 || got[0].AgentID != "triage" {
+		t.Fatalf("origins = %+v, want the run's agent", got)
+	}
+	if got[0].Evidence.Seq == 0 {
+		t.Fatal("origin lost the proved citation")
+	}
+	if r.ledger.reads != 1 {
+		t.Fatalf("ledger reads = %d, want the origin from the proof's read", r.ledger.reads)
+	}
+}
+
 // failingLedger stands in for a database that is unreachable, not for a run
 // that does not exist.
 type failingLedger struct{ err error }

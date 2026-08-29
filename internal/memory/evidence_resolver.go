@@ -83,6 +83,15 @@ type Resolver struct {
 	content EvidenceContent
 }
 
+// EvidenceOrigin is one proved citation and the agent of the run that cited
+// it. AgentID is response metadata, not part of MemoryEvidence: it decides who
+// may recall an agent-scoped memory and is never persisted as if the caller had
+// supplied it.
+type EvidenceOrigin struct {
+	Evidence domain.MemoryEvidence
+	AgentID  domain.AgentID
+}
+
 func NewResolver(ledger EvidenceLedger, content EvidenceContent) *Resolver {
 	return &Resolver{ledger: ledger, content: content}
 }
@@ -99,8 +108,26 @@ from a run somebody has since advanced.
 func (r *Resolver) Resolve(
 	ctx context.Context, scope domain.Scope, in []domain.MemoryEvidence,
 ) ([]domain.MemoryEvidence, error) {
+	origins, err := r.ResolveWithOrigins(ctx, scope, in)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]domain.MemoryEvidence, 0, len(origins))
+	for _, origin := range origins {
+		out = append(out, origin.Evidence)
+	}
+	return out, nil
+}
+
+// ResolveWithOrigins proves the same citations as Resolve and also returns
+// whose run each one names. Both answers come from the same cached ledger read;
+// a creation used to prove the citation and then read the run again only to
+// recover this agent.
+func (r *Resolver) ResolveWithOrigins(
+	ctx context.Context, scope domain.Scope, in []domain.MemoryEvidence,
+) ([]EvidenceOrigin, error) {
 	runs := map[domain.RunID][]domain.Step{}
-	out := make([]domain.MemoryEvidence, 0, len(in))
+	out := make([]EvidenceOrigin, 0, len(in))
 
 	for _, ev := range in {
 		steps, err := r.stepsOf(ctx, runs, scope, ev.RunID)
@@ -111,7 +138,10 @@ func (r *Resolver) Resolve(
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, resolved)
+		out = append(out, EvidenceOrigin{
+			Evidence: resolved,
+			AgentID:  steps[0].AgentID,
+		})
 	}
 	return out, nil
 }

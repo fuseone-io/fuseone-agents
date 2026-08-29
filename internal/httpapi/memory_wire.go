@@ -36,8 +36,9 @@ rather than after every creation. A citation that carries no labels also cannot
 explain the taint the assertion inherited, so the eviction rule could drop the
 one record that showed where it came from.
 
-The agent is the one thing the Resolver does not answer, so it is still read
-here — from the first step of the run, which is where a run says whose it is.
+The agent comes from that same ledger read. Reading the run again after proving
+the citation doubled the most expensive part of every creation and opened a
+small consistency window between two answers about one immutable record.
 */
 func (s *Server) originOfMemoryEvidence(
 	ctx context.Context, scope domain.Scope,
@@ -56,20 +57,18 @@ func (s *Server) originOfMemoryEvidence(
 	// match the ledger from a content store that did not answer, and the caller
 	// decides what each means. Turning both into one sentence is how a database
 	// being away became a message about the form.
-	cited, err := s.memoryEvidence.Resolve(ctx, scope, refs)
+	resolved, err := s.memoryEvidence.ResolveWithOrigins(ctx, scope, refs)
 	if err != nil {
 		return "", nil, nil, fmt.Errorf("memory evidence: %w", err)
 	}
 
 	var labels domain.Labels
 	agents := map[domain.AgentID]bool{}
-	for i, ev := range cited {
-		agent, err := s.agentOfRun(ctx, scope, refs[i].RunID)
-		if err != nil {
-			return "", nil, nil, err
-		}
-		agents[agent] = true
-		labels = labels.Union(ev.Labels)
+	cited := make([]domain.MemoryEvidence, 0, len(resolved))
+	for _, origin := range resolved {
+		agents[origin.AgentID] = true
+		labels = labels.Union(origin.Evidence.Labels)
+		cited = append(cited, origin.Evidence)
 	}
 
 	if namespace == openapi.MemoryAssertionInputNamespaceShared {
@@ -94,25 +93,6 @@ func (s *Server) originOfMemoryEvidence(
 // checking the run it cites is what this path exists to prevent.
 var errNoEvidenceResolver = errors.New(
 	"httpapi: no evidence resolver to prove this memory against")
-
-// agentOfRun is whose run this was, which the ledger records on the step that
-// opened it. The Resolver answers everything else about a citation and not
-// this, because it is a fact about the run rather than about the bytes.
-func (s *Server) agentOfRun(
-	ctx context.Context, scope domain.Scope, run domain.RunID,
-) (domain.AgentID, error) {
-	steps, err := s.store.Read(ctx, run, domain.FirstSeq)
-	// The ledger being unreachable and the run not being there are different
-	// answers, and flattening them told somebody to check their input while the
-	// database was down.
-	if err != nil {
-		return "", fmt.Errorf("read the run a citation names: %w", err)
-	}
-	if len(steps) == 0 || !scope.Contains(steps[0].Scope) {
-		return "", fmt.Errorf("%w: memory evidence is outside scope or absent", memstore.ErrInvalid)
-	}
-	return steps[0].AgentID, nil
-}
 
 // citedArtifact is which of a run's outputs a citation names. The closing
 // answer by default: it is what a memory taught from a run almost always cites,
