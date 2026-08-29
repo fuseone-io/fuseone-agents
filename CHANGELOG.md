@@ -27,6 +27,8 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.40.0] — 2026-08-28
+
 ### Upgrade notes
 
 - **Pending memory suggestions keep the identity they had before this
