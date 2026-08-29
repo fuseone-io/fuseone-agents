@@ -93,16 +93,32 @@ vêm do registro que está sendo lido, a citação vem do passo, os labels vêm 
 rastro, e o agente é lido do ledger quando o pedido chega.
 
 **A página de Memória.** Mesmo formulário, com uma diferença: ali a pessoa
-escreve o identificador da execução, porque não há uma na tela.
+escolhe uma execução finalizada entre os escopos a que tem acesso, porque não
+há uma execução na tela.
 
-Nos dois casos, o que é perguntado é o que só uma pessoa sabe:
+Nos dois casos, o conteúdo autoral é só um assunto curto e uma afirmação. O
+assunto também é a chave humana estável: a plataforma registra novo aprendizado
+com tipo `fact` e deriva a assinatura do assunto sem espaços nas pontas. Isso é
+determinístico de propósito. Gastar uma chamada de modelo para inventar
+vocabulário interno adicionaria custo e poderia dar outra identidade ao mesmo
+fato em uma execução posterior.
+
+As escolhas de governança continuam explícitas. Memória compartilhada nunca é
+alcançada deixando o agente em branco, e toda escrita ainda exige um motivo:
 
 | Perguntado | Derivado pela plataforma |
 |---|---|
-| tipo, assunto, assinatura | agente, a partir da execução citada |
-| a afirmação | labels, dobrados do rastro até o passo citado |
-| quem lê (agente ou compartilhada) | digest e passo da citação |
-| o motivo | contagens iniciais e prazo de 30 dias |
+| assunto e afirmação | tipo `fact` e assinatura a partir do assunto |
+| quem lê (agente ou compartilhada) | agente, a partir da execução citada |
+| o motivo | labels, dobrados do rastro até o passo citado |
+| nada mais | digest e passo da citação, contagens iniciais e prazo de 30 dias |
+
+A identidade derivada aparece antes de salvar e não pode ser editada. Memória
+existente com tipo ou assinatura antiga preserva essa identidade quando sua
+afirmação é corrigida; derivar outra silenciosamente criaria um segundo fato em
+vez de corrigir o primeiro. Portanto, o assunto nomeia a memória: dois fatos
+diferentes sobre um serviço precisam de dois assuntos específicos, não de duas
+afirmações sob um assunto amplo.
 
 ### A evidência é lida, não digitada
 
@@ -201,11 +217,11 @@ memory_learning:
   ttl_days: 30
 ```
 
-V1 é modo de revisão. O agente pode chamar `$fuseone.memory.suggest` com uma
-asserção estruturada: tipo, assunto, assinatura e afirmação. A plataforma
-registra a sugestão com os labels e a evidência da run, mas `memory.find` ainda
-não a devolve. Uma pessoa com permissão de publicação no escopo precisa aceitar
-ou descartar a sugestão pela página de Memória.
+V1 é modo de revisão. O agente pode chamar `$fuseone.memory.suggest` com assunto
+e afirmação. A plataforma deriva a mesma identidade `fact`/assunto usada quando
+uma pessoa ensina e registra a sugestão com os labels e a evidência da run.
+`memory.find` ainda não a devolve. Uma pessoa com permissão de publicação no
+escopo precisa aceitar ou descartar a sugestão pela página de Memória.
 
 Quando aprendizado de memória está ligado, a plataforma também oferece
 `$fuseone.memory.find`. No começo de uma execução com entrada humana, o FuseOne
@@ -215,9 +231,10 @@ passa pelo Gate, aparece na trilha, e quaisquer labels da memória retornada
 viajam para a execução.
 
 O agente pode chamar `memory.find` de novo depois com tipo, assunto ou
-assinatura mais estreitos. O caminho de sugestão também consulta a memória
-ativa pelo mesmo tipo, assunto e assinatura, então um fato lembrado não
-continua criando itens de revisão só porque o modelo propôs outra redação.
+assinatura mais estreitos. Como o ensino humano e o do agente usam a mesma
+identidade da plataforma, o caminho de sugestão encontra memória ativa e
+propostas pendentes do mesmo assunto em vez de criar um segundo vocabulário de
+revisão.
 
 A busca automática roda uma vez. Se depois o modelo propuser um
 `memory.find` equivalente, mudando apenas ordem ou espaços do JSON, a

@@ -27,6 +27,25 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Upgrade notes
+
+- **Pending memory suggestions keep the identity they had before this
+  upgrade.** New human and agent teaching now shares the platform-derived
+  `fact`/subject identity, but existing pending suggestions are not rewritten:
+  they remain an exact record of what the agent proposed. If the same fact is
+  proposed again after upgrading, the review queue can temporarily show both
+  identities until the older suggestion is decided or expires. Existing active
+  memory is not changed.
+
+### Changed
+
+- **Teaching a memory now asks for a subject, a claim and a reason.** The kind
+  and signature are derived from the subject in both the human form and the
+  agent's suggest tool, so one fact has one identity whoever taught it. A
+  memory created before this keeps the identity it has, and correcting one
+  still accepts its original kind and signature — but only for an identity
+  that already exists.
+
 ## [0.39.6] — 2026-08-28
 
 ### Changed

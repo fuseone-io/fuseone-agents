@@ -11,6 +11,14 @@ evidence, labels, confirmation state, retention and erasure state. The model
 can search memory, but it does not choose the company, area or agent namespace
 being searched.
 
+When a person teaches from a run, they write only a short subject, claim and
+reason, then explicitly choose agent or shared reach. The platform records new
+teaching as kind `fact` and derives the signature from the trimmed subject. The
+derived identity is visible before saving and cannot be edited; the agent,
+labels, citation, counters and expiry come from the ledger and policy.
+The subject is the memory's stable human key, so different facts need different
+specific subjects.
+
 ## Reading memory can taint the run
 
 Memory does not make outside data trusted. If an assertion came from Slack,
@@ -28,6 +36,10 @@ a person accepts or dismisses it before it becomes active. In auto-confirm
 mode, the same assertion must appear across the configured number of distinct
 runs before it becomes active, so tainted suggestions can still require Gate
 approval before they count.
+
+The agent proposes only the subject and claim. The platform derives the same
+`fact`/subject identity used by human teaching, so active memory and pending
+proposals share one duplicate-detection space.
 
 The model does not send confidence. Counts are derived by the platform.
 

@@ -91,17 +91,31 @@ scope and the run come from the record being read, the citation from the step,
 the labels from the trail, and the agent is read from the ledger when the
 request arrives.
 
-**The Memory page.** The same form, with one difference: there a person writes
-the run identifier, because no run is on screen.
+**The Memory page.** The same form, with one difference: there a person chooses
+a finished run from the scopes they can access, because no run is on screen.
 
-Either way, what is asked for is what only a person knows:
+Either way, the authored content is only a short subject and claim. The subject
+is also the stable human key: the platform records new teaching with kind
+`fact` and derives its signature from the trimmed subject. This is deterministic
+on purpose. Spending a model turn to invent internal vocabulary would add cost
+and could give the same fact a different identity on a later run.
+
+Governance choices remain explicit. Shared memory is never reached by leaving
+an agent blank, and every write still needs a reason:
 
 | Asked for | Derived by the platform |
 |---|---|
-| kind, subject, signature | the agent, from the cited run |
-| the claim | labels, folded from the trail up to the cited step |
-| who reads it (agent or shared) | the citation's digest and step |
-| the reason | the opening counters and the 30-day expiry |
+| subject and claim | kind `fact` and signature from the subject |
+| who reads it (agent or shared) | the agent, from the cited run |
+| the reason | labels, folded from the trail up to the cited step |
+| nothing else | the citation's digest and step, opening counters and 30-day expiry |
+
+The derived identity is shown before saving and cannot be edited. Existing
+memory with an older kind or signature keeps that identity when its claim is
+corrected; silently deriving a new one there would create a second fact instead
+of correcting the first. The subject therefore names the memory: two different
+facts about one service need two specific subjects, not two claims under one
+broad subject.
 
 ### The evidence is read, not typed
 
@@ -199,11 +213,11 @@ memory_learning:
   ttl_days: 30
 ```
 
-V1 is review mode. The agent can call `$fuseone.memory.suggest` with a
-structured assertion: kind, subject, signature and claim. The platform records
-that suggestion with the run labels and evidence, but `memory.find` does not
-return it yet. A person with publish permission in the scope must accept or
-dismiss it from the Memory page.
+V1 is review mode. The agent can call `$fuseone.memory.suggest` with a subject
+and claim. The platform derives the same `fact`/subject identity used when a
+person teaches, then records the suggestion with the run labels and evidence.
+`memory.find` does not return it yet. A person with publish permission in the
+scope must accept or dismiss it from the Memory page.
 
 When memory learning is enabled, the platform also offers
 `$fuseone.memory.find`. At the start of a run with human input, FuseOne performs
@@ -212,9 +226,9 @@ that input. The lookup is still a tool call: it crosses the Gate, appears in
 the trail, and any labels on returned memory travel into the run.
 
 The agent may call `memory.find` again later with a narrower kind, subject or
-signature. The suggestion path also checks active memory for the same kind,
-subject and signature, so a remembered fact does not keep creating review items
-just because the model proposes different wording.
+signature. Because human and agent teaching use the same platform-owned
+identity, the suggestion path finds active memory and pending proposals for the
+same subject instead of creating a second review vocabulary.
 
 The automatic lookup runs once. If the model later proposes an equivalent
 `memory.find` call with only JSON ordering or whitespace changed, the platform
