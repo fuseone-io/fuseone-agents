@@ -339,7 +339,7 @@ func TestCreateMemoryAssertion_tellsInvalidFromConflictedFromUnavailable(t *test
 		// corrects: it is what every agent in the scope reads.
 		remember(t, store, memoryAssertionFixture("cx", "grafana datasource",
 			func(a *domain.MemoryAssertion) {
-				a.AgentID, a.Signature = "", "grafana.datasource.down"
+				a.AgentID = ""
 			}))
 		assertMemoryConflict(t, createAgainst(t, store, nil))
 	})
@@ -814,11 +814,11 @@ func matchAgainst(
 }
 
 func matchBody(edit func(*openapi.MemoryMatchInput)) *openapi.MemoryMatchInput {
+	kind, signature := domain.DerivedMemoryIdentity("Grafana  Datasource")
 	in := openapi.MemoryMatchInput{
 		Company: "acme", Area: "cx",
 		Namespace: openapi.MemoryMatchInputNamespaceAgent, AgentId: ptr("triage"),
-		Kind: "incident", Subject: "Grafana  Datasource",
-		Signature: "grafana datasource.signature",
+		Kind: kind, Subject: "Grafana  Datasource", Signature: signature,
 	}
 	if edit != nil {
 		edit(&in)
@@ -1007,7 +1007,7 @@ func suggest(t *testing.T, memory *memstore.Memory, s domain.MemorySuggestion) d
 func memoryAssertionFixture(area, subject string, edit func(*domain.MemoryAssertion)) domain.MemoryAssertion {
 	a := domain.MemoryAssertion{
 		Scope: domain.Scope{Company: "acme", Area: domain.AreaID(area)}, AgentID: "triage",
-		Kind: "incident", Subject: subject, Signature: subject + ".signature",
+		Kind: domain.MemoryKindFact, Subject: subject, Signature: subject,
 		Claim: "remembered operator-approved behaviour",
 		Evidence: []domain.MemoryEvidence{{
 			RunID: "run-evidence", Artifact: domain.ArtifactFinalAnswer, Digest: "sha256:answer",
@@ -1110,12 +1110,12 @@ func appendMemoryStep(t *testing.T, store *ledger.Memory, step domain.Step) {
 
 func memoryCreateRequest() openapi.CreateMemoryAssertionRequestObject {
 	return openapi.CreateMemoryAssertionRequestObject{Body: &openapi.MemoryAssertionInput{
-		Company: "acme", Area: "cx", Kind: "incident",
+		Company: "acme", Area: "cx",
 		Namespace: openapi.MemoryAssertionInputNamespaceAgent,
-		Subject:   "grafana datasource", Signature: "grafana.datasource.down",
-		Claim:    "refreshing the datasource token cleared this failure",
-		Evidence: []openapi.MemoryEvidenceInput{{RunId: "run-evidence"}},
-		Reason:   "operator reviewed the incident",
+		Subject:   "grafana datasource",
+		Claim:     "refreshing the datasource token cleared this failure",
+		Evidence:  []openapi.MemoryEvidenceInput{{RunId: "run-evidence"}},
+		Reason:    "operator reviewed the incident",
 	}}
 }
 

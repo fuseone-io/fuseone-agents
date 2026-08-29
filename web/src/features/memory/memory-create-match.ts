@@ -1,5 +1,6 @@
 import { useWatch, type UseFormReturn } from "react-hook-form";
 import { useMemoryMatch } from "@/features/memory/api";
+import { derivedMemoryIdentity } from "@/features/memory/memory-authoring-identity";
 import type { MemoryFormValues } from "@/features/memory/memory-form-schema";
 import { useRun } from "@/features/runs/api";
 import { useSettled } from "@/hooks/use-settled";
@@ -25,27 +26,26 @@ export function useMemoryCreateMatch(
   const values = useWatch({ control: form.control });
   const runID = values.evidenceRunId?.trim() ?? "";
   const run = useRun(runID, enabled && Boolean(runID));
+  const identity = derivedMemoryIdentity(values.subject);
   const currentIdentity = JSON.stringify([
     values.company?.trim() ?? "",
     values.area?.trim() ?? "",
     values.namespace ?? "agent",
-    values.kind?.trim() ?? "",
     values.subject?.trim() ?? "",
-    values.signature?.trim() ?? "",
+    identity.kind,
+    identity.signature,
   ]);
   const settledIdentity = useSettled(currentIdentity, 400);
   const identityInputSettled = currentIdentity === settledIdentity;
-  const [company, area, rawNamespace, kind, subject, signature] = JSON.parse(
+  const [company, area, rawNamespace, subject, kind, signature] = JSON.parse(
     settledIdentity,
   ) as string[];
   const namespace = rawNamespace === "shared" ? "shared" : "agent";
   const identityComplete = Boolean(
     values.company?.trim() &&
-      values.area?.trim() &&
-      values.kind?.trim() &&
-      values.subject?.trim() &&
-      values.signature?.trim() &&
-      runID,
+    values.area?.trim() &&
+    values.subject?.trim() &&
+    runID,
   );
   const runReady = run.isSuccess;
   const agentMissing =

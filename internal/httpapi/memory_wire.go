@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	memstore "github.com/fuseone/agents/internal/memory"
@@ -118,15 +119,40 @@ They move afterwards through observations the agent actually makes.
 */
 func memoryAssertionInput(
 	in openapi.MemoryAssertionInput, scope domain.Scope, derived memoryOrigin,
-) domain.MemoryAssertion {
+) (domain.MemoryAssertion, bool, error) {
+	identity, err := memoryInputIdentity(in)
+	if err != nil {
+		return domain.MemoryAssertion{}, false, err
+	}
 	expires := derived.now.Add(memstore.DefaultMemoryTTL)
 	return domain.MemoryAssertion{
 		Scope: scope, AgentID: derived.agent,
-		Kind: in.Kind, Subject: in.Subject, Signature: in.Signature, Claim: in.Claim,
+		Kind: identity.kind, Subject: in.Subject, Signature: identity.signature, Claim: in.Claim,
 		Evidence: derived.cited, Observations: 1,
 		Confirmed: 1, Labels: derived.labels, Status: domain.MemoryActive,
 		ExpiresAt: &expires,
+	}, identity.mustExist, nil
+}
+
+type memoryInputIdentityValue struct {
+	kind, signature string
+	mustExist       bool
+}
+
+func memoryInputIdentity(in openapi.MemoryAssertionInput) (memoryInputIdentityValue, error) {
+	if in.Kind == nil && in.Signature == nil {
+		kind, signature := domain.DerivedMemoryIdentity(in.Subject)
+		return memoryInputIdentityValue{kind: kind, signature: signature}, nil
 	}
+	if in.Kind == nil || in.Signature == nil ||
+		strings.TrimSpace(valueOr(in.Kind)) == "" || strings.TrimSpace(valueOr(in.Signature)) == "" {
+		return memoryInputIdentityValue{}, fmt.Errorf(
+			"%w: kind and signature must both be omitted or both name an existing identity",
+			memstore.ErrInvalid)
+	}
+	return memoryInputIdentityValue{
+		kind: valueOr(in.Kind), signature: valueOr(in.Signature), mustExist: true,
+	}, nil
 }
 
 /*

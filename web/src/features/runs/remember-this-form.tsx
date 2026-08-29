@@ -12,6 +12,7 @@ import { MemoryDuplicateNotice } from "@/features/memory/memory-duplicate-notice
 import { MemoryCitationField } from "@/features/memory/memory-citation-field";
 import { MemoryEvidenceChip } from "@/features/memory/memory-evidence-chip";
 import { MemoryFactFields } from "@/features/memory/memory-fact-fields";
+import { derivedMemoryIdentity } from "@/features/memory/memory-authoring-identity";
 import { MemoryInputField } from "@/features/memory/memory-form-fields";
 import { MemoryNamespaceField } from "@/features/memory/memory-namespace-field";
 import {
@@ -33,8 +34,9 @@ import type { Run, Step } from "@/lib/api/client";
  * Everything the platform can answer is answered: the scope and the run come
  * from the record being read, the citation from the step, the labels from the
  * trail, the agent from the ledger once the request arrives. What is asked for
- * is what only a person knows — what kind of fact this is, what it is about,
- * what it claims, who reads it, and why they are recording it.
+ * is what only a person knows — what the fact is about, what it claims, who
+ * reads it, and why they are recording it. Kind and signature are stable
+ * platform vocabulary derived from the subject.
  */
 export function RememberThisForm({
   runId,
@@ -66,14 +68,16 @@ export function RememberThisForm({
   // creation there is no evidence to read it from yet, because nothing has been
   // composed, and the run in front of the person is whose namespace this is.
   const namespace = form.watch("namespace");
+  const subject = form.watch("subject");
+  const identity = derivedMemoryIdentity(subject);
   const match = useMemoryMatch({
     company: scope.company,
     area: scope.area,
     namespace,
     ...(namespace === "agent" && agentId ? { agentId } : {}),
-    kind: form.watch("kind"),
-    subject: form.watch("subject"),
-    signature: form.watch("signature"),
+    kind: identity.kind,
+    subject,
+    signature: identity.signature,
   });
 
   // The button is only offered where there is something to cite, so this is an

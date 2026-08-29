@@ -9,9 +9,7 @@ export function memoryDefaults(
     company: company === "*" ? "" : company,
     area,
     namespace: "agent",
-    kind: "",
     subject: "",
-    signature: "",
     claim: "",
     evidenceRunId: "",
     evidenceArtifact: "",
@@ -26,9 +24,7 @@ export function toMemoryAssertionInput(
     company: values.company.trim(),
     area: values.area.trim(),
     namespace: values.namespace,
-    kind: values.kind.trim(),
     subject: values.subject.trim(),
-    signature: values.signature.trim(),
     claim: values.claim.trim(),
     // The run, and nothing else. Which of its outputs defaults to the closing
     // answer, and the digest is the ledger's to say — asking a person to copy
@@ -51,8 +47,9 @@ export function toMemoryAssertionInput(
  *
  * Scope, run and artifact are given rather than defaulted: they come from the
  * run being read and the step being cited, and none of them is a preference.
- * What stays empty is what only a person can say — what kind of fact this is,
- * what it is about, what it claims, and why they are recording it.
+ * What stays empty is what only a person can say — what the fact is about,
+ * what it claims, and why they are recording it. Kind and signature are a
+ * platform identity derived from the subject, not another vocabulary test.
  *
  * The namespace starts at `agent`, the narrower reach. Shared memory is what
  * every agent in the scope recalls, and defaulting to it would make the widest
@@ -67,9 +64,7 @@ export function memoryFromRun(
     company: scope.company,
     area: scope.area,
     namespace: "agent",
-    kind: "",
     subject: "",
-    signature: "",
     claim: "",
     evidenceRunId: runId,
     evidenceArtifact: artifact,

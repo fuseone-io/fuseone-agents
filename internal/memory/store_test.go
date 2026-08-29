@@ -295,6 +295,11 @@ func TestLayer_suggestRecordsPendingMemoryWithoutServingIt(t *testing.T) {
 		!suggestions[0].Labels.Has(domain.LabelUntrusted) {
 		t.Fatalf("suggestions = %+v, want one labelled pending suggestion", suggestions)
 	}
+	if suggestions[0].Kind != domain.MemoryKindFact ||
+		suggestions[0].Signature != suggestions[0].Subject {
+		t.Fatalf("suggestion identity = %q/%q, want platform-derived fact/subject",
+			suggestions[0].Kind, suggestions[0].Signature)
+	}
 	found, err := store.Find(ctx, domain.MemoryQuery{
 		Scope: platformScope, AgentID: "triage", Search: "grafana",
 		Now: time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC),
@@ -1219,8 +1224,8 @@ func entryNamed(entries []domain.ToolEntry, id domain.ToolID) domain.ToolEntry {
 
 func assertion(edit func(*domain.MemoryAssertion)) domain.MemoryAssertion {
 	a := domain.MemoryAssertion{
-		Scope: platformScope, AgentID: "triage", Kind: "incident",
-		Subject: "grafana datasource", Signature: "grafana.datasource.down",
+		Scope: platformScope, AgentID: "triage", Kind: domain.MemoryKindFact,
+		Subject: "grafana datasource", Signature: "grafana datasource",
 		Claim: "datasource errors clear after refreshing the datasource token",
 		Evidence: []domain.MemoryEvidence{{
 			RunID: "run-evidence-1", Artifact: "final_answer", Digest: "sha256:abcd",
@@ -1235,6 +1240,8 @@ func assertion(edit func(*domain.MemoryAssertion)) domain.MemoryAssertion {
 
 func suggestion(edit func(*domain.MemorySuggestion)) domain.MemorySuggestion {
 	s := domain.MemorySuggestion{
+		// Deliberately the old model-authored vocabulary. Suggest must ignore it
+		// and derive the same identity a person teaching this subject receives.
 		Scope: platformScope, AgentID: "triage", Kind: "incident",
 		Subject: "grafana datasource", Signature: "grafana.datasource.down",
 		Claim: "datasource errors clear after refreshing the datasource token",

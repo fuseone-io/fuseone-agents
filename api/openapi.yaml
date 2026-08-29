@@ -4234,12 +4234,15 @@ components:
       type: object
       description: >
         A human-curated memory assertion, in the fields a person can answer.
-        Labels, the agent, the counters and the expiry are all absent on
-        purpose: the server derives them from the run the evidence names and
-        from policy, because every one of them changes what the memory means
-        and none of them is something a caller should be able to assert about
-        itself.
-      required: [company, area, namespace, kind, subject, signature, claim, evidence, reason]
+        Kind and signature are derived as `fact` and the trimmed subject for a
+        new assertion. They remain optional inputs only so an existing
+        assertion with a legacy identity can be corrected without silently
+        becoming a different memory. Labels, the agent, the counters and the
+        expiry are all absent on purpose: the server derives them from the run
+        the evidence names and from policy, because every one of them changes
+        what the memory means and none of them is something a caller should be
+        able to assert about itself.
+      required: [company, area, namespace, subject, claim, evidence, reason]
       properties:
         company: { type: string }
         area: { type: string }
@@ -4251,9 +4254,23 @@ components:
             names; `shared` is every agent in the scope. An explicit choice
             rather than an omitted field, because shared memory is what every
             agent reads and nobody should reach it by leaving something blank.
-        kind: { type: string }
-        subject: { type: string }
-        signature: { type: string }
+        kind:
+          type: string
+          deprecated: true
+          description: >
+            Existing identity kind when correcting a legacy assertion. Omit
+            together with signature when teaching a new memory.
+        subject:
+          type: string
+          description: >
+            Stable, specific name of the fact. New human and agent teaching use
+            it as the signature, so different facts require different subjects.
+        signature:
+          type: string
+          deprecated: true
+          description: >
+            Existing identity signature when correcting a legacy assertion.
+            Omit together with kind when teaching a new memory.
         claim: { type: string, maxLength: 1200 }
         evidence:
           type: array

@@ -8,6 +8,14 @@ import (
 	"github.com/fuseone/agents/internal/domain"
 )
 
+func TestDerivedMemoryIdentity_usesOneStableHumanKey(t *testing.T) {
+	t.Parallel()
+	kind, signature := domain.DerivedMemoryIdentity("  Alertas do Superset  ")
+	if kind != domain.MemoryKindFact || signature != "Alertas do Superset" {
+		t.Fatalf("identity = %q/%q, want fact and the trimmed subject", kind, signature)
+	}
+}
+
 // identity builds an assertion carrying only the six fields identity is made of.
 func identity(company, area, agent, kind, subject, signature string) domain.MemoryAssertion {
 	return domain.MemoryAssertion{

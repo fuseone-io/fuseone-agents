@@ -318,9 +318,7 @@ describe("governed memory page", () => {
       company: "acme",
       area: "ops",
       namespace: "agent",
-      kind: "incident",
       subject: "grafana datasource",
-      signature: "grafana.datasource.down",
       claim: "Refresh the datasource token before restarting the worker.",
       reason: "Reviewed after close",
       // The run, and nothing else: the artifact defaults to the closing answer
@@ -509,12 +507,7 @@ describe("governed memory page", () => {
 });
 
 async function fillAssertion(user: ReturnType<typeof userEvent.setup>) {
-  await user.type(screen.getByLabelText("Kind"), "incident");
   await user.type(screen.getByLabelText("Subject"), "grafana datasource");
-  await user.type(
-    screen.getByLabelText("Signature"),
-    "grafana.datasource.down",
-  );
   await user.type(
     screen.getByLabelText("Claim"),
     "Refresh the datasource token before restarting the worker.",
@@ -529,9 +522,7 @@ async function chooseEvidenceRun(user: ReturnType<typeof userEvent.setup>) {
 }
 
 async function fillMemoryIdentity(user: ReturnType<typeof userEvent.setup>) {
-  await user.type(screen.getByLabelText("Kind"), "incident");
   await user.type(screen.getByLabelText("Subject"), "grafana datasource");
-  await user.type(screen.getByLabelText("Signature"), "grafana.datasource.down");
 }
 
 function memoryAssertion(index: number): MemoryAssertion {

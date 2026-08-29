@@ -29,7 +29,7 @@ const (
 
 const memoryToolDescription = "Find governed structured memory assertions for this agent and scope."
 
-const memorySuggestDescription = "Suggest a structured memory assertion for review or automatic confirmation."
+const memorySuggestDescription = "Suggest a fact for review or automatic confirmation; the platform derives its identity from the subject."
 
 type ToolSource interface {
 	Tools(ctx context.Context) ([]domain.ToolEntry, error)
@@ -203,8 +203,7 @@ func (l *Layer) suggest(ctx context.Context, call engine.Call) (engine.ToolResul
 	now := nowOrWall(call.At)
 	suggestion := domain.MemorySuggestion{
 		Scope: call.Scope, AgentID: call.AgentID,
-		Kind: args.Kind, Subject: args.Subject, Signature: args.Signature,
-		Claim: args.Claim, Labels: call.Labels.Clone(),
+		Subject: args.Subject, Claim: args.Claim, Labels: call.Labels.Clone(),
 		ExpiresAt: policy.ExpiresAt(now),
 		Evidence: []domain.MemoryEvidence{{
 			RunID: call.RunID, Artifact: domain.ArtifactMemorySuggestion,

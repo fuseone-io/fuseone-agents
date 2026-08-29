@@ -95,8 +95,12 @@ func (s *Server) CreateMemoryAssertion(
 	// The same policy the accept applies, from the same function, on the
 	// assertion this is about to write rather than on the request that
 	// described it.
-	proposed, err := memstore.SecretDecision(
-		memoryAssertionInput(*req.Body, scope, memoryOrigin{agent: agent, labels: labels, cited: cited, now: now}),
+	proposed, _, err := memoryAssertionInput(*req.Body, scope,
+		memoryOrigin{agent: agent, labels: labels, cited: cited, now: now})
+	if err != nil {
+		return badMemoryCreate(err.Error()), nil
+	}
+	proposed, err = memstore.SecretDecision(proposed,
 		overridesSecretWarning(*req.Body), req.Body.Reason)
 	if refused := memorySecretProblem(err); refused != nil {
 		return openapi.CreateMemoryAssertion400ApplicationProblemPlusJSONResponse{

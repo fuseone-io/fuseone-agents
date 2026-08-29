@@ -33,9 +33,9 @@ const MATCH = {
     id: "mem_1",
     scope: { company: "acme", area: "ops" },
     agentId: "triage",
-    kind: "incident",
+    kind: "fact",
     subject: "grafana datasource",
-    signature: "grafana.datasource.down",
+    signature: "grafana datasource",
     claim: "Refresh the datasource token.",
     evidence: [],
     observations: 2,
@@ -326,9 +326,7 @@ function stubNetwork(
 
 async function fillMemory() {
   const fields = {
-    Kind: "incident",
     Subject: "grafana datasource",
-    Signature: "grafana.datasource.down",
     Claim: "Refresh the datasource token.",
     Why: "Reviewed after close",
   };
@@ -361,9 +359,9 @@ function matchBody(namespace: "agent" | "shared", agentId?: string) {
     area: "ops",
     namespace,
     ...(agentId ? { agentId } : {}),
-    kind: "incident",
+    kind: "fact",
     subject: "grafana datasource",
-    signature: "grafana.datasource.down",
+    signature: "grafana datasource",
   };
 }
 

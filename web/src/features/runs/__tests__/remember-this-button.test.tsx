@@ -109,9 +109,7 @@ async function openSheet() {
 }
 
 async function fillTheFact(user: ReturnType<typeof userEvent.setup>) {
-  await user.type(screen.getByLabelText(/tipo/i), "policy");
   await user.type(screen.getByLabelText(/^assunto/i), "refunds");
-  await user.type(screen.getByLabelText(/assinatura/i), "refund.limit");
   await user.type(screen.getByLabelText(/afirmação/i), "limit is R$ 500");
   await user.type(screen.getByLabelText(/por quê/i), "reviewed after the call");
 }
@@ -137,13 +135,33 @@ describe("teaching a memory from a run", () => {
       company: "acme",
       area: "ops",
       namespace: "agent",
-      kind: "policy",
       subject: "refunds",
-      signature: "refund.limit",
       claim: "limit is R$ 500",
       evidence: [{ runId: "run-1", artifact: "final_answer" }],
       reason: "reviewed after the call",
     });
+  });
+
+  it("shows the derived identity without asking somebody to author it", async () => {
+    stubNetwork([]);
+    const user = userEvent.setup();
+    renderButton();
+
+    const sheet = await openSheet();
+    await user.type(within(sheet).getByLabelText(/^assunto/i), "refunds");
+    const identity = within(sheet).getByRole("region", {
+      name: /identidade derivada/i,
+    });
+
+    expect(within(identity).getByText("fact")).toBeInTheDocument();
+    expect(within(identity).getByText("refunds")).toBeInTheDocument();
+    expect(
+      within(sheet).getByText(
+        "O assunto identifica esta memória. Use outro assunto para registrar um fato diferente.",
+      ),
+    ).toBeInTheDocument();
+    expect(within(sheet).queryByLabelText(/tipo/i)).not.toBeInTheDocument();
+    expect(within(sheet).queryByLabelText(/assinatura/i)).not.toBeInTheDocument();
   });
 
   // The taint of the run reaches the memory, so it is on screen before the
@@ -234,9 +252,9 @@ describe("teaching a memory from a run", () => {
       area: "ops",
       namespace: "agent",
       agentId: "triage",
-      kind: "policy",
+      kind: "fact",
       subject: "refunds",
-      signature: "refund.limit",
+      signature: "refunds",
     });
 
     await user.click(within(sheet).getByRole("radio", { name: /todos/i }));
@@ -245,9 +263,9 @@ describe("teaching a memory from a run", () => {
       company: "acme",
       area: "ops",
       namespace: "shared",
-      kind: "policy",
+      kind: "fact",
       subject: "refunds",
-      signature: "refund.limit",
+      signature: "refunds",
     });
   });
 

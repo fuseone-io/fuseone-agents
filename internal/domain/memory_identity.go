@@ -14,6 +14,22 @@ import (
 // prefix is what lets them notice.
 const canonicalKeyVersion = "v1"
 
+// MemoryKindFact is the platform-authored kind for a taught fact. A person or
+// agent names the subject; neither gets to invent a separate internal identity.
+const MemoryKindFact = "fact"
+
+// DerivedMemoryIdentity is the identity of a newly taught memory.
+//
+// Subject is already the short human name of the fact. Reusing it as the
+// signature means there is one identity to type and one identity to compare;
+// CanonicalIdentityKey still applies NFC, case folding and whitespace folding
+// before two spellings can merge. Legacy corrections may preserve a different
+// kind and signature at the HTTP boundary, but new teaching never asks a
+// person or model to invent internal vocabulary.
+func DerivedMemoryIdentity(subject string) (kind, signature string) {
+	return MemoryKindFact, strings.TrimSpace(subject)
+}
+
 /*
 CanonicalIdentityKey is the identity two people teaching the same fact land on.
 

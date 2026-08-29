@@ -1,4 +1,5 @@
-import type { Control } from "react-hook-form";
+import { useWatch, type Control } from "react-hook-form";
+import { MemoryDerivedIdentity } from "@/features/memory/memory-derived-identity";
 import {
   MemoryInputField,
   MemoryTextareaField,
@@ -6,7 +7,8 @@ import {
 import type { MemoryFormValues } from "@/features/memory/memory-form-schema";
 
 /**
- * What the memory says: its kind, what it is about, and the claim itself.
+ * What the memory says: what it is about and the claim itself. The internal
+ * identity is shown, but it is derived rather than authored.
  *
  * Shared by the two ways of teaching one, because this half is the same in
  * both. What surrounds it is not, and is deliberately not shared: on the memory
@@ -20,27 +22,17 @@ export function MemoryFactFields({
 }: {
   control: Control<MemoryFormValues>;
 }) {
+  const subject = useWatch({ control, name: "subject" });
   return (
     <>
-      <MemoryInputField
-        control={control}
-        name="kind"
-        label="memory.kind"
-        placeholder="memory.kindPlaceholder"
-      />
       <MemoryInputField
         control={control}
         name="subject"
         label="memory.subject"
         placeholder="memory.subjectPlaceholder"
+        description="memory.subjectIdentityHint"
       />
-      <MemoryInputField
-        control={control}
-        name="signature"
-        label="memory.signature"
-        description="memory.signatureHint"
-        className="font-mono"
-      />
+      <MemoryDerivedIdentity subject={subject} />
       <MemoryTextareaField
         control={control}
         name="claim"

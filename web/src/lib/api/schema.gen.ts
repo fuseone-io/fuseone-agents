@@ -2633,7 +2633,7 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
-        /** @description A human-curated memory assertion, in the fields a person can answer. Labels, the agent, the counters and the expiry are all absent on purpose: the server derives them from the run the evidence names and from policy, because every one of them changes what the memory means and none of them is something a caller should be able to assert about itself. */
+        /** @description A human-curated memory assertion, in the fields a person can answer. Kind and signature are derived as `fact` and the trimmed subject for a new assertion. They remain optional inputs only so an existing assertion with a legacy identity can be corrected without silently becoming a different memory. Labels, the agent, the counters and the expiry are all absent on purpose: the server derives them from the run the evidence names and from policy, because every one of them changes what the memory means and none of them is something a caller should be able to assert about itself. */
         MemoryAssertionInput: {
             company: string;
             area: string;
@@ -2642,9 +2642,18 @@ export interface components {
              * @enum {string}
              */
             namespace: "agent" | "shared";
-            kind: string;
+            /**
+             * @deprecated
+             * @description Existing identity kind when correcting a legacy assertion. Omit together with signature when teaching a new memory.
+             */
+            kind?: string;
+            /** @description Stable, specific name of the fact. New human and agent teaching use it as the signature, so different facts require different subjects. */
             subject: string;
-            signature: string;
+            /**
+             * @deprecated
+             * @description Existing identity signature when correcting a legacy assertion. Omit together with kind when teaching a new memory.
+             */
+            signature?: string;
             claim: string;
             evidence: components["schemas"]["MemoryEvidenceInput"][];
             /** @description Why a person decided this assertion should be remembered. */

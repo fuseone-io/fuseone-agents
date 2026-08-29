@@ -13,7 +13,7 @@ func TestMemoryToolSchemasArePropertyMaps(t *testing.T) {
 		},
 		"suggest": {
 			schema: memorySuggestSchema(),
-			fields: []string{"kind", "subject", "signature", "claim"},
+			fields: []string{"subject", "claim"},
 		},
 	}
 	for name, test := range tests {
@@ -26,6 +26,13 @@ func TestMemoryToolSchemasArePropertyMaps(t *testing.T) {
 			for _, field := range test.fields {
 				if _, ok := test.schema[field]; !ok {
 					t.Fatalf("schema is missing property %q at the top level", field)
+				}
+			}
+			if name == "suggest" {
+				for _, platformOwned := range []string{"kind", "signature"} {
+					if _, ok := test.schema[platformOwned]; ok {
+						t.Errorf("suggest schema lets the model author %q", platformOwned)
+					}
 				}
 			}
 		})

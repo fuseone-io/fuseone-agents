@@ -38,9 +38,12 @@ func prepareAssertion(
 func prepareSuggestion(
 	s domain.MemorySuggestion, by domain.UserID, now time.Time,
 ) (domain.MemorySuggestion, error) {
-	s.Kind = clean(s.Kind)
 	s.Subject = clean(s.Subject)
-	s.Signature = clean(s.Signature)
+	// Identity belongs to the platform on both teaching paths. If the model
+	// could choose these two fields, its proposal and a person's memory about
+	// the same subject would live under different canonical keys and evade both
+	// alreadyActive and the pending duplicate warning.
+	s.Kind, s.Signature = domain.DerivedMemoryIdentity(s.Subject)
 	s.Claim = clean(s.Claim)
 	if s.Status == "" {
 		s.Status = domain.MemorySuggestionPending

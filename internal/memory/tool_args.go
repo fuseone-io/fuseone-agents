@@ -23,6 +23,9 @@ type findArgs struct {
 }
 
 type suggestArgs struct {
+	// Kept only so a replay of a call made before platform-owned identity does
+	// not become malformed. prepareSuggestion ignores both values, and the tool
+	// schema no longer offers them to a model.
 	Kind      string `json:"kind"`
 	Subject   string `json:"subject"`
 	Signature string `json:"signature"`
@@ -73,9 +76,7 @@ func memorySuggestSchema() map[string]any {
 		return map[string]any{"type": "string", "maxLength": max, "description": description}
 	}
 	return map[string]any{
-		"kind":      text("Stable assertion kind.", domain.MaxMemoryKindBytes),
-		"subject":   text("Thing this assertion is about.", domain.MaxMemorySubjectBytes),
-		"signature": text("Stable key for the repeated situation.", domain.MaxMemorySignatureBytes),
-		"claim":     text("Small falsifiable claim to remember.", domain.MaxMemoryClaimBytes),
+		"subject": text("Stable, specific name for this fact. Different facts need different subjects.", domain.MaxMemorySubjectBytes),
+		"claim":   text("Small falsifiable claim to remember.", domain.MaxMemoryClaimBytes),
 	}
 }
