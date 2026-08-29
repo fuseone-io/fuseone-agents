@@ -120,9 +120,15 @@ opens a sheet where the platform has already answered everything it can: the
 scope and the run come from the record being read, the citation from the step,
 the labels from the trail, and the agent is read from the ledger when the
 request arrives.</p>
-<p><strong>The Memory page.</strong> The same form, with one difference: there a person writes
-the run identifier, because no run is on screen.</p>
-<p>Either way, what is asked for is what only a person knows:</p>
+<p><strong>The Memory page.</strong> The same form, with one difference: there a person chooses
+a finished run from the scopes they can access, because no run is on screen.</p>
+<p>Either way, the authored content is only a short subject and claim. The subject
+is also the stable human key: the platform records new teaching with kind
+<code dir="auto">fact</code> and derives its signature from the trimmed subject. This is deterministic
+on purpose. Spending a model turn to invent internal vocabulary would add cost
+and could give the same fact a different identity on a later run.</p>
+<p>Governance choices remain explicit. Shared memory is never reached by leaving
+an agent blank, and every write still needs a reason:</p>
 
 
 
@@ -148,7 +154,13 @@ the run identifier, because no run is on screen.</p>
 
 
 
-<table><thead><tr><th>Asked for</th><th>Derived by the platform</th></tr></thead><tbody><tr><td>kind, subject, signature</td><td>the agent, from the cited run</td></tr><tr><td>the claim</td><td>labels, folded from the trail up to the cited step</td></tr><tr><td>who reads it (agent or shared)</td><td>the citation’s digest and step</td></tr><tr><td>the reason</td><td>the opening counters and the 30-day expiry</td></tr></tbody></table>
+<table><thead><tr><th>Asked for</th><th>Derived by the platform</th></tr></thead><tbody><tr><td>subject and claim</td><td>kind <code dir="auto">fact</code> and signature from the subject</td></tr><tr><td>who reads it (agent or shared)</td><td>the agent, from the cited run</td></tr><tr><td>the reason</td><td>labels, folded from the trail up to the cited step</td></tr><tr><td>nothing else</td><td>the citation’s digest and step, opening counters and 30-day expiry</td></tr></tbody></table>
+<p>The derived identity is shown before saving and cannot be edited. Existing
+memory with an older kind or signature keeps that identity when its claim is
+corrected; silently deriving a new one there would create a second fact instead
+of correcting the first. The subject therefore names the memory: two different
+facts about one service need two specific subjects, not two claims under one
+broad subject.</p>
 <div class="sl-heading-wrapper level-h3"><h3 id="the-evidence-is-read-not-typed">The evidence is read, not typed</h3><a class="sl-anchor-link" href="#the-evidence-is-read-not-typed"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “The evidence is read, not typed”</span></a></div>
 <p>The sheet shows the run, the step, the artifact and the digest, and lets none of
 them be changed. This is not a convenience restriction: every part is the
@@ -269,20 +281,20 @@ than becoming readable to every run for having been made twice.</p>
 opt-in field on the published agent version, so changing it creates a new
 version and is visible in the publication review.</p>
 <div class="expressive-code"><figure class="frame not-content"><figcaption class="header"></figcaption><pre data-language="yaml"><code><div class="ec-line"><div class="code"><span style="--0:#7FDBCA;--1:#111111">memory_learning</span><span style="--0:#D6DEEB;--1:#403F53">:</span></div></div><div class="ec-line"><div class="code"><span class="indent">  </span><span style="--0:#7FDBCA;--1:#111111">mode</span><span style="--0:#D6DEEB;--1:#403F53">: </span><span style="--0:#ECC48D;--1:#3B61B0">review</span></div></div><div class="ec-line"><div class="code"><span class="indent">  </span><span style="--0:#7FDBCA;--1:#111111">ttl_days</span><span style="--0:#D6DEEB;--1:#403F53">: </span><span style="--0:#F78C6C;--1:#AA0982">30</span></div></div></code></pre><div class="copy"><div aria-live="polite"></div><button title="Copy to clipboard" data-copied="Copied!" data-code="memory_learning:  mode: review  ttl_days: 30"><div></div></button></div></figure></div>
-<p>V1 is review mode. The agent can call <code dir="auto">$fuseone.memory.suggest</code> with a
-structured assertion: kind, subject, signature and claim. The platform records
-that suggestion with the run labels and evidence, but <code dir="auto">memory.find</code> does not
-return it yet. A person with publish permission in the scope must accept or
-dismiss it from the Memory page.</p>
+<p>V1 is review mode. The agent can call <code dir="auto">$fuseone.memory.suggest</code> with a subject
+and claim. The platform derives the same <code dir="auto">fact</code>/subject identity used when a
+person teaches, then records the suggestion with the run labels and evidence.
+<code dir="auto">memory.find</code> does not return it yet. A person with publish permission in the
+scope must accept or dismiss it from the Memory page.</p>
 <p>When memory learning is enabled, the platform also offers
 <code dir="auto">$fuseone.memory.find</code>. At the start of a run with human input, FuseOne performs
 one recorded memory lookup before the first model call, using short terms from
 that input. The lookup is still a tool call: it crosses the Gate, appears in
 the trail, and any labels on returned memory travel into the run.</p>
 <p>The agent may call <code dir="auto">memory.find</code> again later with a narrower kind, subject or
-signature. The suggestion path also checks active memory for the same kind,
-subject and signature, so a remembered fact does not keep creating review items
-just because the model proposes different wording.</p>
+signature. Because human and agent teaching use the same platform-owned
+identity, the suggestion path finds active memory and pending proposals for the
+same subject instead of creating a second review vocabulary.</p>
 <p>The automatic lookup runs once. If the model later proposes an equivalent
 <code dir="auto">memory.find</code> call with only JSON ordering or whitespace changed, the platform
 skips it as the same call. A materially different or narrower lookup is still

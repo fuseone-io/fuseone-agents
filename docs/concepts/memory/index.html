@@ -76,6 +76,13 @@ is expected to obey later.</p>
 evidence, labels, confirmation state, retention and erasure state. The model
 can search memory, but it does not choose the company, area or agent namespace
 being searched.</p>
+<p>When a person teaches from a run, they write only a short subject, claim and
+reason, then explicitly choose agent or shared reach. The platform records new
+teaching as kind <code dir="auto">fact</code> and derives the signature from the trimmed subject. The
+derived identity is visible before saving and cannot be edited; the agent,
+labels, citation, counters and expiry come from the ledger and policy.
+The subject is the memory’s stable human key, so different facts need different
+specific subjects.</p>
 <div class="sl-heading-wrapper level-h2"><h2 id="reading-memory-can-taint-the-run">Reading memory can taint the run</h2><a class="sl-anchor-link" href="#reading-memory-can-taint-the-run"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Reading memory can taint the run”</span></a></div>
 <p>Memory does not make outside data trusted. If an assertion came from Slack,
 GitHub, Loki or another external source, its labels travel with the memory
@@ -89,6 +96,9 @@ a person accepts or dismisses it before it becomes active. In auto-confirm
 mode, the same assertion must appear across the configured number of distinct
 runs before it becomes active, so tainted suggestions can still require Gate
 approval before they count.</p>
+<p>The agent proposes only the subject and claim. The platform derives the same
+<code dir="auto">fact</code>/subject identity used by human teaching, so active memory and pending
+proposals share one duplicate-detection space.</p>
 <p>The model does not send confidence. Counts are derived by the platform.</p>
 <p>Active memory is corrected through the governed record path, not edited in
 place. A correction rewrites the claim, keeps the same signature and evidence,

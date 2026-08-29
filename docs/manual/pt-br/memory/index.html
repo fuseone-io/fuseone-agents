@@ -122,8 +122,16 @@ um painel onde a plataforma já respondeu tudo o que sabe: o escopo e a execuç�
 vêm do registro que está sendo lido, a citação vem do passo, os labels vêm do
 rastro, e o agente é lido do ledger quando o pedido chega.</p>
 <p><strong>A página de Memória.</strong> Mesmo formulário, com uma diferença: ali a pessoa
-escreve o identificador da execução, porque não há uma na tela.</p>
-<p>Nos dois casos, o que é perguntado é o que só uma pessoa sabe:</p>
+escolhe uma execução finalizada entre os escopos a que tem acesso, porque não
+há uma execução na tela.</p>
+<p>Nos dois casos, o conteúdo autoral é só um assunto curto e uma afirmação. O
+assunto também é a chave humana estável: a plataforma registra novo aprendizado
+com tipo <code dir="auto">fact</code> e deriva a assinatura do assunto sem espaços nas pontas. Isso é
+determinístico de propósito. Gastar uma chamada de modelo para inventar
+vocabulário interno adicionaria custo e poderia dar outra identidade ao mesmo
+fato em uma execução posterior.</p>
+<p>As escolhas de governança continuam explícitas. Memória compartilhada nunca é
+alcançada deixando o agente em branco, e toda escrita ainda exige um motivo:</p>
 
 
 
@@ -149,7 +157,13 @@ escreve o identificador da execução, porque não há uma na tela.</p>
 
 
 
-<table><thead><tr><th>Perguntado</th><th>Derivado pela plataforma</th></tr></thead><tbody><tr><td>tipo, assunto, assinatura</td><td>agente, a partir da execução citada</td></tr><tr><td>a afirmação</td><td>labels, dobrados do rastro até o passo citado</td></tr><tr><td>quem lê (agente ou compartilhada)</td><td>digest e passo da citação</td></tr><tr><td>o motivo</td><td>contagens iniciais e prazo de 30 dias</td></tr></tbody></table>
+<table><thead><tr><th>Perguntado</th><th>Derivado pela plataforma</th></tr></thead><tbody><tr><td>assunto e afirmação</td><td>tipo <code dir="auto">fact</code> e assinatura a partir do assunto</td></tr><tr><td>quem lê (agente ou compartilhada)</td><td>agente, a partir da execução citada</td></tr><tr><td>o motivo</td><td>labels, dobrados do rastro até o passo citado</td></tr><tr><td>nada mais</td><td>digest e passo da citação, contagens iniciais e prazo de 30 dias</td></tr></tbody></table>
+<p>A identidade derivada aparece antes de salvar e não pode ser editada. Memória
+existente com tipo ou assinatura antiga preserva essa identidade quando sua
+afirmação é corrigida; derivar outra silenciosamente criaria um segundo fato em
+vez de corrigir o primeiro. Portanto, o assunto nomeia a memória: dois fatos
+diferentes sobre um serviço precisam de dois assuntos específicos, não de duas
+afirmações sob um assunto amplo.</p>
 <div class="sl-heading-wrapper level-h3"><h3 id="a-evidência-é-lida-não-digitada">A evidência é lida, não digitada</h3><a class="sl-anchor-link" href="#a-evidência-é-lida-não-digitada"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “A evidência é lida, não digitada”</span></a></div>
 <p>O painel mostra execução, passo, artefato e digest, e não deixa alterar nenhum
 deles. Não é uma restrição de conveniência: todos vêm do ledger, e um campo que
@@ -271,11 +285,11 @@ vezes.</p>
 opt-in na versão publicada do agente; mudar essa política cria uma versão nova
 e aparece na revisão de publicação.</p>
 <div class="expressive-code"><figure class="frame not-content"><figcaption class="header"></figcaption><pre data-language="yaml"><code><div class="ec-line"><div class="code"><span style="--0:#7FDBCA;--1:#111111">memory_learning</span><span style="--0:#D6DEEB;--1:#403F53">:</span></div></div><div class="ec-line"><div class="code"><span class="indent">  </span><span style="--0:#7FDBCA;--1:#111111">mode</span><span style="--0:#D6DEEB;--1:#403F53">: </span><span style="--0:#ECC48D;--1:#3B61B0">review</span></div></div><div class="ec-line"><div class="code"><span class="indent">  </span><span style="--0:#7FDBCA;--1:#111111">ttl_days</span><span style="--0:#D6DEEB;--1:#403F53">: </span><span style="--0:#F78C6C;--1:#AA0982">30</span></div></div></code></pre><div class="copy"><div aria-live="polite"></div><button title="Copy to clipboard" data-copied="Copied!" data-code="memory_learning:  mode: review  ttl_days: 30"><div></div></button></div></figure></div>
-<p>V1 é modo de revisão. O agente pode chamar <code dir="auto">$fuseone.memory.suggest</code> com uma
-asserção estruturada: tipo, assunto, assinatura e afirmação. A plataforma
-registra a sugestão com os labels e a evidência da run, mas <code dir="auto">memory.find</code> ainda
-não a devolve. Uma pessoa com permissão de publicação no escopo precisa aceitar
-ou descartar a sugestão pela página de Memória.</p>
+<p>V1 é modo de revisão. O agente pode chamar <code dir="auto">$fuseone.memory.suggest</code> com assunto
+e afirmação. A plataforma deriva a mesma identidade <code dir="auto">fact</code>/assunto usada quando
+uma pessoa ensina e registra a sugestão com os labels e a evidência da run.
+<code dir="auto">memory.find</code> ainda não a devolve. Uma pessoa com permissão de publicação no
+escopo precisa aceitar ou descartar a sugestão pela página de Memória.</p>
 <p>Quando aprendizado de memória está ligado, a plataforma também oferece
 <code dir="auto">$fuseone.memory.find</code>. No começo de uma execução com entrada humana, o FuseOne
 faz uma busca de memória registrada antes da primeira chamada ao modelo, usando
@@ -283,9 +297,10 @@ termos curtos dessa entrada. A busca continua sendo uma chamada de ferramenta:
 passa pelo Gate, aparece na trilha, e quaisquer labels da memória retornada
 viajam para a execução.</p>
 <p>O agente pode chamar <code dir="auto">memory.find</code> de novo depois com tipo, assunto ou
-assinatura mais estreitos. O caminho de sugestão também consulta a memória
-ativa pelo mesmo tipo, assunto e assinatura, então um fato lembrado não
-continua criando itens de revisão só porque o modelo propôs outra redação.</p>
+assinatura mais estreitos. Como o ensino humano e o do agente usam a mesma
+identidade da plataforma, o caminho de sugestão encontra memória ativa e
+propostas pendentes do mesmo assunto em vez de criar um segundo vocabulário de
+revisão.</p>
 <p>A busca automática roda uma vez. Se depois o modelo propuser um
 <code dir="auto">memory.find</code> equivalente, mudando apenas ordem ou espaços do JSON, a
 plataforma pula como a mesma chamada. Uma busca materialmente diferente ou
