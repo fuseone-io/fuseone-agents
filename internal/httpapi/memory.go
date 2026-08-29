@@ -95,7 +95,7 @@ func (s *Server) CreateMemoryAssertion(
 	// The same policy the accept applies, from the same function, on the
 	// assertion this is about to write rather than on the request that
 	// described it.
-	proposed, _, err := memoryAssertionInput(*req.Body, scope,
+	proposed, existingIdentity, err := memoryAssertionInput(*req.Body, scope,
 		memoryOrigin{agent: agent, labels: labels, cited: cited, now: now})
 	if err != nil {
 		return badMemoryCreate(err.Error()), nil
@@ -106,6 +106,19 @@ func (s *Server) CreateMemoryAssertion(
 		return openapi.CreateMemoryAssertion400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(*refused),
 		}, nil
+	}
+	if existingIdentity {
+		err = s.requireExistingMemoryIdentity(ctx, proposed, now)
+		switch memoryRefusal(err) {
+		case http.StatusConflict:
+			return openapi.CreateMemoryAssertion409ApplicationProblemPlusJSONResponse(
+				conflicted(err.Error())), nil
+		case http.StatusBadRequest:
+			return badMemoryCreate(err.Error()), nil
+		}
+		if err != nil {
+			return nil, fmt.Errorf("verify existing memory identity: %w", err)
+		}
 	}
 	assertion, err := s.memory.Assert(ctx, proposed, callerOf(ctx), req.Body.Reason, now)
 	switch memoryRefusal(err) {
@@ -119,6 +132,29 @@ func (s *Server) CreateMemoryAssertion(
 		return nil, fmt.Errorf("create memory assertion: %w", err)
 	}
 	return openapi.CreateMemoryAssertion200JSONResponse(memoryAssertion(assertion)), nil
+}
+
+// requireExistingMemoryIdentity is the compatibility door for corrections
+// created before the platform owned kind and signature. Both fields in a body
+// are not proof that this is a correction: only a row already carrying that
+// canonical identity is. Shared memory that merely covers an agent-scoped fact
+// does not count as Own and therefore cannot authorize a new custom identity.
+func (s *Server) requireExistingMemoryIdentity(
+	ctx context.Context, proposed domain.MemoryAssertion, now time.Time,
+) error {
+	found, err := s.memory.Match(ctx, memstore.MatchInput{
+		Scope: proposed.Scope, AgentID: proposed.AgentID,
+		Kind: proposed.Kind, Subject: proposed.Subject, Signature: proposed.Signature,
+		Now: now,
+	})
+	if err != nil {
+		return err
+	}
+	if found.Own == nil {
+		return fmt.Errorf("%w: explicit kind and signature may only correct an existing memory identity",
+			memstore.ErrInvalid)
+	}
+	return nil
 }
 
 func (s *Server) DisableMemoryAssertion(
