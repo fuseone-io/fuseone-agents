@@ -113,6 +113,35 @@ Duplicate-effect recognition, memory, context sharing and connector calls all
 keep that same rule: the platform decides what can be said, read, skipped or
 written, and the model does not get to invent authority by text.
 
+## Durable execution, deliberately bounded
+
+FuseOne can resume a run after a process or worker failure because the run is
+derived from its append-only ledger, not held in a worker's memory. Leases keep
+one worker on a turn at a time; an expired lease lets another worker fold the
+same steps and continue. Approval requests, parked runs, budget reservations
+and recorded tool calls therefore survive a restart.
+
+That is durable **agent execution**, not a claim to be a general-purpose
+workflow engine. FuseOne interprets versioned agent definitions through one
+fixed run loop. It does not expose arbitrary deterministic workflow code,
+child workflows, general durable timers or a Temporal-compatible programming
+model.
+
+Nor does durability make an external effect exactly-once. If a remote system
+commits a tool call and the worker dies before recording its result, FuseOne
+records the outcome as unknown and keeps the call's idempotency key. The tool
+or integration must still honor that key, be naturally idempotent, or offer a
+compensation. A model request can likewise be billed again if its response was
+not recorded before an ambiguous failure.
+
+Use FuseOne for bounded agent investigations and actions that need Gate,
+labels, approval, budgets, memory and an auditable trail. Put a durable
+workflow engine beside it when the surrounding business process needs a
+general workflow language, long-lived timers, broad fan-out, workflow-level
+versioning or operational guarantees beyond the run loop FuseOne implements.
+
+Design boundary: [NT-011](docs/NT-011-durable-agent-execution-and-workflow-engines.md).
+
 Functional reference: [docs/PRD-001-fuseone-agents.md](docs/PRD-001-fuseone-agents.md).
 
 ## Installing
@@ -218,6 +247,8 @@ whether this design fits their problem.
 | [NT-007](docs/NT-007-drawing-a-process.md) | A canvas that authors the stages, without the specification becoming a picture |
 | [NT-008](docs/NT-008-a-catalogue-by-shape.md) | The tool servers to ship, chosen by shape and never by vendor |
 | [NT-009](docs/NT-009-governed-connectors.md) | First-party connector shapes, and why runtime comes only after governance |
+| [NT-010](docs/NT-010-the-shape-of-the-platform.md) | Topology, the run loop, layering and where data is written |
+| [NT-011](docs/NT-011-durable-agent-execution-and-workflow-engines.md) | The durable run boundary, and when a workflow engine belongs beside it |
 
 Engineering rules are in [CLAUDE.md](CLAUDE.md) for the Go core and
 [web/CLAUDE.md](web/CLAUDE.md) for the console. Design notes and commits are in
