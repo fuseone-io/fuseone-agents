@@ -9,7 +9,7 @@ BIN     := bin/agentd
 OAPI    := github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.8.0
 GEN_GO  := internal/httpapi/openapi/server.gen.go
 
-.PHONY: chart release volume check check-pg test-pg smoke dev stop reset db run-pg build build-api web console test race cover vet fmt lint tidy clean generate verify-generate run
+.PHONY: chart release volume check check-pg test-pg smoke dev stop reset db sql-db sql-test-certs run-pg build build-api web console test race cover vet fmt lint tidy clean generate verify-generate run
 
 # A database of its own. Sharing one with `make dev` meant a running worker
 # claimed the runs a test had just opened, and a test run wiped the
@@ -19,19 +19,33 @@ TEST_DSN ?= postgres://agents:agents@127.0.0.1:5433/agents_test
 # and its own roles. Deliberately not the one above — a test that proved the
 # executor's guarantees against FuseOne's own store would be proving them where
 # the connector must never reach.
-TEST_SQL_DSN ?= postgres://sqlconn:sqlconn@127.0.0.1:5434/appx_test?sslmode=verify-full
+SQL_TEST_CERT_DIR ?= $(CURDIR)/.dev/sql-postgres-certs
+TEST_SQL_DSN ?= postgres://sqlconn:sqlconn@localhost:5434/appx_test?sslmode=verify-full&sslrootcert=$(SQL_TEST_CERT_DIR)/ca.crt
+TEST_SQL_WRITER_DSN ?= postgres://sqlwriter:sqlwriter@localhost:5434/appx_test?sslmode=verify-full&sslrootcert=$(SQL_TEST_CERT_DIR)/ca.crt
+TEST_SQL_ADMIN_DSN ?= postgres://sqladmin:sqladmin@localhost:5434/appx_test?sslmode=verify-full&sslrootcert=$(SQL_TEST_CERT_DIR)/ca.crt
 
 ## check: everything CI runs. Keep this green.
 check: fmt vet verify-generate test race console chart
 
 ## db: development Postgres. Data lives in tmpfs and is meant to be thrown away.
 db:
-	docker compose up -d
+	docker compose up -d postgres
 	@until docker compose exec -T postgres pg_isready -U agents >/dev/null 2>&1; do sleep 1; done
 	@docker compose exec -T postgres psql -U agents -d agents -tc \
 		"select 1 from pg_database where datname = 'agents_test'" | grep -q 1 || \
 		docker compose exec -T postgres createdb -U agents agents_test
 	@echo "postgres ready on 5433 (dev: agents, tests: agents_test)"
+
+## sql-db: disposable TLS Postgres reached by governed connector tests.
+sql-db: sql-test-certs
+	# The service is disposable by design. Recreate it so a prior test run cannot
+	# keep an expired certificate or an older init script alive behind green tests.
+	docker compose up -d --force-recreate sql-postgres
+	@until docker compose exec -T sql-postgres pg_isready -U sqladmin -d appx_test >/dev/null 2>&1; do sleep 1; done
+	@echo "sql connector postgres ready on 5434 (TLS: verify-full)"
+
+sql-test-certs:
+	@./scripts/sql-test-certs.sh "$(SQL_TEST_CERT_DIR)"
 
 # The suites that need a real database, asked rather than remembered.
 #
@@ -57,8 +71,12 @@ PG_PKGS = $(shell grep -rlE 'TEST_DATABASE_URL|TEST_SQL_DATABASE_URL' --include=
 ## check-pg: the contract suite against a real database as well as the fake.
 ## A fake that is more permissive than the store is how green tests become
 ## incidents, so CI runs this, not just `check`.
-check-pg: db
-	TEST_DATABASE_URL=$(TEST_DSN) TEST_SQL_DATABASE_URL=$(TEST_SQL_DSN) $(MAKE) test-pg
+check-pg: db sql-db
+	TEST_DATABASE_URL="$(TEST_DSN)" \
+	TEST_SQL_DATABASE_URL="$(TEST_SQL_DSN)" \
+	TEST_SQL_WRITER_DATABASE_URL="$(TEST_SQL_WRITER_DSN)" \
+	TEST_SQL_ADMIN_DATABASE_URL="$(TEST_SQL_ADMIN_DSN)" \
+	$(MAKE) test-pg
 
 ## test-pg: the same suites against whatever TEST_DATABASE_URL and
 ## TEST_SQL_DATABASE_URL point at. A suite whose database is absent skips and

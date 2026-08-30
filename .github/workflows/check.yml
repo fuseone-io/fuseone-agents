@@ -63,6 +63,9 @@ jobs:
           --health-retries 20
     env:
       TEST_DATABASE_URL: postgres://agents:agents@127.0.0.1:5432/agents_test
+      TEST_SQL_DATABASE_URL: postgres://sqlconn:sqlconn@localhost:5434/appx_test?sslmode=verify-full&sslrootcert=${{ github.workspace }}/.dev/sql-postgres-certs/ca.crt
+      TEST_SQL_WRITER_DATABASE_URL: postgres://sqlwriter:sqlwriter@localhost:5434/appx_test?sslmode=verify-full&sslrootcert=${{ github.workspace }}/.dev/sql-postgres-certs/ca.crt
+      TEST_SQL_ADMIN_DATABASE_URL: postgres://sqladmin:sqladmin@localhost:5434/appx_test?sslmode=verify-full&sslrootcert=${{ github.workspace }}/.dev/sql-postgres-certs/ca.crt
       REQUIRE_DATABASE: "1"
     steps:
       - uses: actions/checkout@v4
@@ -70,6 +73,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+
+      - name: start the governed SQL target
+        run: make sql-db
 
       # Through the Makefile rather than as a list here. This job carried its
       # own copy and had fallen three packages behind, so CI was running fewer
