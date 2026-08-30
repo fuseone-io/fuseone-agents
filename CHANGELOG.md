@@ -44,8 +44,10 @@ field" is a commit message.
   one TLS-verified read-only PostgreSQL connection, bounds rows, bytes and
   time, stores the result by reference, closes the connection and returns the
   lease. The approval is pinned to the registered target, Vault binding,
-  query, parameter types and limits; changing any of them requires a new
-  decision. SQL results are never served from the MCP result cache.
+  Vault endpoint, query, parameter types and limits; changing any of them
+  requires a new decision. SQL results are never served from the MCP result
+  cache. PostgreSQL enforces the effective execution budget server-side as
+  well as through the worker deadline.
 
 ### Security
 
@@ -53,7 +55,9 @@ field" is a commit message.
   governed results contain no Vault path, token, username, password, DSN or
   lease id. Driver and Vault errors are reduced to stable codes, result rows
   that contain the issued username or password are refused, and metrics carry
-  only bounded stage and outcome labels.
+  only bounded stage and outcome labels. Database codecs preserve UUID and
+  network identifiers as text, exact numerics as decimal strings and binary
+  values as base64 rather than exposing driver-specific Go representations.
 
 ## [0.40.0] — 2026-08-28
 

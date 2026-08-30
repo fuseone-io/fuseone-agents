@@ -73,15 +73,23 @@ After the Gate and any required approval, the worker resolves the binding,
 asks Vault for one short-lived credential, opens one TLS-verified PostgreSQL
 connection, describes the statement against the database, runs it in a
 read-only transaction and streams a bounded result into the content store.
+The effective execution budget is enforced twice: by the worker deadline and
+by PostgreSQL `statement_timeout` plus `idle_in_transaction_session_timeout`.
 The connection is closed before the lease is revoked; TTL remains the
 backstop after ambiguous worker loss.
 
+Rows use the database codecs rather than whatever Go type pgx happens to
+choose. UUIDs and network identifiers are canonical text, exact `numeric`
+values are decimal strings, and `bytea` is base64 in JSON. This keeps keys
+recognisable and numbers lossless when a result is audited or used as input to
+a later call.
+
 Approval binds both halves of the act: the digest of model-authored parameters
-and a versioned digest of the server-owned target, Vault binding, selected
-query, parameter declarations and limits. The latter is recomputed after an
-approval and checked again against current settings before opening the
-database. Changing a template under the same id therefore asks again instead
-of borrowing the earlier decision.
+and a versioned digest of the server-owned target, Vault binding and endpoint,
+selected query, parameter declarations and limits. The latter is recomputed
+after an approval and checked again against current settings before opening
+the database. Changing a template under the same id or repointing the named
+Vault therefore asks again instead of borrowing the earlier decision.
 
 SQL does not reuse the MCP result cache or a dynamic credential. Repeating a
 read is another execution: it crosses the Gate again and, when policy asks,
