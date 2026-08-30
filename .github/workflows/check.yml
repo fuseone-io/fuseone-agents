@@ -38,9 +38,11 @@ jobs:
         run: go vet $(go list ./... | grep -v '/node_modules/')
 
       # The generated server is committed so this check can exist: it proves
-      # the code and api/openapi.yaml still describe the same API.
-      - name: generated code matches the contract
-        run: make verify-generate
+      # the code and api/openapi.yaml still describe the same API. The
+      # TypeScript half runs in the console job, which has npm; this job does
+      # not, and installing one here would make every Go change wait for it.
+      - name: generated Go matches the contract
+        run: make verify-generate-go
 
       - name: test
         run: go test $(go list ./... | grep -v '/node_modules/') -count=1 -race
@@ -99,6 +101,12 @@ jobs:
           cache-dependency-path: web/package-lock.json
 
       - run: npm ci
+      # The other half of the contract check. Both sides are verified, each in
+      # the job that owns its toolchain — a contract checked on one side only
+      # is how the console kept speaking a type the server had already dropped.
+      - name: generated TypeScript matches the contract
+        run: make verify-generate-ts
+        working-directory: .
       # Explicit rather than implied by the build: a failure here should read
       # as "the types are wrong", not as "the bundle did not produce".
       - run: npm run typecheck

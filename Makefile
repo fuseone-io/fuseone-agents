@@ -119,20 +119,35 @@ run-pg: db build-api
 # Both sides of the contract, always together. Generating only Go let the
 # console keep a type the server had already stopped speaking, and the gate
 # said nothing because it checked one half.
-generate:
-	cd api && $(GO) run $(OAPI) -config oapi-codegen.yaml openapi.yaml
-	cd web && npm run generate --silent
+generate: generate-go generate-ts
 	@echo "generated: $(GEN_GO) $(GEN_TS)"
 
+generate-go:
+	cd api && $(GO) run $(OAPI) -config oapi-codegen.yaml openapi.yaml
+
+# Needs the console's node_modules. Split from the Go half so each can run in
+# the job that has its toolchain: the go job has no npm, and asking it to
+# install one to check a TypeScript file would make every Go change wait for it.
+generate-ts:
+	cd web && npm run generate --silent
+
 ## verify-generate: fail when committed generated code drifts from the spec.
-verify-generate:
+## Both halves, but not necessarily in one place — see verify-generate-go and
+## verify-generate-ts. A contract checked on one side only is how the console
+## kept speaking a type the server had already stopped.
+verify-generate: verify-generate-go verify-generate-ts
+
+verify-generate-go:
 	@cp $(GEN_GO) /tmp/agents-gen-before.go
-	@cp $(GEN_TS) /tmp/agents-gen-before.ts
-	@$(MAKE) --no-print-directory generate >/dev/null
+	@$(MAKE) --no-print-directory generate-go >/dev/null
 	@if ! diff -q /tmp/agents-gen-before.go $(GEN_GO) >/dev/null; then \
 		echo "generated Go is stale — run 'make generate' and commit the result"; \
 		cp /tmp/agents-gen-before.go $(GEN_GO); exit 1; \
 	fi
+
+verify-generate-ts:
+	@cp $(GEN_TS) /tmp/agents-gen-before.ts
+	@$(MAKE) --no-print-directory generate-ts >/dev/null
 	@if ! diff -q /tmp/agents-gen-before.ts $(GEN_TS) >/dev/null; then \
 		echo "generated TypeScript is stale — run 'make generate' and commit the result"; \
 		cp /tmp/agents-gen-before.ts $(GEN_TS); exit 1; \
