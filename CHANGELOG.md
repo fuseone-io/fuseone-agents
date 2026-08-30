@@ -27,6 +27,8 @@ field" is a commit message.
 
 ## [Unreleased]
 
+## [0.41.0] — 2026-08-30
+
 ### Upgrade notes
 
 - **Enabled SQL connector instances become executable after this upgrade.**
