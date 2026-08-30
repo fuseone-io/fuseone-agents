@@ -2,6 +2,8 @@ package connectortools
 
 import (
 	"fmt"
+	"net"
+	"regexp"
 	"strings"
 )
 
@@ -74,13 +76,23 @@ func validateSQLConfig(instance Instance) error {
 // a port, a path or a query means somebody wrote an address that can carry
 // more than a destination.
 func plainHost(name, host string) error {
-	if strings.ContainsAny(host, "@/?#:\\ ") {
+	if net.ParseIP(host) != nil {
+		return nil
+	}
+	if !hostname.MatchString(host) {
 		return fmt.Errorf(
-			"connector: sql %s host must be a bare hostname; port, database and credentials are separate fields",
+			"connector: sql %s host must be a hostname or an IP address; port, database and credentials are separate fields",
 			name)
 	}
 	return nil
 }
+
+// hostname accepts what a host may be and nothing else. Listing the characters
+// to refuse left tabs, quotes, semicolons and control bytes through, so
+// `db.internal;password=secret` was a valid host. A positive rule cannot have
+// that gap: anything not named here is refused, including the next separator
+// somebody's driver decides to honour.
+var hostname = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$`)
 
 func validateCredentialSource(name string, source CredentialSource) error {
 	switch {
@@ -148,7 +160,7 @@ func resolveVaultBinding(sql Instance, instances []Instance) error {
 	case !vault.Enabled:
 		return fmt.Errorf("connector: sql %s names vault instance %q, which is disabled",
 			sql.Name, wanted)
-	case strings.TrimSpace(vault.Token) == "":
+	case !vault.TokenPresent():
 		return fmt.Errorf("connector: sql %s names vault instance %q, which has no token",
 			sql.Name, wanted)
 	}

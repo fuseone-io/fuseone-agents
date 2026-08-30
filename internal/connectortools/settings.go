@@ -101,6 +101,10 @@ func (s *Settings) ToolEntries(ctx context.Context) ([]domain.ToolEntry, error) 
 type StoredInstance struct {
 	Connector string      `json:"connector"`
 	Vault     VaultConfig `json:"vault,omitempty"`
+	// A pointer, because omitempty does not elide a struct: every vault
+	// instance would otherwise store an empty sql object in a value operators
+	// read.
+	SQL *SQLConfig `json:"sql,omitempty"`
 }
 
 func (s *Settings) instance(ctx context.Context, row settings.Setting) (Instance, error) {
@@ -130,6 +134,8 @@ func SettingInstance(row settings.Setting) (Instance, error) {
 		Scope:     instanceScope(row),
 		Enabled:   row.Enabled,
 		Vault:     stored.Vault,
+		SQL:       storedSQL(stored.SQL),
+		HasToken:  row.HasSecret,
 	}, nil
 }
 
@@ -137,6 +143,7 @@ func SettingValue(instance Instance) (json.RawMessage, error) {
 	value, err := json.Marshal(StoredInstance{
 		Connector: strings.TrimSpace(instance.Connector),
 		Vault:     instance.Vault,
+		SQL:       sqlToStore(instance.SQL),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("connector: encode %s: %w", instance.Name, err)
@@ -206,4 +213,20 @@ func validateVaultConfig(instance Instance) error {
 		}
 	}
 	return nil
+}
+
+// storedSQL and sqlToStore keep Instance.SQL a plain value with a useful zero,
+// while the stored shape stays absent for connectors that have no SQL config.
+func storedSQL(cfg *SQLConfig) SQLConfig {
+	if cfg == nil {
+		return SQLConfig{}
+	}
+	return *cfg
+}
+
+func sqlToStore(cfg SQLConfig) *SQLConfig {
+	if cfg == (SQLConfig{}) {
+		return nil
+	}
+	return &cfg
 }

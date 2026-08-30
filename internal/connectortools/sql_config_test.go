@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/settings"
 )
 
 func company(name string) domain.Scope { return domain.Scope{Company: domain.CompanyID(name)} }
@@ -256,5 +257,99 @@ func TestValidateBindings_readsOnlyTheConfiguration(t *testing.T) {
 		vault, sqlInstance(area("acme", "platform"), vaultRole("prod")),
 	}); err != nil {
 		t.Fatalf("ValidateBindings err = %v; an unreachable address must not fail configuration", err)
+	}
+}
+
+/*
+What is written down is what comes back.
+
+Every other test here builds an Instance in memory, so none of them notices a
+field the stored shape drops. This one goes through the encoding: a binding
+that survives a PUT and returns empty on the next read is a configuration an
+operator believes they made.
+*/
+func TestSettingValue_roundTripsTheSQLBinding(t *testing.T) {
+	t.Parallel()
+
+	original := sqlInstance(area("acme", "platform"), vaultRole("prod"))
+	value, err := SettingValue(original)
+	if err != nil {
+		t.Fatalf("SettingValue: %v", err)
+	}
+	back, err := SettingInstance(settings.Setting{
+		Name: original.Name, Value: value, Enabled: true,
+		ScopeKind: settings.ScopeArea, Scope: original.Scope,
+	})
+	if err != nil {
+		t.Fatalf("SettingInstance: %v", err)
+	}
+	if back.SQL != original.SQL {
+		t.Fatalf("SQL = %+v, want %+v", back.SQL, original.SQL)
+	}
+}
+
+// The stored shape holds no secret, so a round trip must not invent one.
+func TestSettingValue_storesNoToken(t *testing.T) {
+	t.Parallel()
+
+	instance := vaultInstance("prod", company("acme"))
+	instance.Token = "VAULT-TOKEN-CANARY"
+	value, err := SettingValue(instance)
+	if err != nil {
+		t.Fatalf("SettingValue: %v", err)
+	}
+	if strings.Contains(string(value), "VAULT-TOKEN-CANARY") {
+		t.Fatalf("the stored value carries the token: %s", value)
+	}
+}
+
+/*
+A vault whose token is held by the secret store still counts as having one.
+
+Configured() deliberately does not reveal credentials, so the instances it
+returns carry an empty Token. Asking resolveVaultBinding to read that field
+would refuse every real configuration as tokenless while accepting the
+in-memory fixtures these tests build — which is exactly how this passed
+review the first time.
+*/
+func TestValidateBindings_acceptsAVaultWhoseTokenIsHeldElsewhere(t *testing.T) {
+	t.Parallel()
+
+	vault := vaultInstance("prod", company("acme"))
+	vault.Token = ""
+	vault.HasToken = true
+
+	if err := ValidateBindings([]Instance{
+		vault, sqlInstance(area("acme", "platform"), vaultRole("prod")),
+	}); err != nil {
+		t.Fatalf("ValidateBindings err = %v, want a stored token to count", err)
+	}
+}
+
+func TestPlainHost_refusesEverythingThatIsNotAHostOrAnAddress(t *testing.T) {
+	t.Parallel()
+
+	for _, host := range []string{
+		"db.internal;password=secret",
+		"db.internal\tuser=admin",
+		"db.internal\npassword=secret",
+		`db."internal"`,
+		"db internal",
+		"user:secret@db.internal",
+		"postgres://db.internal/appx",
+		"",
+	} {
+		instance := sqlInstance(area("acme", "platform"), vaultRole("prod"))
+		instance.SQL.Host = host
+		if err := ValidateInstanceConfig(instance); err == nil {
+			t.Errorf("host %q was accepted", host)
+		}
+	}
+	for _, host := range []string{"db.internal", "db-1.internal", "10.0.0.4", "::1"} {
+		instance := sqlInstance(area("acme", "platform"), vaultRole("prod"))
+		instance.SQL.Host = host
+		if err := ValidateInstanceConfig(instance); err != nil {
+			t.Errorf("host %q was refused: %v", host, err)
+		}
 	}
 }
