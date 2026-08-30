@@ -74,13 +74,14 @@ func leaks(t *testing.T, subject any) bool {
 }
 
 type vaultIssuer struct {
-	calls    int
-	username string
-	password string
-	leaseID  string
-	ttl      int
-	err      error
-	revoked  string
+	calls     int
+	username  string
+	password  string
+	leaseID   string
+	ttl       int
+	err       error
+	revokeErr error
+	revoked   string
 }
 
 func (v *vaultIssuer) WriteSecret(context.Context, VaultConfig, string, string, map[string]VaultSecretField) (VaultWriteResult, error) {
@@ -101,6 +102,9 @@ ride the run's cancelled context.
 func (v *vaultIssuer) RevokeLease(ctx context.Context, _ VaultConfig, _, leaseID string) error {
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+	if v.revokeErr != nil {
+		return v.revokeErr
 	}
 	v.revoked = leaseID
 	return nil
