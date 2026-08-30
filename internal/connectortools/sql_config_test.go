@@ -1,6 +1,7 @@
 package connectortools
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -28,7 +29,8 @@ func sqlInstance(scope domain.Scope, source CredentialSource) Instance {
 	return Instance{
 		Connector: "sql", Name: "app-x", Scope: scope, Enabled: true,
 		SQL: SQLConfig{
-			Host: "db.internal", Port: 5432, Database: "appx",
+			Driver: SQLDriverPostgres,
+			Host:   "db.internal", Port: 5432, Database: "appx",
 			CredentialSource: source,
 		},
 	}
@@ -283,7 +285,7 @@ func TestSettingValue_roundTripsTheSQLBinding(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SettingInstance: %v", err)
 	}
-	if back.SQL != original.SQL {
+	if !reflect.DeepEqual(back.SQL, original.SQL) {
 		t.Fatalf("SQL = %+v, want %+v", back.SQL, original.SQL)
 	}
 }

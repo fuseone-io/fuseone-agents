@@ -42,10 +42,12 @@ spelling of one is a validator that falls behind. Refusing the shape is the
 only version that stays true.
 */
 type SQLConfig struct {
+	Driver           SQLDriver
 	Host             string
 	Port             int
 	Database         string
 	CredentialSource CredentialSource
+	Templates        []SQLTemplate
 }
 
 // RequiresToken is whether a connector authenticates with a token of its own.
@@ -59,6 +61,8 @@ func RequiresToken(connector string) bool { return connector == "vault" }
 func validateSQLConfig(instance Instance) error {
 	cfg := instance.SQL
 	switch {
+	case cfg.Driver != SQLDriverPostgres:
+		return fmt.Errorf("connector: sql %s needs driver %q", instance.Name, SQLDriverPostgres)
 	case strings.TrimSpace(cfg.Host) == "":
 		return fmt.Errorf("connector: sql %s needs a host", instance.Name)
 	case cfg.Port <= 0 || cfg.Port > 65535:
@@ -69,7 +73,10 @@ func validateSQLConfig(instance Instance) error {
 	if err := plainHost(instance.Name, cfg.Host); err != nil {
 		return err
 	}
-	return validateCredentialSource(instance.Name, cfg.CredentialSource)
+	if err := validateCredentialSource(instance.Name, cfg.CredentialSource); err != nil {
+		return err
+	}
+	return validateTemplates(instance.Name, cfg.Templates)
 }
 
 // plainHost refuses anything that is not just a host. A scheme, credentials,
@@ -159,6 +166,14 @@ func resolveVaultBinding(sql Instance, instances []Instance) error {
 			sql.Name, wanted, vault.Connector)
 	case !vault.Enabled:
 		return fmt.Errorf("connector: sql %s names vault instance %q, which is disabled",
+			sql.Name, wanted)
+	// A dynamic credential is short-lived, which bounds how long a stolen one
+	// is useful and does nothing about it being read in flight. The token that
+	// mints it travels the same way, so plain HTTP is the same disclosure one
+	// step earlier.
+	case !strings.HasPrefix(vault.Vault.Address, "https://"):
+		return fmt.Errorf(
+			"connector: sql %s names vault instance %q, which must use https to issue credentials",
 			sql.Name, wanted)
 	case !vault.TokenPresent():
 		return fmt.Errorf("connector: sql %s names vault instance %q, which has no token",

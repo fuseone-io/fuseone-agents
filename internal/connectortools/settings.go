@@ -224,8 +224,11 @@ func storedSQL(cfg *SQLConfig) SQLConfig {
 	return *cfg
 }
 
+// A SQLConfig is no longer comparable — it carries templates — so emptiness is
+// asked of the fields that make it one, not of the whole value.
 func sqlToStore(cfg SQLConfig) *SQLConfig {
-	if cfg == (SQLConfig{}) {
+	if cfg.Driver == "" && cfg.Host == "" && cfg.Database == "" &&
+		cfg.CredentialSource == (CredentialSource{}) && len(cfg.Templates) == 0 {
 		return nil
 	}
 	return &cfg
