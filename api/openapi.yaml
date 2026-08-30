@@ -5361,30 +5361,30 @@ components:
       type: object
       description: >
         A registered template as the listing reports it: what it is called,
-        what it takes and what it is bounded by. The query text is not here.
-        Listing connector instances needs only `tool:read`, and an authored
-        query names tables, columns and filters of a customer database — so the
-        listing reports a digest an operator can compare against what they
-        configured, and reading the text back needs the permission that wrote
-        it.
-      required: [id, parameters, timeoutSeconds, maxRows, maxBytes, sqlDigest]
+        what it takes and what it is bounded by. Neither the query nor a digest
+        of it is here. Listing connector instances needs only `tool:read`, and a
+        digest of an authored query does not hide it — queries are low-entropy
+        and guessable offline, so publishing one would disclose tables and
+        filters to anyone who can read the tool catalogue. Reading the text back
+        belongs to a detailed read restricted to configurers, which does not
+        exist yet; until it does, an operator confirms a configuration by
+        writing it again.
+      required: [id, parameters, timeoutSeconds, maxRows, maxBytes]
       properties:
-        id: { type: string }
+        id: { type: string, maxLength: 64 }
         parameters:
           type: array
+          maxItems: 32
           items: { $ref: '#/components/schemas/ConnectorSQLParameter' }
         timeoutSeconds: { type: integer }
         maxRows: { type: integer }
         maxBytes: { type: integer }
-        sqlDigest:
-          type: string
-          description: Hex SHA-256 of the registered query, for comparison without disclosure.
 
     ConnectorSQLParameter:
       type: object
       required: [name, type]
       properties:
-        name: { type: string }
+        name: { type: string, maxLength: 64 }
         type: { type: string, enum: [text, integer, number, boolean, timestamp] }
 
     ConnectorCredentialSource:
@@ -5426,10 +5426,11 @@ components:
       type: object
       required: [id, sql, parameters, timeoutSeconds, maxRows, maxBytes]
       properties:
-        id: { type: string }
-        sql: { type: string }
+        id: { type: string, maxLength: 64 }
+        sql: { type: string, maxLength: 16384 }
         parameters:
           type: array
+          maxItems: 32
           items: { $ref: '#/components/schemas/ConnectorSQLParameter' }
         timeoutSeconds: { type: integer }
         maxRows: { type: integer }

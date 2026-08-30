@@ -3,6 +3,8 @@ package connectortools
 import (
 	"strings"
 	"testing"
+
+	"github.com/fuseone/agents/internal/domain"
 )
 
 func template() SQLTemplate {
@@ -148,7 +150,7 @@ func TestValidateInstanceConfig_limitsHaveCeilings(t *testing.T) {
 
 	cases := map[string]func(*Instance){
 		"rows beyond the ceiling":  func(i *Instance) { i.SQL.Templates[0].MaxRows = 10_001 },
-		"bytes beyond the ceiling": func(i *Instance) { i.SQL.Templates[0].MaxBytes = (8 << 20) + 1 },
+		"bytes beyond the ceiling": func(i *Instance) { i.SQL.Templates[0].MaxBytes = domain.DefaultContentLimit + 1 },
 		"query longer than the cap": func(i *Instance) {
 			i.SQL.Templates[0].SQL = "select '" + strings.Repeat("x", 16<<10) + "' where a = $1 and b = $2"
 		},
@@ -196,6 +198,47 @@ func TestValidatePlaceholders_isNotAuthoritativeAboutSQL(t *testing.T) {
 		instance.SQL.Templates[0].Parameters = []SQLParameter{{Name: "p", Type: SQLParamText}}
 		if err := ValidateInstanceConfig(instance); err != nil {
 			t.Errorf("%s: refused here, so the executor no longer needs to catch it: %v", name, err)
+		}
+	}
+}
+
+/*
+The byte ceiling is the content store's, not a number of its own.
+
+A result larger than the store's limit is truncated to a prefix once stored,
+so a template allowed to ask for more would have the executor hold bytes the
+platform is about to drop. Asserted against the constant rather than a literal:
+when the store's limit rises this must rise with it, and a literal here would
+quietly stop matching.
+*/
+func TestTemplateByteCeiling_followsTheContentStore(t *testing.T) {
+	t.Parallel()
+
+	instance := runnableSQL()
+	instance.SQL.Templates[0].MaxBytes = domain.DefaultContentLimit
+	if err := ValidateInstanceConfig(instance); err != nil {
+		t.Fatalf("the store's own limit was refused: %v", err)
+	}
+	instance.SQL.Templates[0].MaxBytes = domain.DefaultContentLimit + 1
+	if err := ValidateInstanceConfig(instance); err == nil {
+		t.Fatal("a template may ask for more than the store will keep")
+	}
+}
+
+func TestValidateInstanceConfig_namesAreBoundedIdentifiers(t *testing.T) {
+	t.Parallel()
+
+	long := strings.Repeat("a", 65)
+	for name, break_ := range map[string]func(*Instance){
+		"long template id":  func(i *Instance) { i.SQL.Templates[0].ID = long },
+		"long param name":   func(i *Instance) { i.SQL.Templates[0].Parameters[0].Name = long },
+		"shouting param":    func(i *Instance) { i.SQL.Templates[0].Parameters[0].Name = "Customer" },
+		"param with spaces": func(i *Instance) { i.SQL.Templates[0].Parameters[0].Name = "customer id" },
+	} {
+		instance := runnableSQL()
+		break_(&instance)
+		if err := ValidateInstanceConfig(instance); err == nil {
+			t.Errorf("%s was accepted", name)
 		}
 	}
 }

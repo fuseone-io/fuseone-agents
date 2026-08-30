@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
 	"slices"
 	"strings"
@@ -251,11 +250,6 @@ func sqlConfigToResponse(cfg connectortools.SQLConfig) openapi.ConnectorSQLRespo
 		templates = append(templates, openapi.ConnectorSQLTemplateSummary{
 			Id: tpl.ID, Parameters: sqlParametersToResponse(tpl.Parameters),
 			TimeoutSeconds: tpl.TimeoutSeconds, MaxRows: tpl.MaxRows, MaxBytes: tpl.MaxBytes,
-			// A digest, not the query. Listing needs only tool:read, and an
-			// authored query names the tables, columns and filters of a
-			// customer database; a digest lets an operator confirm what is
-			// configured without publishing it to everyone who can read tools.
-			SqlDigest: fmt.Sprintf("%x", sha256.Sum256([]byte(tpl.SQL))),
 		})
 	}
 	return openapi.ConnectorSQLResponse{

@@ -85,17 +85,26 @@ run-pg: db build-api
 
 ## generate: regenerate everything derived from api/openapi.yaml.
 ## The spec is the contract; never hand-edit the generated files.
+# Both sides of the contract, always together. Generating only Go let the
+# console keep a type the server had already stopped speaking, and the gate
+# said nothing because it checked one half.
 generate:
 	cd api && $(GO) run $(OAPI) -config oapi-codegen.yaml openapi.yaml
-	@echo "generated: $(GEN_GO)"
+	cd web && npm run generate --silent
+	@echo "generated: $(GEN_GO) $(GEN_TS)"
 
 ## verify-generate: fail when committed generated code drifts from the spec.
 verify-generate:
 	@cp $(GEN_GO) /tmp/agents-gen-before.go
+	@cp $(GEN_TS) /tmp/agents-gen-before.ts
 	@$(MAKE) --no-print-directory generate >/dev/null
 	@if ! diff -q /tmp/agents-gen-before.go $(GEN_GO) >/dev/null; then \
-		echo "generated code is stale — run 'make generate' and commit the result"; \
+		echo "generated Go is stale — run 'make generate' and commit the result"; \
 		cp /tmp/agents-gen-before.go $(GEN_GO); exit 1; \
+	fi
+	@if ! diff -q /tmp/agents-gen-before.ts $(GEN_TS) >/dev/null; then \
+		echo "generated TypeScript is stale — run 'make generate' and commit the result"; \
+		cp /tmp/agents-gen-before.ts $(GEN_TS); exit 1; \
 	fi
 
 ## run: development server with a seeded in-memory ledger.
@@ -199,3 +208,4 @@ release:
 	git tag -a "v$(V)" -m "$(V)"
 	git push origin "v$(V)"
 	@echo "tagged. CI publishes ghcr.io/fuseone-io/fuseone-agents:$(V), :latest, the chart, and the GitHub Release"
+GEN_TS := web/src/lib/api/schema.gen.ts

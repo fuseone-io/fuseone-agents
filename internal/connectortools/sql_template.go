@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/fuseone/agents/internal/domain"
 )
 
 /*
@@ -66,10 +68,19 @@ value that would only ever be a mistake.
 const (
 	maxTemplateTimeoutSeconds = 3600
 	maxTemplateRows           = 10_000
-	maxTemplateBytes          = 8 << 20
-	maxTemplateSQLBytes       = 16 << 10
-	maxTemplateParameters     = 32
-	maxTemplatesPerInstance   = 64
+	// Aligned to the content store's own limit rather than chosen. A result
+	// larger than that is truncated to a prefix once it is stored, so letting
+	// a template ask for more would have the executor hold bytes in memory
+	// that the platform is about to drop. When DefaultContentLimit rises, this
+	// rises with it — which is why it is derived and not a second number.
+	maxTemplateBytes        = domain.DefaultContentLimit
+	maxTemplateSQLBytes     = 16 << 10
+	maxTemplateParameters   = 32
+	maxTemplatesPerInstance = 64
+	// Names are identifiers, not prose. Sixty-four templates times thirty-two
+	// parameters is a lot of room for a name nobody bounded to inflate a
+	// setting and, later, a tool schema the model has to read.
+	maxTemplateNameBytes = 64
 )
 
 // Template is the query for an id, and only for an id. Nothing here searches
@@ -84,7 +95,13 @@ func (c SQLConfig) Template(id string) (SQLTemplate, bool) {
 	return SQLTemplate{}, false
 }
 
-var templateID = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+// templateID and paramName are the same shape: a lower-case identifier, which
+// is what both become in a tool schema. Bounded here as well as in the
+// contract, because the domain is what refuses when a setting arrives by any
+// other route.
+var templateID = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
+
+var paramName = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 
 func validateTemplates(instanceName string, templates []SQLTemplate) error {
 	if len(templates) > maxTemplatesPerInstance {
@@ -143,9 +160,10 @@ func validateParameters(instanceName string, tpl SQLTemplate) error {
 			return fmt.Errorf("connector: sql %s template %s parameter %q has no declared type",
 				instanceName, tpl.ID, param.Name)
 		}
-		if param.Name == "" || seen[param.Name] {
-			return fmt.Errorf("connector: sql %s template %s has an unnamed or duplicated parameter",
-				instanceName, tpl.ID)
+		if !paramName.MatchString(param.Name) || seen[param.Name] {
+			return fmt.Errorf(
+				"connector: sql %s template %s parameter names must be lower-case identifiers of at most %d bytes, and unique",
+				instanceName, tpl.ID, maxTemplateNameBytes)
 		}
 		seen[param.Name] = true
 	}

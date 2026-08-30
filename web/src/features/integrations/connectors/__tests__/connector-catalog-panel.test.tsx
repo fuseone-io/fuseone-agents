@@ -25,6 +25,7 @@ const vault: GovernedConnector = {
       effects: ["write"],
       approval: "policy",
       secretHandling: "reference_only",
+    cachePolicy: "never",
     },
   ],
 };
@@ -42,6 +43,7 @@ const planned: GovernedConnector = {
       effects: ["read"],
       approval: "policy",
       secretHandling: "reference_only",
+    cachePolicy: "never",
     },
   ],
 };

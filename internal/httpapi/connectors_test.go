@@ -192,14 +192,17 @@ func TestPutConnectorInstance_carriesTheDriverAndTheRegisteredTemplates(t *testi
 }
 
 /*
-Listing reports what a template is, never what it says.
+Listing reports what a template is, never what it says, and not a digest of it
+either.
 
 Listing connector instances needs only tool:read, and a registered query names
-the tables, columns and filters of a customer database. The digest lets an
-operator confirm the configuration matches what they wrote without publishing
-it to everyone who can read the tool catalogue.
+the tables, columns and filters of a customer database. A digest does not hide
+one: queries are low-entropy and an attacker guesses offline until a hash
+matches, which discloses the same thing more slowly. Reading the text back
+belongs to a detailed read restricted to configurers, and until that exists an
+operator confirms a configuration by writing it again.
 */
-func TestListConnectorInstances_reportsATemplateDigestAndNotItsQuery(t *testing.T) {
+func TestListConnectorInstances_publishesNeitherTheQueryNorADigestOfIt(t *testing.T) {
 	t.Parallel()
 
 	const query = "select id from orders where customer_id = $1"
@@ -236,8 +239,10 @@ func TestListConnectorInstances_reportsATemplateDigestAndNotItsQuery(t *testing.
 	if sql == nil || len(sql.Templates) != 1 {
 		t.Fatalf("sql = %+v, want the template summary", sql)
 	}
-	want := fmt.Sprintf("%x", sha256.Sum256([]byte(query)))
-	if sql.Templates[0].SqlDigest != want {
-		t.Fatalf("digest = %q, want %q", sql.Templates[0].SqlDigest, want)
+	if digest := fmt.Sprintf("%x", sha256.Sum256([]byte(query))); strings.Contains(string(rendered), digest) {
+		t.Fatalf("the listing published a digest of the query: %s", rendered)
+	}
+	if sql.Templates[0].Id != "orders_by_customer" || sql.Templates[0].MaxRows != 200 {
+		t.Fatalf("summary = %+v, want the template's shape and bounds", sql.Templates[0])
 	}
 }
