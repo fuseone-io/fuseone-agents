@@ -9,24 +9,43 @@ BIN     := bin/agentd
 OAPI    := github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.8.0
 GEN_GO  := internal/httpapi/openapi/server.gen.go
 
-.PHONY: chart release volume check check-pg test-pg smoke dev stop reset db run-pg build build-api web console test race cover vet fmt lint tidy clean generate verify-generate run
+.PHONY: chart release volume check check-pg test-pg smoke dev stop reset db sql-db sql-test-certs run-pg build build-api web console test race cover vet fmt lint tidy clean generate verify-generate run
 
 # A database of its own. Sharing one with `make dev` meant a running worker
 # claimed the runs a test had just opened, and a test run wiped the
 # administrative trail somebody was reading in the console.
 TEST_DSN ?= postgres://agents:agents@127.0.0.1:5433/agents_test
+# The SQL connector's target: a database standing in for a customer's, with TLS
+# and its own roles. Deliberately not the one above — a test that proved the
+# executor's guarantees against FuseOne's own store would be proving them where
+# the connector must never reach.
+SQL_TEST_CERT_DIR ?= $(CURDIR)/.dev/sql-postgres-certs
+TEST_SQL_DSN ?= postgres://sqlconn:sqlconn@localhost:5434/appx_test?sslmode=verify-full&sslrootcert=$(SQL_TEST_CERT_DIR)/ca.crt
+TEST_SQL_WRITER_DSN ?= postgres://sqlwriter:sqlwriter@localhost:5434/appx_test?sslmode=verify-full&sslrootcert=$(SQL_TEST_CERT_DIR)/ca.crt
+TEST_SQL_ADMIN_DSN ?= postgres://sqladmin:sqladmin@localhost:5434/appx_test?sslmode=verify-full&sslrootcert=$(SQL_TEST_CERT_DIR)/ca.crt
 
 ## check: everything CI runs. Keep this green.
 check: fmt vet verify-generate test race console chart
 
 ## db: development Postgres. Data lives in tmpfs and is meant to be thrown away.
 db:
-	docker compose up -d
+	docker compose up -d postgres
 	@until docker compose exec -T postgres pg_isready -U agents >/dev/null 2>&1; do sleep 1; done
 	@docker compose exec -T postgres psql -U agents -d agents -tc \
 		"select 1 from pg_database where datname = 'agents_test'" | grep -q 1 || \
 		docker compose exec -T postgres createdb -U agents agents_test
 	@echo "postgres ready on 5433 (dev: agents, tests: agents_test)"
+
+## sql-db: disposable TLS Postgres reached by governed connector tests.
+sql-db: sql-test-certs
+	# The service is disposable by design. Recreate it so a prior test run cannot
+	# keep an expired certificate or an older init script alive behind green tests.
+	docker compose up -d --force-recreate sql-postgres
+	@until docker compose exec -T sql-postgres pg_isready -U sqladmin -d appx_test >/dev/null 2>&1; do sleep 1; done
+	@echo "sql connector postgres ready on 5434 (TLS: verify-full)"
+
+sql-test-certs:
+	@./scripts/sql-test-certs.sh "$(SQL_TEST_CERT_DIR)"
 
 # The suites that need a real database, asked rather than remembered.
 #
@@ -41,16 +60,28 @@ db:
 # So it is derived. A suite needs a database exactly when it reads the variable
 # that points at one, which is a fact in the files rather than a note somebody
 # has to remember to update.
-PG_PKGS = $(shell grep -rl TEST_DATABASE_URL --include='*_test.go' internal \
+# Two variables, because two databases. TEST_DATABASE_URL is FuseOne's own
+# store; TEST_SQL_DATABASE_URL is a database the SQL connector reaches as a
+# customer's, with its own TLS, roles and schema. A suite that needed the second
+# and found the first would prove the executor's guarantees against the ledger
+# it must never touch.
+PG_PKGS = $(shell grep -rlE 'TEST_DATABASE_URL|TEST_SQL_DATABASE_URL' --include='*_test.go' internal \
             | xargs -n1 dirname | sort -u | sed 's|^|./|')
 
 ## check-pg: the contract suite against a real database as well as the fake.
 ## A fake that is more permissive than the store is how green tests become
 ## incidents, so CI runs this, not just `check`.
-check-pg: db
-	TEST_DATABASE_URL=$(TEST_DSN) $(MAKE) test-pg
+check-pg: db sql-db
+	REQUIRE_DATABASE=1 \
+	TEST_DATABASE_URL="$(TEST_DSN)" \
+	TEST_SQL_DATABASE_URL="$(TEST_SQL_DSN)" \
+	TEST_SQL_WRITER_DATABASE_URL="$(TEST_SQL_WRITER_DSN)" \
+	TEST_SQL_ADMIN_DATABASE_URL="$(TEST_SQL_ADMIN_DSN)" \
+	$(MAKE) test-pg
 
-## test-pg: the same suites against whatever TEST_DATABASE_URL points at.
+## test-pg: the same suites against whatever TEST_DATABASE_URL and
+## TEST_SQL_DATABASE_URL point at. A suite whose database is absent skips and
+## says so; it does not fall back to the other one.
 ## Separate from check-pg because CI brings its own database and must not have
 ## its own copy of the list.
 test-pg:
@@ -85,17 +116,41 @@ run-pg: db build-api
 
 ## generate: regenerate everything derived from api/openapi.yaml.
 ## The spec is the contract; never hand-edit the generated files.
-generate:
+# Both sides of the contract, always together. Generating only Go let the
+# console keep a type the server had already stopped speaking, and the gate
+# said nothing because it checked one half.
+generate: generate-go generate-ts
+	@echo "generated: $(GEN_GO) $(GEN_TS)"
+
+generate-go:
 	cd api && $(GO) run $(OAPI) -config oapi-codegen.yaml openapi.yaml
-	@echo "generated: $(GEN_GO)"
+
+# Needs the console's node_modules. Split from the Go half so each can run in
+# the job that has its toolchain: the go job has no npm, and asking it to
+# install one to check a TypeScript file would make every Go change wait for it.
+generate-ts:
+	cd web && npm run generate --silent
 
 ## verify-generate: fail when committed generated code drifts from the spec.
-verify-generate:
+## Both halves, but not necessarily in one place — see verify-generate-go and
+## verify-generate-ts. A contract checked on one side only is how the console
+## kept speaking a type the server had already stopped.
+verify-generate: verify-generate-go verify-generate-ts
+
+verify-generate-go:
 	@cp $(GEN_GO) /tmp/agents-gen-before.go
-	@$(MAKE) --no-print-directory generate >/dev/null
+	@$(MAKE) --no-print-directory generate-go >/dev/null
 	@if ! diff -q /tmp/agents-gen-before.go $(GEN_GO) >/dev/null; then \
-		echo "generated code is stale — run 'make generate' and commit the result"; \
+		echo "generated Go is stale — run 'make generate' and commit the result"; \
 		cp /tmp/agents-gen-before.go $(GEN_GO); exit 1; \
+	fi
+
+verify-generate-ts:
+	@cp $(GEN_TS) /tmp/agents-gen-before.ts
+	@$(MAKE) --no-print-directory generate-ts >/dev/null
+	@if ! diff -q /tmp/agents-gen-before.ts $(GEN_TS) >/dev/null; then \
+		echo "generated TypeScript is stale — run 'make generate' and commit the result"; \
+		cp /tmp/agents-gen-before.ts $(GEN_TS); exit 1; \
 	fi
 
 ## run: development server with a seeded in-memory ledger.
@@ -199,3 +254,4 @@ release:
 	git tag -a "v$(V)" -m "$(V)"
 	git push origin "v$(V)"
 	@echo "tagged. CI publishes ghcr.io/fuseone-io/fuseone-agents:$(V), :latest, the chart, and the GitHub Release"
+GEN_TS := web/src/lib/api/schema.gen.ts

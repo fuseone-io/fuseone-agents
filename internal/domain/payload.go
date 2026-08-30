@@ -175,6 +175,9 @@ type GateDecidedPayload struct {
 	// than reporting it unchanged.
 	Labels     Labels `json:"labels,omitempty"`
 	ArgsDigest string `json:"args_digest,omitempty"`
+	// ContractDigest identifies server-owned execution configuration that was
+	// not part of the model's arguments, such as a registered SQL template.
+	ContractDigest string `json:"contract_digest,omitempty"`
 
 	// Budget is recorded only when the budget check blocks. "Budget" covers
 	// money, tokens, calls, steps and wall clock; without the dimension and
@@ -212,6 +215,8 @@ type ToolCalledPayload struct {
 	// ArgsDigest lets an auditor prove which arguments were used without the
 	// ledger holding them.
 	ArgsDigest string `json:"args_digest,omitempty"`
+	// ContractDigest pins server-owned execution configuration at the call.
+	ContractDigest string `json:"contract_digest,omitempty"`
 }
 
 type ToolReturnedPayload struct {
@@ -252,10 +257,11 @@ type ApprovalRequestedPayload struct {
 	// The arguments themselves stay in the content store: they carry whatever
 	// the case carries, including personal data, and the ledger is kept for
 	// years and read by people who have no business seeing it (AU-04).
-	Effect     Effect      `json:"effect,omitempty"`
-	ArgsRef    string      `json:"args_ref,omitempty"`
-	ArgsDigest string      `json:"args_digest,omitempty"`
-	Estimate   Consumption `json:"estimate,omitzero"`
+	Effect         Effect      `json:"effect,omitempty"`
+	ArgsRef        string      `json:"args_ref,omitempty"`
+	ArgsDigest     string      `json:"args_digest,omitempty"`
+	ContractDigest string      `json:"contract_digest,omitempty"`
+	Estimate       Consumption `json:"estimate,omitzero"`
 	// Labels are the taint the arguments carry. The approver needs to know
 	// that a field came from an untrusted source, which is usually the whole
 	// reason the call was escalated (SE-06).

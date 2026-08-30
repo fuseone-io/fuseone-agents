@@ -69,6 +69,9 @@ type PlanInput struct {
 type Proposal struct {
 	Tool domain.ToolID
 	Args []byte
+	// contractDigest is derived by the runner from the tool layer. A planner
+	// cannot author it, and every pass through act recomputes it.
+	contractDigest string
 	// Estimate is the worst-case consumption of the call, used to reserve
 	// budget before spending it.
 	Estimate domain.Consumption
@@ -109,6 +112,14 @@ type Tools interface {
 	Invoke(ctx context.Context, call Call) (ToolResult, error)
 }
 
+// ApprovalBinder is an optional capability for tools whose server-owned
+// execution contract is not present in model-authored arguments. Its digest
+// travels with an approval so changing that contract cannot reuse a decision
+// made about the earlier one.
+type ApprovalBinder interface {
+	ApprovalBinding(call Call) string
+}
+
 type Call struct {
 	// RunID and Seq locate the call in the ledger. The tool layer needs them
 	// to file bulky results in the content store under a stable key.
@@ -121,6 +132,9 @@ type Call struct {
 
 	Tool domain.ToolID
 	Args []byte
+	// ContractDigest binds server-owned execution configuration to the Gate
+	// decision. It is empty for tools whose complete act is already in Args.
+	ContractDigest string
 	// OnBehalfOf is the human delegation the run is using. Tool transports use
 	// it only to choose the credential owned by that human; the Gate has
 	// already decided whether the call may happen at all.

@@ -152,7 +152,8 @@ func (s *State) applyKind(step domain.Step) error {
 			AtSeq: step.Seq, Effect: p.Effect, At: step.At,
 		}
 		s.requested = &ApprovedCall{
-			Tool: p.Tool, ArgsRef: p.ArgsRef, ArgsDigest: p.ArgsDigest, AtSeq: step.Seq,
+			Tool: p.Tool, ArgsRef: p.ArgsRef, ArgsDigest: p.ArgsDigest,
+			ContractDigest: p.ContractDigest, AtSeq: step.Seq,
 		}
 		s.Phase = PhaseAwaitingApproval
 

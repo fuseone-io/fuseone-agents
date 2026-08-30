@@ -39,6 +39,9 @@ func TestMetricsRegistry_rendersOnlyLowCardinalityWorkerFacts(t *testing.T) {
 	reg.MemoryFind(1200*time.Millisecond, 3, 0, false)
 	reg.MemoryFind(800*time.Millisecond, 1, 2, false)
 	reg.MemoryFind(10*time.Millisecond, 0, 0, true)
+	reg.SQLRuntime("issuance", "succeeded")
+	reg.SQLRuntime("query", "db-prod/orders-by-user")
+	reg.SQLRuntime("tenant-a", "password=secret")
 
 	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
 	rec := httptest.NewRecorder()
@@ -79,6 +82,9 @@ func TestMetricsRegistry_rendersOnlyLowCardinalityWorkerFacts(t *testing.T) {
 		`fuseone_memory_find_duration_seconds_count{result="ok",omitted="true"} 1`,
 		`fuseone_memory_find_returned_assertions_total{result="ok",omitted="true"} 1`,
 		`fuseone_memory_find_omitted_assertions_total{result="ok",omitted="true"} 2`,
+		`fuseone_sql_runtime_events_total{stage="issuance",outcome="succeeded"} 1`,
+		`fuseone_sql_runtime_events_total{stage="query",outcome="other"} 1`,
+		`fuseone_sql_runtime_events_total{stage="other",outcome="other"} 1`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("metrics body missing %q:\n%s", want, body)
@@ -87,6 +93,7 @@ func TestMetricsRegistry_rendersOnlyLowCardinalityWorkerFacts(t *testing.T) {
 	for _, forbidden := range []string{
 		"run_", "agent=", "tool=", "server=", "channel=", "conversation=", "usr_", "err=",
 		"github-mcp", "ACME-4417", "jira-prod", "slack-team-alerts", "crm.internal",
+		"db-prod", "orders-by-user", "tenant-a", "password=secret",
 	} {
 		if strings.Contains(body, forbidden) {
 			t.Fatalf("metrics body contains high-cardinality or diagnostic text %q:\n%s", forbidden, body)

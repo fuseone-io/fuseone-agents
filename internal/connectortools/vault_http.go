@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -174,3 +175,102 @@ func (r vaultMetadataResponseWire) metadata() VaultMetadata {
 	slices.Sort(versions)
 	return VaultMetadata{CurrentVersion: r.Data.CurrentVersion, Versions: versions}
 }
+
+/*
+IssueDatabaseCredential asks the database secrets engine for one short-lived
+credential.
+
+Not among the operations a model can reach. It exists for the SQL runtime,
+after Gate and approval, and the fields it returns never become tool output.
+
+The response is read into a narrow shape rather than a map: a decoder that
+accepted anything would carry whatever else Vault returned into memory, and
+from there into whatever printed it.
+*/
+func (c *HTTPVaultClient) IssueDatabaseCredential(
+	ctx context.Context, cfg VaultConfig, token, mount, role string,
+) (IssuedCredential, error) {
+	apiPath, err := vaultCredentialPath(mount, role)
+	if err != nil {
+		return IssuedCredential{}, err
+	}
+	var body databaseCredentialWire
+	// do discards a non-2xx body and reports only the status, which is the
+	// guarantee this needed: a Vault error body can quote the path, the role
+	// and the policy that refused.
+	if err := c.do(ctx, cfg, token, http.MethodGet, apiPath, nil, &body); err != nil {
+		return IssuedCredential{}, err
+	}
+	return body.issued()
+}
+
+/*
+databaseCredentialWire is the only shape that ever holds these bytes with
+exported fields, and it does not leave this function.
+
+A wire struct is printable and serialisable by definition, so the risk is the
+window it exists in. Keeping it unexported and local means there is nowhere
+else to pass one, and the conversion below is the only exit — it happens
+before the value is returned, not somewhere a caller has to remember.
+*/
+type databaseCredentialWire struct {
+	LeaseID       string `json:"lease_id"`
+	LeaseDuration int    `json:"lease_duration"`
+	Data          struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	} `json:"data"`
+}
+
+func (w databaseCredentialWire) issued() (IssuedCredential, error) {
+	switch {
+	case w.Data.Username == "" || w.Data.Password == "":
+		return IssuedCredential{}, ErrCredentialIncomplete
+	case w.LeaseID == "":
+		return IssuedCredential{}, ErrCredentialIncomplete
+	case w.LeaseDuration <= 0:
+		return IssuedCredential{}, ErrCredentialIncomplete
+	}
+	return IssuedCredential{
+		credential: Credential{username: w.Data.Username, password: w.Data.Password},
+		leaseID:    w.LeaseID, ttlSeconds: w.LeaseDuration,
+	}, nil
+}
+
+/*
+vaultCredentialPath builds the endpoint from parts that were checked first.
+
+The mount is a relative path with no segment that climbs, and the role is a
+single strict segment. A binding is a field an operator edits by hand, and
+`database/../sys` is a plausible typo that would address something else
+entirely — so the shape is refused rather than cleaned up, because cleaning it
+would silently address a third thing.
+*/
+func vaultCredentialPath(mount, role string) (string, error) {
+	cleanMount, err := relativeVaultPath(mount)
+	if err != nil {
+		return "", fmt.Errorf("vault: invalid database mount: %w", err)
+	}
+	if !vaultSegment.MatchString(role) {
+		return "", fmt.Errorf("vault: invalid database role")
+	}
+	return cleanMount + "/creds/" + role, nil
+}
+
+func relativeVaultPath(mount string) (string, error) {
+	if mount == "" || strings.HasPrefix(mount, "/") {
+		return "", fmt.Errorf("a mount is a relative path")
+	}
+	segments := strings.Split(mount, "/")
+	for _, segment := range segments {
+		if !vaultSegment.MatchString(segment) {
+			return "", fmt.Errorf("a mount segment is not a plain name")
+		}
+	}
+	return strings.Join(segments, "/"), nil
+}
+
+// vaultSegment is one path segment and nothing that could end it: no slash, no
+// dot-dot, no whitespace, no control byte. Named positively so the next
+// character somebody's proxy treats as a separator is refused by default.
+var vaultSegment = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]*$`)

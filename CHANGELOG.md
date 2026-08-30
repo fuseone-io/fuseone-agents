@@ -27,6 +27,42 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Upgrade notes
+
+- **Enabled SQL connector instances become executable after this upgrade.**
+  Review each registered template, its read-only database role, Vault binding
+  and Gate policy before upgrading; disable any instance that is still being
+  drafted. Existing agent packs only receive the configured native tool, and
+  each execution still crosses the Gate before Vault or the database is
+  contacted.
+
+### Added
+
+- **Governed SQL templates can use a fresh Vault database credential for each
+  execution.** The model chooses only a registered template and its typed
+  parameters. FuseOne resolves the scoped Vault binding after approval, opens
+  one TLS-verified read-only PostgreSQL connection, bounds rows, bytes and
+  time, stores the result by reference, closes the connection and returns the
+  lease. The approval is pinned to the registered target, Vault binding,
+  Vault endpoint, query, parameter types and limits; changing any of them
+  requires a new decision. SQL results are never served from the MCP result
+  cache. PostgreSQL enforces the effective execution budget server-side as
+  well as through the worker deadline.
+
+### Security
+
+- **Database authority remains private to the worker.** SQL tool schemas and
+  governed results contain no Vault path, token, username, password, DSN or
+  lease id. Driver and Vault errors are reduced to stable codes, result rows
+  that contain the issued username or password are refused, and metrics carry
+  only bounded stage and outcome labels. PostgreSQL text is the safe fallback
+  for every result type, so an extension or a newly supported driver codec
+  cannot expose a driver-specific Go representation. UUIDs, network values,
+  exact numerics and `bigint` remain lossless strings; explicitly safe values
+  such as JSON stay structured, and binary values remain base64. The connector
+  also fixes the session's date, interval, timezone, float and bytea settings,
+  so database or role defaults cannot silently change that representation.
+
 ## [0.40.0] — 2026-08-28
 
 ### Upgrade notes

@@ -151,6 +151,10 @@ func connectorOperations(in []connectors.Operation) []openapi.GovernedConnectorO
 			Effects:        connectorEffects(op.Effects),
 			Approval:       openapi.ConnectorApproval(op.Approval),
 			SecretHandling: openapi.ConnectorSecretHandling(op.SecretHandling),
+			// The effective policy, never the raw field: the contract reports
+			// what the platform will do, and an operation that never decided
+			// must read as `never` rather than as an empty string.
+			CachePolicy: openapi.ConnectorCachePolicy(op.EffectiveCachePolicy()),
 		})
 	}
 	return out
@@ -178,6 +182,7 @@ func connectorInstanceInput(
 	instance := connectortools.Instance{
 		Name: name, Connector: strings.TrimSpace(body.Connector),
 		Enabled: enabled, Vault: vaultConfigFromRequest(body.Vault),
+		SQL: sqlConfigFromInput(body.Sql),
 	}
 	clear := body.ClearToken != nil && *body.ClearToken
 	return settings.ScopeKind(body.ScopeKind), scope, instance, body.Token, clear, nil
@@ -230,7 +235,64 @@ func connectorInstanceResponse(instance connectortools.ConfiguredInstance) opena
 	if instance.Connector == "vault" {
 		item.Vault = ptr(vaultConfigToResponse(instance.Vault))
 	}
+	if instance.Connector == "sql" {
+		item.Sql = ptr(sqlConfigToResponse(instance.SQL))
+	}
 	return item
+}
+
+// sqlConfigToResponse is addressing plus the safe identity of the binding.
+// Built field by field rather than by copying the struct: a field added to
+// SQLConfig later must be a decision to expose it, not an inheritance.
+func sqlConfigToResponse(cfg connectortools.SQLConfig) openapi.ConnectorSQLResponse {
+	templates := make([]openapi.ConnectorSQLTemplateSummary, 0, len(cfg.Templates))
+	for _, tpl := range cfg.Templates {
+		templates = append(templates, openapi.ConnectorSQLTemplateSummary{
+			Id: tpl.ID, Parameters: sqlParametersToResponse(tpl.Parameters),
+			TimeoutSeconds: tpl.TimeoutSeconds, MaxRows: tpl.MaxRows, MaxBytes: tpl.MaxBytes,
+		})
+	}
+	return openapi.ConnectorSQLResponse{
+		Driver: openapi.ConnectorSQLResponseDriver(cfg.Driver),
+		Host:   cfg.Host, Port: cfg.Port, Database: cfg.Database,
+		Templates: templates,
+		CredentialSource: openapi.ConnectorCredentialSource{
+			Kind:          openapi.ConnectorCredentialSourceKind(cfg.CredentialSource.Kind),
+			VaultInstance: cfg.CredentialSource.VaultInstance,
+			Mount:         cfg.CredentialSource.Mount,
+			Role:          cfg.CredentialSource.Role,
+		},
+	}
+}
+
+func sqlConfigFromInput(in *openapi.ConnectorSQLInput) connectortools.SQLConfig {
+	if in == nil {
+		return connectortools.SQLConfig{}
+	}
+	templates := make([]connectortools.SQLTemplate, 0, len(in.Templates))
+	for _, tpl := range in.Templates {
+		params := make([]connectortools.SQLParameter, 0, len(tpl.Parameters))
+		for _, param := range tpl.Parameters {
+			params = append(params, connectortools.SQLParameter{
+				Name: param.Name, Type: connectortools.SQLParamType(param.Type),
+			})
+		}
+		templates = append(templates, connectortools.SQLTemplate{
+			ID: tpl.Id, SQL: tpl.Sql, Parameters: params,
+			TimeoutSeconds: tpl.TimeoutSeconds, MaxRows: tpl.MaxRows, MaxBytes: tpl.MaxBytes,
+		})
+	}
+	return connectortools.SQLConfig{
+		Driver: connectortools.SQLDriver(in.Driver),
+		Host:   in.Host, Port: in.Port, Database: in.Database,
+		Templates: templates,
+		CredentialSource: connectortools.CredentialSource{
+			Kind:          connectortools.CredentialSourceKind(in.CredentialSource.Kind),
+			VaultInstance: in.CredentialSource.VaultInstance,
+			Mount:         in.CredentialSource.Mount,
+			Role:          in.CredentialSource.Role,
+		},
+	}
 }
 
 func responseScope(kind settings.ScopeKind, scope domain.Scope) (*string, *string) {
@@ -252,6 +314,16 @@ func vaultConfigToResponse(in connectortools.VaultConfig) openapi.ConnectorVault
 	}
 	if in.Namespace != "" {
 		out.Namespace = ptr(in.Namespace)
+	}
+	return out
+}
+
+func sqlParametersToResponse(in []connectortools.SQLParameter) []openapi.ConnectorSQLParameter {
+	out := make([]openapi.ConnectorSQLParameter, 0, len(in))
+	for _, param := range in {
+		out = append(out, openapi.ConnectorSQLParameter{
+			Name: param.Name, Type: openapi.ConnectorSQLParameterType(param.Type),
+		})
 	}
 	return out
 }

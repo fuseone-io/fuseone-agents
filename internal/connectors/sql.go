@@ -5,7 +5,7 @@ var sqlConnector = Connector{
 	Name:     "Governed SQL read access",
 	Category: CategoryData,
 	Summary:  "Read approved database views through registered templates, without giving the model arbitrary SQL execution.",
-	Maturity: MaturityPlanned,
+	Maturity: MaturityRuntime,
 	Guarantees: []string{
 		"queries run from registered read-only templates, not arbitrary SQL text",
 		"tables, columns, filters and row limits are declared before execution",
@@ -17,28 +17,16 @@ var sqlConnector = Connector{
 	},
 	Operations: []Operation{
 		{
-			ID:             "sql.describe_schema",
-			Name:           "Describe schema",
-			Summary:        "Reads approved table, view and column metadata without returning rows.",
-			Effects:        []Effect{EffectRead},
-			Approval:       ApprovalPolicy,
-			SecretHandling: SecretNone,
-		},
-		{
 			ID:             "sql.run_query_template",
 			Name:           "Run query template",
 			Summary:        "Runs a registered read-only query template with validated parameters and row limits.",
 			Effects:        []Effect{EffectRead},
 			Approval:       ApprovalPolicy,
 			SecretHandling: SecretNone,
-		},
-		{
-			ID:             "sql.lookup_row",
-			Name:           "Lookup row",
-			Summary:        "Reads a bounded record or small row set from an approved view by stable keys.",
-			Effects:        []Effect{EffectRead},
-			Approval:       ApprovalPolicy,
-			SecretHandling: SecretNone,
+			// Written down rather than inherited. A governed read reaches a
+			// customer database under an approval bound to one request, so an
+			// answer from a cache would report a read that did not happen.
+			CachePolicy: CacheNever,
 		},
 	},
 }

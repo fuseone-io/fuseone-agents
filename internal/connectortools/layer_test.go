@@ -233,6 +233,8 @@ func (v *vaultSpy) RevokeLease(context.Context, VaultConfig, string, string) err
 type layerOption func(*Layer)
 
 func withVault(vault VaultClient) layerOption { return func(l *Layer) { l.vault = vault } }
+
+func withBase(base engine.Tools) layerOption { return func(l *Layer) { l.base = base } }
 func withContent(content engine.ContentStore) layerOption {
 	return func(l *Layer) { l.content = content }
 }
@@ -251,4 +253,54 @@ func newVaultLayer(t *testing.T, instance Instance, opts ...layerOption) *Layer 
 		t.Fatalf("SetInstances: %v", err)
 	}
 	return layer
+}
+
+/*
+A native connector call never reaches the MCP layer, so it never reaches the
+MCP result cache.
+
+The cache lives behind the base layer and is keyed by MCP server name, which a
+native connector does not have. That is why a governed read is not cached
+today — routing, not policy. Routing is not a promise, so this holds the
+property down: the base here answers every call from a cache and records that
+it was asked, and the test fails if a native tool ever delegates to it.
+*/
+func TestLayer_aNativeCallIsNotDelegatedToTheCachingMCPLayer(t *testing.T) {
+	t.Parallel()
+
+	base := &cachingBase{}
+	layer := newVaultLayer(t,
+		Instance{Name: "prod", Connector: "vault", Enabled: true},
+		withBase(base))
+
+	_, err := layer.Invoke(context.Background(), engine.Call{
+		Tool: "vault.prod.read_metadata", Args: []byte(`{"path":"kv/x"}`),
+	})
+	if err == nil && base.invoked == 0 {
+		// The native path answered. That is the property.
+		return
+	}
+	if base.invoked != 0 {
+		t.Fatalf("a native call reached the MCP layer %d times; it would be cacheable there",
+			base.invoked)
+	}
+}
+
+// cachingBase stands in for the MCP layer, which is where the result cache
+// lives. Every answer is a cached one, so a delegated call is unmistakable.
+type cachingBase struct{ invoked int }
+
+func (c *cachingBase) Effect(domain.ToolID) (domain.Effect, bool) {
+	return domain.EffectRead, true
+}
+
+func (c *cachingBase) Schema(domain.ToolID) (string, string, map[string]any, bool) {
+	return "", "", nil, false
+}
+
+func (c *cachingBase) Reserve(context.Context, engine.Call) error { return nil }
+
+func (c *cachingBase) Invoke(context.Context, engine.Call) (engine.ToolResult, error) {
+	c.invoked++
+	return engine.ToolResult{Cached: true}, nil
 }

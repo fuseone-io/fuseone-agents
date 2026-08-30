@@ -35,7 +35,21 @@ type Instance struct {
 	Enabled   bool
 
 	Vault VaultConfig
+	SQL   SQLConfig
+	// Token is what the instance authenticates with, for the connectors that
+	// authenticate with one. RequiresToken says which; SQL is not among them.
 	Token string
+	// HasToken says a token is stored without revealing it. Configuration read
+	// back from settings never carries the bytes, so a check that asked Token
+	// would call every real vault tokenless while accepting an in-memory
+	// fixture. Presence is metadata; the value is not.
+	HasToken bool
+}
+
+// TokenPresent is whether this instance can authenticate: the value in hand,
+// or a stored one the reader was not given.
+func (i Instance) TokenPresent() bool {
+	return i.HasToken || strings.TrimSpace(i.Token) != ""
 }
 
 // VaultConfig is the non-secret Vault configuration.

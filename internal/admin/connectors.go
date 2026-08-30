@@ -39,10 +39,18 @@ func (c *ConnectorInstances) PutConnectorInstance(
 		return err
 	}
 	instance.Scope = runtimeScope
-	if instance.Enabled && token != nil && strings.TrimSpace(*token) == "" {
+	needsToken := connectortools.RequiresToken(instance.Connector)
+	if needsToken && instance.Enabled && token != nil && strings.TrimSpace(*token) == "" {
 		return ErrConnectorNeedsToken
 	}
 	if err := connectortools.ValidateInstanceConfig(instance); err != nil {
+		return err
+	}
+	// A binding names another instance, so it can only be judged against the
+	// set. Reads settings, not Vault: saving a configuration must not reach the
+	// system it configures, or an operator cannot write down an intention
+	// before the thing it points at is reachable.
+	if err := c.validateAgainstConfigured(ctx, instance, scopeKind, storedScope); err != nil {
 		return err
 	}
 	value, err := connectortools.SettingValue(instance)
@@ -65,7 +73,7 @@ func (c *ConnectorInstances) PutConnectorInstance(
 	}
 	clear := clearToken && secret == ""
 	willHaveSecret := secret != "" || (!clear && hasSecret)
-	if instance.Enabled && !willHaveSecret {
+	if needsToken && instance.Enabled && !willHaveSecret {
 		return ErrConnectorNeedsToken
 	}
 	if err := c.settings.PutTx(ctx, tx, settings.Setting{
@@ -153,6 +161,22 @@ func connectorInstanceDetail(
 		"tokenChanged": tokenChanged,
 		"tokenCleared": tokenCleared,
 	}
+	// The binding, by the fields already classified as safe to return: which
+	// vault answers and which role is bound. No mount path beyond the one an
+	// operator typed, no token, and nothing a credential could hide in.
+	if instance.Connector == "sql" {
+		detail["sql"] = map[string]any{
+			"host":     instance.SQL.Host,
+			"port":     instance.SQL.Port,
+			"database": instance.SQL.Database,
+			"credentialSource": map[string]any{
+				"kind":          string(instance.SQL.CredentialSource.Kind),
+				"vaultInstance": instance.SQL.CredentialSource.VaultInstance,
+				"mount":         instance.SQL.CredentialSource.Mount,
+				"role":          instance.SQL.CredentialSource.Role,
+			},
+		}
+	}
 	if instance.Connector == "vault" {
 		detail["vault"] = map[string]any{
 			"address":             instance.Vault.Address,
@@ -162,4 +186,61 @@ func connectorInstanceDetail(
 		}
 	}
 	return detail
+}
+
+/*
+validateAgainstConfigured judges the instance being written beside the ones
+already stored.
+
+The instance replaces its stored self rather than being appended, so editing a
+binding is validated as the configuration that will exist and not as one where
+the old and new both do.
+
+This does not make the runtime's revalidation optional. Configuration changes
+after it is written, and a vault disabled tomorrow must not authorise a query
+today because the binding was valid when it was saved.
+*/
+func (c *ConnectorInstances) validateAgainstConfigured(
+	ctx context.Context, instance connectortools.Instance,
+	scopeKind settings.ScopeKind, storedScope domain.Scope,
+) error {
+	stored, err := connectortools.NewSettings(c.settings).Configured(ctx)
+	if err != nil {
+		return err
+	}
+	set := []connectortools.Instance{instance}
+	for _, other := range stored {
+		if sameSetting(other, storedScope, instance.Name) {
+			continue
+		}
+		set = append(set, other.Instance)
+	}
+	return connectortools.ValidateBindings(set)
+}
+
+/*
+sameSetting is the row this write replaces, by the key the store actually uses.
+
+Scope kind, scope and name — not the connector. Two instances may share a name
+in different scopes, and matching on name alone removed both, so editing an
+area's vault dropped the company's vault from the set and let an ambiguous
+configuration validate and then be written. The connector is left out on
+purpose: a body may change the connector stored under a key, and the row being
+replaced is still that key's row.
+*/
+func sameSetting(
+	other connectortools.ConfiguredInstance, storedScope domain.Scope, name string,
+) bool {
+	if other.Name != name {
+		return false
+	}
+	// The stored scope alone, not the scope kind beside it. The kind is what
+	// produces the stored scope, so comparing both puts one rule in two places
+	// — and the second copy is the one no sabotage can reach, which is how a
+	// weakened rule goes unnoticed.
+	_, otherStored, err := connectorScopes(other.ScopeKind, other.Scope)
+	if err != nil {
+		return false
+	}
+	return otherStored == storedScope
 }

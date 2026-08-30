@@ -3253,7 +3253,11 @@ export interface components {
             effects: components["schemas"]["ConnectorEffect"][];
             approval: components["schemas"]["ConnectorApproval"];
             secretHandling: components["schemas"]["ConnectorSecretHandling"];
+            /** @description Whether a result of this operation may be answered from a cache. An operation that has not decided reports `never`: a governed read served from a cache is a record of a read that did not happen. */
+            cachePolicy: components["schemas"]["ConnectorCachePolicy"];
         };
+        /** @enum {string} */
+        ConnectorCachePolicy: "never" | "short_lived";
         GovernedConnector: {
             /** @description Stable connector shape, not an instance name. */
             id: string;
@@ -3300,6 +3304,62 @@ export interface components {
             /** Format: date-time */
             updatedAt?: string;
             vault?: components["schemas"]["ConnectorVaultConfig"];
+            sql?: components["schemas"]["ConnectorSQLResponse"];
+        };
+        /** @description A SQL instance as the administration API reports it. Addressing only, plus the safe identity of the binding: the kind, which vault instance answers it and which role is bound. No token, no generated credential and no connection string are ever returned, because none of them is needed to know the configuration is right. */
+        ConnectorSQLResponse: {
+            /** @enum {string} */
+            driver: "postgres";
+            host: string;
+            port: number;
+            database: string;
+            credentialSource: components["schemas"]["ConnectorCredentialSource"];
+            templates: components["schemas"]["ConnectorSQLTemplateSummary"][];
+        };
+        /** @description A registered template as the listing reports it: what it is called, what it takes and what it is bounded by. Neither the query nor a digest of it is here. Listing connector instances needs only `tool:read`, and a digest of an authored query does not hide it — queries are low-entropy and guessable offline, so publishing one would disclose tables and filters to anyone who can read the tool catalogue. Reading the text back belongs to a detailed read restricted to configurers, which does not exist yet; until it does, an operator confirms a configuration by writing it again. */
+        ConnectorSQLTemplateSummary: {
+            id: string;
+            parameters: components["schemas"]["ConnectorSQLParameter"][];
+            timeoutSeconds: number;
+            maxRows: number;
+            maxBytes: number;
+        };
+        ConnectorSQLParameter: {
+            name: string;
+            /** @enum {string} */
+            type: "text" | "integer" | "number" | "boolean" | "timestamp";
+        };
+        ConnectorCredentialSource: {
+            /** @enum {string} */
+            kind: "vault_database_role";
+            /** @description Name of the vault instance that issues the credential. */
+            vaultInstance: string;
+            mount: string;
+            role: string;
+        };
+        /** @description Addressing is structured on purpose. A connection string is one field that can carry a password, so there is nowhere here to write one. */
+        ConnectorSQLInput: {
+            /**
+             * @description Named rather than inferred; a guessed driver connects to whatever answers.
+             * @enum {string}
+             */
+            driver: "postgres";
+            /** @description Bare hostname. Port, database and credentials are separate. */
+            host: string;
+            port: number;
+            database: string;
+            credentialSource: components["schemas"]["ConnectorCredentialSource"];
+            /** @description The registered queries. A tool takes a template id, never SQL. An enabled instance needs at least one: zero is a tool with no callable id, not a smaller configuration. */
+            templates: components["schemas"]["ConnectorSQLTemplate"][];
+        };
+        /** @description Every bound here is the server's own. A client that accepted more would offer a configuration the server refuses, which reads as the platform changing its mind between the form and the save. */
+        ConnectorSQLTemplate: {
+            id: string;
+            sql: string;
+            parameters: components["schemas"]["ConnectorSQLParameter"][];
+            timeoutSeconds: number;
+            maxRows: number;
+            maxBytes: number;
         };
         ConnectorInstanceInput: {
             /** @description Connector shape. The first runtime connector is vault. */
@@ -3310,6 +3370,7 @@ export interface components {
             company?: string;
             area?: string;
             vault?: components["schemas"]["ConnectorVaultConfig"];
+            sql?: components["schemas"]["ConnectorSQLInput"];
             /** @description Connector token to seal. Omit to keep the stored token. */
             token?: string;
             /** @description Remove the stored token. An enabled instance is refused unless the same request also supplies a replacement token. */

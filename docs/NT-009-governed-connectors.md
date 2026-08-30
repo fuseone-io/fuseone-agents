@@ -1,6 +1,6 @@
 # NT-009 — Governed connectors
 
-Status: accepted, runtime foundation in progress
+Status: accepted; Vault and governed SQL reads have runtime adapters
 
 ## Decision
 
@@ -66,11 +66,57 @@ reads and lease revocation. Certificate generation itself belongs to an
 approved job connector; Vault stores the generated material after it is already
 in the content store.
 
+The SQL runtime is the next completed slice. An enabled SQL instance registers
+one or more read-only templates and binds to a Vault database secrets-engine
+role. A model-visible call contains only a template id and typed parameters.
+After the Gate and any required approval, the worker resolves the binding,
+asks Vault for one short-lived credential, opens one TLS-verified PostgreSQL
+connection, describes the statement against the database, runs it in a
+read-only transaction and streams a bounded result into the content store.
+The effective execution budget is enforced twice: by the worker deadline and
+by PostgreSQL `statement_timeout` plus `idle_in_transaction_session_timeout`.
+The connection is closed before the lease is revoked; TTL remains the
+backstop after ambiguous worker loss.
+
+Rows ask PostgreSQL for its text representation first, so an unknown type or a
+new pgx codec cannot put a driver-specific Go value into a governed record.
+Only a named set of JSON-safe types is decoded into structured values. UUIDs,
+network identifiers, exact `numeric` values and `bigint` are strings; JSON
+documents remain structured, safe scalar arrays remain arrays, and `bytea` is
+base64. This keeps keys recognisable and numbers lossless when a result is
+audited or used as input to a later call.
+
+The connection pins `DateStyle=ISO, MDY`, `IntervalStyle=iso_8601`,
+`TimeZone=UTC`, `extra_float_digits=3` and `bytea_output=hex`. PostgreSQL and
+role defaults therefore cannot change the governed form. Array structure is
+also explicit: only named arrays of safe scalar types become JSON arrays; an
+unlisted array remains the PostgreSQL array literal as one JSON string. Adding
+driver support can improve a type only through a reviewed entry in that set.
+
+Approval binds both halves of the act: the digest of model-authored parameters
+and a versioned digest of the server-owned target, Vault binding and endpoint,
+selected query, parameter declarations and limits. The latter is recomputed
+after an approval and checked again against current settings before opening
+the database. Changing a template under the same id or repointing the named
+Vault therefore asks again instead of borrowing the earlier decision.
+
+SQL does not reuse the MCP result cache or a dynamic credential. Repeating a
+read is another execution: it crosses the Gate again and, when policy asks,
+needs another human decision before another credential is issued. Safe
+provenance records the SQL instance, Vault instance, role, lease duration and
+issuance/revocation outcomes. Username, password, Vault token, DSN and lease id
+are never part of the tool schema, result, ledger or metrics.
+
+SQL instance authoring currently belongs to the administration API. The
+console exposes the safe configured summary and no editor until it can round
+trip the complete target, binding and template contract; a Vault-shaped form
+must never rewrite an SQL instance.
+
 ## Rollout order
 
 1. Vault secret storage.
 2. Approved automation jobs, including certificate/CSR generation templates.
-3. Governed SQL read templates.
+3. Governed SQL read templates. (runtime)
 4. Object storage for governed artifacts.
 5. Identity actions.
 6. DNS and Kubernetes operational connectors.

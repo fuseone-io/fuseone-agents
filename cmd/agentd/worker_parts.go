@@ -113,9 +113,17 @@ func openWorkerParts(ctx context.Context, dsn string) (*workerParts, error) {
 	if err := parts.openConfiguration(ctx, dsn); err != nil {
 		return nil, err
 	}
+	connectorSettings := connectortools.NewSettings(parts.settings)
+	vaultClient := connectortools.NewHTTPVaultClient(nil)
+	sqlRuntime := connectortools.NewSQLRuntime(
+		connectortools.NewCredentialResolver(
+			connectorSettings, connectorSettings, vaultClient,
+		),
+		connectortools.NewPostgresSQLExecutor(nil),
+	)
 	parts.native = connectortools.New(
-		parts.catalog, parts.catalog, parts.content,
-		connectortools.NewHTTPVaultClient(nil))
+		parts.catalog, parts.catalog, parts.content, vaultClient,
+	).WithSQLRuntime(sqlRuntime)
 	if err := parts.refreshConnectors(ctx); err != nil {
 		return nil, err
 	}

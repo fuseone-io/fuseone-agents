@@ -2,6 +2,10 @@ package httpapi
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/fuseone/agents/internal/connectortools"
@@ -126,5 +130,119 @@ func TestDeleteConnectorInstance_requiresTheConfiguredScopeKey(t *testing.T) {
 	if spy.deleted != "prod" || spy.putKind != settings.ScopeCompany ||
 		spy.putScope != (domain.Scope{Company: "acme"}) {
 		t.Fatalf("deleted=%s kind=%s scope=%s", spy.deleted, spy.putKind, spy.putScope)
+	}
+}
+
+func sqlBody() *openapi.ConnectorSQLInput {
+	return &openapi.ConnectorSQLInput{
+		Driver: openapi.ConnectorSQLInputDriverPostgres,
+		Host:   "db.internal", Port: 5432, Database: "appx",
+		CredentialSource: openapi.ConnectorCredentialSource{
+			Kind: openapi.VaultDatabaseRole, VaultInstance: "prod",
+			Mount: "database", Role: "app-x-readonly",
+		},
+		Templates: []openapi.ConnectorSQLTemplate{{
+			Id: "orders_by_customer", Sql: "select id from orders where customer_id = $1",
+			Parameters: []openapi.ConnectorSQLParameter{
+				{Name: "customer_id", Type: openapi.Text},
+			},
+			TimeoutSeconds: 10, MaxRows: 200, MaxBytes: 65536,
+		}},
+	}
+}
+
+/*
+What the API accepts is what the validator requires.
+
+The driver and the templates became required in the same commit that added
+them to the domain, and the contract did not carry either — so every SQL
+configuration sent to this endpoint was refused for a field the caller had no
+way to send. Nothing caught it because no test crossed the boundary.
+*/
+func TestPutConnectorInstance_carriesTheDriverAndTheRegisteredTemplates(t *testing.T) {
+	t.Parallel()
+
+	spy := &connectorInstanceSpy{}
+	resp, err := NewServer(ledger.NewMemory(), "test").WithConnectorInstances(spy).
+		PutConnectorInstance(as(domain.RoleCurator), openapi.PutConnectorInstanceRequestObject{
+			Name: "app-x",
+			Body: &openapi.PutConnectorInstanceJSONRequestBody{
+				Connector: "sql", ScopeKind: openapi.ConnectorScopeKindArea,
+				Company: ptr("acme"), Area: ptr("platform"), Sql: sqlBody(),
+			},
+		})
+	if err != nil {
+		t.Fatalf("PutConnectorInstance: %v", err)
+	}
+	if _, ok := resp.(openapi.PutConnectorInstance204Response); !ok {
+		t.Fatalf("response = %T, want 204", resp)
+	}
+	stored := spy.put.SQL
+	if stored.Driver != connectortools.SQLDriverPostgres {
+		t.Fatalf("driver = %q, want postgres", stored.Driver)
+	}
+	if len(stored.Templates) != 1 || stored.Templates[0].ID != "orders_by_customer" ||
+		stored.Templates[0].MaxRows != 200 {
+		t.Fatalf("templates = %+v, want the registered query", stored.Templates)
+	}
+	if len(stored.Templates[0].Parameters) != 1 ||
+		stored.Templates[0].Parameters[0].Type != connectortools.SQLParamText {
+		t.Fatalf("parameters = %+v, want the declared type", stored.Templates[0].Parameters)
+	}
+}
+
+/*
+Listing reports what a template is, never what it says, and not a digest of it
+either.
+
+Listing connector instances needs only tool:read, and a registered query names
+the tables, columns and filters of a customer database. A digest does not hide
+one: queries are low-entropy and an attacker guesses offline until a hash
+matches, which discloses the same thing more slowly. Reading the text back
+belongs to a detailed read restricted to configurers, and until that exists an
+operator confirms a configuration by writing it again.
+*/
+func TestListConnectorInstances_publishesNeitherTheQueryNorADigestOfIt(t *testing.T) {
+	t.Parallel()
+
+	const query = "select id from orders where customer_id = $1"
+	spy := &connectorInstanceSpy{items: []connectortools.ConfiguredInstance{{
+		Instance: connectortools.Instance{
+			Name: "app-x", Connector: "sql", Enabled: true,
+			Scope: domain.Scope{Company: "acme", Area: "platform"},
+			SQL: connectortools.SQLConfig{
+				Driver: connectortools.SQLDriverPostgres,
+				Host:   "db.internal", Port: 5432, Database: "appx",
+				Templates: []connectortools.SQLTemplate{{
+					ID: "orders_by_customer", SQL: query,
+					Parameters:     []connectortools.SQLParameter{{Name: "customer_id", Type: connectortools.SQLParamText}},
+					TimeoutSeconds: 10, MaxRows: 200, MaxBytes: 65536,
+				}},
+			},
+		},
+		ScopeKind: settings.ScopeArea,
+	}}}
+	resp, err := NewServer(ledger.NewMemory(), "test").WithConnectorInstances(spy).
+		ListConnectorInstances(as(domain.RoleCurator), openapi.ListConnectorInstancesRequestObject{})
+	if err != nil {
+		t.Fatalf("ListConnectorInstances: %v", err)
+	}
+	body := resp.(openapi.ListConnectorInstances200JSONResponse)
+	rendered, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(rendered), "customer_id = $1") {
+		t.Fatalf("the listing published the query: %s", rendered)
+	}
+	sql := body.Items[0].Sql
+	if sql == nil || len(sql.Templates) != 1 {
+		t.Fatalf("sql = %+v, want the template summary", sql)
+	}
+	if digest := fmt.Sprintf("%x", sha256.Sum256([]byte(query))); strings.Contains(string(rendered), digest) {
+		t.Fatalf("the listing published a digest of the query: %s", rendered)
+	}
+	if sql.Templates[0].Id != "orders_by_customer" || sql.Templates[0].MaxRows != 200 {
+		t.Fatalf("summary = %+v, want the template's shape and bounds", sql.Templates[0])
 	}
 }
