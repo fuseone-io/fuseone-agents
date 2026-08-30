@@ -86,3 +86,65 @@ func TestSQLNativeTool_reserveRefusesARepointedVaultAfterTheGate(t *testing.T) {
 		t.Fatalf("Reserve error = %v, want moved contract", err)
 	}
 }
+
+func TestSQLRuntime_rechecksTheConfigurationThatIssuedTheCredential(t *testing.T) {
+	t.Parallel()
+
+	before := ready()
+	after := ready()
+	after[1].SQL.Templates[0].MaxRows++
+	config := &changingSQLConfiguration{before: before, after: after}
+
+	configured, err := config.ConfiguredInstances(context.Background())
+	if err != nil {
+		t.Fatalf("read configuration for the Gate: %v", err)
+	}
+	gateInstances := make([]Instance, len(configured))
+	for i := range configured {
+		gateInstances[i] = configured[i].Instance
+	}
+
+	vault := issuer()
+	spy := &sqlSpy{params: 2}
+	runtime := NewSQLRuntime(NewCredentialResolver(
+		config, tokenFor(after), vault), spy)
+	layer := New(nil, nil, nil, nil).WithSQLRuntime(runtime)
+	if err := layer.SetInstances(gateInstances); err != nil {
+		t.Fatalf("SetInstances: %v", err)
+	}
+	call := boundSQLLayerCall(layer, 1)
+	if err := layer.Reserve(context.Background(), call); err != nil {
+		t.Fatalf("Reserve: %v", err)
+	}
+
+	result, err := runtime.RunBound(
+		context.Background(), "app-x", "orders_by_customer",
+		call.ContractDigest, runScope(), params())
+	if !errors.Is(err, ErrSQLContractChanged) {
+		t.Fatalf("RunBound error = %v, want moved contract", err)
+	}
+	if config.reads != 2 {
+		t.Fatalf("configuration reads = %d, want Gate snapshot then credential snapshot", config.reads)
+	}
+	if spy.opened != 0 {
+		t.Fatalf("database opened %d times for a contract changed before issuance", spy.opened)
+	}
+	if result.Revocation != RevocationSucceeded || vault.revoked == "" {
+		t.Fatalf("revocation = %q/%q, want the issued lease returned", result.Revocation, vault.revoked)
+	}
+}
+
+type changingSQLConfiguration struct {
+	reads         int
+	before, after []Instance
+}
+
+func (c *changingSQLConfiguration) ConfiguredInstances(
+	ctx context.Context,
+) ([]ConfiguredInstance, error) {
+	c.reads++
+	if c.reads == 1 {
+		return staticConfig(c.before).ConfiguredInstances(ctx)
+	}
+	return staticConfig(c.after).ConfiguredInstances(ctx)
+}
