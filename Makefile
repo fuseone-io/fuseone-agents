@@ -72,6 +72,7 @@ PG_PKGS = $(shell grep -rlE 'TEST_DATABASE_URL|TEST_SQL_DATABASE_URL' --include=
 ## A fake that is more permissive than the store is how green tests become
 ## incidents, so CI runs this, not just `check`.
 check-pg: db sql-db
+	REQUIRE_DATABASE=1 \
 	TEST_DATABASE_URL="$(TEST_DSN)" \
 	TEST_SQL_DATABASE_URL="$(TEST_SQL_DSN)" \
 	TEST_SQL_WRITER_DATABASE_URL="$(TEST_SQL_WRITER_DSN)" \
