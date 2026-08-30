@@ -9,8 +9,9 @@ import (
 )
 
 // postgresJSONRow preserves database meaning rather than serialising pgx's
-// incidental Go representation. Exact and identifier-like types use their
-// PostgreSQL text codec; JSON stays structured and bytea stays base64.
+// incidental Go representation. PostgreSQL text is the closed default. Only
+// types whose JSON representation is deliberately named below become native
+// JSON values; adding a pgx codec cannot change a governed result by accident.
 func postgresJSONRow(rows pgx.Rows) (json.RawMessage, error) {
 	fields := rows.FieldDescriptions()
 	raw := rows.RawValues()
@@ -24,42 +25,51 @@ func postgresJSONRow(rows pgx.Rows) (json.RawMessage, error) {
 			continue
 		}
 		field := fields[i]
-		if dataType, ok := typeMap.TypeForOID(field.DataTypeOID); ok {
-			value, err := postgresJSONValue(typeMap, dataType, field.Format, src)
-			if err != nil {
-				return nil, err
-			}
-			values[i] = value
-			continue
+		if field.Format != pgtype.TextFormatCode {
+			return nil, errors.New("connector: postgres returned a non-text value")
 		}
-		if field.Format == pgtype.TextFormatCode {
-			values[i] = string(src)
-		} else {
-			values[i] = append([]byte(nil), src...)
+		value, err := postgresJSONValue(typeMap, field.DataTypeOID, src)
+		if err != nil {
+			return nil, err
 		}
+		values[i] = value
 	}
 	return json.Marshal(values)
 }
 
 func postgresJSONValue(
-	typeMap *pgtype.Map, dataType *pgtype.Type, format int16, src []byte,
+	typeMap *pgtype.Map, oid uint32, src []byte,
 ) (any, error) {
-	if postgresTextualOID(dataType.OID) {
-		return dataType.Codec.DecodeDatabaseSQLValue(typeMap, dataType.OID, format, src)
+	if oid == pgtype.JSONOID || oid == pgtype.JSONBOID {
+		if !json.Valid(src) {
+			return nil, errors.New("connector: postgres returned invalid JSON")
+		}
+		return append(json.RawMessage(nil), src...), nil
 	}
-	value, err := dataType.Codec.DecodeValue(typeMap, dataType.OID, format, src)
+	dataType, ok := typeMap.TypeForOID(oid)
+	if !ok {
+		return string(src), nil
+	}
+	if !postgresStructuredOID(oid) {
+		elementOID, textualArray := postgresTextualArrayElement(oid)
+		if !textualArray {
+			return string(src), nil
+		}
+		value, err := dataType.Codec.DecodeValue(typeMap, oid, pgtype.TextFormatCode, src)
+		if err != nil {
+			return nil, err
+		}
+		elementType, ok := typeMap.TypeForOID(elementOID)
+		if !ok {
+			return nil, errors.New("connector: postgres array element type is unknown")
+		}
+		return postgresTextualArray(typeMap, elementType, value)
+	}
+	value, err := dataType.Codec.DecodeValue(typeMap, oid, pgtype.TextFormatCode, src)
 	if err != nil {
 		return nil, err
 	}
-	elementOID, ok := postgresTextualArrayElement(dataType.OID)
-	if !ok {
-		return value, nil
-	}
-	elementType, ok := typeMap.TypeForOID(elementOID)
-	if !ok {
-		return nil, errors.New("connector: postgres array element type is unknown")
-	}
-	return postgresTextualArray(typeMap, elementType, value)
+	return value, nil
 }
 
 func postgresTextualArray(
@@ -92,12 +102,12 @@ func postgresTextualArray(
 	return result, nil
 }
 
-func postgresTextualOID(oid uint32) bool {
+func postgresStructuredOID(oid uint32) bool {
 	switch oid {
-	case pgtype.UUIDOID, pgtype.NumericOID,
-		pgtype.InetOID, pgtype.CIDROID,
-		pgtype.MacaddrOID, pgtype.Macaddr8OID,
-		pgtype.BitOID, pgtype.VarbitOID, pgtype.IntervalOID:
+	case pgtype.BoolOID, pgtype.Int2OID, pgtype.Int4OID, pgtype.ByteaOID,
+		pgtype.BoolArrayOID, pgtype.Int2ArrayOID, pgtype.Int4ArrayOID,
+		pgtype.TextArrayOID, pgtype.VarcharArrayOID, pgtype.BPCharArrayOID,
+		pgtype.NameArrayOID, pgtype.ByteaArrayOID:
 		return true
 	default:
 		return false
@@ -106,6 +116,8 @@ func postgresTextualOID(oid uint32) bool {
 
 func postgresTextualArrayElement(oid uint32) (uint32, bool) {
 	switch oid {
+	case pgtype.Int8ArrayOID:
+		return pgtype.Int8OID, true
 	case pgtype.UUIDArrayOID:
 		return pgtype.UUIDOID, true
 	case pgtype.NumericArrayOID:

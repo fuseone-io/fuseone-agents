@@ -116,7 +116,14 @@ func (s *postgresSQLSession) Query(
 	}
 	defer rollbackSQLTransaction(tx)
 
-	rows, err := tx.Query(ctx, statement, args...)
+	queryArgs := make([]any, 0, len(args)+1)
+	// One text result format applies to every result column in PostgreSQL's
+	// Bind message. The governed representation may opt a known-safe type back
+	// into structured JSON, but an unknown type must never fall through to a
+	// pgx Go struct or a binary blob.
+	queryArgs = append(queryArgs, pgx.QueryResultFormats{pgx.TextFormatCode})
+	queryArgs = append(queryArgs, args...)
+	rows, err := tx.Query(ctx, statement, queryArgs...)
 	if err != nil {
 		return err
 	}

@@ -28,9 +28,11 @@ registered read-only templates: the model supplies a template id and typed
 parameters, while the worker obtains one short-lived credential from the
 configured Vault database role after the Gate allows the call. The credential
 never becomes tool input or output, and every execution uses a new connection
-and lease. PostgreSQL enforces the same deadline as the worker. UUID and
-network values remain recognisable text, exact numeric values remain decimal
-strings, and binary values are base64 in the governed JSON result.
+and lease. PostgreSQL enforces the same deadline as the worker. PostgreSQL text
+is the fallback for every result type, so driver internals never become part of
+the governed record. UUID, network, exact numeric and `bigint` values remain
+lossless strings; explicitly safe JSON stays structured, and binary values are
+base64.
 
 The catalogue also names planned shapes for object storage, identity actions,
 DNS, Kubernetes, SMTP and governed HTTP. A catalogue entry is not the same as

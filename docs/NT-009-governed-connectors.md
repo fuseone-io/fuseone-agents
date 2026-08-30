@@ -78,11 +78,13 @@ by PostgreSQL `statement_timeout` plus `idle_in_transaction_session_timeout`.
 The connection is closed before the lease is revoked; TTL remains the
 backstop after ambiguous worker loss.
 
-Rows use the database codecs rather than whatever Go type pgx happens to
-choose. UUIDs and network identifiers are canonical text, exact `numeric`
-values are decimal strings, and `bytea` is base64 in JSON. This keeps keys
-recognisable and numbers lossless when a result is audited or used as input to
-a later call.
+Rows ask PostgreSQL for its text representation first, so an unknown type or a
+new pgx codec cannot put a driver-specific Go value into a governed record.
+Only a named set of JSON-safe types is decoded into structured values. UUIDs,
+network identifiers, exact `numeric` values and `bigint` are strings; JSON
+documents remain structured, safe scalar arrays remain arrays, and `bytea` is
+base64. This keeps keys recognisable and numbers lossless when a result is
+audited or used as input to a later call.
 
 Approval binds both halves of the act: the digest of model-authored parameters
 and a versioned digest of the server-owned target, Vault binding and endpoint,

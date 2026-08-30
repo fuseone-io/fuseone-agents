@@ -98,6 +98,7 @@ func TestPostgresSQL_preservesIdentifiersAndExactNumbersInGovernedJSON(t *testin
 	err := session.Query(context.Background(), `select
 		'9045b230-79cb-4c82-8d16-0f1ff1ab8b7d'::uuid,
 		9007199254740993.123456789::numeric,
+		1152921504606846975::int8,
 		'192.0.2.1/24'::inet,
 		'192.0.2.0/24'::cidr,
 		'\x0102'::bytea,
@@ -113,6 +114,7 @@ func TestPostgresSQL_preservesIdentifiersAndExactNumbersInGovernedJSON(t *testin
 	want := `[` +
 		`"9045b230-79cb-4c82-8d16-0f1ff1ab8b7d",` +
 		`"9007199254740993.123456789",` +
+		`"1152921504606846975",` +
 		`"192.0.2.1/24","192.0.2.0/24","AQI=",` +
 		`{"n":2,"ok":true},` +
 		`["9045b230-79cb-4c82-8d16-0f1ff1ab8b7d"],` +

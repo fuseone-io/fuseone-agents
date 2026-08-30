@@ -55,9 +55,11 @@ field" is a commit message.
   governed results contain no Vault path, token, username, password, DSN or
   lease id. Driver and Vault errors are reduced to stable codes, result rows
   that contain the issued username or password are refused, and metrics carry
-  only bounded stage and outcome labels. Database codecs preserve UUID and
-  network identifiers as text, exact numerics as decimal strings and binary
-  values as base64 rather than exposing driver-specific Go representations.
+  only bounded stage and outcome labels. PostgreSQL text is the safe fallback
+  for every result type, so an extension or a newly supported driver codec
+  cannot expose a driver-specific Go representation. UUIDs, network values,
+  exact numerics and `bigint` remain lossless strings; explicitly safe values
+  such as JSON stay structured, and binary values remain base64.
 
 ## [0.40.0] — 2026-08-28
 
