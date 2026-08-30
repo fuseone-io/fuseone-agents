@@ -32,6 +32,11 @@ func sqlInstance(scope domain.Scope, source CredentialSource) Instance {
 			Driver: SQLDriverPostgres,
 			Host:   "db.internal", Port: 5432, Database: "appx",
 			CredentialSource: source,
+			// An enabled instance registers something callable, so the shared
+			// fixture carries one. Tests about addressing and bindings are not
+			// about templates, and an empty list would make every one of them
+			// fail for the wrong reason.
+			Templates: []SQLTemplate{template()},
 		},
 	}
 }

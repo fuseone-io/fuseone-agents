@@ -76,7 +76,7 @@ func validateSQLConfig(instance Instance) error {
 	if err := validateCredentialSource(instance.Name, cfg.CredentialSource); err != nil {
 		return err
 	}
-	return validateTemplates(instance.Name, cfg.Templates)
+	return validateTemplates(instance.Name, instance.Enabled, cfg.Templates)
 }
 
 // plainHost refuses anything that is not just a host. A scheme, credentials,

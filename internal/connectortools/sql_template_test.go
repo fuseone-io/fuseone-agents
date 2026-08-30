@@ -242,3 +242,25 @@ func TestValidateInstanceConfig_namesAreBoundedIdentifiers(t *testing.T) {
 		}
 	}
 }
+
+/*
+An enabled SQL instance without templates is a tool nobody can call.
+
+Once the connector is runtime its operations appear on an agent's surface, and
+every call is refused for naming a template that does not exist. Zero is
+allowed while the instance is disabled, because that is what a configuration
+looks like halfway through being written.
+*/
+func TestValidateInstanceConfig_anEnabledInstanceRegistersSomethingCallable(t *testing.T) {
+	t.Parallel()
+
+	instance := runnableSQL()
+	instance.SQL.Templates = nil
+	if err := ValidateInstanceConfig(instance); err == nil {
+		t.Fatal("an enabled instance with no templates was accepted")
+	}
+	instance.Enabled = false
+	if err := ValidateInstanceConfig(instance); err != nil {
+		t.Fatalf("a disabled instance may be unfinished: %v", err)
+	}
+}

@@ -5371,7 +5371,7 @@ components:
         writing it again.
       required: [id, parameters, timeoutSeconds, maxRows, maxBytes]
       properties:
-        id: { type: string, maxLength: 64 }
+        id: { type: string, maxLength: 64, pattern: '^[a-z][a-z0-9_]*$' }
         parameters:
           type: array
           maxItems: 32
@@ -5384,7 +5384,7 @@ components:
       type: object
       required: [name, type]
       properties:
-        name: { type: string, maxLength: 64 }
+        name: { type: string, maxLength: 64, pattern: '^[a-z][a-z0-9_]*$' }
         type: { type: string, enum: [text, integer, number, boolean, timestamp] }
 
     ConnectorCredentialSource:
@@ -5419,22 +5419,31 @@ components:
         credentialSource: { $ref: '#/components/schemas/ConnectorCredentialSource' }
         templates:
           type: array
-          description: The registered queries. A tool takes a template id, never SQL.
+          description: >
+            The registered queries. A tool takes a template id, never SQL. An
+            enabled instance needs at least one: zero is a tool with no callable
+            id, not a smaller configuration.
+          minItems: 1
+          maxItems: 64
           items: { $ref: '#/components/schemas/ConnectorSQLTemplate' }
 
     ConnectorSQLTemplate:
       type: object
+      description: >
+        Every bound here is the server's own. A client that accepted more would
+        offer a configuration the server refuses, which reads as the platform
+        changing its mind between the form and the save.
       required: [id, sql, parameters, timeoutSeconds, maxRows, maxBytes]
       properties:
-        id: { type: string, maxLength: 64 }
-        sql: { type: string, maxLength: 16384 }
+        id: { type: string, maxLength: 64, pattern: '^[a-z][a-z0-9_]*$' }
+        sql: { type: string, minLength: 1, maxLength: 16384 }
         parameters:
           type: array
           maxItems: 32
           items: { $ref: '#/components/schemas/ConnectorSQLParameter' }
-        timeoutSeconds: { type: integer }
-        maxRows: { type: integer }
-        maxBytes: { type: integer }
+        timeoutSeconds: { type: integer, minimum: 1, maximum: 3600 }
+        maxRows: { type: integer, minimum: 1, maximum: 10000 }
+        maxBytes: { type: integer, minimum: 1, maximum: 1048576 }
 
     ConnectorInstanceInput:
       type: object

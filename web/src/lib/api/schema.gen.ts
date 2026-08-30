@@ -3349,9 +3349,10 @@ export interface components {
             port: number;
             database: string;
             credentialSource: components["schemas"]["ConnectorCredentialSource"];
-            /** @description The registered queries. A tool takes a template id, never SQL. */
+            /** @description The registered queries. A tool takes a template id, never SQL. An enabled instance needs at least one: zero is a tool with no callable id, not a smaller configuration. */
             templates: components["schemas"]["ConnectorSQLTemplate"][];
         };
+        /** @description Every bound here is the server's own. A client that accepted more would offer a configuration the server refuses, which reads as the platform changing its mind between the form and the save. */
         ConnectorSQLTemplate: {
             id: string;
             sql: string;

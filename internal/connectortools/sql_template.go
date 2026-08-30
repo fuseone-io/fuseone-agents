@@ -103,7 +103,21 @@ var templateID = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 
 var paramName = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 
-func validateTemplates(instanceName string, templates []SQLTemplate) error {
+/*
+An enabled SQL instance registers at least one template.
+
+Zero is not a smaller configuration, it is a tool with no id anyone can call:
+once the connector is runtime, the operations still appear on an agent's
+surface and every call is refused for naming a template that does not exist.
+A disabled instance may be empty, because that is what half-written
+configuration looks like while somebody is writing it.
+*/
+func validateTemplates(instanceName string, enabled bool, templates []SQLTemplate) error {
+	if enabled && len(templates) == 0 {
+		return fmt.Errorf(
+			"connector: sql %s must register at least one template, or be disabled while it is written",
+			instanceName)
+	}
 	if len(templates) > maxTemplatesPerInstance {
 		return fmt.Errorf("connector: sql %s registers more than %d templates",
 			instanceName, maxTemplatesPerInstance)
