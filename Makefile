@@ -15,6 +15,11 @@ GEN_GO  := internal/httpapi/openapi/server.gen.go
 # claimed the runs a test had just opened, and a test run wiped the
 # administrative trail somebody was reading in the console.
 TEST_DSN ?= postgres://agents:agents@127.0.0.1:5433/agents_test
+# The SQL connector's target: a database standing in for a customer's, with TLS
+# and its own roles. Deliberately not the one above — a test that proved the
+# executor's guarantees against FuseOne's own store would be proving them where
+# the connector must never reach.
+TEST_SQL_DSN ?= postgres://sqlconn:sqlconn@127.0.0.1:5434/appx_test?sslmode=verify-full
 
 ## check: everything CI runs. Keep this green.
 check: fmt vet verify-generate test race console chart
@@ -41,16 +46,23 @@ db:
 # So it is derived. A suite needs a database exactly when it reads the variable
 # that points at one, which is a fact in the files rather than a note somebody
 # has to remember to update.
-PG_PKGS = $(shell grep -rl TEST_DATABASE_URL --include='*_test.go' internal \
+# Two variables, because two databases. TEST_DATABASE_URL is FuseOne's own
+# store; TEST_SQL_DATABASE_URL is a database the SQL connector reaches as a
+# customer's, with its own TLS, roles and schema. A suite that needed the second
+# and found the first would prove the executor's guarantees against the ledger
+# it must never touch.
+PG_PKGS = $(shell grep -rlE 'TEST_DATABASE_URL|TEST_SQL_DATABASE_URL' --include='*_test.go' internal \
             | xargs -n1 dirname | sort -u | sed 's|^|./|')
 
 ## check-pg: the contract suite against a real database as well as the fake.
 ## A fake that is more permissive than the store is how green tests become
 ## incidents, so CI runs this, not just `check`.
 check-pg: db
-	TEST_DATABASE_URL=$(TEST_DSN) $(MAKE) test-pg
+	TEST_DATABASE_URL=$(TEST_DSN) TEST_SQL_DATABASE_URL=$(TEST_SQL_DSN) $(MAKE) test-pg
 
-## test-pg: the same suites against whatever TEST_DATABASE_URL points at.
+## test-pg: the same suites against whatever TEST_DATABASE_URL and
+## TEST_SQL_DATABASE_URL point at. A suite whose database is absent skips and
+## says so; it does not fall back to the other one.
 ## Separate from check-pg because CI brings its own database and must not have
 ## its own copy of the list.
 test-pg:

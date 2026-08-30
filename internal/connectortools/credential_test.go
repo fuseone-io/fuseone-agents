@@ -91,7 +91,17 @@ func (v *vaultIssuer) ReadMetadata(context.Context, VaultConfig, string, string)
 	return VaultMetadata{}, nil
 }
 
-func (v *vaultIssuer) RevokeLease(_ context.Context, _ VaultConfig, _, leaseID string) error {
+/*
+RevokeLease honours the context, because that is the property under test.
+
+A fake that ignored it would record a revocation the real client could never
+have performed — and the guarantee here is precisely that revocation does not
+ride the run's cancelled context.
+*/
+func (v *vaultIssuer) RevokeLease(ctx context.Context, _ VaultConfig, _, leaseID string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	v.revoked = leaseID
 	return nil
 }

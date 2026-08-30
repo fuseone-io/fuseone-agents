@@ -98,6 +98,10 @@ type Authority struct {
 	credential Credential
 	issuance   Issuance
 	lease      lease
+	// target is the configuration the credential was minted for, carried so
+	// the runtime does not read settings a second time and risk acting on a
+	// different answer than the one authority was granted against.
+	target SQLConfig
 }
 
 type lease struct {
@@ -109,6 +113,10 @@ type lease struct {
 
 func (a Authority) Credential() Credential { return a.credential }
 func (a Authority) Issuance() Issuance     { return a.issuance }
+
+// Target is the instance this authority was granted against. Non-secret
+// configuration, and the same read that chose the vault.
+func (a Authority) Target() SQLConfig { return a.target }
 
 // Revoke gives the lease back. The short TTL remains the backstop: a failure
 // here is reported and is not a reason to keep the connection.
@@ -218,6 +226,7 @@ func (r *CredentialResolver) Resolve(
 		lease: lease{
 			id: issued.leaseID, config: vault.Vault, token: token, vault: r.vault,
 		},
+		target: sql.SQL,
 	}, nil
 }
 
