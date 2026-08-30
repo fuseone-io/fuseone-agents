@@ -107,6 +107,10 @@ type dedupeReservation struct {
 
 // act runs the proposal through the Gate and, if it survives, executes it.
 func (r *Runner) act(ctx context.Context, state State, start Start, p Proposal) (Status, error) {
+	p.contractDigest = approvalBinding(r.deps.Tools, Call{
+		RunID: start.RunID, Scope: start.Scope, AgentID: start.AgentID,
+		Tool: p.Tool, Args: p.Args, OnBehalfOf: start.OnBehalfOf,
+	})
 	effect, _ := r.deps.Catalog.Effect(p.Tool)
 	baseIdemKey := idempotencyKey(start.RunID, p.Tool, p.Args)
 	idemKey := executionIdempotencyKey(state, effect, p.Tool, baseIdemKey)
@@ -188,12 +192,20 @@ func (r *Runner) decide(
 		AlreadyExecuted: already,
 		PendingReview:   pendingReviewWrite(start, p, effect, state.Labels),
 		// Only for the exact call that was cleared. A grant that travelled to
-		// a different tool, or to the same tool with different arguments,
-		// would be the platform doing something nobody agreed to.
+		// a different tool, different arguments or changed server-owned
+		// configuration would make the platform do something nobody agreed to.
 		ApprovalGranted: state.Approved != nil &&
 			state.Approved.Tool == p.Tool &&
-			state.Approved.ArgsDigest == digest(p.Args),
+			state.Approved.ArgsDigest == digest(p.Args) &&
+			state.Approved.ContractDigest == p.contractDigest,
 	})
+}
+
+func approvalBinding(tools Tools, call Call) string {
+	if binder, ok := tools.(ApprovalBinder); ok {
+		return binder.ApprovalBinding(call)
+	}
+	return ""
 }
 
 func pendingReviewWrite(start Start, p Proposal, effect domain.Effect, labels domain.Labels) bool {
@@ -225,7 +237,8 @@ func (r *Runner) appendGateDecision(
 			// The inputs beside the outcome, so this decision can be
 			// re-evaluated later and not merely replayed (AU-08).
 			Labels: state.Labels, ArgsDigest: digest(p.Args),
-			Stage: start.Stage,
+			ContractDigest: p.contractDigest,
+			Stage:          start.Stage,
 		}),
 	})
 }
@@ -254,7 +267,8 @@ func (r *Runner) refused(
 			Payload: mustJSON(domain.ApprovalRequestedPayload{
 				Tool: p.Tool, Rule: decision.Rule, Reason: decision.Reason,
 				Effect: effect, ArgsRef: argsRef, ArgsDigest: digest(p.Args),
-				Estimate: p.Estimate, Labels: state.Labels,
+				ContractDigest: p.contractDigest,
+				Estimate:       p.Estimate, Labels: state.Labels,
 			}),
 		})
 		return status(state), err
@@ -445,6 +459,7 @@ func (r *Runner) invoke(
 		Scope:   start.Scope,
 		AgentID: start.AgentID,
 		Tool:    p.Tool, Args: p.Args,
+		ContractDigest:   p.contractDigest,
 		OnBehalfOf:       start.OnBehalfOf,
 		IdemKey:          idemKey,
 		ContextArtifacts: state.ContextArtifacts,
@@ -480,6 +495,7 @@ func (r *Runner) invoke(
 		Labels:  state.Labels.Clone(),
 		Payload: mustJSON(domain.ToolCalledPayload{
 			Tool: p.Tool, Effect: effect, ArgsRef: argsRef, ArgsDigest: digest(p.Args),
+			ContractDigest: p.contractDigest,
 		}),
 	}); err != nil {
 		return Status{}, err

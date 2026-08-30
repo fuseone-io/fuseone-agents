@@ -1,7 +1,9 @@
 package connectortools
 
 import (
+	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 	"time"
 )
@@ -86,8 +88,15 @@ func asInteger(raw any) (any, error) {
 	case int64:
 		return value, nil
 	case float64:
-		if value == float64(int64(value)) {
+		if wholeFloat(value) {
 			return int64(value), nil
+		}
+	case json.Number:
+		if parsed, err := value.Int64(); err == nil {
+			return parsed, nil
+		}
+		if parsed, err := value.Float64(); err == nil && wholeFloat(parsed) {
+			return int64(parsed), nil
 		}
 	case string:
 		if parsed, err := strconv.ParseInt(value, 10, 64); err == nil {
@@ -98,14 +107,26 @@ func asInteger(raw any) (any, error) {
 }
 
 func asFloat(raw any) (float64, bool) {
+	var parsed float64
+	var ok bool
 	switch value := raw.(type) {
 	case float64:
-		return value, true
+		parsed, ok = value, true
 	case int:
-		return float64(value), true
+		parsed, ok = float64(value), true
+	case json.Number:
+		var err error
+		parsed, err = value.Float64()
+		ok = err == nil
 	case string:
-		parsed, err := strconv.ParseFloat(value, 64)
-		return parsed, err == nil
+		var err error
+		parsed, err = strconv.ParseFloat(value, 64)
+		ok = err == nil
 	}
-	return 0, false
+	return parsed, ok && !math.IsNaN(parsed) && !math.IsInf(parsed, 0)
+}
+
+func wholeFloat(value float64) bool {
+	return !math.IsNaN(value) && !math.IsInf(value, 0) &&
+		value >= math.MinInt64 && value < math.MaxInt64 && value == math.Trunc(value)
 }

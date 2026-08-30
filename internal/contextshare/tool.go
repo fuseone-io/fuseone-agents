@@ -51,6 +51,16 @@ func (l *Layer) Dedupe(id domain.ToolID) (domain.ToolDedupe, bool) {
 	return l.catalog.Dedupe(id)
 }
 
+func (l *Layer) ApprovalBinding(call engine.Call) string {
+	if call.Tool == domain.ToolContextRead {
+		return ""
+	}
+	if binder, ok := l.base.(engine.ApprovalBinder); ok {
+		return binder.ApprovalBinding(call)
+	}
+	return ""
+}
+
 func (l *Layer) Reserve(ctx context.Context, call engine.Call) error {
 	if call.Tool == domain.ToolContextRead {
 		return nil

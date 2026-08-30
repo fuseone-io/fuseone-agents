@@ -30,7 +30,7 @@ type VaultMetadata struct {
 	Keys           []string `json:"keys,omitempty"`
 }
 
-func (l *Layer) invokeNative(
+func (l *Layer) invokeVaultNative(
 	ctx context.Context, instance Instance, op connectors.Operation, call engine.Call,
 ) (engine.ToolResult, error) {
 	if instance.Connector != "vault" {

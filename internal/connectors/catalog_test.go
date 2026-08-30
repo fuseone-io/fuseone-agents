@@ -89,6 +89,9 @@ func TestCatalog_sqlIsReadOnlyAndTemplateBased(t *testing.T) {
 	t.Parallel()
 
 	connector := connectorByID(t, "sql")
+	if connector.Maturity != MaturityRuntime {
+		t.Fatalf("sql maturity = %q, want the proved runtime", connector.Maturity)
+	}
 	if !hasGuarantee(connector, "queries run from registered read-only templates, not arbitrary SQL text") {
 		t.Fatal("sql connector does not declare template-only reads")
 	}
@@ -98,6 +101,9 @@ func TestCatalog_sqlIsReadOnlyAndTemplateBased(t *testing.T) {
 				t.Fatalf("%s effect = %q, want read-only", op.ID, effect)
 			}
 		}
+	}
+	if len(connector.Operations) != 1 || connector.Operations[0].ID != "sql.run_query_template" {
+		t.Fatalf("sql operations = %+v, want only the implemented template read", connector.Operations)
 	}
 }
 

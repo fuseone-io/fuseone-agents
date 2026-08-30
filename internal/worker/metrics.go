@@ -28,6 +28,7 @@ type MetricsRegistry struct {
 	channelItems           map[string]uint64
 	stdioEgressDenials     map[string]uint64
 	memoryFinds            map[memoryFindMetric]memoryFindCounters
+	sqlRuntime             map[sqlRuntimeMetric]uint64
 }
 
 func NewMetricsRegistry() *MetricsRegistry {
@@ -40,6 +41,7 @@ func NewMetricsRegistry() *MetricsRegistry {
 		channelItems:           map[string]uint64{},
 		stdioEgressDenials:     map[string]uint64{},
 		memoryFinds:            map[memoryFindMetric]memoryFindCounters{},
+		sqlRuntime:             map[sqlRuntimeMetric]uint64{},
 	}
 }
 
@@ -74,6 +76,7 @@ func (r *MetricsRegistry) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	renderChannelMetrics(w, snap)
 	renderStdioEgressMetrics(w, snap)
 	renderMemoryMetrics(w, snap)
+	renderSQLRuntimeMetrics(w, snap)
 }
 
 func renderWorkerMetrics(w http.ResponseWriter, snap []poolSnapshot) {
@@ -221,6 +224,15 @@ func renderMemoryMetrics(w http.ResponseWriter, snap registrySnapshot) {
 	}
 }
 
+func renderSQLRuntimeMetrics(w http.ResponseWriter, snap registrySnapshot) {
+	fmt.Fprintln(w, "# HELP fuseone_sql_runtime_events_total Governed SQL runtime events by bounded stage and outcome.")
+	fmt.Fprintln(w, "# TYPE fuseone_sql_runtime_events_total counter")
+	for _, key := range sortedSQLRuntimeKeys(snap.sqlRuntime) {
+		fmt.Fprintf(w, "fuseone_sql_runtime_events_total{stage=%s,outcome=%s} %d\n",
+			label(key.stage), label(key.outcome), snap.sqlRuntime[key])
+	}
+}
+
 type poolSnapshot struct {
 	pool     string
 	slots    int
@@ -240,6 +252,7 @@ type registrySnapshot struct {
 	channelItems           map[string]uint64
 	stdioEgressDenials     map[string]uint64
 	memoryFinds            map[memoryFindMetric]memoryFindCounters
+	sqlRuntime             map[sqlRuntimeMetric]uint64
 }
 
 func (r *MetricsRegistry) snapshot() registrySnapshot {
@@ -256,6 +269,7 @@ func (r *MetricsRegistry) snapshot() registrySnapshot {
 		channelItems:           copyStringCounters(r.channelItems),
 		stdioEgressDenials:     copyStringCounters(r.stdioEgressDenials),
 		memoryFinds:            copyMemoryFindCounters(r.memoryFinds),
+		sqlRuntime:             copySQLRuntimeCounters(r.sqlRuntime),
 	}
 	r.mu.Unlock()
 
@@ -293,6 +307,11 @@ type memoryFindMetric struct {
 	omitted string
 }
 
+type sqlRuntimeMetric struct {
+	stage   string
+	outcome string
+}
+
 type memoryFindCounters struct {
 	calls          uint64
 	durationMicros uint64
@@ -307,7 +326,34 @@ var (
 		"error": true,
 		"ok":    true,
 	}
+	allowedSQLStages = map[string]bool{
+		"issuance":   true,
+		"query":      true,
+		"revocation": true,
+	}
+	allowedSQLOutcomes = map[string]bool{
+		"cancelled":     true,
+		"failed":        true,
+		"not_attempted": true,
+		"refused":       true,
+		"succeeded":     true,
+		"timeout":       true,
+	}
 )
+
+// SQLRuntime records only the stage and its bounded outcome. The method is
+// the connectortools.SQLRuntimeMetrics port; its signature intentionally has
+// nowhere to put an instance, template, run id or error message.
+func (r *MetricsRegistry) SQLRuntime(stage, outcome string) {
+	if r == nil {
+		return
+	}
+	stage = boundedMetricValue(stage, allowedSQLStages)
+	outcome = boundedMetricValue(outcome, allowedSQLOutcomes)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.sqlRuntime[sqlRuntimeMetric{stage: stage, outcome: outcome}]++
+}
 
 func (r *MetricsRegistry) MCPToolCall(result, code string, cached bool) {
 	if r == nil {
@@ -507,6 +553,14 @@ func copyMemoryFindCounters(in map[memoryFindMetric]memoryFindCounters) map[memo
 	return out
 }
 
+func copySQLRuntimeCounters(in map[sqlRuntimeMetric]uint64) map[sqlRuntimeMetric]uint64 {
+	out := make(map[sqlRuntimeMetric]uint64, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
+}
+
 func sortedKeys(m map[string]uint64) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
@@ -585,6 +639,20 @@ func sortedMemoryFindKeys(m map[memoryFindMetric]memoryFindCounters) []memoryFin
 			return keys[i].result < keys[j].result
 		}
 		return keys[i].omitted < keys[j].omitted
+	})
+	return keys
+}
+
+func sortedSQLRuntimeKeys(m map[sqlRuntimeMetric]uint64) []sqlRuntimeMetric {
+	keys := make([]sqlRuntimeMetric, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].stage != keys[j].stage {
+			return keys[i].stage < keys[j].stage
+		}
+		return keys[i].outcome < keys[j].outcome
 	})
 	return keys
 }

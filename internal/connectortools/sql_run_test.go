@@ -7,7 +7,18 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/fuseone/agents/internal/domain"
 )
+
+// Run is deliberately test-only. Production exposes RunBound so no caller can
+// execute a server-owned SQL contract without carrying the Gate's digest.
+func (r *SQLRuntime) Run(
+	ctx context.Context, instance, templateID string,
+	scope domain.Scope, params map[string]any,
+) (SQLResult, error) {
+	return r.run(ctx, instance, templateID, "", scope, params)
+}
 
 type sqlSpy struct {
 	opened      int
@@ -155,6 +166,33 @@ func TestSQLRuntime_revokesEvenWhenTheRequestNeverRuns(t *testing.T) {
 		if spy.opened != 0 {
 			t.Errorf("%s: the database was reached", name)
 		}
+	}
+}
+
+func TestSQLRuntime_aChangedContractNeverReachesTheDatabase(t *testing.T) {
+	t.Parallel()
+
+	approved := ready()[1].SQL
+	digest, ok := sqlContractDigest(approved, "orders_by_customer")
+	if !ok {
+		t.Fatal("approved template has no contract")
+	}
+	current := ready()
+	current[1].SQL.Host = "new-db.internal"
+	vault := issuer()
+	spy := &sqlSpy{params: 2}
+	runtime := NewSQLRuntime(NewCredentialResolver(
+		staticConfig(current), tokenFor(current), vault), spy)
+	result, err := runtime.RunBound(
+		context.Background(), "app-x", "orders_by_customer", digest, runScope(), params())
+	if !errors.Is(err, ErrSQLContractChanged) {
+		t.Fatalf("RunBound error = %v, want moved contract", err)
+	}
+	if spy.opened != 0 {
+		t.Fatalf("database opened %d times for a stale contract", spy.opened)
+	}
+	if result.Revocation != RevocationSucceeded || vault.revoked == "" {
+		t.Fatalf("revocation = %q/%q, want the issued lease returned", result.Revocation, vault.revoked)
 	}
 }
 
@@ -332,6 +370,33 @@ func TestSQLRuntime_resultCarriesNoCredential(t *testing.T) {
 	leaks(t, result)
 	if result.Issuance.VaultInstance != "prod" {
 		t.Fatalf("issuance = %+v, want safe provenance", result.Issuance)
+	}
+}
+
+func TestSQLRuntime_refusesExecutionAuthorityReturnedAsData(t *testing.T) {
+	t.Parallel()
+
+	credentialRow, err := json.Marshal([]string{usernameCanary, credentialCanary})
+	if err != nil {
+		t.Fatalf("marshal credential row: %v", err)
+	}
+	for name, spy := range map[string]*sqlSpy{
+		"row":    {params: 2, columns: []string{"username", "password"}, rows: []json.RawMessage{credentialRow}},
+		"column": {params: 2, columns: []string{usernameCanary}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			rt, vault := runtime(t, spy)
+			vault.username = usernameCanary
+			result, err := rt.Run(
+				context.Background(), "app-x", "orders_by_customer", runScope(), params())
+			if !errors.Is(err, ErrCredentialInResult) {
+				t.Fatalf("Run err = %v, want execution authority refused", err)
+			}
+			if len(result.Rows) != 0 {
+				t.Fatalf("result retained %d credential rows", len(result.Rows))
+			}
+			leaks(t, result)
+		})
 	}
 }
 

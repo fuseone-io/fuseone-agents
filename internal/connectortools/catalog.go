@@ -56,6 +56,8 @@ func schemaFor(operationID string) (map[string]any, bool) {
 		return vaultReadMetadataSchema(), true
 	case "vault.revoke_lease":
 		return vaultRevokeLeaseSchema(), true
+	case "sql.run_query_template":
+		return sqlRunSchema(), true
 	default:
 		return nil, false
 	}

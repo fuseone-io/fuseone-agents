@@ -77,6 +77,7 @@ func workerCmd(args []string) error {
 	defer parts.Close()
 
 	metrics := worker.NewMetricsRegistry()
+	parts.native.WithSQLMetrics(metrics)
 	if err := startWorkerMetrics(ctx, cfg.metricsAddr, metrics); err != nil {
 		return err
 	}

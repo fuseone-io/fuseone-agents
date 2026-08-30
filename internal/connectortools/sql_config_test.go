@@ -201,28 +201,25 @@ func TestValidateBindings_refusesAReferenceToAnotherConnector(t *testing.T) {
 	}
 }
 
-/*
-Configuring SQL does not offer the model a tool it cannot run.
-
-The catalogue shape is MaturityPlanned: there is no SQL runtime yet. Tool
-entries are built from a connector's operations without asking, so without
-this an operator configuring an instance today would put three uncallable
-tools on an agent's surface.
-*/
-func TestToolEntries_aPlannedConnectorOffersNoTool(t *testing.T) {
+// Activating SQL offers only the operation backed by the governed runtime.
+// Catalogue sketches are not capabilities: exposing describe_schema or
+// lookup_row before they have implementations would make every invocation end
+// in connector_unavailable after a person had configured a valid instance.
+func TestToolEntries_runtimeSQLOffersOnlyTheImplementedTemplateRead(t *testing.T) {
 	t.Parallel()
 
 	entries := toolEntriesFor([]Instance{
 		sqlInstance(area("acme", "platform"), vaultRole("prod")),
 		vaultInstance("prod", area("acme", "platform")),
 	})
+	var sqlEntries []domain.ToolEntry
 	for _, entry := range entries {
 		if strings.HasPrefix(string(entry.ID), "sql.") {
-			t.Errorf("planned connector offered %s", entry.ID)
+			sqlEntries = append(sqlEntries, entry)
 		}
 	}
-	if len(entries) == 0 {
-		t.Fatal("no entries at all; this test would pass on anything")
+	if len(sqlEntries) != 1 || sqlEntries[0].ID != "sql.app-x.run_query_template" {
+		t.Fatalf("SQL entries = %+v, want only the governed template read", sqlEntries)
 	}
 }
 

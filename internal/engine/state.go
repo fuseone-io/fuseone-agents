@@ -67,13 +67,15 @@ type PendingApproval struct {
 
 // ApprovedCall is the exact call a person cleared.
 //
-// Exact on purpose. A grant is for one tool with one set of arguments, and
-// executing anything else on the strength of it would be the platform doing
-// something nobody agreed to — the failure this whole queue exists to prevent.
+// Exact on purpose. A grant is for one tool, one set of arguments and one
+// server-owned contract. Executing anything else on the strength of it would
+// be the platform doing something nobody agreed to — the failure this whole
+// queue exists to prevent.
 type ApprovedCall struct {
-	Tool       domain.ToolID
-	ArgsRef    string
-	ArgsDigest string
+	Tool           domain.ToolID
+	ArgsRef        string
+	ArgsDigest     string
+	ContractDigest string
 	// AtSeq is the approval_requested step it answers.
 	AtSeq int64
 }

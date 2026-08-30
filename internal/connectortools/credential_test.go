@@ -31,6 +31,10 @@ const leaseCanary = "database/creds/app-x-readonly/LEASE-CANARY-9d1"
 
 const credentialCanary = `CAN%41RY-"6f2b"/x\y` + "\n" + `tail`
 
+const usernameCanary = `USER%2F-"CANARY"\name` + "\n" + `tail`
+
+const vaultTokenCanary = `VAULT%2F-"TOKEN"\value` + "\n" + `tail`
+
 // encodings are the forms the same secret takes on its way somewhere. A leak
 // test that looks only for the raw bytes passes while the value sits in a log
 // line as \u0022 or %22.
@@ -59,14 +63,16 @@ func leaks(t *testing.T, subject any) bool {
 	if encoded, err := json.Marshal(subject); err == nil {
 		rendered = append(rendered, string(encoded))
 	}
-	for _, form := range rendered {
-		for _, shape := range encodings(credentialCanary) {
-			if shape == "" {
-				continue
-			}
-			if strings.Contains(form, shape) {
-				t.Errorf("the credential reached a rendered form as %q: %s", shape, form)
-				return true
+	for _, secret := range []string{credentialCanary, usernameCanary, vaultTokenCanary, leaseCanary} {
+		for _, form := range rendered {
+			for _, shape := range encodings(secret) {
+				if shape == "" {
+					continue
+				}
+				if strings.Contains(form, shape) {
+					t.Errorf("secret material reached a rendered form as %q: %s", shape, form)
+					return true
+				}
 			}
 		}
 	}
