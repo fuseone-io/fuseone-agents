@@ -38,20 +38,40 @@ type SQLSession interface {
 	// there and not here.
 	Describe(ctx context.Context, sql string) (int, error)
 	/*
-		Query runs inside a read-only transaction and hands each row over as a
-		JSON array, in the order the columns are returned.
+		Query runs inside a read-only transaction and reports the columns
+		before the first row.
 
-		A row is json.RawMessage rather than [][]byte because the difference is
-		not cosmetic: a [][]byte serialises as base64, so the governed result an
-		auditor reads would be an encoding of an encoding. The shape is settled
-		here, before pgx implements it, so the driver has one form to produce
-		rather than an opinion to have.
+		The order is what makes an exact limit possible: the envelope of the
+		stored answer depends on the column names, so a runtime told them last
+		can only estimate while it decides what fits. A sink rather than two
+		callbacks, so the two halves cannot be wired up separately.
 
-		The callback stops the read by returning an error, so a large answer is
-		cut where it is produced rather than after it is held.
+		A row is json.RawMessage rather than []byte because the difference is
+		not cosmetic: a [][]byte serialises as base64, so the governed answer an
+		auditor reads would be an encoding of an encoding.
+
+		The sink stops the read by returning an error, so a large answer is cut
+		where it is produced rather than after it is held.
 	*/
-	Query(ctx context.Context, sql string, args []any, row func(json.RawMessage) error) ([]string, error)
+	Query(ctx context.Context, sql string, args []any, sink SQLSink) error
+	/*
+		Close releases the connection, and must release the transport even when
+		the context expires.
+
+		A graceful close that runs out of time has to be followed by an abrupt
+		one: revocation happens after this returns, and a lease given back while
+		the connection is still alive is a connection the database may keep
+		serving. Returning early without releasing the socket would satisfy the
+		signature and break the guarantee.
+	*/
 	Close(ctx context.Context) error
+}
+
+// SQLSink receives an answer as it is produced. Columns arrive once, before
+// any row.
+type SQLSink interface {
+	Columns(names []string) error
+	Row(row json.RawMessage) error
 }
 
 type SQLExecutor interface {
@@ -68,11 +88,15 @@ const revocationGrace = 5 * time.Second
 // runs after it.
 const closeGrace = 3 * time.Second
 
-// envelopeBytes is what the stored answer costs before any row: the object,
-// the column list and the fields around it. Approximate and deliberately
-// generous, because being a little strict about a limit is a smaller error
-// than reporting one that was not kept.
-const envelopeBytes = 256
+/*
+minTemplateBytes is the smallest byte limit worth registering.
+
+The stored answer costs something before its first row — the object, the column
+names, the provenance — so a limit under this could never hold one. Refusing it
+at configuration time is better than accepting a number that guarantees an
+empty answer.
+*/
+const minTemplateBytes = 1024
 
 // ttlSafetyMargin keeps a query from running to the moment its credential
 // expires. A statement cut off mid-result by an expiring lease looks like a
@@ -133,36 +157,43 @@ func (r *SQLRuntime) Run(
 	ctx context.Context, instance, templateID string,
 	scope domain.Scope, params map[string]any,
 ) (result SQLResult, err error) {
+	// Not attempted until something attempts it, so a failure before issuance
+	// reports a value the enum declares rather than an empty string.
+	result = SQLResult{Revocation: RevocationNotAttempted}
 	authority, err := r.resolver.Resolve(ctx, instance, scope)
 	if err != nil {
-		return SQLResult{}, err
+		return result, err
 	}
+	// Provenance from the moment there is any. Filling it only after a
+	// successful read meant a run that failed at Open or Describe recorded a
+	// credential it had certainly been issued as if it never had one.
+	result.Issuance = authority.Issuance()
 	target := authority.Target()
 	tpl, ok := target.Template(templateID)
 	if !ok {
 		// Resolved first and refused second, so the lease that was minted for
 		// an unusable request is handed back rather than waiting out its TTL.
-		outcome := revoke(authority)
-		return SQLResult{Revocation: outcome}, fmt.Errorf("%w: %s", ErrNoSuchTemplate, templateID)
+		result.Revocation = revoke(ctx, authority)
+		return result, fmt.Errorf("%w: %s", ErrNoSuchTemplate, templateID)
 	}
 	args, err := bindParameters(tpl, params)
 	if err != nil {
-		outcome := revoke(authority)
-		return SQLResult{Revocation: outcome}, err
+		result.Revocation = revoke(ctx, authority)
+		return result, err
 	}
 
 	budget := effectiveTimeout(ctx, tpl, authority.Issuance())
 	if budget <= 0 {
-		outcome := revoke(authority)
-		return SQLResult{Revocation: outcome}, ErrLeaseTooShort
+		result.Revocation = revoke(ctx, authority)
+		return result, ErrLeaseTooShort
 	}
 	queryCtx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
 
 	session, err := r.executor.Open(queryCtx, target, authority.Credential())
 	if err != nil {
-		outcome := revoke(authority)
-		return SQLResult{Revocation: outcome}, reached(err, instance)
+		result.Revocation = revoke(ctx, authority)
+		return result, reached(err, instance)
 	}
 	/*
 		Close before revoke, always, and each on a budget of its own.
@@ -181,14 +212,16 @@ func (r *SQLRuntime) Run(
 		closeCtx, cancelClose := context.WithTimeout(context.WithoutCancel(ctx), closeGrace)
 		_ = session.Close(closeCtx)
 		cancelClose()
-		result.Revocation = revoke(authority)
+		result.Revocation = revoke(ctx, authority)
 	}()
 
 	if err := describes(queryCtx, session, tpl); err != nil {
-		return SQLResult{}, err
+		return result, err
 	}
-	result, err = read(queryCtx, session, tpl, args)
-	result.Issuance = authority.Issuance()
+	// Into the result that already carries provenance, rather than over it:
+	// assigning a fresh value here is how Issuance was lost on every path that
+	// did not reach this line.
+	err = read(queryCtx, session, tpl, args, &result)
 	return result, err
 }
 
@@ -228,35 +261,76 @@ discard, and the row that crosses the byte limit is dropped rather than kept:
 half a row is not a smaller answer, it is a malformed one.
 */
 func read(
-	ctx context.Context, session SQLSession, tpl SQLTemplate, args []any,
-) (SQLResult, error) {
-	var out SQLResult
-	// The envelope is paid for before the first row, because it is stored too.
-	// A limit that counted only rows would report itself respected while the
-	// column names and separators carried the payload past it.
-	size := envelopeBytes
-	columns, err := session.Query(ctx, tpl.SQL, args, func(row json.RawMessage) error {
-		if len(out.Rows) >= tpl.MaxRows || size+len(row)+1 > tpl.MaxBytes {
-			out.Truncated = true
-			return ErrResultTooLarge
-		}
-		out.Rows = append(out.Rows, row)
-		size += len(row) + 1
-		return nil
-	})
-	out.Columns = columns
+	ctx context.Context, session SQLSession, tpl SQLTemplate, args []any, out *SQLResult,
+) error {
+	sink := &boundedSink{result: out, limit: tpl.MaxBytes, maxRows: tpl.MaxRows}
+	err := session.Query(ctx, tpl.SQL, args, sink)
 	if errors.Is(err, ErrResultTooLarge) {
-		return out, nil
+		return nil
 	}
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return out, err
+			return err
 		}
 		// The driver's own words can quote the query, the parameters and
 		// sometimes a value from a row. The template is named; nothing else is.
-		return out, fmt.Errorf("connector: template %s failed against the database", tpl.ID)
+		return fmt.Errorf("connector: template %s failed against the database", tpl.ID)
 	}
-	return out, nil
+	return nil
+}
+
+/*
+boundedSink keeps the stored answer inside the template's byte limit, exactly.
+
+The envelope is measured rather than estimated: once the columns are known,
+the result is serialised with no rows and with the longest revocation outcome
+it could carry, and that is what the first row is added to. Every row after it
+costs its own bytes plus the separator. An estimate would be wrong in one of
+two directions, and the wrong one — under-counting — is the direction that
+puts a payload past the content store while reporting the limit kept.
+*/
+type boundedSink struct {
+	result  *SQLResult
+	limit   int
+	maxRows int
+	size    int
+}
+
+func (s *boundedSink) Columns(names []string) error {
+	s.result.Columns = names
+	// The worst case of the fields that are not rows, so nothing measured here
+	// can grow after the decision to stop was taken.
+	probe := SQLResult{
+		Columns: names, Rows: []json.RawMessage{}, Truncated: true,
+		Issuance: s.result.Issuance, Revocation: RevocationNotAttempted,
+	}
+	encoded, err := json.Marshal(probe)
+	if err != nil {
+		return fmt.Errorf("connector: the answer cannot be measured")
+	}
+	s.size = len(encoded)
+	// The shape of the answer does not fit its own limit. Truncating cannot
+	// help — there is nothing left to drop — and returning a payload already
+	// past the bound would be the limit reporting itself kept while the
+	// content store truncates behind it. A wide result under a small template
+	// limit is a configuration to correct, and columns are not known until the
+	// query runs, so this is the first moment it can be said.
+	if s.size > s.limit {
+		s.result.Truncated = true
+		return fmt.Errorf("%w: the answer's columns alone exceed the template's byte limit",
+			ErrResultTooLarge)
+	}
+	return nil
+}
+
+func (s *boundedSink) Row(row json.RawMessage) error {
+	if len(s.result.Rows) >= s.maxRows || s.size+len(row)+1 > s.limit {
+		s.result.Truncated = true
+		return ErrResultTooLarge
+	}
+	s.result.Rows = append(s.result.Rows, row)
+	s.size += len(row) + 1
+	return nil
 }
 
 /*
@@ -296,8 +370,12 @@ moment a lease most needs handing back is the moment the run was cancelled —
 using the same cancelled context would skip exactly the revocation it exists
 for. The short TTL remains the backstop when this fails.
 */
-func revoke(authority Authority) RevocationOutcome {
-	ctx, cancel := context.WithTimeout(context.Background(), revocationGrace)
+func revoke(ctx context.Context, authority Authority) RevocationOutcome {
+	// Derived from the run's own context with the cancellation removed, rather
+	// than started from Background: a fresh context drops the trace and the
+	// logger, so the one call an operator most wants to find in a cancelled
+	// run would be the one with no context around it.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), revocationGrace)
 	defer cancel()
 	if err := authority.Revoke(ctx); err != nil {
 		// The outcome and not the message: a Vault error body can quote the

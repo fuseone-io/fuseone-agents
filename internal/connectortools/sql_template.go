@@ -149,9 +149,9 @@ func validateTemplate(instanceName string, tpl SQLTemplate) error {
 	case tpl.MaxRows <= 0 || tpl.MaxRows > maxTemplateRows:
 		return fmt.Errorf("connector: sql %s template %s needs a row limit between 1 and %d",
 			instanceName, tpl.ID, maxTemplateRows)
-	case tpl.MaxBytes <= 0 || tpl.MaxBytes > maxTemplateBytes:
-		return fmt.Errorf("connector: sql %s template %s needs a byte limit between 1 and %d",
-			instanceName, tpl.ID, maxTemplateBytes)
+	case tpl.MaxBytes < minTemplateBytes || tpl.MaxBytes > maxTemplateBytes:
+		return fmt.Errorf("connector: sql %s template %s needs a byte limit between %d and %d",
+			instanceName, tpl.ID, minTemplateBytes, maxTemplateBytes)
 	case len(tpl.SQL) > maxTemplateSQLBytes:
 		return fmt.Errorf("connector: sql %s template %s is longer than %d bytes",
 			instanceName, tpl.ID, maxTemplateSQLBytes)

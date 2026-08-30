@@ -40,28 +40,29 @@ func (s *sqlSpy) Describe(_ context.Context, sql string) (int, error) {
 	return s.params, nil
 }
 
-func (s *sqlSpy) Query(
-	ctx context.Context, _ string, args []any, row func(json.RawMessage) error,
-) ([]string, error) {
+func (s *sqlSpy) Query(ctx context.Context, _ string, args []any, sink SQLSink) error {
 	s.args = args
 	if deadline, ok := ctx.Deadline(); ok {
 		s.deadline = time.Until(deadline)
+	}
+	if err := sink.Columns(s.columns); err != nil {
+		return err
 	}
 	// Cancelling here, mid-read, is the case a run actually meets: a resolver
 	// would never mint a credential for a context that was already cancelled.
 	if s.cancelOn != nil {
 		s.cancelOn()
-		return s.columns, ctx.Err()
+		return ctx.Err()
 	}
 	if s.queryErr != nil {
-		return s.columns, s.queryErr
+		return s.queryErr
 	}
 	for _, value := range s.rows {
-		if err := row(value); err != nil {
-			return s.columns, err
+		if err := sink.Row(value); err != nil {
+			return err
 		}
 	}
-	return s.columns, nil
+	return nil
 }
 
 func (s *sqlSpy) Close(ctx context.Context) error {
@@ -200,13 +201,12 @@ func TestSQLRuntime_stopsAtTheTemplateLimits(t *testing.T) {
 	for i := range rows {
 		rows[i] = json.RawMessage(`["` + strings.Repeat("x", 100) + `"]`)
 	}
-	// Rows are 106 bytes of JSON each, plus one for the separator. With the
-	// envelope paid first, 250 bytes of room holds two of them; counting only
-	// the rows would hold four, which is the sabotage this pins.
-	want := map[string]int{"rows": 3, "bytes": 2}
+	// The exact counts are asserted below against a serialised result, because
+	// an estimate of the envelope is exactly what this stopped being.
+	want := map[string]int{"rows": 3}
 	for name, limit := range map[string]func(*SQLTemplate){
 		"rows":  func(tpl *SQLTemplate) { tpl.MaxRows = 3 },
-		"bytes": func(tpl *SQLTemplate) { tpl.MaxBytes = envelopeBytes + 250 },
+		"bytes": func(tpl *SQLTemplate) { tpl.MaxBytes = minTemplateBytes },
 	} {
 		spy := &sqlSpy{params: 2, rows: rows}
 		vault := issuer()
@@ -224,11 +224,21 @@ func TestSQLRuntime_stopsAtTheTemplateLimits(t *testing.T) {
 		if !result.Truncated {
 			t.Fatalf("%s: the read was not cut short", name)
 		}
-		// The exact count, not merely "fewer". Asserting that something was
-		// dropped passes whether or not the envelope is paid for, and the
-		// envelope is the half a limit forgets.
-		if len(result.Rows) != want[name] {
-			t.Errorf("%s: rows = %d, want %d", name, len(result.Rows), want[name])
+		if expected, ok := want[name]; ok && len(result.Rows) != expected {
+			t.Errorf("%s: rows = %d, want %d", name, len(result.Rows), expected)
+		}
+		// The claim the limit actually makes: what gets stored fits. Asserting
+		// a row count would only pin whatever the envelope estimate happened
+		// to be.
+		if name == "bytes" {
+			encoded, err := json.Marshal(result)
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+			if len(encoded) > minTemplateBytes {
+				t.Errorf("stored answer is %d bytes, past the template's %d",
+					len(encoded), minTemplateBytes)
+			}
 		}
 	}
 }
@@ -478,5 +488,137 @@ func TestSQLResult_isReadableJSONAndBoundedAsStored(t *testing.T) {
 	}
 	if !strings.Contains(string(encoded), `"columns":["id","total"]`) {
 		t.Fatalf("stored answer = %s, want named columns", encoded)
+	}
+}
+
+/*
+Provenance survives every way a run can fail after the credential exists.
+
+A run that failed at Open or Describe recorded a credential it had certainly
+been issued as if it never had one — the issuance was filled in only after a
+successful read. The lease is still handed back either way, so the record
+without it was a credential that existed, was returned, and left no trace of
+either.
+*/
+func TestSQLRuntime_recordsIssuanceOnEveryPathPastTheCredential(t *testing.T) {
+	t.Parallel()
+
+	for name, arrange := range map[string]func(*sqlSpy){
+		"open failed":     func(s *sqlSpy) { s.openErr = errors.New("dial") },
+		"describe failed": func(s *sqlSpy) { s.params = 0 },
+		"query failed":    func(s *sqlSpy) { s.queryErr = errors.New("pq: boom") },
+	} {
+		spy := &sqlSpy{params: 2}
+		arrange(spy)
+		rt, _ := runtime(t, spy)
+		result, err := rt.Run(context.Background(), "app-x", "orders_by_customer", runScope(), params())
+		if err == nil {
+			t.Errorf("%s: no error", name)
+		}
+		if result.Issuance.VaultInstance != "prod" || result.Issuance.LeaseTTLSeconds == 0 {
+			t.Errorf("%s: issuance = %+v, want the credential that was minted", name, result.Issuance)
+		}
+		if result.Revocation != RevocationSucceeded {
+			t.Errorf("%s: revocation = %q, want the lease handed back", name, result.Revocation)
+		}
+	}
+}
+
+// A failure before anything is issued reports a value the enum declares. An
+// empty string is not "not attempted", it is a field nobody set.
+func TestSQLRuntime_reportsNotAttemptedBeforeAnyCredentialExists(t *testing.T) {
+	t.Parallel()
+
+	spy := &sqlSpy{params: 2}
+	rt := NewSQLRuntime(NewCredentialResolver(
+		staticConfig(nil), tokenFor(nil), issuer()), spy)
+	result, err := rt.Run(context.Background(), "app-x", "orders_by_customer", runScope(), params())
+	if err == nil {
+		t.Fatal("an unconfigured instance resolved")
+	}
+	if result.Revocation != RevocationNotAttempted {
+		t.Fatalf("revocation = %q, want not_attempted", result.Revocation)
+	}
+}
+
+/*
+The byte limit is measured against what is stored, whatever the columns are.
+
+An estimate is wrong in one of two directions and the wrong one is
+under-counting, which puts a payload past the content store while reporting the
+limit kept. Long column names are the cheapest way to prove the envelope is
+measured rather than assumed.
+*/
+func TestSQLRuntime_boundsTheStoredAnswerWithLongColumnNames(t *testing.T) {
+	t.Parallel()
+
+	rows := make([]json.RawMessage, 200)
+	for i := range rows {
+		rows[i] = json.RawMessage(`["` + strings.Repeat("y", 80) + `"]`)
+	}
+	columns := make([]string, 12)
+	for i := range columns {
+		columns[i] = strings.Repeat("column_name_", 6) + string(rune('a'+i))
+	}
+	spy := &sqlSpy{params: 2, columns: columns, rows: rows}
+	tpl := template()
+	// Big enough that the columns fit and small enough that they are a real
+	// share of the budget, rather than a rounding error against 64 KiB.
+	tpl.MaxBytes = 4 << 10
+	instances := ready()
+	instances[1].SQL.Templates = []SQLTemplate{tpl}
+	rt := NewSQLRuntime(NewCredentialResolver(
+		staticConfig(instances), tokenFor(instances), issuer()), spy)
+
+	result, err := rt.Run(context.Background(), "app-x", "orders_by_customer", runScope(), params())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if len(encoded) > tpl.MaxBytes {
+		t.Fatalf("stored answer is %d bytes, past the template's %d",
+			len(encoded), tpl.MaxBytes)
+	}
+	if !result.Truncated {
+		t.Fatal("nothing was cut, so this proves nothing about the bound")
+	}
+}
+
+/*
+An answer whose columns alone pass the limit is refused, not truncated.
+
+There is nothing left to drop: returning it would be the limit reporting
+itself kept while the content store truncates behind it. Columns are not known
+until the query runs, so this is the first moment the mismatch between a wide
+result and a small template limit can be said at all.
+*/
+func TestSQLRuntime_refusesAnAnswerWhoseShapeCannotFit(t *testing.T) {
+	t.Parallel()
+
+	columns := make([]string, 20)
+	for i := range columns {
+		columns[i] = strings.Repeat("very_long_column_", 8) + string(rune('a'+i))
+	}
+	spy := &sqlSpy{params: 2, columns: columns, rows: []json.RawMessage{json.RawMessage(`["x"]`)}}
+	tpl := template()
+	tpl.MaxBytes = minTemplateBytes
+	instances := ready()
+	instances[1].SQL.Templates = []SQLTemplate{tpl}
+	rt := NewSQLRuntime(NewCredentialResolver(
+		staticConfig(instances), tokenFor(instances), issuer()), spy)
+
+	result, err := rt.Run(context.Background(), "app-x", "orders_by_customer", runScope(), params())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !result.Truncated || len(result.Rows) != 0 {
+		t.Fatalf("rows = %d truncated = %v, want nothing returned", len(result.Rows), result.Truncated)
+	}
+	// And the lease still goes back: a refusal is not a reason to keep one.
+	if result.Revocation != RevocationSucceeded {
+		t.Errorf("revocation = %q, want the lease handed back", result.Revocation)
 	}
 }
