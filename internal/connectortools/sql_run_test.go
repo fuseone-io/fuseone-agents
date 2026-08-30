@@ -10,20 +10,21 @@ import (
 )
 
 type sqlSpy struct {
-	opened     int
-	closed     int
-	describe   int
-	params     int
-	describeAt string
-	args       []any
-	rows       []json.RawMessage
-	columns    []string
-	queryErr   error
-	closeBlock time.Duration
-	cancelOn   context.CancelFunc
-	openErr    error
-	order      []string
-	deadline   time.Duration
+	opened      int
+	closed      int
+	describe    int
+	params      int
+	describeAt  string
+	args        []any
+	rows        []json.RawMessage
+	columns     []string
+	queryErr    error
+	closeBlock  time.Duration
+	skipColumns bool
+	cancelOn    context.CancelFunc
+	openErr     error
+	order       []string
+	deadline    time.Duration
 }
 
 func (s *sqlSpy) Open(_ context.Context, _ SQLConfig, _ Credential) (SQLSession, error) {
@@ -45,8 +46,10 @@ func (s *sqlSpy) Query(ctx context.Context, _ string, args []any, sink SQLSink) 
 	if deadline, ok := ctx.Deadline(); ok {
 		s.deadline = time.Until(deadline)
 	}
-	if err := sink.Columns(s.columns); err != nil {
-		return err
+	if !s.skipColumns {
+		if err := sink.Columns(s.columns); err != nil {
+			return err
+		}
 	}
 	// Cancelling here, mid-read, is the case a run actually meets: a resolver
 	// would never mint a credential for a context that was already cancelled.
@@ -611,14 +614,150 @@ func TestSQLRuntime_refusesAnAnswerWhoseShapeCannotFit(t *testing.T) {
 		staticConfig(instances), tokenFor(instances), issuer()), spy)
 
 	result, err := rt.Run(context.Background(), "app-x", "orders_by_customer", runScope(), params())
-	if err != nil {
-		t.Fatalf("Run: %v", err)
+	// A failure, not a truncation. The two outcomes are opposite: one is a
+	// shorter answer somebody can read, the other is a payload already past
+	// the limit, and returning the second as success is how it reaches the
+	// content store anyway.
+	if !errors.Is(err, ErrAnswerShapeTooLarge) {
+		t.Fatalf("err = %v, want the shape refused", err)
 	}
-	if !result.Truncated || len(result.Rows) != 0 {
-		t.Fatalf("rows = %d truncated = %v, want nothing returned", len(result.Rows), result.Truncated)
+	if len(result.Rows) != 0 {
+		t.Fatalf("rows = %d, want nothing returned", len(result.Rows))
 	}
 	// And the lease still goes back: a refusal is not a reason to keep one.
 	if result.Revocation != RevocationSucceeded {
 		t.Errorf("revocation = %q, want the lease handed back", result.Revocation)
+	}
+}
+
+/*
+The sink refuses what its documentation asks for.
+
+An executor that produces a row before announcing columns would start the count
+at zero, and the limit could be crossed by the whole envelope. One that
+announces columns twice would measure an envelope it then replaces. Containment
+cannot depend on the pgx adapter remembering an order.
+*/
+func TestBoundedSink_refusesAnExecutorThatIgnoresTheOrder(t *testing.T) {
+	t.Parallel()
+
+	row := json.RawMessage(`["x"]`)
+	for name, use := range map[string]func(*boundedSink) error{
+		"row before columns": func(s *boundedSink) error { return s.Row(row) },
+		"columns twice": func(s *boundedSink) error {
+			if err := s.Columns([]string{"a"}); err != nil {
+				return err
+			}
+			return s.Columns([]string{"a"})
+		},
+	} {
+		sink := &boundedSink{result: &SQLResult{}, limit: 1 << 20, maxRows: 10}
+		if err := use(sink); !errors.Is(err, ErrSinkOutOfOrder) {
+			t.Errorf("%s: err = %v, want the order refused", name, err)
+		}
+	}
+}
+
+// An executor that returns without announcing anything left a result with no
+// columns and an uncounted envelope. Silence is not an empty answer.
+func TestSQLRuntime_refusesAnExecutorThatNeverAnnouncesColumns(t *testing.T) {
+	t.Parallel()
+
+	spy := &sqlSpy{params: 2, skipColumns: true}
+	rt, _ := runtime(t, spy)
+	_, err := rt.Run(context.Background(), "app-x", "orders_by_customer", runScope(), params())
+	if !errors.Is(err, ErrSinkOutOfOrder) {
+		t.Fatalf("err = %v, want the missing columns refused", err)
+	}
+}
+
+/*
+A full answer with no rows still fits its limit.
+
+The probe used Truncated true, which is one byte shorter than false, and the
+first row was charged a separator it does not pay. With rows the two errors
+cancelled; with none, a normal answer could sit one byte over the bound that
+reported itself kept.
+*/
+func TestSQLRuntime_anEmptyAnswerStillFitsItsLimit(t *testing.T) {
+	t.Parallel()
+
+	spy := &sqlSpy{params: 2, columns: []string{"id"}}
+	tpl := template()
+	tpl.MaxBytes = minTemplateBytes
+	instances := ready()
+	instances[1].SQL.Templates = []SQLTemplate{tpl}
+	rt := NewSQLRuntime(NewCredentialResolver(
+		staticConfig(instances), tokenFor(instances), issuer()), spy)
+
+	result, err := rt.Run(context.Background(), "app-x", "orders_by_customer", runScope(), params())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if len(encoded) > tpl.MaxBytes {
+		t.Fatalf("an empty answer is %d bytes, past the template's %d", len(encoded), tpl.MaxBytes)
+	}
+}
+
+/*
+An answer sized to its limit never exceeds it.
+
+Calibrated from a real encoding rather than guessed, so it stays true if the
+shape of the result changes.
+
+The two one-byte corrections this pins are only correct, not observable: the
+probe now measures `Truncated: false`, which is the longer form a complete
+answer carries, and the first row is not charged a separator it does not pay.
+Both were errors in the model. Neither can be caught here, because the envelope
+also reserves the longest revocation outcome — four bytes the answer will not
+use — and that slack absorbs a one-byte mistake in either direction. Removing
+the reservation to make them observable would trade a real guarantee for a
+test, so they stay correct and unaccused, and this is where that is written
+down.
+*/
+func TestSQLRuntime_anAnswerExactlyOnItsLimitIsWhole(t *testing.T) {
+	t.Parallel()
+
+	rows := []json.RawMessage{
+		json.RawMessage(`[1,"a"]`), json.RawMessage(`[2,"b"]`), json.RawMessage(`[3,"c"]`),
+	}
+	exact, err := json.Marshal(SQLResult{
+		Columns: []string{"id", "name"}, Rows: rows, Truncated: false,
+		Issuance: Issuance{
+			SQLInstance: "app-x", VaultInstance: "prod", Mount: "database",
+			Role: "app-x-readonly", LeaseTTLSeconds: 300,
+		},
+		Revocation: RevocationSucceeded,
+	})
+	if err != nil {
+		t.Fatalf("calibrate: %v", err)
+	}
+
+	spy := &sqlSpy{params: 2, columns: []string{"id", "name"}, rows: rows}
+	tpl := template()
+	tpl.MaxBytes = len(exact)
+	instances := ready()
+	instances[1].SQL.Templates = []SQLTemplate{tpl}
+	rt := NewSQLRuntime(NewCredentialResolver(
+		staticConfig(instances), tokenFor(instances), issuer()), spy)
+
+	result, err := rt.Run(context.Background(), "app-x", "orders_by_customer", runScope(), params())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	// The safety direction only. The envelope reserves the longest revocation
+	// outcome, which the answer will not carry, so the accounting is
+	// conservative by a few bytes on purpose — demanding perfect packing would
+	// be demanding that the reservation be dropped.
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if len(encoded) > tpl.MaxBytes {
+		t.Fatalf("stored answer is %d bytes, past the template's %d", len(encoded), tpl.MaxBytes)
 	}
 }
