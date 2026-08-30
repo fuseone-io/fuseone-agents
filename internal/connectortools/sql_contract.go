@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"time"
 
 	"github.com/fuseone/agents/internal/domain"
 )
@@ -40,7 +41,9 @@ type SQLSink interface {
 }
 
 type SQLExecutor interface {
-	Open(ctx context.Context, cfg SQLConfig, credential Credential) (SQLSession, error)
+	Open(
+		ctx context.Context, cfg SQLConfig, credential Credential, timeout time.Duration,
+	) (SQLSession, error)
 }
 
 type RevocationOutcome string

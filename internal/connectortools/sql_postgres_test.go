@@ -87,13 +87,92 @@ func TestPostgresSQL_streamsRowsUntilTheSinkStops(t *testing.T) {
 	}
 }
 
+func TestPostgresSQL_preservesIdentifiersAndExactNumbersInGovernedJSON(t *testing.T) {
+	t.Parallel()
+
+	fx := newSQLPostgresFixture(t)
+	session := fx.open(t, fx.reader)
+	defer closeSQLSession(t, session)
+
+	sink := &collectingSQLSink{}
+	err := session.Query(context.Background(), `select
+		'9045b230-79cb-4c82-8d16-0f1ff1ab8b7d'::uuid,
+		9007199254740993.123456789::numeric,
+		'192.0.2.1/24'::inet,
+		'192.0.2.0/24'::cidr,
+		'\x0102'::bytea,
+		'{"ok":true,"n":2}'::jsonb,
+		array['9045b230-79cb-4c82-8d16-0f1ff1ab8b7d'::uuid],
+		array[9007199254740993.123456789::numeric]`, nil, sink)
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(sink.rows) != 1 {
+		t.Fatalf("rows = %d, want 1", len(sink.rows))
+	}
+	want := `[` +
+		`"9045b230-79cb-4c82-8d16-0f1ff1ab8b7d",` +
+		`"9007199254740993.123456789",` +
+		`"192.0.2.1/24","192.0.2.0/24","AQI=",` +
+		`{"n":2,"ok":true},` +
+		`["9045b230-79cb-4c82-8d16-0f1ff1ab8b7d"],` +
+		`["9007199254740993.123456789"]]`
+	if got := string(sink.rows[0]); got != want {
+		t.Fatalf("row = %s, want %s", got, want)
+	}
+}
+
+func TestPostgresSQL_theServerEnforcesTheExecutionBudget(t *testing.T) {
+	t.Parallel()
+
+	fx := newSQLPostgresFixture(t)
+	session := fx.openWithTimeout(t, fx.reader, 100*time.Millisecond)
+	defer closeSQLSession(t, session)
+
+	started := time.Now()
+	err := session.Query(
+		context.Background(), "select pg_sleep(2)", nil, &collectingSQLSink{})
+	if err == nil {
+		t.Fatal("the database ran past its server-side statement timeout")
+	}
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("server timeout returned after %s, want under 1s", elapsed)
+	}
+}
+
+func TestPostgresConnectionConfig_removesFallbacksAndCarriesTheServerBudget(t *testing.T) {
+	t.Parallel()
+
+	parsed, err := pgx.ParseConfig("postgres://localhost/postgres?sslmode=prefer")
+	if err != nil {
+		t.Fatalf("ParseConfig: %v", err)
+	}
+	if len(parsed.Fallbacks) == 0 {
+		t.Fatal("test fixture has no plaintext fallback to remove")
+	}
+	configurePostgresConnection(parsed, SQLConfig{
+		Host: "db.internal", Port: 5432, Database: "app",
+	}, Credential{username: "reader", password: "secret"}, nil, 1500*time.Microsecond)
+	if len(parsed.Fallbacks) != 0 {
+		t.Fatalf("fallbacks = %d, want none", len(parsed.Fallbacks))
+	}
+	if got := parsed.RuntimeParams["statement_timeout"]; got != "2ms" {
+		t.Fatalf("statement_timeout = %q, want 2ms", got)
+	}
+	if got := parsed.RuntimeParams["idle_in_transaction_session_timeout"]; got != "2ms" {
+		t.Fatalf("idle timeout = %q, want 2ms", got)
+	}
+}
+
 func TestPostgresSQL_verifiesTheServerCertificate(t *testing.T) {
 	t.Parallel()
 
 	fx := newSQLPostgresFixture(t)
 	wrongRoots := x509.NewCertPool()
 	executor := NewPostgresSQLExecutor(wrongRoots)
-	if _, err := executor.Open(context.Background(), fx.config, fx.reader); err == nil {
+	if _, err := executor.Open(
+		context.Background(), fx.config, fx.reader, time.Second,
+	); err == nil {
 		t.Fatal("a server outside the configured trust roots was accepted")
 	}
 
@@ -216,8 +295,14 @@ func setupSQLFixture(t *testing.T, admin *pgx.Conn, schema string) {
 }
 
 func (f sqlPostgresFixture) open(t *testing.T, credential Credential) SQLSession {
+	return f.openWithTimeout(t, credential, time.Second)
+}
+
+func (f sqlPostgresFixture) openWithTimeout(
+	t *testing.T, credential Credential, timeout time.Duration,
+) SQLSession {
 	t.Helper()
-	session, err := f.executor.Open(context.Background(), f.config, credential)
+	session, err := f.executor.Open(context.Background(), f.config, credential, timeout)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}

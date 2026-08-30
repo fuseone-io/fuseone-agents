@@ -41,7 +41,6 @@ func (r *SQLRuntime) run(
 	result.IssuanceOutcome = IssuanceSucceeded
 	result.Issuance = authority.Issuance()
 	r.observe("issuance", "succeeded")
-	defer func() { r.observe("query", runtimeOutcome(err)) }()
 
 	target := authority.Target()
 	tpl, ok := target.Template(templateID)
@@ -53,7 +52,7 @@ func (r *SQLRuntime) run(
 		return result, fmt.Errorf("%w: %s", ErrNoSuchTemplate, templateID)
 	}
 	if expectedContract != "" {
-		current, _ := sqlContractDigest(target, templateID)
+		current, _ := sqlContractDigest(target, authority.lease.config, templateID)
 		if current != expectedContract {
 			result.Revocation = r.revoke(ctx, authority)
 			return result, ErrSQLContractChanged
@@ -72,8 +71,9 @@ func (r *SQLRuntime) run(
 	}
 	queryCtx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
+	defer func() { r.observe("query", runtimeOutcome(err)) }()
 
-	session, err := r.executor.Open(queryCtx, target, authority.Credential())
+	session, err := r.executor.Open(queryCtx, target, authority.Credential(), budget)
 	if err != nil {
 		result.Revocation = r.revoke(ctx, authority)
 		return result, reached(err, instance)

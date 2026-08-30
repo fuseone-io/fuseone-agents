@@ -115,8 +115,23 @@ func (l *Layer) ApprovalBinding(call engine.Call) string {
 	if !ok {
 		return ""
 	}
-	digest, _ := sqlContractDigest(instance.SQL, args.TemplateID)
+	vault, ok := l.sqlVaultEndpoint(instance)
+	if !ok {
+		return ""
+	}
+	digest, _ := sqlContractDigest(instance.SQL, vault, args.TemplateID)
 	return digest
+}
+
+func (l *Layer) sqlVaultEndpoint(sql Instance) (VaultConfig, bool) {
+	key := instanceKey{connector: "vault", name: sql.SQL.CredentialSource.VaultInstance}
+	l.mu.RLock()
+	vault, found := l.instances[key]
+	l.mu.RUnlock()
+	if !found || !vault.Enabled || !vault.Scope.Contains(sql.Scope) || vault.Vault.Address == "" {
+		return VaultConfig{}, false
+	}
+	return vault.Vault, true
 }
 
 func (l *Layer) Schema(id domain.ToolID) (string, string, map[string]any, bool) {

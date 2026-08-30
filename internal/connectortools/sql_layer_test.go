@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
@@ -100,6 +101,7 @@ func TestSQLNativeTool_refusesArgumentsOutsideTheRegisteredShape(t *testing.T) {
 	layer := newSQLLayer(t, issuer, &recordingSQLExecutor{}, &cachingBase{})
 	for name, args := range map[string]string{
 		"sql text":       `{"template_id":"orders_by_customer","parameters":{},"sql":"drop table users"}`,
+		"unknown field":  `{"template_id":"orders_by_customer","parameters":{"customer_id":"cus_1","since":"2026-08-30T12:00:00Z"},"extra":true}`,
 		"missing id":     `{"parameters":{}}`,
 		"trailing value": `{"template_id":"orders_by_customer","parameters":{}} true`,
 	} {
@@ -249,7 +251,7 @@ type recordingSQLExecutor struct {
 }
 
 func (e *recordingSQLExecutor) Open(
-	_ context.Context, _ SQLConfig, credential Credential,
+	_ context.Context, _ SQLConfig, credential Credential, _ time.Duration,
 ) (SQLSession, error) {
 	e.mu.Lock()
 	e.credentials = append(e.credentials, credential.Username()+"\x00"+credential.Password())

@@ -36,10 +36,14 @@ type sqlSpy struct {
 	openErr     error
 	order       []string
 	deadline    time.Duration
+	openTimeout time.Duration
 }
 
-func (s *sqlSpy) Open(_ context.Context, _ SQLConfig, _ Credential) (SQLSession, error) {
+func (s *sqlSpy) Open(
+	_ context.Context, _ SQLConfig, _ Credential, timeout time.Duration,
+) (SQLSession, error) {
 	s.opened++
+	s.openTimeout = timeout
 	if s.openErr != nil {
 		return nil, s.openErr
 	}
@@ -173,7 +177,7 @@ func TestSQLRuntime_aChangedContractNeverReachesTheDatabase(t *testing.T) {
 	t.Parallel()
 
 	approved := ready()[1].SQL
-	digest, ok := sqlContractDigest(approved, "orders_by_customer")
+	digest, ok := sqlContractDigest(approved, ready()[0].Vault, "orders_by_customer")
 	if !ok {
 		t.Fatal("approved template has no contract")
 	}
@@ -190,6 +194,34 @@ func TestSQLRuntime_aChangedContractNeverReachesTheDatabase(t *testing.T) {
 	}
 	if spy.opened != 0 {
 		t.Fatalf("database opened %d times for a stale contract", spy.opened)
+	}
+	if result.Revocation != RevocationSucceeded || vault.revoked == "" {
+		t.Fatalf("revocation = %q/%q, want the issued lease returned", result.Revocation, vault.revoked)
+	}
+}
+
+func TestSQLRuntime_aChangedVaultEndpointNeverReachesTheDatabase(t *testing.T) {
+	t.Parallel()
+
+	approved := ready()
+	digest, ok := sqlContractDigest(
+		approved[1].SQL, approved[0].Vault, "orders_by_customer")
+	if !ok {
+		t.Fatal("approved template has no contract")
+	}
+	current := ready()
+	current[0].Vault.Address = "https://replacement-vault.internal"
+	vault := issuer()
+	spy := &sqlSpy{params: 2}
+	runtime := NewSQLRuntime(NewCredentialResolver(
+		staticConfig(current), tokenFor(current), vault), spy)
+	result, err := runtime.RunBound(
+		context.Background(), "app-x", "orders_by_customer", digest, runScope(), params())
+	if !errors.Is(err, ErrSQLContractChanged) {
+		t.Fatalf("RunBound error = %v, want moved contract", err)
+	}
+	if spy.opened != 0 {
+		t.Fatalf("database opened %d times for a repointed Vault", spy.opened)
 	}
 	if result.Revocation != RevocationSucceeded || vault.revoked == "" {
 		t.Fatalf("revocation = %q/%q, want the issued lease returned", result.Revocation, vault.revoked)
@@ -414,11 +446,19 @@ func TestSQLRuntime_deadlineIsTheEarliestOfThree(t *testing.T) {
 		ttl      int
 		timeout  int
 		runLimit time.Duration
+		budget   time.Duration
 		want     time.Duration
 	}{
-		"the template is shortest": {ttl: 600, timeout: 4, runLimit: 0, want: 5 * time.Second},
-		"the lease is shortest":    {ttl: 9, timeout: 600, runLimit: 0, want: 5 * time.Second},
-		"the run is shortest":      {ttl: 600, timeout: 600, runLimit: 2 * time.Second, want: 3 * time.Second},
+		"the template is shortest": {
+			ttl: 600, timeout: 4, runLimit: 0, budget: 4 * time.Second, want: 5 * time.Second,
+		},
+		"the lease is shortest": {
+			ttl: 9, timeout: 600, runLimit: 0, budget: 4 * time.Second, want: 5 * time.Second,
+		},
+		"the run is shortest": {
+			ttl: 600, timeout: 600, runLimit: 2 * time.Second,
+			budget: 2 * time.Second, want: 3 * time.Second,
+		},
 	} {
 		spy := &sqlSpy{params: 2}
 		vault := issuer()
@@ -441,6 +481,9 @@ func TestSQLRuntime_deadlineIsTheEarliestOfThree(t *testing.T) {
 		}
 		if spy.deadline >= arrange.want {
 			t.Errorf("%s: deadline = %v, want under %v", name, spy.deadline, arrange.want)
+		}
+		if delta := spy.openTimeout - arrange.budget; delta > 100*time.Millisecond || delta < -100*time.Millisecond {
+			t.Errorf("%s: server budget = %v, want about %v", name, spy.openTimeout, arrange.budget)
 		}
 	}
 }

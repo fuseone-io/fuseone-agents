@@ -51,6 +51,26 @@ func TestSQLRuntime_aMissingBindingRecordsARefusalWithoutInventingIssuance(t *te
 	metrics.want(t, map[string]int{"issuance/refused": 1})
 }
 
+func TestSQLRuntime_aPreflightRefusalDoesNotClaimTheDatabaseWasQueried(t *testing.T) {
+	t.Parallel()
+
+	metrics := &recordingSQLMetrics{}
+	runtime := NewSQLRuntime(
+		NewCredentialResolver(staticConfig(ready()), tokenFor(ready()), issuer()),
+		&recordingSQLExecutor{},
+	).WithMetrics(metrics)
+
+	_, err := runtime.Run(
+		context.Background(), "app-x", "not_registered", runScope(), params())
+	if !errors.Is(err, ErrNoSuchTemplate) {
+		t.Fatalf("Run err = %v, want ErrNoSuchTemplate", err)
+	}
+	metrics.want(t, map[string]int{
+		"issuance/succeeded":   1,
+		"revocation/succeeded": 1,
+	})
+}
+
 type recordingSQLMetrics struct {
 	mu     sync.Mutex
 	counts map[string]int

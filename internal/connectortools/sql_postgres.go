@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -27,9 +26,9 @@ func NewPostgresSQLExecutor(roots *x509.CertPool) *PostgresSQLExecutor {
 }
 
 func (e *PostgresSQLExecutor) Open(
-	ctx context.Context, cfg SQLConfig, credential Credential,
+	ctx context.Context, cfg SQLConfig, credential Credential, timeout time.Duration,
 ) (SQLSession, error) {
-	connConfig, err := postgresConnectionConfig(cfg, credential, e.roots)
+	connConfig, err := postgresConnectionConfig(cfg, credential, e.roots, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +42,7 @@ func (e *PostgresSQLExecutor) Open(
 }
 
 func postgresConnectionConfig(
-	cfg SQLConfig, credential Credential, roots *x509.CertPool,
+	cfg SQLConfig, credential Credential, roots *x509.CertPool, timeout time.Duration,
 ) (*pgx.ConnConfig, error) {
 	// ParseConfig must create the value; pgx deliberately panics when a caller
 	// hand-builds one and could miss its private defaults. The parsed string is
@@ -52,6 +51,14 @@ func postgresConnectionConfig(
 	if err != nil {
 		return nil, fmt.Errorf("connector: initialise postgres configuration: %w", err)
 	}
+	configurePostgresConnection(parsed, cfg, credential, roots, timeout)
+	return parsed, nil
+}
+
+func configurePostgresConnection(
+	parsed *pgx.ConnConfig, cfg SQLConfig, credential Credential,
+	roots *x509.CertPool, timeout time.Duration,
+) {
 	parsed.Host = cfg.Host
 	parsed.Port = uint16(cfg.Port)
 	parsed.Database = cfg.Database
@@ -62,12 +69,27 @@ func postgresConnectionConfig(
 		RootCAs:    roots,
 		ServerName: cfg.Host,
 	}
-	// ParseConfig normally adds a plaintext fallback for sslmode=prefer. The
-	// executor has no such mode: a TLS failure is a refusal, never a retry in
-	// clear text.
+	// Keep this hardening independent of the ParseConfig seed above. If that
+	// seed is ever weakened to a mode with fallbacks, TLS failure must still be
+	// a refusal and never a retry in clear text.
 	parsed.Fallbacks = nil
-	parsed.RuntimeParams = map[string]string{"application_name": "fuseone-sql-connector"}
-	return parsed, nil
+	serverTimeout := postgresTimeout(timeout)
+	parsed.RuntimeParams = map[string]string{
+		"application_name":                    "fuseone-sql-connector",
+		"statement_timeout":                   serverTimeout,
+		"idle_in_transaction_session_timeout": serverTimeout,
+	}
+}
+
+func postgresTimeout(timeout time.Duration) string {
+	millis := timeout.Milliseconds()
+	if timeout%time.Millisecond != 0 {
+		millis++
+	}
+	if millis < 1 {
+		millis = 1
+	}
+	return fmt.Sprintf("%dms", millis)
 }
 
 type postgresSQLSession struct {
@@ -75,7 +97,10 @@ type postgresSQLSession struct {
 }
 
 func (s *postgresSQLSession) Describe(ctx context.Context, statement string) (int, error) {
-	description, err := s.conn.Prepare(ctx, statement, statement)
+	// The unnamed statement can be replaced on this single-use connection.
+	// Keeping SQL out of the name also avoids PostgreSQL's 63-byte identifier
+	// truncation turning a naming detail into an accidental invariant.
+	description, err := s.conn.Prepare(ctx, "", statement)
 	if err != nil {
 		return 0, err
 	}
@@ -105,11 +130,7 @@ func (s *postgresSQLSession) Query(
 		return err
 	}
 	for rows.Next() {
-		values, err := rows.Values()
-		if err != nil {
-			return err
-		}
-		encoded, err := json.Marshal(values)
+		encoded, err := postgresJSONRow(rows)
 		if err != nil {
 			return fmt.Errorf("connector: postgres returned a row that cannot be encoded")
 		}
