@@ -1209,6 +1209,10 @@
       "company": "Empresa",
       "installation": "Instalação"
     },
+    "sqlCredentialSource": "Role do Vault",
+    "sqlDriver": "Driver",
+    "sqlTarget": "Banco",
+    "sqlTemplates": "Templates",
     "token": "Token",
     "tokenKept": "Existe um token selado. Deixe vazio para manter.",
     "tokenMissing": "faltando",

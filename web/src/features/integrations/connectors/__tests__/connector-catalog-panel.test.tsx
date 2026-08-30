@@ -48,6 +48,8 @@ const planned: GovernedConnector = {
   ],
 };
 
+const runtimeSQL: GovernedConnector = { ...planned, maturity: "runtime" };
+
 const instance: ConnectorInstance = {
   name: "prod",
   connector: "vault",
@@ -61,6 +63,35 @@ const instance: ConnectorInstance = {
     address: "https://vault.example.com",
     mount: "secret",
     allowedPathPrefixes: ["certificates"],
+  },
+};
+
+const sqlInstance: ConnectorInstance = {
+  name: "app-x",
+  connector: "sql",
+  enabled: true,
+  scopeKind: "area",
+  company: "acme",
+  area: "platform",
+  hasToken: false,
+  sql: {
+    driver: "postgres",
+    host: "db.internal",
+    port: 5432,
+    database: "appx",
+    credentialSource: {
+      kind: "vault_database_role",
+      vaultInstance: "prod",
+      mount: "database",
+      role: "app-x-readonly",
+    },
+    templates: [{
+      id: "orders_by_customer",
+      parameters: [],
+      timeoutSeconds: 10,
+      maxRows: 100,
+      maxBytes: 65536,
+    }],
   },
 };
 
@@ -120,6 +151,28 @@ describe("governed connector catalogue", () => {
     expect(screen.getByText("vault em acme/platform")).toBeInTheDocument();
     expect(screen.getByText("selado")).toBeInTheDocument();
     expect(screen.getByText("certificates")).toBeInTheDocument();
+  });
+
+  it("does not open the Vault form for a runtime SQL connector", () => {
+    render(
+      <ConnectorCatalogPanel
+        data={{
+          connectors: [vault, runtimeSQL],
+          instances: [sqlInstance],
+          catalogLoading: false,
+          instancesLoading: false,
+          catalogError: null,
+          instancesError: null,
+        }}
+        actions={actions()}
+      />,
+    );
+
+    expect(screen.getAllByText("Executável")).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Configurar" })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Editar" })).not.toBeInTheDocument();
+    expect(screen.getByText("db.internal:5432/appx")).toBeInTheDocument();
+    expect(screen.getByText("prod/app-x-readonly")).toBeInTheDocument();
   });
 
   it("keeps the catalogue visible when configured instances fail to load", () => {

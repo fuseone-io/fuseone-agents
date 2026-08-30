@@ -27,6 +27,34 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Upgrade notes
+
+- **Enabled SQL connector instances become executable after this upgrade.**
+  Review each registered template, its read-only database role, Vault binding
+  and Gate policy before upgrading; disable any instance that is still being
+  drafted. Existing agent packs only receive the configured native tool, and
+  each execution still crosses the Gate before Vault or the database is
+  contacted.
+
+### Added
+
+- **Governed SQL templates can use a fresh Vault database credential for each
+  execution.** The model chooses only a registered template and its typed
+  parameters. FuseOne resolves the scoped Vault binding after approval, opens
+  one TLS-verified read-only PostgreSQL connection, bounds rows, bytes and
+  time, stores the result by reference, closes the connection and returns the
+  lease. The approval is pinned to the registered target, Vault binding,
+  query, parameter types and limits; changing any of them requires a new
+  decision. SQL results are never served from the MCP result cache.
+
+### Security
+
+- **Database authority remains private to the worker.** SQL tool schemas and
+  governed results contain no Vault path, token, username, password, DSN or
+  lease id. Driver and Vault errors are reduced to stable codes, result rows
+  that contain the issued username or password are refused, and metrics carry
+  only bounded stage and outcome labels.
+
 ## [0.40.0] — 2026-08-28
 
 ### Upgrade notes

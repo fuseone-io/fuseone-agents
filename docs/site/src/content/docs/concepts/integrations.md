@@ -23,10 +23,22 @@ Governed connectors are first-party shapes. They are used when the platform
 should own the operation contract, secret handling, storage semantics and
 approval posture instead of delegating all of that to an MCP server.
 
-The first runtime connector is Vault. The catalogue also names shapes for SQL
-reads, object storage, identity actions, DNS, Kubernetes, SMTP and governed
-HTTP. A catalogue entry is not the same as a ready runtime adapter; the console
-must not imply a connector is operational until the runtime exists.
+Vault and governed PostgreSQL reads have runtime adapters. SQL exposes only
+registered read-only templates: the model supplies a template id and typed
+parameters, while the worker obtains one short-lived credential from the
+configured Vault database role after the Gate allows the call. The credential
+never becomes tool input or output, and every execution uses a new connection
+and lease.
+
+The catalogue also names planned shapes for object storage, identity actions,
+DNS, Kubernetes, SMTP and governed HTTP. A catalogue entry is not the same as
+a ready runtime adapter; the console must not imply a connector is operational
+until the runtime exists.
+
+In this first SQL slice, administrators write the database target, Vault
+binding and registered templates through the connector administration API.
+The console lists the safe target, role and template count, but deliberately
+does not offer a partial editor that could omit the query contract.
 
 ## Channels
 

@@ -14,7 +14,7 @@ export function ConnectorInstanceCard({
   onDelete,
 }: {
   instance: ConnectorInstance;
-  onEdit: () => void;
+  onEdit?: () => void;
   onDelete: () => void;
 }) {
   const { t } = useTranslation();
@@ -37,10 +37,12 @@ export function ConnectorInstanceCard({
             })}
           </p>
         </div>
-        <Button type="button" variant="ghost" size="icon" onClick={onEdit}>
-          <Pencil className="size-4" aria-hidden />
-          <span className="sr-only">{t("common.edit")}</span>
-        </Button>
+        {onEdit && (
+          <Button type="button" variant="ghost" size="icon" onClick={onEdit}>
+            <Pencil className="size-4" aria-hidden />
+            <span className="sr-only">{t("common.edit")}</span>
+          </Button>
+        )}
         <RemoveButton
           title={t("connectors.removeInstance")}
           description={t("connectors.removeInstanceHint", {
@@ -50,20 +52,50 @@ export function ConnectorInstanceCard({
         />
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-        <Fact label={t("connectors.token")} value={tokenState(instance, t)} />
-        <Fact label={t("connectors.updatedAt")} value={updated(instance, t)} />
-        <Fact
-          label={t("connectors.vaultMount")}
-          value={instance.vault?.mount ?? "-"}
-          mono
-        />
-        <Fact
-          label={t("connectors.allowedPathPrefixes")}
-          value={(instance.vault?.allowedPathPrefixes ?? []).join(", ") || "-"}
-          mono
-        />
+        {instance.connector === "sql" ? (
+          <SQLFacts instance={instance} t={t} />
+        ) : (
+          <VaultFacts instance={instance} t={t} />
+        )}
       </div>
     </article>
+  );
+}
+
+function VaultFacts({ instance, t }: { instance: ConnectorInstance; t: TFunction }) {
+  return (
+    <>
+      <Fact label={t("connectors.token")} value={tokenState(instance, t)} />
+      <Fact label={t("connectors.updatedAt")} value={updated(instance, t)} />
+      <Fact label={t("connectors.vaultMount")} value={instance.vault?.mount ?? "-"} mono />
+      <Fact
+        label={t("connectors.allowedPathPrefixes")}
+        value={(instance.vault?.allowedPathPrefixes ?? []).join(", ") || "-"}
+        mono
+      />
+    </>
+  );
+}
+
+function SQLFacts({ instance, t }: { instance: ConnectorInstance; t: TFunction }) {
+  const sql = instance.sql;
+  const source = sql?.credentialSource;
+  return (
+    <>
+      <Fact label={t("connectors.sqlDriver")} value={sql?.driver ?? "-"} mono />
+      <Fact label={t("connectors.updatedAt")} value={updated(instance, t)} />
+      <Fact
+        label={t("connectors.sqlTarget")}
+        value={sql ? `${sql.host}:${sql.port}/${sql.database}` : "-"}
+        mono
+      />
+      <Fact
+        label={t("connectors.sqlCredentialSource")}
+        value={source ? `${source.vaultInstance}/${source.role}` : "-"}
+        mono
+      />
+      <Fact label={t("connectors.sqlTemplates")} value={String(sql?.templates.length ?? 0)} />
+    </>
   );
 }
 

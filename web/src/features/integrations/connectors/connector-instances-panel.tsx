@@ -53,7 +53,7 @@ export function ConnectorInstancesPanel({
             <ConnectorInstanceCard
               key={`${instance.scopeKind}:${instance.company ?? ""}:${instance.area ?? ""}:${instance.name}`}
               instance={instance}
-              onEdit={() => actions.edit(instance)}
+              onEdit={instance.connector === "vault" ? () => actions.edit(instance) : undefined}
               onDelete={() => actions.remove(instance)}
             />
           ))}

@@ -130,7 +130,7 @@ function ConnectorCatalogBody({
           <ConnectorCard
             key={connector.id}
             connector={connector}
-            onConfigure={() => onConfigure(connector)}
+            onConfigure={connector.id === "vault" ? () => onConfigure(connector) : undefined}
           />
         ))}
       </div>
@@ -144,7 +144,7 @@ function ConnectorCard({
   onConfigure,
 }: {
   connector: GovernedConnector;
-  onConfigure: () => void;
+  onConfigure?: () => void;
 }) {
   return (
     <article className="flex min-h-[22rem] flex-col overflow-hidden rounded-lg border bg-card">
@@ -163,7 +163,7 @@ function ConnectorCardHeader({
   onConfigure,
 }: {
   connector: GovernedConnector;
-  onConfigure: () => void;
+  onConfigure?: () => void;
 }) {
   const { t } = useTranslation();
   return (
@@ -181,7 +181,7 @@ function ConnectorCardHeader({
         <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
           {connector.summary}
         </p>
-        {connector.maturity === "runtime" && (
+        {connector.maturity === "runtime" && onConfigure && (
           <Button
             type="button"
             size="sm"

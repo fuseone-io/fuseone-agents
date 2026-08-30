@@ -1209,6 +1209,10 @@
       "company": "Company",
       "installation": "Installation"
     },
+    "sqlCredentialSource": "Vault role",
+    "sqlDriver": "Driver",
+    "sqlTarget": "Database",
+    "sqlTemplates": "Templates",
     "token": "Token",
     "tokenKept": "A sealed token exists. Leave empty to keep it.",
     "tokenMissing": "missing",
