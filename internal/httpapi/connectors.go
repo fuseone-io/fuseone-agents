@@ -151,6 +151,10 @@ func connectorOperations(in []connectors.Operation) []openapi.GovernedConnectorO
 			Effects:        connectorEffects(op.Effects),
 			Approval:       openapi.ConnectorApproval(op.Approval),
 			SecretHandling: openapi.ConnectorSecretHandling(op.SecretHandling),
+			// The effective policy, never the raw field: the contract reports
+			// what the platform will do, and an operation that never decided
+			// must read as `never` rather than as an empty string.
+			CachePolicy: openapi.ConnectorCachePolicy(op.EffectiveCachePolicy()),
 		})
 	}
 	return out

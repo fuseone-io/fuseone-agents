@@ -5232,7 +5232,7 @@ components:
 
     GovernedConnectorOperation:
       type: object
-      required: [id, name, summary, effects, approval, secretHandling]
+      required: [id, name, summary, effects, approval, secretHandling, cachePolicy]
       properties:
         id:
           type: string
@@ -5245,6 +5245,16 @@ components:
           items: { $ref: '#/components/schemas/ConnectorEffect' }
         approval: { $ref: '#/components/schemas/ConnectorApproval' }
         secretHandling: { $ref: '#/components/schemas/ConnectorSecretHandling' }
+        cachePolicy:
+          $ref: '#/components/schemas/ConnectorCachePolicy'
+          description: >
+            Whether a result of this operation may be answered from a cache.
+            An operation that has not decided reports `never`: a governed read
+            served from a cache is a record of a read that did not happen.
+
+    ConnectorCachePolicy:
+      type: string
+      enum: [never, short_lived]
 
     GovernedConnector:
       type: object

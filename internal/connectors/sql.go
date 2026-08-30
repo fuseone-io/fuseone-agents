@@ -23,6 +23,10 @@ var sqlConnector = Connector{
 			Effects:        []Effect{EffectRead},
 			Approval:       ApprovalPolicy,
 			SecretHandling: SecretNone,
+			// Written down rather than inherited. A governed read reaches a
+			// customer database under an approval bound to one request, so an
+			// answer from a cache would report a read that did not happen.
+			CachePolicy: CacheNever,
 		},
 		{
 			ID:             "sql.run_query_template",
@@ -31,6 +35,10 @@ var sqlConnector = Connector{
 			Effects:        []Effect{EffectRead},
 			Approval:       ApprovalPolicy,
 			SecretHandling: SecretNone,
+			// Written down rather than inherited. A governed read reaches a
+			// customer database under an approval bound to one request, so an
+			// answer from a cache would report a read that did not happen.
+			CachePolicy: CacheNever,
 		},
 		{
 			ID:             "sql.lookup_row",
@@ -39,6 +47,10 @@ var sqlConnector = Connector{
 			Effects:        []Effect{EffectRead},
 			Approval:       ApprovalPolicy,
 			SecretHandling: SecretNone,
+			// Written down rather than inherited. A governed read reaches a
+			// customer database under an approval bound to one request, so an
+			// answer from a cache would report a read that did not happen.
+			CachePolicy: CacheNever,
 		},
 	},
 }

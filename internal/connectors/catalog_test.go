@@ -232,3 +232,48 @@ var validMaturities = map[Maturity]bool{
 	MaturityPlanned: true,
 	MaturityRuntime: true,
 }
+
+/*
+Every operation says whether its result may be cached, and silence means no.
+
+The zero value is `never` on purpose. A connector shape added without thinking
+about caching gets the answer that cannot leak: a governed read served from a
+cache is a record of a read that did not happen, against data from an earlier
+instant. Inferring the policy from the effect would give the opposite default,
+because every read looks cacheable from the outside.
+*/
+func TestCatalog_everyOperationHasACachePolicyAndSilenceMeansNever(t *testing.T) {
+	t.Parallel()
+
+	for _, connector := range Catalog() {
+		for _, op := range connector.Operations {
+			switch op.EffectiveCachePolicy() {
+			case CacheNever, CacheShortLived:
+			default:
+				t.Errorf("%s: cache policy %q is not a declared value",
+					op.ID, op.EffectiveCachePolicy())
+			}
+			if op.CachePolicy == "" && op.EffectiveCachePolicy() != CacheNever {
+				t.Errorf("%s: an undeclared policy must read as never", op.ID)
+			}
+		}
+	}
+}
+
+// SQL reaches a customer database under an approval bound to one request. A
+// second run answered from a cache would report a read that never happened, so
+// the refusal is written down rather than left to the default.
+func TestCatalog_sqlNeverServesAResultFromCache(t *testing.T) {
+	t.Parallel()
+
+	for _, connector := range Catalog() {
+		if connector.ID != "sql" {
+			continue
+		}
+		for _, op := range connector.Operations {
+			if op.CachePolicy != CacheNever {
+				t.Errorf("%s: cache policy = %q, want an explicit never", op.ID, op.CachePolicy)
+			}
+		}
+	}
+}
