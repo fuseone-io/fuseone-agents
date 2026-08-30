@@ -59,7 +59,9 @@ field" is a commit message.
   for every result type, so an extension or a newly supported driver codec
   cannot expose a driver-specific Go representation. UUIDs, network values,
   exact numerics and `bigint` remain lossless strings; explicitly safe values
-  such as JSON stay structured, and binary values remain base64.
+  such as JSON stay structured, and binary values remain base64. The connector
+  also fixes the session's date, interval, timezone, float and bytea settings,
+  so database or role defaults cannot silently change that representation.
 
 ## [0.40.0] — 2026-08-28
 

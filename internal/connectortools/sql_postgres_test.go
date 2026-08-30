@@ -164,6 +164,14 @@ func TestPostgresConnectionConfig_removesFallbacksAndCarriesTheServerBudget(t *t
 	if got := parsed.RuntimeParams["idle_in_transaction_session_timeout"]; got != "2ms" {
 		t.Fatalf("idle timeout = %q, want 2ms", got)
 	}
+	for name, want := range map[string]string{
+		"datestyle": "ISO, MDY", "intervalstyle": "iso_8601",
+		"timezone": "UTC", "extra_float_digits": "3", "bytea_output": "hex",
+	} {
+		if got := parsed.RuntimeParams[name]; got != want {
+			t.Errorf("%s = %q, want %q", name, got, want)
+		}
+	}
 }
 
 func TestPostgresSQL_verifiesTheServerCertificate(t *testing.T) {

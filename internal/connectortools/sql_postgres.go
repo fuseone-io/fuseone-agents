@@ -78,6 +78,11 @@ func configurePostgresConnection(
 		"application_name":                    "fuseone-sql-connector",
 		"statement_timeout":                   serverTimeout,
 		"idle_in_transaction_session_timeout": serverTimeout,
+		"datestyle":                           "ISO, MDY",
+		"intervalstyle":                       "iso_8601",
+		"timezone":                            "UTC",
+		"extra_float_digits":                  "3",
+		"bytea_output":                        "hex",
 	}
 }
 

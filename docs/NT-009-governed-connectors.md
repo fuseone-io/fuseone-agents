@@ -86,6 +86,13 @@ documents remain structured, safe scalar arrays remain arrays, and `bytea` is
 base64. This keeps keys recognisable and numbers lossless when a result is
 audited or used as input to a later call.
 
+The connection pins `DateStyle=ISO, MDY`, `IntervalStyle=iso_8601`,
+`TimeZone=UTC`, `extra_float_digits=3` and `bytea_output=hex`. PostgreSQL and
+role defaults therefore cannot change the governed form. Array structure is
+also explicit: only named arrays of safe scalar types become JSON arrays; an
+unlisted array remains the PostgreSQL array literal as one JSON string. Adding
+driver support can improve a type only through a reviewed entry in that set.
+
 Approval binds both halves of the act: the digest of model-authored parameters
 and a versioned digest of the server-owned target, Vault binding and endpoint,
 selected query, parameter declarations and limits. The latter is recomputed

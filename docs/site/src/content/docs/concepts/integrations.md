@@ -32,7 +32,8 @@ and lease. PostgreSQL enforces the same deadline as the worker. PostgreSQL text
 is the fallback for every result type, so driver internals never become part of
 the governed record. UUID, network, exact numeric and `bigint` values remain
 lossless strings; explicitly safe JSON stays structured, and binary values are
-base64.
+base64. The connector fixes date, interval, timezone, float and bytea session
+settings as well, so database defaults cannot change that representation.
 
 The catalogue also names planned shapes for object storage, identity actions,
 DNS, Kubernetes, SMTP and governed HTTP. A catalogue entry is not the same as
