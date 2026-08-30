@@ -117,3 +117,33 @@ func (l *Layer) vaultRevokeLease(ctx context.Context, instance Instance, call en
 		"revoked":   true,
 	})
 }
+
+/*
+VaultDatabaseCredential is what the database secrets engine answers.
+
+Kept apart from the operations a model can reach: this is issued by the SQL
+runtime for one approved query, and there is no tool that returns it. The
+type carries the raw fields because it is the wire shape; the moment it is
+resolved it becomes a Credential, which cannot be printed.
+*/
+type VaultDatabaseCredential struct {
+	Username        string
+	Password        string
+	LeaseID         string
+	LeaseTTLSeconds int
+}
+
+// valid refuses a partial answer. A credential without a lease id cannot be
+// revoked, and one without a TTL cannot be bounded — so an incomplete response
+// is a refusal rather than something to use until it stops working.
+func (c VaultDatabaseCredential) valid() error {
+	switch {
+	case c.Username == "" || c.Password == "":
+		return ErrCredentialIncomplete
+	case c.LeaseID == "":
+		return ErrCredentialIncomplete
+	case c.LeaseTTLSeconds <= 0:
+		return ErrCredentialIncomplete
+	}
+	return nil
+}
