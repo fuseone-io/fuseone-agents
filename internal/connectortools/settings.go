@@ -230,3 +230,57 @@ func sqlToStore(cfg SQLConfig) *SQLConfig {
 	}
 	return &cfg
 }
+
+/*
+ConfiguredInstances is the non-secret read: every instance, no token.
+
+The credential resolver uses this rather than Instances, which reveals the
+token of every enabled instance to answer any question. Choosing a vault does
+not require holding the credentials of all of them.
+*/
+func (s *Settings) ConfiguredInstances(ctx context.Context) ([]ConfiguredInstance, error) {
+	return s.Configured(ctx)
+}
+
+/*
+RevealVaultToken reveals exactly one token, for an instance already resolved.
+
+Named so that Instances cannot satisfy the interface by accident: the resolver
+asks for the token of the vault it chose, after choosing, and the store reads
+that one setting.
+*/
+func (s *Settings) RevealVaultToken(
+	ctx context.Context, instance ConfiguredInstance,
+) (string, error) {
+	if s == nil || s.store == nil {
+		return "", fmt.Errorf("connector: no settings store")
+	}
+	_, storedScope, err := settingScope(instance.ScopeKind, instance.Scope)
+	if err != nil {
+		return "", err
+	}
+	revealed, err := s.store.Reveal(
+		ctx, instance.ScopeKind, storedScope, settings.KindConnectorInstance, instance.Name)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(revealed.Secret) == "" {
+		return "", fmt.Errorf("connector: vault %s has no stored token", instance.Name)
+	}
+	return revealed.Secret, nil
+}
+
+// settingScope is the scope a setting is stored under, which is not always the
+// scope it runs in: an installation-wide row stores an empty scope and runs as
+// the installation company.
+func settingScope(kind settings.ScopeKind, scope domain.Scope) (domain.Scope, domain.Scope, error) {
+	switch kind {
+	case settings.ScopeInstallation:
+		return domain.Scope{Company: domain.Installation}, domain.Scope{}, nil
+	case settings.ScopeCompany:
+		return domain.Scope{Company: scope.Company}, domain.Scope{Company: scope.Company}, nil
+	case settings.ScopeArea:
+		return scope, scope, nil
+	}
+	return domain.Scope{}, domain.Scope{}, fmt.Errorf("connector: unknown scope kind %q", kind)
+}

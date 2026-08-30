@@ -189,28 +189,51 @@ from there into whatever printed it.
 */
 func (c *HTTPVaultClient) IssueDatabaseCredential(
 	ctx context.Context, cfg VaultConfig, token, mount, role string,
-) (VaultDatabaseCredential, error) {
+) (IssuedCredential, error) {
 	apiPath, err := vaultCredentialPath(mount, role)
 	if err != nil {
-		return VaultDatabaseCredential{}, err
+		return IssuedCredential{}, err
 	}
-	var body struct {
-		LeaseID       string `json:"lease_id"`
-		LeaseDuration int    `json:"lease_duration"`
-		Data          struct {
-			Username string `json:"username"`
-			Password string `json:"password"`
-		} `json:"data"`
-	}
+	var body databaseCredentialWire
 	// do discards a non-2xx body and reports only the status, which is the
 	// guarantee this needed: a Vault error body can quote the path, the role
 	// and the policy that refused.
 	if err := c.do(ctx, cfg, token, http.MethodGet, apiPath, nil, &body); err != nil {
-		return VaultDatabaseCredential{}, err
+		return IssuedCredential{}, err
 	}
-	return VaultDatabaseCredential{
-		Username: body.Data.Username, Password: body.Data.Password,
-		LeaseID: body.LeaseID, LeaseTTLSeconds: body.LeaseDuration,
+	return body.issued()
+}
+
+/*
+databaseCredentialWire is the only shape that ever holds these bytes with
+exported fields, and it does not leave this function.
+
+A wire struct is printable and serialisable by definition, so the risk is the
+window it exists in. Keeping it unexported and local means there is nowhere
+else to pass one, and the conversion below is the only exit — it happens
+before the value is returned, not somewhere a caller has to remember.
+*/
+type databaseCredentialWire struct {
+	LeaseID       string `json:"lease_id"`
+	LeaseDuration int    `json:"lease_duration"`
+	Data          struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	} `json:"data"`
+}
+
+func (w databaseCredentialWire) issued() (IssuedCredential, error) {
+	switch {
+	case w.Data.Username == "" || w.Data.Password == "":
+		return IssuedCredential{}, ErrCredentialIncomplete
+	case w.LeaseID == "":
+		return IssuedCredential{}, ErrCredentialIncomplete
+	case w.LeaseDuration <= 0:
+		return IssuedCredential{}, ErrCredentialIncomplete
+	}
+	return IssuedCredential{
+		credential: Credential{username: w.Data.Username, password: w.Data.Password},
+		leaseID:    w.LeaseID, ttlSeconds: w.LeaseDuration,
 	}, nil
 }
 
