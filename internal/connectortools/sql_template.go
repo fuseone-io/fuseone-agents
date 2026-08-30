@@ -54,7 +54,23 @@ type SQLTemplate struct {
 	MaxBytes       int
 }
 
-const maxTemplateTimeoutSeconds = 3600
+/*
+Ceilings, because a limit without one is not a limit.
+
+An administrator writes these, so the numbers are not adversarial — but a row
+limit of two billion protects neither the database that produces the rows nor
+the memory that holds them, and it reads as a bound to whoever configured it.
+Each is generous for the operations this connector exists for and refuses the
+value that would only ever be a mistake.
+*/
+const (
+	maxTemplateTimeoutSeconds = 3600
+	maxTemplateRows           = 10_000
+	maxTemplateBytes          = 8 << 20
+	maxTemplateSQLBytes       = 16 << 10
+	maxTemplateParameters     = 32
+	maxTemplatesPerInstance   = 64
+)
 
 // Template is the query for an id, and only for an id. Nothing here searches
 // by text: a caller that could pass SQL and have it matched would have found
@@ -71,6 +87,10 @@ func (c SQLConfig) Template(id string) (SQLTemplate, bool) {
 var templateID = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 
 func validateTemplates(instanceName string, templates []SQLTemplate) error {
+	if len(templates) > maxTemplatesPerInstance {
+		return fmt.Errorf("connector: sql %s registers more than %d templates",
+			instanceName, maxTemplatesPerInstance)
+	}
 	seen := map[string]bool{}
 	for _, tpl := range templates {
 		if err := validateTemplate(instanceName, tpl); err != nil {
@@ -95,10 +115,18 @@ func validateTemplate(instanceName string, tpl SQLTemplate) error {
 	case tpl.TimeoutSeconds <= 0 || tpl.TimeoutSeconds > maxTemplateTimeoutSeconds:
 		return fmt.Errorf("connector: sql %s template %s needs a timeout between 1 and %d seconds",
 			instanceName, tpl.ID, maxTemplateTimeoutSeconds)
-	case tpl.MaxRows <= 0:
-		return fmt.Errorf("connector: sql %s template %s needs a row limit", instanceName, tpl.ID)
-	case tpl.MaxBytes <= 0:
-		return fmt.Errorf("connector: sql %s template %s needs a byte limit", instanceName, tpl.ID)
+	case tpl.MaxRows <= 0 || tpl.MaxRows > maxTemplateRows:
+		return fmt.Errorf("connector: sql %s template %s needs a row limit between 1 and %d",
+			instanceName, tpl.ID, maxTemplateRows)
+	case tpl.MaxBytes <= 0 || tpl.MaxBytes > maxTemplateBytes:
+		return fmt.Errorf("connector: sql %s template %s needs a byte limit between 1 and %d",
+			instanceName, tpl.ID, maxTemplateBytes)
+	case len(tpl.SQL) > maxTemplateSQLBytes:
+		return fmt.Errorf("connector: sql %s template %s is longer than %d bytes",
+			instanceName, tpl.ID, maxTemplateSQLBytes)
+	case len(tpl.Parameters) > maxTemplateParameters:
+		return fmt.Errorf("connector: sql %s template %s declares more than %d parameters",
+			instanceName, tpl.ID, maxTemplateParameters)
 	}
 	if err := validateParameters(instanceName, tpl); err != nil {
 		return err
@@ -127,13 +155,22 @@ func validateParameters(instanceName string, tpl SQLTemplate) error {
 var placeholder = regexp.MustCompile(`\$(\d+)`)
 
 /*
-validatePlaceholders makes the query and its parameters agree.
+validatePlaceholders catches the common disagreement early, and is not the
+authority.
 
-Every declared parameter is bound to exactly one placeholder, in order: $1 is
-the first, $n is the nth, and there are no others. A template that declares two
-and uses one leaves a supplied value with nowhere to go; one that reads $3 with
-two declared reads a placeholder nobody described, which the driver would
-report as an error on an approved query rather than here.
+Every declared parameter should bind one placeholder, in order. This finds the
+mistake an administrator actually makes — declaring two and using one — at the
+moment they make it, instead of on the first approved query.
+
+What it cannot do is read SQL. `$1` inside a string literal or a comment counts
+here and is invisible to the database, so `select '$1'` with one parameter
+declared passes this and would bind nothing. Writing a SQL parser to close that
+would be maintaining a second, worse implementation of the driver's own.
+
+The authority is the executor: it must Describe the statement and compare the
+parameter count the database reports before running anything. Until that
+exists, this is a smell check, and the test below pins the gap so it is a known
+limitation rather than a believed guarantee.
 */
 func validatePlaceholders(instanceName string, tpl SQLTemplate) error {
 	found := map[int]bool{}

@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"slices"
 	"strings"
@@ -245,8 +246,22 @@ func connectorInstanceResponse(instance connectortools.ConfiguredInstance) opena
 // Built field by field rather than by copying the struct: a field added to
 // SQLConfig later must be a decision to expose it, not an inheritance.
 func sqlConfigToResponse(cfg connectortools.SQLConfig) openapi.ConnectorSQLResponse {
+	templates := make([]openapi.ConnectorSQLTemplateSummary, 0, len(cfg.Templates))
+	for _, tpl := range cfg.Templates {
+		templates = append(templates, openapi.ConnectorSQLTemplateSummary{
+			Id: tpl.ID, Parameters: sqlParametersToResponse(tpl.Parameters),
+			TimeoutSeconds: tpl.TimeoutSeconds, MaxRows: tpl.MaxRows, MaxBytes: tpl.MaxBytes,
+			// A digest, not the query. Listing needs only tool:read, and an
+			// authored query names the tables, columns and filters of a
+			// customer database; a digest lets an operator confirm what is
+			// configured without publishing it to everyone who can read tools.
+			SqlDigest: fmt.Sprintf("%x", sha256.Sum256([]byte(tpl.SQL))),
+		})
+	}
 	return openapi.ConnectorSQLResponse{
-		Host: cfg.Host, Port: cfg.Port, Database: cfg.Database,
+		Driver: openapi.ConnectorSQLResponseDriver(cfg.Driver),
+		Host:   cfg.Host, Port: cfg.Port, Database: cfg.Database,
+		Templates: templates,
 		CredentialSource: openapi.ConnectorCredentialSource{
 			Kind:          openapi.ConnectorCredentialSourceKind(cfg.CredentialSource.Kind),
 			VaultInstance: cfg.CredentialSource.VaultInstance,
@@ -260,8 +275,23 @@ func sqlConfigFromInput(in *openapi.ConnectorSQLInput) connectortools.SQLConfig 
 	if in == nil {
 		return connectortools.SQLConfig{}
 	}
+	templates := make([]connectortools.SQLTemplate, 0, len(in.Templates))
+	for _, tpl := range in.Templates {
+		params := make([]connectortools.SQLParameter, 0, len(tpl.Parameters))
+		for _, param := range tpl.Parameters {
+			params = append(params, connectortools.SQLParameter{
+				Name: param.Name, Type: connectortools.SQLParamType(param.Type),
+			})
+		}
+		templates = append(templates, connectortools.SQLTemplate{
+			ID: tpl.Id, SQL: tpl.Sql, Parameters: params,
+			TimeoutSeconds: tpl.TimeoutSeconds, MaxRows: tpl.MaxRows, MaxBytes: tpl.MaxBytes,
+		})
+	}
 	return connectortools.SQLConfig{
-		Host: in.Host, Port: in.Port, Database: in.Database,
+		Driver: connectortools.SQLDriver(in.Driver),
+		Host:   in.Host, Port: in.Port, Database: in.Database,
+		Templates: templates,
 		CredentialSource: connectortools.CredentialSource{
 			Kind:          connectortools.CredentialSourceKind(in.CredentialSource.Kind),
 			VaultInstance: in.CredentialSource.VaultInstance,
@@ -290,6 +320,16 @@ func vaultConfigToResponse(in connectortools.VaultConfig) openapi.ConnectorVault
 	}
 	if in.Namespace != "" {
 		out.Namespace = ptr(in.Namespace)
+	}
+	return out
+}
+
+func sqlParametersToResponse(in []connectortools.SQLParameter) []openapi.ConnectorSQLParameter {
+	out := make([]openapi.ConnectorSQLParameter, 0, len(in))
+	for _, param := range in {
+		out = append(out, openapi.ConnectorSQLParameter{
+			Name: param.Name, Type: openapi.ConnectorSQLParameterType(param.Type),
+		})
 	}
 	return out
 }

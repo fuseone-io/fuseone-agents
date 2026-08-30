@@ -142,3 +142,60 @@ func TestSQLConfig_templateIsFoundByIDAlone(t *testing.T) {
 		t.Error("a template resolved by its own SQL text")
 	}
 }
+
+func TestValidateInstanceConfig_limitsHaveCeilings(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]func(*Instance){
+		"rows beyond the ceiling":  func(i *Instance) { i.SQL.Templates[0].MaxRows = 10_001 },
+		"bytes beyond the ceiling": func(i *Instance) { i.SQL.Templates[0].MaxBytes = (8 << 20) + 1 },
+		"query longer than the cap": func(i *Instance) {
+			i.SQL.Templates[0].SQL = "select '" + strings.Repeat("x", 16<<10) + "' where a = $1 and b = $2"
+		},
+		"too many parameters": func(i *Instance) {
+			for n := range 40 {
+				i.SQL.Templates[0].Parameters = append(i.SQL.Templates[0].Parameters,
+					SQLParameter{Name: "p" + string(rune('a'+n%26)) + string(rune('a'+n/26)), Type: SQLParamText})
+			}
+		},
+		"too many templates": func(i *Instance) {
+			for n := range 70 {
+				tpl := template()
+				tpl.ID = "t" + string(rune('a'+n%26)) + string(rune('a'+n/26))
+				i.SQL.Templates = append(i.SQL.Templates, tpl)
+			}
+		},
+	}
+	for name, break_ := range cases {
+		instance := runnableSQL()
+		break_(&instance)
+		if err := ValidateInstanceConfig(instance); err == nil {
+			t.Errorf("%s was accepted", name)
+		}
+	}
+}
+
+/*
+The placeholder check does not read SQL, and this is where that is written
+down.
+
+`$1` inside a literal or a comment counts here and binds nothing at the
+database. The cases below are accepted today on purpose: the authority is the
+executor, which must Describe the statement and compare the count the database
+reports. When that lands, this test becomes the list of cases it has to catch.
+*/
+func TestValidatePlaceholders_isNotAuthoritativeAboutSQL(t *testing.T) {
+	t.Parallel()
+
+	for name, sql := range map[string]string{
+		"placeholder inside a literal": "select '$1' from orders",
+		"placeholder inside a comment": "select 1 from orders -- $1",
+	} {
+		instance := runnableSQL()
+		instance.SQL.Templates[0].SQL = sql
+		instance.SQL.Templates[0].Parameters = []SQLParameter{{Name: "p", Type: SQLParamText}}
+		if err := ValidateInstanceConfig(instance); err != nil {
+			t.Errorf("%s: refused here, so the executor no longer needs to catch it: %v", name, err)
+		}
+	}
+}

@@ -5346,12 +5346,46 @@ components:
         answers it and which role is bound. No token, no generated credential
         and no connection string are ever returned, because none of them is
         needed to know the configuration is right.
-      required: [host, port, database, credentialSource]
+      required: [driver, host, port, database, credentialSource, templates]
       properties:
+        driver: { type: string, enum: [postgres] }
         host: { type: string }
         port: { type: integer }
         database: { type: string }
         credentialSource: { $ref: '#/components/schemas/ConnectorCredentialSource' }
+        templates:
+          type: array
+          items: { $ref: '#/components/schemas/ConnectorSQLTemplateSummary' }
+
+    ConnectorSQLTemplateSummary:
+      type: object
+      description: >
+        A registered template as the listing reports it: what it is called,
+        what it takes and what it is bounded by. The query text is not here.
+        Listing connector instances needs only `tool:read`, and an authored
+        query names tables, columns and filters of a customer database — so the
+        listing reports a digest an operator can compare against what they
+        configured, and reading the text back needs the permission that wrote
+        it.
+      required: [id, parameters, timeoutSeconds, maxRows, maxBytes, sqlDigest]
+      properties:
+        id: { type: string }
+        parameters:
+          type: array
+          items: { $ref: '#/components/schemas/ConnectorSQLParameter' }
+        timeoutSeconds: { type: integer }
+        maxRows: { type: integer }
+        maxBytes: { type: integer }
+        sqlDigest:
+          type: string
+          description: Hex SHA-256 of the registered query, for comparison without disclosure.
+
+    ConnectorSQLParameter:
+      type: object
+      required: [name, type]
+      properties:
+        name: { type: string }
+        type: { type: string, enum: [text, integer, number, boolean, timestamp] }
 
     ConnectorCredentialSource:
       type: object
@@ -5371,14 +5405,35 @@ components:
       description: >
         Addressing is structured on purpose. A connection string is one field
         that can carry a password, so there is nowhere here to write one.
-      required: [host, port, database, credentialSource]
+      required: [driver, host, port, database, credentialSource, templates]
       properties:
+        driver:
+          type: string
+          enum: [postgres]
+          description: Named rather than inferred; a guessed driver connects to whatever answers.
         host:
           type: string
           description: Bare hostname. Port, database and credentials are separate.
         port: { type: integer }
         database: { type: string }
         credentialSource: { $ref: '#/components/schemas/ConnectorCredentialSource' }
+        templates:
+          type: array
+          description: The registered queries. A tool takes a template id, never SQL.
+          items: { $ref: '#/components/schemas/ConnectorSQLTemplate' }
+
+    ConnectorSQLTemplate:
+      type: object
+      required: [id, sql, parameters, timeoutSeconds, maxRows, maxBytes]
+      properties:
+        id: { type: string }
+        sql: { type: string }
+        parameters:
+          type: array
+          items: { $ref: '#/components/schemas/ConnectorSQLParameter' }
+        timeoutSeconds: { type: integer }
+        maxRows: { type: integer }
+        maxBytes: { type: integer }
 
     ConnectorInstanceInput:
       type: object
