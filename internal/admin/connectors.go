@@ -39,10 +39,18 @@ func (c *ConnectorInstances) PutConnectorInstance(
 		return err
 	}
 	instance.Scope = runtimeScope
-	if instance.Enabled && token != nil && strings.TrimSpace(*token) == "" {
+	needsToken := connectortools.RequiresToken(instance.Connector)
+	if needsToken && instance.Enabled && token != nil && strings.TrimSpace(*token) == "" {
 		return ErrConnectorNeedsToken
 	}
 	if err := connectortools.ValidateInstanceConfig(instance); err != nil {
+		return err
+	}
+	// A binding names another instance, so it can only be judged against the
+	// set. Reads settings, not Vault: saving a configuration must not reach the
+	// system it configures, or an operator cannot write down an intention
+	// before the thing it points at is reachable.
+	if err := c.validateAgainstConfigured(ctx, instance); err != nil {
 		return err
 	}
 	value, err := connectortools.SettingValue(instance)
@@ -65,7 +73,7 @@ func (c *ConnectorInstances) PutConnectorInstance(
 	}
 	clear := clearToken && secret == ""
 	willHaveSecret := secret != "" || (!clear && hasSecret)
-	if instance.Enabled && !willHaveSecret {
+	if needsToken && instance.Enabled && !willHaveSecret {
 		return ErrConnectorNeedsToken
 	}
 	if err := c.settings.PutTx(ctx, tx, settings.Setting{
@@ -162,4 +170,33 @@ func connectorInstanceDetail(
 		}
 	}
 	return detail
+}
+
+/*
+validateAgainstConfigured judges the instance being written beside the ones
+already stored.
+
+The instance replaces its stored self rather than being appended, so editing a
+binding is validated as the configuration that will exist and not as one where
+the old and new both do.
+
+This does not make the runtime's revalidation optional. Configuration changes
+after it is written, and a vault disabled tomorrow must not authorise a query
+today because the binding was valid when it was saved.
+*/
+func (c *ConnectorInstances) validateAgainstConfigured(
+	ctx context.Context, instance connectortools.Instance,
+) error {
+	stored, err := connectortools.NewSettings(c.settings).Configured(ctx)
+	if err != nil {
+		return err
+	}
+	set := []connectortools.Instance{instance}
+	for _, other := range stored {
+		if other.Connector == instance.Connector && other.Name == instance.Name {
+			continue
+		}
+		set = append(set, other.Instance)
+	}
+	return connectortools.ValidateBindings(set)
 }

@@ -35,6 +35,9 @@ type Instance struct {
 	Enabled   bool
 
 	Vault VaultConfig
+	SQL   SQLConfig
+	// Token is what the instance authenticates with, for the connectors that
+	// authenticate with one. RequiresToken says which; SQL is not among them.
 	Token string
 }
 

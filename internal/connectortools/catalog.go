@@ -65,7 +65,11 @@ func toolEntriesFor(instances []Instance) []domain.ToolEntry {
 	var out []domain.ToolEntry
 	for _, instance := range instances {
 		connector, ok := connectorByID(instance.Connector)
-		if !ok {
+		// A planned shape has a catalogue entry and no runtime. Offering its
+		// operations would put tools on an agent's surface that no code can
+		// answer, which reads to the model as a capability and to the operator
+		// as a bug they caused by configuring an instance.
+		if !ok || connector.Maturity != connectors.MaturityRuntime {
 			continue
 		}
 		for _, op := range connector.Operations {

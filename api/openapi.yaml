@@ -5336,6 +5336,49 @@ components:
         updatedBy: { type: string }
         updatedAt: { type: string, format: date-time }
         vault: { $ref: '#/components/schemas/ConnectorVaultConfig' }
+        sql: { $ref: '#/components/schemas/ConnectorSQLResponse' }
+
+    ConnectorSQLResponse:
+      type: object
+      description: >
+        A SQL instance as the administration API reports it. Addressing only,
+        plus the safe identity of the binding: the kind, which vault instance
+        answers it and which role is bound. No token, no generated credential
+        and no connection string are ever returned, because none of them is
+        needed to know the configuration is right.
+      required: [host, port, database, credentialSource]
+      properties:
+        host: { type: string }
+        port: { type: integer }
+        database: { type: string }
+        credentialSource: { $ref: '#/components/schemas/ConnectorCredentialSource' }
+
+    ConnectorCredentialSource:
+      type: object
+      required: [kind, vaultInstance, mount, role]
+      properties:
+        kind:
+          type: string
+          enum: [vault_database_role]
+        vaultInstance:
+          type: string
+          description: Name of the vault instance that issues the credential.
+        mount: { type: string }
+        role: { type: string }
+
+    ConnectorSQLInput:
+      type: object
+      description: >
+        Addressing is structured on purpose. A connection string is one field
+        that can carry a password, so there is nowhere here to write one.
+      required: [host, port, database, credentialSource]
+      properties:
+        host:
+          type: string
+          description: Bare hostname. Port, database and credentials are separate.
+        port: { type: integer }
+        database: { type: string }
+        credentialSource: { $ref: '#/components/schemas/ConnectorCredentialSource' }
 
     ConnectorInstanceInput:
       type: object
@@ -5351,6 +5394,7 @@ components:
         company: { type: string }
         area: { type: string }
         vault: { $ref: '#/components/schemas/ConnectorVaultConfig' }
+        sql: { $ref: '#/components/schemas/ConnectorSQLInput' }
         token:
           type: string
           description: >

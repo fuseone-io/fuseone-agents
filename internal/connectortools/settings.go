@@ -87,7 +87,7 @@ func (s *Settings) ToolEntries(ctx context.Context) ([]domain.ToolEntry, error) 
 		if err != nil {
 			return nil, err
 		}
-		if !row.Enabled || !row.HasSecret {
+		if !row.Enabled || (RequiresToken(instance.Connector) && !row.HasSecret) {
 			continue
 		}
 		if err := ValidateInstanceConfig(instance); err != nil {
@@ -155,6 +155,16 @@ func ValidateInstance(instance Instance) error {
 	if err := ValidateInstanceConfig(instance); err != nil {
 		return err
 	}
+	// Asked per connector. Requiring one everywhere would either block SQL,
+	// which has no token of its own, or invite somebody to satisfy the check
+	// with the database password this connector exists to avoid storing.
+	if !RequiresToken(instance.Connector) {
+		if strings.TrimSpace(instance.Token) != "" {
+			return fmt.Errorf("connector: %s %s must not carry a token; its authority comes from its binding",
+				instance.Connector, instance.Name)
+		}
+		return nil
+	}
 	if strings.TrimSpace(instance.Token) == "" {
 		return fmt.Errorf("connector: %s %s needs a token", instance.Connector, instance.Name)
 	}
@@ -168,6 +178,8 @@ func ValidateInstanceConfig(instance Instance) error {
 	switch instance.Connector {
 	case "vault":
 		return validateVaultConfig(instance)
+	case "sql":
+		return validateSQLConfig(instance)
 	default:
 		return fmt.Errorf("connector: unsupported connector %q", instance.Connector)
 	}

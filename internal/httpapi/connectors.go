@@ -182,6 +182,7 @@ func connectorInstanceInput(
 	instance := connectortools.Instance{
 		Name: name, Connector: strings.TrimSpace(body.Connector),
 		Enabled: enabled, Vault: vaultConfigFromRequest(body.Vault),
+		SQL: sqlConfigFromInput(body.Sql),
 	}
 	clear := body.ClearToken != nil && *body.ClearToken
 	return settings.ScopeKind(body.ScopeKind), scope, instance, body.Token, clear, nil
@@ -234,7 +235,40 @@ func connectorInstanceResponse(instance connectortools.ConfiguredInstance) opena
 	if instance.Connector == "vault" {
 		item.Vault = ptr(vaultConfigToResponse(instance.Vault))
 	}
+	if instance.Connector == "sql" {
+		item.Sql = ptr(sqlConfigToResponse(instance.SQL))
+	}
 	return item
+}
+
+// sqlConfigToResponse is addressing plus the safe identity of the binding.
+// Built field by field rather than by copying the struct: a field added to
+// SQLConfig later must be a decision to expose it, not an inheritance.
+func sqlConfigToResponse(cfg connectortools.SQLConfig) openapi.ConnectorSQLResponse {
+	return openapi.ConnectorSQLResponse{
+		Host: cfg.Host, Port: cfg.Port, Database: cfg.Database,
+		CredentialSource: openapi.ConnectorCredentialSource{
+			Kind:          openapi.ConnectorCredentialSourceKind(cfg.CredentialSource.Kind),
+			VaultInstance: cfg.CredentialSource.VaultInstance,
+			Mount:         cfg.CredentialSource.Mount,
+			Role:          cfg.CredentialSource.Role,
+		},
+	}
+}
+
+func sqlConfigFromInput(in *openapi.ConnectorSQLInput) connectortools.SQLConfig {
+	if in == nil {
+		return connectortools.SQLConfig{}
+	}
+	return connectortools.SQLConfig{
+		Host: in.Host, Port: in.Port, Database: in.Database,
+		CredentialSource: connectortools.CredentialSource{
+			Kind:          connectortools.CredentialSourceKind(in.CredentialSource.Kind),
+			VaultInstance: in.CredentialSource.VaultInstance,
+			Mount:         in.CredentialSource.Mount,
+			Role:          in.CredentialSource.Role,
+		},
+	}
 }
 
 func responseScope(kind settings.ScopeKind, scope domain.Scope) (*string, *string) {
