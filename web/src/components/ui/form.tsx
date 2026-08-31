@@ -1,6 +1,10 @@
 "use client";
 
+// Customized from shadcn's form primitive: Zod schemas return stable i18n
+// keys, so FormMessage translates them. Preserve this when updating the block.
+
 import * as React from "react";
+import { useTranslation } from "react-i18next";
 import type { Label as LabelPrimitive } from "radix-ui";
 import { Slot } from "radix-ui";
 import {
@@ -137,6 +141,7 @@ function FormDescription({ className, ...props }: React.ComponentProps<"p">) {
 }
 
 function FormMessage({ className, ...props }: React.ComponentProps<"p">) {
+  const { t } = useTranslation();
   const { error, formMessageId } = useFormField();
   const body = error ? String(error?.message ?? "") : props.children;
 
@@ -151,7 +156,7 @@ function FormMessage({ className, ...props }: React.ComponentProps<"p">) {
       className={cn("text-sm text-destructive", className)}
       {...props}
     >
-      {body}
+      {typeof body === "string" ? t(body, { defaultValue: body }) : body}
     </p>
   );
 }

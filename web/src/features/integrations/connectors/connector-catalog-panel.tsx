@@ -39,6 +39,7 @@ export function ConnectorCatalogPanel({
           instances: data.instances,
           isLoading: data.instancesLoading,
           error: data.instancesError,
+          canConfigure: data.canConfigure,
         }}
         actions={{
           retry: actions.retryInstances,
@@ -59,14 +60,18 @@ export function ConnectorCatalogPanel({
         <ConnectorCatalogBody
           connectors={data.connectors}
           page={page}
-          onConfigure={(connector) => {
-            if (
-              (connector.id === "vault" || connector.id === "sql") &&
-              connector.maturity === "runtime"
-            ) {
-              setEditing({ connector: connector.id, instance: null });
-            }
-          }}
+          onConfigure={
+            data.canConfigure
+              ? (connector) => {
+                  if (
+                    (connector.id === "vault" || connector.id === "sql") &&
+                    connector.maturity === "runtime"
+                  ) {
+                    setEditing({ connector: connector.id, instance: null });
+                  }
+                }
+              : undefined
+          }
         />
       )}
       {editing?.connector === "vault" && (
@@ -101,6 +106,7 @@ export type ConnectorPanelData = {
   instancesLoading: boolean;
   catalogError: unknown;
   instancesError: unknown;
+  canConfigure: boolean;
 };
 
 export type ConnectorPanelActions = {

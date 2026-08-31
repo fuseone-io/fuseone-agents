@@ -16,6 +16,7 @@ type ConnectorInstancesView = {
   instances: ConnectorInstance[];
   isLoading: boolean;
   error: unknown;
+  canConfigure: boolean;
 };
 
 type ConnectorInstancesActions = {
@@ -37,24 +38,26 @@ export function ConnectorInstancesPanel({
     <Panel
       title={t("connectors.instances")}
       action={
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button type="button" size="sm">
-              <Plus className="size-4" aria-hidden />
-              {t("connectors.newInstance")}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => actions.create("vault")}>
-              <ShieldCheck aria-hidden />
-              {t("connectors.newVault")}
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => actions.create("sql")}>
-              <Database aria-hidden />
-              {t("connectors.newSQL")}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        view.canConfigure ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" size="sm">
+                <Plus className="size-4" aria-hidden />
+                {t("connectors.newInstance")}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => actions.create("vault")}>
+                <ShieldCheck aria-hidden />
+                {t("connectors.newVault")}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => actions.create("sql")}>
+                <Database aria-hidden />
+                {t("connectors.newSQL")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : undefined
       }
     >
       {view.isLoading ? (
@@ -74,7 +77,8 @@ export function ConnectorInstancesPanel({
               key={`${instance.scopeKind}:${instance.company ?? ""}:${instance.area ?? ""}:${instance.name}`}
               instance={instance}
               onEdit={
-                instance.connector === "vault" || instance.connector === "sql"
+                view.canConfigure &&
+                (instance.connector === "vault" || instance.connector === "sql")
                   ? () => actions.edit(instance)
                   : undefined
               }

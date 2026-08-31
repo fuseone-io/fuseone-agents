@@ -144,7 +144,8 @@ describe("SQL connector instance form", () => {
     ).toBeInTheDocument();
   });
 
-  it("explains binding failures", () => {
+  it("explains binding failures and translates validation keys", async () => {
+    const user = userEvent.setup();
     render(
       <SQLInstanceForm
         instance={null}
@@ -156,5 +157,11 @@ describe("SQL connector instance form", () => {
 
     expect(screen.getByRole("alert")).toHaveTextContent("Nenhum Vault compatível");
     expect(screen.getByText(/HTTPS, ativa e com token/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+    expect(
+      await screen.findByText("Informe o host sem protocolo, porta ou credencial."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("connectors.sqlHostRequired")).not.toBeInTheDocument();
   });
 });

@@ -118,6 +118,7 @@ describe("governed connector catalogue", () => {
           instancesLoading: false,
           catalogError: null,
           instancesError: null,
+          canConfigure: true,
         }}
         actions={actions()}
       />,
@@ -145,6 +146,7 @@ describe("governed connector catalogue", () => {
           instancesLoading: false,
           catalogError: null,
           instancesError: null,
+          canConfigure: true,
         }}
         actions={actions()}
       />,
@@ -167,6 +169,7 @@ describe("governed connector catalogue", () => {
           instancesLoading: false,
           catalogError: null,
           instancesError: null,
+          canConfigure: true,
         }}
         actions={actions()}
       />,
@@ -194,6 +197,7 @@ describe("governed connector catalogue", () => {
           instancesLoading: false,
           catalogError: null,
           instancesError: new Error("instances failed"),
+          canConfigure: true,
         }}
         actions={actions()}
       />,
@@ -215,6 +219,7 @@ describe("governed connector catalogue", () => {
           instancesLoading: false,
           catalogError: new Error("catalogue failed"),
           instancesError: null,
+          canConfigure: true,
         }}
         actions={actions()}
       />,
@@ -224,4 +229,32 @@ describe("governed connector catalogue", () => {
     expect(screen.getByRole("alert")).toBeInTheDocument();
   });
 
+  it("keeps connector details readable without offering configuration", () => {
+    render(
+      <ConnectorCatalogPanel
+        data={{
+          connectors: [vault, runtimeSQL],
+          instances: [sqlInstance],
+          catalogLoading: false,
+          instancesLoading: false,
+          catalogError: null,
+          instancesError: null,
+          canConfigure: false,
+        }}
+        actions={actions()}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "app-x" })).toBeInTheDocument();
+    expect(screen.getByText("db.internal:5432/appx")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Nova instância" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Configurar" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Editar" }),
+    ).not.toBeInTheDocument();
+  });
 });
