@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ConnectorCatalogPanel } from "@/features/integrations/connectors/connector-catalog-panel";
 import type {
@@ -25,7 +26,7 @@ const vault: GovernedConnector = {
       effects: ["write"],
       approval: "policy",
       secretHandling: "reference_only",
-    cachePolicy: "never",
+      cachePolicy: "never",
     },
   ],
 };
@@ -43,7 +44,7 @@ const planned: GovernedConnector = {
       effects: ["read"],
       approval: "policy",
       secretHandling: "reference_only",
-    cachePolicy: "never",
+      cachePolicy: "never",
     },
   ],
 };
@@ -85,13 +86,15 @@ const sqlInstance: ConnectorInstance = {
       mount: "database",
       role: "app-x-readonly",
     },
-    templates: [{
-      id: "orders_by_customer",
-      parameters: [],
-      timeoutSeconds: 10,
-      maxRows: 100,
-      maxBytes: 65536,
-    }],
+    templates: [
+      {
+        id: "orders_by_customer",
+        parameters: [],
+        timeoutSeconds: 10,
+        maxRows: 100,
+        maxBytes: 65536,
+      },
+    ],
   },
 };
 
@@ -115,6 +118,7 @@ describe("governed connector catalogue", () => {
           instancesLoading: false,
           catalogError: null,
           instancesError: null,
+          canConfigure: true,
         }}
         actions={actions()}
       />,
@@ -142,6 +146,7 @@ describe("governed connector catalogue", () => {
           instancesLoading: false,
           catalogError: null,
           instancesError: null,
+          canConfigure: true,
         }}
         actions={actions()}
       />,
@@ -153,7 +158,8 @@ describe("governed connector catalogue", () => {
     expect(screen.getByText("certificates")).toBeInTheDocument();
   });
 
-  it("does not open the Vault form for a runtime SQL connector", () => {
+  it("offers configuration and editing for a runtime SQL connector", async () => {
+    const user = userEvent.setup();
     render(
       <ConnectorCatalogPanel
         data={{
@@ -163,16 +169,22 @@ describe("governed connector catalogue", () => {
           instancesLoading: false,
           catalogError: null,
           instancesError: null,
+          canConfigure: true,
         }}
         actions={actions()}
       />,
     );
 
     expect(screen.getAllByText("Executável")).toHaveLength(2);
-    expect(screen.getAllByRole("button", { name: "Configurar" })).toHaveLength(1);
-    expect(screen.queryByRole("button", { name: "Editar" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Configurar" })).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Editar" })).toBeInTheDocument();
     expect(screen.getByText("db.internal:5432/appx")).toBeInTheDocument();
     expect(screen.getByText("prod/app-x-readonly")).toBeInTheDocument();
+
+    await user.click(screen.getAllByRole("button", { name: "Configurar" })[1]!);
+    expect(
+      screen.getByRole("heading", { name: "Configurar SQL" }),
+    ).toBeInTheDocument();
   });
 
   it("keeps the catalogue visible when configured instances fail to load", () => {
@@ -185,6 +197,7 @@ describe("governed connector catalogue", () => {
           instancesLoading: false,
           catalogError: null,
           instancesError: new Error("instances failed"),
+          canConfigure: true,
         }}
         actions={actions()}
       />,
@@ -206,6 +219,7 @@ describe("governed connector catalogue", () => {
           instancesLoading: false,
           catalogError: new Error("catalogue failed"),
           instancesError: null,
+          canConfigure: true,
         }}
         actions={actions()}
       />,
@@ -213,5 +227,34 @@ describe("governed connector catalogue", () => {
 
     expect(screen.getByRole("heading", { name: "prod" })).toBeInTheDocument();
     expect(screen.getByRole("alert")).toBeInTheDocument();
+  });
+
+  it("keeps connector details readable without offering configuration", () => {
+    render(
+      <ConnectorCatalogPanel
+        data={{
+          connectors: [vault, runtimeSQL],
+          instances: [sqlInstance],
+          catalogLoading: false,
+          instancesLoading: false,
+          catalogError: null,
+          instancesError: null,
+          canConfigure: false,
+        }}
+        actions={actions()}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "app-x" })).toBeInTheDocument();
+    expect(screen.getByText("db.internal:5432/appx")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Nova instância" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Configurar" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Editar" }),
+    ).not.toBeInTheDocument();
   });
 });

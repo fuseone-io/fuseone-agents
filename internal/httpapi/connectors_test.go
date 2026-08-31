@@ -17,6 +17,7 @@ import (
 
 type connectorInstanceSpy struct {
 	items      []connectortools.ConfiguredInstance
+	listCalls  int
 	putBy      domain.UserID
 	putKind    settings.ScopeKind
 	putScope   domain.Scope
@@ -27,6 +28,7 @@ type connectorInstanceSpy struct {
 }
 
 func (s *connectorInstanceSpy) ConnectorInstances(context.Context) ([]connectortools.ConfiguredInstance, error) {
+	s.listCalls++
 	return s.items, nil
 }
 
@@ -199,8 +201,7 @@ Listing connector instances needs only tool:read, and a registered query names
 the tables, columns and filters of a customer database. A digest does not hide
 one: queries are low-entropy and an attacker guesses offline until a hash
 matches, which discloses the same thing more slowly. Reading the text back
-belongs to a detailed read restricted to configurers, and until that exists an
-operator confirms a configuration by writing it again.
+belongs to a detailed read restricted to configurers.
 */
 func TestListConnectorInstances_publishesNeitherTheQueryNorADigestOfIt(t *testing.T) {
 	t.Parallel()
@@ -244,5 +245,109 @@ func TestListConnectorInstances_publishesNeitherTheQueryNorADigestOfIt(t *testin
 	}
 	if sql.Templates[0].Id != "orders_by_customer" || sql.Templates[0].MaxRows != 200 {
 		t.Fatalf("summary = %+v, want the template's shape and bounds", sql.Templates[0])
+	}
+}
+
+func TestGetConnectorInstance_returnsAuthoredSQLOnlyToAConfigurer(t *testing.T) {
+	t.Parallel()
+
+	const query = "select id from orders where customer_id = $1"
+	spy := &connectorInstanceSpy{items: []connectortools.ConfiguredInstance{{
+		Instance: connectortools.Instance{
+			Name: "app-x", Connector: "sql", Enabled: true,
+			Scope: domain.Scope{Company: "acme", Area: "platform"},
+			SQL: connectortools.SQLConfig{
+				Driver: connectortools.SQLDriverPostgres,
+				Host:   "db.internal", Port: 5432, Database: "appx",
+				CredentialSource: connectortools.CredentialSource{
+					Kind:          connectortools.CredentialVaultDatabaseRole,
+					VaultInstance: "prod", Mount: "database", Role: "app-x-readonly",
+				},
+				Templates: []connectortools.SQLTemplate{{
+					ID: "orders_by_customer", SQL: query,
+					Parameters: []connectortools.SQLParameter{{
+						Name: "customer_id", Type: connectortools.SQLParamText,
+					}},
+					TimeoutSeconds: 10, MaxRows: 200, MaxBytes: 65536,
+				}},
+			},
+		},
+		ScopeKind: settings.ScopeArea,
+	}}}
+	req := openapi.GetConnectorInstanceRequestObject{
+		Name: "app-x",
+		Params: openapi.GetConnectorInstanceParams{
+			ScopeKind: openapi.ConnectorScopeKindArea,
+			Company:   ptr("acme"), Area: ptr("platform"),
+		},
+	}
+	server := NewServer(ledger.NewMemory(), "test").WithConnectorInstances(spy)
+	resp, err := server.GetConnectorInstance(as(domain.RoleCurator), req)
+	if err != nil {
+		t.Fatalf("GetConnectorInstance: %v", err)
+	}
+	body := openapi.ConnectorInstanceDetail(resp.(openapi.GetConnectorInstance200JSONResponse))
+	if body.Sql == nil || len(body.Sql.Templates) != 1 || body.Sql.Templates[0].Sql != query {
+		t.Fatalf("sql = %+v, want the complete authored template", body.Sql)
+	}
+
+	forbidden, err := server.GetConnectorInstance(as(domain.RoleAuditor), req)
+	if err != nil {
+		t.Fatalf("GetConnectorInstance as auditor: %v", err)
+	}
+	if _, ok := forbidden.(openapi.GetConnectorInstance403ApplicationProblemPlusJSONResponse); !ok {
+		t.Fatalf("auditor response = %T, want 403", forbidden)
+	}
+	if spy.listCalls != 1 {
+		t.Fatalf("store reads = %d, want only the configurer's read", spy.listCalls)
+	}
+}
+
+func TestGetConnectorInstance_selectsTheExactScope(t *testing.T) {
+	t.Parallel()
+
+	configured := func(area, query string) connectortools.ConfiguredInstance {
+		return connectortools.ConfiguredInstance{
+			Instance: connectortools.Instance{
+				Name: "app-x", Connector: "sql", Enabled: true,
+				Scope: domain.Scope{Company: "acme", Area: domain.AreaID(area)},
+				SQL: connectortools.SQLConfig{Templates: []connectortools.SQLTemplate{{
+					ID: "report", SQL: query,
+				}}},
+			},
+			ScopeKind: settings.ScopeArea,
+		}
+	}
+	spy := &connectorInstanceSpy{items: []connectortools.ConfiguredInstance{
+		configured("payments", "select 'payments'"),
+		configured("platform", "select 'platform'"),
+	}}
+	resp, err := NewServer(ledger.NewMemory(), "test").WithConnectorInstances(spy).
+		GetConnectorInstance(as(domain.RoleCurator), openapi.GetConnectorInstanceRequestObject{
+			Name: "app-x", Params: openapi.GetConnectorInstanceParams{
+				ScopeKind: openapi.ConnectorScopeKindArea,
+				Company:   ptr("acme"), Area: ptr("platform"),
+			},
+		})
+	if err != nil {
+		t.Fatalf("GetConnectorInstance: %v", err)
+	}
+	body := openapi.ConnectorInstanceDetail(resp.(openapi.GetConnectorInstance200JSONResponse))
+	if body.Sql == nil || body.Sql.Templates[0].Sql != "select 'platform'" {
+		t.Fatalf("sql = %+v, want the platform-scoped instance", body.Sql)
+	}
+
+	companyResp, err := NewServer(ledger.NewMemory(), "test").WithConnectorInstances(spy).
+		GetConnectorInstance(as(domain.RoleCurator), openapi.GetConnectorInstanceRequestObject{
+			Name: "app-x", Params: openapi.GetConnectorInstanceParams{
+				ScopeKind: openapi.ConnectorScopeKindCompany,
+				Company:   ptr("acme"),
+			},
+		})
+	if err != nil {
+		t.Fatalf("GetConnectorInstance at company scope: %v", err)
+	}
+	if _, ok := companyResp.(openapi.GetConnectorInstance404ApplicationProblemPlusJSONResponse); !ok {
+		t.Fatalf("company response = %T, want 404 for area-scoped SQL", companyResp)
 	}
 }

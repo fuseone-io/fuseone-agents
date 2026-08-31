@@ -9,6 +9,8 @@ export type ModelProvider = components["schemas"]["ModelProvider"];
 export type IntegrationHealth = components["schemas"]["IntegrationHealth"];
 export type GovernedConnector = components["schemas"]["GovernedConnector"];
 export type ConnectorInstance = components["schemas"]["ConnectorInstance"];
+export type ConnectorInstanceDetail =
+  components["schemas"]["ConnectorInstanceDetail"];
 export type ConnectorInstanceInput =
   components["schemas"]["ConnectorInstanceInput"];
 export type ConnectorScopeKind = components["schemas"]["ConnectorScopeKind"];
@@ -22,6 +24,14 @@ export const integrationKeys = {
     [...integrationKeys.all, "connectors", "catalog"] as const,
   connectorInstances: () =>
     [...integrationKeys.all, "connectors", "instances"] as const,
+  connectorInstance: (instance: ConnectorInstance) =>
+    [
+      ...integrationKeys.connectorInstances(),
+      instance.scopeKind,
+      instance.company ?? "",
+      instance.area ?? "",
+      instance.name,
+    ] as const,
 };
 
 export function useIntegrations() {
@@ -151,6 +161,30 @@ export function useConnectorInstances(enabled = true) {
     queryFn: async () =>
       unwrap(await api.GET("/admin/integrations/connectors/instances")),
     enabled,
+  });
+}
+
+export function useConnectorInstance(instance: ConnectorInstance | undefined) {
+  return useQuery({
+    queryKey: instance
+      ? integrationKeys.connectorInstance(instance)
+      : [...integrationKeys.connectorInstances(), "detail", "idle"],
+    queryFn: async () => {
+      if (!instance) throw new Error("connector instance is required");
+      return unwrap(
+        await api.GET("/admin/integrations/connectors/instances/{name}", {
+          params: {
+            path: { name: instance.name },
+            query: {
+              scopeKind: instance.scopeKind,
+              company: instance.company,
+              area: instance.area,
+            },
+          },
+        }),
+      );
+    },
+    enabled: Boolean(instance),
   });
 }
 

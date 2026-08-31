@@ -36,6 +36,7 @@ import { useRecipes } from "@/features/integrations/mcp/api";
 import { AvailableServersPanel } from "@/features/integrations/mcp/available-servers-panel";
 import { UserCredentialsPanel } from "@/features/integrations/mcp/user-credentials-panel";
 import { LoadMore } from "@/components/shared/load-more";
+import { useMe } from "@/features/session/api";
 import { useVisibleItems } from "@/hooks/use-visible-items";
 import {
   availableEntries,
@@ -64,6 +65,8 @@ export function IntegrationsPage({
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { data: me } = useMe();
+  const canConfigure = me === null || Boolean(me?.can.includes("provider:write"));
   const integrations = useIntegrations();
   const recipes = useRecipes();
   const channels = useChannels();
@@ -210,6 +213,7 @@ export function IntegrationsPage({
               instancesLoading: connectorInstances.isLoading,
               catalogError: connectorCatalog.error,
               instancesError: connectorInstances.error,
+              canConfigure,
             }}
             actions={{
               retryCatalog: () => void connectorCatalog.refetch(),

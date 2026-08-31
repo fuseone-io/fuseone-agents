@@ -2459,6 +2459,40 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
 
   /admin/integrations/connectors/instances/{name}:
+    get:
+      tags: [admin]
+      operationId: getConnectorInstance
+      summary: Read one connector instance for editing
+      description: >
+        Returns the authored configuration to a connector configurer. Unlike
+        the ordinary instance list, this includes registered SQL text so an
+        edit can preserve the complete contract. Tokens, generated database
+        credentials and lease ids are never returned.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+        - name: scopeKind
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/ConnectorScopeKind' }
+        - name: company
+          in: query
+          schema: { type: string }
+        - name: area
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: The complete non-secret configuration of the instance.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConnectorInstanceDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
     put:
       tags: [admin]
       operationId: putConnectorInstance
@@ -5338,6 +5372,27 @@ components:
         vault: { $ref: '#/components/schemas/ConnectorVaultConfig' }
         sql: { $ref: '#/components/schemas/ConnectorSQLResponse' }
 
+    ConnectorInstanceDetail:
+      type: object
+      description: >
+        The authored, non-secret configuration available only to connector
+        configurers. SQL text is present because editing any other SQL field
+        must not erase or replace a registered query. Token presence is
+        metadata; token bytes and generated credentials never leave storage.
+      required: [name, connector, enabled, scopeKind, hasToken]
+      properties:
+        name: { type: string }
+        connector: { type: string }
+        enabled: { type: boolean }
+        scopeKind: { $ref: '#/components/schemas/ConnectorScopeKind' }
+        company: { type: string }
+        area: { type: string }
+        hasToken: { type: boolean }
+        updatedBy: { type: string }
+        updatedAt: { type: string, format: date-time }
+        vault: { $ref: '#/components/schemas/ConnectorVaultConfig' }
+        sql: { $ref: '#/components/schemas/ConnectorSQLInput' }
+
     ConnectorSQLResponse:
       type: object
       description: >
@@ -5366,9 +5421,7 @@ components:
         digest of an authored query does not hide it — queries are low-entropy
         and guessable offline, so publishing one would disclose tables and
         filters to anyone who can read the tool catalogue. Reading the text back
-        belongs to a detailed read restricted to configurers, which does not
-        exist yet; until it does, an operator confirms a configuration by
-        writing it again.
+        belongs to the detailed instance read restricted to configurers.
       required: [id, parameters, timeoutSeconds, maxRows, maxBytes]
       properties:
         id: { type: string, maxLength: 64, pattern: '^[a-z][a-z0-9_]*$' }
@@ -5443,7 +5496,7 @@ components:
           items: { $ref: '#/components/schemas/ConnectorSQLParameter' }
         timeoutSeconds: { type: integer, minimum: 1, maximum: 3600 }
         maxRows: { type: integer, minimum: 1, maximum: 10000 }
-        maxBytes: { type: integer, minimum: 1, maximum: 1048576 }
+        maxBytes: { type: integer, minimum: 1024, maximum: 1048576 }
 
     ConnectorInstanceInput:
       type: object

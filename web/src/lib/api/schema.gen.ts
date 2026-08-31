@@ -1735,7 +1735,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Read one connector instance for editing
+         * @description Returns the authored configuration to a connector configurer. Unlike the ordinary instance list, this includes registered SQL text so an edit can preserve the complete contract. Tokens, generated database credentials and lease ids are never returned.
+         */
+        get: operations["getConnectorInstance"];
         /**
          * Configure a governed connector instance
          * @description Configuring an instance creates executable native tools named connector.instance.operation. Omit token to keep the stored one. Send clearToken to remove it; an enabled instance must still have a token after the write.
@@ -3306,6 +3310,21 @@ export interface components {
             vault?: components["schemas"]["ConnectorVaultConfig"];
             sql?: components["schemas"]["ConnectorSQLResponse"];
         };
+        /** @description The authored, non-secret configuration available only to connector configurers. SQL text is present because editing any other SQL field must not erase or replace a registered query. Token presence is metadata; token bytes and generated credentials never leave storage. */
+        ConnectorInstanceDetail: {
+            name: string;
+            connector: string;
+            enabled: boolean;
+            scopeKind: components["schemas"]["ConnectorScopeKind"];
+            company?: string;
+            area?: string;
+            hasToken: boolean;
+            updatedBy?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+            vault?: components["schemas"]["ConnectorVaultConfig"];
+            sql?: components["schemas"]["ConnectorSQLInput"];
+        };
         /** @description A SQL instance as the administration API reports it. Addressing only, plus the safe identity of the binding: the kind, which vault instance answers it and which role is bound. No token, no generated credential and no connection string are ever returned, because none of them is needed to know the configuration is right. */
         ConnectorSQLResponse: {
             /** @enum {string} */
@@ -3316,7 +3335,7 @@ export interface components {
             credentialSource: components["schemas"]["ConnectorCredentialSource"];
             templates: components["schemas"]["ConnectorSQLTemplateSummary"][];
         };
-        /** @description A registered template as the listing reports it: what it is called, what it takes and what it is bounded by. Neither the query nor a digest of it is here. Listing connector instances needs only `tool:read`, and a digest of an authored query does not hide it — queries are low-entropy and guessable offline, so publishing one would disclose tables and filters to anyone who can read the tool catalogue. Reading the text back belongs to a detailed read restricted to configurers, which does not exist yet; until it does, an operator confirms a configuration by writing it again. */
+        /** @description A registered template as the listing reports it: what it is called, what it takes and what it is bounded by. Neither the query nor a digest of it is here. Listing connector instances needs only `tool:read`, and a digest of an authored query does not hide it — queries are low-entropy and guessable offline, so publishing one would disclose tables and filters to anyone who can read the tool catalogue. Reading the text back belongs to the detailed instance read restricted to configurers. */
         ConnectorSQLTemplateSummary: {
             id: string;
             parameters: components["schemas"]["ConnectorSQLParameter"][];
@@ -7209,6 +7228,36 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    getConnectorInstance: {
+        parameters: {
+            query: {
+                scopeKind: components["schemas"]["ConnectorScopeKind"];
+                company?: string;
+                area?: string;
+            };
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The complete non-secret configuration of the instance. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectorInstanceDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     putConnectorInstance: {

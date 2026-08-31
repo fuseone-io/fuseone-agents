@@ -12,6 +12,7 @@ import type {
 import { ConnectorInstanceForm } from "@/features/integrations/connectors/connector-instance-form";
 import { ConnectorInstancesPanel } from "@/features/integrations/connectors/connector-instances-panel";
 import type { ConnectorInstanceSaver } from "@/features/integrations/connectors/connector-instance-model";
+import { SQLInstanceEditor } from "@/features/integrations/connectors/sql-instance-editor";
 import { useVisibleItems } from "@/hooks/use-visible-items";
 import { cn } from "@/lib/utils";
 
@@ -22,10 +23,13 @@ export function ConnectorCatalogPanel({
   data: ConnectorPanelData;
   actions: ConnectorPanelActions;
 }) {
-  const [editing, setEditing] = useState<ConnectorInstance | null | false>(false);
+  const [editing, setEditing] = useState<{
+    connector: "vault" | "sql";
+    instance: ConnectorInstance | null;
+  } | null>(null);
   const page = useVisibleItems(data.connectors, 8);
 
-  const close = () => setEditing(false);
+  const close = () => setEditing(null);
 
   return (
     <section className="flex flex-col gap-3">
@@ -35,11 +39,16 @@ export function ConnectorCatalogPanel({
           instances: data.instances,
           isLoading: data.instancesLoading,
           error: data.instancesError,
+          canConfigure: data.canConfigure,
         }}
         actions={{
           retry: actions.retryInstances,
-          createVault: () => setEditing(null),
-          edit: setEditing,
+          create: (connector) => setEditing({ connector, instance: null }),
+          edit: (instance) => {
+            if (configurableConnector(instance.connector)) {
+              setEditing({ connector: instance.connector, instance });
+            }
+          },
           remove: actions.deleteInstance,
         }}
       />
@@ -51,22 +60,43 @@ export function ConnectorCatalogPanel({
         <ConnectorCatalogBody
           connectors={data.connectors}
           page={page}
-          onConfigure={(connector) => {
-            if (connector.id === "vault" && connector.maturity === "runtime") {
-              setEditing(null);
-            }
-          }}
+          onConfigure={
+            data.canConfigure
+              ? (connector) => {
+                  if (
+                    (connector.id === "vault" || connector.id === "sql") &&
+                    connector.maturity === "runtime"
+                  ) {
+                    setEditing({ connector: connector.id, instance: null });
+                  }
+                }
+              : undefined
+          }
         />
       )}
-      {editing !== false && (
+      {editing?.connector === "vault" && (
         <ConnectorInstanceForm
-          instance={editing}
+          instance={editing.instance}
+          onClose={close}
+          onSave={actions.saveInstance}
+        />
+      )}
+      {editing?.connector === "sql" && (
+        <SQLInstanceEditor
+          instance={editing.instance}
+          instances={data.instances}
           onClose={close}
           onSave={actions.saveInstance}
         />
       )}
     </section>
   );
+}
+
+function configurableConnector(
+  connector: string,
+): connector is "vault" | "sql" {
+  return connector === "vault" || connector === "sql";
 }
 
 export type ConnectorPanelData = {
@@ -76,6 +106,7 @@ export type ConnectorPanelData = {
   instancesLoading: boolean;
   catalogError: unknown;
   instancesError: unknown;
+  canConfigure: boolean;
 };
 
 export type ConnectorPanelActions = {
@@ -111,7 +142,7 @@ function ConnectorCatalogBody({
 }: {
   connectors: GovernedConnector[];
   page: ReturnType<typeof useVisibleItems<GovernedConnector>>;
-  onConfigure: (connector: GovernedConnector) => void;
+  onConfigure?: (connector: GovernedConnector) => void;
 }) {
   const { t } = useTranslation();
   if (connectors.length === 0) {
@@ -130,7 +161,12 @@ function ConnectorCatalogBody({
           <ConnectorCard
             key={connector.id}
             connector={connector}
-            onConfigure={connector.id === "vault" ? () => onConfigure(connector) : undefined}
+            onConfigure={
+              onConfigure &&
+              (connector.id === "vault" || connector.id === "sql")
+                ? () => onConfigure(connector)
+                : undefined
+            }
           />
         ))}
       </div>

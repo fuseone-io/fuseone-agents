@@ -5,11 +5,11 @@ import type {
   ConnectorScopeKind,
 } from "@/features/integrations/api";
 
-const instanceName = /^[a-z0-9][a-z0-9_-]{0,62}$/;
+export const connectorInstanceName = /^[a-z0-9][a-z0-9_-]{0,62}$/;
 
 export const connectorInstanceSchema = z
   .object({
-    name: z.string().regex(instanceName, "connectors.instanceNameInvalid"),
+    name: z.string().regex(connectorInstanceName, "connectors.instanceNameInvalid"),
     enabled: z.boolean(),
     scopeKind: z.enum(["installation", "company", "area"]),
     company: z.string(),
@@ -93,7 +93,7 @@ export function connectorInstancePayload(
       allowedPathPrefixes: prefixes,
     },
   };
-  applyScope(body, values);
+  applyConnectorScope(body, values);
   if (values.namespace.trim()) body.vault!.namespace = values.namespace.trim();
   if (values.token.trim()) body.token = values.token;
   if (values.clearToken && !body.token) body.clearToken = true;
@@ -107,7 +107,7 @@ export function pathPrefixes(raw: string): string[] {
     .filter(Boolean);
 }
 
-function applyScope(
+export function applyConnectorScope(
   body: ConnectorInstanceInput,
   values: { scopeKind: ConnectorScopeKind; company: string; area: string },
 ) {
