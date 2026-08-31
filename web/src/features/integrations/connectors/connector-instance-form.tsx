@@ -13,13 +13,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -29,6 +22,7 @@ import {
 } from "@/components/shared/properties-sheet";
 import { useActiveScope } from "@/features/scope/active-scope";
 import type { ConnectorInstance } from "@/features/integrations/api";
+import { ConnectorIdentityFields } from "@/features/integrations/connectors/connector-identity-fields";
 import {
   connectorInstanceDefaults,
   connectorInstancePayload,
@@ -40,8 +34,6 @@ import { problemMessage } from "@/lib/api/problem-message";
 
 type ConnectorTextField =
   | "name"
-  | "company"
-  | "area"
   | "address"
   | "mount"
   | "namespace"
@@ -93,7 +85,7 @@ export function ConnectorInstanceForm({
           className="flex min-h-0 flex-1 flex-col"
         >
           <PropertiesSheetBody className="space-y-4">
-            <IdentityFields form={form} editing={instance !== null} />
+            <ConnectorIdentityFields editing={instance !== null} connector="vault" />
             <VaultFields form={form} hasToken={instance?.hasToken === true} />
           </PropertiesSheetBody>
           <PropertiesSheetFooter>
@@ -107,83 +99,6 @@ export function ConnectorInstanceForm({
         </form>
       </Form>
     </PropertiesSheet>
-  );
-}
-
-function IdentityFields({
-  form,
-  editing,
-}: {
-  form: ReturnType<typeof useForm<ConnectorInstanceValues>>;
-  editing: boolean;
-}) {
-  const { t } = useTranslation();
-  const scopeKind = form.watch("scopeKind");
-  return (
-    <div className="grid gap-4">
-      <FormField
-        control={form.control}
-        name="name"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>{t("connectors.instanceName")}</FormLabel>
-            <FormControl>
-              <Input {...field} disabled={editing} className="font-mono" />
-            </FormControl>
-            <FormDescription>{t("connectors.instanceNameHint")}</FormDescription>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-      <FormField
-        control={form.control}
-        name="scopeKind"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>{t("connectors.scopeKind")}</FormLabel>
-            <Select value={field.value} onValueChange={field.onChange}>
-              <FormControl>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-              </FormControl>
-              <SelectContent>
-                <SelectItem value="area">{t("connectors.scope.area")}</SelectItem>
-                <SelectItem value="company">{t("connectors.scope.company")}</SelectItem>
-                <SelectItem value="installation">{t("connectors.scope.installation")}</SelectItem>
-              </SelectContent>
-            </Select>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-      {scopeKind !== "installation" && <ScopeFields form={form} />}
-      <FormField
-        control={form.control}
-        name="enabled"
-        render={({ field }) => (
-          <FormItem className="flex items-center justify-between rounded-lg border p-3">
-            <FormLabel className="m-0">{t("integrations.enabled")}</FormLabel>
-            <FormControl>
-              <Switch checked={field.value} onCheckedChange={field.onChange} />
-            </FormControl>
-          </FormItem>
-        )}
-      />
-    </div>
-  );
-}
-
-function ScopeFields({
-  form,
-}: {
-  form: ReturnType<typeof useForm<ConnectorInstanceValues>>;
-}) {
-  const { t } = useTranslation();
-  const areaScope = form.watch("scopeKind") === "area";
-  return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      <TextField form={form} name="company" label={t("admin.company")} mono />
-      {areaScope && <TextField form={form} name="area" label={t("admin.area")} mono />}
-    </div>
   );
 }
 

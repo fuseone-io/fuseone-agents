@@ -27,6 +27,15 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Added
+
+- **Governed SQL connector instances can now be configured and edited in the
+  console.** Operators choose a scoped Vault database role, register fixed SQL
+  templates and their typed parameters, and set execution limits without ever
+  entering a password or connection string. The ordinary connector list still
+  withholds query text; only connector configurers can read the authored SQL
+  needed by the edit form.
+
 ## [0.41.0] — 2026-08-30
 
 ### Upgrade notes
