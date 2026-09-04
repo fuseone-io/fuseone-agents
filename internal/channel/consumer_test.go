@@ -212,6 +212,80 @@ func TestSweep_anUnboundAccountInABoundConversation_isStillRefused(t *testing.T)
 	}
 }
 
+/*
+A bound conversation starts its own agent and refuses to start another.
+
+The point of binding one is that the conversation decides, and a mention that
+reached past it to something else in the scope would make the binding a
+suggestion. Refused rather than quietly rerouted: somebody who typed a name
+meant it, and running a different agent on their sentence is the confusion this
+is supposed to remove.
+*/
+func TestSweep_aMentionNamingAnotherAgent_isRefusedInABoundConversation(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT> reconciliation fecha o mês", func(p *consumerParts) {
+		p.scopes.agent = "triagem"
+		p.published = append(p.published,
+			domain.AgentSummary{ID: "reconciliation", VersionID: "v1", Name: "Reconciliation"})
+	})
+
+	if _, err := c.Sweep(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if parts.opener.calls != 0 {
+		t.Fatal("a run opened for an agent this conversation is not bound to")
+	}
+	if _, err := c.Answer(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Answer: %v", err)
+	}
+	if len(parts.answers.said) != 1 || !strings.Contains(parts.answers.said[0], "triagem") {
+		t.Errorf("said = %v, want the conversation's own agent named", parts.answers.said)
+	}
+}
+
+// Naming the agent the conversation is bound to still works, and the name is
+// still consumed. An operator who learned to type it should not have to unlearn
+// it, and the word must not turn up at the start of the ask.
+func TestSweep_aMentionNamingTheBoundAgent_startsItWithoutTheName(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT> triagem esse chamado é sobre boleto", func(p *consumerParts) {
+		p.scopes.agent = "triagem"
+	})
+
+	opened, err := c.Sweep(t.Context(), time.Minute, 10)
+	if err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if opened != 1 || parts.opener.last.Agent != "triagem" {
+		t.Fatalf("opened = %d, agent = %q", opened, parts.opener.last.Agent)
+	}
+	var ask struct {
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal(parts.opener.last.Input, &ask); err != nil {
+		t.Fatalf("input: %v", err)
+	}
+	if ask.Text != "esse chamado é sobre boleto" {
+		t.Errorf("text = %q, want the name consumed", ask.Text)
+	}
+}
+
+// An unbound conversation is unchanged: the scope's agents are all addressable
+// and the name is required. Every installation configured before this is one.
+func TestSweep_anUnboundConversation_stillStartsAnyAgentTheScopePublishes(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT> reconciliation fecha o mês", func(p *consumerParts) {
+		p.published = append(p.published,
+			domain.AgentSummary{ID: "reconciliation", VersionID: "v1", Name: "Reconciliation"})
+	})
+
+	opened, err := c.Sweep(t.Context(), time.Minute, 10)
+	if err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if opened != 1 || parts.opener.last.Agent != "reconciliation" {
+		t.Fatalf("opened = %d, agent = %q, want the agent that was named",
+			opened, parts.opener.last.Agent)
+	}
+}
+
 func TestSweep_anAskNamingNoAgent_isAnsweredInTheConversation(t *testing.T) {
 	c, parts := consumerFor(t, "<@U07BOT> alguém aí?")
 
@@ -433,6 +507,7 @@ type consumerParts struct {
 	threads      *threadReaderStub
 	opener       *openerSpy
 	answers      *answerSpy
+	published    []domain.AgentSummary
 	bound        bool
 	bindErr      error
 	willing      bool
@@ -458,8 +533,11 @@ func consumerWith(
 		threads:      &threadReaderStub{},
 		opener:       &openerSpy{},
 		answers:      &answerSpy{},
-		bound:        true,
-		willing:      true,
+		published: []domain.AgentSummary{
+			{ID: "triagem", VersionID: "v1", Name: "Triagem de chamados"},
+		},
+		bound:   true,
+		willing: true,
 		arrival: channel.Arrival{
 			// A delivery id and a message id that are not the same string,
 			// because in a real channel they never are. They were, in the
@@ -506,9 +584,7 @@ func reseed(t *testing.T, p *consumerParts) {
 }
 
 func (p *consumerParts) List(context.Context, domain.Scope, bool) ([]domain.AgentSummary, error) {
-	return []domain.AgentSummary{
-		{ID: "triagem", VersionID: "v1", Name: "Triagem de chamados"},
-	}, nil
+	return p.published, nil
 }
 
 func (p *consumerParts) StartableFromConversation(

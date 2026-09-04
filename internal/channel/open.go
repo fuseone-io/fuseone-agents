@@ -215,6 +215,17 @@ func (c *Consumer) mentioned(
 		// stops an administrator debugging the person who asked.
 		return "", Ask{}, cannotStartHere(ask.Agent), nil
 	}
+	if agent != "" && ask.Agent != agent {
+		// Somebody reached past the binding to something else in the scope.
+		// Refused rather than quietly rerouted: a name that was typed was
+		// meant, and running a different agent on that sentence is the
+		// confusion a binding exists to remove.
+		return "", Ask{}, Refusal{
+			Why: fmt.Sprintf(
+				"This conversation starts %s. Mention the bot without naming another agent.", agent),
+			Reason: "not_this_agent",
+		}, nil
+	}
 	return asker, ask, Refusal{}, nil
 }
 
