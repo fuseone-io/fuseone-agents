@@ -286,6 +286,96 @@ func TestSweep_anUnboundConversation_stillStartsAnyAgentTheScopePublishes(t *tes
 	}
 }
 
+/*
+A conversation that only watches its configured sources starts nothing from a
+mention.
+
+Neither door filters a mention by the conversation's mode — they cannot reply,
+and a channel that answers nothing is indistinguishable from a broken one — so
+the boundary is held here, where the configuration is already read and the
+person who mentioned the bot can be told why nothing happened.
+*/
+func TestSweep_aMentionInAWatchOnlyConversation_startsNothingAndSaysWhy(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT> triagem esse chamado", func(p *consumerParts) {
+		p.scopes.mode = channel.ConversationWatch
+		p.scopes.agent = "triagem"
+	})
+
+	if _, err := c.Sweep(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if parts.opener.calls != 0 {
+		t.Fatal("a mention started a run in a conversation that only watches sources")
+	}
+	if _, err := c.Answer(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Answer: %v", err)
+	}
+	if len(parts.answers.said) != 1 || !strings.Contains(parts.answers.said[0], "sources") {
+		t.Errorf("said = %v, want the mode explained", parts.answers.said)
+	}
+}
+
+// Both keeps both. The watched half is configuration and the mention half is a
+// person, and enabling the first must not disable the second.
+func TestSweep_aMentionInABothConversation_stillStarts(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT> esse chamado é sobre boleto", func(p *consumerParts) {
+		p.scopes.mode = channel.ConversationBoth
+		p.scopes.agent = "triagem"
+	})
+
+	opened, err := c.Sweep(t.Context(), time.Minute, 10)
+	if err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if opened != 1 || parts.opener.last.Agent != "triagem" {
+		t.Fatalf("opened = %d, agent = %q", opened, parts.opener.last.Agent)
+	}
+}
+
+/*
+A mention with no words and nothing around it is not an ask.
+
+Opening a run for it spends a model call on a question nobody asked, and
+somebody who hit send early is far likelier than somebody who meant it. Said
+back rather than dropped, so the person knows the bot heard them.
+*/
+func TestSweep_aBareMentionStartingItsOwnThread_startsNothingAndSaysWhy(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT>", func(p *consumerParts) {
+		p.scopes.agent = "triagem"
+	})
+
+	if _, err := c.Sweep(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if parts.opener.calls != 0 {
+		t.Fatal("a run opened for a mention that asked nothing")
+	}
+	if _, err := c.Answer(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Answer: %v", err)
+	}
+	if len(parts.answers.said) != 1 || !strings.Contains(parts.answers.said[0], "Say what you need") {
+		t.Errorf("said = %v, want the person told what to do", parts.answers.said)
+	}
+}
+
+// Inside a thread the thread is the question. Refusing here would break the
+// ordinary way somebody pulls an agent into a conversation already underway.
+func TestSweep_aBareMentionInsideAThread_startsTheBoundAgent(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT>", func(p *consumerParts) {
+		p.scopes.agent = "triagem"
+		p.arrival.Thread = "1785.0"
+	})
+
+	opened, err := c.Sweep(t.Context(), time.Minute, 10)
+	if err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if opened != 1 || parts.opener.last.Agent != "triagem" {
+		t.Fatalf("opened = %d, agent = %q, want the thread taken as the ask",
+			opened, parts.opener.last.Agent)
+	}
+}
+
 func TestSweep_anAskNamingNoAgent_isAnsweredInTheConversation(t *testing.T) {
 	c, parts := consumerFor(t, "<@U07BOT> alguém aí?")
 
@@ -596,15 +686,15 @@ func (p *consumerParts) StartableFromConversation(
 type conversationStub struct {
 	scope domain.Scope
 	agent domain.AgentID
+	mode  string
 	err   error
 }
 
-func (s *conversationStub) ScopeOf(context.Context, string, string) (domain.Scope, error) {
-	return s.scope, s.err
-}
-
-func (s *conversationStub) AgentOf(context.Context, string, string) (domain.AgentID, error) {
-	return s.agent, nil
+func (s *conversationStub) Resolve(context.Context, string, string) (channel.Mapped, error) {
+	return channel.Mapped{
+		Scope: s.scope, Agent: s.agent,
+		Mode: channel.ConversationMode(s.mode),
+	}, s.err
 }
 
 type subjectStub struct {

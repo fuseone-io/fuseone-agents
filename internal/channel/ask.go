@@ -88,10 +88,10 @@ func Read(text string, startable []Startable, bound domain.AgentID) (Ask, error)
 		}
 	}
 	if bound != "" {
-		// Nothing was consumed as a name, because nothing in it was one. A
-		// bare mention arrives here too and is an ask with no words: an agent
-		// started by an empty message is better than a refusal that reads as
-		// the bot being broken.
+		// Nothing was consumed as a name, because nothing in it was one. A bare
+		// mention arrives here too and resolves with no words; whether that is
+		// worth a run depends on what came before it in the conversation, which
+		// this cannot see and the consumer can.
 		return Ask{Agent: bound, Text: said}, nil
 	}
 

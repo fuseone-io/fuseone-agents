@@ -159,10 +159,10 @@ func TestRead_namingNoAgentWhereOneIsBound_startsTheBoundAgent(t *testing.T) {
 	}
 }
 
-// A bare mention is an ask too. It carries no words, and an agent whose first
-// message is an empty one is still better than a refusal somebody has to
-// decode.
-func TestRead_aBareMentionWhereAnAgentIsBound_isStillAnAsk(t *testing.T) {
+// A bare mention resolves to the bound agent and carries no words. Whether an
+// ask with no words is worth a run is not this function's question — it has no
+// idea what came before the message — and the consumer decides it.
+func TestRead_aBareMentionWhereAnAgentIsBound_resolvesToIt(t *testing.T) {
 	t.Parallel()
 
 	got, err := channel.Read("<@U07BOT>", startable, "triagem")

@@ -24,23 +24,28 @@ permissive stub is a consumer nobody has tested.
 /*
 Mapping is what an administrator configured a conversation to be.
 
-Two questions rather than one interface each, because they are the same lookup
-and the consumer asks them together: an ask is governed by the scope its
-conversation speaks for, and directed at the agent that conversation names.
-Splitting them would let a fake answer one and not the other, which is exactly
-the divergence these ports exist to make impossible.
-
-Not to be confused with [Conversations], which answers the outbound question —
-which places hear about a scope. Visibility and action are not symmetric
-(origin.go), and these are the two halves of that.
+One question rather than one per field, because they are one lookup and the
+consumer needs them together. Read separately they can also disagree: a scope
+from one version of the configuration and an agent from the next is a
+combination nobody ever wrote down, and an edit is exactly when a channel is
+busiest with people trying again.
 */
 type Mapping interface {
-	ScopeOf(ctx context.Context, channel, conversation string) (domain.Scope, error)
-	// AgentOf is the agent this conversation starts, or empty when nobody
-	// chose one. Empty is not a failure: a conversation may be open to
-	// whatever its scope publishes, which was the only arrangement before a
-	// conversation could name an agent for mentions.
-	AgentOf(ctx context.Context, channel, conversation string) (domain.AgentID, error)
+	Resolve(ctx context.Context, channel, conversation string) (Mapped, error)
+}
+
+// Mapped is one conversation's configuration, read at one instant.
+type Mapped struct {
+	Scope domain.Scope
+	// Agent is the agent this conversation starts, or empty when nobody chose
+	// one. Empty is not a failure: a conversation may be open to whatever its
+	// scope publishes, which was the only arrangement before a conversation
+	// could name an agent for mentions.
+	Agent domain.AgentID
+	// Mode is what may start a run here, as ConversationMode reads it. It is a
+	// boundary and not a label: a conversation that only watches configured
+	// sources must not be startable by anybody who can type in it.
+	Mode string
 }
 
 // Published lists what an ask in a scope could start.

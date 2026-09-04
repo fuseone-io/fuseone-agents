@@ -31,7 +31,7 @@ supposed to decide: the scope comes from the conversation, never from what
 somebody wrote in it.
 */
 func (c *Consumer) open(ctx context.Context, a Claimed) (domain.RunID, Refusal, error) {
-	scope, err := c.mapping.ScopeOf(ctx, a.Channel, a.Conversation)
+	mapped, err := c.mapping.Resolve(ctx, a.Channel, a.Conversation)
 	switch {
 	case errors.Is(err, ErrNoConversation), errors.Is(err, ErrAmbiguousConversation):
 		// Ambiguity is refused rather than resolved, and the person is told
@@ -47,13 +47,14 @@ func (c *Consumer) open(ctx context.Context, a Claimed) (domain.RunID, Refusal, 
 		return "", Refusal{}, fmt.Errorf("channel: read the scope of %s: %w", a.Conversation, err)
 	}
 
-	startable, err := c.startable(ctx, scope)
+	startable, err := c.startable(ctx, mapped.Scope)
 	if err != nil {
 		// Not a refusal. The ask is fine and this side is not, so it waits.
-		return "", Refusal{}, fmt.Errorf("channel: read what is startable in %s: %w", scope, err)
+		return "", Refusal{}, fmt.Errorf(
+			"channel: read what is startable in %s: %w", mapped.Scope, err)
 	}
 
-	asker, ask, refusal, err := c.resolveAsk(ctx, a, startable)
+	asker, ask, refusal, err := c.resolveAsk(ctx, a, mapped, startable)
 	if err != nil || refusal.Why != "" {
 		return "", refusal, err
 	}
@@ -147,12 +148,12 @@ bound. Neither borrows the other's answer, and Agent being set on the arrival is
 what says which one this is.
 */
 func (c *Consumer) resolveAsk(
-	ctx context.Context, a Claimed, startable []Startable,
+	ctx context.Context, a Claimed, mapped Mapped, startable []Startable,
 ) (domain.UserID, Ask, Refusal, error) {
 	if a.Agent != "" {
 		return watched(a, startable)
 	}
-	return c.mentioned(ctx, a, startable)
+	return c.mentioned(ctx, a, mapped, startable)
 }
 
 // watched resolves a message the conversation itself was configured to act on.
@@ -178,8 +179,20 @@ run acts on behalf of. So the binding is read first — an unbound account is
 refused whether or not the conversation would have chosen an agent for them.
 */
 func (c *Consumer) mentioned(
-	ctx context.Context, a Claimed, startable []Startable,
+	ctx context.Context, a Claimed, mapped Mapped, startable []Startable,
 ) (domain.UserID, Ask, Refusal, error) {
+	if !StartsFromMentions(mapped.Mode) {
+		// The mode is a boundary, not a label. Neither door filters a mention
+		// by it — they cannot reply, and a conversation that answers nothing is
+		// indistinguishable from a broken one — so it is enforced here, where
+		// the configuration is already read and the person can be told. This is
+		// the same shape as the no_scope refusal above.
+		return "", Ask{}, Refusal{
+			Why:    "This conversation only starts agents from its configured message sources, not from mentions.",
+			Reason: "not_from_mentions",
+		}, nil
+	}
+
 	asker, bound, err := c.bindings(ctx, a.Channel, a.AskedBy)
 	if err != nil {
 		// A store that was away is not an account nobody bound. Folded
@@ -197,12 +210,7 @@ func (c *Consumer) mentioned(
 		}, nil
 	}
 
-	agent, err := c.mapping.AgentOf(ctx, a.Channel, a.Conversation)
-	if err != nil {
-		return "", Ask{}, Refusal{}, fmt.Errorf(
-			"channel: read the agent of %s: %w", a.Conversation, err)
-	}
-	ask, err := Read(a.Text, startable, agent)
+	ask, err := Read(a.Text, startable, mapped.Agent)
 	if err != nil {
 		// The refusal already names what would have worked. It is the only
 		// teaching surface a channel has.
@@ -215,18 +223,38 @@ func (c *Consumer) mentioned(
 		// stops an administrator debugging the person who asked.
 		return "", Ask{}, cannotStartHere(ask.Agent), nil
 	}
-	if agent != "" && ask.Agent != agent {
+	if ask.Text == "" && startsItsOwnThread(a) {
+		// A mention with no words and nothing around it is not an ask. Opening
+		// a run for it spends a model call on a question nobody asked, and the
+		// person is far likelier to have hit send early than to have meant it.
+		// Inside a thread it is different: the thread is the question.
+		return "", Ask{}, Refusal{
+			Why:    "Say what you need in the same message — a mention on its own starts nothing.",
+			Reason: "no_ask",
+		}, nil
+	}
+	if mapped.Agent != "" && ask.Agent != mapped.Agent {
 		// Somebody reached past the binding to something else in the scope.
 		// Refused rather than quietly rerouted: a name that was typed was
 		// meant, and running a different agent on that sentence is the
 		// confusion a binding exists to remove.
 		return "", Ask{}, Refusal{
 			Why: fmt.Sprintf(
-				"This conversation starts %s. Mention the bot without naming another agent.", agent),
+				"This conversation starts %s. Mention the bot without naming another agent.",
+				mapped.Agent),
 			Reason: "not_this_agent",
 		}, nil
 	}
 	return asker, ask, Refusal{}, nil
+}
+
+// startsItsOwnThread reports that nothing was said before this ask.
+//
+// Compared against the message and not the delivery: those are never the same
+// string in a real channel, and comparing them meant the callers below never
+// fired.
+func startsItsOwnThread(a Claimed) bool {
+	return a.Thread == "" || a.Thread == a.Message
 }
 
 func canStart(startable []Startable, agent domain.AgentID) bool {
@@ -267,10 +295,8 @@ func (c *Consumer) structured(
 	}
 
 	// An ask that started its own thread is its own parent, and has no subject
-	// to resolve. Compared against the message and not the delivery: those are
-	// never the same string in a real channel, and comparing them meant this
-	// branch never fired.
-	if a.Thread == "" || a.Thread == a.Message {
+	// to resolve.
+	if startsItsOwnThread(a) {
 		return out, nil
 	}
 	run, found, err := c.subjects.AboutRun(ctx, a.Channel, a.Conversation, a.Thread)
