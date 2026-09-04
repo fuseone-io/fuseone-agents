@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { RefreshCw } from "lucide-react";
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -32,10 +32,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  useAgentsForScope,
   useAvailableConversations,
   useSaveConversation,
 } from "@/features/channels/api";
+import { ConversationAgentField } from "@/features/channels/conversation-agent-field";
 import { useScopes } from "@/features/scope/api";
 import { useMe } from "@/features/session/api";
 import { problemMessage } from "@/lib/api/problem-message";
@@ -90,6 +90,8 @@ const schema = z
     }
   });
 
+export type ConversationValues = z.infer<typeof schema>;
+
 function startsFromMentions(mode: ConversationMode) {
   return mode !== "watch";
 }
@@ -123,7 +125,7 @@ export function ConversationForm({
   const manuallyEnterConversation =
     available.isError || (available.isSuccess && availableItems.length === 0);
 
-  const form = useForm<z.infer<typeof schema>>({
+  const form = useForm<ConversationValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       conversation: conversation?.id ?? "",
@@ -144,11 +146,6 @@ export function ConversationForm({
   });
   const mode = form.watch("mode");
   const scope = form.watch("scope");
-  const agents = useAgentsForScope(scope);
-  const startableAgents = useMemo(
-    () => (agents.data?.items ?? []).filter(startableFromConversation),
-    [agents.data?.items],
-  );
   const people = usePeople();
   const peopleItems = (people.data?.items ?? []).filter((p) => !p.disabled);
   const { data: me } = useMe();
@@ -169,7 +166,7 @@ export function ConversationForm({
     form.setValue("runAs", me.id, { shouldValidate: true });
   }, [canDelegateRunAs, form, me, mode]);
 
-  async function submit(values: z.infer<typeof schema>) {
+  async function submit(values: ConversationValues) {
     // The select's values are always company/area, but a destructure of a
     // split is typed as possibly absent and the compiler is right to say so.
     const [company = "", area = ""] = values.scope.split("/");
@@ -186,7 +183,7 @@ export function ConversationForm({
           : false,
         sources:
           startsFromWatch(values.mode) ? splitSources(values.sources) : undefined,
-        agent: startsFromWatch(values.mode) ? values.agent.trim() : undefined,
+        agent: values.agent.trim() || undefined,
         runAs: startsFromWatch(values.mode) ? values.runAs.trim() : undefined,
         wants: values.wants,
       });
@@ -395,6 +392,7 @@ export function ConversationForm({
                 </FormItem>
               )}
             />
+            <ConversationAgentField form={form} mode={mode} scope={scope} />
             {startsFromMentions(mode) && (
               <FormField
                 control={form.control}
@@ -422,45 +420,7 @@ export function ConversationForm({
             )}
             {startsFromWatch(mode) && (
               <div className="rounded-md border bg-muted/30 p-3">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <FormField
-                    control={form.control}
-                    name="agent"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t("channels.watchAgent")}</FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          value={field.value ?? ""}
-                          disabled={!scope || agents.isLoading}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue
-                                placeholder={t("channels.pickWatchAgent")}
-                              />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {startableAgents.map((agent) => (
-                              <SelectItem
-                                key={agent.agentId}
-                                value={agent.agentId}
-                              >
-                                {agent.name || agent.agentId}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormDescription>
-                          {agents.isSuccess && startableAgents.length === 0
-                            ? t("channels.noWatchAgents")
-                            : t("channels.watchAgentExplains")}
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                <div className="grid gap-4">
                   <FormField
                     control={form.control}
                     name="runAs"
@@ -551,8 +511,4 @@ export function ConversationForm({
       </Form>
     </PropertiesSheet>
   );
-}
-
-function startableFromConversation(agent: components["schemas"]["Agent"]) {
-  return (agent.triggers ?? []).some((trigger) => trigger.type === "channel");
 }

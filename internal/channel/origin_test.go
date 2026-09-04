@@ -358,3 +358,85 @@ func TestAgentOf_theSameIdOnAnotherConnection_isNotThatBinding(t *testing.T) {
 		t.Errorf("AgentOf = %q, %v; want nothing for another connection", got, err)
 	}
 }
+
+/*
+A conversation binds an agent whatever starts its runs.
+
+The field was born for watched messages and was erased anywhere else, so a
+conversation that only takes mentions could not name the agent it is for — the
+one arrangement where saying it out loud helps most, because there the person
+is typing.
+*/
+func TestAgentOf_aMentionsOnlyConversationBoundToAnAgent_answersIt(t *testing.T) {
+	store, channels := configuredChannels(t)
+
+	if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+		ID: "C24-mentions-bound", Enabled: true, Mode: "mentions", Agent: "triagem",
+		Scope: domain.Scope{Company: "acme", Area: "ops"},
+	}, "usr_ana"); err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+
+	got, err := store.AgentOf(t.Context(), "acme-slack", "C24-mentions-bound")
+	if err != nil {
+		t.Fatalf("AgentOf: %v", err)
+	}
+	if got != "triagem" {
+		t.Errorf("agent = %q, want the configured one", got)
+	}
+}
+
+/*
+The principal and the sources still belong to watched messages alone.
+
+A mention runs as the person whose account is bound, so a RunAs kept on a
+conversation that never watches anything is a delegation nothing consumes and
+an auditor cannot explain. Dropped on the way in, where an operator can still
+be told, rather than ignored at the far end.
+*/
+func TestPutConversation_mentionsOnly_keepsTheAgentAndDropsTheWatchPrincipal(t *testing.T) {
+	_, channels := configuredChannels(t)
+
+	if err := channels.PutChannel(t.Context(), admin.Channel{
+		Name: "acme-slack", Kind: "slack", Enabled: true,
+	}, channel.Credentials{}, "usr_ana"); err != nil {
+		t.Fatalf("PutChannel: %v", err)
+	}
+	if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+		ID: "C25-mentions-only", Enabled: true, Mode: "mentions", Agent: "triagem",
+		RunAs: "usr_opsbot", Sources: []string{"B-alerts"},
+		Scope: domain.Scope{Company: "acme", Area: "ops"},
+	}, "usr_ana"); err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+
+	got := storedConversation(t, channels, "acme-slack", "C25-mentions-only")
+	if got.Agent != "triagem" {
+		t.Errorf("agent = %q, want it kept", got.Agent)
+	}
+	if got.RunAs != "" || len(got.Sources) != 0 {
+		t.Errorf("runAs = %q, sources = %v; want both dropped", got.RunAs, got.Sources)
+	}
+}
+
+func storedConversation(
+	t *testing.T, channels *admin.Channels, name, id string,
+) admin.Conversation {
+	t.Helper()
+	channelList, err := channels.List(t.Context())
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	for _, one := range channelList {
+		if one.Name != name {
+			continue
+		}
+		for _, conv := range one.Conversations {
+			if conv.ID == id {
+				return conv
+			}
+		}
+	}
+	t.Fatalf("no conversation %s on %s", id, name)
+	return admin.Conversation{}
+}
