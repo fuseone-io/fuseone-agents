@@ -233,6 +233,12 @@ there needs none and starts nothing else; with none named, the message names
 the agent and the whole scope is addressable, which is what every installation
 configured before this does.
 
+The mode a conversation is in is a boundary and not a label. A conversation
+that starts runs only from its configured message sources must not also be
+startable by anybody who can type in it, and that is enforced where the
+configuration is read rather than at each door — a door cannot reply, and a
+channel that answers nothing is indistinguishable from a broken one.
+
 It selects and it does not authorise. A mention still runs as the person whose
 channel account is bound, exactly as before — the two are separate questions
 and folding them together is how "an administrator chose an agent here" would

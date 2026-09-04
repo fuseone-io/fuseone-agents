@@ -42,6 +42,26 @@ field" is a commit message.
   "mentions only" mode are unaffected: they had no agent, and an unset agent
   still means the message names one.
 
+- **A conversation naming an agent that is not published in its scope, or that
+  never declared the Conversation trigger, is now refused when it is saved.**
+  The check existed only for watched messages, so such a configuration could
+  already have been stored through the API. Reopening those conversations in
+  the console shows what is wrong; nothing stored is rewritten on upgrade, and
+  the refusal in the channel already named the agent.
+
+- **A conversation in "watched messages" mode stops answering mentions.** It
+  never should have: the mode says only the configured Slack sources start
+  agents, and both delivery paths let a mention through regardless. Needing to
+  name an agent was the accidental brake, and a conversation that names one no
+  longer needs it. If people rely on mentioning the bot in such a channel, move
+  it to "both", which keeps each path with its own authority. The refusal says
+  what happened, so nobody is left with a silent channel.
+
+- **A mention with no words no longer starts a run.** `@bot` on its own, in a
+  conversation that names an agent, would open — and pay for — a run with no
+  question in it. It is now refused with a sentence saying what to do, unless
+  the mention is a reply inside a thread, where the thread is the question.
+
 ### Changed
 
 - **Mentioning the bot no longer repeats what the conversation already says.**

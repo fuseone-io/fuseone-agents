@@ -87,6 +87,15 @@ The chosen agent **selects; it does not authorise**. The run still acts on
 behalf of the person whose Slack account is linked to a platform user, and an
 unlinked account is still refused.
 
+Mentions start agents only in "mentions only" and "both". In a conversation set
+to "watched messages", mentioning the bot is refused with the reason — the mode
+says only the configured sources start agents, and that holds for both delivery
+paths.
+
+A mention with no words starts nothing: `@FuseOneAgent` on its own is refused
+with a sentence saying what to do. Inside a thread it is different, because
+there the thread is the question.
+
 ## Watched messages
 
 Watched messages are for messages from a known system, such as Alertmanager or

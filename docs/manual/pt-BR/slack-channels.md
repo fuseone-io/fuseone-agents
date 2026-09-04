@@ -86,6 +86,15 @@ O agente escolhido **seleciona, não autoriza**. A run continua acontecendo em
 nome da pessoa cuja conta Slack está vinculada a um usuário da plataforma;
 quem não tem vínculo continua sendo recusado.
 
+Menções só iniciam agentes nos modos "só menções" e "ambos". Numa conversa em
+modo "watched messages", mencionar o bot é recusado com o motivo — o modo diz
+que só as fontes configuradas iniciam, e isso vale para as duas formas de
+entrega.
+
+Uma menção sem nenhuma palavra não inicia nada: `@FuseOneAgent` sozinho é
+recusado com uma frase dizendo o que fazer. Dentro de uma thread é diferente,
+porque ali a thread é a pergunta.
+
 ## Watched messages
 
 Watched messages servem para mensagens de um sistema conhecido, como
