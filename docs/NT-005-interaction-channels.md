@@ -6,6 +6,7 @@
 **Revised** 2026-08-14 — §9 the shape of a channel trigger, §10 where email belongs
 **Revised** 2026-08-15 — §12 stage 3 broken down, §13 why the other vendors come after
 **Revised** 2026-08-16 — §12.2 the per-correspondent ceiling, built
+**Revised** 2026-09-04 — §9 a conversation may name the agent it starts
 
 People do not live in the console. An approval that waits for somebody to open
 a browser tab waits, and a run whose result nobody reads was not worth the
@@ -217,9 +218,25 @@ govern which conversations belong to which area. It is the same separation that
 makes classifying a tool the Curator's act and not theirs.
 
 And the question it looks like it answers is already answered without it. Which
-agent runs when somebody writes in a channel? **The mention names it.** What
-governs whether it may is the intersection of two facts that already exist: the
-conversation maps to scope X, and the agent lives in scope X.
+agent runs when somebody writes in a channel? **The mention names it, or the
+conversation does.** What governs whether it may is the intersection of two
+facts that already exist: the conversation maps to scope X, and the agent lives
+in scope X.
+
+The conversation naming one is the same administrative act as mapping it to a
+scope, made in the same place by the same people, and it is still not the
+author choosing their own reach. It answers a question the mention alone could
+not: a channel that exists for one agent had no way to say so, so every person
+typing in it had to repeat what the configuration already knew, and the day
+they forgot the platform refused them by name. With an agent named, a mention
+there needs none and starts nothing else; with none named, the message names
+the agent and the whole scope is addressable, which is what every installation
+configured before this does.
+
+It selects and it does not authorise. A mention still runs as the person whose
+channel account is bound, exactly as before — the two are separate questions
+and folding them together is how "an administrator chose an agent here" would
+quietly become "anybody in this channel may run it".
 
 So the trigger is a bare declaration with no field:
 
@@ -319,7 +336,7 @@ half, with delivery recorded per conversation and retried per conversation.
 |---|---|
 | Conversation → scope | The map exists in one direction only: `Configured.For(scope)` answers which conversations speak for a scope. Inbound needs the reverse, and it has to be **unique** — a conversation serving two scopes means the ask picks the scope, which [§4](#4-the-conversation-carries-the-scope) forbids |
 | The trigger declaration | A field with no value on the specification ([§9](#9-a-channel-trigger-names-no-conversation)), the parser, the editor, and the intersection: the conversation maps to scope X and the agent lives in scope X |
-| Which agent | The mention names it. Parsing the mention, resolving the name |
+| Which agent | The mention names it, or the conversation does. Parsing the mention, resolving the name, reading the conversation's own agent |
 | The events endpoint | URL verification, signature (reuse), dedup by `event_id` — and Slack's **three-second acknowledgement**, which means opening the run cannot happen on that request. Get it wrong and every ask is delivered several times |
 | Reference resolution | [§2.1](#21-the-boundary-of-resolution). The Ledger records the structured ask and not the sentence, which means resolving "this thread" to the alert the platform itself posted there, and refusing to resolve what it did not |
 

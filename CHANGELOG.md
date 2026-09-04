@@ -25,6 +25,33 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+### Upgrade notes
+
+- **A conversation in "watched messages" or "both" mode now answers mentions
+  with the agent it already names, and refuses mentions that name another
+  one.** Those conversations were configured with an agent for their watched
+  half; the mention half ignored it and let anybody address any agent published
+  in the scope. After this upgrade a mention there needs no agent name, and one
+  that names a different agent is refused with the name of the agent this
+  conversation starts. **Review every conversation in "both" mode where people
+  deliberately mention more than one agent** — either give each agent its own
+  conversation, or set that conversation to "mentions only" and leave its agent
+  unset, which restores exactly the previous behaviour. Conversations in
+  "mentions only" mode are unaffected: they had no agent, and an unset agent
+  still means the message names one.
+
+### Changed
+
+- **Mentioning the bot no longer repeats what the conversation already says.**
+  A conversation names the agent it is for in every start mode, and a mention
+  there starts that agent without naming it — the whole sentence is the ask.
+  The agent selects and does not authorise: the run still acts on behalf of the
+  person whose channel account is linked, and an unlinked account is still
+  refused. Leaving the agent unset keeps the old arrangement, where the message
+  names the agent and any agent published in the scope can be started.
+
 ## [0.42.0] — 2026-08-31
 
 ### Added
