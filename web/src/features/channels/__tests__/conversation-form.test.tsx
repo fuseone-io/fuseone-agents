@@ -48,7 +48,12 @@ function stubApi(
         : url.includes("/available")
         ? { items: [] }
         : url.includes("/admin/scopes")
-          ? { items: [{ company: "acme", area: "devops", label: "Devops" }] }
+          ? {
+              items: [
+                { company: "acme", area: "devops", label: "Devops" },
+                { company: "acme", area: "ops", label: "Ops" },
+              ],
+            }
           : url.includes("/admin/people")
             ? {
                 items: [
@@ -183,6 +188,29 @@ describe("conversation configuration", () => {
     });
     // The principal is the watched half and must not travel with a mention.
     expect(saved(requests)).not.toHaveProperty("runAs");
+  });
+
+  /*
+   * An agent is only startable in the scope it is published in, so one chosen
+   * for another scope is a configuration the server refuses — and the person
+   * finds out on save, having been shown a name the whole time.
+   */
+  it("clears the agent when the conversation moves to another scope", async () => {
+    stubApi({ agents: [sre] });
+    const user = userEvent.setup();
+    renderForm({ ...mentionsConversation, agent: sre.agentId });
+
+    const picker = await screen.findByRole("combobox", {
+      name: /Agente desta conversa/,
+    });
+    await waitFor(() =>
+      expect(within(picker).getByText(sre.name)).toBeInTheDocument(),
+    );
+
+    await user.click(screen.getByRole("combobox", { name: "Contexto" }));
+    await user.click(await screen.findByRole("option", { name: "Ops" }));
+
+    expect(within(picker).getByText(/Nenhum/)).toBeInTheDocument();
   });
 
   it("only offers agents that declared the Conversation trigger for watched messages", async () => {

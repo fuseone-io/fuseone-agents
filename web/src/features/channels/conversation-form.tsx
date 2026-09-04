@@ -300,7 +300,17 @@ export function ConversationForm({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{t("scope.label")}</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                  <Select
+                    onValueChange={(picked) => {
+                      field.onChange(picked);
+                      // An agent is startable only in the scope it is published
+                      // in, so one chosen for the old scope is a configuration
+                      // the server refuses. Cleared in the same act rather than
+                      // left on screen until save fails.
+                      form.setValue("agent", "", { shouldValidate: true });
+                    }}
+                    value={field.value ?? ""}
+                  >
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder={t("scope.label")} />
