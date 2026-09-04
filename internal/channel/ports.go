@@ -21,8 +21,26 @@ and the fake is held to the same invariants — a consumer that passes against a
 permissive stub is a consumer nobody has tested.
 */
 
-type Scopes interface {
+/*
+Mapping is what an administrator configured a conversation to be.
+
+Two questions rather than one interface each, because they are the same lookup
+and the consumer asks them together: an ask is governed by the scope its
+conversation speaks for, and directed at the agent that conversation names.
+Splitting them would let a fake answer one and not the other, which is exactly
+the divergence these ports exist to make impossible.
+
+Not to be confused with [Conversations], which answers the outbound question —
+which places hear about a scope. Visibility and action are not symmetric
+(origin.go), and these are the two halves of that.
+*/
+type Mapping interface {
 	ScopeOf(ctx context.Context, channel, conversation string) (domain.Scope, error)
+	// AgentOf is the agent this conversation starts, or empty when nobody
+	// chose one. Empty is not a failure: a conversation may be open to
+	// whatever its scope publishes, which was the only arrangement before a
+	// conversation could name an agent for mentions.
+	AgentOf(ctx context.Context, channel, conversation string) (domain.AgentID, error)
 }
 
 // Published lists what an ask in a scope could start.

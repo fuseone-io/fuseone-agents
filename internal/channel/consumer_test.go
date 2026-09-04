@@ -122,6 +122,96 @@ func TestSweep_aWatchedMessage_runsAsTheConfiguredPrincipal(t *testing.T) {
 	}
 }
 
+/*
+A conversation bound to an agent needs no name in the message.
+
+The name only ever selected; it never authorised. So the default changes who
+runs and nothing else: the ask still runs as the person Slack account is bound
+to, never as a principal the conversation configured for watched messages.
+*/
+func TestSweep_aMentionNamingNoAgent_startsTheConversationsOwnAgent(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT> esse chamado é sobre boleto", func(p *consumerParts) {
+		p.scopes.agent = "triagem"
+	})
+
+	opened, err := c.Sweep(t.Context(), time.Minute, 10)
+	if err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if opened != 1 {
+		t.Fatalf("opened = %d, want the bound agent started", opened)
+	}
+	if parts.opener.last.Agent != "triagem" {
+		t.Errorf("agent = %q, want the conversation's own", parts.opener.last.Agent)
+	}
+	if parts.opener.last.By != "usr_ana" {
+		t.Errorf("by = %q, want the person who asked", parts.opener.last.By)
+	}
+	var ask struct {
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal(parts.opener.last.Input, &ask); err != nil {
+		t.Fatalf("input: %v", err)
+	}
+	if ask.Text != "esse chamado é sobre boleto" {
+		t.Errorf("text = %q, want the whole sentence", ask.Text)
+	}
+}
+
+/*
+A binding to an agent that cannot run here is a misconfiguration, said out loud.
+
+Silently falling back to asking for a name would leave an administrator reading
+a screen that says one thing and a channel that does another, and the person in
+the conversation carrying the difference.
+*/
+func TestSweep_aBoundAgentThatCannotStartHere_saysWhichOne(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT> esse chamado é sobre boleto", func(p *consumerParts) {
+		p.scopes.agent = "folha"
+	})
+
+	if _, err := c.Sweep(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if parts.opener.calls != 0 {
+		t.Fatal("a run opened for an agent that cannot start here")
+	}
+	if _, err := c.Answer(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Answer: %v", err)
+	}
+	if len(parts.answers.said) != 1 || !strings.Contains(parts.answers.said[0], "folha") {
+		t.Errorf("said = %v, want the misconfigured agent named", parts.answers.said)
+	}
+}
+
+/*
+The conversation's agent selects; it never authorises.
+
+An unbound account in a bound conversation is refused exactly as it would be
+anywhere else. A default that also supplied authority would turn "an
+administrator chose an agent here" into "anybody in this channel may run it",
+which is the one thing the binding exists to prevent.
+*/
+func TestSweep_anUnboundAccountInABoundConversation_isStillRefused(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT> esse chamado é sobre boleto", func(p *consumerParts) {
+		p.scopes.agent = "triagem"
+		p.bound = false
+	})
+
+	if _, err := c.Sweep(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if parts.opener.calls != 0 {
+		t.Fatal("a run opened for an account nobody bound")
+	}
+	if _, err := c.Answer(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Answer: %v", err)
+	}
+	if len(parts.answers.said) != 1 || !strings.Contains(parts.answers.said[0], "not linked") {
+		t.Errorf("said = %v, want the unbound account named", parts.answers.said)
+	}
+}
+
 func TestSweep_anAskNamingNoAgent_isAnsweredInTheConversation(t *testing.T) {
 	c, parts := consumerFor(t, "<@U07BOT> alguém aí?")
 
@@ -337,7 +427,7 @@ func TestSweep_threadContextReadFailureIsVisibleInTheInput(t *testing.T) {
 type consumerParts struct {
 	inbox        *channel.Inbox
 	arrival      channel.Arrival
-	scopes       *scopeStub
+	scopes       *conversationStub
 	subjects     *subjectStub
 	threadPolicy *threadPolicyStub
 	threads      *threadReaderStub
@@ -362,7 +452,7 @@ func consumerWith(
 	t.Helper()
 	p := &consumerParts{
 		inbox:        freshInbox(t),
-		scopes:       &scopeStub{scope: domain.Scope{Company: "acme", Area: "ops"}},
+		scopes:       &conversationStub{scope: domain.Scope{Company: "acme", Area: "ops"}},
 		subjects:     &subjectStub{found: true},
 		threadPolicy: &threadPolicyStub{},
 		threads:      &threadReaderStub{},
@@ -427,13 +517,18 @@ func (p *consumerParts) StartableFromConversation(
 	return p.willing, nil
 }
 
-type scopeStub struct {
+type conversationStub struct {
 	scope domain.Scope
+	agent domain.AgentID
 	err   error
 }
 
-func (s *scopeStub) ScopeOf(context.Context, string, string) (domain.Scope, error) {
+func (s *conversationStub) ScopeOf(context.Context, string, string) (domain.Scope, error) {
 	return s.scope, s.err
+}
+
+func (s *conversationStub) AgentOf(context.Context, string, string) (domain.AgentID, error) {
+	return s.agent, nil
 }
 
 type subjectStub struct {

@@ -91,3 +91,35 @@ func (c *Configured) ScopeOf(ctx context.Context, channel, id string) (domain.Sc
 		return domain.Scope{}, fmt.Errorf("%w: %s/%s", ErrAmbiguousConversation, channel, id)
 	}
 }
+
+/*
+AgentOf answers which agent this conversation starts.
+
+Empty when nobody chose one, which is a configuration and not a failure: a
+conversation may be open to whatever its scope publishes, and that was the only
+arrangement before a conversation could name an agent.
+
+Keyed by the connection like ScopeOf, and for the same reason. Ambiguity is not
+resolved here because it is already refused there: nothing reaches this without
+a scope, and a conversation speaking for two never gets one.
+*/
+func (c *Configured) AgentOf(ctx context.Context, channel, id string) (domain.AgentID, error) {
+	stored, err := c.store.List(ctx, KindConversation)
+	if err != nil {
+		return "", fmt.Errorf("channel: list conversations: %w", err)
+	}
+	for _, s := range stored {
+		if s.Name != id || !s.Enabled {
+			continue
+		}
+		var v conversationValue
+		if err := json.Unmarshal(s.Value, &v); err != nil {
+			continue
+		}
+		if v.Channel != channel {
+			continue
+		}
+		return v.Agent, nil
+	}
+	return "", nil
+}

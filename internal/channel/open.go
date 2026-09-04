@@ -31,7 +31,7 @@ supposed to decide: the scope comes from the conversation, never from what
 somebody wrote in it.
 */
 func (c *Consumer) open(ctx context.Context, a Claimed) (domain.RunID, Refusal, error) {
-	scope, err := c.scopes.ScopeOf(ctx, a.Channel, a.Conversation)
+	scope, err := c.mapping.ScopeOf(ctx, a.Channel, a.Conversation)
 	switch {
 	case errors.Is(err, ErrNoConversation), errors.Is(err, ErrAmbiguousConversation):
 		// Ambiguity is refused rather than resolved, and the person is told
@@ -137,27 +137,49 @@ func (c *Consumer) startable(ctx context.Context, scope domain.Scope) ([]Startab
 	return out, nil
 }
 
+/*
+resolveAsk answers who this ask runs as and which agent it is for.
+
+Two paths with two sources of authority, which is why they are two functions
+rather than one with a flag. A watched message runs as the principal an
+administrator configured; a mention runs as the person whose channel account is
+bound. Neither borrows the other's answer, and Agent being set on the arrival is
+what says which one this is.
+*/
 func (c *Consumer) resolveAsk(
 	ctx context.Context, a Claimed, startable []Startable,
 ) (domain.UserID, Ask, Refusal, error) {
 	if a.Agent != "" {
-		if a.RunAs == "" {
-			return "", Ask{}, Refusal{
-				Why:    "This conversation is configured to watch messages, but no platform principal was chosen to run them.",
-				Reason: "misconfigured",
-			}, nil
-		}
-		for _, one := range startable {
-			if one.ID == a.Agent {
-				return a.RunAs, Ask{Agent: a.Agent, Text: a.Text}, Refusal{}, nil
-			}
-		}
+		return watched(a, startable)
+	}
+	return c.mentioned(ctx, a, startable)
+}
+
+// watched resolves a message the conversation itself was configured to act on.
+func watched(a Claimed, startable []Startable) (domain.UserID, Ask, Refusal, error) {
+	if a.RunAs == "" {
 		return "", Ask{}, Refusal{
-			Why:    fmt.Sprintf("This conversation is configured to start %s, but that agent cannot start here.", a.Agent),
-			Reason: "no_agent",
+			Why:    "This conversation is configured to watch messages, but no platform principal was chosen to run them.",
+			Reason: "misconfigured",
 		}, nil
 	}
+	if !canStart(startable, a.Agent) {
+		return "", Ask{}, cannotStartHere(a.Agent), nil
+	}
+	return a.RunAs, Ask{Agent: a.Agent, Text: a.Text}, Refusal{}, nil
+}
 
+/*
+mentioned resolves a message somebody addressed to the bot.
+
+The agent may be named in the text or configured on the conversation, and
+neither is authority: the name selects, and the person's binding is what the
+run acts on behalf of. So the binding is read first — an unbound account is
+refused whether or not the conversation would have chosen an agent for them.
+*/
+func (c *Consumer) mentioned(
+	ctx context.Context, a Claimed, startable []Startable,
+) (domain.UserID, Ask, Refusal, error) {
 	asker, bound, err := c.bindings(ctx, a.Channel, a.AskedBy)
 	if err != nil {
 		// A store that was away is not an account nobody bound. Folded
@@ -175,13 +197,42 @@ func (c *Consumer) resolveAsk(
 		}, nil
 	}
 
-	ask, err := Read(a.Text, startable)
+	agent, err := c.mapping.AgentOf(ctx, a.Channel, a.Conversation)
+	if err != nil {
+		return "", Ask{}, Refusal{}, fmt.Errorf(
+			"channel: read the agent of %s: %w", a.Conversation, err)
+	}
+	ask, err := Read(a.Text, startable, agent)
 	if err != nil {
 		// The refusal already names what would have worked. It is the only
 		// teaching surface a channel has.
 		return "", Ask{}, Refusal{Why: err.Error(), Reason: "no_agent"}, nil
 	}
+	if !canStart(startable, ask.Agent) {
+		// Only the configured agent reaches this: Read returns nothing else
+		// that is not on the list. A conversation pointed at an agent that
+		// cannot run in its scope is a misconfiguration, and saying so is what
+		// stops an administrator debugging the person who asked.
+		return "", Ask{}, cannotStartHere(ask.Agent), nil
+	}
 	return asker, ask, Refusal{}, nil
+}
+
+func canStart(startable []Startable, agent domain.AgentID) bool {
+	for _, one := range startable {
+		if one.ID == agent {
+			return true
+		}
+	}
+	return false
+}
+
+func cannotStartHere(agent domain.AgentID) Refusal {
+	return Refusal{
+		Why: fmt.Sprintf(
+			"This conversation is configured to start %s, but that agent cannot start here.", agent),
+		Reason: "no_agent",
+	}
 }
 
 /*
