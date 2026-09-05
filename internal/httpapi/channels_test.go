@@ -519,3 +519,124 @@ func TestListChannels_saysWhichAccountsAreBound(t *testing.T) {
 		t.Errorf("identity = %+v", (*held)[0])
 	}
 }
+
+/*
+The agent a conversation names is validated whatever starts its runs.
+
+The check lived inside the watched-messages branch, so a conversation that only
+takes mentions could be saved pointing at an agent that does not exist, lives
+in another scope, or never declared the Conversation trigger. Nothing failed
+until somebody mentioned the bot and read a refusal about a screen that had
+said 204.
+*/
+func TestPutConversation_mentionsModeAgentOutsideTheScope_isRefused(t *testing.T) {
+	t.Parallel()
+	s := NewServer(ledger.NewMemory(), "test").
+		WithChannels(&channelSpy{}, nil).
+		WithAgents(&startableInScope{})
+
+	resp, err := s.PutConversation(as(domain.RoleCurator), mentionsConversation("folha"))
+	if err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+	if _, ok := resp.(openapi.PutConversation400ApplicationProblemPlusJSONResponse); !ok {
+		t.Fatalf("response = %T, want the configuration refused", resp)
+	}
+}
+
+func TestPutConversation_mentionsModeAgentWithNoConversationTrigger_isRefused(t *testing.T) {
+	t.Parallel()
+	s := NewServer(ledger.NewMemory(), "test").
+		WithChannels(&channelSpy{}, nil).
+		WithAgents(&startableInScope{})
+
+	resp, err := s.PutConversation(as(domain.RoleCurator), mentionsConversation("internal-only"))
+	if err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+	if _, ok := resp.(openapi.PutConversation400ApplicationProblemPlusJSONResponse); !ok {
+		t.Fatalf("response = %T, want the configuration refused", resp)
+	}
+}
+
+func TestPutConversation_mentionsModeStartableAgent_isStored(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{}
+	s := NewServer(ledger.NewMemory(), "test").
+		WithChannels(spy, nil).
+		WithAgents(&startableInScope{})
+
+	resp, err := s.PutConversation(as(domain.RoleCurator), mentionsConversation("triagem"))
+	if err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+	if _, ok := resp.(openapi.PutConversation204Response); !ok {
+		t.Fatalf("response = %T, want accepted", resp)
+	}
+	if spy.putConv.Agent != "triagem" {
+		t.Fatalf("agent = %q, want it stored", spy.putConv.Agent)
+	}
+}
+
+// Nobody choosing is still a choice, and it must not be validated as if it
+// named something.
+func TestPutConversation_mentionsModeWithNoAgent_isStored(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{}
+	s := NewServer(ledger.NewMemory(), "test").
+		WithChannels(spy, nil).
+		WithAgents(&startableInScope{})
+
+	resp, err := s.PutConversation(as(domain.RoleCurator), mentionsConversation(""))
+	if err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+	if _, ok := resp.(openapi.PutConversation204Response); !ok {
+		t.Fatalf("response = %T, want accepted", resp)
+	}
+	if spy.putConv.Agent != "" {
+		t.Fatalf("agent = %q, want none", spy.putConv.Agent)
+	}
+}
+
+func mentionsConversation(agent string) openapi.PutConversationRequestObject {
+	mode := openapi.PutConversationJSONBodyModeMentions
+	return openapi.PutConversationRequestObject{
+		Name: "acme-slack", Conversation: "C-alerts",
+		Body: &openapi.PutConversationJSONRequestBody{
+			Company: "acme", Area: ptr("ops"),
+			Mode: &mode, Agent: ptr(agent),
+		},
+	}
+}
+
+// startableInScope publishes one agent that a conversation may start and one
+// that may not, in acme/ops and nowhere else.
+type startableInScope struct{}
+
+func (a *startableInScope) List(
+	_ context.Context, scope domain.Scope, _ bool,
+) ([]domain.AgentSummary, error) {
+	if scope != (domain.Scope{Company: "acme", Area: "ops"}) {
+		return nil, nil
+	}
+	return []domain.AgentSummary{
+		{
+			ID: "triagem", VersionID: "v1", Scope: scope,
+			Triggers: []domain.AgentTrigger{{Type: spec.TriggerChannel}},
+		},
+		{ID: "internal-only", VersionID: "v1", Scope: scope},
+	}, nil
+}
+
+func (a *startableInScope) Versions(
+	context.Context, domain.AgentID,
+) ([]domain.AgentSummary, error) {
+	return nil, nil
+}
+
+func (a *startableInScope) Instructions(
+	context.Context, domain.AgentID, domain.VersionID,
+) (string, string, error) {
+	return "", "", nil
+}

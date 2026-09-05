@@ -84,6 +84,10 @@ type envelope struct {
 		Text     string `json:"text"`
 		TS       string `json:"ts"`
 		ThreadTS string `json:"thread_ts"`
+		// Read as they arrived. What an alert says may live only here, and
+		// what counts as words in them is one decision, made in blocks.go.
+		Blocks      json.RawMessage `json:"blocks,omitempty"`
+		Attachments json.RawMessage `json:"attachments,omitempty"`
 	} `json:"event"`
 }
 
@@ -154,7 +158,7 @@ func readDelivery(body []byte, allowMessages bool) (Delivery, error) {
 		Conversation: e.Event.Channel,
 		User:         e.Event.User,
 		Source:       sourceOf(e),
-		Text:         e.Event.Text,
+		Text:         messageText(e),
 		Thread:       thread,
 	}, nil
 }
@@ -184,7 +188,7 @@ func ordinaryMessage(e envelope) (Delivery, error) {
 		Conversation: e.Event.Channel,
 		User:         e.Event.User,
 		Source:       source,
-		Text:         e.Event.Text,
+		Text:         messageText(e),
 		Thread:       thread,
 	}, nil
 }

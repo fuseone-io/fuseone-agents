@@ -122,6 +122,405 @@ func TestSweep_aWatchedMessage_runsAsTheConfiguredPrincipal(t *testing.T) {
 	}
 }
 
+/*
+A conversation bound to an agent needs no name in the message.
+
+The name only ever selected; it never authorised. So the default changes who
+runs and nothing else: the ask still runs as the person Slack account is bound
+to, never as a principal the conversation configured for watched messages.
+*/
+func TestSweep_aMentionNamingNoAgent_startsTheConversationsOwnAgent(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT> esse chamado é sobre boleto", func(p *consumerParts) {
+		p.scopes.agent = "triagem"
+	})
+
+	opened, err := c.Sweep(t.Context(), time.Minute, 10)
+	if err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if opened != 1 {
+		t.Fatalf("opened = %d, want the bound agent started", opened)
+	}
+	if parts.opener.last.Agent != "triagem" {
+		t.Errorf("agent = %q, want the conversation's own", parts.opener.last.Agent)
+	}
+	if parts.opener.last.By != "usr_ana" {
+		t.Errorf("by = %q, want the person who asked", parts.opener.last.By)
+	}
+	var ask struct {
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal(parts.opener.last.Input, &ask); err != nil {
+		t.Fatalf("input: %v", err)
+	}
+	if ask.Text != "esse chamado é sobre boleto" {
+		t.Errorf("text = %q, want the whole sentence", ask.Text)
+	}
+}
+
+/*
+A binding to an agent that cannot run here is a misconfiguration, said out loud.
+
+Silently falling back to asking for a name would leave an administrator reading
+a screen that says one thing and a channel that does another, and the person in
+the conversation carrying the difference.
+*/
+func TestSweep_aBoundAgentThatCannotStartHere_saysWhichOne(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT> esse chamado é sobre boleto", func(p *consumerParts) {
+		p.scopes.agent = "folha"
+	})
+
+	if _, err := c.Sweep(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if parts.opener.calls != 0 {
+		t.Fatal("a run opened for an agent that cannot start here")
+	}
+	if _, err := c.Answer(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Answer: %v", err)
+	}
+	if len(parts.answers.said) != 1 || !strings.Contains(parts.answers.said[0], "folha") {
+		t.Errorf("said = %v, want the misconfigured agent named", parts.answers.said)
+	}
+}
+
+/*
+The conversation's agent selects; it never authorises.
+
+An unbound account in a bound conversation is refused exactly as it would be
+anywhere else. A default that also supplied authority would turn "an
+administrator chose an agent here" into "anybody in this channel may run it",
+which is the one thing the binding exists to prevent.
+*/
+func TestSweep_anUnboundAccountInABoundConversation_isStillRefused(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT> esse chamado é sobre boleto", func(p *consumerParts) {
+		p.scopes.agent = "triagem"
+		p.bound = false
+	})
+
+	if _, err := c.Sweep(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if parts.opener.calls != 0 {
+		t.Fatal("a run opened for an account nobody bound")
+	}
+	if _, err := c.Answer(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Answer: %v", err)
+	}
+	if len(parts.answers.said) != 1 || !strings.Contains(parts.answers.said[0], "not linked") {
+		t.Errorf("said = %v, want the unbound account named", parts.answers.said)
+	}
+}
+
+/*
+A bound conversation starts its own agent and refuses to start another.
+
+The point of binding one is that the conversation decides, and a mention that
+reached past it to something else in the scope would make the binding a
+suggestion. Refused rather than quietly rerouted: somebody who typed a name
+meant it, and running a different agent on their sentence is the confusion this
+is supposed to remove.
+*/
+func TestSweep_aMentionNamingAnotherAgent_isRefusedInABoundConversation(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT> reconciliation fecha o mês", func(p *consumerParts) {
+		p.scopes.agent = "triagem"
+		p.published = append(p.published,
+			domain.AgentSummary{ID: "reconciliation", VersionID: "v1", Name: "Reconciliation"})
+	})
+
+	if _, err := c.Sweep(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if parts.opener.calls != 0 {
+		t.Fatal("a run opened for an agent this conversation is not bound to")
+	}
+	if _, err := c.Answer(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Answer: %v", err)
+	}
+	if len(parts.answers.said) != 1 || !strings.Contains(parts.answers.said[0], "triagem") {
+		t.Errorf("said = %v, want the conversation's own agent named", parts.answers.said)
+	}
+}
+
+// Naming the agent the conversation is bound to still works, and the name is
+// still consumed. An operator who learned to type it should not have to unlearn
+// it, and the word must not turn up at the start of the ask.
+func TestSweep_aMentionNamingTheBoundAgent_startsItWithoutTheName(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT> triagem esse chamado é sobre boleto", func(p *consumerParts) {
+		p.scopes.agent = "triagem"
+	})
+
+	opened, err := c.Sweep(t.Context(), time.Minute, 10)
+	if err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if opened != 1 || parts.opener.last.Agent != "triagem" {
+		t.Fatalf("opened = %d, agent = %q", opened, parts.opener.last.Agent)
+	}
+	var ask struct {
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal(parts.opener.last.Input, &ask); err != nil {
+		t.Fatalf("input: %v", err)
+	}
+	if ask.Text != "esse chamado é sobre boleto" {
+		t.Errorf("text = %q, want the name consumed", ask.Text)
+	}
+}
+
+// An unbound conversation is unchanged: the scope's agents are all addressable
+// and the name is required. Every installation configured before this is one.
+func TestSweep_anUnboundConversation_stillStartsAnyAgentTheScopePublishes(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT> reconciliation fecha o mês", func(p *consumerParts) {
+		p.published = append(p.published,
+			domain.AgentSummary{ID: "reconciliation", VersionID: "v1", Name: "Reconciliation"})
+	})
+
+	opened, err := c.Sweep(t.Context(), time.Minute, 10)
+	if err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if opened != 1 || parts.opener.last.Agent != "reconciliation" {
+		t.Fatalf("opened = %d, agent = %q, want the agent that was named",
+			opened, parts.opener.last.Agent)
+	}
+}
+
+/*
+A conversation that only watches its configured sources starts nothing from a
+mention.
+
+Neither door filters a mention by the conversation's mode — they cannot reply,
+and a channel that answers nothing is indistinguishable from a broken one — so
+the boundary is held here, where the configuration is already read and the
+person who mentioned the bot can be told why nothing happened.
+*/
+func TestSweep_aMentionInAWatchOnlyConversation_startsNothingAndSaysWhy(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT> triagem esse chamado", func(p *consumerParts) {
+		p.scopes.mode = channel.ConversationWatch
+		p.scopes.agent = "triagem"
+	})
+
+	if _, err := c.Sweep(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if parts.opener.calls != 0 {
+		t.Fatal("a mention started a run in a conversation that only watches sources")
+	}
+	if _, err := c.Answer(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Answer: %v", err)
+	}
+	if len(parts.answers.said) != 1 || !strings.Contains(parts.answers.said[0], "sources") {
+		t.Errorf("said = %v, want the mode explained", parts.answers.said)
+	}
+}
+
+// Both keeps both. The watched half is configuration and the mention half is a
+// person, and enabling the first must not disable the second.
+/*
+And it is refused before anything is enumerated.
+
+A mention this conversation does not accept must not cost a walk of the
+catalogue, and must not become a pending ask when the catalogue is away: the
+answer does not depend on what is published, so waiting for the registry would
+leave somebody unanswered over a question already settled.
+*/
+func TestSweep_aMentionTheModeRefuses_doesNotReadTheCatalogue(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT> triagem esse chamado", func(p *consumerParts) {
+		p.scopes.mode = channel.ConversationWatch
+		p.scopes.agent = "triagem"
+		p.publishedErr = errors.New("the registry is away")
+	})
+
+	if _, err := c.Sweep(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if parts.listCalls != 0 {
+		t.Errorf("listed the catalogue %d times for a mention the mode refuses", parts.listCalls)
+	}
+	if _, err := c.Answer(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Answer: %v", err)
+	}
+	if len(parts.answers.said) != 1 {
+		t.Fatalf("said = %v, want the refusal delivered rather than left pending", parts.answers.said)
+	}
+}
+
+func TestSweep_aMentionInABothConversation_stillStarts(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT> esse chamado é sobre boleto", func(p *consumerParts) {
+		p.scopes.mode = channel.ConversationBoth
+		p.scopes.agent = "triagem"
+	})
+
+	opened, err := c.Sweep(t.Context(), time.Minute, 10)
+	if err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if opened != 1 || parts.opener.last.Agent != "triagem" {
+		t.Fatalf("opened = %d, agent = %q", opened, parts.opener.last.Agent)
+	}
+}
+
+/*
+A mention with no words and nothing around it is not an ask.
+
+Opening a run for it spends a model call on a question nobody asked, and
+somebody who hit send early is far likelier than somebody who meant it. Said
+back rather than dropped, so the person knows the bot heard them.
+*/
+func TestSweep_aBareMentionStartingItsOwnThread_startsNothingAndSaysWhy(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT>", func(p *consumerParts) {
+		p.scopes.agent = "triagem"
+	})
+
+	if _, err := c.Sweep(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if parts.opener.calls != 0 {
+		t.Fatal("a run opened for a mention that asked nothing")
+	}
+	if _, err := c.Answer(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Answer: %v", err)
+	}
+	if len(parts.answers.said) != 1 || !strings.Contains(parts.answers.said[0], "Say what you need") {
+		t.Errorf("said = %v, want the person told what to do", parts.answers.said)
+	}
+}
+
+/*
+Being in a thread is not context. Having some is.
+
+A thread the conversation never opted into reading, or one the vendor would not
+give us, leaves the agent exactly as empty-handed as a mention on its own — and
+the run is paid for either way.
+*/
+func TestSweep_aBareMentionInAThreadWithNothingInIt_startsNothing(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT>", func(p *consumerParts) {
+		p.scopes.agent = "triagem"
+		p.arrival.Thread = "1785.0"
+	})
+
+	if _, err := c.Sweep(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if parts.opener.calls != 0 {
+		t.Fatal("a run opened for a mention with no words and no context")
+	}
+	if _, err := c.Answer(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Answer: %v", err)
+	}
+	if len(parts.answers.said) != 1 || !strings.Contains(parts.answers.said[0], "Say what you need") {
+		t.Errorf("said = %v, want the person told what to do", parts.answers.said)
+	}
+}
+
+// A thread about a run the platform itself posted is a question: the record
+// names that run, and the agent can go and read it.
+func TestSweep_aBareMentionInAThreadAboutARun_startsTheBoundAgent(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT>", func(p *consumerParts) {
+		p.scopes.agent = "triagem"
+		p.arrival.Thread = "1785.0"
+		p.subjects.run = "run-42"
+	})
+
+	opened, err := c.Sweep(t.Context(), time.Minute, 10)
+	if err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if opened != 1 || parts.opener.last.Agent != "triagem" {
+		t.Fatalf("opened = %d, agent = %q, want the run taken as the ask",
+			opened, parts.opener.last.Agent)
+	}
+}
+
+// So is a thread whose messages were actually read.
+func TestSweep_aBareMentionInAThreadThatWasRead_startsTheBoundAgent(t *testing.T) {
+	c, _ := consumerWith(t, "<@U07BOT>", func(p *consumerParts) {
+		p.scopes.agent = "triagem"
+		p.arrival.Thread = "1785.0"
+		p.threadPolicy.include = true
+		p.threads.context = channel.ThreadContext{
+			Messages: []channel.ThreadMessage{{Ref: "1785.0", Text: "o boleto voltou"}},
+		}
+	})
+
+	if opened, err := c.Sweep(t.Context(), time.Minute, 10); err != nil || opened != 1 {
+		t.Fatalf("opened = %d, err = %v, want the thread taken as the ask", opened, err)
+	}
+}
+
+// A thread the vendor would not give us is not context. The record says
+// unavailable, and an agent cannot read a sentence that is not there.
+func TestSweep_aBareMentionInAThreadThatCouldNotBeRead_startsNothing(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT>", func(p *consumerParts) {
+		p.scopes.agent = "triagem"
+		p.arrival.Thread = "1785.0"
+		p.threadPolicy.include = true
+		p.threads.err = errors.New("missing_scope: channels:history")
+	})
+
+	if _, err := c.Sweep(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if parts.opener.calls != 0 {
+		t.Fatal("a run opened on a thread nobody could read")
+	}
+}
+
+/*
+A watched message with nothing in it starts nothing either.
+
+The rule is about what reaches the agent, not about who sent it. An alerting
+system that leaves `text` empty has its words read out of its blocks by the
+Slack adapter, so what arrives here empty is a message that really said
+nothing — and a run with no input is a model call paid for with no question.
+*/
+func TestSweep_aWatchedMessageWithNothingInIt_startsNothing(t *testing.T) {
+	c, parts := consumerWith(t, "", func(p *consumerParts) {
+		p.arrival.Agent = "triagem"
+		p.arrival.RunAs = "usr_opsbot"
+		p.arrival.AskedBy = "bot:B-alerts"
+		p.arrival.Source = channel.Source{Bot: "B-alerts"}
+	})
+
+	if _, err := c.Sweep(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if parts.opener.calls != 0 {
+		t.Fatal("a run opened for a watched message with no words in it")
+	}
+}
+
+// A watched message that does say something starts its agent, and the words
+// travel. This is the shape the Slack adapter produces from an alert whose
+// content lives in blocks.
+func TestSweep_aWatchedMessageWithWordsFromItsBlocks_startsItsAgent(t *testing.T) {
+	c, parts := consumerWith(t, "FIRING: GatewayRTMInterfaceErrors", func(p *consumerParts) {
+		p.arrival.Agent = "triagem"
+		p.arrival.RunAs = "usr_opsbot"
+		p.arrival.AskedBy = "bot:B-alerts"
+		p.arrival.Source = channel.Source{Bot: "B-alerts"}
+	})
+
+	opened, err := c.Sweep(t.Context(), time.Minute, 10)
+	if err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if opened != 1 || parts.opener.last.Agent != "triagem" {
+		t.Fatalf("opened = %d, agent = %q, want the alert started",
+			opened, parts.opener.last.Agent)
+	}
+	var ask struct {
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal(parts.opener.last.Input, &ask); err != nil {
+		t.Fatalf("input: %v", err)
+	}
+	if ask.Text != "FIRING: GatewayRTMInterfaceErrors" {
+		t.Errorf("text = %q, want the alert available to the run", ask.Text)
+	}
+}
+
 func TestSweep_anAskNamingNoAgent_isAnsweredInTheConversation(t *testing.T) {
 	c, parts := consumerFor(t, "<@U07BOT> alguém aí?")
 
@@ -337,12 +736,15 @@ func TestSweep_threadContextReadFailureIsVisibleInTheInput(t *testing.T) {
 type consumerParts struct {
 	inbox        *channel.Inbox
 	arrival      channel.Arrival
-	scopes       *scopeStub
+	scopes       *conversationStub
 	subjects     *subjectStub
 	threadPolicy *threadPolicyStub
 	threads      *threadReaderStub
 	opener       *openerSpy
 	answers      *answerSpy
+	published    []domain.AgentSummary
+	publishedErr error
+	listCalls    int
 	bound        bool
 	bindErr      error
 	willing      bool
@@ -362,14 +764,17 @@ func consumerWith(
 	t.Helper()
 	p := &consumerParts{
 		inbox:        freshInbox(t),
-		scopes:       &scopeStub{scope: domain.Scope{Company: "acme", Area: "ops"}},
+		scopes:       &conversationStub{scope: domain.Scope{Company: "acme", Area: "ops"}},
 		subjects:     &subjectStub{found: true},
 		threadPolicy: &threadPolicyStub{},
 		threads:      &threadReaderStub{},
 		opener:       &openerSpy{},
 		answers:      &answerSpy{},
-		bound:        true,
-		willing:      true,
+		published: []domain.AgentSummary{
+			{ID: "triagem", VersionID: "v1", Name: "Triagem de chamados"},
+		},
+		bound:   true,
+		willing: true,
 		arrival: channel.Arrival{
 			// A delivery id and a message id that are not the same string,
 			// because in a real channel they never are. They were, in the
@@ -416,9 +821,8 @@ func reseed(t *testing.T, p *consumerParts) {
 }
 
 func (p *consumerParts) List(context.Context, domain.Scope, bool) ([]domain.AgentSummary, error) {
-	return []domain.AgentSummary{
-		{ID: "triagem", VersionID: "v1", Name: "Triagem de chamados"},
-	}, nil
+	p.listCalls++
+	return p.published, p.publishedErr
 }
 
 func (p *consumerParts) StartableFromConversation(
@@ -427,13 +831,18 @@ func (p *consumerParts) StartableFromConversation(
 	return p.willing, nil
 }
 
-type scopeStub struct {
+type conversationStub struct {
 	scope domain.Scope
+	agent domain.AgentID
+	mode  string
 	err   error
 }
 
-func (s *scopeStub) ScopeOf(context.Context, string, string) (domain.Scope, error) {
-	return s.scope, s.err
+func (s *conversationStub) Resolve(context.Context, string, string) (channel.Mapped, error) {
+	return channel.Mapped{
+		Scope: s.scope, Agent: s.agent,
+		Mode: channel.ConversationMode(s.mode),
+	}, s.err
 }
 
 type subjectStub struct {

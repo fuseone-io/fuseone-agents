@@ -258,18 +258,23 @@ func (c *Channels) PutConversation(
 	}
 	mode := channel.ConversationMode(conv.Mode)
 	sources := compactStrings(conv.Sources)
+	conv.Agent = domain.AgentID(strings.TrimSpace(string(conv.Agent)))
 	if channel.StartsFromWatch(mode) {
 		switch {
 		case len(sources) == 0:
 			return ErrNoWatchSource
-		case strings.TrimSpace(string(conv.Agent)) == "":
+		case conv.Agent == "":
 			return ErrNoWatchAgent
 		case strings.TrimSpace(string(conv.RunAs)) == "":
 			return ErrNoWatchRunAs
 		}
 	} else {
+		// The agent survives, because it says which agent this conversation is
+		// for and a mention there needs no name. The principal and the sources
+		// do not: a mention runs as the person whose account is bound, so a
+		// RunAs on a conversation that watches nothing is a delegation nothing
+		// consumes and nobody can explain later.
 		sources = nil
-		conv.Agent = ""
 		conv.RunAs = ""
 	}
 	if !channel.StartsFromMentions(mode) {

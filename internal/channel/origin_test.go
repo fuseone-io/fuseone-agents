@@ -21,7 +21,7 @@ an agent in every area is a different grant. Reading one map in both directions
 would make visibility and action symmetric by accident.
 */
 
-func TestScopeOf_aConfiguredConversation_answersItsOwnScope(t *testing.T) {
+func TestResolve_aConfiguredConversation_answersItsOwnScope(t *testing.T) {
 	store, channels := configuredChannels(t)
 
 	if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
@@ -31,12 +31,12 @@ func TestScopeOf_aConfiguredConversation_answersItsOwnScope(t *testing.T) {
 		t.Fatalf("PutConversation: %v", err)
 	}
 
-	got, err := store.ScopeOf(t.Context(), "acme-slack", "C07-ops")
+	got, err := store.Resolve(t.Context(), "acme-slack", "C07-ops")
 	if err != nil {
-		t.Fatalf("ScopeOf: %v", err)
+		t.Fatalf("Resolve: %v", err)
 	}
-	if got != (domain.Scope{Company: "acme", Area: "ops"}) {
-		t.Errorf("scope = %+v, want the conversation's own", got)
+	if got.Scope != (domain.Scope{Company: "acme", Area: "ops"}) {
+		t.Errorf("scope = %+v, want the conversation's own", got.Scope)
 	}
 }
 
@@ -48,7 +48,7 @@ a caller mapping it.
 // A conversation somebody switched off starts nothing. It is configuration
 // that exists and is not in force, and the outbound half already reads it that
 // way — a channel that stopped hearing must not go on being able to ask.
-func TestScopeOf_aConversationSwitchedOff_isRefused(t *testing.T) {
+func TestResolve_aConversationSwitchedOff_isRefused(t *testing.T) {
 	store, channels := configuredChannels(t)
 
 	if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
@@ -58,15 +58,15 @@ func TestScopeOf_aConversationSwitchedOff_isRefused(t *testing.T) {
 		t.Fatalf("PutConversation: %v", err)
 	}
 
-	if _, err := store.ScopeOf(t.Context(), "acme-slack", "C08-quiet"); !errors.Is(err, channel.ErrNoConversation) {
+	if _, err := store.Resolve(t.Context(), "acme-slack", "C08-quiet"); !errors.Is(err, channel.ErrNoConversation) {
 		t.Errorf("err = %v, want ErrNoConversation", err)
 	}
 }
 
-func TestScopeOf_aConversationNobodyConfigured_isRefused(t *testing.T) {
+func TestResolve_aConversationNobodyConfigured_isRefused(t *testing.T) {
 	store, _ := configuredChannels(t)
 
-	_, err := store.ScopeOf(t.Context(), "acme-slack", "C99-nobody")
+	_, err := store.Resolve(t.Context(), "acme-slack", "C99-nobody")
 	if !errors.Is(err, channel.ErrNoConversation) {
 		t.Errorf("err = %v, want ErrNoConversation", err)
 	}
@@ -224,7 +224,7 @@ Slack's channel ids and Teams' conversation ids are two namespaces, and nothing
 promises they never collide. Resolved by id alone, a message in one workspace
 would be governed by a scope somebody configured for another.
 */
-func TestScopeOf_theSameIdOnTwoConnections_resolvesSeparately(t *testing.T) {
+func TestResolve_theSameIdOnTwoConnections_resolvesSeparately(t *testing.T) {
 	store, channels := configuredChannels(t)
 
 	for _, one := range []struct {
@@ -239,15 +239,15 @@ func TestScopeOf_theSameIdOnTwoConnections_resolvesSeparately(t *testing.T) {
 		}
 	}
 
-	slack, err := store.ScopeOf(t.Context(), "acme-slack", "SHARED-ID")
+	slack, err := store.Resolve(t.Context(), "acme-slack", "SHARED-ID")
 	if err != nil {
-		t.Fatalf("ScopeOf slack: %v", err)
+		t.Fatalf("Resolve slack: %v", err)
 	}
-	teams, err := store.ScopeOf(t.Context(), "acme-teams", "SHARED-ID")
+	teams, err := store.Resolve(t.Context(), "acme-teams", "SHARED-ID")
 	if err != nil {
-		t.Fatalf("ScopeOf teams: %v", err)
+		t.Fatalf("Resolve teams: %v", err)
 	}
-	if slack.Area != "ops" || teams.Area != "finance" {
+	if slack.Scope.Area != "ops" || teams.Scope.Area != "finance" {
 		t.Errorf("slack = %v, teams = %v, want each its own", slack, teams)
 	}
 }
@@ -293,4 +293,153 @@ func TestPutConversation_theSameScopeAgain_isAnEdit(t *testing.T) {
 			t.Fatalf("PutConversation %q: %v", label, err)
 		}
 	}
+}
+
+/*
+Which agent a conversation starts.
+
+Read from the same row as the scope and by the same key, because they are the
+same decision: an administrator pointed this conversation at an area and at an
+agent, and a mention there needs to name neither.
+*/
+func TestResolve_aConversationBoundToAnAgent_answersIt(t *testing.T) {
+	store, channels := configuredChannels(t)
+
+	if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+		ID: "C21-bound", Label: "#bound", Enabled: true, Mode: "both",
+		Sources: []string{"B-alerts"}, Agent: "triagem", RunAs: "usr_opsbot",
+		Scope: domain.Scope{Company: "acme", Area: "ops"},
+	}, "usr_ana"); err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+
+	got, err := store.Resolve(t.Context(), "acme-slack", "C21-bound")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if got.Agent != "triagem" {
+		t.Errorf("agent = %q, want the configured one", got.Agent)
+	}
+	if got.Mode != channel.ConversationBoth {
+		t.Errorf("mode = %q, want it read from the same row", got.Mode)
+	}
+}
+
+// Nobody chose is not a failure. A conversation open to whatever its scope
+// publishes was the only arrangement before this, and it stays one.
+func TestResolve_aConversationNobodyBound_answersEmptyAndNoError(t *testing.T) {
+	store, channels := configuredChannels(t)
+
+	if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+		ID: "C22-unbound", Label: "#unbound", Enabled: true,
+		Scope: domain.Scope{Company: "acme", Area: "ops"},
+	}, "usr_ana"); err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+
+	got, err := store.Resolve(t.Context(), "acme-slack", "C22-unbound")
+	if err != nil || got.Agent != "" {
+		t.Errorf("Resolve = %+v, %v; want no agent and no error", got, err)
+	}
+}
+
+// The same id on two connections is two conversations. An agent bound in one
+// workspace must not answer for a channel that merely shares an identifier.
+func TestResolve_theSameIdOnAnotherConnection_isNotThatBinding(t *testing.T) {
+	store, channels := configuredChannels(t)
+
+	if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+		ID: "C23-one-connection", Enabled: true, Mode: "both",
+		Sources: []string{"B-alerts"}, Agent: "triagem", RunAs: "usr_opsbot",
+		Scope: domain.Scope{Company: "acme", Area: "ops"},
+	}, "usr_ana"); err != nil {
+		t.Fatalf("PutConversation slack: %v", err)
+	}
+
+	_, err := store.Resolve(t.Context(), "acme-teams", "C23-one-connection")
+	if !errors.Is(err, channel.ErrNoConversation) {
+		t.Errorf("err = %v, want nothing resolved for another connection", err)
+	}
+}
+
+/*
+A conversation binds an agent whatever starts its runs.
+
+The field was born for watched messages and was erased anywhere else, so a
+conversation that only takes mentions could not name the agent it is for — the
+one arrangement where saying it out loud helps most, because there the person
+is typing.
+*/
+func TestResolve_aMentionsOnlyConversationBoundToAnAgent_answersIt(t *testing.T) {
+	store, channels := configuredChannels(t)
+
+	if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+		ID: "C24-mentions-bound", Enabled: true, Mode: "mentions", Agent: "triagem",
+		Scope: domain.Scope{Company: "acme", Area: "ops"},
+	}, "usr_ana"); err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+
+	got, err := store.Resolve(t.Context(), "acme-slack", "C24-mentions-bound")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if got.Agent != "triagem" {
+		t.Errorf("agent = %q, want the configured one", got.Agent)
+	}
+}
+
+/*
+The principal and the sources still belong to watched messages alone.
+
+A mention runs as the person whose account is bound, so a RunAs kept on a
+conversation that never watches anything is a delegation nothing consumes and
+an auditor cannot explain. Dropped on the way in, where an operator can still
+be told, rather than ignored at the far end.
+*/
+func TestPutConversation_mentionsOnly_keepsTheAgentAndDropsTheWatchPrincipal(t *testing.T) {
+	_, channels := configuredChannels(t)
+
+	if err := channels.PutChannel(t.Context(), admin.Channel{
+		Name: "acme-slack", Kind: "slack", Enabled: true,
+	}, channel.Credentials{}, "usr_ana"); err != nil {
+		t.Fatalf("PutChannel: %v", err)
+	}
+	if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+		ID: "C25-mentions-only", Enabled: true, Mode: "mentions", Agent: "triagem",
+		RunAs: "usr_opsbot", Sources: []string{"B-alerts"},
+		Scope: domain.Scope{Company: "acme", Area: "ops"},
+	}, "usr_ana"); err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+
+	got := storedConversation(t, channels, "acme-slack", "C25-mentions-only")
+	if got.Agent != "triagem" {
+		t.Errorf("agent = %q, want it kept", got.Agent)
+	}
+	if got.RunAs != "" || len(got.Sources) != 0 {
+		t.Errorf("runAs = %q, sources = %v; want both dropped", got.RunAs, got.Sources)
+	}
+}
+
+func storedConversation(
+	t *testing.T, channels *admin.Channels, name, id string,
+) admin.Conversation {
+	t.Helper()
+	channelList, err := channels.List(t.Context())
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	for _, one := range channelList {
+		if one.Name != name {
+			continue
+		}
+		for _, conv := range one.Conversations {
+			if conv.ID == id {
+				return conv
+			}
+		}
+	}
+	t.Fatalf("no conversation %s on %s", id, name)
+	return admin.Conversation{}
 }

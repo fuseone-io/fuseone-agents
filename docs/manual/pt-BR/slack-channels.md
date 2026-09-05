@@ -59,16 +59,50 @@ deve mostrar botões de aprovação no Slack.
 
 ## Menções
 
-No modo "mentions only", uma pessoa menciona o bot e começa a mensagem com o
-id ou nome do agente:
+Uma conversa pode nomear o agente que ela inicia. Com um agente escolhido, quem
+menciona o bot não precisa nomeá-lo, e a frase inteira é a pergunta:
+
+```text
+@FuseOneAgent entenda esse alerta
+```
+
+Nessa conversa **nenhum outro agente inicia por menção**. Mencionar um agente
+diferente é recusado com o nome do agente da conversa, em vez de rodar outro
+agente na frase de quem perguntou.
+
+Sem agente escolhido — a opção "nenhum — a mensagem nomeia o agente" — a
+mensagem precisa começar com o id ou nome do agente, e qualquer agente
+publicado no escopo da conversa pode ser iniciado:
 
 ```text
 @FuseOneAgent troubleshooting-sre entenda esse alerta
 ```
 
-A conversa decide o escopo. O texto não escolhe company ou area. O agente só
-inicia se a versão publicada declara trigger de conversa e existe naquele
-escopo.
+Nos dois casos a conversa decide o escopo e o texto não escolhe company ou
+area. O agente só inicia se a versão publicada declara trigger de conversa e
+existe naquele escopo.
+
+O agente escolhido **seleciona, não autoriza**. A run continua acontecendo em
+nome da pessoa cuja conta Slack está vinculada a um usuário da plataforma;
+quem não tem vínculo continua sendo recusado.
+
+Menções só iniciam agentes nos modos "só menções" e "ambos". Numa conversa em
+modo "watched messages", mencionar o bot é recusado com o motivo — o modo diz
+que só as fontes configuradas iniciam, e isso vale para as duas formas de
+entrega.
+
+Uma menção sem nenhuma palavra não inicia nada: `@FuseOneAgent` sozinho é
+recusado com uma frase dizendo o que fazer. A exceção é quando a menção chega
+com algo para trabalhar — uma thread onde a plataforma publicou uma run, ou uma
+thread cujas mensagens anteriores foram realmente lidas porque "include thread
+context" está ligado. Estar numa thread não basta: uma thread que ninguém leu
+deixa o agente tão sem informação quanto uma menção sozinha.
+
+A mesma regra vale para watched messages. Quando a mensagem não tem `text`
+próprio, a plataforma lê as palavras dos `blocks` e `attachments` — que é como
+a maioria das integrações de alerta publica — e só recusa quando não encontra
+nada. A entrega continua gravada inteira, então o payload está lá para
+conferir.
 
 ## Watched messages
 
@@ -99,6 +133,7 @@ Se o agente não iniciou:
 
 1. O log mostra `an ask arrived`? Se não, o evento não chegou ao FuseOne.
 2. A conversa está no modo certo: menção, watched messages ou ambos?
+2b. A menção nomeou um agente diferente do agente escolhido na conversa?
 3. O agente publicado tem trigger de conversa?
 4. O agente está publicado no mesmo escopo da conversa?
 5. Em watched messages, o Slack source id está permitido?

@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-
-	"github.com/fuseone/agents/internal/domain"
 )
 
 /*
@@ -50,20 +48,25 @@ migration, or from a version of the screen that did not check.
 var ErrAmbiguousConversation = errors.New("channel: that conversation speaks for more than one scope")
 
 /*
-ScopeOf answers which scope an ask in this conversation belongs to.
+Resolve answers what this conversation was configured to be.
 
 Keyed by the connection as well as the conversation. An id means nothing on its
 own: two workspaces are two namespaces, and an id naming a channel in one may
 name another somewhere else — so a single argument would let a message in one
 installation's Slack resolve to a scope configured for a different Teams.
+
+Everything the consumer needs comes back from one read. Scope, agent and mode
+answered by separate calls could each see a different version of the
+configuration, and an ask governed by one row's scope and another row's agent
+is a combination nobody configured.
 */
-func (c *Configured) ScopeOf(ctx context.Context, channel, id string) (domain.Scope, error) {
+func (c *Configured) Resolve(ctx context.Context, channel, id string) (Mapped, error) {
 	stored, err := c.store.List(ctx, KindConversation)
 	if err != nil {
-		return domain.Scope{}, fmt.Errorf("channel: list conversations: %w", err)
+		return Mapped{}, fmt.Errorf("channel: list conversations: %w", err)
 	}
 
-	var found []domain.Scope
+	var found []Mapped
 	for _, s := range stored {
 		if s.Name != id || !s.Enabled {
 			continue
@@ -79,15 +82,17 @@ func (c *Configured) ScopeOf(ctx context.Context, channel, id string) (domain.Sc
 		if v.Channel != channel {
 			continue
 		}
-		found = append(found, s.Scope)
+		found = append(found, Mapped{
+			Scope: s.Scope, Agent: v.Agent, Mode: ConversationMode(v.Mode),
+		})
 	}
 
 	switch len(found) {
 	case 0:
-		return domain.Scope{}, fmt.Errorf("%w: %s/%s", ErrNoConversation, channel, id)
+		return Mapped{}, fmt.Errorf("%w: %s/%s", ErrNoConversation, channel, id)
 	case 1:
 		return found[0], nil
 	default:
-		return domain.Scope{}, fmt.Errorf("%w: %s/%s", ErrAmbiguousConversation, channel, id)
+		return Mapped{}, fmt.Errorf("%w: %s/%s", ErrAmbiguousConversation, channel, id)
 	}
 }

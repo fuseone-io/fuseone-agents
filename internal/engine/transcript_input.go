@@ -54,47 +54,69 @@ type channelAskTranscript struct {
 		Kind string `json:"kind"`
 		Run  string `json:"run"`
 	} `json:"subject,omitempty"`
-	Text   string `json:"text"`
-	Thread *struct {
-		Messages []struct {
-			Source string `json:"source,omitempty"`
-			Text   string `json:"text"`
-		} `json:"messages,omitempty"`
-		Truncated   bool   `json:"truncated,omitempty"`
-		Unavailable string `json:"unavailable,omitempty"`
-	} `json:"thread,omitempty"`
+	Text   string                   `json:"text"`
+	Thread *channelThreadTranscript `json:"thread,omitempty"`
 }
 
-func channelAskForTranscript(content []byte) ([]byte, bool) {
-	var ask channelAskTranscript
-	if err := json.Unmarshal(content, &ask); err != nil || ask.Text == "" {
-		return nil, false
-	}
-	var b strings.Builder
-	b.WriteString(ask.Text)
-	if ask.Subject != nil && ask.Subject.Kind == "run" && ask.Subject.Run != "" {
-		fmt.Fprintf(&b, "\n\nThread subject: run %s.", ask.Subject.Run)
-	}
-	appendThreadContext(&b, ask.Thread)
-	return []byte(b.String()), true
-}
-
-func appendThreadContext(b *strings.Builder, thread *struct {
+type channelThreadTranscript struct {
 	Messages []struct {
 		Source string `json:"source,omitempty"`
 		Text   string `json:"text"`
 	} `json:"messages,omitempty"`
 	Truncated   bool   `json:"truncated,omitempty"`
 	Unavailable string `json:"unavailable,omitempty"`
-}) {
-	if thread == nil {
-		return
+}
+
+/*
+channelAskForTranscript is what the model sees of an ask made in a channel.
+
+The envelope does not travel. asked_by, the vendor account, the conversation
+and the thread references are how the platform routes and audits an ask, and
+none of them is the question — a model that reads them starts treating a Slack
+user id as an instruction.
+
+Every ask that parses is projected, however little it turns out to say. The
+first version of this chose by the text, so a mention whose question is the
+thread it arrived on — empty text, real context — fell out of the projection
+and the whole envelope went to the model: the exact leak this exists to
+prevent, reached by the one shape nobody had thought about. Choosing by any
+other field would have the same defect waiting behind it, so nothing chooses:
+an ask with nothing in it projects to nothing, which is honest and carries no
+metadata. Only content that is not an ask at all — not JSON — falls back.
+*/
+func channelAskForTranscript(content []byte) ([]byte, bool) {
+	var ask channelAskTranscript
+	if err := json.Unmarshal(content, &ask); err != nil {
+		return nil, false
 	}
+
+	parts := make([]string, 0, 4)
+	if ask.Text != "" {
+		parts = append(parts, ask.Text)
+	}
+	if ask.Subject != nil && ask.Subject.Kind == "run" && ask.Subject.Run != "" {
+		parts = append(parts, fmt.Sprintf("Thread subject: run %s.", ask.Subject.Run))
+	}
+	parts = append(parts, threadContextParts(ask.Thread)...)
+	return []byte(strings.Join(parts, "\n\n")), true
+}
+
+// threadContextParts is the surrounding evidence, as sections.
+//
+// Sections rather than one appended string: with no text of its own, an ask
+// built by appending would open with the blank lines meant to separate it from
+// words that were never there.
+func threadContextParts(thread *channelThreadTranscript) []string {
+	if thread == nil {
+		return nil
+	}
+	var parts []string
 	if thread.Unavailable != "" {
-		fmt.Fprintf(b, "\n\nThread context unavailable: %s", thread.Unavailable)
+		parts = append(parts, "Thread context unavailable: "+thread.Unavailable)
 	}
 	if len(thread.Messages) > 0 {
-		b.WriteString("\n\nEarlier thread messages:")
+		var b strings.Builder
+		b.WriteString("Earlier thread messages:")
 		for _, msg := range thread.Messages {
 			b.WriteString("\n- ")
 			if msg.Source != "" {
@@ -103,10 +125,12 @@ func appendThreadContext(b *strings.Builder, thread *struct {
 			}
 			b.WriteString(msg.Text)
 		}
+		parts = append(parts, b.String())
 	}
 	if thread.Truncated {
-		b.WriteString("\n\nEarlier thread messages were truncated.")
+		parts = append(parts, "Earlier thread messages were truncated.")
 	}
+	return parts
 }
 
 func channelInputCompactionNote(content []byte, fields []map[string]any) string {

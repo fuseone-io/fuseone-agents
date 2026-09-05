@@ -25,6 +25,75 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+### Upgrade notes
+
+- **A conversation in "watched messages" or "both" mode now answers mentions
+  with the agent it already names, and refuses mentions that name another
+  one.** Those conversations were configured with an agent for their watched
+  half; the mention half ignored it and let anybody address any agent published
+  in the scope. After this upgrade a mention there needs no agent name, and one
+  that names a different agent is refused with the name of the agent this
+  conversation starts. **Review every conversation in "both" mode where people
+  deliberately mention more than one agent** — either give each agent its own
+  conversation, or set that conversation to "mentions only" and leave its agent
+  unset, which restores exactly the previous behaviour. Conversations in
+  "mentions only" mode are unaffected: they had no agent, and an unset agent
+  still means the message names one.
+
+- **A conversation naming an agent that is not published in its scope, or that
+  never declared the Conversation trigger, is now refused when it is saved.**
+  The check existed only for watched messages, so such a configuration could
+  already have been stored through the API. Reopening those conversations in
+  the console shows what is wrong; nothing stored is rewritten on upgrade, and
+  the refusal in the channel already named the agent.
+
+- **A conversation in "watched messages" mode stops answering mentions.** It
+  never should have: the mode says only the configured Slack sources start
+  agents, and both delivery paths let a mention through regardless. Needing to
+  name an agent was the accidental brake, and a conversation that names one no
+  longer needs it. If people rely on mentioning the bot in such a channel, move
+  it to "both", which keeps each path with its own authority. The refusal says
+  what happened, so nobody is left with a silent channel.
+
+- **A mention with no words no longer starts a run.** `@bot` on its own, in a
+  conversation that names an agent, would open — and pay for — a run with no
+  question in it. It is now refused with a sentence saying what to do, unless
+  the mention arrives with something to work on: a thread the platform posted a
+  run into, or a thread whose earlier messages were actually read because the
+  conversation has "include thread context" on. Being in a thread is not enough
+  on its own — a thread nobody read leaves the agent as empty-handed as a bare
+  mention.
+
+- **A watched message that says nothing no longer starts a run either.** The
+  same rule, and it is now safe to apply because an alert's words are read out
+  of its Slack blocks and attachments when the message has no `text` of its own
+  — which is how most alerting integrations post. An alert that reaches the
+  platform genuinely empty is refused rather than turned into a model call with
+  no question in it. If an integration posts content in a shape this does not
+  read, its conversation stops starting runs: the delivery is still recorded in
+  full, so the payload is there to check.
+
+### Fixed
+
+- **The channel projection stopped depending on an ask having text.** What the
+  model sees of a channel ask is a projection that deliberately leaves out
+  `asked_by`, the vendor account, the conversation and the thread references.
+  It selected records by their text, so an ask whose question is the thread it
+  arrived on fell through to a fallback that sent the raw envelope instead. Any
+  channel ask that parses is now projected, whatever it turns out to hold.
+
+### Changed
+
+- **Mentioning the bot no longer repeats what the conversation already says.**
+  A conversation names the agent it is for in every start mode, and a mention
+  there starts that agent without naming it — the whole sentence is the ask.
+  The agent selects and does not authorise: the run still acts on behalf of the
+  person whose channel account is linked, and an unlinked account is still
+  refused. Leaving the agent unset keeps the old arrangement, where the message
+  names the agent and any agent published in the scope can be started.
+
 ## [0.42.0] — 2026-08-31
 
 ### Added

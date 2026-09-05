@@ -29,12 +29,16 @@ export function ConversationRow({
   const threadContext = conversation.threadContext
     ? ` · ${t("channels.threadContextShort")}`
     : "";
+  // Shown wherever it was configured, not only where it is required. A mention
+  // in a bound conversation starts that agent without naming it, so a listing
+  // that hid the binding would hide the reason the channel behaves as it does.
+  const agent = conversation.agent ? ` · ${conversation.agent}` : "";
   const mode =
     conversation.mode === "watch"
-      ? `${t("channels.modeWatch")} · ${conversation.agent ?? "-"}`
+      ? `${t("channels.modeWatch")}${agent || " · -"}`
       : conversation.mode === "both"
-        ? `${t("channels.modeBoth")} · ${conversation.agent ?? "-"}${threadContext}`
-        : `${t("channels.modeMentions")}${threadContext}`;
+        ? `${t("channels.modeBoth")}${agent || " · -"}${threadContext}`
+        : `${t("channels.modeMentions")}${agent}${threadContext}`;
 
   return (
     <TableRow>

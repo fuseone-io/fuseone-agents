@@ -60,16 +60,49 @@ in Slack.
 
 ## Mentions
 
-In "mentions only" mode, a person mentions the bot and starts the message with
-the agent id or name:
+A conversation can name the agent it starts. With an agent chosen, mentioning
+the bot needs no name and the whole sentence is the question:
+
+```text
+@FuseOneAgent investigate this alert
+```
+
+In that conversation **no other agent starts from a mention**. Naming a
+different one is refused, and the refusal says which agent this conversation
+starts, rather than running another agent on the asker's sentence.
+
+With no agent chosen — the "none — the message names the agent" option — the
+message has to start with the agent id or name, and any agent published in the
+conversation's scope can be started:
 
 ```text
 @FuseOneAgent troubleshooting-sre investigate this alert
 ```
 
-The conversation decides the scope. The text does not choose company or area.
-The agent starts only if the published version declares a conversation trigger
-and exists in that scope.
+Either way the conversation decides the scope and the text does not choose
+company or area. The agent starts only if the published version declares a
+conversation trigger and exists in that scope.
+
+The chosen agent **selects; it does not authorise**. The run still acts on
+behalf of the person whose Slack account is linked to a platform user, and an
+unlinked account is still refused.
+
+Mentions start agents only in "mentions only" and "both". In a conversation set
+to "watched messages", mentioning the bot is refused with the reason — the mode
+says only the configured sources start agents, and that holds for both delivery
+paths.
+
+A mention with no words starts nothing: `@FuseOneAgent` on its own is refused
+with a sentence saying what to do. The exception is a mention that arrives with
+something to work on — a thread the platform posted a run into, or a thread
+whose earlier messages were actually read because "include thread context" is
+on. Being in a thread is not enough: a thread nobody read leaves the agent as
+empty-handed as a bare mention.
+
+The same rule covers watched messages. When a message has no `text` of its own,
+the platform reads the words out of its `blocks` and `attachments` — which is
+how most alerting integrations post — and refuses only when it finds none. The
+delivery is still recorded in full, so the payload is there to check.
 
 ## Watched messages
 
@@ -100,6 +133,7 @@ If the agent did not start:
 
 1. Does the log show `an ask arrived`? If not, the event did not reach FuseOne.
 2. Is the conversation in the right mode: mention, watched messages or both?
+2b. Did the mention name an agent other than the one chosen on the conversation?
 3. Does the published agent have a conversation trigger?
 4. Is the agent published in the same scope as the conversation?
 5. For watched messages, is the Slack source id allowed?

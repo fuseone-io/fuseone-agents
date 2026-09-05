@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ComponentProps } from "react";
 import {
@@ -48,7 +48,12 @@ function stubApi(
         : url.includes("/available")
         ? { items: [] }
         : url.includes("/admin/scopes")
-          ? { items: [{ company: "acme", area: "devops", label: "Devops" }] }
+          ? {
+              items: [
+                { company: "acme", area: "devops", label: "Devops" },
+                { company: "acme", area: "ops", label: "Ops" },
+              ],
+            }
           : url.includes("/admin/people")
             ? {
                 items: [
@@ -89,6 +94,25 @@ function renderForm(
   );
 }
 
+const sre = {
+  agentId: "troubleshooting-sre",
+  name: "Troubleshooting SRE",
+  triggers: [{ type: "channel" }],
+};
+
+const mentionsConversation = {
+  id: "C-alerts",
+  label: "#alerts",
+  scope: { company: "acme", area: "devops" },
+  mode: "mentions" as const,
+  wants: ["parked"],
+  enabled: true,
+};
+
+function saved(requests: { method: string; body?: unknown }[]) {
+  return requests.find((one) => one.method === "PUT")?.body;
+}
+
 describe("conversation configuration", () => {
   beforeAll(() => {
     Element.prototype.hasPointerCapture ??= () => false;
@@ -119,7 +143,11 @@ describe("conversation configuration", () => {
     renderForm();
 
     expect(await screen.findByText(/O que avisar/)).toBeInTheDocument();
-    expect(screen.queryByText("Iniciar agente")).not.toBeInTheDocument();
+    // The agent belongs to the conversation whatever starts its runs; the
+    // principal and the sources belong to watched messages alone.
+    expect(screen.getByText("Agente desta conversa")).toBeInTheDocument();
+    expect(screen.queryByText("Fontes Slack permitidas")).not.toBeInTheDocument();
+    expect(screen.queryByText("Rodar como")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("combobox", { name: /O que inicia runs/ }));
     await user.click(
@@ -128,9 +156,61 @@ describe("conversation configuration", () => {
       }),
     );
 
-    expect(screen.getByText("Iniciar agente")).toBeInTheDocument();
+    expect(screen.getByText("Agente desta conversa")).toBeInTheDocument();
     expect(screen.getByText("Fontes Slack permitidas")).toBeInTheDocument();
     expect(screen.getByText("Rodar como")).toBeInTheDocument();
+  });
+
+  /*
+   * A conversation that only takes mentions may still say which agent it is
+   * for, and that is what lets somebody mention the bot without naming one.
+   * Optional here and only here: a watched message carries no text to read a
+   * name out of.
+   */
+  it("binds an agent to a conversation that only takes mentions", async () => {
+    const requests: { method: string; url: string; body?: unknown }[] = [];
+    stubApi({ requests, agents: [sre] });
+    const user = userEvent.setup();
+    renderForm(mentionsConversation);
+
+    const picker = await screen.findByRole("combobox", {
+      name: /Agente desta conversa/,
+    });
+    expect(within(picker).getByText(/Nenhum/)).toBeInTheDocument();
+    await user.click(picker);
+    await user.click(await screen.findByRole("option", { name: sre.name }));
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => expect(saved(requests)).toBeDefined());
+    expect(saved(requests)).toMatchObject({
+      mode: "mentions",
+      agent: sre.agentId,
+    });
+    // The principal is the watched half and must not travel with a mention.
+    expect(saved(requests)).not.toHaveProperty("runAs");
+  });
+
+  /*
+   * An agent is only startable in the scope it is published in, so one chosen
+   * for another scope is a configuration the server refuses — and the person
+   * finds out on save, having been shown a name the whole time.
+   */
+  it("clears the agent when the conversation moves to another scope", async () => {
+    stubApi({ agents: [sre] });
+    const user = userEvent.setup();
+    renderForm({ ...mentionsConversation, agent: sre.agentId });
+
+    const picker = await screen.findByRole("combobox", {
+      name: /Agente desta conversa/,
+    });
+    await waitFor(() =>
+      expect(within(picker).getByText(sre.name)).toBeInTheDocument(),
+    );
+
+    await user.click(screen.getByRole("combobox", { name: "Contexto" }));
+    await user.click(await screen.findByRole("option", { name: "Ops" }));
+
+    expect(within(picker).getByText(/Nenhum/)).toBeInTheDocument();
   });
 
   it("only offers agents that declared the Conversation trigger for watched messages", async () => {
@@ -157,7 +237,7 @@ describe("conversation configuration", () => {
       enabled: true,
     });
 
-    await user.click(await screen.findByRole("combobox", { name: /Iniciar agente/ }));
+    await user.click(await screen.findByRole("combobox", { name: /Agente desta conversa/ }));
 
     expect(
       await screen.findByRole("option", { name: "Troubleshooting SRE" }),
@@ -280,7 +360,7 @@ describe("conversation configuration", () => {
       enabled: true,
     });
 
-    expect(await screen.findByText("Iniciar agente")).toBeInTheDocument();
+    expect(await screen.findByText("Agente desta conversa")).toBeInTheDocument();
     expect(screen.getByText("Fontes Slack permitidas")).toBeInTheDocument();
     await user.click(screen.getByText("Incluir contexto da thread"));
     await user.click(screen.getByRole("button", { name: "Salvar" }));

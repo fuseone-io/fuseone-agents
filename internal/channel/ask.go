@@ -18,16 +18,21 @@ no configuration: what governs whether an agent may be started here is the
 intersection of two facts that already exist — the conversation maps to a
 scope, and the agent lives in it (NT-005 §9).
 
-**The name is required, and this refuses rather than choosing.** With one
-startable agent in a scope, picking it looks like the only possible reading and
-is still the platform deciding: the day a second agent is added, the same
-sentence means something else and nobody changed it. Every other place here
-refuses to infer — the exception is not read out of prose, the scope is not
-read out of the text — and an agent that runs because it was the only one is
-the same shape of guess.
+**Nothing here is inferred, and the name is required wherever nobody decided
+otherwise.** With one startable agent in a scope, picking it looks like the
+only possible reading and is still the platform deciding: the day a second
+agent is added, the same sentence means something else and nobody changed it.
+Every other place here refuses to guess — the exception is not read out of
+prose, the scope is not read out of the text — and an agent that runs because
+it happened to be the only one is the same shape of guess.
 
-The refusal is what teaches. It names what is startable in this conversation,
-so the first attempt is the last one that fails.
+A conversation bound to an agent is the opposite of that. An administrator
+wrote it down against that conversation, in the same configuration that decides
+the scope, and reading it is no more a guess than reading the scope is. So a
+mention there needs no name, and the whole sentence is the ask.
+
+Where nobody decided, the refusal is what teaches. It names what is startable
+in this conversation, so the first attempt is the last one that fails.
 */
 
 // ErrNoAgentNamed means the message did not say which agent it was for.
@@ -69,19 +74,30 @@ happened to name in a single word and silently never for the rest.
 
 Longest first, so an agent whose name begins with another's resolves to the one
 actually written.
+
+The bound agent is what the conversation was configured to start, and it is
+reached only after every name has failed to match. A default that outranked the
+name somebody typed would make the name a decoration.
 */
-func Read(text string, startable []Startable) (Ask, error) {
+func Read(text string, startable []Startable, bound domain.AgentID) (Ask, error) {
 	said := strings.TrimSpace(mention.ReplaceAllString(text, " "))
-	if said == "" {
-		return Ask{}, fmt.Errorf("%w. %s", ErrNoAgentNamed, listing(startable))
-	}
 
 	for _, form := range addressings(startable) {
 		if rest, ok := after(said, form.text); ok {
 			return Ask{Agent: form.agent, Text: rest}, nil
 		}
 	}
+	if bound != "" {
+		// Nothing was consumed as a name, because nothing in it was one. A bare
+		// mention arrives here too and resolves with no words; whether that is
+		// worth a run depends on what came before it in the conversation, which
+		// this cannot see and the consumer can.
+		return Ask{Agent: bound, Text: said}, nil
+	}
 
+	if said == "" {
+		return Ask{}, fmt.Errorf("%w. %s", ErrNoAgentNamed, listing(startable))
+	}
 	first, _, _ := strings.Cut(said, " ")
 	return Ask{}, fmt.Errorf("%w: %q. %s", ErrNotStartable, first, listing(startable))
 }

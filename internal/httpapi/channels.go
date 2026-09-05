@@ -166,43 +166,37 @@ func (s *Server) PutConversation(
 	mode := conversationMode(req.Body.Mode)
 	agent := domain.AgentID(valueOr(req.Body.Agent))
 	runAs := domain.UserID(valueOr(req.Body.RunAs))
-	if channel.StartsFromWatch(mode) {
-		if agent == "" {
-			return openapi.PutConversation400ApplicationProblemPlusJSONResponse{
-				BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-					invalid("watched messages need an agent to start")),
-			}, nil
-		}
-		reason, err := s.refuseWatchAgent(ctx, agent, scope)
+	// Validated whenever one is named, and not only where naming one is
+	// required. A conversation that takes mentions may name an agent too, and a
+	// configuration that only fails later — in the Slack thread, to somebody
+	// who did not write it — is the failure this check exists to prevent.
+	if agent != "" {
+		reason, err := s.refuseConversationAgent(ctx, agent, scope)
 		if err != nil {
 			return nil, err
 		}
 		if reason != "" {
-			return openapi.PutConversation400ApplicationProblemPlusJSONResponse{
-				BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-					invalid(reason)),
-			}, nil
+			return badConversation(reason), nil
+		}
+	}
+	if channel.StartsFromWatch(mode) {
+		if agent == "" {
+			return badConversation("watched messages need an agent to start"), nil
 		}
 		if runAs == "" {
-			return openapi.PutConversation400ApplicationProblemPlusJSONResponse{
-				BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-					invalid("runAs is required")),
-			}, nil
+			return badConversation("runAs is required"), nil
 		}
 		if resp := s.refuseRunAsDelegation(ctx, caller, runAs); resp != nil {
 			return openapi.PutConversation403ApplicationProblemPlusJSONResponse{
 				ForbiddenApplicationProblemPlusJSONResponse: *resp,
 			}, nil
 		}
-		reason, err = s.refuseRunAsPrincipal(ctx, runAs, scope)
+		reason, err := s.refuseRunAsPrincipal(ctx, runAs, scope)
 		if err != nil {
 			return nil, err
 		}
 		if reason != "" {
-			return openapi.PutConversation400ApplicationProblemPlusJSONResponse{
-				BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-					invalid(reason)),
-			}, nil
+			return badConversation(reason), nil
 		}
 	}
 
@@ -227,14 +221,24 @@ func (s *Server) PutConversation(
 	return openapi.PutConversation204Response{}, nil
 }
 
-func (s *Server) refuseWatchAgent(
+// badConversation is the one shape a refused configuration takes. Written once
+// because the alternative is five copies of a four-line wrapper, and a reader
+// counting braces rather than reading the rules.
+func badConversation(reason string) openapi.PutConversation400ApplicationProblemPlusJSONResponse {
+	return openapi.PutConversation400ApplicationProblemPlusJSONResponse{
+		BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
+			invalid(reason)),
+	}
+}
+
+func (s *Server) refuseConversationAgent(
 	ctx context.Context, agent domain.AgentID, scope domain.Scope,
 ) (string, error) {
 	if s.agents == nil {
 		return "", nil
 	}
 	/*
-		Watched messages name the agent in configuration rather than in Slack
+		A conversation names its agent in configuration rather than in Slack
 		text, but the same two facts still have to intersect: this is the scope
 		the conversation speaks for, and the published version declared that a
 		conversation may start it. Without this check, a client can save a
@@ -253,9 +257,9 @@ func (s *Server) refuseWatchAgent(
 				return "", nil
 			}
 		}
-		return "watched messages need an agent that declares the Conversation trigger in this scope", nil
+		return "this conversation's agent must declare the Conversation trigger in this scope", nil
 	}
-	return "watched messages need an agent published in this scope", nil
+	return "this conversation's agent must be published in this scope", nil
 }
 
 func (s *Server) refuseRunAsDelegation(

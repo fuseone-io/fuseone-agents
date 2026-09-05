@@ -30,11 +30,11 @@ look: a channel that goes quiet is indistinguishable from a channel that is
 broken, and the second time somebody is ignored they stop asking.
 */
 
-// Scopes answers which scope a conversation speaks for, declared here by the
-// consumer.
+// Consumer turns the asks an inbox holds into runs, or into refusals said back
+// where they were asked.
 type Consumer struct {
 	inbox        *Inbox
-	scopes       Scopes
+	mapping      Mapping
 	published    Published
 	willing      Willing
 	subjects     Subjects
@@ -90,10 +90,10 @@ func NewConsumer(inbox *Inbox, owner string, log *slog.Logger) *Consumer {
 
 // With wires what the consumer reads and what it can do.
 func (c *Consumer) With(
-	scopes Scopes, published Published, willing Willing,
+	mapping Mapping, published Published, willing Willing,
 	subjects Subjects, opener Opens, answers Answers,
 ) *Consumer {
-	c.scopes, c.published, c.willing = scopes, published, willing
+	c.mapping, c.published, c.willing = mapping, published, willing
 	c.subjects, c.opener, c.answers = subjects, opener, answers
 	return c
 }
@@ -328,7 +328,7 @@ func (c *Consumer) wired() error {
 	missing := []string{}
 	for name, present := range map[string]bool{
 		"an inbox":            c.inbox != nil,
-		"a scope map":         c.scopes != nil,
+		"a conversation map":  c.mapping != nil,
 		"a published listing": c.published != nil,
 		"a willingness check": c.willing != nil,
 		"a subject resolver":  c.subjects != nil,
