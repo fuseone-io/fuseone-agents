@@ -663,3 +663,113 @@ func (c inlineContent) Get(context.Context, string) ([]byte, error) { return []b
 func (inlineContent) Put(context.Context, domain.RunID, int64, []byte) (string, error) {
 	return "", nil
 }
+
+/*
+An ask whose question is its context, not its text, is still projected.
+
+A mention that says nothing and arrives on a thread the platform posted a run
+into is a real ask now, and it carries an empty `text`. Projected on the text
+alone, it fell out of the channel projection entirely and the raw envelope went
+to the model — asked_by, the Slack account, the conversation and the thread
+references, all of which this projection exists to keep out.
+*/
+func TestBuildTranscript_channelAskWithNoTextButASubject_projectsWithoutTheEnvelope(t *testing.T) {
+	t.Parallel()
+	turns := channelTurns(t, map[string]any{
+		"text":     "",
+		"asked_by": "usr_ana",
+		"source":   "user:U09",
+		"subject":  map[string]string{"kind": "run", "run": "run-42"},
+	})
+
+	if !strings.Contains(turns[0].Text, "run-42") {
+		t.Fatalf("input does not name the run the thread is about:\n%s", turns[0].Text)
+	}
+	refuseEnvelopeFields(t, turns[0].Text)
+}
+
+func TestBuildTranscript_channelAskWithNoTextButThreadMessages_projectsWithoutTheEnvelope(t *testing.T) {
+	t.Parallel()
+	turns := channelTurns(t, map[string]any{
+		"text":     "",
+		"asked_by": "usr_ana",
+		"source":   "user:U09",
+		"thread": map[string]any{
+			"messages": []map[string]string{{
+				"source": "app:A-alerts", "text": "firing alertGatewayRTMInterfaceErrors",
+			}},
+		},
+	})
+
+	if !strings.Contains(turns[0].Text, "firing alertGatewayRTMInterfaceErrors") {
+		t.Fatalf("input does not carry the thread the ask is about:\n%s", turns[0].Text)
+	}
+	refuseEnvelopeFields(t, turns[0].Text)
+}
+
+// Only the thread reference and the reason it could not be read. Nothing here
+// is a question, and the platform metadata still must not travel.
+func TestBuildTranscript_channelAskWithOnlyAnUnavailableThread_projectsWithoutTheEnvelope(t *testing.T) {
+	t.Parallel()
+	turns := channelTurns(t, map[string]any{
+		"text": "", "asked_by": "usr_ana", "source": "user:U09",
+		"thread": map[string]any{"unavailable": "missing_scope: channels:history"},
+	})
+
+	refuseEnvelopeFields(t, turns[0].Text)
+}
+
+func channelTurns(t *testing.T, input map[string]any) []Turn {
+	t.Helper()
+	ctx := context.Background()
+	store := NewMemoryContent()
+	raw, err := json.Marshal(input)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	ref, err := store.Put(ctx, "run_1", 1, raw)
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	turns, err := BuildTranscript(ctx, store, []domain.Step{{
+		RunID: "run_1", Seq: 1, Kind: domain.StepRunStarted,
+		Payload: payload(t, domain.RunStartedPayload{Trigger: "channel", InputRef: ref}),
+	}})
+	if err != nil {
+		t.Fatalf("BuildTranscript: %v", err)
+	}
+	if len(turns) != 1 {
+		t.Fatalf("turns = %+v, want one input", turns)
+	}
+	return turns
+}
+
+func refuseEnvelopeFields(t *testing.T, text string) {
+	t.Helper()
+	for _, unwanted := range []string{"asked_by", "usr_ana", "source", "user:U09"} {
+		if strings.Contains(text, unwanted) {
+			t.Fatalf("input contains envelope field %q:\n%s", unwanted, text)
+		}
+	}
+}
+
+/*
+An ask that says nothing says nothing to the model, rather than saying who
+asked it.
+
+The projection chooses by nothing at all. Choosing by a field is what let the
+empty-text shape through to the raw envelope in the first place, and any other
+field would leave the same defect waiting behind it — so a record that parses
+is projected however little it turns out to hold.
+*/
+func TestBuildTranscript_channelAskCarryingOnlyTheEnvelope_reachesTheModelAsNothing(t *testing.T) {
+	t.Parallel()
+	turns := channelTurns(t, map[string]any{
+		"text": "", "asked_by": "usr_ana", "source": "user:U09",
+	})
+
+	refuseEnvelopeFields(t, turns[0].Text)
+	if strings.TrimSpace(turns[0].Text) != "" {
+		t.Fatalf("input = %q, want nothing at all", turns[0].Text)
+	}
+}
