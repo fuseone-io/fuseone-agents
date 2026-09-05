@@ -468,21 +468,38 @@ func TestSweep_aBareMentionInAThreadThatCouldNotBeRead_startsNothing(t *testing.
 }
 
 /*
-A watched message with no text still starts its agent.
+A watched message with nothing in it starts nothing either.
 
-The emptiness rule is about mentions and only mentions. An alerting system
-posting through Slack routinely leaves `text` empty and puts everything in
-blocks and attachments, and the whole payload is recorded on the arrival —
-so judging a machine's alert by the same field would silence a class of real
-alerts on the day somebody changed their template.
+The rule is about what reaches the agent, not about who sent it. An alerting
+system that leaves `text` empty has its words read out of its blocks by the
+Slack adapter, so what arrives here empty is a message that really said
+nothing — and a run with no input is a model call paid for with no question.
 */
-func TestSweep_aWatchedMessageWithNoText_stillStartsItsAgent(t *testing.T) {
+func TestSweep_aWatchedMessageWithNothingInIt_startsNothing(t *testing.T) {
 	c, parts := consumerWith(t, "", func(p *consumerParts) {
 		p.arrival.Agent = "triagem"
 		p.arrival.RunAs = "usr_opsbot"
 		p.arrival.AskedBy = "bot:B-alerts"
 		p.arrival.Source = channel.Source{Bot: "B-alerts"}
-		p.arrival.Payload = []byte(`{"blocks":[{"text":"alert firing"}]}`)
+	})
+
+	if _, err := c.Sweep(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if parts.opener.calls != 0 {
+		t.Fatal("a run opened for a watched message with no words in it")
+	}
+}
+
+// A watched message that does say something starts its agent, and the words
+// travel. This is the shape the Slack adapter produces from an alert whose
+// content lives in blocks.
+func TestSweep_aWatchedMessageWithWordsFromItsBlocks_startsItsAgent(t *testing.T) {
+	c, parts := consumerWith(t, "FIRING: GatewayRTMInterfaceErrors", func(p *consumerParts) {
+		p.arrival.Agent = "triagem"
+		p.arrival.RunAs = "usr_opsbot"
+		p.arrival.AskedBy = "bot:B-alerts"
+		p.arrival.Source = channel.Source{Bot: "B-alerts"}
 	})
 
 	opened, err := c.Sweep(t.Context(), time.Minute, 10)
@@ -492,6 +509,15 @@ func TestSweep_aWatchedMessageWithNoText_stillStartsItsAgent(t *testing.T) {
 	if opened != 1 || parts.opener.last.Agent != "triagem" {
 		t.Fatalf("opened = %d, agent = %q, want the alert started",
 			opened, parts.opener.last.Agent)
+	}
+	var ask struct {
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal(parts.opener.last.Input, &ask); err != nil {
+		t.Fatalf("input: %v", err)
+	}
+	if ask.Text != "FIRING: GatewayRTMInterfaceErrors" {
+		t.Errorf("text = %q, want the alert available to the run", ask.Text)
 	}
 }
 

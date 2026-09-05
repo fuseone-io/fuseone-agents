@@ -2,6 +2,7 @@ package slack_test
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/fuseone/agents/internal/channel/slack"
@@ -164,5 +165,159 @@ func TestReadDelivery_aMentionWithNoTimestamp_isMalformed(t *testing.T) {
 	}`))
 	if !errors.Is(err, slack.ErrMalformedAsk) {
 		t.Errorf("err = %v, want ErrMalformedAsk", err)
+	}
+}
+
+/*
+An alert whose words are in its blocks is still an alert.
+
+Alerting systems posting through Slack routinely leave `text` empty and put
+everything in blocks or attachments. Read from `text` alone, such a message
+became a run with an empty input: a model call paid for with no question in it.
+*/
+func TestReadAnyDelivery_anAlertWithNoTextButBlocks_carriesTheBlockText(t *testing.T) {
+	t.Parallel()
+
+	got, err := slack.ReadAnyDelivery([]byte(`{
+	  "type":"event_callback","event_id":"Ev301",
+	  "event":{"type":"message","subtype":"bot_message","channel":"C07-ops",
+	           "bot_id":"B-alerts","text":"","ts":"1786.6",
+	           "blocks":[
+	             {"type":"header","text":{"type":"plain_text","text":"FIRING: GatewayRTMInterfaceErrors"}},
+	             {"type":"section","fields":[
+	               {"type":"mrkdwn","text":"*severity:* critical"},
+	               {"type":"mrkdwn","text":"*cluster:* prod-1"}]}]}
+	}`))
+	if err != nil {
+		t.Fatalf("ReadAnyDelivery: %v", err)
+	}
+	for _, want := range []string{
+		"FIRING: GatewayRTMInterfaceErrors", "*severity:* critical", "*cluster:* prod-1",
+	} {
+		if !strings.Contains(got.Text, want) {
+			t.Errorf("text = %q, want it to carry %q", got.Text, want)
+		}
+	}
+}
+
+func TestReadAnyDelivery_anAlertWithNoTextButAttachments_carriesTheAttachmentText(t *testing.T) {
+	t.Parallel()
+
+	got, err := slack.ReadAnyDelivery([]byte(`{
+	  "type":"event_callback","event_id":"Ev302",
+	  "event":{"type":"message","subtype":"bot_message","channel":"C07-ops",
+	           "bot_id":"B-alerts","text":"","ts":"1786.7",
+	           "attachments":[{"title":"Grafana OnCall",
+	                           "text":"latency above 2s for 5m",
+	                           "fields":[{"title":"env","value":"prod"}]}]}
+	}`))
+	if err != nil {
+		t.Fatalf("ReadAnyDelivery: %v", err)
+	}
+	for _, want := range []string{"Grafana OnCall", "latency above 2s for 5m", "env", "prod"} {
+		if !strings.Contains(got.Text, want) {
+			t.Errorf("text = %q, want it to carry %q", got.Text, want)
+		}
+	}
+}
+
+// The message's own text is what the sender chose to say. Blocks are read only
+// when there is none, so a message that has both is not doubled.
+func TestReadAnyDelivery_anAlertWithTextAndBlocks_keepsOnlyTheText(t *testing.T) {
+	t.Parallel()
+
+	got, err := slack.ReadAnyDelivery([]byte(`{
+	  "type":"event_callback","event_id":"Ev303",
+	  "event":{"type":"message","subtype":"bot_message","channel":"C07-ops",
+	           "bot_id":"B-alerts","text":"firing GatewayRTMInterfaceErrors","ts":"1786.8",
+	           "blocks":[{"type":"section","text":{"type":"mrkdwn","text":"duplicated detail"}}]}
+	}`))
+	if err != nil {
+		t.Fatalf("ReadAnyDelivery: %v", err)
+	}
+	if got.Text != "firing GatewayRTMInterfaceErrors" {
+		t.Errorf("text = %q, want the sender's own words alone", got.Text)
+	}
+}
+
+/*
+One payload reads as one string, whatever order Go walks a map in.
+
+An object carrying several of these fields at once is the shape that exposes
+it: read in map order the same alert reaches the model differently on different
+days, and nobody can reproduce what an agent was asked.
+*/
+func TestReadAnyDelivery_blockTextReadsTheSameEveryTime(t *testing.T) {
+	t.Parallel()
+
+	body := []byte(`{
+	  "type":"event_callback","event_id":"Ev305",
+	  "event":{"type":"message","subtype":"bot_message","channel":"C07-ops",
+	           "bot_id":"B-alerts","text":"","ts":"1787.0",
+	           "attachments":[{"fallback":"F","title":"T","text":"X","value":"V"}]}
+	}`)
+
+	got, err := slack.ReadAnyDelivery(body)
+	if err != nil {
+		t.Fatalf("ReadAnyDelivery: %v", err)
+	}
+	// Sorted by field name, which is arbitrary but fixed. The value that
+	// matters is that it is the same string every time.
+	if got.Text != "F\nX\nT\nV" {
+		t.Fatalf("text = %q, want the fields in one settled order", got.Text)
+	}
+	for range 16 {
+		again, err := slack.ReadAnyDelivery(body)
+		if err != nil || again.Text != got.Text {
+			t.Fatalf("the same payload read as %q and then %q", got.Text, again.Text)
+		}
+	}
+}
+
+// Nesting is bounded. A payload deep enough to be a shape nobody posts on
+// purpose is read as far as the bound and no further, and what is within reach
+// still arrives.
+func TestReadAnyDelivery_blockTextStopsDescendingAtTheBound(t *testing.T) {
+	t.Parallel()
+
+	deep := `{"type":"mrkdwn","text":"deep-leaf"}`
+	for range 40 {
+		deep = `{"type":"section","text":` + deep + `}`
+	}
+	got, err := slack.ReadAnyDelivery([]byte(`{
+	  "type":"event_callback","event_id":"Ev306",
+	  "event":{"type":"message","subtype":"bot_message","channel":"C07-ops",
+	           "bot_id":"B-alerts","text":"","ts":"1787.1",
+	           "blocks":[{"type":"section","text":{"type":"mrkdwn","text":"shallow"}},` + deep + `]}
+	}`))
+	if err != nil {
+		t.Fatalf("ReadAnyDelivery: %v", err)
+	}
+	if !strings.Contains(got.Text, "shallow") {
+		t.Errorf("text = %q, want what is within reach", got.Text)
+	}
+	if strings.Contains(got.Text, "deep-leaf") {
+		t.Errorf("text = %q, want the walk to have stopped at the bound", got.Text)
+	}
+}
+
+// And bounded in bytes. A Slack message can be far larger than anything worth
+// asking a model about, and one message must not decide how much of somebody's
+// budget it spends.
+func TestReadAnyDelivery_blockTextIsBoundedInBytes(t *testing.T) {
+	t.Parallel()
+
+	huge := strings.Repeat("A", 64<<10)
+	got, err := slack.ReadAnyDelivery([]byte(`{
+	  "type":"event_callback","event_id":"Ev307",
+	  "event":{"type":"message","subtype":"bot_message","channel":"C07-ops",
+	           "bot_id":"B-alerts","text":"","ts":"1787.2",
+	           "blocks":[{"type":"section","text":{"type":"mrkdwn","text":"` + huge + `"}}]}
+	}`))
+	if err != nil {
+		t.Fatalf("ReadAnyDelivery: %v", err)
+	}
+	if len(got.Text) > 8<<10 {
+		t.Errorf("text is %d bytes, want it bounded", len(got.Text))
 	}
 }

@@ -78,8 +78,12 @@ being inside a thread is not the same as having one: a thread the conversation
 never opted into reading, or one Slack would not give us, leaves the agent
 exactly as empty-handed as a bare mention — and the run is paid for either way.
 
-Only mentions. A watched message is a machine's, and an alerting system that
-leaves `text` empty and puts everything in blocks is posting a normal alert.
+One rule for both paths. It was a mention-only rule for a while, excused by
+alerts whose words live in blocks rather than in `text` — but the Slack adapter
+reads those into the text now, so a watched message that arrives empty is one
+that really said nothing, and paying for it is no more defensible than paying
+for a bare mention. Only the sentence differs, because only one of the two
+readers can do anything about it.
 */
 func (c *Consumer) recorded(
 	ctx context.Context, a Claimed, ask Ask, asker domain.UserID,
@@ -88,11 +92,12 @@ func (c *Consumer) recorded(
 	if err != nil {
 		return nil, Refusal{}, err
 	}
-	if fromMention(a) && !record.carriesAQuestion() {
-		return nil, Refusal{
-			Why:    "Say what you need in the same message — a mention on its own starts nothing.",
-			Reason: "no_ask",
-		}, nil
+	if !record.carriesAQuestion() {
+		why := "Nothing in this message could be read as a question, so no agent was started."
+		if fromMention(a) {
+			why = "Say what you need in the same message — a mention on its own starts nothing."
+		}
+		return nil, Refusal{Why: why, Reason: "no_ask"}, nil
 	}
 	input, err := json.Marshal(record)
 	if err != nil {
