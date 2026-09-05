@@ -317,6 +317,35 @@ func TestSweep_aMentionInAWatchOnlyConversation_startsNothingAndSaysWhy(t *testi
 
 // Both keeps both. The watched half is configuration and the mention half is a
 // person, and enabling the first must not disable the second.
+/*
+And it is refused before anything is enumerated.
+
+A mention this conversation does not accept must not cost a walk of the
+catalogue, and must not become a pending ask when the catalogue is away: the
+answer does not depend on what is published, so waiting for the registry would
+leave somebody unanswered over a question already settled.
+*/
+func TestSweep_aMentionTheModeRefuses_doesNotReadTheCatalogue(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT> triagem esse chamado", func(p *consumerParts) {
+		p.scopes.mode = channel.ConversationWatch
+		p.scopes.agent = "triagem"
+		p.publishedErr = errors.New("the registry is away")
+	})
+
+	if _, err := c.Sweep(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if parts.listCalls != 0 {
+		t.Errorf("listed the catalogue %d times for a mention the mode refuses", parts.listCalls)
+	}
+	if _, err := c.Answer(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Answer: %v", err)
+	}
+	if len(parts.answers.said) != 1 {
+		t.Fatalf("said = %v, want the refusal delivered rather than left pending", parts.answers.said)
+	}
+}
+
 func TestSweep_aMentionInABothConversation_stillStarts(t *testing.T) {
 	c, parts := consumerWith(t, "<@U07BOT> esse chamado é sobre boleto", func(p *consumerParts) {
 		p.scopes.mode = channel.ConversationBoth
@@ -358,12 +387,40 @@ func TestSweep_aBareMentionStartingItsOwnThread_startsNothingAndSaysWhy(t *testi
 	}
 }
 
-// Inside a thread the thread is the question. Refusing here would break the
-// ordinary way somebody pulls an agent into a conversation already underway.
-func TestSweep_aBareMentionInsideAThread_startsTheBoundAgent(t *testing.T) {
+/*
+Being in a thread is not context. Having some is.
+
+A thread the conversation never opted into reading, or one the vendor would not
+give us, leaves the agent exactly as empty-handed as a mention on its own — and
+the run is paid for either way.
+*/
+func TestSweep_aBareMentionInAThreadWithNothingInIt_startsNothing(t *testing.T) {
 	c, parts := consumerWith(t, "<@U07BOT>", func(p *consumerParts) {
 		p.scopes.agent = "triagem"
 		p.arrival.Thread = "1785.0"
+	})
+
+	if _, err := c.Sweep(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if parts.opener.calls != 0 {
+		t.Fatal("a run opened for a mention with no words and no context")
+	}
+	if _, err := c.Answer(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Answer: %v", err)
+	}
+	if len(parts.answers.said) != 1 || !strings.Contains(parts.answers.said[0], "Say what you need") {
+		t.Errorf("said = %v, want the person told what to do", parts.answers.said)
+	}
+}
+
+// A thread about a run the platform itself posted is a question: the record
+// names that run, and the agent can go and read it.
+func TestSweep_aBareMentionInAThreadAboutARun_startsTheBoundAgent(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT>", func(p *consumerParts) {
+		p.scopes.agent = "triagem"
+		p.arrival.Thread = "1785.0"
+		p.subjects.run = "run-42"
 	})
 
 	opened, err := c.Sweep(t.Context(), time.Minute, 10)
@@ -371,7 +428,69 @@ func TestSweep_aBareMentionInsideAThread_startsTheBoundAgent(t *testing.T) {
 		t.Fatalf("Sweep: %v", err)
 	}
 	if opened != 1 || parts.opener.last.Agent != "triagem" {
-		t.Fatalf("opened = %d, agent = %q, want the thread taken as the ask",
+		t.Fatalf("opened = %d, agent = %q, want the run taken as the ask",
+			opened, parts.opener.last.Agent)
+	}
+}
+
+// So is a thread whose messages were actually read.
+func TestSweep_aBareMentionInAThreadThatWasRead_startsTheBoundAgent(t *testing.T) {
+	c, _ := consumerWith(t, "<@U07BOT>", func(p *consumerParts) {
+		p.scopes.agent = "triagem"
+		p.arrival.Thread = "1785.0"
+		p.threadPolicy.include = true
+		p.threads.context = channel.ThreadContext{
+			Messages: []channel.ThreadMessage{{Ref: "1785.0", Text: "o boleto voltou"}},
+		}
+	})
+
+	if opened, err := c.Sweep(t.Context(), time.Minute, 10); err != nil || opened != 1 {
+		t.Fatalf("opened = %d, err = %v, want the thread taken as the ask", opened, err)
+	}
+}
+
+// A thread the vendor would not give us is not context. The record says
+// unavailable, and an agent cannot read a sentence that is not there.
+func TestSweep_aBareMentionInAThreadThatCouldNotBeRead_startsNothing(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT>", func(p *consumerParts) {
+		p.scopes.agent = "triagem"
+		p.arrival.Thread = "1785.0"
+		p.threadPolicy.include = true
+		p.threads.err = errors.New("missing_scope: channels:history")
+	})
+
+	if _, err := c.Sweep(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if parts.opener.calls != 0 {
+		t.Fatal("a run opened on a thread nobody could read")
+	}
+}
+
+/*
+A watched message with no text still starts its agent.
+
+The emptiness rule is about mentions and only mentions. An alerting system
+posting through Slack routinely leaves `text` empty and puts everything in
+blocks and attachments, and the whole payload is recorded on the arrival —
+so judging a machine's alert by the same field would silence a class of real
+alerts on the day somebody changed their template.
+*/
+func TestSweep_aWatchedMessageWithNoText_stillStartsItsAgent(t *testing.T) {
+	c, parts := consumerWith(t, "", func(p *consumerParts) {
+		p.arrival.Agent = "triagem"
+		p.arrival.RunAs = "usr_opsbot"
+		p.arrival.AskedBy = "bot:B-alerts"
+		p.arrival.Source = channel.Source{Bot: "B-alerts"}
+		p.arrival.Payload = []byte(`{"blocks":[{"text":"alert firing"}]}`)
+	})
+
+	opened, err := c.Sweep(t.Context(), time.Minute, 10)
+	if err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if opened != 1 || parts.opener.last.Agent != "triagem" {
+		t.Fatalf("opened = %d, agent = %q, want the alert started",
 			opened, parts.opener.last.Agent)
 	}
 }
@@ -598,6 +717,8 @@ type consumerParts struct {
 	opener       *openerSpy
 	answers      *answerSpy
 	published    []domain.AgentSummary
+	publishedErr error
+	listCalls    int
 	bound        bool
 	bindErr      error
 	willing      bool
@@ -674,7 +795,8 @@ func reseed(t *testing.T, p *consumerParts) {
 }
 
 func (p *consumerParts) List(context.Context, domain.Scope, bool) ([]domain.AgentSummary, error) {
-	return p.published, nil
+	p.listCalls++
+	return p.published, p.publishedErr
 }
 
 func (p *consumerParts) StartableFromConversation(

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/fuseone/agents/internal/domain"
 )
@@ -47,6 +48,19 @@ func (c *Consumer) open(ctx context.Context, a Claimed) (domain.RunID, Refusal, 
 		return "", Refusal{}, fmt.Errorf("channel: read the scope of %s: %w", a.Conversation, err)
 	}
 
+	// The mode is a boundary, not a label, and it is settled here — before
+	// anything is enumerated. Neither door filters a mention by it: they cannot
+	// reply, and a conversation that answers nothing is indistinguishable from
+	// a broken one. Refused this early because the answer does not depend on
+	// what is published, so a catalogue that was away would leave somebody
+	// unanswered over a question already decided.
+	if fromMention(a) && !StartsFromMentions(mapped.Mode) {
+		return "", Refusal{
+			Why:    "This conversation only starts agents from its configured message sources, not from mentions.",
+			Reason: "not_from_mentions",
+		}, nil
+	}
+
 	startable, err := c.startable(ctx, mapped.Scope)
 	if err != nil {
 		// Not a refusal. The ask is fine and this side is not, so it waits.
@@ -73,6 +87,24 @@ func (c *Consumer) open(ctx context.Context, a Claimed) (domain.RunID, Refusal, 
 	record, err := c.structured(ctx, a, ask, asker)
 	if err != nil {
 		return "", Refusal{}, err
+	}
+	if fromMention(a) && !record.carriesAQuestion() {
+		/*
+			A mention that said nothing and found nothing is not an ask.
+
+			Decided here rather than on the text alone, because being inside a
+			thread is not the same as having one: a thread the conversation
+			never opted into reading, or one Slack would not give us, leaves the
+			agent exactly as empty-handed as a bare mention — and the run is
+			paid for either way.
+
+			Only mentions. A watched message is a machine's, and an alert whose
+			words live in its payload rather than its text is a normal alert.
+		*/
+		return "", Refusal{
+			Why:    "Say what you need in the same message — a mention on its own starts nothing.",
+			Reason: "no_ask",
+		}, nil
 	}
 	input, err := json.Marshal(record)
 	if err != nil {
@@ -150,7 +182,7 @@ what says which one this is.
 func (c *Consumer) resolveAsk(
 	ctx context.Context, a Claimed, mapped Mapped, startable []Startable,
 ) (domain.UserID, Ask, Refusal, error) {
-	if a.Agent != "" {
+	if !fromMention(a) {
 		return watched(a, startable)
 	}
 	return c.mentioned(ctx, a, mapped, startable)
@@ -181,18 +213,6 @@ refused whether or not the conversation would have chosen an agent for them.
 func (c *Consumer) mentioned(
 	ctx context.Context, a Claimed, mapped Mapped, startable []Startable,
 ) (domain.UserID, Ask, Refusal, error) {
-	if !StartsFromMentions(mapped.Mode) {
-		// The mode is a boundary, not a label. Neither door filters a mention
-		// by it — they cannot reply, and a conversation that answers nothing is
-		// indistinguishable from a broken one — so it is enforced here, where
-		// the configuration is already read and the person can be told. This is
-		// the same shape as the no_scope refusal above.
-		return "", Ask{}, Refusal{
-			Why:    "This conversation only starts agents from its configured message sources, not from mentions.",
-			Reason: "not_from_mentions",
-		}, nil
-	}
-
 	asker, bound, err := c.bindings(ctx, a.Channel, a.AskedBy)
 	if err != nil {
 		// A store that was away is not an account nobody bound. Folded
@@ -223,16 +243,6 @@ func (c *Consumer) mentioned(
 		// stops an administrator debugging the person who asked.
 		return "", Ask{}, cannotStartHere(ask.Agent), nil
 	}
-	if ask.Text == "" && startsItsOwnThread(a) {
-		// A mention with no words and nothing around it is not an ask. Opening
-		// a run for it spends a model call on a question nobody asked, and the
-		// person is far likelier to have hit send early than to have meant it.
-		// Inside a thread it is different: the thread is the question.
-		return "", Ask{}, Refusal{
-			Why:    "Say what you need in the same message — a mention on its own starts nothing.",
-			Reason: "no_ask",
-		}, nil
-	}
 	if mapped.Agent != "" && ask.Agent != mapped.Agent {
 		// Somebody reached past the binding to something else in the scope.
 		// Refused rather than quietly rerouted: a name that was typed was
@@ -246,6 +256,35 @@ func (c *Consumer) mentioned(
 		}, nil
 	}
 	return asker, ask, Refusal{}, nil
+}
+
+/*
+fromMention reports that a person addressed the bot, rather than the
+conversation acting on a message it was configured to watch.
+
+Agent carries the whole distinction: the door sets it only from a watch rule,
+so an empty one means nobody but the asker chose anything. Named once because
+three rules turn on it, and three copies of `a.Agent == ""` is three places to
+get the sense backwards.
+*/
+func fromMention(a Claimed) bool { return a.Agent == "" }
+
+/*
+carriesAQuestion reports that this record holds something to work on.
+
+The words somebody typed, a run the platform itself posted about, or thread
+messages that were actually read. Not merely being in a thread — that is a
+position, not a question.
+*/
+func (r structuredAsk) carriesAQuestion() bool {
+	switch {
+	case strings.TrimSpace(r.Text) != "":
+		return true
+	case r.Subject != nil:
+		return true
+	default:
+		return r.Thread != nil && len(r.Thread.Messages) > 0
+	}
 }
 
 // startsItsOwnThread reports that nothing was said before this ask.
