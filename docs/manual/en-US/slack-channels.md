@@ -93,8 +93,14 @@ says only the configured sources start agents, and that holds for both delivery
 paths.
 
 A mention with no words starts nothing: `@FuseOneAgent` on its own is refused
-with a sentence saying what to do. Inside a thread it is different, because
-there the thread is the question.
+with a sentence saying what to do. The exception is a mention that arrives with
+something to work on — a thread the platform posted a run into, or a thread
+whose earlier messages were actually read because "include thread context" is
+on. Being in a thread is not enough: a thread nobody read leaves the agent as
+empty-handed as a bare mention.
+
+This is about mentions only. A watched alert with empty `text` and its content
+in blocks still starts its agent.
 
 ## Watched messages
 

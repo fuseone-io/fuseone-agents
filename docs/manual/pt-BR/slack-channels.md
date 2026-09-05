@@ -92,8 +92,14 @@ que só as fontes configuradas iniciam, e isso vale para as duas formas de
 entrega.
 
 Uma menção sem nenhuma palavra não inicia nada: `@FuseOneAgent` sozinho é
-recusado com uma frase dizendo o que fazer. Dentro de uma thread é diferente,
-porque ali a thread é a pergunta.
+recusado com uma frase dizendo o que fazer. A exceção é quando a menção chega
+com algo para trabalhar — uma thread onde a plataforma publicou uma run, ou uma
+thread cujas mensagens anteriores foram realmente lidas porque "include thread
+context" está ligado. Estar numa thread não basta: uma thread que ninguém leu
+deixa o agente tão sem informação quanto uma menção sozinha.
+
+Isso vale só para menções. Um alerta observado com `text` vazio e o conteúdo em
+blocks continua iniciando o agente normalmente.
 
 ## Watched messages
 

@@ -60,7 +60,12 @@ field" is a commit message.
 - **A mention with no words no longer starts a run.** `@bot` on its own, in a
   conversation that names an agent, would open — and pay for — a run with no
   question in it. It is now refused with a sentence saying what to do, unless
-  the mention is a reply inside a thread, where the thread is the question.
+  the mention arrives with something to work on: a thread the platform posted a
+  run into, or a thread whose earlier messages were actually read because the
+  conversation has "include thread context" on. Being in a thread is not enough
+  on its own — a thread nobody read leaves the agent as empty-handed as a bare
+  mention. Watched messages are unaffected: an alert with empty `text` and its
+  content in blocks still starts its agent.
 
 ### Changed
 
