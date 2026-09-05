@@ -99,8 +99,10 @@ whose earlier messages were actually read because "include thread context" is
 on. Being in a thread is not enough: a thread nobody read leaves the agent as
 empty-handed as a bare mention.
 
-This is about mentions only. A watched alert with empty `text` and its content
-in blocks still starts its agent.
+The same rule covers watched messages. When a message has no `text` of its own,
+the platform reads the words out of its `blocks` and `attachments` — which is
+how most alerting integrations post — and refuses only when it finds none. The
+delivery is still recorded in full, so the payload is there to check.
 
 ## Watched messages
 

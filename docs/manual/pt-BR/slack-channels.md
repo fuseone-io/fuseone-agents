@@ -98,8 +98,11 @@ thread cujas mensagens anteriores foram realmente lidas porque "include thread
 context" está ligado. Estar numa thread não basta: uma thread que ninguém leu
 deixa o agente tão sem informação quanto uma menção sozinha.
 
-Isso vale só para menções. Um alerta observado com `text` vazio e o conteúdo em
-blocks continua iniciando o agente normalmente.
+A mesma regra vale para watched messages. Quando a mensagem não tem `text`
+próprio, a plataforma lê as palavras dos `blocks` e `attachments` — que é como
+a maioria das integrações de alerta publica — e só recusa quando não encontra
+nada. A entrega continua gravada inteira, então o payload está lá para
+conferir.
 
 ## Watched messages
 

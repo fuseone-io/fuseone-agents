@@ -64,8 +64,25 @@ field" is a commit message.
   run into, or a thread whose earlier messages were actually read because the
   conversation has "include thread context" on. Being in a thread is not enough
   on its own — a thread nobody read leaves the agent as empty-handed as a bare
-  mention. Watched messages are unaffected: an alert with empty `text` and its
-  content in blocks still starts its agent.
+  mention.
+
+- **A watched message that says nothing no longer starts a run either.** The
+  same rule, and it is now safe to apply because an alert's words are read out
+  of its Slack blocks and attachments when the message has no `text` of its own
+  — which is how most alerting integrations post. An alert that reaches the
+  platform genuinely empty is refused rather than turned into a model call with
+  no question in it. If an integration posts content in a shape this does not
+  read, its conversation stops starting runs: the delivery is still recorded in
+  full, so the payload is there to check.
+
+### Fixed
+
+- **The channel projection stopped depending on an ask having text.** What the
+  model sees of a channel ask is a projection that deliberately leaves out
+  `asked_by`, the vendor account, the conversation and the thread references.
+  It selected records by their text, so an ask whose question is the thread it
+  arrived on fell through to a fallback that sent the raw envelope instead. Any
+  channel ask that parses is now projected, whatever it turns out to hold.
 
 ### Changed
 
