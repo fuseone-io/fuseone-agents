@@ -141,12 +141,37 @@ abre uma conexão de saída para o Slack.</p>
 o Slack não consegue chamar <code dir="auto">/hooks/channel/&#x3C;nome>/slack</code>, a plataforma não
 deve mostrar botões de aprovação no Slack.</p>
 <div class="sl-heading-wrapper level-h2"><h2 id="menções">Menções</h2><a class="sl-anchor-link" href="#menções"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Menções”</span></a></div>
-<p>No modo “mentions only”, uma pessoa menciona o bot e começa a mensagem com o
-id ou nome do agente:</p>
-<div class="expressive-code"><link rel="stylesheet" href="/fuseone-agents/docs/_astro/ec.w36nc.css"><script type="module" src="/fuseone-agents/docs/_astro/ec.0vx5m.js"></script><figure class="frame not-content"><figcaption class="header"></figcaption><pre data-language="text"><code><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">@FuseOneAgent troubleshooting-sre entenda esse alerta</span></div></div></code></pre><div class="copy"><div aria-live="polite"></div><button title="Copy to clipboard" data-copied="Copied!" data-code="@FuseOneAgent troubleshooting-sre entenda esse alerta"><div></div></button></div></figure></div>
-<p>A conversa decide o escopo. O texto não escolhe company ou area. O agente só
-inicia se a versão publicada declara trigger de conversa e existe naquele
-escopo.</p>
+<p>Uma conversa pode nomear o agente que ela inicia. Com um agente escolhido, quem
+menciona o bot não precisa nomeá-lo, e a frase inteira é a pergunta:</p>
+<div class="expressive-code"><link rel="stylesheet" href="/fuseone-agents/docs/_astro/ec.w36nc.css"><script type="module" src="/fuseone-agents/docs/_astro/ec.0vx5m.js"></script><figure class="frame not-content"><figcaption class="header"></figcaption><pre data-language="text"><code><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">@FuseOneAgent entenda esse alerta</span></div></div></code></pre><div class="copy"><div aria-live="polite"></div><button title="Copy to clipboard" data-copied="Copied!" data-code="@FuseOneAgent entenda esse alerta"><div></div></button></div></figure></div>
+<p>Nessa conversa <strong>nenhum outro agente inicia por menção</strong>. Mencionar um agente
+diferente é recusado com o nome do agente da conversa, em vez de rodar outro
+agente na frase de quem perguntou.</p>
+<p>Sem agente escolhido — a opção “nenhum — a mensagem nomeia o agente” — a
+mensagem precisa começar com o id ou nome do agente, e qualquer agente
+publicado no escopo da conversa pode ser iniciado:</p>
+<div class="expressive-code"><figure class="frame not-content"><figcaption class="header"></figcaption><pre data-language="text"><code><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">@FuseOneAgent troubleshooting-sre entenda esse alerta</span></div></div></code></pre><div class="copy"><div aria-live="polite"></div><button title="Copy to clipboard" data-copied="Copied!" data-code="@FuseOneAgent troubleshooting-sre entenda esse alerta"><div></div></button></div></figure></div>
+<p>Nos dois casos a conversa decide o escopo e o texto não escolhe company ou
+area. O agente só inicia se a versão publicada declara trigger de conversa e
+existe naquele escopo.</p>
+<p>O agente escolhido <strong>seleciona, não autoriza</strong>. A run continua acontecendo em
+nome da pessoa cuja conta Slack está vinculada a um usuário da plataforma;
+quem não tem vínculo continua sendo recusado.</p>
+<p>Menções só iniciam agentes nos modos “só menções” e “ambos”. Numa conversa em
+modo “watched messages”, mencionar o bot é recusado com o motivo — o modo diz
+que só as fontes configuradas iniciam, e isso vale para as duas formas de
+entrega.</p>
+<p>Uma menção sem nenhuma palavra não inicia nada: <code dir="auto">@FuseOneAgent</code> sozinho é
+recusado com uma frase dizendo o que fazer. A exceção é quando a menção chega
+com algo para trabalhar — uma thread onde a plataforma publicou uma run, ou uma
+thread cujas mensagens anteriores foram realmente lidas porque “include thread
+context” está ligado. Estar numa thread não basta: uma thread que ninguém leu
+deixa o agente tão sem informação quanto uma menção sozinha.</p>
+<p>A mesma regra vale para watched messages. Quando a mensagem não tem <code dir="auto">text</code>
+próprio, a plataforma lê as palavras dos <code dir="auto">blocks</code> e <code dir="auto">attachments</code> — que é como
+a maioria das integrações de alerta publica — e só recusa quando não encontra
+nada. A entrega continua gravada inteira, então o payload está lá para
+conferir.</p>
 <div class="sl-heading-wrapper level-h2"><h2 id="watched-messages">Watched messages</h2><a class="sl-anchor-link" href="#watched-messages"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore="">Section titled “Watched messages”</span></a></div>
 <p>Watched messages servem para mensagens de um sistema conhecido, como
 Alertmanager ou Grafana OnCall. A autoridade não vem da mensagem. Ela vem da
@@ -169,7 +194,8 @@ consequência foi aceita.</p>
 <p>Se o agente não iniciou:</p>
 <ol>
 <li>O log mostra <code dir="auto">an ask arrived</code>? Se não, o evento não chegou ao FuseOne.</li>
-<li>A conversa está no modo certo: menção, watched messages ou ambos?</li>
+<li>A conversa está no modo certo: menção, watched messages ou ambos?
+2b. A menção nomeou um agente diferente do agente escolhido na conversa?</li>
 <li>O agente publicado tem trigger de conversa?</li>
 <li>O agente está publicado no mesmo escopo da conversa?</li>
 <li>Em watched messages, o Slack source id está permitido?</li>

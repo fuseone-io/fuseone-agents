@@ -75,7 +75,8 @@
 <strong>Outcome</strong> Two families rather than one abstraction, one new domain concept, three stages
 <strong>Revised</strong> 2026-08-14 — §9 the shape of a channel trigger, §10 where email belongs
 <strong>Revised</strong> 2026-08-15 — §12 stage 3 broken down, §13 why the other vendors come after
-<strong>Revised</strong> 2026-08-16 — §12.2 the per-correspondent ceiling, built</p>
+<strong>Revised</strong> 2026-08-16 — §12.2 the per-correspondent ceiling, built
+<strong>Revised</strong> 2026-09-04 — §9 a conversation may name the agent it starts</p>
 <p>People do not live in the console. An approval that waits for somebody to open
 a browser tab waits, and a run whose result nobody reads was not worth the
 money. Channels are how the platform reaches where the work already happens.</p>
@@ -265,9 +266,28 @@ may start their agent — and the author is precisely the person who does not
 govern which conversations belong to which area. It is the same separation that
 makes classifying a tool the Curator’s act and not theirs.</p>
 <p>And the question it looks like it answers is already answered without it. Which
-agent runs when somebody writes in a channel? <strong>The mention names it.</strong> What
-governs whether it may is the intersection of two facts that already exist: the
-conversation maps to scope X, and the agent lives in scope X.</p>
+agent runs when somebody writes in a channel? <strong>The mention names it, or the
+conversation does.</strong> What governs whether it may is the intersection of two
+facts that already exist: the conversation maps to scope X, and the agent lives
+in scope X.</p>
+<p>The conversation naming one is the same administrative act as mapping it to a
+scope, made in the same place by the same people, and it is still not the
+author choosing their own reach. It answers a question the mention alone could
+not: a channel that exists for one agent had no way to say so, so every person
+typing in it had to repeat what the configuration already knew, and the day
+they forgot the platform refused them by name. With an agent named, a mention
+there needs none and starts nothing else; with none named, the message names
+the agent and the whole scope is addressable, which is what every installation
+configured before this does.</p>
+<p>The mode a conversation is in is a boundary and not a label. A conversation
+that starts runs only from its configured message sources must not also be
+startable by anybody who can type in it, and that is enforced where the
+configuration is read rather than at each door — a door cannot reply, and a
+channel that answers nothing is indistinguishable from a broken one.</p>
+<p>It selects and it does not authorise. A mention still runs as the person whose
+channel account is bound, exactly as before — the two are separate questions
+and folding them together is how “an administrator chose an agent here” would
+quietly become “anybody in this channel may run it”.</p>
 <p>So the trigger is a bare declaration with no field:</p>
 <blockquote>
 <p>This agent may be started by an ask in a conversation of its own scope.</p>
@@ -392,7 +412,7 @@ half, with delivery recorded per conversation and retried per conversation.</p>
 
 
 
-<table><thead><tr><th>Piece</th><th>Why it is what it is</th></tr></thead><tbody><tr><td>Conversation → scope</td><td>The map exists in one direction only: <code dir="auto">Configured.For(scope)</code> answers which conversations speak for a scope. Inbound needs the reverse, and it has to be <strong>unique</strong> — a conversation serving two scopes means the ask picks the scope, which <a href="#4-the-conversation-carries-the-scope">§4</a> forbids</td></tr><tr><td>The trigger declaration</td><td>A field with no value on the specification (<a href="#9-a-channel-trigger-names-no-conversation">§9</a>), the parser, the editor, and the intersection: the conversation maps to scope X and the agent lives in scope X</td></tr><tr><td>Which agent</td><td>The mention names it. Parsing the mention, resolving the name</td></tr><tr><td>The events endpoint</td><td>URL verification, signature (reuse), dedup by <code dir="auto">event_id</code> — and Slack’s <strong>three-second acknowledgement</strong>, which means opening the run cannot happen on that request. Get it wrong and every ask is delivered several times</td></tr><tr><td>Reference resolution</td><td><a href="#21-the-boundary-of-resolution">§2.1</a>. The Ledger records the structured ask and not the sentence, which means resolving “this thread” to the alert the platform itself posted there, and refusing to resolve what it did not</td></tr></tbody></table>
+<table><thead><tr><th>Piece</th><th>Why it is what it is</th></tr></thead><tbody><tr><td>Conversation → scope</td><td>The map exists in one direction only: <code dir="auto">Configured.For(scope)</code> answers which conversations speak for a scope. Inbound needs the reverse, and it has to be <strong>unique</strong> — a conversation serving two scopes means the ask picks the scope, which <a href="#4-the-conversation-carries-the-scope">§4</a> forbids</td></tr><tr><td>The trigger declaration</td><td>A field with no value on the specification (<a href="#9-a-channel-trigger-names-no-conversation">§9</a>), the parser, the editor, and the intersection: the conversation maps to scope X and the agent lives in scope X</td></tr><tr><td>Which agent</td><td>The mention names it, or the conversation does. Parsing the mention, resolving the name, reading the conversation’s own agent</td></tr><tr><td>The events endpoint</td><td>URL verification, signature (reuse), dedup by <code dir="auto">event_id</code> — and Slack’s <strong>three-second acknowledgement</strong>, which means opening the run cannot happen on that request. Get it wrong and every ask is delivered several times</td></tr><tr><td>Reference resolution</td><td><a href="#21-the-boundary-of-resolution">§2.1</a>. The Ledger records the structured ask and not the sentence, which means resolving “this thread” to the alert the platform itself posted there, and refusing to resolve what it did not</td></tr></tbody></table>
 <p>The first three are small. The fourth is medium and fiddly, and its difficulty
 is somebody else’s contract rather than ours. <strong>The fifth is the one to spend
 thought on</strong>, and it is not code-shaped: it is deciding what the platform is
