@@ -32,33 +32,9 @@ supposed to decide: the scope comes from the conversation, never from what
 somebody wrote in it.
 */
 func (c *Consumer) open(ctx context.Context, a Claimed) (domain.RunID, Refusal, error) {
-	mapped, err := c.mapping.Resolve(ctx, a.Channel, a.Conversation)
-	switch {
-	case errors.Is(err, ErrNoConversation), errors.Is(err, ErrAmbiguousConversation):
-		// Ambiguity is refused rather than resolved, and the person is told
-		// plainly: this conversation is not set up to start anything, which is
-		// an operator's job and not theirs.
-		c.log.Warn("an ask arrived in a conversation that speaks for no scope",
-			"channel", a.Channel, "conversation", a.Conversation, "err", err)
-		return "", Refusal{
-			Why:    "This conversation is not set up to start agents. An administrator maps it to an area.",
-			Reason: "no_scope",
-		}, nil
-	case err != nil:
-		return "", Refusal{}, fmt.Errorf("channel: read the scope of %s: %w", a.Conversation, err)
-	}
-
-	// The mode is a boundary, not a label, and it is settled here — before
-	// anything is enumerated. Neither door filters a mention by it: they cannot
-	// reply, and a conversation that answers nothing is indistinguishable from
-	// a broken one. Refused this early because the answer does not depend on
-	// what is published, so a catalogue that was away would leave somebody
-	// unanswered over a question already decided.
-	if fromMention(a) && !StartsFromMentions(mapped.Mode) {
-		return "", Refusal{
-			Why:    "This conversation only starts agents from its configured message sources, not from mentions.",
-			Reason: "not_from_mentions",
-		}, nil
+	mapped, refusal, err := c.mappingOf(ctx, a)
+	if err != nil || refusal.Why != "" {
+		return "", refusal, err
 	}
 
 	startable, err := c.startable(ctx, mapped.Scope)
@@ -84,39 +60,107 @@ func (c *Consumer) open(ctx context.Context, a Claimed) (domain.RunID, Refusal, 
 		return "", *over, nil
 	}
 
+	input, refusal, err := c.recorded(ctx, a, ask, asker)
+	if err != nil || refusal.Why != "" {
+		return "", refusal, err
+	}
+
+	return c.start(ctx, a, starting{ask: ask, asker: asker, input: input})
+}
+
+/*
+recorded builds what the ledger will hold, or refuses an ask holding no
+question.
+
+The two belong together because the second can only be decided by looking at
+the first. A mention that said nothing and found nothing is not an ask, and
+being inside a thread is not the same as having one: a thread the conversation
+never opted into reading, or one Slack would not give us, leaves the agent
+exactly as empty-handed as a bare mention — and the run is paid for either way.
+
+Only mentions. A watched message is a machine's, and an alerting system that
+leaves `text` empty and puts everything in blocks is posting a normal alert.
+*/
+func (c *Consumer) recorded(
+	ctx context.Context, a Claimed, ask Ask, asker domain.UserID,
+) ([]byte, Refusal, error) {
 	record, err := c.structured(ctx, a, ask, asker)
 	if err != nil {
-		return "", Refusal{}, err
+		return nil, Refusal{}, err
 	}
 	if fromMention(a) && !record.carriesAQuestion() {
-		/*
-			A mention that said nothing and found nothing is not an ask.
-
-			Decided here rather than on the text alone, because being inside a
-			thread is not the same as having one: a thread the conversation
-			never opted into reading, or one Slack would not give us, leaves the
-			agent exactly as empty-handed as a bare mention — and the run is
-			paid for either way.
-
-			Only mentions. A watched message is a machine's, and an alert whose
-			words live in its payload rather than its text is a normal alert.
-		*/
-		return "", Refusal{
+		return nil, Refusal{
 			Why:    "Say what you need in the same message — a mention on its own starts nothing.",
 			Reason: "no_ask",
 		}, nil
 	}
 	input, err := json.Marshal(record)
 	if err != nil {
-		return "", Refusal{}, fmt.Errorf("channel: record the ask %s: %w", a.EventID, err)
+		return nil, Refusal{}, fmt.Errorf("channel: record the ask %s: %w", a.EventID, err)
+	}
+	return input, Refusal{}, nil
+}
+
+/*
+mappingOf reads the conversation and settles what it will not do.
+
+Both refusals here are about configuration rather than about the message, and
+both are answered before anything is enumerated: neither depends on what is
+published, so a catalogue that was away would leave somebody unanswered over a
+question already decided.
+*/
+func (c *Consumer) mappingOf(ctx context.Context, a Claimed) (Mapped, Refusal, error) {
+	mapped, err := c.mapping.Resolve(ctx, a.Channel, a.Conversation)
+	switch {
+	case errors.Is(err, ErrNoConversation), errors.Is(err, ErrAmbiguousConversation):
+		// Ambiguity is refused rather than resolved, and the person is told
+		// plainly: this conversation is not set up to start anything, which is
+		// an operator's job and not theirs.
+		c.log.Warn("an ask arrived in a conversation that speaks for no scope",
+			"channel", a.Channel, "conversation", a.Conversation, "err", err)
+		return Mapped{}, Refusal{
+			Why:    "This conversation is not set up to start agents. An administrator maps it to an area.",
+			Reason: "no_scope",
+		}, nil
+	case err != nil:
+		return Mapped{}, Refusal{}, fmt.Errorf(
+			"channel: read the scope of %s: %w", a.Conversation, err)
 	}
 
+	// The mode is a boundary, not a label. Neither door filters a mention by
+	// it — they cannot reply, and a conversation that answers nothing is
+	// indistinguishable from a broken one — so it is held here, where the
+	// configuration is already read and the person can be told.
+	if fromMention(a) && !StartsFromMentions(mapped.Mode) {
+		return Mapped{}, Refusal{
+			Why:    "This conversation only starts agents from its configured message sources, not from mentions.",
+			Reason: "not_from_mentions",
+		}, nil
+	}
+	return mapped, Refusal{}, nil
+}
+
+// starting is everything decided about an ask, ready to become a run.
+//
+// A struct because the parts are easy to transpose: the asker and the agent
+// are both names, and a caller that swapped them would open somebody else's
+// run under somebody else's authority and say nothing about it.
+type starting struct {
+	ask   Ask
+	asker domain.UserID
+	input []byte
+}
+
+// start turns a settled ask into a run, or says why it will never be one.
+func (c *Consumer) start(
+	ctx context.Context, a Claimed, s starting,
+) (domain.RunID, Refusal, error) {
 	opened, err := c.opener.Open(ctx, Request{
-		Agent:   ask.Agent,
+		Agent:   s.ask.Agent,
 		IdemKey: AskKey(a.Arrival),
 		Trigger: "channel",
-		By:      asker,
-		Input:   input,
+		By:      s.asker,
+		Input:   s.input,
 		// Somebody outside the platform typed this. On an internal channel
 		// they are a colleague and the text is still theirs, not ours — and
 		// the taint check is what stands between a sentence and an effect.
@@ -134,14 +178,14 @@ func (c *Consumer) open(ctx context.Context, a Claimed) (domain.RunID, Refusal, 
 		// Paused, stopped by a switch, still a draft. It will not start on a
 		// retry either, so the person is told and the ask is closed.
 		return "", Refusal{
-			Why:    fmt.Sprintf("%s will not start: %v", ask.Agent, err),
+			Why:    fmt.Sprintf("%s will not start: %v", s.ask.Agent, err),
 			Reason: "wont_start",
 		}, nil
 	case err != nil:
 		// Anything else is this side failing, and the ask waits for a sweep
 		// that works. Closing it here would answer a good question with a
 		// refusal that was never about the question.
-		return "", Refusal{}, fmt.Errorf("channel: open a run for %s: %w", ask.Agent, err)
+		return "", Refusal{}, fmt.Errorf("channel: open a run for %s: %w", s.ask.Agent, err)
 	}
 	return opened.RunID, Refusal{}, nil
 }
@@ -203,6 +247,32 @@ func watched(a Claimed, startable []Startable) (domain.UserID, Ask, Refusal, err
 }
 
 /*
+onBehalfOf answers which platform user a mention runs as.
+
+A run acts on somebody's behalf. An account nobody bound speaks for nobody, and
+running as nobody is how an ask acquires authority that no person holds — so
+this is read before the conversation's agent is consulted at all, and an
+unbound account is refused whether or not a conversation would have chosen an
+agent for them.
+*/
+func (c *Consumer) onBehalfOf(ctx context.Context, a Claimed) (domain.UserID, Refusal, error) {
+	asker, bound, err := c.bindings(ctx, a.Channel, a.AskedBy)
+	if err != nil {
+		// A store that was away is not an account nobody bound. Folded
+		// together, the refusal below would tell somebody their account is not
+		// linked about a state that was never true.
+		return "", Refusal{}, fmt.Errorf("channel: read the binding for %s: %w", a.AskedBy, err)
+	}
+	if !bound {
+		return "", Refusal{
+			Why:    "Your channel account is not linked to a platform user, so nothing can run on your behalf.",
+			Reason: "unbound",
+		}, nil
+	}
+	return asker, Refusal{}, nil
+}
+
+/*
 mentioned resolves a message somebody addressed to the bot.
 
 The agent may be named in the text or configured on the conversation, and
@@ -213,21 +283,9 @@ refused whether or not the conversation would have chosen an agent for them.
 func (c *Consumer) mentioned(
 	ctx context.Context, a Claimed, mapped Mapped, startable []Startable,
 ) (domain.UserID, Ask, Refusal, error) {
-	asker, bound, err := c.bindings(ctx, a.Channel, a.AskedBy)
-	if err != nil {
-		// A store that was away is not an account nobody bound. Folded
-		// together, the refusal below would tell somebody their account is
-		// not linked about a state that was never true.
-		return "", Ask{}, Refusal{}, fmt.Errorf("channel: read the binding for %s: %w", a.AskedBy, err)
-	}
-	if !bound {
-		// A run acts on somebody's behalf. An account nobody bound speaks for
-		// nobody, and running as nobody is how an ask acquires authority that
-		// no person holds.
-		return "", Ask{}, Refusal{
-			Why:    "Your channel account is not linked to a platform user, so nothing can run on your behalf.",
-			Reason: "unbound",
-		}, nil
+	asker, refusal, err := c.onBehalfOf(ctx, a)
+	if err != nil || refusal.Why != "" {
+		return "", Ask{}, refusal, err
 	}
 
 	ask, err := Read(a.Text, startable, mapped.Agent)
