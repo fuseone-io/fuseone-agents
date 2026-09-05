@@ -416,6 +416,79 @@ func TestReadAnyDelivery_blockTextStopsDescendingAtTheBound(t *testing.T) {
 	}
 }
 
+/*
+A note about what was omitted is not itself a message.
+
+Read alone it is non-empty text, so it passes for a question and opens a paid
+run whose entire content is the platform apologising. The note only means
+something beside words that were actually read.
+*/
+func TestReadAnyDelivery_blockText_omittingEverything_readsAsNothing(t *testing.T) {
+	t.Parallel()
+
+	deep := `{"type":"rich_text_section","elements":[{"type":"text","text":"deep-leaf"}]}`
+	for range 40 {
+		deep = `{"type":"rich_text","elements":[` + deep + `]}`
+	}
+	got := blockDelivery(t, `"blocks":[`+deep+`]`)
+
+	if got != "" {
+		t.Errorf("text = %q, want nothing at all", got)
+	}
+}
+
+/*
+Nothing omitted, nothing said about omission.
+
+The walk stopping because a list ran out is not the walk stopping because it
+ran out of room. A leaf sitting exactly on the bound has no children to leave
+behind, and a message that announces an omission that never happened sends a
+reader looking for content that was always complete.
+*/
+func TestReadAnyDelivery_blockText_completeMessages_claimNoOmission(t *testing.T) {
+	t.Parallel()
+
+	for depth := 1; depth <= 16; depth++ {
+		nested := `{"type":"rich_text_section","elements":[{"type":"text","text":"leaf"}]}`
+		for range depth {
+			nested = `{"type":"rich_text","elements":[` + nested + `]}`
+		}
+		got := blockDelivery(t, `"blocks":[`+nested+`]`)
+
+		if strings.Contains(got, "leaf") && strings.Contains(got, "not read") {
+			t.Errorf("depth %d: text = %q, but nothing was left out", depth, got)
+		}
+	}
+}
+
+// Padding is not content wherever it arrives, and a block's text object is the
+// form most of it comes in.
+func TestReadAnyDelivery_blockText_trimsWhatABlockSays(t *testing.T) {
+	t.Parallel()
+
+	got := blockDelivery(t, `"blocks":[
+	  {"type":"section","text":{"type":"mrkdwn","text":"  Disk full on db-a\n\n"}},
+	  {"type":"section","text":{"type":"mrkdwn","text":"\t severity: critical  "}}]`)
+
+	if got != "Disk full on db-a\nseverity: critical" {
+		t.Errorf("text = %q, want each block's words without their padding", got)
+	}
+}
+
+// Whitespace is not content. Compared before it is trimmed, an attachment's
+// fallback stops matching its own text and the reader is told the same
+// sentence twice.
+func TestReadAnyDelivery_blockText_aPaddedFallback_isStillTheSameSentence(t *testing.T) {
+	t.Parallel()
+
+	got := blockDelivery(t, `"attachments":[{"fallback":"  latency above 2s  ",
+	  "text":"latency above 2s","title":"Grafana OnCall"}]`)
+
+	if strings.Count(got, "latency above 2s") != 1 {
+		t.Errorf("text = %q, want the attachment's own repeat dropped", got)
+	}
+}
+
 // blockDelivery reads one bot message carrying no text of its own.
 func blockDelivery(t *testing.T, content string) string {
 	t.Helper()

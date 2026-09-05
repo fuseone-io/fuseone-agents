@@ -67,7 +67,16 @@ type words struct {
 	truncated bool
 }
 
+// String is the message as read, and nothing when none of it was.
+//
+// The note is not a message. Returned on its own it is non-empty text, which
+// passes for a question downstream and opens a paid run whose entire content
+// is the platform apologising. It only means something beside words that were
+// actually read.
 func (w *words) String() string {
+	if len(w.found) == 0 {
+		return ""
+	}
 	out := strings.Join(w.found, "\n")
 	if w.truncated {
 		out += truncationNote
@@ -83,13 +92,16 @@ assembled from five hundred small blocks is as expensive as one long one, and
 counting only the words let it past. Room for the note is reserved whether or
 not it ends up being used, so the bound holds either way.
 
+What arrives here is already normalised: visibleText is the one place that
+decides what a Slack text field says, so trimming again here would be a second
+definition of it and the two would drift.
+
 The cut lands on a rune boundary. A prefix taken by byte count splits a
 multi-byte character and produces a string PostgreSQL will not store — so a
 valid Slack delivery fails to be written down, and the sender retries it
 forever.
 */
 func (w *words) add(said string) {
-	said = strings.TrimSpace(said)
 	if said == "" || w.truncated {
 		return
 	}
@@ -130,7 +142,7 @@ Interactive elements contribute their label and nothing else — `value`,
 `action_id` and `url` are the app's own wiring, and none of them is on screen.
 */
 func (w *words) blocks(items []any, depth int) {
-	if w.tooDeep(depth) {
+	if len(items) == 0 || w.tooDeep(depth) {
 		return
 	}
 	for _, item := range items {
@@ -153,7 +165,7 @@ func (w *words) blocks(items []any, depth int) {
 // elements reads what a block arranges: rich-text runs, context lines, and
 // controls. Only ever the visible label, and never the wiring behind it.
 func (w *words) elements(items []any, depth int) {
-	if w.tooDeep(depth) {
+	if len(items) == 0 || w.tooDeep(depth) {
 		return
 	}
 	for _, item := range items {
@@ -176,7 +188,7 @@ and collapsing them deletes a state and leaves the reader pairing labels with
 the wrong values.
 */
 func (w *words) attachments(items []any, depth int) {
-	if w.tooDeep(depth) {
+	if len(items) == 0 || w.tooDeep(depth) {
 		return
 	}
 	for _, item := range items {
@@ -204,6 +216,13 @@ func (w *words) attachments(items []any, depth int) {
 
 // tooDeep stops the walk, and records that it stopped: content beyond the
 // bound was omitted like any other, and the reader is told.
+//
+// Its three callers ask only once there is something to descend into. A leaf
+// sitting exactly on the bound has no children to leave behind, and announcing
+// an omission that never happened sends a reader looking for content that was
+// always complete. Only nested elements can reach the bound today — blocks and
+// attachments are entered once from the message and once from an attachment —
+// so the guard is uniform rather than three separately reasoned cases.
 func (w *words) tooDeep(depth int) bool {
 	if depth <= maxBlockDepth {
 		return false
@@ -214,13 +233,17 @@ func (w *words) tooDeep(depth int) bool {
 
 // visibleText reads a Slack text object, or a plain string where Slack uses
 // one. Anything else is a shape this does not claim to understand.
+//
+// Normalised here rather than only where it is kept, because callers compare
+// what comes back: an attachment whose fallback is its own text with padding
+// around it is the same sentence, and comparing the raw forms said it twice.
 func visibleText(node any) string {
 	switch value := node.(type) {
 	case string:
-		return value
+		return strings.TrimSpace(value)
 	case map[string]any:
 		said, _ := value["text"].(string)
-		return said
+		return strings.TrimSpace(said)
 	default:
 		return ""
 	}
