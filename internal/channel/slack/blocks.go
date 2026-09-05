@@ -2,8 +2,8 @@ package slack
 
 import (
 	"encoding/json"
-	"sort"
 	"strings"
+	"unicode/utf8"
 )
 
 /*
@@ -19,102 +19,230 @@ This reads the second, and only when the first is empty. A message that has
 both said what it wanted to say in `text`, and appending the rendered version
 would hand the model the same alert twice.
 
-**It is deliberately not a Slack renderer.** It collects the string fields that
-carry human words wherever they appear, which is what an agent needs to read;
-it does not reproduce layout, and it does not try to keep up with block kinds
-Slack has not shipped yet. The whole payload is still recorded on the arrival,
-so an auditor reading the thing itself loses nothing.
+**It walks the shapes rather than the keys.** The first version collected every
+string under a handful of key names wherever they appeared, which cannot tell a
+label from a control's callback data: a button's `value` is read back by the
+app when somebody clicks it, is never on screen, and was going to the model. So
+each shape is read for the fields that hold words a person can see, and a
+`value` counts only where it means one — one half of an attachment field's
+label-and-value pair.
+
+**It is not a Slack renderer.** It does not reproduce layout and does not try
+to keep up with block kinds Slack has not shipped yet. The whole payload is
+recorded on the arrival, so an auditor reading the thing itself loses nothing,
+and an integration whose shape is not read here makes its conversation go quiet
+rather than start runs on half an alert.
 */
 
 const (
 	// Deep enough for the shapes alerting systems actually post — attachment,
-	// block, field, rich-text element — and shallow enough that a payload
-	// nesting forever cannot walk this forever with it.
+	// block, field, rich-text section, element — and shallow enough that a
+	// payload nesting forever cannot walk this forever with it.
 	maxBlockDepth = 12
-	// What reaches the run input. A Slack message can be far larger than
-	// anything worth asking a model about, and the bound is here rather than
-	// downstream because this is where the cost is decided.
+	// What reaches the run input, separators and the note below included. A
+	// Slack message can be far larger than anything worth asking a model
+	// about, and the bound is here rather than downstream because this is
+	// where the cost is decided.
 	maxBlockTextBytes = 4 << 10
+	// Said to the model rather than left to be inferred. A reader told nothing
+	// about the omission reasons from a sentence that stops mid-fact.
+	truncationNote = "\n… the rest of this message was not read"
 )
-
-// blockTextKeys are the fields Slack puts human words in. `value` and `title`
-// belong to attachment fields, `fallback` to the attachment itself.
-var blockTextKeys = map[string]bool{
-	"text": true, "fallback": true, "title": true, "value": true,
-}
 
 // messageText is what the platform reads as the message.
 func messageText(e envelope) string {
 	if strings.TrimSpace(e.Event.Text) != "" {
 		return e.Event.Text
 	}
-	return blockText(e.Event.Blocks, e.Event.Attachments)
+	var w words
+	w.blocks(decodeList(e.Event.Blocks), 0)
+	w.attachments(decodeList(e.Event.Attachments), 0)
+	return w.String()
 }
 
-func blockText(sources ...json.RawMessage) string {
-	found := make([]string, 0, 8)
-	seen := map[string]bool{}
-	size := 0
-	for _, raw := range sources {
-		if len(raw) == 0 {
-			continue
-		}
-		var decoded any // Slack's block payload is any JSON it chooses to send.
-		if err := json.Unmarshal(raw, &decoded); err != nil {
-			continue
-		}
-		collectBlockText(decoded, 0, &found, seen, &size)
+// words is what has been read so far, and whether anything was left behind.
+type words struct {
+	found     []string
+	size      int
+	truncated bool
+}
+
+func (w *words) String() string {
+	out := strings.Join(w.found, "\n")
+	if w.truncated {
+		out += truncationNote
 	}
-	return strings.Join(found, "\n")
+	return out
 }
 
 /*
-collectBlockText walks a decoded payload gathering the words in it.
+add keeps one piece of visible text, inside the ceiling.
 
-Keys are visited in sorted order, never map order: two readings of one payload
-have to produce one string, or the same alert reaches the model differently on
-different days and nobody can reproduce what an agent was asked.
+The ceiling covers the separators and the note as well as the words: a message
+assembled from five hundred small blocks is as expensive as one long one, and
+counting only the words let it past. Room for the note is reserved whether or
+not it ends up being used, so the bound holds either way.
 
-Repeats are dropped. An attachment states its `fallback` and its `text`, which
-are usually the same sentence, and an agent reading it twice is being told it
-matters twice.
+The cut lands on a rune boundary. A prefix taken by byte count splits a
+multi-byte character and produces a string PostgreSQL will not store — so a
+valid Slack delivery fails to be written down, and the sender retries it
+forever.
 */
-func collectBlockText(node any, depth int, found *[]string, seen map[string]bool, size *int) {
-	if depth > maxBlockDepth || *size >= maxBlockTextBytes {
+func (w *words) add(said string) {
+	said = strings.TrimSpace(said)
+	if said == "" || w.truncated {
 		return
 	}
-	switch value := node.(type) {
-	case []any:
-		for _, item := range value {
-			collectBlockText(item, depth+1, found, seen, size)
+	separator := 0
+	if len(w.found) > 0 {
+		separator = 1
+	}
+	room := maxBlockTextBytes - len(truncationNote) - w.size - separator
+	if room <= 0 {
+		w.truncated = true
+		return
+	}
+	if len(said) > room {
+		said = said[:runeBoundary(said, room)]
+		w.truncated = true
+		if said == "" {
+			return
 		}
-	case map[string]any:
-		keys := make([]string, 0, len(value))
-		for key := range value {
-			keys = append(keys, key)
+	}
+	w.found = append(w.found, said)
+	w.size += separator + len(said)
+}
+
+// runeBoundary is the largest cut at or below max that keeps the string valid.
+func runeBoundary(said string, max int) int {
+	cut := max
+	for cut > 0 && !utf8.RuneStart(said[cut]) {
+		cut--
+	}
+	return cut
+}
+
+/*
+blocks reads Slack's Block Kit layout.
+
+A block states its own text, its fields, and whatever elements it arranges.
+Interactive elements contribute their label and nothing else — `value`,
+`action_id` and `url` are the app's own wiring, and none of them is on screen.
+*/
+func (w *words) blocks(items []any, depth int) {
+	if w.tooDeep(depth) {
+		return
+	}
+	for _, item := range items {
+		block := asObject(item)
+		if block == nil {
+			continue
 		}
-		sort.Strings(keys)
-		for _, key := range keys {
-			if words, ok := value[key].(string); ok {
-				if blockTextKeys[key] {
-					keepWords(words, found, seen, size)
-				}
-				continue
-			}
-			collectBlockText(value[key], depth+1, found, seen, size)
+		w.add(visibleText(block["text"]))
+		w.add(visibleText(block["title"]))
+		for _, field := range asList(block["fields"]) {
+			w.add(visibleText(field))
+		}
+		w.elements(asList(block["elements"]), depth+1)
+		if accessory := asObject(block["accessory"]); accessory != nil {
+			w.add(visibleText(accessory["text"]))
 		}
 	}
 }
 
-func keepWords(words string, found *[]string, seen map[string]bool, size *int) {
-	words = strings.TrimSpace(words)
-	if words == "" || seen[words] {
+// elements reads what a block arranges: rich-text runs, context lines, and
+// controls. Only ever the visible label, and never the wiring behind it.
+func (w *words) elements(items []any, depth int) {
+	if w.tooDeep(depth) {
 		return
 	}
-	if room := maxBlockTextBytes - *size; len(words) > room {
-		words = words[:room]
+	for _, item := range items {
+		element := asObject(item)
+		if element == nil {
+			continue
+		}
+		w.add(visibleText(element["text"]))
+		w.elements(asList(element["elements"]), depth+1)
 	}
-	seen[words] = true
-	*found = append(*found, words)
-	*size += len(words)
+}
+
+/*
+attachments reads Slack's older attachment shape.
+
+`fallback` is a plain-text rendering of the attachment's own text, so the two
+are said once. That is the only repeat dropped: the same word in two different
+blocks is two facts — two hosts reported down is not one host reported down —
+and collapsing them deletes a state and leaves the reader pairing labels with
+the wrong values.
+*/
+func (w *words) attachments(items []any, depth int) {
+	if w.tooDeep(depth) {
+		return
+	}
+	for _, item := range items {
+		attachment := asObject(item)
+		if attachment == nil {
+			continue
+		}
+		fallback := visibleText(attachment["fallback"])
+		w.add(fallback)
+		for _, key := range []string{"pretext", "title", "text"} {
+			if said := visibleText(attachment[key]); said != fallback {
+				w.add(said)
+			}
+		}
+		for _, item := range asList(attachment["fields"]) {
+			field := asObject(item)
+			w.add(visibleText(field["title"]))
+			// The one place a `value` is somebody's words rather than an
+			// app's callback data.
+			w.add(visibleText(field["value"]))
+		}
+		w.blocks(asList(attachment["blocks"]), depth+1)
+	}
+}
+
+// tooDeep stops the walk, and records that it stopped: content beyond the
+// bound was omitted like any other, and the reader is told.
+func (w *words) tooDeep(depth int) bool {
+	if depth <= maxBlockDepth {
+		return false
+	}
+	w.truncated = true
+	return true
+}
+
+// visibleText reads a Slack text object, or a plain string where Slack uses
+// one. Anything else is a shape this does not claim to understand.
+func visibleText(node any) string {
+	switch value := node.(type) {
+	case string:
+		return value
+	case map[string]any:
+		said, _ := value["text"].(string)
+		return said
+	default:
+		return ""
+	}
+}
+
+func decodeList(raw json.RawMessage) []any {
+	if len(raw) == 0 {
+		return nil
+	}
+	var decoded []any // Slack sends whatever JSON it chooses inside these.
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		return nil
+	}
+	return decoded
+}
+
+func asList(node any) []any {
+	list, _ := node.([]any)
+	return list
+}
+
+func asObject(node any) map[string]any {
+	object, _ := node.(map[string]any)
+	return object
 }
