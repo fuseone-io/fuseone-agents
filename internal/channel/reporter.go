@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"time"
-
-	"github.com/fuseone/agents/internal/domain"
 )
 
 /*
@@ -98,7 +96,7 @@ func (r *Reporter) Sweep(ctx context.Context, limit int) (int, error) {
 			// here is a run that conversation never hears about.
 			continue
 		}
-		if err := r.reports.Reported(ctx, report.RunID, report.Event, r.clock()); err != nil {
+		if err := r.reports.Reported(ctx, report, r.clock()); err != nil {
 			failures = append(failures, err)
 		}
 	}
@@ -151,10 +149,9 @@ func (r *Reporter) failuresFor(report Report, place Conversation, cause error) [
 	var failures []DeliveryFailure
 	for _, code := range FailureCodes(cause) {
 		failures = append(failures, DeliveryFailure{
-			RunID: report.RunID, Event: report.Event,
-			Channel: place.Channel, Conversation: place.ID,
-			ScopeWide: place.Channel == "" && place.ID == "",
-			Code:      code, Scope: report.Scope, AgentID: report.AgentID,
+			Announcement: report.announcementTo(place),
+			ScopeWide:    place.Channel == "" && place.ID == "",
+			Code:         code, Scope: report.Scope, AgentID: report.AgentID,
 			SeenAt: r.clock(),
 		})
 	}
@@ -173,7 +170,8 @@ func (r *Reporter) recordFailures(ctx context.Context, failures []DeliveryFailur
 
 // post sends one message, unless it has already been sent.
 func (r *Reporter) post(ctx context.Context, report Report, place Conversation) (bool, error) {
-	said, err := r.deliveries.Delivered(ctx, report.RunID, report.Event, place.Channel, place.ID)
+	owed := report.announcementTo(place)
+	said, err := r.deliveries.Delivered(ctx, owed)
 	if err != nil {
 		return false, fmt.Errorf("channel: read deliveries: %w", err)
 	}
@@ -189,9 +187,7 @@ func (r *Reporter) post(ctx context.Context, report Report, place Conversation) 
 	}
 
 	return true, r.deliveries.Record(ctx, Delivery{
-		RunID: report.RunID, Event: report.Event,
-		Channel: place.Channel, Conversation: place.ID,
-		Ref: ref, PostedAt: r.clock(),
+		Announcement: owed, Ref: ref, PostedAt: r.clock(),
 	})
 }
 
@@ -219,8 +215,6 @@ func (noDeliveries) RecordFailure(context.Context, DeliveryFailure) error {
 func (noDeliveries) RecordFailures(context.Context, []DeliveryFailure) error {
 	return nil
 }
-func (noDeliveries) Delivered(
-	context.Context, domain.RunID, Event, string, string,
-) (bool, error) {
+func (noDeliveries) Delivered(context.Context, Announcement) (bool, error) {
 	return false, nil
 }

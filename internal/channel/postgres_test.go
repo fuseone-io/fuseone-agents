@@ -1,6 +1,7 @@
 package channel_test
 
 import (
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -36,8 +37,11 @@ func TestUnreported_runIsWaitingOnSomebody_isListedUntilItIsReported(t *testing.
 	}
 
 	if err := store.Record(t.Context(), channel.Delivery{
-		RunID: "run-waiting", Event: channel.EventParked,
-		Channel: "acme-slack", Conversation: "C07-ops", Ref: "1.1", PostedAt: time.Now(),
+		Announcement: channel.Announcement{
+			RunID: "run-waiting", Event: channel.EventParked,
+			Channel: "acme-slack", Conversation: "C07-ops",
+		},
+		Ref: "1.1", PostedAt: time.Now(),
 	}); err != nil {
 		t.Fatalf("record: %v", err)
 	}
@@ -61,7 +65,7 @@ func TestUnreported_runIsWaitingOnSomebody_isListedUntilItIsReported(t *testing.
 
 	// Said everywhere, recorded by the one component that knows what
 	// everywhere means.
-	if err := store.Reported(t.Context(), "run-waiting", channel.EventParked, noon); err != nil {
+	if err := store.Reported(t.Context(), pending[0], noon); err != nil {
 		t.Fatalf("reported: %v", err)
 	}
 
@@ -109,8 +113,10 @@ func TestUnreported_runIsStillWorking_saysNothing(t *testing.T) {
 func TestRecordFailure_keepsScopeAndCountsRetries(t *testing.T) {
 	store, pool := channelStore(t)
 	failure := channel.DeliveryFailure{
-		RunID: "run-waiting", Event: channel.EventParked,
-		Channel: "acme-slack", Conversation: "C07-ops",
+		Announcement: channel.Announcement{
+			RunID: "run-waiting", Event: channel.EventParked,
+			Channel: "acme-slack", Conversation: "C07-ops",
+		},
 		Code: "slack-team-alerts", Scope: domain.Scope{Company: "acme", Area: "ops"},
 		AgentID: "triage", SeenAt: noon,
 	}
@@ -153,8 +159,10 @@ func TestRuntimeHealth_channelFailuresAreScopedAndBounded(t *testing.T) {
 	recordFailure := func(run, conversation, code string, scope domain.Scope, seen time.Time) {
 		t.Helper()
 		if err := store.RecordFailure(ctx, channel.DeliveryFailure{
-			RunID: domain.RunID(run), Event: channel.EventParked,
-			Channel: "acme-slack", Conversation: conversation,
+			Announcement: channel.Announcement{
+				RunID: domain.RunID(run), Event: channel.EventParked,
+				Channel: "acme-slack", Conversation: conversation,
+			},
 			Code: code, Scope: scope, AgentID: "triage", SeenAt: seen,
 		}); err != nil {
 			t.Fatalf("RecordFailure %s/%s: %v", run, code, err)
@@ -165,7 +173,9 @@ func TestRuntimeHealth_channelFailuresAreScopedAndBounded(t *testing.T) {
 	recordFailure("run-ops-1", "C07-ops", channel.CodeMissingScope, ops, noon.Add(time.Minute))
 	recordFailure("run-ops-2", "C08-ops", "jira-prod.transition_ACME-4417", ops, noon.Add(2*time.Minute))
 	if err := store.RecordFailure(ctx, channel.DeliveryFailure{
-		RunID: "run-ops-3", Event: channel.EventParked,
+		Announcement: channel.Announcement{
+			RunID: "run-ops-3", Event: channel.EventParked,
+		},
 		Code: channel.CodeConfigurationReadFailed, Scope: ops,
 		AgentID: "triage", ScopeWide: true, SeenAt: noon.Add(3 * time.Minute),
 	}); err != nil {
@@ -277,8 +287,11 @@ func TestAboutRun_aMessageThePlatformPosted_resolvesToItsRun(t *testing.T) {
 	store, _ := channelStore(t)
 
 	if err := store.Record(t.Context(), channel.Delivery{
-		RunID: "run-alerta", Event: channel.EventParked,
-		Channel: "acme-slack", Conversation: "C07-ops", Ref: "1786.42", PostedAt: noon,
+		Announcement: channel.Announcement{
+			RunID: "run-alerta", Event: channel.EventParked,
+			Channel: "acme-slack", Conversation: "C07-ops",
+		},
+		Ref: "1786.42", PostedAt: noon,
 	}); err != nil {
 		t.Fatalf("Record: %v", err)
 	}
@@ -311,8 +324,11 @@ func TestAboutRun_theSameRefInAnotherConversation_isAnotherMessage(t *testing.T)
 	store, _ := channelStore(t)
 
 	if err := store.Record(t.Context(), channel.Delivery{
-		RunID: "run-outra", Event: channel.EventParked,
-		Channel: "acme-slack", Conversation: "C08-finance", Ref: "1786.77", PostedAt: noon,
+		Announcement: channel.Announcement{
+			RunID: "run-outra", Event: channel.EventParked,
+			Channel: "acme-slack", Conversation: "C08-finance",
+		},
+		Ref: "1786.77", PostedAt: noon,
 	}); err != nil {
 		t.Fatalf("Record: %v", err)
 	}
@@ -333,13 +349,155 @@ func TestAboutRun_theSameRefOnAnotherConnection_isAnotherMessage(t *testing.T) {
 	store, _ := channelStore(t)
 
 	if err := store.Record(t.Context(), channel.Delivery{
-		RunID: "run-teams", Event: channel.EventParked,
-		Channel: "acme-teams", Conversation: "SHARED-ID", Ref: "1786.99", PostedAt: noon,
+		Announcement: channel.Announcement{
+			RunID: "run-teams", Event: channel.EventParked,
+			Channel: "acme-teams", Conversation: "SHARED-ID",
+		},
+		Ref: "1786.99", PostedAt: noon,
 	}); err != nil {
 		t.Fatalf("Record: %v", err)
 	}
 
 	if _, ok, _ := store.AboutRun(t.Context(), "acme-slack", "SHARED-ID", "1786.99"); ok {
 		t.Error("a reference resolved across connections")
+	}
+}
+
+/*
+A run that stops a second time is a second question.
+
+The sentinel that retires a run from the sweep is keyed by the run and the
+event, so once a parked run had been announced it could never be announced
+again — and an agent that asks for two tools asks for two approvals. The second
+one reached no channel and no person, and the run sat parked until somebody
+happened to open the console.
+*/
+func TestUnreported_runParksAtASecondStep_isListedAgain(t *testing.T) {
+	store, pool := channelStore(t)
+
+	park(t, pool, "run-twice")
+	first, err := store.Unreported(t.Context(), noon.Add(-channel.Window), 50)
+	if err != nil {
+		t.Fatalf("unreported: %v", err)
+	}
+	if len(first) != 1 {
+		t.Fatalf("pending = %+v, want the first park", first)
+	}
+	if err := store.Reported(t.Context(), first[0], noon); err != nil {
+		t.Fatalf("reported: %v", err)
+	}
+
+	decideAndParkAgain(t, pool, "run-twice")
+
+	again, err := store.Unreported(t.Context(), noon.Add(-channel.Window), 50)
+	if err != nil {
+		t.Fatalf("unreported after the second park: %v", err)
+	}
+	if len(again) != 1 || again[0].RunID != "run-twice" {
+		t.Fatalf("pending = %+v, want the second park announced", again)
+	}
+	if again[0].AtSeq <= first[0].AtSeq {
+		t.Errorf("at seq %d, want the later step (first was %d)", again[0].AtSeq, first[0].AtSeq)
+	}
+}
+
+// And a run sitting on the same question is asked about once. The sweep runs
+// every thirty seconds; a run parked overnight must not be announced two
+// thousand times.
+func TestUnreported_runStillParkedAtTheSameStep_isReportedOnce(t *testing.T) {
+	store, pool := channelStore(t)
+
+	park(t, pool, "run-patient")
+	pending, err := store.Unreported(t.Context(), noon.Add(-channel.Window), 50)
+	if err != nil {
+		t.Fatalf("unreported: %v", err)
+	}
+	if err := store.Reported(t.Context(), pending[0], noon); err != nil {
+		t.Fatalf("reported: %v", err)
+	}
+
+	again, err := store.Unreported(t.Context(), noon.Add(-channel.Window), 50)
+	if err != nil {
+		t.Fatalf("unreported after being reported: %v", err)
+	}
+	if len(again) != 0 {
+		t.Errorf("announced the same question twice: %+v", again)
+	}
+}
+
+func decideAndParkAgain(t *testing.T, pool *pgxpool.Pool, run string) {
+	t.Helper()
+	appendStep(t, pool, run, domain.StepApprovalDecided,
+		[]byte(`{"approved":true,"by":"usr_ana"}`))
+	appendStep(t, pool, run, domain.StepApprovalRequested,
+		[]byte(`{"tool":"erp.pay","rule":"financial","reason":"a second ceiling"}`))
+}
+
+/*
+A delivery that names no conversation is refused, not stored.
+
+An empty connection and an empty conversation is the shape a run reported
+everywhere is filed under. A delivery reaching it — a recipient nobody bound, a
+lookup that answered nothing — would retire the run from the sweep, and every
+real conversation would lose the announcement silently and for good. The
+invariant is held by the table's writer rather than by everyone who calls it.
+*/
+func TestRecord_aDeliveryNamingNoConversation_isRefusedAndDoesNotRetireTheRun(t *testing.T) {
+	store, pool := channelStore(t)
+
+	park(t, pool, "run-unaddressed")
+	err := store.Record(t.Context(), channel.Delivery{
+		Announcement: channel.Announcement{
+			RunID: "run-unaddressed", Event: channel.EventParked,
+		},
+		PostedAt: noon,
+	})
+	if !errors.Is(err, channel.ErrUnaddressed) {
+		t.Fatalf("Record = %v, want it refused as unaddressed", err)
+	}
+
+	pending, err := store.Unreported(t.Context(), noon.Add(-channel.Window), 50)
+	if err != nil {
+		t.Fatalf("unreported: %v", err)
+	}
+	if len(pending) != 1 || pending[0].RunID != "run-unaddressed" {
+		t.Fatalf("pending = %+v, want the run still owed an announcement", pending)
+	}
+}
+
+/*
+A conversation that heard about one question has not heard about the next.
+
+The dedup that stops a sweep saying the same thing twice is keyed by the step
+as well, or the second approval is suppressed in exactly the conversation that
+was told about the first — which is the same silence, one level down from the
+sentinel.
+*/
+func TestDelivered_theSameConversationAboutAnotherStep_hasNotHeard(t *testing.T) {
+	store, _ := channelStore(t)
+
+	first := channel.Announcement{
+		RunID: "run-two-questions", Event: channel.EventParked, AtSeq: 2,
+		Channel: "acme-slack", Conversation: "C07-ops",
+	}
+	if err := store.Record(t.Context(), channel.Delivery{
+		Announcement: first, Ref: "1.1", PostedAt: noon,
+	}); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+
+	said, err := store.Delivered(t.Context(), first)
+	if err != nil || !said {
+		t.Fatalf("Delivered(first) = %v, %v; want it already said", said, err)
+	}
+
+	second := first
+	second.AtSeq = 9
+	said, err = store.Delivered(t.Context(), second)
+	if err != nil {
+		t.Fatalf("Delivered(second): %v", err)
+	}
+	if said {
+		t.Error("the second question was suppressed by the answer to the first")
 	}
 }

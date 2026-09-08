@@ -3,6 +3,7 @@ package channel_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"testing"
 	"time"
@@ -442,10 +443,8 @@ func (f *fixedReports) Unreported(context.Context, time.Time, int) ([]channel.Re
 	return f.reports, nil
 }
 
-func (f *fixedReports) Reported(
-	_ context.Context, run domain.RunID, _ channel.Event, _ time.Time,
-) error {
-	f.done = append(f.done, run)
+func (f *fixedReports) Reported(_ context.Context, r channel.Report, _ time.Time) error {
+	f.done = append(f.done, r.RunID)
 	return nil
 }
 
@@ -513,7 +512,13 @@ type memoryDeliveries struct {
 	batches  int
 }
 
+// Refused exactly as the store refuses it. An empty pair is the shape "said
+// everywhere" is filed under, and a fake that accepted one would let a test
+// pass against a row the real table treats as retiring the run.
 func (m *memoryDeliveries) Record(_ context.Context, d channel.Delivery) error {
+	if d.Channel == "" && d.Conversation == "" {
+		return fmt.Errorf("%w: %s", channel.ErrUnaddressed, d.RunID)
+	}
 	m.recorded = append(m.recorded, d)
 	return nil
 }
@@ -532,11 +537,9 @@ func (m *memoryDeliveries) RecordFailures(_ context.Context, failures []channel.
 // The fake keys delivery the way the real store does. A fake that was more
 // permissive about what counts as the same conversation would let a test pass
 // against a namespacing the production table refuses.
-func (m *memoryDeliveries) Delivered(
-	_ context.Context, run domain.RunID, ev channel.Event, ch, conv string,
-) (bool, error) {
+func (m *memoryDeliveries) Delivered(_ context.Context, a channel.Announcement) (bool, error) {
 	for _, d := range m.recorded {
-		if d.RunID == run && d.Event == ev && d.Channel == ch && d.Conversation == conv {
+		if d.Announcement == a {
 			return true, nil
 		}
 	}

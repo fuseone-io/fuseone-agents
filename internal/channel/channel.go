@@ -132,15 +132,35 @@ type Message struct {
 	Decidable bool
 }
 
-// Delivery records that a message left. One per run, event and conversation.
-type Delivery struct {
+/*
+Announcement names one message the platform owes.
+
+Which run, about which of its steps, on which connection, in which
+conversation. It is the idempotency key of the whole outbound path, written
+once as a type because its parts are easy to transpose: the connection and the
+conversation are both strings, and a caller that swapped them would ask whether
+a message had reached a place that does not exist and be told no, for ever.
+*/
+type Announcement struct {
 	RunID domain.RunID
 	Event Event
+	// AtSeq is the step this message is about.
+	//
+	// Zero for an event a run has once — it finished, it failed. The sequence
+	// of the request for a park, because a run stops as many times as it asks:
+	// an agent that wants two tools asks for two approvals, and keyed by the
+	// run alone the second question was never asked of anybody.
+	AtSeq int64
 	// Channel names the connection the conversation belongs to. A conversation
 	// id means nothing on its own: two workspaces are two namespaces, and an
 	// id that names a channel in one may name another somewhere else.
 	Channel      string
 	Conversation string
+}
+
+// Delivery records that a message left.
+type Delivery struct {
+	Announcement
 	// Ref is what the channel called the message, so a later stage can reply
 	// in the same thread.
 	Ref      string
@@ -151,10 +171,7 @@ type Delivery struct {
 // receive it. It is scoped because the cockpit that reads this later must not
 // turn a channel incident in one area into installation-wide knowledge.
 type DeliveryFailure struct {
-	RunID        domain.RunID
-	Event        Event
-	Channel      string
-	Conversation string
+	Announcement
 	// ScopeWide means the failure happened before the reporter knew which
 	// conversations were owed the message. Counting it as one conversation
 	// would understate the blast radius as confidently as naming all of them.
@@ -169,10 +186,22 @@ type DeliveryFailure struct {
 // consumer.
 type Reports interface {
 	Unreported(ctx context.Context, since time.Time, limit int) ([]Report, error)
-	// Reported marks a run's event as said everywhere it should be said. The
+	// Reported marks one report as said everywhere it should be said. The
 	// reporter is the only component that knows what everywhere means, so it
 	// is the one that writes it.
-	Reported(ctx context.Context, run domain.RunID, e Event, at time.Time) error
+	//
+	// The whole report rather than its parts, because the step it is about is
+	// half the key: a run reported at the step it stopped on is still owed an
+	// announcement the next time it stops.
+	Reported(ctx context.Context, r Report, at time.Time) error
+}
+
+// announcementTo is what this report owes one conversation.
+func (r Report) announcementTo(place Conversation) Announcement {
+	return Announcement{
+		RunID: r.RunID, Event: r.Event, AtSeq: r.AtSeq,
+		Channel: place.Channel, Conversation: place.ID,
+	}
 }
 
 // Conversations answers which places speak for a scope.
@@ -191,7 +220,7 @@ type Deliveries interface {
 	Record(ctx context.Context, d Delivery) error
 	RecordFailure(ctx context.Context, f DeliveryFailure) error
 	RecordFailures(ctx context.Context, failures []DeliveryFailure) error
-	Delivered(ctx context.Context, run domain.RunID, e Event, channel, conversation string) (bool, error)
+	Delivered(ctx context.Context, a Announcement) (bool, error)
 }
 
 // Available is a place a connection could be pointed at, as a person would
