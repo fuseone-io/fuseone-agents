@@ -36,10 +36,28 @@ var (
 type Channels struct {
 	pool     *pgxpool.Pool
 	settings *settings.Store
+	drivers  Drivers
 }
 
 func NewChannels(pool *pgxpool.Pool, store *settings.Store) *Channels {
 	return &Channels{pool: pool, settings: store}
+}
+
+/*
+Drivers answers which vendors this binary can connect.
+
+Declared here rather than taken from the package that builds them: what the
+administration needs is one question, and depending on the driver table for it
+would put a vendor package in the import path of every configuration write.
+*/
+type Drivers interface{ Kinds() []string }
+
+// WithDrivers lets the administration refuse an inbound rule on a connection
+// nothing in this binary can talk to. Optional: a process that builds no
+// drivers asks nothing.
+func (c *Channels) WithDrivers(d Drivers) *Channels {
+	c.drivers = d
+	return c
 }
 
 // Channel is a connection and the conversations inside it.
@@ -144,7 +162,12 @@ version before this one.
 */
 type storedConversation struct {
 	name string
-	conv Conversation
+	// keyVersion is the shape the row declares its own name is in. An edit
+	// writes the row back the way it found it: this version writes the id
+	// alone, but the release after it writes the connection into the name, and
+	// both are rolled out beside each other.
+	keyVersion int
+	conv       Conversation
 }
 
 func conversationsOf(channelName string, stored []settings.Setting) []Conversation {
@@ -181,19 +204,20 @@ func conversationRows(channelName string, stored []settings.Setting) []storedCon
 			// edits one configuration believing it is another.
 			continue
 		}
-		out = append(out, storedConversation{name: s.Name, conv: Conversation{
-			ID: id, Label: v.Label, Scope: s.Scope,
-			// As stored. Read through the display normalisation, a mode this
-			// version cannot name came back as "mentions", and saving any
-			// unrelated edit from that reading turned a room that started
-			// nothing into one anybody could start runs from by typing in it.
-			Mode:    channel.StoredMode(v.Mode),
-			Sources: compactStrings(v.Sources),
-			Agent:   domain.AgentID(v.Agent), RunAs: domain.UserID(v.RunAs),
-			ThreadContext:   v.ThreadContext,
-			DirectApprovals: v.DirectApprovals,
-			Wants:           v.Wants, Enabled: s.Enabled,
-		}})
+		out = append(out, storedConversation{
+			name: s.Name, keyVersion: v.KeyVersion, conv: Conversation{
+				ID: id, Label: v.Label, Scope: s.Scope,
+				// As stored. Read through the display normalisation, a mode this
+				// version cannot name came back as "mentions", and saving any
+				// unrelated edit from that reading turned a room that started
+				// nothing into one anybody could start runs from by typing in it.
+				Mode:    channel.StoredMode(v.Mode),
+				Sources: compactStrings(v.Sources),
+				Agent:   domain.AgentID(v.Agent), RunAs: domain.UserID(v.RunAs),
+				ThreadContext:   v.ThreadContext,
+				DirectApprovals: v.DirectApprovals,
+				Wants:           v.Wants, Enabled: s.Enabled,
+			}})
 	}
 	return out
 }
@@ -384,52 +408,78 @@ func (c *Channels) PutConversation(
 	if !channel.Wants(eventsOf(conv.Wants), channel.EventParked) {
 		conv.DirectApprovals = false
 	}
-	value, err := json.Marshal(map[string]any{
+	// One transaction, holding the connection's lock: the precondition, the
+	// shape the row is already in, and the write are one decision.
+	tx, err := c.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("admin: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if err := lockChannel(ctx, tx, channelName); err != nil {
+		return err
+	}
+	if err := c.refuseUnreachableConnection(ctx, tx, channelName, mode); err != nil {
+		return err
+	}
+	// The uniqueness rules are checked here rather than before the
+	// transaction. Read outside it, two requests naming one conversation for
+	// two scopes both saw it unmapped and both stored — and a Slack channel
+	// receiving two companies' runs is the disclosure the conversation scope
+	// exists to prevent.
+	if err := c.unmapped(ctx, tx, channelName, conv); err != nil {
+		return err
+	}
+
+	/*
+		The row keeps the shape it is already in.
+
+		This version writes the id alone, because the connection joins the key
+		one release later and the version still serving beside this one reads
+		only the old name. But that later release writes the new shape, and it
+		too will be rolled out beside this one — so an edit here that forced
+		the old name back would leave the new row untouched and a second row
+		beside it, which is the ambiguity the read refuses, for good. A row
+		that exists is updated where it lies.
+	*/
+	stored, err := c.settings.ListTx(ctx, tx, channel.KindConversation)
+	if err != nil {
+		return fmt.Errorf("admin: list conversations: %w", err)
+	}
+	name, keyVersion := conv.ID, channel.KeyVersionName
+	for _, one := range conversationRows(channelName, stored) {
+		if one.conv.ID == conv.ID && one.conv.Scope == conv.Scope {
+			name, keyVersion = one.name, one.keyVersion
+			break
+		}
+	}
+
+	body := map[string]any{
 		"channel": channelName, "label": conv.Label, "wants": conv.Wants,
 		"mode": mode, "sources": sources,
 		"agent": string(conv.Agent), "runAs": string(conv.RunAs),
 		"threadContext":   conv.ThreadContext,
 		"directApprovals": conv.DirectApprovals,
-	})
+	}
+	if keyVersion != channel.KeyVersionName {
+		body["keyVersion"] = keyVersion
+	}
+	value, err := json.Marshal(body)
 	if err != nil {
 		return err
 	}
 
-	// Under the connection's lock, so attaching a room and deciding whether the
-	// connection may be touched cannot interleave. Whoever is allowed to write
-	// this row is settled at the door; what this serialises is the pair.
-	//
-	// The uniqueness rule is checked here for the same reason. Read before the
-	// transaction, two requests naming one conversation for two scopes both
-	// saw it unmapped and both stored — and a Slack channel receiving two
-	// companies' runs is the disclosure the conversation scope exists to
-	// prevent.
-	guard := func(ctx context.Context, conn settings.DB) error {
-		if err := lockChannel(ctx, conn, channelName); err != nil {
-			return err
-		}
-		if err := c.refuseUnreachableConnection(ctx, conn, channelName, mode); err != nil {
-			return err
-		}
-		return c.unmapped(ctx, conn, channelName, conv)
+	if err := c.settings.PutTx(ctx, tx, settings.Setting{
+		ScopeKind: conversationScopeKind(conv.Scope), Scope: conv.Scope,
+		Kind: channel.KindConversation, Name: name,
+		Value: value, Enabled: conv.Enabled, UpdatedBy: string(by),
+	}); err != nil {
+		return err
 	}
-	return writeGuarded(ctx, c.pool, c.settings, guard, folded{
-		by: by, scope: conv.Scope,
-		action: "channel.conversation.configured", target: conv.ID,
-		set: settings.Setting{
-			ScopeKind: conversationScopeKind(conv.Scope), Scope: conv.Scope,
-			Kind: channel.KindConversation,
-			// Still the id alone. The connection joins the key one release
-			// after this one: writing it now would take the conversation away
-			// from the version still serving beside this one, and that version
-			// would write this name back — leaving two rows for one
-			// conversation, which is the ambiguity the read refuses, for good.
-			// The collision the new key exists to prevent is refused in the
-			// guard instead.
-			Name:  conv.ID,
-			Value: value, Enabled: conv.Enabled, UpdatedBy: string(by),
-		},
-		detail: map[string]any{
+	if err := Record(ctx, tx, Event{
+		Principal: by, Scope: conv.Scope,
+		Action: "channel.conversation.configured", Target: conv.ID,
+		Detail: map[string]any{
 			"channel": channelName, "scope": conv.Scope.String(), "wants": conv.Wants,
 			"mode": mode, "sources": sources,
 			"agent": string(conv.Agent), "runAs": string(conv.RunAs),
@@ -439,7 +489,10 @@ func (c *Channels) PutConversation(
 			// from. The trail has to say when it was turned on, and by whom.
 			"directApprovals": conv.DirectApprovals,
 		},
-	})
+	}); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func compactStrings(in []string) []string {

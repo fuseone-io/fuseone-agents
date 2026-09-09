@@ -360,6 +360,15 @@ func channelStore(t *testing.T) (*channel.Postgres, *pgxpool.Pool) {
 		truncate run_steps, runs, channel_deliveries, channel_delivery_failures`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
+	// The configuration too. Settings survive a test, and a row left behind by
+	// another one answers in its place: a sabotage that should have broken a
+	// test passed because a leftover conversation resolved for it, which is a
+	// test agreeing with something nobody wrote.
+	if _, err := pool.Exec(t.Context(), `
+		delete from settings where kind in ('channel', 'channel_conversation', 'channel_identity');
+		delete from admin_events`); err != nil {
+		t.Fatalf("clean the configuration: %v", err)
+	}
 	return channel.NewPostgres(pool), pool
 }
 

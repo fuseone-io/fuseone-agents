@@ -776,6 +776,46 @@ func TestResolve_aRowKeyedByConnectionAndId_resolves(t *testing.T) {
 }
 
 /*
+And editing it leaves it where it is.
+
+That is the other half of the rollout the version after this one will do. This
+version writes the id alone — but forcing that name onto a row already keyed by
+its connection would leave the newer row untouched and a second one beside it,
+which is the ambiguity the read refuses, for good. A row that exists is updated
+where it lies.
+*/
+func TestPutConversation_editingARowKeyedByConnectionAndId_keepsItsShape(t *testing.T) {
+	store, channels, settingsStore := configuredChannelsWithStore(t)
+	scope := domain.Scope{Company: "acme", Area: "future2"}
+
+	if err := settingsStore.Put(t.Context(), settings.Setting{
+		ScopeKind: settings.ScopeArea, Scope: scope,
+		Kind:    channel.KindConversation,
+		Name:    channel.ConversationKey("acme-slack", "C-KEPT"),
+		Value:   []byte(`{"channel":"acme-slack","keyVersion":2,"mode":"mentions","agent":"triagem"}`),
+		Enabled: true, UpdatedBy: "a newer version",
+	}); err != nil {
+		t.Fatalf("write the row: %v", err)
+	}
+
+	if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+		ID: "C-KEPT", Enabled: true, Scope: scope, Agent: "cobranca",
+		Wants: []string{"parked"},
+	}, "usr_ana"); err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+
+	// One row, and it is the edit that answers.
+	got, err := store.Resolve(t.Context(), "acme-slack", "C-KEPT")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if got.Agent != "cobranca" {
+		t.Errorf("agent = %q, want the edit", got.Agent)
+	}
+}
+
+/*
 And it can be removed.
 
 The delete recomputed the key, so a row stored under the id alone was named by
@@ -1096,6 +1136,9 @@ it also tells the people who may decide.
 */
 func TestPutConversation_atTheInstallationScope_storesNothingAboutStarting(t *testing.T) {
 	_, channels := configuredChannels(t)
+	// The listing hangs conversations off the connections that exist, so the
+	// one they are configured on has to be there to read them back.
+	connect(t, channels, "acme-slack")
 
 	for _, mode := range []string{
 		channel.ConversationMentions, channel.ConversationWatch,
@@ -1195,6 +1238,7 @@ The console does not offer it, which is not the same as the server refusing it.
 */
 func TestPutConversation_announceAtAnOrdinaryScope_keepsNoAgent(t *testing.T) {
 	_, channels := configuredChannels(t)
+	connect(t, channels, "acme-slack")
 
 	if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
 		ID: "C54-quiet", Enabled: true, Mode: channel.ConversationAnnounce,
