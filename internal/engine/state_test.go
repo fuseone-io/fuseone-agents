@@ -564,3 +564,115 @@ func TestFold_wallClock_accumulatesFromTheRunsOwnInstants(t *testing.T) {
 			s.Committed().WallClockMS)
 	}
 }
+
+/*
+One question, decided more than once.
+
+The ledger refuses a second decision on the same request, so new runs never
+hold this shape. Old ones do, and the fold is what an auditor reads a year
+later — so it has to answer for them, and it has to answer the same way
+whatever order the two steps landed in.
+
+A second approval must not void the first. Folded by position rather than by
+what the decision names, `s.Approved = s.requested` ran again with nothing
+requested and set the grant to nothing: the run went back to running, the
+planner asked again, and nobody was told why.
+*/
+func TestFold_approvedTwiceForOneRequest_keepsTheGrant(t *testing.T) {
+	t.Parallel()
+
+	s := mustFold(t, decidedTwice(t,
+		domain.ApprovalDecidedPayload{Approved: true, By: "ana", AtSeq: 2},
+		domain.ApprovalDecidedPayload{Approved: true, By: "bruno", AtSeq: 2},
+	))
+
+	if s.Approved == nil {
+		t.Fatal("a second approval voided the first")
+	}
+	if s.Approved.Tool != "crm.reply" {
+		t.Errorf("approved = %+v, want the call that was asked about", s.Approved)
+	}
+}
+
+/*
+A refusal removes the grant, whenever it arrives.
+
+Refusing left `s.Approved` untouched, so a run approved and then refused
+carried a usable grant past its own refusal — and the phase was already running
+after the first decision, so a worker could take the approved call while the
+refusal was still being written. The trail then read: approved, executed,
+refused.
+*/
+func TestFold_approvedThenRefusedForOneRequest_leavesNoGrant(t *testing.T) {
+	t.Parallel()
+
+	s := mustFold(t, decidedTwice(t,
+		domain.ApprovalDecidedPayload{Approved: true, By: "ana", AtSeq: 2},
+		domain.ApprovalDecidedPayload{Approved: false, By: "bruno", AtSeq: 2},
+	))
+
+	if s.Approved != nil {
+		t.Fatalf("approved = %+v, want nothing usable after a refusal", s.Approved)
+	}
+}
+
+// And a refusal written before the sequence was recorded still closes what it
+// cannot name. It could only have meant the question that was open, and
+// leaving a grant standing on the strength of a missing field is the one
+// reading that turns a refusal into permission.
+func TestFold_refusedWithNoSequenceNamed_stillRemovesTheGrant(t *testing.T) {
+	t.Parallel()
+
+	s := mustFold(t, decidedTwice(t,
+		domain.ApprovalDecidedPayload{Approved: true, By: "ana"},
+		domain.ApprovalDecidedPayload{Approved: false, By: "bruno"},
+	))
+
+	if s.Approved != nil {
+		t.Fatalf("approved = %+v, want nothing usable after a refusal", s.Approved)
+	}
+}
+
+// A decision about a question the run has moved past changes nothing. It is
+// what a stale card in a channel produces, and it must not reopen a phase, a
+// request or a grant.
+func TestFold_decisionAboutAnEarlierRequest_changesNothing(t *testing.T) {
+	t.Parallel()
+
+	steps := chain(t, append(stripSeal(oneApproval(t)),
+		domain.Step{Kind: domain.StepApprovalDecided,
+			Payload: payload(t, domain.ApprovalDecidedPayload{Approved: true, By: "ana", AtSeq: 2})},
+		domain.Step{Kind: domain.StepApprovalRequested,
+			Payload: payload(t, domain.ApprovalRequestedPayload{Tool: "crm.refund", Reason: "second"})},
+		// Somebody presses the button on the first card, long after.
+		domain.Step{Kind: domain.StepApprovalDecided,
+			Payload: payload(t, domain.ApprovalDecidedPayload{Approved: true, By: "bruno", AtSeq: 2})},
+	)...)
+
+	s := mustFold(t, steps)
+	if s.Phase != PhaseAwaitingApproval {
+		t.Errorf("phase = %v, want the second question still open", s.Phase)
+	}
+	if s.PendingApproval == nil || s.PendingApproval.Tool != "crm.refund" {
+		t.Errorf("pending = %+v, want the second request untouched", s.PendingApproval)
+	}
+}
+
+func oneApproval(t *testing.T) []domain.Step {
+	t.Helper()
+	return chain(t,
+		domain.Step{Kind: domain.StepRunStarted},
+		domain.Step{Kind: domain.StepApprovalRequested,
+			Payload: payload(t, domain.ApprovalRequestedPayload{
+				Tool: "crm.reply", Reason: "customer_reply",
+			})},
+	)
+}
+
+func decidedTwice(t *testing.T, first, second domain.ApprovalDecidedPayload) []domain.Step {
+	t.Helper()
+	return chain(t, append(stripSeal(oneApproval(t)),
+		domain.Step{Kind: domain.StepApprovalDecided, Payload: payload(t, first)},
+		domain.Step{Kind: domain.StepApprovalDecided, Payload: payload(t, second)},
+	)...)
+}

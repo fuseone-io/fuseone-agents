@@ -272,6 +272,14 @@ type ApprovalDecidedPayload struct {
 	Approved bool   `json:"approved"`
 	By       UserID `json:"by"`
 	Note     string `json:"note,omitempty"`
+	// AtSeq is the request this decision answers.
+	//
+	// Absent on steps written before it existed, and those stay readable: a
+	// decision that names no request could only have meant the one that was
+	// open when somebody wrote it. Everything written now names one, so a
+	// decision arriving about a question the run has moved past can be told
+	// apart from the one it is waiting on.
+	AtSeq int64 `json:"at_seq,omitempty"`
 }
 
 // ResumedPayload records a person returning a parked run to the queue.
