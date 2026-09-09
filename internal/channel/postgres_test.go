@@ -844,3 +844,38 @@ func reportFor(pending []channel.Report, run domain.RunID) *channel.Report {
 	}
 	return nil
 }
+
+/*
+A stop that asked nothing is not a card.
+
+A run parked by its budget carries a step like any other stop now, and its
+message has no buttons on it — there is nothing to close. Swept up with the
+approvals, a perfectly good "stopped: over budget" is rewritten into an answer
+to a question nobody asked, in a room where people are reading it.
+*/
+func TestStale_aStopThatAskedNothing_isNotACard(t *testing.T) {
+	store, pool := channelStore(t)
+
+	parkWithoutAsking(t, pool, "run-budget-card")
+	pending, err := store.Unreported(t.Context(), noon.Add(-channel.Window), 50)
+	if err != nil {
+		t.Fatalf("unreported: %v", err)
+	}
+	if err := store.Record(t.Context(), channel.Delivery{
+		Announcement: pending[0].AnnouncementTo(channel.Conversation{
+			Channel: "acme-slack", ID: "C07-ops",
+		}),
+		Ref: "1786.9", PostedAt: noon,
+	}); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	appendStep(t, pool, "run-budget-card", domain.StepResumed, []byte(`{"by":"usr_ana"}`))
+
+	open, err := store.Stale(t.Context(), 50)
+	if err != nil {
+		t.Fatalf("Stale: %v", err)
+	}
+	if cardFor(open, "run-budget-card") != nil {
+		t.Error("a stop that asked nothing was swept up as an approval card")
+	}
+}

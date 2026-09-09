@@ -1,6 +1,7 @@
 package slack_test
 
 import (
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -79,16 +80,25 @@ func TestPost_runFailed_offersNoAnswer(t *testing.T) {
 }
 
 func recording(t *testing.T) (*httptest.Server, *string) {
+	server, _, body := recordingCall(t, `{"ok":true,"ts":"1.1"}`)
+	return server, body
+}
+
+// recordingCall answers whatever it is told to and remembers both halves of
+// the request. Which endpoint was called is half of what these tests assert:
+// posting and editing carry nearly the same body and are entirely different
+// acts, and a mistake between them is invisible in the body alone.
+func recordingCall(t *testing.T, answer string) (*httptest.Server, *string, *string) {
 	t.Helper()
-	body := ""
+	path, body := "", ""
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw, _ := io.ReadAll(r.Body)
-		body = string(raw)
+		path, body = r.URL.Path, string(raw)
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, `{"ok":true,"ts":"1.1"}`)
+		_, _ = io.WriteString(w, answer)
 	}))
 	t.Cleanup(server.Close)
-	return server, &body
+	return server, &path, &body
 }
 
 func parked() channel.Message {
@@ -151,5 +161,83 @@ func TestEdit_ananswered_cardDoesNotStillSayItIsWaiting(t *testing.T) {
 	}
 	if !strings.Contains(*sent, "Approved by usr_ana") {
 		t.Errorf("the card does not say who answered:\n%s", *sent)
+	}
+}
+
+/*
+Rewriting a card is a different call from posting one.
+
+The two carry nearly the same body, so a mistake between them is invisible in
+the body alone — and it is not a small mistake: posting instead of editing
+leaves the old card offering an answer and adds a second one saying the
+question is settled, in every conversation and every private message.
+
+The place is the other half. chat.postMessage takes a person and opens the
+conversation itself; chat.update does not, so it takes the one Slack named.
+*/
+func TestEdit_rewritesTheMessageWhereSlackPutIt(t *testing.T) {
+	t.Parallel()
+	server, path, sent := recordingCall(t, `{"ok":true,"ts":"1.1"}`)
+
+	answered := parked()
+	answered.Outcome = channel.OutcomeApproved
+	answered.DecidedBy = "usr_ana"
+
+	err := slack.New("xoxb-test").WithEndpointBase(server.URL).Decidable().
+		Edit(t.Context(), channel.Placement{
+			Channel: "acme-slack", Conversation: "D-ana", Ref: "1786.7",
+		}, answered)
+	if err != nil {
+		t.Fatalf("Edit: %v", err)
+	}
+
+	if *path != "/chat.update" {
+		t.Errorf("called %q, want chat.update", *path)
+	}
+	for _, want := range []string{`"channel":"D-ana"`, `"ts":"1786.7"`} {
+		if !strings.Contains(*sent, want) {
+			t.Errorf("the edit does not carry %s:\n%s", want, *sent)
+		}
+	}
+	// Twice, and twice is right: the fallback text and the heading, which is
+	// what every message here carries. A third is the outcome repeated as a
+	// note underneath, telling the reader the same thing again while the facts
+	// between the two go unread.
+	if n := strings.Count(*sent, "Approved by usr_ana"); n != 2 {
+		t.Errorf("the card says what happened %d times, want the fallback and the heading:\n%s",
+			n, *sent)
+	}
+	if strings.Contains(*sent, `"type":"actions"`) {
+		t.Error("the rewritten card still offers an answer")
+	}
+}
+
+/*
+Slack's words for a person who cannot be messaged.
+
+They have to be recognised as final. Read as an ordinary failure, a run whose
+approver left the workspace is held open and every recipient is attempted again
+every thirty seconds until the window closes — and the card that did arrive is
+never marked as said.
+*/
+func TestPost_refusalsAboutTheRecipient_areReportedAsPermanent(t *testing.T) {
+	t.Parallel()
+
+	for _, reason := range []string{
+		"cannot_dm_bot", "user_not_found", "users_not_found",
+		"message_not_found", "cant_update_message",
+	} {
+		server, _, _ := recordingCall(t, `{"ok":false,"error":"`+reason+`"}`)
+
+		_, err := slack.New("xoxb-test").WithEndpointBase(server.URL).
+			Post(t.Context(), channel.Conversation{ID: "U-gone"}, parked())
+		var refused *channel.Error
+		if !errors.As(err, &refused) {
+			t.Fatalf("%s: err = %v, want a channel error", reason, err)
+		}
+		if refused.Code != channel.CodeConversationUnavailable {
+			t.Errorf("%s: code = %q, want the conversation reported unavailable",
+				reason, refused.Code)
+		}
 	}
 }

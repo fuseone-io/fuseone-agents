@@ -101,9 +101,15 @@ const openCardsSQL = `
 		    select s.payload
 		    from run_steps s
 		    where s.run_id = d.run_id and s.opened_at = r.started_at
-		      and s.seq = d.at_seq
+		      and s.seq = d.at_seq and s.kind = 'approval_requested'
 		) asked on true
 		where d.event = 'parked' and d.at_seq > 0 and d.closed_at is null
+		  -- A card is a card because it asked something. A run stops for other
+		  -- reasons — a budget, retries that stopped helping — and those carry
+		  -- a step too, with no buttons on the message and nothing to close.
+		  -- Swept up with the rest, a perfectly good "stopped: over budget" is
+		  -- rewritten into an answer to a question nobody asked.
+		  and asked.payload is not null
 		  and d.ref <> '' and d.conversation <> ''
 		  and (r.phase <> 'awaiting_approval'
 		       or coalesce(r.pending_at_seq, 0) <> d.at_seq)

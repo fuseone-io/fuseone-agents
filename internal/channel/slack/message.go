@@ -85,12 +85,13 @@ func blocks(m channel.Message, decidable bool) []any {
 	// Buttons only where an answer could arrive. Everywhere else a link, which
 	// is honest: a button that does nothing is the worst kind of interface,
 	// and it would be on the message that matters most.
-	if m.Outcome != "" {
-		// The question has an answer, so the card stops offering one. The
-		// facts stay: a closed card that collapsed to a sentence would take
-		// the record out of the room it was announced in.
-		out = append(out, context_(answeredBy(m)))
-	} else if decidable && m.AwaitingDecision && m.Event == channel.EventParked && m.AtSeq > 0 {
+	// A card whose question has an answer offers none. What happened is
+	// already the heading — summary says it — and repeating it underneath
+	// tells the reader the same thing twice while the facts between them go
+	// unread. The facts themselves stay: a closed card that collapsed to a
+	// sentence would take the record out of the room it was announced in.
+	if m.Outcome == "" &&
+		decidable && m.AwaitingDecision && m.Event == channel.EventParked && m.AtSeq > 0 {
 		out = append(out, decide(m))
 	}
 	if m.Link != "" {
