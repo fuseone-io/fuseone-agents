@@ -170,6 +170,11 @@ export function ConversationForm({
   // refused: the server strips it, and a field that is saved and forgotten is
   // worse than one that was never offered.
   const reportsOnly = scope === INSTALLATION_SCOPE;
+  // A conversation that starts nothing has nothing to say about agents. The
+  // installation gets there by its scope; any conversation can get there by
+  // choosing the mode, and that one keeps its mode picker — hiding it would
+  // make "only reports" a door that only opens one way.
+  const startsNothing = reportsOnly || mode === "announce";
   const people = usePeople();
   const peopleItems = (people.data?.items ?? []).filter((p) => !p.disabled);
   const { data: me } = useMe();
@@ -214,7 +219,7 @@ export function ConversationForm({
         sources: startsFromWatch(mode)
           ? splitSources(values.sources)
           : undefined,
-        agent: reportsOnly ? undefined : values.agent.trim() || undefined,
+        agent: startsNothing ? undefined : values.agent.trim() || undefined,
         runAs: startsFromWatch(mode) ? values.runAs.trim() : undefined,
         wants: values.wants,
       });
@@ -411,21 +416,28 @@ export function ConversationForm({
                           <SelectItem value="both">
                             {t("channels.modeBoth")}
                           </SelectItem>
+                          <SelectItem value="announce">
+                            {t("channels.modeAnnounce")}
+                          </SelectItem>
                         </SelectContent>
                       </Select>
                       <FormDescription>
-                        {mode === "watch"
-                          ? t("channels.modeWatchExplains")
-                          : mode === "both"
-                            ? t("channels.modeBothExplains")
-                            : t("channels.modeMentionsExplains")}
+                        {mode === "announce"
+                          ? t("channels.modeAnnounceExplains")
+                          : mode === "watch"
+                            ? t("channels.modeWatchExplains")
+                            : mode === "both"
+                              ? t("channels.modeBothExplains")
+                              : t("channels.modeMentionsExplains")}
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                <ConversationAgentField form={form} mode={mode} scope={scope} />
               </>
+            )}
+            {!startsNothing && (
+              <ConversationAgentField form={form} mode={mode} scope={scope} />
             )}
             {!reportsOnly && startsFromMentions(mode) && (
               <FormField

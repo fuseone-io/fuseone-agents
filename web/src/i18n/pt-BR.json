@@ -835,6 +835,7 @@
     "modeWatchExplains": "Só mensagens das fontes Slack configuradas iniciam o agente configurado. A mensagem continua sendo entrada não confiável.",
     "modeBoth": "Menções e mensagens observadas",
     "modeAnnounce": "Só relata",
+    "modeAnnounceExplains": "Ninguém inicia runs por aqui: menções são recusadas e nenhuma mensagem observada dispara nada. A conversa só recebe os avisos escolhidos acima.",
     "modeBothExplains": "Pessoas podem mencionar o bot, e fontes Slack configuradas também podem iniciar o agente configurado. Cada caminho mantém a própria autoridade.",
     "noWatchAgents": "Nenhum agente neste escopo declara o gatilho Conversation. Publique um com Governança → Gatilhos → Conversation.",
     "watchAgentExplains": "O texto do Slack nunca escolhe o agente.",

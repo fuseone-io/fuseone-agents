@@ -539,4 +539,31 @@ describe("conversation configuration", () => {
     expect(saved(requests)).not.toHaveProperty("area");
     expect(saved(requests)).not.toHaveProperty("agent");
   });
+  /*
+   * "Only reports" is a mode any conversation may take, and taking it drops
+   * the agent — a binding on a conversation that starts nothing is a field
+   * stored and never read. The mode picker stays, because a room set to report
+   * has to be able to become one that answers again.
+   */
+  it("drops the bound agent when a conversation is set to only report", async () => {
+    const requests: { method: string; url: string; body?: unknown }[] = [];
+    stubApi({ requests, agents: [sre] });
+    const user = userEvent.setup();
+    renderForm({ ...mentionsConversation, agent: "troubleshooting-sre" });
+
+    await user.click(
+      await screen.findByRole("combobox", { name: /O que inicia runs/ }),
+    );
+    await user.click(await screen.findByRole("option", { name: "Só relata" }));
+
+    expect(screen.queryByText("Agente desta conversa")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("combobox", { name: /O que inicia runs/ }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+    await waitFor(() => expect(saved(requests)).toBeDefined());
+    expect(saved(requests)).toMatchObject({ mode: "announce" });
+    expect(saved(requests)).not.toHaveProperty("agent");
+  });
 });
