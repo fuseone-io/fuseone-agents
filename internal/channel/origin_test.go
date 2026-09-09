@@ -670,6 +670,34 @@ func TestWatchFor_aModeThisVersionDoesNotKnow_answersNoRule(t *testing.T) {
 	}
 }
 
+/*
+Two rows for one conversation answer no watch rule.
+
+Resolve reports the pair as ambiguous, and WatchFor — asked first, by the door —
+answered from whichever row the database returned first. Restored with the same
+id at an area and at the installation, the area row won and started the agent
+under its stored principal, while a mention in the very same conversation was
+being refused as ambiguous. Which of the two is in force is not a question row
+order may answer.
+*/
+func TestWatchFor_theSameIdAtTwoScopes_answersNoRule(t *testing.T) {
+	store, _, settingsStore := configuredChannelsWithStore(t)
+
+	conversationRow(t, settingsStore, "SHARED-WATCHING",
+		settings.ScopeArea, domain.Scope{Company: "acme", Area: "ops"},
+		channel.ConversationWatch)
+	installationConversation(t, settingsStore, "SHARED-WATCHING", channel.ConversationWatch)
+
+	_, ok, err := store.WatchFor(t.Context(), "acme-slack", "SHARED-WATCHING",
+		channel.Source{Bot: "B-alerts"})
+	if err != nil {
+		t.Fatalf("WatchFor: %v", err)
+	}
+	if ok {
+		t.Error("an ambiguous conversation answered with a watch rule")
+	}
+}
+
 // installationConversation writes a row the administration will not produce.
 // It arrives by restore, by migration, or from a version of the screen that did
 // not check — which is exactly what the locks on the read side are for.

@@ -266,31 +266,62 @@ func (c *Configured) WatchFor(
 		return WatchRule{}, false, fmt.Errorf("channel: list conversations: %w", err)
 	}
 
+	found := conversationsNamed(stored, channelName, id)
+	// Every row for this conversation, and only then a decision. Answering
+	// from the first one found made row order decide which configuration was
+	// in force: the same pair Resolve reports as ambiguous started the agent
+	// here, under whichever principal the database happened to return first.
+	if len(found) != 1 {
+		return WatchRule{}, false, nil
+	}
+
+	one := found[0]
+	// The door asks this before the consumer resolves anything, so a row for
+	// the whole installation would let any configured source write an inbox
+	// row carrying a configured principal — refused a sweep later, after the
+	// write and the delegation had already travelled. The mode alone would not
+	// catch a restored row that says watch.
+	if one.scope.IsInstallation() || !StartsFromWatch(one.value.Mode) {
+		return WatchRule{}, false, nil
+	}
+	v := one.value
+	if v.Agent == "" || v.RunAs == "" || !source.Matches(v.Sources) {
+		return WatchRule{}, false, nil
+	}
+	return WatchRule{Agent: v.Agent, RunAs: v.RunAs, Sources: v.Sources}, true, nil
+}
+
+// storedConversation is one row read back, kept with the scope it was stored
+// in: the scope is administrative and nothing inside the value may widen it.
+type storedConversation struct {
+	scope domain.Scope
+	value conversationValue
+}
+
+// conversationsNamed collects every enabled row for one conversation on one
+// connection. Two of them is a configuration nobody can act on, and saying so
+// is the caller's job — the count is the answer here.
+func conversationsNamed(
+	stored []settings.Setting, channelName, id string,
+) []storedConversation {
+	var found []storedConversation
 	for _, s := range stored {
 		if s.Name != id || !s.Enabled {
 			continue
 		}
-		// The door asks this before the consumer resolves anything, so a row
-		// for the whole installation would let any configured source write an
-		// inbox row carrying a configured principal — refused a sweep later,
-		// after the write and the delegation had already travelled. The mode
-		// alone would not catch a restored row that says watch.
-		if s.Scope.IsInstallation() {
-			continue
-		}
 		var v conversationValue
 		if err := json.Unmarshal(s.Value, &v); err != nil {
+			// One malformed row must not decide for the others, and must not
+			// hide them either: it is not counted, so a legible row beside it
+			// still answers.
 			continue
 		}
-		if v.Channel != channelName || !StartsFromWatch(v.Mode) {
+		if v.Channel != channelName {
 			continue
 		}
-		if v.Agent == "" || v.RunAs == "" || !source.Matches(v.Sources) {
-			return WatchRule{}, false, nil
-		}
-		return WatchRule{Agent: v.Agent, RunAs: v.RunAs, Sources: v.Sources}, true, nil
+		found = append(found, storedConversation{scope: s.Scope, value: v})
 	}
-	return WatchRule{}, false, nil
+	return found
 }
 
 // IncludeThreadContext answers whether a mention-capable conversation chose to send
