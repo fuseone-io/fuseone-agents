@@ -41,6 +41,19 @@ field" is a commit message.
 
 ### Fixed
 
+- **Two people deciding one approval at the same moment no longer corrupt each
+  other.** Reading the run, checking which step it waits on and recording the
+  decision were three moments, and two requests that read the same state both
+  passed the check and both wrote. A second approval then *destroyed* the
+  first — the run returned to running and the agent asked again, with nobody
+  told why — and a refusal never removed an approval, so a run approved and
+  then refused carried usable permission past its own refusal, with a worker
+  free to take the approved action while the refusal was still being written.
+  The decision is now sealed onto the request it answers, under the same lock
+  that orders the ledger, so the second one is refused and told that the
+  question is settled. The same guard covers a decision that arrives while the
+  run is being abandoned, which previously put a terminal run back to work.
+
 - **A run that stops a second time is announced again.** An agent that needs
   two tools asks for two approvals, and only the first was ever announced —
   the second reached no channel and no person, and the run sat waiting until
