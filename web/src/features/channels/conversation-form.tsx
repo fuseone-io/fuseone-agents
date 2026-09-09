@@ -36,13 +36,20 @@ import {
   useSaveConversation,
 } from "@/features/channels/api";
 import { ConversationAgentField } from "@/features/channels/conversation-agent-field";
-import { useScopes } from "@/features/scope/api";
+import {
+  ConversationScopeField,
+  INSTALLATION_SCOPE,
+} from "@/features/channels/conversation-scope-field";
 import { useMe } from "@/features/session/api";
 import { problemMessage } from "@/lib/api/problem-message";
 import type { components } from "@/lib/api/schema.gen";
 
 const EVENTS = ["parked", "failed", "finished"] as const;
-type RunAsPerson = { id: string; display?: string | null; email?: string | null };
+type RunAsPerson = {
+  id: string;
+  display?: string | null;
+  email?: string | null;
+};
 type Conversation = components["schemas"]["ChannelConversation"];
 // The stored value, which includes the one a person never picks: a
 // conversation for the whole installation is stored as `announce`, chosen by
@@ -131,7 +138,6 @@ export function ConversationForm({
 }) {
   const { t } = useTranslation();
   const save = useSaveConversation();
-  const { data: scopes } = useScopes();
   const available = useAvailableConversations(channel);
   const availableItems = available.data?.items ?? [];
   const manuallyEnterConversation =
@@ -159,6 +165,11 @@ export function ConversationForm({
   });
   const mode = form.watch("mode");
   const scope = form.watch("scope");
+  // A conversation for the whole installation hears about every company and
+  // starts nothing. Everything inbound is hidden rather than shown and
+  // refused: the server strips it, and a field that is saved and forgotten is
+  // worse than one that was never offered.
+  const reportsOnly = scope === INSTALLATION_SCOPE;
   const people = usePeople();
   const peopleItems = (people.data?.items ?? []).filter((p) => !p.disabled);
   const { data: me } = useMe();
@@ -183,6 +194,12 @@ export function ConversationForm({
     // The select's values are always company/area, but a destructure of a
     // split is typed as possibly absent and the compiler is right to say so.
     const [company = "", area = ""] = values.scope.split("/");
+    // One mode decides the whole request. A conversation for the installation
+    // reports and starts nothing, so every field about starting is sent as
+    // absent rather than left to be stripped on the far side — a request that
+    // says one thing while the server stores another is what makes the console
+    // disagree with itself on the next read.
+    const mode = reportsOnly ? "announce" : values.mode;
     try {
       await save.mutateAsync({
         channel,
@@ -190,16 +207,15 @@ export function ConversationForm({
         company,
         area: area || undefined,
         label: values.label.trim() || undefined,
-        mode: values.mode,
+        mode,
         directApprovals:
           values.wants.includes("parked") && values.directApprovals,
-        threadContext: startsFromMentions(values.mode)
-          ? values.threadContext
-          : false,
-        sources:
-          startsFromWatch(values.mode) ? splitSources(values.sources) : undefined,
-        agent: values.agent.trim() || undefined,
-        runAs: startsFromWatch(values.mode) ? values.runAs.trim() : undefined,
+        threadContext: startsFromMentions(mode) ? values.threadContext : false,
+        sources: startsFromWatch(mode)
+          ? splitSources(values.sources)
+          : undefined,
+        agent: reportsOnly ? undefined : values.agent.trim() || undefined,
+        runAs: startsFromWatch(mode) ? values.runAs.trim() : undefined,
         wants: values.wants,
       });
       toast.success(t("channels.conversationSaved"));
@@ -309,46 +325,7 @@ export function ConversationForm({
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="scope"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("scope.label")}</FormLabel>
-                  <Select
-                    onValueChange={(picked) => {
-                      field.onChange(picked);
-                      // An agent is startable only in the scope it is published
-                      // in, so one chosen for the old scope is a configuration
-                      // the server refuses. Cleared in the same act rather than
-                      // left on screen until save fails.
-                      form.setValue("agent", "", { shouldValidate: true });
-                    }}
-                    value={field.value ?? ""}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder={t("scope.label")} />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {(scopes?.items ?? []).map((s) => (
-                        <SelectItem
-                          key={`${s.company}/${s.area}`}
-                          value={`${s.company}/${s.area}`}
-                        >
-                          {s.label || `${s.company}/${s.area}`}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormDescription>
-                    {t("channels.scopeGoverns")}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <ConversationScopeField form={form} />
             <FormField
               control={form.control}
               name="wants"
@@ -407,43 +384,50 @@ export function ConversationForm({
                 )}
               />
             )}
-            <FormField
-              control={form.control}
-              name="mode"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("channels.startMode")}</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value ?? ""}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="mentions">
-                        {t("channels.modeMentions")}
-                      </SelectItem>
-                      <SelectItem value="watch">
-                        {t("channels.modeWatch")}
-                      </SelectItem>
-                      <SelectItem value="both">
-                        {t("channels.modeBoth")}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormDescription>
-                    {mode === "watch"
-                      ? t("channels.modeWatchExplains")
-                      : mode === "both"
-                        ? t("channels.modeBothExplains")
-                        : t("channels.modeMentionsExplains")}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <ConversationAgentField form={form} mode={mode} scope={scope} />
-            {startsFromMentions(mode) && (
+            {!reportsOnly && (
+              <>
+                <FormField
+                  control={form.control}
+                  name="mode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t("channels.startMode")}</FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value ?? ""}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="mentions">
+                            {t("channels.modeMentions")}
+                          </SelectItem>
+                          <SelectItem value="watch">
+                            {t("channels.modeWatch")}
+                          </SelectItem>
+                          <SelectItem value="both">
+                            {t("channels.modeBoth")}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        {mode === "watch"
+                          ? t("channels.modeWatchExplains")
+                          : mode === "both"
+                            ? t("channels.modeBothExplains")
+                            : t("channels.modeMentionsExplains")}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <ConversationAgentField form={form} mode={mode} scope={scope} />
+              </>
+            )}
+            {!reportsOnly && startsFromMentions(mode) && (
               <FormField
                 control={form.control}
                 name="threadContext"
@@ -468,7 +452,7 @@ export function ConversationForm({
                 )}
               />
             )}
-            {startsFromWatch(mode) && (
+            {!reportsOnly && startsFromWatch(mode) && (
               <div className="rounded-md border bg-muted/30 p-3">
                 <div className="grid gap-4">
                   <FormField

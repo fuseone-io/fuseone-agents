@@ -61,3 +61,25 @@ describe("private approvals in the listing", () => {
     expect(screen.queryByText(/dm/)).not.toBeInTheDocument();
   });
 });
+
+/*
+ * The scope above every company is stored as the company "*".
+ *
+ * A listing that printed it raw would show a company nobody has, next to a
+ * mode read as "mentions" — two lies about the one conversation that hears
+ * every company and starts nothing.
+ */
+describe("a conversation for the whole installation", () => {
+  it("is named rather than printed as the company that stores it", () => {
+    renderRow({ scope: { company: "*", area: "" }, mode: "announce" });
+
+    expect(screen.getByText("A instalação inteira")).toBeInTheDocument();
+    expect(screen.queryByText("*")).not.toBeInTheDocument();
+  });
+
+  it("says it only reports", () => {
+    renderRow({ scope: { company: "*", area: "" }, mode: "announce" });
+
+    expect(screen.getByText(/Só relata/)).toBeInTheDocument();
+  });
+});

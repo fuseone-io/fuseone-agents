@@ -163,7 +163,15 @@ export function useAgentsForScope(scope: string) {
           },
         }),
       ),
-    enabled: company !== "",
+    // Never for the scope above every company. Reading agents there needs
+    // authority almost nobody holds, so the request answers 403 and paints an
+    // error on a screen where the field is not even shown.
+    //
+    // No test accuses this line today: the only caller is a field the form
+    // unmounts for that scope, so removing the guard changes nothing that can
+    // be observed. It stays because the guard belongs where the request is
+    // built — the next screen to call this hook will not know to hide it.
+    enabled: company !== "" && company !== "*",
   });
 }
 

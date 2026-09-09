@@ -461,4 +461,82 @@ describe("conversation configuration", () => {
       runAs: "usr_opsbot",
     });
   });
+  /*
+   * A room that hears every company is the authority above them all.
+   *
+   * The server refuses it from anybody else, so offering the option to a
+   * curator of one company would be a control that answers 403 — and the
+   * console already knows: "company:write" is announced only when it was
+   * granted at the installation.
+   */
+  it("offers the whole installation only to whoever governs it", async () => {
+    const user = userEvent.setup();
+    stubApi({ can: ["provider:write"] });
+    renderForm();
+
+    await user.click(await screen.findByRole("combobox", { name: "Contexto" }));
+
+    expect(
+      screen.queryByRole("option", { name: "A instalação inteira" }),
+    ).not.toBeInTheDocument();
+    expect(await screen.findByRole("option", { name: "Devops" })).toBeInTheDocument();
+  });
+
+  /*
+   * Nothing inbound is offered for the installation, and nothing inbound is
+   * asked of the server either.
+   *
+   * Listing agents there is a read almost nobody may do, so leaving the query
+   * on would paint an error over a field that is not even shown.
+   */
+  it("asks nothing about starting runs for the whole installation", async () => {
+    const requests: { method: string; url: string; body?: unknown }[] = [];
+    stubApi({ can: ["company:write"], requests });
+    const user = userEvent.setup();
+    renderForm();
+
+    await user.click(await screen.findByRole("combobox", { name: "Contexto" }));
+    await user.click(
+      await screen.findByRole("option", { name: "A instalação inteira" }),
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("combobox", { name: /O que inicia runs/ }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(screen.queryByText("Agente desta conversa")).not.toBeInTheDocument();
+    expect(screen.queryByText("Incluir contexto da thread")).not.toBeInTheDocument();
+    expect(
+      requests.filter((one) => one.url.includes("/agents?")),
+    ).toHaveLength(0);
+  });
+
+  /*
+   * What is saved says what the platform will do. The mode field is hidden
+   * rather than set, so a request that carried its old value would store a
+   * conversation claiming an inbound path the server strips — and the console
+   * would disagree with itself on the next read.
+   */
+  it("saves a conversation for the whole installation as one that only reports", async () => {
+    const requests: { method: string; url: string; body?: unknown }[] = [];
+    stubApi({ can: ["company:write"], requests });
+    const user = userEvent.setup();
+    renderForm({ ...mentionsConversation, threadContext: true });
+
+    await user.click(await screen.findByRole("combobox", { name: "Contexto" }));
+    await user.click(
+      await screen.findByRole("option", { name: "A instalação inteira" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => expect(saved(requests)).toBeDefined());
+    expect(saved(requests)).toMatchObject({
+      company: "*",
+      mode: "announce",
+      threadContext: false,
+    });
+    expect(saved(requests)).not.toHaveProperty("area");
+    expect(saved(requests)).not.toHaveProperty("agent");
+  });
 });

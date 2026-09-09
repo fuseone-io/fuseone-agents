@@ -25,6 +25,21 @@ export function channelHealth(channel: Channel): {
   return { key: "answering", tone: "ok" };
 }
 
+/*
+scopeText is where a conversation was configured, as one string.
+
+Shared rather than written out at each call site, because the listing, the
+search and the form each need the same answer and three copies drift: the day
+"*" started meaning the whole installation, a copy nobody remembered would go
+on printing a company called "*".
+
+It stays the stored value. Turning it into a name needs the translation
+dictionary, and the search has to match what is stored anyway.
+*/
+export function scopeText(scope: Conversation["scope"]) {
+  return scope.area ? `${scope.company}/${scope.area}` : scope.company;
+}
+
 export function filterConversations(
   conversations: Conversation[],
   query: string,
@@ -33,20 +48,20 @@ export function filterConversations(
 ) {
   const q = query.trim().toLowerCase();
   return conversations.filter((conversation) => {
-    if (view === "approvals" && !(conversation.wants ?? []).includes("parked")) {
+    if (
+      view === "approvals" &&
+      !(conversation.wants ?? []).includes("parked")
+    ) {
       return false;
     }
     if (view === "attention" && !channelAttention && conversation.enabled) {
       return false;
     }
     if (!q) return true;
-    const scope = conversation.scope.area
-      ? `${conversation.scope.company}/${conversation.scope.area}`
-      : conversation.scope.company;
     return [
       conversation.id,
       conversation.label ?? "",
-      scope,
+      scopeText(conversation.scope),
       conversation.mode ?? "mentions",
       ...(conversation.wants ?? []),
     ]
