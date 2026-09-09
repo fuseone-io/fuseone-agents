@@ -60,3 +60,24 @@ func TestCan_installationAdminReachesEveryCompany(t *testing.T) {
 		t.Error("an installation admin did not reach a company area")
 	}
 }
+
+/*
+The approver role still carries the permission it is named for.
+
+A notification list is built from the role rather than from the permission,
+because the permission also belongs to admin and an installation-wide admin
+would be told about every parked run in every company — that is not a
+notification, it is noise.
+
+Naming the role is only sound while the role means what it says. If `approver`
+ever stops carrying `approval:act`, the list becomes a list of people who will
+be handed a 403 in a private message, and this fails on the commit that breaks
+it rather than in somebody's Slack.
+*/
+func TestRoleApprover_stillCarriesApprovalAct(t *testing.T) {
+	t.Parallel()
+
+	if !domain.RoleApprover.Allows(domain.PermApprovalAct) {
+		t.Fatal("approver no longer carries approval:act; the notification list is now wrong")
+	}
+}
