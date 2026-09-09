@@ -37,6 +37,31 @@ const phases = `
 	end`
 
 /*
+announcementSeq is which stop this announcement is about.
+
+A run stops as many times as it needs to, and each stop is its own question.
+Only one of the two ways of stopping leaves a sequence on the projection:
+pending_at_seq is written for an approval request and cleared by everything
+else, so a budget park and a retry that stopped helping have none. Read from
+that column alone, every such stop is filed under zero and the second one is
+announced to nobody.
+
+So the stop itself answers where nothing was asked: a parked run appends
+nothing, and last_seq is the step that stopped it. Failing and finishing happen
+once, and carry zero.
+
+Written once and used by both the report and the anti-join that retires it. Two
+copies would let a run be announced under one sequence and retired under
+another, which is silence that looks like success.
+*/
+const announcementSeq = `
+	case runs.phase
+		when 'awaiting_approval' then coalesce(runs.pending_at_seq, runs.last_seq)
+		when 'parked'            then runs.last_seq
+		else 0
+	end`
+
+/*
 Unreported lists runs in a state worth announcing that has not been said
 everywhere it should be.
 
@@ -59,7 +84,7 @@ func (p *Postgres) Unreported(ctx context.Context, since time.Time, limit int) (
 		select runs.run_id, runs.agent_id, runs.company_id, runs.area_id,
 		       `+phases+` as event, runs.updated_at,
 		       coalesce(runs.pending_tool, ''), coalesce(runs.pending_reason, ''),
-		       coalesce(runs.pending_at_seq, 0)
+		       `+announcementSeq+`
 		from runs
 		where not runs.simulated
 		  and runs.updated_at >= $1
@@ -68,7 +93,7 @@ func (p *Postgres) Unreported(ctx context.Context, since time.Time, limit int) (
 		      select 1 from channel_deliveries d
 		      where d.run_id = runs.run_id and d.event = `+phases+`
 		        and d.channel = '' and d.conversation = ''
-		        and d.at_seq = coalesce(runs.pending_at_seq, 0))
+		        and d.at_seq = `+announcementSeq+`)
 		order by runs.updated_at desc
 		limit $2`, since.UTC(), limit)
 	if err != nil {
@@ -96,12 +121,17 @@ func (p *Postgres) Unreported(ctx context.Context, since time.Time, limit int) (
 // Conflict means a second sweep raced the first and both posted. The message
 // is already out; refusing here would make the sweep retry it forever.
 func (p *Postgres) Record(ctx context.Context, d Delivery) error {
-	if d.Channel == "" && d.Conversation == "" {
-		// The shape reserved for "said everywhere", which Reported alone
-		// writes. A caller arriving here with an empty pair — a recipient
-		// nobody bound, a lookup that answered nothing — would retire the run
-		// from the sweep, and every real conversation would lose the
-		// announcement silently and for good.
+	if d.Channel == "" || d.Conversation == "" {
+		/*
+			A delivery names a place, or it is not a delivery.
+
+			Refused for either half. Both empty is the shape that means "said
+			everywhere", and storing one retires the run from the sweep while
+			every real conversation loses the message. Only the conversation
+			empty is the half a direct message will produce — the connection is
+			known long before the person's account is — and stored it claims
+			somebody was told, suppressing the retry that would have told them.
+		*/
 		return fmt.Errorf("%w: %s", ErrUnaddressed, d.RunID)
 	}
 	_, err := p.pool.Exec(ctx, `

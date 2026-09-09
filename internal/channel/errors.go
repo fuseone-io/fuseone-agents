@@ -96,10 +96,11 @@ func collectFailureCodes(err error, out *[]string) {
 	*out = append(*out, MetricOther)
 }
 
-// ErrUnaddressed means a delivery named no conversation.
+// ErrUnaddressed means a delivery named no place.
 //
-// Refused rather than stored. An empty connection and an empty conversation is
-// the shape a run being reported everywhere is filed under, so a delivery that
-// reached it would retire the run from the announcement sweep and every real
-// conversation would lose the message — silently, and with no way to notice.
-var ErrUnaddressed = errors.New("channel: a delivery must name a conversation")
+// Refused rather than stored, and refused for either half. A row with both
+// empty is the shape a run reported everywhere is filed under, so storing one
+// retires the run from the sweep and every real conversation loses the
+// message. A row with only the conversation empty claims somebody was told
+// and suppresses the retry that would have told them.
+var ErrUnaddressed = errors.New("channel: a delivery must name a connection and a conversation")

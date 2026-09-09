@@ -516,7 +516,7 @@ type memoryDeliveries struct {
 // everywhere" is filed under, and a fake that accepted one would let a test
 // pass against a row the real table treats as retiring the run.
 func (m *memoryDeliveries) Record(_ context.Context, d channel.Delivery) error {
-	if d.Channel == "" && d.Conversation == "" {
+	if d.Channel == "" || d.Conversation == "" {
 		return fmt.Errorf("%w: %s", channel.ErrUnaddressed, d.RunID)
 	}
 	m.recorded = append(m.recorded, d)

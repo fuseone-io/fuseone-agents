@@ -3,6 +3,7 @@ package channel_test
 import (
 	"errors"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -23,7 +24,7 @@ is precisely the one somebody is waiting on.
 func TestUnreported_runIsWaitingOnSomebody_isListedUntilItIsReported(t *testing.T) {
 	store, pool := channelStore(t)
 
-	park(t, pool, "run-waiting")
+	awaitApproval(t, pool, "run-waiting")
 
 	pending, err := store.Unreported(t.Context(), noon.Add(-channel.Window), 50)
 	if err != nil {
@@ -255,11 +256,23 @@ func appendStep(t *testing.T, pool *pgxpool.Pool, run string, kind domain.StepKi
 	}
 }
 
-func park(t *testing.T, pool *pgxpool.Pool, run string) {
+// awaitApproval stops a run on a person. Named for what it appends: a run also
+// stops without asking anybody — a budget, a retry that stopped helping — and
+// reading `park` as covering both is how the second of those kept its defect
+// while the first was fixed.
+func awaitApproval(t *testing.T, pool *pgxpool.Pool, run string) {
 	t.Helper()
 	appendStep(t, pool, run, domain.StepRunStarted, nil)
 	appendStep(t, pool, run, domain.StepApprovalRequested,
 		[]byte(`{"tool":"erp.transfer","rule":"financial","reason":"over the ceiling"}`))
+}
+
+// parkWithoutAsking is the other way a run stops: nothing to decide, nothing
+// pending, and no approval sequence on the projection at all.
+func parkWithoutAsking(t *testing.T, pool *pgxpool.Pool, run string) {
+	t.Helper()
+	appendStep(t, pool, run, domain.StepRunStarted, nil)
+	appendStep(t, pool, run, domain.StepParked, []byte(`{"reason":"over the budget"}`))
 }
 
 func simulate(t *testing.T, pool *pgxpool.Pool, run string) {
@@ -375,7 +388,7 @@ happened to open the console.
 func TestUnreported_runParksAtASecondStep_isListedAgain(t *testing.T) {
 	store, pool := channelStore(t)
 
-	park(t, pool, "run-twice")
+	awaitApproval(t, pool, "run-twice")
 	first, err := store.Unreported(t.Context(), noon.Add(-channel.Window), 50)
 	if err != nil {
 		t.Fatalf("unreported: %v", err)
@@ -407,7 +420,7 @@ func TestUnreported_runParksAtASecondStep_isListedAgain(t *testing.T) {
 func TestUnreported_runStillParkedAtTheSameStep_isReportedOnce(t *testing.T) {
 	store, pool := channelStore(t)
 
-	park(t, pool, "run-patient")
+	awaitApproval(t, pool, "run-patient")
 	pending, err := store.Unreported(t.Context(), noon.Add(-channel.Window), 50)
 	if err != nil {
 		t.Fatalf("unreported: %v", err)
@@ -422,6 +435,67 @@ func TestUnreported_runStillParkedAtTheSameStep_isReportedOnce(t *testing.T) {
 	}
 	if len(again) != 0 {
 		t.Errorf("announced the same question twice: %+v", again)
+	}
+}
+
+/*
+And a run that stops without asking anybody stops as often as it needs to.
+
+A budget park and a retry that stopped helping carry no approval, so the
+projection has no pending sequence for them at all. Keyed off that alone, both
+parks are filed under the same zero and the second one is announced to nobody —
+the same defect as a repeated approval, in the shape that has no button.
+*/
+func TestUnreported_runParksAgainWithoutAsking_isListedAgain(t *testing.T) {
+	store, pool := channelStore(t)
+
+	parkWithoutAsking(t, pool, "run-budget")
+	first, err := store.Unreported(t.Context(), noon.Add(-channel.Window), 50)
+	if err != nil {
+		t.Fatalf("unreported: %v", err)
+	}
+	if len(first) != 1 {
+		t.Fatalf("pending = %+v, want the first park", first)
+	}
+	if err := store.Reported(t.Context(), first[0], noon); err != nil {
+		t.Fatalf("reported: %v", err)
+	}
+
+	appendStep(t, pool, "run-budget", domain.StepResumed, []byte(`{"by":"usr_ana"}`))
+	appendStep(t, pool, "run-budget", domain.StepParked, []byte(`{"reason":"over the budget again"}`))
+
+	again, err := store.Unreported(t.Context(), noon.Add(-channel.Window), 50)
+	if err != nil {
+		t.Fatalf("unreported after the second park: %v", err)
+	}
+	if len(again) != 1 || again[0].RunID != "run-budget" {
+		t.Fatalf("pending = %+v, want the second park announced", again)
+	}
+	if again[0].AtSeq <= first[0].AtSeq {
+		t.Errorf("at seq %d, want the later stop (first was %d)", again[0].AtSeq, first[0].AtSeq)
+	}
+}
+
+// A run sitting on the same stop is asked about once, whether or not anybody
+// was asked to decide it.
+func TestUnreported_runStillParkedWithoutAsking_isReportedOnce(t *testing.T) {
+	store, pool := channelStore(t)
+
+	parkWithoutAsking(t, pool, "run-budget-patient")
+	pending, err := store.Unreported(t.Context(), noon.Add(-channel.Window), 50)
+	if err != nil {
+		t.Fatalf("unreported: %v", err)
+	}
+	if err := store.Reported(t.Context(), pending[0], noon); err != nil {
+		t.Fatalf("reported: %v", err)
+	}
+
+	again, err := store.Unreported(t.Context(), noon.Add(-channel.Window), 50)
+	if err != nil {
+		t.Fatalf("unreported after being reported: %v", err)
+	}
+	if len(again) != 0 {
+		t.Errorf("announced the same stop twice: %+v", again)
 	}
 }
 
@@ -442,62 +516,92 @@ lookup that answered nothing — would retire the run from the sweep, and every
 real conversation would lose the announcement silently and for good. The
 invariant is held by the table's writer rather than by everyone who calls it.
 */
-func TestRecord_aDeliveryNamingNoConversation_isRefusedAndDoesNotRetireTheRun(t *testing.T) {
+func TestRecord_aDeliveryNamingNoPlace_isRefusedAndDoesNotRetireTheRun(t *testing.T) {
 	store, pool := channelStore(t)
 
-	park(t, pool, "run-unaddressed")
-	err := store.Record(t.Context(), channel.Delivery{
-		Announcement: channel.Announcement{
-			RunID: "run-unaddressed", Event: channel.EventParked,
-		},
-		PostedAt: noon,
-	})
-	if !errors.Is(err, channel.ErrUnaddressed) {
-		t.Fatalf("Record = %v, want it refused as unaddressed", err)
+	for _, missing := range []struct {
+		what         string
+		channel      string
+		conversation string
+	}{
+		// The shape that means "said everywhere". Stored, it retires the run.
+		{"neither", "", ""},
+		// The half a direct message produces: the connection is known long
+		// before the person's account is. Stored, it claims somebody was told.
+		{"no conversation", "acme-slack", ""},
+		{"no connection", "", "C07-ops"},
+	} {
+		run := domain.RunID("run-unaddressed-" + strings.ReplaceAll(missing.what, " ", "-"))
+		awaitApproval(t, pool, string(run))
+
+		err := store.Record(t.Context(), channel.Delivery{
+			Announcement: channel.Announcement{
+				RunID: run, Event: channel.EventParked,
+				Channel: missing.channel, Conversation: missing.conversation,
+			},
+			PostedAt: noon,
+		})
+		if !errors.Is(err, channel.ErrUnaddressed) {
+			t.Errorf("%s: Record = %v, want it refused as unaddressed", missing.what, err)
+		}
+
+		pending, err := store.Unreported(t.Context(), noon.Add(-channel.Window), 50)
+		if err != nil {
+			t.Fatalf("unreported: %v", err)
+		}
+		if !owes(pending, run) {
+			t.Errorf("%s: the run is no longer owed an announcement", missing.what)
+		}
+	}
+}
+
+func owes(pending []channel.Report, run domain.RunID) bool {
+	for _, r := range pending {
+		if r.RunID == run {
+			return true
+		}
+	}
+	return false
+}
+
+/*
+A run awaiting a decision with no pending sequence is announced once, not
+forever.
+
+The projection always writes one for an approval request, so this is a row that
+arrived some other way — a restore, a migration, a writer older than the column.
+It matters because of how SQL compares: `at_seq = null` is never true, so a
+sentinel could never match and the sweep would announce the same run every
+thirty seconds until somebody noticed the noise. The fallback to the run's own
+last step is what makes the comparison possible at all.
+*/
+func TestUnreported_awaitingApprovalWithNoPendingSequence_isStillRetired(t *testing.T) {
+	store, pool := channelStore(t)
+
+	if _, err := pool.Exec(t.Context(), `
+		insert into runs (run_id, company_id, area_id, agent_id, version_id,
+		                  phase, last_seq, pending_at_seq, started_at, updated_at)
+		values ('run-restored', 'acme', 'ops', 'triage', 'v1',
+		        'awaiting_approval', 7, null, $1, $1)`, noon); err != nil {
+		t.Fatalf("seed a restored row: %v", err)
 	}
 
 	pending, err := store.Unreported(t.Context(), noon.Add(-channel.Window), 50)
 	if err != nil {
 		t.Fatalf("unreported: %v", err)
 	}
-	if len(pending) != 1 || pending[0].RunID != "run-unaddressed" {
-		t.Fatalf("pending = %+v, want the run still owed an announcement", pending)
+	if len(pending) != 1 || pending[0].AtSeq != 7 {
+		t.Fatalf("pending = %+v, want the run at its own last step", pending)
 	}
-}
-
-/*
-A conversation that heard about one question has not heard about the next.
-
-The dedup that stops a sweep saying the same thing twice is keyed by the step
-as well, or the second approval is suppressed in exactly the conversation that
-was told about the first — which is the same silence, one level down from the
-sentinel.
-*/
-func TestDelivered_theSameConversationAboutAnotherStep_hasNotHeard(t *testing.T) {
-	store, _ := channelStore(t)
-
-	first := channel.Announcement{
-		RunID: "run-two-questions", Event: channel.EventParked, AtSeq: 2,
-		Channel: "acme-slack", Conversation: "C07-ops",
-	}
-	if err := store.Record(t.Context(), channel.Delivery{
-		Announcement: first, Ref: "1.1", PostedAt: noon,
-	}); err != nil {
-		t.Fatalf("Record: %v", err)
+	if err := store.Reported(t.Context(), pending[0], noon); err != nil {
+		t.Fatalf("reported: %v", err)
 	}
 
-	said, err := store.Delivered(t.Context(), first)
-	if err != nil || !said {
-		t.Fatalf("Delivered(first) = %v, %v; want it already said", said, err)
-	}
-
-	second := first
-	second.AtSeq = 9
-	said, err = store.Delivered(t.Context(), second)
+	again, err := store.Unreported(t.Context(), noon.Add(-channel.Window), 50)
 	if err != nil {
-		t.Fatalf("Delivered(second): %v", err)
+		t.Fatalf("unreported after being reported: %v", err)
 	}
-	if said {
-		t.Error("the second question was suppressed by the answer to the first")
+	if len(again) != 0 {
+		t.Errorf("announced again with nothing new to say: %+v", again)
 	}
 }
