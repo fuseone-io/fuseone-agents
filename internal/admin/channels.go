@@ -202,48 +202,53 @@ func (c *Channels) PutChannel(ctx context.Context, w ChannelWrite) error {
 		return err
 	}
 
-	merged, err := c.mergeCredentials(ctx, ch.Name, w.Credentials, mode)
-	if err != nil {
-		return err
+	base := settings.Setting{
+		ScopeKind: settings.ScopeInstallation,
+		Kind:      channel.KindChannel, Name: ch.Name,
+		Value: value, Enabled: ch.Enabled, UpdatedBy: string(by),
 	}
-
 	guard := func(ctx context.Context, conn settings.DB) error {
 		return c.guardInstallationRoom(ctx, conn, ch.Name, w.Governs)
 	}
 	return writeGuarded(ctx, c.pool, c.settings, guard, folded{
 		by: by, scope: domain.Scope{},
 		action: "channel.configured", target: ch.Name,
-		set: settings.Setting{
-			ScopeKind: settings.ScopeInstallation,
-			Kind:      channel.KindChannel, Name: ch.Name,
-			Value: value, Secret: merged.Sealed(), Enabled: ch.Enabled,
-			UpdatedBy: string(by),
-		},
-		detail: map[string]any{
-			// Never a credential, only which of them are now held. Whether an
-			// installation can be spoken to is a fact an auditor may need; the
-			// secret is not.
-			"kind": ch.Kind, "workspace": ch.Workspace,
-			"deliveryMode": mode,
-			"token":        merged.Token != "", "signing": merged.Signing != "",
-			"appToken": merged.AppToken != "",
+		set: base,
+		// The credentials are folded inside the transaction, onto the row this
+		// write has already locked. Read before it, a request carrying one
+		// half and meaning "leave the other" is a lost update waiting for two
+		// people: both read the old pair, both write their own half onto it,
+		// and the second commit puts the other's back — reported as success.
+		//
+		// It is also where the secret is opened, which is after the guard has
+		// decided whether this caller may touch the connection at all.
+		fold: func(stored settings.Setting) (settings.Setting, any, error) {
+			merged := mergedCredentials(
+				channel.ReadCredentials(stored.Secret), w.Credentials, mode)
+			set := base
+			set.Secret = merged.Sealed()
+			return set, map[string]any{
+				// Never a credential, only which of them are now held. Whether
+				// an installation can be spoken to is a fact an auditor may
+				// need; the secret is not.
+				"kind": ch.Kind, "workspace": ch.Workspace,
+				"deliveryMode": mode,
+				"token":        merged.Token != "", "signing": merged.Signing != "",
+				"appToken": merged.AppToken != "",
+			}, nil
 		},
 	})
 }
 
-// mergeCredentials keeps whichever half this write left out.
-func (c *Channels) mergeCredentials(
-	ctx context.Context, name string, given channel.Credentials, mode string,
-) (channel.Credentials, error) {
-	held, err := c.settings.Reveal(ctx,
-		settings.ScopeInstallation, domain.Scope{}, channel.KindChannel, name)
-	if err != nil {
-		// No such channel yet: this write is the first, and what it carries is
-		// all there is.
-		return channelCredentialsForMode(given, mode), nil //nolint:nilerr // absent is not a failure here
-	}
-
-	stored := channel.ReadCredentials(held.Secret)
+// mergedCredentials keeps whichever half this write left out.
+//
+// A pure fold over what is stored. It used to read the row itself and treat
+// every failure as "no such channel yet" — a vault that was away or a cancelled
+// context then looked like a first write, and answered by storing the half it
+// had been given as the whole of it.
+func mergedCredentials(
+	stored, given channel.Credentials, mode string,
+) channel.Credentials {
 	if given.Token == "" {
 		given.Token = stored.Token
 	}
@@ -259,16 +264,7 @@ func (c *Channels) mergeCredentials(
 		}
 		given.AppToken = ""
 	}
-	return given, nil
-}
-
-func channelCredentialsForMode(creds channel.Credentials, mode string) channel.Credentials {
-	if mode == channel.DeliverySocket {
-		creds.Signing = ""
-		return creds
-	}
-	creds.AppToken = ""
-	return creds
+	return given
 }
 
 /*
@@ -337,10 +333,6 @@ func (c *Channels) PutConversation(
 	if !channel.Wants(eventsOf(conv.Wants), channel.EventParked) {
 		conv.DirectApprovals = false
 	}
-	if err := c.unmapped(ctx, channelName, conv); err != nil {
-		return err
-	}
-
 	value, err := json.Marshal(map[string]any{
 		"channel": channelName, "label": conv.Label, "wants": conv.Wants,
 		"mode": mode, "sources": sources,
@@ -355,8 +347,17 @@ func (c *Channels) PutConversation(
 	// Under the connection's lock, so attaching a room and deciding whether the
 	// connection may be touched cannot interleave. Whoever is allowed to write
 	// this row is settled at the door; what this serialises is the pair.
+	//
+	// The uniqueness rule is checked here for the same reason. Read before the
+	// transaction, two requests naming one conversation for two scopes both
+	// saw it unmapped and both stored — and a Slack channel receiving two
+	// companies' runs is the disclosure the conversation scope exists to
+	// prevent.
 	guard := func(ctx context.Context, conn settings.DB) error {
-		return lockChannel(ctx, conn, channelName)
+		if err := lockChannel(ctx, conn, channelName); err != nil {
+			return err
+		}
+		return c.unmapped(ctx, conn, channelName, conv)
 	}
 	return writeGuarded(ctx, c.pool, c.settings, guard, folded{
 		by: by, scope: conv.Scope,
@@ -462,8 +463,10 @@ var ErrConversationMapped = errors.New("admin: that conversation already speaks 
 // The same scope is not a conflict: pointing a conversation at the scope it is
 // already pointed at is how somebody renames it or changes which events it
 // wants.
-func (c *Channels) unmapped(ctx context.Context, channelName string, conv Conversation) error {
-	existing, err := c.settings.List(ctx, channel.KindConversation)
+func (c *Channels) unmapped(
+	ctx context.Context, conn settings.DB, channelName string, conv Conversation,
+) error {
+	existing, err := c.settings.ListTx(ctx, conn, channel.KindConversation)
 	if err != nil {
 		return fmt.Errorf("admin: list conversations: %w", err)
 	}
