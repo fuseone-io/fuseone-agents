@@ -3897,10 +3897,12 @@ export interface components {
             label?: string;
             scope: components["schemas"]["Scope"];
             /**
-             * @description How inbound Slack messages may start runs. Empty legacy rows read as mentions.
+             * @description How inbound Slack messages may start runs. Empty legacy rows read
+             *     as mentions. `announce` starts nothing, and is what a conversation
+             *     for the whole installation is stored as.
              * @enum {string}
              */
-            mode?: "mentions" | "watch" | "both";
+            mode?: "mentions" | "watch" | "both" | "announce";
             /**
              * @description Whether a mention made inside an existing vendor thread includes
              *     earlier thread messages in the run input. The text remains
@@ -7700,6 +7702,12 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
+                    /**
+                     * @description The company whose runs report here. `*` is the scope above
+                     *     every company: such a conversation hears about a run in any
+                     *     of them, starts nothing, and needs authority over the
+                     *     installation to configure or to remove.
+                     */
                     company: string;
                     /** @description Empty covers the whole company. */
                     area?: string;
@@ -7711,11 +7719,14 @@ export interface operations {
                      *     agent from ordinary messages written by configured
                      *     sources, under the configured principal. `both` keeps the
                      *     mention path and the watched-message path enabled together;
-                     *     each keeps its own authority.
+                     *     each keeps its own authority. `announce` starts nothing at
+                     *     all: the conversation only reports what runs do, and it is
+                     *     the only mode a conversation for the whole installation may
+                     *     have.
                      * @default mentions
                      * @enum {string}
                      */
-                    mode?: "mentions" | "watch" | "both";
+                    mode?: "mentions" | "watch" | "both" | "announce";
                     /**
                      * @description Slack user, bot or app ids allowed to trigger watched
                      *     messages. They filter the source; they never grant

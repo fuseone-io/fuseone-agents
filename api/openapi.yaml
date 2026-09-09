@@ -3010,7 +3010,13 @@ paths:
               type: object
               required: [company]
               properties:
-                company: { type: string }
+                company:
+                  type: string
+                  description: |
+                    The company whose runs report here. `*` is the scope above
+                    every company: such a conversation hears about a run in any
+                    of them, starts nothing, and needs authority over the
+                    installation to configure or to remove.
                 area:
                   type: string
                   description: Empty covers the whole company.
@@ -3019,7 +3025,7 @@ paths:
                   description: What a person calls it, for the console and the logs.
                 mode:
                   type: string
-                  enum: [mentions, watch, both]
+                  enum: [mentions, watch, both, announce]
                   default: mentions
                   description: |
                     `mentions` starts only when a person mentions the channel
@@ -3027,7 +3033,10 @@ paths:
                     agent from ordinary messages written by configured
                     sources, under the configured principal. `both` keeps the
                     mention path and the watched-message path enabled together;
-                    each keeps its own authority.
+                    each keeps its own authority. `announce` starts nothing at
+                    all: the conversation only reports what runs do, and it is
+                    the only mode a conversation for the whole installation may
+                    have.
                 sources:
                   type: array
                   description: |
@@ -6213,8 +6222,11 @@ components:
         scope: { $ref: '#/components/schemas/Scope' }
         mode:
           type: string
-          enum: [mentions, watch, both]
-          description: How inbound Slack messages may start runs. Empty legacy rows read as mentions.
+          enum: [mentions, watch, both, announce]
+          description: |
+            How inbound Slack messages may start runs. Empty legacy rows read
+            as mentions. `announce` starts nothing, and is what a conversation
+            for the whole installation is stored as.
         threadContext:
           type: boolean
           description: |

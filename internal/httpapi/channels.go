@@ -163,6 +163,24 @@ func (s *Server) PutConversation(
 		Company: domain.CompanyID(req.Body.Company),
 		Area:    domain.AreaID(valueOr(req.Body.Area)),
 	}
+	/*
+		A room for the whole installation reads every company's runs into one
+		place, which is the disclosure the conversation scope exists to
+		prevent, arriving as a notification.
+
+		Configuring channels is a curator's act and a curator granted on one
+		company holds it, so without this a company-level configurer could
+		build a room receiving another company's runs. Deciding that one room
+		hears the whole installation is the authority above them all.
+	*/
+	if scope.IsInstallation() {
+		if _, resp := s.governs(ctx); resp != nil {
+			return openapi.PutConversation403ApplicationProblemPlusJSONResponse{
+				ForbiddenApplicationProblemPlusJSONResponse: *resp,
+			}, nil
+		}
+	}
+
 	mode := conversationMode(req.Body.Mode)
 	agent := domain.AgentID(valueOr(req.Body.Agent))
 	runAs := domain.UserID(valueOr(req.Body.RunAs))
@@ -170,7 +188,10 @@ func (s *Server) PutConversation(
 	// required. A conversation that takes mentions may name an agent too, and a
 	// configuration that only fails later — in the Slack thread, to somebody
 	// who did not write it — is the failure this check exists to prevent.
-	if agent != "" {
+	// An installation conversation starts nothing, so it names no agent — the
+	// administration strips one on the way in. Checking it here would send
+	// somebody to publish an agent into a scope nothing can be published to.
+	if agent != "" && !scope.IsInstallation() {
 		reason, err := s.refuseConversationAgent(ctx, agent, scope)
 		if err != nil {
 			return nil, err
@@ -330,6 +351,15 @@ func (s *Server) DeleteConversation(
 	scope, found := s.scopeOfConversation(ctx, req.Name, req.Conversation)
 	if !found {
 		return openapi.DeleteConversation204Response{}, nil
+	}
+	// The same authority the room needed to exist. Otherwise a company
+	// configurer silences the one room that hears what nobody else does.
+	if scope.IsInstallation() {
+		if _, resp := s.governs(ctx); resp != nil {
+			return openapi.DeleteConversation403ApplicationProblemPlusJSONResponse{
+				ForbiddenApplicationProblemPlusJSONResponse: *resp,
+			}, nil
+		}
 	}
 	if err := s.channels.DeleteConversation(ctx, req.Conversation, scope, caller); err != nil {
 		return nil, fmt.Errorf("delete conversation: %w", err)

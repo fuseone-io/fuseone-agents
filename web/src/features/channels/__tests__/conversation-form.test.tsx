@@ -193,6 +193,23 @@ describe("conversation configuration", () => {
     expect(saved(requests)).toMatchObject({ directApprovals: true });
   });
 
+  /*
+   * A conversation that only reports offers nothing about starting runs.
+   *
+   * The predicate deciding that was a denylist — anything that is not "watch"
+   * takes mentions — so a mode whose whole purpose is to start nothing would
+   * have shown the mention fields and offered to configure an inbound path the
+   * server refuses.
+   */
+  it("offers nothing about starting runs for a conversation that only reports", async () => {
+    renderForm({ ...mentionsConversation, mode: "announce" });
+
+    expect(await screen.findByText(/O que avisar/)).toBeInTheDocument();
+    expect(screen.queryByText("Incluir contexto da thread")).not.toBeInTheDocument();
+    expect(screen.queryByText("Fontes Slack permitidas")).not.toBeInTheDocument();
+    expect(screen.queryByText("Rodar como")).not.toBeInTheDocument();
+  });
+
   it("explains an empty Slack listing instead of leaving a picker with no choices", async () => {
     renderForm();
 

@@ -706,3 +706,105 @@ func directApprovalConversation(on bool) openapi.PutConversationRequestObject {
 		},
 	}
 }
+
+/*
+A room for the whole installation needs authority over the installation.
+
+Every other conversation is configured inside a scope somebody already governs.
+This one reads every company's runs into one place, which is the disclosure the
+conversation scope exists to prevent, arriving as a notification.
+
+Configuring channels is a curator's act, and a curator granted on one company
+holds it — so without this a company-level configurer could build a room
+receiving another company's runs. Deciding that one room hears the whole
+installation is the authority above them all.
+*/
+func TestPutConversation_forTheWholeInstallation_needsAuthorityOverIt(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{}
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, nil)
+
+	resp, err := s.PutConversation(as(domain.RoleCurator), installationConversationRequest())
+	if err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+	if _, ok := resp.(openapi.PutConversation403ApplicationProblemPlusJSONResponse); !ok {
+		t.Fatalf("response = %T, want it refused", resp)
+	}
+	if spy.putConv.ID != "" {
+		t.Error("the conversation reached the store")
+	}
+}
+
+func TestPutConversation_forTheWholeInstallation_isAllowedToWhoGovernsIt(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{}
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, nil)
+
+	resp, err := s.PutConversation(asInstallation(domain.RoleAdmin), installationConversationRequest())
+	if err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+	if _, ok := resp.(openapi.PutConversation204Response); !ok {
+		t.Fatalf("response = %T, want accepted", resp)
+	}
+}
+
+// And removing it needs the same. Otherwise a company configurer silences the
+// one room that hears what nobody else does.
+func TestDeleteConversation_forTheWholeInstallation_needsAuthorityOverIt(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{listed: []admin.Channel{{
+		Name: "acme-slack", Kind: "slack", Enabled: true,
+		Conversations: []admin.Conversation{{
+			ID: "C-everywhere", Scope: domain.Scope{Company: domain.Installation},
+			Mode: "announce", Enabled: true,
+		}},
+	}}}
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, nil)
+
+	resp, err := s.DeleteConversation(as(domain.RoleCurator),
+		openapi.DeleteConversationRequestObject{Name: "acme-slack", Conversation: "C-everywhere"})
+	if err != nil {
+		t.Fatalf("DeleteConversation: %v", err)
+	}
+	if _, ok := resp.(openapi.DeleteConversation403ApplicationProblemPlusJSONResponse); !ok {
+		t.Fatalf("response = %T, want it refused", resp)
+	}
+	if spy.deletedScope != (domain.Scope{}) {
+		t.Error("the removal reached the store")
+	}
+}
+
+// An installation conversation names no agent, so the check that would look for
+// one has nothing to look in. Told the truth rather than sent to publish an
+// agent into a scope nothing can be published to.
+func TestPutConversation_forTheWholeInstallation_doesNotAskForAnAgent(t *testing.T) {
+	t.Parallel()
+	s := NewServer(ledger.NewMemory(), "test").
+		WithChannels(&channelSpy{}, nil).
+		WithAgents(&startableInScope{})
+
+	req := installationConversationRequest()
+	req.Body.Agent = ptr("triagem")
+
+	resp, err := s.PutConversation(asInstallation(domain.RoleAdmin), req)
+	if err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+	if _, ok := resp.(openapi.PutConversation204Response); !ok {
+		t.Fatalf("response = %T, want accepted with the agent ignored", resp)
+	}
+}
+
+func installationConversationRequest() openapi.PutConversationRequestObject {
+	wants := []openapi.PutConversationJSONBodyWants{
+		openapi.PutConversationJSONBodyWantsParked,
+	}
+	return openapi.PutConversationRequestObject{
+		Name: "acme-slack", Conversation: "C-everywhere",
+		Body: &openapi.PutConversationJSONRequestBody{
+			Company: string(domain.Installation), Wants: &wants,
+		},
+	}
+}

@@ -44,7 +44,10 @@ import type { components } from "@/lib/api/schema.gen";
 const EVENTS = ["parked", "failed", "finished"] as const;
 type RunAsPerson = { id: string; display?: string | null; email?: string | null };
 type Conversation = components["schemas"]["ChannelConversation"];
-type ConversationMode = "mentions" | "watch" | "both";
+// The stored value, which includes the one a person never picks: a
+// conversation for the whole installation is stored as `announce`, chosen by
+// its scope rather than from this list.
+type ConversationMode = "mentions" | "watch" | "both" | "announce";
 
 function splitSources(value: string) {
   return value
@@ -58,7 +61,7 @@ const schema = z
     conversation: z.string().min(1, "channels.needsConversation"),
     label: z.string(),
     scope: z.string().min(1, "channels.needsScope"),
-    mode: z.enum(["mentions", "watch", "both"]),
+    mode: z.enum(["mentions", "watch", "both", "announce"]),
     threadContext: z.boolean(),
     directApprovals: z.boolean(),
     sources: z.string(),
@@ -93,8 +96,16 @@ const schema = z
 
 export type ConversationValues = z.infer<typeof schema>;
 
+/*
+ * Which modes let a message start a run, said the same way the server says it.
+ *
+ * An allowlist. Written as "anything that is not watch", a mode added later is
+ * answered yes — so `announce`, whose whole purpose is to start nothing, would
+ * have shown the mention fields and offered to configure an inbound path the
+ * server refuses.
+ */
 function startsFromMentions(mode: ConversationMode) {
-  return mode !== "watch";
+  return mode === "mentions" || mode === "both";
 }
 
 function startsFromWatch(mode: ConversationMode) {

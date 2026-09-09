@@ -42,7 +42,7 @@ export function ConversationAgentField({
   scope,
 }: {
   form: UseFormReturn<ConversationValues>;
-  mode: "mentions" | "watch" | "both";
+  mode: "mentions" | "watch" | "both" | "announce";
   scope: string;
 }) {
   const { t } = useTranslation();

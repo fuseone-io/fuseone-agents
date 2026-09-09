@@ -62,7 +62,7 @@ export interface ConversationInput {
   company: string;
   area?: string;
   label?: string;
-  mode?: "mentions" | "watch" | "both";
+  mode?: "mentions" | "watch" | "both" | "announce";
   threadContext?: boolean;
   directApprovals?: boolean;
   sources?: string[];
