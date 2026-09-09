@@ -84,3 +84,57 @@ func TestInstallation_isNotAName_anybodyCouldRegister(t *testing.T) {
 		t.Error("the sentinel is accepted as a company somebody could create")
 	}
 }
+
+/*
+Naming the scope above every company, rather than spelling it out.
+
+Written by hand each time, this comparison drifts: a check on the company alone
+accepts the sentinel carrying an area, which contains nothing at all — the
+containment rule short circuits on the sentinel and requires the area to be
+empty, so that shape reaches nothing while looking like it reaches everything.
+
+The zero scope has to keep failing it. `Scope{}` is what a struct starts as and
+what a failed decode leaves behind, and if it answered yes here every one of
+those would be the installation.
+*/
+func TestIsInstallation_answersOnlyForTheScopeAboveEveryCompany(t *testing.T) {
+	t.Parallel()
+
+	for _, c := range []struct {
+		name  string
+		scope domain.Scope
+		want  bool
+	}{
+		{"the sentinel", domain.Scope{Company: domain.Installation}, true},
+		{"the zero scope", domain.Scope{}, false},
+		{"a company", domain.Scope{Company: "acme"}, false},
+		{"an area", domain.Scope{Company: "acme", Area: "ops"}, false},
+		// Storable, and it contains nothing: Contains short circuits on the
+		// sentinel and answers false unless the area is empty.
+		{"the sentinel with an area", domain.Scope{Company: domain.Installation, Area: "cx"}, false},
+	} {
+		if got := c.scope.IsInstallation(); got != c.want {
+			t.Errorf("%s: IsInstallation() = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// And it agrees with what containment already believes, which is the rule it
+// exists to make readable.
+func TestIsInstallation_agreesWithWhatContainsEverything(t *testing.T) {
+	t.Parallel()
+
+	for _, scope := range []domain.Scope{
+		{Company: domain.Installation},
+		{Company: domain.Installation, Area: "cx"},
+		{},
+		{Company: "acme"},
+	} {
+		reaches := scope.Contains(domain.Scope{Company: "beta", Area: "fin"}) &&
+			scope.Contains(domain.Scope{Company: "acme", Area: "ops"})
+		if scope.IsInstallation() != reaches {
+			t.Errorf("%+v: IsInstallation() = %v but reaches everything = %v",
+				scope, scope.IsInstallation(), reaches)
+		}
+	}
+}
