@@ -292,25 +292,30 @@ the empty conversation the delivery table now refuses outright — a message
 attempted against nothing, and a recipient the sweep believes it has told.
 */
 func TestAccountsOn_aKeyNamingNoAccount_isNotReachable(t *testing.T) {
-	channels, store := boundChannels(t)
-	ctx := context.Background()
+	// Blank both ways the write refuses it. BindIdentity rejects an account
+	// that is only spaces, so a stored one arrived by restore and names a
+	// place no more than an empty string does.
+	for _, blank := range []string{"", "   ", "\t"} {
+		channels, store := boundChannels(t)
+		ctx := context.Background()
 
-	if err := store.Put(ctx, settings.Setting{
-		ScopeKind: settings.ScopeInstallation,
-		Kind:      admin.KindChannelIdentity,
-		Name:      "acme-slack/",
-		Value: []byte(
-			`{"channel":"acme-slack","account":"","principal":"usr_ana"}`),
-		Enabled: true, UpdatedBy: "restore",
-	}); err != nil {
-		t.Fatalf("write the malformed row: %v", err)
-	}
+		if err := store.Put(ctx, settings.Setting{
+			ScopeKind: settings.ScopeInstallation,
+			Kind:      admin.KindChannelIdentity,
+			Name:      "acme-slack/" + blank,
+			Value: []byte(
+				`{"channel":"acme-slack","account":"","principal":"usr_ana"}`),
+			Enabled: true, UpdatedBy: "restore",
+		}); err != nil {
+			t.Fatalf("write the malformed row %q: %v", blank, err)
+		}
 
-	where, err := channels.AccountsOn(ctx, "acme-slack", []domain.UserID{"usr_ana"})
-	if err != nil {
-		t.Fatalf("AccountsOn: %v", err)
-	}
-	if account, ok := where["usr_ana"]; ok {
-		t.Errorf("reachable at %q, want a key naming no account to reach nobody", account)
+		where, err := channels.AccountsOn(ctx, "acme-slack", []domain.UserID{"usr_ana"})
+		if err != nil {
+			t.Fatalf("AccountsOn: %v", err)
+		}
+		if account, ok := where["usr_ana"]; ok {
+			t.Errorf("key %q: reachable at %q, want it to reach nobody", blank, account)
+		}
 	}
 }

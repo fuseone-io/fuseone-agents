@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/settings"
@@ -109,11 +110,22 @@ func reachable(s settings.Setting, channelName string) (account string, who doma
 	if keyChannel(s.Name) != channelName {
 		return "", "", false
 	}
-	// A key with no account names a person and not a place. Answered as
-	// reachable, it hands the next stage the empty conversation the delivery
-	// table refuses outright — a message attempted against nothing, and a
-	// recipient the sweep believes it has told.
-	if account = keyAccount(s.Name); account == "" {
+	/*
+		A key with no account names a person and not a place. Answered as
+		reachable, it hands the next stage the empty conversation the delivery
+		table refuses outright — a message attempted against nothing, and a
+		recipient the sweep believes it has told.
+
+		Blank the same way the write refuses it, whitespace included: BindIdentity
+		rejects an account that is only spaces, so a stored one arrived by restore
+		and means no more than an empty string does.
+
+		What comes back is the key as stored, never a tidied copy. PrincipalFor
+		matches an arriving account against that exact name, so an address
+		trimmed here would be one the inbound side does not resolve — the two
+		have to agree about who a row is for, even when the row is wrong.
+	*/
+	if account = keyAccount(s.Name); strings.TrimSpace(account) == "" {
 		return "", "", false
 	}
 	return account, id.Principal, true
