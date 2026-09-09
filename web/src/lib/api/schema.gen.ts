@@ -3847,10 +3847,17 @@ export interface components {
             kind: string;
             workspace?: string;
             /**
-             * @description How Slack asks reach this installation. Empty legacy rows read as http.
-             * @enum {string}
+             * @description How Slack asks reach this installation, as stored. Empty legacy rows
+             *     read as http.
+             *
+             *     Deliberately not an enumeration, unlike the request: a connection
+             *     written by a newer version travels back as itself. Read as the
+             *     nearest value this one knows, an unrelated edit saved from that
+             *     reading would open the inbound door this version does have. A client
+             *     that does not recognise the value must not offer to save the
+             *     connection.
              */
-            deliveryMode?: "http" | "socket";
+            deliveryMode?: string;
             enabled: boolean;
             /** @description Whether the bot token used for posting is stored, never what it is. */
             hasCredential: boolean;

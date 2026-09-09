@@ -26,7 +26,7 @@ import {
   INSTALLATION_SCOPE,
 } from "@/features/channels/conversation-scope-field";
 import { ConversationThreadContextField } from "@/features/channels/conversation-thread-context-field";
-import { ConversationUnknownMode } from "@/features/channels/conversation-unknown-mode";
+import { UnknownConfiguration } from "@/features/channels/unknown-configuration";
 import { ConversationWantsField } from "@/features/channels/conversation-wants-field";
 import { ConversationWatchFields } from "@/features/channels/conversation-watch-fields";
 import { problemMessage } from "@/lib/api/problem-message";
@@ -132,7 +132,13 @@ export function ConversationForm({
   // Before anything is drawn. A form filled with this console's idea of the
   // nearest value is a form whose save rewrites the conversation.
   if (!knownMode(stored)) {
-    return <ConversationUnknownMode mode={stored} onClose={onClose} />;
+    return (
+      <UnknownConfiguration
+        title={t("channels.editConversation")}
+        message={t("channels.unknownMode", { mode: stored })}
+        onClose={onClose}
+      />
+    );
   }
 
   return (

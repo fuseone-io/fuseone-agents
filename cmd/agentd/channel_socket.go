@@ -140,7 +140,7 @@ func (m *slackSocketManager) candidates(ctx context.Context) ([]slackSocketCandi
 				"channel", set.Name, "err", err)
 			continue
 		}
-		if conn.Kind != "slack" || channel.DeliveryMode(conn.DeliveryMode) != channel.DeliverySocket {
+		if conn.Kind != "slack" || !channel.DeliversOverSocket(conn.DeliveryMode) {
 			continue
 		}
 		if !set.HasSecret {

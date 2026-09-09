@@ -39,6 +39,12 @@ not happen.
 var ErrUnknownMode = errors.New(
 	"admin: that conversation mode is not one this version knows")
 
+// ErrUnknownDeliveryMode means a connection named a way of being reached that
+// this version cannot honour. Refused rather than normalised: read as HTTP, a
+// connection restored from a newer version opens the door this one knows.
+var ErrUnknownDeliveryMode = errors.New(
+	"admin: that delivery mode is not one this version knows")
+
 var ErrInstallationArea = errors.New(
 	"admin: the installation is the scope above every company and has no area")
 
@@ -90,7 +96,8 @@ refusal somebody has no way to act on.
 */
 func Invalid(err error) bool {
 	for _, sentinel := range []error{
-		ErrNoChannelKind, ErrNoCompany, ErrInstallationArea, ErrUnknownMode,
+		ErrNoChannelKind, ErrUnknownDeliveryMode, ErrNoCompany,
+		ErrInstallationArea, ErrUnknownMode,
 		ErrNoWatchSource, ErrNoWatchAgent, ErrNoWatchRunAs, ErrConversationMapped,
 	} {
 		if errors.Is(err, sentinel) {

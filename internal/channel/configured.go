@@ -80,11 +80,54 @@ type Connection struct {
 	DeliveryMode string `json:"deliveryMode,omitempty"`
 }
 
+/*
+DeliveryMode normalises for a screen. It answers HTTP for anything it does not
+recognise, which is right for a label and wrong for a door — see the pair below.
+*/
 func DeliveryMode(mode string) string {
 	if mode == DeliverySocket {
 		return DeliverySocket
 	}
 	return DeliveryHTTP
+}
+
+// StoredDeliveryMode is the value as configured, with the one translation that
+// is defined: empty was HTTP, from before Socket Mode existed. A value this
+// version cannot name travels intact, so an edit cannot quietly turn it into
+// one this version does act on.
+func StoredDeliveryMode(mode string) string {
+	if mode == "" {
+		return DeliveryHTTP
+	}
+	return mode
+}
+
+// KnownDeliveryMode answers whether this version understands a stored delivery
+// mode at all. Refused on the way in rather than normalised, for the reason
+// KnownMode is: normalising is how a connection configured by a newer version
+// comes back as one whose inbound door this version opens.
+func KnownDeliveryMode(mode string) bool {
+	return mode == "" || mode == DeliveryHTTP || mode == DeliverySocket
+}
+
+/*
+DeliversOverHTTP answers whether Slack reaches this installation through the
+public webhook path.
+
+An allowlist, and read from the stored value. Written as "anything that is not
+socket", a mode this version does not know opens the HTTP door — the same
+fail-open the conversation modes had, one layer down: a restored connection
+would start accepting asks again, verified by whichever signing secret was
+sealed beside it.
+*/
+func DeliversOverHTTP(mode string) bool {
+	return mode == "" || mode == DeliveryHTTP
+}
+
+// DeliversOverSocket answers whether the worker opens Socket Mode outbound.
+// Empty is not one of them: socket had to be asked for from the day it existed.
+func DeliversOverSocket(mode string) bool {
+	return mode == DeliverySocket
 }
 
 func ConversationMode(mode string) string {

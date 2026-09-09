@@ -97,7 +97,11 @@ func (c *Channels) List(ctx context.Context) ([]Channel, error) {
 		secret := c.channelSecretState(ctx, s.Name)
 		out = append(out, Channel{
 			Name: s.Name, Kind: conn.Kind, Workspace: conn.Workspace,
-			DeliveryMode: channel.DeliveryMode(conn.DeliveryMode),
+			// As stored, for the reason a conversation's mode is: read through
+			// the display normalisation, a connection configured by a newer
+			// version comes back as HTTP, and saving any unrelated edit from
+			// that reading opens the inbound door this version knows.
+			DeliveryMode: channel.StoredDeliveryMode(conn.DeliveryMode),
 			Enabled:      s.Enabled, HasCredential: secret.BotToken,
 			HasSigning: secret.Signing, HasAppToken: secret.AppToken,
 			Conversations: conversationsOf(s.Name, conversations),
@@ -192,8 +196,11 @@ func (c *Channels) PutChannel(ctx context.Context, w ChannelWrite) error {
 	if strings.TrimSpace(ch.Kind) == "" {
 		return ErrNoChannelKind
 	}
+	if !channel.KnownDeliveryMode(ch.DeliveryMode) {
+		return fmt.Errorf("%w: %q", ErrUnknownDeliveryMode, ch.DeliveryMode)
+	}
 
-	mode := channel.DeliveryMode(ch.DeliveryMode)
+	mode := channel.StoredDeliveryMode(ch.DeliveryMode)
 	value, err := json.Marshal(channel.Connection{
 		Kind: ch.Kind, Workspace: ch.Workspace,
 		DeliveryMode: mode,

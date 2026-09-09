@@ -4,6 +4,19 @@ export type Channel = components["schemas"]["Channel"];
 export type Conversation = components["schemas"]["ChannelConversation"];
 export type ChannelView = "all" | "attention" | "approvals";
 
+/*
+knownDelivery answers whether this console can draw a stored delivery mode.
+
+The stored value travels back as itself, which is what stops an unrelated edit
+from rewriting a connection a newer version configured. The console has to do
+its half: a value it cannot draw is one it must not offer to save.
+*/
+export function knownDelivery(mode: string | undefined): mode is DeliveryMode {
+  return mode === undefined || mode === "http" || mode === "socket";
+}
+
+export type DeliveryMode = "http" | "socket";
+
 export function channelNeedsAttention(channel: Channel) {
   if (!channel.enabled || !channel.hasCredential) return true;
   if (channel.deliveryMode === "socket") return !channel.hasAppToken;

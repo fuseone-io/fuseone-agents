@@ -420,7 +420,7 @@ func (s *Server) scopeOfConversation(
 func channelFrom(
 	c admin.Channel, bound []admin.ChannelIdentity, seen []admin.ChannelAccountSeen,
 ) openapi.Channel {
-	delivery := openapi.ChannelDeliveryMode(channel.DeliveryMode(c.DeliveryMode))
+	delivery := channel.StoredDeliveryMode(c.DeliveryMode)
 	out := openapi.Channel{
 		Name: c.Name, Kind: c.Kind, Enabled: c.Enabled,
 		DeliveryMode:  &delivery,

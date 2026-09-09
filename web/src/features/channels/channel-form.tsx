@@ -27,6 +27,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useSaveChannel } from "@/features/channels/api";
+import { knownDelivery } from "@/features/channels/channel-model";
+import { UnknownConfiguration } from "@/features/channels/unknown-configuration";
 import { problemMessage } from "@/lib/api/problem-message";
 import type { components } from "@/lib/api/schema.gen";
 
@@ -71,6 +73,12 @@ export function ChannelForm({
 }) {
   const { t } = useTranslation();
   const save = useSaveChannel();
+  // What is stored, which may be a way of being reached that this console
+  // cannot draw. Narrowed here and refused below: a form filled with the
+  // nearest value it knows is a form whose save opens the door this version
+  // has, on a connection a newer one had put somewhere else.
+  const stored = channel?.deliveryMode;
+  const delivery = knownDelivery(stored) ? (stored ?? "http") : "http";
 
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
@@ -78,7 +86,7 @@ export function ChannelForm({
       name: channel?.name ?? "",
       kind: channel?.kind ?? kinds[0] ?? "",
       workspace: channel?.workspace ?? "",
-      deliveryMode: channel?.deliveryMode ?? "http",
+      deliveryMode: delivery,
       token: "",
       appToken: "",
       signingSecret: "",
@@ -107,6 +115,16 @@ export function ChannelForm({
     } catch (error) {
       toast.error(problemMessage(error, t));
     }
+  }
+
+  if (!knownDelivery(stored)) {
+    return (
+      <UnknownConfiguration
+        title={t("channels.editChannel")}
+        message={t("channels.unknownDeliveryMode", { mode: stored })}
+        onClose={onClose}
+      />
+    );
   }
 
   return (
