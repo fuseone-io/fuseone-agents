@@ -151,7 +151,7 @@ func conversationsOf(channelName string, stored []settings.Setting) []Conversati
 			continue
 		}
 		out = append(out, Conversation{
-			ID: s.Name, Label: v.Label, Scope: s.Scope,
+			ID: channel.ConversationID(channelName, s.Name), Label: v.Label, Scope: s.Scope,
 			// As stored. Read through the display normalisation, a mode this
 			// version cannot name came back as "mentions", and saving any
 			// unrelated edit from that reading turned a room that started
@@ -379,7 +379,11 @@ func (c *Channels) PutConversation(
 		action: "channel.conversation.configured", target: conv.ID,
 		set: settings.Setting{
 			ScopeKind: conversationScopeKind(conv.Scope), Scope: conv.Scope,
-			Kind: channel.KindConversation, Name: conv.ID,
+			Kind: channel.KindConversation,
+			// The connection and the id, because either alone is ambiguous:
+			// stored under the id, mapping the same one on a second connection
+			// in this scope replaced the first, silently.
+			Name:  channel.ConversationKey(channelName, conv.ID),
 			Value: value, Enabled: conv.Enabled, UpdatedBy: string(by),
 		},
 		detail: map[string]any{
@@ -437,7 +441,8 @@ func (c *Channels) DeleteChannel(
 	}
 	for _, conv := range conversationsOf(name, stored) {
 		if err := c.settings.DeleteTx(ctx, tx, conversationScopeKind(conv.Scope),
-			conv.Scope, channel.KindConversation, conv.ID); err != nil {
+			conv.Scope, channel.KindConversation,
+			channel.ConversationKey(name, conv.ID)); err != nil {
 			return err
 		}
 		if err := Record(ctx, tx, Event{
@@ -460,13 +465,25 @@ func (c *Channels) DeleteChannel(
 	return tx.Commit(ctx)
 }
 
+// ConversationRef names one conversation: the connection it is on, the id the
+// vendor calls it, and the scope it was configured in. The three travel
+// together because none of them identifies it alone — and a delete keyed
+// differently from the write is a removal that reports success and removes
+// nothing, or somebody else's row.
+type ConversationRef struct {
+	Channel string
+	ID      string
+	Scope   domain.Scope
+}
+
 // DeleteConversation stops a scope's runs reporting to a place.
 func (c *Channels) DeleteConversation(
-	ctx context.Context, id string, scope domain.Scope, by domain.UserID,
+	ctx context.Context, ref ConversationRef, by domain.UserID,
 ) error {
 	return removeScopedSetting(ctx, c.pool, c.settings, by,
-		conversationScopeKind(scope), scope, scope,
-		channel.KindConversation, id, "channel.conversation.removed")
+		conversationScopeKind(ref.Scope), ref.Scope, ref.Scope,
+		channel.KindConversation, channel.ConversationKey(ref.Channel, ref.ID),
+		"channel.conversation.removed")
 }
 
 // ErrConversationMapped means this conversation already speaks for another

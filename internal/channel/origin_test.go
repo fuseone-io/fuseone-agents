@@ -675,6 +675,82 @@ func TestWatchFor_aModeThisVersionDoesNotKnow_answersNoRule(t *testing.T) {
 }
 
 /*
+The same conversation id on two connections is two conversations, in one scope.
+
+The existing test varied the area as well, so the scope alone told them apart
+and the row key never had to. It did not: a conversation was stored under its
+vendor id, and the connection lived in the value — so mapping C-SAME in one
+scope on a second workspace overwrote the first, and the first stopped
+resolving. No refusal, no trail of a removal, and cards and approvals for that
+workspace simply stopped.
+
+Slack channel ids and Teams conversation ids are two namespaces, and nothing
+promises they never collide. Which is the whole reason this package resolves by
+connection and id — the storage was the half that did not.
+*/
+func TestResolve_theSameIdOnTwoConnectionsInOneScope_areTwoConversations(t *testing.T) {
+	store, channels := configuredChannels(t)
+	scope := domain.Scope{Company: "acme", Area: "ops"}
+
+	for _, one := range []struct{ connection, agent string }{
+		{"workspace-a", "triagem"}, {"workspace-b", "cobranca"},
+	} {
+		if err := channels.PutConversation(t.Context(), one.connection, admin.Conversation{
+			ID: "C-SAME", Enabled: true, Scope: scope,
+			Agent: domain.AgentID(one.agent), Wants: []string{"parked"},
+		}, "usr_ana"); err != nil {
+			t.Fatalf("map %s: %v", one.connection, err)
+		}
+	}
+
+	for _, one := range []struct{ connection, agent string }{
+		{"workspace-a", "triagem"}, {"workspace-b", "cobranca"},
+	} {
+		got, err := store.Resolve(t.Context(), one.connection, "C-SAME")
+		if err != nil {
+			t.Fatalf("resolve on %s: %v", one.connection, err)
+		}
+		if got.Agent != domain.AgentID(one.agent) {
+			t.Errorf("%s starts %q, want its own agent %q",
+				one.connection, got.Agent, one.agent)
+		}
+	}
+}
+
+/*
+And removing one leaves the other.
+
+The delete is keyed the same way the write is, and the two disagreeing is how a
+removal reports success and removes somebody else's row — or nothing at all.
+*/
+func TestDeleteConversation_theSameIdOnAnotherConnection_isNotRemoved(t *testing.T) {
+	store, channels := configuredChannels(t)
+	scope := domain.Scope{Company: "acme", Area: "cx"}
+
+	for _, connection := range []string{"workspace-a", "workspace-b"} {
+		if err := channels.PutConversation(t.Context(), connection, admin.Conversation{
+			ID: "C-BOTH", Enabled: true, Scope: scope, Wants: []string{"parked"},
+		}, "usr_ana"); err != nil {
+			t.Fatalf("map %s: %v", connection, err)
+		}
+	}
+
+	if err := channels.DeleteConversation(t.Context(), admin.ConversationRef{
+		Channel: "workspace-a", ID: "C-BOTH", Scope: scope,
+	}, "usr_ana"); err != nil {
+		t.Fatalf("DeleteConversation: %v", err)
+	}
+
+	if _, err := store.Resolve(t.Context(), "workspace-a", "C-BOTH"); !errors.Is(
+		err, channel.ErrNoConversation) {
+		t.Errorf("err = %v, want the removed conversation gone", err)
+	}
+	if _, err := store.Resolve(t.Context(), "workspace-b", "C-BOTH"); err != nil {
+		t.Errorf("the other connection's conversation went with it: %v", err)
+	}
+}
+
+/*
 Two rows for one conversation answer no watch rule.
 
 Resolve reports the pair as ambiguous, and WatchFor — asked first, by the door —
@@ -930,7 +1006,9 @@ func TestDeleteConversation_atEveryScope_theRowIsGone(t *testing.T) {
 			t.Fatalf("%+v: the conversation was not configured", scope)
 		}
 
-		if err := channels.DeleteConversation(t.Context(), id, scope, "usr_ana"); err != nil {
+		if err := channels.DeleteConversation(t.Context(), admin.ConversationRef{
+			Channel: "acme-slack", ID: id, Scope: scope,
+		}, "usr_ana"); err != nil {
 			t.Fatalf("DeleteConversation %+v: %v", scope, err)
 		}
 		if hears(t, store, id, domain.Scope{Company: "acme", Area: "ops"}) {

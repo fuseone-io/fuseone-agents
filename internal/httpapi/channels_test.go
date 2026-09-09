@@ -282,6 +282,7 @@ type channelSpy struct {
 	seen         []admin.ChannelAccountSeen
 	putConv      admin.Conversation
 	deletedScope domain.Scope
+	deletedFrom  string
 	putChannel   string
 	deleted      string
 	// governs is what the door decided about the caller's authority over the
@@ -319,9 +320,9 @@ func (c *channelSpy) PutConversation(
 }
 
 func (c *channelSpy) DeleteConversation(
-	_ context.Context, _ string, scope domain.Scope, _ domain.UserID,
+	_ context.Context, ref admin.ConversationRef, _ domain.UserID,
 ) error {
-	c.deletedScope = scope
+	c.deletedScope, c.deletedFrom = ref.Scope, ref.Channel
 	return nil
 }
 

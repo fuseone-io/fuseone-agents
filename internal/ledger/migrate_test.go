@@ -60,3 +60,77 @@ func TestMigrate_twoProcessesStartingTogether_bothSucceed(t *testing.T) {
 		}
 	}
 }
+
+/*
+Conversations stored before the connection joined the key are renamed.
+
+Until 0071 a conversation was stored under the vendor's id alone, so an
+installation upgrading into this schema has rows the new key does not name — and
+the delete, which now keys by connection and id, would match nothing and report
+success. The migration is what makes the two agree.
+
+Exercised by putting a row in the old shape back and letting the migration run
+again, which is the only honest way to see a file that has already been applied.
+*/
+func TestMigrate_conversationsStoredUnderTheIdAlone_takeTheirConnection(t *testing.T) {
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("TEST_DATABASE_URL is unset; skipping the migration")
+	}
+	pool, err := pgxpool.New(t.Context(), dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	if err := ledger.Migrate(t.Context(), pool); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	const version = "0071_conversations_by_connection"
+	for _, one := range []struct{ name, value string }{
+		{"C-LEGACY", `{"channel":"acme-slack","mode":"mentions"}`},
+		// Nothing to hang it on: left as it is rather than given an invented
+		// connection.
+		{"C-ORPHANED", `{"mode":"mentions"}`},
+	} {
+		if _, err := pool.Exec(t.Context(), `
+			insert into settings (scope_kind, company_id, area_id, kind, name, value, enabled, updated_by)
+			values ('area', 'acme', 'legacy', 'channel_conversation', $1, $2, true, 'restore')
+			on conflict (scope_kind, company_id, area_id, kind, name) do update set value = excluded.value`,
+			one.name, one.value); err != nil {
+			t.Fatalf("write the %s row: %v", one.name, err)
+		}
+	}
+	if _, err := pool.Exec(t.Context(),
+		`delete from schema_migrations where version = $1`, version); err != nil {
+		t.Fatalf("forget the migration: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = pool.Exec(context.Background(),
+			`delete from settings where company_id = 'acme' and area_id = 'legacy'`)
+	})
+
+	if err := ledger.Migrate(t.Context(), pool); err != nil {
+		t.Fatalf("migrate again: %v", err)
+	}
+
+	var names []string
+	rows, err := pool.Query(t.Context(), `
+		select name from settings
+		where kind = 'channel_conversation' and company_id = 'acme' and area_id = 'legacy'
+		order by name`)
+	if err != nil {
+		t.Fatalf("read the rows back: %v", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		names = append(names, name)
+	}
+	if len(names) != 2 || names[0] != "C-ORPHANED" || names[1] != "acme-slack/C-LEGACY" {
+		t.Fatalf("names = %v, want the one with a connection renamed and the other left", names)
+	}
+}

@@ -61,6 +61,17 @@ field" is a commit message.
   holding its corrections is the one notice nobody thinks to ask for. Existing
   conversations keep exactly what they were configured with.
 
+### Fixed
+
+- **The same conversation id on two connections no longer overwrites itself.**
+  A conversation was stored under the id the vendor gives it, with the
+  connection recorded only inside the row — so pointing the same id at the same
+  scope on a second workspace replaced the first, with no refusal and nothing in
+  the trail saying a conversation had been removed. Cards and approvals for that
+  workspace simply stopped. Vendor ids are per-workspace namespaces, which is
+  why the runtime has always resolved by connection *and* id; the storage was
+  the half that did not. Existing conversations are renamed in place on upgrade.
+
 ### Changed
 
 - **A conversation's stored mode is handed back as it is stored.** The API used

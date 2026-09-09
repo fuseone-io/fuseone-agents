@@ -28,7 +28,7 @@ type ChannelAdmin interface {
 	PutChannel(ctx context.Context, w admin.ChannelWrite) error
 	DeleteChannel(ctx context.Context, name string, by domain.UserID, governs bool) error
 	PutConversation(ctx context.Context, channelName string, conv admin.Conversation, by domain.UserID) error
-	DeleteConversation(ctx context.Context, id string, scope domain.Scope, by domain.UserID) error
+	DeleteConversation(ctx context.Context, ref admin.ConversationRef, by domain.UserID) error
 	Identities(ctx context.Context) ([]admin.ChannelIdentity, error)
 	SeenAccounts(ctx context.Context) ([]admin.ChannelAccountSeen, error)
 	BindIdentity(ctx context.Context, id admin.ChannelIdentity, by domain.UserID) error
@@ -391,7 +391,9 @@ func (s *Server) DeleteConversation(
 			}, nil
 		}
 	}
-	if err := s.channels.DeleteConversation(ctx, req.Conversation, scope, caller); err != nil {
+	if err := s.channels.DeleteConversation(ctx, admin.ConversationRef{
+		Channel: req.Name, ID: req.Conversation, Scope: scope,
+	}, caller); err != nil {
 		return nil, fmt.Errorf("delete conversation: %w", err)
 	}
 	return openapi.DeleteConversation204Response{}, nil

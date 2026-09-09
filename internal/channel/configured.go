@@ -215,6 +215,28 @@ func startsSomething(mode string) bool {
 	return StartsFromMentions(mode) || StartsFromWatch(mode)
 }
 
+/*
+ConversationKey is where a conversation is stored.
+
+The connection and the id together, because either alone is ambiguous: two
+workspaces are two namespaces, and an id naming a channel in one may name
+another somewhere else. Stored under the id alone, mapping the same id on a
+second connection in one scope replaced the first — silently, because the write
+that did it looked like an ordinary configuration.
+*/
+func ConversationKey(channelName, id string) string {
+	return channelName + "/" + id
+}
+
+// ConversationID reads the id back out of a stored key.
+//
+// Given the connection rather than split on the separator, so an id containing
+// one comes back whole — and a row from before the connection joined the key,
+// which has no prefix to strip, comes back as itself.
+func ConversationID(channelName, name string) string {
+	return strings.TrimPrefix(name, channelName+"/")
+}
+
 // Source is who wrote a channel event as the vendor names it.
 //
 // It is not authority. Authority comes from a configured RunAs principal on a
@@ -298,7 +320,7 @@ func (c *Configured) For(ctx context.Context, scope domain.Scope) ([]Conversatio
 			continue
 		}
 		out = append(out, Conversation{
-			Channel: v.Channel, ID: s.Name, Label: v.Label,
+			Channel: v.Channel, ID: ConversationID(v.Channel, s.Name), Label: v.Label,
 			Agent: v.Agent, Wants: v.Wants,
 			DirectApprovals: v.DirectApprovals,
 		})
@@ -365,7 +387,7 @@ func conversationsNamed(
 ) []storedConversation {
 	var found []storedConversation
 	for _, s := range stored {
-		if s.Name != id || !s.Enabled {
+		if !s.Enabled {
 			continue
 		}
 		var v conversationValue
@@ -375,7 +397,10 @@ func conversationsNamed(
 			// still answers.
 			continue
 		}
-		if v.Channel != channelName {
+		// The connection first, then the id read out of the key it carries. A
+		// row from before it did is named by the id alone — exactly the row
+		// that could belong to another connection.
+		if v.Channel != channelName || ConversationID(v.Channel, s.Name) != id {
 			continue
 		}
 		found = append(found, storedConversation{scope: s.Scope, value: v})
@@ -394,18 +419,11 @@ func (c *Configured) IncludeThreadContext(
 	if err != nil {
 		return false, fmt.Errorf("channel: list conversations: %w", err)
 	}
-	for _, s := range stored {
-		if s.Name != id || !s.Enabled {
+	for _, one := range conversationsNamed(stored, channelName, id) {
+		if !StartsFromMentions(one.value.Mode) {
 			continue
 		}
-		var v conversationValue
-		if err := json.Unmarshal(s.Value, &v); err != nil {
-			continue
-		}
-		if v.Channel != channelName || !StartsFromMentions(v.Mode) {
-			continue
-		}
-		return v.ThreadContext, nil
+		return one.value.ThreadContext, nil
 	}
 	return false, nil
 }

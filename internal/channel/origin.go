@@ -2,7 +2,6 @@ package channel
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 )
@@ -86,29 +85,24 @@ func (c *Configured) Resolve(ctx context.Context, channel, id string) (Mapped, e
 		return Mapped{}, fmt.Errorf("channel: list conversations: %w", err)
 	}
 
+	// Collected by connection and id, which is one question and not two: the
+	// key carries both, and a row from before it did is named by the id alone
+	// — exactly the row that could belong to somewhere else.
+	//
+	// The scope is the row's own. Nothing inside the value decides it: that is
+	// administrative, and not something a conversation's configuration may
+	// widen.
 	var found []Mapped
-	for _, s := range stored {
-		if s.Name != id || !s.Enabled {
-			continue
-		}
-		// The row is read for the connection it belongs to. Its contents do
-		// not decide the scope: the scope is the row's own, which is
-		// administrative and not something a conversation's configuration can
-		// widen.
-		var v conversationValue
-		if err := json.Unmarshal(s.Value, &v); err != nil {
-			continue
-		}
-		if v.Channel != channel {
-			continue
-		}
-		// The stored value, not the normalised one. ConversationMode answers
+	for _, one := range conversationsNamed(stored, channel, id) {
+		// The mode as stored, not the normalised one. ConversationMode answers
 		// anything it does not recognise with "mentions", which is the right
 		// answer for a screen and the opposite of the right answer for
 		// deciding who may start work: a row written by a newer version and
 		// restored here would come back as a conversation anybody can start
 		// runs from by typing in it.
-		found = append(found, Mapped{Scope: s.Scope, Agent: v.Agent, Mode: v.Mode})
+		found = append(found, Mapped{
+			Scope: one.scope, Agent: one.value.Agent, Mode: one.value.Mode,
+		})
 	}
 
 	switch len(found) {
