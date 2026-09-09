@@ -85,6 +85,20 @@ because the alternative is a caller asking about an empty id and being handed
 the broken row as that person's address.
 */
 func reachable(s settings.Setting, channelName string) (account string, who domain.UserID, ok bool) {
+	// One position, and it is the one authority reads. PrincipalFor resolves
+	// an arriving account by an exact key at the installation scope, so that
+	// is where a binding means anything — and the settings key includes the
+	// scope, so a row for the same channel and account can also sit at a
+	// company or an area. Listing a kind returns every one of them.
+	//
+	// Accepted, such a row addresses a message by a mapping the inbound side
+	// will never honour: an area row saying U123 is Ana, beside the
+	// installation row saying U123 is Bruno, sends Ana's approval to Bruno's
+	// Slack. It grants nothing — the button resolves Bruno and the Gate checks
+	// Bruno — after showing Bruno the run, the area and the action.
+	if s.ScopeKind != settings.ScopeInstallation || s.Scope != (domain.Scope{}) {
+		return "", "", false
+	}
 	if !s.Enabled {
 		return "", "", false
 	}
@@ -95,5 +109,12 @@ func reachable(s settings.Setting, channelName string) (account string, who doma
 	if keyChannel(s.Name) != channelName {
 		return "", "", false
 	}
-	return keyAccount(s.Name), id.Principal, true
+	// A key with no account names a person and not a place. Answered as
+	// reachable, it hands the next stage the empty conversation the delivery
+	// table refuses outright — a message attempted against nothing, and a
+	// recipient the sweep believes it has told.
+	if account = keyAccount(s.Name); account == "" {
+		return "", "", false
+	}
+	return account, id.Principal, true
 }

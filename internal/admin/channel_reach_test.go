@@ -216,3 +216,101 @@ func bind(t *testing.T, channels *admin.Channels, channelName, account, principa
 		t.Fatalf("BindIdentity %s/%s: %v", channelName, account, err)
 	}
 }
+
+/*
+A binding lives at one position, and reach reads the same one authority does.
+
+PrincipalFor resolves an arriving account by an exact key at the installation
+scope, so that is where a binding means anything. Nothing stopped a row for the
+same channel and account existing at a company or an area — the settings key
+includes the scope, so the two are different rows — and listing a kind returns
+every scope of it.
+
+Read without the position, an area row mapping U123 to Ana sits beside the
+installation row mapping U123 to Bruno. Ana's approval is then addressed to
+U123, which is Bruno's Slack. It grants nothing: the button resolves Bruno and
+the Gate checks Bruno. It has already shown Bruno the run, the agent, the area
+and the action somebody wanted approved.
+*/
+func TestAccountsOn_aBindingOutsideTheInstallationScope_cannotAddress(t *testing.T) {
+	channels, store := boundChannels(t)
+	ctx := context.Background()
+
+	// The row authority reads: this account is Bruno.
+	bind(t, channels, "acme-slack", "U123", "usr_bruno")
+	// A row at an area claiming the same account is Ana. Only a restore or a
+	// hand-edited row puts one here; BindIdentity writes installation-wide.
+	if err := store.Put(ctx, settings.Setting{
+		ScopeKind: settings.ScopeArea,
+		Scope:     domain.Scope{Company: "acme", Area: "ops"},
+		Kind:      admin.KindChannelIdentity,
+		Name:      "acme-slack/U123",
+		Value: []byte(
+			`{"channel":"acme-slack","account":"U123","principal":"usr_ana"}`),
+		Enabled: true, UpdatedBy: "restore",
+	}); err != nil {
+		t.Fatalf("write the area row: %v", err)
+	}
+
+	// And a row that says installation while carrying a company. The kind and
+	// the scope are separate columns, so nothing keeps them agreeing, and
+	// PrincipalFor looks at an exact position rather than at the kind alone.
+	if err := store.Put(ctx, settings.Setting{
+		ScopeKind: settings.ScopeInstallation,
+		Scope:     domain.Scope{Company: "acme"},
+		Kind:      admin.KindChannelIdentity,
+		Name:      "acme-slack/U123",
+		Value: []byte(
+			`{"channel":"acme-slack","account":"U123","principal":"usr_carla"}`),
+		Enabled: true, UpdatedBy: "restore",
+	}); err != nil {
+		t.Fatalf("write the mislabelled row: %v", err)
+	}
+
+	where, err := channels.AccountsOn(ctx, "acme-slack",
+		[]domain.UserID{"usr_ana", "usr_bruno", "usr_carla"})
+	if err != nil {
+		t.Fatalf("AccountsOn: %v", err)
+	}
+	for _, stranger := range []domain.UserID{"usr_ana", "usr_carla"} {
+		if account, ok := where[stranger]; ok {
+			t.Errorf("%s is reachable at %q, which is somebody else's account",
+				stranger, account)
+		}
+	}
+	if where["usr_bruno"] != "U123" {
+		t.Errorf("where = %v, want the installation binding to still address", where)
+	}
+}
+
+/*
+A key naming no account addresses nobody.
+
+`acme-slack/` parses, is enabled, and names a principal; only the half that
+says where to send is missing. Answered as reachable, it hands the next stage
+the empty conversation the delivery table now refuses outright — a message
+attempted against nothing, and a recipient the sweep believes it has told.
+*/
+func TestAccountsOn_aKeyNamingNoAccount_isNotReachable(t *testing.T) {
+	channels, store := boundChannels(t)
+	ctx := context.Background()
+
+	if err := store.Put(ctx, settings.Setting{
+		ScopeKind: settings.ScopeInstallation,
+		Kind:      admin.KindChannelIdentity,
+		Name:      "acme-slack/",
+		Value: []byte(
+			`{"channel":"acme-slack","account":"","principal":"usr_ana"}`),
+		Enabled: true, UpdatedBy: "restore",
+	}); err != nil {
+		t.Fatalf("write the malformed row: %v", err)
+	}
+
+	where, err := channels.AccountsOn(ctx, "acme-slack", []domain.UserID{"usr_ana"})
+	if err != nil {
+		t.Fatalf("AccountsOn: %v", err)
+	}
+	if account, ok := where["usr_ana"]; ok {
+		t.Errorf("reachable at %q, want a key naming no account to reach nobody", account)
+	}
+}
