@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/fuseone/agents/internal/admin"
+	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/channel/connect"
-	"github.com/fuseone/agents/internal/settings"
 	"github.com/fuseone/agents/internal/worker"
 )
 
@@ -27,16 +27,20 @@ const channelSweep = 30 * time.Second
 // rather than offering a button, because a button would promise an inbound
 // surface that does not exist yet.
 func reportToChannels(
-	ctx context.Context, store *settings.Store, deliveries *channel.Postgres,
-	baseURL string, metrics *worker.MetricsRegistry,
+	ctx context.Context, p *workerParts, baseURL string, metrics *worker.MetricsRegistry,
 ) {
+	store, deliveries := p.settings, channel.NewPostgres(p.configPool)
 	reporter := channel.NewReporter(
 		deliveries,
 		channel.NewConfigured(store),
 		channel.NewRouter(connect.New(store)),
 		time.Now,
 		slog.Default(),
-	).WithDeliveries(deliveries).WithBaseURL(baseURL)
+	).WithDeliveries(deliveries).WithBaseURL(baseURL).
+		// Who may decide, and where to reach them. Both are read once per
+		// sweep and neither grants anything: the button is checked by the
+		// console's own path wherever it is pressed.
+		WithDirectApprovals(auth.NewPostgres(p.configPool), admin.NewChannels(p.configPool, store))
 
 	ticker := time.NewTicker(channelSweep)
 	defer ticker.Stop()

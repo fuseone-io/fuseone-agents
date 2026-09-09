@@ -492,6 +492,10 @@ type recorder struct {
 	attempts int
 	fail     error
 	failFor  string
+	// failWith is what failFor refuses with, when the reason matters. The
+	// direct path treats a refusal nothing can fix differently from one
+	// another sweep could survive.
+	failWith error
 }
 
 func (r *recorder) Post(_ context.Context, c channel.Conversation, m channel.Message) (string, error) {
@@ -500,6 +504,9 @@ func (r *recorder) Post(_ context.Context, c channel.Conversation, m channel.Mes
 		return "", r.fail
 	}
 	if r.failFor != "" && c.ID == r.failFor {
+		if r.failWith != nil {
+			return "", r.failWith
+		}
 		return "", errors.New("not in channel")
 	}
 	r.sent = append(r.sent, sent{conversation: c, message: m})

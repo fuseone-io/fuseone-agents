@@ -26,6 +26,8 @@ type Reporter struct {
 	conversations Conversations
 	poster        Poster
 	deliveries    Deliveries
+	approvers     Approvers
+	accounts      Accounts
 	clock         func() time.Time
 	baseURL       string
 	log           *slog.Logger
@@ -50,6 +52,25 @@ func NewReporter(
 		poster: poster, clock: clock, log: log,
 		deliveries: noDeliveries{},
 	}
+}
+
+/*
+WithDirectApprovals lets a conversation also tell the people who may decide.
+
+Optional because most of this platform's outbound path has nothing to do with
+approvals, and a reporter without it simply never sends a private message —
+which is what an installation that has not opted in gets anyway.
+*/
+func (r *Reporter) WithDirectApprovals(who Approvers, where Accounts) *Reporter {
+	r.approvers, r.accounts = who, where
+	return r
+}
+
+// WithConversations replaces where announcements go. Used by tests that need a
+// shape the default map does not describe.
+func (r *Reporter) WithConversations(c Conversations) *Reporter {
+	r.conversations = c
+	return r
 }
 
 // WithDeliveries records what has been said. Without it nothing is remembered
@@ -78,9 +99,14 @@ func (r *Reporter) Sweep(ctx context.Context, limit int) (int, error) {
 		return 0, fmt.Errorf("channel: read what is unreported: %w", err)
 	}
 
+	// One fan-out for the pass. Who may decide and where they are reachable
+	// are asked once and remembered: both are configuration, and re-reading
+	// them between reports would let the set of people one sweep messages
+	// change halfway through the sweep.
+	pass := r.newFanout()
 	sent, failures := 0, []error{}
 	for _, report := range pending {
-		n, told, err := r.announce(ctx, report)
+		n, told, err := r.announce(ctx, pass, report)
 		sent += n
 		if err != nil {
 			// Left unreported on purpose. The next sweep tries the
@@ -109,7 +135,9 @@ func (r *Reporter) Sweep(ctx context.Context, limit int) (int, error) {
 // It answers how many messages left and how many conversations were owed one
 // at all — which are different questions. Nothing sent because everybody had
 // already heard is finished; nothing sent because nobody was listening is not.
-func (r *Reporter) announce(ctx context.Context, report Report) (sent, told int, err error) {
+func (r *Reporter) announce(
+	ctx context.Context, pass *fanout, report Report,
+) (sent, told int, err error) {
 	places, err := r.conversations.For(ctx, report.Scope)
 	if err != nil {
 		err = WrapError(
@@ -133,11 +161,24 @@ func (r *Reporter) announce(ctx context.Context, report Report) (sent, told int,
 		if err != nil {
 			failures = append(failures, err)
 			deliveryFailures = append(deliveryFailures, r.failuresFor(report, place, err)...)
+			// The room comes first, and a private message never stands in for
+			// it. A conversation that could not be told is retried; answering
+			// it with a direct message meanwhile would put the run in front of
+			// one person and nobody else.
 			continue
 		}
 		if posted {
 			sent++
 		}
+
+		privately, refused := r.direct(ctx, pass, report, place)
+		sent += privately
+		// Only a failure another sweep could survive holds the run open.
+		// Anything else is recorded and left, or an installation that never
+		// granted the app permission to open a direct message would keep every
+		// parked run unreported for a day.
+		failures = append(failures, refused.blocking...)
+		deliveryFailures = append(deliveryFailures, refused.recorded...)
 	}
 	if err := r.recordFailures(ctx, deliveryFailures); err != nil {
 		failures = append(failures, err)

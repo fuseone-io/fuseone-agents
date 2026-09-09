@@ -24,6 +24,10 @@ const (
 	CodeConversationUnavailable = "channel_conversation_unavailable"
 	CodeMissingScope            = "channel_missing_scope"
 	CodeRateLimited             = "channel_rate_limited"
+	// CodeTooManyRecipients means an approval reached more people who may
+	// decide it than one announcement should ever be sent to, so it was sent
+	// to none of them privately and the conversation heard alone.
+	CodeTooManyRecipients = "channel_too_many_recipients"
 )
 
 var (
@@ -49,6 +53,7 @@ var (
 		CodeConversationUnavailable: true,
 		CodeMissingScope:            true,
 		CodeRateLimited:             true,
+		CodeTooManyRecipients:       true,
 	}
 )
 

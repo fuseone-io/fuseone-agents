@@ -9,7 +9,6 @@ import (
 	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/autonomy"
 	"github.com/fuseone/agents/internal/budget"
-	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/finops"
 	"github.com/fuseone/agents/internal/ledger"
@@ -51,7 +50,7 @@ func (p *workerParts) startLoops(
 
 	// What the people waiting on a run get told (NT-005 stage 1).
 	if p.settings != nil {
-		go reportToChannels(ctx, p.settings, channel.NewPostgres(p.configPool), cfg.baseURL, metrics)
+		go reportToChannels(ctx, p, cfg.baseURL, metrics)
 		go watchPolicyRefusals(ctx, p.settings, p.configPool, cfg.baseURL, cfg.owner+"-gate-refusals")
 	}
 
