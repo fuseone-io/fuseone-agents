@@ -129,16 +129,22 @@ func (s *Server) PutChannel(
 		},
 		By: caller, Governs: ungoverned == nil,
 	})
-	if errors.Is(err, admin.ErrInstallationAuthority) {
+	switch {
+	case errors.Is(err, admin.ErrInstallationAuthority):
 		return openapi.PutChannel403ApplicationProblemPlusJSONResponse{
 			ForbiddenApplicationProblemPlusJSONResponse: *ungoverned,
 		}, nil
-	}
-	if err != nil {
+	case admin.Invalid(err):
 		return openapi.PutChannel400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
 				invalid(err.Error())),
 		}, nil
+	case err != nil:
+		// Not the request's fault, so not the request's problem to fix. A lock
+		// that could not be taken or a vault that would not open is a failure,
+		// and dressing it as a refusal sends somebody to correct a field that
+		// was right.
+		return nil, fmt.Errorf("configure channel: %w", err)
 	}
 	return openapi.PutChannel204Response{}, nil
 }
@@ -255,11 +261,14 @@ func (s *Server) PutConversation(
 		Wants:           wantsOf(req.Body.Wants),
 		Enabled:         orDefault(req.Body.Enabled, true),
 	}, caller)
-	if err != nil {
+	switch {
+	case admin.Invalid(err):
 		return openapi.PutConversation400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
 				invalid(err.Error())),
 		}, nil
+	case err != nil:
+		return nil, fmt.Errorf("configure conversation: %w", err)
 	}
 	return openapi.PutConversation204Response{}, nil
 }

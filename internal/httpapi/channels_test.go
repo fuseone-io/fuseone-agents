@@ -192,6 +192,90 @@ func TestPutChannel_byWhoGovernsTheInstallation_saysSo(t *testing.T) {
 	}
 }
 
+/*
+A failure is not a refusal.
+
+Everything that was not one named sentinel became "bad request", so a lock that
+could not be taken, a database that was away or a vault that would not open came
+back as 400 — sending somebody to fix a field that was never wrong, with the
+operational text in the reply.
+*/
+func TestPutChannel_theStoreFails_isReportedRatherThanCalledInvalid(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{refuse: errors.New("configuration store unavailable")}
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, nil)
+
+	resp, err := s.PutChannel(asInstallation(domain.RoleAdmin), openapi.PutChannelRequestObject{
+		Name: "acme-slack", Body: &openapi.PutChannelJSONRequestBody{Kind: "slack"},
+	})
+	if err == nil {
+		t.Fatalf("response = %T, want the failure reported", resp)
+	}
+}
+
+// And a configuration the caller really did get wrong still says so.
+func TestPutChannel_aConfigurationTheCallerGotWrong_isABadRequest(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{refuse: admin.ErrNoChannelKind}
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, nil)
+
+	resp, err := s.PutChannel(asInstallation(domain.RoleAdmin), openapi.PutChannelRequestObject{
+		Name: "acme-slack", Body: &openapi.PutChannelJSONRequestBody{Kind: "slack"},
+	})
+	if err != nil {
+		t.Fatalf("PutChannel: %v", err)
+	}
+	if _, ok := resp.(openapi.PutChannel400ApplicationProblemPlusJSONResponse); !ok {
+		t.Fatalf("response = %T, want bad request", resp)
+	}
+}
+
+func TestPutConversation_theStoreFails_isReportedRatherThanCalledInvalid(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{refuse: errors.New("configuration store unavailable")}
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, nil)
+
+	if _, err := s.PutConversation(as(domain.RoleCurator), watchConversation("usr_ana")); err == nil {
+		t.Fatal("a store failure was answered as a bad request")
+	}
+}
+
+/*
+A mode this version does not know crosses the boundary as it is stored.
+
+The administration keeps it and the console refuses to draw it, and between
+them is the reply that used to normalise: read as "mentions" there, an
+unrelated edit saved from that reading turned a room that starts nothing into
+one anybody can start runs from. Each end was held by its own test and the
+seam between them by none.
+*/
+func TestListChannels_aModeThisVersionDoesNotKnow_travelsAsItIsStored(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{listed: []admin.Channel{{
+		Name: "acme-slack",
+		Conversations: []admin.Conversation{{
+			ID: "C07", Mode: "a-future-mode",
+			Scope: domain.Scope{Company: "acme", Area: "ops"},
+		}},
+	}}}
+	s := NewServer(ledger.NewMemory(), "test").
+		WithChannels(spy, nil).
+		WithChannelListing(&listerSpy{kinds: []string{"slack"}})
+
+	resp, err := s.ListChannels(as(domain.RoleCurator), openapi.ListChannelsRequestObject{})
+	if err != nil {
+		t.Fatalf("ListChannels: %v", err)
+	}
+	page, ok := resp.(openapi.ListChannels200JSONResponse)
+	if !ok {
+		t.Fatalf("response = %T", resp)
+	}
+	got := page.Items[0].Conversations[0].Mode
+	if got == nil || *got != "a-future-mode" {
+		t.Fatalf("mode = %v, want the stored value", got)
+	}
+}
+
 type channelSpy struct {
 	listed       []admin.Channel
 	bound        []admin.ChannelIdentity
@@ -231,7 +315,7 @@ func (c *channelSpy) PutConversation(
 	_ context.Context, _ string, conv admin.Conversation, _ domain.UserID,
 ) error {
 	c.putConv = conv
-	return nil
+	return c.refuse
 }
 
 func (c *channelSpy) DeleteConversation(

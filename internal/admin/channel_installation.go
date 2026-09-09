@@ -76,6 +76,31 @@ var ErrInstallationAuthority = errors.New(
 	"admin: that connection carries the room for the whole installation")
 
 /*
+Invalid answers whether an error is the request's fault.
+
+The alternative is what this replaced: everything that was not one named
+sentinel became "bad request", so a lock that could not be taken, a database
+that was away or a vault that would not open came back as a validation failure
+— sending somebody to fix a field that was never wrong, and putting operational
+text in a reply to a browser.
+
+A sentinel missing from this list answers false, and the caller reports a
+failure rather than a refusal. That is the safe way round: loud, and never a
+refusal somebody has no way to act on.
+*/
+func Invalid(err error) bool {
+	for _, sentinel := range []error{
+		ErrNoChannelKind, ErrNoCompany, ErrInstallationArea, ErrUnknownMode,
+		ErrNoWatchSource, ErrNoWatchAgent, ErrNoWatchRunAs, ErrConversationMapped,
+	} {
+		if errors.Is(err, sentinel) {
+			return true
+		}
+	}
+	return false
+}
+
+/*
 lockChannel serialises every write about one connection.
 
 The precondition and the write have to be one decision. Checked before the
