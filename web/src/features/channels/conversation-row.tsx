@@ -12,6 +12,7 @@ import {
   type Conversation,
   scopeText,
 } from "@/features/channels/channel-model";
+import { knownMode } from "@/features/channels/conversation-form-model";
 import { problemMessage } from "@/lib/api/problem-message";
 
 export function ConversationRow({
@@ -45,8 +46,12 @@ export function ConversationRow({
   // in a bound conversation starts that agent without naming it, so a listing
   // that hid the binding would hide the reason the channel behaves as it does.
   const agent = conversation.agent ? ` · ${conversation.agent}` : "";
-  const mode =
-    conversation.mode === "announce"
+  // A mode this console cannot name is printed as it is stored. Reading it as
+  // "mentions" would tell somebody the room starts runs, which is the one thing
+  // an unknown mode is guaranteed not to do.
+  const mode = !knownMode(conversation.mode)
+    ? conversation.mode
+    : conversation.mode === "announce"
       ? `${t("channels.modeAnnounce")}${direct}`
       : conversation.mode === "watch"
         ? `${t("channels.modeWatch")}${agent || " · -"}${direct}`

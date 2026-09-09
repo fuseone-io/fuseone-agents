@@ -305,7 +305,7 @@ func (c *channelSpy) UnbindIdentity(context.Context, string, string, domain.User
 }
 
 func watchConversation(runAs string) openapi.PutConversationRequestObject {
-	mode := openapi.PutConversationJSONBodyModeWatch
+	mode := openapi.Watch
 	sources := []string{"B-alerts"}
 	return openapi.PutConversationRequestObject{
 		Name: "acme-slack", Conversation: "C-alerts",
@@ -339,7 +339,7 @@ func TestPutConversation_mentionsModeCanIncludeThreadContext(t *testing.T) {
 	spy := &channelSpy{}
 	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, nil)
 	on := true
-	mode := openapi.PutConversationJSONBodyModeMentions
+	mode := openapi.Mentions
 
 	resp, err := s.PutConversation(as(domain.RoleCurator), openapi.PutConversationRequestObject{
 		Name: "acme-slack", Conversation: "C-alerts",
@@ -364,7 +364,7 @@ func TestPutConversation_bothModeKeepsMentionsAndWatchSettings(t *testing.T) {
 	spy := &channelSpy{}
 	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, nil)
 	on := true
-	mode := openapi.PutConversationJSONBodyModeBoth
+	mode := openapi.Both
 	sources := []string{"B-alerts"}
 
 	resp, err := s.PutConversation(as(domain.RoleCurator), openapi.PutConversationRequestObject{
@@ -713,7 +713,7 @@ func TestPutConversation_mentionsModeWithNoAgent_isStored(t *testing.T) {
 }
 
 func mentionsConversation(agent string) openapi.PutConversationRequestObject {
-	mode := openapi.PutConversationJSONBodyModeMentions
+	mode := openapi.Mentions
 	return openapi.PutConversationRequestObject{
 		Name: "acme-slack", Conversation: "C-alerts",
 		Body: &openapi.PutConversationJSONRequestBody{
@@ -807,7 +807,7 @@ func TestListChannels_theDirectApprovalChoice_reachesTheConsole(t *testing.T) {
 }
 
 func directApprovalConversation(on bool) openapi.PutConversationRequestObject {
-	mode := openapi.PutConversationJSONBodyModeMentions
+	mode := openapi.Mentions
 	wants := []openapi.PutConversationJSONBodyWants{
 		openapi.PutConversationJSONBodyWantsParked,
 	}

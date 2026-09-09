@@ -148,7 +148,11 @@ func conversationsOf(channelName string, stored []settings.Setting) []Conversati
 		}
 		out = append(out, Conversation{
 			ID: s.Name, Label: v.Label, Scope: s.Scope,
-			Mode:    channel.ConversationMode(v.Mode),
+			// As stored. Read through the display normalisation, a mode this
+			// version cannot name came back as "mentions", and saving any
+			// unrelated edit from that reading turned a room that started
+			// nothing into one anybody could start runs from by typing in it.
+			Mode:    channel.StoredMode(v.Mode),
 			Sources: compactStrings(v.Sources),
 			Agent:   domain.AgentID(v.Agent), RunAs: domain.UserID(v.RunAs),
 			ThreadContext:   v.ThreadContext,

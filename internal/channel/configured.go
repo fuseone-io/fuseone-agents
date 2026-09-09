@@ -130,6 +130,22 @@ func StartsFromWatch(mode string) bool {
 }
 
 /*
+StoredMode is the mode as configured, with the one translation that is defined.
+
+Empty means mentions — a conversation configured before modes existed — and
+nothing else is translated. A value this version cannot name travels intact:
+read as "mentions" it would come back through an edit as a room that starts
+runs, which is the same fail-open the runtime already refuses, arriving by the
+console instead of by the door.
+*/
+func StoredMode(mode string) string {
+	if mode == "" {
+		return ConversationMentions
+	}
+	return mode
+}
+
+/*
 KnownMode answers whether this version understands a stored mode at all.
 
 Asked on the way in, where the alternative is worse than at the read: an

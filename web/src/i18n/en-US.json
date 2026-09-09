@@ -836,6 +836,7 @@
     "modeBoth": "Mentions and watched messages",
     "modeAnnounce": "Only reports",
     "modeAnnounceExplains": "Nobody starts runs here: mentions are refused and no watched message triggers anything. The conversation only receives the announcements chosen above.",
+    "unknownMode": "This conversation is configured with a mode this console does not know ({{mode}}), most likely by a newer version. It stands as it is and starts nothing — editing here would rewrite it. Update the console to change it.",
     "modeBothExplains": "People can mention the bot, and configured Slack sources can also start the configured agent. Each path keeps its own authority.",
     "noWatchAgents": "No agent in this scope declares the Conversation trigger. Publish one with Governance → Triggers → Conversation.",
     "watchAgentExplains": "The Slack text never chooses the agent.",

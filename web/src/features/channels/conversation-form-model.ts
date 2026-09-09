@@ -25,6 +25,26 @@ export const INSTALLATION_SCOPE = "*/";
 // server rather than silently read as mentions.
 export type ConversationMode = "mentions" | "watch" | "both" | "announce";
 
+/*
+knownMode answers whether this console can draw a stored mode at all.
+
+A conversation configured by a newer version travels back as itself now, which
+is what stopped an unrelated edit from rewriting it as "mentions". The console
+has to do its half: a value it cannot draw is a value it must not offer to
+save.
+*/
+export function knownMode(
+  mode: string | undefined,
+): mode is ConversationMode | undefined {
+  return (
+    mode === undefined ||
+    mode === "mentions" ||
+    mode === "watch" ||
+    mode === "both" ||
+    mode === "announce"
+  );
+}
+
 export function splitSources(value: string) {
   return value
     .split(/[\n,]/)

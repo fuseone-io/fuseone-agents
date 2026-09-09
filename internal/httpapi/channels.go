@@ -508,7 +508,7 @@ func channelFrom(
 		if conv.Label != "" {
 			item.Label = ptr(conv.Label)
 		}
-		mode := openapi.ChannelConversationMode(channel.ConversationMode(conv.Mode))
+		mode := channel.StoredMode(conv.Mode)
 		item.Mode = &mode
 		if len(conv.Sources) > 0 {
 			item.Sources = &conv.Sources
@@ -533,7 +533,7 @@ func channelFrom(
 	return out
 }
 
-func conversationMode(mode *openapi.PutConversationJSONBodyMode) string {
+func conversationMode(mode *openapi.ConversationMode) string {
 	if mode == nil {
 		return channel.ConversationMentions
 	}

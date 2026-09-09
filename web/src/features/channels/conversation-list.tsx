@@ -38,10 +38,14 @@ export function ConversationList({
       <Table className="min-w-[840px] table-fixed">
         <TableHeader>
           <TableRow className="bg-muted/50 hover:bg-muted/50">
-            <TableHead className="w-[28%]">{t("channels.conversation")}</TableHead>
+            <TableHead className="w-[28%]">
+              {t("channels.conversation")}
+            </TableHead>
             <TableHead className="w-[30%]">{t("channels.sends")}</TableHead>
             <TableHead className="w-[17%]">{t("channels.listensTo")}</TableHead>
-            <TableHead className="w-[15%]">{t("channels.lastDelivery")}</TableHead>
+            <TableHead className="w-[15%]">
+              {t("channels.lastDelivery")}
+            </TableHead>
             <TableHead className="w-[10%] text-right">
               {t("common.actions")}
             </TableHead>

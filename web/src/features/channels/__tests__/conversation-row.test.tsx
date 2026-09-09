@@ -83,3 +83,14 @@ describe("a conversation for the whole installation", () => {
     expect(screen.getByText(/Só relata/)).toBeInTheDocument();
   });
 });
+
+// And the listing says what is stored rather than the nearest thing it knows.
+// "Menções" beside a mode nothing can name would claim the room starts runs,
+// which is the one thing an unknown mode is guaranteed not to do.
+describe("a mode this console does not know", () => {
+  it("is printed as it is stored", () => {
+    renderRow({ mode: "a-future-mode" });
+
+    expect(screen.getByText(/a-future-mode/)).toBeInTheDocument();
+  });
+});

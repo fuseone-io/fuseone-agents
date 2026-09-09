@@ -821,6 +821,41 @@ func TestPutConversation_atTheInstallationScope_storesNothingAboutStarting(t *te
 }
 
 /*
+And the administration hands it back as it is stored.
+
+Read through the display normalisation, a mode this version cannot name came
+back as "mentions" — and the console saving any unrelated edit from that reading
+wrote "mentions", turning a room that started nothing into one anybody could
+start runs from by typing in it. The runtime failing closed does not help: by
+then the row says mentions and means it.
+
+Empty is the one value that is translated, because empty is defined: it is a
+conversation configured before modes existed.
+*/
+func TestList_aModeThisVersionDoesNotKnow_isNotReadAsMentions(t *testing.T) {
+	_, channels, settingsStore := configuredChannelsWithStore(t)
+	scope := domain.Scope{Company: "acme", Area: "ops"}
+
+	// The listing walks connections and hangs conversations off them, so this
+	// one has to exist for the rows below to be visible at all.
+	if err := channels.PutChannel(t.Context(), admin.Channel{
+		Name: "acme-slack", Kind: "slack", Enabled: true,
+	}, channel.Credentials{}, "usr_ana"); err != nil {
+		t.Fatalf("PutChannel: %v", err)
+	}
+
+	conversationRow(t, settingsStore, "C55-future", settings.ScopeArea, scope, "a-future-mode")
+	conversationRow(t, settingsStore, "C56-legacy", settings.ScopeArea, scope, "")
+
+	if got := storedConversation(t, channels, "acme-slack", "C55-future"); got.Mode != "a-future-mode" {
+		t.Errorf("mode = %q, want the stored value", got.Mode)
+	}
+	if got := storedConversation(t, channels, "acme-slack", "C56-legacy"); got.Mode != channel.ConversationMentions {
+		t.Errorf("legacy mode = %q, want mentions", got.Mode)
+	}
+}
+
+/*
 A mode this version does not know is refused, not quietly rewritten.
 
 The write normalised too, and normalising here is worse than at the read: an

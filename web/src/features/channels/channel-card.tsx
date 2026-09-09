@@ -51,10 +51,17 @@ export function ChannelCard({
   const [open, setOpen] = useState(true);
   const [expanded, setExpanded] = useState(false);
   const inboundReady =
-    channel.deliveryMode === "socket" ? channel.hasAppToken : channel.hasSigning;
+    channel.deliveryMode === "socket"
+      ? channel.hasAppToken
+      : channel.hasSigning;
   const identities = channel.identities ?? [];
   const attention = channelNeedsAttention(channel);
-  const rows = filterConversations(channel.conversations, query, view, attention);
+  const rows = filterConversations(
+    channel.conversations,
+    query,
+    view,
+    attention,
+  );
   const visibleRows = expanded || query.trim() !== "" ? rows : rows.slice(0, 6);
   const hidden = rows.length - visibleRows.length;
   const health = channelHealth(channel);

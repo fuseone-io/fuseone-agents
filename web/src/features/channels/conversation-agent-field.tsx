@@ -47,7 +47,9 @@ export function ConversationAgentField({
 }) {
   const { t } = useTranslation();
   const agents = useAgentsForScope(scope);
-  const startable = (agents.data?.items ?? []).filter(startableFromConversation);
+  const startable = (agents.data?.items ?? []).filter(
+    startableFromConversation,
+  );
   const optional = mode === "mentions";
 
   return (

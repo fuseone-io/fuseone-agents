@@ -590,4 +590,20 @@ describe("conversation configuration", () => {
     await waitFor(() => expect(saved(requests)).toBeDefined());
     expect(saved(requests)).toMatchObject({ company: "*", mode: "announce" });
   });
+  /*
+   * A conversation this console cannot draw is not offered for editing.
+   *
+   * Its mode came from a newer version, and the platform keeps it: a mode
+   * nothing here can name starts nothing. The form would fill every field with
+   * this console's idea of the nearest value and write that back on save,
+   * which is how a room that started nothing becomes one anybody can start
+   * runs from by typing in it.
+   */
+  it("refuses to edit a conversation whose mode came from a newer version", async () => {
+    renderForm({ ...mentionsConversation, mode: "a-future-mode" });
+
+    expect(await screen.findByText(/a-future-mode/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Salvar" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Contexto" })).not.toBeInTheDocument();
+  });
 });

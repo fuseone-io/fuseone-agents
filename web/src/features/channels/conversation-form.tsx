@@ -13,6 +13,7 @@ import { useSaveConversation } from "@/features/channels/api";
 import { ConversationAgentField } from "@/features/channels/conversation-agent-field";
 import {
   conversationSchema,
+  knownMode,
   splitSources,
   startsFromMentions,
   startsFromWatch,
@@ -25,6 +26,7 @@ import {
   INSTALLATION_SCOPE,
 } from "@/features/channels/conversation-scope-field";
 import { ConversationThreadContextField } from "@/features/channels/conversation-thread-context-field";
+import { ConversationUnknownMode } from "@/features/channels/conversation-unknown-mode";
 import { ConversationWantsField } from "@/features/channels/conversation-wants-field";
 import { ConversationWatchFields } from "@/features/channels/conversation-watch-fields";
 import { problemMessage } from "@/lib/api/problem-message";
@@ -51,6 +53,11 @@ export function ConversationForm({
 }) {
   const { t } = useTranslation();
   const save = useSaveConversation();
+  // What is stored, which since it started travelling back as itself may be a
+  // value this console cannot draw. Narrowed here and refused below; the form
+  // never sees anything but a mode it knows.
+  const stored = conversation?.mode;
+  const startMode = knownMode(stored) ? (stored ?? "mentions") : "mentions";
 
   const form = useForm<ConversationValues>({
     resolver: zodResolver(conversationSchema),
@@ -60,7 +67,7 @@ export function ConversationForm({
         ? `${conversation.scope.company}/${conversation.scope.area ?? ""}`
         : "",
       label: conversation?.label ?? "",
-      mode: conversation?.mode ?? "mentions",
+      mode: startMode,
       threadContext: conversation?.threadContext ?? false,
       directApprovals: conversation?.directApprovals ?? false,
       sources: (conversation?.sources ?? []).join("\n"),
@@ -120,6 +127,12 @@ export function ConversationForm({
     } catch (error) {
       toast.error(problemMessage(error, t));
     }
+  }
+
+  // Before anything is drawn. A form filled with this console's idea of the
+  // nearest value is a form whose save rewrites the conversation.
+  if (!knownMode(stored)) {
+    return <ConversationUnknownMode mode={stored} onClose={onClose} />;
   }
 
   return (

@@ -3892,17 +3892,41 @@ export interface components {
             /** Format: date-time */
             lastSeen: string;
         };
+        /**
+         * @description What may start a run in a conversation.
+         *
+         *     `mentions` starts only when a person mentions the channel bot and names
+         *     an agent. `watch` starts one configured agent from ordinary messages
+         *     written by configured sources, under the configured principal. `both`
+         *     keeps the mention path and the watched-message path enabled together;
+         *     each keeps its own authority. `announce` starts nothing at all: the
+         *     conversation only reports what runs do, and it is the only mode a
+         *     conversation for the whole installation may have.
+         *
+         *     A closed set on the way in and deliberately not on the way out: a
+         *     client may only ask for a mode this version can honour, and a row
+         *     written by a newer version has to travel back as itself.
+         * @default mentions
+         * @enum {string}
+         */
+        ConversationMode: "mentions" | "watch" | "both" | "announce";
         ChannelConversation: {
             id: string;
             label?: string;
             scope: components["schemas"]["Scope"];
             /**
-             * @description How inbound Slack messages may start runs. Empty legacy rows read
-             *     as mentions. `announce` starts nothing, and is what a conversation
-             *     for the whole installation is stored as.
-             * @enum {string}
+             * @description How inbound Slack messages may start runs, as stored. Empty legacy
+             *     rows read as mentions. `announce` starts nothing, and is what a
+             *     conversation for the whole installation is stored as.
+             *
+             *     Deliberately not an enumeration, unlike the request: a row written
+             *     by a newer version travels back as itself rather than as the
+             *     nearest value this one knows. Reading it as "mentions" is how an
+             *     unrelated edit turned a room that started nothing into one anybody
+             *     could start runs from. A client that does not recognise the value
+             *     must not offer to save the conversation.
              */
-            mode?: "mentions" | "watch" | "both" | "announce";
+            mode?: string;
             /**
              * @description Whether a mention made inside an existing vendor thread includes
              *     earlier thread messages in the run input. The text remains
@@ -7713,20 +7737,7 @@ export interface operations {
                     area?: string;
                     /** @description What a person calls it, for the console and the logs. */
                     label?: string;
-                    /**
-                     * @description `mentions` starts only when a person mentions the channel
-                     *     bot and names an agent. `watch` starts one configured
-                     *     agent from ordinary messages written by configured
-                     *     sources, under the configured principal. `both` keeps the
-                     *     mention path and the watched-message path enabled together;
-                     *     each keeps its own authority. `announce` starts nothing at
-                     *     all: the conversation only reports what runs do, and it is
-                     *     the only mode a conversation for the whole installation may
-                     *     have.
-                     * @default mentions
-                     * @enum {string}
-                     */
-                    mode?: "mentions" | "watch" | "both" | "announce";
+                    mode?: components["schemas"]["ConversationMode"];
                     /**
                      * @description Slack user, bot or app ids allowed to trigger watched
                      *     messages. They filter the source; they never grant
