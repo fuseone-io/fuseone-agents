@@ -27,18 +27,6 @@ field" is a commit message.
 
 ## [0.45.0] — 2026-09-09
 
-### Upgrade notes
-
-- **While both versions are running, a conversation saved on the new one is
-  invisible to the old one.** Conversations are now stored under their
-  connection as well as their id, and the version before this reads the old name
-  and only the old name. Nothing is renamed up front for exactly that reason —
-  a migration doing it would take every conversation away from the pods still
-  serving — but a conversation *edited* during the rollout moves to the new name
-  in that act, and until the older pods are gone they will not find it. It
-  affects only conversations saved in that window, and it ends when the rollout
-  does.
-
 ### Added
 
 - **A conversation can speak for the whole installation.** Until now a run
@@ -75,18 +63,27 @@ field" is a commit message.
 
 ### Fixed
 
-- **The same conversation id on two connections no longer overwrites itself.**
-  A conversation was stored under the id the vendor gives it, with the
-  connection recorded only inside the row — so pointing the same id at the same
-  scope on a second workspace replaced the first, with no refusal and nothing in
-  the trail saying a conversation had been removed. Cards and approvals for that
-  workspace simply stopped. Vendor ids are per-workspace namespaces, which is
-  why the runtime has always resolved by connection *and* id; the storage was
-  the half that did not.
+- **The same conversation id on two connections no longer overwrites itself
+  in silence.** A conversation is stored under the id the vendor gives it, with
+  the connection recorded only inside the row — so pointing the same id at the
+  same scope on a second workspace replaced the first, with no refusal and
+  nothing in the trail saying a conversation had been removed. Cards and
+  approvals for that workspace simply stopped. It is refused now, naming the
+  connection that already holds it.
 
-  Nothing is renamed on upgrade. Conversations written before this keep their
-  old name and go on working, and each one moves to the new one the next time
-  it is saved. The reason is in the upgrade notes.
+  Storing it under the connection as well is the real fix and it is not this
+  release: nothing changes shape on upgrade, because both versions serve while
+  a rollout runs and a key that moved under the older one would take every
+  conversation away from it. This version learns to read the new shape so the
+  next one can write it. Until then, the same vendor id on two connections in
+  one scope is a configuration the platform declines rather than loses.
+
+- **Nothing inbound can be configured on a connection this version cannot
+  reach.** A connection whose delivery mode came from a newer version opens no
+  door here, so a mention or watch rule stored under it would do nothing — until
+  a version that recognises the mode read it and put it into force, with nobody
+  having decided anything in between. Such a connection's conversations may only
+  announce, and the console stops offering to add one.
 
 ### Changed
 

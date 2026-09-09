@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -30,6 +31,18 @@ not happen.
 // as configured, and the person who typed it is told nothing, for ever.
 var ErrUnknownEvent = errors.New(
 	"admin: that event is not one this version announces")
+
+/*
+ErrConnectionOnlyAnnounces means the connection this conversation is on is
+reached in a way this version cannot honour, so nothing may start from it.
+
+The runtime already opens no door there. What this stops is the configuration
+being written under it anyway: a mention rule stored today, and a later version
+that recognises the delivery mode putting it into force with nobody having
+decided anything.
+*/
+var ErrConnectionOnlyAnnounces = errors.New(
+	"admin: that connection is reached in a way this version does not know, so its conversations may only announce")
 
 // ErrInstallationArea means a conversation named the installation and an area.
 //
@@ -104,6 +117,7 @@ func Invalid(err error) bool {
 	for _, sentinel := range []error{
 		ErrNoChannelKind, ErrUnknownDeliveryMode, ErrNoCompany,
 		ErrInstallationArea, ErrUnknownMode, ErrUnknownEvent,
+		ErrConversationOnAnotherConnection, ErrConnectionOnlyAnnounces,
 		ErrNoWatchSource, ErrNoWatchAgent, ErrNoWatchRunAs, ErrConversationMapped,
 	} {
 		if errors.Is(err, sentinel) {
@@ -157,6 +171,40 @@ func (c *Channels) guardInstallationRoom(
 	for _, conv := range conversationsOf(name, stored) {
 		if conv.Scope.IsInstallation() {
 			return fmt.Errorf("%w: %s", ErrInstallationAuthority, name)
+		}
+	}
+	return nil
+}
+
+/*
+refuseUnreachableConnection stops an inbound rule being stored under a
+connection this version cannot reach.
+
+Read in the guard, under the connection's lock, so the delivery mode it checks
+is the one the write lands beside. A connection that does not exist yet is not
+a refusal: conversations are configured before the credential arrives, and that
+has always worked.
+*/
+func (c *Channels) refuseUnreachableConnection(
+	ctx context.Context, conn settings.DB, channelName, mode string,
+) error {
+	if !channel.StartsFromMentions(mode) && !channel.StartsFromWatch(mode) {
+		return nil
+	}
+	stored, err := c.settings.ListTx(ctx, conn, channel.KindChannel)
+	if err != nil {
+		return fmt.Errorf("admin: list channels: %w", err)
+	}
+	for _, one := range stored {
+		if one.Name != channelName {
+			continue
+		}
+		var v channel.Connection
+		if err := json.Unmarshal(one.Value, &v); err != nil {
+			continue
+		}
+		if !channel.KnownDeliveryMode(v.DeliveryMode) {
+			return fmt.Errorf("%w: %s", ErrConnectionOnlyAnnounces, channelName)
 		}
 	}
 	return nil

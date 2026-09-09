@@ -119,3 +119,45 @@ func TestPutConversation_gateRefusalByName_isRefused(t *testing.T) {
 		t.Fatalf("err = %v, want ErrUnknownEvent", err)
 	}
 }
+
+/*
+Nothing inbound may be configured on a connection this version cannot reach.
+
+The runtime opens no door there, so the rule would do nothing today — and that
+is the danger: stored now, a mention rule comes into force the day a version
+that recognises the delivery mode reads it, with nobody having decided anything
+in between. A room on such a connection may only announce.
+*/
+func TestPutConversation_onAConnectionThisVersionCannotReach_mayOnlyAnnounce(t *testing.T) {
+	pool := freshPool(t)
+	store := settings.NewStore(pool, testVault(t))
+	channels := admin.NewChannels(pool, store)
+	ctx := context.Background()
+
+	// Restored, migrated, or written by a newer version: the administration
+	// refuses to produce it, which is why this has to survive it.
+	if err := store.Put(ctx, settings.Setting{
+		ScopeKind: settings.ScopeInstallation, Scope: domain.Scope{},
+		Kind: channel.KindChannel, Name: "future-slack",
+		Value:   []byte(`{"kind":"slack","deliveryMode":"a-future-mode"}`),
+		Enabled: true, UpdatedBy: "restore",
+	}); err != nil {
+		t.Fatalf("write the connection: %v", err)
+	}
+
+	scope := domain.Scope{Company: "acme", Area: "ops"}
+	err := channels.PutConversation(ctx, "future-slack", admin.Conversation{
+		ID: "C-mentions", Enabled: true, Scope: scope, Wants: []string{"parked"},
+	}, "usr_ana")
+	if !errors.Is(err, admin.ErrConnectionOnlyAnnounces) {
+		t.Fatalf("err = %v, want ErrConnectionOnlyAnnounces", err)
+	}
+
+	// Announcing is what such a room is for, and it is still allowed.
+	if err := channels.PutConversation(ctx, "future-slack", admin.Conversation{
+		ID: "C-reports", Enabled: true, Scope: scope, Wants: []string{"parked"},
+		Mode: channel.ConversationAnnounce,
+	}, "usr_ana"); err != nil {
+		t.Fatalf("announcing was refused too: %v", err)
+	}
+}

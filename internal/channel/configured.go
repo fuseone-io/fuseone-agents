@@ -217,39 +217,69 @@ func startsSomething(mode string) bool {
 }
 
 /*
-ConversationKey is where a conversation is stored.
+Where a conversation is stored, and how a reader knows which shape it is in.
 
-The connection and the id together, because either alone is ambiguous: two
-workspaces are two namespaces, and an id naming a channel in one may name
-another somewhere else. Stored under the id alone, mapping the same id on a
-second connection in one scope replaced the first — silently, because the write
-that did it looked like an ordinary configuration.
+A conversation belongs to a connection, and the key said only the id: two
+workspaces are two namespaces, so mapping the same id at one scope on a second
+connection replaced the first — silently, because the write that did it looked
+like an ordinary configuration.
 
-Length-prefixed, for the reason AskKey is: joined with a separator, a connection
-called "workspace" holding "team/C" and one called "workspace/team" holding "C"
-produce the same key, and the second write is the first one's grave. Both are
-names somebody typed or a vendor chose, so neither can be promised free of the
-separator. The length cannot be forged by punctuation.
+Moving the key is a two-release act, and this is the first half: **this version
+reads both shapes and writes the old one.** The chart applies migrations before
+the rollout and both versions serve during it, so a version that wrote the new
+shape would take conversations away from the pods still running — and those
+pods would write the old shape back, leaving two rows for one conversation,
+which is the ambiguity the read refuses. Permanently, long after the rollout
+ended. The collision itself is refused on the way in instead, which is what
+makes waiting affordable.
+
+The shape is declared by the row and never inferred from the name. A stored id
+may look like anything a vendor chose — a Teams conversation id begins with
+digits and a colon — so a reader deciding by appearance would take somebody's id
+apart and answer as a different conversation.
+*/
+
+// KeyVersionConnection is what a row carries once its name holds the connection
+// as well as the id. Absent — every row this version writes — means the name is
+// the id itself.
+const KeyVersionConnection = 2
+
+/*
+ConversationKey is the name a row of that version is stored under.
+
+Length-prefixed, for the reason AskKey is: joined with a separator alone, a
+connection called "workspace" holding "team/C" and one called "workspace/team"
+holding "C" produce the same string, and in one scope that is one row. Both
+halves are names somebody typed or a vendor chose, so neither can be promised
+free of the separator; a length cannot be forged by punctuation.
+
+Nothing writes it yet. It is here so the version after this one writes something
+this one already reads, and so the two agree on what it means before either
+depends on it.
 */
 func ConversationKey(channelName, id string) string {
 	return strconv.Itoa(len(channelName)) + ":" + channelName + "/" + id
 }
 
 /*
-ConversationID reads the id back out of a stored key.
+ConversationIDOf answers which conversation a stored row is for.
 
-Given the connection rather than parsed, so an id containing the separator comes
-back whole. A name that does not carry this connection's prefix is from before
-the key had one and is the id itself — which is also why the prefix is matched
-whole rather than sniffed: an old id that happens to begin with "11:acme-slack/"
-is an id, not a key, and only an exact match may take it apart.
+The row's own declared version decides, and the connection comes from the row
+rather than from the name. A row claiming the new shape without carrying it is
+illegible rather than read as something else: it is nobody's conversation, and
+guessing which one is how a configuration ends up governing a message it was
+never written for.
 */
-func ConversationID(channelName, name string) string {
-	prefix := strconv.Itoa(len(channelName)) + ":" + channelName + "/"
-	if id, found := strings.CutPrefix(name, prefix); found && id != "" {
-		return id
+func ConversationIDOf(keyVersion int, channelName, name string) (string, bool) {
+	if keyVersion < KeyVersionConnection {
+		return name, true
 	}
-	return name
+	prefix := strconv.Itoa(len(channelName)) + ":" + channelName + "/"
+	id, found := strings.CutPrefix(name, prefix)
+	if !found || id == "" {
+		return "", false
+	}
+	return id, true
 }
 
 // Source is who wrote a channel event as the vendor names it.
@@ -295,6 +325,9 @@ func (s Source) Matches(allowed []string) bool {
 type conversationValue struct {
 	Channel string `json:"channel"`
 	Label   string `json:"label,omitempty"`
+	// KeyVersion is the shape of the row's own name, declared rather than
+	// guessed. Absent means the name is the conversation id.
+	KeyVersion int `json:"keyVersion,omitempty"`
 	// Mode governs inbound starts. Wants governs outbound announcements; they
 	// are deliberately separate decisions.
 	Mode          string         `json:"mode,omitempty"`
@@ -334,8 +367,12 @@ func (c *Configured) For(ctx context.Context, scope domain.Scope) ([]Conversatio
 			// One malformed row must not silence every other conversation.
 			continue
 		}
+		id, legible := ConversationIDOf(v.KeyVersion, v.Channel, s.Name)
+		if !legible {
+			continue
+		}
 		out = append(out, Conversation{
-			Channel: v.Channel, ID: ConversationID(v.Channel, s.Name), Label: v.Label,
+			Channel: v.Channel, ID: id, Label: v.Label,
 			Agent: v.Agent, Wants: v.Wants,
 			DirectApprovals: v.DirectApprovals,
 		})
@@ -412,10 +449,12 @@ func conversationsNamed(
 			// still answers.
 			continue
 		}
-		// The connection first, then the id read out of the key it carries. A
-		// row from before it did is named by the id alone — exactly the row
-		// that could belong to another connection.
-		if v.Channel != channelName || ConversationID(v.Channel, s.Name) != id {
+		// The connection first, then the id the row says it is for.
+		if v.Channel != channelName {
+			continue
+		}
+		stored, legible := ConversationIDOf(v.KeyVersion, v.Channel, s.Name)
+		if !legible || stored != id {
 			continue
 		}
 		found = append(found, storedConversation{scope: s.Scope, value: v})

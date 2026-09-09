@@ -48,10 +48,10 @@ func TestStartsFromMentions_everyMode_saysWhetherAMessageMayStart(t *testing.T) 
 /*
 Two connections cannot produce one key.
 
-Joined with a separator, a connection called "workspace" holding "team/C" and
-one called "workspace/team" holding "C" are the same string — and in one scope
-that is one row, so the second write is the first one's grave. Both halves are
-names somebody typed or a vendor chose; neither can be promised free of the
+Joined with a separator alone, a connection called "workspace" holding "team/C"
+and one called "workspace/team" holding "C" are the same string — and in one
+scope that is one row, so the second write is the first one's grave. Both halves
+are names somebody typed or a vendor chose; neither can be promised free of the
 separator.
 */
 func TestConversationKey_partsThatShareASeparator_areStillTwoKeys(t *testing.T) {
@@ -62,34 +62,51 @@ func TestConversationKey_partsThatShareASeparator_areStillTwoKeys(t *testing.T) 
 	if first == second {
 		t.Fatalf("both connections key to %q", first)
 	}
-	// And each still says which conversation it is.
-	if got := channel.ConversationID("workspace", first); got != "team/C-SAME" {
-		t.Errorf("id = %q, want the whole id back", got)
-	}
-	if got := channel.ConversationID("workspace/team", second); got != "C-SAME" {
-		t.Errorf("id = %q, want the whole id back", got)
+	for _, one := range []struct{ channel, key, want string }{
+		{"workspace", first, "team/C-SAME"},
+		{"workspace/team", second, "C-SAME"},
+	} {
+		got, legible := channel.ConversationIDOf(
+			channel.KeyVersionConnection, one.channel, one.key)
+		if !legible || got != one.want {
+			t.Errorf("id of %q = %q (legible %v), want %q",
+				one.key, got, legible, one.want)
+		}
 	}
 }
 
 /*
-A row from before the key carried a connection is read as the id it is.
+Which shape a row is in is the row's own word, never its appearance.
 
-Its name has no prefix to strip. An id that merely looks like a key — one that
-happens to begin with this connection's prefix — is still an id, so the prefix
-is matched whole and never sniffed for.
+A stored id may look like anything a vendor chose — a Teams conversation id
+begins with digits and a colon — so a reader deciding by appearance would take
+somebody's id apart and answer as a different conversation. And a row claiming
+the new shape without carrying it is nobody's conversation rather than a guess.
 */
-func TestConversationID_aNameWithoutThisConnectionsPrefix_isTheIdItself(t *testing.T) {
+func TestConversationIDOf_theShapeIsDeclared_notInferred(t *testing.T) {
 	t.Parallel()
 
-	for _, one := range []struct{ channel, name, want string }{
-		{"acme-slack", "C07", "C07"},
-		{"acme-slack", "acme-slack/C07", "acme-slack/C07"},
-		{"acme-slack", "10:acme-slack/C07", "C07"},
-		{"acme-slack", "9:acme-slac/C07", "9:acme-slac/C07"},
+	for _, one := range []struct {
+		name       string
+		keyVersion int
+		channel    string
+		stored     string
+		want       string
+		legible    bool
+	}{
+		{"the name is the id", 0, "acme-slack", "C07", "C07", true},
+		{"an id that looks like a key is still an id", 0, "acme-slack",
+			"10:acme-slack/C07", "10:acme-slack/C07", true},
+		{"the new shape is taken apart", channel.KeyVersionConnection,
+			"acme-slack", "10:acme-slack/C07", "C07", true},
+		{"a row claiming a shape it does not carry is illegible",
+			channel.KeyVersionConnection, "acme-slack", "C07", "", false},
 	} {
-		if got := channel.ConversationID(one.channel, one.name); got != one.want {
-			t.Errorf("ConversationID(%q, %q) = %q, want %q",
-				one.channel, one.name, got, one.want)
-		}
+		t.Run(one.name, func(t *testing.T) {
+			got, legible := channel.ConversationIDOf(one.keyVersion, one.channel, one.stored)
+			if legible != one.legible || got != one.want {
+				t.Errorf("= %q, %v; want %q, %v", got, legible, one.want, one.legible)
+			}
+		})
 	}
 }

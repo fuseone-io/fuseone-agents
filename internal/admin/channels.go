@@ -161,6 +161,7 @@ func conversationRows(channelName string, stored []settings.Setting) []storedCon
 	for _, s := range stored {
 		var v struct {
 			Channel         string   `json:"channel"`
+			KeyVersion      int      `json:"keyVersion"`
 			Label           string   `json:"label"`
 			Mode            string   `json:"mode"`
 			Sources         []string `json:"sources"`
@@ -173,8 +174,15 @@ func conversationRows(channelName string, stored []settings.Setting) []storedCon
 		if err := json.Unmarshal(s.Value, &v); err != nil || v.Channel != channelName {
 			continue
 		}
+		id, legible := channel.ConversationIDOf(v.KeyVersion, v.Channel, s.Name)
+		if !legible {
+			// A row claiming a key shape it does not carry is nobody's
+			// conversation. Listing it under a guessed id is how somebody
+			// edits one configuration believing it is another.
+			continue
+		}
 		out = append(out, storedConversation{name: s.Name, conv: Conversation{
-			ID: channel.ConversationID(channelName, s.Name), Label: v.Label, Scope: s.Scope,
+			ID: id, Label: v.Label, Scope: s.Scope,
 			// As stored. Read through the display normalisation, a mode this
 			// version cannot name came back as "mentions", and saving any
 			// unrelated edit from that reading turned a room that started
@@ -400,27 +408,25 @@ func (c *Channels) PutConversation(
 		if err := lockChannel(ctx, conn, channelName); err != nil {
 			return err
 		}
+		if err := c.refuseUnreachableConnection(ctx, conn, channelName, mode); err != nil {
+			return err
+		}
 		return c.unmapped(ctx, conn, channelName, conv)
 	}
 	return writeGuarded(ctx, c.pool, c.settings, guard, folded{
 		by: by, scope: conv.Scope,
 		action: "channel.conversation.configured", target: conv.ID,
-		// The row this one replaces, if it is stored under the id alone. Two
-		// rows for one conversation is the ambiguity the read refuses, so the
-		// older shape goes in the same act rather than being left beside its
-		// replacement. Nothing is renamed ahead of time: a version before this
-		// one reads the old name and only the old name, and it is still
-		// serving while this one starts.
-		then: func(ctx context.Context, conn settings.DB) error {
-			return c.removeLegacyRow(ctx, conn, channelName, conv)
-		},
 		set: settings.Setting{
 			ScopeKind: conversationScopeKind(conv.Scope), Scope: conv.Scope,
 			Kind: channel.KindConversation,
-			// The connection and the id, because either alone is ambiguous:
-			// stored under the id, mapping the same one on a second connection
-			// in this scope replaced the first, silently.
-			Name:  channel.ConversationKey(channelName, conv.ID),
+			// Still the id alone. The connection joins the key one release
+			// after this one: writing it now would take the conversation away
+			// from the version still serving beside this one, and that version
+			// would write this name back — leaving two rows for one
+			// conversation, which is the ambiguity the read refuses, for good.
+			// The collision the new key exists to prevent is refused in the
+			// guard instead.
+			Name:  conv.ID,
 			Value: value, Enabled: conv.Enabled, UpdatedBy: string(by),
 		},
 		detail: map[string]any{
@@ -513,31 +519,6 @@ type ConversationRef struct {
 }
 
 /*
-removeLegacyRow deletes the same conversation stored under the id alone.
-
-Only when it belongs to this connection. A row named by the id alone may be
-somebody else's — that is the whole reason the key changed — and deleting it
-because the names collide would be this defect happening one more time, in the
-opposite direction.
-*/
-func (c *Channels) removeLegacyRow(
-	ctx context.Context, conn settings.DB, channelName string, conv Conversation,
-) error {
-	stored, err := c.settings.ListTx(ctx, conn, channel.KindConversation)
-	if err != nil {
-		return fmt.Errorf("admin: list conversations: %w", err)
-	}
-	for _, one := range conversationRows(channelName, stored) {
-		if one.name != conv.ID || one.conv.Scope != conv.Scope {
-			continue
-		}
-		return c.settings.DeleteTx(ctx, conn, conversationScopeKind(conv.Scope),
-			conv.Scope, channel.KindConversation, one.name)
-	}
-	return nil
-}
-
-/*
 DeleteConversation stops a scope's runs reporting to a place.
 
 The row is found before it is removed, and removed under the name it is
@@ -584,11 +565,28 @@ func (c *Channels) DeleteConversation(
 // scope on this connection.
 var ErrConversationMapped = errors.New("admin: that conversation already speaks for another scope")
 
-// unmapped refuses a conversation that already belongs to a different scope.
-//
-// The same scope is not a conflict: pointing a conversation at the scope it is
-// already pointed at is how somebody renames it or changes which events it
-// wants.
+// ErrConversationOnAnotherConnection means this scope already has a
+// conversation by that id, on a different connection. Until the key carries the
+// connection the two would be one row, and this write would replace it.
+var ErrConversationOnAnotherConnection = errors.New(
+	"admin: that conversation id is already configured on another connection in this scope")
+
+/*
+unmapped refuses a conversation that is already somebody else's.
+
+Two ways it can be. **Another scope on this connection:** an ask arriving in it
+would be governed by whichever row a query returned first, and nobody could
+answer "who could have asked for this". The same scope is not a conflict —
+pointing a conversation at the scope it already speaks for is how somebody
+renames it or changes which events it wants.
+
+**Another connection at this scope:** a conversation is stored under its id
+alone until the release after this one, so the two are one row, and the second
+write replaced the first with no refusal and nothing in the trail. Refused here
+rather than silently overwritten. It is a real restriction — the same vendor id
+on two workspaces in one scope is a thing somebody may legitimately want — and
+it lifts when the key carries the connection.
+*/
 func (c *Channels) unmapped(
 	ctx context.Context, conn settings.DB, channelName string, conv Conversation,
 ) error {
@@ -600,6 +598,18 @@ func (c *Channels) unmapped(
 		if one.ID == conv.ID && one.Scope != conv.Scope {
 			return fmt.Errorf("%w: %s speaks for %s", ErrConversationMapped, conv.ID, one.Scope)
 		}
+	}
+	for _, one := range existing {
+		if one.Name != conv.ID || one.Scope != conv.Scope {
+			continue
+		}
+		var v struct {
+			Channel string `json:"channel"`
+		}
+		if err := json.Unmarshal(one.Value, &v); err != nil || v.Channel == channelName {
+			continue
+		}
+		return fmt.Errorf("%w: %s is configured on %s", ErrConversationOnAnotherConnection, conv.ID, v.Channel)
 	}
 	return nil
 }

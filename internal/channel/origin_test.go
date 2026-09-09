@@ -675,81 +675,103 @@ func TestWatchFor_aModeThisVersionDoesNotKnow_answersNoRule(t *testing.T) {
 }
 
 /*
-The same conversation id on two connections is two conversations, in one scope.
+The same conversation id on two connections, in one scope, is refused.
 
-The existing test varied the area as well, so the scope alone told them apart
-and the row key never had to. It did not: a conversation was stored under its
-vendor id, and the connection lived in the value — so mapping C-SAME in one
-scope on a second workspace overwrote the first, and the first stopped
-resolving. No refusal, no trail of a removal, and cards and approvals for that
-workspace simply stopped.
+A conversation is stored under its id alone, so the two are one row: the second
+write replaced the first, with no refusal and nothing in the trail saying a
+conversation had been removed. Cards and approvals for that workspace simply
+stopped.
 
-Slack channel ids and Teams conversation ids are two namespaces, and nothing
-promises they never collide. Which is the whole reason this package resolves by
-connection and id — the storage was the half that did not.
+Refused rather than overwritten. It is a real restriction — vendor ids are
+per-workspace namespaces, and the same one on two workspaces is something
+somebody may legitimately want — and it lifts when the key carries the
+connection, one release after this. Until then, being told is the whole of the
+fix.
 */
-func TestResolve_theSameIdOnTwoConnectionsInOneScope_areTwoConversations(t *testing.T) {
+func TestPutConversation_theSameIdOnAnotherConnectionInOneScope_isRefused(t *testing.T) {
 	store, channels := configuredChannels(t)
 	scope := domain.Scope{Company: "acme", Area: "ops"}
 
-	for _, one := range []struct{ connection, agent string }{
-		{"workspace-a", "triagem"}, {"workspace-b", "cobranca"},
-	} {
+	if err := channels.PutConversation(t.Context(), "workspace-a", admin.Conversation{
+		ID: "C-SAME", Enabled: true, Scope: scope, Agent: "triagem",
+		Wants: []string{"parked"},
+	}, "usr_ana"); err != nil {
+		t.Fatalf("map the first: %v", err)
+	}
+
+	err := channels.PutConversation(t.Context(), "workspace-b", admin.Conversation{
+		ID: "C-SAME", Enabled: true, Scope: scope, Agent: "cobranca",
+		Wants: []string{"parked"},
+	}, "usr_ana")
+	if !errors.Is(err, admin.ErrConversationOnAnotherConnection) {
+		t.Fatalf("err = %v, want ErrConversationOnAnotherConnection", err)
+	}
+
+	// And the first is untouched, which is the thing that used to be lost.
+	got, err := store.Resolve(t.Context(), "workspace-a", "C-SAME")
+	if err != nil {
+		t.Fatalf("the first conversation stopped resolving: %v", err)
+	}
+	if got.Agent != "triagem" {
+		t.Errorf("agent = %q, want the first configuration intact", got.Agent)
+	}
+}
+
+// The same id on another connection in *another* scope is no collision: they
+// are two rows, and always were.
+func TestPutConversation_theSameIdOnAnotherConnectionElsewhere_isAllowed(t *testing.T) {
+	store, channels := configuredChannels(t)
+
+	for _, one := range []struct {
+		connection string
+		area       domain.AreaID
+		agent      domain.AgentID
+	}{{"workspace-a", "sales", "triagem"}, {"workspace-b", "billing", "cobranca"}} {
 		if err := channels.PutConversation(t.Context(), one.connection, admin.Conversation{
-			ID: "C-SAME", Enabled: true, Scope: scope,
-			Agent: domain.AgentID(one.agent), Wants: []string{"parked"},
+			ID: "C-ELSEWHERE", Enabled: true, Agent: one.agent,
+			Scope: domain.Scope{Company: "acme", Area: one.area},
+			Wants: []string{"parked"},
 		}, "usr_ana"); err != nil {
 			t.Fatalf("map %s: %v", one.connection, err)
 		}
-	}
-
-	for _, one := range []struct{ connection, agent string }{
-		{"workspace-a", "triagem"}, {"workspace-b", "cobranca"},
-	} {
-		got, err := store.Resolve(t.Context(), one.connection, "C-SAME")
+		got, err := store.Resolve(t.Context(), one.connection, "C-ELSEWHERE")
 		if err != nil {
 			t.Fatalf("resolve on %s: %v", one.connection, err)
 		}
-		if got.Agent != domain.AgentID(one.agent) {
-			t.Errorf("%s starts %q, want its own agent %q",
-				one.connection, got.Agent, one.agent)
+		if got.Agent != one.agent {
+			t.Errorf("%s starts %q, want its own agent", one.connection, got.Agent)
 		}
 	}
 }
 
 /*
-A conversation stored before the connection joined the key is still reachable.
+A row written the way the next version will write it is already readable.
 
-Nothing is renamed ahead of the rollout: the version before this one reads the
-old name and only the old name, and it is still serving while this one starts.
-So both shapes have to work — this one reads them, and an edit retires the old
-row in the same act rather than leaving two rows for one conversation, which is
-the ambiguity the read refuses.
+That is what makes moving the key affordable: the release after this one may put
+the connection into the name only if this one already understands it, because
+both are serving while the rollout runs. Written directly here, since nothing in
+this version produces one.
 */
-func TestPutConversation_aRowStoredUnderTheIdAlone_isReplacedRatherThanDoubled(t *testing.T) {
-	store, channels, settingsStore := configuredChannelsWithStore(t)
-	scope := domain.Scope{Company: "acme", Area: "legacy"}
+func TestResolve_aRowKeyedByConnectionAndId_resolves(t *testing.T) {
+	store, _, settingsStore := configuredChannelsWithStore(t)
+	scope := domain.Scope{Company: "acme", Area: "future"}
 
-	// The old shape, as a version before this one wrote it.
-	conversationRow(t, settingsStore, "C-OLD", settings.ScopeArea, scope,
-		channel.ConversationMentions)
-	if _, err := store.Resolve(t.Context(), "acme-slack", "C-OLD"); err != nil {
-		t.Fatalf("the old shape does not resolve: %v", err)
+	if err := settingsStore.Put(t.Context(), settings.Setting{
+		ScopeKind: settings.ScopeArea, Scope: scope,
+		Kind:    channel.KindConversation,
+		Name:    channel.ConversationKey("acme-slack", "C-NEXT"),
+		Value:   []byte(`{"channel":"acme-slack","keyVersion":2,"mode":"mentions","agent":"triagem"}`),
+		Enabled: true, UpdatedBy: "a newer version",
+	}); err != nil {
+		t.Fatalf("write the row: %v", err)
 	}
 
-	if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
-		ID: "C-OLD", Enabled: true, Scope: scope, Wants: []string{"parked"},
-		Agent: "cobranca",
-	}, "usr_ana"); err != nil {
-		t.Fatalf("PutConversation: %v", err)
-	}
-
-	got, err := store.Resolve(t.Context(), "acme-slack", "C-OLD")
+	got, err := store.Resolve(t.Context(), "acme-slack", "C-NEXT")
 	if err != nil {
-		t.Fatalf("resolve after the edit: %v", err)
+		t.Fatalf("Resolve: %v", err)
 	}
-	if got.Agent != "cobranca" {
-		t.Errorf("agent = %q, want the edit to be what answers", got.Agent)
+	if got.Agent != "triagem" || got.Scope != scope {
+		t.Errorf("resolved to %+v, want the row's own agent and scope", got)
 	}
 }
 
@@ -775,39 +797,6 @@ func TestDeleteConversation_aRowStoredUnderTheIdAlone_isRemoved(t *testing.T) {
 	if _, err := store.Resolve(t.Context(), "acme-slack", "C-OLDER"); !errors.Is(
 		err, channel.ErrNoConversation) {
 		t.Errorf("err = %v, want the conversation gone", err)
-	}
-}
-
-/*
-And removing one leaves the other.
-
-The delete is keyed the same way the write is, and the two disagreeing is how a
-removal reports success and removes somebody else's row — or nothing at all.
-*/
-func TestDeleteConversation_theSameIdOnAnotherConnection_isNotRemoved(t *testing.T) {
-	store, channels := configuredChannels(t)
-	scope := domain.Scope{Company: "acme", Area: "cx"}
-
-	for _, connection := range []string{"workspace-a", "workspace-b"} {
-		if err := channels.PutConversation(t.Context(), connection, admin.Conversation{
-			ID: "C-BOTH", Enabled: true, Scope: scope, Wants: []string{"parked"},
-		}, "usr_ana"); err != nil {
-			t.Fatalf("map %s: %v", connection, err)
-		}
-	}
-
-	if err := channels.DeleteConversation(t.Context(), admin.ConversationRef{
-		Channel: "workspace-a", ID: "C-BOTH", Scope: scope,
-	}, "usr_ana"); err != nil {
-		t.Fatalf("DeleteConversation: %v", err)
-	}
-
-	if _, err := store.Resolve(t.Context(), "workspace-a", "C-BOTH"); !errors.Is(
-		err, channel.ErrNoConversation) {
-		t.Errorf("err = %v, want the removed conversation gone", err)
-	}
-	if _, err := store.Resolve(t.Context(), "workspace-b", "C-BOTH"); err != nil {
-		t.Errorf("the other connection's conversation went with it: %v", err)
 	}
 }
 
