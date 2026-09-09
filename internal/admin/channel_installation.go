@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/domain"
@@ -201,13 +202,35 @@ func (c *Channels) refuseUnreachableConnection(
 		}
 		var v channel.Connection
 		if err := json.Unmarshal(one.Value, &v); err != nil {
-			continue
+			// Unreadable is unreachable. Skipped, it was the one shape that
+			// let an inbound rule through: a row this version cannot decode
+			// says nothing about what it is, least of all that it is safe.
+			return fmt.Errorf("%w: %s", ErrConnectionOnlyAnnounces, channelName)
 		}
-		if !channel.KnownDeliveryMode(v.DeliveryMode) {
+		if !channel.KnownDeliveryMode(v.DeliveryMode) || !c.canConnect(v.Kind) {
 			return fmt.Errorf("%w: %s", ErrConnectionOnlyAnnounces, channelName)
 		}
 	}
 	return nil
+}
+
+/*
+canConnect answers whether this binary has a driver for a vendor.
+
+Asked of the same table that builds the connection rather than restated here:
+two lists saying which vendors exist is one list letting an inbound rule be
+written for a vendor nothing can talk to — dormant, and in force the day
+somebody adds the driver.
+
+Unwired, it answers yes. The administration runs in processes that build no
+drivers at all, and refusing there would refuse every conversation on the
+strength of a question nobody asked.
+*/
+func (c *Channels) canConnect(kind string) bool {
+	if c.drivers == nil {
+		return true
+	}
+	return slices.Contains(c.drivers.Kinds(), kind)
 }
 
 // conversationScopeKind is where a conversation is stored.

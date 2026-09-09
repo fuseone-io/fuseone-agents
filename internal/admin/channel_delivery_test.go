@@ -161,3 +161,72 @@ func TestPutConversation_onAConnectionThisVersionCannotReach_mayOnlyAnnounce(t *
 		t.Fatalf("announcing was refused too: %v", err)
 	}
 }
+
+/*
+Unreadable is unreachable, and so is a vendor nothing here can talk to.
+
+Two shapes slipped through the first version of this guard. A connection whose
+value this binary cannot decode said nothing about itself — least of all that it
+was safe — and was skipped. And one naming a vendor with no driver was treated
+as reachable, though the runtime refuses to build it: an inbound rule written
+under it lies dormant and comes into force the day somebody adds the driver.
+*/
+func TestPutConversation_onAConnectionThatCannotBeBuilt_mayOnlyAnnounce(t *testing.T) {
+	for _, one := range []struct{ name, value string }{
+		{"unreadable-slack", `{"kind":"slack","deliveryMode":["http"]}`},
+		{"teams-someday", `{"kind":"teams","deliveryMode":"http"}`},
+	} {
+		t.Run(one.name, func(t *testing.T) {
+			pool := freshPool(t)
+			store := settings.NewStore(pool, testVault(t))
+			channels := admin.NewChannels(pool, store).WithDrivers(onlySlack{})
+			ctx := context.Background()
+
+			if err := store.Put(ctx, settings.Setting{
+				ScopeKind: settings.ScopeInstallation, Scope: domain.Scope{},
+				Kind: channel.KindChannel, Name: one.name,
+				Value:   []byte(one.value),
+				Enabled: true, UpdatedBy: "restore",
+			}); err != nil {
+				t.Fatalf("write the connection: %v", err)
+			}
+
+			err := channels.PutConversation(ctx, one.name, admin.Conversation{
+				ID: "C-mentions", Enabled: true, Wants: []string{"parked"},
+				Scope: domain.Scope{Company: "acme", Area: "ops"},
+			}, "usr_ana")
+			if !errors.Is(err, admin.ErrConnectionOnlyAnnounces) {
+				t.Fatalf("err = %v, want ErrConnectionOnlyAnnounces", err)
+			}
+		})
+	}
+}
+
+// And a vendor this binary does have stays configurable, which is the whole
+// point of asking the driver table rather than a list written here.
+func TestPutConversation_onAConnectionThatCanBeBuilt_isConfigured(t *testing.T) {
+	pool := freshPool(t)
+	store := settings.NewStore(pool, testVault(t))
+	channels := admin.NewChannels(pool, store).WithDrivers(onlySlack{})
+	ctx := context.Background()
+
+	if err := store.Put(ctx, settings.Setting{
+		ScopeKind: settings.ScopeInstallation, Scope: domain.Scope{},
+		Kind: channel.KindChannel, Name: "acme-slack",
+		Value:   []byte(`{"kind":"slack","deliveryMode":"http"}`),
+		Enabled: true, UpdatedBy: "usr_ana",
+	}); err != nil {
+		t.Fatalf("write the connection: %v", err)
+	}
+
+	if err := channels.PutConversation(ctx, "acme-slack", admin.Conversation{
+		ID: "C-mentions", Enabled: true, Wants: []string{"parked"},
+		Scope: domain.Scope{Company: "acme", Area: "ops"},
+	}, "usr_ana"); err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+}
+
+type onlySlack struct{}
+
+func (onlySlack) Kinds() []string { return []string{"slack"} }
