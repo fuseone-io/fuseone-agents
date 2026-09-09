@@ -129,6 +129,33 @@ func StartsFromWatch(mode string) bool {
 	return mode == ConversationWatch || mode == ConversationBoth
 }
 
+/*
+KnownMode answers whether this version understands a stored mode at all.
+
+Asked on the way in, where the alternative is worse than at the read: an
+operator editing on an older console would turn a room a newer version had set
+to start nothing into one that starts runs by mention, and the trail would
+record an ordinary edit. Empty is known — it is a conversation configured
+before modes existed.
+*/
+func KnownMode(mode string) bool {
+	switch mode {
+	case "", ConversationMentions, ConversationWatch,
+		ConversationBoth, ConversationAnnounce:
+		return true
+	}
+	return false
+}
+
+// startsSomething answers whether anything at all may start a run here.
+//
+// The union of the two allowlists rather than a third list, so a mode added to
+// one of them cannot be forgotten here — and a mode named in neither starts
+// nothing, whether it is "announce" or a value written by a newer version.
+func startsSomething(mode string) bool {
+	return StartsFromMentions(mode) || StartsFromWatch(mode)
+}
+
 // Source is who wrote a channel event as the vendor names it.
 //
 // It is not authority. Authority comes from a configured RunAs principal on a

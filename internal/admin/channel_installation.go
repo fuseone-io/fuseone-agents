@@ -28,6 +28,15 @@ not happen.
 // The two together reach nothing: containment short circuits on the sentinel
 // and requires the area to be empty, so the row announces to no scope at all
 // while looking configured — the quietest way to own a room that never speaks.
+// ErrUnknownMode means a conversation named a mode this version cannot honour.
+//
+// Refused rather than normalised. Read as "mentions" — which is what the
+// display normalisation answers for anything it does not recognise — a room a
+// newer version had set to start nothing would come back startable by anybody
+// who can type in it.
+var ErrUnknownMode = errors.New(
+	"admin: that conversation mode is not one this version knows")
+
 var ErrInstallationArea = errors.New(
 	"admin: the installation is the scope above every company and has no area")
 

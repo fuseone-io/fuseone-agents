@@ -265,6 +265,9 @@ func (c *Channels) PutConversation(
 	if conv.Scope.Company == domain.Installation && !conv.Scope.IsInstallation() {
 		return ErrInstallationArea
 	}
+	if !channel.KnownMode(conv.Mode) {
+		return fmt.Errorf("%w: %q", ErrUnknownMode, conv.Mode)
+	}
 	if conv.Scope.IsInstallation() {
 		conv, conv.Mode = announcesOnly(conv)
 	}

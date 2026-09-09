@@ -627,6 +627,49 @@ func TestWatchFor_aConversationForTheWholeInstallation_answersNoRule(t *testing.
 	}
 }
 
+/*
+A mode this version does not know starts nothing.
+
+The allowlist is right and it was being asked the wrong question: Resolve
+normalised the stored value first, and ConversationMode answers anything it
+does not recognise with "mentions" — which is the correct answer for a screen
+and the opposite of the correct answer for deciding who may start work. A row
+saying "a-future-mode", written by a newer version and restored here, came back
+as a conversation anybody could start runs from by typing in it.
+
+Empty is the one unknown value that legitimately means mentions, and it is
+named on its own. Everything else fails closed.
+*/
+func TestResolve_aModeThisVersionDoesNotKnow_startsNothing(t *testing.T) {
+	store, _, settingsStore := configuredChannelsWithStore(t)
+
+	conversationRow(t, settingsStore, "C43-future", settings.ScopeArea,
+		domain.Scope{Company: "acme", Area: "ops"}, "a-future-mode")
+
+	_, err := store.Resolve(t.Context(), "acme-slack", "C43-future")
+	if !errors.Is(err, channel.ErrAnnouncesOnly) {
+		t.Fatalf("err = %v, want ErrAnnouncesOnly", err)
+	}
+}
+
+// And it writes nothing down either. WatchFor reads the stored value for the
+// same reason, and is asked first.
+func TestWatchFor_aModeThisVersionDoesNotKnow_answersNoRule(t *testing.T) {
+	store, _, settingsStore := configuredChannelsWithStore(t)
+
+	conversationRow(t, settingsStore, "C44-future", settings.ScopeArea,
+		domain.Scope{Company: "acme", Area: "ops"}, "a-future-mode")
+
+	_, ok, err := store.WatchFor(t.Context(), "acme-slack", "C44-future",
+		channel.Source{Bot: "B-alerts"})
+	if err != nil {
+		t.Fatalf("WatchFor: %v", err)
+	}
+	if ok {
+		t.Error("a mode this version does not know answered with a watch rule")
+	}
+}
+
 // installationConversation writes a row the administration will not produce.
 // It arrives by restore, by migration, or from a version of the screen that did
 // not check — which is exactly what the locks on the read side are for.
@@ -746,6 +789,27 @@ func TestPutConversation_atTheInstallationScope_storesNothingAboutStarting(t *te
 		if !got.DirectApprovals {
 			t.Errorf("mode %q: the room stopped telling the people who may decide", mode)
 		}
+	}
+}
+
+/*
+A mode this version does not know is refused, not quietly rewritten.
+
+The write normalised too, and normalising here is worse than at the read: an
+operator editing a conversation on an older console would turn a room a newer
+version had set to start nothing into one that starts runs by mention, with the
+trail recording an ordinary edit. Empty stays mentions — that is a conversation
+configured before modes existed.
+*/
+func TestPutConversation_aModeThisVersionDoesNotKnow_isRefused(t *testing.T) {
+	_, channels := configuredChannels(t)
+
+	err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+		ID: "C53-future", Enabled: true, Mode: "a-future-mode",
+		Scope: domain.Scope{Company: "acme", Area: "ops"},
+	}, "usr_ana")
+	if !errors.Is(err, admin.ErrUnknownMode) {
+		t.Fatalf("err = %v, want ErrUnknownMode", err)
 	}
 }
 

@@ -102,9 +102,13 @@ func (c *Configured) Resolve(ctx context.Context, channel, id string) (Mapped, e
 		if v.Channel != channel {
 			continue
 		}
-		found = append(found, Mapped{
-			Scope: s.Scope, Agent: v.Agent, Mode: ConversationMode(v.Mode),
-		})
+		// The stored value, not the normalised one. ConversationMode answers
+		// anything it does not recognise with "mentions", which is the right
+		// answer for a screen and the opposite of the right answer for
+		// deciding who may start work: a row written by a newer version and
+		// restored here would come back as a conversation anybody can start
+		// runs from by typing in it.
+		found = append(found, Mapped{Scope: s.Scope, Agent: v.Agent, Mode: v.Mode})
 	}
 
 	switch len(found) {
@@ -114,7 +118,7 @@ func (c *Configured) Resolve(ctx context.Context, channel, id string) (Mapped, e
 		// After the count and not inside the search. Refusing while looking
 		// would answer "this one announces only" and hide the fact that two
 		// rows exist, sending an operator to the wrong one.
-		if found[0].Scope.IsInstallation() || found[0].Mode == ConversationAnnounce {
+		if found[0].Scope.IsInstallation() || !startsSomething(found[0].Mode) {
 			return Mapped{}, fmt.Errorf("%w: %s/%s", ErrAnnouncesOnly, channel, id)
 		}
 		return found[0], nil
