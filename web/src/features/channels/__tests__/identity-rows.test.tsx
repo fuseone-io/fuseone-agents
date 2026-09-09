@@ -50,13 +50,16 @@ describe("who can decide", () => {
   });
 
   it("uses a seen account as a form hint rather than a binding", () => {
-    show([], [
-      {
-        account: "U777",
-        conversation: "C-alerts",
-        lastSeen: "2026-08-19T12:00:00.000Z",
-      },
-    ]);
+    show(
+      [],
+      [
+        {
+          account: "U777",
+          conversation: "C-alerts",
+          lastSeen: "2026-08-19T12:00:00.000Z",
+        },
+      ],
+    );
 
     fireEvent.click(screen.getByRole("button", { name: /U777/i }));
 

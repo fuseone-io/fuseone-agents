@@ -16,6 +16,7 @@ import {
   channelHealth,
   channelNeedsAttention,
   filterConversations,
+  knownDelivery,
   type Channel,
   type ChannelView,
   type Conversation,
@@ -50,10 +51,14 @@ export function ChannelCard({
   const { t } = useTranslation();
   const [open, setOpen] = useState(true);
   const [expanded, setExpanded] = useState(false);
-  const inboundReady =
-    channel.deliveryMode === "socket"
+  // Only a mode this console can name has an inbound half it can describe. One
+  // it cannot is closed at the runtime, and the strip below offers binding
+  // people to a door that is shut.
+  const inboundReady = knownDelivery(channel.deliveryMode)
+    ? channel.deliveryMode === "socket"
       ? channel.hasAppToken
-      : channel.hasSigning;
+      : channel.hasSigning
+    : false;
   const identities = channel.identities ?? [];
   const attention = channelNeedsAttention(channel);
   const rows = filterConversations(
@@ -89,9 +94,11 @@ export function ChannelCard({
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <p className="truncate text-sm font-medium">{channel.name}</p>
             <Badge variant="outline" className="shrink-0">
-              {channel.deliveryMode === "socket"
-                ? t("channels.deliverySocket")
-                : t("channels.deliveryHttp")}
+              {!knownDelivery(channel.deliveryMode)
+                ? channel.deliveryMode
+                : channel.deliveryMode === "socket"
+                  ? t("channels.deliverySocket")
+                  : t("channels.deliveryHttp")}
             </Badge>
           </div>
           <p className="truncate text-xs text-muted-foreground">

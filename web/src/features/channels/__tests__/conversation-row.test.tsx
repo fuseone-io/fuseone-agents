@@ -12,15 +12,17 @@ function renderRow(conversation: Partial<Conversation>) {
         <TableBody>
           <ConversationRow
             channel="acme-slack"
-            conversation={{
-              id: "C-alerts",
-              label: "#alerts",
-              scope: { company: "acme", area: "devops" },
-              mode: "mentions",
-              wants: ["parked"],
-              enabled: true,
-              ...conversation,
-            } as Conversation}
+            conversation={
+              {
+                id: "C-alerts",
+                label: "#alerts",
+                scope: { company: "acme", area: "devops" },
+                mode: "mentions",
+                wants: ["parked"],
+                enabled: true,
+                ...conversation,
+              } as Conversation
+            }
             onEdit={() => {}}
           />
         </TableBody>

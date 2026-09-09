@@ -97,3 +97,28 @@ describe("channel card", () => {
     expect(screen.getByText("#approvals")).toBeInTheDocument();
   });
 });
+
+/*
+ * A delivery mode this console cannot name is not a healthy connection.
+ *
+ * The card read "anything that is not socket" as HTTP, so a connection a newer
+ * version configured showed as answering, with a strip offering to bind people
+ * to an inbound door the runtime has closed.
+ */
+describe("a delivery mode this console does not know", () => {
+  it("says what is stored and asks for attention", () => {
+    setLocale("en-US");
+    renderCard({
+      name: "acme-slack",
+      kind: "slack",
+      deliveryMode: "a-future-mode",
+      enabled: true,
+      hasCredential: true,
+      hasSigning: true,
+      conversations: [],
+    });
+
+    expect(screen.getByText("a-future-mode")).toBeInTheDocument();
+    expect(screen.queryByText(/answering/)).not.toBeInTheDocument();
+  });
+});

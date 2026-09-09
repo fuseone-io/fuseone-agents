@@ -18,6 +18,10 @@ export function knownDelivery(mode: string | undefined): mode is DeliveryMode {
 export type DeliveryMode = "http" | "socket";
 
 export function channelNeedsAttention(channel: Channel) {
+  // A way of being reached this console cannot name is configuration nobody
+  // here can act on. It is the first thing asked, because everything below
+  // reads the mode and would answer about the wrong one.
+  if (!knownDelivery(channel.deliveryMode)) return true;
   if (!channel.enabled || !channel.hasCredential) return true;
   if (channel.deliveryMode === "socket") return !channel.hasAppToken;
   return !channel.hasSigning;
@@ -27,6 +31,9 @@ export function channelHealth(channel: Channel): {
   key: string;
   tone: "ok" | "warn";
 } {
+  if (!knownDelivery(channel.deliveryMode)) {
+    return { key: "unknownDelivery", tone: "warn" };
+  }
   if (!channel.enabled) return { key: "disabled", tone: "warn" };
   if (!channel.hasCredential) return { key: "noCredential", tone: "warn" };
   if (channel.deliveryMode === "socket" && !channel.hasAppToken) {
