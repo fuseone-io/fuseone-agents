@@ -49,6 +49,14 @@ export function knownMode(
   );
 }
 
+// knownEvent answers whether this console can draw a stored event. Like the
+// modes: the value travels back as it is stored, so a conversation asking for
+// something a newer version announces is visible and not editable, rather than
+// quietly losing the subscription on the next save.
+export function knownEvent(event: string) {
+  return (EVENTS as readonly string[]).includes(event);
+}
+
 export function splitSources(value: string) {
   return value
     .split(/[\n,]/)

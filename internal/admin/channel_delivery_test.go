@@ -74,3 +74,48 @@ func TestList_aDeliveryModeThisVersionDoesNotKnow_isNotReadAsHTTP(t *testing.T) 
 		}
 	}
 }
+
+/*
+An event nothing announces is refused.
+
+The contract's enumeration is checked by the generated server and nowhere else,
+so anything reaching the administration another way was stored: a subscription
+to silence, which saves cleanly, shows as configured, and never tells anybody
+the thing whoever typed it thought they had asked for. The console then cannot
+draw it either — an unknown name is in no checkbox, and the form's own schema
+refuses to save the conversation at all.
+*/
+func TestPutConversation_anEventThisVersionDoesNotAnnounce_isRefused(t *testing.T) {
+	pool := freshPool(t)
+	channels := admin.NewChannels(pool, settings.NewStore(pool, testVault(t)))
+
+	err := channels.PutConversation(context.Background(), "acme-slack",
+		admin.Conversation{
+			ID: "C-quiet", Enabled: true,
+			Scope: domain.Scope{Company: "acme", Area: "ops"},
+			Wants: []string{"parked", "a-future-event"},
+		}, "usr_ana")
+	if !errors.Is(err, admin.ErrUnknownEvent) {
+		t.Fatalf("err = %v, want ErrUnknownEvent", err)
+	}
+	if !admin.Invalid(err) {
+		t.Error("the refusal is not reported as the request's fault")
+	}
+}
+
+// gate_refusal is not one either. It rides with failed rather than being
+// chosen, so asking for it by name asks for something the fan-out never reads.
+func TestPutConversation_gateRefusalByName_isRefused(t *testing.T) {
+	pool := freshPool(t)
+	channels := admin.NewChannels(pool, settings.NewStore(pool, testVault(t)))
+
+	err := channels.PutConversation(context.Background(), "acme-slack",
+		admin.Conversation{
+			ID: "C-gate", Enabled: true,
+			Scope: domain.Scope{Company: "acme", Area: "ops"},
+			Wants: []string{"gate_refusal"},
+		}, "usr_ana")
+	if !errors.Is(err, admin.ErrUnknownEvent) {
+		t.Fatalf("err = %v, want ErrUnknownEvent", err)
+	}
+}

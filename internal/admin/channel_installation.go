@@ -25,6 +25,12 @@ lock, on the way in, so the configuration never describes something that will
 not happen.
 */
 
+// ErrUnknownEvent means a conversation asked to hear about something this
+// version does not announce. A subscription to silence saves cleanly and shows
+// as configured, and the person who typed it is told nothing, for ever.
+var ErrUnknownEvent = errors.New(
+	"admin: that event is not one this version announces")
+
 // ErrInstallationArea means a conversation named the installation and an area.
 //
 // The two together reach nothing: containment short circuits on the sentinel
@@ -97,7 +103,7 @@ refusal somebody has no way to act on.
 func Invalid(err error) bool {
 	for _, sentinel := range []error{
 		ErrNoChannelKind, ErrUnknownDeliveryMode, ErrNoCompany,
-		ErrInstallationArea, ErrUnknownMode,
+		ErrInstallationArea, ErrUnknownMode, ErrUnknownEvent,
 		ErrNoWatchSource, ErrNoWatchAgent, ErrNoWatchRunAs, ErrConversationMapped,
 	} {
 		if errors.Is(err, sentinel) {

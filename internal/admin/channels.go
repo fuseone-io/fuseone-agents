@@ -330,6 +330,11 @@ func (c *Channels) PutConversation(
 	if !channel.KnownMode(conv.Mode) {
 		return fmt.Errorf("%w: %q", ErrUnknownMode, conv.Mode)
 	}
+	for _, want := range conv.Wants {
+		if !channel.KnownEvent(channel.Event(want)) {
+			return fmt.Errorf("%w: %q", ErrUnknownEvent, want)
+		}
+	}
 	// The scope is one reason a conversation starts nothing and the mode is
 	// the other, and both leave the same fields with nothing to do.
 	if conv.Scope.IsInstallation() || conv.Mode == channel.ConversationAnnounce {

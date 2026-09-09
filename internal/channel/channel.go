@@ -44,6 +44,25 @@ const (
 	EventDrifted Event = "drifted"
 )
 
+/*
+KnownEvent answers whether this version has a notice by that name.
+
+An allowlist, checked on the way in. A name nothing announces is a subscription
+to silence: it saves cleanly, shows as configured, and the conversation is never
+told the thing whoever typed it thought they had asked for.
+
+gate_refusal is deliberately absent. It rides with failed rather than being
+chosen, so a conversation asking for it by name is asking for something the
+fan-out does not offer.
+*/
+func KnownEvent(e Event) bool {
+	switch e {
+	case EventParked, EventFailed, EventFinished, EventDrifted:
+		return true
+	}
+	return false
+}
+
 // Report is a run, at the moment something happened to it.
 type Report struct {
 	RunID   domain.RunID

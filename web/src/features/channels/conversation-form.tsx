@@ -14,6 +14,7 @@ import { ConversationAgentField } from "@/features/channels/conversation-agent-f
 import {
   conversationSchema,
   EVENTS_BY_DEFAULT,
+  knownEvent,
   knownMode,
   splitSources,
   startsFromMentions,
@@ -59,6 +60,12 @@ export function ConversationForm({
   // never sees anything but a mode it knows.
   const stored = conversation?.mode;
   const startMode = knownMode(stored) ? (stored ?? "mentions") : "mentions";
+  // The same for the events. One this console cannot name is in no checkbox,
+  // so a form drawn anyway would show a conversation asking for less than it
+  // asks for, and save exactly that.
+  const strangeEvent = (conversation?.wants ?? []).find(
+    (one) => !knownEvent(one),
+  );
 
   const form = useForm<ConversationValues>({
     resolver: zodResolver(conversationSchema),
@@ -131,11 +138,15 @@ export function ConversationForm({
 
   // Before anything is drawn. A form filled with this console's idea of the
   // nearest value is a form whose save rewrites the conversation.
-  if (!knownMode(stored)) {
+  if (!knownMode(stored) || strangeEvent) {
     return (
       <UnknownConfiguration
         title={t("channels.editConversation")}
-        message={t("channels.unknownMode", { mode: stored })}
+        message={
+          strangeEvent
+            ? t("channels.unknownEvent", { event: strangeEvent })
+            : t("channels.unknownMode", { mode: stored })
+        }
         onClose={onClose}
       />
     );
