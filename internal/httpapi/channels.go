@@ -201,16 +201,17 @@ func (s *Server) PutConversation(
 	}
 
 	err := s.channels.PutConversation(ctx, req.Name, admin.Conversation{
-		ID:            req.Conversation,
-		Label:         valueOr(req.Body.Label),
-		Scope:         scope,
-		Mode:          mode,
-		Sources:       valueOrSlice(req.Body.Sources),
-		Agent:         agent,
-		RunAs:         runAs,
-		ThreadContext: orDefault(req.Body.ThreadContext, false),
-		Wants:         wantsOf(req.Body.Wants),
-		Enabled:       orDefault(req.Body.Enabled, true),
+		ID:              req.Conversation,
+		Label:           valueOr(req.Body.Label),
+		Scope:           scope,
+		Mode:            mode,
+		Sources:         valueOrSlice(req.Body.Sources),
+		Agent:           agent,
+		RunAs:           runAs,
+		ThreadContext:   orDefault(req.Body.ThreadContext, false),
+		DirectApprovals: orDefault(req.Body.DirectApprovals, false),
+		Wants:           wantsOf(req.Body.Wants),
+		Enabled:         orDefault(req.Body.Enabled, true),
 	}, caller)
 	if err != nil {
 		return openapi.PutConversation400ApplicationProblemPlusJSONResponse{
@@ -432,6 +433,9 @@ func channelFrom(
 		}
 		if conv.RunAs != "" {
 			item.RunAs = ptr(string(conv.RunAs))
+		}
+		if conv.DirectApprovals {
+			item.DirectApprovals = ptr(true)
 		}
 		if conv.ThreadContext {
 			item.ThreadContext = ptr(true)

@@ -74,12 +74,17 @@ type Conversation struct {
 	ID string
 	// Label is what a person calls it, for the console and for logs.
 	Label string
-	// Agent names the agent this conversation starts from watched messages,
-	// when it is plugged into one. Empty means a scope-level broadcast
-	// conversation.
+	// Agent names the agent this conversation starts — from a watched message,
+	// and from a mention that does not name one. Empty means a conversation
+	// open to whatever its scope publishes.
 	Agent domain.AgentID
 	// Wants is which events reach it. Empty means the defaults.
 	Wants []Event
+	// DirectApprovals says an approval announced here also goes privately to
+	// the people who may decide it. Outbound and orthogonal to Mode: which
+	// messages may start a run here is a different question from who is told
+	// when one stops.
+	DirectApprovals bool
 }
 
 // wants answers whether an event belongs here.
@@ -98,6 +103,19 @@ func (c Conversation) wants(e Event) bool {
 		}
 	}
 	return false
+}
+
+/*
+Wants answers whether a list of chosen events includes this one.
+
+Exported because two places need the same answer and one of them is not this
+package. A conversation is told about parked runs or it is not, and the
+administration decides what to store on the strength of that — a second
+statement of the rule in admin would be a second definition of what an empty
+list means, and the two would drift the first time the defaults changed.
+*/
+func Wants(list []Event, e Event) bool {
+	return Conversation{Wants: list}.wants(e)
 }
 
 func (c Conversation) reportsAgent(agent domain.AgentID) bool {

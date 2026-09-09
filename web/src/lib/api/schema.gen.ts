@@ -3907,6 +3907,12 @@ export interface components {
              *     untrusted; this only supplies context for the agent to read.
              */
             threadContext?: boolean;
+            /**
+             * @description Whether an approval announced here is also sent privately to the
+             *     people who may decide it. Addressing only: the decision is checked
+             *     where the button is pressed, exactly as it is in the conversation.
+             */
+            directApprovals?: boolean;
             sources?: string[];
             agent?: string;
             runAs?: string;
@@ -7728,6 +7734,16 @@ export interface operations {
                      *     for the conversation type.
                      */
                     threadContext?: boolean;
+                    /**
+                     * @description Also send the approval card privately to the people holding
+                     *     Approver in a scope that covers the run, in addition to the
+                     *     card posted here. It grants nobody the right to decide: the
+                     *     same check applies wherever the button is pressed, and a
+                     *     recipient without the grant is refused there as anywhere
+                     *     else. Requires the Slack app's im:write scope, and applies
+                     *     only where this conversation is told about parked runs.
+                     */
+                    directApprovals?: boolean;
                     /** @description Which events reach it. Empty means the defaults, which are parked and failed — a conversation that hears every run finish is one people mute. */
                     wants?: ("parked" | "failed" | "finished")[];
                     /** @default true */

@@ -44,3 +44,20 @@ describe("a conversation in the listing", () => {
     expect(screen.queryByText(/·/)).not.toBeInTheDocument();
   });
 });
+
+// A conversation that also messages people privately says so in the listing.
+// It is a decision about who sees a run's facts, and a screen that showed the
+// channel card and not the private one would understate what is configured.
+describe("private approvals in the listing", () => {
+  it("says when approvals also go out privately", () => {
+    renderRow({ mode: "mentions", directApprovals: true });
+
+    expect(screen.getByText(/dm/)).toBeInTheDocument();
+  });
+
+  it("says nothing when they do not", () => {
+    renderRow({ mode: "mentions" });
+
+    expect(screen.queryByText(/dm/)).not.toBeInTheDocument();
+  });
+});

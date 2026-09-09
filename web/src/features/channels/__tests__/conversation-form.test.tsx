@@ -109,6 +109,71 @@ const mentionsConversation = {
   enabled: true,
 };
 
+
+  /*
+   * Sending the card privately as well is a choice about who sees a run's
+   * facts, so it is offered where the events are chosen and only where parked
+   * runs are among them. A conversation that is never told a run stopped
+   * cannot tell anybody privately either, and offering the option there would
+   * be a switch that does nothing.
+   */
+  it("offers private approvals only where parked runs are announced", async () => {
+    const user = userEvent.setup();
+    renderForm({
+      ...mentionsConversation,
+      wants: ["parked"],
+    });
+
+    expect(
+      await screen.findByText("Também avisar em particular quem pode decidir"),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByText("Esperando uma decisão"));
+
+    expect(
+      screen.queryByText("Também avisar em particular quem pode decidir"),
+    ).not.toBeInTheDocument();
+  });
+
+  /*
+   * Turning off the event takes the private card with it, on the way out and
+   * not only on the way back. The field disappears when parked is unchecked
+   * and its value does not, so a request could say one thing while the server
+   * stores another — and the console would show it off after the next read,
+   * with nothing saying why.
+   */
+  it("drops the private approval choice when parked stops being announced", async () => {
+    const requests: { method: string; url: string; body?: unknown }[] = [];
+    stubApi({ requests });
+    const user = userEvent.setup();
+    renderForm({
+      ...mentionsConversation,
+      wants: ["parked", "failed"],
+      directApprovals: true,
+    });
+
+    await user.click(await screen.findByText("Esperando uma decisão"));
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => expect(saved(requests)).toBeDefined());
+    expect(saved(requests)).toMatchObject({ directApprovals: false });
+  });
+
+  it("sends the private approval choice when a conversation is saved", async () => {
+    const requests: { method: string; url: string; body?: unknown }[] = [];
+    stubApi({ requests });
+    const user = userEvent.setup();
+    renderForm({ ...mentionsConversation, wants: ["parked"] });
+
+    await user.click(
+      await screen.findByText("Também avisar em particular quem pode decidir"),
+    );
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => expect(saved(requests)).toBeDefined());
+    expect(saved(requests)).toMatchObject({ directApprovals: true });
+  });
+
 function saved(requests: { method: string; body?: unknown }[]) {
   return requests.find((one) => one.method === "PUT")?.body;
 }
