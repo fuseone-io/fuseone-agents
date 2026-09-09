@@ -25,6 +25,33 @@ field" is a commit message.
 
 ---
 
+## [0.45.0] — 2026-09-09
+
+### Added
+
+- **A conversation can speak for the whole installation.** Until now a run
+  parked in an area nobody pointed at a channel reached no card and no person,
+  and waited for somebody to open the console. Under **Integrations → Channels
+  → new conversation**, the context "the whole installation" makes one room
+  hear about a run in any company, with the same options as any other
+  conversation — including telling the people who may decide privately, which
+  still reaches whoever holds Approver in that run's scope rather than whoever
+  holds a grant at the installation. It starts nothing: mentioning the bot
+  there is refused saying the room only reports, and no watched-message
+  automation runs from it. A scope containing every company is the right answer
+  for hearing and the wrong one for asking. Configuring or deleting it needs
+  Company configurer granted at the installation scope, and the option is
+  absent for anybody else rather than offered and refused. New rooms announce
+  drift by default, so choose "what to announce" before saving unless drift
+  from every agent in every company is what you want.
+
+- **"Only reports" is a mode a conversation can be stored in.** It is what the
+  installation room saves, and the API accepts it for any conversation: a room
+  somebody added the bot to for visibility is not a room anybody should be able
+  to start runs from by typing in it. Wherever it is set, mentions and watched
+  messages start nothing there, and the console shows no fields about starting
+  runs. The console offers it today only through the installation room.
+
 ## [0.44.0] — 2026-09-09
 
 ### Upgrade notes

@@ -140,6 +140,33 @@ Se o agente não iniciou:
 6. O `run as` existe e tem grant no escopo?
 7. Em Socket Mode, o app token está salvo e o worker está conectado?
 
+## Uma sala para a instalação inteira
+
+Uma conversa recebe os runs do escopo em que foi configurada, e uma configurada
+numa empresa cobre todas as áreas dela. Sobra o caso de uma área que ninguém
+apontou para canal nenhum: um run parado ali não produz card nem mensagem
+privada, e fica esperando alguém abrir o console.
+
+Em **Integrações → Canais → nova conversa**, o contexto **"A instalação
+inteira"** resolve isso. Ela ouve sobre um run de qualquer empresa, com as
+mesmas opções de sempre — inclusive avisar em particular quem pode decidir, que
+continua alcançando quem tem Aprovador no escopo daquele run, e não quem tem
+grant na instalação.
+
+Ela **não inicia nada**. Mencionar o bot ali é recusado dizendo que a sala só
+relata, e nenhuma automação de watched message parte dela. Escopo que contém
+tudo é a resposta certa para *ouvir* e a errada para *pedir*: uma sala que ouve
+todas as empresas é uma configuração razoável, e uma que pode iniciar um agente
+em todas elas é outra coisa inteiramente.
+
+Por isso o contexto só aparece para quem governa a instalação — quem tem
+**Configurador de empresa concedido no escopo da instalação**. Configurar para
+onde uma área relata é um ato escopado comum; decidir que uma sala ouve todas
+as empresas é a autoridade acima delas. O mesmo vale para apagá-la.
+
+Comece pelo **"o que avisar"**. O padrão inclui drift, e uma sala recém-criada
+sem esse ajuste passa a receber o drift de todo agente de toda empresa.
+
 ## Avisar em particular quem pode decidir
 
 Uma conversa avisada sobre runs parados pode, além do card no canal, mandar o

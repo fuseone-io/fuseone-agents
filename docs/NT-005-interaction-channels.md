@@ -100,6 +100,24 @@ the conversation and who holds a grant in its scope.
 The scope must not come from the text. An ask that names its own scope is an
 ask that can name a wider one.
 
+Containment is right for hearing and wrong for asking, and the asymmetry is
+deliberate. A conversation configured at a company hears about every area in
+it, because one `#alertas` for a company that has not split its areas is a
+sensible thing to configure. The same widening applied to the inbound path
+would make that conversation a place from which to start an agent in any of
+those areas, which is a different grant entirely — so a conversation configured
+above the scope it could start runs in reports and starts nothing, and says so
+in the mode it stores rather than leaving the refusal to be discovered at the
+door.
+
+The limit case is the scope above every company. A room there answers the area
+nobody pointed at a channel: without it, a run parked in that area reaches no
+card and no person. It is refused as an origin in the channel package itself,
+not left to the fact that no agent can be published in that scope today — that
+is a rule in another package, and the day somebody teaches the catalogue to
+read the scope above every company as "all of them", a room configured for
+visibility would become a start button for the whole installation.
+
 ## 5. Where the two families split
 
 Everything above holds for both. This does not.
