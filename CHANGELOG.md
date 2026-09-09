@@ -40,7 +40,8 @@ field" is a commit message.
   linked account for each person; anybody unlinked is simply not reached. If
   more than twenty people may decide, nobody is messaged privately and the
   reason is recorded — telling an arbitrary twenty of them is worse than
-  telling none.
+  telling none. The cap counts messages rather than candidates, so people
+  without a linked account never silence the ones who have one.
 
 - **A card whose approval has been answered stops offering to answer it.** Once
   somebody decides — in Slack, in a private message, or in the console — every

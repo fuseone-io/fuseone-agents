@@ -86,7 +86,7 @@ func (r *Reporter) newFanout() *fanout {
 // the button could answer.
 func (f *fanout) wanted(report Report, place Conversation) bool {
 	return f != nil && f.approvers != nil && f.accounts != nil &&
-		place.DirectApprovals && report.Event == EventParked && report.AtSeq > 0
+		place.DirectApprovals && report.AwaitingDecision && report.AtSeq > 0
 }
 
 /*
@@ -108,9 +108,6 @@ func (f *fanout) recipients(
 	if len(who) == 0 {
 		return nil, false, nil
 	}
-	if len(who) > MaxDirectRecipients {
-		return nil, true, nil
-	}
 
 	where, err := f.whereReachable(ctx, place.Channel, who)
 	if err != nil {
@@ -129,6 +126,13 @@ func (f *fanout) recipients(
 			Channel: place.Channel, ID: account, Label: account,
 			Wants: place.Wants, DirectApprovals: true,
 		})
+	}
+	// Counted in messages, not in candidates. Applied to the people who may
+	// decide, twenty-one approvers with one Slack account between them would
+	// send nothing — somebody nobody bound silencing the one person who could
+	// have been reached, which is the opposite of what the cap is for.
+	if len(to) > MaxDirectRecipients {
+		return nil, true, nil
 	}
 	return to, false, nil
 }
@@ -178,21 +182,34 @@ func (f *fanout) whereReachable(
 }
 
 /*
-degrades reports that another sweep would learn nothing new.
+terminal are the refusals that mean the same thing on the next sweep.
 
-An app never granted permission to open a direct message is not a failure to
-retry: the run would stay unreported, every recipient would be attempted again
-every thirty seconds for a day, and the channel card that did arrive would be
-held open behind it. A rate limit is the opposite, and so is a failure with no
-stable code at all — this side may simply have been away, and the sweep exists
-to try again.
+Named one by one, and the list is the whole of it: anything not here keeps its
+run open. An app never granted permission to open a direct message, a person
+who cannot be messaged at all, a driver that cannot do it — none improves by
+being asked again, and treating one as temporary would hold every parked run
+unreported for a day while re-attempting every recipient every thirty seconds.
+
+The inversion is the point. Written as "anything that is not a rate limit is
+final", a reset connection, an answer nobody could read and an error with no
+code at all were all permanent — and a message lost to a network blip was
+recorded as delivered and never sent again. Being unable to name why something
+failed is a reason to try, not a reason to stop.
 */
+var terminal = map[string]bool{
+	CodeMissingScope:            true,
+	CodeConversationUnavailable: true,
+	CodeUnsupportedCapability:   true,
+	CodeTooManyRecipients:       true,
+}
+
+// degrades reports that another sweep would learn nothing new.
 func degrades(err error) bool {
 	var known *Error
 	if !errors.As(err, &known) {
 		return false
 	}
-	return !known.Summary().Retryable
+	return terminal[known.Code]
 }
 
 // refusal is what a fan-out could not do: what is worth another sweep, and
@@ -225,10 +242,17 @@ func (r *Reporter) direct(
 	to, capped, err := pass.recipients(ctx, report, place)
 	switch {
 	case err != nil:
-		return 0, r.refuse(report, place, err)
+		// Not knowing who to tell, or where, is this side being unavailable.
+		// Recorded and kept: nobody was told and nothing about that is
+		// settled, so the run waits for a sweep that can read its own
+		// configuration.
+		return 0, refusal{
+			blocking: []error{err},
+			recorded: r.failuresFor(report, place, err),
+		}
 	case capped:
-		return 0, r.refuse(report, place, NewError(CodeTooManyRecipients, fmt.Sprintf(
-			"channel: %d people may decide, more than one approval should reach", len(pass.byScope[report.Scope]))))
+		return 0, r.refuse(report, place, NewError(CodeTooManyRecipients,
+			"channel: more people can be reached about this than one approval should reach"))
 	}
 
 	for _, person := range to {

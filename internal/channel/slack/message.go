@@ -19,8 +19,21 @@ pastes into the console, and a truncated one costs a round trip.
 */
 
 func summary(m channel.Message) string {
+	// A card whose question has been answered says so first. Left as it was,
+	// the fallback text and the heading both go on saying a run is waiting,
+	// with the answer underneath contradicting them — and the fallback is what
+	// a phone notification reads aloud.
+	if m.Outcome != "" {
+		return answeredBy(m)
+	}
 	switch m.Event {
 	case channel.EventParked:
+		if !m.AwaitingDecision {
+			// Stopped, and not on anybody. A budget, or retries that stopped
+			// helping: saying it waits for a decision would send somebody
+			// looking for a button that is not there and should not be.
+			return fmt.Sprintf("%s stopped: %s", m.Agent, reasonOr(m.Reason, "no reason recorded"))
+		}
 		if m.Tool != "" {
 			return fmt.Sprintf("%s is waiting for permission to run %s", m.Agent, m.Tool)
 		}
@@ -77,7 +90,7 @@ func blocks(m channel.Message, decidable bool) []any {
 		// facts stay: a closed card that collapsed to a sentence would take
 		// the record out of the room it was announced in.
 		out = append(out, context_(answeredBy(m)))
-	} else if decidable && m.Event == channel.EventParked && m.AtSeq > 0 {
+	} else if decidable && m.AwaitingDecision && m.Event == channel.EventParked && m.AtSeq > 0 {
 		out = append(out, decide(m))
 	}
 	if m.Link != "" {

@@ -655,6 +655,12 @@ func TestStale_cardsWhoseQuestionIsSettled_areListedWithWhatHappened(t *testing.
 	if card.Outcome != channel.OutcomeApproved || card.DecidedBy != "usr_ana" {
 		t.Errorf("card = %+v, want it to carry who answered and how", card)
 	}
+	// The facts the card showed, read back from the step it asked about. The
+	// projection clears them the moment the run moves on, so a closed card
+	// built from it would answer a question the room can no longer read.
+	if card.Tool != "erp.transfer" || card.Reason != "over the ceiling" {
+		t.Errorf("card = %+v, want the action and reason it was about", card)
+	}
 
 	if err := store.Closed(t.Context(), *card, noon); err != nil {
 		t.Fatalf("Closed: %v", err)
@@ -791,4 +797,50 @@ func TestStale_aRunWaitingOnALaterStep_closesTheEarlierCard(t *testing.T) {
 	if card.AtSeq != first[0].AtSeq {
 		t.Errorf("card at seq %d, want the earlier question %d", card.AtSeq, first[0].AtSeq)
 	}
+}
+
+/*
+Whether a stop is a question somebody can answer.
+
+Both kinds of stop carry a sequence now, so the number cannot tell them apart —
+and read as "a park with a sequence is a pending approval", every budget park
+draws two buttons whose only possible answer is a conflict and messages every
+approver about a decision nobody can make. The phase is what knows, and this is
+where it is read.
+*/
+func TestUnreported_saysWhetherTheStopIsAQuestion(t *testing.T) {
+	store, pool := channelStore(t)
+
+	awaitApproval(t, pool, "run-asking")
+	parkWithoutAsking(t, pool, "run-just-stopped")
+
+	pending, err := store.Unreported(t.Context(), noon.Add(-channel.Window), 50)
+	if err != nil {
+		t.Fatalf("unreported: %v", err)
+	}
+	for _, want := range []struct {
+		run    domain.RunID
+		asking bool
+	}{
+		{"run-asking", true},
+		{"run-just-stopped", false},
+	} {
+		report := reportFor(pending, want.run)
+		if report == nil {
+			t.Fatalf("pending = %+v, want %s", pending, want.run)
+		}
+		if report.AwaitingDecision != want.asking {
+			t.Errorf("%s: awaiting a decision = %v, want %v",
+				want.run, report.AwaitingDecision, want.asking)
+		}
+	}
+}
+
+func reportFor(pending []channel.Report, run domain.RunID) *channel.Report {
+	for i, r := range pending {
+		if r.RunID == run {
+			return &pending[i]
+		}
+	}
+	return nil
 }

@@ -95,6 +95,61 @@ func parked() channel.Message {
 	return channel.Message{
 		Event: channel.EventParked,
 		RunID: "run-1", Agent: "triage", Tool: "crm.reply", AtSeq: 12,
-		Link: "https://agents.example.com/runs/run-1",
+		AwaitingDecision: true,
+		Link:             "https://agents.example.com/runs/run-1",
+	}
+}
+
+/*
+A run that stopped without asking anybody gets no buttons.
+
+A budget park and a retry that stopped helping carry a step now, because an
+announcement is keyed by the step a run stopped on. Read as "a park with a step
+is a pending approval" they draw Approve and Refuse, whose only possible answer
+is a conflict — and the heading says a run is waiting for a decision nobody can
+give.
+*/
+func TestPost_aStopWithNothingToDecide_offersNoAnswer(t *testing.T) {
+	t.Parallel()
+
+	stopped := parked()
+	stopped.AwaitingDecision = false
+	stopped.Reason = "over the budget"
+	server, sent := recording(t)
+	if _, err := slack.New("xoxb-test").WithEndpointBase(server.URL).Decidable().
+		Post(t.Context(), channel.Conversation{ID: "C07"}, stopped); err != nil {
+		t.Fatalf("post: %v", err)
+	}
+
+	for _, unwanted := range []string{"approve:run-1:12", "refuse:run-1:12", "waiting"} {
+		if strings.Contains(*sent, unwanted) {
+			t.Errorf("the message carries %q for a stop nobody can answer", unwanted)
+		}
+	}
+	if !strings.Contains(*sent, "over the budget") {
+		t.Errorf("the message does not say why it stopped:\n%s", *sent)
+	}
+}
+
+// A card whose question has an answer says so in its heading and in the
+// fallback text, which is what a phone notification reads aloud. Left alone,
+// both went on saying a run is waiting with the answer underneath.
+func TestEdit_ananswered_cardDoesNotStillSayItIsWaiting(t *testing.T) {
+	t.Parallel()
+
+	answered := parked()
+	answered.Outcome = channel.OutcomeApproved
+	answered.DecidedBy = "usr_ana"
+	server, sent := recording(t)
+	if _, err := slack.New("xoxb-test").WithEndpointBase(server.URL).Decidable().
+		Post(t.Context(), channel.Conversation{ID: "C07"}, answered); err != nil {
+		t.Fatalf("post: %v", err)
+	}
+
+	if strings.Contains(*sent, "waiting") {
+		t.Errorf("an answered card still says it is waiting:\n%s", *sent)
+	}
+	if !strings.Contains(*sent, "Approved by usr_ana") {
+		t.Errorf("the card does not say who answered:\n%s", *sent)
 	}
 }

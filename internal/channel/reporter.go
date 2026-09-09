@@ -218,7 +218,7 @@ func (r *Reporter) message(report Report) Message {
 	m := Message{
 		Event: report.Event, RunID: report.RunID, Agent: report.AgentID,
 		Scope: report.Scope, Reason: report.Reason, Tool: report.Tool,
-		AtSeq: report.AtSeq,
+		AtSeq: report.AtSeq, AwaitingDecision: report.AwaitingDecision,
 	}
 	if r.baseURL != "" {
 		m.Link = fmt.Sprintf("%s/runs/%s", r.baseURL, report.RunID)

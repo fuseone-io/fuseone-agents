@@ -58,6 +58,10 @@ type Report struct {
 	Reason string
 	// Tool is the action a parked run is waiting for permission to take.
 	Tool string
+	// AwaitingDecision is whether this stop is a question somebody can answer.
+	// Read from the run's phase, never from the sequence: a run parked by a
+	// budget carries one and has nothing to decide.
+	AwaitingDecision bool
 	// AtSeq is the step the run is waiting on, which a decision has to name.
 	// A button carrying only the run would answer whatever the run happens to
 	// be waiting on when it is pressed, and a message keeps its buttons for
@@ -144,10 +148,12 @@ type Message struct {
 	AtSeq  int64
 	// Link is where somebody goes to act on it.
 	Link string
-	// Decidable is whether an answer given here could reach the platform. A
-	// button on a channel that cannot verify what comes back would promise an
-	// inbound surface that is switched off.
-	Decidable bool
+	// AwaitingDecision is whether the run is stopped on a question somebody
+	// can answer. A run stops for other reasons — a budget, retries that
+	// stopped helping — and those carry a sequence too now, so the sequence
+	// alone cannot tell them apart. Buttons and private messages both hang on
+	// this: an answer to a run that is not asking can only ever be a conflict.
+	AwaitingDecision bool
 	// Outcome is what happened to the approval this card asked about. Set only
 	// on a replacement: a card carrying one offers no buttons, because the
 	// question it asked already has an answer.

@@ -153,7 +153,13 @@ func slackDeliveryCode(reason string) string {
 	switch reason {
 	case "invalid_auth", "not_authed", "account_inactive", "token_revoked":
 		return channel.CodeCredentialRejected
-	case "not_in_channel", "channel_not_found", "is_archived":
+	case "not_in_channel", "channel_not_found", "is_archived",
+		// A person the bot may not message, one the workspace does not have,
+		// and a message that is no longer there. All three mean the same thing
+		// on the next sweep, and naming them is what stops a run being held
+		// open for ever over somebody who cannot be reached at all.
+		"cannot_dm_bot", "user_not_found", "users_not_found",
+		"message_not_found", "cant_update_message":
 		return channel.CodeConversationUnavailable
 	case "missing_scope":
 		return channel.CodeMissingScope

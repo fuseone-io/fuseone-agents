@@ -293,6 +293,9 @@ func reportOf(event channel.Event, atSeq int64) channel.Report {
 		RunID: "run-1", AgentID: "triage", Event: event, AtSeq: atSeq,
 		Scope: domain.Scope{Company: "acme", Area: "ops"},
 		Tool:  "erp.transfer", Reason: "over the ceiling", At: noon,
+		// A stop is a question by default here, because that is what these
+		// tests are about. The one that is not says so.
+		AwaitingDecision: event == channel.EventParked,
 	}
 }
 
@@ -394,4 +397,116 @@ func recordedFailure(d *memoryDeliveries, code string) bool {
 		}
 	}
 	return false
+}
+
+/*
+A run that stopped without asking anybody is not an approval.
+
+A budget park and a retry that stopped helping carry a sequence now — the
+announcement is keyed by the step a run stopped on, and for those the step is
+the run's own last one. Read as "a park with a sequence is a pending
+approval", every one of them messages the approvers privately and draws two
+buttons whose only possible answer is a conflict.
+
+Whether a decision is pending is a phase and not a number.
+*/
+func TestSweep_aParkWithNothingToDecide_reachesNobodyPrivately(t *testing.T) {
+	posts := &recorder{}
+	stopped := reportOf(channel.EventParked, 6)
+	stopped.AwaitingDecision = false
+	r := directReporter(t, posts, deciders("usr_ana"),
+		accountBook{"acme-slack": {"usr_ana": "U-ana"}}, stopped)
+
+	if _, err := r.Sweep(context.Background(), 10); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if addressed(posts.sent, "U-ana") {
+		t.Error("a stop with nothing to decide was sent to an approver privately")
+	}
+	if posts.sent[0].message.AwaitingDecision {
+		t.Error("the channel card offers buttons for a stop with nothing to decide")
+	}
+}
+
+/*
+A failure another sweep could survive never retires the announcement.
+
+Only a refusal that means the same thing next time may degrade to the channel
+alone: an app that was never granted permission to open a direct message, a
+person who cannot be messaged, a driver that cannot do it at all. A reset
+connection, an unreadable answer, a directory that was away — those are this
+side being unavailable, and treating them as final loses the message for good
+while marking the run as told.
+*/
+func TestSweep_aDirectFailureThatMightPass_leavesTheRunForTheNextPass(t *testing.T) {
+	for _, cause := range []struct {
+		name string
+		err  error
+	}{
+		{"a reset connection", channel.WrapError(
+			channel.CodeDeliveryFailed, errors.New("connection reset by peer"))},
+		{"an answer nobody could read", channel.NewError(
+			channel.CodeDeliveryFailed, "slack: read answer (status 502)")},
+		{"a refusal with no code at all", errors.New("something went wrong")},
+	} {
+		posts := &recorder{failFor: "U-ana", failWith: cause.err}
+		reports := &fixedReports{reports: []channel.Report{parkedReport()}}
+		r := directReporterWith(t, reports, posts, deciders("usr_ana"),
+			accountBook{"acme-slack": {"usr_ana": "U-ana"}})
+
+		if _, err := r.Sweep(context.Background(), 10); err == nil {
+			t.Errorf("%s: Sweep reported success with the message lost", cause.name)
+		}
+		if len(reports.done) != 0 {
+			t.Errorf("%s: the run was marked reported", cause.name)
+		}
+	}
+}
+
+// And a directory that was away is the same kind of absence. Nobody was told
+// and nothing about that is settled.
+func TestSweep_theApproversCouldNotBeRead_leavesTheRunForTheNextPass(t *testing.T) {
+	posts := &recorder{}
+	reports := &fixedReports{reports: []channel.Report{parkedReport()}}
+	r := directReporterWith(t, reports, posts, &failingApprovers{},
+		accountBook{"acme-slack": {"usr_ana": "U-ana"}})
+
+	if _, err := r.Sweep(context.Background(), 10); err == nil {
+		t.Fatal("Sweep reported success without knowing who to tell")
+	}
+	if len(reports.done) != 0 {
+		t.Errorf("done = %v, want the run left for the next pass", reports.done)
+	}
+}
+
+/*
+The cap counts messages, not candidates.
+
+Twenty-one people may decide and one of them is on Slack. Counted before the
+bindings are read, that is a scope past the cap and nobody is told — so
+somebody unbound silences the one person who could have been reached, which is
+the opposite of what the cap is for.
+*/
+func TestSweep_moreApproversThanTheCapButFewReachable_tellsThemAnyway(t *testing.T) {
+	who := make([]domain.UserID, 0, channel.MaxDirectRecipients+1)
+	for i := range channel.MaxDirectRecipients + 1 {
+		who = append(who, domain.UserID(fmt.Sprintf("usr_%02d", i)))
+	}
+
+	posts := &recorder{}
+	r := directReporter(t, posts, &fixedApprovers{who: who},
+		accountBook{"acme-slack": {"usr_00": "U-00"}}, parkedReport())
+
+	if _, err := r.Sweep(context.Background(), 10); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if !addressed(posts.sent, "U-00") {
+		t.Error("the one reachable person was silenced by twenty who are not")
+	}
+}
+
+type failingApprovers struct{}
+
+func (failingApprovers) ApproversIn(context.Context, domain.Scope) ([]domain.UserID, error) {
+	return nil, errors.New("the directory is away")
 }

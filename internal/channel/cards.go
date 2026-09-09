@@ -77,7 +77,9 @@ const openCardsSQL = `
 		       coalesce(nullif(d.placed_in, ''), d.conversation), d.ref,
 		       r.agent_id, r.company_id, r.area_id,
 		       coalesce(decided.approved, false), coalesce(decided.by, ''),
-		       decided.approved is not null
+		       decided.approved is not null,
+		       coalesce(asked.payload->>'tool', ''),
+		       coalesce(asked.payload->>'reason', '')
 		from channel_deliveries d
 		join runs r on r.run_id = d.run_id
 		left join lateral (
@@ -89,6 +91,18 @@ const openCardsSQL = `
 		    order by s.seq asc
 		    limit 1
 		) decided on true
+		-- The step the card asked about, read back for the facts it showed.
+		-- runs.pending_tool and pending_reason are cleared the moment the run
+		-- moves on, so a closed card built from the projection would lose the
+		-- action and the reason it was originally about — and a room that saw
+		-- an approval requested would be left with an answer to a question it
+		-- can no longer read.
+		left join lateral (
+		    select s.payload
+		    from run_steps s
+		    where s.run_id = d.run_id and s.opened_at = r.started_at
+		      and s.seq = d.at_seq
+		) asked on true
 		where d.event = 'parked' and d.at_seq > 0 and d.closed_at is null
 		  and d.ref <> '' and d.conversation <> ''
 		  and (r.phase <> 'awaiting_approval'
@@ -110,7 +124,7 @@ func (p *Postgres) Stale(ctx context.Context, limit int) ([]Card, error) {
 		var approved, wasDecided bool
 		if err := rows.Scan(&c.RunID, &event, &c.AtSeq, &c.Channel, &c.Conversation,
 			&c.PlacedIn, &c.Ref, &c.AgentID, &company, &area,
-			&approved, &c.DecidedBy, &wasDecided); err != nil {
+			&approved, &c.DecidedBy, &wasDecided, &c.Tool, &c.Reason); err != nil {
 			return nil, err
 		}
 		c.Event = Event(event)
