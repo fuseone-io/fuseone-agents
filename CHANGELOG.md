@@ -45,12 +45,24 @@ field" is a commit message.
   announce" before saving: the default is parked and failed, which at this
   scope means every stop and every failure in every company.
 
-- **"Only reports" is a mode a conversation can be stored in.** It is what the
-  installation room saves, and the API accepts it for any conversation: a room
-  somebody added the bot to for visibility is not a room anybody should be able
-  to start runs from by typing in it. Wherever it is set, mentions and watched
-  messages start nothing there, and the console shows no fields about starting
-  runs. The console offers it today only through the installation room.
+- **"Only reports" is a mode any conversation can be set to.** It is what the
+  installation room saves, and it is offered on every conversation in the start
+  mode list: a room somebody added the bot to for visibility is not a room
+  anybody should be able to start runs from by typing in it. Wherever it is set,
+  mentions and watched messages start nothing there, the bound agent is dropped
+  — a conversation that starts nothing has none to start — and the console shows
+  no fields about starting runs.
+
+### Changed
+
+- **A conversation's stored mode is handed back as it is stored.** The API used
+  to answer with the nearest mode it recognised, so a conversation configured by
+  a newer version read as "mentions" — and saving any unrelated edit from that
+  reading wrote "mentions" and meant it, turning a room that started nothing
+  into one anybody could start runs from. The response field is no longer a
+  closed set (the request still is), and a client that does not recognise a
+  value must not offer to save that conversation: this console says so and
+  refuses to open the form.
 
 ## [0.44.0] — 2026-09-09
 
