@@ -103,13 +103,24 @@ func (s *Server) PutChannel(
 	if s.channels == nil || req.Body == nil {
 		return nil, errNoAdministration
 	}
+	governed, err := s.carriesInstallationRoom(ctx, req.Name)
+	if err != nil {
+		return nil, err
+	}
+	if governed {
+		if _, resp := s.governs(ctx); resp != nil {
+			return openapi.PutChannel403ApplicationProblemPlusJSONResponse{
+				ForbiddenApplicationProblemPlusJSONResponse: *resp,
+			}, nil
+		}
+	}
 
 	delivery := channel.DeliveryHTTP
 	if req.Body.DeliveryMode != nil {
 		delivery = string(*req.Body.DeliveryMode)
 	}
 
-	err := s.channels.PutChannel(ctx, admin.Channel{
+	err = s.channels.PutChannel(ctx, admin.Channel{
 		Name:         req.Name,
 		Kind:         string(req.Body.Kind),
 		Workspace:    valueOr(req.Body.Workspace),
@@ -140,6 +151,17 @@ func (s *Server) DeleteChannel(
 	}
 	if s.channels == nil {
 		return nil, errNoAdministration
+	}
+	governed, err := s.carriesInstallationRoom(ctx, req.Name)
+	if err != nil {
+		return nil, err
+	}
+	if governed {
+		if _, resp := s.governs(ctx); resp != nil {
+			return openapi.DeleteChannel403ApplicationProblemPlusJSONResponse{
+				ForbiddenApplicationProblemPlusJSONResponse: *resp,
+			}, nil
+		}
 	}
 	if err := s.channels.DeleteChannel(ctx, req.Name, caller); err != nil {
 		return nil, fmt.Errorf("delete channel: %w", err)
@@ -365,6 +387,39 @@ func (s *Server) DeleteConversation(
 		return nil, fmt.Errorf("delete conversation: %w", err)
 	}
 	return openapi.DeleteConversation204Response{}, nil
+}
+
+/*
+carriesInstallationRoom answers whether a connection holds a conversation for
+the whole installation.
+
+A room there needs authority over the installation to exist and to be removed,
+and that is worth nothing while the connection around it stays a curator's to
+configure: removing a channel takes its conversations with it, and disabling or
+re-crededentialling one silences the room or sends its messages out through
+somebody else's token. The authority follows what is attached — a connection
+carrying no such room is configured as it always was.
+
+An error is reported rather than answered as "no". Not knowing is not the same
+as knowing there is none, and guessing wrong here is exactly the reach this
+closes.
+*/
+func (s *Server) carriesInstallationRoom(ctx context.Context, name string) (bool, error) {
+	configured, err := s.channels.List(ctx)
+	if err != nil {
+		return false, fmt.Errorf("list channels: %w", err)
+	}
+	for _, one := range configured {
+		if one.Name != name {
+			continue
+		}
+		for _, conv := range one.Conversations {
+			if conv.Scope.IsInstallation() {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }
 
 func (s *Server) scopeOfConversation(

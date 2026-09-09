@@ -125,23 +125,136 @@ func TestTestConversation_conversationIsNotConfigured_refusesRatherThanPosting(t
 	}
 }
 
+/*
+The connection under the installation's room is governed by whoever governs the
+installation.
+
+The room needs authority over the installation to exist and to be removed, and
+none of that was worth much while the connection carrying it stayed a curator's
+to configure. Deleting a channel takes its conversations with it — that is
+deliberate, a conversation pointing at a connection that no longer exists reads
+as configured and delivers nothing — so a company configurer could reach the one
+room they had just been refused, by removing the thing around it.
+
+Disabling or reconfiguring is the same reach by another route: the room falls
+silent, or its messages start leaving through somebody else's credential.
+*/
+func TestDeleteChannel_carryingTheInstallationsRoom_needsAuthorityOverTheInstallation(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{listed: []admin.Channel{withInstallationRoom()}}
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, nil)
+
+	resp, err := s.DeleteChannel(as(domain.RoleCurator),
+		openapi.DeleteChannelRequestObject{Name: "acme-slack"})
+	if err != nil {
+		t.Fatalf("DeleteChannel: %v", err)
+	}
+	if _, ok := resp.(openapi.DeleteChannel403ApplicationProblemPlusJSONResponse); !ok {
+		t.Fatalf("response = %T, want forbidden", resp)
+	}
+	if spy.deleted != "" {
+		t.Errorf("the connection reached the store as %q", spy.deleted)
+	}
+}
+
+func TestPutChannel_carryingTheInstallationsRoom_needsAuthorityOverTheInstallation(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{listed: []admin.Channel{withInstallationRoom()}}
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, nil)
+
+	resp, err := s.PutChannel(as(domain.RoleCurator), openapi.PutChannelRequestObject{
+		Name: "acme-slack", Body: &openapi.PutChannelJSONRequestBody{Kind: "slack"},
+	})
+	if err != nil {
+		t.Fatalf("PutChannel: %v", err)
+	}
+	if _, ok := resp.(openapi.PutChannel403ApplicationProblemPlusJSONResponse); !ok {
+		t.Fatalf("response = %T, want forbidden", resp)
+	}
+	if spy.putChannel != "" {
+		t.Errorf("the connection reached the store as %q", spy.putChannel)
+	}
+}
+
+// And whoever does govern the installation configures it as before. The rule
+// raises the bar for one connection, not for the feature.
+func TestPutChannel_carryingTheInstallationsRoom_isConfiguredByWhoGovernsIt(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{listed: []admin.Channel{withInstallationRoom()}}
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, nil)
+
+	resp, err := s.PutChannel(asInstallation(domain.RoleAdmin), openapi.PutChannelRequestObject{
+		Name: "acme-slack", Body: &openapi.PutChannelJSONRequestBody{Kind: "slack"},
+	})
+	if err != nil {
+		t.Fatalf("PutChannel: %v", err)
+	}
+	if _, ok := resp.(openapi.PutChannel204Response); !ok {
+		t.Fatalf("response = %T, want accepted", resp)
+	}
+	if spy.putChannel != "acme-slack" {
+		t.Error("the connection never reached the store")
+	}
+}
+
+// A connection carrying no such room stays a curator's to configure. The
+// authority follows what is attached, and nothing else changes.
+func TestDeleteChannel_carryingOrdinaryConversations_staysACuratorsToRemove(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{listed: []admin.Channel{{
+		Name: "acme-slack",
+		Conversations: []admin.Conversation{{
+			ID: "C07", Scope: domain.Scope{Company: "acme", Area: "ops"},
+		}},
+	}}}
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, nil)
+
+	resp, err := s.DeleteChannel(as(domain.RoleCurator),
+		openapi.DeleteChannelRequestObject{Name: "acme-slack"})
+	if err != nil {
+		t.Fatalf("DeleteChannel: %v", err)
+	}
+	if _, ok := resp.(openapi.DeleteChannel204Response); !ok {
+		t.Fatalf("response = %T, want accepted", resp)
+	}
+	if spy.deleted != "acme-slack" {
+		t.Error("the connection never reached the store")
+	}
+}
+
+func withInstallationRoom() admin.Channel {
+	return admin.Channel{
+		Name: "acme-slack",
+		Conversations: []admin.Conversation{
+			{ID: "C07", Scope: domain.Scope{Company: "acme", Area: "ops"}},
+			{ID: "C-everywhere", Scope: domain.Scope{Company: domain.Installation}},
+		},
+	}
+}
+
 type channelSpy struct {
 	listed       []admin.Channel
 	bound        []admin.ChannelIdentity
 	seen         []admin.ChannelAccountSeen
 	putConv      admin.Conversation
 	deletedScope domain.Scope
+	putChannel   string
+	deleted      string
 }
 
 func (c *channelSpy) List(context.Context) ([]admin.Channel, error) { return c.listed, nil }
 
 func (c *channelSpy) PutChannel(
-	context.Context, admin.Channel, channel.Credentials, domain.UserID,
+	_ context.Context, ch admin.Channel, _ channel.Credentials, _ domain.UserID,
 ) error {
+	c.putChannel = ch.Name
 	return nil
 }
 
-func (c *channelSpy) DeleteChannel(context.Context, string, domain.UserID) error { return nil }
+func (c *channelSpy) DeleteChannel(_ context.Context, name string, _ domain.UserID) error {
+	c.deleted = name
+	return nil
+}
 
 func (c *channelSpy) PutConversation(
 	_ context.Context, _ string, conv admin.Conversation, _ domain.UserID,
