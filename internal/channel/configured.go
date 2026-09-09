@@ -239,10 +239,15 @@ digits and a colon — so a reader deciding by appearance would take somebody's 
 apart and answer as a different conversation.
 */
 
-// KeyVersionConnection is what a row carries once its name holds the connection
-// as well as the id. Absent — every row this version writes — means the name is
-// the id itself.
-const KeyVersionConnection = 2
+const (
+	// KeyVersionName is a row whose name is the conversation id. Absent from
+	// the value, which is how every row this version writes reads back.
+	KeyVersionName = 0
+	// KeyVersionConnection is a row whose name holds the connection as well as
+	// the id. Written by the release after this one; read by this one, which
+	// is what makes that release possible.
+	KeyVersionConnection = 2
+)
 
 /*
 ConversationKey is the name a row of that version is stored under.
@@ -271,15 +276,24 @@ guessing which one is how a configuration ends up governing a message it was
 never written for.
 */
 func ConversationIDOf(keyVersion int, channelName, name string) (string, bool) {
-	if keyVersion < KeyVersionConnection {
+	// An allowlist of exactly the versions this binary knows. Read as ranges,
+	// a version from the future fell into whichever side it happened to be
+	// nearer — so a row a later release wrote in a shape nobody here has seen
+	// would have been taken apart as though it were v2, and answered as some
+	// other conversation.
+	switch keyVersion {
+	case KeyVersionName:
 		return name, true
-	}
-	prefix := strconv.Itoa(len(channelName)) + ":" + channelName + "/"
-	id, found := strings.CutPrefix(name, prefix)
-	if !found || id == "" {
+	case KeyVersionConnection:
+		prefix := strconv.Itoa(len(channelName)) + ":" + channelName + "/"
+		id, found := strings.CutPrefix(name, prefix)
+		if !found || id == "" {
+			return "", false
+		}
+		return id, true
+	default:
 		return "", false
 	}
-	return id, true
 }
 
 // Source is who wrote a channel event as the vendor names it.

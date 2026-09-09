@@ -101,6 +101,14 @@ func TestConversationIDOf_theShapeIsDeclared_notInferred(t *testing.T) {
 			"acme-slack", "10:acme-slack/C07", "C07", true},
 		{"a row claiming a shape it does not carry is illegible",
 			channel.KeyVersionConnection, "acme-slack", "C07", "", false},
+		// A version from the future is not the nearest one this binary knows.
+		// Read as a range it fell to whichever side it was closer to, so a row
+		// written in a shape nobody here has seen was taken apart as though it
+		// were v2 and answered as another conversation.
+		{"a version this binary has never seen is illegible", 3, "acme-slack",
+			"10:acme-slack/C07", "", false},
+		{"and so is one below the first", -1, "acme-slack", "C07", "", false},
+		{"and one between them", 1, "acme-slack", "C07", "", false},
 	} {
 		t.Run(one.name, func(t *testing.T) {
 			got, legible := channel.ConversationIDOf(one.keyVersion, one.channel, one.stored)
