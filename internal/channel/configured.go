@@ -243,6 +243,14 @@ func (c *Configured) WatchFor(
 		if s.Name != id || !s.Enabled {
 			continue
 		}
+		// The door asks this before the consumer resolves anything, so a row
+		// for the whole installation would let any configured source write an
+		// inbox row carrying a configured principal — refused a sweep later,
+		// after the write and the delegation had already travelled. The mode
+		// alone would not catch a restored row that says watch.
+		if s.Scope.IsInstallation() {
+			continue
+		}
 		var v conversationValue
 		if err := json.Unmarshal(s.Value, &v); err != nil {
 			continue

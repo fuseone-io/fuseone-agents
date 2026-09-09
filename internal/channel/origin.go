@@ -48,6 +48,26 @@ migration, or from a version of the screen that did not check.
 var ErrAmbiguousConversation = errors.New("channel: that conversation speaks for more than one scope")
 
 /*
+ErrAnnouncesOnly means this conversation was configured to hear and not to ask.
+
+Two rows reach it. One says so in its mode — a room somebody added the bot to
+for visibility. The other speaks for the whole installation, which contains
+every company: a room that hears about every company is a reasonable thing to
+configure, and one that can start an agent in every company is a different
+grant entirely.
+
+Refused on read as well as on write. A row arrives by restore, by migration, or
+from a version of the screen that did not check — and for the second kind the
+safety is otherwise borrowed entirely from another package: no agent can be
+published at the installation, and the catalogue compares the company for
+equality rather than containment, so the startable list comes back empty. Both
+are true today and neither says why. The day the second is taught to read the
+sentinel as "everything", this room becomes a start button for every agent
+here, and nothing in this package would have noticed.
+*/
+var ErrAnnouncesOnly = errors.New("channel: that conversation announces and starts nothing")
+
+/*
 Resolve answers what this conversation was configured to be.
 
 Keyed by the connection as well as the conversation. An id means nothing on its
@@ -91,6 +111,12 @@ func (c *Configured) Resolve(ctx context.Context, channel, id string) (Mapped, e
 	case 0:
 		return Mapped{}, fmt.Errorf("%w: %s/%s", ErrNoConversation, channel, id)
 	case 1:
+		// After the count and not inside the search. Refusing while looking
+		// would answer "this one announces only" and hide the fact that two
+		// rows exist, sending an operator to the wrong one.
+		if found[0].Scope.IsInstallation() || found[0].Mode == ConversationAnnounce {
+			return Mapped{}, fmt.Errorf("%w: %s/%s", ErrAnnouncesOnly, channel, id)
+		}
 		return found[0], nil
 	default:
 		return Mapped{}, fmt.Errorf("%w: %s/%s", ErrAmbiguousConversation, channel, id)

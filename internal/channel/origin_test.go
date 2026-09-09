@@ -212,9 +212,22 @@ func TestPutConversation_watchModeRequiresAuthorityAndSource(t *testing.T) {
 
 func configuredChannels(t *testing.T) (*channel.Configured, *admin.Channels) {
 	t.Helper()
+	configured, channels, _ := configuredChannelsWithStore(t)
+	return configured, channels
+}
+
+// configuredChannelsWithStore also hands back the settings store, for the tests
+// that have to write a row the administration would never produce. Restore,
+// migration and a hand-edited row are how those arrive, and they are what the
+// locks on the read side exist for.
+func configuredChannelsWithStore(
+	t *testing.T,
+) (*channel.Configured, *admin.Channels, *settings.Store) {
+	t.Helper()
 	_, pool := channelStore(t)
 	settingsStore := settings.NewStore(pool, nil)
-	return channel.NewConfigured(settingsStore), admin.NewChannels(pool, settingsStore)
+	return channel.NewConfigured(settingsStore),
+		admin.NewChannels(pool, settingsStore), settingsStore
 }
 
 /*
@@ -520,4 +533,121 @@ func TestFor_theDirectApprovalChoice_reachesTheRuntime(t *testing.T) {
 		}
 	}
 	t.Fatalf("places = %+v, want the conversation", places)
+}
+
+/*
+A conversation for the whole installation hears everything and asks nothing.
+
+That scope contains every company, and containment is right for hearing and
+wrong for asking — the asymmetry this file opens with. A room that hears about
+every company is a reasonable thing to configure; one that can start an agent in
+every company is a different grant entirely.
+
+Today nothing would come of a mention there: no agent can be published at the
+installation, and the catalogue query compares the company for equality rather
+than containment, so the startable list comes back empty. **Both of those live
+in another package and neither says why.** The rule has to be stated here, or
+the day somebody teaches that query to read the sentinel as "everything" — a
+change that would look correct — this room becomes a start button for every
+agent in the installation.
+*/
+func TestResolve_aConversationForTheWholeInstallation_startsNothing(t *testing.T) {
+	store, _, settingsStore := configuredChannelsWithStore(t)
+
+	installationConversation(t, settingsStore, "C40-everywhere", channel.ConversationMentions)
+
+	_, err := store.Resolve(t.Context(), "acme-slack", "C40-everywhere")
+	if !errors.Is(err, channel.ErrAnnouncesOnly) {
+		t.Fatalf("err = %v, want ErrAnnouncesOnly", err)
+	}
+}
+
+// And so does any conversation whose mode says it only announces, wherever it
+// sits. The scope is one reason to refuse; the mode is the other.
+func TestResolve_aConversationThatOnlyAnnounces_startsNothing(t *testing.T) {
+	store, channels, _ := configuredChannelsWithStore(t)
+
+	if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+		ID: "C41-quiet", Enabled: true, Mode: channel.ConversationAnnounce,
+		Scope: domain.Scope{Company: "acme", Area: "ops"},
+	}, "usr_ana"); err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+
+	_, err := store.Resolve(t.Context(), "acme-slack", "C41-quiet")
+	if !errors.Is(err, channel.ErrAnnouncesOnly) {
+		t.Fatalf("err = %v, want ErrAnnouncesOnly", err)
+	}
+}
+
+/*
+Two rows for one Slack channel are still reported as ambiguous.
+
+The refusal for an installation row sits after the count, not inside the loop.
+Refusing it while searching would answer "this one announces only" and hide the
+fact that two rows exist — sending an operator to look at the wrong one.
+*/
+func TestResolve_theSameIdAtTheInstallationAndAtACompany_isAmbiguous(t *testing.T) {
+	store, _, settingsStore := configuredChannelsWithStore(t)
+
+	// Both written directly. The administration refuses to create the pair —
+	// that is its own lock — so a state holding both is restored, migrated or
+	// hand-edited, which is the state this read has to survive.
+	conversationRow(t, settingsStore, "SHARED-EVERYWHERE",
+		settings.ScopeArea, domain.Scope{Company: "acme", Area: "ops"},
+		channel.ConversationMentions)
+	installationConversation(t, settingsStore, "SHARED-EVERYWHERE", channel.ConversationMentions)
+
+	_, err := store.Resolve(t.Context(), "acme-slack", "SHARED-EVERYWHERE")
+	if !errors.Is(err, channel.ErrAmbiguousConversation) {
+		t.Fatalf("err = %v, want the ambiguity reported", err)
+	}
+}
+
+/*
+And a watched message in such a room writes nothing down.
+
+WatchFor is asked by the door, before the consumer resolves anything. It never
+looked at the scope, so an installation row saying "watch" would let any
+configured Slack source write an inbox row carrying a configured principal —
+refused a sweep later, after the write and the delegation had already travelled.
+*/
+func TestWatchFor_aConversationForTheWholeInstallation_answersNoRule(t *testing.T) {
+	store, _, settingsStore := configuredChannelsWithStore(t)
+
+	installationConversation(t, settingsStore, "C42-watching", channel.ConversationWatch)
+
+	_, ok, err := store.WatchFor(t.Context(), "acme-slack", "C42-watching",
+		channel.Source{Bot: "B-alerts"})
+	if err != nil {
+		t.Fatalf("WatchFor: %v", err)
+	}
+	if ok {
+		t.Error("a conversation for the whole installation answered with a watch rule")
+	}
+}
+
+// installationConversation writes a row the administration will not produce.
+// It arrives by restore, by migration, or from a version of the screen that did
+// not check — which is exactly what the locks on the read side are for.
+func installationConversation(t *testing.T, store *settings.Store, id, mode string) {
+	t.Helper()
+	conversationRow(t, store, id, settings.ScopeInstallation,
+		domain.Scope{Company: domain.Installation}, mode)
+}
+
+func conversationRow(
+	t *testing.T, store *settings.Store, id string,
+	kind settings.ScopeKind, scope domain.Scope, mode string,
+) {
+	t.Helper()
+	value := `{"channel":"acme-slack","mode":"` + mode +
+		`","agent":"triagem","runAs":"usr_opsbot","sources":["B-alerts"]}`
+	if err := store.Put(t.Context(), settings.Setting{
+		ScopeKind: kind, Scope: scope,
+		Kind: channel.KindConversation, Name: id,
+		Value: []byte(value), Enabled: true, UpdatedBy: "restore",
+	}); err != nil {
+		t.Fatalf("write the %s row: %v", kind, err)
+	}
 }

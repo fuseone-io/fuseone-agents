@@ -1121,3 +1121,36 @@ func TestSweep_theBindingCouldNotBeRead_leavesTheAskPending(t *testing.T) {
 		t.Error("the ask was closed because the settings store was away")
 	}
 }
+
+/*
+A mention in a room that only reports starts nothing, and reads no catalogue.
+
+The catalogue assertion is the load-bearing half. Nothing would come of such a
+mention today anyway — no agent can be published at the installation and the
+catalogue compares the company for equality — but both of those live in another
+package and neither says why. Proving the refusal happens without reading the
+catalogue at all is what pins the rule here, where it is stated, rather than to
+a SQL predicate that has every reason to change.
+*/
+func TestSweep_aMentionInARoomThatOnlyReports_startsNothingWithoutReadingTheCatalogue(t *testing.T) {
+	c, parts := consumerWith(t, "<@U07BOT> triagem esse chamado", func(p *consumerParts) {
+		p.scopes.err = fmt.Errorf("%w: acme-slack/C07-ops", channel.ErrAnnouncesOnly)
+		p.publishedErr = errors.New("the registry is away")
+	})
+
+	if _, err := c.Sweep(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if parts.opener.calls != 0 {
+		t.Fatal("a run opened from a room that only reports")
+	}
+	if parts.listCalls != 0 {
+		t.Errorf("read the catalogue %d times, want the refusal to need none", parts.listCalls)
+	}
+	if _, err := c.Answer(t.Context(), time.Minute, 10); err != nil {
+		t.Fatalf("Answer: %v", err)
+	}
+	if len(parts.answers.said) != 1 || !strings.Contains(parts.answers.said[0], "only reports") {
+		t.Fatalf("said = %v, want the person told what the room is for", parts.answers.said)
+	}
+}
