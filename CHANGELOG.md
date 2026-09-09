@@ -42,8 +42,8 @@ field" is a commit message.
   for hearing and the wrong one for asking. Configuring or deleting it needs
   Company configurer granted at the installation scope, and the option is
   absent for anybody else rather than offered and refused. Choose "what to
-  announce" before saving: the default is parked and failed, which at this
-  scope means every stop and every failure in every company.
+  announce" before saving: the default is parked, failed and drifted, which at
+  this scope means every stop, every failure and every drift in every company.
 
 - **"Only reports" is a mode any conversation can be set to.** It is what the
   installation room saves, and it is offered on every conversation in the start
@@ -52,6 +52,14 @@ field" is a commit message.
   mentions and watched messages start nothing there, the bound agent is dropped
   — a conversation that starts nothing has none to start — and the console shows
   no fields about starting runs.
+
+- **Drift can be announced in a conversation.** It was in the platform's
+  defaults and in none of the console's: the screen offered parked, failed and
+  finished, and always sent that list, so the fallback that includes drift was
+  reachable through the API and nowhere else. It is an option now, and among
+  the ones a new conversation starts with — an agent that quietly stopped
+  holding its corrections is the one notice nobody thinks to ask for. Existing
+  conversations keep exactly what they were configured with.
 
 ### Changed
 

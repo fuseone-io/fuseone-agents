@@ -606,4 +606,39 @@ describe("conversation configuration", () => {
     expect(screen.queryByRole("button", { name: "Salvar" })).not.toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: "Contexto" })).not.toBeInTheDocument();
   });
+  /*
+   * Drift is announced unless somebody says otherwise.
+   *
+   * It is in the platform's own defaults for a reason: it fires rarely, and an
+   * agent that quietly stopped holding its corrections is precisely what nobody
+   * thinks to go and ask about. The console offered no way to ask for it and
+   * always sent its own list, so the default was unreachable from the screen
+   * while every text on it said otherwise.
+   */
+  it("announces drift by default, and lets it be turned off", async () => {
+    const requests: { method: string; url: string; body?: unknown }[] = [];
+    stubApi({ requests });
+    const user = userEvent.setup();
+    renderForm(mentionsConversation);
+
+    // An existing conversation keeps what it was configured with.
+    expect(
+      await screen.findByRole("checkbox", { name: "Fora do combinado" }),
+    ).not.toBeChecked();
+
+    await user.click(screen.getByRole("checkbox", { name: "Fora do combinado" }));
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => expect(saved(requests)).toBeDefined());
+    expect((saved(requests) as { wants: string[] }).wants).toContain("drifted");
+  });
+
+  it("starts a new conversation with drift among the events", async () => {
+    stubApi();
+    renderForm();
+
+    expect(
+      await screen.findByRole("checkbox", { name: "Fora do combinado" }),
+    ).toBeChecked();
+  });
 });

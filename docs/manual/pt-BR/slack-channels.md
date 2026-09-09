@@ -164,9 +164,10 @@ Por isso o contexto só aparece para quem governa a instalação — quem tem
 onde uma área relata é um ato escopado comum; decidir que uma sala ouve todas
 as empresas é a autoridade acima delas. O mesmo vale para apagá-la.
 
-Comece pelo **"o que avisar"**. O padrão do formulário é *parada* e *falhou*,
-e nesse escopo isso significa toda parada e toda falha de toda empresa — o
-volume de uma sala dessas é a soma de todas as outras. Estreite antes de salvar.
+Comece pelo **"o que avisar"**. O padrão é *parada*, *falhou* e *fora do
+combinado*, e nesse escopo isso significa toda parada, toda falha e todo drift
+de toda empresa — o volume de uma sala dessas é a soma de todas as outras.
+Estreite antes de salvar.
 
 ## Avisar em particular quem pode decidir
 

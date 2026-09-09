@@ -3066,7 +3066,7 @@ paths:
                     Sending the field is choosing: the console always does, so a
                     conversation configured there hears what was ticked and
                     nothing else.
-                  items: { type: string, enum: [parked, failed, finished] }
+                  items: { type: string, enum: [parked, failed, finished, drifted] }
                 enabled: { type: boolean, default: true }
       responses:
         '204': { description: The conversation is configured. }

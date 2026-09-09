@@ -765,7 +765,8 @@
     "event": {
       "parked": "Waiting on a decision",
       "failed": "Failed",
-      "finished": "Finished"
+      "finished": "Finished",
+      "drifted": "Drifted"
     },
     "explains": "A channel is where runs report and, when inbound delivery is configured, where explicit mentions can start an agent.",
     "kind": "Kind",
@@ -805,7 +806,7 @@
     "saved": "Channel saved",
     "scopeGoverns": "The scope governs: only its runs reach this conversation.",
     "installationScope": "The whole installation",
-    "installationScopeExplains": "Hears about a run in any company, and is the answer for an area nobody pointed at a channel of its own. It starts nothing: mentioning the bot here is refused. Begin with \"what to announce\" — the default includes drift from every agent in every company.",
+    "installationScopeExplains": "Hears about a run in any company, and is the answer for an area nobody pointed at a channel of its own. It starts nothing: mentioning the bot here is refused. Begin with \"what to announce\" — the default is every stop, every failure and every drift, in every company.",
     "sendTest": "Send a test",
     "seenAccounts": "Seen recently",
     "seenAccountsHint": "Click an account to fill the link form. It grants nothing until you choose a person and save.",

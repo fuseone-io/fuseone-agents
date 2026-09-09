@@ -9,11 +9,15 @@ because the rules are worth reading on their own, without four hundred lines of
 JSX around them.
 */
 
-// What the console offers. The stored set is wider: a conversation for the
-// whole installation is stored as `announce`, chosen by its scope rather than
-// picked from a list, and drift reaches only a conversation stored with no
-// choice at all.
-export const EVENTS = ["parked", "failed", "finished"] as const;
+// What the console offers, and what a new conversation starts with. Drift is
+// among the defaults for the reason the platform makes it one: it fires rarely,
+// and an agent that quietly stopped holding its corrections is precisely the
+// thing nobody thinks to go and ask about.
+//
+// The stored set is wider by one: a conversation for the whole installation is
+// stored as `announce`, chosen by its scope rather than picked from a list.
+export const EVENTS = ["parked", "failed", "finished", "drifted"] as const;
+export const EVENTS_BY_DEFAULT = ["parked", "failed", "drifted"] as const;
 
 // The scope above every company, written the way the API writes it. A
 // conversation there hears about a run in any company, which is what makes it

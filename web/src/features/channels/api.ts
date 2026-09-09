@@ -68,7 +68,7 @@ export interface ConversationInput {
   sources?: string[];
   agent?: string;
   runAs?: string;
-  wants?: ("parked" | "failed" | "finished")[];
+  wants?: ("parked" | "failed" | "finished" | "drifted")[];
 }
 
 export function useSaveConversation() {

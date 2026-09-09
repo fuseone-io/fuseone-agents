@@ -13,6 +13,7 @@ import { useSaveConversation } from "@/features/channels/api";
 import { ConversationAgentField } from "@/features/channels/conversation-agent-field";
 import {
   conversationSchema,
+  EVENTS_BY_DEFAULT,
   knownMode,
   splitSources,
   startsFromMentions,
@@ -73,9 +74,8 @@ export function ConversationForm({
       sources: (conversation?.sources ?? []).join("\n"),
       agent: conversation?.agent ?? "",
       runAs: conversation?.runAs ?? "",
-      wants: (conversation?.wants as ("parked" | "failed" | "finished")[]) ?? [
-        "parked",
-        "failed",
+      wants: (conversation?.wants as ConversationValues["wants"]) ?? [
+        ...EVENTS_BY_DEFAULT,
       ],
     },
   });

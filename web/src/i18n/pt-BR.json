@@ -765,7 +765,8 @@
     "event": {
       "parked": "Esperando uma decisão",
       "failed": "Falhou",
-      "finished": "Terminou"
+      "finished": "Terminou",
+      "drifted": "Fora do combinado"
     },
     "explains": "Um canal é onde os runs avisam e, quando a entrada está configurada, onde menções explícitas podem iniciar um agente.",
     "kind": "Tipo",
@@ -805,7 +806,7 @@
     "saved": "Canal salvo",
     "scopeGoverns": "Quem manda aqui é o escopo: só os runs dele chegam nesta conversa.",
     "installationScope": "A instalação inteira",
-    "installationScopeExplains": "Ouve sobre um run de qualquer empresa, e é a resposta para uma área que ninguém apontou para um canal próprio. Não inicia nada: mencionar o bot aqui é recusado. Comece escolhendo em \"o que avisar\" — o padrão inclui drift de todo agente de toda empresa.",
+    "installationScopeExplains": "Ouve sobre um run de qualquer empresa, e é a resposta para uma área que ninguém apontou para um canal próprio. Não inicia nada: mencionar o bot aqui é recusado. Comece escolhendo em \"o que avisar\" — o padrão é toda parada, toda falha e todo drift, de toda empresa.",
     "sendTest": "Enviar teste",
     "seenAccounts": "Vistas recentemente",
     "seenAccountsHint": "Clique em uma conta para preencher o formulário. Nada é concedido até escolher uma pessoa e salvar.",

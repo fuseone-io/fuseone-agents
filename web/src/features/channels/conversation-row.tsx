@@ -12,7 +12,10 @@ import {
   type Conversation,
   scopeText,
 } from "@/features/channels/channel-model";
-import { knownMode } from "@/features/channels/conversation-form-model";
+import {
+  EVENTS_BY_DEFAULT,
+  knownMode,
+} from "@/features/channels/conversation-form-model";
 import { problemMessage } from "@/lib/api/problem-message";
 
 export function ConversationRow({
@@ -83,7 +86,7 @@ export function ConversationRow({
         </div>
       </TableCell>
       <TableCell>
-        <EventBadges wants={conversation.wants ?? ["parked", "failed"]} />
+        <EventBadges wants={conversation.wants ?? [...EVENTS_BY_DEFAULT]} />
       </TableCell>
       <TableCell className="truncate text-xs">{mode}</TableCell>
       <TableCell className="truncate text-xs text-muted-foreground">
