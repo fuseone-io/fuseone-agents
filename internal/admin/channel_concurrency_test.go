@@ -34,7 +34,7 @@ func TestPutConversation_twoScopesForOneConversationAtOnce_onlyOneIsStored(t *te
 	pool := freshPool(t)
 	channels := admin.NewChannels(pool, settings.NewStore(pool, testVault(t)))
 
-	release := hold(t, pool, "channel:acme-slack")
+	barrier := hold(t, pool, "channel:acme-slack")
 
 	results := make(chan error, 2)
 	for _, area := range []domain.AreaID{"ops", "finance"} {
@@ -46,10 +46,10 @@ func TestPutConversation_twoScopesForOneConversationAtOnce_onlyOneIsStored(t *te
 				}, "usr_ana")
 		}()
 	}
-	// Both are now inside their transactions, waiting for the lock. Whatever
-	// they read about each other, they read before this line.
-	time.Sleep(300 * time.Millisecond)
-	release()
+	// Both are inside their transactions and queued on the lock. Whatever they
+	// read about each other, they read before this line.
+	barrier.waitFor(t, 2)
+	barrier.release(t)
 
 	stored, refused := 0, 0
 	for range 2 {
@@ -90,7 +90,7 @@ func TestPutChannel_twoPartialRotationsAtOnce_keepBoth(t *testing.T) {
 		t.Fatalf("configure the connection: %v", err)
 	}
 
-	release := hold(t, pool, "channel:acme-slack")
+	barrier := hold(t, pool, "channel:acme-slack")
 
 	results := make(chan error, 2)
 	for _, creds := range []channel.Credentials{
@@ -103,8 +103,8 @@ func TestPutChannel_twoPartialRotationsAtOnce_keepBoth(t *testing.T) {
 			})
 		}()
 	}
-	time.Sleep(300 * time.Millisecond)
-	release()
+	barrier.waitFor(t, 2)
+	barrier.release(t)
 
 	for range 2 {
 		if err := <-results; err != nil {
@@ -123,33 +123,94 @@ func TestPutChannel_twoPartialRotationsAtOnce_keepBoth(t *testing.T) {
 	}
 }
 
-// hold takes the connection's lock from outside and hands back the release, so
-// a test can decide when two writers are allowed to proceed.
-func hold(t *testing.T, pool *pgxpool.Pool, key string) func() {
+/*
+barrier holds the connection's lock from outside, so a test can decide when two
+writers are let go — and can tell that they are both actually waiting.
+
+Asked of Postgres rather than timed. A sleep long enough to be reliable is long
+enough to be slow, and one short enough to be quick is a test that passes for
+the wrong reason on a loaded machine: a writer that had not started yet reads
+the other's result, sees the state it was supposed to race, and agrees with the
+broken implementation.
+*/
+type barrier struct {
+	pool *pgxpool.Pool
+	conn *pgxpool.Conn
+	lock advisoryLock
+	key  string
+	done bool
+}
+
+type advisoryLock struct {
+	database uint32
+	classID  uint32
+	objID    uint32
+	objSubID int16
+}
+
+func hold(t *testing.T, pool *pgxpool.Pool, key string) *barrier {
 	t.Helper()
 	conn, err := pool.Acquire(context.Background())
 	if err != nil {
 		t.Fatalf("acquire: %v", err)
 	}
-	if _, err := conn.Exec(context.Background(),
-		`select pg_advisory_lock(hashtext($1))`, key); err != nil {
-		conn.Release()
-		t.Fatalf("take the lock: %v", err)
-	}
-	released := false
+	b := &barrier{pool: pool, conn: conn, key: key}
 	t.Cleanup(func() {
-		if !released {
+		if !b.done {
 			conn.Release()
 		}
 	})
-	return func() {
-		released = true
-		if _, err := conn.Exec(context.Background(),
-			`select pg_advisory_unlock(hashtext($1))`, key); err != nil {
-			t.Errorf("release the lock: %v", err)
-		}
-		conn.Release()
+	if _, err := conn.Exec(context.Background(),
+		`select pg_advisory_lock(hashtext($1))`, key); err != nil {
+		t.Fatalf("take the lock: %v", err)
 	}
+
+	var pid int
+	if err := conn.QueryRow(context.Background(), `select pg_backend_pid()`).Scan(&pid); err != nil {
+		t.Fatalf("read the holder's backend: %v", err)
+	}
+	if err := pool.QueryRow(context.Background(), `
+		select database, classid, objid, objsubid from pg_locks
+		where locktype = 'advisory' and granted and pid = $1`, pid).
+		Scan(&b.lock.database, &b.lock.classID, &b.lock.objID, &b.lock.objSubID); err != nil {
+		t.Fatalf("read the lock the holder took: %v", err)
+	}
+	return b
+}
+
+// waitFor blocks until that many writers are queued on this exact lock. Until
+// they are, letting go would prove nothing.
+func (b *barrier) waitFor(t *testing.T, want int) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		var waiting int
+		if err := b.pool.QueryRow(context.Background(), `
+			select count(*) from pg_locks
+			where locktype = 'advisory' and not granted
+			  and database = $1 and classid = $2 and objid = $3 and objsubid = $4`,
+			b.lock.database, b.lock.classID, b.lock.objID, b.lock.objSubID).
+			Scan(&waiting); err != nil {
+			t.Fatalf("read lock waiters: %v", err)
+		}
+		if waiting >= want {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("only %d of %d writers reached the connection's lock", waiting, want)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+func (b *barrier) release(t *testing.T) {
+	t.Helper()
+	b.done = true
+	if _, err := b.conn.Exec(context.Background(),
+		`select pg_advisory_unlock(hashtext($1))`, b.key); err != nil {
+		t.Errorf("release the lock: %v", err)
+	}
+	b.conn.Release()
 }
 
 func testVault(t *testing.T) *vault.Vault {
