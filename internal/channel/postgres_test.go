@@ -605,3 +605,190 @@ func TestUnreported_awaitingApprovalWithNoPendingSequence_isStillRetired(t *test
 		t.Errorf("announced again with nothing new to say: %+v", again)
 	}
 }
+
+/*
+Which posted cards still ask a question that has an answer.
+
+Read as state rather than pushed from the decision, so it has to recognise
+every way a question stops being open: somebody answered it, the run was
+abandoned, or the run stopped again somewhere later — which happens now that a
+run parking twice is announced twice, and the first card must stop offering to
+answer a step the second one replaced.
+*/
+func TestStale_cardsWhoseQuestionIsSettled_areListedWithWhatHappened(t *testing.T) {
+	store, pool := channelStore(t)
+
+	awaitApproval(t, pool, "run-decided")
+	pending, err := store.Unreported(t.Context(), noon.Add(-channel.Window), 50)
+	if err != nil {
+		t.Fatalf("unreported: %v", err)
+	}
+	if err := store.Record(t.Context(), channel.Delivery{
+		Announcement: pending[0].AnnouncementTo(channel.Conversation{
+			Channel: "acme-slack", ID: "C07-ops",
+		}),
+		Ref: "1786.1", PostedAt: noon,
+	}); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+
+	// Still waiting: the card is asking a live question.
+	open, err := store.Stale(t.Context(), 50)
+	if err != nil {
+		t.Fatalf("Stale: %v", err)
+	}
+	if cardFor(open, "run-decided") != nil {
+		t.Fatal("a card was called stale while the run was still waiting")
+	}
+
+	appendStep(t, pool, "run-decided", domain.StepApprovalDecided,
+		[]byte(`{"approved":true,"by":"usr_ana","at_seq":2}`))
+
+	open, err = store.Stale(t.Context(), 50)
+	if err != nil {
+		t.Fatalf("Stale after the decision: %v", err)
+	}
+	card := cardFor(open, "run-decided")
+	if card == nil {
+		t.Fatalf("open = %+v, want the answered card", open)
+	}
+	if card.Outcome != channel.OutcomeApproved || card.DecidedBy != "usr_ana" {
+		t.Errorf("card = %+v, want it to carry who answered and how", card)
+	}
+
+	if err := store.Closed(t.Context(), *card, noon); err != nil {
+		t.Fatalf("Closed: %v", err)
+	}
+	open, err = store.Stale(t.Context(), 50)
+	if err != nil {
+		t.Fatalf("Stale after closing: %v", err)
+	}
+	if cardFor(open, "run-decided") != nil {
+		t.Error("a closed card came back for another sweep")
+	}
+}
+
+// A run that stopped and was never decided says exactly that. Calling it
+// refused would put a decision in somebody's mouth that nobody made.
+func TestStale_aRunThatMovedOnUndecided_claimsNoDecision(t *testing.T) {
+	store, pool := channelStore(t)
+
+	awaitApproval(t, pool, "run-abandoned")
+	pending, err := store.Unreported(t.Context(), noon.Add(-channel.Window), 50)
+	if err != nil {
+		t.Fatalf("unreported: %v", err)
+	}
+	if err := store.Record(t.Context(), channel.Delivery{
+		Announcement: pending[0].AnnouncementTo(channel.Conversation{
+			Channel: "acme-slack", ID: "C07-ops",
+		}),
+		Ref: "1786.2", PostedAt: noon,
+	}); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	appendStep(t, pool, "run-abandoned", domain.StepAbandoned, []byte(`{"reason":"cancelled"}`))
+
+	open, err := store.Stale(t.Context(), 50)
+	if err != nil {
+		t.Fatalf("Stale: %v", err)
+	}
+	card := cardFor(open, "run-abandoned")
+	if card == nil {
+		t.Fatalf("open = %+v, want the card of a run nobody decided", open)
+	}
+	if card.Outcome != channel.OutcomeMovedOn || card.DecidedBy != "" {
+		t.Errorf("card = %+v, want it to claim no decision", card)
+	}
+}
+
+/*
+The sentinel is not a card, and neither is a row naming no message.
+
+"Said everywhere" is filed as a delivery with no connection and no
+conversation; a row with no reference names nothing that could be rewritten.
+Routing either to a driver asks it to edit a message that does not exist, on a
+connection that is not one.
+*/
+func TestStale_theSentinelAndRowsNamingNoMessage_areNotCards(t *testing.T) {
+	store, pool := channelStore(t)
+
+	awaitApproval(t, pool, "run-sentinel")
+	pending, err := store.Unreported(t.Context(), noon.Add(-channel.Window), 50)
+	if err != nil {
+		t.Fatalf("unreported: %v", err)
+	}
+	if err := store.Reported(t.Context(), pending[0], noon); err != nil {
+		t.Fatalf("Reported: %v", err)
+	}
+	if err := store.Record(t.Context(), channel.Delivery{
+		Announcement: pending[0].AnnouncementTo(channel.Conversation{
+			Channel: "acme-slack", ID: "C08-quiet",
+		}),
+		PostedAt: noon,
+	}); err != nil {
+		t.Fatalf("Record without a ref: %v", err)
+	}
+	appendStep(t, pool, "run-sentinel", domain.StepAbandoned, []byte(`{"reason":"cancelled"}`))
+
+	open, err := store.Stale(t.Context(), 50)
+	if err != nil {
+		t.Fatalf("Stale: %v", err)
+	}
+	for _, c := range open {
+		if c.RunID != "run-sentinel" {
+			continue
+		}
+		if c.Conversation == "" || c.Ref == "" {
+			t.Errorf("card = %+v, want nothing that names no message", c)
+		}
+	}
+}
+
+func cardFor(open []channel.Card, run domain.RunID) *channel.Card {
+	for i, c := range open {
+		if c.RunID == run {
+			return &open[i]
+		}
+	}
+	return nil
+}
+
+/*
+A run waiting again is not waiting on the old question.
+
+A run stops as many times as it asks, and each stop is announced now. The card
+from the first stop is still on screen offering to answer a step the second one
+replaced — and the run is once more awaiting a decision, so anything that
+looked only at the phase would leave it open for ever.
+*/
+func TestStale_aRunWaitingOnALaterStep_closesTheEarlierCard(t *testing.T) {
+	store, pool := channelStore(t)
+
+	awaitApproval(t, pool, "run-again")
+	first, err := store.Unreported(t.Context(), noon.Add(-channel.Window), 50)
+	if err != nil {
+		t.Fatalf("unreported: %v", err)
+	}
+	if err := store.Record(t.Context(), channel.Delivery{
+		Announcement: first[0].AnnouncementTo(channel.Conversation{
+			Channel: "acme-slack", ID: "C07-ops",
+		}),
+		Ref: "1786.3", PostedAt: noon,
+	}); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+
+	decideAndParkAgain(t, pool, "run-again")
+
+	open, err := store.Stale(t.Context(), 50)
+	if err != nil {
+		t.Fatalf("Stale: %v", err)
+	}
+	card := cardFor(open, "run-again")
+	if card == nil {
+		t.Fatalf("open = %+v, want the card of the question that was replaced", open)
+	}
+	if card.AtSeq != first[0].AtSeq {
+		t.Errorf("card at seq %d, want the earlier question %d", card.AtSeq, first[0].AtSeq)
+	}
+}

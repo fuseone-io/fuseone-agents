@@ -27,6 +27,27 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Added
+
+- **An approval can also be sent privately to the people who may decide it.**
+  Turn on "also tell the people who may decide, privately" on a conversation
+  that is told about parked runs, and the same card goes as a direct message
+  from the channel bot to whoever holds Approver in a scope covering the run —
+  in addition to the card in the conversation, never instead of it. It grants
+  nobody anything: the button is checked against the run's own scope wherever
+  it is pressed, so a recipient without the grant is refused in a direct
+  message exactly as in a channel. Needs the Slack app's `im:write` scope and a
+  linked account for each person; anybody unlinked is simply not reached. If
+  more than twenty people may decide, nobody is messaged privately and the
+  reason is recorded — telling an arbitrary twenty of them is worse than
+  telling none.
+
+- **A card whose approval has been answered stops offering to answer it.** Once
+  somebody decides — in Slack, in a private message, or in the console — every
+  card posted about that step is rewritten to say what happened and who decided
+  it, and the buttons go. This applies to conversation cards too, so an
+  approval decided in the console no longer leaves live buttons behind.
+
 ### Upgrade notes
 
 - **A run that is stopped right now may be announced once more after the

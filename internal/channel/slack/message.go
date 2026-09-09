@@ -72,7 +72,12 @@ func blocks(m channel.Message, decidable bool) []any {
 	// Buttons only where an answer could arrive. Everywhere else a link, which
 	// is honest: a button that does nothing is the worst kind of interface,
 	// and it would be on the message that matters most.
-	if decidable && m.Event == channel.EventParked && m.AtSeq > 0 {
+	if m.Outcome != "" {
+		// The question has an answer, so the card stops offering one. The
+		// facts stay: a closed card that collapsed to a sentence would take
+		// the record out of the room it was announced in.
+		out = append(out, context_(answeredBy(m)))
+	} else if decidable && m.Event == channel.EventParked && m.AtSeq > 0 {
 		out = append(out, decide(m))
 	}
 	if m.Link != "" {
@@ -135,4 +140,26 @@ func reasonOr(reason, fallback string) string {
 		return fallback
 	}
 	return reason
+}
+
+// answeredBy says what became of the question, and who settled it.
+//
+// Named, because a card that says only "decided" sends the next person to the
+// console to find out by whom — and the whole point of announcing an approval
+// where people are is that they do not have to.
+func answeredBy(m channel.Message) string {
+	who := m.DecidedBy
+	if who == "" {
+		who = "somebody"
+	}
+	switch m.Outcome {
+	case channel.OutcomeApproved:
+		return fmt.Sprintf("Approved by %s. The run is continuing.", who)
+	case channel.OutcomeRefused:
+		return fmt.Sprintf("Refused by %s. The run will not take that action.", who)
+	default:
+		// Nobody answered it. Saying "refused" would put a decision in
+		// somebody's mouth that nobody made.
+		return "This is no longer waiting on a decision."
+	}
 }

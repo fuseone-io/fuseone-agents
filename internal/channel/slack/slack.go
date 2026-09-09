@@ -68,7 +68,22 @@ func (p *Poster) WithEndpointBase(url string) *Poster {
 func (p *Poster) Post(
 	ctx context.Context, c channel.Conversation, m channel.Message,
 ) (string, error) {
-	return p.send(ctx, postMessage{
+	at, err := p.PostPlaced(ctx, c, m)
+	return at.Ref, err
+}
+
+/*
+PostPlaced posts and says where the message landed.
+
+An address and a place are the same string for a room and different for a
+person: chat.postMessage accepts a user id and opens the conversation itself,
+answering with the one it made. Editing that message later takes the place, and
+nothing but this call ever learns it.
+*/
+func (p *Poster) PostPlaced(
+	ctx context.Context, c channel.Conversation, m channel.Message,
+) (channel.Placement, error) {
+	return p.call(ctx, "/chat.postMessage", postMessage{
 		Channel: c.ID,
 		// Fallback text as well as blocks. Notifications and screen readers
 		// read this one, so a message with blocks alone is silent on a phone.
@@ -77,11 +92,32 @@ func (p *Poster) Post(
 	})
 }
 
+/*
+Edit replaces a message this platform posted.
+
+How a card stops offering an answer to a question that already has one. It is
+not a decision and cannot become one: it rewrites what is on screen, touches no
+state, and its worst failure is a button that answers 409 — which is what
+happens today, everywhere.
+*/
+func (p *Poster) Edit(
+	ctx context.Context, at channel.Placement, m channel.Message,
+) error {
+	_, err := p.call(ctx, "/chat.update", postMessage{
+		Channel: at.Conversation, Ts: at.Ref,
+		Text:   summary(m),
+		Blocks: blocks(m, p.decidable),
+	})
+	return err
+}
+
 type postMessage struct {
-	Channel     string `json:"channel"`
-	Text        string `json:"text"`
-	Blocks      []any  `json:"blocks,omitempty"`
-	Thread      string `json:"thread_ts,omitempty"`
+	Channel string `json:"channel"`
+	Text    string `json:"text"`
+	Blocks  []any  `json:"blocks,omitempty"`
+	Thread  string `json:"thread_ts,omitempty"`
+	// Ts names the message being replaced. Only chat.update reads it.
+	Ts          string `json:"ts,omitempty"`
 	Parse       string `json:"parse,omitempty"`
 	Mrkdwn      *bool  `json:"mrkdwn,omitempty"`
 	UnfurlLinks *bool  `json:"unfurl_links,omitempty"`

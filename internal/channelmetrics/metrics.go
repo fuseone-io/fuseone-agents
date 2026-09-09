@@ -9,7 +9,10 @@ const (
 	ResultError = "error"
 	ResultOK    = "ok"
 
-	TaskAnnouncements     = "announcements"
+	TaskAnnouncements = "announcements"
+	// TaskCardsClosed counts approval cards rewritten because the question
+	// they asked has an answer.
+	TaskCardsClosed       = "cards_closed"
 	TaskAnswersDelivered  = "answers_delivered"
 	TaskAsksOpened        = "asks_opened"
 	TaskRefusalsDelivered = "refusals_delivered"
@@ -28,6 +31,9 @@ const (
 	// decide it than one announcement should ever be sent to, so it was sent
 	// to none of them privately and the conversation heard alone.
 	CodeTooManyRecipients = "channel_too_many_recipients"
+	// CodeUnsupportedCapability means a driver was asked for something it
+	// cannot do — rewriting a message it posted, today.
+	CodeUnsupportedCapability = "channel_unsupported_capability"
 )
 
 var (
@@ -37,6 +43,7 @@ var (
 	}
 	tasks = map[string]bool{
 		TaskAnnouncements:     true,
+		TaskCardsClosed:       true,
 		TaskAnswersDelivered:  true,
 		TaskAsksOpened:        true,
 		TaskRefusalsDelivered: true,
@@ -54,6 +61,7 @@ var (
 		CodeMissingScope:            true,
 		CodeRateLimited:             true,
 		CodeTooManyRecipients:       true,
+		CodeUnsupportedCapability:   true,
 	}
 )
 

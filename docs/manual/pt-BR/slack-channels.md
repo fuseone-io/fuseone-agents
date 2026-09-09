@@ -139,3 +139,40 @@ Se o agente não iniciou:
 5. Em watched messages, o Slack source id está permitido?
 6. O `run as` existe e tem grant no escopo?
 7. Em Socket Mode, o app token está salvo e o worker está conectado?
+
+## Avisar em particular quem pode decidir
+
+Uma conversa avisada sobre runs parados pode, além do card no canal, mandar o
+mesmo pedido por mensagem direta do bot para quem pode decidir. Ligue em
+**Integrações → Canais → a conversa → "Também avisar em particular quem pode
+decidir"**.
+
+Quem recebe são as pessoas com o papel **Aprovador** num escopo que contém o
+run — não administradores, que podem decidir e seriam avisados de todo run
+parado da instalação inteira. Cada uma precisa de conta Slack vinculada; quem
+não tem simplesmente não é alcançado.
+
+A DM **endereça e não autoriza**. O botão é checado contra o escopo do próprio
+run onde quer que seja apertado, então quem não tem o grant é recusado numa
+mensagem privada igual a como seria no canal.
+
+Ela também **não substitui o canal**. O card no canal vai primeiro, e uma
+conversa que não pôde ser avisada não é respondida com uma mensagem privada no
+lugar — o ledger registra toda decisão, mas a visibilidade que faz alguém
+reparar que um run está parado há duas horas está no canal.
+
+Precisa do escopo **`im:write`** no app do Slack. Sem ele a DM é recusada, a
+falha fica registrada e o canal continua sendo avisado normalmente.
+
+Se mais de vinte pessoas puderem decidir, ninguém recebe DM e a razão é
+registrada. Avisar vinte arbitrárias de cem é pior que avisar nenhuma: ninguém
+consegue dizer quem era para ter sido perguntado.
+
+## Cards que já foram respondidos
+
+Depois que alguém decide, todo card daquele passo é reescrito dizendo o que
+aconteceu e quem decidiu, e os botões somem. Vale para o card do canal também,
+então uma aprovação decidida no console não deixa mais botões vivos por lá.
+
+Um card que não pode ser reescrito — mensagem apagada, conversa removida — é
+marcado como fechado mesmo assim, para não consumir a varredura para sempre.

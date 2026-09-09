@@ -148,6 +148,11 @@ type Message struct {
 	// button on a channel that cannot verify what comes back would promise an
 	// inbound surface that is switched off.
 	Decidable bool
+	// Outcome is what happened to the approval this card asked about. Set only
+	// on a replacement: a card carrying one offers no buttons, because the
+	// question it asked already has an answer.
+	Outcome   Outcome
+	DecidedBy string
 }
 
 /*
@@ -176,30 +181,6 @@ type Announcement struct {
 	Conversation string
 }
 
-// Delivery records that a message left.
-type Delivery struct {
-	Announcement
-	// Ref is what the channel called the message, so a later stage can reply
-	// in the same thread.
-	Ref      string
-	PostedAt time.Time
-}
-
-// DeliveryFailure records that a conversation was owed a message and did not
-// receive it. It is scoped because the cockpit that reads this later must not
-// turn a channel incident in one area into installation-wide knowledge.
-type DeliveryFailure struct {
-	Announcement
-	// ScopeWide means the failure happened before the reporter knew which
-	// conversations were owed the message. Counting it as one conversation
-	// would understate the blast radius as confidently as naming all of them.
-	ScopeWide bool
-	Code      string
-	Scope     domain.Scope
-	AgentID   domain.AgentID
-	SeenAt    time.Time
-}
-
 // Reports lists what has happened and not yet been said, declared here by the
 // consumer.
 type Reports interface {
@@ -214,8 +195,8 @@ type Reports interface {
 	Reported(ctx context.Context, r Report, at time.Time) error
 }
 
-// announcementTo is what this report owes one conversation.
-func (r Report) announcementTo(place Conversation) Announcement {
+// AnnouncementTo is what this report owes one conversation.
+func (r Report) AnnouncementTo(place Conversation) Announcement {
 	return Announcement{
 		RunID: r.RunID, Event: r.Event, AtSeq: r.AtSeq,
 		Channel: place.Channel, Conversation: place.ID,
@@ -231,14 +212,6 @@ type Conversations interface {
 // outside.
 type Poster interface {
 	Post(ctx context.Context, c Conversation, m Message) (ref string, err error)
-}
-
-// Deliveries is what has already been said.
-type Deliveries interface {
-	Record(ctx context.Context, d Delivery) error
-	RecordFailure(ctx context.Context, f DeliveryFailure) error
-	RecordFailures(ctx context.Context, failures []DeliveryFailure) error
-	Delivered(ctx context.Context, a Announcement) (bool, error)
 }
 
 // Available is a place a connection could be pointed at, as a person would

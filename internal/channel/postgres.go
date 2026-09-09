@@ -135,11 +135,12 @@ func (p *Postgres) Record(ctx context.Context, d Delivery) error {
 		return fmt.Errorf("%w: %s", ErrUnaddressed, d.RunID)
 	}
 	_, err := p.pool.Exec(ctx, `
-		insert into channel_deliveries (run_id, event, channel, conversation, at_seq, ref, posted_at)
-		values ($1, $2, $3, $4, $5, $6, $7)
+		insert into channel_deliveries
+			(run_id, event, channel, conversation, at_seq, ref, placed_in, posted_at)
+		values ($1, $2, $3, $4, $5, $6, $7, $8)
 		on conflict (run_id, event, channel, conversation, at_seq) do nothing`,
 		string(d.RunID), string(d.Event), d.Channel, d.Conversation,
-		d.AtSeq, d.Ref, d.PostedAt.UTC())
+		d.AtSeq, d.Ref, d.Placed, d.PostedAt.UTC())
 	if err != nil {
 		return fmt.Errorf("channel: record delivery: %w", err)
 	}

@@ -254,3 +254,54 @@ func (r *Reporter) direct(
 func (r *Reporter) refuse(report Report, place Conversation, cause error) refusal {
 	return refusal{recorded: r.failuresFor(report, place, cause)}
 }
+
+/*
+placed posts and answers with where the message ended up.
+
+A driver that cannot say is taken at its word that the address and the place
+are the same, which is true of every room and of every driver that has no
+private messages to send. Only the ones that do have to answer, and only their
+messages can be closed afterwards.
+*/
+func placed(ctx context.Context, p Poster, c Conversation, m Message) (Placement, error) {
+	if knows, ok := p.(Placer); ok {
+		at, err := knows.PostPlaced(ctx, c, m)
+		// The connection is the caller's knowledge, not the driver's: a driver
+		// speaks for one and has never been told which.
+		at.Channel = c.Channel
+		return at, err
+	}
+	ref, err := p.Post(ctx, c, m)
+	return Placement{Channel: c.Channel, Conversation: c.ID, Ref: ref}, err
+}
+
+/*
+tell says it in one conversation, and privately to whoever may decide it.
+
+The room comes first and the private cards never stand in for it: a
+conversation that could not be reached is retried, and answering it with a
+direct message meanwhile would put the run in front of one person and nobody
+else.
+
+Only a failure another sweep could survive holds the run open. Anything else is
+recorded and left behind, or an installation that never granted the app
+permission to open a direct message would keep every parked run unreported for
+a day and re-send the channel card it already delivered.
+*/
+func (r *Reporter) tell(
+	ctx context.Context, pass *fanout, report Report, place Conversation,
+) (sent int, refused refusal) {
+	posted, err := r.post(ctx, report, place)
+	if err != nil {
+		return 0, refusal{
+			blocking: []error{err},
+			recorded: r.failuresFor(report, place, err),
+		}
+	}
+	if posted {
+		sent++
+	}
+
+	privately, refusedPrivately := r.direct(ctx, pass, report, place)
+	return sent + privately, refusedPrivately
+}

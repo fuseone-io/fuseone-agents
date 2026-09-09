@@ -42,6 +42,12 @@ func reportToChannels(
 		// console's own path wherever it is pressed.
 		WithDirectApprovals(auth.NewPostgres(p.configPool), admin.NewChannels(p.configPool, store))
 
+	// The cards the announcements left behind. A separate loop because it
+	// answers a different question — what is still asking, rather than what
+	// has not been said — and because a decision taken in the console reaches
+	// no channel code at all, so nothing else would ever close its cards.
+	go closeAnsweredCards(ctx, deliveries, connect.New(store), baseURL, metrics)
+
 	ticker := time.NewTicker(channelSweep)
 	defer ticker.Stop()
 	for {
@@ -193,4 +199,33 @@ func recordChannelSweep(metrics *worker.MetricsRegistry, task string, items int,
 		return
 	}
 	metrics.ChannelSweep(task, channel.MetricResultOK, items)
+}
+
+/*
+closeAnsweredCards rewrites approval cards whose question has been settled.
+
+Every copy of a card is still offering to answer once somebody decides, and
+pressing one of them is refused with a conflict — correct, and a card that says
+a run is waiting when it is not. This reads state rather than following a
+decision, because a decision taken in the console never reaches any channel
+code, and a hook there would leave those cards live for ever.
+*/
+func closeAnsweredCards(
+	ctx context.Context, cards *channel.Postgres, drivers channel.Drivers,
+	baseURL string, metrics *worker.MetricsRegistry,
+) {
+	closer := channel.NewCloser(cards, channel.NewRouterEditor(drivers),
+		time.Now, slog.Default()).WithBaseURL(baseURL)
+
+	ticker := time.NewTicker(channelSweep)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			closed, err := closer.Sweep(ctx, 50)
+			recordChannelSweep(metrics, channel.MetricTaskCardsClosed, closed, err)
+		}
+	}
 }

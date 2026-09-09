@@ -139,3 +139,41 @@ If the agent did not start:
 5. For watched messages, is the Slack source id allowed?
 6. Does `run as` exist and have a grant in the scope?
 7. In Socket Mode, is the app token saved and is the worker connected?
+
+## Telling the people who may decide, privately
+
+A conversation that is told about parked runs can also send the same request as
+a direct message from the bot to the people who may decide it. Turn it on under
+**Integrations → Channels → the conversation → "Also tell the people who may
+decide, privately"**.
+
+The recipients are the people holding **Approver** in a scope that contains the
+run — not administrators, who may decide and would be told about every parked
+run in the whole installation. Each needs a linked Slack account; anybody
+unlinked is simply not reached.
+
+The direct message **addresses and does not authorise**. The button is checked
+against the run's own scope wherever it is pressed, so somebody without the
+grant is refused in a private message exactly as they would be in a channel.
+
+It also **does not replace the channel**. The channel card goes first, and a
+conversation that could not be told is not answered with a private message
+instead — the ledger records every decision, but the visibility that makes
+somebody notice a run has been waiting two hours is in the channel.
+
+It needs the Slack app's **`im:write`** scope. Without it the direct message is
+refused, the failure is recorded, and the channel is still told.
+
+If more than twenty people may decide, nobody is messaged privately and the
+reason is recorded. Telling an arbitrary twenty of a hundred is worse than
+telling none: nobody can say who was meant to be asked.
+
+## Cards that have been answered
+
+Once somebody decides, every card about that step is rewritten to say what
+happened and who decided it, and the buttons go. This covers the channel card
+too, so an approval decided in the console no longer leaves live buttons
+behind.
+
+A card that cannot be rewritten — the message was deleted, the conversation is
+gone — is marked closed anyway, so it does not consume the sweep for ever.
