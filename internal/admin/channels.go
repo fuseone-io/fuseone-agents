@@ -227,6 +227,14 @@ func (c *Channels) PutChannel(ctx context.Context, w ChannelWrite) error {
 				channel.ReadCredentials(stored.Secret), w.Credentials, mode)
 			set := base
 			set.Secret = merged.Sealed()
+			// An omitted secret means "keep what is stored", which is what
+			// lets somebody change an unrelated field without pasting a token
+			// back in. So a pair the mode has emptied has to say so: dropping
+			// the signing secret on the way to Socket Mode, and then writing
+			// nothing, left it sealed and out of sight — a credential nothing
+			// verifies with, back in force the day the mode changes again,
+			// while the trail recorded that it was gone.
+			set.ClearSecret = merged == (channel.Credentials{})
 			return set, map[string]any{
 				// Never a credential, only which of them are now held. Whether
 				// an installation can be spoken to is a fact an auditor may
