@@ -80,10 +80,15 @@ func TestAppendIfHead_decidersReleasedTogether_sealExactlyOne(t *testing.T) {
 		t.Fatalf("begin holder: %v", err)
 	}
 	defer func() { _ = holder.Rollback(ctx) }()
+	var holderPID int
+	if err := holder.QueryRow(ctx, `select pg_backend_pid()`).Scan(&holderPID); err != nil {
+		t.Fatalf("identify the holder: %v", err)
+	}
 	if _, err := holder.Exec(ctx,
 		`select pg_advisory_xact_lock(hashtextextended($1, 0))`, "run-1"); err != nil {
 		t.Fatalf("hold the run's lock: %v", err)
 	}
+	held := advisoryLockHeldBy(t, pool, holderPID)
 
 	outcomes := make(chan error, deciders)
 	var done sync.WaitGroup
@@ -100,7 +105,7 @@ func TestAppendIfHead_decidersReleasedTogether_sealExactlyOne(t *testing.T) {
 		}()
 	}
 
-	waitForWaiters(t, pool, deciders)
+	waitForWaiters(t, pool, held, deciders)
 	if err := holder.Rollback(ctx); err != nil {
 		t.Fatalf("release the lock: %v", err)
 	}
@@ -131,19 +136,50 @@ func TestAppendIfHead_decidersReleasedTogether_sealExactlyOne(t *testing.T) {
 	}
 }
 
-// waitForWaiters blocks until every decider is queued on the advisory lock.
+/*
+advisoryLock names one lock as Postgres itself identifies it.
+
+A count of ungranted advisory locks is a count for the whole cluster: another
+suite, another process, or a developer's own session on the same database
+inflates it, and the holder is then released before the overlap this test
+exists to create. The point of the test is to replace a probabilistic race with
+an exact one, so the thing waited on is exact too.
+*/
+type advisoryLock struct {
+	database uint32
+	classID  uint32
+	objID    uint32
+	objSubID int16
+}
+
+func advisoryLockHeldBy(t *testing.T, pool *pgxpool.Pool, pid int) advisoryLock {
+	t.Helper()
+	var lock advisoryLock
+	err := pool.QueryRow(context.Background(), `
+		select database, classid, objid, objsubid from pg_locks
+		where locktype = 'advisory' and granted and pid = $1`, pid).
+		Scan(&lock.database, &lock.classID, &lock.objID, &lock.objSubID)
+	if err != nil {
+		t.Fatalf("read the lock the holder took: %v", err)
+	}
+	return lock
+}
+
+// waitForWaiters blocks until every decider is queued on that exact lock.
 //
 // Asked of Postgres rather than timed. A sleep long enough to be reliable is
 // long enough to be slow, and one short enough to be quick is a test that
 // passes for the wrong reason on a loaded machine.
-func waitForWaiters(t *testing.T, pool *pgxpool.Pool, want int) {
+func waitForWaiters(t *testing.T, pool *pgxpool.Pool, on advisoryLock, want int) {
 	t.Helper()
 	deadline := time.Now().Add(10 * time.Second)
 	for {
 		var waiting int
 		err := pool.QueryRow(context.Background(), `
 			select count(*) from pg_locks
-			where locktype = 'advisory' and not granted`).Scan(&waiting)
+			where locktype = 'advisory' and not granted
+			  and database = $1 and classid = $2 and objid = $3 and objsubid = $4`,
+			on.database, on.classID, on.objID, on.objSubID).Scan(&waiting)
 		if err != nil {
 			t.Fatalf("read lock waiters: %v", err)
 		}
@@ -151,7 +187,7 @@ func waitForWaiters(t *testing.T, pool *pgxpool.Pool, want int) {
 			return
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("only %d of %d deciders reached the lock", waiting, want)
+			t.Fatalf("only %d of %d deciders reached the run's lock", waiting, want)
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
