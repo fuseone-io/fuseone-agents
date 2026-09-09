@@ -145,7 +145,9 @@ export function ChannelCard({
           allTotal={channel.conversations.length}
           hidden={hidden}
           onExpand={() => setExpanded(true)}
-          onAdd={onAddConversation}
+          onAdd={
+            knownDelivery(channel.deliveryMode) ? onAddConversation : undefined
+          }
           onEdit={onEditConversation}
         />
       )}

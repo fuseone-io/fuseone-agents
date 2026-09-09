@@ -14,6 +14,7 @@ import {
 } from "@/features/channels/channel-model";
 import {
   EVENTS_BY_DEFAULT,
+  knownEvent,
   knownMode,
 } from "@/features/channels/conversation-form-model";
 import { problemMessage } from "@/lib/api/problem-message";
@@ -148,7 +149,10 @@ function EventBadges({ wants }: { wants: string[] }) {
     <div className="flex min-w-0 flex-wrap gap-1">
       {wants.slice(0, 3).map((want) => (
         <Badge key={want} variant={eventVariant(want)} className="text-2xs">
-          {t(`channels.event.${want}`)}
+          {/* The stored name for one this console cannot translate. Passed to
+              t() it renders as "channels.event.a-future-event", which tells a
+              reader about our key naming and nothing about their configuration. */}
+          {knownEvent(want) ? t(`channels.event.${want}`) : want}
         </Badge>
       ))}
       {wants.length > 3 && (

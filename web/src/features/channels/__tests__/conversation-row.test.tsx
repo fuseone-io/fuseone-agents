@@ -96,3 +96,14 @@ describe("a mode this console does not know", () => {
     expect(screen.getByText(/a-future-mode/)).toBeInTheDocument();
   });
 });
+
+// An event this console cannot translate is printed as it is stored. Passed to
+// t() it renders as "channels.event.a-future-event", which tells a reader about
+// our key naming and nothing about their configuration.
+describe("an event this console does not know", () => {
+  it("is printed as it is stored", () => {
+    renderRow({ mode: "mentions", wants: ["parked", "a-future-event"] });
+
+    expect(screen.getByText("a-future-event")).toBeInTheDocument();
+  });
+});

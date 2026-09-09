@@ -121,4 +121,24 @@ describe("a delivery mode this console does not know", () => {
     expect(screen.getByText("a-future-mode")).toBeInTheDocument();
     expect(screen.queryByText(/answering/)).not.toBeInTheDocument();
   });
+
+  // Nothing inbound is offered either. A conversation configured there would do
+  // nothing today and come into force the day a version that understands the
+  // connection reads it, with nobody having decided anything in between.
+  it("does not offer to add a conversation", () => {
+    setLocale("en-US");
+    renderCard({
+      name: "acme-slack",
+      kind: "slack",
+      deliveryMode: "a-future-mode",
+      enabled: true,
+      hasCredential: true,
+      hasSigning: true,
+      conversations: [],
+    });
+
+    expect(
+      screen.queryByRole("button", { name: /Add a conversation/i }),
+    ).not.toBeInTheDocument();
+  });
 });
