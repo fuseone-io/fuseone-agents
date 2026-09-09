@@ -25,6 +25,30 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+### Upgrade notes
+
+- **A run that is stopped right now may be announced once more after the
+  upgrade.** Announcements are recorded against the step a run stopped on, and
+  rows written before this carry no step — the old row cannot say which stop it
+  was about, and treating it as covering the current one would restore the very
+  silence this release fixes. So a run that is parked or awaiting approval, and
+  whose last activity is inside the 24-hour announcement window, gets one
+  further message in the conversations that already heard about it. Runs that
+  finished or failed are unaffected: those happen once, and their old records
+  still match.
+
+### Fixed
+
+- **A run that stops a second time is announced again.** An agent that needs
+  two tools asks for two approvals, and only the first was ever announced —
+  the second reached no channel and no person, and the run sat waiting until
+  somebody happened to open the console. The same was true of a run parked
+  twice by a budget or by retries that stopped helping. Announcements, the
+  per-conversation deduplication and the failure records are all keyed by the
+  step now.
+
 ## [0.43.0] — 2026-09-05
 
 ### Upgrade notes
