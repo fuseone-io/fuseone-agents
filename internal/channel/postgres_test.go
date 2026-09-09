@@ -2,6 +2,7 @@ package channel_test
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -217,6 +218,73 @@ func TestRuntimeHealth_channelFailuresAreScopedAndBounded(t *testing.T) {
 	if scopeWide.Code != channel.CodeConfigurationReadFailed || scopeWide.Attempts != 1 ||
 		scopeWide.Conversations != 0 || !scopeWide.ScopeWide || scopeWide.Runs != 1 {
 		t.Fatalf("scope-wide bucket = %+v, want no invented conversation", scopeWide)
+	}
+}
+
+/*
+A destination nobody can reach must not hold the queue.
+
+The batch was ordered by recency alone, so with more stopped runs than fit in
+one sweep, the same page came back forever: a run that could not be announced
+everywhere is never retired, and one destination refusing every message keeps
+every run in that page pending. The runs below the cut were never tried at all
+— not even in the conversations that were answering — and fell out of the
+window a day later, unannounced, with nothing recording that they had been due.
+
+An installation room is what made this sharp. One unreachable destination now
+belongs to every run, so what used to stall one company's page stalls the whole
+queue.
+
+So the sweep takes what has not been tried before what has, and a page that
+failed goes to the back. The retry count against a broken destination is
+unchanged — it is bounded by the batch, as before — but it no longer costs
+anybody else their turn.
+*/
+func TestUnreported_aPageThatFailed_yieldsToRunsNobodyHasTried(t *testing.T) {
+	store, pool := channelStore(t)
+
+	const batch = 3
+	waiting := map[domain.RunID]bool{}
+	for i := range batch + 1 {
+		run := fmt.Sprintf("run-queued-%d", i)
+		awaitApproval(t, pool, run)
+		waiting[domain.RunID(run)] = true
+	}
+
+	first, err := store.Unreported(t.Context(), noon.Add(-channel.Window), batch)
+	if err != nil {
+		t.Fatalf("unreported: %v", err)
+	}
+	if len(first) != batch {
+		t.Fatalf("first sweep took %d runs, want a full page", len(first))
+	}
+	for _, r := range first {
+		delete(waiting, r.RunID)
+		// Nothing is reported: the destination refused, which is what leaves a
+		// run pending and is the whole shape of this failure.
+		if err := store.RecordFailure(t.Context(), channel.DeliveryFailure{
+			Announcement: channel.Announcement{
+				RunID: r.RunID, Event: r.Event,
+				Channel: "acme-slack", Conversation: "C-everywhere",
+			},
+			Code: "slack-channel-not-found", Scope: r.Scope, SeenAt: noon,
+		}); err != nil {
+			t.Fatalf("record the failure: %v", err)
+		}
+	}
+	if len(waiting) != 1 {
+		t.Fatalf("%d runs left over, want exactly the one that did not fit", len(waiting))
+	}
+
+	second, err := store.Unreported(t.Context(), noon.Add(-channel.Window), batch)
+	if err != nil {
+		t.Fatalf("second sweep: %v", err)
+	}
+	for _, r := range second {
+		delete(waiting, r.RunID)
+	}
+	if len(waiting) != 0 {
+		t.Errorf("still never tried: %v", waiting)
 	}
 }
 
