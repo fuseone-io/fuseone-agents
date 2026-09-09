@@ -49,6 +49,21 @@ const (
 	// selected ordinary messages. The two paths keep their own authority:
 	// mentions come from the bound person; watched messages come from RunAs.
 	ConversationBoth = "both"
+	/*
+		ConversationAnnounce means nothing said here starts anything.
+
+		A room somebody added the bot to for visibility is not a room anybody
+		should be able to start a run from by typing in it, and saying so is
+		better than a conversation whose stored mode describes an inbound path
+		it does not have.
+
+		It is also the only mode a conversation for the whole installation may
+		have. That scope contains every company, and containment is right for
+		hearing and wrong for asking (origin.go): a room that hears about every
+		company is a reasonable thing to configure, and one that can start an
+		agent in every company is a different grant entirely.
+	*/
+	ConversationAnnounce = "announce"
 )
 
 // Connection is the non-secret half of a channel: which vendor, and anything
@@ -78,17 +93,39 @@ func ConversationMode(mode string) string {
 		return ConversationWatch
 	case ConversationBoth:
 		return ConversationBoth
+	case ConversationAnnounce:
+		return ConversationAnnounce
 	default:
+		// Empty is a conversation configured before modes existed, and it took
+		// mentions. Anything else is a value this version does not know, and
+		// ConversationMode is not where that is decided — the predicates below
+		// name what may start a run, and neither of them names this.
 		return ConversationMentions
 	}
 }
 
+/*
+StartsFromMentions answers whether a person mentioning the bot may start a run.
+
+An allowlist, and read from the stored value rather than the normalised one.
+Written as "anything that is not watch", the answer for a mode nobody has added
+yet is yes — so the day a mode is named for a room that starts nothing, it
+starts runs and every existing test goes on passing.
+
+Normalising first would lose the distinction that matters here: ConversationMode
+answers unknown with mentions, which is right for a screen and wrong for this.
+Empty is named explicitly, because it is the one value that legitimately means
+mentions — a conversation configured before modes existed. Anything else this
+version does not recognise starts nothing.
+*/
 func StartsFromMentions(mode string) bool {
-	return ConversationMode(mode) != ConversationWatch
+	return mode == "" || mode == ConversationMentions || mode == ConversationBoth
 }
 
+// StartsFromWatch answers whether a configured message source may start a run.
+// An allowlist for the same reason, and empty is not one of them: watching had
+// to be asked for from the day it existed.
 func StartsFromWatch(mode string) bool {
-	mode = ConversationMode(mode)
 	return mode == ConversationWatch || mode == ConversationBoth
 }
 
