@@ -97,11 +97,14 @@ func (p *Postgres) Unreported(ctx context.Context, since time.Time, limit int) (
 		left join lateral (
 		    select max(f.last_seen) as last_seen
 		    from channel_delivery_failures f
-		    -- Per event, so a run that failed while parked starts its next
-		    -- question's turn fresh. No test accuses that narrowing: with one
-		    -- event it changes nothing, and the difference it makes is which
-		    -- run goes first, not which runs are announced.
+		    -- Per question, not per run. Two approvals in one run are both
+		    -- "parked", so matching the event alone put a run's second
+		    -- question at the back of the queue because its first could not be
+		    -- delivered — behind runs nobody had ever tried. The identity of
+		    -- an announcement is the step it is about, which is what both
+		    -- delivery tables are keyed by.
 		    where f.run_id = runs.run_id and f.event = `+phases+`
+		      and f.at_seq = `+announcementSeq+`
 		) tried on true
 		where not runs.simulated
 		  and runs.updated_at >= $1

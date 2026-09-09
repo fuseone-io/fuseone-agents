@@ -266,6 +266,10 @@ func TestUnreported_aPageThatFailed_yieldsToRunsNobodyHasTried(t *testing.T) {
 			Announcement: channel.Announcement{
 				RunID: r.RunID, Event: r.Event,
 				Channel: "acme-slack", Conversation: "C-everywhere",
+				// The step the announcement was about, as the reporter records
+				// it. Without it this test would be recording a failure the
+				// real one never writes, and asserting against it.
+				AtSeq: r.AtSeq,
 			},
 			Code: "slack-channel-not-found", Scope: r.Scope, SeenAt: noon,
 		}); err != nil {
@@ -285,6 +289,53 @@ func TestUnreported_aPageThatFailed_yieldsToRunsNobodyHasTried(t *testing.T) {
 	}
 	if len(waiting) != 0 {
 		t.Errorf("still never tried: %v", waiting)
+	}
+}
+
+/*
+A new question starts its retries fresh.
+
+The rotation asks what has already been tried, and a run's second approval is
+not the first one: both are "parked", so a run whose first question could not be
+delivered began its second question at the back of the queue, behind runs
+nobody had ever tried. The identity of an announcement is the step it is about
+— that is what the delivery tables were keyed by — and this read has to say so
+too.
+*/
+func TestUnreported_aSecondQuestion_isNotBehindTheFirstOnesFailure(t *testing.T) {
+	store, pool := channelStore(t)
+
+	// Older, and never attempted: whatever this test proves, it is not that
+	// the queue prefers whatever was written last.
+	awaitApproval(t, pool, "run-waiting-quietly")
+
+	awaitApproval(t, pool, "run-asking-again")
+	first, err := store.Unreported(t.Context(), noon.Add(-channel.Window), 1)
+	if err != nil {
+		t.Fatalf("unreported: %v", err)
+	}
+	if len(first) != 1 || first[0].RunID != "run-asking-again" {
+		t.Fatalf("first sweep = %+v, want the newest question", first)
+	}
+	if err := store.RecordFailure(t.Context(), channel.DeliveryFailure{
+		Announcement: channel.Announcement{
+			RunID: "run-asking-again", Event: channel.EventParked,
+			Channel: "acme-slack", Conversation: "C-everywhere",
+			AtSeq: first[0].AtSeq,
+		},
+		Code: "slack-channel-not-found", SeenAt: noon,
+	}); err != nil {
+		t.Fatalf("record the failure: %v", err)
+	}
+
+	decideAndParkAgain(t, pool, "run-asking-again")
+
+	again, err := store.Unreported(t.Context(), noon.Add(-channel.Window), 1)
+	if err != nil {
+		t.Fatalf("unreported after the second question: %v", err)
+	}
+	if len(again) != 1 || again[0].RunID != "run-asking-again" {
+		t.Fatalf("second sweep = %+v, want the new question first", again)
 	}
 }
 
