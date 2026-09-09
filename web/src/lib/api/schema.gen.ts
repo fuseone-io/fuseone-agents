@@ -7755,7 +7755,7 @@ export interface operations {
                      *     only where this conversation is told about parked runs.
                      */
                     directApprovals?: boolean;
-                    /** @description Which events reach it. Empty means the defaults, which are parked and failed — a conversation that hears every run finish is one people mute. */
+                    /** @description Which events reach it. Empty means the defaults, which are parked, failed and drifted — a conversation that hears every run finish is one people mute, and an agent that quietly stopped working is the one notice nobody thinks to ask for. Sending the field is choosing: the console always does, so a conversation configured there hears what was ticked and nothing else. */
                     wants?: ("parked" | "failed" | "finished")[];
                     /** @default true */
                     enabled?: boolean;

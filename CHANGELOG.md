@@ -41,9 +41,9 @@ field" is a commit message.
   automation runs from it. A scope containing every company is the right answer
   for hearing and the wrong one for asking. Configuring or deleting it needs
   Company configurer granted at the installation scope, and the option is
-  absent for anybody else rather than offered and refused. New rooms announce
-  drift by default, so choose "what to announce" before saving unless drift
-  from every agent in every company is what you want.
+  absent for anybody else rather than offered and refused. Choose "what to
+  announce" before saving: the default is parked and failed, which at this
+  scope means every stop and every failure in every company.
 
 - **"Only reports" is a mode a conversation can be stored in.** It is what the
   installation room saves, and the API accepts it for any conversation: a room

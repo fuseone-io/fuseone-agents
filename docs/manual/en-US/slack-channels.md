@@ -165,9 +165,9 @@ Configuring where one area reports is an ordinary scoped act; deciding that one
 room hears every company is the authority above them all. Deleting it needs the
 same.
 
-Begin with **"what to announce"**. The default includes drift, and a room
-created without changing it starts receiving drift from every agent in every
-company.
+Begin with **"what to announce"**. The form's default is *parked* and *failed*,
+and at this scope that means every stop and every failure in every company —
+such a room's volume is the sum of all the others. Narrow it before saving.
 
 ## Telling the people who may decide, privately
 
