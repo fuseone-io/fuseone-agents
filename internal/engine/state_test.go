@@ -564,3 +564,107 @@ func TestFold_wallClock_accumulatesFromTheRunsOwnInstants(t *testing.T) {
 			s.Committed().WallClockMS)
 	}
 }
+
+/*
+One question, decided more than once, in every order.
+
+The ledger refuses a second decision on the same request, so new runs never
+hold these shapes. Old ones do, and the fold is what an auditor reads a year
+later — so it has to answer for them, and give the same answer whichever of the
+two steps landed first.
+
+Folded by position rather than by what a decision named, two of these four were
+wrong. A second approval ran `s.Approved = s.requested` again with nothing
+requested and set the grant to nothing: the run returned to running, the
+planner asked again, and nobody was told why. And refusing never touched the
+grant, so a run approved and then refused carried permission past its own
+refusal — with the phase already running, a worker could take the approved call
+while the refusal was still being written.
+
+Each order twice over, because a decision written before the sequence existed
+names no request and has to keep meaning what it meant.
+*/
+func TestFold_oneRequestDecidedTwice_answersTheSameWhicheverLanded(t *testing.T) {
+	t.Parallel()
+
+	for _, c := range []struct {
+		order  string
+		first  bool
+		second bool
+		grant  bool
+	}{
+		{"approved twice", true, true, true},
+		{"approved then refused", true, false, false},
+		{"refused then approved", false, true, false},
+		{"refused twice", false, false, false},
+	} {
+		for _, form := range []struct {
+			named string
+			seq   int64
+		}{
+			{"naming the request", 2},
+			// Written before the sequence was recorded. It could only have
+			// meant whatever was open, and reading it any other way would
+			// rewrite what a past decision decided.
+			{"naming nothing", 0},
+		} {
+			s := mustFold(t, decidedTwice(t,
+				domain.ApprovalDecidedPayload{Approved: c.first, By: "ana", AtSeq: form.seq},
+				domain.ApprovalDecidedPayload{Approved: c.second, By: "bruno", AtSeq: form.seq},
+			))
+
+			held := s.Approved != nil
+			if held != c.grant {
+				t.Errorf("%s, %s: grant held = %v, want %v", c.order, form.named, held, c.grant)
+			}
+			if held && s.Approved.Tool != "crm.reply" {
+				t.Errorf("%s, %s: approved = %+v, want the call that was asked about",
+					c.order, form.named, s.Approved)
+			}
+		}
+	}
+}
+
+// A decision about a question the run has moved past changes nothing. It is
+// what a stale card in a channel produces, and it must not reopen a phase, a
+// request or a grant.
+func TestFold_decisionAboutAnEarlierRequest_changesNothing(t *testing.T) {
+	t.Parallel()
+
+	steps := chain(t, append(stripSeal(oneApproval(t)),
+		domain.Step{Kind: domain.StepApprovalDecided,
+			Payload: payload(t, domain.ApprovalDecidedPayload{Approved: true, By: "ana", AtSeq: 2})},
+		domain.Step{Kind: domain.StepApprovalRequested,
+			Payload: payload(t, domain.ApprovalRequestedPayload{Tool: "crm.refund", Reason: "second"})},
+		// Somebody presses the button on the first card, long after.
+		domain.Step{Kind: domain.StepApprovalDecided,
+			Payload: payload(t, domain.ApprovalDecidedPayload{Approved: true, By: "bruno", AtSeq: 2})},
+	)...)
+
+	s := mustFold(t, steps)
+	if s.Phase != PhaseAwaitingApproval {
+		t.Errorf("phase = %v, want the second question still open", s.Phase)
+	}
+	if s.PendingApproval == nil || s.PendingApproval.Tool != "crm.refund" {
+		t.Errorf("pending = %+v, want the second request untouched", s.PendingApproval)
+	}
+}
+
+func oneApproval(t *testing.T) []domain.Step {
+	t.Helper()
+	return chain(t,
+		domain.Step{Kind: domain.StepRunStarted},
+		domain.Step{Kind: domain.StepApprovalRequested,
+			Payload: payload(t, domain.ApprovalRequestedPayload{
+				Tool: "crm.reply", Reason: "customer_reply",
+			})},
+	)
+}
+
+func decidedTwice(t *testing.T, first, second domain.ApprovalDecidedPayload) []domain.Step {
+	t.Helper()
+	return chain(t, append(stripSeal(oneApproval(t)),
+		domain.Step{Kind: domain.StepApprovalDecided, Payload: payload(t, first)},
+		domain.Step{Kind: domain.StepApprovalDecided, Payload: payload(t, second)},
+	)...)
+}

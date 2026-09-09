@@ -153,3 +153,32 @@ func (s Step) VerifyLink(prev *Step) error {
 	}
 	return nil
 }
+
+/*
+StepRef names one step of a run: where it sits, and what it was.
+
+Both halves, because either alone is a weaker claim than the caller is making.
+A sequence says a step was there and not what it said; a kind says what
+happened and not when. What a decision needs to assert is that the question it
+answers is still the one open, and that is a place *and* a shape.
+
+It is not part of a step and never reaches the hash. It is a condition about
+the record, not a fact in it.
+*/
+type StepRef struct {
+	Seq  int64
+	Kind StepKind
+}
+
+/*
+ErrHeadMoved means the run is no longer where the caller decided it was.
+
+A statement about the run rather than about storage, which is why it is here
+and not beside the implementation that raises it: somebody else answered the
+question, or the run was abandoned, and an answer to a question nobody is
+asking any more would put a finished run back to work.
+
+Not a collision to retry. Retrying rediscovers the same fact, and the write
+being refused is the point.
+*/
+var ErrHeadMoved = errors.New("domain: the run moved past the step this was decided against")

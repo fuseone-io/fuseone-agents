@@ -32,9 +32,33 @@ func NewPostgres(pool *pgxpool.Pool) *Postgres {
 // in one transaction. The projection can never disagree with the ledger,
 // because there is no moment at which only one of them has been written.
 func (p *Postgres) Append(ctx context.Context, s domain.Step) (domain.Step, error) {
+	return p.appendChecked(ctx, nil, s)
+}
+
+/*
+AppendIfHead seals a step only onto the head it was decided against.
+
+A caller that read state, decided, and then wrote is describing three moments,
+and the run can move between the first and the third: somebody else answers the
+same question, or the run is abandoned. A check made before the write has
+already gone stale by the time the write begins, so the condition is taken
+under the same advisory lock that serialises the append — the only place where
+reading the head and sealing onto it are one act.
+
+A refused precondition is an answer and not a collision, so it is not retried.
+*/
+func (p *Postgres) AppendIfHead(
+	ctx context.Context, head domain.StepRef, s domain.Step,
+) (domain.Step, error) {
+	return p.appendChecked(ctx, &head, s)
+}
+
+func (p *Postgres) appendChecked(
+	ctx context.Context, expect *domain.StepRef, s domain.Step,
+) (domain.Step, error) {
 	var last error
 	for attempt := range appendRetries {
-		sealed, err := p.appendOnce(ctx, s)
+		sealed, err := p.appendOnce(ctx, expect, s)
 		switch {
 		case err == nil:
 			return sealed, nil

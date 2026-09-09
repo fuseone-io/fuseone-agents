@@ -7,6 +7,7 @@ package ledger
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"sync"
@@ -22,7 +23,8 @@ var (
 	ErrSeqConflict = errors.New("ledger: sequence already claimed by another writer")
 	// ErrIdemConflict means the same idempotency key was already recorded.
 	ErrIdemConflict = errors.New("ledger: idempotency key already used")
-	ErrNotFound     = domain.ErrRunNotFound
+
+	ErrNotFound = domain.ErrRunNotFound
 )
 
 // Memory is an in-memory ledger used by tests and by single-node development.
@@ -63,6 +65,27 @@ func NewMemory() *Memory {
 // The caller supplies the step without Seq, PrevHash or Hash: those are the
 // ledger's to assign, because only the ledger knows the head at commit time.
 func (m *Memory) Append(ctx context.Context, s domain.Step) (domain.Step, error) {
+	return m.append(ctx, nil, s)
+}
+
+/*
+AppendIfHead seals a step only onto the head it was decided against.
+
+Held here and not only in Postgres, and held the same way. A caller that read
+state, decided, and then wrote is describing three moments; the run can move
+between the first and the third, and a check made before the write has already
+gone stale by the time the write begins. This closes it under the same lock
+that serialises the append.
+*/
+func (m *Memory) AppendIfHead(
+	ctx context.Context, head domain.StepRef, s domain.Step,
+) (domain.Step, error) {
+	return m.append(ctx, &head, s)
+}
+
+func (m *Memory) append(
+	ctx context.Context, expect *domain.StepRef, s domain.Step,
+) (domain.Step, error) {
 	if err := ctx.Err(); err != nil {
 		return domain.Step{}, err
 	}
@@ -70,16 +93,24 @@ func (m *Memory) Append(ctx context.Context, s domain.Step) (domain.Step, error)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if s.IdemKey != "" {
-		if _, used := m.idems[s.IdemKey]; used {
-			return domain.Step{}, ErrIdemConflict
-		}
-	}
-
 	steps := m.runs[s.RunID]
 	var prev *domain.Step
 	if n := len(steps); n > 0 {
 		prev = &steps[n-1]
+	}
+
+	// The precondition first, and the order is part of the contract rather
+	// than an accident of writing. The store checks the head before it
+	// inserts, so a step that fails both conditions is refused there for the
+	// head — which is the answer worth giving, because it says the run moved
+	// on rather than that this exact write happened before.
+	if err := headIs(expect, prev); err != nil {
+		return domain.Step{}, err
+	}
+	if s.IdemKey != "" {
+		if _, used := m.idems[s.IdemKey]; used {
+			return domain.Step{}, ErrIdemConflict
+		}
 	}
 
 	sealed, err := domain.NewStep(prev, s)
@@ -189,4 +220,22 @@ func (m *Memory) Verify(ctx context.Context, runID domain.RunID) error {
 		return err
 	}
 	return domain.VerifyChain(steps)
+}
+
+// headIs checks a caller's precondition against the head it actually found.
+//
+// One comparison, written once, so the fake and the store cannot answer the
+// question differently — which is the whole reason the fake exists.
+func headIs(expect *domain.StepRef, head *domain.Step) error {
+	if expect == nil {
+		return nil
+	}
+	if head == nil {
+		return fmt.Errorf("%w: the run has no steps", domain.ErrHeadMoved)
+	}
+	if head.Seq != expect.Seq || head.Kind != expect.Kind {
+		return fmt.Errorf("%w: head is %s at %d, expected %s at %d",
+			domain.ErrHeadMoved, head.Kind, head.Seq, expect.Kind, expect.Seq)
+	}
+	return nil
 }

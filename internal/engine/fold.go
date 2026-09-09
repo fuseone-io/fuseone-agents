@@ -162,13 +162,7 @@ func (s *State) applyKind(step domain.Step) error {
 		if err := decode(step, &p); err != nil {
 			return err
 		}
-		// A refusal leaves nothing to carry forward. The planner sees it in
-		// the transcript and chooses again, which is the point of asking.
-		if p.Approved {
-			s.Approved = s.requested
-		}
-		s.PendingApproval, s.requested = nil, nil
-		s.Phase = PhaseRunning
+		s.decide(p)
 
 	case domain.StepParked:
 		s.Phase = PhaseParked
@@ -246,4 +240,62 @@ func decode(step domain.Step, into any) error {
 		return fmt.Errorf("engine: decode %s payload at seq %d: %w", step.Kind, step.Seq, err)
 	}
 	return nil
+}
+
+/*
+decide applies one decision to the question it was about.
+
+Folded by position, a second decision ran the same lines again: `Approved` was
+set from a request that had already been cleared, so approving twice destroyed
+the grant, and refusing never touched it, so a run approved and then refused
+carried permission past its own refusal.
+
+The ledger refuses a second decision on one request now, so a new run cannot
+hold either shape. This is what the fold owes the runs that already do — and
+what makes the answer the same whatever order the steps landed in, which is the
+only kind of answer worth reading a year later.
+*/
+func (s *State) decide(p domain.ApprovalDecidedPayload) {
+	if s.answers(p) {
+		// A refusal carries nothing forward: the planner sees it in the
+		// transcript and chooses again, which is the point of asking. What it
+		// does not touch is a grant left over from an earlier request — that
+		// call was approved and nobody refused it, and clearing it here would
+		// withdraw permission on the strength of an answer about something
+		// else.
+		if p.Approved {
+			s.Approved = s.requested
+		}
+		s.PendingApproval, s.requested = nil, nil
+		s.Phase = PhaseRunning
+		return
+	}
+
+	/*
+		A decision about a question this run has moved past.
+
+		It reopens nothing: not the phase, not the request, and not a grant —
+		which is what a stale card in a channel produces and what must not
+		restart a run that has gone on without it.
+
+		A refusal is the exception, and it closes rather than opens. One that
+		names the grant still outstanding removes it, and so does one that
+		names nothing at all: a refusal that cannot say what it refused, with
+		something approved and uncalled, is only safe read as being about that.
+	*/
+	if !p.Approved && s.Approved != nil && (p.AtSeq == 0 || p.AtSeq == s.Approved.AtSeq) {
+		s.Approved = nil
+	}
+}
+
+// answers reports that this decision is about the question now open.
+//
+// A decision written before the sequence was recorded names none, and stays
+// readable: it could only have meant whatever was open when somebody wrote it,
+// and that is what is open here.
+func (s *State) answers(p domain.ApprovalDecidedPayload) bool {
+	if s.PendingApproval == nil {
+		return false
+	}
+	return p.AtSeq == 0 || p.AtSeq == s.PendingApproval.AtSeq
 }

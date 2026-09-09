@@ -22,7 +22,9 @@ it, and the run’s projection moves — because a chain with a gap and a
 projection that disagrees with the trail are the two ways this record stops
 being worth keeping (PRD AU-01, AU-02).
 */
-func (p *Postgres) appendOnce(ctx context.Context, s domain.Step) (domain.Step, error) {
+func (p *Postgres) appendOnce(
+	ctx context.Context, expect *domain.StepRef, s domain.Step,
+) (domain.Step, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return domain.Step{}, fmt.Errorf("begin: %w", err)
@@ -45,6 +47,11 @@ func (p *Postgres) appendOnce(ctx context.Context, s domain.Step) (domain.Step, 
 
 	prev, err := headTx(ctx, tx, s.RunID)
 	if err != nil {
+		return domain.Step{}, err
+	}
+	// Inside the lock, which is the only place the answer is still true when
+	// the step is written.
+	if err := headIs(expect, prev); err != nil {
 		return domain.Step{}, err
 	}
 

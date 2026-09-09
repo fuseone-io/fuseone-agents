@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -113,20 +114,47 @@ func (s *Server) DecideApproval(ctx context.Context, req openapi.DecideApprovalR
 			state.PendingApproval.AtSeq, req.Body.AtSeq))), nil
 	}
 
-	if _, err := s.store.Append(ctx, domain.Step{
+	/*
+		Written against the request it answers, and only onto it.
+
+		The check above is the message: it tells somebody with a stale tab
+		which step the run is actually waiting on. It is not the guarantee —
+		reading, checking and writing are three moments, and between the first
+		and the third another approver can answer the same question or the run
+		can be abandoned. The ledger takes the condition under the lock that
+		serialises the append, which is the only place it is still true when
+		the step is written.
+
+		Two decisions on one request also share an idempotency key. That is
+		unreachable from here — the condition is checked before the insert, in
+		the same transaction — and it is what settles a caller that reaches the
+		write by some other route, using the uniqueness the ledger already
+		enforces rather than a second rule beside it.
+	*/
+	decision := domain.Step{
 		RunID: runID, Scope: state.Scope,
 		AgentID: state.AgentID, VersionID: state.VersionID, OnBehalfOf: state.OnBehalfOf,
-		Kind: domain.StepApprovalDecided,
-		At:   decidedAt(steps, clockOr(s.clock).Now()),
+		Kind:    domain.StepApprovalDecided,
+		At:      decidedAt(steps, clockOr(s.clock).Now()),
+		IdemKey: domain.ApprovalDecisionKey(runID, req.Body.AtSeq),
 		Payload: mustJSON(domain.ApprovalDecidedPayload{
 			Approved: req.Body.Approved,
 			// Who decided. Its absence made every entry in the audit trail
 			// read "—" in the column the whole product exists to fill: an
 			// action was authorised and the record could not say by whom.
-			By:   callerOf(ctx),
-			Note: valueOr(req.Body.Note),
+			By:    callerOf(ctx),
+			Note:  valueOr(req.Body.Note),
+			AtSeq: req.Body.AtSeq,
 		}),
-	}); err != nil {
+	}
+	head := domain.StepRef{Seq: req.Body.AtSeq, Kind: domain.StepApprovalRequested}
+	switch _, err := s.store.AppendIfHead(ctx, head, decision); {
+	case errors.Is(err, domain.ErrHeadMoved):
+		// Somebody else answered, or the run moved on. The same 409 a stale
+		// tab gets, because it is the same fact: this question is settled.
+		return openapi.DecideApproval409ApplicationProblemPlusJSONResponse(
+			conflicted("this decision was overtaken; the run is no longer waiting on that step")), nil
+	case err != nil:
 		return nil, fmt.Errorf("record decision: %w", err)
 	}
 

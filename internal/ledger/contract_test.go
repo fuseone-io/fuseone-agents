@@ -30,6 +30,8 @@ import (
 // and the API need.
 type Store interface {
 	engine.Ledger
+	// AppendIfHead seals a step only onto the head it was decided against.
+	AppendIfHead(ctx context.Context, head domain.StepRef, s domain.Step) (domain.Step, error)
 	Runs(ctx context.Context) ([]domain.RunID, error)
 	Verify(ctx context.Context, runID domain.RunID) error
 	Claim(ctx context.Context, owner string, lease time.Duration) (domain.Claim, error)
@@ -2223,6 +2225,142 @@ func TestAgreementContract(t *testing.T) {
 		if len(got) != 1 || got[0].Version != "v3" ||
 			got[0].Blocks != 1 || got[0].Runs != 1 {
 			t.Errorf("blocks = %+v, want only the recent block", got)
+		}
+	})
+}
+
+/*
+A step that may only be sealed onto the head it was decided against.
+
+Reading state, deciding, and then appending is three moments, and between the
+first and the third the run can move: somebody else answers the same question,
+or the run is abandoned entirely. A check made in the caller cannot close that
+window — it has already happened by the time the write begins — so the ledger
+takes it under the same lock that serialises the append.
+
+Written as a contract because the fake is where most callers meet it, and one
+that sealed a step the store would refuse is one that certifies behaviour
+production does not have.
+*/
+func TestAppendIfHead(t *testing.T) {
+	run(t, "the head is what was expected, and the step is sealed", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		asked := seedApprovalRequest(t, s)
+
+		decided, err := s.AppendIfHead(ctx,
+			domain.StepRef{Seq: asked.Seq, Kind: domain.StepApprovalRequested},
+			step("run-1", domain.StepApprovalDecided))
+		if err != nil {
+			t.Fatalf("AppendIfHead: %v", err)
+		}
+		if decided.Seq != asked.Seq+1 {
+			t.Errorf("seq = %d, want it sealed onto the head", decided.Seq)
+		}
+	})
+
+	run(t, "another step landed first, so the decision is refused", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		asked := seedApprovalRequest(t, s)
+
+		// Somebody else answered, or the run was abandoned. Either way the
+		// question this decision was about is no longer the one open.
+		if _, err := s.Append(ctx, step("run-1", domain.StepApprovalDecided)); err != nil {
+			t.Fatalf("the first decision: %v", err)
+		}
+
+		_, err := s.AppendIfHead(ctx,
+			domain.StepRef{Seq: asked.Seq, Kind: domain.StepApprovalRequested},
+			step("run-1", domain.StepApprovalDecided))
+		if !errors.Is(err, domain.ErrHeadMoved) {
+			t.Fatalf("err = %v, want ErrHeadMoved", err)
+		}
+
+		steps, err := s.Read(ctx, "run-1", domain.FirstSeq)
+		if err != nil {
+			t.Fatalf("Read: %v", err)
+		}
+		if decisions := countKind(steps, domain.StepApprovalDecided); decisions != 1 {
+			t.Errorf("%d decisions recorded, want the second one refused", decisions)
+		}
+	})
+
+	run(t, "the head sits at the right sequence and is another kind", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		asked := seedApprovalRequest(t, s)
+
+		_, err := s.AppendIfHead(ctx,
+			domain.StepRef{Seq: asked.Seq, Kind: domain.StepToolCalled},
+			step("run-1", domain.StepApprovalDecided))
+		if !errors.Is(err, domain.ErrHeadMoved) {
+			t.Fatalf("err = %v, want the kind to be part of the condition", err)
+		}
+	})
+
+	// A refused precondition is an answer, not a collision. Retried, it would
+	// spend the caller's request budget rediscovering the same fact.
+	run(t, "a refused precondition is not retried", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		seedApprovalRequest(t, s)
+
+		_, err := s.AppendIfHead(ctx,
+			domain.StepRef{Seq: 99, Kind: domain.StepApprovalRequested},
+			step("run-1", domain.StepApprovalDecided))
+		if !errors.Is(err, domain.ErrHeadMoved) {
+			t.Fatalf("err = %v, want ErrHeadMoved", err)
+		}
+	})
+}
+
+func seedApprovalRequest(t *testing.T, s Store) domain.Step {
+	t.Helper()
+	ctx := context.Background()
+	if _, err := s.Append(ctx, step("run-1", domain.StepRunStarted)); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	asked, err := s.Append(ctx, step("run-1", domain.StepApprovalRequested))
+	if err != nil {
+		t.Fatalf("ask: %v", err)
+	}
+	return asked
+}
+
+func countKind(steps []domain.Step, kind domain.StepKind) int {
+	n := 0
+	for _, s := range steps {
+		if s.Kind == kind {
+			n++
+		}
+	}
+	return n
+}
+
+/*
+Failing both conditions is reported as the head, not as the key.
+
+A decision carries an idempotency key naming the same request its precondition
+names, so a second one fails both. Which answer comes back decides what the
+caller says: the head moved is "somebody else settled this", and the key was
+used is "you sent this twice". Only the first is true, and only the first is
+worth telling a person looking at a card that no longer applies.
+
+The fake had them the other way round, and the divergence surfaced as a caller
+getting a server failure for an ordinary race.
+*/
+func TestAppendIfHead_bothConditionsFail_reportsTheHead(t *testing.T) {
+	run(t, "the head is reported before the key", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		asked := seedApprovalRequest(t, s)
+
+		decision := step("run-1", domain.StepApprovalDecided)
+		decision.IdemKey = domain.ApprovalDecisionKey("run-1", asked.Seq)
+		head := domain.StepRef{Seq: asked.Seq, Kind: domain.StepApprovalRequested}
+
+		if _, err := s.AppendIfHead(ctx, head, decision); err != nil {
+			t.Fatalf("the first decision: %v", err)
+		}
+		_, err := s.AppendIfHead(ctx, head, decision)
+		if !errors.Is(err, domain.ErrHeadMoved) {
+			t.Fatalf("err = %v, want the head reported rather than the key", err)
 		}
 	})
 }
