@@ -110,6 +110,25 @@ const mentionsConversation = {
 };
 
 
+function saved(requests: { method: string; body?: unknown }[]) {
+  return requests.find((one) => one.method === "PUT")?.body;
+}
+
+describe("conversation configuration", () => {
+  beforeAll(() => {
+    Element.prototype.hasPointerCapture ??= () => false;
+    Element.prototype.setPointerCapture ??= () => {};
+    Element.prototype.releasePointerCapture ??= () => {};
+    Element.prototype.scrollIntoView ??= () => {};
+  });
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    setLocale("pt-BR");
+    stubApi();
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
   /*
    * Sending the card privately as well is a choice about who sees a run's
    * facts, so it is offered where the events are chosen and only where parked
@@ -173,25 +192,6 @@ const mentionsConversation = {
     await waitFor(() => expect(saved(requests)).toBeDefined());
     expect(saved(requests)).toMatchObject({ directApprovals: true });
   });
-
-function saved(requests: { method: string; body?: unknown }[]) {
-  return requests.find((one) => one.method === "PUT")?.body;
-}
-
-describe("conversation configuration", () => {
-  beforeAll(() => {
-    Element.prototype.hasPointerCapture ??= () => false;
-    Element.prototype.setPointerCapture ??= () => {};
-    Element.prototype.releasePointerCapture ??= () => {};
-    Element.prototype.scrollIntoView ??= () => {};
-  });
-
-  beforeEach(() => {
-    vi.restoreAllMocks();
-    setLocale("pt-BR");
-    stubApi();
-  });
-  afterEach(() => vi.unstubAllGlobals());
 
   it("explains an empty Slack listing instead of leaving a picker with no choices", async () => {
     renderForm();

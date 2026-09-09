@@ -487,3 +487,37 @@ func TestPutConversation_notToldAboutParkedRuns_storesNoDirectApprovals(t *testi
 		}
 	}
 }
+
+/*
+The runtime reads the choice the administration stored.
+
+Configured.For lists the fields it carries out one by one, so a field added to
+the stored shape and not to that list reads as false everywhere — the console
+says on, the settings row says on, and nothing is ever sent. It is the quietest
+way for this feature to be absent.
+*/
+func TestFor_theDirectApprovalChoice_reachesTheRuntime(t *testing.T) {
+	store, channels := configuredChannels(t)
+
+	if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+		ID: "C33-direct", Enabled: true, Wants: []string{"parked"},
+		DirectApprovals: true,
+		Scope:           domain.Scope{Company: "acme", Area: "ops"},
+	}, "usr_ana"); err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+
+	places, err := store.For(t.Context(), domain.Scope{Company: "acme", Area: "ops"})
+	if err != nil {
+		t.Fatalf("For: %v", err)
+	}
+	for _, place := range places {
+		if place.ID == "C33-direct" {
+			if !place.DirectApprovals {
+				t.Error("the runtime reads the conversation as not telling anybody privately")
+			}
+			return
+		}
+	}
+	t.Fatalf("places = %+v, want the conversation", places)
+}
