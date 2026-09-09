@@ -25,7 +25,19 @@ field" is a commit message.
 
 ---
 
-## [Unreleased]
+## [0.44.0] — 2026-09-09
+
+### Upgrade notes
+
+- **A run that is stopped right now may be announced once more after the
+  upgrade.** Announcements are recorded against the step a run stopped on, and
+  rows written before this carry no step — the old row cannot say which stop it
+  was about, and treating it as covering the current one would restore the very
+  silence this release fixes. So a run that is parked or awaiting approval, and
+  whose last activity is inside the 24-hour announcement window, gets one
+  further message in the conversations that already heard about it. Runs that
+  finished or failed are unaffected: those happen once, and their old records
+  still match.
 
 ### Added
 
@@ -48,18 +60,6 @@ field" is a commit message.
   card posted about that step is rewritten to say what happened and who decided
   it, and the buttons go. This applies to conversation cards too, so an
   approval decided in the console no longer leaves live buttons behind.
-
-### Upgrade notes
-
-- **A run that is stopped right now may be announced once more after the
-  upgrade.** Announcements are recorded against the step a run stopped on, and
-  rows written before this carry no step — the old row cannot say which stop it
-  was about, and treating it as covering the current one would restore the very
-  silence this release fixes. So a run that is parked or awaiting approval, and
-  whose last activity is inside the 24-hour announcement window, gets one
-  further message in the conversations that already heard about it. Runs that
-  finished or failed are unaffected: those happen once, and their old records
-  still match.
 
 ### Fixed
 
