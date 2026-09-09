@@ -103,6 +103,55 @@ func TestApproversIn_aDisabledPerson_isNotNotified(t *testing.T) {
 	}
 }
 
+/*
+Only people are told.
+
+A service account holding an API token, or an agent principal delegated
+authority for a run, may carry the role and legitimately decide through the
+API. Neither has anybody to send a private message to, and putting them on the
+list produces a message addressed to a machine or an address that does not
+exist.
+
+The rest of this suite creates people and only people, so the filter that keeps
+them out had nothing testing it — which is how a clause survives long enough to
+be deleted by somebody tidying up.
+*/
+func TestApproversIn_aServiceOrAgentPrincipal_isNotNotified(t *testing.T) {
+	dir, pool := directoryFor(t)
+	ops := domain.Scope{Company: "acme", Area: "ops"}
+
+	// A person with the same grant, so a green test cannot be the fixture
+	// failing to grant anything.
+	person := personIn(t, dir, "ana")
+	machines := map[string]string{"service": "svc_tokenholder", "agent": "agt_delegated"}
+	for kind, id := range machines {
+		if _, err := pool.Exec(t.Context(),
+			`insert into principals (principal_id, kind, display) values ($1, $2, $3)`,
+			id, kind, kind); err != nil {
+			t.Fatalf("seed a %s principal: %v", kind, err)
+		}
+	}
+	for _, id := range append([]string{person}, "svc_tokenholder", "agt_delegated") {
+		if err := dir.SetGrants(t.Context(), id,
+			[]domain.Grant{{Scope: ops, Role: domain.RoleApprover}}, "test"); err != nil {
+			t.Fatalf("SetGrants %s: %v", id, err)
+		}
+	}
+
+	who, err := dir.ApproversIn(t.Context(), ops)
+	if err != nil {
+		t.Fatalf("ApproversIn: %v", err)
+	}
+	if !slices.Contains(who, domain.UserID(person)) {
+		t.Fatalf("who = %v, want the person listed", who)
+	}
+	for kind, id := range machines {
+		if slices.Contains(who, domain.UserID(id)) {
+			t.Errorf("a %s principal was put on the notification list", kind)
+		}
+	}
+}
+
 // Two grants reaching the same run name one person once. The list addresses
 // messages, and a duplicate is a second private message about one question.
 func TestApproversIn_grantedTwiceOverTheSameRun_isNamedOnce(t *testing.T) {
