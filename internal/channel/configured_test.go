@@ -44,3 +44,52 @@ func TestStartsFromMentions_everyMode_saysWhetherAMessageMayStart(t *testing.T) 
 		}
 	}
 }
+
+/*
+Two connections cannot produce one key.
+
+Joined with a separator, a connection called "workspace" holding "team/C" and
+one called "workspace/team" holding "C" are the same string — and in one scope
+that is one row, so the second write is the first one's grave. Both halves are
+names somebody typed or a vendor chose; neither can be promised free of the
+separator.
+*/
+func TestConversationKey_partsThatShareASeparator_areStillTwoKeys(t *testing.T) {
+	t.Parallel()
+
+	first := channel.ConversationKey("workspace", "team/C-SAME")
+	second := channel.ConversationKey("workspace/team", "C-SAME")
+	if first == second {
+		t.Fatalf("both connections key to %q", first)
+	}
+	// And each still says which conversation it is.
+	if got := channel.ConversationID("workspace", first); got != "team/C-SAME" {
+		t.Errorf("id = %q, want the whole id back", got)
+	}
+	if got := channel.ConversationID("workspace/team", second); got != "C-SAME" {
+		t.Errorf("id = %q, want the whole id back", got)
+	}
+}
+
+/*
+A row from before the key carried a connection is read as the id it is.
+
+Its name has no prefix to strip. An id that merely looks like a key — one that
+happens to begin with this connection's prefix — is still an id, so the prefix
+is matched whole and never sniffed for.
+*/
+func TestConversationID_aNameWithoutThisConnectionsPrefix_isTheIdItself(t *testing.T) {
+	t.Parallel()
+
+	for _, one := range []struct{ channel, name, want string }{
+		{"acme-slack", "C07", "C07"},
+		{"acme-slack", "acme-slack/C07", "acme-slack/C07"},
+		{"acme-slack", "10:acme-slack/C07", "C07"},
+		{"acme-slack", "9:acme-slac/C07", "9:acme-slac/C07"},
+	} {
+		if got := channel.ConversationID(one.channel, one.name); got != one.want {
+			t.Errorf("ConversationID(%q, %q) = %q, want %q",
+				one.channel, one.name, got, one.want)
+		}
+	}
+}

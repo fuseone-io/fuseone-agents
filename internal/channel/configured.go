@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/fuseone/agents/internal/domain"
@@ -223,18 +224,32 @@ workspaces are two namespaces, and an id naming a channel in one may name
 another somewhere else. Stored under the id alone, mapping the same id on a
 second connection in one scope replaced the first — silently, because the write
 that did it looked like an ordinary configuration.
+
+Length-prefixed, for the reason AskKey is: joined with a separator, a connection
+called "workspace" holding "team/C" and one called "workspace/team" holding "C"
+produce the same key, and the second write is the first one's grave. Both are
+names somebody typed or a vendor chose, so neither can be promised free of the
+separator. The length cannot be forged by punctuation.
 */
 func ConversationKey(channelName, id string) string {
-	return channelName + "/" + id
+	return strconv.Itoa(len(channelName)) + ":" + channelName + "/" + id
 }
 
-// ConversationID reads the id back out of a stored key.
-//
-// Given the connection rather than split on the separator, so an id containing
-// one comes back whole — and a row from before the connection joined the key,
-// which has no prefix to strip, comes back as itself.
+/*
+ConversationID reads the id back out of a stored key.
+
+Given the connection rather than parsed, so an id containing the separator comes
+back whole. A name that does not carry this connection's prefix is from before
+the key had one and is the id itself — which is also why the prefix is matched
+whole rather than sniffed: an old id that happens to begin with "11:acme-slack/"
+is an id, not a key, and only an exact match may take it apart.
+*/
 func ConversationID(channelName, name string) string {
-	return strings.TrimPrefix(name, channelName+"/")
+	prefix := strconv.Itoa(len(channelName)) + ":" + channelName + "/"
+	if id, found := strings.CutPrefix(name, prefix); found && id != "" {
+		return id
+	}
+	return name
 }
 
 // Source is who wrote a channel event as the vendor names it.

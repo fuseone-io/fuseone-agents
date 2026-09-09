@@ -27,6 +27,18 @@ field" is a commit message.
 
 ## [0.45.0] — 2026-09-09
 
+### Upgrade notes
+
+- **While both versions are running, a conversation saved on the new one is
+  invisible to the old one.** Conversations are now stored under their
+  connection as well as their id, and the version before this reads the old name
+  and only the old name. Nothing is renamed up front for exactly that reason —
+  a migration doing it would take every conversation away from the pods still
+  serving — but a conversation *edited* during the rollout moves to the new name
+  in that act, and until the older pods are gone they will not find it. It
+  affects only conversations saved in that window, and it ends when the rollout
+  does.
+
 ### Added
 
 - **A conversation can speak for the whole installation.** Until now a run
@@ -70,7 +82,11 @@ field" is a commit message.
   the trail saying a conversation had been removed. Cards and approvals for that
   workspace simply stopped. Vendor ids are per-workspace namespaces, which is
   why the runtime has always resolved by connection *and* id; the storage was
-  the half that did not. Existing conversations are renamed in place on upgrade.
+  the half that did not.
+
+  Nothing is renamed on upgrade. Conversations written before this keep their
+  old name and go on working, and each one moves to the new one the next time
+  it is saved. The reason is in the upgrade notes.
 
 ### Changed
 

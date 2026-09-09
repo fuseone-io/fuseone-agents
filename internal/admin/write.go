@@ -62,6 +62,10 @@ type folded struct {
 	// fold sees what is stored and returns what to write. Absent for a write
 	// that depends on nothing.
 	fold func(stored settings.Setting) (settings.Setting, any, error)
+	// then runs after the write, in the same transaction. For the other half
+	// of a write that is one act — removing the row this one replaces, under
+	// a name only the store knows.
+	then func(ctx context.Context, conn settings.DB) error
 }
 
 func writeFolded(
@@ -100,6 +104,12 @@ func writeFolded(
 	if err := store.PutTx(ctx, tx, set); err != nil {
 		return err
 	}
+	if w.then != nil {
+		if err := w.then(ctx, tx); err != nil {
+			return err
+		}
+	}
+
 	by, scope, action, target := w.by, w.scope, w.action, w.target
 	if err := Record(ctx, tx, Event{
 		Principal: by, Scope: scope, Action: action, Target: target, Detail: detail,

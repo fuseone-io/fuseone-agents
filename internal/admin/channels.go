@@ -133,8 +133,31 @@ func (c *Channels) channelSecretState(ctx context.Context, name string) channelS
 	}
 }
 
+/*
+storedConversation is one conversation beside the row's own name.
+
+The name is what a delete has to say. Recomputing it from the connection and
+the id is how a removal reports success and removes nothing: rows written before
+the connection joined the key are named by the id alone, and one of those
+arrives from a restore, from a partial rollout, or from any writer still on the
+version before this one.
+*/
+type storedConversation struct {
+	name string
+	conv Conversation
+}
+
 func conversationsOf(channelName string, stored []settings.Setting) []Conversation {
-	var out []Conversation
+	rows := conversationRows(channelName, stored)
+	out := make([]Conversation, 0, len(rows))
+	for _, one := range rows {
+		out = append(out, one.conv)
+	}
+	return out
+}
+
+func conversationRows(channelName string, stored []settings.Setting) []storedConversation {
+	var out []storedConversation
 	for _, s := range stored {
 		var v struct {
 			Channel         string   `json:"channel"`
@@ -150,7 +173,7 @@ func conversationsOf(channelName string, stored []settings.Setting) []Conversati
 		if err := json.Unmarshal(s.Value, &v); err != nil || v.Channel != channelName {
 			continue
 		}
-		out = append(out, Conversation{
+		out = append(out, storedConversation{name: s.Name, conv: Conversation{
 			ID: channel.ConversationID(channelName, s.Name), Label: v.Label, Scope: s.Scope,
 			// As stored. Read through the display normalisation, a mode this
 			// version cannot name came back as "mentions", and saving any
@@ -162,7 +185,7 @@ func conversationsOf(channelName string, stored []settings.Setting) []Conversati
 			ThreadContext:   v.ThreadContext,
 			DirectApprovals: v.DirectApprovals,
 			Wants:           v.Wants, Enabled: s.Enabled,
-		})
+		}})
 	}
 	return out
 }
@@ -377,6 +400,15 @@ func (c *Channels) PutConversation(
 	return writeGuarded(ctx, c.pool, c.settings, guard, folded{
 		by: by, scope: conv.Scope,
 		action: "channel.conversation.configured", target: conv.ID,
+		// The row this one replaces, if it is stored under the id alone. Two
+		// rows for one conversation is the ambiguity the read refuses, so the
+		// older shape goes in the same act rather than being left beside its
+		// replacement. Nothing is renamed ahead of time: a version before this
+		// one reads the old name and only the old name, and it is still
+		// serving while this one starts.
+		then: func(ctx context.Context, conn settings.DB) error {
+			return c.removeLegacyRow(ctx, conn, channelName, conv)
+		},
 		set: settings.Setting{
 			ScopeKind: conversationScopeKind(conv.Scope), Scope: conv.Scope,
 			Kind: channel.KindConversation,
@@ -439,15 +471,14 @@ func (c *Channels) DeleteChannel(
 	if err != nil {
 		return fmt.Errorf("admin: list conversations: %w", err)
 	}
-	for _, conv := range conversationsOf(name, stored) {
-		if err := c.settings.DeleteTx(ctx, tx, conversationScopeKind(conv.Scope),
-			conv.Scope, channel.KindConversation,
-			channel.ConversationKey(name, conv.ID)); err != nil {
+	for _, one := range conversationRows(name, stored) {
+		if err := c.settings.DeleteTx(ctx, tx, conversationScopeKind(one.conv.Scope),
+			one.conv.Scope, channel.KindConversation, one.name); err != nil {
 			return err
 		}
 		if err := Record(ctx, tx, Event{
-			Principal: by, Scope: conv.Scope,
-			Action: "channel.conversation.removed", Target: conv.ID,
+			Principal: by, Scope: one.conv.Scope,
+			Action: "channel.conversation.removed", Target: one.conv.ID,
 		}); err != nil {
 			return err
 		}
@@ -476,14 +507,72 @@ type ConversationRef struct {
 	Scope   domain.Scope
 }
 
-// DeleteConversation stops a scope's runs reporting to a place.
+/*
+removeLegacyRow deletes the same conversation stored under the id alone.
+
+Only when it belongs to this connection. A row named by the id alone may be
+somebody else's — that is the whole reason the key changed — and deleting it
+because the names collide would be this defect happening one more time, in the
+opposite direction.
+*/
+func (c *Channels) removeLegacyRow(
+	ctx context.Context, conn settings.DB, channelName string, conv Conversation,
+) error {
+	stored, err := c.settings.ListTx(ctx, conn, channel.KindConversation)
+	if err != nil {
+		return fmt.Errorf("admin: list conversations: %w", err)
+	}
+	for _, one := range conversationRows(channelName, stored) {
+		if one.name != conv.ID || one.conv.Scope != conv.Scope {
+			continue
+		}
+		return c.settings.DeleteTx(ctx, conn, conversationScopeKind(conv.Scope),
+			conv.Scope, channel.KindConversation, one.name)
+	}
+	return nil
+}
+
+/*
+DeleteConversation stops a scope's runs reporting to a place.
+
+The row is found before it is removed, and removed under the name it is
+actually stored with. Recomputing the key instead is how a removal reports
+success and removes nothing: a conversation written before the connection
+joined the key is named by the id alone, and one of those arrives from a
+restore, or from a writer still on the version before this one.
+*/
 func (c *Channels) DeleteConversation(
 	ctx context.Context, ref ConversationRef, by domain.UserID,
 ) error {
-	return removeScopedSetting(ctx, c.pool, c.settings, by,
-		conversationScopeKind(ref.Scope), ref.Scope, ref.Scope,
-		channel.KindConversation, channel.ConversationKey(ref.Channel, ref.ID),
-		"channel.conversation.removed")
+	tx, err := c.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("admin: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if err := lockChannel(ctx, tx, ref.Channel); err != nil {
+		return err
+	}
+	stored, err := c.settings.ListTx(ctx, tx, channel.KindConversation)
+	if err != nil {
+		return fmt.Errorf("admin: list conversations: %w", err)
+	}
+	for _, one := range conversationRows(ref.Channel, stored) {
+		if one.conv.ID != ref.ID || one.conv.Scope != ref.Scope {
+			continue
+		}
+		if err := c.settings.DeleteTx(ctx, tx, conversationScopeKind(ref.Scope),
+			ref.Scope, channel.KindConversation, one.name); err != nil {
+			return err
+		}
+	}
+	if err := Record(ctx, tx, Event{
+		Principal: by, Scope: ref.Scope,
+		Action: "channel.conversation.removed", Target: ref.ID,
+	}); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // ErrConversationMapped means this conversation already speaks for another

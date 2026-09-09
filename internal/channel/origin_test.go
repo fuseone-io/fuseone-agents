@@ -718,6 +718,67 @@ func TestResolve_theSameIdOnTwoConnectionsInOneScope_areTwoConversations(t *test
 }
 
 /*
+A conversation stored before the connection joined the key is still reachable.
+
+Nothing is renamed ahead of the rollout: the version before this one reads the
+old name and only the old name, and it is still serving while this one starts.
+So both shapes have to work — this one reads them, and an edit retires the old
+row in the same act rather than leaving two rows for one conversation, which is
+the ambiguity the read refuses.
+*/
+func TestPutConversation_aRowStoredUnderTheIdAlone_isReplacedRatherThanDoubled(t *testing.T) {
+	store, channels, settingsStore := configuredChannelsWithStore(t)
+	scope := domain.Scope{Company: "acme", Area: "legacy"}
+
+	// The old shape, as a version before this one wrote it.
+	conversationRow(t, settingsStore, "C-OLD", settings.ScopeArea, scope,
+		channel.ConversationMentions)
+	if _, err := store.Resolve(t.Context(), "acme-slack", "C-OLD"); err != nil {
+		t.Fatalf("the old shape does not resolve: %v", err)
+	}
+
+	if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+		ID: "C-OLD", Enabled: true, Scope: scope, Wants: []string{"parked"},
+		Agent: "cobranca",
+	}, "usr_ana"); err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+
+	got, err := store.Resolve(t.Context(), "acme-slack", "C-OLD")
+	if err != nil {
+		t.Fatalf("resolve after the edit: %v", err)
+	}
+	if got.Agent != "cobranca" {
+		t.Errorf("agent = %q, want the edit to be what answers", got.Agent)
+	}
+}
+
+/*
+And it can be removed.
+
+The delete recomputed the key, so a row stored under the id alone was named by
+something that was not in the table: the removal matched nothing, reported
+success, and the conversation went on receiving.
+*/
+func TestDeleteConversation_aRowStoredUnderTheIdAlone_isRemoved(t *testing.T) {
+	store, channels, settingsStore := configuredChannelsWithStore(t)
+	scope := domain.Scope{Company: "acme", Area: "legacy2"}
+
+	conversationRow(t, settingsStore, "C-OLDER", settings.ScopeArea, scope,
+		channel.ConversationMentions)
+
+	if err := channels.DeleteConversation(t.Context(), admin.ConversationRef{
+		Channel: "acme-slack", ID: "C-OLDER", Scope: scope,
+	}, "usr_ana"); err != nil {
+		t.Fatalf("DeleteConversation: %v", err)
+	}
+	if _, err := store.Resolve(t.Context(), "acme-slack", "C-OLDER"); !errors.Is(
+		err, channel.ErrNoConversation) {
+		t.Errorf("err = %v, want the conversation gone", err)
+	}
+}
+
+/*
 And removing one leaves the other.
 
 The delete is keyed the same way the write is, and the two disagreeing is how a
