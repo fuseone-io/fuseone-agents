@@ -1,6 +1,9 @@
 package domain
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // Typed payloads for each step kind. They are the ledger's on-disk contract:
 // an auditor reading run_steps five years from now decodes these, so treat a
@@ -280,6 +283,26 @@ type ApprovalDecidedPayload struct {
 	// decision arriving about a question the run has moved past can be told
 	// apart from the one it is waiting on.
 	AtSeq int64 `json:"at_seq,omitempty"`
+}
+
+/*
+ApprovalDecisionKey names one decision about one request.
+
+The ledger already refuses a repeated idempotency key, in both the store and
+the fake, so a decision that carries one is unique by the guarantee that
+already exists rather than by a second rule beside it — no expression index
+over JSON, no migration, and nothing else to teach the fake.
+
+Readable rather than hashed. A key an auditor can read tells them which request
+a row answered without decoding anything, and there is nothing here worth
+hiding: the run and the step are already columns.
+
+Decisions written before this carry no key. That is correct and not a gap — an
+immutable ledger earns a reader that understands its older rows, never a
+rewrite of them.
+*/
+func ApprovalDecisionKey(run RunID, atSeq int64) string {
+	return fmt.Sprintf("approval_decision:%s:%d", run, atSeq)
 }
 
 // ResumedPayload records a person returning a parked run to the queue.

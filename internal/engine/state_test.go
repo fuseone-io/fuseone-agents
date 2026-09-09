@@ -566,70 +566,62 @@ func TestFold_wallClock_accumulatesFromTheRunsOwnInstants(t *testing.T) {
 }
 
 /*
-One question, decided more than once.
+One question, decided more than once, in every order.
 
 The ledger refuses a second decision on the same request, so new runs never
-hold this shape. Old ones do, and the fold is what an auditor reads a year
-later — so it has to answer for them, and it has to answer the same way
-whatever order the two steps landed in.
+hold these shapes. Old ones do, and the fold is what an auditor reads a year
+later — so it has to answer for them, and give the same answer whichever of the
+two steps landed first.
 
-A second approval must not void the first. Folded by position rather than by
-what the decision names, `s.Approved = s.requested` ran again with nothing
-requested and set the grant to nothing: the run went back to running, the
-planner asked again, and nobody was told why.
+Folded by position rather than by what a decision named, two of these four were
+wrong. A second approval ran `s.Approved = s.requested` again with nothing
+requested and set the grant to nothing: the run returned to running, the
+planner asked again, and nobody was told why. And refusing never touched the
+grant, so a run approved and then refused carried permission past its own
+refusal — with the phase already running, a worker could take the approved call
+while the refusal was still being written.
+
+Each order twice over, because a decision written before the sequence existed
+names no request and has to keep meaning what it meant.
 */
-func TestFold_approvedTwiceForOneRequest_keepsTheGrant(t *testing.T) {
+func TestFold_oneRequestDecidedTwice_answersTheSameWhicheverLanded(t *testing.T) {
 	t.Parallel()
 
-	s := mustFold(t, decidedTwice(t,
-		domain.ApprovalDecidedPayload{Approved: true, By: "ana", AtSeq: 2},
-		domain.ApprovalDecidedPayload{Approved: true, By: "bruno", AtSeq: 2},
-	))
+	for _, c := range []struct {
+		order  string
+		first  bool
+		second bool
+		grant  bool
+	}{
+		{"approved twice", true, true, true},
+		{"approved then refused", true, false, false},
+		{"refused then approved", false, true, false},
+		{"refused twice", false, false, false},
+	} {
+		for _, form := range []struct {
+			named string
+			seq   int64
+		}{
+			{"naming the request", 2},
+			// Written before the sequence was recorded. It could only have
+			// meant whatever was open, and reading it any other way would
+			// rewrite what a past decision decided.
+			{"naming nothing", 0},
+		} {
+			s := mustFold(t, decidedTwice(t,
+				domain.ApprovalDecidedPayload{Approved: c.first, By: "ana", AtSeq: form.seq},
+				domain.ApprovalDecidedPayload{Approved: c.second, By: "bruno", AtSeq: form.seq},
+			))
 
-	if s.Approved == nil {
-		t.Fatal("a second approval voided the first")
-	}
-	if s.Approved.Tool != "crm.reply" {
-		t.Errorf("approved = %+v, want the call that was asked about", s.Approved)
-	}
-}
-
-/*
-A refusal removes the grant, whenever it arrives.
-
-Refusing left `s.Approved` untouched, so a run approved and then refused
-carried a usable grant past its own refusal — and the phase was already running
-after the first decision, so a worker could take the approved call while the
-refusal was still being written. The trail then read: approved, executed,
-refused.
-*/
-func TestFold_approvedThenRefusedForOneRequest_leavesNoGrant(t *testing.T) {
-	t.Parallel()
-
-	s := mustFold(t, decidedTwice(t,
-		domain.ApprovalDecidedPayload{Approved: true, By: "ana", AtSeq: 2},
-		domain.ApprovalDecidedPayload{Approved: false, By: "bruno", AtSeq: 2},
-	))
-
-	if s.Approved != nil {
-		t.Fatalf("approved = %+v, want nothing usable after a refusal", s.Approved)
-	}
-}
-
-// And a refusal written before the sequence was recorded still closes what it
-// cannot name. It could only have meant the question that was open, and
-// leaving a grant standing on the strength of a missing field is the one
-// reading that turns a refusal into permission.
-func TestFold_refusedWithNoSequenceNamed_stillRemovesTheGrant(t *testing.T) {
-	t.Parallel()
-
-	s := mustFold(t, decidedTwice(t,
-		domain.ApprovalDecidedPayload{Approved: true, By: "ana"},
-		domain.ApprovalDecidedPayload{Approved: false, By: "bruno"},
-	))
-
-	if s.Approved != nil {
-		t.Fatalf("approved = %+v, want nothing usable after a refusal", s.Approved)
+			held := s.Approved != nil
+			if held != c.grant {
+				t.Errorf("%s, %s: grant held = %v, want %v", c.order, form.named, held, c.grant)
+			}
+			if held && s.Approved.Tool != "crm.reply" {
+				t.Errorf("%s, %s: approved = %+v, want the call that was asked about",
+					c.order, form.named, s.Approved)
+			}
+		}
 	}
 }
 

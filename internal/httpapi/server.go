@@ -23,6 +23,11 @@ const defaultLimit = 50
 type Store interface {
 	Read(ctx context.Context, runID domain.RunID, fromSeq int64) ([]domain.Step, error)
 	Append(ctx context.Context, s domain.Step) (domain.Step, error)
+	// AppendIfHead seals a step only onto the head it was decided against.
+	// Reading state, deciding and writing are three moments; between the first
+	// and the third somebody else can answer the same question or the run can
+	// be abandoned, and a check the caller made cannot see that.
+	AppendIfHead(ctx context.Context, head domain.StepRef, s domain.Step) (domain.Step, error)
 	Runs(ctx context.Context) ([]domain.RunID, error)
 	// Stats, ListRuns and CostRollup answer questions about many runs at once.
 	// They are separate from Runs and Read because answering them by folding
