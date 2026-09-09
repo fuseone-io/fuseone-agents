@@ -842,6 +842,31 @@ func TestPutConversation_aModeThisVersionDoesNotKnow_isRefused(t *testing.T) {
 }
 
 /*
+A conversation that only reports keeps no agent, wherever it sits.
+
+Only the installation scope went through the coercion, so an ordinary room set
+to announce kept its binding: a field the platform never reads, stored, and
+waiting to come back the day somebody sets that room to take mentions again.
+The console does not offer it, which is not the same as the server refusing it.
+*/
+func TestPutConversation_announceAtAnOrdinaryScope_keepsNoAgent(t *testing.T) {
+	_, channels := configuredChannels(t)
+
+	if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+		ID: "C54-quiet", Enabled: true, Mode: channel.ConversationAnnounce,
+		Scope: domain.Scope{Company: "acme", Area: "ops"},
+		Agent: "triagem", ThreadContext: true,
+	}, "usr_ana"); err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+
+	got := storedConversation(t, channels, "acme-slack", "C54-quiet")
+	if got.Agent != "" || got.ThreadContext {
+		t.Errorf("stored %+v, want nothing about starting runs", got)
+	}
+}
+
+/*
 The installation has no area, and a row claiming one reaches nothing.
 
 Containment short circuits on the sentinel and requires the area to be empty,

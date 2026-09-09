@@ -41,13 +41,16 @@ var ErrInstallationArea = errors.New(
 	"admin: the installation is the scope above every company and has no area")
 
 /*
-announcesOnly strips what a conversation for the whole installation cannot use.
+announcesOnly strips what a conversation that starts nothing cannot use.
 
 Coerced rather than refused, in the same shape as every other field a choice
-does not consume here. The agent goes too, even though it also narrows what the
-room hears: agent ids belong to a company, so one named here could not be
-checked against anything, and the endpoint that validates it has no scope to
-look in.
+does not consume here. The agent goes too, even though on the installation it
+would also narrow what the room hears: agent ids belong to a company, so one
+named there could not be checked against anything, and the endpoint that
+validates it has no scope to look in. At an ordinary scope the reason is
+simpler — a conversation that starts nothing has no agent to start, and a
+binding left behind is a field nothing reads until somebody sets the room back
+to taking mentions and it silently comes into force.
 
 What survives is what the room is for — the events it hears, and whether it also
 tells the people who may decide, which is the whole reason to have one.
