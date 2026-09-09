@@ -28,6 +28,17 @@ func writeSetting(
 	})
 }
 
+// writeGuarded is writeSetting with a precondition taken inside the
+// transaction. The options struct is the parameter list: seven arguments was
+// already one too many, and the guard is the eighth.
+func writeGuarded(
+	ctx context.Context, pool *pgxpool.Pool, store *settings.Store,
+	guard func(ctx context.Context, conn settings.DB) error, w folded,
+) error {
+	w.guard = guard
+	return writeFolded(ctx, pool, store, w)
+}
+
 /*
 folded is a write that may need to see what is stored before it decides.
 
@@ -38,6 +49,10 @@ having read the older value, and the second commit puts the older value back.
 So the reading happens inside, under the row's own lock.
 */
 type folded struct {
+	// guard runs first, inside the transaction. A precondition read before
+	// Begin is a decision about a state that may not hold by the time the
+	// write lands, which for an authority check is the whole failure.
+	guard  func(ctx context.Context, conn settings.DB) error
 	by     domain.UserID
 	scope  domain.Scope
 	action string
@@ -57,6 +72,12 @@ func writeFolded(
 		return fmt.Errorf("admin: begin: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+
+	if w.guard != nil {
+		if err := w.guard(ctx, tx); err != nil {
+			return err
+		}
+	}
 
 	set, detail := w.set, w.detail
 	if w.fold != nil {

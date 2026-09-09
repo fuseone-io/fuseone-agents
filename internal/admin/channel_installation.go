@@ -1,7 +1,9 @@
 package admin
 
 import (
+	"context"
 	"errors"
+	"fmt"
 
 	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/domain"
@@ -60,6 +62,66 @@ func announcesOnly(conv Conversation) (Conversation, string) {
 	conv.Agent, conv.RunAs, conv.ThreadContext = "", "", false
 	conv.Sources = nil
 	return conv, conv.Mode
+}
+
+/*
+ErrInstallationAuthority means the caller may not touch what carries the room.
+
+A conversation for the whole installation needs authority over the installation
+to exist and to be removed. The connection under it is the same reach by another
+route: removing it takes the room with it, and disabling or re-credentialling it
+silences the room or sends its messages out through another token.
+*/
+var ErrInstallationAuthority = errors.New(
+	"admin: that connection carries the room for the whole installation")
+
+/*
+lockChannel serialises every write about one connection.
+
+The precondition and the write have to be one decision. Checked before the
+transaction, a curator passes the check on a connection carrying no room, the
+room is attached by somebody who may, and the write lands anyway — a 204 for
+exactly the act that had just been refused.
+
+An advisory lock rather than a row lock, because the two writes touch different
+rows: the connection's and the conversation's. What they share is the name.
+*/
+func lockChannel(ctx context.Context, conn settings.DB, name string) error {
+	if _, err := conn.Exec(ctx,
+		`select pg_advisory_xact_lock(hashtext($1))`, "channel:"+name); err != nil {
+		return fmt.Errorf("admin: lock the connection %s: %w", name, err)
+	}
+	return nil
+}
+
+/*
+guardInstallationRoom refuses a write about a connection that carries the room,
+from a caller who does not govern the installation.
+
+Read from the conversation rows rather than from the assembled listing: that one
+hangs conversations off the connections that exist, so a room whose connection
+is gone — restored, migrated, or left behind by a half-finished delete — is
+invisible to it, and recreating the connection would quietly adopt it.
+*/
+func (c *Channels) guardInstallationRoom(
+	ctx context.Context, conn settings.DB, name string, governs bool,
+) error {
+	if err := lockChannel(ctx, conn, name); err != nil {
+		return err
+	}
+	if governs {
+		return nil
+	}
+	stored, err := c.settings.ListTx(ctx, conn, channel.KindConversation)
+	if err != nil {
+		return fmt.Errorf("admin: list conversations: %w", err)
+	}
+	for _, conv := range conversationsOf(name, stored) {
+		if conv.Scope.IsInstallation() {
+			return fmt.Errorf("%w: %s", ErrInstallationAuthority, name)
+		}
+	}
+	return nil
 }
 
 // conversationScopeKind is where a conversation is stored.

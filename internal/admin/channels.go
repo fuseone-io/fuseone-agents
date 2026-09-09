@@ -171,9 +171,24 @@ to the selected delivery mode: HTTP keeps a signing secret, Socket Mode keeps
 an app-level token, and switching modes drops the other one rather than hiding
 an unused credential in the vault.
 */
-func (c *Channels) PutChannel(
-	ctx context.Context, ch Channel, creds channel.Credentials, by domain.UserID,
-) error {
+/*
+ChannelWrite is one connection as somebody asked for it to be.
+
+An options struct because the caller's authority travels with the request and
+not with the connection: whether it is needed is decided here, under the same
+lock as the write, from what is attached at that moment.
+*/
+type ChannelWrite struct {
+	Channel     Channel
+	Credentials channel.Credentials
+	By          domain.UserID
+	// Governs says the caller holds authority over the whole installation. It
+	// is only consulted when this connection carries the room for it.
+	Governs bool
+}
+
+func (c *Channels) PutChannel(ctx context.Context, w ChannelWrite) error {
+	ch, by := w.Channel, w.By
 	if strings.TrimSpace(ch.Kind) == "" {
 		return ErrNoChannelKind
 	}
@@ -187,23 +202,32 @@ func (c *Channels) PutChannel(
 		return err
 	}
 
-	merged, err := c.mergeCredentials(ctx, ch.Name, creds, mode)
+	merged, err := c.mergeCredentials(ctx, ch.Name, w.Credentials, mode)
 	if err != nil {
 		return err
 	}
 
-	return writeSetting(ctx, c.pool, c.settings, by, domain.Scope{}, settings.Setting{
-		ScopeKind: settings.ScopeInstallation,
-		Kind:      channel.KindChannel, Name: ch.Name,
-		Value: value, Secret: merged.Sealed(), Enabled: ch.Enabled, UpdatedBy: string(by),
-	}, "channel.configured", ch.Name, map[string]any{
-		// Never a credential, only which of them are now held. Whether an
-		// installation can be spoken to is a fact an auditor may need; the
-		// secret is not.
-		"kind": ch.Kind, "workspace": ch.Workspace,
-		"deliveryMode": mode,
-		"token":        merged.Token != "", "signing": merged.Signing != "",
-		"appToken": merged.AppToken != "",
+	guard := func(ctx context.Context, conn settings.DB) error {
+		return c.guardInstallationRoom(ctx, conn, ch.Name, w.Governs)
+	}
+	return writeGuarded(ctx, c.pool, c.settings, guard, folded{
+		by: by, scope: domain.Scope{},
+		action: "channel.configured", target: ch.Name,
+		set: settings.Setting{
+			ScopeKind: settings.ScopeInstallation,
+			Kind:      channel.KindChannel, Name: ch.Name,
+			Value: value, Secret: merged.Sealed(), Enabled: ch.Enabled,
+			UpdatedBy: string(by),
+		},
+		detail: map[string]any{
+			// Never a credential, only which of them are now held. Whether an
+			// installation can be spoken to is a fact an auditor may need; the
+			// secret is not.
+			"kind": ch.Kind, "workspace": ch.Workspace,
+			"deliveryMode": mode,
+			"token":        merged.Token != "", "signing": merged.Signing != "",
+			"appToken": merged.AppToken != "",
+		},
 	})
 }
 
@@ -328,19 +352,30 @@ func (c *Channels) PutConversation(
 		return err
 	}
 
-	return writeSetting(ctx, c.pool, c.settings, by, conv.Scope, settings.Setting{
-		ScopeKind: conversationScopeKind(conv.Scope), Scope: conv.Scope,
-		Kind: channel.KindConversation, Name: conv.ID,
-		Value: value, Enabled: conv.Enabled, UpdatedBy: string(by),
-	}, "channel.conversation.configured", conv.ID, map[string]any{
-		"channel": channelName, "scope": conv.Scope.String(), "wants": conv.Wants,
-		"mode": mode, "sources": sources,
-		"agent": string(conv.Agent), "runAs": string(conv.RunAs),
-		"threadContext": conv.ThreadContext,
-		// Turning this on decides that a run's facts reach people privately
-		// rather than only in a room somebody can be added to or removed from.
-		// The trail has to say when it was turned on, and by whom.
-		"directApprovals": conv.DirectApprovals,
+	// Under the connection's lock, so attaching a room and deciding whether the
+	// connection may be touched cannot interleave. Whoever is allowed to write
+	// this row is settled at the door; what this serialises is the pair.
+	guard := func(ctx context.Context, conn settings.DB) error {
+		return lockChannel(ctx, conn, channelName)
+	}
+	return writeGuarded(ctx, c.pool, c.settings, guard, folded{
+		by: by, scope: conv.Scope,
+		action: "channel.conversation.configured", target: conv.ID,
+		set: settings.Setting{
+			ScopeKind: conversationScopeKind(conv.Scope), Scope: conv.Scope,
+			Kind: channel.KindConversation, Name: conv.ID,
+			Value: value, Enabled: conv.Enabled, UpdatedBy: string(by),
+		},
+		detail: map[string]any{
+			"channel": channelName, "scope": conv.Scope.String(), "wants": conv.Wants,
+			"mode": mode, "sources": sources,
+			"agent": string(conv.Agent), "runAs": string(conv.RunAs),
+			"threadContext": conv.ThreadContext,
+			// Turning this on decides that a run's facts reach people privately
+			// rather than only in a room somebody can be added to or removed
+			// from. The trail has to say when it was turned on, and by whom.
+			"directApprovals": conv.DirectApprovals,
+		},
 	})
 }
 
@@ -355,24 +390,58 @@ func compactStrings(in []string) []string {
 	return out
 }
 
-// DeleteChannel removes a connection and everything mapped into it.
-//
-// The conversations go too. Leaving them would keep rows pointing at a
-// connection that no longer exists, which reads as configured and delivers
-// nothing.
-func (c *Channels) DeleteChannel(ctx context.Context, name string, by domain.UserID) error {
-	existing, err := c.settings.List(ctx, channel.KindConversation)
+/*
+DeleteChannel removes a connection and everything mapped into it.
+
+The conversations go too. Leaving them would keep rows pointing at a connection
+that no longer exists, which reads as configured, delivers nothing, and is
+adopted by the next connection to take the name.
+
+One transaction, holding the connection's lock. As a loop of separate
+transactions it could stop halfway — conversations gone, connection still there
+— and a room attached while it ran was neither seen by the authority check nor
+removed by the cascade, left behind pointing at a connection that no longer
+exists.
+*/
+func (c *Channels) DeleteChannel(
+	ctx context.Context, name string, by domain.UserID, governs bool,
+) error {
+	tx, err := c.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("admin: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if err := c.guardInstallationRoom(ctx, tx, name, governs); err != nil {
+		return err
+	}
+	stored, err := c.settings.ListTx(ctx, tx, channel.KindConversation)
 	if err != nil {
 		return fmt.Errorf("admin: list conversations: %w", err)
 	}
-	for _, conv := range conversationsOf(name, existing) {
-		if err := c.DeleteConversation(ctx, conv.ID, conv.Scope, by); err != nil {
+	for _, conv := range conversationsOf(name, stored) {
+		if err := c.settings.DeleteTx(ctx, tx, conversationScopeKind(conv.Scope),
+			conv.Scope, channel.KindConversation, conv.ID); err != nil {
+			return err
+		}
+		if err := Record(ctx, tx, Event{
+			Principal: by, Scope: conv.Scope,
+			Action: "channel.conversation.removed", Target: conv.ID,
+		}); err != nil {
 			return err
 		}
 	}
 
-	return removeSetting(ctx, c.pool, c.settings, by, domain.Scope{},
-		channel.KindChannel, name, "channel.removed")
+	if err := c.settings.DeleteTx(ctx, tx, settings.ScopeInstallation,
+		domain.Scope{}, channel.KindChannel, name); err != nil {
+		return err
+	}
+	if err := Record(ctx, tx, Event{
+		Principal: by, Action: "channel.removed", Target: name,
+	}); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // DeleteConversation stops a scope's runs reporting to a place.

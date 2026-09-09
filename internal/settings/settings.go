@@ -273,7 +273,16 @@ func (s *Store) RevealTx(
 
 // List returns every setting of a kind, without credentials.
 func (s *Store) List(ctx context.Context, kind Kind) ([]Setting, error) {
-	rows, err := s.pool.Query(ctx, `
+	return s.ListTx(ctx, s.pool, kind)
+}
+
+// ListTx is List inside somebody else's transaction.
+//
+// Not a convenience: a caller that has to decide something from what is stored
+// and then write must read under the same lock it writes under, or it decides
+// from a state that no longer holds by the time it acts.
+func (s *Store) ListTx(ctx context.Context, conn DB, kind Kind) ([]Setting, error) {
+	rows, err := conn.Query(ctx, `
 		select scope_kind, company_id, area_id, name, value, secret is not null, enabled, updated_by, updated_at
 		from settings where kind = $1
 		order by scope_kind, company_id, area_id, name`, string(kind))

@@ -1,8 +1,10 @@
 package channel_test
 
 import (
+	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/channel"
@@ -413,9 +415,10 @@ be told, rather than ignored at the far end.
 func TestPutConversation_mentionsOnly_keepsTheAgentAndDropsTheWatchPrincipal(t *testing.T) {
 	_, channels := configuredChannels(t)
 
-	if err := channels.PutChannel(t.Context(), admin.Channel{
-		Name: "acme-slack", Kind: "slack", Enabled: true,
-	}, channel.Credentials{}, "usr_ana"); err != nil {
+	if err := channels.PutChannel(t.Context(), admin.ChannelWrite{
+		Channel: admin.Channel{Name: "acme-slack", Kind: "slack", Enabled: true},
+		By:      "usr_ana", Governs: true,
+	}); err != nil {
 		t.Fatalf("PutChannel: %v", err)
 	}
 	if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
@@ -472,9 +475,10 @@ other field a mode or a choice does not consume is treated here.
 func TestPutConversation_notToldAboutParkedRuns_storesNoDirectApprovals(t *testing.T) {
 	_, channels := configuredChannels(t)
 
-	if err := channels.PutChannel(t.Context(), admin.Channel{
-		Name: "acme-slack", Kind: "slack", Enabled: true,
-	}, channel.Credentials{}, "usr_ana"); err != nil {
+	if err := channels.PutChannel(t.Context(), admin.ChannelWrite{
+		Channel: admin.Channel{Name: "acme-slack", Kind: "slack", Enabled: true},
+		By:      "usr_ana", Governs: true,
+	}); err != nil {
 		t.Fatalf("PutChannel: %v", err)
 	}
 	for _, c := range []struct {
@@ -698,6 +702,182 @@ func TestWatchFor_theSameIdAtTwoScopes_answersNoRule(t *testing.T) {
 	}
 }
 
+/*
+The connection under the room is guarded where it is written, not before.
+
+Checked at the door and written afterwards, the two are separate decisions: a
+curator passes the check on a connection carrying no room, somebody who may
+attaches one, and the write lands anyway — a 204 for exactly the act that was
+about to be refused. The precondition now runs inside the transaction that
+writes, under the connection's lock.
+*/
+func TestPutChannel_carryingTheRoomForTheInstallation_needsAuthorityOverIt(t *testing.T) {
+	_, channels := configuredChannels(t)
+	connect(t, channels, "room-slack")
+
+	if err := channels.PutConversation(t.Context(), "room-slack", admin.Conversation{
+		ID: "C60-everywhere", Enabled: true,
+		Scope: domain.Scope{Company: domain.Installation},
+		Wants: []string{"parked"},
+	}, "usr_ana"); err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+
+	err := channels.PutChannel(t.Context(), admin.ChannelWrite{
+		Channel: admin.Channel{Name: "room-slack", Kind: "slack", Enabled: false},
+		By:      "usr_curator",
+	})
+	if !errors.Is(err, admin.ErrInstallationAuthority) {
+		t.Fatalf("err = %v, want ErrInstallationAuthority", err)
+	}
+	if !enabledChannel(t, channels, "room-slack") {
+		t.Error("the connection was disabled by the write that was refused")
+	}
+}
+
+/*
+And a room whose connection is gone is guarded too.
+
+The assembled listing hangs conversations off the connections that exist, so a
+room left behind by a restore, a migration or a half-finished delete is
+invisible to it — and a curator recreating the connection under that name would
+quietly adopt it, receiving every company's runs.
+*/
+func TestPutChannel_anOrphanedRoomForTheInstallation_isStillGuarded(t *testing.T) {
+	_, channels, settingsStore := configuredChannelsWithStore(t)
+
+	orphanedRoom(t, settingsStore, "orphaned-slack", "C61-orphan")
+
+	err := channels.PutChannel(t.Context(), admin.ChannelWrite{
+		Channel: admin.Channel{Name: "orphaned-slack", Kind: "slack", Enabled: true},
+		By:      "usr_curator",
+	})
+	if !errors.Is(err, admin.ErrInstallationAuthority) {
+		t.Fatalf("err = %v, want ErrInstallationAuthority", err)
+	}
+}
+
+func TestDeleteChannel_carryingTheRoomForTheInstallation_needsAuthorityOverIt(t *testing.T) {
+	store, channels := configuredChannels(t)
+	connect(t, channels, "gone-slack")
+
+	if err := channels.PutConversation(t.Context(), "gone-slack", admin.Conversation{
+		ID: "C62-everywhere", Enabled: true,
+		Scope: domain.Scope{Company: domain.Installation},
+		Wants: []string{"parked"},
+	}, "usr_ana"); err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+
+	if err := channels.DeleteChannel(t.Context(), "gone-slack", "usr_curator", false); !errors.Is(
+		err, admin.ErrInstallationAuthority) {
+		t.Fatalf("err = %v, want ErrInstallationAuthority", err)
+	}
+	if !hears(t, store, "C62-everywhere", domain.Scope{Company: "other", Area: "ops"}) {
+		t.Fatal("the room stopped hearing after a delete that was refused")
+	}
+
+	// And whoever governs the installation removes it, room and all.
+	if err := channels.DeleteChannel(t.Context(), "gone-slack", "usr_ana", true); err != nil {
+		t.Fatalf("DeleteChannel: %v", err)
+	}
+	if hears(t, store, "C62-everywhere", domain.Scope{Company: "other", Area: "ops"}) {
+		t.Error("the room is still receiving after the connection was removed")
+	}
+}
+
+/*
+A conversation is written under the connection's lock.
+
+What makes the guard a precondition rather than a guess is that the two writes
+cannot interleave. Proved by holding the lock from outside and watching the
+connection write wait for it: without the lock it would sail past and decide
+from a state somebody else was in the middle of changing.
+*/
+func TestPutChannel_whileTheConnectionIsLocked_waits(t *testing.T) {
+	_, pool := channelStore(t)
+	channels := admin.NewChannels(pool, settings.NewStore(pool, nil))
+
+	held, err := pool.Acquire(t.Context())
+	if err != nil {
+		t.Fatalf("acquire: %v", err)
+	}
+	defer held.Release()
+	if _, err := held.Exec(t.Context(),
+		`select pg_advisory_lock(hashtext($1))`, "channel:acme-slack"); err != nil {
+		t.Fatalf("take the lock: %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- channels.PutChannel(context.Background(), admin.ChannelWrite{
+			Channel: admin.Channel{Name: "acme-slack", Kind: "slack", Enabled: true},
+			By:      "usr_ana", Governs: true,
+		})
+	}()
+
+	select {
+	case err := <-done:
+		t.Fatalf("the write did not wait for the connection's lock: %v", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+
+	if _, err := held.Exec(t.Context(),
+		`select pg_advisory_unlock(hashtext($1))`, "channel:acme-slack"); err != nil {
+		t.Fatalf("release the lock: %v", err)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("PutChannel: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the write never completed after the lock was released")
+	}
+}
+
+// orphanedRoom writes a room for the whole installation whose connection does
+// not exist: restored, migrated, or left behind by a delete that stopped
+// halfway. The assembled listing cannot see one, which is the point.
+func orphanedRoom(t *testing.T, store *settings.Store, channelName, id string) {
+	t.Helper()
+	value := `{"channel":"` + channelName + `","mode":"announce"}`
+	if err := store.Put(t.Context(), settings.Setting{
+		ScopeKind: settings.ScopeInstallation,
+		Scope:     domain.Scope{Company: domain.Installation},
+		Kind:      channel.KindConversation, Name: id,
+		Value: []byte(value), Enabled: true, UpdatedBy: "restore",
+	}); err != nil {
+		t.Fatalf("write the orphaned room: %v", err)
+	}
+}
+
+// connect writes the connection a conversation hangs off.
+func connect(t *testing.T, channels *admin.Channels, name string) {
+	t.Helper()
+	if err := channels.PutChannel(t.Context(), admin.ChannelWrite{
+		Channel: admin.Channel{Name: name, Kind: "slack", Enabled: true},
+		By:      "usr_ana", Governs: true,
+	}); err != nil {
+		t.Fatalf("PutChannel: %v", err)
+	}
+}
+
+func enabledChannel(t *testing.T, channels *admin.Channels, name string) bool {
+	t.Helper()
+	listed, err := channels.List(t.Context())
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	for _, one := range listed {
+		if one.Name == name {
+			return one.Enabled
+		}
+	}
+	t.Fatalf("no connection %s", name)
+	return false
+}
+
 // installationConversation writes a row the administration will not produce.
 // It arrives by restore, by migration, or from a version of the screen that did
 // not check — which is exactly what the locks on the read side are for.
@@ -838,9 +1018,10 @@ func TestList_aModeThisVersionDoesNotKnow_isNotReadAsMentions(t *testing.T) {
 
 	// The listing walks connections and hangs conversations off them, so this
 	// one has to exist for the rows below to be visible at all.
-	if err := channels.PutChannel(t.Context(), admin.Channel{
-		Name: "acme-slack", Kind: "slack", Enabled: true,
-	}, channel.Credentials{}, "usr_ana"); err != nil {
+	if err := channels.PutChannel(t.Context(), admin.ChannelWrite{
+		Channel: admin.Channel{Name: "acme-slack", Kind: "slack", Enabled: true},
+		By:      "usr_ana", Governs: true,
+	}); err != nil {
 		t.Fatalf("PutChannel: %v", err)
 	}
 

@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/fuseone/agents/internal/admin"
@@ -24,8 +25,8 @@ to an agent: the Gate decides effects after the run starts.
 // ChannelAdmin is channel configuration, declared here by the consumer.
 type ChannelAdmin interface {
 	List(ctx context.Context) ([]admin.Channel, error)
-	PutChannel(ctx context.Context, ch admin.Channel, creds channel.Credentials, by domain.UserID) error
-	DeleteChannel(ctx context.Context, name string, by domain.UserID) error
+	PutChannel(ctx context.Context, w admin.ChannelWrite) error
+	DeleteChannel(ctx context.Context, name string, by domain.UserID, governs bool) error
 	PutConversation(ctx context.Context, channelName string, conv admin.Conversation, by domain.UserID) error
 	DeleteConversation(ctx context.Context, id string, scope domain.Scope, by domain.UserID) error
 	Identities(ctx context.Context) ([]admin.ChannelIdentity, error)
@@ -103,34 +104,36 @@ func (s *Server) PutChannel(
 	if s.channels == nil || req.Body == nil {
 		return nil, errNoAdministration
 	}
-	governed, err := s.carriesInstallationRoom(ctx, req.Name)
-	if err != nil {
-		return nil, err
-	}
-	if governed {
-		if _, resp := s.governs(ctx); resp != nil {
-			return openapi.PutChannel403ApplicationProblemPlusJSONResponse{
-				ForbiddenApplicationProblemPlusJSONResponse: *resp,
-			}, nil
-		}
-	}
+	// Whether it is needed is not decided here. The administration takes the
+	// connection's lock, sees what is attached under it and refuses — so a room
+	// attached between this line and the write is seen by the write.
+	_, ungoverned := s.governs(ctx)
 
 	delivery := channel.DeliveryHTTP
 	if req.Body.DeliveryMode != nil {
 		delivery = string(*req.Body.DeliveryMode)
 	}
 
-	err = s.channels.PutChannel(ctx, admin.Channel{
-		Name:         req.Name,
-		Kind:         string(req.Body.Kind),
-		Workspace:    valueOr(req.Body.Workspace),
-		DeliveryMode: delivery,
-		Enabled:      orDefault(req.Body.Enabled, true),
-	}, channel.Credentials{
-		Token:    valueOr(req.Body.Token),
-		AppToken: valueOr(req.Body.AppToken),
-		Signing:  valueOr(req.Body.SigningSecret),
-	}, caller)
+	err := s.channels.PutChannel(ctx, admin.ChannelWrite{
+		Channel: admin.Channel{
+			Name:         req.Name,
+			Kind:         string(req.Body.Kind),
+			Workspace:    valueOr(req.Body.Workspace),
+			DeliveryMode: delivery,
+			Enabled:      orDefault(req.Body.Enabled, true),
+		},
+		Credentials: channel.Credentials{
+			Token:    valueOr(req.Body.Token),
+			AppToken: valueOr(req.Body.AppToken),
+			Signing:  valueOr(req.Body.SigningSecret),
+		},
+		By: caller, Governs: ungoverned == nil,
+	})
+	if errors.Is(err, admin.ErrInstallationAuthority) {
+		return openapi.PutChannel403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: *ungoverned,
+		}, nil
+	}
 	if err != nil {
 		return openapi.PutChannel400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
@@ -152,18 +155,14 @@ func (s *Server) DeleteChannel(
 	if s.channels == nil {
 		return nil, errNoAdministration
 	}
-	governed, err := s.carriesInstallationRoom(ctx, req.Name)
+	_, ungoverned := s.governs(ctx)
+	err := s.channels.DeleteChannel(ctx, req.Name, caller, ungoverned == nil)
+	if errors.Is(err, admin.ErrInstallationAuthority) {
+		return openapi.DeleteChannel403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: *ungoverned,
+		}, nil
+	}
 	if err != nil {
-		return nil, err
-	}
-	if governed {
-		if _, resp := s.governs(ctx); resp != nil {
-			return openapi.DeleteChannel403ApplicationProblemPlusJSONResponse{
-				ForbiddenApplicationProblemPlusJSONResponse: *resp,
-			}, nil
-		}
-	}
-	if err := s.channels.DeleteChannel(ctx, req.Name, caller); err != nil {
 		return nil, fmt.Errorf("delete channel: %w", err)
 	}
 	return openapi.DeleteChannel204Response{}, nil
@@ -387,39 +386,6 @@ func (s *Server) DeleteConversation(
 		return nil, fmt.Errorf("delete conversation: %w", err)
 	}
 	return openapi.DeleteConversation204Response{}, nil
-}
-
-/*
-carriesInstallationRoom answers whether a connection holds a conversation for
-the whole installation.
-
-A room there needs authority over the installation to exist and to be removed,
-and that is worth nothing while the connection around it stays a curator's to
-configure: removing a channel takes its conversations with it, and disabling or
-re-crededentialling one silences the room or sends its messages out through
-somebody else's token. The authority follows what is attached — a connection
-carrying no such room is configured as it always was.
-
-An error is reported rather than answered as "no". Not knowing is not the same
-as knowing there is none, and guessing wrong here is exactly the reach this
-closes.
-*/
-func (s *Server) carriesInstallationRoom(ctx context.Context, name string) (bool, error) {
-	configured, err := s.channels.List(ctx)
-	if err != nil {
-		return false, fmt.Errorf("list channels: %w", err)
-	}
-	for _, one := range configured {
-		if one.Name != name {
-			continue
-		}
-		for _, conv := range one.Conversations {
-			if conv.Scope.IsInstallation() {
-				return true, nil
-			}
-		}
-	}
-	return false, nil
 }
 
 func (s *Server) scopeOfConversation(
