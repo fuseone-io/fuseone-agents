@@ -651,3 +651,119 @@ func conversationRow(
 		t.Fatalf("write the %s row: %v", kind, err)
 	}
 }
+
+/*
+Removing a conversation removes the row that exists.
+
+Where a conversation is stored is chosen in two places — once when it is
+written and once when it is deleted — and the two agreeing is what makes a
+delete a delete. Disagreeing, the removal matches nothing, reports no error and
+answers 204, and the room goes on receiving every run it was configured for.
+Nothing says so: the console shows it gone.
+*/
+func TestDeleteConversation_atEveryScope_theRowIsGone(t *testing.T) {
+	store, channels := configuredChannels(t)
+
+	for _, scope := range []domain.Scope{
+		{Company: "acme", Area: "ops"},
+		{Company: "acme"},
+		{Company: domain.Installation},
+	} {
+		id := "C50-" + string(scope.Company) + "-" + string(scope.Area)
+		if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+			ID: id, Enabled: true, Scope: scope,
+		}, "usr_ana"); err != nil {
+			t.Fatalf("PutConversation %+v: %v", scope, err)
+		}
+		if !hears(t, store, id, domain.Scope{Company: "acme", Area: "ops"}) {
+			t.Fatalf("%+v: the conversation was not configured", scope)
+		}
+
+		if err := channels.DeleteConversation(t.Context(), id, scope, "usr_ana"); err != nil {
+			t.Fatalf("DeleteConversation %+v: %v", scope, err)
+		}
+		if hears(t, store, id, domain.Scope{Company: "acme", Area: "ops"}) {
+			t.Errorf("%+v: the conversation still receives after being removed", scope)
+		}
+	}
+}
+
+func hears(t *testing.T, store *channel.Configured, id string, run domain.Scope) bool {
+	t.Helper()
+	places, err := store.For(t.Context(), run)
+	if err != nil {
+		t.Fatalf("For: %v", err)
+	}
+	for _, place := range places {
+		if place.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+/*
+A conversation for the whole installation stores nothing about starting runs.
+
+The scope already reached every company before anybody asked it to — the write
+only ever refused an empty one — so such a row exists today with a mode saying
+"mentions" and, if somebody sent them, an agent, a principal and a list of
+sources. The read side refuses all of it, and configuration describing an
+inbound path the platform will not take is configuration nobody can trust.
+
+Coerced rather than refused, like every other field a choice does not consume
+here. What survives is what the room is for: which events it hears, and whether
+it also tells the people who may decide.
+*/
+func TestPutConversation_atTheInstallationScope_storesNothingAboutStarting(t *testing.T) {
+	_, channels := configuredChannels(t)
+
+	for _, mode := range []string{
+		channel.ConversationMentions, channel.ConversationWatch,
+		channel.ConversationBoth, channel.ConversationAnnounce, "",
+	} {
+		id := "C51-" + mode
+		if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+			ID: id, Enabled: true, Mode: mode,
+			Scope:   domain.Scope{Company: domain.Installation},
+			Agent:   "triagem",
+			RunAs:   "usr_opsbot",
+			Sources: []string{"B-alerts"},
+			// Kept: it is what the room is for.
+			ThreadContext: true, DirectApprovals: true,
+			Wants: []string{"parked"},
+		}, "usr_ana"); err != nil {
+			t.Fatalf("PutConversation %q: %v", mode, err)
+		}
+
+		got := storedConversation(t, channels, "acme-slack", id)
+		if got.Mode != channel.ConversationAnnounce {
+			t.Errorf("mode %q stored as %q, want announce", mode, got.Mode)
+		}
+		if got.Agent != "" || got.RunAs != "" || len(got.Sources) != 0 || got.ThreadContext {
+			t.Errorf("mode %q: stored inbound configuration %+v", mode, got)
+		}
+		if !got.DirectApprovals {
+			t.Errorf("mode %q: the room stopped telling the people who may decide", mode)
+		}
+	}
+}
+
+/*
+The installation has no area, and a row claiming one reaches nothing.
+
+Containment short circuits on the sentinel and requires the area to be empty,
+so that shape announces to no scope at all while looking configured — the
+quietest way to have a room that never says anything.
+*/
+func TestPutConversation_theInstallationWithAnArea_isRefused(t *testing.T) {
+	_, channels := configuredChannels(t)
+
+	err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+		ID: "C52-nowhere", Enabled: true,
+		Scope: domain.Scope{Company: domain.Installation, Area: "ops"},
+	}, "usr_ana")
+	if !errors.Is(err, admin.ErrInstallationArea) {
+		t.Fatalf("err = %v, want ErrInstallationArea", err)
+	}
+}

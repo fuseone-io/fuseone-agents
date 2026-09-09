@@ -262,6 +262,12 @@ func (c *Channels) PutConversation(
 	if conv.Scope.Company == "" {
 		return ErrNoCompany
 	}
+	if conv.Scope.Company == domain.Installation && !conv.Scope.IsInstallation() {
+		return ErrInstallationArea
+	}
+	if conv.Scope.IsInstallation() {
+		conv, conv.Mode = announcesOnly(conv)
+	}
 	mode := channel.ConversationMode(conv.Mode)
 	sources := compactStrings(conv.Sources)
 	conv.Agent = domain.AgentID(strings.TrimSpace(string(conv.Agent)))
@@ -313,13 +319,8 @@ func (c *Channels) PutConversation(
 		return err
 	}
 
-	kind := settings.ScopeCompany
-	if conv.Scope.Area != "" {
-		kind = settings.ScopeArea
-	}
-
 	return writeSetting(ctx, c.pool, c.settings, by, conv.Scope, settings.Setting{
-		ScopeKind: kind, Scope: conv.Scope,
+		ScopeKind: conversationScopeKind(conv.Scope), Scope: conv.Scope,
 		Kind: channel.KindConversation, Name: conv.ID,
 		Value: value, Enabled: conv.Enabled, UpdatedBy: string(by),
 	}, "channel.conversation.configured", conv.ID, map[string]any{
@@ -369,11 +370,8 @@ func (c *Channels) DeleteChannel(ctx context.Context, name string, by domain.Use
 func (c *Channels) DeleteConversation(
 	ctx context.Context, id string, scope domain.Scope, by domain.UserID,
 ) error {
-	at := settings.ScopeCompany
-	if scope.Area != "" {
-		at = settings.ScopeArea
-	}
-	return removeScopedSetting(ctx, c.pool, c.settings, by, at, scope, scope,
+	return removeScopedSetting(ctx, c.pool, c.settings, by,
+		conversationScopeKind(scope), scope, scope,
 		channel.KindConversation, id, "channel.conversation.removed")
 }
 
