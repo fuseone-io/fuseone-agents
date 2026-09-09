@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/select";
 import { useScopes } from "@/features/scope/api";
 import { useMe } from "@/features/session/api";
-import type { ConversationValues } from "@/features/channels/conversation-form";
+import type { ConversationValues } from "@/features/channels/conversation-form-model";
 
 // The scope above every company, written the way the API writes it. A
 // conversation there hears about a run in any company, which is what makes it

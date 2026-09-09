@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAgentsForScope } from "@/features/channels/api";
-import type { ConversationValues } from "@/features/channels/conversation-form";
+import type { ConversationValues } from "@/features/channels/conversation-form-model";
 import type { components } from "@/lib/api/schema.gen";
 
 // A shadcn Select cannot carry an empty value, and "nobody chose one" is a real
