@@ -37,6 +37,31 @@ const phases = `
 	end`
 
 /*
+announcementSeq is which stop this announcement is about.
+
+A run stops as many times as it needs to, and each stop is its own question.
+Only one of the two ways of stopping leaves a sequence on the projection:
+pending_at_seq is written for an approval request and cleared by everything
+else, so a budget park and a retry that stopped helping have none. Read from
+that column alone, every such stop is filed under zero and the second one is
+announced to nobody.
+
+So the stop itself answers where nothing was asked: a parked run appends
+nothing, and last_seq is the step that stopped it. Failing and finishing happen
+once, and carry zero.
+
+Written once and used by both the report and the anti-join that retires it. Two
+copies would let a run be announced under one sequence and retired under
+another, which is silence that looks like success.
+*/
+const announcementSeq = `
+	case runs.phase
+		when 'awaiting_approval' then coalesce(runs.pending_at_seq, runs.last_seq)
+		when 'parked'            then runs.last_seq
+		else 0
+	end`
+
+/*
 Unreported lists runs in a state worth announcing that has not been said
 everywhere it should be.
 
@@ -59,7 +84,7 @@ func (p *Postgres) Unreported(ctx context.Context, since time.Time, limit int) (
 		select runs.run_id, runs.agent_id, runs.company_id, runs.area_id,
 		       `+phases+` as event, runs.updated_at,
 		       coalesce(runs.pending_tool, ''), coalesce(runs.pending_reason, ''),
-		       coalesce(runs.pending_at_seq, 0)
+		       `+announcementSeq+`
 		from runs
 		where not runs.simulated
 		  and runs.updated_at >= $1
@@ -67,7 +92,8 @@ func (p *Postgres) Unreported(ctx context.Context, since time.Time, limit int) (
 		  and not exists (
 		      select 1 from channel_deliveries d
 		      where d.run_id = runs.run_id and d.event = `+phases+`
-		        and d.channel = '' and d.conversation = '')
+		        and d.channel = '' and d.conversation = ''
+		        and d.at_seq = `+announcementSeq+`)
 		order by runs.updated_at desc
 		limit $2`, since.UTC(), limit)
 	if err != nil {
@@ -95,11 +121,25 @@ func (p *Postgres) Unreported(ctx context.Context, since time.Time, limit int) (
 // Conflict means a second sweep raced the first and both posted. The message
 // is already out; refusing here would make the sweep retry it forever.
 func (p *Postgres) Record(ctx context.Context, d Delivery) error {
+	if d.Channel == "" || d.Conversation == "" {
+		/*
+			A delivery names a place, or it is not a delivery.
+
+			Refused for either half. Both empty is the shape that means "said
+			everywhere", and storing one retires the run from the sweep while
+			every real conversation loses the message. Only the conversation
+			empty is the half a direct message will produce — the connection is
+			known long before the person's account is — and stored it claims
+			somebody was told, suppressing the retry that would have told them.
+		*/
+		return fmt.Errorf("%w: %s", ErrUnaddressed, d.RunID)
+	}
 	_, err := p.pool.Exec(ctx, `
-		insert into channel_deliveries (run_id, event, channel, conversation, ref, posted_at)
-		values ($1, $2, $3, $4, $5, $6)
-		on conflict (run_id, event, channel, conversation) do nothing`,
-		string(d.RunID), string(d.Event), d.Channel, d.Conversation, d.Ref, d.PostedAt.UTC())
+		insert into channel_deliveries (run_id, event, channel, conversation, at_seq, ref, posted_at)
+		values ($1, $2, $3, $4, $5, $6, $7)
+		on conflict (run_id, event, channel, conversation, at_seq) do nothing`,
+		string(d.RunID), string(d.Event), d.Channel, d.Conversation,
+		d.AtSeq, d.Ref, d.PostedAt.UTC())
 	if err != nil {
 		return fmt.Errorf("channel: record delivery: %w", err)
 	}
@@ -126,7 +166,7 @@ func (p *Postgres) RecordFailures(ctx context.Context, failures []DeliveryFailur
 			f.SeenAt = time.Now()
 		}
 		batch.Queue(recordFailureSQL,
-			string(f.RunID), string(f.Event), f.Channel, f.Conversation,
+			string(f.RunID), string(f.Event), f.Channel, f.Conversation, f.AtSeq,
 			f.ScopeWide, MetricCode(f.Code), string(f.Scope.Company),
 			string(f.Scope.Area), string(f.AgentID), f.SeenAt.UTC())
 	}
@@ -145,10 +185,10 @@ func (p *Postgres) RecordFailures(ctx context.Context, failures []DeliveryFailur
 
 const recordFailureSQL = `
 	insert into channel_delivery_failures (
-		run_id, event, channel, conversation, scope_wide, code,
+		run_id, event, channel, conversation, at_seq, scope_wide, code,
 		company_id, area_id, agent_id, attempts, first_seen, last_seen)
-	values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 1, $10, $10)
-	on conflict (run_id, event, channel, conversation, code)
+	values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 1, $11, $11)
+	on conflict (run_id, event, channel, conversation, at_seq, code)
 	do update set
 		attempts = channel_delivery_failures.attempts + 1,
 		scope_wide = channel_delivery_failures.scope_wide or excluded.scope_wide,
@@ -159,15 +199,13 @@ const recordFailureSQL = `
 //
 // Here is a conversation *on a connection*: two workspaces are two namespaces,
 // and an id that means one channel in Slack may mean another somewhere else.
-func (p *Postgres) Delivered(
-	ctx context.Context, run domain.RunID, e Event, channel, conversation string,
-) (bool, error) {
+func (p *Postgres) Delivered(ctx context.Context, a Announcement) (bool, error) {
 	var exists bool
 	err := p.pool.QueryRow(ctx, `
 		select exists(select 1 from channel_deliveries
 		              where run_id = $1 and event = $2
-		                and channel = $3 and conversation = $4)`,
-		string(run), string(e), channel, conversation).Scan(&exists)
+		                and channel = $3 and conversation = $4 and at_seq = $5)`,
+		string(a.RunID), string(a.Event), a.Channel, a.Conversation, a.AtSeq).Scan(&exists)
 	if err != nil {
 		return false, fmt.Errorf("channel: read delivery: %w", err)
 	}
@@ -181,16 +219,20 @@ func (p *Postgres) Delivered(
 // without a failure. An empty channel *and* an empty conversation is what "all
 // of them" is filed under: a delivery belongs to a conversation on a
 // connection, and this belongs to neither. Both empty, because a real delivery
-// is never both — which is what keeps the two apart now that a channel column
-// exists and old rows carry an empty one.
-func (p *Postgres) Reported(ctx context.Context, run domain.RunID, e Event, at time.Time) error {
+// is never both — Record refuses to write one, so nothing else can reach this
+// shape by accident.
+//
+// Filed against the step as well as the run. A run stops as many times as it
+// asks, and a sentinel naming only the run answered the second question with
+// the first one's silence.
+func (p *Postgres) Reported(ctx context.Context, r Report, at time.Time) error {
 	_, err := p.pool.Exec(ctx, `
-		insert into channel_deliveries (run_id, event, channel, conversation, ref, posted_at)
-		values ($1, $2, '', '', '', $3)
-		on conflict (run_id, event, channel, conversation) do nothing`,
-		string(run), string(e), at.UTC())
+		insert into channel_deliveries (run_id, event, channel, conversation, at_seq, ref, posted_at)
+		values ($1, $2, '', '', $3, '', $4)
+		on conflict (run_id, event, channel, conversation, at_seq) do nothing`,
+		string(r.RunID), string(r.Event), r.AtSeq, at.UTC())
 	if err != nil {
-		return fmt.Errorf("channel: mark %s reported: %w", run, err)
+		return fmt.Errorf("channel: mark %s reported: %w", r.RunID, err)
 	}
 	return nil
 }
