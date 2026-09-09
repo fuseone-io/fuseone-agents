@@ -58,6 +58,10 @@ type Report struct {
 	Reason string
 	// Tool is the action a parked run is waiting for permission to take.
 	Tool string
+	// AwaitingDecision is whether this stop is a question somebody can answer.
+	// Read from the run's phase, never from the sequence: a run parked by a
+	// budget carries one and has nothing to decide.
+	AwaitingDecision bool
 	// AtSeq is the step the run is waiting on, which a decision has to name.
 	// A button carrying only the run would answer whatever the run happens to
 	// be waiting on when it is pressed, and a message keeps its buttons for
@@ -74,12 +78,17 @@ type Conversation struct {
 	ID string
 	// Label is what a person calls it, for the console and for logs.
 	Label string
-	// Agent names the agent this conversation starts from watched messages,
-	// when it is plugged into one. Empty means a scope-level broadcast
-	// conversation.
+	// Agent names the agent this conversation starts — from a watched message,
+	// and from a mention that does not name one. Empty means a conversation
+	// open to whatever its scope publishes.
 	Agent domain.AgentID
 	// Wants is which events reach it. Empty means the defaults.
 	Wants []Event
+	// DirectApprovals says an approval announced here also goes privately to
+	// the people who may decide it. Outbound and orthogonal to Mode: which
+	// messages may start a run here is a different question from who is told
+	// when one stops.
+	DirectApprovals bool
 }
 
 // wants answers whether an event belongs here.
@@ -98,6 +107,19 @@ func (c Conversation) wants(e Event) bool {
 		}
 	}
 	return false
+}
+
+/*
+Wants answers whether a list of chosen events includes this one.
+
+Exported because two places need the same answer and one of them is not this
+package. A conversation is told about parked runs or it is not, and the
+administration decides what to store on the strength of that — a second
+statement of the rule in admin would be a second definition of what an empty
+list means, and the two would drift the first time the defaults changed.
+*/
+func Wants(list []Event, e Event) bool {
+	return Conversation{Wants: list}.wants(e)
 }
 
 func (c Conversation) reportsAgent(agent domain.AgentID) bool {
@@ -126,10 +148,17 @@ type Message struct {
 	AtSeq  int64
 	// Link is where somebody goes to act on it.
 	Link string
-	// Decidable is whether an answer given here could reach the platform. A
-	// button on a channel that cannot verify what comes back would promise an
-	// inbound surface that is switched off.
-	Decidable bool
+	// AwaitingDecision is whether the run is stopped on a question somebody
+	// can answer. A run stops for other reasons — a budget, retries that
+	// stopped helping — and those carry a sequence too now, so the sequence
+	// alone cannot tell them apart. Buttons and private messages both hang on
+	// this: an answer to a run that is not asking can only ever be a conflict.
+	AwaitingDecision bool
+	// Outcome is what happened to the approval this card asked about. Set only
+	// on a replacement: a card carrying one offers no buttons, because the
+	// question it asked already has an answer.
+	Outcome   Outcome
+	DecidedBy string
 }
 
 /*
@@ -158,30 +187,6 @@ type Announcement struct {
 	Conversation string
 }
 
-// Delivery records that a message left.
-type Delivery struct {
-	Announcement
-	// Ref is what the channel called the message, so a later stage can reply
-	// in the same thread.
-	Ref      string
-	PostedAt time.Time
-}
-
-// DeliveryFailure records that a conversation was owed a message and did not
-// receive it. It is scoped because the cockpit that reads this later must not
-// turn a channel incident in one area into installation-wide knowledge.
-type DeliveryFailure struct {
-	Announcement
-	// ScopeWide means the failure happened before the reporter knew which
-	// conversations were owed the message. Counting it as one conversation
-	// would understate the blast radius as confidently as naming all of them.
-	ScopeWide bool
-	Code      string
-	Scope     domain.Scope
-	AgentID   domain.AgentID
-	SeenAt    time.Time
-}
-
 // Reports lists what has happened and not yet been said, declared here by the
 // consumer.
 type Reports interface {
@@ -196,8 +201,8 @@ type Reports interface {
 	Reported(ctx context.Context, r Report, at time.Time) error
 }
 
-// announcementTo is what this report owes one conversation.
-func (r Report) announcementTo(place Conversation) Announcement {
+// AnnouncementTo is what this report owes one conversation.
+func (r Report) AnnouncementTo(place Conversation) Announcement {
 	return Announcement{
 		RunID: r.RunID, Event: r.Event, AtSeq: r.AtSeq,
 		Channel: place.Channel, Conversation: place.ID,
@@ -213,14 +218,6 @@ type Conversations interface {
 // outside.
 type Poster interface {
 	Post(ctx context.Context, c Conversation, m Message) (ref string, err error)
-}
-
-// Deliveries is what has already been said.
-type Deliveries interface {
-	Record(ctx context.Context, d Delivery) error
-	RecordFailure(ctx context.Context, f DeliveryFailure) error
-	RecordFailures(ctx context.Context, failures []DeliveryFailure) error
-	Delivered(ctx context.Context, a Announcement) (bool, error)
 }
 
 // Available is a place a connection could be pointed at, as a person would

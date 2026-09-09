@@ -605,3 +605,277 @@ func TestUnreported_awaitingApprovalWithNoPendingSequence_isStillRetired(t *test
 		t.Errorf("announced again with nothing new to say: %+v", again)
 	}
 }
+
+/*
+Which posted cards still ask a question that has an answer.
+
+Read as state rather than pushed from the decision, so it has to recognise
+every way a question stops being open: somebody answered it, the run was
+abandoned, or the run stopped again somewhere later — which happens now that a
+run parking twice is announced twice, and the first card must stop offering to
+answer a step the second one replaced.
+*/
+func TestStale_cardsWhoseQuestionIsSettled_areListedWithWhatHappened(t *testing.T) {
+	store, pool := channelStore(t)
+
+	awaitApproval(t, pool, "run-decided")
+	pending, err := store.Unreported(t.Context(), noon.Add(-channel.Window), 50)
+	if err != nil {
+		t.Fatalf("unreported: %v", err)
+	}
+	if err := store.Record(t.Context(), channel.Delivery{
+		Announcement: pending[0].AnnouncementTo(channel.Conversation{
+			Channel: "acme-slack", ID: "C07-ops",
+		}),
+		Ref: "1786.1", PostedAt: noon,
+	}); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+
+	// Still waiting: the card is asking a live question.
+	open, err := store.Stale(t.Context(), 50)
+	if err != nil {
+		t.Fatalf("Stale: %v", err)
+	}
+	if cardFor(open, "run-decided") != nil {
+		t.Fatal("a card was called stale while the run was still waiting")
+	}
+
+	appendStep(t, pool, "run-decided", domain.StepApprovalDecided,
+		[]byte(`{"approved":true,"by":"usr_ana","at_seq":2}`))
+
+	open, err = store.Stale(t.Context(), 50)
+	if err != nil {
+		t.Fatalf("Stale after the decision: %v", err)
+	}
+	card := cardFor(open, "run-decided")
+	if card == nil {
+		t.Fatalf("open = %+v, want the answered card", open)
+	}
+	if card.Outcome != channel.OutcomeApproved || card.DecidedBy != "usr_ana" {
+		t.Errorf("card = %+v, want it to carry who answered and how", card)
+	}
+	// The facts the card showed, read back from the step it asked about. The
+	// projection clears them the moment the run moves on, so a closed card
+	// built from it would answer a question the room can no longer read.
+	if card.Tool != "erp.transfer" || card.Reason != "over the ceiling" {
+		t.Errorf("card = %+v, want the action and reason it was about", card)
+	}
+
+	if err := store.Closed(t.Context(), *card, noon); err != nil {
+		t.Fatalf("Closed: %v", err)
+	}
+	open, err = store.Stale(t.Context(), 50)
+	if err != nil {
+		t.Fatalf("Stale after closing: %v", err)
+	}
+	if cardFor(open, "run-decided") != nil {
+		t.Error("a closed card came back for another sweep")
+	}
+}
+
+// A run that stopped and was never decided says exactly that. Calling it
+// refused would put a decision in somebody's mouth that nobody made.
+func TestStale_aRunThatMovedOnUndecided_claimsNoDecision(t *testing.T) {
+	store, pool := channelStore(t)
+
+	awaitApproval(t, pool, "run-abandoned")
+	pending, err := store.Unreported(t.Context(), noon.Add(-channel.Window), 50)
+	if err != nil {
+		t.Fatalf("unreported: %v", err)
+	}
+	if err := store.Record(t.Context(), channel.Delivery{
+		Announcement: pending[0].AnnouncementTo(channel.Conversation{
+			Channel: "acme-slack", ID: "C07-ops",
+		}),
+		Ref: "1786.2", PostedAt: noon,
+	}); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	appendStep(t, pool, "run-abandoned", domain.StepAbandoned, []byte(`{"reason":"cancelled"}`))
+
+	open, err := store.Stale(t.Context(), 50)
+	if err != nil {
+		t.Fatalf("Stale: %v", err)
+	}
+	card := cardFor(open, "run-abandoned")
+	if card == nil {
+		t.Fatalf("open = %+v, want the card of a run nobody decided", open)
+	}
+	if card.Outcome != channel.OutcomeMovedOn || card.DecidedBy != "" {
+		t.Errorf("card = %+v, want it to claim no decision", card)
+	}
+}
+
+/*
+The sentinel is not a card, and neither is a row naming no message.
+
+"Said everywhere" is filed as a delivery with no connection and no
+conversation; a row with no reference names nothing that could be rewritten.
+Routing either to a driver asks it to edit a message that does not exist, on a
+connection that is not one.
+*/
+func TestStale_theSentinelAndRowsNamingNoMessage_areNotCards(t *testing.T) {
+	store, pool := channelStore(t)
+
+	awaitApproval(t, pool, "run-sentinel")
+	pending, err := store.Unreported(t.Context(), noon.Add(-channel.Window), 50)
+	if err != nil {
+		t.Fatalf("unreported: %v", err)
+	}
+	if err := store.Reported(t.Context(), pending[0], noon); err != nil {
+		t.Fatalf("Reported: %v", err)
+	}
+	if err := store.Record(t.Context(), channel.Delivery{
+		Announcement: pending[0].AnnouncementTo(channel.Conversation{
+			Channel: "acme-slack", ID: "C08-quiet",
+		}),
+		PostedAt: noon,
+	}); err != nil {
+		t.Fatalf("Record without a ref: %v", err)
+	}
+	appendStep(t, pool, "run-sentinel", domain.StepAbandoned, []byte(`{"reason":"cancelled"}`))
+
+	open, err := store.Stale(t.Context(), 50)
+	if err != nil {
+		t.Fatalf("Stale: %v", err)
+	}
+	for _, c := range open {
+		if c.RunID != "run-sentinel" {
+			continue
+		}
+		if c.Conversation == "" || c.Ref == "" {
+			t.Errorf("card = %+v, want nothing that names no message", c)
+		}
+	}
+}
+
+func cardFor(open []channel.Card, run domain.RunID) *channel.Card {
+	for i, c := range open {
+		if c.RunID == run {
+			return &open[i]
+		}
+	}
+	return nil
+}
+
+/*
+A run waiting again is not waiting on the old question.
+
+A run stops as many times as it asks, and each stop is announced now. The card
+from the first stop is still on screen offering to answer a step the second one
+replaced — and the run is once more awaiting a decision, so anything that
+looked only at the phase would leave it open for ever.
+*/
+func TestStale_aRunWaitingOnALaterStep_closesTheEarlierCard(t *testing.T) {
+	store, pool := channelStore(t)
+
+	awaitApproval(t, pool, "run-again")
+	first, err := store.Unreported(t.Context(), noon.Add(-channel.Window), 50)
+	if err != nil {
+		t.Fatalf("unreported: %v", err)
+	}
+	if err := store.Record(t.Context(), channel.Delivery{
+		Announcement: first[0].AnnouncementTo(channel.Conversation{
+			Channel: "acme-slack", ID: "C07-ops",
+		}),
+		Ref: "1786.3", PostedAt: noon,
+	}); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+
+	decideAndParkAgain(t, pool, "run-again")
+
+	open, err := store.Stale(t.Context(), 50)
+	if err != nil {
+		t.Fatalf("Stale: %v", err)
+	}
+	card := cardFor(open, "run-again")
+	if card == nil {
+		t.Fatalf("open = %+v, want the card of the question that was replaced", open)
+	}
+	if card.AtSeq != first[0].AtSeq {
+		t.Errorf("card at seq %d, want the earlier question %d", card.AtSeq, first[0].AtSeq)
+	}
+}
+
+/*
+Whether a stop is a question somebody can answer.
+
+Both kinds of stop carry a sequence now, so the number cannot tell them apart —
+and read as "a park with a sequence is a pending approval", every budget park
+draws two buttons whose only possible answer is a conflict and messages every
+approver about a decision nobody can make. The phase is what knows, and this is
+where it is read.
+*/
+func TestUnreported_saysWhetherTheStopIsAQuestion(t *testing.T) {
+	store, pool := channelStore(t)
+
+	awaitApproval(t, pool, "run-asking")
+	parkWithoutAsking(t, pool, "run-just-stopped")
+
+	pending, err := store.Unreported(t.Context(), noon.Add(-channel.Window), 50)
+	if err != nil {
+		t.Fatalf("unreported: %v", err)
+	}
+	for _, want := range []struct {
+		run    domain.RunID
+		asking bool
+	}{
+		{"run-asking", true},
+		{"run-just-stopped", false},
+	} {
+		report := reportFor(pending, want.run)
+		if report == nil {
+			t.Fatalf("pending = %+v, want %s", pending, want.run)
+		}
+		if report.AwaitingDecision != want.asking {
+			t.Errorf("%s: awaiting a decision = %v, want %v",
+				want.run, report.AwaitingDecision, want.asking)
+		}
+	}
+}
+
+func reportFor(pending []channel.Report, run domain.RunID) *channel.Report {
+	for i, r := range pending {
+		if r.RunID == run {
+			return &pending[i]
+		}
+	}
+	return nil
+}
+
+/*
+A stop that asked nothing is not a card.
+
+A run parked by its budget carries a step like any other stop now, and its
+message has no buttons on it — there is nothing to close. Swept up with the
+approvals, a perfectly good "stopped: over budget" is rewritten into an answer
+to a question nobody asked, in a room where people are reading it.
+*/
+func TestStale_aStopThatAskedNothing_isNotACard(t *testing.T) {
+	store, pool := channelStore(t)
+
+	parkWithoutAsking(t, pool, "run-budget-card")
+	pending, err := store.Unreported(t.Context(), noon.Add(-channel.Window), 50)
+	if err != nil {
+		t.Fatalf("unreported: %v", err)
+	}
+	if err := store.Record(t.Context(), channel.Delivery{
+		Announcement: pending[0].AnnouncementTo(channel.Conversation{
+			Channel: "acme-slack", ID: "C07-ops",
+		}),
+		Ref: "1786.9", PostedAt: noon,
+	}); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	appendStep(t, pool, "run-budget-card", domain.StepResumed, []byte(`{"by":"usr_ana"}`))
+
+	open, err := store.Stale(t.Context(), 50)
+	if err != nil {
+		t.Fatalf("Stale: %v", err)
+	}
+	if cardFor(open, "run-budget-card") != nil {
+		t.Error("a stop that asked nothing was swept up as an approval card")
+	}
+}

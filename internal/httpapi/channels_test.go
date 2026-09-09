@@ -640,3 +640,69 @@ func (a *startableInScope) Instructions(
 ) (string, string, error) {
 	return "", "", nil
 }
+
+/*
+The choice survives the crossing, in both directions.
+
+Every layer here is tested against objects built by hand, so each side can be
+right while the wiring between them is not. Dropping the field from the request
+leaves the console sending on and the server storing off; dropping it from the
+response leaves the listing showing off, and the next edit saves that back over
+somebody's choice. Neither shows up in a test of either side alone.
+*/
+func TestPutConversation_theDirectApprovalChoice_reachesTheStore(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{}
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, nil)
+
+	resp, err := s.PutConversation(as(domain.RoleCurator), directApprovalConversation(true))
+	if err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+	if _, ok := resp.(openapi.PutConversation204Response); !ok {
+		t.Fatalf("response = %T, want accepted", resp)
+	}
+	if !spy.putConv.DirectApprovals {
+		t.Error("the choice did not reach the store")
+	}
+}
+
+func TestListChannels_theDirectApprovalChoice_reachesTheConsole(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{listed: []admin.Channel{{
+		Name: "acme-slack", Kind: "slack", Enabled: true,
+		Conversations: []admin.Conversation{{
+			ID: "C-alerts", Scope: domain.Scope{Company: "acme", Area: "ops"},
+			Mode: "mentions", Wants: []string{"parked"},
+			DirectApprovals: true, Enabled: true,
+		}},
+	}}}
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, nil)
+
+	resp, err := s.ListChannels(as(domain.RoleCurator), openapi.ListChannelsRequestObject{})
+	if err != nil {
+		t.Fatalf("ListChannels: %v", err)
+	}
+	listed, ok := resp.(openapi.ListChannels200JSONResponse)
+	if !ok {
+		t.Fatalf("response = %T, want the listing", resp)
+	}
+	conv := listed.Items[0].Conversations[0]
+	if conv.DirectApprovals == nil || !*conv.DirectApprovals {
+		t.Errorf("conversation = %+v, want the choice shown", conv)
+	}
+}
+
+func directApprovalConversation(on bool) openapi.PutConversationRequestObject {
+	mode := openapi.PutConversationJSONBodyModeMentions
+	wants := []openapi.PutConversationJSONBodyWants{
+		openapi.PutConversationJSONBodyWantsParked,
+	}
+	return openapi.PutConversationRequestObject{
+		Name: "acme-slack", Conversation: "C-alerts",
+		Body: &openapi.PutConversationJSONRequestBody{
+			Company: "acme", Area: ptr("ops"),
+			Mode: &mode, Wants: &wants, DirectApprovals: &on,
+		},
+	}
+}

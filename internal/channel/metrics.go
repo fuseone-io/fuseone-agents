@@ -10,6 +10,7 @@ const (
 	MetricResultOK    = channelmetrics.ResultOK
 
 	MetricTaskAnnouncements     = channelmetrics.TaskAnnouncements
+	MetricTaskCardsClosed       = channelmetrics.TaskCardsClosed
 	MetricTaskAnswersDelivered  = channelmetrics.TaskAnswersDelivered
 	MetricTaskAsksOpened        = channelmetrics.TaskAsksOpened
 	MetricTaskRefusalsDelivered = channelmetrics.TaskRefusalsDelivered

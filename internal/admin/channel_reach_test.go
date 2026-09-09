@@ -2,6 +2,7 @@ package admin_test
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/fuseone/agents/internal/admin"
@@ -317,5 +318,48 @@ func TestAccountsOn_aKeyNamingNoAccount_isNotReachable(t *testing.T) {
 		if account, ok := where["usr_ana"]; ok {
 			t.Errorf("key %q: reachable at %q, want it to reach nobody", blank, account)
 		}
+	}
+}
+
+/*
+The trail says when somebody decided a run's facts may go out privately.
+
+Turning this on decides that an approval reaches people in a direct message
+rather than only in a room somebody can be added to or removed from. A trail
+that records the conversation being configured without saying that is one an
+auditor cannot use to answer who decided it, or when.
+*/
+func TestPutConversation_turningOnDirectApprovals_isRecordedInTheTrail(t *testing.T) {
+	pool := freshPool(t)
+	channels := admin.NewChannels(pool, settings.NewStore(pool, nil))
+	ctx := context.Background()
+
+	if err := channels.PutConversation(ctx, "acme-slack", admin.Conversation{
+		ID: "C-trailed", Enabled: true, Wants: []string{"parked"},
+		DirectApprovals: true,
+		Scope:           domain.Scope{Company: "acme", Area: "ops"},
+	}, "usr_ana"); err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+
+	var action, detail string
+	if err := pool.QueryRow(ctx, `
+		select action, coalesce(detail::text, '')
+		from admin_events where target = $1 order by event_id desc limit 1`,
+		"C-trailed").Scan(&action, &detail); err != nil {
+		t.Fatalf("read trail: %v", err)
+	}
+	if action != "channel.conversation.configured" {
+		t.Fatalf("action = %q, want the conversation configuration", action)
+	}
+	// Decoded rather than matched as a substring: the column is jsonb and the
+	// database chooses its own spacing, so a string comparison would be
+	// asserting Postgres's formatting instead of the fact.
+	var recorded map[string]any
+	if err := json.Unmarshal([]byte(detail), &recorded); err != nil {
+		t.Fatalf("decode the trail detail: %v", err)
+	}
+	if on, ok := recorded["directApprovals"].(bool); !ok || !on {
+		t.Errorf("detail = %s, want it to record the private approvals choice", detail)
 	}
 }

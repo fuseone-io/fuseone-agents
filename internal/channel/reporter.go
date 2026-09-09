@@ -26,6 +26,8 @@ type Reporter struct {
 	conversations Conversations
 	poster        Poster
 	deliveries    Deliveries
+	approvers     Approvers
+	accounts      Accounts
 	clock         func() time.Time
 	baseURL       string
 	log           *slog.Logger
@@ -50,6 +52,25 @@ func NewReporter(
 		poster: poster, clock: clock, log: log,
 		deliveries: noDeliveries{},
 	}
+}
+
+/*
+WithDirectApprovals lets a conversation also tell the people who may decide.
+
+Optional because most of this platform's outbound path has nothing to do with
+approvals, and a reporter without it simply never sends a private message —
+which is what an installation that has not opted in gets anyway.
+*/
+func (r *Reporter) WithDirectApprovals(who Approvers, where Accounts) *Reporter {
+	r.approvers, r.accounts = who, where
+	return r
+}
+
+// WithConversations replaces where announcements go. Used by tests that need a
+// shape the default map does not describe.
+func (r *Reporter) WithConversations(c Conversations) *Reporter {
+	r.conversations = c
+	return r
 }
 
 // WithDeliveries records what has been said. Without it nothing is remembered
@@ -78,9 +99,14 @@ func (r *Reporter) Sweep(ctx context.Context, limit int) (int, error) {
 		return 0, fmt.Errorf("channel: read what is unreported: %w", err)
 	}
 
+	// One fan-out for the pass. Who may decide and where they are reachable
+	// are asked once and remembered: both are configuration, and re-reading
+	// them between reports would let the set of people one sweep messages
+	// change halfway through the sweep.
+	pass := r.newFanout()
 	sent, failures := 0, []error{}
 	for _, report := range pending {
-		n, told, err := r.announce(ctx, report)
+		n, told, err := r.announce(ctx, pass, report)
 		sent += n
 		if err != nil {
 			// Left unreported on purpose. The next sweep tries the
@@ -109,7 +135,9 @@ func (r *Reporter) Sweep(ctx context.Context, limit int) (int, error) {
 // It answers how many messages left and how many conversations were owed one
 // at all — which are different questions. Nothing sent because everybody had
 // already heard is finished; nothing sent because nobody was listening is not.
-func (r *Reporter) announce(ctx context.Context, report Report) (sent, told int, err error) {
+func (r *Reporter) announce(
+	ctx context.Context, pass *fanout, report Report,
+) (sent, told int, err error) {
 	places, err := r.conversations.For(ctx, report.Scope)
 	if err != nil {
 		err = WrapError(
@@ -129,15 +157,10 @@ func (r *Reporter) announce(ctx context.Context, report Report) (sent, told int,
 		// that already heard is one this run has finished with.
 		told++
 
-		posted, err := r.post(ctx, report, place)
-		if err != nil {
-			failures = append(failures, err)
-			deliveryFailures = append(deliveryFailures, r.failuresFor(report, place, err)...)
-			continue
-		}
-		if posted {
-			sent++
-		}
+		n, refused := r.tell(ctx, pass, report, place)
+		sent += n
+		failures = append(failures, refused.blocking...)
+		deliveryFailures = append(deliveryFailures, refused.recorded...)
 	}
 	if err := r.recordFailures(ctx, deliveryFailures); err != nil {
 		failures = append(failures, err)
@@ -149,7 +172,7 @@ func (r *Reporter) failuresFor(report Report, place Conversation, cause error) [
 	var failures []DeliveryFailure
 	for _, code := range FailureCodes(cause) {
 		failures = append(failures, DeliveryFailure{
-			Announcement: report.announcementTo(place),
+			Announcement: report.AnnouncementTo(place),
 			ScopeWide:    place.Channel == "" && place.ID == "",
 			Code:         code, Scope: report.Scope, AgentID: report.AgentID,
 			SeenAt: r.clock(),
@@ -170,7 +193,7 @@ func (r *Reporter) recordFailures(ctx context.Context, failures []DeliveryFailur
 
 // post sends one message, unless it has already been sent.
 func (r *Reporter) post(ctx context.Context, report Report, place Conversation) (bool, error) {
-	owed := report.announcementTo(place)
+	owed := report.AnnouncementTo(place)
 	said, err := r.deliveries.Delivered(ctx, owed)
 	if err != nil {
 		return false, fmt.Errorf("channel: read deliveries: %w", err)
@@ -179,7 +202,7 @@ func (r *Reporter) post(ctx context.Context, report Report, place Conversation) 
 		return false, nil
 	}
 
-	ref, err := r.poster.Post(ctx, place, r.message(report))
+	at, err := placed(ctx, r.poster, place, r.message(report))
 	if err != nil {
 		// Named, because the ordinary cause is a bot removed from one channel
 		// and the symptom is silence in that channel alone.
@@ -187,7 +210,7 @@ func (r *Reporter) post(ctx context.Context, report Report, place Conversation) 
 	}
 
 	return true, r.deliveries.Record(ctx, Delivery{
-		Announcement: owed, Ref: ref, PostedAt: r.clock(),
+		Announcement: owed, Ref: at.Ref, Placed: at.Conversation, PostedAt: r.clock(),
 	})
 }
 
@@ -195,7 +218,7 @@ func (r *Reporter) message(report Report) Message {
 	m := Message{
 		Event: report.Event, RunID: report.RunID, Agent: report.AgentID,
 		Scope: report.Scope, Reason: report.Reason, Tool: report.Tool,
-		AtSeq: report.AtSeq,
+		AtSeq: report.AtSeq, AwaitingDecision: report.AwaitingDecision,
 	}
 	if r.baseURL != "" {
 		m.Link = fmt.Sprintf("%s/runs/%s", r.baseURL, report.RunID)

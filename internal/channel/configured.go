@@ -142,7 +142,11 @@ type conversationValue struct {
 	Agent         domain.AgentID `json:"agent,omitempty"`
 	RunAs         domain.UserID  `json:"runAs,omitempty"`
 	ThreadContext bool           `json:"threadContext,omitempty"`
-	Wants         []Event        `json:"wants,omitempty"`
+	// DirectApprovals is outbound, like Wants and unlike Mode: it says an
+	// approval announced here also reaches the people who may decide it,
+	// privately.
+	DirectApprovals bool    `json:"directApprovals,omitempty"`
+	Wants           []Event `json:"wants,omitempty"`
 }
 
 // Configured reads channels and conversations from the administration area.
@@ -173,6 +177,7 @@ func (c *Configured) For(ctx context.Context, scope domain.Scope) ([]Conversatio
 		out = append(out, Conversation{
 			Channel: v.Channel, ID: s.Name, Label: v.Label,
 			Agent: v.Agent, Wants: v.Wants,
+			DirectApprovals: v.DirectApprovals,
 		})
 	}
 	return out, nil

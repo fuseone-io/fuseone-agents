@@ -443,3 +443,81 @@ func storedConversation(
 	t.Fatalf("no conversation %s on %s", id, name)
 	return admin.Conversation{}
 }
+
+/*
+A conversation that is not told about parked runs sends no private ones either.
+
+The flag is outbound, like Wants, and it rides on the same obligation: the fan
+-out happens after a conversation has been found owed an announcement about
+this event. So a conversation that never hears about parked runs cannot send a
+private card about one, and storing the flag as on would be configuration that
+describes something the platform does not do.
+
+Zeroed on the way in rather than ignored at the far end, which is how every
+other field a mode or a choice does not consume is treated here.
+*/
+func TestPutConversation_notToldAboutParkedRuns_storesNoDirectApprovals(t *testing.T) {
+	_, channels := configuredChannels(t)
+
+	if err := channels.PutChannel(t.Context(), admin.Channel{
+		Name: "acme-slack", Kind: "slack", Enabled: true,
+	}, channel.Credentials{}, "usr_ana"); err != nil {
+		t.Fatalf("PutChannel: %v", err)
+	}
+	for _, c := range []struct {
+		id     string
+		wants  []string
+		stored bool
+	}{
+		{"C30-parked", []string{"parked", "failed"}, true},
+		{"C31-finished", []string{"finished"}, false},
+		// Empty means the defaults, and parked is one of them.
+		{"C32-defaults", nil, true},
+	} {
+		if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+			ID: c.id, Enabled: true, Wants: c.wants, DirectApprovals: true,
+			Scope: domain.Scope{Company: "acme", Area: "ops"},
+		}, "usr_ana"); err != nil {
+			t.Fatalf("PutConversation %s: %v", c.id, err)
+		}
+		got := storedConversation(t, channels, "acme-slack", c.id)
+		if got.DirectApprovals != c.stored {
+			t.Errorf("%s wants %v: stored = %v, want %v",
+				c.id, c.wants, got.DirectApprovals, c.stored)
+		}
+	}
+}
+
+/*
+The runtime reads the choice the administration stored.
+
+Configured.For lists the fields it carries out one by one, so a field added to
+the stored shape and not to that list reads as false everywhere — the console
+says on, the settings row says on, and nothing is ever sent. It is the quietest
+way for this feature to be absent.
+*/
+func TestFor_theDirectApprovalChoice_reachesTheRuntime(t *testing.T) {
+	store, channels := configuredChannels(t)
+
+	if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+		ID: "C33-direct", Enabled: true, Wants: []string{"parked"},
+		DirectApprovals: true,
+		Scope:           domain.Scope{Company: "acme", Area: "ops"},
+	}, "usr_ana"); err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+
+	places, err := store.For(t.Context(), domain.Scope{Company: "acme", Area: "ops"})
+	if err != nil {
+		t.Fatalf("For: %v", err)
+	}
+	for _, place := range places {
+		if place.ID == "C33-direct" {
+			if !place.DirectApprovals {
+				t.Error("the runtime reads the conversation as not telling anybody privately")
+			}
+			return
+		}
+	}
+	t.Fatalf("places = %+v, want the conversation", places)
+}

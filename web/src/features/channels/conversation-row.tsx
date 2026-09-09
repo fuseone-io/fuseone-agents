@@ -29,16 +29,21 @@ export function ConversationRow({
   const threadContext = conversation.threadContext
     ? ` · ${t("channels.threadContextShort")}`
     : "";
+  // Shown wherever it is on, whatever starts the runs: it says a run's facts
+  // reach people privately, which is not something a listing should keep quiet.
+  const direct = conversation.directApprovals
+    ? ` · ${t("channels.directApprovalsShort")}`
+    : "";
   // Shown wherever it was configured, not only where it is required. A mention
   // in a bound conversation starts that agent without naming it, so a listing
   // that hid the binding would hide the reason the channel behaves as it does.
   const agent = conversation.agent ? ` · ${conversation.agent}` : "";
   const mode =
     conversation.mode === "watch"
-      ? `${t("channels.modeWatch")}${agent || " · -"}`
+      ? `${t("channels.modeWatch")}${agent || " · -"}${direct}`
       : conversation.mode === "both"
-        ? `${t("channels.modeBoth")}${agent || " · -"}${threadContext}`
-        : `${t("channels.modeMentions")}${agent}${threadContext}`;
+        ? `${t("channels.modeBoth")}${agent || " · -"}${threadContext}${direct}`
+        : `${t("channels.modeMentions")}${agent}${threadContext}${direct}`;
 
   return (
     <TableRow>

@@ -87,35 +87,53 @@ reading the status code is two chances to report a message that never left, so
 there is one reader.
 */
 func (p *Poster) send(ctx context.Context, m postMessage) (string, error) {
+	at, err := p.call(ctx, "/chat.postMessage", m)
+	return at.Ref, err
+}
+
+/*
+call is the one round trip, and the one place `ok:false` is believed.
+
+It answers with where the message ended up as well as what it is called. For a
+room those are the same string; for a direct message they are not — a message
+is addressed to a person and Slack puts it in a conversation it names itself,
+and editing it later takes the second. Sending never needed the distinction,
+which is why nothing recorded it.
+*/
+func (p *Poster) call(
+	ctx context.Context, method string, m postMessage,
+) (channel.Placement, error) {
+	var at channel.Placement
 	body, err := json.Marshal(m)
 	if err != nil {
-		return "", fmt.Errorf("slack: build message: %w", err)
+		return at, fmt.Errorf("slack: build message: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		p.base+"/chat.postMessage", bytes.NewReader(body))
+		p.base+method, bytes.NewReader(body))
 	if err != nil {
-		return "", fmt.Errorf("slack: build request: %w", err)
+		return at, fmt.Errorf("slack: build request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+p.token)
 	req.Header.Set("Content-Type", "application/json; charset=utf-8")
 
 	resp, err := p.client.Do(req)
 	if err != nil {
-		return "", channel.WrapError(channel.CodeDeliveryFailed, fmt.Errorf("slack: post: %w", err))
+		return at, channel.WrapError(channel.CodeDeliveryFailed, fmt.Errorf("slack: post: %w", err))
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == http.StatusTooManyRequests {
-		return "", channel.NewError(channel.CodeRateLimited, "slack: rate limited")
+		return at, channel.NewError(channel.CodeRateLimited, "slack: rate limited")
 	}
 
 	var answer struct {
-		OK    bool   `json:"ok"`
-		TS    string `json:"ts"`
-		Error string `json:"error"`
+		OK      bool   `json:"ok"`
+		TS      string `json:"ts"`
+		Channel string `json:"channel"`
+		Error   string `json:"error"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&answer); err != nil {
-		return "", channel.WrapError(
+		return at, channel.WrapError(
 			channel.CodeDeliveryFailed,
 			fmt.Errorf("slack: read answer (status %d): %w", resp.StatusCode, err),
 		)
@@ -123,19 +141,25 @@ func (p *Poster) send(ctx context.Context, m postMessage) (string, error) {
 	if !answer.OK {
 		// Slack's own word for it. "not_in_channel" tells an operator what to
 		// do; "post failed" tells them to go and find out.
-		return "", channel.NewError(
+		return at, channel.NewError(
 			slackDeliveryCode(answer.Error),
 			fmt.Sprintf("slack: refused: %s", answer.Error),
 		)
 	}
-	return answer.TS, nil
+	return channel.Placement{Conversation: answer.Channel, Ref: answer.TS}, nil
 }
 
 func slackDeliveryCode(reason string) string {
 	switch reason {
 	case "invalid_auth", "not_authed", "account_inactive", "token_revoked":
 		return channel.CodeCredentialRejected
-	case "not_in_channel", "channel_not_found", "is_archived":
+	case "not_in_channel", "channel_not_found", "is_archived",
+		// A person the bot may not message, one the workspace does not have,
+		// and a message that is no longer there. All three mean the same thing
+		// on the next sweep, and naming them is what stops a run being held
+		// open for ever over somebody who cannot be reached at all.
+		"cannot_dm_bot", "user_not_found", "users_not_found",
+		"message_not_found", "cant_update_message":
 		return channel.CodeConversationUnavailable
 	case "missing_scope":
 		return channel.CodeMissingScope

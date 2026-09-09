@@ -69,8 +69,12 @@ type Conversation struct {
 	Agent         domain.AgentID
 	RunAs         domain.UserID
 	ThreadContext bool
-	Wants         []string
-	Enabled       bool
+	// DirectApprovals sends an approval announced here privately as well, to
+	// the people who may decide it. Outbound, like Wants: it says who is told
+	// when a run stops, not what may start one.
+	DirectApprovals bool
+	Wants           []string
+	Enabled         bool
 }
 
 // List answers with every connection and the conversations mapped into it.
@@ -129,14 +133,15 @@ func conversationsOf(channelName string, stored []settings.Setting) []Conversati
 	var out []Conversation
 	for _, s := range stored {
 		var v struct {
-			Channel       string   `json:"channel"`
-			Label         string   `json:"label"`
-			Mode          string   `json:"mode"`
-			Sources       []string `json:"sources"`
-			Agent         string   `json:"agent"`
-			RunAs         string   `json:"runAs"`
-			ThreadContext bool     `json:"threadContext"`
-			Wants         []string `json:"wants"`
+			Channel         string   `json:"channel"`
+			Label           string   `json:"label"`
+			Mode            string   `json:"mode"`
+			Sources         []string `json:"sources"`
+			Agent           string   `json:"agent"`
+			RunAs           string   `json:"runAs"`
+			ThreadContext   bool     `json:"threadContext"`
+			DirectApprovals bool     `json:"directApprovals"`
+			Wants           []string `json:"wants"`
 		}
 		if err := json.Unmarshal(s.Value, &v); err != nil || v.Channel != channelName {
 			continue
@@ -146,8 +151,9 @@ func conversationsOf(channelName string, stored []settings.Setting) []Conversati
 			Mode:    channel.ConversationMode(v.Mode),
 			Sources: compactStrings(v.Sources),
 			Agent:   domain.AgentID(v.Agent), RunAs: domain.UserID(v.RunAs),
-			ThreadContext: v.ThreadContext,
-			Wants:         v.Wants, Enabled: s.Enabled,
+			ThreadContext:   v.ThreadContext,
+			DirectApprovals: v.DirectApprovals,
+			Wants:           v.Wants, Enabled: s.Enabled,
 		})
 	}
 	return out
@@ -280,6 +286,18 @@ func (c *Channels) PutConversation(
 	if !channel.StartsFromMentions(mode) {
 		conv.ThreadContext = false
 	}
+	// A private card rides on this conversation's own obligation: the fan-out
+	// happens once a conversation has been found owed an announcement about a
+	// parked run. One that never hears about them cannot send a private card
+	// about one, so storing this as on would describe something the platform
+	// does not do.
+	//
+	// The question is asked of the channel package rather than answered again
+	// here. What an empty list means is its rule, and a second statement of it
+	// would disagree the first time the defaults changed.
+	if !channel.Wants(eventsOf(conv.Wants), channel.EventParked) {
+		conv.DirectApprovals = false
+	}
 	if err := c.unmapped(ctx, channelName, conv); err != nil {
 		return err
 	}
@@ -288,7 +306,8 @@ func (c *Channels) PutConversation(
 		"channel": channelName, "label": conv.Label, "wants": conv.Wants,
 		"mode": mode, "sources": sources,
 		"agent": string(conv.Agent), "runAs": string(conv.RunAs),
-		"threadContext": conv.ThreadContext,
+		"threadContext":   conv.ThreadContext,
+		"directApprovals": conv.DirectApprovals,
 	})
 	if err != nil {
 		return err
@@ -308,6 +327,10 @@ func (c *Channels) PutConversation(
 		"mode": mode, "sources": sources,
 		"agent": string(conv.Agent), "runAs": string(conv.RunAs),
 		"threadContext": conv.ThreadContext,
+		// Turning this on decides that a run's facts reach people privately
+		// rather than only in a room somebody can be added to or removed from.
+		// The trail has to say when it was turned on, and by whom.
+		"directApprovals": conv.DirectApprovals,
 	})
 }
 
@@ -374,4 +397,14 @@ func (c *Channels) unmapped(ctx context.Context, channelName string, conv Conver
 		}
 	}
 	return nil
+}
+
+// eventsOf reads the stored event names as the channel package's own type.
+// The names are that package's vocabulary; this only carries them across.
+func eventsOf(names []string) []channel.Event {
+	out := make([]channel.Event, 0, len(names))
+	for _, name := range names {
+		out = append(out, channel.Event(name))
+	}
+	return out
 }

@@ -3049,6 +3049,16 @@ paths:
                     of earlier thread messages in the run input. Those messages
                     remain untrusted input and require the Slack history scope
                     for the conversation type.
+                directApprovals:
+                  type: boolean
+                  description: |
+                    Also send the approval card privately to the people holding
+                    Approver in a scope that covers the run, in addition to the
+                    card posted here. It grants nobody the right to decide: the
+                    same check applies wherever the button is pressed, and a
+                    recipient without the grant is refused there as anywhere
+                    else. Requires the Slack app's im:write scope, and applies
+                    only where this conversation is told about parked runs.
                 wants:
                   type: array
                   description: >
@@ -6211,6 +6221,12 @@ components:
             Whether a mention made inside an existing vendor thread includes
             earlier thread messages in the run input. The text remains
             untrusted; this only supplies context for the agent to read.
+        directApprovals:
+          type: boolean
+          description: |
+            Whether an approval announced here is also sent privately to the
+            people who may decide it. Addressing only: the decision is checked
+            where the button is pressed, exactly as it is in the conversation.
         sources:
           type: array
           items: { type: string }

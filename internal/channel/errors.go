@@ -18,6 +18,8 @@ const (
 	CodeConversationUnavailable = channelmetrics.CodeConversationUnavailable
 	CodeMissingScope            = channelmetrics.CodeMissingScope
 	CodeRateLimited             = channelmetrics.CodeRateLimited
+	CodeTooManyRecipients       = channelmetrics.CodeTooManyRecipients
+	CodeUnsupportedCapability   = channelmetrics.CodeUnsupportedCapability
 )
 
 // Error carries the stable reason a channel operation failed. The wrapped text

@@ -60,6 +60,7 @@ const schema = z
     scope: z.string().min(1, "channels.needsScope"),
     mode: z.enum(["mentions", "watch", "both"]),
     threadContext: z.boolean(),
+    directApprovals: z.boolean(),
     sources: z.string(),
     agent: z.string(),
     runAs: z.string(),
@@ -135,6 +136,7 @@ export function ConversationForm({
       label: conversation?.label ?? "",
       mode: conversation?.mode ?? "mentions",
       threadContext: conversation?.threadContext ?? false,
+      directApprovals: conversation?.directApprovals ?? false,
       sources: (conversation?.sources ?? []).join("\n"),
       agent: conversation?.agent ?? "",
       runAs: conversation?.runAs ?? "",
@@ -178,6 +180,8 @@ export function ConversationForm({
         area: area || undefined,
         label: values.label.trim() || undefined,
         mode: values.mode,
+        directApprovals:
+          values.wants.includes("parked") && values.directApprovals,
         threadContext: startsFromMentions(values.mode)
           ? values.threadContext
           : false,
@@ -367,6 +371,31 @@ export function ConversationForm({
                 </FormItem>
               )}
             />
+            {form.watch("wants").includes("parked") && (
+              <FormField
+                control={form.control}
+                name="directApprovals"
+                render={({ field }) => (
+                  <FormItem className="rounded-md border bg-muted/30 p-3">
+                    <label className="flex items-start gap-2 text-sm">
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={(on) => field.onChange(Boolean(on))}
+                      />
+                      <span className="grid gap-1">
+                        <span className="font-medium">
+                          {t("channels.directApprovals")}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {t("channels.directApprovalsExplains")}
+                        </span>
+                      </span>
+                    </label>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
             <FormField
               control={form.control}
               name="mode"

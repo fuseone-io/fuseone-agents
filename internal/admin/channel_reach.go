@@ -76,6 +76,14 @@ value are a copy that can only ever disagree with the thing doing the work, and
 a row keyed `acme-slack/U-real` whose contents claim another account would
 address a message to one this connection does not have.
 
+One position, and it is the one authority reads. PrincipalFor resolves an
+arriving account by an exact key at the installation scope, and the settings key
+includes the scope — so a row for the same channel and account can also sit at a
+company or an area, and listing a kind returns every one of them. Accepted, such
+a row addresses a message by a mapping the inbound side will never honour: an
+area row saying U123 is Ana, beside the installation row saying U123 is Bruno,
+sends Ana's approval to Bruno's Slack.
+
 Switched off and unreadable both answer no, and for the same reason from
 opposite ends — one is a binding somebody withdrew, the other is a binding
 nobody can read. Sending to either is guessing.
@@ -86,17 +94,6 @@ because the alternative is a caller asking about an empty id and being handed
 the broken row as that person's address.
 */
 func reachable(s settings.Setting, channelName string) (account string, who domain.UserID, ok bool) {
-	// One position, and it is the one authority reads. PrincipalFor resolves
-	// an arriving account by an exact key at the installation scope, so that
-	// is where a binding means anything — and the settings key includes the
-	// scope, so a row for the same channel and account can also sit at a
-	// company or an area. Listing a kind returns every one of them.
-	//
-	// Accepted, such a row addresses a message by a mapping the inbound side
-	// will never honour: an area row saying U123 is Ana, beside the
-	// installation row saying U123 is Bruno, sends Ana's approval to Bruno's
-	// Slack. It grants nothing — the button resolves Bruno and the Gate checks
-	// Bruno — after showing Bruno the run, the area and the action.
 	if s.ScopeKind != settings.ScopeInstallation || s.Scope != (domain.Scope{}) {
 		return "", "", false
 	}

@@ -84,7 +84,8 @@ func (p *Postgres) Unreported(ctx context.Context, since time.Time, limit int) (
 		select runs.run_id, runs.agent_id, runs.company_id, runs.area_id,
 		       `+phases+` as event, runs.updated_at,
 		       coalesce(runs.pending_tool, ''), coalesce(runs.pending_reason, ''),
-		       `+announcementSeq+`
+		       `+announcementSeq+`,
+		       runs.phase = 'awaiting_approval'
 		from runs
 		where not runs.simulated
 		  and runs.updated_at >= $1
@@ -106,7 +107,7 @@ func (p *Postgres) Unreported(ctx context.Context, since time.Time, limit int) (
 		var r Report
 		var company, area, event string
 		if err := rows.Scan(&r.RunID, &r.AgentID, &company, &area,
-			&event, &r.At, &r.Tool, &r.Reason, &r.AtSeq); err != nil {
+			&event, &r.At, &r.Tool, &r.Reason, &r.AtSeq, &r.AwaitingDecision); err != nil {
 			return nil, err
 		}
 		r.Scope = domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)}
@@ -135,11 +136,12 @@ func (p *Postgres) Record(ctx context.Context, d Delivery) error {
 		return fmt.Errorf("%w: %s", ErrUnaddressed, d.RunID)
 	}
 	_, err := p.pool.Exec(ctx, `
-		insert into channel_deliveries (run_id, event, channel, conversation, at_seq, ref, posted_at)
-		values ($1, $2, $3, $4, $5, $6, $7)
+		insert into channel_deliveries
+			(run_id, event, channel, conversation, at_seq, ref, placed_in, posted_at)
+		values ($1, $2, $3, $4, $5, $6, $7, $8)
 		on conflict (run_id, event, channel, conversation, at_seq) do nothing`,
 		string(d.RunID), string(d.Event), d.Channel, d.Conversation,
-		d.AtSeq, d.Ref, d.PostedAt.UTC())
+		d.AtSeq, d.Ref, d.Placed, d.PostedAt.UTC())
 	if err != nil {
 		return fmt.Errorf("channel: record delivery: %w", err)
 	}

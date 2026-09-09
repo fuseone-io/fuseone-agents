@@ -19,8 +19,21 @@ pastes into the console, and a truncated one costs a round trip.
 */
 
 func summary(m channel.Message) string {
+	// A card whose question has been answered says so first. Left as it was,
+	// the fallback text and the heading both go on saying a run is waiting,
+	// with the answer underneath contradicting them — and the fallback is what
+	// a phone notification reads aloud.
+	if m.Outcome != "" {
+		return answeredBy(m)
+	}
 	switch m.Event {
 	case channel.EventParked:
+		if !m.AwaitingDecision {
+			// Stopped, and not on anybody. A budget, or retries that stopped
+			// helping: saying it waits for a decision would send somebody
+			// looking for a button that is not there and should not be.
+			return fmt.Sprintf("%s stopped: %s", m.Agent, reasonOr(m.Reason, "no reason recorded"))
+		}
 		if m.Tool != "" {
 			return fmt.Sprintf("%s is waiting for permission to run %s", m.Agent, m.Tool)
 		}
@@ -72,7 +85,13 @@ func blocks(m channel.Message, decidable bool) []any {
 	// Buttons only where an answer could arrive. Everywhere else a link, which
 	// is honest: a button that does nothing is the worst kind of interface,
 	// and it would be on the message that matters most.
-	if decidable && m.Event == channel.EventParked && m.AtSeq > 0 {
+	// A card whose question has an answer offers none. What happened is
+	// already the heading — summary says it — and repeating it underneath
+	// tells the reader the same thing twice while the facts between them go
+	// unread. The facts themselves stay: a closed card that collapsed to a
+	// sentence would take the record out of the room it was announced in.
+	if m.Outcome == "" &&
+		decidable && m.AwaitingDecision && m.Event == channel.EventParked && m.AtSeq > 0 {
 		out = append(out, decide(m))
 	}
 	if m.Link != "" {
@@ -135,4 +154,26 @@ func reasonOr(reason, fallback string) string {
 		return fallback
 	}
 	return reason
+}
+
+// answeredBy says what became of the question, and who settled it.
+//
+// Named, because a card that says only "decided" sends the next person to the
+// console to find out by whom — and the whole point of announcing an approval
+// where people are is that they do not have to.
+func answeredBy(m channel.Message) string {
+	who := m.DecidedBy
+	if who == "" {
+		who = "somebody"
+	}
+	switch m.Outcome {
+	case channel.OutcomeApproved:
+		return fmt.Sprintf("Approved by %s. The run is continuing.", who)
+	case channel.OutcomeRefused:
+		return fmt.Sprintf("Refused by %s. The run will not take that action.", who)
+	default:
+		// Nobody answered it. Saying "refused" would put a decision in
+		// somebody's mouth that nobody made.
+		return "This is no longer waiting on a decision."
+	}
 }

@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/fuseone/agents/internal/admin"
+	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/channel/connect"
-	"github.com/fuseone/agents/internal/settings"
 	"github.com/fuseone/agents/internal/worker"
 )
 
@@ -27,16 +27,26 @@ const channelSweep = 30 * time.Second
 // rather than offering a button, because a button would promise an inbound
 // surface that does not exist yet.
 func reportToChannels(
-	ctx context.Context, store *settings.Store, deliveries *channel.Postgres,
-	baseURL string, metrics *worker.MetricsRegistry,
+	ctx context.Context, p *workerParts, baseURL string, metrics *worker.MetricsRegistry,
 ) {
+	store, deliveries := p.settings, channel.NewPostgres(p.configPool)
 	reporter := channel.NewReporter(
 		deliveries,
 		channel.NewConfigured(store),
 		channel.NewRouter(connect.New(store)),
 		time.Now,
 		slog.Default(),
-	).WithDeliveries(deliveries).WithBaseURL(baseURL)
+	).WithDeliveries(deliveries).WithBaseURL(baseURL).
+		// Who may decide, and where to reach them. Both are read once per
+		// sweep and neither grants anything: the button is checked by the
+		// console's own path wherever it is pressed.
+		WithDirectApprovals(auth.NewPostgres(p.configPool), admin.NewChannels(p.configPool, store))
+
+	// The cards the announcements left behind. A separate loop because it
+	// answers a different question — what is still asking, rather than what
+	// has not been said — and because a decision taken in the console reaches
+	// no channel code at all, so nothing else would ever close its cards.
+	go closeAnsweredCards(ctx, deliveries, connect.New(store), baseURL, metrics)
 
 	ticker := time.NewTicker(channelSweep)
 	defer ticker.Stop()
@@ -189,4 +199,33 @@ func recordChannelSweep(metrics *worker.MetricsRegistry, task string, items int,
 		return
 	}
 	metrics.ChannelSweep(task, channel.MetricResultOK, items)
+}
+
+/*
+closeAnsweredCards rewrites approval cards whose question has been settled.
+
+Every copy of a card is still offering to answer once somebody decides, and
+pressing one of them is refused with a conflict — correct, and a card that says
+a run is waiting when it is not. This reads state rather than following a
+decision, because a decision taken in the console never reaches any channel
+code, and a hook there would leave those cards live for ever.
+*/
+func closeAnsweredCards(
+	ctx context.Context, cards *channel.Postgres, drivers channel.Drivers,
+	baseURL string, metrics *worker.MetricsRegistry,
+) {
+	closer := channel.NewCloser(cards, channel.NewRouterEditor(drivers),
+		time.Now, slog.Default()).WithBaseURL(baseURL)
+
+	ticker := time.NewTicker(channelSweep)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			closed, err := closer.Sweep(ctx, 50)
+			recordChannelSweep(metrics, channel.MetricTaskCardsClosed, closed, err)
+		}
+	}
 }
