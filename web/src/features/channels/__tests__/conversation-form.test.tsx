@@ -566,4 +566,28 @@ describe("conversation configuration", () => {
     expect(saved(requests)).toMatchObject({ mode: "announce" });
     expect(saved(requests)).not.toHaveProperty("agent");
   });
+  /*
+   * A half-written watch rule must not trap somebody in the form.
+   *
+   * The mode field is hidden for the installation and the request says
+   * "announce", but the schema went on validating the mode still sitting in
+   * the form: an incomplete watch draft failed on sources, an agent and a
+   * principal — three fields the screen was no longer showing — and the save
+   * did nothing, with nothing to fix and nowhere to fix it.
+   */
+  it("saves an unfinished watch draft once the installation is picked", async () => {
+    const requests: { method: string; url: string; body?: unknown }[] = [];
+    stubApi({ can: ["company:write"], requests });
+    const user = userEvent.setup();
+    renderForm({ ...mentionsConversation, mode: "watch" });
+
+    await user.click(await screen.findByRole("combobox", { name: "Contexto" }));
+    await user.click(
+      await screen.findByRole("option", { name: "A instalação inteira" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => expect(saved(requests)).toBeDefined());
+    expect(saved(requests)).toMatchObject({ company: "*", mode: "announce" });
+  });
 });

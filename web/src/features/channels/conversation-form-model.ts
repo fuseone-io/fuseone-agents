@@ -15,6 +15,11 @@ JSX around them.
 // choice at all.
 export const EVENTS = ["parked", "failed", "finished"] as const;
 
+// The scope above every company, written the way the API writes it. A
+// conversation there hears about a run in any company, which is what makes it
+// the answer for an area nobody has pointed at a channel of its own.
+export const INSTALLATION_SCOPE = "*/";
+
 // Every mode that can be stored, including the one nobody picks from the
 // events list. A value this console does not know would be refused by the
 // server rather than silently read as mentions.
@@ -57,6 +62,11 @@ export const conversationSchema = z
     wants: z.array(z.enum(EVENTS)).min(1, "channels.needsEvent"),
   })
   .superRefine((value, ctx) => {
+    // A conversation for the whole installation starts nothing, whatever the
+    // hidden mode field still says. Validating it anyway trapped a half-written
+    // watch rule in the form: three fields the screen was no longer showing
+    // refused the save, with nothing to fix and nowhere to fix it.
+    if (value.scope === INSTALLATION_SCOPE) return;
     if (!startsFromWatch(value.mode)) return;
     if (splitSources(value.sources).length === 0) {
       ctx.addIssue({

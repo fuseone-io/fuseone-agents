@@ -17,12 +17,15 @@ import {
 } from "@/components/ui/select";
 import { useScopes } from "@/features/scope/api";
 import { useMe } from "@/features/session/api";
-import type { ConversationValues } from "@/features/channels/conversation-form-model";
+import {
+  INSTALLATION_SCOPE,
+  type ConversationValues,
+} from "@/features/channels/conversation-form-model";
 
-// The scope above every company, written the way the API writes it. A
-// conversation there hears about a run in any company, which is what makes it
-// the answer for an area nobody has pointed at a channel of its own.
-export const INSTALLATION_SCOPE = "*/";
+// Re-exported where the field that offers it lives, so a caller drawing the
+// picker does not have to know the schema file exists. The value belongs to the
+// model: the validation has to answer to it too.
+export { INSTALLATION_SCOPE };
 
 /**
  * Which runs report here.
