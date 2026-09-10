@@ -2,6 +2,7 @@ package channel_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -318,6 +319,93 @@ func TestSweep_twoRunsOfOneVersion_askItsOwnerOnce(t *testing.T) {
 	}
 }
 
+/*
+A refusal is remembered for the pass, exactly like an answer.
+
+Remembering only the successes turns an outage into an amplifier: a page of
+fifty runs asks fifty times, every thirty seconds. Worse than the cost, a pass
+that re-asks can be told two different things inside one sweep — the set of
+people one announcement reaches changing halfway through reaching them, which is
+the whole reason the pass exists.
+*/
+func TestSweep_whileTheConfigurationIsUnreadable_asksOncePerSweep(t *testing.T) {
+	policies := &failingPolicies{}
+	from := &countingConnections{names: []string{"acme-slack"}}
+	who := &failingApprovers{}
+	second := parkedReport()
+	second.RunID = "run-second"
+	page := []channel.Report{parkedReport(), second}
+
+	t.Run("the specification cannot be read", func(t *testing.T) {
+		r := ownerReporterWith(t, &fixedReports{reports: page}, &recorder{},
+			policies, from, deciders("usr_ana"),
+			accountBook{"acme-slack": {"usr_ana": "U-ana"}})
+
+		if _, err := r.Sweep(context.Background(), 10); err == nil {
+			t.Fatal("Sweep swallowed a configuration that could not be read")
+		}
+		if policies.calls != 1 {
+			t.Errorf("read the policy %d times, want once for the version", policies.calls)
+		}
+	})
+
+	t.Run("who may decide cannot be read", func(t *testing.T) {
+		r := ownerReporterWith(t, &fixedReports{reports: page}, &recorder{},
+			wanting(domain.ApprovalPolicy{Direct: true}), from, who,
+			accountBook{"acme-slack": {"usr_ana": "U-ana"}})
+
+		if _, err := r.Sweep(context.Background(), 10); err == nil {
+			t.Fatal("Sweep swallowed an approver list that could not be read")
+		}
+		if who.calls != 1 {
+			t.Errorf("asked who decides %d times, want once for the scope", who.calls)
+		}
+	})
+}
+
+/*
+Why nobody was told is two facts, not one.
+
+Both end in silence and neither is fixed in the same place: one wants somebody
+granted Approver, the other wants that person to link their account — a
+different screen, and usually a different person. The failure record carries the
+code and nothing else, so a code covering both would send whoever reads the
+cockpit to guess.
+*/
+func TestSweep_nobodyTold_recordsWhichKindOfNobody(t *testing.T) {
+	for _, one := range []struct {
+		name     string
+		who      channel.Approvers
+		accounts channel.Accounts
+		want     string
+	}{
+		{
+			name: "nobody may decide", who: deciders(),
+			accounts: accountBook{"acme-slack": {"usr_ana": "U-ana"}},
+			want:     channel.CodeNobodyMayDecide,
+		},
+		{
+			name: "nobody has linked an account", who: deciders("usr_ana"),
+			accounts: accountBook{},
+			want:     channel.CodeNobodyReachable,
+		},
+	} {
+		t.Run(one.name, func(t *testing.T) {
+			deliveries := &memoryDeliveries{}
+			r := ownerReporterWith(t, &fixedReports{reports: []channel.Report{parkedReport()}},
+				&recorder{}, wanting(domain.ApprovalPolicy{Direct: true}),
+				oneConnection, one.who, one.accounts).WithDeliveries(deliveries)
+
+			if _, err := r.Sweep(context.Background(), 10); err != nil {
+				t.Fatalf("Sweep: %v", err)
+			}
+			if !recordedFailure(deliveries, one.want) {
+				t.Fatalf("failures = %+v, want %s", deliveries.failures, one.want)
+			}
+		})
+	}
+}
+
 // --- the harness ------------------------------------------------------------
 
 func ownerReporter(
@@ -379,3 +467,14 @@ func (c *countingConnections) EnabledConnections(context.Context) ([]string, err
 	c.calls++
 	return c.names, nil
 }
+
+type failingPolicies struct{ calls int }
+
+func (f *failingPolicies) ApprovalPolicy(
+	context.Context, domain.AgentID, domain.VersionID,
+) (domain.ApprovalPolicy, error) {
+	f.calls++
+	return domain.ApprovalPolicy{}, errUnavailable
+}
+
+var errUnavailable = errors.New("the configuration store is away")

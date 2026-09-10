@@ -505,8 +505,11 @@ func TestSweep_moreApproversThanTheCapButFewReachable_tellsThemAnyway(t *testing
 	}
 }
 
-type failingApprovers struct{}
+// failingApprovers is the directory being away, and counts how often it was
+// asked: a pass that re-asks during an outage amplifies it once per report.
+type failingApprovers struct{ calls int }
 
-func (failingApprovers) ApproversIn(context.Context, domain.Scope) ([]domain.UserID, error) {
+func (f *failingApprovers) ApproversIn(context.Context, domain.Scope) ([]domain.UserID, error) {
+	f.calls++
 	return nil, errors.New("the directory is away")
 }

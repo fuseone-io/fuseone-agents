@@ -130,11 +130,33 @@ func (r *Reporter) directForOwner(
 			sent++
 		}
 	}
+	if len(to) == 0 {
+		/*
+			Nobody could be told, and it is written down.
+
+			Not retired, so the first grant or binding somebody creates is
+			answered by the next sweep — and recorded, which is the half that
+			was missing: the sweep takes what has not been tried before what
+			has, and a run with no attempt against it is "never tried" for ever.
+			With more runs than fit in a page, an older run that *could* be
+			told would sit behind them until it left the window, announced to
+			nobody.
+
+			Two causes, two codes. One is fixed by granting somebody Approver,
+			the other by that person linking their account — a different screen
+			and usually a different person.
+		*/
+		cause, why := CodeNobodyReachable,
+			"channel: nobody who may decide has linked an account on this connection"
+		if len(who) == 0 {
+			cause, why = CodeNobodyMayDecide,
+				"channel: nobody may decide in this run's scope"
+		}
+		return 0, 0, r.refuse(report, place, NewError(cause, why))
+	}
 	if delivered == 0 {
-		// Nobody who may decide has a linked account. Not recorded — it is the
-		// ordinary state of most of a workspace and the conversation path reads
-		// it the same way — and not retired, so the first binding somebody
-		// creates is answered by the next sweep.
+		// Everybody who should have been told failed, and each failure was
+		// recorded above. Kept for the next sweep.
 		return 0, 0, refused
 	}
 	return sent, 1, refused
@@ -152,16 +174,16 @@ func (f *fanout) policyFor(
 	ctx context.Context, from Approvals, report Report,
 ) (domain.ApprovalPolicy, error) {
 	key := versionOfAgent{agent: report.AgentID, version: report.Version}
-	if policy, asked := f.byVersion[key]; asked {
-		return policy, nil
+	if before, asked := f.byVersion[key]; asked {
+		return before.value, before.err
 	}
 	policy, err := from.ApprovalPolicy(ctx, report.AgentID, report.Version)
 	if err != nil {
-		return domain.ApprovalPolicy{}, WrapError(CodeConfigurationReadFailed,
+		err = WrapError(CodeConfigurationReadFailed,
 			fmt.Errorf("channel: read the approval policy of %s: %w", report.AgentID, err))
 	}
-	f.byVersion[key] = policy
-	return policy, nil
+	f.byVersion[key] = answered[domain.ApprovalPolicy]{value: policy, err: err}
+	return policy, err
 }
 
 /*
@@ -183,17 +205,17 @@ side"; the caller records why.
 */
 func (f *fanout) speakingConnection(ctx context.Context, from Connections) (string, error) {
 	if !f.askedConnections {
+		f.askedConnections = true
 		enabled, err := from.EnabledConnections(ctx)
 		if err != nil {
-			return "", WrapError(CodeConfigurationReadFailed,
+			f.connectionsErr = WrapError(CodeConfigurationReadFailed,
 				fmt.Errorf("channel: read the enabled connections: %w", err))
 		}
-		f.askedConnections = true
 		if len(enabled) == 1 {
 			f.connection = enabled[0]
 		}
 	}
-	return f.connection, nil
+	return f.connection, f.connectionsErr
 }
 
 /*
