@@ -223,7 +223,12 @@ side"; the caller records why.
 func (f *fanout) speakingConnection(
 	ctx context.Context, from Connections, places []Conversation,
 ) (string, error) {
-	if named := oneConnectionAmong(places); named != "" {
+	// The rooms answer first, and their silence is not the same as their
+	// disagreement. Read as one empty string, two rooms on two workspaces fell
+	// through to the installation's list — and an installation with a single
+	// enabled connection then answered a question its own configuration had
+	// just said was ambiguous.
+	if named, chosen := connectionAmong(places); chosen {
 		return named, nil
 	}
 	if !f.askedConnections {
@@ -241,26 +246,32 @@ func (f *fanout) speakingConnection(
 }
 
 /*
-oneConnectionAmong answers the connection a scope's rooms agree on.
+connectionAmong answers what a scope's rooms say about the workspace, and
+whether they said anything at all.
 
-Empty when there are no rooms, and empty when they name more than one: two rooms
-on two workspaces is the ambiguity this whole rule is about, arriving from the
-conversations instead of from the installation. Nothing about a room being
-configured says which of two workspaces a private message belongs in.
+Three states, not two. No rooms is "ask somewhere else". One connection is the
+answer. Rooms naming two is an answer as well — *nobody*, because two rooms on
+two workspaces is the ambiguity this whole rule is about, arriving from the
+conversations instead of from the installation. Collapsed into one empty string,
+that third state fell through to the installation's list, and an installation
+with a single enabled connection answered a question its own configuration had
+just said was ambiguous.
+
+Nothing about a room being configured says which of two workspaces a private
+message belongs in.
 */
-func oneConnectionAmong(places []Conversation) string {
-	named := ""
+func connectionAmong(places []Conversation) (named string, chosen bool) {
 	for _, place := range places {
 		switch {
 		case place.Channel == "" || place.Channel == named:
 			continue
 		case named != "":
-			return ""
+			return "", true
 		default:
 			named = place.Channel
 		}
 	}
-	return named
+	return named, named != ""
 }
 
 /*

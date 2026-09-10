@@ -524,27 +524,43 @@ func TestSweep_aRoomInTheScope_namesTheWorkspaceForThePrivateMessage(t *testing.
 	}
 }
 
-// And two rooms on two workspaces are ambiguous again: a room being configured
-// says nothing about which of two a private message belongs in.
+/*
+And two rooms on two workspaces are ambiguous again — even where the
+installation has only one connection left enabled.
+
+Their disagreement is an answer, and it must not be read as silence. Falling
+through to the installation's list, a single enabled connection answered a
+question this run's own configuration had just said was ambiguous: the card goes
+to two workspaces and the private message follows whichever one happens to still
+be switched on.
+
+The list holds one connection here deliberately. Given two, this test would pass
+for the wrong reason — the fallback refusing on its own — and the state worth
+protecting would go untested, which is how it went untested.
+*/
 func TestSweep_roomsOnTwoWorkspaces_tellNobodyPrivately(t *testing.T) {
 	posts := &recorder{}
+	deliveries := &memoryDeliveries{}
 	elsewhere := room("C07-ops", false)
 	elsewhere.Channel = "other-slack"
 	r := channel.NewReporter(
 		&fixedReports{reports: []channel.Report{parkedReport()}},
 		rooms(room("C07-ops", false), elsewhere), posts,
 		func() time.Time { return noon }, nil,
-	).WithDeliveries(&memoryDeliveries{}).
+	).WithDeliveries(deliveries).
 		WithDirectApprovals(deciders("usr_ana"),
 			accountBook{"acme-slack": {"usr_ana": "U-ana"}}).
-		WithOwnerApprovals(wanting(domain.ApprovalPolicy{Direct: true}),
-			connections("acme-slack", "other-slack"))
+		WithOwnerApprovals(wanting(domain.ApprovalPolicy{Direct: true}), oneConnection)
 
 	if _, err := r.Sweep(context.Background(), 10); err != nil {
 		t.Fatalf("Sweep: %v", err)
 	}
 	if addressed(posts.sent, "U-ana") {
 		t.Error("a private message went out with two workspaces to choose between")
+	}
+	if !recordedFailure(deliveries, channel.CodeNoConnectionChosen) {
+		t.Errorf("failures = %+v, want the reason nobody was told privately",
+			deliveries.failures)
 	}
 }
 
