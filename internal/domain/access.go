@@ -151,6 +151,29 @@ func (r Role) Allows(p Permission) bool {
 	return slices.Contains(grants[r], p)
 }
 
+/*
+RolesAllowing lists the roles a permission is reachable through.
+
+The grants table read the other way round, and derived rather than restated:
+"who may decide" is a question the platform has to answer to offer a person on a
+screen, and answering it with a role name is a guess that was wrong the day the
+administrator gained the approval act. A second list would drift from the table
+silently, and the symptom would be somebody offered a decision the button then
+refuses.
+
+In the order roles are declared, so an answer that decides who is offered or
+told does not reshuffle between two calls.
+*/
+func RolesAllowing(p Permission) []Role {
+	out := make([]Role, 0, len(roles))
+	for _, r := range roles {
+		if r.Allows(p) {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
 // Permissions lists what a role may do, sorted for display.
 func (r Role) Permissions() []Permission {
 	out := slices.Clone(grants[r])
