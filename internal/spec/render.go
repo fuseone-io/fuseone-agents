@@ -41,6 +41,13 @@ func Render(s Spec) ([]byte, error) {
 	if learning := s.MemoryLearning.Normalize(); learning.Enabled() {
 		fm.MemoryLearning = &learning
 	}
+	// Rendered whenever the owner asked for anything. Left out, the round trip
+	// this function exists for silently drops it: the console reads an agent,
+	// writes back a field somebody edited, and publishes a version that no
+	// longer sends the approvals its owner had asked to be sent.
+	if approvals := s.Approvals.Normalize(); approvals.Direct {
+		fm.Approvals = &approvals
+	}
 	for _, t := range s.Tools {
 		fm.Tools = append(fm.Tools, string(t))
 	}

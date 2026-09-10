@@ -9,6 +9,7 @@ import (
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/channel/connect"
+	"github.com/fuseone/agents/internal/spec"
 	"github.com/fuseone/agents/internal/worker"
 )
 
@@ -26,22 +27,72 @@ const channelSweep = 30 * time.Second
 // conversation says reaches this process; the message even links to the console
 // rather than offering a button, because a button would promise an inbound
 // surface that does not exist yet.
+
+/*
+reporterParts is everything the announcement needs, named.
+
+Assembled in its own function so the assembly can be tested. Written inline, a
+dependency dropped from the chain — the agent's own approval policy, say — turns
+the feature off in the worker while every test that builds its own reporter
+stays green: the tests would be proving that a reporter *they* wired obeys an
+owner, which nobody deploys.
+*/
+type reporterParts struct {
+	reports     channel.Reports
+	deliveries  channel.Deliveries
+	rooms       channel.Conversations
+	poster      channel.Poster
+	approvers   channel.Approvers
+	accounts    channel.Accounts
+	policies    channel.Approvals
+	connections channel.Connections
+	baseURL     string
+}
+
+/*
+reporterPartsFor is where every dependency is chosen.
+
+Its own function so a test can look at what the process supplies. Written inline
+at the call site, a part left out — the agent's own approval policy, the
+connections it may speak from — turns the feature off in the worker while every
+test that assembles a reporter of its own stays green, including the one that
+asks whether the assembly obeys an owner.
+*/
+func reporterPartsFor(p *workerParts, baseURL string) reporterParts {
+	store, deliveries := p.settings, channel.NewPostgres(p.configPool)
+	return reporterParts{
+		reports:    deliveries,
+		deliveries: deliveries,
+		rooms:      channel.NewConfigured(store),
+		poster:     channel.NewRouter(connect.New(store)),
+		approvers:  auth.NewPostgres(p.configPool),
+		// Reads where people are reachable; configures nothing, so it is
+		// handed no driver table.
+		accounts:    admin.NewChannels(p.configPool, store, nil),
+		policies:    spec.NewRegistry(p.configPool),
+		connections: channel.NewConfigured(store),
+		baseURL:     baseURL,
+	}
+}
+
+func announcingReporter(parts reporterParts) *channel.Reporter {
+	return channel.NewReporter(
+		parts.reports, parts.rooms, parts.poster, time.Now, slog.Default(),
+	).WithDeliveries(parts.deliveries).WithBaseURL(parts.baseURL).
+		// Who may decide, and where to reach them. Both are read once per
+		// sweep and neither grants anything: the button is checked by the
+		// console's own path wherever it is pressed.
+		WithDirectApprovals(parts.approvers, parts.accounts).
+		// And what each agent's owner asked for, read from the version the run
+		// pinned. Without this an agent that asked is simply not obeyed, which
+		// is what an installation running an older worker gets.
+		WithOwnerApprovals(parts.policies, parts.connections)
+}
 func reportToChannels(
 	ctx context.Context, p *workerParts, baseURL string, metrics *worker.MetricsRegistry,
 ) {
 	store, deliveries := p.settings, channel.NewPostgres(p.configPool)
-	reporter := channel.NewReporter(
-		deliveries,
-		channel.NewConfigured(store),
-		channel.NewRouter(connect.New(store)),
-		time.Now,
-		slog.Default(),
-	).WithDeliveries(deliveries).WithBaseURL(baseURL).
-		// Who may decide, and where to reach them. Both are read once per
-		// sweep and neither grants anything: the button is checked by the
-		// console's own path wherever it is pressed.
-		// Reads where people are reachable; configures nothing.
-		WithDirectApprovals(auth.NewPostgres(p.configPool), admin.NewChannels(p.configPool, store, nil))
+	reporter := announcingReporter(reporterPartsFor(p, baseURL))
 
 	// The cards the announcements left behind. A separate loop because it
 	// answers a different question — what is still asking, rather than what

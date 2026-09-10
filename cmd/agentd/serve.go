@@ -219,6 +219,10 @@ func serve(args []string) error {
 		identity.routes.WithIdentityProviders(identityStore)
 		api = api.WithIdentity(identityStore, identity.oidc).
 			WithPeople(auth.NewPostgres(identity.pool)).
+			// The narrow list an agent's author picks recipients from. The
+			// same store, a different question: who may decide here, by name,
+			// with no authority over the directory needed to ask it.
+			WithEligibleApprovers(auth.NewPostgres(identity.pool)).
 			// And the people who do not come from a provider at all, which
 			// on an installation's first day is everybody.
 			WithAccounts(auth.NewLocal(identity.pool, auth.NewPostgres(identity.pool)))

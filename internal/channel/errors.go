@@ -19,6 +19,11 @@ const (
 	CodeMissingScope            = channelmetrics.CodeMissingScope
 	CodeRateLimited             = channelmetrics.CodeRateLimited
 	CodeTooManyRecipients       = channelmetrics.CodeTooManyRecipients
+	CodeNoConnectionChosen      = channelmetrics.CodeNoConnectionChosen
+	CodeNamedNobodyWhoDecides   = channelmetrics.CodeNamedNobodyWhoDecides
+	CodeNobodyMayDecide         = channelmetrics.CodeNobodyMayDecide
+	CodeNobodyReachable         = channelmetrics.CodeNobodyReachable
+	CodeNowhereToSayIt          = channelmetrics.CodeNowhereToSayIt
 	CodeUnsupportedCapability   = channelmetrics.CodeUnsupportedCapability
 )
 

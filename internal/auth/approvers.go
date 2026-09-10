@@ -56,8 +56,31 @@ truncates the list, which is where the test for it belongs.
 func (p *Postgres) peopleHolding(
 	ctx context.Context, role domain.Role, scope domain.Scope,
 ) ([]domain.UserID, error) {
+	named, err := p.peopleHoldingNamed(ctx, role, scope)
+	if err != nil {
+		return nil, err
+	}
+	who := make([]domain.UserID, 0, len(named))
+	for _, one := range named {
+		who = append(who, one.ID)
+	}
+	return who, nil
+}
+
+/*
+peopleHoldingNamed is the same question with the names attached.
+
+The one implementation, because the two answers must be the same people. Written
+twice — once for the fan-out and once for the screen that offers the list — the
+copies drift, and the drift is invisible: a screen offering somebody who cannot
+be messaged, or hiding somebody who will be. The names cost nothing here; the
+caller that does not want them drops them.
+*/
+func (p *Postgres) peopleHoldingNamed(
+	ctx context.Context, role domain.Role, scope domain.Scope,
+) ([]Eligible, error) {
 	rows, err := p.pool.Query(ctx, `
-		select distinct g.principal_id
+		select distinct g.principal_id, coalesce(pr.display, g.principal_id)
 		from role_grants g
 		join principals pr on pr.principal_id = g.principal_id
 		where g.role = $1
@@ -76,13 +99,13 @@ func (p *Postgres) peopleHolding(
 	}
 	defer rows.Close()
 
-	var who []domain.UserID
+	var who []Eligible
 	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
+		var one Eligible
+		if err := rows.Scan(&one.ID, &one.Display); err != nil {
 			return nil, err
 		}
-		who = append(who, domain.UserID(id))
+		who = append(who, one)
 	}
 	return who, rows.Err()
 }

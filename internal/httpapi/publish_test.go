@@ -607,3 +607,71 @@ func (s *schedules) Sync(
 	s.synced[agent] = list
 	return nil
 }
+
+/*
+Republishing an agent must not quietly drop what its owner asked about
+approvals.
+
+The console reads a version, changes one field and publishes the whole thing.
+So a field the door does not accept is a field the next edit deletes: somebody
+adjusts a budget, and the agent stops sending its approvals privately, with
+nothing on the screen having said so and the record showing an ordinary
+publication.
+
+Twice on the way in, this one. The renderer dropped it, and the door dropped it
+before the renderer could see it.
+*/
+func TestPublishAgent_withAnApprovalPolicy_keepsIt(t *testing.T) {
+	t.Parallel()
+	pub := newPublisher()
+
+	body := definition(nil)
+	body.Approvals = &openapi.ApprovalPolicy{
+		Direct: ptr(true), Notify: ptr([]string{"usr_ana"}),
+	}
+
+	if _, err := publishServer(t, pub).PublishAgent(
+		inArea("cx", domain.RoleAuthor),
+		openapi.PublishAgentRequestObject{AgentId: "triage", Body: body},
+	); err != nil {
+		t.Fatalf("PublishAgent: %v", err)
+	}
+
+	if len(pub.published) != 1 {
+		t.Fatalf("published = %d", len(pub.published))
+	}
+	got := pub.published[0].Approvals
+	if !got.Direct {
+		t.Fatal("the published version does not ask for a private approval")
+	}
+	if len(got.Notify) != 1 || got.Notify[0] != "usr_ana" {
+		t.Errorf("notify = %v, want the person the owner named", got.Notify)
+	}
+	// And it is in the file, which is the artefact: the version is its digest,
+	// so a policy in the specification but not in the text would make two
+	// publications of one definition two different versions.
+	rendered, err := spec.Render(pub.published[0])
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if !strings.Contains(string(rendered), "approvals:") {
+		t.Errorf("the definition renders no approvals block:\n%s", rendered)
+	}
+}
+
+// An agent that asks for nothing publishes nothing, so a client that sends back
+// what it read does not invent a policy for an agent that never had one.
+func TestPublishAgent_withoutAnApprovalPolicy_publishesNone(t *testing.T) {
+	t.Parallel()
+	pub := newPublisher()
+
+	if _, err := publishServer(t, pub).PublishAgent(
+		inArea("cx", domain.RoleAuthor),
+		openapi.PublishAgentRequestObject{AgentId: "triage", Body: definition(nil)},
+	); err != nil {
+		t.Fatalf("PublishAgent: %v", err)
+	}
+	if got := pub.published[0].Approvals; got.Direct || len(got.Notify) > 0 {
+		t.Errorf("approvals = %+v, want the console alone", got)
+	}
+}

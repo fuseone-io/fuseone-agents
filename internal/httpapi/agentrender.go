@@ -77,6 +77,28 @@ func memoryLearningFrom(p domain.MemoryLearningPolicy) *openapi.MemoryLearningPo
 	}
 }
 
+/*
+approvalsFrom is what the owner asked for, on the way out.
+
+Absent when nothing was asked, so a client that reads a version and publishes it
+again sends back exactly what it received — including nothing.
+*/
+func approvalsFrom(p domain.ApprovalPolicy) *openapi.ApprovalPolicy {
+	normalized := p.Normalize()
+	if !normalized.Direct {
+		return nil
+	}
+	out := openapi.ApprovalPolicy{Direct: ptr(true)}
+	if len(normalized.Notify) > 0 {
+		notify := make([]string, 0, len(normalized.Notify))
+		for _, one := range normalized.Notify {
+			notify = append(notify, string(one))
+		}
+		out.Notify = &notify
+	}
+	return &out
+}
+
 func activityFrom(a domain.AgentActivity) openapi.AgentActivity {
 	out := openapi.AgentActivity{
 		Runs: a.Runs, Finished: a.Finished, Waiting: a.Waiting, CostMicros: a.CostMicros,

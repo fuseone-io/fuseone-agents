@@ -79,3 +79,41 @@ describe("the agent draft", () => {
     );
   });
 });
+
+/*
+ * The draft carries what no field on this screen shows.
+ *
+ * Publishing writes the draft whole, so a value the draft drops is a value
+ * deleted on the next edit — silently, on a change somebody made for another
+ * reason. The approval policy has a control of its own on the governance tab,
+ * and still has to survive an edit made on a tab beside it without anybody
+ * opening that one.
+ */
+describe("a version's approval policy", () => {
+  it("survives an edit made for another reason", () => {
+    const asking = {
+      ...cobranca,
+      approvals: { direct: true, notify: ["usr_ana"] },
+    } as unknown as AgentDetail;
+
+    const { result } = renderHook(() => useAgentDraft(asking));
+
+    expect(result.current.draft.approvals).toEqual({
+      direct: true,
+      notify: ["usr_ana"],
+    });
+
+    act(() => result.current.patch({ model: "outro-modelo" }));
+
+    expect(result.current.draft.approvals).toEqual({
+      direct: true,
+      notify: ["usr_ana"],
+    });
+  });
+
+  it("is absent for an agent that asked for nothing", () => {
+    const { result } = renderHook(() => useAgentDraft(cobranca));
+
+    expect(result.current.draft.approvals).toBeUndefined();
+  });
+});

@@ -67,6 +67,11 @@ func KnownEvent(e Event) bool {
 type Report struct {
 	RunID   domain.RunID
 	AgentID domain.AgentID
+	// Version is the specification the run pinned when it started. What an
+	// agent asked for about its own approvals is read from that version and
+	// never from whatever is published now: a run is governed by the version
+	// it began under, and how its owner wanted to be told is not an exception.
+	Version domain.VersionID
 	Scope   domain.Scope
 	Event   Event
 	At      time.Time

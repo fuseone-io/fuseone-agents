@@ -112,6 +112,7 @@ type Server struct {
 	// people is the directory of who exists and what each one holds, and
 	// accounts is the half of it that signs in with a password.
 	people   People
+	eligible EligibleApprovers
 	accounts Accounts
 	// regressions is the corpus a future version is checked against, and
 	// batteries is where the last run of it against a version is found.

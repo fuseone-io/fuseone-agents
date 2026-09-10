@@ -339,6 +339,32 @@ func TestUnreported_aSecondQuestion_isNotBehindTheFirstOnesFailure(t *testing.T)
 	}
 }
 
+/*
+The announcement says which version the run pinned.
+
+What an agent's owner asked for about its own approvals lives in the
+specification, and specifications are versioned. Read from whatever is published
+now, a run that started this morning would be announced according to a decision
+somebody took this afternoon — and the ledger would show one thing while the
+notification obeyed another.
+*/
+func TestUnreported_saysWhichVersionTheRunPinned(t *testing.T) {
+	store, pool := channelStore(t)
+
+	awaitApproval(t, pool, "run-versioned")
+
+	pending, err := store.Unreported(t.Context(), noon.Add(-channel.Window), 50)
+	if err != nil {
+		t.Fatalf("unreported: %v", err)
+	}
+	if len(pending) != 1 {
+		t.Fatalf("pending = %+v, want the parked run", pending)
+	}
+	if pending[0].Version == "" {
+		t.Error("the announcement does not say which version the run pinned")
+	}
+}
+
 func channelStore(t *testing.T) (*channel.Postgres, *pgxpool.Pool) {
 	t.Helper()
 	dsn := os.Getenv("TEST_DATABASE_URL")
@@ -356,8 +382,13 @@ func channelStore(t *testing.T) (*channel.Postgres, *pgxpool.Pool) {
 	if err := ledger.Migrate(t.Context(), pool); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
+	// agent_specs too: it is insert-only, so a version published by an earlier
+	// test is still there and `on conflict do nothing` makes the next
+	// publication a no-op. A sabotage of what publishing stores then changes
+	// nothing, and the test agrees with a row nobody in it wrote.
 	if _, err := pool.Exec(t.Context(), `
-		truncate run_steps, runs, channel_deliveries, channel_delivery_failures`); err != nil {
+		truncate run_steps, runs, channel_deliveries, channel_delivery_failures,
+		         agent_specs`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	// The configuration too. Settings survive a test, and a row left behind by
@@ -374,11 +405,31 @@ func channelStore(t *testing.T) (*channel.Postgres, *pgxpool.Pool) {
 
 func appendStep(t *testing.T, pool *pgxpool.Pool, run string, kind domain.StepKind, payload []byte) {
 	t.Helper()
+	appendStepIn(t, pool, domain.Scope{Company: "acme", Area: "ops"}, run, kind, payload)
+}
+
+// appendStepIn is the same, in a scope a test chooses. Who may decide is a
+// property of the scope, so a test that needs one run answerable and another
+// not says so here.
+func appendStepIn(
+	t *testing.T, pool *pgxpool.Pool, scope domain.Scope,
+	run string, kind domain.StepKind, payload []byte,
+) {
+	t.Helper()
+	appendStepOf(t, pool, scope, "triage", "v1", run, kind, payload)
+}
+
+func appendStepOf(
+	t *testing.T, pool *pgxpool.Pool, scope domain.Scope,
+	agent domain.AgentID, version domain.VersionID,
+	run string, kind domain.StepKind, payload []byte,
+) {
+	t.Helper()
 	store := ledger.NewPostgres(pool)
 	if _, err := store.Append(t.Context(), domain.Step{
 		RunID: domain.RunID(run), Kind: kind, At: time.Now(),
-		Scope:   domain.Scope{Company: "acme", Area: "ops"},
-		AgentID: "triage", VersionID: "v1", Payload: payload,
+		Scope:   scope,
+		AgentID: agent, VersionID: version, Payload: payload,
 	}); err != nil {
 		t.Fatalf("append %s: %v", kind, err)
 	}
@@ -390,8 +441,23 @@ func appendStep(t *testing.T, pool *pgxpool.Pool, run string, kind domain.StepKi
 // while the first was fixed.
 func awaitApproval(t *testing.T, pool *pgxpool.Pool, run string) {
 	t.Helper()
-	appendStep(t, pool, run, domain.StepRunStarted, nil)
-	appendStep(t, pool, run, domain.StepApprovalRequested,
+	awaitApprovalIn(t, pool, domain.Scope{Company: "acme", Area: "ops"}, run)
+}
+
+func awaitApprovalIn(t *testing.T, pool *pgxpool.Pool, scope domain.Scope, run string) {
+	t.Helper()
+	awaitApprovalOf(t, pool, scope, run, "triage", "v1")
+}
+
+// awaitApprovalOf pins the run to a version somebody published, which is what a
+// test needs when the answer depends on what that version declared.
+func awaitApprovalOf(
+	t *testing.T, pool *pgxpool.Pool, scope domain.Scope,
+	run string, agent domain.AgentID, version domain.VersionID,
+) {
+	t.Helper()
+	appendStepOf(t, pool, scope, agent, version, run, domain.StepRunStarted, nil)
+	appendStepOf(t, pool, scope, agent, version, run, domain.StepApprovalRequested,
 		[]byte(`{"tool":"erp.transfer","rule":"financial","reason":"over the ceiling"}`))
 }
 

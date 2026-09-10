@@ -81,17 +81,23 @@ func (r *Registry) Publish(ctx context.Context, s Spec, by domain.UserID, compan
 	if err != nil {
 		return fmt.Errorf("spec: encode memory learning: %w", err)
 	}
+	approvals, err := json.Marshal(s.Approvals.Normalize())
+	if err != nil {
+		return fmt.Errorf("spec: encode approvals: %w", err)
+	}
 
 	_, err = r.pool.Exec(ctx, `
 		insert into agent_specs (
 			agent_id, version_id, company_id, area_id, name,
 			provider, model, effort, tools, budget, triggers,
-			instructions, source, published_by, emits, steps, memory_learning
-		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+			instructions, source, published_by, emits, steps, memory_learning,
+			approvals
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
 		on conflict (agent_id, version_id) do nothing`,
 		string(s.ID), string(s.Version), string(company), string(s.Area), s.Name,
 		s.Provider, s.Model, s.Effort, tools, budget, triggers,
-		s.Instructions, s.Source, string(by), encodedEmits, steps, learning)
+		s.Instructions, s.Source, string(by), encodedEmits, steps, learning,
+		approvals)
 	if err != nil {
 		return fmt.Errorf("spec: publish %s@%s: %w", s.ID, s.Version, err)
 	}
@@ -106,17 +112,18 @@ func (r *Registry) Get(ctx context.Context, agent domain.AgentID, version domain
 		budget, triggers []byte
 		emits, steps     []byte
 		learning         []byte
+		approvals        []byte
 		company          string
 	)
 	err := r.pool.QueryRow(ctx, `
 		select agent_id, version_id, company_id, area_id, name,
 		       provider, model, effort, tools, budget, triggers, instructions,
-		       source, emits, steps, memory_learning
+		       source, emits, steps, memory_learning, approvals
 		from agent_specs where agent_id = $1 and version_id = $2`,
 		string(agent), string(version),
 	).Scan(&s.ID, &s.Version, &company, &s.Area, &s.Name,
 		&s.Provider, &s.Model, &s.Effort, &tools, &budget, &triggers,
-		&s.Instructions, &s.Source, &emits, &steps, &learning)
+		&s.Instructions, &s.Source, &emits, &steps, &learning, &approvals)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Spec{}, fmt.Errorf("%w: %s@%s", ErrNotPublished, agent, version)
@@ -149,41 +156,60 @@ func (r *Registry) Get(ctx context.Context, agent domain.AgentID, version domain
 		return Spec{}, fmt.Errorf("spec: decode memory learning: %w", err)
 	}
 	s.MemoryLearning = s.MemoryLearning.Normalize()
+	// The same read the reporter uses. Two decoders for one column is how a
+	// shape one of them refuses is obeyed by the other.
+	if s.Approvals, err = decodeApprovals(approvals); err != nil {
+		return Spec{}, err
+	}
 	return s, nil
 }
+
+// Declarations is what a published version holds and a summary leaves out.
+//
+// One answer rather than three, because all three are omitted for the same
+// reason and would be lost for the same reason: what a read does not return, an
+// editor cannot put back, and publishing again deletes it. Separate calls are
+// separate chances to forget one — which is exactly how the approval policy was
+// lost between a version and its next publication.
 
 // Declared reads the parts of a published version a summary leaves out.
 //
 // Its own read rather than fields on the summary: a listing of twenty agents
 // would carry twenty processes nobody asked to see, which is the same reason
-// the instructions are read one version at a time. Both in one answer,
+// the instructions are read one version at a time. All of them in one answer,
 // because what a read omits an editor cannot put back — and publishing again
 // deletes it.
+type Declarations struct {
+	Steps     []Step
+	Emits     Emits
+	Approvals domain.ApprovalPolicy
+}
+
 func (r *Registry) Declared(
 	ctx context.Context, agent domain.AgentID, version domain.VersionID,
-) ([]Step, Emits, error) {
-	var (
-		raw   []byte
-		emits []byte
-	)
-	err := r.pool.QueryRow(ctx,
-		`select steps, emits from agent_specs where agent_id = $1 and version_id = $2`,
-		string(agent), string(version)).Scan(&raw, &emits)
+) (Declarations, error) {
+	var raw, emits, approvals []byte
+	err := r.pool.QueryRow(ctx, `
+		select steps, emits, approvals from agent_specs
+		where agent_id = $1 and version_id = $2`,
+		string(agent), string(version)).Scan(&raw, &emits, &approvals)
 
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil, nil
+		return Declarations{}, nil
 	}
 	if err != nil {
-		return nil, nil, fmt.Errorf("spec: read declarations of %s@%s: %w", agent, version, err)
+		return Declarations{}, fmt.Errorf("spec: read declarations of %s@%s: %w", agent, version, err)
 	}
 
-	var steps []Step
-	if err := json.Unmarshal(raw, &steps); err != nil {
-		return nil, nil, fmt.Errorf("spec: decode steps: %w", err)
+	var out Declarations
+	if err := json.Unmarshal(raw, &out.Steps); err != nil {
+		return Declarations{}, fmt.Errorf("spec: decode steps: %w", err)
 	}
-	var decoded Emits
-	if err := json.Unmarshal(emits, &decoded); err != nil {
-		return nil, nil, fmt.Errorf("spec: decode emits: %w", err)
+	if err := json.Unmarshal(emits, &out.Emits); err != nil {
+		return Declarations{}, fmt.Errorf("spec: decode emits: %w", err)
 	}
-	return steps, decoded, nil
+	if out.Approvals, err = decodeApprovals(approvals); err != nil {
+		return Declarations{}, err
+	}
+	return out, nil
 }

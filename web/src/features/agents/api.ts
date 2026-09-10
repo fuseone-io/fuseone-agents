@@ -29,3 +29,31 @@ export function useAgents(allVersions = false) {
       ),
   });
 }
+
+/**
+ * Who this agent may name to be told about its approvals.
+ *
+ * The narrow list, not the directory: naming somebody needs their name and
+ * nothing else, and an author holds no authority over identity — the
+ * administrative listing answered 403 and drew an empty control with no error.
+ *
+ * Asked only when a private message was actually asked for. A screen that reads
+ * the people who may decide in order to draw a checkbox nobody ticked is a
+ * screen making a request on every visit for a control that is not there.
+ */
+export function useEligibleApprovers(
+  company: string,
+  area: string,
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: [...agentKeys.all, "approvers", company, area] as const,
+    queryFn: async () =>
+      unwrap(
+        await api.GET("/agents/approvers", {
+          params: { query: { company, area: area || undefined } },
+        }),
+      ),
+    enabled: enabled && company !== "",
+  });
+}

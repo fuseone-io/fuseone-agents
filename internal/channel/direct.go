@@ -64,18 +64,54 @@ property of the run's scope; where they are reachable is configuration that
 changes by an administrative act. Re-reading either between recipients would let
 the set of people one announcement reaches change halfway through reaching them.
 */
+/*
+answered is what a pass remembers, including a refusal.
+
+Remembering only the successes was an amplifier: during an outage a page of
+fifty runs asked fifty times, every thirty seconds, and could be told different
+things inside one sweep — the set of people one announcement reaches changing
+halfway through reaching them, which is the whole reason this pass exists.
+
+The error is the answer until the next sweep.
+*/
+type answered[T any] struct {
+	value T
+	err   error
+}
+
 type fanout struct {
 	approvers Approvers
 	accounts  Accounts
-	byScope   map[domain.Scope][]domain.UserID
+	byScope   map[domain.Scope]answered[[]domain.UserID]
 	byChannel map[string]map[domain.UserID]string
+	// Reading who is reachable fills in one person at a time, so a failure is
+	// remembered for the connection rather than for the people it was about.
+	failedChannel map[string]error
+	// The connection an agent's own approvals are sent from, and whether it has
+	// been asked for. Empty is an answer — no connection, or more than one —
+	// which is why the asking is tracked separately from the answer.
+	connection       string
+	askedConnections bool
+	connectionsErr   error
+	// What each version's owner asked for. Two runs of one agent in a page ask
+	// once, and every run of it asks once per sweep rather than per report.
+	byVersion map[versionOfAgent]answered[domain.ApprovalPolicy]
+}
+
+// versionOfAgent is what an approval policy is stored against: a run is pinned
+// to a version, so two versions of one agent are two answers.
+type versionOfAgent struct {
+	agent   domain.AgentID
+	version domain.VersionID
 }
 
 func (r *Reporter) newFanout() *fanout {
 	return &fanout{
 		approvers: r.approvers, accounts: r.accounts,
-		byScope:   map[domain.Scope][]domain.UserID{},
-		byChannel: map[string]map[domain.UserID]string{},
+		byScope:       map[domain.Scope]answered[[]domain.UserID]{},
+		byChannel:     map[string]map[domain.UserID]string{},
+		failedChannel: map[string]error{},
+		byVersion:     map[versionOfAgent]answered[domain.ApprovalPolicy]{},
 	}
 }
 
@@ -109,6 +145,20 @@ func (f *fanout) recipients(
 		return nil, false, nil
 	}
 
+	return f.reachable(ctx, place, who)
+}
+
+/*
+reachable turns the people who may decide into the private conversations to
+post in, or answers that there are too many.
+
+Split from recipients because the owner's path narrows *who* before asking
+*where*, and the cap has to be applied after both — counted in messages rather
+than in candidates.
+*/
+func (f *fanout) reachable(
+	ctx context.Context, place Conversation, who []domain.UserID,
+) (to []Conversation, capped bool, err error) {
 	where, err := f.whereReachable(ctx, place.Channel, who)
 	if err != nil {
 		return nil, false, err
@@ -138,16 +188,16 @@ func (f *fanout) recipients(
 }
 
 func (f *fanout) whoDecides(ctx context.Context, scope domain.Scope) ([]domain.UserID, error) {
-	if who, asked := f.byScope[scope]; asked {
-		return who, nil
+	if before, asked := f.byScope[scope]; asked {
+		return before.value, before.err
 	}
 	who, err := f.approvers.ApproversIn(ctx, scope)
 	if err != nil {
-		return nil, WrapError(CodeConfigurationReadFailed,
+		err = WrapError(CodeConfigurationReadFailed,
 			fmt.Errorf("channel: who may approve in %s: %w", scope, err))
 	}
-	f.byScope[scope] = who
-	return who, nil
+	f.byScope[scope] = answered[[]domain.UserID]{value: who, err: err}
+	return who, err
 }
 
 func (f *fanout) whereReachable(
@@ -160,14 +210,22 @@ func (f *fanout) whereReachable(
 			missing = append(missing, one)
 		}
 	}
+	// Nothing to ask means nothing to fail. Checked after the question rather
+	// than before it, so a lookup that failed for one scope does not answer for
+	// another where there was nobody to look up at all.
 	if len(missing) == 0 {
 		return known, nil
+	}
+	if err := f.failedChannel[channelName]; err != nil {
+		return nil, err
 	}
 
 	found, err := f.accounts.AccountsOn(ctx, channelName, missing)
 	if err != nil {
-		return nil, WrapError(CodeConfigurationReadFailed,
+		err = WrapError(CodeConfigurationReadFailed,
 			fmt.Errorf("channel: where to reach people on %s: %w", channelName, err))
+		f.failedChannel[channelName] = err
+		return nil, err
 	}
 	if known == nil {
 		known = map[domain.UserID]string{}
@@ -201,6 +259,11 @@ var terminal = map[string]bool{
 	CodeConversationUnavailable: true,
 	CodeUnsupportedCapability:   true,
 	CodeTooManyRecipients:       true,
+	// Both wait on somebody configuring something: a connection to send from,
+	// or people who may actually decide. Another sweep in thirty seconds reads
+	// the same answer.
+	CodeNoConnectionChosen:    true,
+	CodeNamedNobodyWhoDecides: true,
 }
 
 // degrades reports that another sweep would learn nothing new.

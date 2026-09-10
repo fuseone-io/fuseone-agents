@@ -2,6 +2,7 @@ package spec_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -68,7 +69,16 @@ func openSpecPool(t *testing.T) *pgxpool.Pool {
 
 func openRegistry(t *testing.T) *spec.Registry {
 	t.Helper()
-	return spec.NewRegistry(openSpecPool(t))
+	r, _ := openRegistryWithPool(t)
+	return r
+}
+
+// openRegistryWithPool also hands back the pool, for a test that has to plant a
+// row the registry itself would never write.
+func openRegistryWithPool(t *testing.T) (*spec.Registry, *pgxpool.Pool) {
+	t.Helper()
+	pool := openSpecPool(t)
+	return spec.NewRegistry(pool), pool
 }
 
 func published(t *testing.T, source string) spec.Spec {
@@ -530,5 +540,151 @@ func TestPublish_noSteps_readsBackAsNoneRatherThanOne(t *testing.T) {
 	// how every agent behaved before steps existed.
 	if len(got.Tools) == 0 {
 		t.Error("the pack came back empty")
+	}
+}
+
+/*
+How the owner asked to be told is published with the version.
+
+A run is pinned to a version, and the notification obeys the version — so the
+preference has to survive the registry the way the instructions do. Kept beside
+the agent instead, an owner who changed their mind this afternoon would change
+how a run that started this morning is announced, and the ledger would show one
+thing while the message obeyed another.
+*/
+func TestPublish_theApprovalPolicy_survivesTheRegistry(t *testing.T) {
+	r := openRegistry(t)
+	ctx := context.Background()
+	asking := published(t, strings.Replace(definition, "tools:",
+		"approvals:\n  direct: true\n  notify: [usr_ana]\ntools:", 1))
+
+	if err := r.Publish(ctx, asking, "usr_ana", "acme"); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+
+	got, err := r.Get(ctx, "triage", asking.Version)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if !got.Approvals.Direct {
+		t.Error("the agent asked for a private approval and the version does not say so")
+	}
+	if len(got.Approvals.Notify) != 1 || got.Approvals.Notify[0] != "usr_ana" {
+		t.Errorf("notify = %v, want the person the owner named", got.Approvals.Notify)
+	}
+}
+
+// A version published before an agent could ask reads as the console alone,
+// which is what those agents have always done.
+func TestGet_aVersionPublishedBeforeAgentsCouldAsk_wantsNothingPrivate(t *testing.T) {
+	r := openRegistry(t)
+	ctx := context.Background()
+	plain := published(t, definition)
+
+	if err := r.Publish(ctx, plain, "usr_ana", "acme"); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+
+	got, err := r.Get(ctx, "triage", plain.Version)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.Approvals.Direct || len(got.Approvals.Notify) > 0 {
+		t.Errorf("approvals = %+v, want the console alone", got.Approvals)
+	}
+}
+
+/*
+The policy is read on its own, not by decoding a whole version.
+
+The reporter asks this for every run in a page, every thirty seconds, including
+for the agents that asked for nothing. Answered through Get it decoded the
+instructions, the tools, the triggers, the steps and the emissions to produce
+one boolean.
+*/
+func TestApprovalPolicy_readsWhatTheOwnerAsked(t *testing.T) {
+	r := openRegistry(t)
+	ctx := context.Background()
+	asking := published(t, strings.Replace(definition, "tools:",
+		"approvals:\n  direct: true\n  notify: [usr_ana]\ntools:", 1))
+
+	if err := r.Publish(ctx, asking, "usr_ana", "acme"); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+
+	got, err := r.ApprovalPolicy(ctx, "triage", asking.Version)
+	if err != nil {
+		t.Fatalf("ApprovalPolicy: %v", err)
+	}
+	if !got.Direct || len(got.Notify) != 1 || got.Notify[0] != "usr_ana" {
+		t.Errorf("policy = %+v, want what the owner published", got)
+	}
+}
+
+/*
+A version nobody published is an error, not "the console alone".
+
+The reporter keeps the run and reads again next sweep. Answered as a preference
+this would invent the owner's decision out of a version that is missing, and
+retire a run having told nobody.
+*/
+func TestApprovalPolicy_aVersionNobodyPublished_isRefused(t *testing.T) {
+	r := openRegistry(t)
+
+	_, err := r.ApprovalPolicy(context.Background(), "triage", "v-nowhere")
+	if !errors.Is(err, spec.ErrNotPublished) {
+		t.Fatalf("err = %v, want ErrNotPublished", err)
+	}
+}
+
+/*
+A stored policy is read the way publishing writes it, or not at all.
+
+Written by one path and read by another, the two drifted: authoring refuses a
+policy that names people while asking for no message, and the read accepted it.
+Such a row can only arrive by restore or from a newer version — and obeying it
+means obeying a shape the platform itself calls meaningless.
+*/
+func TestApprovalPolicy_aShapeAuthoringWouldRefuse_isRefusedOnTheWayOut(t *testing.T) {
+	r, pool := openRegistryWithPool(t)
+	ctx := context.Background()
+
+	for _, one := range []struct{ name, stored string }{
+		{"naming people while asking for no message",
+			`{"notify":["usr_ana"]}`},
+		{"a field this version does not know",
+			`{"direct":true,"escalate_after":"1h"}`},
+		{"a row that lost its meaning", `null`},
+	} {
+		t.Run(one.name, func(t *testing.T) {
+			// Inserted rather than updated: a published version cannot be
+			// changed, which is the point of the table. This is the row a
+			// restore or a newer version leaves behind.
+			version := domain.VersionID("v-" + strings.ReplaceAll(one.name, " ", "-"))
+			if _, err := pool.Exec(ctx, `
+				insert into agent_specs (
+					agent_id, version_id, company_id, area_id, name,
+					provider, model, effort, tools, budget, triggers,
+					instructions, source, published_by, emits, steps,
+					memory_learning, approvals
+				) values ('triage', $1, 'acme', 'cx', 'Ticket triage',
+					'openai', 'test-model', '', '{}', '{}'::jsonb, '[]'::jsonb,
+					'read it', 'test.agent.md', 'usr_ana', '[]'::jsonb,
+					'[]'::jsonb, '{"mode":"off"}'::jsonb, $2::jsonb)`,
+				string(version), one.stored); err != nil {
+				t.Fatalf("plant the row: %v", err)
+			}
+
+			_, err := r.ApprovalPolicy(ctx, "triage", version)
+			if !errors.Is(err, spec.ErrUnreadableApprovals) {
+				t.Fatalf("err = %v, want ErrUnreadableApprovals", err)
+			}
+			// And the whole version reads the same way: one column, one
+			// decoder, or a shape one path refuses is obeyed by the other.
+			if _, err := r.Get(ctx, "triage", version); !errors.Is(
+				err, spec.ErrUnreadableApprovals) {
+				t.Errorf("Get err = %v, want ErrUnreadableApprovals", err)
+			}
+		})
 	}
 }

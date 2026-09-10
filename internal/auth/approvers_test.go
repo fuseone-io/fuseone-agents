@@ -5,6 +5,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/domain"
 )
 
@@ -184,15 +185,47 @@ func TestApproversIn_grantedTwiceOverTheSameRun_isNamedOnce(t *testing.T) {
 	}
 }
 
+// approverLister is both readings of one question: the fan-out's, and the one a
+// screen offers an owner. Named together because they must answer together.
 type approverLister interface {
 	ApproversIn(ctx context.Context, scope domain.Scope) ([]domain.UserID, error)
+	ApproversNamed(ctx context.Context, scope domain.Scope) ([]auth.Eligible, error)
 }
 
+/*
+listsApprover asks both readings and demands they agree.
+
+The fan-out asks who may decide; the screen that offers an owner the list asks
+the same people by name. They are one query today and the point of driving both
+from this table is that they stay one: written apart, the copies drift, and the
+drift is invisible — a screen offering somebody who will never be messaged, or
+hiding somebody who will be, with both halves working.
+*/
 func listsApprover(t *testing.T, dir approverLister, run domain.Scope, person string) bool {
 	t.Helper()
 	who, err := dir.ApproversIn(t.Context(), run)
 	if err != nil {
 		t.Fatalf("ApproversIn %+v: %v", run, err)
 	}
-	return slices.Contains(who, domain.UserID(person))
+	listed := slices.Contains(who, domain.UserID(person))
+
+	named, err := dir.ApproversNamed(t.Context(), run)
+	if err != nil {
+		t.Fatalf("ApproversNamed %+v: %v", run, err)
+	}
+	offered := slices.ContainsFunc(named, func(one auth.Eligible) bool {
+		return one.ID == domain.UserID(person)
+	})
+	if offered != listed {
+		t.Errorf("run %+v: the fan-out lists %s = %v, the screen offers it = %v",
+			run, person, listed, offered)
+	}
+	// And a name a person recognises, because a screen showing identifiers is
+	// a screen where somebody picks the wrong colleague.
+	for _, one := range named {
+		if one.Display == "" {
+			t.Errorf("%s is offered with no name", one.ID)
+		}
+	}
+	return listed
 }
