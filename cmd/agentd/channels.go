@@ -9,6 +9,7 @@ import (
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/channel/connect"
+	"github.com/fuseone/agents/internal/spec"
 	"github.com/fuseone/agents/internal/worker"
 )
 
@@ -41,7 +42,11 @@ func reportToChannels(
 		// sweep and neither grants anything: the button is checked by the
 		// console's own path wherever it is pressed.
 		// Reads where people are reachable; configures nothing.
-		WithDirectApprovals(auth.NewPostgres(p.configPool), admin.NewChannels(p.configPool, store, nil))
+		WithDirectApprovals(auth.NewPostgres(p.configPool), admin.NewChannels(p.configPool, store, nil)).
+		// And what each agent's owner asked for, read from the version the run
+		// pinned. Without this an agent that asked is simply not obeyed, which
+		// is what an installation running an older worker gets.
+		WithOwnerApprovals(spec.NewRegistry(p.configPool), channel.NewConfigured(store))
 
 	// The cards the announcements left behind. A separate loop because it
 	// answers a different question — what is still asking, rather than what

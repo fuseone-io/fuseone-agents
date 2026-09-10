@@ -394,6 +394,28 @@ func (c *Configured) For(ctx context.Context, scope domain.Scope) ([]Conversatio
 	return out, nil
 }
 
+/*
+EnabledConnections answers which connections this installation can speak from.
+
+Only asked when an agent wants its approvals sent privately and no conversation
+names a workspace. Disabled ones are left out because a connection somebody
+switched off is configuration that exists and is not in force — and a run
+announced from it would be a message nobody receives, recorded as sent.
+*/
+func (c *Configured) EnabledConnections(ctx context.Context) ([]string, error) {
+	stored, err := c.store.List(ctx, KindChannel)
+	if err != nil {
+		return nil, fmt.Errorf("channel: list connections: %w", err)
+	}
+	var out []string
+	for _, s := range stored {
+		if s.Enabled {
+			out = append(out, s.Name)
+		}
+	}
+	return out, nil
+}
+
 // WatchRule is the explicit automation a watched message may start.
 type WatchRule struct {
 	Agent   domain.AgentID
