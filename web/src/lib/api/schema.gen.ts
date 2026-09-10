@@ -96,6 +96,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/approvers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Who an agent may name to be told about its approvals
+         * @description The people holding Approver in a scope, by name — the same people the
+         *     fan-out would message, so a screen offering the list offers the list
+         *     that will be used.
+         *
+         *     Deliberately narrow. Naming somebody to be told needs their name and
+         *     nothing else, and it must not need authority over the directory: an
+         *     author publishing an agent holds none, and asking the administrative
+         *     listing gives them an empty control and a refusal nobody shows.
+         *
+         *     Authorised by the right to publish in the scope asked about, because
+         *     that is the act this list is part of.
+         */
+        get: operations["listEligibleApprovers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents": {
         parameters: {
             query?: never;
@@ -2609,6 +2639,10 @@ export interface components {
              * @description Who to message, among the people who may decide. Empty means
              *     everyone holding Approver in a scope covering the run.
              *
+             *     Bounded at twenty, which is also where the fan-out stops: past it
+             *     nobody is messaged privately at all, because telling an arbitrary
+             *     twenty of a hundred is worse than telling none.
+             *
              *     Naming somebody is addressing and never authorising: the button is
              *     checked against the run's own scope wherever it is pressed, so a
              *     name here that holds no grant is dropped rather than messaged.
@@ -5046,6 +5080,36 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+        };
+    };
+    listEligibleApprovers: {
+        parameters: {
+            query?: {
+                /** @description Company scope. A single value until multi-company (PRD 3.1). */
+                company?: components["parameters"]["CompanyScope"];
+                area?: components["parameters"]["Area"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Who may decide there. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: {
+                            id: string;
+                            display: string;
+                        }[];
+                    };
+                };
+            };
+            403: components["responses"]["Forbidden"];
         };
     };
     listAgents: {

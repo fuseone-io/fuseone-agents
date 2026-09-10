@@ -122,6 +122,45 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
 
+  /agents/approvers:
+    get:
+      tags: [agents]
+      operationId: listEligibleApprovers
+      summary: Who an agent may name to be told about its approvals
+      description: |
+        The people holding Approver in a scope, by name — the same people the
+        fan-out would message, so a screen offering the list offers the list
+        that will be used.
+
+        Deliberately narrow. Naming somebody to be told needs their name and
+        nothing else, and it must not need authority over the directory: an
+        author publishing an agent holds none, and asking the administrative
+        listing gives them an empty control and a refusal nobody shows.
+
+        Authorised by the right to publish in the scope asked about, because
+        that is the act this list is part of.
+      parameters:
+        - $ref: '#/components/parameters/CompanyScope'
+        - $ref: '#/components/parameters/Area'
+      responses:
+        '200':
+          description: Who may decide there.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, display]
+                      properties:
+                        id: { type: string }
+                        display: { type: string }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /agents:
     get:
       tags: [agents]
@@ -4213,9 +4252,14 @@ components:
             channel bot, to the people who may decide it.
         notify:
           type: array
+          maxItems: 20
           description: |
             Who to message, among the people who may decide. Empty means
             everyone holding Approver in a scope covering the run.
+
+            Bounded at twenty, which is also where the fan-out stops: past it
+            nobody is messaged privately at all, because telling an arbitrary
+            twenty of a hundred is worse than telling none.
 
             Naming somebody is addressing and never authorising: the button is
             checked against the run's own scope wherever it is pressed, so a
