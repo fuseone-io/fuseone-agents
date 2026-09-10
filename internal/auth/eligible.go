@@ -2,7 +2,6 @@ package auth
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/fuseone/agents/internal/domain"
 )
@@ -26,42 +25,18 @@ type Eligible struct {
 	Display string
 }
 
-// ApproversNamed lists who may decide in a scope, with their display names.
-//
-// The same predicate as ApproversIn, which the fan-out uses to decide who is
-// actually messaged: a screen offering somebody the list must offer the list
-// that will be used, or naming a person there produces a message that never
-// goes out and no explanation of why.
+/*
+ApproversNamed lists who may decide in a scope, with their display names.
+
+The same call the fan-out makes, with the names kept: a screen offering somebody
+the list must offer the list that will be used, or naming a person there
+produces a message that never goes out and no explanation of why. Written as its
+own query it was a copy of the predicate, and a copy of a predicate is a
+predicate that drifts — invisibly, because both halves keep working and only
+disagree about who.
+*/
 func (p *Postgres) ApproversNamed(
 	ctx context.Context, scope domain.Scope,
 ) ([]Eligible, error) {
-	rows, err := p.pool.Query(ctx, `
-		select distinct g.principal_id, coalesce(pr.display, g.principal_id)
-		from role_grants g
-		join principals pr on pr.principal_id = g.principal_id
-		where g.role = $1
-		  and pr.disabled_at is null
-		  and pr.kind = 'user'
-		  and (
-		        (g.company_id = $2 and g.area_id = '')
-		     or (g.company_id = $3 and g.area_id = '')
-		     or (g.company_id = $3 and g.area_id = $4)
-		  )
-		order by g.principal_id`,
-		string(domain.RoleApprover), string(domain.Installation),
-		string(scope.Company), string(scope.Area))
-	if err != nil {
-		return nil, fmt.Errorf("auth: who may approve in %s: %w", scope, err)
-	}
-	defer rows.Close()
-
-	var out []Eligible
-	for rows.Next() {
-		var one Eligible
-		if err := rows.Scan(&one.ID, &one.Display); err != nil {
-			return nil, err
-		}
-		out = append(out, one)
-	}
-	return out, rows.Err()
+	return p.peopleHoldingNamed(ctx, domain.RoleApprover, scope)
 }
