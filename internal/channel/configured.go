@@ -239,12 +239,14 @@ apart and answer as a different conversation.
 */
 
 const (
-	// KeyVersionName is a row whose name is the conversation id. Absent from
-	// the value, which is how every row this version writes reads back.
+	// KeyVersionName is a row whose name is the conversation id alone. Absent
+	// from the value, which is how every row written before the move reads
+	// back — and rows in that shape still arrive, from a pod on the previous
+	// version and from a restore taken before it.
 	KeyVersionName = 0
 	// KeyVersionConnection is a row whose name holds the connection as well as
-	// the id. Written by the release after this one; read by this one, which
-	// is what makes that release possible.
+	// the id. What this version writes, and what the migration renames the old
+	// rows into.
 	KeyVersionConnection = 2
 )
 
@@ -257,9 +259,9 @@ holding "C" produce the same string, and in one scope that is one row. Both
 halves are names somebody typed or a vendor chose, so neither can be promised
 free of the separator; a length cannot be forged by punctuation.
 
-Nothing writes it yet. It is here so the version after this one writes something
-this one already reads, and so the two agree on what it means before either
-depends on it.
+Every conversation this version stores is named by it, and the migration renames
+the older rows into the same shape. A reader still meets the old shape, so the
+name alone never decides which it is looking at — the row says so.
 */
 func ConversationKey(channelName, id string) string {
 	return strconv.Itoa(len(channelName)) + ":" + channelName + "/" + id
