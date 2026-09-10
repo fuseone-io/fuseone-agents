@@ -128,21 +128,25 @@ export function TabSteps({
       ) : view === "text" ? (
         // Sentences are read left to right and stop at a measure somebody can
         // follow; the canvas is looked at and takes what it is given.
-        <div className="mx-auto w-full max-w-[820px] overflow-y-auto px-5 pt-4 pb-10">
-          <StepsTextView
-            steps={steps}
-            catalogue={catalogue}
-            policies={policies}
-            onEdit={(at) => {
-              // Editing a stage is the inspector's job, and the inspector
-              // lives in the strip: the pencil takes you there rather than
-              // opening a second editor beside the first.
-              drawing.setSelected(at);
-              setView("flow");
-            }}
-            onAdd={() => drawing.insert("", steps.length)}
-            onMove={drawing.reorder}
-          />
+        // The scroller takes the width so its bar sits at the page's own edge;
+        // the measure stays on the column inside it.
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="mx-auto w-full max-w-[820px] px-5 pt-4 pb-10">
+            <StepsTextView
+              steps={steps}
+              catalogue={catalogue}
+              policies={policies}
+              onEdit={(at) => {
+                // Editing a stage is the inspector's job, and the inspector
+                // lives in the strip: the pencil takes you there rather than
+                // opening a second editor beside the first.
+                drawing.setSelected(at);
+                setView("flow");
+              }}
+              onAdd={() => drawing.insert("", steps.length)}
+              onMove={drawing.reorder}
+            />
+          </div>
         </div>
       ) : (
         <div className="flex min-h-0 flex-1">
