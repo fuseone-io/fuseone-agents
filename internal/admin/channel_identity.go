@@ -92,6 +92,24 @@ func identityKey(channelName, account string) string {
 	return channelName + "/" + account
 }
 
+/*
+lockIdentity serialises every write about one binding.
+
+Binding and withdrawing are the same fact from two directions, and they read
+each other: the withdrawal takes an inventory of where the binding is stored,
+because a copy can sit somewhere it means nothing. Read outside the write, that
+inventory is a photograph — a bind landing between the two leaves a row the
+withdrawal never saw, and the operator is told the account speaks for nobody
+while it speaks for somebody.
+*/
+func lockIdentity(ctx context.Context, conn settings.DB, key string) error {
+	if _, err := conn.Exec(ctx,
+		`select pg_advisory_xact_lock(hashtext($1))`, "identity:"+key); err != nil {
+		return fmt.Errorf("admin: lock the binding %s: %w", key, err)
+	}
+	return nil
+}
+
 // BindIdentity records that an account speaks for a principal.
 func (c *Channels) BindIdentity(
 	ctx context.Context, id ChannelIdentity, by domain.UserID,
@@ -111,18 +129,26 @@ func (c *Channels) BindIdentity(
 		return err
 	}
 
-	return writeSetting(ctx, c.pool, c.settings, by, domain.Scope{}, settings.Setting{
-		ScopeKind: settings.ScopeInstallation,
-		Kind:      KindChannelIdentity,
-		Name:      identityKey(id.Channel, id.Account),
-		Value:     value, Enabled: true, UpdatedBy: string(by),
-	}, "channel.identity.bound", identityKey(id.Channel, id.Account),
-		map[string]any{
+	key := identityKey(id.Channel, id.Account)
+	guard := func(ctx context.Context, conn settings.DB) error {
+		return lockIdentity(ctx, conn, key)
+	}
+	return writeGuarded(ctx, c.pool, c.settings, guard, folded{
+		by: by, scope: domain.Scope{},
+		action: "channel.identity.bound", target: key,
+		set: settings.Setting{
+			ScopeKind: settings.ScopeInstallation,
+			Kind:      KindChannelIdentity,
+			Name:      key,
+			Value:     value, Enabled: true, UpdatedBy: string(by),
+		},
+		detail: map[string]any{
 			// Both sides in the trail. "Somebody was bound to somebody" is not
 			// an answer anybody can act on a year later.
 			"channel": id.Channel, "account": id.Account,
 			"principal": string(id.Principal),
-		})
+		},
+	})
 }
 
 /*
@@ -143,16 +169,23 @@ func (c *Channels) UnbindIdentity(
 	ctx context.Context, channelName, account string, by domain.UserID,
 ) error {
 	key := identityKey(channelName, account)
-	stored, err := c.settings.List(ctx, KindChannelIdentity)
-	if err != nil {
-		return fmt.Errorf("admin: list channel identities: %w", err)
-	}
-
 	tx, err := c.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("admin: begin: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+
+	// Under the binding's own lock, and the inventory is taken inside it.
+	// Read before the transaction it was a photograph: a bind landing between
+	// the two left a row this never saw, and the trail said the account speaks
+	// for nobody while it went on speaking for somebody.
+	if err := lockIdentity(ctx, tx, key); err != nil {
+		return err
+	}
+	stored, err := c.settings.ListTx(ctx, tx, KindChannelIdentity)
+	if err != nil {
+		return fmt.Errorf("admin: list channel identities: %w", err)
+	}
 
 	for _, one := range stored {
 		if one.Name != key {
