@@ -62,6 +62,32 @@ const announcementSeq = `
 	end`
 
 /*
+nextAttempt is how long a run that could not be announced waits.
+
+Doubling, from a floor, to a ceiling — and the whole schedule sits inside the
+24-hour window, so a run is retried many times before it leaves and nothing here
+is ever "give up". Read as: this run may be tried again once its last attempt is
+older than that.
+
+Two schedules, because two failures are not alike. A destination refusing is an
+incident and somebody is probably fixing it, so the first retry is a minute
+away. Nothing configured to hear the run at all is an installation part-way
+through being set up: the same run coming back every thirty seconds writes
+2,880 attempts a day into a table nobody is reading, and the fix is a person
+doing something, not a network recovering.
+
+Written here rather than as a column, because it is a policy and a column is a
+value: changing it would leave every row already scheduled by the old one.
+*/
+const nextAttempt = `
+	tried.last_seen + case when tried.unconfigured
+		then least(interval '6 hours',
+		           interval '15 minutes' * power(2, least(coalesce(tried.attempts, 1) - 1, 5)))
+		else least(interval '2 hours',
+		           interval '1 minute' * power(2, least(coalesce(tried.attempts, 1) - 1, 7)))
+	end`
+
+/*
 Unreported lists runs in a state worth announcing that has not been said
 everywhere it should be.
 
@@ -95,7 +121,14 @@ func (p *Postgres) Unreported(ctx context.Context, since time.Time, limit int) (
 		-- conversations that were answering — until they left the window a day
 		-- later, unannounced.
 		left join lateral (
-		    select max(f.last_seen) as last_seen
+		    select max(f.last_seen) as last_seen,
+		           max(f.attempts) as attempts,
+		           -- Whether every reason recorded is that nothing at all is
+		           -- configured to hear this run. It is a different thing from
+		           -- a destination refusing: one is an installation being set
+		           -- up, the other is an incident, and they deserve different
+		           -- patience.
+		           bool_and(f.code = '`+CodeNowhereToSayIt+`') as unconfigured
 		    from channel_delivery_failures f
 		    -- Per question, not per run. Two approvals in one run are both
 		    -- "parked", so matching the event alone put a run's second
@@ -114,6 +147,10 @@ func (p *Postgres) Unreported(ctx context.Context, since time.Time, limit int) (
 		      where d.run_id = runs.run_id and d.event = `+phases+`
 		        and d.channel = '' and d.conversation = ''
 		        and d.at_seq = `+announcementSeq+`)
+		  -- Waited long enough. Compared against now, not against the attempt
+		  -- itself: an attempt is always older than itself plus a wait, which
+		  -- is a clause that reads like a schedule and lets everything through.
+		  and (tried.last_seen is null or `+nextAttempt+` <= now())
 		order by coalesce(tried.last_seen, to_timestamp(0)) asc, runs.updated_at desc
 		limit $2`, since.UTC(), limit)
 	if err != nil {

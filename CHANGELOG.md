@@ -25,6 +25,21 @@ field" is a commit message.
 
 ---
 
+## [0.47.0] — 2026-09-10
+
+### Fixed
+
+- **A run nothing could be told about is no longer retried twice a minute for a
+  day.** Announcements are retried until they land or the run leaves the
+  24-hour window, and a run with no destination at all came back every thirty
+  seconds — 2,880 attempts written about an installation nobody had finished
+  configuring. The wait now doubles from a floor to a ceiling, and it is two
+  schedules rather than one: a destination refusing is an incident somebody is
+  probably fixing, so the first retry is a minute away; nothing configured to
+  hear the run at all is an installation being set up, and waits fifteen. The
+  whole schedule still fits inside the window, so waiting longer is never
+  giving up.
+
 ## [0.46.0] — 2026-09-10
 
 ### Added
