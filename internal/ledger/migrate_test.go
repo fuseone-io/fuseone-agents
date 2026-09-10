@@ -240,13 +240,47 @@ func TestMigrate_conversationsUnderTheIdAlone_waitForTheConnectionsLock(t *testi
 		t.Fatalf("take the lock: %v", err)
 	}
 
+	// Which advisory lock that was, as Postgres itself identifies it. Waiting is
+	// then something the database is asked about rather than something inferred
+	// from a stopwatch: a slow migration and a migration queued behind this
+	// holder look identical from outside, and only one of them is the rule.
+	var pid int
+	if err := holder.QueryRow(t.Context(), `select pg_backend_pid()`).Scan(&pid); err != nil {
+		t.Fatalf("read the holder's backend: %v", err)
+	}
+	var db, class, obj, sub uint32
+	if err := pool.QueryRow(t.Context(), `
+		select database, classid, objid, objsubid from pg_locks
+		where locktype = 'advisory' and granted and pid = $1`, pid).
+		Scan(&db, &class, &obj, &sub); err != nil {
+		t.Fatalf("read the lock the holder took: %v", err)
+	}
+
 	done := make(chan error, 1)
 	go func() { done <- ledger.Migrate(context.Background(), pool) }()
 
-	select {
-	case err := <-done:
-		t.Fatalf("the rename did not wait for the connection's lock: %v", err)
-	case <-time.After(300 * time.Millisecond):
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		select {
+		case err := <-done:
+			t.Fatalf("the rename did not wait for the connection's lock: %v", err)
+		default:
+		}
+		var waiting int
+		if err := pool.QueryRow(t.Context(), `
+			select count(*) from pg_locks
+			where locktype = 'advisory' and not granted
+			  and database = $1 and classid = $2 and objid = $3 and objsubid = $4`,
+			db, class, obj, sub).Scan(&waiting); err != nil {
+			t.Fatalf("read lock waiters: %v", err)
+		}
+		if waiting > 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the migration never queued on the connection's lock")
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
 
 	if _, err := holder.Exec(t.Context(),
