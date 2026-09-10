@@ -131,7 +131,7 @@ func serve(args []string) error {
 		}
 		// The driver table, so an inbound rule cannot be written for a
 		// connection this binary has no way to talk to.
-		channels = admin.NewChannels(identity.pool, store).WithDrivers(drivers)
+		channels = admin.NewChannels(identity.pool, store, drivers)
 		connectorSettings := connectortools.NewSettings(store)
 		connectorInstances := admin.NewConnectorInstances(identity.pool, store)
 		api = api.WithChannels(channels, channel.NewRouter(drivers)).

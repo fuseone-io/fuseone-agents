@@ -22,7 +22,7 @@ Slack posts to the callback.
 */
 func TestPutChannel_aDeliveryModeThisVersionDoesNotKnow_isRefused(t *testing.T) {
 	pool := freshPool(t)
-	channels := admin.NewChannels(pool, settings.NewStore(pool, testVault(t)))
+	channels := admin.NewChannels(pool, settings.NewStore(pool, testVault(t)), onlySlack{})
 
 	err := channels.PutChannel(context.Background(), admin.ChannelWrite{
 		Channel: admin.Channel{
@@ -53,7 +53,7 @@ configured before Socket Mode existed.
 func TestList_aDeliveryModeThisVersionDoesNotKnow_isNotReadAsHTTP(t *testing.T) {
 	pool := freshPool(t)
 	store := settings.NewStore(pool, testVault(t))
-	channels := admin.NewChannels(pool, store)
+	channels := admin.NewChannels(pool, store, onlySlack{})
 
 	for _, one := range []struct{ name, stored, want string }{
 		{"future-slack", `"a-future-mode"`, "a-future-mode"},
@@ -87,7 +87,7 @@ refuses to save the conversation at all.
 */
 func TestPutConversation_anEventThisVersionDoesNotAnnounce_isRefused(t *testing.T) {
 	pool := freshPool(t)
-	channels := admin.NewChannels(pool, settings.NewStore(pool, testVault(t)))
+	channels := admin.NewChannels(pool, settings.NewStore(pool, testVault(t)), onlySlack{})
 
 	err := channels.PutConversation(context.Background(), "acme-slack",
 		admin.Conversation{
@@ -107,7 +107,7 @@ func TestPutConversation_anEventThisVersionDoesNotAnnounce_isRefused(t *testing.
 // chosen, so asking for it by name asks for something the fan-out never reads.
 func TestPutConversation_gateRefusalByName_isRefused(t *testing.T) {
 	pool := freshPool(t)
-	channels := admin.NewChannels(pool, settings.NewStore(pool, testVault(t)))
+	channels := admin.NewChannels(pool, settings.NewStore(pool, testVault(t)), onlySlack{})
 
 	err := channels.PutConversation(context.Background(), "acme-slack",
 		admin.Conversation{
@@ -131,7 +131,7 @@ in between. A room on such a connection may only announce.
 func TestPutConversation_onAConnectionThisVersionCannotReach_mayOnlyAnnounce(t *testing.T) {
 	pool := freshPool(t)
 	store := settings.NewStore(pool, testVault(t))
-	channels := admin.NewChannels(pool, store)
+	channels := admin.NewChannels(pool, store, onlySlack{})
 	ctx := context.Background()
 
 	// Restored, migrated, or written by a newer version: the administration
@@ -179,7 +179,7 @@ func TestPutConversation_onAConnectionThatCannotBeBuilt_mayOnlyAnnounce(t *testi
 		t.Run(one.name, func(t *testing.T) {
 			pool := freshPool(t)
 			store := settings.NewStore(pool, testVault(t))
-			channels := admin.NewChannels(pool, store).WithDrivers(onlySlack{})
+			channels := admin.NewChannels(pool, store, onlySlack{})
 			ctx := context.Background()
 
 			if err := store.Put(ctx, settings.Setting{
@@ -207,7 +207,7 @@ func TestPutConversation_onAConnectionThatCannotBeBuilt_mayOnlyAnnounce(t *testi
 func TestPutConversation_onAConnectionThatCanBeBuilt_isConfigured(t *testing.T) {
 	pool := freshPool(t)
 	store := settings.NewStore(pool, testVault(t))
-	channels := admin.NewChannels(pool, store).WithDrivers(onlySlack{})
+	channels := admin.NewChannels(pool, store, onlySlack{})
 	ctx := context.Background()
 
 	if err := store.Put(ctx, settings.Setting{

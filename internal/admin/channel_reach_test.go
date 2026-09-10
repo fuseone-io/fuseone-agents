@@ -331,7 +331,7 @@ auditor cannot use to answer who decided it, or when.
 */
 func TestPutConversation_turningOnDirectApprovals_isRecordedInTheTrail(t *testing.T) {
 	pool := freshPool(t)
-	channels := admin.NewChannels(pool, settings.NewStore(pool, nil))
+	channels := admin.NewChannels(pool, settings.NewStore(pool, nil), onlySlack{})
 	ctx := context.Background()
 
 	if err := channels.PutConversation(ctx, "acme-slack", admin.Conversation{

@@ -20,6 +20,7 @@ import (
 
 	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/channel"
+	"github.com/fuseone/agents/internal/channel/connect"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/httpapi"
@@ -150,7 +151,7 @@ func aConversation(t *testing.T) *conversing {
 	store := settings.NewStore(pool, v)
 	c := &conversing{
 		pool: pool, store: store,
-		channels: admin.NewChannels(pool, store),
+		channels: admin.NewChannels(pool, store, connect.New(store)),
 		registry: spec.NewRegistry(pool),
 		said:     &saidAloud{},
 	}

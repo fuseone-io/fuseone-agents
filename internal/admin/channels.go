@@ -39,8 +39,18 @@ type Channels struct {
 	drivers  Drivers
 }
 
-func NewChannels(pool *pgxpool.Pool, store *settings.Store) *Channels {
-	return &Channels{pool: pool, settings: store}
+/*
+NewChannels takes the driver table because configuring a conversation depends
+on it.
+
+Required rather than optional. As a WithDrivers it could be deleted from the
+wiring and every test would stay green, which is a security boundary held up by
+a line nobody is looking at. A process that only reads may pass nil and say so
+in the code — and if one of those ever configured a conversation, it would be
+refused rather than trusted.
+*/
+func NewChannels(pool *pgxpool.Pool, store *settings.Store, drivers Drivers) *Channels {
+	return &Channels{pool: pool, settings: store, drivers: drivers}
 }
 
 /*
@@ -51,14 +61,6 @@ administration needs is one question, and depending on the driver table for it
 would put a vendor package in the import path of every configuration write.
 */
 type Drivers interface{ Kinds() []string }
-
-// WithDrivers lets the administration refuse an inbound rule on a connection
-// nothing in this binary can talk to. Optional: a process that builds no
-// drivers asks nothing.
-func (c *Channels) WithDrivers(d Drivers) *Channels {
-	c.drivers = d
-	return c
-}
 
 // Channel is a connection and the conversations inside it.
 type Channel struct {

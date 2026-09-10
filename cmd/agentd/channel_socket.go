@@ -64,8 +64,9 @@ func (p *workerParts) receiveSlackSockets(ctx context.Context) {
 	manager := &slackSocketManager{
 		settings: p.settings,
 		inbox:    channel.NewInbox(p.configPool),
-		seen:     admin.NewChannels(p.configPool, p.settings),
-		log:      slog.Default(),
+		// Reads which accounts have been seen; configures nothing.
+		seen: admin.NewChannels(p.configPool, p.settings, nil),
+		log:  slog.Default(),
 		openURL: func(ctx context.Context, appToken string) (string, error) {
 			return slack.OpenSocketURL(ctx, appToken, slack.SocketAPI,
 				&http.Client{Timeout: 10 * time.Second})

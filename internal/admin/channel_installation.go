@@ -222,13 +222,14 @@ two lists saying which vendors exist is one list letting an inbound rule be
 written for a vendor nothing can talk to — dormant, and in force the day
 somebody adds the driver.
 
-Unwired, it answers yes. The administration runs in processes that build no
-drivers at all, and refusing there would refuse every conversation on the
-strength of a question nobody asked.
+Nil is not "everything". A process that did not say which vendors it can talk
+to cannot vouch for this one, and this is only reached when something inbound
+is being configured on a connection that exists — a decision no read-only
+process makes.
 */
 func (c *Channels) canConnect(kind string) bool {
 	if c.drivers == nil {
-		return true
+		return false
 	}
 	return slices.Contains(c.drivers.Kinds(), kind)
 }

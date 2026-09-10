@@ -41,7 +41,7 @@ func TestPutChannel_changingDeliveryMode_removesTheSecretItCannotUse(t *testing.
 		t.Run(one.name, func(t *testing.T) {
 			pool := freshPool(t)
 			store := settings.NewStore(pool, testVault(t))
-			channels := admin.NewChannels(pool, store)
+			channels := admin.NewChannels(pool, store, onlySlack{})
 			ctx := context.Background()
 
 			if err := channels.PutChannel(ctx, admin.ChannelWrite{

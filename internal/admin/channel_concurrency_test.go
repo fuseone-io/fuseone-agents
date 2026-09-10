@@ -32,7 +32,7 @@ order that used to be a race.
 // written in it.
 func TestPutConversation_twoScopesForOneConversationAtOnce_onlyOneIsStored(t *testing.T) {
 	pool := freshPool(t)
-	channels := admin.NewChannels(pool, settings.NewStore(pool, testVault(t)))
+	channels := admin.NewChannels(pool, settings.NewStore(pool, testVault(t)), onlySlack{})
 
 	barrier := hold(t, pool, "channel:acme-slack")
 
@@ -79,7 +79,7 @@ both credentials present.
 func TestPutChannel_twoPartialRotationsAtOnce_keepBoth(t *testing.T) {
 	pool := freshPool(t)
 	store := settings.NewStore(pool, testVault(t))
-	channels := admin.NewChannels(pool, store)
+	channels := admin.NewChannels(pool, store, onlySlack{})
 	ctx := context.Background()
 
 	if err := channels.PutChannel(ctx, admin.ChannelWrite{

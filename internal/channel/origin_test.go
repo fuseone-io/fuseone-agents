@@ -229,7 +229,7 @@ func configuredChannelsWithStore(
 	_, pool := channelStore(t)
 	settingsStore := settings.NewStore(pool, nil)
 	return channel.NewConfigured(settingsStore),
-		admin.NewChannels(pool, settingsStore), settingsStore
+		admin.NewChannels(pool, settingsStore, onlySlack{}), settingsStore
 }
 
 /*
@@ -962,7 +962,7 @@ from a state somebody else was in the middle of changing.
 */
 func TestPutChannel_whileTheConnectionIsLocked_waits(t *testing.T) {
 	_, pool := channelStore(t)
-	channels := admin.NewChannels(pool, settings.NewStore(pool, nil))
+	channels := admin.NewChannels(pool, settings.NewStore(pool, nil), onlySlack{})
 
 	held, err := pool.Acquire(t.Context())
 	if err != nil {
@@ -1272,3 +1272,10 @@ func TestPutConversation_theInstallationWithAnArea_isRefused(t *testing.T) {
 		t.Fatalf("err = %v, want ErrInstallationArea", err)
 	}
 }
+
+// onlySlack is what this binary can connect, as the administration asks it.
+// Named here rather than left nil: a conversation that starts runs is refused
+// on a connection nothing can talk to, and these tests configure real ones.
+type onlySlack struct{}
+
+func (onlySlack) Kinds() []string { return []string{"slack"} }
