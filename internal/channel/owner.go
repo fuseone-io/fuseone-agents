@@ -91,12 +91,19 @@ func (r *Reporter) directForOwner(
 			recorded: r.failuresFor(report, place, err),
 		}
 	}
-	// Named people, none of whom may decide here. Said plainly, because it is
-	// the owner's own list being wrong — a different problem from nobody having
-	// linked a Slack account, and with a different fix.
-	if len(who) == 0 && len(policy.Notify) > 0 {
-		return 0, 0, r.refuse(report, place, NewError(CodeNamedNobodyWhoDecides,
-			"channel: the people this agent names cannot decide in the run's scope"))
+	// Nobody to tell, answered before any binding is looked up. Asked
+	// afterwards, a connection whose account lookup happened to be failing
+	// would answer "the configuration could not be read" about a scope where
+	// the real fact — that nobody may decide in it — was already known.
+	if len(who) == 0 {
+		if len(policy.Notify) > 0 {
+			// The owner's own list is wrong, which is a different problem from
+			// nobody holding the grant, and has a different fix.
+			return 0, 0, r.refuse(report, place, NewError(CodeNamedNobodyWhoDecides,
+				"channel: the people this agent names cannot decide in the run's scope"))
+		}
+		return 0, 0, r.refuse(report, place, NewError(CodeNobodyMayDecide,
+			"channel: nobody may decide in this run's scope"))
 	}
 
 	to, capped, err := pass.reachable(ctx, place, who)
@@ -142,17 +149,13 @@ func (r *Reporter) directForOwner(
 			told would sit behind them until it left the window, announced to
 			nobody.
 
-			Two causes, two codes. One is fixed by granting somebody Approver,
-			the other by that person linking their account — a different screen
-			and usually a different person.
+			Nobody may decide is answered further up, before any binding is
+			looked up: they are two facts with two fixes, one a grant and the
+			other a linked account, and the second must not speak for the
+			first.
 		*/
-		cause, why := CodeNobodyReachable,
-			"channel: nobody who may decide has linked an account on this connection"
-		if len(who) == 0 {
-			cause, why = CodeNobodyMayDecide,
-				"channel: nobody may decide in this run's scope"
-		}
-		return 0, 0, r.refuse(report, place, NewError(cause, why))
+		return 0, 0, r.refuse(report, place, NewError(CodeNobodyReachable,
+			"channel: nobody who may decide has linked an account on this connection"))
 	}
 	if delivered == 0 {
 		// Everybody who should have been told failed, and each failure was

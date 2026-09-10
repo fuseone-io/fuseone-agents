@@ -203,9 +203,6 @@ func (f *fanout) whoDecides(ctx context.Context, scope domain.Scope) ([]domain.U
 func (f *fanout) whereReachable(
 	ctx context.Context, channelName string, who []domain.UserID,
 ) (map[domain.UserID]string, error) {
-	if err := f.failedChannel[channelName]; err != nil {
-		return nil, err
-	}
 	known := f.byChannel[channelName]
 	missing := make([]domain.UserID, 0, len(who))
 	for _, one := range who {
@@ -213,8 +210,14 @@ func (f *fanout) whereReachable(
 			missing = append(missing, one)
 		}
 	}
+	// Nothing to ask means nothing to fail. Checked after the question rather
+	// than before it, so a lookup that failed for one scope does not answer for
+	// another where there was nobody to look up at all.
 	if len(missing) == 0 {
 		return known, nil
+	}
+	if err := f.failedChannel[channelName]; err != nil {
+		return nil, err
 	}
 
 	found, err := f.accounts.AccountsOn(ctx, channelName, missing)

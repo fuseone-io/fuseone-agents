@@ -402,7 +402,58 @@ func TestSweep_nobodyTold_recordsWhichKindOfNobody(t *testing.T) {
 			if !recordedFailure(deliveries, one.want) {
 				t.Fatalf("failures = %+v, want %s", deliveries.failures, one.want)
 			}
+			// Once. The sweep records a general attempt for a run nothing was
+			// told about, and a second row saying the same silence twice makes
+			// the cockpit count one run's silence as two.
+			if len(deliveries.failures) != 1 {
+				t.Fatalf("failures = %+v, want one record of one silence",
+					deliveries.failures)
+			}
+			// And about the scope, not about a conversation: no room was
+			// involved, and counting a connection with nobody bound on it as
+			// one conversation affected tells the cockpit a room was there.
+			if !deliveries.failures[0].ScopeWide {
+				t.Error("a failure naming no conversation was recorded as one conversation's")
+			}
 		})
+	}
+}
+
+/*
+A lookup that failed for one scope does not answer for another.
+
+Who may decide is answered before any binding is looked up, and the pass
+remembers a refusal per connection. Read in the wrong order, a run in a scope
+where *nobody holds the grant at all* was told "the configuration could not be
+read" — because an earlier run on the same connection had failed a lookup that
+this one never needed to make. The fact was already known; the cache spoke over
+it.
+
+Two guards stop it and either one is enough, so neither falls to a sabotage on
+its own: the question is asked before the lookup, and the lookup does not answer
+when there was nothing to ask. Removing both is what reproduces the finding.
+*/
+func TestSweep_aFailedLookup_doesNotSpeakForAScopeWithNobodyToLookUp(t *testing.T) {
+	deliveries := &memoryDeliveries{}
+	crowded := domain.Scope{Company: "acme", Area: "ops"}
+	empty := domain.Scope{Company: "acme", Area: "cx"}
+
+	first := parkedReport()
+	second := parkedReport()
+	second.RunID, second.Scope = "run-second", empty
+
+	r := ownerReporterWith(t,
+		&fixedReports{reports: []channel.Report{first, second}}, &recorder{},
+		wanting(domain.ApprovalPolicy{Direct: true}), oneConnection,
+		decidersByScope{crowded: {"usr_ana"}},
+		failingAccounts{}).WithDeliveries(deliveries)
+
+	if _, err := r.Sweep(context.Background(), 10); err == nil {
+		t.Fatal("Sweep swallowed a lookup that failed")
+	}
+	if !recordedFailure(deliveries, channel.CodeNobodyMayDecide) {
+		t.Errorf("failures = %+v, want the scope with nobody to look up recorded as such",
+			deliveries.failures)
 	}
 }
 
@@ -478,3 +529,11 @@ func (f *failingPolicies) ApprovalPolicy(
 }
 
 var errUnavailable = errors.New("the configuration store is away")
+
+type failingAccounts struct{}
+
+func (failingAccounts) AccountsOn(
+	context.Context, string, []domain.UserID,
+) (map[domain.UserID]string, error) {
+	return nil, errUnavailable
+}
