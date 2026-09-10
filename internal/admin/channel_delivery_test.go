@@ -331,6 +331,11 @@ func TestPutChannel_takingAVendorWithNoDriver_isRefusedForShapesItCannotRead(t *
 			`{"channel":"someday","keyVersion":7,"mode":"mentions"}`},
 		{"a row from before modes existed",
 			`{"channel":"someday"}`},
+		// It names this connection plainly. Read together with the mode, the
+		// wrong shape in one field failed the whole decode and the row walked
+		// out through the excuse meant for rows that name nobody.
+		{"a mode that is not even a string",
+			`{"channel":"someday","mode":["mentions"]}`},
 	} {
 		t.Run(one.name, func(t *testing.T) {
 			pool := freshPool(t)
@@ -380,5 +385,33 @@ func TestPutChannel_takingAVendorWithNoDriver_isAllowedForARoomThatOnlyAnnounces
 		By:      "usr_ana", Governs: true,
 	}); err != nil {
 		t.Fatalf("PutChannel: %v", err)
+	}
+}
+
+// And a row that names no connection is still nobody's business here. Refusing
+// every connection write because some unrelated row is corrupt would be an
+// administration nobody can use.
+func TestPutChannel_takingAVendorWithNoDriver_ignoresARowThatNamesNoConnection(t *testing.T) {
+	for _, value := range []string{`{"mode":"mentions"}`, `"not an object at all"`} {
+		pool := freshPool(t)
+		store := settings.NewStore(pool, testVault(t))
+		channels := admin.NewChannels(pool, store, onlySlack{})
+		ctx := context.Background()
+
+		if err := store.Put(ctx, settings.Setting{
+			ScopeKind: settings.ScopeArea,
+			Scope:     domain.Scope{Company: "acme", Area: "ops"},
+			Kind:      channel.KindConversation, Name: "C-nowhere",
+			Value: []byte(value), Enabled: true, UpdatedBy: "restore",
+		}); err != nil {
+			t.Fatalf("write the conversation: %v", err)
+		}
+
+		if err := channels.PutChannel(ctx, admin.ChannelWrite{
+			Channel: admin.Channel{Name: "someday", Kind: "teams", Enabled: true},
+			By:      "usr_ana", Governs: true,
+		}); err != nil {
+			t.Fatalf("PutChannel with %s stored elsewhere: %v", value, err)
+		}
 	}
 }

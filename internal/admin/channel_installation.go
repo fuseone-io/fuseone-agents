@@ -264,18 +264,30 @@ func (c *Channels) refuseStartingConversations(
 		return fmt.Errorf("admin: list conversations: %w", err)
 	}
 	for _, one := range stored {
-		var v struct {
-			Channel string `json:"channel"`
-			Mode    string `json:"mode"`
+		// The address and the claim are read apart. Decoded together, a row
+		// that plainly names this connection escaped the moment any other
+		// field was the wrong shape: `"mode": ["mentions"]` failed the whole
+		// unmarshal, and a corrupt field became an exit.
+		var row struct {
+			Channel json.RawMessage `json:"channel"`
+			Mode    json.RawMessage `json:"mode"`
 		}
-		// A row this version cannot decode at all names no connection, so it
-		// cannot be shown to be on this one. Refusing every connection write
-		// because some unrelated row is corrupt would be an administration
-		// nobody can use.
-		if err := json.Unmarshal(one.Value, &v); err != nil || v.Channel != channelName {
+		if err := json.Unmarshal(one.Value, &row); err != nil {
 			continue
 		}
-		if v.Mode != channel.ConversationAnnounce {
+		// No address is the one thing that excuses a row: it cannot be shown
+		// to be on this connection. Refusing every connection write because
+		// some unrelated row is corrupt would be an administration nobody can
+		// use.
+		var name string
+		if err := json.Unmarshal(row.Channel, &name); err != nil || name != channelName {
+			continue
+		}
+		// On this connection, and only "announce" is proof. Absent, unreadable
+		// or anything else: not proof.
+		var mode string
+		if err := json.Unmarshal(row.Mode, &mode); err != nil ||
+			mode != channel.ConversationAnnounce {
 			return fmt.Errorf("%w: %s", ErrConversationsStartRuns, one.Name)
 		}
 	}
