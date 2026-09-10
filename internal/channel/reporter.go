@@ -187,6 +187,33 @@ func (r *Reporter) announce(
 	failures = append(failures, refusedPrivately.blocking...)
 	deliveryFailures = append(deliveryFailures, refusedPrivately.recorded...)
 
+	/*
+		Nobody was told and nothing above said why.
+
+		A run with no destination at all — no conversation covers its scope and
+		its agent asked for nothing — is kept, because marking it announced
+		would spend the window on silence: configuring a conversation replays
+		the last day into it, and a run marked here is one that conversation
+		never hears about.
+
+		Kept and never written down, it is "never tried" for ever, and the sweep
+		takes what has not been tried first. So a handful of runs nobody can be
+		told about sit at the front of every page, and an older run that *could*
+		be told is never reached before it leaves the window. This is the same
+		starvation the per-cause records fixed, arriving through the exit that
+		is by far the most common: an installation part-way through being
+		configured.
+
+		Recorded once for the whole announcement, and only when nothing else
+		explained it, so a run that already said why nobody heard is not
+		counted twice.
+	*/
+	if told == 0 && len(deliveryFailures) == 0 {
+		deliveryFailures = append(deliveryFailures, r.failuresFor(report, Conversation{},
+			NewError(CodeNowhereToSayIt,
+				"channel: nothing is configured to hear about this run"))...)
+	}
+
 	if err := r.recordFailures(ctx, deliveryFailures); err != nil {
 		failures = append(failures, err)
 	}
@@ -198,8 +225,12 @@ func (r *Reporter) failuresFor(report Report, place Conversation, cause error) [
 	for _, code := range FailureCodes(cause) {
 		failures = append(failures, DeliveryFailure{
 			Announcement: report.AnnouncementTo(place),
-			ScopeWide:    place.Channel == "" && place.ID == "",
-			Code:         code, Scope: report.Scope, AgentID: report.AgentID,
+			// About the scope rather than about a room, whenever no room was
+			// involved — a connection with nobody bound on it is not one
+			// conversation affected, and counting it as one tells the cockpit
+			// a conversation was there.
+			ScopeWide: place.ID == "",
+			Code:      code, Scope: report.Scope, AgentID: report.AgentID,
 			SeenAt: r.clock(),
 		})
 	}

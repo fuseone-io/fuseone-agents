@@ -23,6 +23,7 @@ const (
 	CodeNamedNobodyWhoDecides   = channelmetrics.CodeNamedNobodyWhoDecides
 	CodeNobodyMayDecide         = channelmetrics.CodeNobodyMayDecide
 	CodeNobodyReachable         = channelmetrics.CodeNobodyReachable
+	CodeNowhereToSayIt          = channelmetrics.CodeNowhereToSayIt
 	CodeUnsupportedCapability   = channelmetrics.CodeUnsupportedCapability
 )
 

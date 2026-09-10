@@ -53,6 +53,12 @@ const (
 	// them has linked a channel account. Nobody can be told, and the fix is a
 	// binding — a different screen and usually a different person.
 	CodeNobodyReachable = "channel_nobody_reachable"
+	// CodeNowhereToSayIt means a run stopped and nothing at all is configured
+	// to hear about it: no conversation covers its scope, and its agent asked
+	// for nothing private. The run is kept — configuring a conversation
+	// replays the last day into it — and this is the record that it was owed
+	// an announcement nobody could receive.
+	CodeNowhereToSayIt = "channel_nowhere_to_say_it"
 )
 
 var (
@@ -85,6 +91,7 @@ var (
 		CodeNamedNobodyWhoDecides:   true,
 		CodeNobodyMayDecide:         true,
 		CodeNobodyReachable:         true,
+		CodeNowhereToSayIt:          true,
 	}
 )
 
