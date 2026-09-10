@@ -450,6 +450,12 @@ func channelFrom(
 			// to be able to see it.
 			item.Unreadable = ptr(true)
 		}
+		if id.Misplaced {
+			// Same reason, other fault: this one is readable and stored where
+			// nothing reads it, so it grants nobody anything while looking
+			// exactly like a binding that does.
+			item.Misplaced = ptr(true)
+		}
 		identities = append(identities, item)
 	}
 	out.Identities = &identities

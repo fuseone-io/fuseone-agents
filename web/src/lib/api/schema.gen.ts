@@ -3943,6 +3943,18 @@ export interface components {
              *     makes it removable.
              */
             unreadable?: boolean;
+            /**
+             * @description The binding is stored somewhere it means nothing. Bindings live at
+             *     the installation, which is where they are read from, so a row at a
+             *     company or an area grants nobody anything — it arrived by restore,
+             *     by migration, or by a hand-edited row.
+             *
+             *     Listed and marked rather than hidden or shown as ordinary: hidden,
+             *     it is a configuration nobody can see or repair; shown as ordinary,
+             *     it claims an authority it does not have. The delete reaches it
+             *     wherever it sits.
+             */
+            misplaced?: boolean;
         };
         /**
          * @description A channel account seen in a signed event, but not necessarily bound.

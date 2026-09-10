@@ -29,6 +29,14 @@ field" is a commit message.
 
 ### Fixed
 
+- **A channel binding stored in the wrong place can be seen and removed.** A
+  binding lives at the installation, which is the only position anything reads
+  it from — so one at a company or an area, from a restore or a hand-edited row,
+  grants nobody anything. The console showed it as an ordinary binding and
+  offered a delete that removed nothing: the removal was keyed at the
+  installation, matched no row, and reported success. It is marked as being in
+  the wrong place now, and the delete reaches it where it sits.
+
 - **A run nothing could be told about is no longer retried twice a minute for a
   day.** Announcements are retried until they land or the run leaves the
   24-hour window, and a run with no destination at all came back every thirty

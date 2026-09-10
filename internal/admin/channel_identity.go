@@ -61,6 +61,27 @@ type ChannelIdentity struct {
 		of it survived.
 	*/
 	Unreadable bool
+	/*
+		Misplaced marks a binding stored somewhere it means nothing.
+
+		A binding lives at the installation, because that is where it is read
+		from: PrincipalFor asks for an exact key there, and AccountsOn refuses
+		to address from anywhere else. A row at a company or an area — from a
+		restore, a migration, a hand-edited settings row — therefore grants
+		nobody anything.
+
+		Listed, and marked. Hidden it would be a configuration an operator
+		cannot see and cannot repair, with the only trace of it in the settings
+		table; shown as ordinary it would claim an authority it does not have,
+		which is the more dangerous of the two. The delete reaches it wherever
+		it sits.
+	*/
+	Misplaced bool
+	// scope is where the row actually is, so the delete can name it. Not
+	// exported: it is not a fact about the binding, it is where a broken one
+	// has to be reached.
+	scope   domain.Scope
+	scopeAt settings.ScopeKind
 }
 
 // identityKey names the setting. Both halves, because one Slack account is a
@@ -102,11 +123,31 @@ func (c *Channels) BindIdentity(
 		})
 }
 
-// UnbindIdentity withdraws a binding.
+/*
+UnbindIdentity withdraws a binding, wherever it is stored.
+
+The position is found rather than assumed. A binding belongs at the
+installation and one stored at a company or an area grants nobody anything —
+but it is listed, so the delete the console offers has to reach it: keyed at
+the installation it matched nothing, reported success, and left the row on the
+screen for somebody to try to remove again.
+*/
 func (c *Channels) UnbindIdentity(
 	ctx context.Context, channelName, account string, by domain.UserID,
 ) error {
-	return removeSetting(ctx, c.pool, c.settings, by, domain.Scope{},
+	at, scope := settings.ScopeInstallation, domain.Scope{}
+	bound, err := c.Identities(ctx)
+	if err != nil {
+		return err
+	}
+	for _, one := range bound {
+		if one.Channel == channelName && one.Account == account && one.Misplaced {
+			at, scope = one.scopeAt, one.scope
+			break
+		}
+	}
+	return removeScopedSetting(ctx, c.pool, c.settings, by,
+		at, scope, domain.Scope{},
 		KindChannelIdentity, identityKey(channelName, account),
 		"channel.identity.unbound")
 }
@@ -120,6 +161,10 @@ func (c *Channels) Identities(ctx context.Context) ([]ChannelIdentity, error) {
 
 	out := make([]ChannelIdentity, 0, len(stored))
 	for _, s := range stored {
+		// Where the row is, kept whatever else it turns out to be: a delete
+		// recomputing the position would name the place a binding belongs
+		// rather than the place this one is, and remove nothing.
+		here := s.ScopeKind != settings.ScopeInstallation || s.Scope != (domain.Scope{})
 		id, ok := identityFrom(s)
 		if ok && id.Principal != "" {
 			/*
@@ -138,6 +183,7 @@ func (c *Channels) Identities(ctx context.Context) ([]ChannelIdentity, error) {
 				screen has to agree with the runtime.
 			*/
 			id.Channel, id.Account = keyChannel(s.Name), keyAccount(s.Name)
+			id.Misplaced, id.scope, id.scopeAt = here, s.Scope, s.ScopeKind
 			out = append(out, id)
 			continue
 		}
@@ -165,6 +211,9 @@ func (c *Channels) Identities(ctx context.Context) ([]ChannelIdentity, error) {
 			Account:    keyAccount(s.Name),
 			Display:    id.Display,
 			Unreadable: true,
+			Misplaced:  here,
+			scope:      s.Scope,
+			scopeAt:    s.ScopeKind,
 		})
 	}
 	return out, nil

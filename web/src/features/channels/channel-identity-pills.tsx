@@ -23,14 +23,20 @@ export function IdentityChips({
           key={id.account}
           className={cn(
             "inline-flex min-h-6 max-w-56 items-center gap-1.5 rounded-full border bg-background px-2 py-0.5 text-xs",
-            id.unreadable && "border-danger/40 text-danger",
+            (id.unreadable || id.misplaced) && "border-danger/40 text-danger",
           )}
         >
-          {id.unreadable && <TriangleAlert className="size-3" aria-hidden />}
+          {/* Two faults, one look: both are rows that grant nobody anything
+              while sitting where a binding sits. The words say which. */}
+          {(id.unreadable || id.misplaced) && (
+            <TriangleAlert className="size-3" aria-hidden />
+          )}
           <span className="truncate">
             {id.unreadable
               ? t("channels.bindingUnreadable")
-              : id.display || id.principal}
+              : id.misplaced
+                ? t("channels.bindingMisplaced")
+                : id.display || id.principal}
           </span>
           <Mono dim className="shrink-0 text-[10px]">
             {id.account}

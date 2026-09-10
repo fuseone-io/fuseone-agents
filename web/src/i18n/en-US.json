@@ -762,6 +762,7 @@
     "addConversation": "Add a conversation",
     "bind": "Link",
     "bindingUnreadable": "Unreadable binding — remove it and bind again",
+    "bindingMisplaced": "Stored in the wrong place — it binds nobody",
     "botToken": "Bot token",
     "bound": "Account linked",
     "channels": "Channels",

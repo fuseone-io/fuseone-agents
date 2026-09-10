@@ -762,6 +762,7 @@
     "addConversation": "Adicionar conversa",
     "bind": "Vincular",
     "bindingUnreadable": "Vínculo ilegível — remova e refaça",
+    "bindingMisplaced": "Guardado fora do lugar — não vale para ninguém",
     "botToken": "Token do bot",
     "bound": "Conta vinculada",
     "channels": "Canais",
