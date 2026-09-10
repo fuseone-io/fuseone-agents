@@ -81,17 +81,23 @@ func (r *Registry) Publish(ctx context.Context, s Spec, by domain.UserID, compan
 	if err != nil {
 		return fmt.Errorf("spec: encode memory learning: %w", err)
 	}
+	approvals, err := json.Marshal(s.Approvals.Normalize())
+	if err != nil {
+		return fmt.Errorf("spec: encode approvals: %w", err)
+	}
 
 	_, err = r.pool.Exec(ctx, `
 		insert into agent_specs (
 			agent_id, version_id, company_id, area_id, name,
 			provider, model, effort, tools, budget, triggers,
-			instructions, source, published_by, emits, steps, memory_learning
-		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+			instructions, source, published_by, emits, steps, memory_learning,
+			approvals
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
 		on conflict (agent_id, version_id) do nothing`,
 		string(s.ID), string(s.Version), string(company), string(s.Area), s.Name,
 		s.Provider, s.Model, s.Effort, tools, budget, triggers,
-		s.Instructions, s.Source, string(by), encodedEmits, steps, learning)
+		s.Instructions, s.Source, string(by), encodedEmits, steps, learning,
+		approvals)
 	if err != nil {
 		return fmt.Errorf("spec: publish %s@%s: %w", s.ID, s.Version, err)
 	}
@@ -106,17 +112,18 @@ func (r *Registry) Get(ctx context.Context, agent domain.AgentID, version domain
 		budget, triggers []byte
 		emits, steps     []byte
 		learning         []byte
+		approvals        []byte
 		company          string
 	)
 	err := r.pool.QueryRow(ctx, `
 		select agent_id, version_id, company_id, area_id, name,
 		       provider, model, effort, tools, budget, triggers, instructions,
-		       source, emits, steps, memory_learning
+		       source, emits, steps, memory_learning, approvals
 		from agent_specs where agent_id = $1 and version_id = $2`,
 		string(agent), string(version),
 	).Scan(&s.ID, &s.Version, &company, &s.Area, &s.Name,
 		&s.Provider, &s.Model, &s.Effort, &tools, &budget, &triggers,
-		&s.Instructions, &s.Source, &emits, &steps, &learning)
+		&s.Instructions, &s.Source, &emits, &steps, &learning, &approvals)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Spec{}, fmt.Errorf("%w: %s@%s", ErrNotPublished, agent, version)
@@ -149,6 +156,10 @@ func (r *Registry) Get(ctx context.Context, agent domain.AgentID, version domain
 		return Spec{}, fmt.Errorf("spec: decode memory learning: %w", err)
 	}
 	s.MemoryLearning = s.MemoryLearning.Normalize()
+	if err := json.Unmarshal(approvals, &s.Approvals); err != nil {
+		return Spec{}, fmt.Errorf("spec: decode approvals: %w", err)
+	}
+	s.Approvals = s.Approvals.Normalize()
 	return s, nil
 }
 

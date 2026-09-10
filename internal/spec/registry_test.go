@@ -532,3 +532,54 @@ func TestPublish_noSteps_readsBackAsNoneRatherThanOne(t *testing.T) {
 		t.Error("the pack came back empty")
 	}
 }
+
+/*
+How the owner asked to be told is published with the version.
+
+A run is pinned to a version, and the notification obeys the version — so the
+preference has to survive the registry the way the instructions do. Kept beside
+the agent instead, an owner who changed their mind this afternoon would change
+how a run that started this morning is announced, and the ledger would show one
+thing while the message obeyed another.
+*/
+func TestPublish_theApprovalPolicy_survivesTheRegistry(t *testing.T) {
+	r := openRegistry(t)
+	ctx := context.Background()
+	asking := published(t, strings.Replace(definition, "tools:",
+		"approvals:\n  direct: true\n  notify: [usr_ana]\ntools:", 1))
+
+	if err := r.Publish(ctx, asking, "usr_ana", "acme"); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+
+	got, err := r.Get(ctx, "triage", asking.Version)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if !got.Approvals.Direct {
+		t.Error("the agent asked for a private approval and the version does not say so")
+	}
+	if len(got.Approvals.Notify) != 1 || got.Approvals.Notify[0] != "usr_ana" {
+		t.Errorf("notify = %v, want the person the owner named", got.Approvals.Notify)
+	}
+}
+
+// A version published before an agent could ask reads as the console alone,
+// which is what those agents have always done.
+func TestGet_aVersionPublishedBeforeAgentsCouldAsk_wantsNothingPrivate(t *testing.T) {
+	r := openRegistry(t)
+	ctx := context.Background()
+	plain := published(t, definition)
+
+	if err := r.Publish(ctx, plain, "usr_ana", "acme"); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+
+	got, err := r.Get(ctx, "triage", plain.Version)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.Approvals.Direct || len(got.Approvals.Notify) > 0 {
+		t.Errorf("approvals = %+v, want the console alone", got.Approvals)
+	}
+}
