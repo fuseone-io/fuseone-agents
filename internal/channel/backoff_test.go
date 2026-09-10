@@ -114,3 +114,82 @@ func TestUnreported_repeatedFailures_waitLonger(t *testing.T) {
 		t.Fatalf("tried again after five failures and four minutes: %+v", again)
 	}
 }
+
+/*
+How long to wait is decided by what went wrong last time.
+
+Read over every failure ever recorded about one announcement, the schedule was a
+history rather than a state. An installation configured this morning carries a
+handful of "nothing is configured" attempts; the first real refusal after that
+then inherited their count and their patience — half an hour before the next
+try, for a problem somebody may be fixing right now.
+
+Both transitions, because either direction is a run waiting for the wrong
+reason.
+*/
+func TestUnreported_theScheduleFollowsTheLatestFailure(t *testing.T) {
+	for _, one := range []struct {
+		name    string
+		history string
+		latest  string
+		after   time.Duration
+		tried   bool
+	}{
+		{
+			// Six attempts at nothing configured, then somebody configures a
+			// connection and the destination refuses. The incident schedule
+			// starts over: a minute, not the half hour six attempts had earned.
+			name:    "an incident after an unconfigured history",
+			history: channel.CodeNowhereToSayIt, latest: channel.CodeDeliveryFailed,
+			after: 2 * time.Minute, tried: true,
+		},
+		{
+			// And the other way: a destination that used to refuse, and now
+			// there is nothing configured at all. That waits the longer time
+			// from the start rather than inheriting a minute.
+			name:    "nothing configured after an incident history",
+			history: channel.CodeDeliveryFailed, latest: channel.CodeNowhereToSayIt,
+			after: 2 * time.Minute, tried: false,
+		},
+	} {
+		t.Run(one.name, func(t *testing.T) {
+			store, pool := channelStore(t)
+
+			awaitApproval(t, pool, "run-history")
+			pending, err := store.Unreported(t.Context(), time.Now().Add(-channel.Window), 50)
+			if err != nil || len(pending) != 1 {
+				t.Fatalf("unreported = %+v, %v", pending, err)
+			}
+
+			failure := channel.DeliveryFailure{
+				Announcement: channel.Announcement{
+					RunID: "run-history", Event: channel.EventParked,
+					AtSeq: pending[0].AtSeq,
+				},
+				Scope: domain.Scope{Company: "acme", Area: "ops"},
+			}
+			// Six of the old kind, an hour ago.
+			failure.Code = one.history
+			for i := range 6 {
+				failure.SeenAt = time.Now().Add(-time.Hour).Add(time.Duration(i) * time.Second)
+				if err := store.RecordFailure(t.Context(), failure); err != nil {
+					t.Fatalf("record the history: %v", err)
+				}
+			}
+			// One of the new kind, just now.
+			failure.Code, failure.SeenAt = one.latest, time.Now().Add(-one.after)
+			if err := store.RecordFailure(t.Context(), failure); err != nil {
+				t.Fatalf("record the latest failure: %v", err)
+			}
+
+			again, err := store.Unreported(t.Context(), time.Now().Add(-channel.Window), 50)
+			if err != nil {
+				t.Fatalf("unreported: %v", err)
+			}
+			if tried := len(again) == 1; tried != one.tried {
+				t.Fatalf("tried again = %v, want %v: the schedule follows %s",
+					tried, one.tried, one.latest)
+			}
+		})
+	}
+}

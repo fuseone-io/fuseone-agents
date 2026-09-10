@@ -120,15 +120,19 @@ func (p *Postgres) Unreported(ctx context.Context, since time.Time, limit int) (
 		-- below the cut were never tried anywhere — not even in the
 		-- conversations that were answering — until they left the window a day
 		-- later, unannounced.
+		-- The most recent failure, and only it.
+		--
+		-- Aggregated over every failure ever recorded about this announcement,
+		-- the schedule read a history rather than a state: six old attempts at
+		-- "nothing is configured" and one refusal two minutes ago produced six
+		-- attempts on the incident schedule — a run waiting half an hour to be
+		-- retried because of a problem somebody had already fixed. What decides
+		-- how long to wait is what went wrong last time, and how many times
+		-- that has gone wrong.
 		left join lateral (
-		    select max(f.last_seen) as last_seen,
-		           max(f.attempts) as attempts,
-		           -- Whether every reason recorded is that nothing at all is
-		           -- configured to hear this run. It is a different thing from
-		           -- a destination refusing: one is an installation being set
-		           -- up, the other is an incident, and they deserve different
-		           -- patience.
-		           bool_and(f.code = '`+CodeNowhereToSayIt+`') as unconfigured
+		    select f.last_seen,
+		           f.attempts,
+		           f.code = '`+CodeNowhereToSayIt+`' as unconfigured
 		    from channel_delivery_failures f
 		    -- Per question, not per run. Two approvals in one run are both
 		    -- "parked", so matching the event alone put a run's second
@@ -138,6 +142,8 @@ func (p *Postgres) Unreported(ctx context.Context, since time.Time, limit int) (
 		    -- delivery tables are keyed by.
 		    where f.run_id = runs.run_id and f.event = `+phases+`
 		      and f.at_seq = `+announcementSeq+`
+		    order by f.last_seen desc, f.attempts desc
+		    limit 1
 		) tried on true
 		where not runs.simulated
 		  and runs.updated_at >= $1
