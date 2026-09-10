@@ -230,3 +230,80 @@ func TestPutConversation_onAConnectionThatCanBeBuilt_isConfigured(t *testing.T) 
 type onlySlack struct{}
 
 func (onlySlack) Kinds() []string { return []string{"slack"} }
+
+/*
+The same rule from the other side: the connection arrives second.
+
+A conversation may be configured before the connection exists — that has always
+worked, and refusing it would make the order of two administrative acts matter.
+So the check runs again when the connection arrives. Without it the sequence is
+one act apart: write an inbound rule on a name nothing holds yet, then give that
+name a vendor nothing can build, and the rule sits there until the driver ships.
+
+An announce-only conversation is no reason to refuse. It starts nothing, and
+preparing a connection for a vendor this binary cannot build yet is a reasonable
+thing to do.
+*/
+func TestPutChannel_takingAVendorWithNoDriver_isRefusedWhileConversationsStartRuns(t *testing.T) {
+	for _, one := range []struct {
+		name    string
+		mode    string
+		already string
+		refused bool
+	}{
+		{"a conversation that takes mentions", channel.ConversationMentions, "", true},
+		{"one that only reports", channel.ConversationAnnounce, "", false},
+		{"a connection changing vendor under a mention rule",
+			channel.ConversationMentions, "slack", true},
+	} {
+		t.Run(one.name, func(t *testing.T) {
+			pool := freshPool(t)
+			store := settings.NewStore(pool, testVault(t))
+			channels := admin.NewChannels(pool, store, onlySlack{})
+			ctx := context.Background()
+
+			if one.already != "" {
+				if err := channels.PutChannel(ctx, admin.ChannelWrite{
+					Channel: admin.Channel{
+						Name: "someday", Kind: one.already, Enabled: true,
+					},
+					By: "usr_ana", Governs: true,
+				}); err != nil {
+					t.Fatalf("configure the connection: %v", err)
+				}
+			}
+			if err := channels.PutConversation(ctx, "someday", admin.Conversation{
+				ID: "C07", Enabled: true, Mode: one.mode, Wants: []string{"parked"},
+				Scope: domain.Scope{Company: "acme", Area: "ops"},
+			}, "usr_ana"); err != nil {
+				t.Fatalf("map the conversation: %v", err)
+			}
+
+			err := channels.PutChannel(ctx, admin.ChannelWrite{
+				Channel: admin.Channel{Name: "someday", Kind: "teams", Enabled: true},
+				By:      "usr_ana", Governs: true,
+			})
+			switch {
+			case one.refused && !errors.Is(err, admin.ErrConversationsStartRuns):
+				t.Fatalf("err = %v, want ErrConversationsStartRuns", err)
+			case !one.refused && err != nil:
+				t.Fatalf("PutChannel: %v", err)
+			}
+			if !one.refused {
+				return
+			}
+			// And nothing was stored under the vendor that was refused, which
+			// is what the error alone does not say. Absent is a right answer
+			// here: the first case had no connection to begin with.
+			listed, err := channels.List(ctx)
+			if err != nil {
+				t.Fatalf("List: %v", err)
+			}
+			for _, got := range listed {
+				if got.Name == "someday" && got.Kind == "teams" {
+					t.Error("the connection took the vendor anyway")
+				}
+			}
+		})
+	}
+}

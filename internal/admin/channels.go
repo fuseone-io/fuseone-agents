@@ -272,7 +272,10 @@ func (c *Channels) PutChannel(ctx context.Context, w ChannelWrite) error {
 		Value: value, Enabled: ch.Enabled, UpdatedBy: string(by),
 	}
 	guard := func(ctx context.Context, conn settings.DB) error {
-		return c.guardInstallationRoom(ctx, conn, ch.Name, w.Governs)
+		if err := c.guardInstallationRoom(ctx, conn, ch.Name, w.Governs); err != nil {
+			return err
+		}
+		return c.refuseStartingConversations(ctx, conn, ch.Name, ch.Kind)
 	}
 	return writeGuarded(ctx, c.pool, c.settings, guard, folded{
 		by: by, scope: domain.Scope{},

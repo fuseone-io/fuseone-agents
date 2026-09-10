@@ -45,6 +45,23 @@ decided anything.
 var ErrConnectionOnlyAnnounces = errors.New(
 	"admin: that connection is reached in a way this version does not know, so its conversations may only announce")
 
+/*
+ErrConversationsStartRuns means the connection cannot be given this vendor while
+conversations on it start runs.
+
+The other direction of the same rule. A conversation may be configured before
+the connection exists — that has always worked, and refusing it would make the
+order of two administrative acts matter — so the check has to run again when the
+connection arrives, or an inbound rule written first and a vendor nothing can
+build second is dormant configuration that comes alive the day the driver does.
+
+An announce-only conversation is no reason to refuse: it starts nothing, and a
+connection for a vendor this binary cannot build yet is a reasonable thing to
+prepare.
+*/
+var ErrConversationsStartRuns = errors.New(
+	"admin: conversations on that connection start runs, and this version has no driver for the vendor it now names")
+
 // ErrInstallationArea means a conversation named the installation and an area.
 //
 // The two together reach nothing: containment short circuits on the sentinel
@@ -119,6 +136,7 @@ func Invalid(err error) bool {
 		ErrNoChannelKind, ErrUnknownDeliveryMode, ErrNoCompany,
 		ErrInstallationArea, ErrUnknownMode, ErrUnknownEvent,
 		ErrConversationOnAnotherConnection, ErrConnectionOnlyAnnounces,
+		ErrConversationsStartRuns,
 		ErrNoWatchSource, ErrNoWatchAgent, ErrNoWatchRunAs, ErrConversationMapped,
 	} {
 		if errors.Is(err, sentinel) {
@@ -209,6 +227,33 @@ func (c *Channels) refuseUnreachableConnection(
 		}
 		if !channel.KnownDeliveryMode(v.DeliveryMode) || !c.canConnect(v.Kind) {
 			return fmt.Errorf("%w: %s", ErrConnectionOnlyAnnounces, channelName)
+		}
+	}
+	return nil
+}
+
+/*
+refuseStartingConversations stops a connection taking a vendor nothing here can
+build while conversations on it start runs.
+
+The delivery mode is not asked about: PutChannel refuses one it cannot honour
+outright, so a connection never reaches here carrying one. What can change under
+an existing conversation is the vendor.
+*/
+func (c *Channels) refuseStartingConversations(
+	ctx context.Context, conn settings.DB, channelName, kind string,
+) error {
+	if c.canConnect(kind) {
+		return nil
+	}
+	stored, err := c.settings.ListTx(ctx, conn, channel.KindConversation)
+	if err != nil {
+		return fmt.Errorf("admin: list conversations: %w", err)
+	}
+	for _, one := range conversationRows(channelName, stored) {
+		mode := one.conv.Mode
+		if channel.StartsFromMentions(mode) || channel.StartsFromWatch(mode) {
+			return fmt.Errorf("%w: %s", ErrConversationsStartRuns, one.conv.ID)
 		}
 	}
 	return nil
