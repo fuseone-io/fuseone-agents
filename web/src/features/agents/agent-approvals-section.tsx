@@ -10,9 +10,21 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { usePeople } from "@/features/admin/people-api";
+import { useEligibleApprovers } from "@/features/agents/api";
 import { Labelled, Section } from "@/features/policies/section";
 import type { AgentDefinition } from "@/lib/api/client";
+import { problemMessage } from "@/lib/api/problem-message";
+import { cn } from "@/lib/utils";
+
+/*
+The most people one approval may be sent to privately.
+
+The same number the fan-out stops at, and said here rather than only there: past
+it nobody is messaged at all, because telling an arbitrary twenty of a hundred
+is worse than telling none. A control that let somebody choose twenty-one would
+be collecting a decision the platform refuses minutes later, on another screen.
+*/
+const MAX_NOTIFY = 20;
 
 /**
  * Where the people who may decide are asked.
@@ -36,10 +48,14 @@ export function AgentApprovalsSection({
   patch: (over: Partial<AgentDefinition>) => void;
 }) {
   const { t } = useTranslation();
-  const people = usePeople();
   const direct = draft.approvals?.direct ?? false;
   const notify = draft.approvals?.notify ?? [];
-  const choosable = (people.data?.items ?? []).filter((one) => !one.disabled);
+  // Only when a message was asked for, and only the people who may already
+  // decide in this agent's own scope — the same list the fan-out will use, so
+  // naming somebody here cannot produce a message that never goes out.
+  const people = useEligibleApprovers(draft.company, draft.area, direct);
+  const choosable = people.data?.items ?? [];
+  const full = notify.length >= MAX_NOTIFY;
 
   // Absent rather than `{direct: false}`: an agent that asked for nothing
   // carries no block at all, so its file does not grow a section its author
@@ -75,7 +91,7 @@ export function AgentApprovalsSection({
         >
           <Select
             value=""
-            disabled={people.isLoading}
+            disabled={people.isLoading || people.isError || full}
             onValueChange={(id) =>
               setNotify(notify.includes(id) ? notify : [...notify, id])
             }
@@ -86,14 +102,38 @@ export function AgentApprovalsSection({
             <SelectContent>
               {choosable.map((person) => (
                 <SelectItem key={person.id} value={person.id}>
-                  {person.display || person.email || person.id}
+                  {person.display || person.id}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground">
-            {t("agents.approvalsNotifyHint")}
+          {/* The ceiling is said before somebody meets it: the twenty-first
+              name is refused when they publish, which is minutes later and on
+              another screen. */}
+          <p
+            className={cn(
+              "text-xs",
+              people.isError ? "text-warning" : "text-muted-foreground",
+            )}
+          >
+            {people.isError
+              ? problemMessage(people.error, t)
+              : full
+                ? t("agents.approvalsNotifyFull", { count: MAX_NOTIFY })
+                : t("agents.approvalsNotifyHint")}
           </p>
+          {people.isError && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-fit"
+              disabled={people.isFetching}
+              onClick={() => void people.refetch()}
+            >
+              {t("common.retry")}
+            </Button>
+          )}
           {notify.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {notify.map((id) => (
@@ -126,10 +166,6 @@ export function AgentApprovalsSection({
 // The name if this console knows it, and the identifier if it does not: a
 // person removed from the directory is still named in a published version, and
 // showing nothing there would make the list look shorter than it is.
-function displayOf(
-  people: { id: string; display?: string | null; email?: string | null }[],
-  id: string,
-) {
-  const found = people.find((one) => one.id === id);
-  return found?.display || found?.email || id;
+function displayOf(people: { id: string; display: string }[], id: string) {
+  return people.find((one) => one.id === id)?.display || id;
 }

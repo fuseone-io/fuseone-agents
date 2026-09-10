@@ -85,9 +85,9 @@ export function toDefinition(
     // publishes — silently, on an edit they made for another reason.
     steps: steps ?? [],
     emits: emits ?? [],
-    // How the owner asked for approvals to arrive. No field on this screen
-    // shows it yet, which is exactly why it has to travel: it is written in the
-    // agent file, and an edit made here for another reason would delete it.
+    // How the owner asked for approvals to arrive. The governance tab shows it
+    // now; it travels here because publishing writes the draft whole, so a tab
+    // somebody never opened must not delete what it holds.
     approvals,
   };
 }

@@ -266,6 +266,7 @@
     "approvalsNotify": "Avisar em particular",
     "approvalsNotifyAnyone": "Quem tiver Aprovador no escopo do run",
     "approvalsNotifyHint": "Nomear estreita quem é avisado entre quem já pode decidir. Não concede nada: o botão é conferido contra o escopo do run onde for apertado.",
+    "approvalsNotifyFull": "Já são {{count}} — o máximo que um pedido alcança em particular.",
     "approvalsNotifyRemove": "Tirar {{person}} da lista",
     "fieldInstructions": "instruções",
     "fieldMemoryLearning": "aprendizado de memória",

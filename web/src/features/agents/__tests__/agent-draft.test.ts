@@ -85,8 +85,9 @@ describe("the agent draft", () => {
  *
  * Publishing writes the draft whole, so a value the draft drops is a value
  * deleted on the next edit — silently, on a change somebody made for another
- * reason. How the owner asked for approvals to arrive has no control here yet,
- * which is exactly why it has to survive the round trip.
+ * reason. The approval policy has a control of its own on the governance tab,
+ * and still has to survive an edit made on a tab beside it without anybody
+ * opening that one.
  */
 describe("a version's approval policy", () => {
   it("survives an edit made for another reason", () => {

@@ -6,15 +6,24 @@ import { AgentApprovalsSection } from "@/features/agents/agent-approvals-section
 import { setLocale } from "@/i18n";
 import type { AgentDefinition } from "@/lib/api/client";
 
-function renderSection(approvals?: AgentDefinition["approvals"]) {
+function renderSection(
+  approvals?: AgentDefinition["approvals"],
+  answer: (url: string) => Response = eligible,
+) {
   const patch = vi.fn();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: Request) =>
+      answer(input instanceof Request ? input.url : String(input)),
+    ),
+  );
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   render(
     <QueryClientProvider client={client}>
       <AgentApprovalsSection
-        draft={{ approvals } as AgentDefinition}
+        draft={{ company: "acme", area: "cx", approvals } as AgentDefinition}
         patch={patch}
       />
     </QueryClientProvider>,
@@ -84,3 +93,86 @@ describe("how an agent's owner asks to be told", () => {
     expect(screen.queryByText("Avisar em particular")).not.toBeInTheDocument();
   });
 });
+
+/*
+ * The list is the one the fan-out will use.
+ *
+ * The administrative directory needs authority over identity, which an author
+ * publishing an agent does not have: it answered 403 and drew an empty select
+ * with no error and no retry — a control that looks like an installation with
+ * no approvers in it.
+ */
+describe("the people an owner may name", () => {
+  it("is read from the agent's own scope, not from the directory", async () => {
+    const asked: string[] = [];
+    renderSection({ direct: true, notify: [] }, (url) => {
+      asked.push(url);
+      return eligible();
+    });
+
+    await screen.findByText("Avisar em particular");
+    expect(asked.some((url) => url.includes("/agents/approvers"))).toBe(true);
+    expect(asked.some((url) => url.includes("/admin/people"))).toBe(false);
+  });
+
+  /*
+   * And not read at all until a message is asked for.
+   *
+   * Awaited rather than asserted straight after rendering: the query runs in
+   * an effect, so a synchronous check passes whether or not the hook is
+   * enabled — which is what it did, and the sabotage that should have caught it
+   * went through.
+   */
+  it("is not read while the message is switched off", async () => {
+    const asked: string[] = [];
+    renderSection(undefined, (url) => {
+      asked.push(url);
+      return eligible();
+    });
+
+    await screen.findByText("Aprovação humana");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(asked).toHaveLength(0);
+  });
+
+  it("says why it is empty when the read fails, and offers to try again", async () => {
+    renderSection(
+      { direct: true, notify: [] },
+      () =>
+        new Response(JSON.stringify({ title: "não foi possível ler" }), {
+          status: 500,
+          headers: { "Content-Type": "application/problem+json" },
+        }),
+    );
+
+    expect(
+      await screen.findByRole("button", { name: /Tentar de novo/ }),
+    ).toBeEnabled();
+  });
+
+  /*
+   * The twenty-first name is refused when somebody publishes — minutes later,
+   * on another screen. The ceiling is said where the choice is made.
+   */
+  it("stops at the number the fan-out stops at", async () => {
+    const twenty = Array.from({ length: 20 }, (_, i) => `usr_${i}`);
+    renderSection({ direct: true, notify: twenty });
+
+    expect(
+      await screen.findByText(/o máximo que um pedido alcança/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("combobox")).toBeDisabled();
+  });
+});
+
+function eligible() {
+  return new Response(
+    JSON.stringify({
+      items: [
+        { id: "usr_ana", display: "Ana" },
+        { id: "usr_bob", display: "Bob" },
+      ],
+    }),
+    { status: 200, headers: { "Content-Type": "application/json" } },
+  );
+}
