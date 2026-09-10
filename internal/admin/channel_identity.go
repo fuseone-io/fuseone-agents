@@ -371,16 +371,30 @@ channels an ordinary reader should hold: the token that posts as this
 installation, and the secret that decides which requests are genuine. A process
 that lists conversations has no business being able to read either.
 */
-type ChannelDoor struct{ *ChannelFacts }
+type ChannelDoor struct {
+	// Composed, not embedded. Embedding would publish every method
+	// ChannelFacts grows from now on through a type whose whole argument is
+	// that it offers two — and the day somebody adds a reader to the facts is
+	// exactly the day nobody is looking at this file.
+	facts *ChannelFacts
+}
 
 func NewChannelDoor(pool *pgxpool.Pool, store *settings.Store) *ChannelDoor {
-	return &ChannelDoor{ChannelFacts: NewChannelFacts(pool, store)}
+	return &ChannelDoor{facts: NewChannelFacts(pool, store)}
+}
+
+// PrincipalFor answers who an account speaks for, and no is an answer: a
+// stranger naming an unbound account is the ordinary case at this door.
+func (c *ChannelDoor) PrincipalFor(
+	ctx context.Context, channelName, account string,
+) (domain.UserID, bool, error) {
+	return c.facts.PrincipalFor(ctx, channelName, account)
 }
 
 func (c *ChannelDoor) Secrets(
 	ctx context.Context, name string,
 ) (channel.Credentials, bool) {
-	held, err := c.settings.Reveal(ctx,
+	held, err := c.facts.settings.Reveal(ctx,
 		settings.ScopeInstallation, domain.Scope{}, channel.KindChannel, name)
 	if err != nil || !held.Enabled {
 		return channel.Credentials{}, false

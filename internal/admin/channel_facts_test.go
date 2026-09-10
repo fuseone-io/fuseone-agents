@@ -91,11 +91,18 @@ func TestChannelDoor_isTheOnlyOneThatReadsCredentials(t *testing.T) {
 	if _, offered := reflect.TypeOf(&admin.ChannelFacts{}).MethodByName("Secrets"); offered {
 		t.Error("ChannelFacts reads channel credentials")
 	}
-	if _, offered := reflect.TypeOf(&admin.ChannelDoor{}).MethodByName("Secrets"); !offered {
-		t.Error("the door cannot read the secret it has to verify requests with")
+	// And the door offers those two and nothing else. Named rather than
+	// denied: a denylist passes the moment somebody adds a reader nobody
+	// thought to forbid, which is the only way this boundary ever moves.
+	door := map[string]bool{"PrincipalFor": true, "Secrets": true}
+	offered := reflect.TypeOf(&admin.ChannelDoor{})
+	for i := range offered.NumMethod() {
+		if name := offered.Method(i).Name; !door[name] {
+			t.Errorf("the door offers %s, which a stranger's request has no business reaching", name)
+		}
+		delete(door, offered.Method(i).Name)
 	}
-	// And the door configures nothing either: it is reached by a stranger.
-	if _, offered := reflect.TypeOf(&admin.ChannelDoor{}).MethodByName("BindIdentity"); offered {
-		t.Error("the door can bind an identity")
+	for name := range door {
+		t.Errorf("the door cannot %s, which it needs to trust a request at all", name)
 	}
 }
