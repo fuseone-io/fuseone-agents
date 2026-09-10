@@ -650,3 +650,33 @@ type failingConnections struct{}
 func (failingConnections) EnabledConnections(context.Context) ([]string, error) {
 	return nil, errUnavailable
 }
+
+/*
+Somebody the owner named is reached when they may decide, whatever role says so.
+
+Narrowing was written as an intersection with the announcement list, and the
+announcement list is deliberately narrower than the act: an administrator holds
+it, and is left out of the broadcast because one granted at the installation
+would otherwise be told about every parked run there is.
+
+So the one colleague an owner is most likely to name — the person who
+administers the installation — was dropped in silence. Not refused, not
+recorded: intersected away, with the run marked as announced and nobody told.
+The narrowing is now against who may decide, which is what the button checks
+when the message arrives.
+*/
+func TestSweep_theOwnerNamedSomebodyWhoMayDecideButIsNotAnnouncedTo_reachesThem(t *testing.T) {
+	reports := &fixedReports{reports: []channel.Report{parkedReport()}}
+	posts := &recorder{}
+	r := ownerReporterWith(t, reports, posts,
+		wanting(domain.ApprovalPolicy{Direct: true, Notify: []domain.UserID{"usr_boss"}}),
+		oneConnection, deciders("usr_ana").andNameable("usr_boss"),
+		accountBook{"acme-slack": {"usr_ana": "U-ana", "usr_boss": "U-boss"}})
+
+	if _, err := r.Sweep(context.Background(), 10); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if len(posts.sent) != 1 || posts.sent[0].conversation.ID != "U-boss" {
+		t.Fatalf("sent %+v, want one private message to the administrator", posts.sent)
+	}
+}

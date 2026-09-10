@@ -88,6 +88,10 @@ func (p *postSpy) Post(
 
 type fixedApprovers []domain.UserID
 
+func (f fixedApprovers) DecidersIn(ctx context.Context, s domain.Scope) ([]domain.UserID, error) {
+	return f.ApproversIn(ctx, s)
+}
+
 func (f fixedApprovers) ApproversIn(context.Context, domain.Scope) ([]domain.UserID, error) {
 	return f, nil
 }

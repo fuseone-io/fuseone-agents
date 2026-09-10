@@ -284,6 +284,13 @@ holds no grant in the run's scope is dropped rather than messaged. Naming who is
 specification is not where grants are made — the button would refuse the person
 it reached, which teaches them the platform is broken.
 
+Intersected against who may decide, and not against who is announced to. Those
+differ by the administrator, who holds the act and is left out of the broadcast
+because one granted at the installation would be told about every parked run
+there is. Narrowed against the broadcast, the one colleague an owner is most
+likely to name was dropped in silence: not refused and not recorded, with the
+run marked announced and nobody told.
+
 Answered before anybody is looked up, so that "none of these may decide" and
 "none of these has an account" stay two different answers. Read from one empty
 list at the end, an owner whose colleague simply never linked Slack would be
@@ -292,8 +299,11 @@ told their list was wrong.
 func (f *fanout) decidersAmong(
 	ctx context.Context, scope domain.Scope, only []domain.UserID,
 ) ([]domain.UserID, error) {
-	who, err := f.whoDecides(ctx, scope)
-	if err != nil || len(only) == 0 {
+	if len(only) == 0 {
+		return f.whoDecides(ctx, scope)
+	}
+	who, err := f.whoMayDecide(ctx, scope)
+	if err != nil {
 		return who, err
 	}
 

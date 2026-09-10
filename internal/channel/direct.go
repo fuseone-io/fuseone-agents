@@ -47,7 +47,15 @@ const MaxDirectRecipients = 20
 // button is checked against the run's own scope by the console's own path,
 // which is why being on this list and being refused are both ordinary.
 type Approvers interface {
+	// ApproversIn is who a run is announced to when nobody was named.
+	// Deliberately narrower than the act: an administrator granted at the
+	// installation may decide everywhere, and announcing by the act would tell
+	// every administrator about every parked run there is.
 	ApproversIn(ctx context.Context, scope domain.Scope) ([]domain.UserID, error)
+	// DecidersIn is who may decide, which is what a name an owner chose is
+	// checked against. Naming is one message to one person, not a broadcast,
+	// so the question here is the one the button will ask.
+	DecidersIn(ctx context.Context, scope domain.Scope) ([]domain.UserID, error)
 }
 
 // Accounts answers where people can be reached on one connection. Absence is
@@ -83,6 +91,7 @@ type fanout struct {
 	approvers Approvers
 	accounts  Accounts
 	byScope   map[domain.Scope]answered[[]domain.UserID]
+	mayDecide map[domain.Scope]answered[[]domain.UserID]
 	byChannel map[string]map[domain.UserID]string
 	// Reading who is reachable fills in one person at a time, so a failure is
 	// remembered for the connection rather than for the people it was about.
@@ -109,6 +118,7 @@ func (r *Reporter) newFanout() *fanout {
 	return &fanout{
 		approvers: r.approvers, accounts: r.accounts,
 		byScope:       map[domain.Scope]answered[[]domain.UserID]{},
+		mayDecide:     map[domain.Scope]answered[[]domain.UserID]{},
 		byChannel:     map[string]map[domain.UserID]string{},
 		failedChannel: map[string]error{},
 		byVersion:     map[versionOfAgent]answered[domain.ApprovalPolicy]{},
@@ -197,6 +207,22 @@ func (f *fanout) whoDecides(ctx context.Context, scope domain.Scope) ([]domain.U
 			fmt.Errorf("channel: who may approve in %s: %w", scope, err))
 	}
 	f.byScope[scope] = answered[[]domain.UserID]{value: who, err: err}
+	return who, err
+}
+
+// whoMayDecide is the wider question, asked once per scope for the same reason:
+// a set of people that changed halfway through a sweep would send a run's
+// approval to one list and its retry to another.
+func (f *fanout) whoMayDecide(ctx context.Context, scope domain.Scope) ([]domain.UserID, error) {
+	if before, asked := f.mayDecide[scope]; asked {
+		return before.value, before.err
+	}
+	who, err := f.approvers.DecidersIn(ctx, scope)
+	if err != nil {
+		err = WrapError(CodeConfigurationReadFailed,
+			fmt.Errorf("channel: who may decide in %s: %w", scope, err))
+	}
+	f.mayDecide[scope] = answered[[]domain.UserID]{value: who, err: err}
 	return who, err
 }
 

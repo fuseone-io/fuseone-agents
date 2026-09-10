@@ -127,3 +127,9 @@ func (d decidersByScope) ApproversIn(
 ) ([]domain.UserID, error) {
 	return d[scope], nil
 }
+
+func (d decidersByScope) DecidersIn(
+	_ context.Context, scope domain.Scope,
+) ([]domain.UserID, error) {
+	return d[scope], nil
+}

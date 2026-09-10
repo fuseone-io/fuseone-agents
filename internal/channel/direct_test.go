@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -333,13 +334,30 @@ func directReporterWith(
 }
 
 type fixedApprovers struct {
-	who   []domain.UserID
-	calls int
+	who []domain.UserID
+	// alsoDeciding is the administrator: somebody whose button decides and who
+	// is deliberately not announced to, because one granted at the installation
+	// covers every company. The fake keeps the invariant the directory keeps —
+	// everybody announced to may decide — rather than being freer than it.
+	alsoDeciding []domain.UserID
+	calls        int
 }
 
 func (f *fixedApprovers) ApproversIn(context.Context, domain.Scope) ([]domain.UserID, error) {
 	f.calls++
 	return f.who, nil
+}
+
+func (f *fixedApprovers) DecidersIn(context.Context, domain.Scope) ([]domain.UserID, error) {
+	return append(slices.Clone(f.who), f.alsoDeciding...), nil
+}
+
+// andNameable names people who may decide without being announced to.
+func (f *fixedApprovers) andNameable(ids ...string) *fixedApprovers {
+	for _, id := range ids {
+		f.alsoDeciding = append(f.alsoDeciding, domain.UserID(id))
+	}
+	return f
 }
 
 func deciders(ids ...string) *fixedApprovers {
@@ -510,6 +528,11 @@ func TestSweep_moreApproversThanTheCapButFewReachable_tellsThemAnyway(t *testing
 type failingApprovers struct{ calls int }
 
 func (f *failingApprovers) ApproversIn(context.Context, domain.Scope) ([]domain.UserID, error) {
+	f.calls++
+	return nil, errors.New("the directory is away")
+}
+
+func (f *failingApprovers) DecidersIn(context.Context, domain.Scope) ([]domain.UserID, error) {
 	f.calls++
 	return nil, errors.New("the directory is away")
 }
