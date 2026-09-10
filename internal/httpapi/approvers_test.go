@@ -67,7 +67,7 @@ func TestListEligibleApprovers_anotherAreasAuthor_isRefused(t *testing.T) {
 
 type namedApprovers []auth.Eligible
 
-func (n namedApprovers) ApproversNamed(
+func (n namedApprovers) DecidersNamed(
 	context.Context, domain.Scope,
 ) ([]auth.Eligible, error) {
 	return n, nil

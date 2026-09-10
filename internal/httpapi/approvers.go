@@ -21,9 +21,11 @@ So this answers one question, authorised by the act it belongs to: the right to
 publish in the scope being asked about.
 */
 
-// EligibleApprovers answers who may decide in a scope, by name.
+// EligibleApprovers answers who may decide in a scope, by name. Who may decide,
+// not who is announced to: the two differ by the administrator, who is not
+// broadcast to and may be named.
 type EligibleApprovers interface {
-	ApproversNamed(ctx context.Context, scope domain.Scope) ([]auth.Eligible, error)
+	DecidersNamed(ctx context.Context, scope domain.Scope) ([]auth.Eligible, error)
 }
 
 // WithEligibleApprovers wires the list an author picks from.
@@ -60,7 +62,7 @@ func (s *Server) ListEligibleApprovers(
 		}, nil
 	}
 
-	found, err := s.eligible.ApproversNamed(ctx, scope)
+	found, err := s.eligible.DecidersNamed(ctx, scope)
 	if err != nil {
 		return nil, fmt.Errorf("list eligible approvers: %w", err)
 	}

@@ -16,8 +16,8 @@ publishing an agent holds no identity administration, and pointing that screen
 at the administrative listing gave them an empty control and a refusal nobody
 showed.
 
-So this answers the narrowest possible question: the people holding Approver in
-a scope, with the name a person would recognise. No grants, no email, no
+So this answers the narrowest possible question: the people who may decide in a
+scope, with the name a person would recognise. No grants, no email, no
 accounts, no disabled principals, nobody who is not a person.
 */
 type Eligible struct {
@@ -26,17 +26,20 @@ type Eligible struct {
 }
 
 /*
-ApproversNamed lists who may decide in a scope, with their display names.
+DecidersNamed lists who may decide in a scope, with their display names.
 
-The same call the fan-out makes, with the names kept: a screen offering somebody
-the list must offer the list that will be used, or naming a person there
-produces a message that never goes out and no explanation of why. Written as its
-own query it was a copy of the predicate, and a copy of a predicate is a
-predicate that drifts — invisibly, because both halves keep working and only
-disagree about who.
+The same call the named path makes, with the names kept: a screen offering
+somebody must offer the people that path will accept, or naming one produces a
+message that never goes out and no explanation of why. Written as its own query
+it was a copy of the predicate, and a copy of a predicate is a predicate that
+drifts — invisibly, because both halves keep working and only disagree about who.
+
+By the act rather than by the Approver role, which is where it was wrong: an
+administrator's button decides, and the screen did not offer them. It is not the
+broadcast list, and must not become it — see DecidersIn.
 */
-func (p *Postgres) ApproversNamed(
+func (p *Postgres) DecidersNamed(
 	ctx context.Context, scope domain.Scope,
 ) ([]Eligible, error) {
-	return p.peopleHoldingNamed(ctx, domain.RoleApprover, scope)
+	return p.peopleHoldingNamed(ctx, domain.RolesAllowing(domain.PermApprovalAct), scope)
 }
