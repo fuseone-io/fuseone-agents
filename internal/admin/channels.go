@@ -33,10 +33,35 @@ var (
 )
 
 // Channels reads and writes channel configuration, recording each change.
-type Channels struct {
+/*
+ChannelFacts is what a process may learn about channels, and the single thing it
+may record that governs nothing.
+
+Split from the configuration rather than left as a subset of it. Three processes
+here only read — where people are reachable, who an account speaks for, which
+accounts have been seen — and holding the type that configures meant a later
+edit could configure from them by mistake, with nothing in the way. A worker
+that cannot bind an identity is better than one that is trusted not to.
+
+Recording that an account was seen lives here because it is not an
+administrative decision: it is the platform noticing something about itself, and
+binding that account is the governed act, which is on the other type and is
+recorded in the trail.
+*/
+type ChannelFacts struct {
 	pool     *pgxpool.Pool
 	settings *settings.Store
-	drivers  Drivers
+}
+
+func NewChannelFacts(pool *pgxpool.Pool, store *settings.Store) *ChannelFacts {
+	return &ChannelFacts{pool: pool, settings: store}
+}
+
+// Channels is ChannelFacts and the acts that change what an installation does:
+// connections, conversations, and who a channel account speaks for.
+type Channels struct {
+	*ChannelFacts
+	drivers Drivers
 }
 
 /*
@@ -50,7 +75,7 @@ in the code — and if one of those ever configured a conversation, it would be
 refused rather than trusted.
 */
 func NewChannels(pool *pgxpool.Pool, store *settings.Store, drivers Drivers) *Channels {
-	return &Channels{pool: pool, settings: store, drivers: drivers}
+	return &Channels{ChannelFacts: NewChannelFacts(pool, store), drivers: drivers}
 }
 
 /*
@@ -98,7 +123,7 @@ type Conversation struct {
 }
 
 // List answers with every connection and the conversations mapped into it.
-func (c *Channels) List(ctx context.Context) ([]Channel, error) {
+func (c *ChannelFacts) List(ctx context.Context) ([]Channel, error) {
 	connections, err := c.settings.List(ctx, channel.KindChannel)
 	if err != nil {
 		return nil, fmt.Errorf("admin: list channels: %w", err)
@@ -139,7 +164,7 @@ type channelSecretState struct {
 // channelSecretState answers which sealed pieces exist, without exposing any
 // of them. A single HasSecret bit is no longer enough: posting, HTTP inbound
 // and Socket Mode are three different capabilities.
-func (c *Channels) channelSecretState(ctx context.Context, name string) channelSecretState {
+func (c *ChannelFacts) channelSecretState(ctx context.Context, name string) channelSecretState {
 	held, err := c.settings.Reveal(ctx,
 		settings.ScopeInstallation, domain.Scope{}, channel.KindChannel, name)
 	if err != nil {

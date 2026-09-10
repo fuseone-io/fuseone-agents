@@ -153,7 +153,7 @@ func (c *Channels) UnbindIdentity(
 }
 
 // Identities lists every binding, for the screen that manages them.
-func (c *Channels) Identities(ctx context.Context) ([]ChannelIdentity, error) {
+func (c *ChannelFacts) Identities(ctx context.Context) ([]ChannelIdentity, error) {
 	stored, err := c.settings.List(ctx, KindChannelIdentity)
 	if err != nil {
 		return nil, fmt.Errorf("admin: list channel identities: %w", err)
@@ -255,7 +255,7 @@ second. A store that was away made every account read as unbound, so an ask
 would be closed telling somebody their account is not linked — which is a
 sentence they would act on, about a state that was never true.
 */
-func (c *Channels) PrincipalFor(
+func (c *ChannelFacts) PrincipalFor(
 	ctx context.Context, channelName, account string,
 ) (domain.UserID, bool, error) {
 	s, err := c.settings.Get(ctx, settings.ScopeInstallation, domain.Scope{},
@@ -306,7 +306,7 @@ is why it is a method here rather than a value passed around at start-up: a
 rotated secret takes effect on the next request instead of at the next deploy,
 which matters most in the case where it was rotated because it leaked.
 */
-func (c *Channels) Secrets(
+func (c *ChannelFacts) Secrets(
 	ctx context.Context, name string,
 ) (channel.Credentials, bool) {
 	held, err := c.settings.Reveal(ctx,

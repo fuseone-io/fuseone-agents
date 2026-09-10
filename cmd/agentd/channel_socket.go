@@ -64,8 +64,9 @@ func (p *workerParts) receiveSlackSockets(ctx context.Context) {
 	manager := &slackSocketManager{
 		settings: p.settings,
 		inbox:    channel.NewInbox(p.configPool),
-		// Reads which accounts have been seen; configures nothing.
-		seen: admin.NewChannels(p.configPool, p.settings, nil),
+		// Notices which accounts have been seen. It cannot configure anything:
+		// the type it holds has no method that does.
+		seen: admin.NewChannelFacts(p.configPool, p.settings),
 		log:  slog.Default(),
 		openURL: func(ctx context.Context, appToken string) (string, error) {
 			return slack.OpenSocketURL(ctx, appToken, slack.SocketAPI,
