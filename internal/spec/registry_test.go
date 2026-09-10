@@ -2,6 +2,7 @@ package spec_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -581,5 +582,48 @@ func TestGet_aVersionPublishedBeforeAgentsCouldAsk_wantsNothingPrivate(t *testin
 	}
 	if got.Approvals.Direct || len(got.Approvals.Notify) > 0 {
 		t.Errorf("approvals = %+v, want the console alone", got.Approvals)
+	}
+}
+
+/*
+The policy is read on its own, not by decoding a whole version.
+
+The reporter asks this for every run in a page, every thirty seconds, including
+for the agents that asked for nothing. Answered through Get it decoded the
+instructions, the tools, the triggers, the steps and the emissions to produce
+one boolean.
+*/
+func TestApprovalPolicy_readsWhatTheOwnerAsked(t *testing.T) {
+	r := openRegistry(t)
+	ctx := context.Background()
+	asking := published(t, strings.Replace(definition, "tools:",
+		"approvals:\n  direct: true\n  notify: [usr_ana]\ntools:", 1))
+
+	if err := r.Publish(ctx, asking, "usr_ana", "acme"); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+
+	got, err := r.ApprovalPolicy(ctx, "triage", asking.Version)
+	if err != nil {
+		t.Fatalf("ApprovalPolicy: %v", err)
+	}
+	if !got.Direct || len(got.Notify) != 1 || got.Notify[0] != "usr_ana" {
+		t.Errorf("policy = %+v, want what the owner published", got)
+	}
+}
+
+/*
+A version nobody published is an error, not "the console alone".
+
+The reporter keeps the run and reads again next sweep. Answered as a preference
+this would invent the owner's decision out of a version that is missing, and
+retire a run having told nobody.
+*/
+func TestApprovalPolicy_aVersionNobodyPublished_isRefused(t *testing.T) {
+	r := openRegistry(t)
+
+	_, err := r.ApprovalPolicy(context.Background(), "triage", "v-nowhere")
+	if !errors.Is(err, spec.ErrNotPublished) {
+		t.Fatalf("err = %v, want ErrNotPublished", err)
 	}
 }
