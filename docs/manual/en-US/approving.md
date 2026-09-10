@@ -16,6 +16,36 @@ When a run stops it appears in the **human queue**. The screen shows three thing
 
 **What the run did up to that point.** The whole trail, so you understand the path and not only the last step.
 
+## Where you are asked
+
+An approval always exists in the console — that is where the human queue lives,
+and nothing in this section changes it. What the **agent's owner** chooses is
+whether it also arrives as a **direct message from the Slack bot**.
+
+Tick **"Also send it as a direct message from the bot"** on the agent, under
+**Governance**. Naming nobody, it reaches the people holding **Approver** in a
+scope covering the run. Naming people, it reaches those — among the ones who may
+already decide.
+
+Naming is **addressing, not authorising**. The button is checked against the
+run's own scope wherever it is pressed, so naming somebody without the grant
+gives them nothing: they are dropped from the list, and it is recorded that the
+agent's list reaches nobody who can decide.
+
+The choice is **versioned with the agent**. A run obeys what the version it
+pinned asked for — changing the agent today does not change how yesterday's run
+is announced.
+
+Three things must exist for the message to go out: a channel connection, the
+Slack app's `im:write` scope, and the person's linked account. Anybody unlinked
+is simply not reached, and the reason is recorded.
+
+If the installation has **more than one connection** and the run is in no area
+with a configured conversation, nothing is sent: there is no way to know which
+workspace to speak from, and guessing would send one company's run into another
+company's Slack. Configure a conversation for that scope, or leave one
+connection enabled.
+
 ## Approving releases that call
 
 An approval covers **that call, with those arguments**. It does not switch the tool on, does not carry to next time, does not create an exception. The next run stops again.

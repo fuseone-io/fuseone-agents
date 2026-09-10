@@ -25,6 +25,45 @@ field" is a commit message.
 
 ---
 
+## [0.46.0] — 2026-09-10
+
+### Added
+
+- **An agent's owner says how its approvals should reach a person.** Under the
+  agent's **Governance** tab: also send the approval as a direct message from
+  the channel bot, and optionally name who — among the people who may already
+  decide — should be told. It needs no conversation and no channel: an agent
+  published in an area nobody mapped now reaches the people who can answer it,
+  which until now produced no card, no message, and no record that anybody
+  should have been told.
+
+  The console always has the request; this only decides where else it appears,
+  and nothing here can switch approval off. Naming somebody is addressing and
+  never authorising: the button is checked against the run's own scope wherever
+  it is pressed, so a name that holds no grant is dropped rather than sent a
+  message it cannot answer. The choice is versioned with the agent, so a run
+  obeys what the version it pinned asked for.
+
+  With more than one channel connection and no conversation covering the run's
+  scope, nothing is sent and the reason is recorded — guessing would send one
+  company's run into another company's Slack. A conversation in the run's own
+  scope answers it, because somebody already chose that workspace for those
+  runs.
+
+### Fixed
+
+- **A run nobody could be told about no longer holds up the ones that can be.**
+  Announcements are taken oldest-attempt-first so that a broken destination
+  cannot starve the rest, and a run with no destination at all had no attempt
+  recorded against it — so it counted as never tried, sat at the front of every
+  page, and an area that *was* configured never got its turn. Every run nobody
+  was told about now records why, which is also what the cockpit needed: no
+  connection to send from, nobody holding Approver, nobody with a linked
+  account, or nothing configured to hear about it at all.
+
+- **Seven channel failure codes reached the screen as identifiers.** Four of
+  them since 0.45.0. They have words now, in both languages.
+
 ## [0.45.0] — 2026-09-09
 
 ### Added
