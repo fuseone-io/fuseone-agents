@@ -32,7 +32,7 @@ field" is a commit message.
 - **An agent's owner says how its approvals should reach a person.** Under the
   agent's **Governance** tab: also send the approval as a direct message from
   the channel bot, and optionally name who — among the people who may already
-  decide — should be told. It needs no conversation and no channel: an agent
+  decide — should be told. It needs no conversation and no room: an agent
   published in an area nobody mapped now reaches the people who can answer it,
   which until now produced no card, no message, and no record that anybody
   should have been told.

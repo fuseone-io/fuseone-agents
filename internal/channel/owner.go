@@ -17,9 +17,10 @@ an agent published in an area nobody mapped produced no card, no message, and no
 record that anybody should have been told.
 
 This is the other beginning. The agent's own specification says its approvals
-should also arrive privately, and that is enough: no conversation, no channel,
-no mapping from a scope to a room. What it needs instead is the one thing the
-room used to supply for free — which workspace the bot speaks from.
+should also arrive privately, and that is enough: no conversation, no room, no
+mapping from a scope to one. A connection is still needed — a bot with no
+workspace to speak from cannot send anything — and which one is the single thing
+the room used to supply for free.
 
 It sends the same card, to the same people, under the same cap, recorded under
 the same key. A person who was already told through a room is not told twice:
