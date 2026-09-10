@@ -81,7 +81,7 @@ for a rehearsal would teach people to ignore the channel.
 */
 func (p *Postgres) Unreported(ctx context.Context, since time.Time, limit int) ([]Report, error) {
 	rows, err := p.pool.Query(ctx, `
-		select runs.run_id, runs.agent_id, runs.company_id, runs.area_id,
+		select runs.run_id, runs.agent_id, runs.version_id, runs.company_id, runs.area_id,
 		       `+phases+` as event, runs.updated_at,
 		       coalesce(runs.pending_tool, ''), coalesce(runs.pending_reason, ''),
 		       `+announcementSeq+`,
@@ -125,7 +125,7 @@ func (p *Postgres) Unreported(ctx context.Context, since time.Time, limit int) (
 	for rows.Next() {
 		var r Report
 		var company, area, event string
-		if err := rows.Scan(&r.RunID, &r.AgentID, &company, &area,
+		if err := rows.Scan(&r.RunID, &r.AgentID, &r.Version, &company, &area,
 			&event, &r.At, &r.Tool, &r.Reason, &r.AtSeq, &r.AwaitingDecision); err != nil {
 			return nil, err
 		}

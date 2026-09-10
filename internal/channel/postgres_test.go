@@ -339,6 +339,32 @@ func TestUnreported_aSecondQuestion_isNotBehindTheFirstOnesFailure(t *testing.T)
 	}
 }
 
+/*
+The announcement says which version the run pinned.
+
+What an agent's owner asked for about its own approvals lives in the
+specification, and specifications are versioned. Read from whatever is published
+now, a run that started this morning would be announced according to a decision
+somebody took this afternoon — and the ledger would show one thing while the
+notification obeyed another.
+*/
+func TestUnreported_saysWhichVersionTheRunPinned(t *testing.T) {
+	store, pool := channelStore(t)
+
+	awaitApproval(t, pool, "run-versioned")
+
+	pending, err := store.Unreported(t.Context(), noon.Add(-channel.Window), 50)
+	if err != nil {
+		t.Fatalf("unreported: %v", err)
+	}
+	if len(pending) != 1 {
+		t.Fatalf("pending = %+v, want the parked run", pending)
+	}
+	if pending[0].Version == "" {
+		t.Error("the announcement does not say which version the run pinned")
+	}
+}
+
 func channelStore(t *testing.T) (*channel.Postgres, *pgxpool.Pool) {
 	t.Helper()
 	dsn := os.Getenv("TEST_DATABASE_URL")
