@@ -189,10 +189,11 @@ version before this one.
 */
 type storedConversation struct {
 	name string
-	// keyVersion is the shape the row declares its own name is in. An edit
-	// writes the row back the way it found it: this version writes the id
-	// alone, but the release after it writes the connection into the name, and
-	// both are rolled out beside each other.
+	// keyVersion is the shape the row declares its own name is in. It is read
+	// because it decides which row a delete removes: this version writes the
+	// connection into the name, and the version before it wrote the id alone —
+	// so a row named either way is still arriving, from a pod mid-rollout or
+	// from a restore, and recomputing the name would remove nothing.
 	keyVersion int
 	conv       Conversation
 }

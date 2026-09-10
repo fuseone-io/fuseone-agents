@@ -744,12 +744,12 @@ func TestPutConversation_theSameIdOnAnotherConnectionElsewhere_isAllowed(t *test
 }
 
 /*
-A row written the way the next version will write it is already readable.
+A row keyed by connection and id resolves when nothing here wrote it.
 
-That is what makes moving the key affordable: the release after this one may put
-the connection into the name only if this one already understands it, because
-both are serving while the rollout runs. Written directly here, since nothing in
-this version produces one.
+The shape this version writes also arrives from outside it — the migration
+renames rows into it, a restore replays them, and a second pod writes them while
+a rollout runs. So it is written directly to the store here, bypassing the admin
+path that would otherwise be both the author and the witness of the shape.
 */
 func TestResolve_aRowKeyedByConnectionAndId_resolves(t *testing.T) {
 	store, _, settingsStore := configuredChannelsWithStore(t)

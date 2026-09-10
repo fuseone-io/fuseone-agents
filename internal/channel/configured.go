@@ -224,14 +224,13 @@ workspaces are two namespaces, so mapping the same id at one scope on a second
 connection replaced the first — silently, because the write that did it looked
 like an ordinary configuration.
 
-Moving the key is a two-release act, and this is the first half: **this version
-reads both shapes and writes the old one.** The chart applies migrations before
-the rollout and both versions serve during it, so a version that wrote the new
-shape would take conversations away from the pods still running — and those
-pods would write the old shape back, leaving two rows for one conversation,
-which is the ambiguity the read refuses. Permanently, long after the rollout
-ended. The collision itself is refused on the way in instead, which is what
-makes waiting affordable.
+Moving the key was a two-release act, and this is the second half: **this
+version reads both shapes and writes the new one**, and the migration renames
+what the first half left behind. Reading both is not leftover politeness — the
+previous version is still serving while this one rolls out, it goes on writing
+the old shape, and a row also arrives from a restore taken before the move. The
+old shape is therefore read for as long as anything can produce one, which is
+longer than the rollout.
 
 The shape is declared by the row and never inferred from the name. A stored id
 may look like anything a vendor chose — a Teams conversation id begins with
