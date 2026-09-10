@@ -386,3 +386,56 @@ func identityNamed(listed []admin.ChannelIdentity, account string) *admin.Channe
 	}
 	return nil
 }
+
+/*
+Revoking a binding revokes it, whatever else is stored under the same key.
+
+A misplaced copy and the live binding can exist at once, and on the screen they
+are one thing: one account, one button. Removing "the misplaced one" answered a
+request to take somebody's authority away by deleting the inert copy — reporting
+success, leaving the live row, and `PrincipalFor` going on naming them.
+
+The worst shape a delete can have: it is the act somebody takes when they have
+decided that person must stop being able to decide.
+*/
+func TestUnbindIdentity_withAMisplacedCopy_leavesNobodyBound(t *testing.T) {
+	channels, store := boundChannels(t)
+	ctx := context.Background()
+
+	if err := channels.BindIdentity(ctx, admin.ChannelIdentity{
+		Channel: "acme-slack", Account: "U-BOTH", Principal: "usr_active",
+	}, "usr_ana"); err != nil {
+		t.Fatalf("BindIdentity: %v", err)
+	}
+	// The copy a restore left behind, under the same key.
+	if err := store.Put(ctx, settings.Setting{
+		ScopeKind: settings.ScopeArea,
+		Scope:     domain.Scope{Company: "acme", Area: "ops"},
+		Kind:      admin.KindChannelIdentity, Name: "acme-slack/U-BOTH",
+		Value: []byte(`{"channel":"acme-slack","account":"U-BOTH",` +
+			`"principal":"usr_active"}`),
+		Enabled: true, UpdatedBy: "restore",
+	}); err != nil {
+		t.Fatalf("write the misplaced copy: %v", err)
+	}
+
+	if err := channels.UnbindIdentity(ctx, "acme-slack", "U-BOTH", "usr_ana"); err != nil {
+		t.Fatalf("UnbindIdentity: %v", err)
+	}
+
+	// The question the operator was answering.
+	who, bound, err := channels.PrincipalFor(ctx, "acme-slack", "U-BOTH")
+	if err != nil {
+		t.Fatalf("PrincipalFor: %v", err)
+	}
+	if bound {
+		t.Fatalf("the account still speaks for %s after being unbound", who)
+	}
+	listed, err := channels.Identities(ctx)
+	if err != nil {
+		t.Fatalf("Identities: %v", err)
+	}
+	if identityNamed(listed, "U-BOTH") != nil {
+		t.Error("a row survived the withdrawal and is still on the screen")
+	}
+}

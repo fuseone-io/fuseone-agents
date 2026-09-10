@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/settings"
@@ -124,32 +126,49 @@ func (c *Channels) BindIdentity(
 }
 
 /*
-UnbindIdentity withdraws a binding, wherever it is stored.
+UnbindIdentity withdraws a binding, from every position it is stored in.
 
-The position is found rather than assumed. A binding belongs at the
-installation and one stored at a company or an area grants nobody anything —
-but it is listed, so the delete the console offers has to reach it: keyed at
-the installation it matched nothing, reported success, and left the row on the
-screen for somebody to try to remove again.
+Every position, and this is the whole of it. A binding belongs at the
+installation and a row elsewhere grants nobody anything — but both can exist at
+once, under the same key, and they are one thing on the screen: one account,
+one button. Removing "the one that is misplaced" then answered a request to
+revoke somebody's authority by deleting the inert copy and leaving the live
+one, reporting success. `PrincipalFor` went on naming them.
+
+So the request means what an operator means by it: after this, that account
+speaks for nobody. One transaction, so it does not half happen, and one event —
+the act is the withdrawal, not the number of rows it took.
 */
 func (c *Channels) UnbindIdentity(
 	ctx context.Context, channelName, account string, by domain.UserID,
 ) error {
-	at, scope := settings.ScopeInstallation, domain.Scope{}
-	bound, err := c.Identities(ctx)
+	key := identityKey(channelName, account)
+	stored, err := c.settings.List(ctx, KindChannelIdentity)
 	if err != nil {
-		return err
+		return fmt.Errorf("admin: list channel identities: %w", err)
 	}
-	for _, one := range bound {
-		if one.Channel == channelName && one.Account == account && one.Misplaced {
-			at, scope = one.scopeAt, one.scope
-			break
+
+	tx, err := c.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("admin: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	for _, one := range stored {
+		if one.Name != key {
+			continue
+		}
+		if err := c.settings.DeleteTx(ctx, tx,
+			one.ScopeKind, one.Scope, KindChannelIdentity, key); err != nil {
+			return err
 		}
 	}
-	return removeScopedSetting(ctx, c.pool, c.settings, by,
-		at, scope, domain.Scope{},
-		KindChannelIdentity, identityKey(channelName, account),
-		"channel.identity.unbound")
+	if err := Record(ctx, tx, Event{
+		Principal: by, Action: "channel.identity.unbound", Target: key,
+	}); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // Identities lists every binding, for the screen that manages them.
@@ -306,7 +325,26 @@ is why it is a method here rather than a value passed around at start-up: a
 rotated secret takes effect on the next request instead of at the next deploy,
 which matters most in the case where it was rotated because it leaked.
 */
-func (c *ChannelFacts) Secrets(
+/*
+ChannelDoor is what the unauthenticated door needs, and only that.
+
+Slack posts to a public path, so the request has to be verified before anything
+about it is believed — which needs the signing secret — and then the account it
+names has to be turned into a principal. Two reads, both of them prerequisites
+for trusting a stranger's request at all.
+
+The credentials do not live on ChannelFacts because they are not a fact about
+channels an ordinary reader should hold: the token that posts as this
+installation, and the secret that decides which requests are genuine. A process
+that lists conversations has no business being able to read either.
+*/
+type ChannelDoor struct{ *ChannelFacts }
+
+func NewChannelDoor(pool *pgxpool.Pool, store *settings.Store) *ChannelDoor {
+	return &ChannelDoor{ChannelFacts: NewChannelFacts(pool, store)}
+}
+
+func (c *ChannelDoor) Secrets(
 	ctx context.Context, name string,
 ) (channel.Credentials, bool) {
 	held, err := c.settings.Reveal(ctx,
