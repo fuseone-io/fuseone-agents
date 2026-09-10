@@ -234,11 +234,24 @@ func (c *Channels) refuseUnreachableConnection(
 
 /*
 refuseStartingConversations stops a connection taking a vendor nothing here can
-build while conversations on it start runs.
+build unless every conversation on it only announces.
 
-The delivery mode is not asked about: PutChannel refuses one it cannot honour
-outright, so a connection never reaches here carrying one. What can change under
-an existing conversation is the vendor.
+The question is deliberately the conservative one — *can I prove none of these
+starts anything?* — and not the runtime's *does this one start something?* Asked
+the second way it fails open twice over: a mode this version cannot name is not
+one the start predicates recognise, and a row whose key shape is illegible is
+dropped before it is looked at. Both would sit there until a version arrived
+that understood the mode, or the key, and the vendor — and then come into force
+with nobody having decided anything.
+
+So the rows are read directly, and only "announce" counts as proof. The
+conversation's identity is not resolved: which conversation it is has no bearing
+on whether it may start a run, and asking would reintroduce the shape that hid
+one.
+
+The delivery mode is not asked about either. PutChannel refuses one it cannot
+honour outright, so a connection never reaches here carrying one; what can
+change under an existing conversation is the vendor.
 */
 func (c *Channels) refuseStartingConversations(
 	ctx context.Context, conn settings.DB, channelName, kind string,
@@ -250,10 +263,20 @@ func (c *Channels) refuseStartingConversations(
 	if err != nil {
 		return fmt.Errorf("admin: list conversations: %w", err)
 	}
-	for _, one := range conversationRows(channelName, stored) {
-		mode := one.conv.Mode
-		if channel.StartsFromMentions(mode) || channel.StartsFromWatch(mode) {
-			return fmt.Errorf("%w: %s", ErrConversationsStartRuns, one.conv.ID)
+	for _, one := range stored {
+		var v struct {
+			Channel string `json:"channel"`
+			Mode    string `json:"mode"`
+		}
+		// A row this version cannot decode at all names no connection, so it
+		// cannot be shown to be on this one. Refusing every connection write
+		// because some unrelated row is corrupt would be an administration
+		// nobody can use.
+		if err := json.Unmarshal(one.Value, &v); err != nil || v.Channel != channelName {
+			continue
+		}
+		if v.Mode != channel.ConversationAnnounce {
+			return fmt.Errorf("%w: %s", ErrConversationsStartRuns, one.Name)
 		}
 	}
 	return nil

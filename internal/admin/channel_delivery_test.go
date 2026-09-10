@@ -307,3 +307,78 @@ func TestPutChannel_takingAVendorWithNoDriver_isRefusedWhileConversationsStartRu
 		})
 	}
 }
+
+/*
+Only "announce" is proof, and a shape this version cannot read is not.
+
+Asked the runtime's question — does this conversation start something? — the
+guard failed open twice. A mode nothing here can name is not one the start
+predicates recognise, and a row whose key shape is illegible was dropped before
+it was looked at. Both sat there until a version arrived that understood the
+mode, or the key, and the vendor.
+
+Restored rows, because that is how either arrives: the administration refuses to
+write them.
+*/
+func TestPutChannel_takingAVendorWithNoDriver_isRefusedForShapesItCannotRead(t *testing.T) {
+	for _, one := range []struct {
+		name  string
+		value string
+	}{
+		{"a mode this version cannot name",
+			`{"channel":"someday","mode":"a-future-mode"}`},
+		{"a key shape this version cannot read",
+			`{"channel":"someday","keyVersion":7,"mode":"mentions"}`},
+		{"a row from before modes existed",
+			`{"channel":"someday"}`},
+	} {
+		t.Run(one.name, func(t *testing.T) {
+			pool := freshPool(t)
+			store := settings.NewStore(pool, testVault(t))
+			channels := admin.NewChannels(pool, store, onlySlack{})
+			ctx := context.Background()
+
+			if err := store.Put(ctx, settings.Setting{
+				ScopeKind: settings.ScopeArea,
+				Scope:     domain.Scope{Company: "acme", Area: "ops"},
+				Kind:      channel.KindConversation, Name: "C-restored",
+				Value: []byte(one.value), Enabled: true, UpdatedBy: "restore",
+			}); err != nil {
+				t.Fatalf("write the conversation: %v", err)
+			}
+
+			err := channels.PutChannel(ctx, admin.ChannelWrite{
+				Channel: admin.Channel{Name: "someday", Kind: "teams", Enabled: true},
+				By:      "usr_ana", Governs: true,
+			})
+			if !errors.Is(err, admin.ErrConversationsStartRuns) {
+				t.Fatalf("err = %v, want ErrConversationsStartRuns", err)
+			}
+		})
+	}
+}
+
+// And a room that says it only announces is proof, whatever else it carries.
+func TestPutChannel_takingAVendorWithNoDriver_isAllowedForARoomThatOnlyAnnounces(t *testing.T) {
+	pool := freshPool(t)
+	store := settings.NewStore(pool, testVault(t))
+	channels := admin.NewChannels(pool, store, onlySlack{})
+	ctx := context.Background()
+
+	if err := store.Put(ctx, settings.Setting{
+		ScopeKind: settings.ScopeArea,
+		Scope:     domain.Scope{Company: "acme", Area: "ops"},
+		Kind:      channel.KindConversation, Name: "C-restored",
+		Value:   []byte(`{"channel":"someday","keyVersion":7,"mode":"announce"}`),
+		Enabled: true, UpdatedBy: "restore",
+	}); err != nil {
+		t.Fatalf("write the conversation: %v", err)
+	}
+
+	if err := channels.PutChannel(ctx, admin.ChannelWrite{
+		Channel: admin.Channel{Name: "someday", Kind: "teams", Enabled: true},
+		By:      "usr_ana", Governs: true,
+	}); err != nil {
+		t.Fatalf("PutChannel: %v", err)
+	}
+}
