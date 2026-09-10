@@ -437,24 +437,24 @@ func (c *Channels) PutConversation(
 	}
 
 	/*
-		The row keeps the shape it is already in.
+		The connection is in the key, and a row that predates that moves.
 
-		This version writes the id alone, because the connection joins the key
-		one release later and the version still serving beside this one reads
-		only the old name. But that later release writes the new shape, and it
-		too will be rolled out beside this one — so an edit here that forced
-		the old name back would leave the new row untouched and a second row
-		beside it, which is the ambiguity the read refuses, for good. A row
-		that exists is updated where it lies.
+		The migration renames what exists; this is the other half, for the row
+		somebody edits before a migration ever runs — and for the shape the
+		release before this one still writes if it is serving beside this one
+		during a rollout. Writing the new name while leaving the old row would
+		be two rows for one conversation, which is the ambiguity the read
+		refuses, so the row it replaces goes with it.
 	*/
 	stored, err := c.settings.ListTx(ctx, tx, channel.KindConversation)
 	if err != nil {
 		return fmt.Errorf("admin: list conversations: %w", err)
 	}
-	name, keyVersion := conv.ID, channel.KeyVersionName
+	name := channel.ConversationKey(channelName, conv.ID)
+	replaced := ""
 	for _, one := range conversationRows(channelName, stored) {
-		if one.conv.ID == conv.ID && one.conv.Scope == conv.Scope {
-			name, keyVersion = one.name, one.keyVersion
+		if one.conv.ID == conv.ID && one.conv.Scope == conv.Scope && one.name != name {
+			replaced = one.name
 			break
 		}
 	}
@@ -466,9 +466,10 @@ func (c *Channels) PutConversation(
 		"threadContext":   conv.ThreadContext,
 		"directApprovals": conv.DirectApprovals,
 	}
-	if keyVersion != channel.KeyVersionName {
-		body["keyVersion"] = keyVersion
-	}
+	// Declared, never inferred. A row carrying the connection in its name and
+	// not saying so is read as an id that happens to contain a colon and a
+	// slash — nobody's conversation.
+	body["keyVersion"] = channel.KeyVersionConnection
 	value, err := json.Marshal(body)
 	if err != nil {
 		return err
@@ -480,6 +481,12 @@ func (c *Channels) PutConversation(
 		Value: value, Enabled: conv.Enabled, UpdatedBy: string(by),
 	}); err != nil {
 		return err
+	}
+	if replaced != "" {
+		if err := c.settings.DeleteTx(ctx, tx, conversationScopeKind(conv.Scope),
+			conv.Scope, channel.KindConversation, replaced); err != nil {
+			return err
+		}
 	}
 	if err := Record(ctx, tx, Event{
 		Principal: by, Scope: conv.Scope,
@@ -623,12 +630,6 @@ func (c *Channels) DeleteConversation(
 // scope on this connection.
 var ErrConversationMapped = errors.New("admin: that conversation already speaks for another scope")
 
-// ErrConversationOnAnotherConnection means this scope already has a
-// conversation by that id, on a different connection. Until the key carries the
-// connection the two would be one row, and this write would replace it.
-var ErrConversationOnAnotherConnection = errors.New(
-	"admin: that conversation id is already configured on another connection in this scope")
-
 /*
 unmapped refuses a conversation that is already somebody else's.
 
@@ -638,12 +639,11 @@ answer "who could have asked for this". The same scope is not a conflict —
 pointing a conversation at the scope it already speaks for is how somebody
 renames it or changes which events it wants.
 
-**Another connection at this scope:** a conversation is stored under its id
-alone until the release after this one, so the two are one row, and the second
-write replaced the first with no refusal and nothing in the trail. Refused here
-rather than silently overwritten. It is a real restriction — the same vendor id
-on two workspaces in one scope is a thing somebody may legitimately want — and
-it lifts when the key carries the connection.
+The same id on another connection is not a conflict at all, and used to be
+refused: while a conversation was stored under its id alone the two were one
+row, and the second write replaced the first with nothing in the trail. Refusing
+was the honest answer to a storage that could not hold both. The key carries the
+connection now, so they are two rows and the restriction is gone.
 */
 func (c *Channels) unmapped(
 	ctx context.Context, conn settings.DB, channelName string, conv Conversation,
@@ -656,18 +656,6 @@ func (c *Channels) unmapped(
 		if one.ID == conv.ID && one.Scope != conv.Scope {
 			return fmt.Errorf("%w: %s speaks for %s", ErrConversationMapped, conv.ID, one.Scope)
 		}
-	}
-	for _, one := range existing {
-		if one.Name != conv.ID || one.Scope != conv.Scope {
-			continue
-		}
-		var v struct {
-			Channel string `json:"channel"`
-		}
-		if err := json.Unmarshal(one.Value, &v); err != nil || v.Channel == channelName {
-			continue
-		}
-		return fmt.Errorf("%w: %s is configured on %s", ErrConversationOnAnotherConnection, conv.ID, v.Channel)
 	}
 	return nil
 }

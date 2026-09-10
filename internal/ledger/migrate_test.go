@@ -60,3 +60,115 @@ func TestMigrate_twoProcessesStartingTogether_bothSucceed(t *testing.T) {
 		}
 	}
 }
+
+/*
+Conversations stored under the id alone take their connection into the key.
+
+The second half of a two-release move: the release before this one reads both
+shapes, so renaming what is stored is safe now and was not then. An installation
+upgrading into this schema has rows the new key does not name, and the delete
+keys by connection and id — so without the rename a removal would match nothing
+and report success.
+
+Four things the statement has to get right, each of which was got wrong on the
+way here, and each of which is a case below.
+*/
+func TestMigrate_conversationsUnderTheIdAlone_takeTheirConnection(t *testing.T) {
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("TEST_DATABASE_URL is unset; skipping the migration")
+	}
+	pool, err := pgxpool.New(t.Context(), dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	if err := ledger.Migrate(t.Context(), pool); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	const version = "0072_conversations_by_connection"
+	rows := []struct {
+		name  string
+		value string
+		want  string
+	}{
+		// The ordinary one: renamed, and told what shape it is now in.
+		{"C-LEGACY", `{"channel":"acme-slack","mode":"mentions"}`,
+			"10:acme-slack/C-LEGACY"},
+		// Bytes, not runes: the key counts octets and connection names accept
+		// Unicode, so a rename measured in characters produces a name the
+		// reader cannot take apart.
+		{"C-UNICODE", `{"channel":"café-slack","mode":"mentions"}`,
+			"11:café-slack/C-UNICODE"},
+		// A connection whose name holds what `like` reads as a wildcard. No
+		// accuser: this statement compares nothing against a built prefix, so
+		// the hazard is designed out rather than guarded — and the case is
+		// here to say that if somebody adds such a comparison, this row is the
+		// one that will show it.
+		{"C-WILD", `{"channel":"acme_slack","mode":"mentions"}`,
+			"10:acme_slack/C-WILD"},
+		// A row whose new name is already taken, by a conversation somebody
+		// saved after the release that writes the new shape. Left where it is:
+		// a rename that collides aborts the statement, and a migration that
+		// dies is a process that will not start.
+		{"C-TAKEN", `{"channel":"acme-slack","mode":"mentions"}`, "C-TAKEN"},
+		// Already moved. Left exactly as it is, so the statement is safe to run
+		// against a database somebody has since written to.
+		{"11:other-slack/C-DONE",
+			`{"channel":"other-slack","keyVersion":2,"mode":"mentions"}`,
+			"11:other-slack/C-DONE"},
+		// Nothing to hang it on: left alone rather than given an invented
+		// connection.
+		{"C-ORPHANED", `{"mode":"mentions"}`, "C-ORPHANED"},
+	}
+	// The row that makes C-TAKEN's new name unavailable, written first.
+	rows = append(rows, struct {
+		name  string
+		value string
+		want  string
+	}{
+		"10:acme-slack/C-TAKEN",
+		`{"channel":"acme-slack","keyVersion":2,"mode":"mentions"}`,
+		"10:acme-slack/C-TAKEN",
+	})
+	for _, one := range rows {
+		if _, err := pool.Exec(t.Context(), `
+			insert into settings (scope_kind, company_id, area_id, kind, name, value, enabled, updated_by)
+			values ('area', 'acme', 'migrating', 'channel_conversation', $1, $2, true, 'restore')
+			on conflict (scope_kind, company_id, area_id, kind, name) do update set value = excluded.value`,
+			one.name, one.value); err != nil {
+			t.Fatalf("write the %s row: %v", one.name, err)
+		}
+	}
+	if _, err := pool.Exec(t.Context(),
+		`delete from schema_migrations where version = $1`, version); err != nil {
+		t.Fatalf("forget the migration: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = pool.Exec(context.Background(),
+			`delete from settings where company_id = 'acme' and area_id = 'migrating'`)
+	})
+
+	if err := ledger.Migrate(t.Context(), pool); err != nil {
+		t.Fatalf("migrate again: %v", err)
+	}
+
+	for _, one := range rows {
+		var version int
+		err := pool.QueryRow(t.Context(), `
+			select coalesce((value->>'keyVersion')::int, 0) from settings
+			where kind = 'channel_conversation' and company_id = 'acme'
+			  and area_id = 'migrating' and name = $1`, one.want).Scan(&version)
+		if err != nil {
+			t.Fatalf("%s did not become %s: %v", one.name, one.want, err)
+		}
+		// Renamed rows declare the shape they are in. A rename without it is
+		// read as an id that happens to contain a colon and a slash, which is
+		// nobody's conversation.
+		if moved := one.want != one.name; moved && version != 2 {
+			t.Errorf("%s was renamed to %s and declares version %d",
+				one.name, one.want, version)
+		}
+	}
+}

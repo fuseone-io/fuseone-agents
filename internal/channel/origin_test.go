@@ -675,45 +675,44 @@ func TestWatchFor_aModeThisVersionDoesNotKnow_answersNoRule(t *testing.T) {
 }
 
 /*
-The same conversation id on two connections, in one scope, is refused.
+The same conversation id on two connections, in one scope, is two conversations.
 
-A conversation is stored under its id alone, so the two are one row: the second
-write replaced the first, with no refusal and nothing in the trail saying a
-conversation had been removed. Cards and approvals for that workspace simply
-stopped.
-
-Refused rather than overwritten. It is a real restriction — vendor ids are
-per-workspace namespaces, and the same one on two workspaces is something
-somebody may legitimately want — and it lifts when the key carries the
-connection, one release after this. Until then, being told is the whole of the
-fix.
+It was refused for one release, and the refusal was honest: stored under the id
+alone the two were one row, so the second write replaced the first with nothing
+in the trail. The key carries the connection now, so the storage can hold what
+the runtime always believed — two workspaces are two namespaces, and an id
+naming a channel in one may name another somewhere else.
 */
-func TestPutConversation_theSameIdOnAnotherConnectionInOneScope_isRefused(t *testing.T) {
+func TestPutConversation_theSameIdOnAnotherConnectionInOneScope_areTwo(t *testing.T) {
 	store, channels := configuredChannels(t)
 	scope := domain.Scope{Company: "acme", Area: "ops"}
 
-	if err := channels.PutConversation(t.Context(), "workspace-a", admin.Conversation{
-		ID: "C-SAME", Enabled: true, Scope: scope, Agent: "triagem",
-		Wants: []string{"parked"},
-	}, "usr_ana"); err != nil {
-		t.Fatalf("map the first: %v", err)
+	for _, one := range []struct {
+		connection string
+		agent      domain.AgentID
+	}{{"workspace-a", "triagem"}, {"workspace-b", "cobranca"}} {
+		if err := channels.PutConversation(t.Context(), one.connection, admin.Conversation{
+			ID: "C-SAME", Enabled: true, Scope: scope, Agent: one.agent,
+			Wants: []string{"parked"},
+		}, "usr_ana"); err != nil {
+			t.Fatalf("map %s: %v", one.connection, err)
+		}
 	}
 
-	err := channels.PutConversation(t.Context(), "workspace-b", admin.Conversation{
-		ID: "C-SAME", Enabled: true, Scope: scope, Agent: "cobranca",
-		Wants: []string{"parked"},
-	}, "usr_ana")
-	if !errors.Is(err, admin.ErrConversationOnAnotherConnection) {
-		t.Fatalf("err = %v, want ErrConversationOnAnotherConnection", err)
-	}
-
-	// And the first is untouched, which is the thing that used to be lost.
-	got, err := store.Resolve(t.Context(), "workspace-a", "C-SAME")
-	if err != nil {
-		t.Fatalf("the first conversation stopped resolving: %v", err)
-	}
-	if got.Agent != "triagem" {
-		t.Errorf("agent = %q, want the first configuration intact", got.Agent)
+	// Each answers with its own configuration, which is the whole point of the
+	// connection being in the key.
+	for _, one := range []struct {
+		connection string
+		agent      domain.AgentID
+	}{{"workspace-a", "triagem"}, {"workspace-b", "cobranca"}} {
+		got, err := store.Resolve(t.Context(), one.connection, "C-SAME")
+		if err != nil {
+			t.Fatalf("resolve on %s: %v", one.connection, err)
+		}
+		if got.Agent != one.agent {
+			t.Errorf("%s starts %q, want its own agent %q",
+				one.connection, got.Agent, one.agent)
+		}
 	}
 }
 
@@ -807,6 +806,39 @@ func TestPutConversation_editingARowKeyedByConnectionAndId_keepsItsShape(t *test
 
 	// One row, and it is the edit that answers.
 	got, err := store.Resolve(t.Context(), "acme-slack", "C-KEPT")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if got.Agent != "cobranca" {
+		t.Errorf("agent = %q, want the edit", got.Agent)
+	}
+}
+
+/*
+Editing a conversation stored under the id alone moves it, and leaves nothing.
+
+The migration renames what exists, and this is the row somebody edits before one
+runs — or one written by the release still serving beside this during a rollout,
+which writes the old shape. Writing the new name and leaving the old row would
+be two rows for one conversation, which is the ambiguity the read refuses.
+*/
+func TestPutConversation_aRowStoredUnderTheIdAlone_movesRatherThanDoubling(t *testing.T) {
+	store, channels, settingsStore := configuredChannelsWithStore(t)
+	scope := domain.Scope{Company: "acme", Area: "moving"}
+
+	conversationRow(t, settingsStore, "C-MOVES", settings.ScopeArea, scope,
+		channel.ConversationMentions)
+
+	if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+		ID: "C-MOVES", Enabled: true, Scope: scope, Agent: "cobranca",
+		Wants: []string{"parked"},
+	}, "usr_ana"); err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+
+	// One row: two would be refused as ambiguous, and this is the edit that
+	// answers.
+	got, err := store.Resolve(t.Context(), "acme-slack", "C-MOVES")
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
