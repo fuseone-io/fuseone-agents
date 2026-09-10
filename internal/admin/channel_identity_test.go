@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/fuseone/agents/internal/admin"
+	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/settings"
 )
 
@@ -292,5 +293,149 @@ func TestIdentities_aWorkingBindingWhoseValueDisagrees_isNamedByItsKey(t *testin
 	who, bound, err := channels.PrincipalFor(ctx, found.Channel, found.Account)
 	if err != nil || !bound || who != "usr_disagree" {
 		t.Errorf("the shown binding is not the one that works: %q (%v, %v)", who, bound, err)
+	}
+}
+
+/*
+A binding stored where nothing reads it is listed, marked, and removable.
+
+Bindings live at the installation, which is the only position PrincipalFor reads
+and the only one AccountsOn will address from. A row at a company or an area —
+restore, migration, a hand-edited settings row — therefore grants nobody
+anything, and the console showed it as an ordinary binding and offered a delete
+that removed nothing: keyed at the installation, the removal matched no row,
+reported success, and left it on the screen to be tried again.
+*/
+func TestIdentities_aBindingStoredOutsideTheInstallation_isMarkedAndRemovable(t *testing.T) {
+	channels, store := boundChannels(t)
+	ctx := context.Background()
+
+	// The row the administration will not write.
+	if err := store.Put(ctx, settings.Setting{
+		ScopeKind: settings.ScopeArea,
+		Scope:     domain.Scope{Company: "acme", Area: "ops"},
+		Kind:      admin.KindChannelIdentity, Name: "acme-slack/U-MISPLACED",
+		Value: []byte(`{"channel":"acme-slack","account":"U-MISPLACED",` +
+			`"principal":"usr_ana","display":"Ana"}`),
+		Enabled: true, UpdatedBy: "restore",
+	}); err != nil {
+		t.Fatalf("write the misplaced row: %v", err)
+	}
+
+	listed, err := channels.Identities(ctx)
+	if err != nil {
+		t.Fatalf("Identities: %v", err)
+	}
+	found := identityNamed(listed, "U-MISPLACED")
+	if found == nil {
+		t.Fatal("the misplaced binding is not listed, so nobody can repair it")
+	}
+	if !found.Misplaced {
+		t.Error("it is listed as an ordinary binding, claiming an authority it has not got")
+	}
+
+	if err := channels.UnbindIdentity(ctx, "acme-slack", "U-MISPLACED", "usr_ana"); err != nil {
+		t.Fatalf("UnbindIdentity: %v", err)
+	}
+	after, err := channels.Identities(ctx)
+	if err != nil {
+		t.Fatalf("Identities after the removal: %v", err)
+	}
+	if identityNamed(after, "U-MISPLACED") != nil {
+		t.Error("the delete reported success and the binding is still there")
+	}
+}
+
+// And a binding where it belongs is not marked, and is still removed by the
+// same call — the position is found, not assumed in either direction.
+func TestIdentities_aBindingAtTheInstallation_isOrdinaryAndRemovable(t *testing.T) {
+	channels, _ := boundChannels(t)
+	ctx := context.Background()
+
+	if err := channels.BindIdentity(ctx, admin.ChannelIdentity{
+		Channel: "acme-slack", Account: "U-BOUND", Principal: "usr_ana",
+	}, "usr_ana"); err != nil {
+		t.Fatalf("BindIdentity: %v", err)
+	}
+
+	listed, err := channels.Identities(ctx)
+	if err != nil {
+		t.Fatalf("Identities: %v", err)
+	}
+	if found := identityNamed(listed, "U-BOUND"); found == nil || found.Misplaced {
+		t.Fatalf("binding = %+v, want an ordinary one", found)
+	}
+
+	if err := channels.UnbindIdentity(ctx, "acme-slack", "U-BOUND", "usr_ana"); err != nil {
+		t.Fatalf("UnbindIdentity: %v", err)
+	}
+	after, err := channels.Identities(ctx)
+	if err != nil {
+		t.Fatalf("Identities after the removal: %v", err)
+	}
+	if identityNamed(after, "U-BOUND") != nil {
+		t.Error("the ordinary binding survived its own removal")
+	}
+}
+
+func identityNamed(listed []admin.ChannelIdentity, account string) *admin.ChannelIdentity {
+	for i, one := range listed {
+		if one.Account == account {
+			return &listed[i]
+		}
+	}
+	return nil
+}
+
+/*
+Revoking a binding revokes it, whatever else is stored under the same key.
+
+A misplaced copy and the live binding can exist at once, and on the screen they
+are one thing: one account, one button. Removing "the misplaced one" answered a
+request to take somebody's authority away by deleting the inert copy — reporting
+success, leaving the live row, and `PrincipalFor` going on naming them.
+
+The worst shape a delete can have: it is the act somebody takes when they have
+decided that person must stop being able to decide.
+*/
+func TestUnbindIdentity_withAMisplacedCopy_leavesNobodyBound(t *testing.T) {
+	channels, store := boundChannels(t)
+	ctx := context.Background()
+
+	if err := channels.BindIdentity(ctx, admin.ChannelIdentity{
+		Channel: "acme-slack", Account: "U-BOTH", Principal: "usr_active",
+	}, "usr_ana"); err != nil {
+		t.Fatalf("BindIdentity: %v", err)
+	}
+	// The copy a restore left behind, under the same key.
+	if err := store.Put(ctx, settings.Setting{
+		ScopeKind: settings.ScopeArea,
+		Scope:     domain.Scope{Company: "acme", Area: "ops"},
+		Kind:      admin.KindChannelIdentity, Name: "acme-slack/U-BOTH",
+		Value: []byte(`{"channel":"acme-slack","account":"U-BOTH",` +
+			`"principal":"usr_active"}`),
+		Enabled: true, UpdatedBy: "restore",
+	}); err != nil {
+		t.Fatalf("write the misplaced copy: %v", err)
+	}
+
+	if err := channels.UnbindIdentity(ctx, "acme-slack", "U-BOTH", "usr_ana"); err != nil {
+		t.Fatalf("UnbindIdentity: %v", err)
+	}
+
+	// The question the operator was answering.
+	who, bound, err := channels.PrincipalFor(ctx, "acme-slack", "U-BOTH")
+	if err != nil {
+		t.Fatalf("PrincipalFor: %v", err)
+	}
+	if bound {
+		t.Fatalf("the account still speaks for %s after being unbound", who)
+	}
+	listed, err := channels.Identities(ctx)
+	if err != nil {
+		t.Fatalf("Identities: %v", err)
+	}
+	if identityNamed(listed, "U-BOTH") != nil {
+		t.Error("a row survived the withdrawal and is still on the screen")
 	}
 }

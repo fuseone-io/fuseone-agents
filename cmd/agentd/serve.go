@@ -266,7 +266,13 @@ func serve(args []string) error {
 		// it carries no cookie, and what authenticates it is a signature this
 		// installation checks rather than anything the API knows about.
 		if channels != nil {
-			hooks := httpapi.NewChannelHooks(api, channels, identity.dir, time.Now, slog.Default()).
+			// The door reads two things and can do nothing else: the secret
+			// that says a request is genuine, and who the account it names
+			// speaks for. It is handed neither the driver table nor any act
+			// that configures.
+			hooks := httpapi.NewChannelHooks(
+				api, admin.NewChannelDoor(identity.pool, settingsStore), identity.dir,
+				time.Now, slog.Default()).
 				// Where an ask waits between arriving and being opened. The
 				// events path acknowledges only what it has already written
 				// down, so a process that dies after answering has not lost

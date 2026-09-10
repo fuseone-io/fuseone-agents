@@ -21,7 +21,7 @@ type ChannelAccountSeen struct {
 // No audit event is written here. Seeing an account is not an administrative
 // decision, and writing one event per mention would turn the audit trail into
 // a telemetry sink. Binding the account is the governed act and is recorded.
-func (c *Channels) MarkAccountSeen(
+func (c *ChannelFacts) MarkAccountSeen(
 	ctx context.Context, channelName, account, conversation string, at time.Time,
 ) error {
 	channelName = strings.TrimSpace(channelName)
@@ -54,7 +54,7 @@ set conversation = case
 // Bounded per channel so one very noisy workspace cannot make the integrations
 // page draw an unbounded directory. A hidden old row is still harmless: the
 // next interaction moves it back into the visible set.
-func (c *Channels) SeenAccounts(ctx context.Context) ([]ChannelAccountSeen, error) {
+func (c *ChannelFacts) SeenAccounts(ctx context.Context) ([]ChannelAccountSeen, error) {
 	rows, err := c.pool.Query(ctx, `
 select channel, account, conversation, last_seen
 from (

@@ -25,6 +25,38 @@ field" is a commit message.
 
 ---
 
+## [0.47.0] — 2026-09-10
+
+### Changed
+
+- **A conversation is stored under its connection as well as its id.** The
+  second half of a move the previous release prepared: it learned to read both
+  shapes and went on writing the old one, because both versions serve during a
+  rolling update. Conversations written before this are renamed on upgrade, and
+  the restriction that stood in for the key is gone — the same Slack channel id
+  on two workspaces, in one scope, is two conversations again.
+
+### Fixed
+
+- **A channel binding stored in the wrong place can be seen and removed.** A
+  binding lives at the installation, which is the only position anything reads
+  it from — so one at a company or an area, from a restore or a hand-edited row,
+  grants nobody anything. The console showed it as an ordinary binding and
+  offered a delete that removed nothing: the removal was keyed at the
+  installation, matched no row, and reported success. It is marked as being in
+  the wrong place now, and the delete reaches it where it sits.
+
+- **A run nothing could be told about is no longer retried twice a minute for a
+  day.** Announcements are retried until they land or the run leaves the
+  24-hour window, and a run with no destination at all came back every thirty
+  seconds — 2,880 attempts written about an installation nobody had finished
+  configuring. The wait now doubles from a floor to a ceiling, and it is two
+  schedules rather than one: a destination refusing is an incident somebody is
+  probably fixing, so the first retry is a minute away; nothing configured to
+  hear the run at all is an installation being set up, and waits fifteen. The
+  whole schedule still fits inside the window, so waiting longer is never
+  giving up.
+
 ## [0.46.0] — 2026-09-10
 
 ### Added

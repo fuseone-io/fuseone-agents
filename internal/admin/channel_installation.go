@@ -135,7 +135,7 @@ func Invalid(err error) bool {
 	for _, sentinel := range []error{
 		ErrNoChannelKind, ErrUnknownDeliveryMode, ErrNoCompany,
 		ErrInstallationArea, ErrUnknownMode, ErrUnknownEvent,
-		ErrConversationOnAnotherConnection, ErrConnectionOnlyAnnounces,
+		ErrConnectionOnlyAnnounces,
 		ErrConversationsStartRuns,
 		ErrNoWatchSource, ErrNoWatchAgent, ErrNoWatchRunAs, ErrConversationMapped,
 	} {

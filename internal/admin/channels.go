@@ -33,10 +33,35 @@ var (
 )
 
 // Channels reads and writes channel configuration, recording each change.
-type Channels struct {
+/*
+ChannelFacts is what a process may learn about channels, and the single thing it
+may record that governs nothing.
+
+Split from the configuration rather than left as a subset of it. Three processes
+here only read — where people are reachable, who an account speaks for, which
+accounts have been seen — and holding the type that configures meant a later
+edit could configure from them by mistake, with nothing in the way. A worker
+that cannot bind an identity is better than one that is trusted not to.
+
+Recording that an account was seen lives here because it is not an
+administrative decision: it is the platform noticing something about itself, and
+binding that account is the governed act, which is on the other type and is
+recorded in the trail.
+*/
+type ChannelFacts struct {
 	pool     *pgxpool.Pool
 	settings *settings.Store
-	drivers  Drivers
+}
+
+func NewChannelFacts(pool *pgxpool.Pool, store *settings.Store) *ChannelFacts {
+	return &ChannelFacts{pool: pool, settings: store}
+}
+
+// Channels is ChannelFacts and the acts that change what an installation does:
+// connections, conversations, and who a channel account speaks for.
+type Channels struct {
+	*ChannelFacts
+	drivers Drivers
 }
 
 /*
@@ -50,7 +75,7 @@ in the code — and if one of those ever configured a conversation, it would be
 refused rather than trusted.
 */
 func NewChannels(pool *pgxpool.Pool, store *settings.Store, drivers Drivers) *Channels {
-	return &Channels{pool: pool, settings: store, drivers: drivers}
+	return &Channels{ChannelFacts: NewChannelFacts(pool, store), drivers: drivers}
 }
 
 /*
@@ -98,7 +123,7 @@ type Conversation struct {
 }
 
 // List answers with every connection and the conversations mapped into it.
-func (c *Channels) List(ctx context.Context) ([]Channel, error) {
+func (c *ChannelFacts) List(ctx context.Context) ([]Channel, error) {
 	connections, err := c.settings.List(ctx, channel.KindChannel)
 	if err != nil {
 		return nil, fmt.Errorf("admin: list channels: %w", err)
@@ -139,7 +164,7 @@ type channelSecretState struct {
 // channelSecretState answers which sealed pieces exist, without exposing any
 // of them. A single HasSecret bit is no longer enough: posting, HTTP inbound
 // and Socket Mode are three different capabilities.
-func (c *Channels) channelSecretState(ctx context.Context, name string) channelSecretState {
+func (c *ChannelFacts) channelSecretState(ctx context.Context, name string) channelSecretState {
 	held, err := c.settings.Reveal(ctx,
 		settings.ScopeInstallation, domain.Scope{}, channel.KindChannel, name)
 	if err != nil {
@@ -164,10 +189,11 @@ version before this one.
 */
 type storedConversation struct {
 	name string
-	// keyVersion is the shape the row declares its own name is in. An edit
-	// writes the row back the way it found it: this version writes the id
-	// alone, but the release after it writes the connection into the name, and
-	// both are rolled out beside each other.
+	// keyVersion is the shape the row declares its own name is in. It is read
+	// because it decides which row a delete removes: this version writes the
+	// connection into the name, and the version before it wrote the id alone —
+	// so a row named either way is still arriving, from a pod mid-rollout or
+	// from a restore, and recomputing the name would remove nothing.
 	keyVersion int
 	conv       Conversation
 }
@@ -437,24 +463,24 @@ func (c *Channels) PutConversation(
 	}
 
 	/*
-		The row keeps the shape it is already in.
+		The connection is in the key, and a row that predates that moves.
 
-		This version writes the id alone, because the connection joins the key
-		one release later and the version still serving beside this one reads
-		only the old name. But that later release writes the new shape, and it
-		too will be rolled out beside this one — so an edit here that forced
-		the old name back would leave the new row untouched and a second row
-		beside it, which is the ambiguity the read refuses, for good. A row
-		that exists is updated where it lies.
+		The migration renames what exists; this is the other half, for the row
+		somebody edits before a migration ever runs — and for the shape the
+		release before this one still writes if it is serving beside this one
+		during a rollout. Writing the new name while leaving the old row would
+		be two rows for one conversation, which is the ambiguity the read
+		refuses, so the row it replaces goes with it.
 	*/
 	stored, err := c.settings.ListTx(ctx, tx, channel.KindConversation)
 	if err != nil {
 		return fmt.Errorf("admin: list conversations: %w", err)
 	}
-	name, keyVersion := conv.ID, channel.KeyVersionName
+	name := channel.ConversationKey(channelName, conv.ID)
+	replaced := ""
 	for _, one := range conversationRows(channelName, stored) {
-		if one.conv.ID == conv.ID && one.conv.Scope == conv.Scope {
-			name, keyVersion = one.name, one.keyVersion
+		if one.conv.ID == conv.ID && one.conv.Scope == conv.Scope && one.name != name {
+			replaced = one.name
 			break
 		}
 	}
@@ -466,9 +492,10 @@ func (c *Channels) PutConversation(
 		"threadContext":   conv.ThreadContext,
 		"directApprovals": conv.DirectApprovals,
 	}
-	if keyVersion != channel.KeyVersionName {
-		body["keyVersion"] = keyVersion
-	}
+	// Declared, never inferred. A row carrying the connection in its name and
+	// not saying so is read as an id that happens to contain a colon and a
+	// slash — nobody's conversation.
+	body["keyVersion"] = channel.KeyVersionConnection
 	value, err := json.Marshal(body)
 	if err != nil {
 		return err
@@ -480,6 +507,12 @@ func (c *Channels) PutConversation(
 		Value: value, Enabled: conv.Enabled, UpdatedBy: string(by),
 	}); err != nil {
 		return err
+	}
+	if replaced != "" {
+		if err := c.settings.DeleteTx(ctx, tx, conversationScopeKind(conv.Scope),
+			conv.Scope, channel.KindConversation, replaced); err != nil {
+			return err
+		}
 	}
 	if err := Record(ctx, tx, Event{
 		Principal: by, Scope: conv.Scope,
@@ -623,12 +656,6 @@ func (c *Channels) DeleteConversation(
 // scope on this connection.
 var ErrConversationMapped = errors.New("admin: that conversation already speaks for another scope")
 
-// ErrConversationOnAnotherConnection means this scope already has a
-// conversation by that id, on a different connection. Until the key carries the
-// connection the two would be one row, and this write would replace it.
-var ErrConversationOnAnotherConnection = errors.New(
-	"admin: that conversation id is already configured on another connection in this scope")
-
 /*
 unmapped refuses a conversation that is already somebody else's.
 
@@ -638,12 +665,11 @@ answer "who could have asked for this". The same scope is not a conflict —
 pointing a conversation at the scope it already speaks for is how somebody
 renames it or changes which events it wants.
 
-**Another connection at this scope:** a conversation is stored under its id
-alone until the release after this one, so the two are one row, and the second
-write replaced the first with no refusal and nothing in the trail. Refused here
-rather than silently overwritten. It is a real restriction — the same vendor id
-on two workspaces in one scope is a thing somebody may legitimately want — and
-it lifts when the key carries the connection.
+The same id on another connection is not a conflict at all, and used to be
+refused: while a conversation was stored under its id alone the two were one
+row, and the second write replaced the first with nothing in the trail. Refusing
+was the honest answer to a storage that could not hold both. The key carries the
+connection now, so they are two rows and the restriction is gone.
 */
 func (c *Channels) unmapped(
 	ctx context.Context, conn settings.DB, channelName string, conv Conversation,
@@ -656,18 +682,6 @@ func (c *Channels) unmapped(
 		if one.ID == conv.ID && one.Scope != conv.Scope {
 			return fmt.Errorf("%w: %s speaks for %s", ErrConversationMapped, conv.ID, one.Scope)
 		}
-	}
-	for _, one := range existing {
-		if one.Name != conv.ID || one.Scope != conv.Scope {
-			continue
-		}
-		var v struct {
-			Channel string `json:"channel"`
-		}
-		if err := json.Unmarshal(one.Value, &v); err != nil || v.Channel == channelName {
-			continue
-		}
-		return fmt.Errorf("%w: %s is configured on %s", ErrConversationOnAnotherConnection, conv.ID, v.Channel)
 	}
 	return nil
 }

@@ -224,14 +224,13 @@ workspaces are two namespaces, so mapping the same id at one scope on a second
 connection replaced the first — silently, because the write that did it looked
 like an ordinary configuration.
 
-Moving the key is a two-release act, and this is the first half: **this version
-reads both shapes and writes the old one.** The chart applies migrations before
-the rollout and both versions serve during it, so a version that wrote the new
-shape would take conversations away from the pods still running — and those
-pods would write the old shape back, leaving two rows for one conversation,
-which is the ambiguity the read refuses. Permanently, long after the rollout
-ended. The collision itself is refused on the way in instead, which is what
-makes waiting affordable.
+Moving the key was a two-release act, and this is the second half: **this
+version reads both shapes and writes the new one**, and the migration renames
+what the first half left behind. Reading both is not leftover politeness — the
+previous version is still serving while this one rolls out, it goes on writing
+the old shape, and a row also arrives from a restore taken before the move. The
+old shape is therefore read for as long as anything can produce one, which is
+longer than the rollout.
 
 The shape is declared by the row and never inferred from the name. A stored id
 may look like anything a vendor chose — a Teams conversation id begins with
@@ -240,12 +239,14 @@ apart and answer as a different conversation.
 */
 
 const (
-	// KeyVersionName is a row whose name is the conversation id. Absent from
-	// the value, which is how every row this version writes reads back.
+	// KeyVersionName is a row whose name is the conversation id alone. Absent
+	// from the value, which is how every row written before the move reads
+	// back — and rows in that shape still arrive, from a pod on the previous
+	// version and from a restore taken before it.
 	KeyVersionName = 0
 	// KeyVersionConnection is a row whose name holds the connection as well as
-	// the id. Written by the release after this one; read by this one, which
-	// is what makes that release possible.
+	// the id. What this version writes, and what the migration renames the old
+	// rows into.
 	KeyVersionConnection = 2
 )
 
@@ -258,9 +259,9 @@ holding "C" produce the same string, and in one scope that is one row. Both
 halves are names somebody typed or a vendor chose, so neither can be promised
 free of the separator; a length cannot be forged by punctuation.
 
-Nothing writes it yet. It is here so the version after this one writes something
-this one already reads, and so the two agree on what it means before either
-depends on it.
+Every conversation this version stores is named by it, and the migration renames
+the older rows into the same shape. A reader still meets the old shape, so the
+name alone never decides which it is looking at — the row says so.
 */
 func ConversationKey(channelName, id string) string {
 	return strconv.Itoa(len(channelName)) + ":" + channelName + "/" + id

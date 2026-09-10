@@ -204,7 +204,10 @@ func aConversation(t *testing.T) *conversing {
 		t.Fatalf("start the agent: %v", err)
 	}
 
-	hooks := httpapi.NewChannelHooks(nil, c.channels, nil, time.Now, slog.Default()).
+	// The door: the secret that says a request is genuine, and who the account
+	// it names speaks for. It cannot configure anything.
+	hooks := httpapi.NewChannelHooks(
+		nil, admin.NewChannelDoor(pool, store), nil, time.Now, slog.Default()).
 		WithArrivals(channel.NewInbox(pool))
 	mux := http.NewServeMux()
 	hooks.MountEvents(mux)

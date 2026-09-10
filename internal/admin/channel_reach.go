@@ -29,7 +29,7 @@ configuration — they change by an administrative act, not by a run — and
 re-reading them between recipients would let the set of people a message goes
 to change halfway through sending it.
 */
-func (c *Channels) AccountsOn(
+func (c *ChannelFacts) AccountsOn(
 	ctx context.Context, channelName string, who []domain.UserID,
 ) (map[domain.UserID]string, error) {
 	stored, err := c.settings.List(ctx, KindChannelIdentity)

@@ -34,6 +34,30 @@ describe("who can decide", () => {
     expect(screen.getByText(/ilegível/i)).toBeInTheDocument();
   });
 
+  /*
+   * A binding stored where nothing reads it looks like one that works.
+   *
+   * Bindings live at the installation; a row at a company or an area grants
+   * nobody anything. Shown as ordinary it claims an authority it has not got,
+   * and the person reading the screen has no way to tell why an approval never
+   * reached whoever it names.
+   */
+  it("says a binding is in the wrong place rather than showing it as ordinary", () => {
+    show([
+      {
+        account: "U505",
+        principal: "usr_ana",
+        display: "Ana",
+        misplaced: true,
+      },
+    ]);
+
+    expect(screen.getByText(/fora do lugar/i)).toBeInTheDocument();
+    expect(screen.queryByText("Ana")).not.toBeInTheDocument();
+    // And still removable, which is the point of listing it.
+    expect(screen.getAllByRole("button", { name: /remover/i })).toHaveLength(1);
+  });
+
   it("shows an ordinary binding by the name of the person", () => {
     show([{ account: "U024", principal: "usr_ana", display: "Ana" }]);
 

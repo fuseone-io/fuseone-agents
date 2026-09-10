@@ -62,6 +62,32 @@ const announcementSeq = `
 	end`
 
 /*
+nextAttempt is how long a run that could not be announced waits.
+
+Doubling, from a floor, to a ceiling — and the whole schedule sits inside the
+24-hour window, so a run is retried many times before it leaves and nothing here
+is ever "give up". Read as: this run may be tried again once its last attempt is
+older than that.
+
+Two schedules, because two failures are not alike. A destination refusing is an
+incident and somebody is probably fixing it, so the first retry is a minute
+away. Nothing configured to hear the run at all is an installation part-way
+through being set up: the same run coming back every thirty seconds writes
+2,880 attempts a day into a table nobody is reading, and the fix is a person
+doing something, not a network recovering.
+
+Written here rather than as a column, because it is a policy and a column is a
+value: changing it would leave every row already scheduled by the old one.
+*/
+const nextAttempt = `
+	tried.last_seen + case when tried.unconfigured
+		then least(interval '6 hours',
+		           interval '15 minutes' * power(2, least(coalesce(tried.attempts, 1) - 1, 5)))
+		else least(interval '2 hours',
+		           interval '1 minute' * power(2, least(coalesce(tried.attempts, 1) - 1, 7)))
+	end`
+
+/*
 Unreported lists runs in a state worth announcing that has not been said
 everywhere it should be.
 
@@ -94,8 +120,28 @@ func (p *Postgres) Unreported(ctx context.Context, since time.Time, limit int) (
 		-- below the cut were never tried anywhere — not even in the
 		-- conversations that were answering — until they left the window a day
 		-- later, unannounced.
+		-- The most recent failure, and only it.
+		--
+		-- Aggregated over every failure ever recorded about this announcement,
+		-- the schedule read a history rather than a state: six old attempts at
+		-- "nothing is configured" and one refusal two minutes ago produced six
+		-- attempts on the incident schedule — a run waiting half an hour to be
+		-- retried because of a problem somebody had already fixed. What decides
+		-- how long to wait is what went wrong last time, and how many times
+		-- that has gone wrong.
+		--
+		-- "That" is one cause, and a cause is one row of this table: a
+		-- destination and a normalised operational code, about one
+		-- announcement. The count belongs to the cause and is never reset by
+		-- another one happening in between — a destination that refused six
+		-- times, went unreachable for some other reason, and now refuses again
+		-- is refusing for the seventh time. Nothing about the interruption
+		-- makes the first six untrue. The ceilings below are what keeps an
+		-- inherited count from doubling a run out of the window.
 		left join lateral (
-		    select max(f.last_seen) as last_seen
+		    select f.last_seen,
+		           f.attempts,
+		           f.code = '`+CodeNowhereToSayIt+`' as unconfigured
 		    from channel_delivery_failures f
 		    -- Per question, not per run. Two approvals in one run are both
 		    -- "parked", so matching the event alone put a run's second
@@ -105,6 +151,8 @@ func (p *Postgres) Unreported(ctx context.Context, since time.Time, limit int) (
 		    -- delivery tables are keyed by.
 		    where f.run_id = runs.run_id and f.event = `+phases+`
 		      and f.at_seq = `+announcementSeq+`
+		    order by f.last_seen desc, f.attempts desc
+		    limit 1
 		) tried on true
 		where not runs.simulated
 		  and runs.updated_at >= $1
@@ -114,6 +162,10 @@ func (p *Postgres) Unreported(ctx context.Context, since time.Time, limit int) (
 		      where d.run_id = runs.run_id and d.event = `+phases+`
 		        and d.channel = '' and d.conversation = ''
 		        and d.at_seq = `+announcementSeq+`)
+		  -- Waited long enough. Compared against now, not against the attempt
+		  -- itself: an attempt is always older than itself plus a wait, which
+		  -- is a clause that reads like a schedule and lets everything through.
+		  and (tried.last_seen is null or `+nextAttempt+` <= now())
 		order by coalesce(tried.last_seen, to_timestamp(0)) asc, runs.updated_at desc
 		limit $2`, since.UTC(), limit)
 	if err != nil {

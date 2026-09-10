@@ -221,3 +221,55 @@ func testVault(t *testing.T) *vault.Vault {
 	}
 	return v
 }
+
+/*
+Binding and withdrawing one account cannot interleave.
+
+They are the same fact from two directions, and the withdrawal reads the bind:
+it takes an inventory of where the binding is stored, because a copy can sit
+somewhere it means nothing. Taken outside the write, that inventory is a
+photograph — a bind landing between the two leaves a row the withdrawal never
+saw, and the operator is told the account speaks for nobody while it speaks for
+somebody.
+
+What is asserted is that the state and the trail agree. Which of the two wins is
+the race's business; what must never happen is the last recorded act saying one
+thing and the platform doing the other.
+*/
+func TestBindAndUnbind_atOnce_leaveTheTrailAgreeingWithTheState(t *testing.T) {
+	pool := freshPool(t)
+	channels := admin.NewChannels(pool, settings.NewStore(pool, testVault(t)), onlySlack{})
+	ctx := context.Background()
+
+	barrier := hold(t, pool, "identity:acme-slack/U-RACED")
+
+	results := make(chan error, 2)
+	go func() {
+		results <- channels.BindIdentity(ctx, admin.ChannelIdentity{
+			Channel: "acme-slack", Account: "U-RACED", Principal: "usr_live",
+		}, "usr_ana")
+	}()
+	go func() {
+		results <- channels.UnbindIdentity(ctx, "acme-slack", "U-RACED", "usr_ana")
+	}()
+	barrier.waitFor(t, 2)
+	barrier.release(t)
+
+	for range 2 {
+		if err := <-results; err != nil {
+			t.Fatalf("bind/unbind: %v", err)
+		}
+	}
+
+	who, bound, err := channels.PrincipalFor(ctx, "acme-slack", "U-RACED")
+	if err != nil {
+		t.Fatalf("PrincipalFor: %v", err)
+	}
+	action, _ := lastTrailDetail(t, pool, "acme-slack/U-RACED")
+	switch {
+	case bound && action != "channel.identity.bound":
+		t.Errorf("%s speaks for %s and the trail's last act is %q", "U-RACED", who, action)
+	case !bound && action != "channel.identity.unbound":
+		t.Errorf("nobody speaks for the account and the trail's last act is %q", action)
+	}
+}

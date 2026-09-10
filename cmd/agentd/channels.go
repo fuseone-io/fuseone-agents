@@ -66,9 +66,9 @@ func reporterPartsFor(p *workerParts, baseURL string) reporterParts {
 		rooms:      channel.NewConfigured(store),
 		poster:     channel.NewRouter(connect.New(store)),
 		approvers:  auth.NewPostgres(p.configPool),
-		// Reads where people are reachable; configures nothing, so it is
-		// handed no driver table.
-		accounts:    admin.NewChannels(p.configPool, store, nil),
+		// Reads where people are reachable, and cannot configure anything: the
+		// type it holds has no method that does.
+		accounts:    admin.NewChannelFacts(p.configPool, store),
 		policies:    spec.NewRegistry(p.configPool),
 		connections: channel.NewConfigured(store),
 		baseURL:     baseURL,
@@ -185,7 +185,7 @@ func (p *workerParts) consumeAsks(ctx context.Context, owner string, metrics *wo
 		).
 		WithOutcomes(channel.NewPostgres(pool), p.content).
 		WithThreadContext(configured, drivers).
-		Binding(admin.NewChannels(pool, p.settings, nil).PrincipalFor)
+		Binding(admin.NewChannelFacts(pool, p.settings).PrincipalFor)
 
 	go channelSweepLoop(ctx, askSweep, channel.MetricTaskAsksOpened, "asks opened", metrics, func() (int, error) {
 		return consumer.Sweep(ctx, askLease, 20)
