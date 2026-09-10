@@ -41,13 +41,18 @@ func (r *Reporter) wantsOwnApprovals(report Report) bool {
 
 /*
 directForOwner tells the people the agent's owner asked for, and says whether
-anything was owed at all.
+anybody actually has it.
 
-The second answer is what keeps the run from waiting for ever. A run is retired
-from the sweep once something was owed a message and nothing failed in a way
-another sweep would fix — so an agent that asked for private approvals owes one
-here, whether it ends in messages or in a recorded reason nobody can improve by
-waiting.
+The second answer decides whether the run leaves the sweep for good, so it means
+one thing only: somebody was told. Not "we tried", and not "we recorded why we
+could not" — a run retired on those is a run that stays unannounced after the
+connection is configured, after the account is bound, after the operator fixes
+exactly the thing the record complained about. Nothing would ever say so: the
+sentinel is written once and the run is never looked at again.
+
+Left unreported, it comes back. The window bounds that to a day, and a page that
+failed now sorts behind runs nobody has tried, so waiting costs the other runs
+nothing.
 */
 func (r *Reporter) directForOwner(
 	ctx context.Context, pass *fanout, report Report,
@@ -56,30 +61,45 @@ func (r *Reporter) directForOwner(
 		return 0, 0, refusal{}
 	}
 
-	policy, err := r.approvals.ApprovalPolicy(ctx, report.AgentID, report.Version)
+	policy, err := pass.policyFor(ctx, r.approvals, report)
 	if err != nil {
 		// This side being unavailable. Nothing is owed and nothing is
 		// recorded: the next sweep reads the specification again.
-		return 0, 0, refusal{blocking: []error{WrapError(CodeConfigurationReadFailed,
-			fmt.Errorf("channel: read the approval policy of %s: %w", report.AgentID, err))}}
+		return 0, 0, refusal{blocking: []error{err}}
 	}
 	if !policy.Direct {
 		return 0, 0, refusal{}
 	}
 
-	from, err := r.speakingConnection(ctx)
+	from, err := pass.speakingConnection(ctx, r.connections)
 	switch {
 	case err != nil:
 		return 0, 0, refusal{blocking: []error{err}}
 	case from == "":
-		// Owed, and answered with a reason. Whether it is one connection too
-		// many or none at all, another sweep reads the same configuration.
-		return 0, 1, r.refuse(report, Conversation{}, NewError(CodeNoConnectionChosen,
+		// Recorded and not owed. Nobody has this approval, and the day
+		// somebody configures a connection the run is still in the sweep to be
+		// told about — which is the whole point of not retiring it.
+		return 0, 0, r.refuse(report, Conversation{}, NewError(CodeNoConnectionChosen,
 			"channel: nothing says which workspace this agent's approvals should be sent from"))
 	}
 
 	place := Conversation{Channel: from, DirectApprovals: true}
-	to, capped, err := pass.recipientsAmong(ctx, report, place, policy.Notify)
+	who, err := pass.decidersAmong(ctx, report.Scope, policy.Notify)
+	if err != nil {
+		return 0, 0, refusal{
+			blocking: []error{err},
+			recorded: r.failuresFor(report, place, err),
+		}
+	}
+	// Named people, none of whom may decide here. Said plainly, because it is
+	// the owner's own list being wrong — a different problem from nobody having
+	// linked a Slack account, and with a different fix.
+	if len(who) == 0 && len(policy.Notify) > 0 {
+		return 0, 0, r.refuse(report, place, NewError(CodeNamedNobodyWhoDecides,
+			"channel: the people this agent names cannot decide in the run's scope"))
+	}
+
+	to, capped, err := pass.reachable(ctx, place, who)
 	switch {
 	case err != nil:
 		return 0, 0, refusal{
@@ -87,16 +107,14 @@ func (r *Reporter) directForOwner(
 			recorded: r.failuresFor(report, place, err),
 		}
 	case capped:
-		return 0, 1, r.refuse(report, place, NewError(CodeTooManyRecipients,
+		return 0, 0, r.refuse(report, place, NewError(CodeTooManyRecipients,
 			"channel: more people can be reached about this than one approval should reach"))
-	case len(to) == 0 && len(policy.Notify) > 0:
-		// The owner named people and not one of them may decide here. Silence
-		// would read as "nobody was reachable", which is a different problem
-		// with a different fix.
-		return 0, 1, r.refuse(report, place, NewError(CodeNamedNobodyWhoDecides,
-			"channel: the people this agent names cannot decide in the run's scope"))
 	}
 
+	// Delivered counts the people who have it, including the ones a previous
+	// sweep already told: the run is theirs to answer whether the message went
+	// out a moment ago or an hour ago.
+	delivered := 0
 	for _, person := range to {
 		posted, err := r.post(ctx, report, person)
 		if err != nil {
@@ -107,14 +125,43 @@ func (r *Reporter) directForOwner(
 			}
 			continue
 		}
+		delivered++
 		if posted {
 			sent++
 		}
 	}
-	// Owed either way. Nobody bound on this connection is the ordinary state of
-	// most of a workspace, and leaving the run pending for it would fill the
-	// sweep with runs nobody will ever be told about.
+	if delivered == 0 {
+		// Nobody who may decide has a linked account. Not recorded — it is the
+		// ordinary state of most of a workspace and the conversation path reads
+		// it the same way — and not retired, so the first binding somebody
+		// creates is answered by the next sweep.
+		return 0, 0, refused
+	}
 	return sent, 1, refused
+}
+
+/*
+policyFor answers what one version's owner asked for, once per sweep.
+
+Remembered by version rather than by run: a page holds fifty runs and an
+installation has far fewer agents than that, so the same specification was being
+read and decoded once for every run of it. It is also configuration, and a pass
+that re-read it could obey two different answers inside one sweep.
+*/
+func (f *fanout) policyFor(
+	ctx context.Context, from Approvals, report Report,
+) (domain.ApprovalPolicy, error) {
+	key := versionOfAgent{agent: report.AgentID, version: report.Version}
+	if policy, asked := f.byVersion[key]; asked {
+		return policy, nil
+	}
+	policy, err := from.ApprovalPolicy(ctx, report.AgentID, report.Version)
+	if err != nil {
+		return domain.ApprovalPolicy{}, WrapError(CodeConfigurationReadFailed,
+			fmt.Errorf("channel: read the approval policy of %s: %w", report.AgentID, err))
+	}
+	f.byVersion[key] = policy
+	return policy, nil
 }
 
 /*
@@ -127,41 +174,50 @@ rather than guessed: sending one company's run — its id, its agent, the action
 somebody wanted approved — into another company's Slack is the disclosure the
 conversation scope exists to prevent, and a coin toss is not a governance rule.
 
+Read once per sweep, like everything else this pass remembers. It is
+configuration, and a page of fifty runs asking fifty times would let the answer
+change halfway through a sweep as well as costing fifty reads.
+
 Empty and no error is "nobody could be told, and it is not a failure of this
 side"; the caller records why.
 */
-func (r *Reporter) speakingConnection(ctx context.Context) (string, error) {
-	enabled, err := r.connections.EnabledConnections(ctx)
-	if err != nil {
-		return "", WrapError(CodeConfigurationReadFailed,
-			fmt.Errorf("channel: read the enabled connections: %w", err))
+func (f *fanout) speakingConnection(ctx context.Context, from Connections) (string, error) {
+	if !f.askedConnections {
+		enabled, err := from.EnabledConnections(ctx)
+		if err != nil {
+			return "", WrapError(CodeConfigurationReadFailed,
+				fmt.Errorf("channel: read the enabled connections: %w", err))
+		}
+		f.askedConnections = true
+		if len(enabled) == 1 {
+			f.connection = enabled[0]
+		}
 	}
-	if len(enabled) != 1 {
-		return "", nil
-	}
-	return enabled[0], nil
+	return f.connection, nil
 }
 
 /*
-recipientsAmong is recipients, narrowed to the people an owner named.
+decidersAmong is who may decide, narrowed to the people an owner named.
 
 The narrowing is an intersection and never a substitution: a name here that
-holds no grant in the run's scope is dropped rather than messaged. Naming who
-is *told* is addressing; naming who *may decide* is a grant, and an agent's
+holds no grant in the run's scope is dropped rather than messaged. Naming who is
+*told* is addressing; naming who *may decide* is a grant, and an agent's
 specification is not where grants are made — the button would refuse the person
 it reached, which teaches them the platform is broken.
+
+Answered before anybody is looked up, so that "none of these may decide" and
+"none of these has an account" stay two different answers. Read from one empty
+list at the end, an owner whose colleague simply never linked Slack would be
+told their list was wrong.
 */
-func (f *fanout) recipientsAmong(
-	ctx context.Context, report Report, place Conversation, only []domain.UserID,
-) (to []Conversation, capped bool, err error) {
-	if len(only) == 0 {
-		return f.recipients(ctx, report, place)
+func (f *fanout) decidersAmong(
+	ctx context.Context, scope domain.Scope, only []domain.UserID,
+) ([]domain.UserID, error) {
+	who, err := f.whoDecides(ctx, scope)
+	if err != nil || len(only) == 0 {
+		return who, err
 	}
 
-	who, err := f.whoDecides(ctx, report.Scope)
-	if err != nil {
-		return nil, false, err
-	}
 	named := make(map[domain.UserID]bool, len(only))
 	for _, one := range only {
 		named[one] = true
@@ -172,8 +228,5 @@ func (f *fanout) recipientsAmong(
 			deciding = append(deciding, one)
 		}
 	}
-	if len(deciding) == 0 {
-		return nil, false, nil
-	}
-	return f.reachable(ctx, place, deciding)
+	return deciding, nil
 }

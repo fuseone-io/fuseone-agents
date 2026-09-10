@@ -69,6 +69,21 @@ type fanout struct {
 	accounts  Accounts
 	byScope   map[domain.Scope][]domain.UserID
 	byChannel map[string]map[domain.UserID]string
+	// The connection an agent's own approvals are sent from, and whether it has
+	// been asked for. Empty is an answer — no connection, or more than one —
+	// which is why the asking is tracked separately from the answer.
+	connection       string
+	askedConnections bool
+	// What each version's owner asked for. Two runs of one agent in a page ask
+	// once, and every run of it asks once per sweep rather than per report.
+	byVersion map[versionOfAgent]domain.ApprovalPolicy
+}
+
+// versionOfAgent is what an approval policy is stored against: a run is pinned
+// to a version, so two versions of one agent are two answers.
+type versionOfAgent struct {
+	agent   domain.AgentID
+	version domain.VersionID
 }
 
 func (r *Reporter) newFanout() *fanout {
@@ -76,6 +91,7 @@ func (r *Reporter) newFanout() *fanout {
 		approvers: r.approvers, accounts: r.accounts,
 		byScope:   map[domain.Scope][]domain.UserID{},
 		byChannel: map[string]map[domain.UserID]string{},
+		byVersion: map[versionOfAgent]domain.ApprovalPolicy{},
 	}
 }
 

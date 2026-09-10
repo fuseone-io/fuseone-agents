@@ -35,10 +35,10 @@ func TestSweep_anAgentThatAsksPrivately_isAnsweredWithNoRoomAtAll(t *testing.T) 
 /*
 And the run is retired, though no conversation was owed anything.
 
-A run leaves the sweep when something was owed a message and nothing failed in a
-way another pass would fix. Counted only in rooms, an agent answered privately
-would be read as never announced: it would come back every thirty seconds for a
-day, and the page would fill with runs nobody will ever be told about again.
+A run leaves the sweep when somebody was told. Counted only in rooms, an agent
+answered privately would be read as never announced: it would come back every
+thirty seconds for a day, and the page would fill with runs nobody will ever be
+told about again.
 */
 func TestSweep_anAgentAnsweredPrivately_isNotAnnouncedForEver(t *testing.T) {
 	reports := &fixedReports{reports: []channel.Report{parkedReport()}}
@@ -198,6 +198,126 @@ func TestSweep_theAgentsWord_isReadForTheVersionTheRunPinned(t *testing.T) {
 	}
 }
 
+/*
+A run nobody could be told about stays in the sweep.
+
+Retiring it writes the sentinel that says it was announced everywhere, once and
+for ever — so configuring the connection a minute later, or binding the account,
+or opening a room, announces nothing. The record would say why nobody was told
+and the run would never be looked at again.
+
+Left unreported it comes back. The window bounds that to a day, and a page that
+failed sorts behind runs nobody has tried, so waiting costs the other runs
+nothing.
+*/
+func TestSweep_nobodyCouldBeTold_leavesTheRunInTheSweep(t *testing.T) {
+	for _, one := range []struct {
+		name     string
+		policy   domain.ApprovalPolicy
+		from     channel.Connections
+		who      channel.Approvers
+		accounts channel.Accounts
+	}{
+		{
+			name:   "no connection to speak from",
+			policy: domain.ApprovalPolicy{Direct: true},
+			from:   connections(), who: deciders("usr_ana"),
+			accounts: accountBook{"acme-slack": {"usr_ana": "U-ana"}},
+		},
+		{
+			name:   "two connections and nothing to choose",
+			policy: domain.ApprovalPolicy{Direct: true},
+			from:   connections("acme-slack", "other-slack"), who: deciders("usr_ana"),
+			accounts: accountBook{"acme-slack": {"usr_ana": "U-ana"}},
+		},
+		{
+			name:   "the decider has linked no account",
+			policy: domain.ApprovalPolicy{Direct: true},
+			from:   oneConnection, who: deciders("usr_ana"),
+			accounts: accountBook{},
+		},
+		{
+			name:   "the people named cannot decide",
+			policy: domain.ApprovalPolicy{Direct: true, Notify: []domain.UserID{"usr_bob"}},
+			from:   oneConnection, who: deciders("usr_ana"),
+			accounts: accountBook{"acme-slack": {"usr_bob": "U-bob"}},
+		},
+	} {
+		t.Run(one.name, func(t *testing.T) {
+			reports := &fixedReports{reports: []channel.Report{parkedReport()}}
+			posts := &recorder{}
+			r := ownerReporterWith(t, reports, posts, wanting(one.policy),
+				one.from, one.who, one.accounts)
+
+			if _, err := r.Sweep(context.Background(), 10); err != nil {
+				t.Fatalf("Sweep: %v", err)
+			}
+			if len(posts.sent) != 0 {
+				t.Fatalf("sent %+v, want nothing", posts.sent)
+			}
+			if len(reports.done) != 0 {
+				t.Fatalf("reported = %v, want the run kept for a sweep that can tell somebody",
+					reports.done)
+			}
+		})
+	}
+}
+
+/*
+Somebody who may decide and has linked no account is not the owner's list being
+wrong.
+
+Both end in nobody being messaged, and they are fixed by different people in
+different places: one by whoever binds a Slack account, the other by the owner
+editing the agent. Read from one empty list at the end, an owner whose colleague
+simply never linked Slack is told their list is wrong.
+*/
+func TestSweep_aDeciderWithNoAccount_isNotRecordedAsNamingTheWrongPeople(t *testing.T) {
+	deliveries := &memoryDeliveries{}
+	r := ownerReporterWith(t, &fixedReports{reports: []channel.Report{parkedReport()}},
+		&recorder{},
+		wanting(domain.ApprovalPolicy{Direct: true, Notify: []domain.UserID{"usr_ana"}}),
+		oneConnection, deciders("usr_ana"), accountBook{}).WithDeliveries(deliveries)
+
+	if _, err := r.Sweep(context.Background(), 10); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if recordedFailure(deliveries, channel.CodeNamedNobodyWhoDecides) {
+		t.Error("a decider with no linked account was recorded as somebody who cannot decide")
+	}
+}
+
+/*
+One sweep asks each version once, and the connections once.
+
+A page holds fifty runs and an installation has far fewer agents than that, so
+the same specification was read and decoded once per run — every thirty seconds,
+including for the agents that asked for nothing. Configuration re-read inside one
+pass can also answer twice: a sweep obeying two different policies for one
+version is a sweep nobody can explain.
+*/
+func TestSweep_twoRunsOfOneVersion_askItsOwnerOnce(t *testing.T) {
+	asked := &askedPolicies{policy: domain.ApprovalPolicy{Direct: true}}
+	from := &countingConnections{names: []string{"acme-slack"}}
+	second := parkedReport()
+	second.RunID = "run-second"
+
+	r := ownerReporterWith(t,
+		&fixedReports{reports: []channel.Report{parkedReport(), second}}, &recorder{},
+		asked, from, deciders("usr_ana"),
+		accountBook{"acme-slack": {"usr_ana": "U-ana"}})
+
+	if _, err := r.Sweep(context.Background(), 10); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if asked.calls != 1 {
+		t.Errorf("read the policy %d times, want once for the version", asked.calls)
+	}
+	if from.calls != 1 {
+		t.Errorf("listed the connections %d times, want once for the sweep", from.calls)
+	}
+}
+
 // --- the harness ------------------------------------------------------------
 
 func ownerReporter(
@@ -227,12 +347,14 @@ type askedPolicies struct {
 	policy  domain.ApprovalPolicy
 	agent   domain.AgentID
 	version domain.VersionID
+	calls   int
 }
 
 func (a *askedPolicies) ApprovalPolicy(
 	_ context.Context, agent domain.AgentID, version domain.VersionID,
 ) (domain.ApprovalPolicy, error) {
 	a.agent, a.version = agent, version
+	a.calls++
 	return a.policy, nil
 }
 
@@ -247,3 +369,13 @@ func (f fixedConnections) EnabledConnections(context.Context) ([]string, error) 
 func connections(names ...string) fixedConnections { return names }
 
 var oneConnection = fixedConnections{"acme-slack"}
+
+type countingConnections struct {
+	names []string
+	calls int
+}
+
+func (c *countingConnections) EnabledConnections(context.Context) ([]string, error) {
+	c.calls++
+	return c.names, nil
+}
