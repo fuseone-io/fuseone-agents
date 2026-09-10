@@ -181,7 +181,7 @@ func (r *Reporter) announce(
 	// The other beginning: the agent's own word, needing no room at all. After
 	// the rooms, because a card in a channel is what somebody else can see, and
 	// a private message is not a replacement for it where both were asked for.
-	privately, owed, refusedPrivately := r.directForOwner(ctx, pass, report)
+	privately, owed, refusedPrivately := r.directForOwner(ctx, pass, report, places)
 	sent += privately
 	told += owed
 	failures = append(failures, refusedPrivately.blocking...)

@@ -55,7 +55,7 @@ failed now sorts behind runs nobody has tried, so waiting costs the other runs
 nothing.
 */
 func (r *Reporter) directForOwner(
-	ctx context.Context, pass *fanout, report Report,
+	ctx context.Context, pass *fanout, report Report, places []Conversation,
 ) (sent, owed int, refused refusal) {
 	if !r.wantsOwnApprovals(report) {
 		return 0, 0, refusal{}
@@ -63,18 +63,27 @@ func (r *Reporter) directForOwner(
 
 	policy, err := pass.policyFor(ctx, r.approvals, report)
 	if err != nil {
-		// This side being unavailable. Nothing is owed and nothing is
-		// recorded: the next sweep reads the specification again.
-		return 0, 0, refusal{blocking: []error{err}}
+		// This side being unavailable. Nothing is owed — the next sweep reads
+		// the specification again — and it is recorded, because the record is
+		// how the announcement says why nobody heard. Left out, the general
+		// marker spoke in its place and told an operator that nothing was
+		// configured, which sends them to configure what is already there.
+		return 0, 0, refusal{
+			blocking: []error{err},
+			recorded: r.failuresFor(report, Conversation{}, err),
+		}
 	}
 	if !policy.Direct {
 		return 0, 0, refusal{}
 	}
 
-	from, err := pass.speakingConnection(ctx, r.connections)
+	from, err := pass.speakingConnection(ctx, r.connections, places)
 	switch {
 	case err != nil:
-		return 0, 0, refusal{blocking: []error{err}}
+		return 0, 0, refusal{
+			blocking: []error{err},
+			recorded: r.failuresFor(report, Conversation{}, err),
+		}
 	case from == "":
 		// Recorded and not owed. Nobody has this approval, and the day
 		// somebody configures a connection the run is still in the sweep to be
@@ -190,23 +199,33 @@ func (f *fanout) policyFor(
 }
 
 /*
-speakingConnection answers which workspace the bot speaks from when no
-conversation names one.
+speakingConnection answers which workspace the bot speaks from.
 
-One enabled connection is the answer. None means this installation has no bot to
-speak with at all. More than one is genuinely ambiguous, and it is refused
-rather than guessed: sending one company's run — its id, its agent, the action
-somebody wanted approved — into another company's Slack is the disclosure the
-conversation scope exists to prevent, and a coin toss is not a governance rule.
+The run's own conversations answer it first. A scope with a room has already
+been told which workspace speaks for it — by somebody who configured that room —
+and ignoring it to consult the installation's list would refuse an installation
+with two connections for being ambiguous when nothing about it was.
 
-Read once per sweep, like everything else this pass remembers. It is
-configuration, and a page of fifty runs asking fifty times would let the answer
-change halfway through a sweep as well as costing fifty reads.
+Failing that, one enabled connection is the answer. None means this installation
+has no bot to speak with at all. More than one is genuinely ambiguous, and it is
+refused rather than guessed: sending one company's run — its id, its agent, the
+action somebody wanted approved — into another company's Slack is the disclosure
+the conversation scope exists to prevent, and a coin toss is not a governance
+rule.
+
+The installation's list is read once per sweep, like everything else this pass
+remembers. The rooms are not: they are the run's own, and differ from run to
+run.
 
 Empty and no error is "nobody could be told, and it is not a failure of this
 side"; the caller records why.
 */
-func (f *fanout) speakingConnection(ctx context.Context, from Connections) (string, error) {
+func (f *fanout) speakingConnection(
+	ctx context.Context, from Connections, places []Conversation,
+) (string, error) {
+	if named := oneConnectionAmong(places); named != "" {
+		return named, nil
+	}
 	if !f.askedConnections {
 		f.askedConnections = true
 		enabled, err := from.EnabledConnections(ctx)
@@ -219,6 +238,29 @@ func (f *fanout) speakingConnection(ctx context.Context, from Connections) (stri
 		}
 	}
 	return f.connection, f.connectionsErr
+}
+
+/*
+oneConnectionAmong answers the connection a scope's rooms agree on.
+
+Empty when there are no rooms, and empty when they name more than one: two rooms
+on two workspaces is the ambiguity this whole rule is about, arriving from the
+conversations instead of from the installation. Nothing about a room being
+configured says which of two workspaces a private message belongs in.
+*/
+func oneConnectionAmong(places []Conversation) string {
+	named := ""
+	for _, place := range places {
+		switch {
+		case place.Channel == "" || place.Channel == named:
+			continue
+		case named != "":
+			return ""
+		default:
+			named = place.Channel
+		}
+	}
+	return named
 }
 
 /*

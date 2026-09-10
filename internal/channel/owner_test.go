@@ -457,6 +457,97 @@ func TestSweep_aFailedLookup_doesNotSpeakForAScopeWithNobodyToLookUp(t *testing.
 	}
 }
 
+/*
+Configuration that could not be read says so.
+
+The record is how an announcement explains why nobody heard, and these two
+returns carried none — so the general marker spoke in their place and told an
+operator that nothing was configured. That sends them to configure what is
+already there, while the thing that was actually wrong goes unmentioned.
+*/
+func TestSweep_theConfigurationCannotBeRead_recordsThatAndNotSilence(t *testing.T) {
+	for _, one := range []struct {
+		name string
+		what channel.Approvals
+		from channel.Connections
+	}{
+		{"the specification", &failingPolicies{}, oneConnection},
+		{"the connections", wanting(domain.ApprovalPolicy{Direct: true}), failingConnections{}},
+	} {
+		t.Run(one.name, func(t *testing.T) {
+			deliveries := &memoryDeliveries{}
+			r := ownerReporterWith(t, &fixedReports{reports: []channel.Report{parkedReport()}},
+				&recorder{}, one.what, one.from, deciders("usr_ana"),
+				accountBook{"acme-slack": {"usr_ana": "U-ana"}}).WithDeliveries(deliveries)
+
+			if _, err := r.Sweep(context.Background(), 10); err == nil {
+				t.Fatal("Sweep swallowed configuration it could not read")
+			}
+			if !recordedFailure(deliveries, channel.CodeConfigurationReadFailed) {
+				t.Fatalf("failures = %+v, want the read that failed", deliveries.failures)
+			}
+			if recordedFailure(deliveries, channel.CodeNowhereToSayIt) {
+				t.Error("a failed read was recorded as nothing being configured")
+			}
+		})
+	}
+}
+
+/*
+A room in the run's own scope has already chosen the workspace.
+
+Somebody configured that room on that connection, for these runs. Consulting the
+installation's list instead refuses an installation with two connections for
+being ambiguous when nothing about this run was — the card goes out in the room
+and the private message, which is the part the owner asked for, does not.
+*/
+func TestSweep_aRoomInTheScope_namesTheWorkspaceForThePrivateMessage(t *testing.T) {
+	posts := &recorder{}
+	r := channel.NewReporter(
+		&fixedReports{reports: []channel.Report{parkedReport()}},
+		rooms(room("C07-ops", false)), posts,
+		func() time.Time { return noon }, nil,
+	).WithDeliveries(&memoryDeliveries{}).
+		WithDirectApprovals(deciders("usr_ana"),
+			accountBook{"acme-slack": {"usr_ana": "U-ana"}}).
+		WithOwnerApprovals(wanting(domain.ApprovalPolicy{Direct: true}),
+			connections("acme-slack", "other-slack"))
+
+	if _, err := r.Sweep(context.Background(), 10); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if !addressed(posts.sent, "C07-ops") {
+		t.Error("the room was not told")
+	}
+	if !addressed(posts.sent, "U-ana") {
+		t.Error("the decider was not told privately, though the room named the workspace")
+	}
+}
+
+// And two rooms on two workspaces are ambiguous again: a room being configured
+// says nothing about which of two a private message belongs in.
+func TestSweep_roomsOnTwoWorkspaces_tellNobodyPrivately(t *testing.T) {
+	posts := &recorder{}
+	elsewhere := room("C07-ops", false)
+	elsewhere.Channel = "other-slack"
+	r := channel.NewReporter(
+		&fixedReports{reports: []channel.Report{parkedReport()}},
+		rooms(room("C07-ops", false), elsewhere), posts,
+		func() time.Time { return noon }, nil,
+	).WithDeliveries(&memoryDeliveries{}).
+		WithDirectApprovals(deciders("usr_ana"),
+			accountBook{"acme-slack": {"usr_ana": "U-ana"}}).
+		WithOwnerApprovals(wanting(domain.ApprovalPolicy{Direct: true}),
+			connections("acme-slack", "other-slack"))
+
+	if _, err := r.Sweep(context.Background(), 10); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if addressed(posts.sent, "U-ana") {
+		t.Error("a private message went out with two workspaces to choose between")
+	}
+}
+
 // --- the harness ------------------------------------------------------------
 
 func ownerReporter(
@@ -535,5 +626,11 @@ type failingAccounts struct{}
 func (failingAccounts) AccountsOn(
 	context.Context, string, []domain.UserID,
 ) (map[domain.UserID]string, error) {
+	return nil, errUnavailable
+}
+
+type failingConnections struct{}
+
+func (failingConnections) EnabledConnections(context.Context) ([]string, error) {
 	return nil, errUnavailable
 }
