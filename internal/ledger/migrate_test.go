@@ -5,6 +5,7 @@ import (
 	"os"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -121,6 +122,12 @@ func TestMigrate_conversationsUnderTheIdAlone_takeTheirConnection(t *testing.T) 
 		// Nothing to hang it on: left alone rather than given an invented
 		// connection.
 		{"C-ORPHANED", `{"mode":"mentions"}`, "C-ORPHANED"},
+		// A shape nobody can read. Left where it is — the reader calls it
+		// nobody's conversation — and, crucially, not allowed to take the
+		// upgrade down with it: cast to an integer this row aborts the
+		// statement, the hook, and the release.
+		{"C-BROKEN", `{"channel":"acme-slack","keyVersion":"broken"}`, "C-BROKEN"},
+		{"C-BOOLEAN", `{"channel":"acme-slack","keyVersion":true}`, "C-BOOLEAN"},
 	}
 	// The row that makes C-TAKEN's new name unavailable, written first.
 	rows = append(rows, struct {
@@ -155,9 +162,12 @@ func TestMigrate_conversationsUnderTheIdAlone_takeTheirConnection(t *testing.T) 
 	}
 
 	for _, one := range rows {
-		var version int
+		// Read as text, never cast: the statement under test must survive a
+		// row whose keyVersion is not a number, and a readback that casts
+		// fails on the very row that proves it.
+		var version *string
 		err := pool.QueryRow(t.Context(), `
-			select coalesce((value->>'keyVersion')::int, 0) from settings
+			select value->>'keyVersion' from settings
 			where kind = 'channel_conversation' and company_id = 'acme'
 			  and area_id = 'migrating' and name = $1`, one.want).Scan(&version)
 		if err != nil {
@@ -166,9 +176,100 @@ func TestMigrate_conversationsUnderTheIdAlone_takeTheirConnection(t *testing.T) 
 		// Renamed rows declare the shape they are in. A rename without it is
 		// read as an id that happens to contain a colon and a slash, which is
 		// nobody's conversation.
-		if moved := one.want != one.name; moved && version != 2 {
-			t.Errorf("%s was renamed to %s and declares version %d",
+		if moved := one.want != one.name; moved && (version == nil || *version != "2") {
+			t.Errorf("%s was renamed to %s and declares version %v",
 				one.name, one.want, version)
 		}
+	}
+}
+
+/*
+The rename waits for whoever is writing that connection.
+
+It runs as a pre-upgrade hook, so the release before it is still serving — and
+that release reads both shapes and writes the old one. Unlocked, the order that
+happens is: a pod decides to write, this statement renames the row, the pod
+writes the old name back, and the conversation exists twice. The runtime then
+refuses it as ambiguous: a conversation broken by an upgrade that reported
+success, and broken for good.
+
+Proved by holding the lock a writer would hold and watching the migration wait
+for it. The lock is asked of Postgres by the name the administration uses, so
+this also says the two agree about what that name is.
+*/
+func TestMigrate_conversationsUnderTheIdAlone_waitForTheConnectionsLock(t *testing.T) {
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("TEST_DATABASE_URL is unset; skipping the migration")
+	}
+	pool, err := pgxpool.New(t.Context(), dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	if err := ledger.Migrate(t.Context(), pool); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	if _, err := pool.Exec(t.Context(), `
+		insert into settings (scope_kind, company_id, area_id, kind, name, value, enabled, updated_by)
+		values ('area', 'acme', 'locked', 'channel_conversation', 'C-LOCKED',
+		        '{"channel":"held-slack","mode":"mentions"}'::jsonb, true, 'restore')
+		on conflict (scope_kind, company_id, area_id, kind, name) do update set value = excluded.value`,
+	); err != nil {
+		t.Fatalf("write the row: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = pool.Exec(context.Background(),
+			`delete from settings where company_id = 'acme' and area_id = 'locked'`)
+	})
+	if _, err := pool.Exec(t.Context(),
+		`delete from schema_migrations where version = '0072_conversations_by_connection'`,
+	); err != nil {
+		t.Fatalf("forget the migration: %v", err)
+	}
+
+	// The lock a writer holds while it configures that connection.
+	holder, err := pool.Acquire(t.Context())
+	if err != nil {
+		t.Fatalf("acquire: %v", err)
+	}
+	defer holder.Release()
+	if _, err := holder.Exec(t.Context(),
+		`select pg_advisory_lock(hashtext($1))`, "channel:held-slack"); err != nil {
+		t.Fatalf("take the lock: %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- ledger.Migrate(context.Background(), pool) }()
+
+	select {
+	case err := <-done:
+		t.Fatalf("the rename did not wait for the connection's lock: %v", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+
+	if _, err := holder.Exec(t.Context(),
+		`select pg_advisory_unlock(hashtext($1))`, "channel:held-slack"); err != nil {
+		t.Fatalf("release the lock: %v", err)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("migrate after the lock was released: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the migration never finished after the lock was released")
+	}
+
+	var name string
+	if err := pool.QueryRow(t.Context(), `
+		select name from settings
+		where kind = 'channel_conversation' and company_id = 'acme' and area_id = 'locked'`,
+	).Scan(&name); err != nil {
+		t.Fatalf("read the row back: %v", err)
+	}
+	if name != "10:held-slack/C-LOCKED" {
+		t.Errorf("name = %q, want it renamed once the lock was free", name)
 	}
 }

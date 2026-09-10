@@ -28,13 +28,37 @@
 -- abort the migration: a migration that dies is a process that will not start,
 -- and a row already in the new shape is a conversation somebody has since
 -- saved.
+-- The connections whose conversations are about to move, locked first.
+--
+-- This runs as a pre-upgrade hook, so the release before it is still serving —
+-- and that release reads both shapes and writes the old one. Without the lock
+-- the order that happens is: a pod decides to write, this statement renames the
+-- row, the pod writes the old name back, and the conversation exists twice. The
+-- runtime then refuses it as ambiguous, which is a conversation broken by an
+-- upgrade that reported success.
+--
+-- The same lock `PutConversation` takes, by the same name, so the two queue
+-- rather than interleave. Taken in one deterministic order, because a migration
+-- that deadlocks with a worker is a migration that fails.
+select pg_advisory_xact_lock(hashtext('channel:' || connection))
+  from (select distinct settings.value->>'channel' as connection
+          from settings
+         where settings.kind = 'channel_conversation'
+           and coalesce(settings.value->>'channel', '') <> ''
+         order by 1) as affected;
+
 update settings as target
    set name = octet_length(target.value->>'channel')::text || ':'
               || (target.value->>'channel') || '/' || target.name,
        value = jsonb_set(target.value, '{keyVersion}', '2'::jsonb, true)
  where target.kind = 'channel_conversation'
    and coalesce(target.value->>'channel', '') <> ''
-   and coalesce((target.value->>'keyVersion')::int, 0) = 0
+   -- The legacy shape is the absence of the field, recognised without reading
+   -- what is there. Cast to an integer, a restored row carrying "broken" or a
+   -- boolean aborts the statement — and with it the hook, and with that the
+   -- upgrade: one unreadable row stopping an installation from starting, where
+   -- the reader that meets the same row simply calls it nobody's conversation.
+   and target.value->'keyVersion' is null
    and not exists (
        select 1 from settings as taken
         where taken.scope_kind = target.scope_kind
