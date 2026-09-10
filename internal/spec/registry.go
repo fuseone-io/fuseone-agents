@@ -164,13 +164,13 @@ func (r *Registry) Get(ctx context.Context, agent domain.AgentID, version domain
 	return s, nil
 }
 
-// Declarations is the half of a published version a summary leaves out.
+// Declarations is what a published version holds and a summary leaves out.
 //
-// One answer rather than three, because they are dropped for the same reason:
-// what a read does not return, an editor cannot put back, and publishing again
-// deletes it. Separate calls are separate chances to forget one — which is
-// exactly how the approval policy was lost between a version and its next
-// publication.
+// One answer rather than three, because all three are omitted for the same
+// reason and would be lost for the same reason: what a read does not return, an
+// editor cannot put back, and publishing again deletes it. Separate calls are
+// separate chances to forget one — which is exactly how the approval policy was
+// lost between a version and its next publication.
 
 // Declared reads the parts of a published version a summary leaves out.
 //

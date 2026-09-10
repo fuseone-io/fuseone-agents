@@ -9,18 +9,20 @@ import (
 )
 
 /*
-The half of a definition the summary leaves out.
+What a definition holds and the summary leaves out.
 
 A listing shows twenty agents and none of their processes, for the same reason
-it shows none of their prose: twenty bodies of text nobody asked to read. The
-stages are read one version at a time, beside the instructions they belong to.
+it shows none of their prose: twenty bodies of text nobody asked to read. They
+are read one version at a time, beside the instructions they belong to.
 */
-// Definitions reads the half of a specification the summary leaves out,
+// Definitions reads what a specification holds and its summary leaves out,
 // declared here by the consumer.
 //
-// Both halves in one answer, because they are dropped for the same reason:
-// what a read does not return, an editor cannot put back, and publishing
-// again deletes it. Two calls would be two chances to forget one.
+// All of it in one answer, because every part of it is dropped for the same
+// reason: what a read does not return, an editor cannot put back, and
+// publishing again deletes it. Separate calls are separate chances to forget
+// one — which is how the approval policy came to be lost between a version and
+// its next publication, while the two beside it travelled.
 type Definitions interface {
 	Declared(ctx context.Context, agent domain.AgentID, version domain.VersionID) (spec.Declarations, error)
 }
