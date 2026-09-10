@@ -27,6 +27,15 @@ field" is a commit message.
 
 ## [0.47.0] — 2026-09-10
 
+### Changed
+
+- **A conversation is stored under its connection as well as its id.** The
+  second half of a move the previous release prepared: it learned to read both
+  shapes and went on writing the old one, because both versions serve during a
+  rolling update. Conversations written before this are renamed on upgrade, and
+  the restriction that stood in for the key is gone — the same Slack channel id
+  on two workspaces, in one scope, is two conversations again.
+
 ### Fixed
 
 - **A channel binding stored in the wrong place can be seen and removed.** A
