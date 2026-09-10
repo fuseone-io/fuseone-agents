@@ -69,7 +69,16 @@ func openSpecPool(t *testing.T) *pgxpool.Pool {
 
 func openRegistry(t *testing.T) *spec.Registry {
 	t.Helper()
-	return spec.NewRegistry(openSpecPool(t))
+	r, _ := openRegistryWithPool(t)
+	return r
+}
+
+// openRegistryWithPool also hands back the pool, for a test that has to plant a
+// row the registry itself would never write.
+func openRegistryWithPool(t *testing.T) (*spec.Registry, *pgxpool.Pool) {
+	t.Helper()
+	pool := openSpecPool(t)
+	return spec.NewRegistry(pool), pool
 }
 
 func published(t *testing.T, source string) spec.Spec {
@@ -625,5 +634,57 @@ func TestApprovalPolicy_aVersionNobodyPublished_isRefused(t *testing.T) {
 	_, err := r.ApprovalPolicy(context.Background(), "triage", "v-nowhere")
 	if !errors.Is(err, spec.ErrNotPublished) {
 		t.Fatalf("err = %v, want ErrNotPublished", err)
+	}
+}
+
+/*
+A stored policy is read the way publishing writes it, or not at all.
+
+Written by one path and read by another, the two drifted: authoring refuses a
+policy that names people while asking for no message, and the read accepted it.
+Such a row can only arrive by restore or from a newer version — and obeying it
+means obeying a shape the platform itself calls meaningless.
+*/
+func TestApprovalPolicy_aShapeAuthoringWouldRefuse_isRefusedOnTheWayOut(t *testing.T) {
+	r, pool := openRegistryWithPool(t)
+	ctx := context.Background()
+
+	for _, one := range []struct{ name, stored string }{
+		{"naming people while asking for no message",
+			`{"notify":["usr_ana"]}`},
+		{"a field this version does not know",
+			`{"direct":true,"escalate_after":"1h"}`},
+		{"a row that lost its meaning", `null`},
+	} {
+		t.Run(one.name, func(t *testing.T) {
+			// Inserted rather than updated: a published version cannot be
+			// changed, which is the point of the table. This is the row a
+			// restore or a newer version leaves behind.
+			version := domain.VersionID("v-" + strings.ReplaceAll(one.name, " ", "-"))
+			if _, err := pool.Exec(ctx, `
+				insert into agent_specs (
+					agent_id, version_id, company_id, area_id, name,
+					provider, model, effort, tools, budget, triggers,
+					instructions, source, published_by, emits, steps,
+					memory_learning, approvals
+				) values ('triage', $1, 'acme', 'cx', 'Ticket triage',
+					'openai', 'test-model', '', '{}', '{}'::jsonb, '[]'::jsonb,
+					'read it', 'test.agent.md', 'usr_ana', '[]'::jsonb,
+					'[]'::jsonb, '{"mode":"off"}'::jsonb, $2::jsonb)`,
+				string(version), one.stored); err != nil {
+				t.Fatalf("plant the row: %v", err)
+			}
+
+			_, err := r.ApprovalPolicy(ctx, "triage", version)
+			if !errors.Is(err, spec.ErrUnreadableApprovals) {
+				t.Fatalf("err = %v, want ErrUnreadableApprovals", err)
+			}
+			// And the whole version reads the same way: one column, one
+			// decoder, or a shape one path refuses is obeyed by the other.
+			if _, err := r.Get(ctx, "triage", version); !errors.Is(
+				err, spec.ErrUnreadableApprovals) {
+				t.Errorf("Get err = %v, want ErrUnreadableApprovals", err)
+			}
+		})
 	}
 }

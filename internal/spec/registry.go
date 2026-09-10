@@ -156,10 +156,11 @@ func (r *Registry) Get(ctx context.Context, agent domain.AgentID, version domain
 		return Spec{}, fmt.Errorf("spec: decode memory learning: %w", err)
 	}
 	s.MemoryLearning = s.MemoryLearning.Normalize()
-	if err := json.Unmarshal(approvals, &s.Approvals); err != nil {
-		return Spec{}, fmt.Errorf("spec: decode approvals: %w", err)
+	// The same read the reporter uses. Two decoders for one column is how a
+	// shape one of them refuses is obeyed by the other.
+	if s.Approvals, err = decodeApprovals(approvals); err != nil {
+		return Spec{}, err
 	}
-	s.Approvals = s.Approvals.Normalize()
 	return s, nil
 }
 

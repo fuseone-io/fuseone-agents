@@ -1,6 +1,7 @@
 package spec
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -45,9 +46,43 @@ func (r *Registry) ApprovalPolicy(
 			"spec: read the approvals of %s@%s: %w", agent, version, err)
 	}
 
-	var policy domain.ApprovalPolicy
-	if err := json.Unmarshal(raw, &policy); err != nil {
-		return domain.ApprovalPolicy{}, fmt.Errorf("spec: decode approvals: %w", err)
+	return decodeApprovals(raw)
+}
+
+// ErrUnreadableApprovals means a stored policy is a shape this version cannot
+// honour. Refused rather than read as much of it as happens to fit: a field
+// this binary does not know is a decision somebody took that it cannot carry
+// out, and obeying the half it recognises is obeying something nobody wrote.
+var ErrUnreadableApprovals = errors.New("spec: that approval policy is not one this version knows")
+
+/*
+decodeApprovals reads a stored policy the way publishing wrote it.
+
+Written by one path and read by another, the two drifted: authoring refuses a
+policy that names people while asking for no message, and the read accepted it —
+so a row that could only have arrived by restore or by a newer version was
+obeyed in a shape the platform says is meaningless.
+
+Unknown fields are refused for the same reason. Absent and null are refused too:
+the column is not null and defaults to an object, so neither is a policy anybody
+wrote — it is a row that lost its meaning somewhere, and reading it as "asked
+for nothing" would be inventing an answer.
+*/
+func decodeApprovals(raw []byte) (domain.ApprovalPolicy, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return domain.ApprovalPolicy{}, fmt.Errorf("%w: it is empty", ErrUnreadableApprovals)
 	}
-	return policy.Normalize(), nil
+
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	var policy domain.ApprovalPolicy
+	if err := decoder.Decode(&policy); err != nil {
+		return domain.ApprovalPolicy{}, fmt.Errorf("%w: %v", ErrUnreadableApprovals, err)
+	}
+
+	policy = policy.Normalize()
+	if err := policy.Validate(); err != nil {
+		return domain.ApprovalPolicy{}, fmt.Errorf("%w: %v", ErrUnreadableApprovals, err)
+	}
+	return policy, nil
 }
