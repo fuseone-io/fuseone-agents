@@ -46,6 +46,11 @@ type Spec struct {
 	Budget         domain.Budget
 	MemoryLearning domain.MemoryLearningPolicy
 
+	// Approvals is how this agent's owner asked for human approval to arrive.
+	// The Gate decides whether a person must answer; this decides where they
+	// are asked, and the console answers whatever it says.
+	Approvals domain.ApprovalPolicy
+
 	Triggers []Trigger
 
 	// Emits are the events this agent publishes when a run of it finishes
@@ -100,6 +105,7 @@ type frontmatter struct {
 		WallClockMS int64 `yaml:"wall_clock_ms"`
 	} `yaml:"budget"`
 	MemoryLearning *domain.MemoryLearningPolicy `yaml:"memory_learning,omitempty"`
+	Approvals      *domain.ApprovalPolicy       `yaml:"approvals,omitempty"`
 }
 
 // Parse reads one agent definition.
@@ -118,6 +124,12 @@ func Parse(source string, data []byte) (Spec, error) {
 	if fm.MemoryLearning != nil {
 		learning = fm.MemoryLearning.Normalize()
 	}
+	// Absent is the console alone, which is how every agent behaved before an
+	// agent could ask for anything else.
+	approvals := domain.ApprovalPolicy{}
+	if fm.Approvals != nil {
+		approvals = fm.Approvals.Normalize()
+	}
 
 	s := Spec{
 		ID:             domain.AgentID(fm.ID),
@@ -133,6 +145,7 @@ func Parse(source string, data []byte) (Spec, error) {
 		Steps:          fm.Steps,
 		Instructions:   strings.TrimSpace(string(body)),
 		MemoryLearning: learning,
+		Approvals:      approvals,
 		Source:         source,
 		Budget: domain.Budget{
 			Micros:      fm.Budget.Micros,
@@ -186,6 +199,9 @@ func (s Spec) validate() error {
 	}
 	problems = append(problems, triggerProblems(s.Triggers)...)
 	problems = append(problems, emitProblems(s.Emits)...)
+	if err := s.Approvals.Validate(); err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalid, err)
+	}
 	if err := s.MemoryLearning.Validate(); err != nil {
 		problems = append(problems, err.Error())
 	}

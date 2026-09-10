@@ -470,3 +470,50 @@ func TestParse_aTriggerTypeNobodyServes_isRefused(t *testing.T) {
 		t.Fatalf("err = %v, want the typo refused", err)
 	}
 }
+
+/*
+An agent says how its approvals should reach a person.
+
+The choice belongs to whoever owns the agent, and the file is where they work —
+so it needs no console screen and no new door in Slack. It is versioned with
+everything else here, which is what lets a run be governed by the preference the
+version it pinned declared rather than by one taken after it started.
+*/
+func TestParse_anAgentAsksForItsApprovalsPrivately(t *testing.T) {
+	t.Parallel()
+
+	s := parse(t, strings.Replace(valid, "tools: [crm.lookup, crm.note]",
+		"tools: [crm.lookup, crm.note]\napprovals:\n  direct: true\n  notify: [usr_ana]", 1))
+
+	if !s.Approvals.Direct {
+		t.Error("the agent asked for a private message and the spec does not say so")
+	}
+	if len(s.Approvals.Notify) != 1 || s.Approvals.Notify[0] != "usr_ana" {
+		t.Errorf("notify = %v, want the person the owner named", s.Approvals.Notify)
+	}
+}
+
+// Absent is the console alone: how every agent behaved before one could ask for
+// anything else.
+func TestParse_anAgentThatAsksForNothing_getsTheConsoleAlone(t *testing.T) {
+	t.Parallel()
+
+	s := parse(t, valid)
+
+	if s.Approvals.Direct || len(s.Approvals.Notify) > 0 {
+		t.Errorf("approvals = %+v, want the console alone", s.Approvals)
+	}
+}
+
+// And a policy that reads as configured while doing nothing is refused where
+// the author can still see the file.
+func TestParse_namingPeopleWithoutAskingForAMessage_isRefused(t *testing.T) {
+	t.Parallel()
+
+	_, err := spec.Parse("test.agent.md", []byte(strings.Replace(valid,
+		"tools: [crm.lookup, crm.note]",
+		"tools: [crm.lookup, crm.note]\napprovals:\n  notify: [usr_ana]", 1)))
+	if !errors.Is(err, spec.ErrInvalid) {
+		t.Fatalf("err = %v, want ErrInvalid", err)
+	}
+}
