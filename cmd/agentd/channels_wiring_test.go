@@ -119,3 +119,39 @@ type oneWorkspace struct{}
 func (oneWorkspace) EnabledConnections(context.Context) ([]string, error) {
 	return []string{"acme-slack"}, nil
 }
+
+/*
+And the process supplies every one of them.
+
+The test above asks the assembly, with parts a test chose. That leaves the
+choosing itself uncovered: a dependency dropped where the process picks them —
+the agent's approval policy, the connections it may speak from — turns the
+feature off in the worker, and a reporter assembled from a test's own parts goes
+on obeying an owner in every test there is.
+
+Constructed rather than run: none of these touches a database to exist, and what
+is being asked is whether anybody remembered to name it.
+*/
+func TestReporterPartsFor_namesEveryDependency(t *testing.T) {
+	t.Parallel()
+	parts := reporterPartsFor(&workerParts{}, "https://agents.example.com")
+
+	for _, one := range []struct {
+		what    string
+		missing bool
+	}{
+		{"what has not been announced", parts.reports == nil},
+		{"what has been delivered", parts.deliveries == nil},
+		{"the rooms that hear", parts.rooms == nil},
+		{"something to post with", parts.poster == nil},
+		{"who may decide", parts.approvers == nil},
+		{"where they are reachable", parts.accounts == nil},
+		{"what each agent's owner asked for", parts.policies == nil},
+		{"which workspaces it may speak from", parts.connections == nil},
+		{"a link back to the run", parts.baseURL == ""},
+	} {
+		if one.missing {
+			t.Errorf("the worker builds its reporter without %s", one.what)
+		}
+	}
+}

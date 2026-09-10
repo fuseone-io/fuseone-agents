@@ -49,6 +49,32 @@ type reporterParts struct {
 	baseURL     string
 }
 
+/*
+reporterPartsFor is where every dependency is chosen.
+
+Its own function so a test can look at what the process supplies. Written inline
+at the call site, a part left out — the agent's own approval policy, the
+connections it may speak from — turns the feature off in the worker while every
+test that assembles a reporter of its own stays green, including the one that
+asks whether the assembly obeys an owner.
+*/
+func reporterPartsFor(p *workerParts, baseURL string) reporterParts {
+	store, deliveries := p.settings, channel.NewPostgres(p.configPool)
+	return reporterParts{
+		reports:    deliveries,
+		deliveries: deliveries,
+		rooms:      channel.NewConfigured(store),
+		poster:     channel.NewRouter(connect.New(store)),
+		approvers:  auth.NewPostgres(p.configPool),
+		// Reads where people are reachable; configures nothing, so it is
+		// handed no driver table.
+		accounts:    admin.NewChannels(p.configPool, store, nil),
+		policies:    spec.NewRegistry(p.configPool),
+		connections: channel.NewConfigured(store),
+		baseURL:     baseURL,
+	}
+}
+
 func announcingReporter(parts reporterParts) *channel.Reporter {
 	return channel.NewReporter(
 		parts.reports, parts.rooms, parts.poster, time.Now, slog.Default(),
@@ -66,17 +92,7 @@ func reportToChannels(
 	ctx context.Context, p *workerParts, baseURL string, metrics *worker.MetricsRegistry,
 ) {
 	store, deliveries := p.settings, channel.NewPostgres(p.configPool)
-	reporter := announcingReporter(reporterParts{
-		reports:     deliveries,
-		deliveries:  deliveries,
-		rooms:       channel.NewConfigured(store),
-		poster:      channel.NewRouter(connect.New(store)),
-		approvers:   auth.NewPostgres(p.configPool),
-		accounts:    admin.NewChannels(p.configPool, store, nil),
-		policies:    spec.NewRegistry(p.configPool),
-		connections: channel.NewConfigured(store),
-		baseURL:     baseURL,
-	})
+	reporter := announcingReporter(reporterPartsFor(p, baseURL))
 
 	// The cards the announcements left behind. A separate loop because it
 	// answers a different question — what is still asking, rather than what
