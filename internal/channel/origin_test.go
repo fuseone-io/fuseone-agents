@@ -1044,6 +1044,46 @@ func enabledChannel(t *testing.T, channels *admin.Channels, name string) bool {
 	return false
 }
 
+/*
+Which workspace the bot may speak from is installation-wide configuration.
+
+Where a connection is stored is part of what it is: they live at the
+installation, which is where the credential is sealed. A row left at a company
+or an area by a restore is not a second connection — but counted as one it makes
+a healthy installation look like it has two workspaces to choose between, and
+that is answered by telling nobody at all. A silent denial, produced by a row
+nothing else reads.
+*/
+func TestEnabledConnections_onlyTheInstallationsOwn(t *testing.T) {
+	store, channels, settingsStore := configuredChannelsWithStore(t)
+
+	connect(t, channels, "acme-slack")
+	if err := channels.PutChannel(t.Context(), admin.ChannelWrite{
+		Channel: admin.Channel{Name: "asleep-slack", Kind: "slack", Enabled: false},
+		By:      "usr_ana", Governs: true,
+	}); err != nil {
+		t.Fatalf("PutChannel: %v", err)
+	}
+	// The administration writes connections at the installation and nowhere
+	// else, so this is a restore, a migration, or a hand edit.
+	if err := settingsStore.Put(t.Context(), settings.Setting{
+		ScopeKind: settings.ScopeArea,
+		Scope:     domain.Scope{Company: "acme", Area: "ops"},
+		Kind:      channel.KindChannel, Name: "stray-slack",
+		Value: []byte(`{"kind":"slack"}`), Enabled: true, UpdatedBy: "restore",
+	}); err != nil {
+		t.Fatalf("write the stray row: %v", err)
+	}
+
+	got, err := store.EnabledConnections(t.Context())
+	if err != nil {
+		t.Fatalf("EnabledConnections: %v", err)
+	}
+	if len(got) != 1 || got[0] != "acme-slack" {
+		t.Fatalf("connections = %v, want the installation's one enabled connection", got)
+	}
+}
+
 // installationConversation writes a row the administration will not produce.
 // It arrives by restore, by migration, or from a version of the screen that did
 // not check — which is exactly what the locks on the read side are for.

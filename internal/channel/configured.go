@@ -409,7 +409,13 @@ func (c *Configured) EnabledConnections(ctx context.Context) ([]string, error) {
 	}
 	var out []string
 	for _, s := range stored {
-		if s.Enabled {
+		// Where a connection is stored is part of what it is: they are
+		// installation-wide, and the credential is sealed there. A row at a
+		// company or an area is not a second connection — it is something a
+		// restore or a hand edit left behind, and counting it would make a
+		// healthy installation look like it has two workspaces to choose
+		// between, which is answered by telling nobody.
+		if s.Enabled && s.ScopeKind == settings.ScopeInstallation && s.Scope == (domain.Scope{}) {
 			out = append(out, s.Name)
 		}
 	}
