@@ -27,7 +27,9 @@ type Definitions interface {
 	Declared(ctx context.Context, agent domain.AgentID, version domain.VersionID) (spec.Declarations, error)
 }
 
-// WithDefinitions wires reading a published version's declared stages.
+// WithDefinitions wires reading what a published version declares and its
+// summary leaves out: the stages, the events it emits, and how its owner asked
+// for approvals to arrive.
 func (s *Server) WithDefinitions(definitions Definitions) *Server {
 	s.definitions = definitions
 	return s

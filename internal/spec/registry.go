@@ -176,7 +176,7 @@ func (r *Registry) Get(ctx context.Context, agent domain.AgentID, version domain
 //
 // Its own read rather than fields on the summary: a listing of twenty agents
 // would carry twenty processes nobody asked to see, which is the same reason
-// the instructions are read one version at a time. Both in one answer,
+// the instructions are read one version at a time. All of them in one answer,
 // because what a read omits an editor cannot put back — and publishing again
 // deletes it.
 type Declarations struct {
