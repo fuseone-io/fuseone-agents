@@ -34,6 +34,17 @@ const (
 	// CodeUnsupportedCapability means a driver was asked for something it
 	// cannot do — rewriting a message it posted, today.
 	CodeUnsupportedCapability = "channel_unsupported_capability"
+	// CodeNoConnectionChosen means an agent asked for its approvals privately
+	// and nothing said which workspace the bot should send them from. With no
+	// conversation to name one, and more than one connection to choose
+	// between, guessing would send one company's run into another company's
+	// Slack — so nobody is told and the reason is recorded.
+	CodeNoConnectionChosen = "channel_no_connection_chosen"
+	// CodeNamedNobodyWhoDecides means an agent named the people to message and
+	// none of them may decide in the run's scope. Addressing is not
+	// authorising: a message to somebody the button will refuse is a message
+	// that wastes their time and tells the owner nothing.
+	CodeNamedNobodyWhoDecides = "channel_named_nobody_who_decides"
 )
 
 var (
@@ -62,6 +73,8 @@ var (
 		CodeRateLimited:             true,
 		CodeTooManyRecipients:       true,
 		CodeUnsupportedCapability:   true,
+		CodeNoConnectionChosen:      true,
+		CodeNamedNobodyWhoDecides:   true,
 	}
 )
 

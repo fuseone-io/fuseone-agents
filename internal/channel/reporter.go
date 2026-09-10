@@ -28,6 +28,8 @@ type Reporter struct {
 	deliveries    Deliveries
 	approvers     Approvers
 	accounts      Accounts
+	approvals     Approvals
+	connections   Connections
 	clock         func() time.Time
 	baseURL       string
 	log           *slog.Logger
@@ -63,6 +65,20 @@ which is what an installation that has not opted in gets anyway.
 */
 func (r *Reporter) WithDirectApprovals(who Approvers, where Accounts) *Reporter {
 	r.approvers, r.accounts = who, where
+	return r
+}
+
+/*
+WithOwnerApprovals lets an agent's own specification ask for private approvals,
+with no conversation involved.
+
+Optional, like the rest of the private path. Without it an agent that asked is
+simply not obeyed, which is what an installation running an older worker gets —
+and is why the preference is stored versioned rather than acted on at write
+time: the record says what was asked, whatever a given process can do about it.
+*/
+func (r *Reporter) WithOwnerApprovals(what Approvals, from Connections) *Reporter {
+	r.approvals, r.connections = what, from
 	return r
 }
 
@@ -162,6 +178,15 @@ func (r *Reporter) announce(
 		failures = append(failures, refused.blocking...)
 		deliveryFailures = append(deliveryFailures, refused.recorded...)
 	}
+	// The other beginning: the agent's own word, needing no room at all. After
+	// the rooms, because a card in a channel is what somebody else can see, and
+	// a private message is not a replacement for it where both were asked for.
+	privately, owed, refusedPrivately := r.directForOwner(ctx, pass, report)
+	sent += privately
+	told += owed
+	failures = append(failures, refusedPrivately.blocking...)
+	deliveryFailures = append(deliveryFailures, refusedPrivately.recorded...)
+
 	if err := r.recordFailures(ctx, deliveryFailures); err != nil {
 		failures = append(failures, err)
 	}

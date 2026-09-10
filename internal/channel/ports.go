@@ -48,6 +48,32 @@ type Mapped struct {
 	Mode string
 }
 
+/*
+Approvals answers how an agent's owner asked for approval to arrive.
+
+Keyed by the version the run pinned, not by the agent alone. A specification is
+versioned, and a run is governed by the one it began under: read from whatever
+is published now, a run that started this morning would be announced according
+to a decision taken this afternoon.
+*/
+type Approvals interface {
+	ApprovalPolicy(
+		ctx context.Context, agent domain.AgentID, version domain.VersionID,
+	) (domain.ApprovalPolicy, error)
+}
+
+/*
+Connections answers which channel connections this installation has enabled.
+
+Asked only when an agent wants its approvals sent privately and no conversation
+is involved, because then nothing else says which workspace the bot should speak
+from. One is the answer; more than one is a question this platform refuses to
+answer by guessing.
+*/
+type Connections interface {
+	EnabledConnections(ctx context.Context) ([]string, error)
+}
+
 // Published lists what an ask in a scope could start.
 type Published interface {
 	List(ctx context.Context, scope domain.Scope, allVersions bool) ([]domain.AgentSummary, error)

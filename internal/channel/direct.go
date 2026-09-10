@@ -109,6 +109,20 @@ func (f *fanout) recipients(
 		return nil, false, nil
 	}
 
+	return f.reachable(ctx, place, who)
+}
+
+/*
+reachable turns the people who may decide into the private conversations to
+post in, or answers that there are too many.
+
+Split from recipients because the owner's path narrows *who* before asking
+*where*, and the cap has to be applied after both — counted in messages rather
+than in candidates.
+*/
+func (f *fanout) reachable(
+	ctx context.Context, place Conversation, who []domain.UserID,
+) (to []Conversation, capped bool, err error) {
 	where, err := f.whereReachable(ctx, place.Channel, who)
 	if err != nil {
 		return nil, false, err
@@ -201,6 +215,11 @@ var terminal = map[string]bool{
 	CodeConversationUnavailable: true,
 	CodeUnsupportedCapability:   true,
 	CodeTooManyRecipients:       true,
+	// Both wait on somebody configuring something: a connection to send from,
+	// or people who may actually decide. Another sweep in thirty seconds reads
+	// the same answer.
+	CodeNoConnectionChosen:    true,
+	CodeNamedNobodyWhoDecides: true,
 }
 
 // degrades reports that another sweep would learn nothing new.
