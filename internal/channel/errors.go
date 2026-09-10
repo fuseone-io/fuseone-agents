@@ -21,6 +21,8 @@ const (
 	CodeTooManyRecipients       = channelmetrics.CodeTooManyRecipients
 	CodeNoConnectionChosen      = channelmetrics.CodeNoConnectionChosen
 	CodeNamedNobodyWhoDecides   = channelmetrics.CodeNamedNobodyWhoDecides
+	CodeNobodyMayDecide         = channelmetrics.CodeNobodyMayDecide
+	CodeNobodyReachable         = channelmetrics.CodeNobodyReachable
 	CodeUnsupportedCapability   = channelmetrics.CodeUnsupportedCapability
 )
 

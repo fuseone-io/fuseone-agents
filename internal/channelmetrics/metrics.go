@@ -45,6 +45,14 @@ const (
 	// authorising: a message to somebody the button will refuse is a message
 	// that wastes their time and tells the owner nothing.
 	CodeNamedNobodyWhoDecides = "channel_named_nobody_who_decides"
+	// CodeNobodyMayDecide means an agent asked for its approvals privately and
+	// nobody holds Approver in a scope covering the run. Nobody can be told,
+	// and the fix is a grant.
+	CodeNobodyMayDecide = "channel_nobody_may_decide"
+	// CodeNobodyReachable means the people who may decide are known and none of
+	// them has linked a channel account. Nobody can be told, and the fix is a
+	// binding — a different screen and usually a different person.
+	CodeNobodyReachable = "channel_nobody_reachable"
 )
 
 var (
@@ -75,6 +83,8 @@ var (
 		CodeUnsupportedCapability:   true,
 		CodeNoConnectionChosen:      true,
 		CodeNamedNobodyWhoDecides:   true,
+		CodeNobodyMayDecide:         true,
+		CodeNobodyReachable:         true,
 	}
 )
 

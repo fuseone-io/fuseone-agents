@@ -400,10 +400,21 @@ func channelStore(t *testing.T) (*channel.Postgres, *pgxpool.Pool) {
 
 func appendStep(t *testing.T, pool *pgxpool.Pool, run string, kind domain.StepKind, payload []byte) {
 	t.Helper()
+	appendStepIn(t, pool, domain.Scope{Company: "acme", Area: "ops"}, run, kind, payload)
+}
+
+// appendStepIn is the same, in a scope a test chooses. Who may decide is a
+// property of the scope, so a test that needs one run answerable and another
+// not says so here.
+func appendStepIn(
+	t *testing.T, pool *pgxpool.Pool, scope domain.Scope,
+	run string, kind domain.StepKind, payload []byte,
+) {
+	t.Helper()
 	store := ledger.NewPostgres(pool)
 	if _, err := store.Append(t.Context(), domain.Step{
 		RunID: domain.RunID(run), Kind: kind, At: time.Now(),
-		Scope:   domain.Scope{Company: "acme", Area: "ops"},
+		Scope:   scope,
 		AgentID: "triage", VersionID: "v1", Payload: payload,
 	}); err != nil {
 		t.Fatalf("append %s: %v", kind, err)
@@ -416,8 +427,13 @@ func appendStep(t *testing.T, pool *pgxpool.Pool, run string, kind domain.StepKi
 // while the first was fixed.
 func awaitApproval(t *testing.T, pool *pgxpool.Pool, run string) {
 	t.Helper()
-	appendStep(t, pool, run, domain.StepRunStarted, nil)
-	appendStep(t, pool, run, domain.StepApprovalRequested,
+	awaitApprovalIn(t, pool, domain.Scope{Company: "acme", Area: "ops"}, run)
+}
+
+func awaitApprovalIn(t *testing.T, pool *pgxpool.Pool, scope domain.Scope, run string) {
+	t.Helper()
+	appendStepIn(t, pool, scope, run, domain.StepRunStarted, nil)
+	appendStepIn(t, pool, scope, run, domain.StepApprovalRequested,
 		[]byte(`{"tool":"erp.transfer","rule":"financial","reason":"over the ceiling"}`))
 }
 
