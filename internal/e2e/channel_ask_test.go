@@ -20,6 +20,7 @@ import (
 
 	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/channel"
+	"github.com/fuseone/agents/internal/channel/connect"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/httpapi"
@@ -150,15 +151,19 @@ func aConversation(t *testing.T) *conversing {
 	store := settings.NewStore(pool, v)
 	c := &conversing{
 		pool: pool, store: store,
-		channels: admin.NewChannels(pool, store),
+		channels: admin.NewChannels(pool, store, connect.New(store)),
 		registry: spec.NewRegistry(pool),
 		said:     &saidAloud{},
 	}
 
 	// Configured through the administration area, which is what records it.
-	if err := c.channels.PutChannel(ctx,
-		admin.Channel{Name: "acme", Kind: "slack", Workspace: "Acme", Enabled: true},
-		channel.Credentials{Token: "xoxb-acme", Signing: signing}, "usr_ana"); err != nil {
+	if err := c.channels.PutChannel(ctx, admin.ChannelWrite{
+		Channel: admin.Channel{
+			Name: "acme", Kind: "slack", Workspace: "Acme", Enabled: true,
+		},
+		Credentials: channel.Credentials{Token: "xoxb-acme", Signing: signing},
+		By:          "usr_ana", Governs: true,
+	}); err != nil {
 		t.Fatalf("configure the channel: %v", err)
 	}
 	if err := c.channels.PutConversation(ctx, "acme", admin.Conversation{

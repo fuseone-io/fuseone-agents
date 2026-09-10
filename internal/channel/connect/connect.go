@@ -156,7 +156,7 @@ saying which vendors exist is one place offering a kind the binary cannot make.
 var drivers = map[string]func(conn channel.Connection, creds channel.Credentials) Driver{
 	"slack": func(conn channel.Connection, creds channel.Credentials) Driver {
 		driver := slack.New(creds.Token)
-		if channel.DeliveryMode(conn.DeliveryMode) == channel.DeliveryHTTP && creds.Signing != "" {
+		if channel.DeliversOverHTTP(conn.DeliveryMode) && creds.Signing != "" {
 			driver = driver.Decidable()
 		}
 		return driver

@@ -27,6 +27,22 @@ installation by asking for it.
 */
 const Installation CompanyID = "*"
 
+/*
+IsInstallation answers whether this is the scope above every company.
+
+Both halves, because the company alone is a weaker claim than it looks. The
+sentinel carrying an area is storable and reaches nothing: Contains short
+circuits on it and requires the area to be empty, so that shape looks like
+everything and is in fact a scope no run ever falls into.
+
+Named rather than spelled out at each site. The comparison is written by hand
+in several places already, and every copy is one that can drift into checking
+the company alone.
+*/
+func (s Scope) IsInstallation() bool {
+	return s.Company == Installation && s.Area == ""
+}
+
 // ValidCompanyID refuses what cannot be a company.
 //
 // The same shape an area has to have, for the same reason: the id reaches a

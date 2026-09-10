@@ -1,105 +1,40 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { RefreshCw } from "lucide-react";
-import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { z } from "zod";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   PropertiesSheet,
   PropertiesSheetBody,
   PropertiesSheetFooter,
 } from "@/components/shared/properties-sheet";
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { usePeople } from "@/features/admin/people-api";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  useAvailableConversations,
-  useSaveConversation,
-} from "@/features/channels/api";
+import { Button } from "@/components/ui/button";
+import { Form } from "@/components/ui/form";
+import { useSaveConversation } from "@/features/channels/api";
 import { ConversationAgentField } from "@/features/channels/conversation-agent-field";
-import { useScopes } from "@/features/scope/api";
-import { useMe } from "@/features/session/api";
+import {
+  conversationSchema,
+  EVENTS_BY_DEFAULT,
+  knownEvent,
+  knownMode,
+  splitSources,
+  startsFromMentions,
+  startsFromWatch,
+  type ConversationValues,
+} from "@/features/channels/conversation-form-model";
+import { ConversationIdField } from "@/features/channels/conversation-id-field";
+import { ConversationModeField } from "@/features/channels/conversation-mode-field";
+import {
+  ConversationScopeField,
+  INSTALLATION_SCOPE,
+} from "@/features/channels/conversation-scope-field";
+import { ConversationThreadContextField } from "@/features/channels/conversation-thread-context-field";
+import { UnknownConfiguration } from "@/features/channels/unknown-configuration";
+import { ConversationWantsField } from "@/features/channels/conversation-wants-field";
+import { ConversationWatchFields } from "@/features/channels/conversation-watch-fields";
 import { problemMessage } from "@/lib/api/problem-message";
 import type { components } from "@/lib/api/schema.gen";
 
-const EVENTS = ["parked", "failed", "finished"] as const;
-type RunAsPerson = { id: string; display?: string | null; email?: string | null };
 type Conversation = components["schemas"]["ChannelConversation"];
-type ConversationMode = "mentions" | "watch" | "both";
-
-function splitSources(value: string) {
-  return value
-    .split(/[\n,]/)
-    .map((one) => one.trim())
-    .filter(Boolean);
-}
-
-const schema = z
-  .object({
-    conversation: z.string().min(1, "channels.needsConversation"),
-    label: z.string(),
-    scope: z.string().min(1, "channels.needsScope"),
-    mode: z.enum(["mentions", "watch", "both"]),
-    threadContext: z.boolean(),
-    directApprovals: z.boolean(),
-    sources: z.string(),
-    agent: z.string(),
-    runAs: z.string(),
-    wants: z.array(z.enum(EVENTS)).min(1, "channels.needsEvent"),
-  })
-  .superRefine((value, ctx) => {
-    if (!startsFromWatch(value.mode)) return;
-    if (splitSources(value.sources).length === 0) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["sources"],
-        message: "channels.needsWatchSource",
-      });
-    }
-    if (value.agent.trim() === "") {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["agent"],
-        message: "channels.needsWatchAgent",
-      });
-    }
-    if (value.runAs.trim() === "") {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["runAs"],
-        message: "channels.needsWatchRunAs",
-      });
-    }
-  });
-
-export type ConversationValues = z.infer<typeof schema>;
-
-function startsFromMentions(mode: ConversationMode) {
-  return mode !== "watch";
-}
-
-function startsFromWatch(mode: ConversationMode) {
-  return mode === "watch" || mode === "both";
-}
 
 /**
  * Pointing a scope's runs at a conversation.
@@ -120,58 +55,60 @@ export function ConversationForm({
 }) {
   const { t } = useTranslation();
   const save = useSaveConversation();
-  const { data: scopes } = useScopes();
-  const available = useAvailableConversations(channel);
-  const availableItems = available.data?.items ?? [];
-  const manuallyEnterConversation =
-    available.isError || (available.isSuccess && availableItems.length === 0);
+  // What is stored, which since it started travelling back as itself may be a
+  // value this console cannot draw. Narrowed here and refused below; the form
+  // never sees anything but a mode it knows.
+  const stored = conversation?.mode;
+  const startMode = knownMode(stored) ? (stored ?? "mentions") : "mentions";
+  // The same for the events. One this console cannot name is in no checkbox,
+  // so a form drawn anyway would show a conversation asking for less than it
+  // asks for, and save exactly that.
+  const strangeEvent = (conversation?.wants ?? []).find(
+    (one) => !knownEvent(one),
+  );
 
   const form = useForm<ConversationValues>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(conversationSchema),
     defaultValues: {
       conversation: conversation?.id ?? "",
       scope: conversation
         ? `${conversation.scope.company}/${conversation.scope.area ?? ""}`
         : "",
       label: conversation?.label ?? "",
-      mode: conversation?.mode ?? "mentions",
+      mode: startMode,
       threadContext: conversation?.threadContext ?? false,
       directApprovals: conversation?.directApprovals ?? false,
       sources: (conversation?.sources ?? []).join("\n"),
       agent: conversation?.agent ?? "",
       runAs: conversation?.runAs ?? "",
-      wants: (conversation?.wants as ("parked" | "failed" | "finished")[]) ?? [
-        "parked",
-        "failed",
+      wants: (conversation?.wants as ConversationValues["wants"]) ?? [
+        ...EVENTS_BY_DEFAULT,
       ],
     },
   });
   const mode = form.watch("mode");
   const scope = form.watch("scope");
-  const people = usePeople();
-  const peopleItems = (people.data?.items ?? []).filter((p) => !p.disabled);
-  const { data: me } = useMe();
-  const canDelegateRunAs =
-    me === null || Boolean(me?.can.includes("identity:write"));
-  const runAsPeople: RunAsPerson[] = canDelegateRunAs
-    ? peopleItems
-    : me
-      ? peopleItems.some((person) => person.id === me.id)
-        ? peopleItems.filter((person) => person.id === me.id)
-        : [{ id: me.id, display: me.display }]
-      : [];
-
-  useEffect(() => {
-    if (!startsFromWatch(mode) || me === null || me === undefined) return;
-    if (canDelegateRunAs) return;
-    if (form.getValues("runAs") === me.id) return;
-    form.setValue("runAs", me.id, { shouldValidate: true });
-  }, [canDelegateRunAs, form, me, mode]);
+  // A conversation for the whole installation hears about every company and
+  // starts nothing. Everything inbound is hidden rather than shown and
+  // refused: the server strips it, and a field that is saved and forgotten is
+  // worse than one that was never offered.
+  const reportsOnly = scope === INSTALLATION_SCOPE;
+  // A conversation that starts nothing has nothing to say about agents. The
+  // installation gets there by its scope; any conversation can get there by
+  // choosing the mode, and that one keeps its mode picker — hiding it would
+  // make "only reports" a door that only opens one way.
+  const startsNothing = reportsOnly || mode === "announce";
 
   async function submit(values: ConversationValues) {
     // The select's values are always company/area, but a destructure of a
     // split is typed as possibly absent and the compiler is right to say so.
     const [company = "", area = ""] = values.scope.split("/");
+    // One mode decides the whole request. A conversation for the installation
+    // reports and starts nothing, so every field about starting is sent as
+    // absent rather than left to be stripped on the far side — a request that
+    // says one thing while the server stores another is what makes the console
+    // disagree with itself on the next read.
+    const picked = reportsOnly ? "announce" : values.mode;
     try {
       await save.mutateAsync({
         channel,
@@ -179,16 +116,17 @@ export function ConversationForm({
         company,
         area: area || undefined,
         label: values.label.trim() || undefined,
-        mode: values.mode,
+        mode: picked,
         directApprovals:
           values.wants.includes("parked") && values.directApprovals,
-        threadContext: startsFromMentions(values.mode)
+        threadContext: startsFromMentions(picked)
           ? values.threadContext
           : false,
-        sources:
-          startsFromWatch(values.mode) ? splitSources(values.sources) : undefined,
-        agent: values.agent.trim() || undefined,
-        runAs: startsFromWatch(values.mode) ? values.runAs.trim() : undefined,
+        sources: startsFromWatch(picked)
+          ? splitSources(values.sources)
+          : undefined,
+        agent: startsNothing ? undefined : values.agent.trim() || undefined,
+        runAs: startsFromWatch(picked) ? values.runAs.trim() : undefined,
         wants: values.wants,
       });
       toast.success(t("channels.conversationSaved"));
@@ -196,6 +134,22 @@ export function ConversationForm({
     } catch (error) {
       toast.error(problemMessage(error, t));
     }
+  }
+
+  // Before anything is drawn. A form filled with this console's idea of the
+  // nearest value is a form whose save rewrites the conversation.
+  if (!knownMode(stored) || strangeEvent) {
+    return (
+      <UnknownConfiguration
+        title={t("channels.editConversation")}
+        message={
+          strangeEvent
+            ? t("channels.unknownEvent", { event: strangeEvent })
+            : t("channels.unknownMode", { mode: stored })
+        }
+        onClose={onClose}
+      />
+    );
   }
 
   return (
@@ -215,326 +169,22 @@ export function ConversationForm({
           className="flex min-h-0 flex-1 flex-col"
         >
           <PropertiesSheetBody className="space-y-4">
-            <FormField
-              control={form.control}
-              name="conversation"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("channels.conversation")}</FormLabel>
-                  {conversation ? (
-                    <>
-                      <FormControl>
-                        <Input {...field} disabled className="font-mono" />
-                      </FormControl>
-                      <FormDescription>
-                        {t("channels.conversationIdCannotChange")}
-                      </FormDescription>
-                    </>
-                  ) : manuallyEnterConversation ? (
-                    <>
-                      {/* Listing is a convenience, not authority. When Slack
-                          refuses the list or returns none, the screen says so
-                          and lets an operator paste the stable channel id
-                          rather than leaving behind a picker with no choices. */}
-                      <FormControl>
-                        <Input {...field} placeholder="C0123ABCDEF" />
-                      </FormControl>
-                      <FormDescription
-                        className={available.isError ? "text-warning" : ""}
-                      >
-                        {available.isError
-                          ? problemMessage(available.error, t)
-                          : t("channels.noAvailableConversations")}
-                      </FormDescription>
-                      {!available.isError && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="w-fit"
-                          disabled={available.isFetching}
-                          onClick={() => void available.refetch()}
-                        >
-                          <RefreshCw className="size-3.5" aria-hidden />
-                          {t("common.retry")}
-                        </Button>
-                      )}
-                    </>
-                  ) : (
-                    <Select
-                      onValueChange={(id) => {
-                        field.onChange(id);
-                        const picked = availableItems.find((c) => c.id === id);
-                        if (picked) form.setValue("label", `#${picked.name}`);
-                      }}
-                      value={field.value ?? ""}
-                      disabled={available.isLoading}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue
-                            placeholder={
-                              available.isLoading
-                                ? t("common.loadingMore")
-                                : t("channels.pickConversation")
-                            }
-                          />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {availableItems.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.private ? "🔒 " : "#"}
-                            {c.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                  <FormDescription>
-                    {t("channels.onlyWhereInvited")}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
+            <ConversationIdField
+              form={form}
+              channel={channel}
+              existing={Boolean(conversation)}
             />
-            <FormField
-              control={form.control}
-              name="scope"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("scope.label")}</FormLabel>
-                  <Select
-                    onValueChange={(picked) => {
-                      field.onChange(picked);
-                      // An agent is startable only in the scope it is published
-                      // in, so one chosen for the old scope is a configuration
-                      // the server refuses. Cleared in the same act rather than
-                      // left on screen until save fails.
-                      form.setValue("agent", "", { shouldValidate: true });
-                    }}
-                    value={field.value ?? ""}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder={t("scope.label")} />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {(scopes?.items ?? []).map((s) => (
-                        <SelectItem
-                          key={`${s.company}/${s.area}`}
-                          value={`${s.company}/${s.area}`}
-                        >
-                          {s.label || `${s.company}/${s.area}`}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormDescription>
-                    {t("channels.scopeGoverns")}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="wants"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("channels.wants")}</FormLabel>
-                  <div className="flex flex-col gap-2">
-                    {EVENTS.map((event) => (
-                      <label
-                        key={event}
-                        className="flex items-center gap-2 text-sm"
-                      >
-                        <Checkbox
-                          checked={field.value.includes(event)}
-                          onCheckedChange={(on) =>
-                            field.onChange(
-                              on
-                                ? [...field.value, event]
-                                : field.value.filter((e) => e !== event),
-                            )
-                          }
-                        />
-                        {t(`channels.event.${event}`)}
-                      </label>
-                    ))}
-                  </div>
-                  <FormDescription>
-                    {t("channels.wantsExplains")}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            {form.watch("wants").includes("parked") && (
-              <FormField
-                control={form.control}
-                name="directApprovals"
-                render={({ field }) => (
-                  <FormItem className="rounded-md border bg-muted/30 p-3">
-                    <label className="flex items-start gap-2 text-sm">
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={(on) => field.onChange(Boolean(on))}
-                      />
-                      <span className="grid gap-1">
-                        <span className="font-medium">
-                          {t("channels.directApprovals")}
-                        </span>
-                        <span className="text-muted-foreground">
-                          {t("channels.directApprovalsExplains")}
-                        </span>
-                      </span>
-                    </label>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            <ConversationScopeField form={form} />
+            <ConversationWantsField form={form} />
+            {!reportsOnly && <ConversationModeField form={form} mode={mode} />}
+            {!startsNothing && (
+              <ConversationAgentField form={form} mode={mode} scope={scope} />
             )}
-            <FormField
-              control={form.control}
-              name="mode"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("channels.startMode")}</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value ?? ""}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="mentions">
-                        {t("channels.modeMentions")}
-                      </SelectItem>
-                      <SelectItem value="watch">
-                        {t("channels.modeWatch")}
-                      </SelectItem>
-                      <SelectItem value="both">
-                        {t("channels.modeBoth")}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormDescription>
-                    {mode === "watch"
-                      ? t("channels.modeWatchExplains")
-                      : mode === "both"
-                        ? t("channels.modeBothExplains")
-                        : t("channels.modeMentionsExplains")}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <ConversationAgentField form={form} mode={mode} scope={scope} />
-            {startsFromMentions(mode) && (
-              <FormField
-                control={form.control}
-                name="threadContext"
-                render={({ field }) => (
-                  <FormItem className="rounded-md border bg-muted/30 p-3">
-                    <label className="flex items-start gap-2 text-sm">
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={(on) => field.onChange(Boolean(on))}
-                      />
-                      <span className="grid gap-1">
-                        <span className="font-medium">
-                          {t("channels.threadContext")}
-                        </span>
-                        <span className="text-muted-foreground">
-                          {t("channels.threadContextExplains")}
-                        </span>
-                      </span>
-                    </label>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            {!reportsOnly && startsFromMentions(mode) && (
+              <ConversationThreadContextField form={form} />
             )}
-            {startsFromWatch(mode) && (
-              <div className="rounded-md border bg-muted/30 p-3">
-                <div className="grid gap-4">
-                  <FormField
-                    control={form.control}
-                    name="runAs"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t("channels.watchRunAs")}</FormLabel>
-                        {runAsPeople.length > 0 ? (
-                          <Select
-                            onValueChange={field.onChange}
-                            value={field.value ?? ""}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue
-                                  placeholder={t("channels.pickWatchRunAs")}
-                                />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {runAsPeople.map((person) => (
-                                <SelectItem key={person.id} value={person.id}>
-                                  {person.display || person.email || person.id}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        ) : me === undefined ? (
-                          <Select disabled value="">
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue
-                                  placeholder={t("common.loading")}
-                                />
-                              </SelectTrigger>
-                            </FormControl>
-                          </Select>
-                        ) : (
-                          <FormControl>
-                            <Input
-                              {...field}
-                              placeholder={t("channels.watchRunAsPlaceholder")}
-                            />
-                          </FormControl>
-                        )}
-                        <FormDescription>
-                          {canDelegateRunAs
-                            ? t("channels.watchRunAsExplains")
-                            : t("channels.watchRunAsSelfOnly")}
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                <FormField
-                  control={form.control}
-                  name="sources"
-                  render={({ field }) => (
-                    <FormItem className="mt-4">
-                      <FormLabel>{t("channels.watchSources")}</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          {...field}
-                          className="min-h-20 font-mono text-xs"
-                          placeholder={t("channels.watchSourcesPlaceholder")}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        {t("channels.watchSourcesExplains")}
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+            {!reportsOnly && startsFromWatch(mode) && (
+              <ConversationWatchFields form={form} />
             )}
           </PropertiesSheetBody>
 

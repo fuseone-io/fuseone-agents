@@ -12,15 +12,17 @@ function renderRow(conversation: Partial<Conversation>) {
         <TableBody>
           <ConversationRow
             channel="acme-slack"
-            conversation={{
-              id: "C-alerts",
-              label: "#alerts",
-              scope: { company: "acme", area: "devops" },
-              mode: "mentions",
-              wants: ["parked"],
-              enabled: true,
-              ...conversation,
-            } as Conversation}
+            conversation={
+              {
+                id: "C-alerts",
+                label: "#alerts",
+                scope: { company: "acme", area: "devops" },
+                mode: "mentions",
+                wants: ["parked"],
+                enabled: true,
+                ...conversation,
+              } as Conversation
+            }
             onEdit={() => {}}
           />
         </TableBody>
@@ -59,5 +61,49 @@ describe("private approvals in the listing", () => {
     renderRow({ mode: "mentions" });
 
     expect(screen.queryByText(/dm/)).not.toBeInTheDocument();
+  });
+});
+
+/*
+ * The scope above every company is stored as the company "*".
+ *
+ * A listing that printed it raw would show a company nobody has, next to a
+ * mode read as "mentions" — two lies about the one conversation that hears
+ * every company and starts nothing.
+ */
+describe("a conversation for the whole installation", () => {
+  it("is named rather than printed as the company that stores it", () => {
+    renderRow({ scope: { company: "*", area: "" }, mode: "announce" });
+
+    expect(screen.getByText("A instalação inteira")).toBeInTheDocument();
+    expect(screen.queryByText("*")).not.toBeInTheDocument();
+  });
+
+  it("says it only reports", () => {
+    renderRow({ scope: { company: "*", area: "" }, mode: "announce" });
+
+    expect(screen.getByText(/Só relata/)).toBeInTheDocument();
+  });
+});
+
+// And the listing says what is stored rather than the nearest thing it knows.
+// "Menções" beside a mode nothing can name would claim the room starts runs,
+// which is the one thing an unknown mode is guaranteed not to do.
+describe("a mode this console does not know", () => {
+  it("is printed as it is stored", () => {
+    renderRow({ mode: "a-future-mode" });
+
+    expect(screen.getByText(/a-future-mode/)).toBeInTheDocument();
+  });
+});
+
+// An event this console cannot translate is printed as it is stored. Passed to
+// t() it renders as "channels.event.a-future-event", which tells a reader about
+// our key naming and nothing about their configuration.
+describe("an event this console does not know", () => {
+  it("is printed as it is stored", () => {
+    renderRow({ mode: "mentions", wants: ["parked", "a-future-event"] });
+
+    expect(screen.getByText("a-future-event")).toBeInTheDocument();
   });
 });

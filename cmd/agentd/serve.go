@@ -129,7 +129,9 @@ func serve(args []string) error {
 		if err != nil {
 			return fmt.Errorf("load the known servers: %w", err)
 		}
-		channels = admin.NewChannels(identity.pool, store)
+		// The driver table, so an inbound rule cannot be written for a
+		// connection this binary has no way to talk to.
+		channels = admin.NewChannels(identity.pool, store, drivers)
 		connectorSettings := connectortools.NewSettings(store)
 		connectorInstances := admin.NewConnectorInstances(identity.pool, store)
 		api = api.WithChannels(channels, channel.NewRouter(drivers)).

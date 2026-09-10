@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAgentsForScope } from "@/features/channels/api";
-import type { ConversationValues } from "@/features/channels/conversation-form";
+import type { ConversationValues } from "@/features/channels/conversation-form-model";
 import type { components } from "@/lib/api/schema.gen";
 
 // A shadcn Select cannot carry an empty value, and "nobody chose one" is a real
@@ -42,12 +42,14 @@ export function ConversationAgentField({
   scope,
 }: {
   form: UseFormReturn<ConversationValues>;
-  mode: "mentions" | "watch" | "both";
+  mode: "mentions" | "watch" | "both" | "announce";
   scope: string;
 }) {
   const { t } = useTranslation();
   const agents = useAgentsForScope(scope);
-  const startable = (agents.data?.items ?? []).filter(startableFromConversation);
+  const startable = (agents.data?.items ?? []).filter(
+    startableFromConversation,
+  );
   const optional = mode === "mentions";
 
   return (

@@ -87,6 +87,25 @@ func (p *Postgres) Unreported(ctx context.Context, since time.Time, limit int) (
 		       `+announcementSeq+`,
 		       runs.phase = 'awaiting_approval'
 		from runs
+		-- What has already been attempted, so a page that failed goes to the
+		-- back. Ordered by recency alone, more stopped runs than fit in one
+		-- sweep meant the same page came back forever: one destination
+		-- refusing every message keeps every run in it pending, and the runs
+		-- below the cut were never tried anywhere — not even in the
+		-- conversations that were answering — until they left the window a day
+		-- later, unannounced.
+		left join lateral (
+		    select max(f.last_seen) as last_seen
+		    from channel_delivery_failures f
+		    -- Per question, not per run. Two approvals in one run are both
+		    -- "parked", so matching the event alone put a run's second
+		    -- question at the back of the queue because its first could not be
+		    -- delivered — behind runs nobody had ever tried. The identity of
+		    -- an announcement is the step it is about, which is what both
+		    -- delivery tables are keyed by.
+		    where f.run_id = runs.run_id and f.event = `+phases+`
+		      and f.at_seq = `+announcementSeq+`
+		) tried on true
 		where not runs.simulated
 		  and runs.updated_at >= $1
 		  and `+phases+` is not null
@@ -95,7 +114,7 @@ func (p *Postgres) Unreported(ctx context.Context, since time.Time, limit int) (
 		      where d.run_id = runs.run_id and d.event = `+phases+`
 		        and d.channel = '' and d.conversation = ''
 		        and d.at_seq = `+announcementSeq+`)
-		order by runs.updated_at desc
+		order by coalesce(tried.last_seen, to_timestamp(0)) asc, runs.updated_at desc
 		limit $2`, since.UTC(), limit)
 	if err != nil {
 		return nil, fmt.Errorf("channel: unreported runs: %w", err)

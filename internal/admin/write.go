@@ -28,6 +28,17 @@ func writeSetting(
 	})
 }
 
+// writeGuarded is writeSetting with a precondition taken inside the
+// transaction. The options struct is the parameter list: seven arguments was
+// already one too many, and the guard is the eighth.
+func writeGuarded(
+	ctx context.Context, pool *pgxpool.Pool, store *settings.Store,
+	guard func(ctx context.Context, conn settings.DB) error, w folded,
+) error {
+	w.guard = guard
+	return writeFolded(ctx, pool, store, w)
+}
+
 /*
 folded is a write that may need to see what is stored before it decides.
 
@@ -38,6 +49,10 @@ having read the older value, and the second commit puts the older value back.
 So the reading happens inside, under the row's own lock.
 */
 type folded struct {
+	// guard runs first, inside the transaction. A precondition read before
+	// Begin is a decision about a state that may not hold by the time the
+	// write lands, which for an authority check is the whole failure.
+	guard  func(ctx context.Context, conn settings.DB) error
 	by     domain.UserID
 	scope  domain.Scope
 	action string
@@ -47,6 +62,10 @@ type folded struct {
 	// fold sees what is stored and returns what to write. Absent for a write
 	// that depends on nothing.
 	fold func(stored settings.Setting) (settings.Setting, any, error)
+	// then runs after the write, in the same transaction. For the other half
+	// of a write that is one act — removing the row this one replaces, under
+	// a name only the store knows.
+	then func(ctx context.Context, conn settings.DB) error
 }
 
 func writeFolded(
@@ -57,6 +76,12 @@ func writeFolded(
 		return fmt.Errorf("admin: begin: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+
+	if w.guard != nil {
+		if err := w.guard(ctx, tx); err != nil {
+			return err
+		}
+	}
 
 	set, detail := w.set, w.detail
 	if w.fold != nil {
@@ -79,6 +104,12 @@ func writeFolded(
 	if err := store.PutTx(ctx, tx, set); err != nil {
 		return err
 	}
+	if w.then != nil {
+		if err := w.then(ctx, tx); err != nil {
+			return err
+		}
+	}
+
 	by, scope, action, target := w.by, w.scope, w.action, w.target
 	if err := Record(ctx, tx, Event{
 		Principal: by, Scope: scope, Action: action, Target: target, Detail: detail,

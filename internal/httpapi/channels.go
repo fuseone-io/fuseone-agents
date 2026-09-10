@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/fuseone/agents/internal/admin"
@@ -24,10 +25,10 @@ to an agent: the Gate decides effects after the run starts.
 // ChannelAdmin is channel configuration, declared here by the consumer.
 type ChannelAdmin interface {
 	List(ctx context.Context) ([]admin.Channel, error)
-	PutChannel(ctx context.Context, ch admin.Channel, creds channel.Credentials, by domain.UserID) error
-	DeleteChannel(ctx context.Context, name string, by domain.UserID) error
+	PutChannel(ctx context.Context, w admin.ChannelWrite) error
+	DeleteChannel(ctx context.Context, name string, by domain.UserID, governs bool) error
 	PutConversation(ctx context.Context, channelName string, conv admin.Conversation, by domain.UserID) error
-	DeleteConversation(ctx context.Context, id string, scope domain.Scope, by domain.UserID) error
+	DeleteConversation(ctx context.Context, ref admin.ConversationRef, by domain.UserID) error
 	Identities(ctx context.Context) ([]admin.ChannelIdentity, error)
 	SeenAccounts(ctx context.Context) ([]admin.ChannelAccountSeen, error)
 	BindIdentity(ctx context.Context, id admin.ChannelIdentity, by domain.UserID) error
@@ -103,28 +104,47 @@ func (s *Server) PutChannel(
 	if s.channels == nil || req.Body == nil {
 		return nil, errNoAdministration
 	}
+	// Whether it is needed is not decided here. The administration takes the
+	// connection's lock, sees what is attached under it and refuses — so a room
+	// attached between this line and the write is seen by the write.
+	_, ungoverned := s.governs(ctx)
 
 	delivery := channel.DeliveryHTTP
 	if req.Body.DeliveryMode != nil {
 		delivery = string(*req.Body.DeliveryMode)
 	}
 
-	err := s.channels.PutChannel(ctx, admin.Channel{
-		Name:         req.Name,
-		Kind:         string(req.Body.Kind),
-		Workspace:    valueOr(req.Body.Workspace),
-		DeliveryMode: delivery,
-		Enabled:      orDefault(req.Body.Enabled, true),
-	}, channel.Credentials{
-		Token:    valueOr(req.Body.Token),
-		AppToken: valueOr(req.Body.AppToken),
-		Signing:  valueOr(req.Body.SigningSecret),
-	}, caller)
-	if err != nil {
+	err := s.channels.PutChannel(ctx, admin.ChannelWrite{
+		Channel: admin.Channel{
+			Name:         req.Name,
+			Kind:         string(req.Body.Kind),
+			Workspace:    valueOr(req.Body.Workspace),
+			DeliveryMode: delivery,
+			Enabled:      orDefault(req.Body.Enabled, true),
+		},
+		Credentials: channel.Credentials{
+			Token:    valueOr(req.Body.Token),
+			AppToken: valueOr(req.Body.AppToken),
+			Signing:  valueOr(req.Body.SigningSecret),
+		},
+		By: caller, Governs: ungoverned == nil,
+	})
+	switch {
+	case errors.Is(err, admin.ErrInstallationAuthority):
+		return openapi.PutChannel403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: *ungoverned,
+		}, nil
+	case admin.Invalid(err):
 		return openapi.PutChannel400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
 				invalid(err.Error())),
 		}, nil
+	case err != nil:
+		// Not the request's fault, so not the request's problem to fix. A lock
+		// that could not be taken or a vault that would not open is a failure,
+		// and dressing it as a refusal sends somebody to correct a field that
+		// was right.
+		return nil, fmt.Errorf("configure channel: %w", err)
 	}
 	return openapi.PutChannel204Response{}, nil
 }
@@ -141,7 +161,14 @@ func (s *Server) DeleteChannel(
 	if s.channels == nil {
 		return nil, errNoAdministration
 	}
-	if err := s.channels.DeleteChannel(ctx, req.Name, caller); err != nil {
+	_, ungoverned := s.governs(ctx)
+	err := s.channels.DeleteChannel(ctx, req.Name, caller, ungoverned == nil)
+	if errors.Is(err, admin.ErrInstallationAuthority) {
+		return openapi.DeleteChannel403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: *ungoverned,
+		}, nil
+	}
+	if err != nil {
 		return nil, fmt.Errorf("delete channel: %w", err)
 	}
 	return openapi.DeleteChannel204Response{}, nil
@@ -163,6 +190,24 @@ func (s *Server) PutConversation(
 		Company: domain.CompanyID(req.Body.Company),
 		Area:    domain.AreaID(valueOr(req.Body.Area)),
 	}
+	/*
+		A room for the whole installation reads every company's runs into one
+		place, which is the disclosure the conversation scope exists to
+		prevent, arriving as a notification.
+
+		Configuring channels is a curator's act and a curator granted on one
+		company holds it, so without this a company-level configurer could
+		build a room receiving another company's runs. Deciding that one room
+		hears the whole installation is the authority above them all.
+	*/
+	if scope.IsInstallation() {
+		if _, resp := s.governs(ctx); resp != nil {
+			return openapi.PutConversation403ApplicationProblemPlusJSONResponse{
+				ForbiddenApplicationProblemPlusJSONResponse: *resp,
+			}, nil
+		}
+	}
+
 	mode := conversationMode(req.Body.Mode)
 	agent := domain.AgentID(valueOr(req.Body.Agent))
 	runAs := domain.UserID(valueOr(req.Body.RunAs))
@@ -170,7 +215,10 @@ func (s *Server) PutConversation(
 	// required. A conversation that takes mentions may name an agent too, and a
 	// configuration that only fails later — in the Slack thread, to somebody
 	// who did not write it — is the failure this check exists to prevent.
-	if agent != "" {
+	// An installation conversation starts nothing, so it names no agent — the
+	// administration strips one on the way in. Checking it here would send
+	// somebody to publish an agent into a scope nothing can be published to.
+	if agent != "" && !scope.IsInstallation() {
 		reason, err := s.refuseConversationAgent(ctx, agent, scope)
 		if err != nil {
 			return nil, err
@@ -213,11 +261,14 @@ func (s *Server) PutConversation(
 		Wants:           wantsOf(req.Body.Wants),
 		Enabled:         orDefault(req.Body.Enabled, true),
 	}, caller)
-	if err != nil {
+	switch {
+	case admin.Invalid(err):
 		return openapi.PutConversation400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
 				invalid(err.Error())),
 		}, nil
+	case err != nil:
+		return nil, fmt.Errorf("configure conversation: %w", err)
 	}
 	return openapi.PutConversation204Response{}, nil
 }
@@ -331,7 +382,18 @@ func (s *Server) DeleteConversation(
 	if !found {
 		return openapi.DeleteConversation204Response{}, nil
 	}
-	if err := s.channels.DeleteConversation(ctx, req.Conversation, scope, caller); err != nil {
+	// The same authority the room needed to exist. Otherwise a company
+	// configurer silences the one room that hears what nobody else does.
+	if scope.IsInstallation() {
+		if _, resp := s.governs(ctx); resp != nil {
+			return openapi.DeleteConversation403ApplicationProblemPlusJSONResponse{
+				ForbiddenApplicationProblemPlusJSONResponse: *resp,
+			}, nil
+		}
+	}
+	if err := s.channels.DeleteConversation(ctx, admin.ConversationRef{
+		Channel: req.Name, ID: req.Conversation, Scope: scope,
+	}, caller); err != nil {
 		return nil, fmt.Errorf("delete conversation: %w", err)
 	}
 	return openapi.DeleteConversation204Response{}, nil
@@ -360,7 +422,7 @@ func (s *Server) scopeOfConversation(
 func channelFrom(
 	c admin.Channel, bound []admin.ChannelIdentity, seen []admin.ChannelAccountSeen,
 ) openapi.Channel {
-	delivery := openapi.ChannelDeliveryMode(channel.DeliveryMode(c.DeliveryMode))
+	delivery := channel.StoredDeliveryMode(c.DeliveryMode)
 	out := openapi.Channel{
 		Name: c.Name, Kind: c.Kind, Enabled: c.Enabled,
 		DeliveryMode:  &delivery,
@@ -423,7 +485,7 @@ func channelFrom(
 		if conv.Label != "" {
 			item.Label = ptr(conv.Label)
 		}
-		mode := openapi.ChannelConversationMode(channel.ConversationMode(conv.Mode))
+		mode := channel.StoredMode(conv.Mode)
 		item.Mode = &mode
 		if len(conv.Sources) > 0 {
 			item.Sources = &conv.Sources
@@ -448,7 +510,7 @@ func channelFrom(
 	return out
 }
 
-func conversationMode(mode *openapi.PutConversationJSONBodyMode) string {
+func conversationMode(mode *openapi.ConversationMode) string {
 	if mode == nil {
 		return channel.ConversationMentions
 	}

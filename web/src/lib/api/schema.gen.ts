@@ -3847,10 +3847,17 @@ export interface components {
             kind: string;
             workspace?: string;
             /**
-             * @description How Slack asks reach this installation. Empty legacy rows read as http.
-             * @enum {string}
+             * @description How Slack asks reach this installation, as stored. Empty legacy rows
+             *     read as http.
+             *
+             *     Deliberately not an enumeration, unlike the request: a connection
+             *     written by a newer version travels back as itself. Read as the
+             *     nearest value this one knows, an unrelated edit saved from that
+             *     reading would open the inbound door this version does have. A client
+             *     that does not recognise the value must not offer to save the
+             *     connection.
              */
-            deliveryMode?: "http" | "socket";
+            deliveryMode?: string;
             enabled: boolean;
             /** @description Whether the bot token used for posting is stored, never what it is. */
             hasCredential: boolean;
@@ -3892,15 +3899,41 @@ export interface components {
             /** Format: date-time */
             lastSeen: string;
         };
+        /**
+         * @description What may start a run in a conversation.
+         *
+         *     `mentions` starts only when a person mentions the channel bot and names
+         *     an agent. `watch` starts one configured agent from ordinary messages
+         *     written by configured sources, under the configured principal. `both`
+         *     keeps the mention path and the watched-message path enabled together;
+         *     each keeps its own authority. `announce` starts nothing at all: the
+         *     conversation only reports what runs do, and it is the only mode a
+         *     conversation for the whole installation may have.
+         *
+         *     A closed set on the way in and deliberately not on the way out: a
+         *     client may only ask for a mode this version can honour, and a row
+         *     written by a newer version has to travel back as itself.
+         * @default mentions
+         * @enum {string}
+         */
+        ConversationMode: "mentions" | "watch" | "both" | "announce";
         ChannelConversation: {
             id: string;
             label?: string;
             scope: components["schemas"]["Scope"];
             /**
-             * @description How inbound Slack messages may start runs. Empty legacy rows read as mentions.
-             * @enum {string}
+             * @description How inbound Slack messages may start runs, as stored. Empty legacy
+             *     rows read as mentions. `announce` starts nothing, and is what a
+             *     conversation for the whole installation is stored as.
+             *
+             *     Deliberately not an enumeration, unlike the request: a row written
+             *     by a newer version travels back as itself rather than as the
+             *     nearest value this one knows. Reading it as "mentions" is how an
+             *     unrelated edit turned a room that started nothing into one anybody
+             *     could start runs from. A client that does not recognise the value
+             *     must not offer to save the conversation.
              */
-            mode?: "mentions" | "watch" | "both";
+            mode?: string;
             /**
              * @description Whether a mention made inside an existing vendor thread includes
              *     earlier thread messages in the run input. The text remains
@@ -7700,22 +7733,18 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
+                    /**
+                     * @description The company whose runs report here. `*` is the scope above
+                     *     every company: such a conversation hears about a run in any
+                     *     of them, starts nothing, and needs authority over the
+                     *     installation to configure or to remove.
+                     */
                     company: string;
                     /** @description Empty covers the whole company. */
                     area?: string;
                     /** @description What a person calls it, for the console and the logs. */
                     label?: string;
-                    /**
-                     * @description `mentions` starts only when a person mentions the channel
-                     *     bot and names an agent. `watch` starts one configured
-                     *     agent from ordinary messages written by configured
-                     *     sources, under the configured principal. `both` keeps the
-                     *     mention path and the watched-message path enabled together;
-                     *     each keeps its own authority.
-                     * @default mentions
-                     * @enum {string}
-                     */
-                    mode?: "mentions" | "watch" | "both";
+                    mode?: components["schemas"]["ConversationMode"];
                     /**
                      * @description Slack user, bot or app ids allowed to trigger watched
                      *     messages. They filter the source; they never grant
@@ -7744,8 +7773,8 @@ export interface operations {
                      *     only where this conversation is told about parked runs.
                      */
                     directApprovals?: boolean;
-                    /** @description Which events reach it. Empty means the defaults, which are parked and failed — a conversation that hears every run finish is one people mute. */
-                    wants?: ("parked" | "failed" | "finished")[];
+                    /** @description Which events reach it. Empty means the defaults, which are parked, failed and drifted — a conversation that hears every run finish is one people mute, and an agent that quietly stopped working is the one notice nobody thinks to ask for. Sending the field is choosing: the console always does, so a conversation configured there hears what was ticked and nothing else. */
+                    wants?: ("parked" | "failed" | "finished" | "drifted")[];
                     /** @default true */
                     enabled?: boolean;
                 };

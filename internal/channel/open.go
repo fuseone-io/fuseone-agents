@@ -127,6 +127,14 @@ func (c *Consumer) mappingOf(ctx context.Context, a Claimed) (Mapped, Refusal, e
 			Why:    "This conversation is not set up to start agents. An administrator maps it to an area.",
 			Reason: "no_scope",
 		}, nil
+	case errors.Is(err, ErrAnnouncesOnly):
+		// The truth, rather than "an administrator maps it to an area". This
+		// room is configured and configured deliberately; what it is not is a
+		// place anybody starts work from.
+		return Mapped{}, Refusal{
+			Why:    "This conversation only reports what runs do. Ask in the conversation configured for your area.",
+			Reason: "announces_only",
+		}, nil
 	case err != nil:
 		return Mapped{}, Refusal{}, fmt.Errorf(
 			"channel: read the scope of %s: %w", a.Conversation, err)

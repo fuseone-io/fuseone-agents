@@ -125,35 +125,204 @@ func TestTestConversation_conversationIsNotConfigured_refusesRatherThanPosting(t
 	}
 }
 
+/*
+The door decides the caller's authority; the administration decides whether it
+was needed.
+
+Read here and acted on there, because between the two a room can be attached:
+the check that matters is taken under the connection's lock, beside the write,
+and this end's job is only to make sure the answer travels and the refusal comes
+back as a refusal.
+*/
+func TestDeleteChannel_theAdministrationRefuses_isForbiddenRatherThanAnError(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{refuse: admin.ErrInstallationAuthority}
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, nil)
+
+	resp, err := s.DeleteChannel(as(domain.RoleCurator),
+		openapi.DeleteChannelRequestObject{Name: "acme-slack"})
+	if err != nil {
+		t.Fatalf("DeleteChannel: %v", err)
+	}
+	if _, ok := resp.(openapi.DeleteChannel403ApplicationProblemPlusJSONResponse); !ok {
+		t.Fatalf("response = %T, want forbidden", resp)
+	}
+	if spy.governs {
+		t.Error("a curator was reported as governing the installation")
+	}
+}
+
+func TestPutChannel_theAdministrationRefuses_isForbiddenRatherThanBadRequest(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{refuse: admin.ErrInstallationAuthority}
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, nil)
+
+	resp, err := s.PutChannel(as(domain.RoleCurator), openapi.PutChannelRequestObject{
+		Name: "acme-slack", Body: &openapi.PutChannelJSONRequestBody{Kind: "slack"},
+	})
+	if err != nil {
+		t.Fatalf("PutChannel: %v", err)
+	}
+	// Not a 400. The configuration is fine; the caller is not the one who may
+	// make it, and telling somebody their request was malformed sends them to
+	// fix a field.
+	if _, ok := resp.(openapi.PutChannel403ApplicationProblemPlusJSONResponse); !ok {
+		t.Fatalf("response = %T, want forbidden", resp)
+	}
+}
+
+// And whoever governs the installation is reported as governing it, so the
+// administration lets the write through.
+func TestPutChannel_byWhoGovernsTheInstallation_saysSo(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{}
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, nil)
+
+	resp, err := s.PutChannel(asInstallation(domain.RoleAdmin), openapi.PutChannelRequestObject{
+		Name: "acme-slack", Body: &openapi.PutChannelJSONRequestBody{Kind: "slack"},
+	})
+	if err != nil {
+		t.Fatalf("PutChannel: %v", err)
+	}
+	if _, ok := resp.(openapi.PutChannel204Response); !ok {
+		t.Fatalf("response = %T, want accepted", resp)
+	}
+	if !spy.governs {
+		t.Error("authority over the installation never reached the administration")
+	}
+}
+
+/*
+A failure is not a refusal.
+
+Everything that was not one named sentinel became "bad request", so a lock that
+could not be taken, a database that was away or a vault that would not open came
+back as 400 — sending somebody to fix a field that was never wrong, with the
+operational text in the reply.
+*/
+func TestPutChannel_theStoreFails_isReportedRatherThanCalledInvalid(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{refuse: errors.New("configuration store unavailable")}
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, nil)
+
+	resp, err := s.PutChannel(asInstallation(domain.RoleAdmin), openapi.PutChannelRequestObject{
+		Name: "acme-slack", Body: &openapi.PutChannelJSONRequestBody{Kind: "slack"},
+	})
+	if err == nil {
+		t.Fatalf("response = %T, want the failure reported", resp)
+	}
+}
+
+// And a configuration the caller really did get wrong still says so.
+func TestPutChannel_aConfigurationTheCallerGotWrong_isABadRequest(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{refuse: admin.ErrNoChannelKind}
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, nil)
+
+	resp, err := s.PutChannel(asInstallation(domain.RoleAdmin), openapi.PutChannelRequestObject{
+		Name: "acme-slack", Body: &openapi.PutChannelJSONRequestBody{Kind: "slack"},
+	})
+	if err != nil {
+		t.Fatalf("PutChannel: %v", err)
+	}
+	if _, ok := resp.(openapi.PutChannel400ApplicationProblemPlusJSONResponse); !ok {
+		t.Fatalf("response = %T, want bad request", resp)
+	}
+}
+
+func TestPutConversation_theStoreFails_isReportedRatherThanCalledInvalid(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{refuse: errors.New("configuration store unavailable")}
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, nil)
+
+	if _, err := s.PutConversation(as(domain.RoleCurator), watchConversation("usr_ana")); err == nil {
+		t.Fatal("a store failure was answered as a bad request")
+	}
+}
+
+/*
+A mode this version does not know crosses the boundary as it is stored.
+
+The administration keeps it and the console refuses to draw it, and between
+them is the reply that used to normalise: read as "mentions" there, an
+unrelated edit saved from that reading turned a room that starts nothing into
+one anybody can start runs from. Each end was held by its own test and the
+seam between them by none.
+*/
+func TestListChannels_aModeThisVersionDoesNotKnow_travelsAsItIsStored(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{listed: []admin.Channel{{
+		Name: "acme-slack",
+		Conversations: []admin.Conversation{{
+			ID: "C07", Mode: "a-future-mode",
+			Scope: domain.Scope{Company: "acme", Area: "ops"},
+		}},
+	}}}
+	s := NewServer(ledger.NewMemory(), "test").
+		WithChannels(spy, nil).
+		WithChannelListing(&listerSpy{kinds: []string{"slack"}})
+
+	resp, err := s.ListChannels(as(domain.RoleCurator), openapi.ListChannelsRequestObject{})
+	if err != nil {
+		t.Fatalf("ListChannels: %v", err)
+	}
+	page, ok := resp.(openapi.ListChannels200JSONResponse)
+	if !ok {
+		t.Fatalf("response = %T", resp)
+	}
+	got := page.Items[0].Conversations[0].Mode
+	if got == nil || *got != "a-future-mode" {
+		t.Fatalf("mode = %v, want the stored value", got)
+	}
+}
+
 type channelSpy struct {
 	listed       []admin.Channel
 	bound        []admin.ChannelIdentity
 	seen         []admin.ChannelAccountSeen
 	putConv      admin.Conversation
 	deletedScope domain.Scope
+	deletedFrom  string
+	putChannel   string
+	deleted      string
+	// governs is what the door decided about the caller's authority over the
+	// installation. The administration is what acts on it, so what this end
+	// has to keep true is that the answer travels.
+	governs bool
+	refuse  error
 }
 
 func (c *channelSpy) List(context.Context) ([]admin.Channel, error) { return c.listed, nil }
 
-func (c *channelSpy) PutChannel(
-	context.Context, admin.Channel, channel.Credentials, domain.UserID,
-) error {
+func (c *channelSpy) PutChannel(_ context.Context, w admin.ChannelWrite) error {
+	c.putChannel, c.governs = w.Channel.Name, w.Governs
+	if c.refuse != nil {
+		return c.refuse
+	}
 	return nil
 }
 
-func (c *channelSpy) DeleteChannel(context.Context, string, domain.UserID) error { return nil }
+func (c *channelSpy) DeleteChannel(
+	_ context.Context, name string, _ domain.UserID, governs bool,
+) error {
+	c.deleted, c.governs = name, governs
+	if c.refuse != nil {
+		return c.refuse
+	}
+	return nil
+}
 
 func (c *channelSpy) PutConversation(
 	_ context.Context, _ string, conv admin.Conversation, _ domain.UserID,
 ) error {
 	c.putConv = conv
-	return nil
+	return c.refuse
 }
 
 func (c *channelSpy) DeleteConversation(
-	_ context.Context, _ string, scope domain.Scope, _ domain.UserID,
+	_ context.Context, ref admin.ConversationRef, _ domain.UserID,
 ) error {
-	c.deletedScope = scope
+	c.deletedScope, c.deletedFrom = ref.Scope, ref.Channel
 	return nil
 }
 
@@ -192,7 +361,7 @@ func (c *channelSpy) UnbindIdentity(context.Context, string, string, domain.User
 }
 
 func watchConversation(runAs string) openapi.PutConversationRequestObject {
-	mode := openapi.PutConversationJSONBodyModeWatch
+	mode := openapi.Watch
 	sources := []string{"B-alerts"}
 	return openapi.PutConversationRequestObject{
 		Name: "acme-slack", Conversation: "C-alerts",
@@ -226,7 +395,7 @@ func TestPutConversation_mentionsModeCanIncludeThreadContext(t *testing.T) {
 	spy := &channelSpy{}
 	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, nil)
 	on := true
-	mode := openapi.PutConversationJSONBodyModeMentions
+	mode := openapi.Mentions
 
 	resp, err := s.PutConversation(as(domain.RoleCurator), openapi.PutConversationRequestObject{
 		Name: "acme-slack", Conversation: "C-alerts",
@@ -251,7 +420,7 @@ func TestPutConversation_bothModeKeepsMentionsAndWatchSettings(t *testing.T) {
 	spy := &channelSpy{}
 	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, nil)
 	on := true
-	mode := openapi.PutConversationJSONBodyModeBoth
+	mode := openapi.Both
 	sources := []string{"B-alerts"}
 
 	resp, err := s.PutConversation(as(domain.RoleCurator), openapi.PutConversationRequestObject{
@@ -600,7 +769,7 @@ func TestPutConversation_mentionsModeWithNoAgent_isStored(t *testing.T) {
 }
 
 func mentionsConversation(agent string) openapi.PutConversationRequestObject {
-	mode := openapi.PutConversationJSONBodyModeMentions
+	mode := openapi.Mentions
 	return openapi.PutConversationRequestObject{
 		Name: "acme-slack", Conversation: "C-alerts",
 		Body: &openapi.PutConversationJSONRequestBody{
@@ -694,7 +863,7 @@ func TestListChannels_theDirectApprovalChoice_reachesTheConsole(t *testing.T) {
 }
 
 func directApprovalConversation(on bool) openapi.PutConversationRequestObject {
-	mode := openapi.PutConversationJSONBodyModeMentions
+	mode := openapi.Mentions
 	wants := []openapi.PutConversationJSONBodyWants{
 		openapi.PutConversationJSONBodyWantsParked,
 	}
@@ -703,6 +872,108 @@ func directApprovalConversation(on bool) openapi.PutConversationRequestObject {
 		Body: &openapi.PutConversationJSONRequestBody{
 			Company: "acme", Area: ptr("ops"),
 			Mode: &mode, Wants: &wants, DirectApprovals: &on,
+		},
+	}
+}
+
+/*
+A room for the whole installation needs authority over the installation.
+
+Every other conversation is configured inside a scope somebody already governs.
+This one reads every company's runs into one place, which is the disclosure the
+conversation scope exists to prevent, arriving as a notification.
+
+Configuring channels is a curator's act, and a curator granted on one company
+holds it — so without this a company-level configurer could build a room
+receiving another company's runs. Deciding that one room hears the whole
+installation is the authority above them all.
+*/
+func TestPutConversation_forTheWholeInstallation_needsAuthorityOverIt(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{}
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, nil)
+
+	resp, err := s.PutConversation(as(domain.RoleCurator), installationConversationRequest())
+	if err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+	if _, ok := resp.(openapi.PutConversation403ApplicationProblemPlusJSONResponse); !ok {
+		t.Fatalf("response = %T, want it refused", resp)
+	}
+	if spy.putConv.ID != "" {
+		t.Error("the conversation reached the store")
+	}
+}
+
+func TestPutConversation_forTheWholeInstallation_isAllowedToWhoGovernsIt(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{}
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, nil)
+
+	resp, err := s.PutConversation(asInstallation(domain.RoleAdmin), installationConversationRequest())
+	if err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+	if _, ok := resp.(openapi.PutConversation204Response); !ok {
+		t.Fatalf("response = %T, want accepted", resp)
+	}
+}
+
+// And removing it needs the same. Otherwise a company configurer silences the
+// one room that hears what nobody else does.
+func TestDeleteConversation_forTheWholeInstallation_needsAuthorityOverIt(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{listed: []admin.Channel{{
+		Name: "acme-slack", Kind: "slack", Enabled: true,
+		Conversations: []admin.Conversation{{
+			ID: "C-everywhere", Scope: domain.Scope{Company: domain.Installation},
+			Mode: "announce", Enabled: true,
+		}},
+	}}}
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, nil)
+
+	resp, err := s.DeleteConversation(as(domain.RoleCurator),
+		openapi.DeleteConversationRequestObject{Name: "acme-slack", Conversation: "C-everywhere"})
+	if err != nil {
+		t.Fatalf("DeleteConversation: %v", err)
+	}
+	if _, ok := resp.(openapi.DeleteConversation403ApplicationProblemPlusJSONResponse); !ok {
+		t.Fatalf("response = %T, want it refused", resp)
+	}
+	if spy.deletedScope != (domain.Scope{}) {
+		t.Error("the removal reached the store")
+	}
+}
+
+// An installation conversation names no agent, so the check that would look for
+// one has nothing to look in. Told the truth rather than sent to publish an
+// agent into a scope nothing can be published to.
+func TestPutConversation_forTheWholeInstallation_doesNotAskForAnAgent(t *testing.T) {
+	t.Parallel()
+	s := NewServer(ledger.NewMemory(), "test").
+		WithChannels(&channelSpy{}, nil).
+		WithAgents(&startableInScope{})
+
+	req := installationConversationRequest()
+	req.Body.Agent = ptr("triagem")
+
+	resp, err := s.PutConversation(asInstallation(domain.RoleAdmin), req)
+	if err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+	if _, ok := resp.(openapi.PutConversation204Response); !ok {
+		t.Fatalf("response = %T, want accepted with the agent ignored", resp)
+	}
+}
+
+func installationConversationRequest() openapi.PutConversationRequestObject {
+	wants := []openapi.PutConversationJSONBodyWants{
+		openapi.PutConversationJSONBodyWantsParked,
+	}
+	return openapi.PutConversationRequestObject{
+		Name: "acme-slack", Conversation: "C-everywhere",
+		Body: &openapi.PutConversationJSONRequestBody{
+			Company: string(domain.Installation), Wants: &wants,
 		},
 	}
 }

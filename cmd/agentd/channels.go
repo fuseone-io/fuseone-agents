@@ -40,7 +40,8 @@ func reportToChannels(
 		// Who may decide, and where to reach them. Both are read once per
 		// sweep and neither grants anything: the button is checked by the
 		// console's own path wherever it is pressed.
-		WithDirectApprovals(auth.NewPostgres(p.configPool), admin.NewChannels(p.configPool, store))
+		// Reads where people are reachable; configures nothing.
+		WithDirectApprovals(auth.NewPostgres(p.configPool), admin.NewChannels(p.configPool, store, nil))
 
 	// The cards the announcements left behind. A separate loop because it
 	// answers a different question — what is still asking, rather than what
@@ -133,7 +134,7 @@ func (p *workerParts) consumeAsks(ctx context.Context, owner string, metrics *wo
 		).
 		WithOutcomes(channel.NewPostgres(pool), p.content).
 		WithThreadContext(configured, drivers).
-		Binding(admin.NewChannels(pool, p.settings).PrincipalFor)
+		Binding(admin.NewChannels(pool, p.settings, nil).PrincipalFor)
 
 	go channelSweepLoop(ctx, askSweep, channel.MetricTaskAsksOpened, "asks opened", metrics, func() (int, error) {
 		return consumer.Sweep(ctx, askLease, 20)

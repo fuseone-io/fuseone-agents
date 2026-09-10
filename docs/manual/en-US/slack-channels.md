@@ -140,6 +140,36 @@ If the agent did not start:
 6. Does `run as` exist and have a grant in the scope?
 7. In Socket Mode, is the app token saved and is the worker connected?
 
+## A room for the whole installation
+
+A conversation receives the runs of the scope it was configured in, and one
+configured at a company covers every area in it. What is left over is an area
+nobody pointed at a channel at all: a run parked there produces no card and no
+private message, and waits for somebody to open the console.
+
+Under **Integrations → Channels → new conversation**, the context **"The whole
+installation"** answers that. It hears about a run in any company, with the
+same options as any other conversation — including telling the people who may
+decide privately, which still reaches whoever holds Approver in that run's
+scope, not whoever holds a grant at the installation.
+
+It **starts nothing**. Mentioning the bot there is refused, saying the room only
+reports, and no watched-message automation runs from it. A scope that contains
+everything is the right answer for *hearing* and the wrong one for *asking*: a
+room that hears every company is a reasonable thing to configure, and one that
+can start an agent in every company is something else entirely.
+
+That is why the context is offered only to whoever governs the installation —
+whoever holds **Company configurer granted at the installation scope**.
+Configuring where one area reports is an ordinary scoped act; deciding that one
+room hears every company is the authority above them all. Deleting it needs the
+same.
+
+Begin with **"what to announce"**. The default is *parked*, *failed* and
+*drifted*, and at this scope that means every stop, every failure and every
+drift in every company — such a room's volume is the sum of all the others.
+Narrow it before saving.
+
 ## Telling the people who may decide, privately
 
 A conversation that is told about parked runs can also send the same request as

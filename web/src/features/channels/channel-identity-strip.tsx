@@ -77,9 +77,7 @@ export function ChannelIdentityStrip({
         ) : (
           <IdentityChips
             identities={identities}
-            onRemove={(id) =>
-              unbind.mutate({ channel, account: id.account })
-            }
+            onRemove={(id) => unbind.mutate({ channel, account: id.account })}
           />
         )}
         {seenAccounts.length > 0 && (
@@ -95,7 +93,10 @@ export function ChannelIdentityStrip({
           className="h-8 w-36 font-mono"
         />
         <Select value={principal} onValueChange={setPrincipal}>
-          <SelectTrigger className="h-8 min-w-36 flex-1" aria-label={t("channels.person")}>
+          <SelectTrigger
+            className="h-8 min-w-36 flex-1"
+            aria-label={t("channels.person")}
+          >
             <SelectValue placeholder={t("channels.pickPerson")} />
           </SelectTrigger>
           <SelectContent>

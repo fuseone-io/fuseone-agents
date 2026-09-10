@@ -106,7 +106,7 @@ func boundChannels(t *testing.T) (*admin.Channels, *settings.Store) {
 	t.Helper()
 	pool := freshPool(t)
 	store := settings.NewStore(pool, nil)
-	return admin.NewChannels(pool, store), store
+	return admin.NewChannels(pool, store, onlySlack{}), store
 }
 
 /*

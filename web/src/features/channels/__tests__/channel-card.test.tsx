@@ -97,3 +97,48 @@ describe("channel card", () => {
     expect(screen.getByText("#approvals")).toBeInTheDocument();
   });
 });
+
+/*
+ * A delivery mode this console cannot name is not a healthy connection.
+ *
+ * The card read "anything that is not socket" as HTTP, so a connection a newer
+ * version configured showed as answering, with a strip offering to bind people
+ * to an inbound door the runtime has closed.
+ */
+describe("a delivery mode this console does not know", () => {
+  it("says what is stored and asks for attention", () => {
+    setLocale("en-US");
+    renderCard({
+      name: "acme-slack",
+      kind: "slack",
+      deliveryMode: "a-future-mode",
+      enabled: true,
+      hasCredential: true,
+      hasSigning: true,
+      conversations: [],
+    });
+
+    expect(screen.getByText("a-future-mode")).toBeInTheDocument();
+    expect(screen.queryByText(/answering/)).not.toBeInTheDocument();
+  });
+
+  // Nothing inbound is offered either. A conversation configured there would do
+  // nothing today and come into force the day a version that understands the
+  // connection reads it, with nobody having decided anything in between.
+  it("does not offer to add a conversation", () => {
+    setLocale("en-US");
+    renderCard({
+      name: "acme-slack",
+      kind: "slack",
+      deliveryMode: "a-future-mode",
+      enabled: true,
+      hasCredential: true,
+      hasSigning: true,
+      conversations: [],
+    });
+
+    expect(
+      screen.queryByRole("button", { name: /Add a conversation/i }),
+    ).not.toBeInTheDocument();
+  });
+});

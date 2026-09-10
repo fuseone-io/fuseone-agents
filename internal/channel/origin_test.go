@@ -1,8 +1,10 @@
 package channel_test
 
 import (
+	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/channel"
@@ -212,9 +214,22 @@ func TestPutConversation_watchModeRequiresAuthorityAndSource(t *testing.T) {
 
 func configuredChannels(t *testing.T) (*channel.Configured, *admin.Channels) {
 	t.Helper()
+	configured, channels, _ := configuredChannelsWithStore(t)
+	return configured, channels
+}
+
+// configuredChannelsWithStore also hands back the settings store, for the tests
+// that have to write a row the administration would never produce. Restore,
+// migration and a hand-edited row are how those arrive, and they are what the
+// locks on the read side exist for.
+func configuredChannelsWithStore(
+	t *testing.T,
+) (*channel.Configured, *admin.Channels, *settings.Store) {
+	t.Helper()
 	_, pool := channelStore(t)
 	settingsStore := settings.NewStore(pool, nil)
-	return channel.NewConfigured(settingsStore), admin.NewChannels(pool, settingsStore)
+	return channel.NewConfigured(settingsStore),
+		admin.NewChannels(pool, settingsStore, onlySlack{}), settingsStore
 }
 
 /*
@@ -400,9 +415,10 @@ be told, rather than ignored at the far end.
 func TestPutConversation_mentionsOnly_keepsTheAgentAndDropsTheWatchPrincipal(t *testing.T) {
 	_, channels := configuredChannels(t)
 
-	if err := channels.PutChannel(t.Context(), admin.Channel{
-		Name: "acme-slack", Kind: "slack", Enabled: true,
-	}, channel.Credentials{}, "usr_ana"); err != nil {
+	if err := channels.PutChannel(t.Context(), admin.ChannelWrite{
+		Channel: admin.Channel{Name: "acme-slack", Kind: "slack", Enabled: true},
+		By:      "usr_ana", Governs: true,
+	}); err != nil {
 		t.Fatalf("PutChannel: %v", err)
 	}
 	if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
@@ -459,9 +475,10 @@ other field a mode or a choice does not consume is treated here.
 func TestPutConversation_notToldAboutParkedRuns_storesNoDirectApprovals(t *testing.T) {
 	_, channels := configuredChannels(t)
 
-	if err := channels.PutChannel(t.Context(), admin.Channel{
-		Name: "acme-slack", Kind: "slack", Enabled: true,
-	}, channel.Credentials{}, "usr_ana"); err != nil {
+	if err := channels.PutChannel(t.Context(), admin.ChannelWrite{
+		Channel: admin.Channel{Name: "acme-slack", Kind: "slack", Enabled: true},
+		By:      "usr_ana", Governs: true,
+	}); err != nil {
 		t.Fatalf("PutChannel: %v", err)
 	}
 	for _, c := range []struct {
@@ -521,3 +538,744 @@ func TestFor_theDirectApprovalChoice_reachesTheRuntime(t *testing.T) {
 	}
 	t.Fatalf("places = %+v, want the conversation", places)
 }
+
+/*
+A conversation for the whole installation hears everything and asks nothing.
+
+That scope contains every company, and containment is right for hearing and
+wrong for asking — the asymmetry this file opens with. A room that hears about
+every company is a reasonable thing to configure; one that can start an agent in
+every company is a different grant entirely.
+
+Today nothing would come of a mention there: no agent can be published at the
+installation, and the catalogue query compares the company for equality rather
+than containment, so the startable list comes back empty. **Both of those live
+in another package and neither says why.** The rule has to be stated here, or
+the day somebody teaches that query to read the sentinel as "everything" — a
+change that would look correct — this room becomes a start button for every
+agent in the installation.
+*/
+func TestResolve_aConversationForTheWholeInstallation_startsNothing(t *testing.T) {
+	store, _, settingsStore := configuredChannelsWithStore(t)
+
+	installationConversation(t, settingsStore, "C40-everywhere", channel.ConversationMentions)
+
+	_, err := store.Resolve(t.Context(), "acme-slack", "C40-everywhere")
+	if !errors.Is(err, channel.ErrAnnouncesOnly) {
+		t.Fatalf("err = %v, want ErrAnnouncesOnly", err)
+	}
+}
+
+// And so does any conversation whose mode says it only announces, wherever it
+// sits. The scope is one reason to refuse; the mode is the other.
+func TestResolve_aConversationThatOnlyAnnounces_startsNothing(t *testing.T) {
+	store, channels, _ := configuredChannelsWithStore(t)
+
+	if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+		ID: "C41-quiet", Enabled: true, Mode: channel.ConversationAnnounce,
+		Scope: domain.Scope{Company: "acme", Area: "ops"},
+	}, "usr_ana"); err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+
+	_, err := store.Resolve(t.Context(), "acme-slack", "C41-quiet")
+	if !errors.Is(err, channel.ErrAnnouncesOnly) {
+		t.Fatalf("err = %v, want ErrAnnouncesOnly", err)
+	}
+}
+
+/*
+Two rows for one Slack channel are still reported as ambiguous.
+
+The refusal for an installation row sits after the count, not inside the loop.
+Refusing it while searching would answer "this one announces only" and hide the
+fact that two rows exist — sending an operator to look at the wrong one.
+*/
+func TestResolve_theSameIdAtTheInstallationAndAtACompany_isAmbiguous(t *testing.T) {
+	store, _, settingsStore := configuredChannelsWithStore(t)
+
+	// Both written directly. The administration refuses to create the pair —
+	// that is its own lock — so a state holding both is restored, migrated or
+	// hand-edited, which is the state this read has to survive.
+	conversationRow(t, settingsStore, "SHARED-EVERYWHERE",
+		settings.ScopeArea, domain.Scope{Company: "acme", Area: "ops"},
+		channel.ConversationMentions)
+	installationConversation(t, settingsStore, "SHARED-EVERYWHERE", channel.ConversationMentions)
+
+	_, err := store.Resolve(t.Context(), "acme-slack", "SHARED-EVERYWHERE")
+	if !errors.Is(err, channel.ErrAmbiguousConversation) {
+		t.Fatalf("err = %v, want the ambiguity reported", err)
+	}
+}
+
+/*
+And a watched message in such a room writes nothing down.
+
+WatchFor is asked by the door, before the consumer resolves anything. It never
+looked at the scope, so an installation row saying "watch" would let any
+configured Slack source write an inbox row carrying a configured principal —
+refused a sweep later, after the write and the delegation had already travelled.
+*/
+func TestWatchFor_aConversationForTheWholeInstallation_answersNoRule(t *testing.T) {
+	store, _, settingsStore := configuredChannelsWithStore(t)
+
+	installationConversation(t, settingsStore, "C42-watching", channel.ConversationWatch)
+
+	_, ok, err := store.WatchFor(t.Context(), "acme-slack", "C42-watching",
+		channel.Source{Bot: "B-alerts"})
+	if err != nil {
+		t.Fatalf("WatchFor: %v", err)
+	}
+	if ok {
+		t.Error("a conversation for the whole installation answered with a watch rule")
+	}
+}
+
+/*
+A mode this version does not know starts nothing.
+
+The allowlist is right and it was being asked the wrong question: Resolve
+normalised the stored value first, and ConversationMode answers anything it
+does not recognise with "mentions" — which is the correct answer for a screen
+and the opposite of the correct answer for deciding who may start work. A row
+saying "a-future-mode", written by a newer version and restored here, came back
+as a conversation anybody could start runs from by typing in it.
+
+Empty is the one unknown value that legitimately means mentions, and it is
+named on its own. Everything else fails closed.
+*/
+func TestResolve_aModeThisVersionDoesNotKnow_startsNothing(t *testing.T) {
+	store, _, settingsStore := configuredChannelsWithStore(t)
+
+	conversationRow(t, settingsStore, "C43-future", settings.ScopeArea,
+		domain.Scope{Company: "acme", Area: "ops"}, "a-future-mode")
+
+	_, err := store.Resolve(t.Context(), "acme-slack", "C43-future")
+	if !errors.Is(err, channel.ErrAnnouncesOnly) {
+		t.Fatalf("err = %v, want ErrAnnouncesOnly", err)
+	}
+}
+
+// And it writes nothing down either. WatchFor reads the stored value for the
+// same reason, and is asked first.
+func TestWatchFor_aModeThisVersionDoesNotKnow_answersNoRule(t *testing.T) {
+	store, _, settingsStore := configuredChannelsWithStore(t)
+
+	conversationRow(t, settingsStore, "C44-future", settings.ScopeArea,
+		domain.Scope{Company: "acme", Area: "ops"}, "a-future-mode")
+
+	_, ok, err := store.WatchFor(t.Context(), "acme-slack", "C44-future",
+		channel.Source{Bot: "B-alerts"})
+	if err != nil {
+		t.Fatalf("WatchFor: %v", err)
+	}
+	if ok {
+		t.Error("a mode this version does not know answered with a watch rule")
+	}
+}
+
+/*
+The same conversation id on two connections, in one scope, is refused.
+
+A conversation is stored under its id alone, so the two are one row: the second
+write replaced the first, with no refusal and nothing in the trail saying a
+conversation had been removed. Cards and approvals for that workspace simply
+stopped.
+
+Refused rather than overwritten. It is a real restriction — vendor ids are
+per-workspace namespaces, and the same one on two workspaces is something
+somebody may legitimately want — and it lifts when the key carries the
+connection, one release after this. Until then, being told is the whole of the
+fix.
+*/
+func TestPutConversation_theSameIdOnAnotherConnectionInOneScope_isRefused(t *testing.T) {
+	store, channels := configuredChannels(t)
+	scope := domain.Scope{Company: "acme", Area: "ops"}
+
+	if err := channels.PutConversation(t.Context(), "workspace-a", admin.Conversation{
+		ID: "C-SAME", Enabled: true, Scope: scope, Agent: "triagem",
+		Wants: []string{"parked"},
+	}, "usr_ana"); err != nil {
+		t.Fatalf("map the first: %v", err)
+	}
+
+	err := channels.PutConversation(t.Context(), "workspace-b", admin.Conversation{
+		ID: "C-SAME", Enabled: true, Scope: scope, Agent: "cobranca",
+		Wants: []string{"parked"},
+	}, "usr_ana")
+	if !errors.Is(err, admin.ErrConversationOnAnotherConnection) {
+		t.Fatalf("err = %v, want ErrConversationOnAnotherConnection", err)
+	}
+
+	// And the first is untouched, which is the thing that used to be lost.
+	got, err := store.Resolve(t.Context(), "workspace-a", "C-SAME")
+	if err != nil {
+		t.Fatalf("the first conversation stopped resolving: %v", err)
+	}
+	if got.Agent != "triagem" {
+		t.Errorf("agent = %q, want the first configuration intact", got.Agent)
+	}
+}
+
+// The same id on another connection in *another* scope is no collision: they
+// are two rows, and always were.
+func TestPutConversation_theSameIdOnAnotherConnectionElsewhere_isAllowed(t *testing.T) {
+	store, channels := configuredChannels(t)
+
+	for _, one := range []struct {
+		connection string
+		area       domain.AreaID
+		agent      domain.AgentID
+	}{{"workspace-a", "sales", "triagem"}, {"workspace-b", "billing", "cobranca"}} {
+		if err := channels.PutConversation(t.Context(), one.connection, admin.Conversation{
+			ID: "C-ELSEWHERE", Enabled: true, Agent: one.agent,
+			Scope: domain.Scope{Company: "acme", Area: one.area},
+			Wants: []string{"parked"},
+		}, "usr_ana"); err != nil {
+			t.Fatalf("map %s: %v", one.connection, err)
+		}
+		got, err := store.Resolve(t.Context(), one.connection, "C-ELSEWHERE")
+		if err != nil {
+			t.Fatalf("resolve on %s: %v", one.connection, err)
+		}
+		if got.Agent != one.agent {
+			t.Errorf("%s starts %q, want its own agent", one.connection, got.Agent)
+		}
+	}
+}
+
+/*
+A row written the way the next version will write it is already readable.
+
+That is what makes moving the key affordable: the release after this one may put
+the connection into the name only if this one already understands it, because
+both are serving while the rollout runs. Written directly here, since nothing in
+this version produces one.
+*/
+func TestResolve_aRowKeyedByConnectionAndId_resolves(t *testing.T) {
+	store, _, settingsStore := configuredChannelsWithStore(t)
+	scope := domain.Scope{Company: "acme", Area: "future"}
+
+	if err := settingsStore.Put(t.Context(), settings.Setting{
+		ScopeKind: settings.ScopeArea, Scope: scope,
+		Kind:    channel.KindConversation,
+		Name:    channel.ConversationKey("acme-slack", "C-NEXT"),
+		Value:   []byte(`{"channel":"acme-slack","keyVersion":2,"mode":"mentions","agent":"triagem"}`),
+		Enabled: true, UpdatedBy: "a newer version",
+	}); err != nil {
+		t.Fatalf("write the row: %v", err)
+	}
+
+	got, err := store.Resolve(t.Context(), "acme-slack", "C-NEXT")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if got.Agent != "triagem" || got.Scope != scope {
+		t.Errorf("resolved to %+v, want the row's own agent and scope", got)
+	}
+}
+
+/*
+And editing it leaves it where it is.
+
+That is the other half of the rollout the version after this one will do. This
+version writes the id alone — but forcing that name onto a row already keyed by
+its connection would leave the newer row untouched and a second one beside it,
+which is the ambiguity the read refuses, for good. A row that exists is updated
+where it lies.
+*/
+func TestPutConversation_editingARowKeyedByConnectionAndId_keepsItsShape(t *testing.T) {
+	store, channels, settingsStore := configuredChannelsWithStore(t)
+	scope := domain.Scope{Company: "acme", Area: "future2"}
+
+	if err := settingsStore.Put(t.Context(), settings.Setting{
+		ScopeKind: settings.ScopeArea, Scope: scope,
+		Kind:    channel.KindConversation,
+		Name:    channel.ConversationKey("acme-slack", "C-KEPT"),
+		Value:   []byte(`{"channel":"acme-slack","keyVersion":2,"mode":"mentions","agent":"triagem"}`),
+		Enabled: true, UpdatedBy: "a newer version",
+	}); err != nil {
+		t.Fatalf("write the row: %v", err)
+	}
+
+	if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+		ID: "C-KEPT", Enabled: true, Scope: scope, Agent: "cobranca",
+		Wants: []string{"parked"},
+	}, "usr_ana"); err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+
+	// One row, and it is the edit that answers.
+	got, err := store.Resolve(t.Context(), "acme-slack", "C-KEPT")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if got.Agent != "cobranca" {
+		t.Errorf("agent = %q, want the edit", got.Agent)
+	}
+}
+
+/*
+And it can be removed.
+
+The delete recomputed the key, so a row stored under the id alone was named by
+something that was not in the table: the removal matched nothing, reported
+success, and the conversation went on receiving.
+*/
+func TestDeleteConversation_aRowStoredUnderTheIdAlone_isRemoved(t *testing.T) {
+	store, channels, settingsStore := configuredChannelsWithStore(t)
+	scope := domain.Scope{Company: "acme", Area: "legacy2"}
+
+	conversationRow(t, settingsStore, "C-OLDER", settings.ScopeArea, scope,
+		channel.ConversationMentions)
+
+	if err := channels.DeleteConversation(t.Context(), admin.ConversationRef{
+		Channel: "acme-slack", ID: "C-OLDER", Scope: scope,
+	}, "usr_ana"); err != nil {
+		t.Fatalf("DeleteConversation: %v", err)
+	}
+	if _, err := store.Resolve(t.Context(), "acme-slack", "C-OLDER"); !errors.Is(
+		err, channel.ErrNoConversation) {
+		t.Errorf("err = %v, want the conversation gone", err)
+	}
+}
+
+/*
+Two rows for one conversation answer no watch rule.
+
+Resolve reports the pair as ambiguous, and WatchFor — asked first, by the door —
+answered from whichever row the database returned first. Restored with the same
+id at an area and at the installation, the area row won and started the agent
+under its stored principal, while a mention in the very same conversation was
+being refused as ambiguous. Which of the two is in force is not a question row
+order may answer.
+*/
+func TestWatchFor_theSameIdAtTwoScopes_answersNoRule(t *testing.T) {
+	store, _, settingsStore := configuredChannelsWithStore(t)
+
+	conversationRow(t, settingsStore, "SHARED-WATCHING",
+		settings.ScopeArea, domain.Scope{Company: "acme", Area: "ops"},
+		channel.ConversationWatch)
+	installationConversation(t, settingsStore, "SHARED-WATCHING", channel.ConversationWatch)
+
+	_, ok, err := store.WatchFor(t.Context(), "acme-slack", "SHARED-WATCHING",
+		channel.Source{Bot: "B-alerts"})
+	if err != nil {
+		t.Fatalf("WatchFor: %v", err)
+	}
+	if ok {
+		t.Error("an ambiguous conversation answered with a watch rule")
+	}
+}
+
+/*
+The connection under the room is guarded where it is written, not before.
+
+Checked at the door and written afterwards, the two are separate decisions: a
+curator passes the check on a connection carrying no room, somebody who may
+attaches one, and the write lands anyway — a 204 for exactly the act that was
+about to be refused. The precondition now runs inside the transaction that
+writes, under the connection's lock.
+*/
+func TestPutChannel_carryingTheRoomForTheInstallation_needsAuthorityOverIt(t *testing.T) {
+	_, channels := configuredChannels(t)
+	connect(t, channels, "room-slack")
+
+	if err := channels.PutConversation(t.Context(), "room-slack", admin.Conversation{
+		ID: "C60-everywhere", Enabled: true,
+		Scope: domain.Scope{Company: domain.Installation},
+		Wants: []string{"parked"},
+	}, "usr_ana"); err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+
+	err := channels.PutChannel(t.Context(), admin.ChannelWrite{
+		Channel: admin.Channel{Name: "room-slack", Kind: "slack", Enabled: false},
+		By:      "usr_curator",
+	})
+	if !errors.Is(err, admin.ErrInstallationAuthority) {
+		t.Fatalf("err = %v, want ErrInstallationAuthority", err)
+	}
+	if !enabledChannel(t, channels, "room-slack") {
+		t.Error("the connection was disabled by the write that was refused")
+	}
+}
+
+/*
+And a room whose connection is gone is guarded too.
+
+The assembled listing hangs conversations off the connections that exist, so a
+room left behind by a restore, a migration or a half-finished delete is
+invisible to it — and a curator recreating the connection under that name would
+quietly adopt it, receiving every company's runs.
+*/
+func TestPutChannel_anOrphanedRoomForTheInstallation_isStillGuarded(t *testing.T) {
+	_, channels, settingsStore := configuredChannelsWithStore(t)
+
+	orphanedRoom(t, settingsStore, "orphaned-slack", "C61-orphan")
+
+	err := channels.PutChannel(t.Context(), admin.ChannelWrite{
+		Channel: admin.Channel{Name: "orphaned-slack", Kind: "slack", Enabled: true},
+		By:      "usr_curator",
+	})
+	if !errors.Is(err, admin.ErrInstallationAuthority) {
+		t.Fatalf("err = %v, want ErrInstallationAuthority", err)
+	}
+}
+
+func TestDeleteChannel_carryingTheRoomForTheInstallation_needsAuthorityOverIt(t *testing.T) {
+	store, channels := configuredChannels(t)
+	connect(t, channels, "gone-slack")
+
+	if err := channels.PutConversation(t.Context(), "gone-slack", admin.Conversation{
+		ID: "C62-everywhere", Enabled: true,
+		Scope: domain.Scope{Company: domain.Installation},
+		Wants: []string{"parked"},
+	}, "usr_ana"); err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+
+	if err := channels.DeleteChannel(t.Context(), "gone-slack", "usr_curator", false); !errors.Is(
+		err, admin.ErrInstallationAuthority) {
+		t.Fatalf("err = %v, want ErrInstallationAuthority", err)
+	}
+	if !hears(t, store, "C62-everywhere", domain.Scope{Company: "other", Area: "ops"}) {
+		t.Fatal("the room stopped hearing after a delete that was refused")
+	}
+
+	// And whoever governs the installation removes it, room and all.
+	if err := channels.DeleteChannel(t.Context(), "gone-slack", "usr_ana", true); err != nil {
+		t.Fatalf("DeleteChannel: %v", err)
+	}
+	if hears(t, store, "C62-everywhere", domain.Scope{Company: "other", Area: "ops"}) {
+		t.Error("the room is still receiving after the connection was removed")
+	}
+}
+
+/*
+A conversation is written under the connection's lock.
+
+What makes the guard a precondition rather than a guess is that the two writes
+cannot interleave. Proved by holding the lock from outside and watching the
+connection write wait for it: without the lock it would sail past and decide
+from a state somebody else was in the middle of changing.
+*/
+func TestPutChannel_whileTheConnectionIsLocked_waits(t *testing.T) {
+	_, pool := channelStore(t)
+	channels := admin.NewChannels(pool, settings.NewStore(pool, nil), onlySlack{})
+
+	held, err := pool.Acquire(t.Context())
+	if err != nil {
+		t.Fatalf("acquire: %v", err)
+	}
+	defer held.Release()
+	if _, err := held.Exec(t.Context(),
+		`select pg_advisory_lock(hashtext($1))`, "channel:acme-slack"); err != nil {
+		t.Fatalf("take the lock: %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- channels.PutChannel(context.Background(), admin.ChannelWrite{
+			Channel: admin.Channel{Name: "acme-slack", Kind: "slack", Enabled: true},
+			By:      "usr_ana", Governs: true,
+		})
+	}()
+
+	select {
+	case err := <-done:
+		t.Fatalf("the write did not wait for the connection's lock: %v", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+
+	if _, err := held.Exec(t.Context(),
+		`select pg_advisory_unlock(hashtext($1))`, "channel:acme-slack"); err != nil {
+		t.Fatalf("release the lock: %v", err)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("PutChannel: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the write never completed after the lock was released")
+	}
+}
+
+// orphanedRoom writes a room for the whole installation whose connection does
+// not exist: restored, migrated, or left behind by a delete that stopped
+// halfway. The assembled listing cannot see one, which is the point.
+func orphanedRoom(t *testing.T, store *settings.Store, channelName, id string) {
+	t.Helper()
+	value := `{"channel":"` + channelName + `","mode":"announce"}`
+	if err := store.Put(t.Context(), settings.Setting{
+		ScopeKind: settings.ScopeInstallation,
+		Scope:     domain.Scope{Company: domain.Installation},
+		Kind:      channel.KindConversation, Name: id,
+		Value: []byte(value), Enabled: true, UpdatedBy: "restore",
+	}); err != nil {
+		t.Fatalf("write the orphaned room: %v", err)
+	}
+}
+
+// connect writes the connection a conversation hangs off.
+func connect(t *testing.T, channels *admin.Channels, name string) {
+	t.Helper()
+	if err := channels.PutChannel(t.Context(), admin.ChannelWrite{
+		Channel: admin.Channel{Name: name, Kind: "slack", Enabled: true},
+		By:      "usr_ana", Governs: true,
+	}); err != nil {
+		t.Fatalf("PutChannel: %v", err)
+	}
+}
+
+func enabledChannel(t *testing.T, channels *admin.Channels, name string) bool {
+	t.Helper()
+	listed, err := channels.List(t.Context())
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	for _, one := range listed {
+		if one.Name == name {
+			return one.Enabled
+		}
+	}
+	t.Fatalf("no connection %s", name)
+	return false
+}
+
+// installationConversation writes a row the administration will not produce.
+// It arrives by restore, by migration, or from a version of the screen that did
+// not check — which is exactly what the locks on the read side are for.
+func installationConversation(t *testing.T, store *settings.Store, id, mode string) {
+	t.Helper()
+	conversationRow(t, store, id, settings.ScopeInstallation,
+		domain.Scope{Company: domain.Installation}, mode)
+}
+
+func conversationRow(
+	t *testing.T, store *settings.Store, id string,
+	kind settings.ScopeKind, scope domain.Scope, mode string,
+) {
+	t.Helper()
+	value := `{"channel":"acme-slack","mode":"` + mode +
+		`","agent":"triagem","runAs":"usr_opsbot","sources":["B-alerts"]}`
+	if err := store.Put(t.Context(), settings.Setting{
+		ScopeKind: kind, Scope: scope,
+		Kind: channel.KindConversation, Name: id,
+		Value: []byte(value), Enabled: true, UpdatedBy: "restore",
+	}); err != nil {
+		t.Fatalf("write the %s row: %v", kind, err)
+	}
+}
+
+/*
+Removing a conversation removes the row that exists.
+
+Where a conversation is stored is chosen in two places — once when it is
+written and once when it is deleted — and the two agreeing is what makes a
+delete a delete. Disagreeing, the removal matches nothing, reports no error and
+answers 204, and the room goes on receiving every run it was configured for.
+Nothing says so: the console shows it gone.
+*/
+func TestDeleteConversation_atEveryScope_theRowIsGone(t *testing.T) {
+	store, channels := configuredChannels(t)
+
+	for _, scope := range []domain.Scope{
+		{Company: "acme", Area: "ops"},
+		{Company: "acme"},
+		{Company: domain.Installation},
+	} {
+		id := "C50-" + string(scope.Company) + "-" + string(scope.Area)
+		if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+			ID: id, Enabled: true, Scope: scope,
+		}, "usr_ana"); err != nil {
+			t.Fatalf("PutConversation %+v: %v", scope, err)
+		}
+		if !hears(t, store, id, domain.Scope{Company: "acme", Area: "ops"}) {
+			t.Fatalf("%+v: the conversation was not configured", scope)
+		}
+
+		if err := channels.DeleteConversation(t.Context(), admin.ConversationRef{
+			Channel: "acme-slack", ID: id, Scope: scope,
+		}, "usr_ana"); err != nil {
+			t.Fatalf("DeleteConversation %+v: %v", scope, err)
+		}
+		if hears(t, store, id, domain.Scope{Company: "acme", Area: "ops"}) {
+			t.Errorf("%+v: the conversation still receives after being removed", scope)
+		}
+	}
+}
+
+func hears(t *testing.T, store *channel.Configured, id string, run domain.Scope) bool {
+	t.Helper()
+	places, err := store.For(t.Context(), run)
+	if err != nil {
+		t.Fatalf("For: %v", err)
+	}
+	for _, place := range places {
+		if place.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+/*
+A conversation for the whole installation stores nothing about starting runs.
+
+The scope already reached every company before anybody asked it to — the write
+only ever refused an empty one — so such a row exists today with a mode saying
+"mentions" and, if somebody sent them, an agent, a principal and a list of
+sources. The read side refuses all of it, and configuration describing an
+inbound path the platform will not take is configuration nobody can trust.
+
+Coerced rather than refused, like every other field a choice does not consume
+here. What survives is what the room is for: which events it hears, and whether
+it also tells the people who may decide.
+*/
+func TestPutConversation_atTheInstallationScope_storesNothingAboutStarting(t *testing.T) {
+	_, channels := configuredChannels(t)
+	// The listing hangs conversations off the connections that exist, so the
+	// one they are configured on has to be there to read them back.
+	connect(t, channels, "acme-slack")
+
+	for _, mode := range []string{
+		channel.ConversationMentions, channel.ConversationWatch,
+		channel.ConversationBoth, channel.ConversationAnnounce, "",
+	} {
+		id := "C51-" + mode
+		if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+			ID: id, Enabled: true, Mode: mode,
+			Scope:   domain.Scope{Company: domain.Installation},
+			Agent:   "triagem",
+			RunAs:   "usr_opsbot",
+			Sources: []string{"B-alerts"},
+			// Kept: it is what the room is for.
+			ThreadContext: true, DirectApprovals: true,
+			Wants: []string{"parked"},
+		}, "usr_ana"); err != nil {
+			t.Fatalf("PutConversation %q: %v", mode, err)
+		}
+
+		got := storedConversation(t, channels, "acme-slack", id)
+		if got.Mode != channel.ConversationAnnounce {
+			t.Errorf("mode %q stored as %q, want announce", mode, got.Mode)
+		}
+		if got.Agent != "" || got.RunAs != "" || len(got.Sources) != 0 || got.ThreadContext {
+			t.Errorf("mode %q: stored inbound configuration %+v", mode, got)
+		}
+		if !got.DirectApprovals {
+			t.Errorf("mode %q: the room stopped telling the people who may decide", mode)
+		}
+	}
+}
+
+/*
+And the administration hands it back as it is stored.
+
+Read through the display normalisation, a mode this version cannot name came
+back as "mentions" — and the console saving any unrelated edit from that reading
+wrote "mentions", turning a room that started nothing into one anybody could
+start runs from by typing in it. The runtime failing closed does not help: by
+then the row says mentions and means it.
+
+Empty is the one value that is translated, because empty is defined: it is a
+conversation configured before modes existed.
+*/
+func TestList_aModeThisVersionDoesNotKnow_isNotReadAsMentions(t *testing.T) {
+	_, channels, settingsStore := configuredChannelsWithStore(t)
+	scope := domain.Scope{Company: "acme", Area: "ops"}
+
+	// The listing walks connections and hangs conversations off them, so this
+	// one has to exist for the rows below to be visible at all.
+	if err := channels.PutChannel(t.Context(), admin.ChannelWrite{
+		Channel: admin.Channel{Name: "acme-slack", Kind: "slack", Enabled: true},
+		By:      "usr_ana", Governs: true,
+	}); err != nil {
+		t.Fatalf("PutChannel: %v", err)
+	}
+
+	conversationRow(t, settingsStore, "C55-future", settings.ScopeArea, scope, "a-future-mode")
+	conversationRow(t, settingsStore, "C56-legacy", settings.ScopeArea, scope, "")
+
+	if got := storedConversation(t, channels, "acme-slack", "C55-future"); got.Mode != "a-future-mode" {
+		t.Errorf("mode = %q, want the stored value", got.Mode)
+	}
+	if got := storedConversation(t, channels, "acme-slack", "C56-legacy"); got.Mode != channel.ConversationMentions {
+		t.Errorf("legacy mode = %q, want mentions", got.Mode)
+	}
+}
+
+/*
+A mode this version does not know is refused, not quietly rewritten.
+
+The write normalised too, and normalising here is worse than at the read: an
+operator editing a conversation on an older console would turn a room a newer
+version had set to start nothing into one that starts runs by mention, with the
+trail recording an ordinary edit. Empty stays mentions — that is a conversation
+configured before modes existed.
+*/
+func TestPutConversation_aModeThisVersionDoesNotKnow_isRefused(t *testing.T) {
+	_, channels := configuredChannels(t)
+
+	err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+		ID: "C53-future", Enabled: true, Mode: "a-future-mode",
+		Scope: domain.Scope{Company: "acme", Area: "ops"},
+	}, "usr_ana")
+	if !errors.Is(err, admin.ErrUnknownMode) {
+		t.Fatalf("err = %v, want ErrUnknownMode", err)
+	}
+}
+
+/*
+A conversation that only reports keeps no agent, wherever it sits.
+
+Only the installation scope went through the coercion, so an ordinary room set
+to announce kept its binding: a field the platform never reads, stored, and
+waiting to come back the day somebody sets that room to take mentions again.
+The console does not offer it, which is not the same as the server refusing it.
+*/
+func TestPutConversation_announceAtAnOrdinaryScope_keepsNoAgent(t *testing.T) {
+	_, channels := configuredChannels(t)
+	connect(t, channels, "acme-slack")
+
+	if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+		ID: "C54-quiet", Enabled: true, Mode: channel.ConversationAnnounce,
+		Scope: domain.Scope{Company: "acme", Area: "ops"},
+		Agent: "triagem", ThreadContext: true,
+	}, "usr_ana"); err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+
+	got := storedConversation(t, channels, "acme-slack", "C54-quiet")
+	if got.Agent != "" || got.ThreadContext {
+		t.Errorf("stored %+v, want nothing about starting runs", got)
+	}
+}
+
+/*
+The installation has no area, and a row claiming one reaches nothing.
+
+Containment short circuits on the sentinel and requires the area to be empty,
+so that shape announces to no scope at all while looking configured — the
+quietest way to have a room that never says anything.
+*/
+func TestPutConversation_theInstallationWithAnArea_isRefused(t *testing.T) {
+	_, channels := configuredChannels(t)
+
+	err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+		ID: "C52-nowhere", Enabled: true,
+		Scope: domain.Scope{Company: domain.Installation, Area: "ops"},
+	}, "usr_ana")
+	if !errors.Is(err, admin.ErrInstallationArea) {
+		t.Fatalf("err = %v, want ErrInstallationArea", err)
+	}
+}
+
+// onlySlack is what this binary can connect, as the administration asks it.
+// Named here rather than left nil: a conversation that starts runs is refused
+// on a connection nothing can talk to, and these tests configure real ones.
+type onlySlack struct{}
+
+func (onlySlack) Kinds() []string { return []string{"slack"} }

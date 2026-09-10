@@ -46,28 +46,31 @@ function stubApi(
             can: options.can ?? [],
           }
         : url.includes("/available")
-        ? { items: [] }
-        : url.includes("/admin/scopes")
-          ? {
-              items: [
-                { company: "acme", area: "devops", label: "Devops" },
-                { company: "acme", area: "ops", label: "Ops" },
-              ],
-            }
-          : url.includes("/admin/people")
+          ? { items: [] }
+          : url.includes("/admin/scopes")
             ? {
                 items: [
-                  { id: "usr_opsbot", display: "Ops Bot" },
-                  { id: "usr_admin", display: "Security Admin" },
+                  { company: "acme", area: "devops", label: "Devops" },
+                  { company: "acme", area: "ops", label: "Ops" },
                 ],
               }
-            : url.includes("/agents")
+            : url.includes("/admin/people")
               ? {
-                  items: options.agents ?? [
-                    { agentId: "troubleshooting-sre", name: "Troubleshooting SRE" },
+                  items: [
+                    { id: "usr_opsbot", display: "Ops Bot" },
+                    { id: "usr_admin", display: "Security Admin" },
                   ],
                 }
-          : {};
+              : url.includes("/agents")
+                ? {
+                    items: options.agents ?? [
+                      {
+                        agentId: "troubleshooting-sre",
+                        name: "Troubleshooting SRE",
+                      },
+                    ],
+                  }
+                : {};
       return new Response(JSON.stringify(body), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -108,7 +111,6 @@ const mentionsConversation = {
   wants: ["parked"],
   enabled: true,
 };
-
 
 function saved(requests: { method: string; body?: unknown }[]) {
   return requests.find((one) => one.method === "PUT")?.body;
@@ -193,6 +195,27 @@ describe("conversation configuration", () => {
     expect(saved(requests)).toMatchObject({ directApprovals: true });
   });
 
+  /*
+   * A conversation that only reports offers nothing about starting runs.
+   *
+   * The predicate deciding that was a denylist — anything that is not "watch"
+   * takes mentions — so a mode whose whole purpose is to start nothing would
+   * have shown the mention fields and offered to configure an inbound path the
+   * server refuses.
+   */
+  it("offers nothing about starting runs for a conversation that only reports", async () => {
+    renderForm({ ...mentionsConversation, mode: "announce" });
+
+    expect(await screen.findByText(/O que avisar/)).toBeInTheDocument();
+    expect(
+      screen.queryByText("Incluir contexto da thread"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Fontes Slack permitidas"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Rodar como")).not.toBeInTheDocument();
+  });
+
   it("explains an empty Slack listing instead of leaving a picker with no choices", async () => {
     renderForm();
 
@@ -200,7 +223,9 @@ describe("conversation configuration", () => {
       await screen.findByText(/O Slack não retornou nenhum canal/),
     ).toBeInTheDocument();
     expect(screen.getByPlaceholderText("C0123ABCDEF")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Tentar de novo/ })).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: /Tentar de novo/ }),
+    ).toBeEnabled();
   });
 
   it("shows the watch rule only when selected", async () => {
@@ -211,10 +236,14 @@ describe("conversation configuration", () => {
     // The agent belongs to the conversation whatever starts its runs; the
     // principal and the sources belong to watched messages alone.
     expect(screen.getByText("Agente desta conversa")).toBeInTheDocument();
-    expect(screen.queryByText("Fontes Slack permitidas")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Fontes Slack permitidas"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("Rodar como")).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("combobox", { name: /O que inicia runs/ }));
+    await user.click(
+      screen.getByRole("combobox", { name: /O que inicia runs/ }),
+    );
     await user.click(
       await screen.findByRole("option", {
         name: "Observar mensagens selecionadas",
@@ -302,7 +331,9 @@ describe("conversation configuration", () => {
       enabled: true,
     });
 
-    await user.click(await screen.findByRole("combobox", { name: /Agente desta conversa/ }));
+    await user.click(
+      await screen.findByRole("combobox", { name: /Agente desta conversa/ }),
+    );
 
     expect(
       await screen.findByRole("option", { name: "Troubleshooting SRE" }),
@@ -316,16 +347,22 @@ describe("conversation configuration", () => {
     const user = userEvent.setup();
     renderForm();
 
-    await user.click(await screen.findByRole("combobox", { name: /O que inicia runs/ }));
+    await user.click(
+      await screen.findByRole("combobox", { name: /O que inicia runs/ }),
+    );
     await user.click(
       await screen.findByRole("option", {
         name: "Observar mensagens selecionadas",
       }),
     );
 
-    await user.click(await screen.findByRole("combobox", { name: /Rodar como/ }));
+    await user.click(
+      await screen.findByRole("combobox", { name: /Rodar como/ }),
+    );
 
-    expect(await screen.findByRole("option", { name: "Ops Bot" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("option", { name: "Ops Bot" }),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("option", { name: "Security Admin" }),
     ).not.toBeInTheDocument();
@@ -339,16 +376,22 @@ describe("conversation configuration", () => {
     const user = userEvent.setup();
     renderForm();
 
-    await user.click(await screen.findByRole("combobox", { name: /O que inicia runs/ }));
+    await user.click(
+      await screen.findByRole("combobox", { name: /O que inicia runs/ }),
+    );
     await user.click(
       await screen.findByRole("option", {
         name: "Observar mensagens selecionadas",
       }),
     );
 
-    await user.click(await screen.findByRole("combobox", { name: /Rodar como/ }));
+    await user.click(
+      await screen.findByRole("combobox", { name: /Rodar como/ }),
+    );
 
-    expect(await screen.findByRole("option", { name: "Ops Bot" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("option", { name: "Ops Bot" }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("option", { name: "Security Admin" }),
     ).toBeInTheDocument();
@@ -370,9 +413,9 @@ describe("conversation configuration", () => {
     expect(await screen.findByText("Editar conversa")).toBeInTheDocument();
     const id = screen.getByDisplayValue("C-alerts");
     expect(id).toBeDisabled();
-    expect(
-      await screen.findByLabelText("Fontes Slack permitidas"),
-    ).toHaveValue("B0123ALERT\nA0123APP");
+    expect(await screen.findByLabelText("Fontes Slack permitidas")).toHaveValue(
+      "B0123ALERT\nA0123APP",
+    );
     expect(
       screen.getByText(/Para apontar outro canal Slack/),
     ).toBeInTheDocument();
@@ -425,7 +468,9 @@ describe("conversation configuration", () => {
       enabled: true,
     });
 
-    expect(await screen.findByText("Agente desta conversa")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Agente desta conversa"),
+    ).toBeInTheDocument();
     expect(screen.getByText("Fontes Slack permitidas")).toBeInTheDocument();
     await user.click(screen.getByText("Incluir contexto da thread"));
     await user.click(screen.getByRole("button", { name: "Salvar" }));
@@ -443,5 +488,214 @@ describe("conversation configuration", () => {
       agent: "troubleshooting-sre",
       runAs: "usr_opsbot",
     });
+  });
+  /*
+   * A room that hears every company is the authority above them all.
+   *
+   * The server refuses it from anybody else, so offering the option to a
+   * curator of one company would be a control that answers 403 — and the
+   * console already knows: "company:write" is announced only when it was
+   * granted at the installation.
+   */
+  it("offers the whole installation only to whoever governs it", async () => {
+    const user = userEvent.setup();
+    stubApi({ can: ["provider:write"] });
+    renderForm();
+
+    await user.click(await screen.findByRole("combobox", { name: "Contexto" }));
+
+    expect(
+      screen.queryByRole("option", { name: "A instalação inteira" }),
+    ).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole("option", { name: "Devops" }),
+    ).toBeInTheDocument();
+  });
+
+  /*
+   * Nothing inbound is offered for the installation, and nothing inbound is
+   * asked of the server either.
+   *
+   * Listing agents there is a read almost nobody may do, so leaving the query
+   * on would paint an error over a field that is not even shown.
+   */
+  it("asks nothing about starting runs for the whole installation", async () => {
+    const requests: { method: string; url: string; body?: unknown }[] = [];
+    stubApi({ can: ["company:write"], requests });
+    const user = userEvent.setup();
+    renderForm();
+
+    await user.click(await screen.findByRole("combobox", { name: "Contexto" }));
+    await user.click(
+      await screen.findByRole("option", { name: "A instalação inteira" }),
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("combobox", { name: /O que inicia runs/ }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(screen.queryByText("Agente desta conversa")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Incluir contexto da thread"),
+    ).not.toBeInTheDocument();
+    expect(requests.filter((one) => one.url.includes("/agents?"))).toHaveLength(
+      0,
+    );
+  });
+
+  /*
+   * What is saved says what the platform will do. The mode field is hidden
+   * rather than set, so a request that carried its old value would store a
+   * conversation claiming an inbound path the server strips — and the console
+   * would disagree with itself on the next read.
+   */
+  it("saves a conversation for the whole installation as one that only reports", async () => {
+    const requests: { method: string; url: string; body?: unknown }[] = [];
+    stubApi({ can: ["company:write"], requests });
+    const user = userEvent.setup();
+    renderForm({ ...mentionsConversation, threadContext: true });
+
+    await user.click(await screen.findByRole("combobox", { name: "Contexto" }));
+    await user.click(
+      await screen.findByRole("option", { name: "A instalação inteira" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => expect(saved(requests)).toBeDefined());
+    expect(saved(requests)).toMatchObject({
+      company: "*",
+      mode: "announce",
+      threadContext: false,
+    });
+    expect(saved(requests)).not.toHaveProperty("area");
+    expect(saved(requests)).not.toHaveProperty("agent");
+  });
+  /*
+   * "Only reports" is a mode any conversation may take, and taking it drops
+   * the agent — a binding on a conversation that starts nothing is a field
+   * stored and never read. The mode picker stays, because a room set to report
+   * has to be able to become one that answers again.
+   */
+  it("drops the bound agent when a conversation is set to only report", async () => {
+    const requests: { method: string; url: string; body?: unknown }[] = [];
+    stubApi({ requests, agents: [sre] });
+    const user = userEvent.setup();
+    renderForm({ ...mentionsConversation, agent: "troubleshooting-sre" });
+
+    await user.click(
+      await screen.findByRole("combobox", { name: /O que inicia runs/ }),
+    );
+    await user.click(await screen.findByRole("option", { name: "Só relata" }));
+
+    expect(screen.queryByText("Agente desta conversa")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("combobox", { name: /O que inicia runs/ }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+    await waitFor(() => expect(saved(requests)).toBeDefined());
+    expect(saved(requests)).toMatchObject({ mode: "announce" });
+    expect(saved(requests)).not.toHaveProperty("agent");
+  });
+  /*
+   * A half-written watch rule must not trap somebody in the form.
+   *
+   * The mode field is hidden for the installation and the request says
+   * "announce", but the schema went on validating the mode still sitting in
+   * the form: an incomplete watch draft failed on sources, an agent and a
+   * principal — three fields the screen was no longer showing — and the save
+   * did nothing, with nothing to fix and nowhere to fix it.
+   */
+  it("saves an unfinished watch draft once the installation is picked", async () => {
+    const requests: { method: string; url: string; body?: unknown }[] = [];
+    stubApi({ can: ["company:write"], requests });
+    const user = userEvent.setup();
+    renderForm({ ...mentionsConversation, mode: "watch" });
+
+    await user.click(await screen.findByRole("combobox", { name: "Contexto" }));
+    await user.click(
+      await screen.findByRole("option", { name: "A instalação inteira" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => expect(saved(requests)).toBeDefined());
+    expect(saved(requests)).toMatchObject({ company: "*", mode: "announce" });
+  });
+  /*
+   * A conversation this console cannot draw is not offered for editing.
+   *
+   * Its mode came from a newer version, and the platform keeps it: a mode
+   * nothing here can name starts nothing. The form would fill every field with
+   * this console's idea of the nearest value and write that back on save,
+   * which is how a room that started nothing becomes one anybody can start
+   * runs from by typing in it.
+   */
+  it("refuses to edit a conversation whose mode came from a newer version", async () => {
+    renderForm({ ...mentionsConversation, mode: "a-future-mode" });
+
+    expect(await screen.findByText(/a-future-mode/)).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Salvar" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("combobox", { name: "Contexto" }),
+    ).not.toBeInTheDocument();
+  });
+  /*
+   * Drift is announced unless somebody says otherwise.
+   *
+   * It is in the platform's own defaults for a reason: it fires rarely, and an
+   * agent that quietly stopped holding its corrections is precisely what nobody
+   * thinks to go and ask about. The console offered no way to ask for it and
+   * always sent its own list, so the default was unreachable from the screen
+   * while every text on it said otherwise.
+   */
+  it("announces drift by default, and lets it be turned off", async () => {
+    const requests: { method: string; url: string; body?: unknown }[] = [];
+    stubApi({ requests });
+    const user = userEvent.setup();
+    renderForm(mentionsConversation);
+
+    // An existing conversation keeps what it was configured with.
+    expect(
+      await screen.findByRole("checkbox", { name: "Fora do combinado" }),
+    ).not.toBeChecked();
+
+    await user.click(
+      screen.getByRole("checkbox", { name: "Fora do combinado" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => expect(saved(requests)).toBeDefined());
+    expect((saved(requests) as { wants: string[] }).wants).toContain("drifted");
+  });
+
+  it("starts a new conversation with drift among the events", async () => {
+    stubApi();
+    renderForm();
+
+    expect(
+      await screen.findByRole("checkbox", { name: "Fora do combinado" }),
+    ).toBeChecked();
+  });
+  /*
+   * A conversation asking for a notice this console cannot name is not offered
+   * for editing either.
+   *
+   * The name is in no checkbox, so the form would show a conversation asking
+   * for less than it asks for — and save exactly that, dropping a subscription
+   * a newer version configured, silently.
+   */
+  it("refuses to edit a conversation that asks for an unknown event", async () => {
+    renderForm({
+      ...mentionsConversation,
+      wants: ["parked", "a-future-event"],
+    });
+
+    expect(await screen.findByText(/a-future-event/)).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Salvar" }),
+    ).not.toBeInTheDocument();
   });
 });

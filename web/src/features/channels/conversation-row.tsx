@@ -8,7 +8,15 @@ import {
   useDeleteConversation,
   useTestConversation,
 } from "@/features/channels/api";
-import type { Conversation } from "@/features/channels/channel-model";
+import {
+  type Conversation,
+  scopeText,
+} from "@/features/channels/channel-model";
+import {
+  EVENTS_BY_DEFAULT,
+  knownEvent,
+  knownMode,
+} from "@/features/channels/conversation-form-model";
 import { problemMessage } from "@/lib/api/problem-message";
 
 export function ConversationRow({
@@ -23,9 +31,13 @@ export function ConversationRow({
   const { t } = useTranslation();
   const test = useTestConversation();
   const remove = useDeleteConversation();
-  const scope = conversation.scope.area
-    ? `${conversation.scope.company}/${conversation.scope.area}`
-    : conversation.scope.company;
+  // A conversation for the whole installation is stored as the company "*",
+  // and a listing that printed that would show a company nobody has. The name
+  // is for reading; the search still matches the stored value.
+  const scope =
+    conversation.scope.company === "*"
+      ? t("channels.installationScope")
+      : scopeText(conversation.scope);
   const threadContext = conversation.threadContext
     ? ` · ${t("channels.threadContextShort")}`
     : "";
@@ -38,21 +50,33 @@ export function ConversationRow({
   // in a bound conversation starts that agent without naming it, so a listing
   // that hid the binding would hide the reason the channel behaves as it does.
   const agent = conversation.agent ? ` · ${conversation.agent}` : "";
-  const mode =
-    conversation.mode === "watch"
-      ? `${t("channels.modeWatch")}${agent || " · -"}${direct}`
-      : conversation.mode === "both"
-        ? `${t("channels.modeBoth")}${agent || " · -"}${threadContext}${direct}`
-        : `${t("channels.modeMentions")}${agent}${threadContext}${direct}`;
+  // A mode this console cannot name is printed as it is stored. Reading it as
+  // "mentions" would tell somebody the room starts runs, which is the one thing
+  // an unknown mode is guaranteed not to do.
+  const mode = !knownMode(conversation.mode)
+    ? conversation.mode
+    : conversation.mode === "announce"
+      ? `${t("channels.modeAnnounce")}${direct}`
+      : conversation.mode === "watch"
+        ? `${t("channels.modeWatch")}${agent || " · -"}${direct}`
+        : conversation.mode === "both"
+          ? `${t("channels.modeBoth")}${agent || " · -"}${threadContext}${direct}`
+          : `${t("channels.modeMentions")}${agent}${threadContext}${direct}`;
 
   return (
     <TableRow>
       <TableCell>
         <div className="flex min-w-0 items-center gap-2">
           {(conversation.label || conversation.id).startsWith("@") ? (
-            <AtSign className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            <AtSign
+              className="size-4 shrink-0 text-muted-foreground"
+              aria-hidden
+            />
           ) : (
-            <Hash className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            <Hash
+              className="size-4 shrink-0 text-muted-foreground"
+              aria-hidden
+            />
           )}
           <div className="min-w-0">
             <p className="truncate font-mono text-sm">
@@ -63,7 +87,7 @@ export function ConversationRow({
         </div>
       </TableCell>
       <TableCell>
-        <EventBadges wants={conversation.wants ?? ["parked", "failed"]} />
+        <EventBadges wants={conversation.wants ?? [...EVENTS_BY_DEFAULT]} />
       </TableCell>
       <TableCell className="truncate text-xs">{mode}</TableCell>
       <TableCell className="truncate text-xs text-muted-foreground">
@@ -125,7 +149,10 @@ function EventBadges({ wants }: { wants: string[] }) {
     <div className="flex min-w-0 flex-wrap gap-1">
       {wants.slice(0, 3).map((want) => (
         <Badge key={want} variant={eventVariant(want)} className="text-2xs">
-          {t(`channels.event.${want}`)}
+          {/* The stored name for one this console cannot translate. Passed to
+              t() it renders as "channels.event.a-future-event", which tells a
+              reader about our key naming and nothing about their configuration. */}
+          {knownEvent(want) ? t(`channels.event.${want}`) : want}
         </Badge>
       ))}
       {wants.length > 3 && (

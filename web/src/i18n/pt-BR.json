@@ -765,7 +765,8 @@
     "event": {
       "parked": "Esperando uma decisão",
       "failed": "Falhou",
-      "finished": "Terminou"
+      "finished": "Terminou",
+      "drifted": "Fora do combinado"
     },
     "explains": "Um canal é onde os runs avisam e, quando a entrada está configurada, onde menções explícitas podem iniciar um agente.",
     "kind": "Tipo",
@@ -804,6 +805,8 @@
     "pickWatchRunAs": "Escolha um principal",
     "saved": "Canal salvo",
     "scopeGoverns": "Quem manda aqui é o escopo: só os runs dele chegam nesta conversa.",
+    "installationScope": "A instalação inteira",
+    "installationScopeExplains": "Ouve sobre um run de qualquer empresa, e é a resposta para uma área que ninguém apontou para um canal próprio. Não inicia nada: mencionar o bot aqui é recusado. Comece escolhendo em \"o que avisar\" — o padrão é toda parada, toda falha e todo drift, de toda empresa.",
     "sendTest": "Enviar teste",
     "seenAccounts": "Vistas recentemente",
     "seenAccountsHint": "Clique em uma conta para preencher o formulário. Nada é concedido até escolher uma pessoa e salvar.",
@@ -832,6 +835,12 @@
     "modeWatch": "Observar mensagens selecionadas",
     "modeWatchExplains": "Só mensagens das fontes Slack configuradas iniciam o agente configurado. A mensagem continua sendo entrada não confiável.",
     "modeBoth": "Menções e mensagens observadas",
+    "modeAnnounce": "Só relata",
+    "modeAnnounceExplains": "Ninguém inicia runs por aqui: menções são recusadas e nenhuma mensagem observada dispara nada. A conversa só recebe os avisos escolhidos acima.",
+    "unknownMode": "Esta conversa foi configurada com um modo que este console não conhece ({{mode}}), provavelmente por uma versão mais nova. Ela continua valendo como está e não inicia nada — editar aqui a reescreveria. Atualize o console para mexer nela.",
+    "unknownEvent": "Esta conversa pede um aviso que este console não conhece ({{event}}), provavelmente de uma versão mais nova. Ela continua recebendo o que foi configurado — editar por aqui derrubaria esse pedido sem dizer nada. Atualize o console para mexer nela.",
+    "unknownConfiguration": "Configurada por uma versão mais nova deste servidor.",
+    "unknownDeliveryMode": "Esta conexão está configurada com uma forma de ser alcançada que este console não conhece ({{mode}}), provavelmente por uma versão mais nova. Ela continua como está e não abre nenhuma porta de entrada aqui — editar por aqui a reescreveria. Atualize o console para mexer nela.",
     "modeBothExplains": "Pessoas podem mencionar o bot, e fontes Slack configuradas também podem iniciar o agente configurado. Cada caminho mantém a própria autoridade.",
     "noWatchAgents": "Nenhum agente neste escopo declara o gatilho Conversation. Publique um com Governança → Gatilhos → Conversation.",
     "watchAgentExplains": "O texto do Slack nunca escolhe o agente.",
@@ -864,7 +873,8 @@
       "disabled": "desativado",
       "noCredential": "sem token do bot",
       "noAppToken": "sem token de app",
-      "outboundOnly": "só saída"
+      "outboundOnly": "só saída",
+      "unknownDelivery": "modo de entrega desconhecido"
     },
     "noDeciderConsequence": "Agentes conseguem postar aqui, mas ninguém consegue aprovar a partir deste workspace.",
     "sends": "Envia",

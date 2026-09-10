@@ -28,7 +28,11 @@ export function ConversationList({
   allTotal: number;
   hidden: number;
   onExpand: () => void;
-  onAdd: () => void;
+  // Absent where there is nothing to add to: a connection reached in a way
+  // this console cannot name has no inbound half it can describe, and offering
+  // to configure one invites somebody to write a rule that does nothing until
+  // a version that understands the connection quietly puts it into force.
+  onAdd?: () => void;
   onEdit: (conversation: Conversation) => void;
 }) {
   const { t } = useTranslation();
@@ -38,10 +42,14 @@ export function ConversationList({
       <Table className="min-w-[840px] table-fixed">
         <TableHeader>
           <TableRow className="bg-muted/50 hover:bg-muted/50">
-            <TableHead className="w-[28%]">{t("channels.conversation")}</TableHead>
+            <TableHead className="w-[28%]">
+              {t("channels.conversation")}
+            </TableHead>
             <TableHead className="w-[30%]">{t("channels.sends")}</TableHead>
             <TableHead className="w-[17%]">{t("channels.listensTo")}</TableHead>
-            <TableHead className="w-[15%]">{t("channels.lastDelivery")}</TableHead>
+            <TableHead className="w-[15%]">
+              {t("channels.lastDelivery")}
+            </TableHead>
             <TableHead className="w-[10%] text-right">
               {t("common.actions")}
             </TableHead>
@@ -72,15 +80,17 @@ export function ConversationList({
         </TableBody>
       </Table>
       <div className="flex flex-wrap items-center gap-2 border-t px-4 py-2">
-        <Button
-          variant="outline"
-          size="sm"
-          className="border-dashed"
-          onClick={onAdd}
-        >
-          <Plus className="size-4" aria-hidden />
-          {t("channels.addConversation")}
-        </Button>
+        {onAdd && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-dashed"
+            onClick={onAdd}
+          >
+            <Plus className="size-4" aria-hidden />
+            {t("channels.addConversation")}
+          </Button>
+        )}
         {hidden > 0 && (
           <Button variant="outline" size="sm" onClick={onExpand}>
             {t("channels.showMoreConversations", { count: hidden })}

@@ -25,6 +25,77 @@ field" is a commit message.
 
 ---
 
+## [0.45.0] — 2026-09-09
+
+### Added
+
+- **A conversation can speak for the whole installation.** Until now a run
+  parked in an area nobody pointed at a channel reached no card and no person,
+  and waited for somebody to open the console. Under **Integrations → Channels
+  → new conversation**, the context "the whole installation" makes one room
+  hear about a run in any company, with the same options as any other
+  conversation — including telling the people who may decide privately, which
+  still reaches whoever holds Approver in that run's scope rather than whoever
+  holds a grant at the installation. It starts nothing: mentioning the bot
+  there is refused saying the room only reports, and no watched-message
+  automation runs from it. A scope containing every company is the right answer
+  for hearing and the wrong one for asking. Configuring or deleting it needs
+  Company configurer granted at the installation scope, and the option is
+  absent for anybody else rather than offered and refused. Choose "what to
+  announce" before saving: the default is parked, failed and drifted, which at
+  this scope means every stop, every failure and every drift in every company.
+
+- **"Only reports" is a mode any conversation can be set to.** It is what the
+  installation room saves, and it is offered on every conversation in the start
+  mode list: a room somebody added the bot to for visibility is not a room
+  anybody should be able to start runs from by typing in it. Wherever it is set,
+  mentions and watched messages start nothing there, the bound agent is dropped
+  — a conversation that starts nothing has none to start — and the console shows
+  no fields about starting runs.
+
+- **Drift can be announced in a conversation.** It was in the platform's
+  defaults and in none of the console's: the screen offered parked, failed and
+  finished, and always sent that list, so the fallback that includes drift was
+  reachable through the API and nowhere else. It is an option now, and among
+  the ones a new conversation starts with — an agent that quietly stopped
+  holding its corrections is the one notice nobody thinks to ask for. Existing
+  conversations keep exactly what they were configured with.
+
+### Fixed
+
+- **The same conversation id on two connections no longer overwrites itself
+  in silence.** A conversation is stored under the id the vendor gives it, with
+  the connection recorded only inside the row — so pointing the same id at the
+  same scope on a second workspace replaced the first, with no refusal and
+  nothing in the trail saying a conversation had been removed. Cards and
+  approvals for that workspace simply stopped. It is refused now, naming the
+  connection that already holds it.
+
+  Storing it under the connection as well is the real fix and it is not this
+  release: nothing changes shape on upgrade, because both versions serve while
+  a rollout runs and a key that moved under the older one would take every
+  conversation away from it. This version learns to read the new shape so the
+  next one can write it. Until then, the same vendor id on two connections in
+  one scope is a configuration the platform declines rather than loses.
+
+- **Nothing inbound can be configured on a connection this version cannot
+  reach.** A connection whose delivery mode came from a newer version opens no
+  door here, so a mention or watch rule stored under it would do nothing — until
+  a version that recognises the mode read it and put it into force, with nobody
+  having decided anything in between. Such a connection's conversations may only
+  announce, and the console stops offering to add one.
+
+### Changed
+
+- **A conversation's stored mode is handed back as it is stored.** The API used
+  to answer with the nearest mode it recognised, so a conversation configured by
+  a newer version read as "mentions" — and saving any unrelated edit from that
+  reading wrote "mentions" and meant it, turning a room that started nothing
+  into one anybody could start runs from. The response field is no longer a
+  closed set (the request still is), and a client that does not recognise a
+  value must not offer to save that conversation: this console says so and
+  refuses to open the form.
+
 ## [0.44.0] — 2026-09-09
 
 ### Upgrade notes

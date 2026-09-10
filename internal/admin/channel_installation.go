@@ -1,0 +1,327 @@
+package admin
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"slices"
+
+	"github.com/fuseone/agents/internal/channel"
+	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/settings"
+)
+
+/*
+A conversation that speaks for the whole installation.
+
+The scope above every company contains every one of them, so such a room hears
+about a run in any company — which is the point, and is why it is the answer
+for an area nobody has mapped to a channel of its own.
+
+It is also why it may not start anything. Containment is right for hearing and
+wrong for asking: a room that hears about every company is a reasonable thing to
+configure, and one from which anybody could start an agent in every company is a
+different grant entirely. The read side refuses it twice over; this is the third
+lock, on the way in, so the configuration never describes something that will
+not happen.
+*/
+
+// ErrUnknownEvent means a conversation asked to hear about something this
+// version does not announce. A subscription to silence saves cleanly and shows
+// as configured, and the person who typed it is told nothing, for ever.
+var ErrUnknownEvent = errors.New(
+	"admin: that event is not one this version announces")
+
+/*
+ErrConnectionOnlyAnnounces means the connection this conversation is on is
+reached in a way this version cannot honour, so nothing may start from it.
+
+The runtime already opens no door there. What this stops is the configuration
+being written under it anyway: a mention rule stored today, and a later version
+that recognises the delivery mode putting it into force with nobody having
+decided anything.
+*/
+var ErrConnectionOnlyAnnounces = errors.New(
+	"admin: that connection is reached in a way this version does not know, so its conversations may only announce")
+
+/*
+ErrConversationsStartRuns means the connection cannot be given this vendor while
+conversations on it start runs.
+
+The other direction of the same rule. A conversation may be configured before
+the connection exists — that has always worked, and refusing it would make the
+order of two administrative acts matter — so the check has to run again when the
+connection arrives, or an inbound rule written first and a vendor nothing can
+build second is dormant configuration that comes alive the day the driver does.
+
+An announce-only conversation is no reason to refuse: it starts nothing, and a
+connection for a vendor this binary cannot build yet is a reasonable thing to
+prepare.
+*/
+var ErrConversationsStartRuns = errors.New(
+	"admin: conversations on that connection start runs, and this version has no driver for the vendor it now names")
+
+// ErrInstallationArea means a conversation named the installation and an area.
+//
+// The two together reach nothing: containment short circuits on the sentinel
+// and requires the area to be empty, so the row announces to no scope at all
+// while looking configured — the quietest way to own a room that never speaks.
+// ErrUnknownMode means a conversation named a mode this version cannot honour.
+//
+// Refused rather than normalised. Read as "mentions" — which is what the
+// display normalisation answers for anything it does not recognise — a room a
+// newer version had set to start nothing would come back startable by anybody
+// who can type in it.
+var ErrUnknownMode = errors.New(
+	"admin: that conversation mode is not one this version knows")
+
+// ErrUnknownDeliveryMode means a connection named a way of being reached that
+// this version cannot honour. Refused rather than normalised: read as HTTP, a
+// connection restored from a newer version opens the door this one knows.
+var ErrUnknownDeliveryMode = errors.New(
+	"admin: that delivery mode is not one this version knows")
+
+var ErrInstallationArea = errors.New(
+	"admin: the installation is the scope above every company and has no area")
+
+/*
+announcesOnly strips what a conversation that starts nothing cannot use.
+
+Coerced rather than refused, in the same shape as every other field a choice
+does not consume here. The agent goes too, even though on the installation it
+would also narrow what the room hears: agent ids belong to a company, so one
+named there could not be checked against anything, and the endpoint that
+validates it has no scope to look in. At an ordinary scope the reason is
+simpler — a conversation that starts nothing has no agent to start, and a
+binding left behind is a field nothing reads until somebody sets the room back
+to taking mentions and it silently comes into force.
+
+What survives is what the room is for — the events it hears, and whether it also
+tells the people who may decide, which is the whole reason to have one.
+*/
+func announcesOnly(conv Conversation) (Conversation, string) {
+	conv.Mode = channel.ConversationAnnounce
+	conv.Agent, conv.RunAs, conv.ThreadContext = "", "", false
+	conv.Sources = nil
+	return conv, conv.Mode
+}
+
+/*
+ErrInstallationAuthority means the caller may not touch what carries the room.
+
+A conversation for the whole installation needs authority over the installation
+to exist and to be removed. The connection under it is the same reach by another
+route: removing it takes the room with it, and disabling or re-credentialling it
+silences the room or sends its messages out through another token.
+*/
+var ErrInstallationAuthority = errors.New(
+	"admin: that connection carries the room for the whole installation")
+
+/*
+Invalid answers whether an error is the request's fault.
+
+The alternative is what this replaced: everything that was not one named
+sentinel became "bad request", so a lock that could not be taken, a database
+that was away or a vault that would not open came back as a validation failure
+— sending somebody to fix a field that was never wrong, and putting operational
+text in a reply to a browser.
+
+A sentinel missing from this list answers false, and the caller reports a
+failure rather than a refusal. That is the safe way round: loud, and never a
+refusal somebody has no way to act on.
+*/
+func Invalid(err error) bool {
+	for _, sentinel := range []error{
+		ErrNoChannelKind, ErrUnknownDeliveryMode, ErrNoCompany,
+		ErrInstallationArea, ErrUnknownMode, ErrUnknownEvent,
+		ErrConversationOnAnotherConnection, ErrConnectionOnlyAnnounces,
+		ErrConversationsStartRuns,
+		ErrNoWatchSource, ErrNoWatchAgent, ErrNoWatchRunAs, ErrConversationMapped,
+	} {
+		if errors.Is(err, sentinel) {
+			return true
+		}
+	}
+	return false
+}
+
+/*
+lockChannel serialises every write about one connection.
+
+The precondition and the write have to be one decision. Checked before the
+transaction, a curator passes the check on a connection carrying no room, the
+room is attached by somebody who may, and the write lands anyway — a 204 for
+exactly the act that had just been refused.
+
+An advisory lock rather than a row lock, because the two writes touch different
+rows: the connection's and the conversation's. What they share is the name.
+*/
+func lockChannel(ctx context.Context, conn settings.DB, name string) error {
+	if _, err := conn.Exec(ctx,
+		`select pg_advisory_xact_lock(hashtext($1))`, "channel:"+name); err != nil {
+		return fmt.Errorf("admin: lock the connection %s: %w", name, err)
+	}
+	return nil
+}
+
+/*
+guardInstallationRoom refuses a write about a connection that carries the room,
+from a caller who does not govern the installation.
+
+Read from the conversation rows rather than from the assembled listing: that one
+hangs conversations off the connections that exist, so a room whose connection
+is gone — restored, migrated, or left behind by a half-finished delete — is
+invisible to it, and recreating the connection would quietly adopt it.
+*/
+func (c *Channels) guardInstallationRoom(
+	ctx context.Context, conn settings.DB, name string, governs bool,
+) error {
+	if err := lockChannel(ctx, conn, name); err != nil {
+		return err
+	}
+	if governs {
+		return nil
+	}
+	stored, err := c.settings.ListTx(ctx, conn, channel.KindConversation)
+	if err != nil {
+		return fmt.Errorf("admin: list conversations: %w", err)
+	}
+	for _, conv := range conversationsOf(name, stored) {
+		if conv.Scope.IsInstallation() {
+			return fmt.Errorf("%w: %s", ErrInstallationAuthority, name)
+		}
+	}
+	return nil
+}
+
+/*
+refuseUnreachableConnection stops an inbound rule being stored under a
+connection this version cannot reach.
+
+Read in the guard, under the connection's lock, so the delivery mode it checks
+is the one the write lands beside. A connection that does not exist yet is not
+a refusal: conversations are configured before the credential arrives, and that
+has always worked.
+*/
+func (c *Channels) refuseUnreachableConnection(
+	ctx context.Context, conn settings.DB, channelName, mode string,
+) error {
+	if !channel.StartsFromMentions(mode) && !channel.StartsFromWatch(mode) {
+		return nil
+	}
+	stored, err := c.settings.ListTx(ctx, conn, channel.KindChannel)
+	if err != nil {
+		return fmt.Errorf("admin: list channels: %w", err)
+	}
+	for _, one := range stored {
+		if one.Name != channelName {
+			continue
+		}
+		var v channel.Connection
+		if err := json.Unmarshal(one.Value, &v); err != nil {
+			// Unreadable is unreachable. Skipped, it was the one shape that
+			// let an inbound rule through: a row this version cannot decode
+			// says nothing about what it is, least of all that it is safe.
+			return fmt.Errorf("%w: %s", ErrConnectionOnlyAnnounces, channelName)
+		}
+		if !channel.KnownDeliveryMode(v.DeliveryMode) || !c.canConnect(v.Kind) {
+			return fmt.Errorf("%w: %s", ErrConnectionOnlyAnnounces, channelName)
+		}
+	}
+	return nil
+}
+
+/*
+refuseStartingConversations stops a connection taking a vendor nothing here can
+build unless every conversation on it only announces.
+
+The question is deliberately the conservative one — *can I prove none of these
+starts anything?* — and not the runtime's *does this one start something?* Asked
+the second way it fails open twice over: a mode this version cannot name is not
+one the start predicates recognise, and a row whose key shape is illegible is
+dropped before it is looked at. Both would sit there until a version arrived
+that understood the mode, or the key, and the vendor — and then come into force
+with nobody having decided anything.
+
+So the rows are read directly, and only "announce" counts as proof. The
+conversation's identity is not resolved: which conversation it is has no bearing
+on whether it may start a run, and asking would reintroduce the shape that hid
+one.
+
+The delivery mode is not asked about either. PutChannel refuses one it cannot
+honour outright, so a connection never reaches here carrying one; what can
+change under an existing conversation is the vendor.
+*/
+func (c *Channels) refuseStartingConversations(
+	ctx context.Context, conn settings.DB, channelName, kind string,
+) error {
+	if c.canConnect(kind) {
+		return nil
+	}
+	stored, err := c.settings.ListTx(ctx, conn, channel.KindConversation)
+	if err != nil {
+		return fmt.Errorf("admin: list conversations: %w", err)
+	}
+	for _, one := range stored {
+		// The address and the claim are read apart. Decoded together, a row
+		// that plainly names this connection escaped the moment any other
+		// field was the wrong shape: `"mode": ["mentions"]` failed the whole
+		// unmarshal, and a corrupt field became an exit.
+		var row struct {
+			Channel json.RawMessage `json:"channel"`
+			Mode    json.RawMessage `json:"mode"`
+		}
+		if err := json.Unmarshal(one.Value, &row); err != nil {
+			continue
+		}
+		// No address is the one thing that excuses a row: it cannot be shown
+		// to be on this connection. Refusing every connection write because
+		// some unrelated row is corrupt would be an administration nobody can
+		// use.
+		var name string
+		if err := json.Unmarshal(row.Channel, &name); err != nil || name != channelName {
+			continue
+		}
+		// On this connection, and only "announce" is proof. Absent, unreadable
+		// or anything else: not proof.
+		var mode string
+		if err := json.Unmarshal(row.Mode, &mode); err != nil ||
+			mode != channel.ConversationAnnounce {
+			return fmt.Errorf("%w: %s", ErrConversationsStartRuns, one.Name)
+		}
+	}
+	return nil
+}
+
+/*
+canConnect answers whether this binary has a driver for a vendor.
+
+Asked of the same table that builds the connection rather than restated here:
+two lists saying which vendors exist is one list letting an inbound rule be
+written for a vendor nothing can talk to — dormant, and in force the day
+somebody adds the driver.
+
+Nil is not "everything". A process that did not say which vendors it can talk
+to cannot vouch for this one, and this is only reached when something inbound
+is being configured on a connection that exists — a decision no read-only
+process makes.
+*/
+func (c *Channels) canConnect(kind string) bool {
+	if c.drivers == nil {
+		return false
+	}
+	return slices.Contains(c.drivers.Kinds(), kind)
+}
+
+// conversationScopeKind is where a conversation is stored.
+//
+// Written once because it is asked twice — when a conversation is saved and
+// when it is removed — and the two disagreeing would make a delete match
+// nothing, report no error, and leave the room receiving.
+func conversationScopeKind(scope domain.Scope) settings.ScopeKind {
+	if scope.Area != "" {
+		return settings.ScopeArea
+	}
+	return settings.ScopeCompany
+}

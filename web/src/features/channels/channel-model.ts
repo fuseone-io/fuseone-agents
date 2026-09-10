@@ -4,7 +4,24 @@ export type Channel = components["schemas"]["Channel"];
 export type Conversation = components["schemas"]["ChannelConversation"];
 export type ChannelView = "all" | "attention" | "approvals";
 
+/*
+knownDelivery answers whether this console can draw a stored delivery mode.
+
+The stored value travels back as itself, which is what stops an unrelated edit
+from rewriting a connection a newer version configured. The console has to do
+its half: a value it cannot draw is one it must not offer to save.
+*/
+export function knownDelivery(mode: string | undefined): mode is DeliveryMode {
+  return mode === undefined || mode === "http" || mode === "socket";
+}
+
+export type DeliveryMode = "http" | "socket";
+
 export function channelNeedsAttention(channel: Channel) {
+  // A way of being reached this console cannot name is configuration nobody
+  // here can act on. It is the first thing asked, because everything below
+  // reads the mode and would answer about the wrong one.
+  if (!knownDelivery(channel.deliveryMode)) return true;
   if (!channel.enabled || !channel.hasCredential) return true;
   if (channel.deliveryMode === "socket") return !channel.hasAppToken;
   return !channel.hasSigning;
@@ -14,6 +31,9 @@ export function channelHealth(channel: Channel): {
   key: string;
   tone: "ok" | "warn";
 } {
+  if (!knownDelivery(channel.deliveryMode)) {
+    return { key: "unknownDelivery", tone: "warn" };
+  }
   if (!channel.enabled) return { key: "disabled", tone: "warn" };
   if (!channel.hasCredential) return { key: "noCredential", tone: "warn" };
   if (channel.deliveryMode === "socket" && !channel.hasAppToken) {
@@ -25,6 +45,21 @@ export function channelHealth(channel: Channel): {
   return { key: "answering", tone: "ok" };
 }
 
+/*
+scopeText is where a conversation was configured, as one string.
+
+Shared rather than written out at each call site, because the listing, the
+search and the form each need the same answer and three copies drift: the day
+"*" started meaning the whole installation, a copy nobody remembered would go
+on printing a company called "*".
+
+It stays the stored value. Turning it into a name needs the translation
+dictionary, and the search has to match what is stored anyway.
+*/
+export function scopeText(scope: Conversation["scope"]) {
+  return scope.area ? `${scope.company}/${scope.area}` : scope.company;
+}
+
 export function filterConversations(
   conversations: Conversation[],
   query: string,
@@ -33,20 +68,20 @@ export function filterConversations(
 ) {
   const q = query.trim().toLowerCase();
   return conversations.filter((conversation) => {
-    if (view === "approvals" && !(conversation.wants ?? []).includes("parked")) {
+    if (
+      view === "approvals" &&
+      !(conversation.wants ?? []).includes("parked")
+    ) {
       return false;
     }
     if (view === "attention" && !channelAttention && conversation.enabled) {
       return false;
     }
     if (!q) return true;
-    const scope = conversation.scope.area
-      ? `${conversation.scope.company}/${conversation.scope.area}`
-      : conversation.scope.company;
     return [
       conversation.id,
       conversation.label ?? "",
-      scope,
+      scopeText(conversation.scope),
       conversation.mode ?? "mentions",
       ...(conversation.wants ?? []),
     ]

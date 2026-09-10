@@ -765,7 +765,8 @@
     "event": {
       "parked": "Waiting on a decision",
       "failed": "Failed",
-      "finished": "Finished"
+      "finished": "Finished",
+      "drifted": "Drifted"
     },
     "explains": "A channel is where runs report and, when inbound delivery is configured, where explicit mentions can start an agent.",
     "kind": "Kind",
@@ -804,6 +805,8 @@
     "pickWatchRunAs": "Choose a principal",
     "saved": "Channel saved",
     "scopeGoverns": "The scope governs: only its runs reach this conversation.",
+    "installationScope": "The whole installation",
+    "installationScopeExplains": "Hears about a run in any company, and is the answer for an area nobody pointed at a channel of its own. It starts nothing: mentioning the bot here is refused. Begin with \"what to announce\" — the default is every stop, every failure and every drift, in every company.",
     "sendTest": "Send a test",
     "seenAccounts": "Seen recently",
     "seenAccountsHint": "Click an account to fill the link form. It grants nothing until you choose a person and save.",
@@ -832,6 +835,12 @@
     "modeWatch": "Watch selected messages",
     "modeWatchExplains": "Only messages from the configured Slack sources start the configured agent. The message is still untrusted input.",
     "modeBoth": "Mentions and watched messages",
+    "modeAnnounce": "Only reports",
+    "modeAnnounceExplains": "Nobody starts runs here: mentions are refused and no watched message triggers anything. The conversation only receives the announcements chosen above.",
+    "unknownMode": "This conversation is configured with a mode this console does not know ({{mode}}), most likely by a newer version. It stands as it is and starts nothing — editing here would rewrite it. Update the console to change it.",
+    "unknownEvent": "This conversation asks for a notice this console does not know ({{event}}), most likely from a newer version. It still receives what was configured — editing here would drop that request without saying so. Update the console to change it.",
+    "unknownConfiguration": "Configured by a newer version of this server.",
+    "unknownDeliveryMode": "This connection is configured with a way of being reached that this console does not know ({{mode}}), most likely by a newer version. It stands as it is and opens no inbound door here — editing it here would rewrite it. Update the console to change it.",
     "modeBothExplains": "People can mention the bot, and configured Slack sources can also start the configured agent. Each path keeps its own authority.",
     "noWatchAgents": "No agent in this scope declares the Conversation trigger. Publish one with Governance → Triggers → Conversation.",
     "watchAgentExplains": "The Slack text never chooses the agent.",
@@ -864,7 +873,8 @@
       "disabled": "disabled",
       "noCredential": "no bot token",
       "noAppToken": "no app token",
-      "outboundOnly": "outbound only"
+      "outboundOnly": "outbound only",
+      "unknownDelivery": "unknown delivery mode"
     },
     "noDeciderConsequence": "Agents can post here, but nobody can approve from this workspace.",
     "sends": "Sends",
