@@ -129,6 +129,15 @@ func (p *Postgres) Unreported(ctx context.Context, since time.Time, limit int) (
 		-- retried because of a problem somebody had already fixed. What decides
 		-- how long to wait is what went wrong last time, and how many times
 		-- that has gone wrong.
+		--
+		-- "That" is one cause, and a cause is one row of this table: a
+		-- destination and a normalised operational code, about one
+		-- announcement. The count belongs to the cause and is never reset by
+		-- another one happening in between — a destination that refused six
+		-- times, went unreachable for some other reason, and now refuses again
+		-- is refusing for the seventh time. Nothing about the interruption
+		-- makes the first six untrue. The ceilings below are what keeps an
+		-- inherited count from doubling a run out of the window.
 		left join lateral (
 		    select f.last_seen,
 		           f.attempts,

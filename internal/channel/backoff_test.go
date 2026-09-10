@@ -193,3 +193,96 @@ func TestUnreported_theScheduleFollowsTheLatestFailure(t *testing.T) {
 		})
 	}
 }
+
+/*
+And an intervening cause does not give the old one a fresh start.
+
+The count belongs to the cause, and a cause is one row: a destination and a
+normalised operational code. So a destination that refused six times, was
+unreachable for a while for another reason, and now refuses again is refusing
+for the seventh time — not the first. Nothing about the other reason having
+happened in between makes the first six untrue.
+
+Both directions, and each of them twice: once shortly after the return, to say
+the count was inherited, and once past the ceiling, to say the inherited wait is
+still bounded by it. An inherited count that kept doubling would be how a run
+quietly leaves the window unannounced, which is the failure the whole schedule
+exists inside.
+*/
+func TestUnreported_aCauseReturningAfterAnother_keepsItsOwnCount(t *testing.T) {
+	for _, one := range []struct {
+		name    string
+		cause   string
+		between string
+		before  int
+		probe   time.Duration
+		tried   bool
+	}{
+		{
+			// Seven refusals is 64 minutes, and a first refusal would be a
+			// minute. Ten minutes after the return tells the two apart.
+			name:  "an incident that returns after an unconfigured spell",
+			cause: channel.CodeDeliveryFailed, between: channel.CodeNowhereToSayIt,
+			before: 6, probe: 10 * time.Minute, tried: false,
+		},
+		{
+			// Eleven refusals doubles to 128 minutes, and the ceiling is 120.
+			name:  "an incident that returns often enough to reach the ceiling",
+			cause: channel.CodeDeliveryFailed, between: channel.CodeNowhereToSayIt,
+			before: 10, probe: 2*time.Hour + 5*time.Minute, tried: true,
+		},
+		{
+			// The other direction: nothing configured, then an incident, then
+			// nothing configured again. Seven attempts on the slower schedule
+			// is already at its six-hour ceiling.
+			name:  "an unconfigured installation after an incident",
+			cause: channel.CodeNowhereToSayIt, between: channel.CodeDeliveryFailed,
+			before: 6, probe: 2 * time.Hour, tried: false,
+		},
+		{
+			name:  "an unconfigured installation past its ceiling",
+			cause: channel.CodeNowhereToSayIt, between: channel.CodeDeliveryFailed,
+			before: 10, probe: 6*time.Hour + 5*time.Minute, tried: true,
+		},
+	} {
+		t.Run(one.name, func(t *testing.T) {
+			store, pool := channelStore(t)
+
+			awaitApproval(t, pool, "run-returning")
+			pending, err := store.Unreported(t.Context(), time.Now().Add(-channel.Window), 50)
+			if err != nil || len(pending) != 1 {
+				t.Fatalf("unreported = %+v, %v", pending, err)
+			}
+
+			failure := channel.DeliveryFailure{
+				Announcement: channel.Announcement{
+					RunID: "run-returning", Event: channel.EventParked,
+					AtSeq: pending[0].AtSeq,
+				},
+				Scope: domain.Scope{Company: "acme", Area: "ops"},
+			}
+			record := func(code string, at time.Time) {
+				t.Helper()
+				failure.Code, failure.SeenAt = code, at
+				if err := store.RecordFailure(t.Context(), failure); err != nil {
+					t.Fatalf("record %s: %v", code, err)
+				}
+			}
+
+			for i := range one.before {
+				record(one.cause, time.Now().Add(-20*time.Hour).Add(time.Duration(i)*time.Second))
+			}
+			record(one.between, time.Now().Add(-15*time.Hour))
+			record(one.cause, time.Now().Add(-one.probe))
+
+			again, err := store.Unreported(t.Context(), time.Now().Add(-channel.Window), 50)
+			if err != nil {
+				t.Fatalf("unreported: %v", err)
+			}
+			if tried := len(again) == 1; tried != one.tried {
+				t.Fatalf("tried again = %v, want %v: %s returned for the %d%s time",
+					tried, one.tried, one.cause, one.before+1, "th")
+			}
+		})
+	}
+}
