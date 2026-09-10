@@ -517,3 +517,45 @@ func TestParse_namingPeopleWithoutAskingForAMessage_isRefused(t *testing.T) {
 		t.Fatalf("err = %v, want ErrInvalid", err)
 	}
 }
+
+/*
+What the owner asked for survives the round trip.
+
+Render exists so a file and the console are one representation. A field it drops
+is a field the console silently deletes: somebody edits a budget, saves, and the
+version published no longer sends the approvals its owner had asked to be sent —
+with nothing on the screen having said so.
+*/
+func TestRender_theApprovalPolicy_survivesTheRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	asking := parse(t, strings.Replace(valid, "tools: [crm.lookup, crm.note]",
+		"tools: [crm.lookup, crm.note]\napprovals:\n  direct: true\n  notify: [usr_ana]", 1))
+
+	out, err := spec.Render(asking)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	back := parse(t, string(out))
+
+	if !back.Approvals.Direct {
+		t.Error("the round trip dropped the owner's request for a private approval")
+	}
+	if len(back.Approvals.Notify) != 1 || back.Approvals.Notify[0] != "usr_ana" {
+		t.Errorf("notify = %v, want the person the owner named", back.Approvals.Notify)
+	}
+}
+
+// And an agent that asked for nothing renders no block at all, so a file
+// somebody wrote by hand does not grow a section they never typed.
+func TestRender_anAgentThatAsksForNothing_writesNoBlock(t *testing.T) {
+	t.Parallel()
+
+	out, err := spec.Render(parse(t, valid))
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if strings.Contains(string(out), "approvals:") {
+		t.Errorf("rendered an approvals block nobody asked for:\n%s", out)
+	}
+}
