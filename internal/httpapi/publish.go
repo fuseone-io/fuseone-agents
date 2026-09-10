@@ -289,6 +289,7 @@ func renderAndParse(id string, in openapi.AgentDefinition) ([]byte, spec.Spec, e
 		}
 	}
 	draft.MemoryLearning = memoryLearningOf(in.MemoryLearning)
+	draft.Approvals = approvalsOf(in.Approvals)
 	for _, t := range valueOr(in.Triggers) {
 		draft.Triggers = append(draft.Triggers, spec.Trigger{
 			Type: string(t.Type), Schedule: valueOr(t.Schedule),
@@ -319,6 +320,25 @@ func memoryLearningOf(in *openapi.MemoryLearningPolicy) domain.MemoryLearningPol
 		MinObservations: valueOr(in.MinObservations),
 		TTLDays:         valueOr(in.TtlDays),
 	}.Normalize()
+}
+
+/*
+approvalsOf is what the client sent back, on the way in.
+
+Absent is the console alone. There is no "leave what is stored" here, because
+publishing writes a whole version: a client that omits this is publishing an
+agent that asked for nothing, which is why the read hands it back and the
+console carries it through untouched.
+*/
+func approvalsOf(in *openapi.ApprovalPolicy) domain.ApprovalPolicy {
+	if in == nil {
+		return domain.ApprovalPolicy{}
+	}
+	out := domain.ApprovalPolicy{Direct: valueOr(in.Direct)}
+	for _, one := range valueOrSlice(in.Notify) {
+		out.Notify = append(out.Notify, domain.UserID(one))
+	}
+	return out.Normalize()
 }
 
 func emitsOf(in *[]openapi.AgentEvent) spec.Emits {

@@ -258,6 +258,7 @@
     "fieldBudget": "ceiling",
     "fieldEffort": "effort",
     "fieldEmits": "Events published",
+    "fieldApprovals": "Approvals",
     "fieldInstructions": "instructions",
     "fieldMemoryLearning": "memory learning",
     "fieldModel": "model",

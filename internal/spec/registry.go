@@ -164,6 +164,14 @@ func (r *Registry) Get(ctx context.Context, agent domain.AgentID, version domain
 	return s, nil
 }
 
+// Declarations is the half of a published version a summary leaves out.
+//
+// One answer rather than three, because they are dropped for the same reason:
+// what a read does not return, an editor cannot put back, and publishing again
+// deletes it. Separate calls are separate chances to forget one — which is
+// exactly how the approval policy was lost between a version and its next
+// publication.
+
 // Declared reads the parts of a published version a summary leaves out.
 //
 // Its own read rather than fields on the summary: a listing of twenty agents
@@ -171,31 +179,37 @@ func (r *Registry) Get(ctx context.Context, agent domain.AgentID, version domain
 // the instructions are read one version at a time. Both in one answer,
 // because what a read omits an editor cannot put back — and publishing again
 // deletes it.
+type Declarations struct {
+	Steps     []Step
+	Emits     Emits
+	Approvals domain.ApprovalPolicy
+}
+
 func (r *Registry) Declared(
 	ctx context.Context, agent domain.AgentID, version domain.VersionID,
-) ([]Step, Emits, error) {
-	var (
-		raw   []byte
-		emits []byte
-	)
-	err := r.pool.QueryRow(ctx,
-		`select steps, emits from agent_specs where agent_id = $1 and version_id = $2`,
-		string(agent), string(version)).Scan(&raw, &emits)
+) (Declarations, error) {
+	var raw, emits, approvals []byte
+	err := r.pool.QueryRow(ctx, `
+		select steps, emits, approvals from agent_specs
+		where agent_id = $1 and version_id = $2`,
+		string(agent), string(version)).Scan(&raw, &emits, &approvals)
 
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil, nil
+		return Declarations{}, nil
 	}
 	if err != nil {
-		return nil, nil, fmt.Errorf("spec: read declarations of %s@%s: %w", agent, version, err)
+		return Declarations{}, fmt.Errorf("spec: read declarations of %s@%s: %w", agent, version, err)
 	}
 
-	var steps []Step
-	if err := json.Unmarshal(raw, &steps); err != nil {
-		return nil, nil, fmt.Errorf("spec: decode steps: %w", err)
+	var out Declarations
+	if err := json.Unmarshal(raw, &out.Steps); err != nil {
+		return Declarations{}, fmt.Errorf("spec: decode steps: %w", err)
 	}
-	var decoded Emits
-	if err := json.Unmarshal(emits, &decoded); err != nil {
-		return nil, nil, fmt.Errorf("spec: decode emits: %w", err)
+	if err := json.Unmarshal(emits, &out.Emits); err != nil {
+		return Declarations{}, fmt.Errorf("spec: decode emits: %w", err)
 	}
-	return steps, decoded, nil
+	if out.Approvals, err = decodeApprovals(approvals); err != nil {
+		return Declarations{}, err
+	}
+	return out, nil
 }

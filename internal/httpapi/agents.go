@@ -96,16 +96,20 @@ func (s *Server) GetAgent(ctx context.Context, req openapi.GetAgentRequestObject
 	// the same reason the prose is: a page of twenty agents would otherwise
 	// carry twenty processes nobody asked to read.
 	if s.definitions != nil {
-		declared, emits, err := s.definitions.Declared(ctx, wanted.ID, wanted.VersionID)
+		declared, err := s.definitions.Declared(ctx, wanted.ID, wanted.VersionID)
 		if err != nil {
 			return nil, fmt.Errorf("agent declarations: %w", err)
 		}
-		if len(declared) > 0 {
-			out.Steps = ptr(stepsFrom(declared))
+		if len(declared.Steps) > 0 {
+			out.Steps = ptr(stepsFrom(declared.Steps))
 		}
-		if len(emits) > 0 {
-			out.Emits = ptr(eventsFrom(emits))
+		if len(declared.Emits) > 0 {
+			out.Emits = ptr(eventsFrom(declared.Emits))
 		}
+		// What the owner asked for about approvals travels back for the same
+		// reason the rest of this does: an editor cannot put back what a read
+		// leaves out, and publishing again deletes it.
+		out.Approvals = approvalsFrom(declared.Approvals)
 	}
 	for _, v := range versions {
 		version := openapi.AgentVersion{

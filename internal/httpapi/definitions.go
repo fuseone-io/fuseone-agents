@@ -22,7 +22,7 @@ stages are read one version at a time, beside the instructions they belong to.
 // what a read does not return, an editor cannot put back, and publishing
 // again deletes it. Two calls would be two chances to forget one.
 type Definitions interface {
-	Declared(ctx context.Context, agent domain.AgentID, version domain.VersionID) (steps []spec.Step, emits spec.Emits, err error)
+	Declared(ctx context.Context, agent domain.AgentID, version domain.VersionID) (spec.Declarations, error)
 }
 
 // WithDefinitions wires reading a published version's declared stages.

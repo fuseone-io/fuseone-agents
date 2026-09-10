@@ -141,14 +141,15 @@ func (f *fakeDetail) Instructions(
 }
 
 type declaredDetail struct {
-	steps []spec.Step
-	emits spec.Emits
+	steps     []spec.Step
+	emits     spec.Emits
+	approvals domain.ApprovalPolicy
 }
 
 func (d declaredDetail) Declared(
 	context.Context, domain.AgentID, domain.VersionID,
-) ([]spec.Step, spec.Emits, error) {
-	return d.steps, d.emits, nil
+) (spec.Declarations, error) {
+	return spec.Declarations{Steps: d.steps, Emits: d.emits, Approvals: d.approvals}, nil
 }
 
 func TestGetAgent_eventContextIsReturnedWithTheVersion(t *testing.T) {
@@ -223,4 +224,51 @@ func (runningAgent) IsPaused(context.Context, domain.AgentID) (bool, error) { re
 
 func (runningAgent) Paused(context.Context) (map[domain.AgentID]bool, error) {
 	return map[domain.AgentID]bool{"triage": false}, nil
+}
+
+/*
+What the owner asked for about approvals comes back with the version.
+
+The console reads a version, changes one field and publishes the whole thing, so
+a field the read leaves out is a field the next publication deletes. It happened
+to this one twice on the way in: once in the renderer, and once here — where the
+policy never reached the renderer at all.
+*/
+func TestGetAgent_theApprovalPolicyIsReturnedWithTheVersion(t *testing.T) {
+	t.Parallel()
+
+	resp, err := NewServer(ledger.NewMemory(), "test").
+		WithAgents(publishedVersions(t)).
+		WithDefinitions(declaredDetail{approvals: domain.ApprovalPolicy{
+			Direct: true, Notify: []domain.UserID{"usr_ana"},
+		}}).
+		GetAgent(inArea("cx", domain.RoleAuthor), openapi.GetAgentRequestObject{AgentId: "triage"})
+	if err != nil {
+		t.Fatalf("GetAgent: %v", err)
+	}
+
+	got := resp.(openapi.GetAgent200JSONResponse)
+	if got.Approvals == nil || got.Approvals.Direct == nil || !*got.Approvals.Direct {
+		t.Fatalf("approvals = %+v, want the owner's request back", got.Approvals)
+	}
+	if got.Approvals.Notify == nil || len(*got.Approvals.Notify) != 1 {
+		t.Errorf("notify = %+v, want the person the owner named", got.Approvals.Notify)
+	}
+}
+
+// An agent that asked for nothing carries nothing, so a client that publishes
+// back what it read does not invent a policy.
+func TestGetAgent_anAgentThatAskedForNothing_carriesNoPolicy(t *testing.T) {
+	t.Parallel()
+
+	resp, err := NewServer(ledger.NewMemory(), "test").
+		WithAgents(publishedVersions(t)).
+		WithDefinitions(declaredDetail{}).
+		GetAgent(inArea("cx", domain.RoleAuthor), openapi.GetAgentRequestObject{AgentId: "triage"})
+	if err != nil {
+		t.Fatalf("GetAgent: %v", err)
+	}
+	if got := resp.(openapi.GetAgent200JSONResponse); got.Approvals != nil {
+		t.Errorf("approvals = %+v, want nothing", got.Approvals)
+	}
 }

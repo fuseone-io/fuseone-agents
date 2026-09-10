@@ -67,7 +67,7 @@ export function toDefinition(
   detail?: AgentDetail,
 ): AgentDefinition | undefined {
   if (!detail) return undefined;
-  const { agent, instructions, steps, emits } = detail;
+  const { agent, instructions, steps, emits, approvals } = detail;
   return {
     name: agent.name,
     company: agent.scope.company,
@@ -85,6 +85,10 @@ export function toDefinition(
     // publishes — silently, on an edit they made for another reason.
     steps: steps ?? [],
     emits: emits ?? [],
+    // How the owner asked for approvals to arrive. No field on this screen
+    // shows it yet, which is exactly why it has to travel: it is written in the
+    // agent file, and an edit made here for another reason would delete it.
+    approvals,
   };
 }
 
@@ -143,6 +147,10 @@ export function changesBetween(
   // is the summary telling them their work did not land.
   compare("agents.fieldSteps", before.steps, after.steps);
   compare("agents.fieldEmits", before.emits, after.emits);
+  // Named for the same reason: if a future screen ever changes it, the summary
+  // has to say so — and until then, a difference appearing here means the draft
+  // dropped something it was carrying.
+  compare("agents.fieldApprovals", before.approvals, after.approvals);
   return changes;
 }
 

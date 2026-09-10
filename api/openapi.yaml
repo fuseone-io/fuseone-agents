@@ -4196,6 +4196,31 @@ components:
       type: string
       enum: [off, review, auto_confirm]
 
+    ApprovalPolicy:
+      type: object
+      description: |
+        How this agent's owner asked for human approval to arrive.
+
+        The Gate decides whether a person must answer; this decides where they
+        are asked, and the console answers whatever it says. Versioned with the
+        rest of the specification, so a run is governed by what the version it
+        pinned declared.
+      properties:
+        direct:
+          type: boolean
+          description: >
+            Also send the approval privately, as a direct message from the
+            channel bot, to the people who may decide it.
+        notify:
+          type: array
+          description: |
+            Who to message, among the people who may decide. Empty means
+            everyone holding Approver in a scope covering the run.
+
+            Naming somebody is addressing and never authorising: the button is
+            checked against the run's own scope wherever it is pressed, so a
+            name here that holds no grant is dropped rather than messaged.
+          items: { type: string }
     MemoryLearningPolicy:
       type: object
       description: >
@@ -6721,6 +6746,11 @@ components:
             Optional. Off by default. When enabled, the agent may propose
             structured memory through the platform-owned suggestion tool; the
             platform still decides when a suggestion becomes active memory.
+        approvals:
+          allOf: [{ $ref: '#/components/schemas/ApprovalPolicy' }]
+          description: >
+            Optional. The console alone by default. Sent back on a definition
+            unchanged: what a client does not return, publishing deletes.
         emits:
           type: array
           description: |
@@ -6796,6 +6826,13 @@ components:
             every edit, and an agent that quietly stopped emitting takes every
             agent composed onto it down with it.
           items: { $ref: '#/components/schemas/AgentEvent' }
+        approvals:
+          allOf: [{ $ref: '#/components/schemas/ApprovalPolicy' }]
+          description: |
+            How this version's owner asked for human approval to arrive.
+            Returned for the same reason the events are: a client that cannot
+            see it drops it on every edit, and the next publication of an agent
+            whose owner asked to be told privately silently stops telling them.
         versions:
           type: array
           description: Every published version, newest first.
