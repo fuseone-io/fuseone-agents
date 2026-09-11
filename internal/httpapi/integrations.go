@@ -214,6 +214,9 @@ func (s *Server) PutModelProvider(ctx context.Context, req openapi.PutModelProvi
 	provider := domain.ModelProvider{
 		Name: req.Name, Kind: string(req.Body.Kind), BaseURL: valueOr(req.Body.BaseUrl), Enabled: true,
 	}
+	if req.Body.Models != nil {
+		provider.Models = *req.Body.Models
+	}
 	if req.Body.Enabled != nil {
 		provider.Enabled = *req.Body.Enabled
 	}

@@ -171,6 +171,7 @@ func (s *Server) ListIntegrations(ctx context.Context, _ openapi.ListIntegration
 	for _, p := range providers {
 		body.Providers = append(body.Providers, openapi.ModelProvider{
 			Name: p.Name, Kind: openapi.ModelProviderKind(p.Kind), BaseUrl: p.BaseURL,
+			Models: ptr(p.Models),
 			// Only whether a credential exists. The credential itself never
 			// leaves the vault through this API.
 			Enabled: p.Enabled, HasKey: p.HasKey,

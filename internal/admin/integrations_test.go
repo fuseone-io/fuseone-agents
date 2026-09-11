@@ -1737,3 +1737,44 @@ func TestPutMCPServer_recordsTheTransportUnderTheNameTheTrailAlwaysUsed(t *testi
 		t.Errorf("detail = %v, want the transport under its own name", detail)
 	}
 }
+
+/*
+The models a provider serves are the installation's own answer.
+
+A preset ships a list for the vendors the platform knows, and that is no help
+where it matters most: behind a proxy the names are whatever the installation
+configured — `anthropic-claude-sonnet-5`, `gemini/gemini-2.5-pro` — and nothing
+in a binary can guess them. Without this every author had to know, and spell, an
+identifier nothing on the screen offered.
+
+Stored beside the address because it is the same fact about the same endpoint,
+and it survives a write that carries no credential for the same reason the
+address does.
+*/
+func TestPutProvider_theModelsItServes_surviveAWriteWithNoCredential(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+
+	provider := domain.ModelProvider{
+		Name: "litellm", Kind: "openai_compatible", BaseURL: "https://litellm.internal/v1",
+		Models: []string{"anthropic-claude-sonnet-5", "gemini/gemini-2.5-pro"}, Enabled: true,
+	}
+	if err := i.PutProvider(ctx, "usr_ana", platform, provider, "sk-secret"); err != nil {
+		t.Fatalf("PutProvider: %v", err)
+	}
+	provider.BaseURL = "https://litellm.internal/v2"
+	if err := i.PutProvider(ctx, "usr_ana", platform, provider, ""); err != nil {
+		t.Fatalf("PutProvider again: %v", err)
+	}
+
+	providers, err := i.Providers(ctx)
+	if err != nil {
+		t.Fatalf("Providers: %v", err)
+	}
+	if len(providers) != 1 {
+		t.Fatalf("Providers = %+v, want one", providers)
+	}
+	if !slices.Equal(providers[0].Models, provider.Models) {
+		t.Errorf("Models = %v, want the list the installation configured", providers[0].Models)
+	}
+}

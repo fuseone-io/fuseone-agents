@@ -100,8 +100,9 @@ type storedServer struct {
 }
 
 type storedProvider struct {
-	Kind    string `json:"kind"`
-	BaseURL string `json:"baseURL"`
+	Kind    string   `json:"kind"`
+	BaseURL string   `json:"baseURL"`
+	Models  []string `json:"models,omitempty"`
 }
 
 type storedMCPUserCredential struct {
@@ -963,6 +964,7 @@ func (i *Integrations) Providers(ctx context.Context) ([]domain.ModelProvider, e
 		}
 		out = append(out, domain.ModelProvider{
 			Name: row.Name, Kind: stored.Kind, BaseURL: stored.BaseURL,
+			Models:  stored.Models,
 			Enabled: row.Enabled, HasKey: row.HasSecret,
 			UpdatedBy: row.UpdatedBy, UpdatedAt: row.UpdatedAt,
 		})
@@ -985,7 +987,9 @@ func (i *Integrations) PutProvider(ctx context.Context, by domain.UserID, scope 
 		return ErrNoBaseURL
 	}
 
-	value, err := json.Marshal(storedProvider{Kind: provider.Kind, BaseURL: provider.BaseURL})
+	value, err := json.Marshal(storedProvider{
+		Kind: provider.Kind, BaseURL: provider.BaseURL, Models: cleanModels(provider.Models),
+	})
 	if err != nil {
 		return fmt.Errorf("admin: encode provider: %w", err)
 	}
@@ -1003,6 +1007,27 @@ func (i *Integrations) PutProvider(ctx context.Context, by domain.UserID, scope 
 		"kind": provider.Kind, "baseURL": provider.BaseURL,
 		"enabled": provider.Enabled, "keyChanged": apiKey != "",
 	})
+}
+
+/*
+cleanModels drops blanks and repeats from a list somebody typed.
+
+Trimmed rather than refused: a trailing comma or a stray space is not a mistake
+worth stopping a save for, and an empty entry stored would show as a nameless
+suggestion in the one control that exists to stop people guessing names.
+*/
+func cleanModels(in []string) []string {
+	out := make([]string, 0, len(in))
+	for _, one := range in {
+		one = strings.TrimSpace(one)
+		if one != "" && !slices.Contains(out, one) {
+			out = append(out, one)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func (i *Integrations) DeleteProvider(ctx context.Context, by domain.UserID, scope domain.Scope, name string) error {

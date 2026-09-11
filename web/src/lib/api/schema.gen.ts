@@ -3744,6 +3744,8 @@ export interface components {
             /** @enum {string} */
             kind: "anthropic" | "openai_compatible";
             baseUrl: string;
+            /** @description The models this endpoint serves, as the installation configured them. */
+            models?: string[];
             enabled: boolean;
             /** @description Whether a credential is stored. The credential itself never leaves the vault through this API. */
             hasKey: boolean;
@@ -8041,6 +8043,15 @@ export interface operations {
                      *     Omitted for anthropic, whose client already knows one.
                      */
                     baseUrl?: string;
+                    /**
+                     * @description The models this endpoint serves, as the installation knows
+                     *     them. Suggestions offered to an agent's author and never a
+                     *     closed set — a list that refused a model released last week
+                     *     would be worse than no list. It matters most behind a proxy,
+                     *     where the names are whatever somebody configured there and
+                     *     nothing shipped in a binary can guess them.
+                     */
+                    models?: string[];
                     /** @description Sealed in the vault on arrival and never returned. Omit it to keep the stored credential — changing a base URL should not require re-entering a key. */
                     apiKey?: string;
                     /** @default true */
