@@ -35,7 +35,10 @@ func registerFromEnv(registry *model.Registry) {
 			continue
 		}
 		if _, taken := existing[name]; taken {
-			slog.Info("ignoring environment credential; the administration area configures this provider",
+			// Debug, because this is a steady state somebody chose and this
+			// runs every thirty seconds. Said at Info it is two lines a minute
+			// about a decision that is not changing.
+			slog.Debug("ignoring environment credential; the administration area configures this provider",
 				"provider", name)
 			continue
 		}
@@ -48,7 +51,7 @@ func registerFromEnv(registry *model.Registry) {
 			slog.Warn("could not register provider from environment", "provider", name, "err", err)
 			continue
 		}
-		slog.Info("provider configured", "provider", name, "source", "environment")
+		slog.Info("provider configured from the environment", "provider", name)
 	}
 }
 

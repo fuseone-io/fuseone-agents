@@ -365,9 +365,12 @@ func TestSetConfigured_theSameConfigurationAgain_leavesTheRevision(t *testing.T)
 		Models: []string{"gemini/gemini-2.5-pro"},
 		Prices: map[string]model.Prices{"gemini/gemini-2.5-pro": {InputMicros: 3}},
 	}}
-	registry.SetConfigured(same)
+	// Claimed as well as supplied, which is the shape the wiring uses: every
+	// usable provider arrives twice, once as a claim on its name and once as a
+	// value.
+	registry.SetConfigured(same, "litellm")
 	before := registry.Revision()
-	registry.SetConfigured(same)
+	registry.SetConfigured(same, "litellm")
 	if registry.Revision() != before {
 		t.Error("an identical pass moved the revision; every planner would be rebuilt twice a minute")
 	}

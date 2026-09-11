@@ -309,6 +309,63 @@ func (s *Store) ListTx(ctx context.Context, conn DB, kind Kind) ([]Setting, erro
 	return out, rows.Err()
 }
 
+/*
+RevealAll lists a kind with every credential opened, in one query.
+
+One query because a configuration and the credential that goes with it are a
+pair: read apart they are two rows read a moment apart, and an edit landing
+between them hands the new credential to the old address — during a rotation
+away from an endpoint somebody no longer trusts, that is the replacement key
+delivered to exactly the place it was meant to leave.
+
+It is also the difference between one round trip and one per row, on a path
+that runs in every process every thirty seconds.
+
+Nothing here is logged, and the secret is in the answer: this is for the wiring
+that has to open credentials to build a client. A caller that only needs to know
+whether one exists wants List.
+*/
+func (s *Store) RevealAll(ctx context.Context, kind Kind) ([]Setting, error) {
+	rows, err := s.pool.Query(ctx, `
+		select scope_kind, company_id, area_id, name, value, secret, secret_nonce,
+		       enabled, updated_by, updated_at
+		from settings where kind = $1
+		order by scope_kind, company_id, area_id, name`, string(kind))
+	if err != nil {
+		return nil, fmt.Errorf("settings: reveal %s: %w", kind, err)
+	}
+	defer rows.Close()
+
+	var out []Setting
+	for rows.Next() {
+		var (
+			set               = Setting{Kind: kind}
+			scopeKind         string
+			company, area     string
+			ciphertext, nonce []byte
+		)
+		if err := rows.Scan(&scopeKind, &company, &area, &set.Name, &set.Value,
+			&ciphertext, &nonce, &set.Enabled, &set.UpdatedBy, &set.UpdatedAt); err != nil {
+			return nil, err
+		}
+		set.ScopeKind = ScopeKind(scopeKind)
+		set.Scope = domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)}
+		set.HasSecret = ciphertext != nil
+		if set.HasSecret {
+			if s.vault == nil {
+				return nil, ErrNoVault
+			}
+			plain, err := s.vault.Open(ciphertext, nonce, contextFor(set))
+			if err != nil {
+				return nil, fmt.Errorf("settings: open %s/%s: %w", kind, set.Name, err)
+			}
+			set.Secret = string(plain)
+		}
+		out = append(out, set)
+	}
+	return out, rows.Err()
+}
+
 // Resolve finds the setting that applies in a scope, walking outward.
 //
 // Area first, then company, then installation. This is what lets an area

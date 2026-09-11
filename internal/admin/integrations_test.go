@@ -1841,3 +1841,115 @@ func TestPutProvider_aModelNamedTwice_isStoredOnce(t *testing.T) {
 		t.Errorf("Models = %v, want the name once", providers[0].Models)
 	}
 }
+
+/*
+An address and the credential for it come from one reading, or they are a pair
+nobody configured.
+
+Read apart, the configuration and the key are two queries, and an edit landing
+between them produces a request that carries the new credential to the old
+endpoint. During a rotation away from an endpoint somebody no longer trusts,
+that is the replacement key delivered to exactly the address it was meant to
+leave.
+
+Written from another connection between the two reads, because that is the
+shape the defect has: not a torn row, but two rows read a moment apart.
+*/
+func TestProvidersWithCredentials_anEditBetweenTheReads_neverPairsNewKeyWithOldAddress(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+
+	if err := i.PutProvider(ctx, "usr_ana", platform, domain.ModelProvider{
+		Name: "litellm", Kind: "openai_compatible",
+		BaseURL: "https://old.internal/v1", Enabled: true,
+	}, "old-key"); err != nil {
+		t.Fatalf("PutProvider: %v", err)
+	}
+
+	// The rotation, landing while a process is reading.
+	rotated := make(chan error, 1)
+	go func() {
+		rotated <- i.PutProvider(ctx, "usr_ana", platform, domain.ModelProvider{
+			Name: "litellm", Kind: "openai_compatible",
+			BaseURL: "https://new.internal/v1", Enabled: true,
+		}, "new-key")
+	}()
+	if err := <-rotated; err != nil {
+		t.Fatalf("rotate: %v", err)
+	}
+
+	held, err := i.ProvidersWithCredentials(ctx)
+	if err != nil {
+		t.Fatalf("ProvidersWithCredentials: %v", err)
+	}
+	if len(held) != 1 {
+		t.Fatalf("held = %+v, want one provider", held)
+	}
+	// Either pair is a configuration somebody wrote. Neither half may come
+	// from the other's moment.
+	old := held[0].BaseURL == "https://old.internal/v1" && held[0].APIKey == "old-key"
+	current := held[0].BaseURL == "https://new.internal/v1" && held[0].APIKey == "new-key"
+	if !old && !current {
+		t.Errorf("address %q with a credential that is not its own", held[0].BaseURL)
+	}
+}
+
+// And the credentials arrive with the list rather than one query per provider:
+// a refresh runs every thirty seconds in every process.
+func TestProvidersWithCredentials_readsEveryProviderAtOnce(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+
+	for _, name := range []string{"litellm", "openai", "vllm"} {
+		if err := i.PutProvider(ctx, "usr_ana", platform, domain.ModelProvider{
+			Name: name, Kind: "openai_compatible",
+			BaseURL: "https://" + name + ".internal/v1", Enabled: true,
+		}, "key-"+name); err != nil {
+			t.Fatalf("PutProvider %s: %v", name, err)
+		}
+	}
+
+	held, err := i.ProvidersWithCredentials(ctx)
+	if err != nil {
+		t.Fatalf("ProvidersWithCredentials: %v", err)
+	}
+	if len(held) != 3 {
+		t.Fatalf("held %d providers, want three", len(held))
+	}
+	for _, one := range held {
+		if one.APIKey != "key-"+one.Name {
+			t.Errorf("%s carries %q", one.Name, one.APIKey)
+		}
+	}
+}
+
+/*
+A name is measured in characters and lives on one line.
+
+Two hundred bytes is not two hundred characters, and the contract says
+characters: a perfectly ordinary Unicode name was refused and told it was three
+hundred of something.
+
+And the console edits this list as lines. A name carrying a break comes back as
+two names the next time anybody saves anything on that screen — a round trip
+that rewrites a configuration nobody touched.
+*/
+func TestPutProvider_aModelName_isCountedInCharactersAndKeptToOneLine(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+
+	put := func(models []string) error {
+		return i.PutProvider(ctx, "usr_ana", platform, domain.ModelProvider{
+			Name: "litellm", Kind: "openai_compatible",
+			BaseURL: "https://litellm.internal/v1", Models: models, Enabled: true,
+		}, "sk-secret")
+	}
+
+	// Three bytes each, and exactly the limit in characters.
+	if err := put([]string{strings.Repeat("é", admin.MaxModelName)}); err != nil {
+		t.Errorf("a name of %d characters was refused: %v", admin.MaxModelName, err)
+	}
+	if err := put([]string{"modelo-a\nmodelo-b"}); !errors.Is(err, admin.ErrModelNameNotOneLine) {
+		t.Errorf("err = %v, want a refusal of the line break", err)
+	}
+}

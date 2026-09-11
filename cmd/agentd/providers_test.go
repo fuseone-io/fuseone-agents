@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -78,24 +77,29 @@ func TestConfigureFrom_anOpenAICompatibleProviderWithNoAddress_isNotRegistered(t
 	}
 }
 
-// stubConfig is the administration area with a vault that refuses some of it.
+// stubConfig is the administration area, with a vault that refuses some of it.
+//
+// A sealed provider answers the way the real read does when the master key is
+// missing: the row says a credential is stored and none came back.
 type stubConfig struct {
 	providers []domain.ModelProvider
 	sealed    map[string]bool
+	rates     []admin.ModelPrice
 }
 
-func (s *stubConfig) Providers(context.Context) ([]domain.ModelProvider, error) {
-	return s.providers, nil
-}
-
-func (s *stubConfig) Credential(_ context.Context, name string) (string, error) {
-	if s.sealed[name] {
-		return "", errors.New("no vault: the master key was not given to this process")
+func (s *stubConfig) ProvidersWithCredentials(context.Context) ([]admin.ConfiguredProvider, error) {
+	out := make([]admin.ConfiguredProvider, 0, len(s.providers))
+	for _, p := range s.providers {
+		one := admin.ConfiguredProvider{ModelProvider: p}
+		if p.HasKey && !s.sealed[p.Name] {
+			one.APIKey = "opened-" + p.Name
+		}
+		out = append(out, one)
 	}
-	return "opened-" + name, nil
+	return out, nil
 }
 
-func (s *stubConfig) Prices(context.Context) ([]admin.ModelPrice, error) { return nil, nil }
+func (s *stubConfig) Prices(context.Context) ([]admin.ModelPrice, error) { return s.rates, nil }
 
 /*
 An address changed in the console reaches a process that is already running.
@@ -250,5 +254,67 @@ func TestApplyConfiguration_aNameNobodyConfigures_isStillTheEnvironments(t *test
 	}
 	if !slices.Contains(registry.Names(), "anthropic") {
 		t.Error("the environment's provider was dropped")
+	}
+}
+
+/*
+A provider the environment supplies starts life with its configured rate.
+
+The environment layer ran in a defer, so it landed after the rates were
+applied — and a provider it registered began with no rate at all until the next
+pass, thirty seconds later. Runs opened in that window record tokens with no
+money against them, and a ceiling stated in money has nothing to measure.
+*/
+func TestApplyConfiguration_aProviderFromTheEnvironment_hasItsRateOnTheFirstPass(t *testing.T) {
+	t.Setenv("ANTHROPIC_API_KEY", "from-the-environment")
+	registry := model.NewRegistry(nil)
+
+	if _, err := applyConfiguration(t.Context(), registry, &stubConfig{
+		rates: []admin.ModelPrice{{
+			Provider: "anthropic", Model: "claude-opus-5", InputMicros: 5, OutputMicros: 25,
+		}},
+	}); err != nil {
+		t.Fatalf("applyConfiguration: %v", err)
+	}
+
+	price, priced, err := registry.PriceFor("anthropic", "claude-opus-5")
+	if err != nil {
+		t.Fatalf("PriceFor: %v", err)
+	}
+	if !priced || price.InputMicros != 5 {
+		t.Errorf("rate = %+v priced=%v, want the configured rate on the first pass", price, priced)
+	}
+}
+
+/*
+A pass that changes nothing leaves every planner where it is.
+
+The revision is what tells a resolver to rebuild the planner it cached for a
+published version. Production hands every usable provider to SetConfigured twice
+— once as a claim and once as a value — and the claim deleted the name before
+the comparison could see it, so nothing ever looked unchanged. Every active
+version rebuilt its planner every thirty seconds.
+*/
+func TestApplyConfiguration_twoIdenticalPasses_leaveTheRevision(t *testing.T) {
+	registry := model.NewRegistry(nil)
+	config := &stubConfig{providers: []domain.ModelProvider{
+		{Name: "litellm", Kind: "openai_compatible", BaseURL: "https://litellm.internal/v1",
+			Models: []string{"gemini/gemini-2.5-pro"}, Enabled: true, HasKey: true},
+	}, rates: []admin.ModelPrice{{
+		Provider: "litellm", Model: "gemini/gemini-2.5-pro", InputMicros: 3,
+	}}}
+
+	if _, err := applyConfiguration(t.Context(), registry, config); err != nil {
+		t.Fatalf("applyConfiguration: %v", err)
+	}
+	settled := registry.Revision()
+	for range 3 {
+		if _, err := applyConfiguration(t.Context(), registry, config); err != nil {
+			t.Fatalf("applyConfiguration again: %v", err)
+		}
+	}
+	if registry.Revision() != settled {
+		t.Errorf("revision moved to %d over three identical passes, from %d",
+			registry.Revision(), settled)
 	}
 }

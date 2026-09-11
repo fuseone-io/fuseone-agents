@@ -9,13 +9,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/fuseone/agents/internal/admin"
 
-	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/model"
 )
 
@@ -30,8 +30,12 @@ one provider cannot be read is the whole point of the code below, and a test
 that cannot make a credential refuse to open cannot say anything about it.
 */
 type providerConfig interface {
-	Providers(ctx context.Context) ([]domain.ModelProvider, error)
-	Credential(ctx context.Context, name string) (string, error)
+	// One call, because an address and the credential for it are a pair. Read
+	// apart they are two queries, and an edit landing between them hands the
+	// new credential to the old address — during a rotation away from an
+	// endpoint somebody no longer trusts, that is the replacement key
+	// delivered to exactly the place it was meant to leave.
+	ProvidersWithCredentials(ctx context.Context) ([]admin.ConfiguredProvider, error)
 	Prices(ctx context.Context) ([]admin.ModelPrice, error)
 }
 
@@ -46,6 +50,7 @@ func registerConfigured(ctx context.Context, registry *model.Registry, integrati
 	if err != nil {
 		return err
 	}
+	slog.Info("model providers configured", "providers", registry.Names())
 	for name, why := range failed {
 		// Loud at boot, and the run still fails: this is the difference
 		// between an installation that is misconfigured and one that is lying
@@ -76,7 +81,7 @@ func configureFrom(
 	ctx context.Context, registry *model.Registry,
 	from providerConfig, priced map[string]map[string]model.Prices,
 ) (map[string]string, error) {
-	configured, err := from.Providers(ctx)
+	configured, err := from.ProvidersWithCredentials(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("read configured providers: %w", err)
 	}
@@ -92,7 +97,7 @@ func configureFrom(
 		if !p.Enabled {
 			continue
 		}
-		provider, err := providerFrom(ctx, from, p, priced[p.Name])
+		provider, err := providerFrom(p, priced[p.Name])
 		if err != nil {
 			// Reported by the caller rather than here: at boot every failure
 			// is news, and on a refresh only a change is. Logging it in the
@@ -102,7 +107,12 @@ func configureFrom(
 			continue
 		}
 		ready = append(ready, provider)
-		slog.Info("provider configured", "provider", p.Name,
+		// Not announced here. This runs every thirty seconds in every process,
+		// and a line per provider per pass is a log that says the same thing
+		// four thousand times a day and buries the one line that is news. The
+		// callers say it: once at boot, and afterwards only when something
+		// actually moved.
+		slog.Debug("provider configured", "provider", p.Name,
 			"source", "administration", "priced_models", len(provider.Prices))
 	}
 	registry.SetConfigured(ready, claimed...)
@@ -123,27 +133,34 @@ refresh has always done for rates, and what everything else was missing.
 func applyConfiguration(
 	ctx context.Context, registry *model.Registry, from providerConfig,
 ) (map[string]string, error) {
-	// The environment is the layer underneath, and it is applied however this
-	// pass ends: a read that failed leaves the last good configuration in
-	// place, and the names nothing claims are still the environment's to fill.
-	defer registerFromEnv(registry)
-
 	priced, err := pricesFrom(ctx, from)
 	if err != nil {
+		// The layer underneath still applies. The rates stay as they were,
+		// because a refresh that could not read them must not turn a priced
+		// model back into zero.
+		registerFromEnv(registry)
 		return nil, err
 	}
+
 	failed, err := configureFrom(ctx, registry, from, priced)
 	if err != nil {
+		registerFromEnv(registry)
 		return nil, err
 	}
+
+	// The environment before the rates, and not in a defer. Applied after
+	// them, a provider it supplies began life with no configured rate until
+	// the next pass thirty seconds later — and a run opened in that window
+	// records tokens with no money against them, leaving a ceiling stated in
+	// money with nothing to measure.
+	registerFromEnv(registry)
 	registry.SetPrices(priced)
 	return failed, nil
 }
 
 // providerFrom builds one provider, preset quirks and credential included.
 func providerFrom(
-	ctx context.Context, from providerConfig,
-	p domain.ModelProvider, priced map[string]model.Prices,
+	p admin.ConfiguredProvider, priced map[string]model.Prices,
 ) (model.Provider, error) {
 	provider := model.Provider{
 		Name: p.Name, Kind: model.Kind(p.Kind), BaseURL: p.BaseURL,
@@ -156,11 +173,13 @@ func providerFrom(
 		provider = preset
 	}
 	if p.HasKey {
-		key, err := from.Credential(ctx, p.Name)
-		if err != nil {
-			return model.Provider{}, fmt.Errorf("open credential: %w", err)
+		if p.APIKey == "" {
+			// The row said a credential is stored and the read produced none.
+			// Registering it would build a client with no key, which either
+			// borrows one from somewhere or fails at the first turn.
+			return model.Provider{}, errors.New("a stored credential that did not open")
 		}
-		provider.APIKey = key
+		provider.APIKey = p.APIKey
 	}
 	provider.Prices = priced
 	if provider.Kind == model.KindOpenAICompatible && provider.BaseURL == "" {
@@ -225,10 +244,17 @@ func watchConfiguration(ctx context.Context, registry *model.Registry, integrati
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			before := registry.Revision()
 			failed, err := applyConfiguration(ctx, registry, integrations)
 			if err != nil && ctx.Err() == nil {
 				slog.Warn("could not refresh the model configuration", "err", err)
 				continue
+			}
+			// Only when something moved. A refresh that found the installation
+			// exactly as it left it is not news, and said every thirty seconds
+			// it is the thing that hides the pass that is.
+			if registry.Revision() != before {
+				slog.Info("model configuration refreshed", "providers", registry.Names())
 			}
 			for name, why := range failed {
 				if reported[name] != why {

@@ -77,13 +77,27 @@ func (r *Registry) SetConfigured(ps []Provider, claimed ...string) {
 	defer r.mu.Unlock()
 
 	taken := make(map[string]bool, len(ps)+len(claimed))
+	supplied := make(map[string]bool, len(ps))
+	for _, p := range ps {
+		supplied[p.Name] = true
+	}
+
 	changed := false
-	// Claimed first, so a name the administration area configured and this
-	// process could not build is held empty rather than left to the
-	// environment. Filled from somewhere else it is not a misconfiguration any
-	// more, it is a request to an endpoint nobody chose.
+	// A name the administration area configured and this process could not
+	// build is held empty rather than left to the environment. Filled from
+	// somewhere else it is not a misconfiguration any more, it is a request to
+	// an endpoint nobody chose.
+	//
+	// Only the names nothing supplies. Every usable provider arrives here
+	// twice — once as a claim and once as a value — and deleting first meant
+	// the comparison below never had a previous value to compare against, so
+	// no pass ever looked unchanged and every planner in the installation was
+	// rebuilt every thirty seconds.
 	for _, name := range claimed {
 		taken[name] = true
+		if supplied[name] {
+			continue
+		}
 		if _, held := r.providers[name]; held {
 			delete(r.providers, name)
 			changed = true

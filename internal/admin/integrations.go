@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -972,6 +973,49 @@ func (i *Integrations) Providers(ctx context.Context) ([]domain.ModelProvider, e
 	return out, nil
 }
 
+/*
+ConfiguredProvider is a provider and the credential that goes with it, read
+together.
+
+They travel as one value because they were read as one row. Split into two
+calls, an edit between them pairs a new credential with an old address, which
+is the failure a rotation exists to avoid.
+*/
+type ConfiguredProvider struct {
+	domain.ModelProvider
+	APIKey string
+}
+
+/*
+ProvidersWithCredentials is the list a process needs to build clients.
+
+One query, credentials opened. The ordinary listing says only that a credential
+exists, which is what a screen should know; this is the wiring that has to
+speak to the endpoint.
+*/
+func (i *Integrations) ProvidersWithCredentials(ctx context.Context) ([]ConfiguredProvider, error) {
+	rows, err := i.settings.RevealAll(ctx, settings.KindModelProvider)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ConfiguredProvider, 0, len(rows))
+	for _, row := range rows {
+		var stored storedProvider
+		if err := json.Unmarshal(row.Value, &stored); err != nil {
+			return nil, fmt.Errorf("admin: decode provider %s: %w", row.Name, err)
+		}
+		out = append(out, ConfiguredProvider{
+			ModelProvider: domain.ModelProvider{
+				Name: row.Name, Kind: stored.Kind, BaseURL: stored.BaseURL,
+				Models: stored.Models, Enabled: row.Enabled, HasKey: row.HasSecret,
+				UpdatedBy: row.UpdatedBy, UpdatedAt: row.UpdatedAt,
+			},
+			APIKey: row.Secret,
+		})
+	}
+	return out, nil
+}
+
 // PutProvider records a provider. An empty key keeps the stored one, so
 // changing a base URL does not require re-entering a credential — which is how
 // operators end up pasting keys into chat to look them up.
@@ -1024,10 +1068,12 @@ const (
 	MaxModelName      = 200
 )
 
-// ErrTooManyModels and ErrModelNameTooLong refuse a list that is not a list.
+// ErrTooManyModels, ErrModelNameTooLong and ErrModelNameNotOneLine refuse a
+// list that is not a list.
 var (
-	ErrTooManyModels    = errors.New("admin: more models than a provider list may hold")
-	ErrModelNameTooLong = errors.New("admin: a model name longer than any vendor uses")
+	ErrTooManyModels       = errors.New("admin: more models than a provider list may hold")
+	ErrModelNameTooLong    = errors.New("admin: a model name longer than any vendor uses")
+	ErrModelNameNotOneLine = errors.New("admin: a model name containing a line break")
 )
 
 /*
@@ -1053,12 +1099,22 @@ func cleanModels(in []string) ([]string, error) {
 		if one == "" || seen[one] {
 			continue
 		}
-		if len(one) > MaxModelName {
+		// Counted in characters, because the contract says characters. Measured
+		// in bytes, a name of two hundred perfectly ordinary Unicode characters
+		// was refused and told it was three hundred.
+		if utf8.RuneCountInString(one) > MaxModelName {
 			// The name is not in the error. It came from a paste that may be
 			// anything, and a refusal that quotes its input is a refusal that
 			// can be made to say whatever the sender chose.
 			return nil, fmt.Errorf("%w: %d characters, and the limit is %d",
-				ErrModelNameTooLong, len(one), MaxModelName)
+				ErrModelNameTooLong, utf8.RuneCountInString(one), MaxModelName)
+		}
+		// A name is one line. The console edits this list as lines, so a name
+		// carrying a break comes back as two names the next time anybody saves
+		// anything on that screen — a round trip that quietly rewrites a
+		// configuration nobody touched.
+		if strings.ContainsAny(one, "\r\n") {
+			return nil, ErrModelNameNotOneLine
 		}
 		seen[one] = true
 		out = append(out, one)
