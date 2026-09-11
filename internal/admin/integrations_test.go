@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -12,8 +13,19 @@ import (
 	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/settings"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/fuseone/agents/internal/vault"
 )
+
+// newIntegrationsOn is the administration area over a pool the caller keeps, so
+// a test can read the same rows through a second process — one that was given
+// no master key, which the console process is allowed to be.
+func newIntegrationsOn(t *testing.T, pool *pgxpool.Pool, v *vault.Vault) *admin.Integrations {
+	t.Helper()
+	return admin.NewIntegrations(pool, settings.NewStore(pool, v))
+}
 
 func newIntegrations(t *testing.T) *admin.Integrations {
 	t.Helper()
@@ -1843,55 +1855,102 @@ func TestPutProvider_aModelNamedTwice_isStoredOnce(t *testing.T) {
 }
 
 /*
-An address and the credential for it come from one reading, or they are a pair
-nobody configured.
+An address and the credential for it come from one reading.
 
-Read apart, the configuration and the key are two queries, and an edit landing
-between them produces a request that carries the new credential to the old
-endpoint. During a rotation away from an endpoint somebody no longer trusts,
-that is the replacement key delivered to exactly the address it was meant to
-leave.
+Read apart they are two queries, and an edit landing between them produces a
+request that carries the new credential to the old endpoint. During a rotation
+away from an endpoint somebody no longer trusts, that is the replacement key
+delivered to exactly the address it was meant to leave.
 
-Written from another connection between the two reads, because that is the
-shape the defect has: not a torn row, but two rows read a moment apart.
+Asserted as one query rather than by racing a writer against it. A race proves
+nothing when it does not happen to interleave — the previous version of this
+test waited for the rotation to finish before reading, and passed twenty times
+out of twenty against the two vulnerable reads it was written to catch. What
+makes the pairing safe is that there is no second read to land between, so that
+is what is measured, by counting what pgx was asked to run.
 */
-func TestProvidersWithCredentials_anEditBetweenTheReads_neverPairsNewKeyWithOldAddress(t *testing.T) {
-	i := newIntegrations(t)
+func TestProvidersWithCredentials_readsTheAddressAndTheKeyInOneQuery(t *testing.T) {
+	seed := newIntegrations(t)
 	ctx := context.Background()
 
-	if err := i.PutProvider(ctx, "usr_ana", platform, domain.ModelProvider{
-		Name: "litellm", Kind: "openai_compatible",
-		BaseURL: "https://old.internal/v1", Enabled: true,
-	}, "old-key"); err != nil {
-		t.Fatalf("PutProvider: %v", err)
+	for _, name := range []string{"litellm", "openai", "vllm"} {
+		if err := seed.PutProvider(ctx, "usr_ana", platform, domain.ModelProvider{
+			Name: name, Kind: "openai_compatible",
+			BaseURL: "https://" + name + ".internal/v1", Enabled: true,
+		}, "key-"+name); err != nil {
+			t.Fatalf("PutProvider %s: %v", name, err)
+		}
 	}
 
-	// The rotation, landing while a process is reading.
-	rotated := make(chan error, 1)
-	go func() {
-		rotated <- i.PutProvider(ctx, "usr_ana", platform, domain.ModelProvider{
-			Name: "litellm", Kind: "openai_compatible",
-			BaseURL: "https://new.internal/v1", Enabled: true,
-		}, "new-key")
-	}()
-	if err := <-rotated; err != nil {
-		t.Fatalf("rotate: %v", err)
-	}
+	counted := &queryCounter{}
+	watched := newIntegrationsOn(t, tracedPool(t, counted), testVault(t))
+	counted.start()
 
-	held, err := i.ProvidersWithCredentials(ctx)
+	held, err := watched.ProvidersWithCredentials(ctx)
 	if err != nil {
 		t.Fatalf("ProvidersWithCredentials: %v", err)
 	}
-	if len(held) != 1 {
-		t.Fatalf("held = %+v, want one provider", held)
+
+	if asked := counted.stop(); asked != 1 {
+		t.Errorf("%d queries for three providers and their credentials, want one", asked)
 	}
-	// Either pair is a configuration somebody wrote. Neither half may come
-	// from the other's moment.
-	old := held[0].BaseURL == "https://old.internal/v1" && held[0].APIKey == "old-key"
-	current := held[0].BaseURL == "https://new.internal/v1" && held[0].APIKey == "new-key"
-	if !old && !current {
-		t.Errorf("address %q with a credential that is not its own", held[0].BaseURL)
+	if len(held) != 3 {
+		t.Fatalf("held %d providers, want three", len(held))
 	}
+	for _, one := range held {
+		if one.APIKey != "key-"+one.Name {
+			t.Errorf("%s carries %q", one.Name, one.APIKey)
+		}
+	}
+}
+
+// queryCounter counts what pgx was asked to run, between start and stop.
+type queryCounter struct {
+	mu      sync.Mutex
+	running bool
+	asked   int
+}
+
+func (q *queryCounter) TraceQueryStart(
+	ctx context.Context, _ *pgx.Conn, _ pgx.TraceQueryStartData,
+) context.Context {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.running {
+		q.asked++
+	}
+	return ctx
+}
+
+func (q *queryCounter) TraceQueryEnd(context.Context, *pgx.Conn, pgx.TraceQueryEndData) {}
+
+func (q *queryCounter) start() {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.running, q.asked = true, 0
+}
+
+func (q *queryCounter) stop() int {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.running = false
+	return q.asked
+}
+
+// tracedPool is a pool that reports every query it is asked to run.
+func tracedPool(t *testing.T, tracer pgx.QueryTracer) *pgxpool.Pool {
+	t.Helper()
+	cfg, err := pgxpool.ParseConfig(os.Getenv("TEST_DATABASE_URL"))
+	if err != nil {
+		t.Fatalf("parse the database url: %v", err)
+	}
+	cfg.ConnConfig.Tracer = tracer
+	pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	return pool
 }
 
 // And the credentials arrive with the list rather than one query per provider:
@@ -1951,5 +2010,67 @@ func TestPutProvider_aModelName_isCountedInCharactersAndKeptToOneLine(t *testing
 	}
 	if err := put([]string{"modelo-a\nmodelo-b"}); !errors.Is(err, admin.ErrModelNameNotOneLine) {
 		t.Errorf("err = %v, want a refusal of the line break", err)
+	}
+}
+
+/*
+A credential this process cannot open loses that provider and nothing else.
+
+The whole read returned at the first sealed row, so a process without the master
+key — which the console process is allowed to be — came back with no providers
+at all. Not even their names, so the wiring above had nothing to claim, and a
+provider from an environment variable took the name at another address with
+another key. The defect this branch exists to fix, one layer further down.
+
+A switched-off provider used to cause it too, because the credential was opened
+before anybody asked whether it was switched on.
+*/
+func TestProvidersWithCredentials_withoutTheMasterKey_keepsEveryProviderAndOpensNone(t *testing.T) {
+	sealed := newIntegrations(t)
+	ctx := context.Background()
+
+	for _, one := range []struct {
+		name    string
+		key     string
+		enabled bool
+	}{
+		{"litellm", "sk-sealed", true},
+		{"vllm", "", true},
+		{"retired", "sk-also-sealed", false},
+	} {
+		if err := sealed.PutProvider(ctx, "usr_ana", platform, domain.ModelProvider{
+			Name: one.name, Kind: "openai_compatible",
+			BaseURL: "https://" + one.name + ".internal/v1", Enabled: one.enabled,
+		}, one.key); err != nil {
+			t.Fatalf("PutProvider %s: %v", one.name, err)
+		}
+	}
+
+	// The same rows, read by a process that was given no master key.
+	keyless := newIntegrationsOn(t, openPool(t), nil)
+	held, err := keyless.ProvidersWithCredentials(ctx)
+	if err != nil {
+		t.Fatalf("ProvidersWithCredentials: %v", err)
+	}
+	if len(held) != 3 {
+		t.Fatalf("held %d providers, want all three", len(held))
+	}
+
+	by := map[string]admin.ConfiguredProvider{}
+	for _, one := range held {
+		by[one.Name] = one
+	}
+	if one := by["litellm"]; !one.HasKey || one.APIKey != "" || one.Unreadable == "" {
+		t.Errorf("the sealed provider = %+v, want it kept, unopened and marked", one)
+	}
+	if one := by["vllm"]; one.HasKey || one.Unreadable != "" {
+		t.Errorf("a provider with no credential = %+v, want nothing to report", one)
+	}
+	// Switched off, and its credential was never opened: nothing is going to
+	// speak with it, so there is nothing to report about a key this process
+	// cannot read. Listed all the same, or its name would look free.
+	if one := by["retired"]; one.BaseURL != "https://retired.internal/v1" ||
+		one.Unreadable != "" || one.APIKey != "" {
+		t.Errorf("the switched-off provider = %+v, want it listed and left sealed", one)
 	}
 }
