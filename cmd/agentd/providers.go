@@ -150,9 +150,7 @@ func applyConfiguration(
 
 	// The environment before the rates, and not in a defer. Applied after
 	// them, a provider it supplies began life with no configured rate until
-	// the next pass thirty seconds later — and a run opened in that window
-	// records tokens with no money against them, leaving a ceiling stated in
-	// money with nothing to measure.
+	// the next pass thirty seconds later.
 	registerFromEnv(registry)
 	registry.SetPrices(priced)
 	return failed, nil
@@ -173,10 +171,14 @@ func providerFrom(
 		provider = preset
 	}
 	if p.HasKey {
+		if p.Unreadable != "" {
+			return model.Provider{}, fmt.Errorf("a stored credential that did not open: %s", p.Unreadable)
+		}
 		if p.APIKey == "" {
-			// The row said a credential is stored and the read produced none.
-			// Registering it would build a client with no key, which either
-			// borrows one from somewhere or fails at the first turn.
+			// The row said a credential is stored and the read produced none,
+			// with no reason attached. Registering it would build a client
+			// with no key, which either borrows one from somewhere or fails at
+			// the first turn.
 			return model.Provider{}, errors.New("a stored credential that did not open")
 		}
 		provider.APIKey = p.APIKey

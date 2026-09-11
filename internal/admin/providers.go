@@ -55,6 +55,11 @@ is the failure a rotation exists to avoid.
 type ConfiguredProvider struct {
 	domain.ModelProvider
 	APIKey string
+	// Unreadable says why a stored credential did not open here. The provider
+	// is still listed: its name and its address are true whatever this process
+	// can do with its key, and a caller that lost the row would let something
+	// else answer under that name.
+	Unreadable string
 }
 
 /*
@@ -81,7 +86,8 @@ func (i *Integrations) ProvidersWithCredentials(ctx context.Context) ([]Configur
 				Models: stored.Models, Enabled: row.Enabled, HasKey: row.HasSecret,
 				UpdatedBy: row.UpdatedBy, UpdatedAt: row.UpdatedAt,
 			},
-			APIKey: row.Secret,
+			APIKey:     row.Secret,
+			Unreadable: row.SecretUnreadable,
 		})
 	}
 	return out, nil

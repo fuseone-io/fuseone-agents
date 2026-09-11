@@ -154,6 +154,14 @@ that runs in every process every thirty seconds.
 Nothing here is logged, and the secret is in the answer: this is for the wiring
 that has to open credentials to build a client. A caller that only needs to know
 whether one exists wants List.
+
+A credential this process cannot open is described on its own row and never
+returned as the collection's error. One sealed row used to cost the caller every
+other row — names included — which is how a process ends up with no
+configuration to honour and fills the gap from its environment.
+
+A switched-off row's credential is not opened at all: nothing is going to speak
+with it.
 */
 func (s *Store) RevealAll(ctx context.Context, kind Kind) ([]Setting, error) {
 	rows, err := s.pool.Query(ctx, `
@@ -181,13 +189,23 @@ func (s *Store) RevealAll(ctx context.Context, kind Kind) ([]Setting, error) {
 		set.ScopeKind = ScopeKind(scopeKind)
 		set.Scope = domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)}
 		set.HasSecret = ciphertext != nil
-		if set.HasSecret {
-			if s.vault == nil {
-				return nil, ErrNoVault
-			}
+		switch {
+		case !set.HasSecret:
+		case !set.Enabled:
+			// Nothing is going to use it. Opening a credential that will not
+			// be spoken with is a decryption this process has no reason to
+			// perform, and a failure it has no reason to report.
+		case s.vault == nil:
+			set.SecretUnreadable = ErrNoVault.Error()
+		default:
 			plain, err := s.vault.Open(ciphertext, nonce, contextFor(set))
 			if err != nil {
-				return nil, fmt.Errorf("settings: open %s/%s: %w", kind, set.Name, err)
+				// Described, not returned. Returned, one sealed row cost the
+				// caller every other row — including the names, which is how a
+				// process ends up with no configuration to honour and fills
+				// the gap from its environment.
+				set.SecretUnreadable = err.Error()
+				break
 			}
 			set.Secret = string(plain)
 		}

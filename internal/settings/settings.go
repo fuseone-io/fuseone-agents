@@ -81,6 +81,14 @@ type Setting struct {
 	Secret string
 	// HasSecret reports whether a credential is stored, without exposing it.
 	HasSecret bool
+	// SecretUnreadable says a credential is stored and this process could not
+	// open it — no master key, or one that does not match what sealed it.
+	//
+	// A description rather than a refusal, because one unreadable credential
+	// must not cost a caller the rest of the collection: the name and the
+	// configuration are still true, and a process that loses them fills the
+	// gap from somewhere else.
+	SecretUnreadable string
 	/*
 		ClearSecret removes the stored credential.
 

@@ -91,7 +91,11 @@ func (s *stubConfig) ProvidersWithCredentials(context.Context) ([]admin.Configur
 	out := make([]admin.ConfiguredProvider, 0, len(s.providers))
 	for _, p := range s.providers {
 		one := admin.ConfiguredProvider{ModelProvider: p}
-		if p.HasKey && !s.sealed[p.Name] {
+		switch {
+		case !p.HasKey:
+		case s.sealed[p.Name]:
+			one.Unreadable = "no vault: the master key was not given to this process"
+		default:
 			one.APIKey = "opened-" + p.Name
 		}
 		out = append(out, one)
