@@ -186,3 +186,69 @@ func (a *answers) hits() int {
 	defer a.mu.Unlock()
 	return a.asked
 }
+
+/*
+A name the console claims is not filled by the environment.
+
+The claim was made in the registry and then handed straight back: the
+environment fallback asked which providers were registered, and a name held
+empty is not registered — so it looked free, and the variable filled it. The
+substitution this whole path exists to prevent, reintroduced two lines later.
+
+A provider somebody switched off is the same claim. Disabled means this
+installation said no, not "use whatever the environment has under that name".
+*/
+func TestApplyConfiguration_aNameTheConsoleClaims_isNotFilledByTheEnvironment(t *testing.T) {
+	for _, one := range []struct {
+		name      string
+		configure domain.ModelProvider
+		sealed    bool
+	}{
+		{
+			name: "configured, and its credential cannot be opened",
+			configure: domain.ModelProvider{
+				Name: "anthropic", Kind: "anthropic",
+				BaseURL: "https://litellm.internal", Enabled: true, HasKey: true,
+			},
+			sealed: true,
+		},
+		{
+			name: "configured and switched off",
+			configure: domain.ModelProvider{
+				Name: "anthropic", Kind: "anthropic",
+				BaseURL: "https://litellm.internal", Enabled: false,
+			},
+		},
+	} {
+		t.Run(one.name, func(t *testing.T) {
+			t.Setenv("ANTHROPIC_API_KEY", "the-vendors-key")
+			registry := model.NewRegistry(nil)
+
+			config := &stubConfig{providers: []domain.ModelProvider{one.configure}}
+			if one.sealed {
+				config.sealed = map[string]bool{"anthropic": true}
+			}
+			if _, err := applyConfiguration(t.Context(), registry, config); err != nil {
+				t.Fatalf("applyConfiguration: %v", err)
+			}
+
+			if slices.Contains(registry.Names(), "anthropic") {
+				t.Error("the environment filled a name the console had claimed")
+			}
+		})
+	}
+}
+
+// And a name nobody configures is still the environment's to fill: that is the
+// installation with no administrator yet, and local development.
+func TestApplyConfiguration_aNameNobodyConfigures_isStillTheEnvironments(t *testing.T) {
+	t.Setenv("ANTHROPIC_API_KEY", "the-vendors-key")
+	registry := model.NewRegistry(nil)
+
+	if _, err := applyConfiguration(t.Context(), registry, &stubConfig{}); err != nil {
+		t.Fatalf("applyConfiguration: %v", err)
+	}
+	if !slices.Contains(registry.Names(), "anthropic") {
+		t.Error("the environment's provider was dropped")
+	}
+}

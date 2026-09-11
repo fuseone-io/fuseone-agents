@@ -87,10 +87,13 @@ func configureFrom(
 	ready := make([]model.Provider, 0, len(configured))
 	claimed := make([]string, 0, len(configured))
 	for _, p := range configured {
+		// Claimed whether or not it can be used, and whether or not it is
+		// switched on. Disabled means this installation said no about that
+		// name; it does not mean "use whatever the environment has under it".
+		claimed = append(claimed, p.Name)
 		if !p.Enabled {
 			continue
 		}
-		claimed = append(claimed, p.Name)
 		provider, err := providerFrom(ctx, from, p, priced[p.Name])
 		if err != nil {
 			// Reported by the caller rather than here: at boot every failure
@@ -252,6 +255,14 @@ func watchConfiguration(ctx context.Context, registry *model.Registry, integrati
 func registerFromEnv(registry *model.Registry) {
 	existing := make(map[string]struct{}, len(registry.Names()))
 	for _, name := range registry.Names() {
+		existing[name] = struct{}{}
+	}
+	// And the names the administration area claims, which are not the same as
+	// the names it could fill. A provider whose credential would not open, or
+	// one somebody switched off, holds its name and registers nothing — read
+	// from the registry's contents alone that name looks free, and filling it
+	// is the substitution this path exists to prevent.
+	for _, name := range registry.Claimed() {
 		existing[name] = struct{}{}
 	}
 
