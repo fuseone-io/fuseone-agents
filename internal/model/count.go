@@ -45,13 +45,19 @@ func (r *Registry) Counter(providerName string, cfg Config) (Counter, error) {
 		return nil, fmt.Errorf("%s: %w", p.Name, ErrNoTokeniser)
 	}
 
-	// Built through the same path a planner is, so the count is asked of the
-	// same endpoint and the same credential a run would use.
-	planner, err := r.Planner(providerName, cfg, nil)
+	// Built from the reading above rather than from a second one, so a refresh
+	// landing between them cannot answer with a planner of the other shape.
+	// Asserted with the comma anyway: a shape this cannot use is a refusal, and
+	// never a panic in a worker.
+	planner, err := r.plannerFrom(p, withPrice(p, cfg), nil)
 	if err != nil {
 		return nil, err
 	}
-	return planner.(*Anthropic), nil
+	counter, ok := planner.(*Anthropic)
+	if !ok {
+		return nil, fmt.Errorf("%s: %w", p.Name, ErrNoTokeniser)
+	}
+	return counter, nil
 }
 
 // Count asks the provider how it reads this instruction.
