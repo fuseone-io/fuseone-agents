@@ -14,7 +14,8 @@ export type ConnectorInstanceDetail =
 export type ConnectorInstanceInput =
   components["schemas"]["ConnectorInstanceInput"];
 export type ConnectorScopeKind = components["schemas"]["ConnectorScopeKind"];
-export type ConnectorVaultConfig = components["schemas"]["ConnectorVaultConfig"];
+export type ConnectorVaultConfig =
+  components["schemas"]["ConnectorVaultConfig"];
 
 export const integrationKeys = {
   all: ["integrations"] as const,
@@ -191,10 +192,7 @@ export function useConnectorInstance(instance: ConnectorInstance | undefined) {
 export function usePutConnectorInstance() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: {
-      name: string;
-      body: ConnectorInstanceInput;
-    }) =>
+    mutationFn: async (input: { name: string; body: ConnectorInstanceInput }) =>
       unwrap(
         await api.PUT("/admin/integrations/connectors/instances/{name}", {
           params: { path: { name: input.name } },
@@ -294,6 +292,7 @@ export function usePutProvider() {
       name: string;
       kind: "anthropic" | "openai_compatible";
       baseUrl: string;
+      models?: string[];
       apiKey?: string;
       enabled: boolean;
     }) =>
@@ -303,6 +302,7 @@ export function usePutProvider() {
           body: {
             kind: input.kind,
             baseUrl: input.baseUrl,
+            models: input.models,
             enabled: input.enabled,
             ...(input.apiKey ? { apiKey: input.apiKey } : {}),
           },

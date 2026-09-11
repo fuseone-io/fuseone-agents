@@ -5,6 +5,7 @@ import { z } from "zod";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import {
   PropertiesSheet,
@@ -42,6 +43,10 @@ const schema = z.object({
   // is known only to the installation. Requiring it made the reference
   // provider impossible to configure at all.
   baseUrl: z.string(),
+  // One per line, because that is what somebody pastes: a proxy's model list
+  // comes out of its own configuration one to a row, and a comma-separated
+  // field invites a name with a comma in it to be split in half.
+  models: z.string(),
   apiKey: z.string(),
   enabled: z.boolean(),
 });
@@ -64,6 +69,7 @@ export function ProviderForm({
         (provider?.kind as "anthropic" | "openai_compatible") ??
         "openai_compatible",
       baseUrl: provider?.baseUrl ?? "",
+      models: (provider?.models ?? []).join("\n"),
       apiKey: "",
       enabled: provider?.enabled ?? true,
     },
@@ -79,6 +85,7 @@ export function ProviderForm({
     if (!preset) return;
     form.setValue("kind", preset.kind as "anthropic" | "openai_compatible");
     form.setValue("baseUrl", preset.baseUrl ?? "");
+    form.setValue("models", (preset.models ?? []).join("\n"));
   };
 
   async function submit(values: z.infer<typeof schema>) {
@@ -89,13 +96,18 @@ export function ProviderForm({
       return;
     }
     try {
-      await put.mutateAsync({ ...values, apiKey: values.apiKey || undefined });
+      await put.mutateAsync({
+        ...values,
+        models: values.models
+          .split("\n")
+          .map((one) => one.trim())
+          .filter((one) => one !== ""),
+        apiKey: values.apiKey || undefined,
+      });
       toast.success(t("integrations.saved", { name: values.name }));
       onClose();
     } catch (error) {
-      toast.error(
-        problemMessage(error, t),
-      );
+      toast.error(problemMessage(error, t));
     }
   }
 
@@ -122,8 +134,12 @@ export function ProviderForm({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{t("admin.name")}</FormLabel>
-                  <FormControl>
-                    <div className="flex gap-2">
+                  {/* The row holds two controls; only one of them is the
+                      field. Wrapping the row in FormControl gave the label's
+                      id to the div, so "Nome" pointed at a container and the
+                      input had no accessible name at all. */}
+                  <div className="flex gap-2">
+                    <FormControl>
                       <Input
                         {...field}
                         disabled={!!provider}
@@ -135,28 +151,29 @@ export function ProviderForm({
                         className="font-mono"
                         placeholder="openai"
                       />
-                      {!provider && (
-                        <Select onValueChange={applyPreset}>
-                          <SelectTrigger className="w-[150px] shrink-0">
-                            <SelectValue
-                              placeholder={t("integrations.known")}
-                            />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {presets.map((preset) => (
-                              <SelectItem
-                                key={preset.name}
-                                value={preset.name}
-                                className="font-mono"
-                              >
-                                {preset.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    </div>
-                  </FormControl>
+                    </FormControl>
+                    {!provider && (
+                      <Select onValueChange={applyPreset}>
+                        <SelectTrigger
+                          className="w-[150px] shrink-0"
+                          aria-label={t("integrations.known")}
+                        >
+                          <SelectValue placeholder={t("integrations.known")} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {presets.map((preset) => (
+                            <SelectItem
+                              key={preset.name}
+                              value={preset.name}
+                              className="font-mono"
+                            >
+                              {preset.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
                   <FormDescription>
                     {t("integrations.referencedBySpecs")}
                   </FormDescription>
@@ -216,6 +233,31 @@ export function ProviderForm({
                         ? "integrations.addressOnlyForProxy"
                         : "integrations.addressFilledByPreset",
                     )}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="models"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("integrations.models")}</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      {...field}
+                      rows={4}
+                      className="font-mono text-xs"
+                    />
+                  </FormControl>
+                  {/* Said plainly, because the field looks like a restriction
+                      and is not one: an author can always type a name that is
+                      not here, and a list shipped in a binary ages between
+                      releases. */}
+                  <FormDescription>
+                    {t("integrations.modelsHint")}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
