@@ -266,13 +266,12 @@ func envOr(key, fallback string) string {
 // than at boot: an installation with no assistant configured must still start.
 func assistants(ctx context.Context, integrations *admin.Integrations) *model.Registry {
 	providers := model.NewRegistry(nil)
+	// One pass: the administration area, then the environment underneath it,
+	// then the rates. The same call the timer repeats, so what this process
+	// starts with and what it settles on are built the one way.
 	if err := registerConfigured(ctx, providers, integrations); err != nil {
-		slog.Warn("could not read configured providers for the authoring assistant", "err", err)
+		slog.Warn("could not read the configured providers for the authoring assistant", "err", err)
 	}
-	registerFromEnv(providers)
-	if err := refreshConfiguredPrices(ctx, providers, integrations); err != nil {
-		slog.Warn("could not read configured prices for the authoring assistant", "err", err)
-	}
-	go watchConfiguredPrices(ctx, providers, integrations)
+	go watchConfiguration(ctx, providers, integrations)
 	return providers
 }
