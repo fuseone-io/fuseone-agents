@@ -139,6 +139,10 @@ type Registry struct {
 	providers     map[string]Provider
 	http          *http.Client
 	priceRevision uint64
+	// configured is which names the administration area last supplied, so a
+	// refresh can express a removal without touching what the environment put
+	// there beside it.
+	configured map[string]bool
 }
 
 func NewRegistry(hc *http.Client) *Registry {
@@ -159,6 +163,47 @@ func (r *Registry) Register(p Provider) error {
 	p.Prices = clonePriceMap(p.Prices)
 	r.providers[p.Name] = p
 	return nil
+}
+
+/*
+SetConfigured replaces the providers the administration area supplies.
+
+Register alone could only add, so the registry was a photograph of boot: an
+address edited in the console reached no running process, and the run went on
+speaking to whatever endpoint that process had started with — authenticated,
+with a credential nobody had chosen, and reported by the vendor as a model that
+does not exist. A provider deleted in the console survived just as long.
+
+Replaced as a set, so a removal is expressible. Providers registered from the
+environment are left alone unless the administration area now claims the same
+name, which is the precedence that already held at boot: configuration somebody
+can audit outranks configuration nobody can see.
+*/
+func (r *Registry) SetConfigured(ps []Provider, claimed ...string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	taken := make(map[string]bool, len(ps)+len(claimed))
+	// Claimed first, so a name the administration area configured and this
+	// process could not build is held empty rather than left to the
+	// environment. Filled from somewhere else it is not a misconfiguration any
+	// more, it is a request to an endpoint nobody chose.
+	for _, name := range claimed {
+		taken[name] = true
+		delete(r.providers, name)
+	}
+	for _, p := range ps {
+		p.Prices = clonePriceMap(p.Prices)
+		p.Models = slices.Clone(p.Models)
+		r.providers[p.Name] = p
+		taken[p.Name] = true
+	}
+	for name := range r.configured {
+		if !taken[name] {
+			delete(r.providers, name)
+		}
+	}
+	r.configured = taken
 }
 
 func (r *Registry) Names() []string {
