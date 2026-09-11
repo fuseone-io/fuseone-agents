@@ -25,6 +25,25 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **An administrator can be named to be told about an approval.** The list an
+  agent's owner picks from asked for the Approver role, and an administrator
+  holds the approval act — so the colleague most likely to be named was not in
+  the list, and naming them by hand would have been dropped in silence, because
+  the delivery narrowed against the announcement list rather than against who
+  may decide. Both now ask the permission. What a run is announced to when
+  nobody is named is unchanged and still the Approver role: an administrator
+  granted at the installation covers every company, and announcing by the act
+  would tell every administrator about every parked run there is.
+
+- **The agent editor's scrollbar sits at the edge of the page.** The element
+  that measured the prose was also the element that scrolled, so on a wide
+  screen the bar floated at the right edge of the text column with the page
+  still stretching past it.
+
 ## [0.47.0] — 2026-09-10
 
 ### Changed

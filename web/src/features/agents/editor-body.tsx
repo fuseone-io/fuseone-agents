@@ -47,45 +47,56 @@ export function EditorBody({
   // until its middle row was sliced in half, which reads as a broken screen
   // rather than as a column that needed scrolling. Cards keep their height and
   // the column scrolls, which is what the comment above always claimed.
+  // Two jobs, and one element doing both put the scrollbar in the middle of
+  // the window: the measure and the scroller were the same 1040px box, so on a
+  // wide screen the bar floated at the right edge of the text with the page
+  // still stretching past it. The scroller takes the width and the column
+  // keeps the measure.
+  const scroller = "min-h-0 flex-1 overflow-y-auto";
   const column =
-    "mx-auto flex w-full max-w-[1040px] flex-col gap-4 overflow-y-auto px-5 pt-6 pb-10 [&>*]:shrink-0";
+    "mx-auto flex w-full max-w-[1040px] flex-col gap-4 px-5 pt-6 pb-10 [&>*]:shrink-0";
 
   return (
     <>
       {tab === "definition" && (
-        <div data-testid="agent-definition-column" className={column}>
-          {/* Only while writing the first version, and only on the tab it fills
+        <div className={scroller}>
+          <div data-testid="agent-definition-column" className={column}>
+            {/* Only while writing the first version, and only on the tab it fills
               in: offering a starting point beside an agent that already exists
               would be offering to overwrite it. It lives in the same scroller
               as the form because they are one column; sibling scrollers split
               the page and hide whichever one lost the height negotiation. */}
-          {editing.creating && (
-            <TemplateGallery
-              chosen={editing.template}
-              onChoose={(template) => {
-                patch({
-                  name: template.name,
-                  area: draft.company !== "" ? (template.area ?? draft.area) : draft.area,
-                  instructions: template.instructions,
-                  triggers: template.triggers,
-                  budget: template.budget ?? draft.budget,
-                });
-                editing.onAgentId(template.id);
-                editing.onTemplate(template.id);
-              }}
-              onClear={() => {
-                editing.onTemplate(undefined);
-                patch({ name: "", instructions: "", triggers: [] });
-              }}
+            {editing.creating && (
+              <TemplateGallery
+                chosen={editing.template}
+                onChoose={(template) => {
+                  patch({
+                    name: template.name,
+                    area:
+                      draft.company !== ""
+                        ? (template.area ?? draft.area)
+                        : draft.area,
+                    instructions: template.instructions,
+                    triggers: template.triggers,
+                    budget: template.budget ?? draft.budget,
+                  });
+                  editing.onAgentId(template.id);
+                  editing.onTemplate(template.id);
+                }}
+                onClear={() => {
+                  editing.onTemplate(undefined);
+                  patch({ name: "", instructions: "", triggers: [] });
+                }}
+              />
+            )}
+            <TabDefinition
+              draft={draft}
+              patch={patch}
+              editing={editing}
+              tools={tools}
+              onSteps={onSteps}
             />
-          )}
-          <TabDefinition
-            draft={draft}
-            patch={patch}
-            editing={editing}
-            tools={tools}
-            onSteps={onSteps}
-          />
+          </div>
         </div>
       )}
       {tab === "steps" && (
@@ -107,8 +118,10 @@ export function EditorBody({
         </div>
       )}
       {tab === "governance" && (
-        <div className={column}>
-          <TabGovernance draft={draft} patch={patch} />
+        <div className={scroller}>
+          <div className={column}>
+            <TabGovernance draft={draft} patch={patch} />
+          </div>
         </div>
       )}
     </>

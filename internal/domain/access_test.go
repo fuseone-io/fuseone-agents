@@ -1,6 +1,7 @@
 package domain_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/fuseone/agents/internal/domain"
@@ -79,5 +80,43 @@ func TestRoleApprover_stillCarriesApprovalAct(t *testing.T) {
 
 	if !domain.RoleApprover.Allows(domain.PermApprovalAct) {
 		t.Fatal("approver no longer carries approval:act; the notification list is now wrong")
+	}
+}
+
+/*
+Which roles allow an act is read from the table, never listed again by hand.
+
+Naming somebody to be told about an approval has to offer the people whose
+button will accept them, and that is a property of the grants table — a role
+name is a proxy for it that was wrong the day admin gained the act. Written out
+a second time, the copy is what drifts: the table gains a role, the copy does
+not, and the symptom is somebody offered a decision the platform then refuses.
+*/
+func TestRolesAllowing_isEveryRoleTheTableGivesTheAct(t *testing.T) {
+	t.Parallel()
+
+	for _, perm := range []domain.Permission{
+		domain.PermApprovalAct, domain.PermAgentPublish, domain.PermDataErase,
+	} {
+		allowed := domain.RolesAllowing(perm)
+		for _, role := range domain.Roles() {
+			listed := slices.Contains(allowed, role)
+			if want := role.Allows(perm); listed != want {
+				t.Errorf("%s in RolesAllowing(%s) = %v, Allows = %v",
+					role, perm, listed, want)
+			}
+		}
+	}
+}
+
+// And the one this platform asks about is both of them, which is the fact the
+// approval fan-out and the console both stand on.
+func TestRolesAllowing_theApprovalAct_isTheApproverAndTheAdministrator(t *testing.T) {
+	t.Parallel()
+
+	if got := domain.RolesAllowing(domain.PermApprovalAct); !slices.Equal(
+		got, []domain.Role{domain.RoleAdmin, domain.RoleApprover},
+	) {
+		t.Errorf("RolesAllowing(approval:act) = %v", got)
 	}
 }

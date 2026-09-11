@@ -56,10 +56,21 @@ func TestApproversIn_agreesWithScopeContains(t *testing.T) {
 	_ = pool
 }
 
-// An admin may decide and is deliberately not on this list. One held at the
-// installation covers every company, so a notification built from the
-// permission would tell every administrator about every parked run there is.
-func TestApproversIn_anAdministrator_isNotNotified(t *testing.T) {
+/*
+An administrator is not broadcast to, and may be named.
+
+Two different questions that a single role name answered wrongly for one of
+them. An admin holds the approval act, so their button works — but one held at
+the installation covers every company, and announcing by the act alone would
+tell every administrator about every parked run there is. That is why the
+broadcast asks for the Approver role and not for the permission.
+
+Naming is the other direction: an agent's owner picked this person, one message
+to one person who may genuinely decide. Offering them was the missing half —
+the screen listed the role, so the one colleague an owner most wants to name
+was not in the list, and would have been dropped in silence if they had been.
+*/
+func TestApproversIn_anAdministrator_isNotBroadcastToButMayBeNamed(t *testing.T) {
 	dir, _ := directoryFor(t)
 	ops := domain.Scope{Company: "acme", Area: "ops"}
 
@@ -70,8 +81,51 @@ func TestApproversIn_anAdministrator_isNotNotified(t *testing.T) {
 		t.Fatalf("SetGrants: %v", err)
 	}
 
+	// listsApprover already demands the screen and the named path agree about
+	// this person, so the one assertion here is the broadcast staying narrow.
 	if listsApprover(t, dir, ops, boss) {
-		t.Error("an administrator was put on the notification list")
+		t.Error("an administrator was announced to without being named")
+	}
+	deciding, err := dir.DecidersIn(t.Context(), ops)
+	if err != nil {
+		t.Fatalf("DecidersIn: %v", err)
+	}
+	if !slices.Contains(deciding, domain.UserID(boss)) {
+		t.Error("an administrator cannot be named, and their button would accept them")
+	}
+}
+
+/*
+And a role that cannot decide is neither broadcast to nor nameable.
+
+The curator is the case worth writing down: they configure almost everything
+this platform has — packs, policies, budgets, providers — and hold no approval
+act at all. A list built from "powerful roles" rather than from the act would
+have them in it, and every name in it is a private message whose button refuses
+the person who receives it.
+*/
+func TestDecidersIn_aRoleWithoutTheAct_isNeitherToldNorOffered(t *testing.T) {
+	dir, _ := directoryFor(t)
+	ops := domain.Scope{Company: "acme", Area: "ops"}
+
+	for _, role := range []domain.Role{domain.RoleCurator, domain.RoleAuthor, domain.RoleAuditor} {
+		person := personIn(t, dir, "holder-"+string(role))
+		if err := dir.SetGrants(t.Context(), person,
+			[]domain.Grant{{Scope: domain.Scope{Company: "acme"}, Role: role}},
+			"test"); err != nil {
+			t.Fatalf("SetGrants %s: %v", role, err)
+		}
+
+		if listsApprover(t, dir, ops, person) {
+			t.Errorf("a %s was announced to", role)
+		}
+		deciding, err := dir.DecidersIn(t.Context(), ops)
+		if err != nil {
+			t.Fatalf("DecidersIn: %v", err)
+		}
+		if slices.Contains(deciding, domain.UserID(person)) {
+			t.Errorf("a %s can be named, and the button would refuse them", role)
+		}
 	}
 }
 
@@ -185,21 +239,34 @@ func TestApproversIn_grantedTwiceOverTheSameRun_isNamedOnce(t *testing.T) {
 	}
 }
 
-// approverLister is both readings of one question: the fan-out's, and the one a
-// screen offers an owner. Named together because they must answer together.
+/*
+approverLister is the three readings of one question, named together because
+what they must not do is disagree by accident.
+
+ApproversIn is who a parked run is announced to when nobody was named — the
+broadcast, deliberately narrower than the act, because an administrator held at
+the installation would otherwise be told about every parked run there is.
+DecidersIn is who may decide, which is what an explicitly named person is
+checked against. DecidersNamed is that same set with the names attached, and it
+is what a screen offers.
+*/
 type approverLister interface {
 	ApproversIn(ctx context.Context, scope domain.Scope) ([]domain.UserID, error)
-	ApproversNamed(ctx context.Context, scope domain.Scope) ([]auth.Eligible, error)
+	DecidersIn(ctx context.Context, scope domain.Scope) ([]domain.UserID, error)
+	DecidersNamed(ctx context.Context, scope domain.Scope) ([]auth.Eligible, error)
 }
 
 /*
-listsApprover asks both readings and demands they agree.
+listsApprover asks all three readings and demands the two that must agree do.
 
-The fan-out asks who may decide; the screen that offers an owner the list asks
-the same people by name. They are one query today and the point of driving both
-from this table is that they stay one: written apart, the copies drift, and the
-drift is invisible — a screen offering somebody who will never be messaged, or
-hiding somebody who will be, with both halves working.
+The screen offers a list; the named path decides whether the person it reached
+may act. Written apart those two drift, and the drift is invisible — a screen
+offering somebody the fan-out will silently drop, or hiding somebody it would
+message. So they are one query, and this demands it person by person.
+
+The broadcast is allowed to be narrower and never wider: somebody announced to
+without being named must be somebody who may decide, or the platform is sending
+approval requests to people whose button refuses them.
 */
 func listsApprover(t *testing.T, dir approverLister, run domain.Scope, person string) bool {
 	t.Helper()
@@ -209,16 +276,25 @@ func listsApprover(t *testing.T, dir approverLister, run domain.Scope, person st
 	}
 	listed := slices.Contains(who, domain.UserID(person))
 
-	named, err := dir.ApproversNamed(t.Context(), run)
+	deciding, err := dir.DecidersIn(t.Context(), run)
 	if err != nil {
-		t.Fatalf("ApproversNamed %+v: %v", run, err)
+		t.Fatalf("DecidersIn %+v: %v", run, err)
+	}
+	mayDecide := slices.Contains(deciding, domain.UserID(person))
+	if listed && !mayDecide {
+		t.Errorf("run %+v: %s is announced to and may not decide", run, person)
+	}
+
+	named, err := dir.DecidersNamed(t.Context(), run)
+	if err != nil {
+		t.Fatalf("DecidersNamed %+v: %v", run, err)
 	}
 	offered := slices.ContainsFunc(named, func(one auth.Eligible) bool {
 		return one.ID == domain.UserID(person)
 	})
-	if offered != listed {
-		t.Errorf("run %+v: the fan-out lists %s = %v, the screen offers it = %v",
-			run, person, listed, offered)
+	if offered != mayDecide {
+		t.Errorf("run %+v: the screen offers %s = %v, the named path accepts it = %v",
+			run, person, offered, mayDecide)
 	}
 	// And a name a person recognises, because a screen showing identifiers is
 	// a screen where somebody picks the wrong colleague.
