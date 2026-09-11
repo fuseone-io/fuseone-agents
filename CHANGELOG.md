@@ -27,7 +27,38 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Added
+
+- **A provider says which models it serves.** A list shipped in the binary
+  describes the vendors the platform knows, and behind a proxy those are the
+  wrong names: what an installation's LiteLLM or vLLM serves is whatever
+  somebody configured there. The models are now part of a provider's
+  configuration and are what an agent's author is offered — suggestions and
+  never a limit, so a model released last week can still be typed.
+
 ### Fixed
+
+- **An address changed in the console reaches a process that is already
+  running.** Providers were read once at boot and only prices refreshed, so
+  pointing a provider at a proxy changed nothing until somebody restarted the
+  worker and the console. Nothing said so: the endpoint the process had started
+  with went on answering, authenticated, until the vendor reported a model it
+  had never heard of. A provider removed in the console also stayed alive in
+  the process for as long as it ran. Both now follow the same 30-second refresh
+  that rates already had.
+
+- **One unreadable credential no longer hands its provider to the environment.**
+  Registration stopped at the first failure, so in the console process — where
+  the master key is optional — a single sealed credential erased every
+  configured provider at once. A provider registered from an environment
+  variable under the same name then answered in its place, at a different
+  address with a different credential. Each provider is now built on its own,
+  and one that cannot be built holds its name empty and answers as not
+  configured, which is a sentence somebody can act on.
+
+- **The provider name field has an accessible label.** The label pointed at the
+  row containing the field rather than at the field, so the input had no
+  accessible name.
 
 - **An administrator can be named to be told about an approval.** The list an
   agent's owner picks from asked for the Approver role, and an administrator
