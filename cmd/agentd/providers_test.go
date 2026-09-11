@@ -358,3 +358,33 @@ func TestApplyConfiguration_whenTheProvidersCannotBeRead_theEnvironmentIsStillPr
 		t.Errorf("rate = %+v priced=%v, want the environment's provider priced anyway", price, priced)
 	}
 }
+
+/*
+A provider from the environment is priced by the act that registers it.
+
+Asserted here without SetPrices, because SetPrices is what hides this. Every
+other test reads the registry after the whole pass, so the rate is there
+whichever step put it there — and the window reopens silently the moment the
+rate stops travelling into the registration itself.
+
+The window is small and its consequence is not: a run opened in it records
+tokens with no money against them, and a ceiling stated in money has nothing to
+measure.
+*/
+func TestRegisterFromEnv_aProviderItSupplies_isPricedByTheRegistration(t *testing.T) {
+	t.Setenv("ANTHROPIC_API_KEY", "from-the-environment")
+	registry := model.NewRegistry(nil)
+
+	registerFromEnv(registry, map[string]map[string]model.Prices{
+		"anthropic": {"claude-opus-5": {InputMicros: 5, OutputMicros: 25}},
+	})
+
+	price, priced, err := registry.PriceFor("anthropic", "claude-opus-5")
+	if err != nil {
+		t.Fatalf("PriceFor: %v", err)
+	}
+	if !priced || price.InputMicros != 5 || price.OutputMicros != 25 {
+		t.Errorf("rate = %+v priced=%v, want the rate to arrive with the provider",
+			price, priced)
+	}
+}
