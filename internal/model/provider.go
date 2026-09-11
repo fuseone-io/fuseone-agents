@@ -1,16 +1,8 @@
 package model
 
 import (
-	"fmt"
 	"maps"
-	"net/http"
 	"slices"
-	"sync"
-
-	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/anthropics/anthropic-sdk-go/option"
-
-	"github.com/fuseone/agents/internal/engine"
 )
 
 // Kind is how a provider is spoken to, not who sells it.
@@ -127,117 +119,4 @@ func Preset(name string) (Provider, bool) {
 // PresetNames lists the known providers, sorted.
 func PresetNames() []string {
 	return slices.Sorted(maps.Keys(Presets))
-}
-
-// Registry holds the providers an installation has configured and builds a
-// planner for an agent's model configuration.
-//
-// The engine only ever sees engine.Planner, so which vendor answers a run is
-// an installation setting rather than an architectural commitment.
-type Registry struct {
-	mu            sync.RWMutex
-	providers     map[string]Provider
-	http          *http.Client
-	priceRevision uint64
-}
-
-func NewRegistry(hc *http.Client) *Registry {
-	return &Registry{providers: make(map[string]Provider), http: hc}
-}
-
-// Register adds or replaces a provider.
-func (r *Registry) Register(p Provider) error {
-	if p.Name == "" {
-		return fmt.Errorf("model: provider needs a name")
-	}
-	if p.Kind == KindOpenAICompatible && p.BaseURL == "" {
-		return fmt.Errorf("model: provider %q needs a base URL", p.Name)
-	}
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	p.Prices = clonePriceMap(p.Prices)
-	r.providers[p.Name] = p
-	return nil
-}
-
-func (r *Registry) Names() []string {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	return slices.Sorted(maps.Keys(r.providers))
-}
-
-// PriceRevision changes when the installation's configured rates change.
-//
-// A planner owns the rate it was built with. Specs are immutable by version,
-// but prices are live administration state, so a resolver must not reuse a
-// planner after this changes.
-func (r *Registry) PriceRevision() uint64 {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	return r.priceRevision
-}
-
-// SetPrices replaces the configured rates on registered providers.
-//
-// Provider credentials and endpoints are still connection state; this only
-// refreshes the money table operators edit while the worker is running.
-func (r *Registry) SetPrices(priced map[string]map[string]Prices) bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	changed := false
-	for name, provider := range r.providers {
-		next := clonePriceMap(priced[name])
-		if maps.Equal(provider.Prices, next) {
-			continue
-		}
-		provider.Prices = next
-		r.providers[name] = provider
-		changed = true
-	}
-	if changed {
-		r.priceRevision++
-	}
-	return changed
-}
-
-// Planner builds the planner an agent runs on.
-func (r *Registry) Planner(providerName string, cfg Config, tools ToolSchemas) (engine.Planner, error) {
-	cfg = r.withPrice(providerName, cfg)
-	r.mu.RLock()
-	p, ok := r.providers[providerName]
-	r.mu.RUnlock()
-
-	if !ok {
-		return nil, fmt.Errorf("model: provider %q is not configured; available: %v", providerName, r.Names())
-	}
-
-	switch p.Kind {
-	case KindAnthropic:
-		opts := []option.RequestOption{}
-		if p.APIKey != "" {
-			opts = append(opts, option.WithAPIKey(p.APIKey))
-		}
-		if p.BaseURL != "" {
-			opts = append(opts, option.WithBaseURL(p.BaseURL))
-		}
-		if r.http != nil {
-			opts = append(opts, option.WithHTTPClient(r.http))
-		}
-		return New(anthropic.NewClient(opts...), p.Name, cfg, tools), nil
-
-	case KindOpenAICompatible:
-		return NewOpenAICompatible(p, cfg, tools, r.http), nil
-
-	default:
-		return nil, fmt.Errorf("model: provider %q has unknown kind %q", p.Name, p.Kind)
-	}
-}
-
-func clonePriceMap(in map[string]Prices) map[string]Prices {
-	if len(in) == 0 {
-		return nil
-	}
-	return maps.Clone(in)
 }

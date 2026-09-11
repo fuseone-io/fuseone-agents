@@ -100,8 +100,9 @@ type storedServer struct {
 }
 
 type storedProvider struct {
-	Kind    string `json:"kind"`
-	BaseURL string `json:"baseURL"`
+	Kind    string   `json:"kind"`
+	BaseURL string   `json:"baseURL"`
+	Models  []string `json:"models,omitempty"`
 }
 
 type storedMCPUserCredential struct {
@@ -947,76 +948,6 @@ func (i *Integrations) DeleteMCPServer(ctx context.Context, by domain.UserID, sc
 	// way, and a screen showing a stale observation is better than a server
 	// that could not be removed because its observation could not be.
 	return i.health.Forget(ctx, name)
-}
-
-func (i *Integrations) Providers(ctx context.Context) ([]domain.ModelProvider, error) {
-	rows, err := i.settings.List(ctx, settings.KindModelProvider)
-	if err != nil {
-		return nil, err
-	}
-
-	out := make([]domain.ModelProvider, 0, len(rows))
-	for _, row := range rows {
-		var stored storedProvider
-		if err := json.Unmarshal(row.Value, &stored); err != nil {
-			return nil, fmt.Errorf("admin: decode provider %s: %w", row.Name, err)
-		}
-		out = append(out, domain.ModelProvider{
-			Name: row.Name, Kind: stored.Kind, BaseURL: stored.BaseURL,
-			Enabled: row.Enabled, HasKey: row.HasSecret,
-			UpdatedBy: row.UpdatedBy, UpdatedAt: row.UpdatedAt,
-		})
-	}
-	return out, nil
-}
-
-// PutProvider records a provider. An empty key keeps the stored one, so
-// changing a base URL does not require re-entering a credential — which is how
-// operators end up pasting keys into chat to look them up.
-func (i *Integrations) PutProvider(ctx context.Context, by domain.UserID, scope domain.Scope, provider domain.ModelProvider, apiKey string) error {
-	switch {
-	case strings.TrimSpace(provider.Name) == "":
-		return ErrNoName
-	// Required only where the client cannot already know it. Anthropic's does;
-	// an OpenAI-compatible endpoint, including a self-hosted one, is known
-	// only to the installation. Demanding it from everybody asked for a value
-	// nobody has and made the reference provider impossible to configure.
-	case provider.Kind != "anthropic" && strings.TrimSpace(provider.BaseURL) == "":
-		return ErrNoBaseURL
-	}
-
-	value, err := json.Marshal(storedProvider{Kind: provider.Kind, BaseURL: provider.BaseURL})
-	if err != nil {
-		return fmt.Errorf("admin: encode provider: %w", err)
-	}
-
-	return writeSetting(ctx, i.pool, i.settings, by, scope, settings.Setting{
-		ScopeKind: settings.ScopeInstallation,
-		Kind:      settings.KindModelProvider,
-		Name:      provider.Name,
-		Value:     value,
-		Secret:    apiKey,
-		Enabled:   provider.Enabled,
-		UpdatedBy: string(by),
-	}, "provider.configured", provider.Name, map[string]any{
-		// The credential is never in the trail, only the fact that one arrived.
-		"kind": provider.Kind, "baseURL": provider.BaseURL,
-		"enabled": provider.Enabled, "keyChanged": apiKey != "",
-	})
-}
-
-func (i *Integrations) DeleteProvider(ctx context.Context, by domain.UserID, scope domain.Scope, name string) error {
-	return removeSetting(ctx, i.pool, i.settings, by, scope, settings.KindModelProvider, name, "provider.removed")
-}
-
-// Credential opens a provider's key. Separate and explicit: reading
-// configuration is routine, reading a credential is not.
-func (i *Integrations) Credential(ctx context.Context, name string) (string, error) {
-	set, err := i.settings.Reveal(ctx, settings.ScopeInstallation, domain.Scope{}, settings.KindModelProvider, name)
-	if err != nil {
-		return "", err
-	}
-	return set.Secret, nil
 }
 
 // surfaceSize reports how many tools were brought in, or -1 for a server

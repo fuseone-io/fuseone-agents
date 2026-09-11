@@ -3,6 +3,8 @@ package admin_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -11,8 +13,19 @@ import (
 	"github.com/fuseone/agents/internal/admin"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/settings"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/fuseone/agents/internal/vault"
 )
+
+// newIntegrationsOn is the administration area over a pool the caller keeps, so
+// a test can read the same rows through a second process — one that was given
+// no master key, which the console process is allowed to be.
+func newIntegrationsOn(t *testing.T, pool *pgxpool.Pool, v *vault.Vault) *admin.Integrations {
+	t.Helper()
+	return admin.NewIntegrations(pool, settings.NewStore(pool, v))
+}
 
 func newIntegrations(t *testing.T) *admin.Integrations {
 	t.Helper()
@@ -1735,5 +1748,329 @@ func TestPutMCPServer_recordsTheTransportUnderTheNameTheTrailAlwaysUsed(t *testi
 	}
 	if detail["transport"] != "http" {
 		t.Errorf("detail = %v, want the transport under its own name", detail)
+	}
+}
+
+/*
+The models a provider serves are the installation's own answer.
+
+A preset ships a list for the vendors the platform knows, and that is no help
+where it matters most: behind a proxy the names are whatever the installation
+configured — `anthropic-claude-sonnet-5`, `gemini/gemini-2.5-pro` — and nothing
+in a binary can guess them. Without this every author had to know, and spell, an
+identifier nothing on the screen offered.
+
+Stored beside the address because it is the same fact about the same endpoint,
+and it survives a write that carries no credential for the same reason the
+address does.
+*/
+func TestPutProvider_theModelsItServes_surviveAWriteWithNoCredential(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+
+	provider := domain.ModelProvider{
+		Name: "litellm", Kind: "openai_compatible", BaseURL: "https://litellm.internal/v1",
+		Models: []string{"anthropic-claude-sonnet-5", "gemini/gemini-2.5-pro"}, Enabled: true,
+	}
+	if err := i.PutProvider(ctx, "usr_ana", platform, provider, "sk-secret"); err != nil {
+		t.Fatalf("PutProvider: %v", err)
+	}
+	provider.BaseURL = "https://litellm.internal/v2"
+	if err := i.PutProvider(ctx, "usr_ana", platform, provider, ""); err != nil {
+		t.Fatalf("PutProvider again: %v", err)
+	}
+
+	providers, err := i.Providers(ctx)
+	if err != nil {
+		t.Fatalf("Providers: %v", err)
+	}
+	if len(providers) != 1 {
+		t.Fatalf("Providers = %+v, want one", providers)
+	}
+	if !slices.Equal(providers[0].Models, provider.Models) {
+		t.Errorf("Models = %v, want the list the installation configured", providers[0].Models)
+	}
+}
+
+/*
+A paste that is not a list is refused, and the refusal does not quote it.
+
+The list is decoded by every process on every refresh, so an accidental paste is
+paid for twice a minute for ever by an installation that cannot see why. Refused
+rather than truncated: silently keeping the first two hundred is the platform
+deciding which of somebody's models exist.
+*/
+func TestPutProvider_aModelListPastItsBounds_isRefused(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+
+	tooMany := make([]string, admin.MaxProviderModels+1)
+	for at := range tooMany {
+		tooMany[at] = fmt.Sprintf("model-%d", at)
+	}
+	long := strings.Repeat("m", admin.MaxModelName+1)
+
+	for _, one := range []struct {
+		name   string
+		models []string
+		want   error
+	}{
+		{"more names than a list holds", tooMany, admin.ErrTooManyModels},
+		{"a name longer than any vendor uses", []string{long}, admin.ErrModelNameTooLong},
+	} {
+		t.Run(one.name, func(t *testing.T) {
+			err := i.PutProvider(ctx, "usr_ana", platform, domain.ModelProvider{
+				Name: "litellm", Kind: "openai_compatible",
+				BaseURL: "https://litellm.internal/v1", Models: one.models, Enabled: true,
+			}, "sk-secret")
+			if !errors.Is(err, one.want) {
+				t.Fatalf("err = %v, want %v", err, one.want)
+			}
+			if strings.Contains(err.Error(), "mmmm") || strings.Contains(err.Error(), "model-1") {
+				t.Errorf("the refusal quotes what it was sent: %v", err)
+			}
+		})
+	}
+}
+
+// And the repeats a paste carries are dropped without asking anybody about them.
+func TestPutProvider_aModelNamedTwice_isStoredOnce(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+
+	if err := i.PutProvider(ctx, "usr_ana", platform, domain.ModelProvider{
+		Name: "litellm", Kind: "openai_compatible", BaseURL: "https://litellm.internal/v1",
+		Models: []string{"gemini/gemini-2.5-pro", " gemini/gemini-2.5-pro ", ""}, Enabled: true,
+	}, "sk-secret"); err != nil {
+		t.Fatalf("PutProvider: %v", err)
+	}
+
+	providers, err := i.Providers(ctx)
+	if err != nil {
+		t.Fatalf("Providers: %v", err)
+	}
+	if !slices.Equal(providers[0].Models, []string{"gemini/gemini-2.5-pro"}) {
+		t.Errorf("Models = %v, want the name once", providers[0].Models)
+	}
+}
+
+/*
+An address and the credential for it come from one reading.
+
+Read apart they are two queries, and an edit landing between them produces a
+request that carries the new credential to the old endpoint. During a rotation
+away from an endpoint somebody no longer trusts, that is the replacement key
+delivered to exactly the address it was meant to leave.
+
+Asserted as one query rather than by racing a writer against it. A race proves
+nothing when it does not happen to interleave — the previous version of this
+test waited for the rotation to finish before reading, and passed twenty times
+out of twenty against the two vulnerable reads it was written to catch. What
+makes the pairing safe is that there is no second read to land between, so that
+is what is measured, by counting what pgx was asked to run.
+*/
+func TestProvidersWithCredentials_readsTheAddressAndTheKeyInOneQuery(t *testing.T) {
+	seed := newIntegrations(t)
+	ctx := context.Background()
+
+	for _, name := range []string{"litellm", "openai", "vllm"} {
+		if err := seed.PutProvider(ctx, "usr_ana", platform, domain.ModelProvider{
+			Name: name, Kind: "openai_compatible",
+			BaseURL: "https://" + name + ".internal/v1", Enabled: true,
+		}, "key-"+name); err != nil {
+			t.Fatalf("PutProvider %s: %v", name, err)
+		}
+	}
+
+	counted := &queryCounter{}
+	watched := newIntegrationsOn(t, tracedPool(t, counted), testVault(t))
+	counted.start()
+
+	held, err := watched.ProvidersWithCredentials(ctx)
+	if err != nil {
+		t.Fatalf("ProvidersWithCredentials: %v", err)
+	}
+
+	if asked := counted.stop(); asked != 1 {
+		t.Errorf("%d queries for three providers and their credentials, want one", asked)
+	}
+	if len(held) != 3 {
+		t.Fatalf("held %d providers, want three", len(held))
+	}
+	for _, one := range held {
+		if one.APIKey != "key-"+one.Name {
+			t.Errorf("%s carries %q", one.Name, one.APIKey)
+		}
+	}
+}
+
+// queryCounter counts what pgx was asked to run, between start and stop.
+type queryCounter struct {
+	mu      sync.Mutex
+	running bool
+	asked   int
+}
+
+func (q *queryCounter) TraceQueryStart(
+	ctx context.Context, _ *pgx.Conn, _ pgx.TraceQueryStartData,
+) context.Context {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.running {
+		q.asked++
+	}
+	return ctx
+}
+
+func (q *queryCounter) TraceQueryEnd(context.Context, *pgx.Conn, pgx.TraceQueryEndData) {}
+
+func (q *queryCounter) start() {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.running, q.asked = true, 0
+}
+
+func (q *queryCounter) stop() int {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.running = false
+	return q.asked
+}
+
+// tracedPool is a pool that reports every query it is asked to run.
+func tracedPool(t *testing.T, tracer pgx.QueryTracer) *pgxpool.Pool {
+	t.Helper()
+	cfg, err := pgxpool.ParseConfig(os.Getenv("TEST_DATABASE_URL"))
+	if err != nil {
+		t.Fatalf("parse the database url: %v", err)
+	}
+	cfg.ConnConfig.Tracer = tracer
+	pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	return pool
+}
+
+// And the credentials arrive with the list rather than one query per provider:
+// a refresh runs every thirty seconds in every process.
+func TestProvidersWithCredentials_readsEveryProviderAtOnce(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+
+	for _, name := range []string{"litellm", "openai", "vllm"} {
+		if err := i.PutProvider(ctx, "usr_ana", platform, domain.ModelProvider{
+			Name: name, Kind: "openai_compatible",
+			BaseURL: "https://" + name + ".internal/v1", Enabled: true,
+		}, "key-"+name); err != nil {
+			t.Fatalf("PutProvider %s: %v", name, err)
+		}
+	}
+
+	held, err := i.ProvidersWithCredentials(ctx)
+	if err != nil {
+		t.Fatalf("ProvidersWithCredentials: %v", err)
+	}
+	if len(held) != 3 {
+		t.Fatalf("held %d providers, want three", len(held))
+	}
+	for _, one := range held {
+		if one.APIKey != "key-"+one.Name {
+			t.Errorf("%s carries %q", one.Name, one.APIKey)
+		}
+	}
+}
+
+/*
+A name is measured in characters and lives on one line.
+
+Two hundred bytes is not two hundred characters, and the contract says
+characters: a perfectly ordinary Unicode name was refused and told it was three
+hundred of something.
+
+And the console edits this list as lines. A name carrying a break comes back as
+two names the next time anybody saves anything on that screen — a round trip
+that rewrites a configuration nobody touched.
+*/
+func TestPutProvider_aModelName_isCountedInCharactersAndKeptToOneLine(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+
+	put := func(models []string) error {
+		return i.PutProvider(ctx, "usr_ana", platform, domain.ModelProvider{
+			Name: "litellm", Kind: "openai_compatible",
+			BaseURL: "https://litellm.internal/v1", Models: models, Enabled: true,
+		}, "sk-secret")
+	}
+
+	// Three bytes each, and exactly the limit in characters.
+	if err := put([]string{strings.Repeat("é", admin.MaxModelName)}); err != nil {
+		t.Errorf("a name of %d characters was refused: %v", admin.MaxModelName, err)
+	}
+	if err := put([]string{"modelo-a\nmodelo-b"}); !errors.Is(err, admin.ErrModelNameNotOneLine) {
+		t.Errorf("err = %v, want a refusal of the line break", err)
+	}
+}
+
+/*
+A credential this process cannot open loses that provider and nothing else.
+
+The whole read returned at the first sealed row, so a process without the master
+key — which the console process is allowed to be — came back with no providers
+at all. Not even their names, so the wiring above had nothing to claim, and a
+provider from an environment variable took the name at another address with
+another key. The defect this branch exists to fix, one layer further down.
+
+A switched-off provider used to cause it too, because the credential was opened
+before anybody asked whether it was switched on.
+*/
+func TestProvidersWithCredentials_withoutTheMasterKey_keepsEveryProviderAndOpensNone(t *testing.T) {
+	sealed := newIntegrations(t)
+	ctx := context.Background()
+
+	for _, one := range []struct {
+		name    string
+		key     string
+		enabled bool
+	}{
+		{"litellm", "sk-sealed", true},
+		{"vllm", "", true},
+		{"retired", "sk-also-sealed", false},
+	} {
+		if err := sealed.PutProvider(ctx, "usr_ana", platform, domain.ModelProvider{
+			Name: one.name, Kind: "openai_compatible",
+			BaseURL: "https://" + one.name + ".internal/v1", Enabled: one.enabled,
+		}, one.key); err != nil {
+			t.Fatalf("PutProvider %s: %v", one.name, err)
+		}
+	}
+
+	// The same rows, read by a process that was given no master key.
+	keyless := newIntegrationsOn(t, openPool(t), nil)
+	held, err := keyless.ProvidersWithCredentials(ctx)
+	if err != nil {
+		t.Fatalf("ProvidersWithCredentials: %v", err)
+	}
+	if len(held) != 3 {
+		t.Fatalf("held %d providers, want all three", len(held))
+	}
+
+	by := map[string]admin.ConfiguredProvider{}
+	for _, one := range held {
+		by[one.Name] = one
+	}
+	if one := by["litellm"]; !one.HasKey || one.APIKey != "" || one.Unreadable == "" {
+		t.Errorf("the sealed provider = %+v, want it kept, unopened and marked", one)
+	}
+	if one := by["vllm"]; one.HasKey || one.Unreadable != "" {
+		t.Errorf("a provider with no credential = %+v, want nothing to report", one)
+	}
+	// Switched off, and its credential was never opened: nothing is going to
+	// speak with it, so there is nothing to report about a key this process
+	// cannot read. Listed all the same, or its name would look free.
+	if one := by["retired"]; one.BaseURL != "https://retired.internal/v1" ||
+		one.Unreadable != "" || one.APIKey != "" {
+		t.Errorf("the switched-off provider = %+v, want it listed and left sealed", one)
 	}
 }

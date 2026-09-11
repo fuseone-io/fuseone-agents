@@ -3269,6 +3269,17 @@ paths:
                     Required for openai_compatible and refused as empty there,
                     because only the installation knows where its endpoint is.
                     Omitted for anthropic, whose client already knows one.
+                models:
+                  type: array
+                  maxItems: 200
+                  items: { type: string, maxLength: 200, pattern: '^[^\r\n]+$' }
+                  description: |
+                    The models this endpoint serves, as the installation knows
+                    them. Suggestions offered to an agent's author and never a
+                    closed set — a list that refused a model released last week
+                    would be worse than no list. It matters most behind a proxy,
+                    where the names are whatever somebody configured there and
+                    nothing shipped in a binary can guess them.
                 apiKey:
                   type: string
                   description: >
@@ -5992,6 +6003,11 @@ components:
           type: string
           enum: [anthropic, openai_compatible]
         baseUrl: { type: string }
+        models:
+          type: array
+          maxItems: 200
+          items: { type: string, maxLength: 200 }
+          description: The models this endpoint serves, as the installation configured them.
         enabled: { type: boolean }
         hasKey:
           type: boolean

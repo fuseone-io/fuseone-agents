@@ -46,16 +46,22 @@ func (r *Registry) Completer(providerName string, cfg Config) (Completer, error)
 	// same HTTP client. No tools are offered to either shape here: the
 	// assistant is asked to read prose and answer in JSON, and a tool list
 	// would invite it to act instead.
-	planner, err := r.Planner(providerName, cfg, nil)
+	//
+	// From the reading above, not from a second one: the kind was read here and
+	// the planner was fetched again, so a refresh landing between them returned
+	// the other shape and the assertion below took the process down.
+	planner, err := r.plannerFrom(p, withPrice(p, cfg), nil)
 	if err != nil {
 		return nil, err
 	}
 
-	switch p.Kind {
-	case KindAnthropic:
-		return &anthropicCompleter{Anthropic: planner.(*Anthropic)}, nil
+	switch shape := planner.(type) {
+	case *Anthropic:
+		return &anthropicCompleter{Anthropic: shape}, nil
+	case *OpenAICompatible:
+		return &openAICompleter{OpenAICompatible: shape}, nil
 	default:
-		return &openAICompleter{OpenAICompatible: planner.(*OpenAICompatible)}, nil
+		return nil, fmt.Errorf("model: provider %q has no completer", p.Name)
 	}
 }
 

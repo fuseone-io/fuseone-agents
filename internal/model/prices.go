@@ -39,26 +39,25 @@ func (r *Registry) PriceFor(providerName, modelName string) (Prices, bool, error
 // planner and forgotten in the other, and the forgotten one records tokens
 // with no money against them — silently, and only noticed when somebody asks
 // why a month of runs cost nothing.
-func (r *Registry) withPrice(providerName string, cfg Config) Config {
+// Taken from a provider already read rather than by name, so everything a
+// planner is built from comes from one reading of the registry — an address, a
+// protocol, a credential and a rate that describe the same moment.
+func withPrice(p Provider, cfg Config) Config {
 	if !cfg.PricePerMTok.IsZero() {
 		cfg.PriceConfigured = true
 		return cfg
 	}
-	price, ok, err := r.PriceFor(providerName, cfg.Model)
-	if err == nil {
-		cfg.PricePerMTok = price
-		cfg.PriceConfigured = ok
+	if price, ok := p.Prices[cfg.Model]; ok {
+		cfg.PricePerMTok, cfg.PriceConfigured = price, true
 	}
 	// And a way to price a model this planner was not built for. A step may
 	// name its own, and without this the planner would bill it at the agent's
 	// base rate — the misattribution that made the aggregate worth building
 	// per planning call in the first place.
 	if cfg.RateFor == nil {
+		rates := p.Prices
 		cfg.RateFor = func(model string) (Prices, bool) {
-			price, ok, err := r.PriceFor(providerName, model)
-			if err != nil {
-				return Prices{}, false
-			}
+			price, ok := rates[model]
 			return price, ok
 		}
 	}

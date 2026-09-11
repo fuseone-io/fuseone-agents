@@ -1196,7 +1196,9 @@
     "url": "Address",
     "acceptLocalExecution": "This server runs code inside the worker",
     "acceptLocalExecutionWhy": "A local server is a program this installation starts. It runs as the worker, on its filesystem, and reaches whatever the worker reaches — the Gate decides what a tool may do, and decides nothing about what a process may read. Your name is recorded against this.",
-    "acceptLocalExecutionRequired": "Accept what a local server is, or reach this one over HTTP instead."
+    "acceptLocalExecutionRequired": "Accept what a local server is, or reach this one over HTTP instead.",
+    "models": "Models this endpoint serves",
+    "modelsHint": "One per line. Suggestions for whoever writes an agent, never a limit — behind a proxy the names are the ones you configured there, and nothing shipped in the binary can guess them."
   },
   "connectors": {
     "title": "Governed connectors",

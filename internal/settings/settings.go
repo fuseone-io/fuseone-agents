@@ -81,6 +81,14 @@ type Setting struct {
 	Secret string
 	// HasSecret reports whether a credential is stored, without exposing it.
 	HasSecret bool
+	// SecretUnreadable says a credential is stored and this process could not
+	// open it — no master key, or one that does not match what sealed it.
+	//
+	// A description rather than a refusal, because one unreadable credential
+	// must not cost a caller the rest of the collection: the name and the
+	// configuration are still true, and a process that loses them fills the
+	// gap from somewhere else.
+	SecretUnreadable string
 	/*
 		ClearSecret removes the stored credential.
 
@@ -186,127 +194,6 @@ func (s *Store) Get(ctx context.Context, scopeKind ScopeKind, scope domain.Scope
 		return Setting{}, fmt.Errorf("settings: read %s/%s: %w", kind, name, err)
 	}
 	return out, nil
-}
-
-// Reveal returns a setting with its credential decrypted.
-//
-// Separate from Get on purpose. Reading configuration is routine; reading a
-// credential is not, and a caller has to ask for it explicitly so the audit
-// trail can record that they did.
-func (s *Store) Reveal(ctx context.Context, scopeKind ScopeKind, scope domain.Scope, kind Kind, name string) (Setting, error) {
-	set, err := s.Get(ctx, scopeKind, scope, kind, name)
-	if err != nil {
-		return Setting{}, err
-	}
-	if !set.HasSecret {
-		return set, nil
-	}
-	if s.vault == nil {
-		return Setting{}, ErrNoVault
-	}
-
-	var ciphertext, nonce []byte
-	if err := s.pool.QueryRow(ctx, `
-		select secret, secret_nonce from settings
-		where scope_kind = $1 and company_id = $2 and area_id = $3 and kind = $4 and name = $5`,
-		string(scopeKind), string(scope.Company), string(scope.Area), string(kind), name,
-	).Scan(&ciphertext, &nonce); err != nil {
-		return Setting{}, fmt.Errorf("settings: read secret: %w", err)
-	}
-
-	plain, err := s.vault.Open(ciphertext, nonce, contextFor(set))
-	if err != nil {
-		return Setting{}, err
-	}
-	set.Secret = string(plain)
-	return set, nil
-}
-
-/*
-RevealTx is Reveal inside a caller's transaction, holding the row.
-
-For a write that folds onto what is stored — keeping a credential a request did
-not mention, or a choice it said nothing about. Read outside the transaction,
-that fold is a lost update waiting for two people: one narrows a server, the
-other saves a token having read the older value, and the second commit puts the
-older value back. The row lock is what makes "keep what is there" mean what is
-there when the write happens.
-
-A row that does not exist locks nothing, and two concurrent creations of the
-same name then serialise on the unique index instead — one wins wholesale,
-which is the honest outcome when neither had anything to fold onto.
-*/
-func (s *Store) RevealTx(
-	ctx context.Context, conn DB,
-	scopeKind ScopeKind, scope domain.Scope, kind Kind, name string,
-) (Setting, error) {
-	out := Setting{ScopeKind: scopeKind, Scope: scope, Kind: kind, Name: name}
-	var ciphertext, nonce []byte
-	err := conn.QueryRow(ctx, `
-		select value, secret, secret_nonce, enabled, updated_by, updated_at
-		from settings
-		where scope_kind = $1 and company_id = $2 and area_id = $3 and kind = $4 and name = $5
-		for update`,
-		string(scopeKind), string(scope.Company), string(scope.Area), string(kind), name,
-	).Scan(&out.Value, &ciphertext, &nonce, &out.Enabled, &out.UpdatedBy, &out.UpdatedAt)
-
-	if errors.Is(err, pgx.ErrNoRows) {
-		return Setting{}, fmt.Errorf("%w: %s/%s", ErrNotFound, kind, name)
-	}
-	if err != nil {
-		return Setting{}, fmt.Errorf("settings: read %s/%s: %w", kind, name, err)
-	}
-	out.HasSecret = len(ciphertext) > 0
-	if !out.HasSecret {
-		return out, nil
-	}
-	if s.vault == nil {
-		return Setting{}, ErrNoVault
-	}
-	plain, err := s.vault.Open(ciphertext, nonce, contextFor(out))
-	if err != nil {
-		return Setting{}, err
-	}
-	out.Secret = string(plain)
-	return out, nil
-}
-
-// List returns every setting of a kind, without credentials.
-func (s *Store) List(ctx context.Context, kind Kind) ([]Setting, error) {
-	return s.ListTx(ctx, s.pool, kind)
-}
-
-// ListTx is List inside somebody else's transaction.
-//
-// Not a convenience: a caller that has to decide something from what is stored
-// and then write must read under the same lock it writes under, or it decides
-// from a state that no longer holds by the time it acts.
-func (s *Store) ListTx(ctx context.Context, conn DB, kind Kind) ([]Setting, error) {
-	rows, err := conn.Query(ctx, `
-		select scope_kind, company_id, area_id, name, value, secret is not null, enabled, updated_by, updated_at
-		from settings where kind = $1
-		order by scope_kind, company_id, area_id, name`, string(kind))
-	if err != nil {
-		return nil, fmt.Errorf("settings: list %s: %w", kind, err)
-	}
-	defer rows.Close()
-
-	var out []Setting
-	for rows.Next() {
-		var (
-			set           = Setting{Kind: kind}
-			scopeKind     string
-			company, area string
-		)
-		if err := rows.Scan(&scopeKind, &company, &area, &set.Name, &set.Value,
-			&set.HasSecret, &set.Enabled, &set.UpdatedBy, &set.UpdatedAt); err != nil {
-			return nil, err
-		}
-		set.ScopeKind = ScopeKind(scopeKind)
-		set.Scope = domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)}
-		out = append(out, set)
-	}
-	return out, rows.Err()
 }
 
 // Resolve finds the setting that applies in a scope, walking outward.

@@ -27,7 +27,59 @@ field" is a commit message.
 
 ## [Unreleased]
 
+### Added
+
+- **A provider says which models it serves.** A list shipped in the binary
+  describes the vendors the platform knows, and behind a proxy those are the
+  wrong names: what an installation's LiteLLM or vLLM serves is whatever
+  somebody configured there. The models are now part of a provider's
+  configuration and are what an agent's author is offered — suggestions and
+  never a limit, so a model released last week can still be typed.
+
 ### Fixed
+
+- **An address changed in the console reaches a process that is already
+  running.** Providers were read once at boot and only prices refreshed, so
+  pointing a provider at a proxy changed nothing until somebody restarted the
+  worker and the console. Nothing said so: the endpoint the process had started
+  with went on answering, authenticated, until the vendor reported a model it
+  had never heard of. A provider removed in the console also stayed alive in
+  the process for as long as it ran. Both now follow the same 30-second refresh
+  that rates already had.
+
+- **One unreadable credential no longer hands its provider to the environment.**
+  Registration stopped at the first failure, so in the console process — where
+  the master key is optional — a single sealed credential erased every
+  configured provider at once. A provider registered from an environment
+  variable under the same name then answered in its place, at a different
+  address with a different credential. Each provider is now built on its own,
+  and one that cannot be built holds its name empty and answers as not
+  configured, which is a sentence somebody can act on.
+
+- **A provider's endpoint, protocol and credential reach a run, not just the
+  registry.** The resolver rebuilds a published version's planner when the
+  provider registry's revision moves, and only a price change moved it — so a
+  version that had already run kept speaking to the address it started with
+  even after the refresh reached the registry.
+
+- **A proxy configured without a credential is not handed the vendor's.** The
+  Anthropic client reads `ANTHROPIC_API_KEY` and `ANTHROPIC_BASE_URL` on its own
+  when it is given neither, so an installation's own key could be sent to an
+  endpoint nobody chose it for. The platform now refuses those defaults
+  explicitly.
+
+- **Changing a provider's protocol no longer risks taking a worker down.** The
+  code that needed a provider's kind read it, released the lock and asked for a
+  planner built from a second reading; a refresh between the two produced the
+  other shape and an unguarded type assertion.
+
+- **A model list has bounds.** Two hundred names of two hundred characters, at
+  the door and in the contract. The list is decoded by every process on every
+  refresh, so an accidental paste would be paid for twice a minute for ever.
+
+- **The provider name field has an accessible label.** The label pointed at the
+  row containing the field rather than at the field, so the input had no
+  accessible name.
 
 - **An administrator can be named to be told about an approval.** The list an
   agent's owner picks from asked for the Approver role, and an administrator

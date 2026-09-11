@@ -292,6 +292,13 @@ type ModelProvider struct {
 	Name    string
 	Kind    string
 	BaseURL string
+	// Models this endpoint serves, as the installation knows them.
+	//
+	// Suggestions and never a closed set, for the reason a preset's list is:
+	// one that refused a model released last week would be worse than no list.
+	// It matters most behind a proxy, where the names are whatever somebody
+	// configured there and nothing shipped in a binary can guess them.
+	Models  []string
 	Enabled bool
 	// HasKey reports that a credential is stored, never what it is.
 	HasKey    bool
