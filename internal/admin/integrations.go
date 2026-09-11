@@ -987,8 +987,12 @@ func (i *Integrations) PutProvider(ctx context.Context, by domain.UserID, scope 
 		return ErrNoBaseURL
 	}
 
+	models, err := cleanModels(provider.Models)
+	if err != nil {
+		return err
+	}
 	value, err := json.Marshal(storedProvider{
-		Kind: provider.Kind, BaseURL: provider.BaseURL, Models: cleanModels(provider.Models),
+		Kind: provider.Kind, BaseURL: provider.BaseURL, Models: models,
 	})
 	if err != nil {
 		return fmt.Errorf("admin: encode provider: %w", err)
@@ -1009,25 +1013,60 @@ func (i *Integrations) PutProvider(ctx context.Context, by domain.UserID, scope 
 	})
 }
 
+// MaxProviderModels and MaxModelName bound a list somebody pastes.
+//
+// Not a judgement about how many models an endpoint may serve — it is that this
+// list is decoded by every process every thirty seconds, and a paste nobody
+// meant to make would be paid for on every refresh, for ever, by an
+// installation that cannot see why.
+const (
+	MaxProviderModels = 200
+	MaxModelName      = 200
+)
+
+// ErrTooManyModels and ErrModelNameTooLong refuse a list that is not a list.
+var (
+	ErrTooManyModels    = errors.New("admin: more models than a provider list may hold")
+	ErrModelNameTooLong = errors.New("admin: a model name longer than any vendor uses")
+)
+
 /*
 cleanModels drops blanks and repeats from a list somebody typed.
 
-Trimmed rather than refused: a trailing comma or a stray space is not a mistake
+Trimmed rather than refused: a trailing line or a stray space is not a mistake
 worth stopping a save for, and an empty entry stored would show as a nameless
 suggestion in the one control that exists to stop people guessing names.
+
+A list past the bounds is refused rather than truncated. Silently keeping the
+first two hundred of somebody's paste is the platform deciding which of their
+models exist.
 */
-func cleanModels(in []string) []string {
+func cleanModels(in []string) ([]string, error) {
+	if len(in) > MaxProviderModels {
+		return nil, fmt.Errorf("%w: %d, and the limit is %d",
+			ErrTooManyModels, len(in), MaxProviderModels)
+	}
+	seen := make(map[string]bool, len(in))
 	out := make([]string, 0, len(in))
 	for _, one := range in {
 		one = strings.TrimSpace(one)
-		if one != "" && !slices.Contains(out, one) {
-			out = append(out, one)
+		if one == "" || seen[one] {
+			continue
 		}
+		if len(one) > MaxModelName {
+			// The name is not in the error. It came from a paste that may be
+			// anything, and a refusal that quotes its input is a refusal that
+			// can be made to say whatever the sender chose.
+			return nil, fmt.Errorf("%w: %d characters, and the limit is %d",
+				ErrModelNameTooLong, len(one), MaxModelName)
+		}
+		seen[one] = true
+		out = append(out, one)
 	}
 	if len(out) == 0 {
-		return nil
+		return nil, nil
 	}
-	return out
+	return out, nil
 }
 
 func (i *Integrations) DeleteProvider(ctx context.Context, by domain.UserID, scope domain.Scope, name string) error {

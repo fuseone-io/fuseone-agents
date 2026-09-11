@@ -3,6 +3,7 @@ package admin_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"sync"
@@ -1776,5 +1777,67 @@ func TestPutProvider_theModelsItServes_surviveAWriteWithNoCredential(t *testing.
 	}
 	if !slices.Equal(providers[0].Models, provider.Models) {
 		t.Errorf("Models = %v, want the list the installation configured", providers[0].Models)
+	}
+}
+
+/*
+A paste that is not a list is refused, and the refusal does not quote it.
+
+The list is decoded by every process on every refresh, so an accidental paste is
+paid for twice a minute for ever by an installation that cannot see why. Refused
+rather than truncated: silently keeping the first two hundred is the platform
+deciding which of somebody's models exist.
+*/
+func TestPutProvider_aModelListPastItsBounds_isRefused(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+
+	tooMany := make([]string, admin.MaxProviderModels+1)
+	for at := range tooMany {
+		tooMany[at] = fmt.Sprintf("model-%d", at)
+	}
+	long := strings.Repeat("m", admin.MaxModelName+1)
+
+	for _, one := range []struct {
+		name   string
+		models []string
+		want   error
+	}{
+		{"more names than a list holds", tooMany, admin.ErrTooManyModels},
+		{"a name longer than any vendor uses", []string{long}, admin.ErrModelNameTooLong},
+	} {
+		t.Run(one.name, func(t *testing.T) {
+			err := i.PutProvider(ctx, "usr_ana", platform, domain.ModelProvider{
+				Name: "litellm", Kind: "openai_compatible",
+				BaseURL: "https://litellm.internal/v1", Models: one.models, Enabled: true,
+			}, "sk-secret")
+			if !errors.Is(err, one.want) {
+				t.Fatalf("err = %v, want %v", err, one.want)
+			}
+			if strings.Contains(err.Error(), "mmmm") || strings.Contains(err.Error(), "model-1") {
+				t.Errorf("the refusal quotes what it was sent: %v", err)
+			}
+		})
+	}
+}
+
+// And the repeats a paste carries are dropped without asking anybody about them.
+func TestPutProvider_aModelNamedTwice_isStoredOnce(t *testing.T) {
+	i := newIntegrations(t)
+	ctx := context.Background()
+
+	if err := i.PutProvider(ctx, "usr_ana", platform, domain.ModelProvider{
+		Name: "litellm", Kind: "openai_compatible", BaseURL: "https://litellm.internal/v1",
+		Models: []string{"gemini/gemini-2.5-pro", " gemini/gemini-2.5-pro ", ""}, Enabled: true,
+	}, "sk-secret"); err != nil {
+		t.Fatalf("PutProvider: %v", err)
+	}
+
+	providers, err := i.Providers(ctx)
+	if err != nil {
+		t.Fatalf("Providers: %v", err)
+	}
+	if !slices.Equal(providers[0].Models, []string{"gemini/gemini-2.5-pro"}) {
+		t.Errorf("Models = %v, want the name once", providers[0].Models)
 	}
 }
