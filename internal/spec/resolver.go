@@ -89,7 +89,7 @@ func (r *Resolver) Resolve(ctx context.Context, agent domain.AgentID, version do
 
 func (r *Resolver) planner(spec Spec) (engine.Planner, error) {
 	for {
-		priceRevision := r.providers.PriceRevision()
+		priceRevision := r.providers.Revision()
 		r.mu.RLock()
 		cached, ok := r.planners[spec.Version]
 		r.mu.RUnlock()
@@ -107,7 +107,7 @@ func (r *Resolver) planner(spec Spec) (engine.Planner, error) {
 		if err != nil {
 			return nil, fmt.Errorf("spec: %s@%s: %w", spec.ID, spec.Version, err)
 		}
-		if r.providers.PriceRevision() != priceRevision {
+		if r.providers.Revision() != priceRevision {
 			continue
 		}
 

@@ -143,7 +143,7 @@ func TestSetPrices_updatesRegisteredProvidersAndAdvancesTheRevision(t *testing.T
 	}); err != nil {
 		t.Fatalf("register: %v", err)
 	}
-	before := registry.PriceRevision()
+	before := registry.Revision()
 
 	if changed := registry.SetPrices(map[string]map[string]model.Prices{
 		"anthropic": {
@@ -162,8 +162,8 @@ func TestSetPrices_updatesRegisteredProvidersAndAdvancesTheRevision(t *testing.T
 	if got.InputMicros != 7_000_000 {
 		t.Fatalf("price = %+v, want refreshed rate", got)
 	}
-	if registry.PriceRevision() != before+1 {
-		t.Fatalf("revision = %d, want %d", registry.PriceRevision(), before+1)
+	if registry.Revision() != before+1 {
+		t.Fatalf("revision = %d, want %d", registry.Revision(), before+1)
 	}
 
 	if changed := registry.SetPrices(map[string]map[string]model.Prices{
@@ -173,7 +173,7 @@ func TestSetPrices_updatesRegisteredProvidersAndAdvancesTheRevision(t *testing.T
 	}); changed {
 		t.Fatal("same price table should not advance the revision")
 	}
-	if registry.PriceRevision() != before+1 {
+	if registry.Revision() != before+1 {
 		t.Fatalf("revision changed on an identical table")
 	}
 }
@@ -310,4 +310,139 @@ func (r *recorded) key() string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.apiKey
+}
+
+/*
+Replacing a provider is a new revision, or a run keeps the old one.
+
+A resolver caches the planner it built for a published version and rebuilds it
+when the registry's revision moves. Only prices moved it — so an address, a
+protocol, a credential or a removal changed nothing for a version that had
+already run: the planner in the cache went on speaking to the endpoint it was
+built with, for as long as the process lived.
+
+Worse in combination. The replacement already carried the new rates, so the
+price table that follows it found equality and did not move the revision
+either — the one thing that used to work stopped working exactly when something
+else about the provider changed.
+*/
+func TestSetConfigured_aDifferentAddress_movesTheRevision(t *testing.T) {
+	t.Parallel()
+	registry := model.NewRegistry(nil)
+
+	before := registry.Revision()
+	registry.SetConfigured([]model.Provider{{
+		Name: "litellm", Kind: model.KindOpenAICompatible, BaseURL: "https://a.internal/v1",
+	}})
+	if registry.Revision() == before {
+		t.Fatal("a provider arriving did not move the revision")
+	}
+
+	atA := registry.Revision()
+	registry.SetConfigured([]model.Provider{{
+		Name: "litellm", Kind: model.KindOpenAICompatible, BaseURL: "https://b.internal/v1",
+	}})
+	if registry.Revision() == atA {
+		t.Error("a new address did not move the revision; a run would keep the old planner")
+	}
+
+	atB := registry.Revision()
+	registry.SetConfigured(nil)
+	if registry.Revision() == atB {
+		t.Error("a removal did not move the revision")
+	}
+}
+
+// And a pass that changes nothing does not move it: the refresh runs every
+// thirty seconds, and a revision that moved each time would rebuild every
+// planner in the installation twice a minute.
+func TestSetConfigured_theSameConfigurationAgain_leavesTheRevision(t *testing.T) {
+	t.Parallel()
+	registry := model.NewRegistry(nil)
+
+	same := []model.Provider{{
+		Name: "litellm", Kind: model.KindOpenAICompatible, BaseURL: "https://a.internal/v1",
+		Models: []string{"gemini/gemini-2.5-pro"},
+		Prices: map[string]model.Prices{"gemini/gemini-2.5-pro": {InputMicros: 3}},
+	}}
+	registry.SetConfigured(same)
+	before := registry.Revision()
+	registry.SetConfigured(same)
+	if registry.Revision() != before {
+		t.Error("an identical pass moved the revision; every planner would be rebuilt twice a minute")
+	}
+}
+
+/*
+The vendor's environment is not a fallback for a provider that named neither.
+
+The Anthropic client reads ANTHROPIC_API_KEY and ANTHROPIC_BASE_URL on its own
+when it is given neither. So a proxy configured without a credential was handed
+the vendor's — the operator's own key, sent to an endpoint they did not choose
+it for, by a client nobody asked to look.
+*/
+func TestPlanner_aProviderWithNoCredential_doesNotBorrowTheVendorsFromTheEnvironment(t *testing.T) {
+	vendor, proxy := recordingProvider(t), recordingProvider(t)
+	t.Setenv("ANTHROPIC_API_KEY", "the-vendors-key")
+	t.Setenv("ANTHROPIC_BASE_URL", vendor.URL)
+
+	registry := model.NewRegistry(proxy.Client())
+	registry.SetConfigured([]model.Provider{{
+		Name: "litellm", Kind: model.KindAnthropic, BaseURL: proxy.URL,
+	}})
+
+	counter, err := registry.Counter("litellm", model.Config{Model: "anthropic-claude-sonnet-5"})
+	if err != nil {
+		t.Fatalf("Counter: %v", err)
+	}
+	// It may refuse for want of a credential. What it may not do is find one.
+	_, _ = counter.Count(t.Context(), "hello")
+
+	if vendor.hits() != 0 {
+		t.Error("the request went to the address the environment named")
+	}
+	if key := proxy.key(); key == "the-vendors-key" {
+		t.Error("the vendor's credential was sent to an endpoint nobody chose it for")
+	}
+}
+
+/*
+A protocol changed mid-call does not take the process down.
+
+Completer and Counter read the provider's kind, released the lock and asked for
+a planner, which read the registry again. Between the two reads a refresh could
+replace an Anthropic provider with an OpenAI-compatible one, and the type
+assertion that followed was unguarded: the answer to a configuration edit was a
+panic in a worker.
+*/
+func TestCounter_whileTheProtocolIsBeingChanged_neverPanics(t *testing.T) {
+	registry := model.NewRegistry(nil)
+	kinds := []model.Kind{model.KindAnthropic, model.KindOpenAICompatible}
+	configure := func(kind model.Kind) {
+		registry.SetConfigured([]model.Provider{{
+			Name: "litellm", Kind: kind, BaseURL: "https://litellm.internal/v1", APIKey: "k",
+		}})
+	}
+	// Configured before anybody reads, so "not configured yet" is not one of
+	// the answers this is measuring.
+	configure(model.KindAnthropic)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := range 400 {
+			configure(kinds[i%2])
+		}
+	}()
+	for range 400 {
+		// Either answer is correct. Neither may be a panic, and neither may be
+		// a counter built for a protocol that cannot answer.
+		if counter, err := registry.Counter("litellm", model.Config{Model: "m"}); err == nil && counter == nil {
+			t.Fatal("a counter that is neither an error nor a counter")
+		}
+		if _, err := registry.Completer("litellm", model.Config{Model: "m"}); err != nil {
+			t.Fatalf("Completer: %v", err)
+		}
+	}
+	<-done
 }
