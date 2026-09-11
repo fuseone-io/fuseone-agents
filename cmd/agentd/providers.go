@@ -43,7 +43,9 @@ type providerConfig interface {
 // and all. This is where a key leaves the vault, and the only place it does.
 func registerConfigured(ctx context.Context, registry *model.Registry, integrations *admin.Integrations) error {
 	if integrations == nil {
-		registerFromEnv(registry)
+		// No administration area at all: the environment is the whole of the
+		// configuration, and it brings no rates because nothing stores any.
+		registerFromEnv(registry, nil)
 		return nil
 	}
 	failed, err := applyConfiguration(ctx, registry, integrations)
@@ -135,23 +137,28 @@ func applyConfiguration(
 ) (map[string]string, error) {
 	priced, err := pricesFrom(ctx, from)
 	if err != nil {
-		// The layer underneath still applies. The rates stay as they were,
-		// because a refresh that could not read them must not turn a priced
-		// model back into zero.
-		registerFromEnv(registry)
+		// The layer underneath still applies, carrying whatever rates this
+		// registry already holds. They are not overwritten: a refresh that
+		// could not read them must not turn a priced model back into zero.
+		registerFromEnv(registry, nil)
 		return nil, err
 	}
 
+	// Every exit registers the environment with the rates in hand, and every
+	// provider it supplies is priced as it is registered. Applied as a step
+	// afterwards, a provider existed unpriced in between — and on the exit
+	// below, where reading the providers failed, that step never ran at all.
 	failed, err := configureFrom(ctx, registry, from, priced)
 	if err != nil {
-		registerFromEnv(registry)
+		registerFromEnv(registry, priced)
+		registry.SetPrices(priced)
 		return nil, err
 	}
 
-	// The environment before the rates, and not in a defer. Applied after
-	// them, a provider it supplies began life with no configured rate until
-	// the next pass thirty seconds later.
-	registerFromEnv(registry)
+	registerFromEnv(registry, priced)
+	// And the rates for what was already here: a provider the environment
+	// supplied on an earlier pass is not registered again, so this is what
+	// carries a rate edited since.
 	registry.SetPrices(priced)
 	return failed, nil
 }

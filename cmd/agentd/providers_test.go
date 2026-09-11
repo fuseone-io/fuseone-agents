@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -82,12 +83,16 @@ func TestConfigureFrom_anOpenAICompatibleProviderWithNoAddress_isNotRegistered(t
 // A sealed provider answers the way the real read does when the master key is
 // missing: the row says a credential is stored and none came back.
 type stubConfig struct {
-	providers []domain.ModelProvider
-	sealed    map[string]bool
-	rates     []admin.ModelPrice
+	providers    []domain.ModelProvider
+	sealed       map[string]bool
+	rates        []admin.ModelPrice
+	providersErr error
 }
 
 func (s *stubConfig) ProvidersWithCredentials(context.Context) ([]admin.ConfiguredProvider, error) {
+	if s.providersErr != nil {
+		return nil, s.providersErr
+	}
 	out := make([]admin.ConfiguredProvider, 0, len(s.providers))
 	for _, p := range s.providers {
 		one := admin.ConfiguredProvider{ModelProvider: p}
@@ -320,5 +325,36 @@ func TestApplyConfiguration_twoIdenticalPasses_leaveTheRevision(t *testing.T) {
 	if registry.Revision() != settled {
 		t.Errorf("revision moved to %d over three identical passes, from %d",
 			registry.Revision(), settled)
+	}
+}
+
+/*
+Even a pass that could not read the providers leaves the environment priced.
+
+The rates had been read, and the exit that gave up on the providers returned
+before applying them — so on a fresh process whose first pass met a database
+error, the environment's provider existed with no rate at all, and stayed that
+way while the error lasted.
+*/
+func TestApplyConfiguration_whenTheProvidersCannotBeRead_theEnvironmentIsStillPriced(t *testing.T) {
+	t.Setenv("ANTHROPIC_API_KEY", "from-the-environment")
+	registry := model.NewRegistry(nil)
+
+	_, err := applyConfiguration(t.Context(), registry, &stubConfig{
+		providersErr: errors.New("the database is away"),
+		rates: []admin.ModelPrice{{
+			Provider: "anthropic", Model: "claude-opus-5", InputMicros: 5,
+		}},
+	})
+	if err == nil {
+		t.Fatal("applyConfiguration: want the read failure reported")
+	}
+
+	price, priced, err := registry.PriceFor("anthropic", "claude-opus-5")
+	if err != nil {
+		t.Fatalf("PriceFor: %v", err)
+	}
+	if !priced || price.InputMicros != 5 {
+		t.Errorf("rate = %+v priced=%v, want the environment's provider priced anyway", price, priced)
 	}
 }

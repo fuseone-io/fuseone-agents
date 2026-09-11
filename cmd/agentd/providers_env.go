@@ -15,7 +15,7 @@ import (
 // no administrator yet, and for local development. A provider already
 // configured in the administration area wins: configuration somebody can audit
 // outranks configuration nobody can see.
-func registerFromEnv(registry *model.Registry) {
+func registerFromEnv(registry *model.Registry, priced map[string]map[string]model.Prices) {
 	existing := make(map[string]struct{}, len(registry.Names()))
 	for _, name := range registry.Names() {
 		existing[name] = struct{}{}
@@ -44,6 +44,12 @@ func registerFromEnv(registry *model.Registry) {
 		}
 		p, _ := model.Preset(name)
 		p.APIKey = key
+		// Priced as it is registered, not afterwards. Applied as a second step
+		// it left a window — and on the pass where reading the providers
+		// failed, no second step ran at all: the provider existed with no rate
+		// until some later refresh, recording tokens with no money against
+		// them and leaving a ceiling stated in money with nothing to measure.
+		p.Prices = priced[name]
 		if base := os.Getenv(envBaseFor(name)); base != "" {
 			p.BaseURL = base
 		}
