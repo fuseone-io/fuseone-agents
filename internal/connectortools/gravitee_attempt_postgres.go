@@ -46,7 +46,7 @@ func (p *PostgresGraviteeAttempts) ClaimDue(
 	rows, err := p.pool.Query(ctx, `
 		with due as (
 			select idem_key as claimed_id from governed_external_attempts
-			where attempt_kind = $5 and not settled and status <> 'manual' and next_check_at <= $2
+			where attempt_kind = $5 and not settled and next_check_at <= $2
 			  and (claimed_until is null or claimed_until <= $2)
 			order by next_check_at, created_at, idem_key
 			for update skip locked
@@ -107,11 +107,13 @@ func (p *PostgresGraviteeAttempts) Resolve(
 		return GraviteeAttempt{}, err
 	}
 	var next any
-	if in.Status == GraviteeAttemptPrepared || in.Status == GraviteeAttemptPending {
+	if in.Status == GraviteeAttemptPrepared || in.Status == GraviteeAttemptPending ||
+		in.Status == GraviteeAttemptManual {
 		next = in.NextCheckAt.UTC()
 	} else if in.Status == GraviteeAttemptConfirmed || in.Status == GraviteeAttemptTerminal {
-		// Final remote knowledge is due until the ticket finish is also durable.
-		next = in.At.UTC()
+		// Final remote knowledge remains due until its normal return or a late
+		// reconciliation is sealed in the immutable run record.
+		next = in.NextCheckAt.UTC()
 	}
 	row := p.pool.QueryRow(ctx, `
 		update governed_external_attempts
@@ -119,7 +121,7 @@ func (p *PostgresGraviteeAttempts) Resolve(
 		    checks = checks + 1, next_check_at = $7,
 		    claimed_by = '', claimed_until = null, updated_at = $8
 		where idem_key = $1 and attempt_kind = $9 and not settled
-		  and (status in ('prepared', 'pending') or status = $3)
+		  and (status in ('prepared', 'pending', 'manual') or status = $3)
 		  and (($2 <> '' and claimed_by = $2) or
 		       ($2 = '' and (claimed_by = '' or claimed_until <= $8)))
 		returning `+graviteeAttemptColumns,

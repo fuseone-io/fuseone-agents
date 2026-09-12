@@ -248,6 +248,20 @@ type ToolReturnedPayload struct {
 	Context *ContextArtifact `json:"context,omitempty"`
 }
 
+// EffectReconciledPayload records the final truth learned after a write whose
+// immediate outcome was unknown. It names the original call because this is
+// an audit correction, not another model-visible tool return or another state
+// transition in the run.
+type EffectReconciledPayload struct {
+	Tool         ToolID `json:"tool"`
+	ForSeq       int64  `json:"for_seq"`
+	ResultRef    string `json:"result_ref"`
+	ResultDigest string `json:"result_digest"`
+	ResultBytes  int64  `json:"result_bytes"`
+	Failed       bool   `json:"failed,omitempty"`
+	ErrorCode    string `json:"error_code,omitempty"`
+}
+
 type ApprovalRequestedPayload struct {
 	Tool ToolID `json:"tool"`
 	// Rule is the stable key of the check that demanded a human. The trail and

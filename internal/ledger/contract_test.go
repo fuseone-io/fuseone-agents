@@ -965,6 +965,34 @@ func TestListContract(t *testing.T) {
 		}
 	})
 
+	run(t, "a late effect reconciliation does not move the current run", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		mustAppend(t, s, startedAt("run-1", base))
+		asked := step("run-1", domain.StepApprovalRequested)
+		asked.At = base.Add(time.Second)
+		asked.Payload = mustJSON(t, domain.ApprovalRequestedPayload{
+			Tool: "crm.note", Rule: "taint", Reason: "untrusted argument",
+		})
+		mustAppend(t, s, asked)
+		reconciled := step("run-1", domain.StepEffectReconciled)
+		reconciled.At = base.Add(2 * time.Second)
+		reconciled.Payload = mustJSON(t, domain.EffectReconciledPayload{
+			Tool: "gravitee.apim.accept_subscription", ForSeq: 2,
+			ResultRef: "safe-result", ResultDigest: "sha256:safe-result",
+		})
+		mustAppend(t, s, reconciled)
+
+		page, err := s.ListRuns(ctx, domain.RunFilter{}, "awaiting_approval", 50)
+		if err != nil {
+			t.Fatalf("ListRuns: %v", err)
+		}
+		if len(page) != 1 || page[0].PendingApproval == nil ||
+			page[0].PendingApproval.Tool != "crm.note" {
+			t.Fatalf("ListRuns = %v, want the current approval untouched", page)
+		}
+	})
+
 	run(t, "a parked provider failure carries the stable failure summary", func(t *testing.T, s Store) {
 		ctx := context.Background()
 

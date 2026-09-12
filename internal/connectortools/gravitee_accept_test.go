@@ -46,8 +46,8 @@ func TestGraviteeAcceptRuntime_concurrentRetriesEmitOnePOST(t *testing.T) {
 		t.Fatalf("completed ticket = (%+v, %v)", current, err)
 	}
 	stored, err := fixture.attempts.Get(t.Context(), fixture.call.IdemKey)
-	if err != nil || !stored.Settled || stored.Status != GraviteeAttemptConfirmed {
-		t.Fatalf("settled attempt = (%+v, %v)", stored, err)
+	if err != nil || stored.Settled || stored.Status != GraviteeAttemptConfirmed {
+		t.Fatalf("attempt before ledger confirmation = (%+v, %v)", stored, err)
 	}
 	raw, err := fixture.content.Get(t.Context(), stored.Result.Ref)
 	if err != nil {
@@ -55,6 +55,17 @@ func TestGraviteeAcceptRuntime_concurrentRetriesEmitOnePOST(t *testing.T) {
 	}
 	if strings.Contains(string(raw), "token") || strings.Contains(string(raw), "apiKey") {
 		t.Fatalf("safe result contains authority: %s", raw)
+	}
+	fixture.advance(graviteeFirstCheck + time.Second)
+	reconciler := NewGraviteeAttemptReconciler(fixture.runtime, fixture.attempts, "worker-final")
+	reconciler.now = fixture.runtime.now
+	if count, err := reconciler.Sweep(t.Context()); err != nil || count != 1 {
+		t.Fatalf("final Sweep = (%d, %v)", count, err)
+	}
+	stored, _ = fixture.attempts.Get(t.Context(), fixture.call.IdemKey)
+	if !stored.Settled || fixture.audit.calls != 1 {
+		t.Fatalf("settled=%t audit calls=%d, want one durable reconciliation",
+			stored.Settled, fixture.audit.calls)
 	}
 }
 
@@ -110,6 +121,34 @@ func TestGraviteeAcceptRuntime_anAmbiguousPOSTIsResolvedOnlyByGET(t *testing.T) 
 	}
 }
 
+func TestGraviteeAcceptRuntime_doesNotRetireFinalKnowledgeBeforeTheLedgerHasIt(t *testing.T) {
+	fixture := newAcceptanceFixture(t)
+	if _, err := fixture.runtime.Accept(t.Context(), "apim", fixture.call, fixture.input); err != nil {
+		t.Fatalf("Accept: %v", err)
+	}
+	fixture.audit.err = errors.New("ledger unavailable")
+	fixture.advance(graviteeFirstCheck + time.Second)
+	reconciler := NewGraviteeAttemptReconciler(fixture.runtime, fixture.attempts, "worker-ledger")
+	reconciler.now = fixture.runtime.now
+	if count, err := reconciler.Sweep(t.Context()); err == nil || count != 1 {
+		t.Fatalf("Sweep without ledger = (%d, %v)", count, err)
+	}
+	attempt, _ := fixture.attempts.Get(t.Context(), fixture.call.IdemKey)
+	if attempt.Settled {
+		t.Fatal("attempt settled before its final knowledge reached the ledger")
+	}
+
+	fixture.audit.err = nil
+	fixture.advance(graviteeReconcileLease + time.Second)
+	if count, err := reconciler.Sweep(t.Context()); err != nil || count != 1 {
+		t.Fatalf("recovered Sweep = (%d, %v)", count, err)
+	}
+	attempt, _ = fixture.attempts.Get(t.Context(), fixture.call.IdemKey)
+	if !attempt.Settled || fixture.remote.acceptCalls != 1 {
+		t.Fatalf("settled=%t POST calls=%d", attempt.Settled, fixture.remote.acceptCalls)
+	}
+}
+
 func TestGraviteeAcceptRuntime_uncertaintyPastTheDeadlineNeedsAttention(t *testing.T) {
 	fixture := newAcceptanceFixture(t)
 	fixture.access.err = errors.New("vault unavailable")
@@ -127,8 +166,21 @@ func TestGraviteeAcceptRuntime_uncertaintyPastTheDeadlineNeedsAttention(t *testi
 		t.Fatalf("manual attempt = (%+v, %v)", attempt, err)
 	}
 	current, _ := fixture.tickets.Current(t.Context(), fixture.call.Ticket.Ref.Key)
-	if current.Current.Phase != ticket.PhaseExecuting || fixture.remote.acceptCalls != 0 {
+	if current.Current.Phase != ticket.PhaseNeedsAttention || current.Active == nil ||
+		current.Current.Outcome == nil || fixture.remote.acceptCalls != 0 || fixture.audit.calls != 1 {
 		t.Fatalf("manual ticket = %+v, POST calls = %d", current, fixture.remote.acceptCalls)
+	}
+	fixture.access.err = nil
+	fixture.remote.observed = acceptedObservation(fixture.snapshot)
+	fixture.advance(graviteeManualCheck + time.Second)
+	if count, err := reconciler.Sweep(t.Context()); err != nil || count != 1 {
+		t.Fatalf("manual recovery Sweep = (%d, %v)", count, err)
+	}
+	current, _ = fixture.tickets.Current(t.Context(), fixture.call.Ticket.Ref.Key)
+	if current.Current.Phase != ticket.PhaseCompleted || current.Active != nil ||
+		fixture.remote.acceptCalls != 0 || fixture.remote.observeCalls != 1 || fixture.audit.calls != 2 {
+		t.Fatalf("recovered manual ticket = %+v, POST=%d GET=%d audit=%d",
+			current, fixture.remote.acceptCalls, fixture.remote.observeCalls, fixture.audit.calls)
 	}
 }
 
@@ -139,6 +191,7 @@ type acceptanceFixture struct {
 	content  *engine.MemoryContent
 	access   *fakeGraviteeAccess
 	remote   *fakeAcceptanceRemote
+	audit    *recordingGraviteeReconciliations
 	call     engine.Call
 	input    GraviteeInspectInput
 	snapshot GraviteeSnapshot
@@ -177,8 +230,10 @@ func newAcceptanceFixture(t *testing.T) *acceptanceFixture {
 		inspected: safeObservation(), observed: safeObservation(),
 		accepted: acceptedObservation(snapshot),
 	}
+	audit := &recordingGraviteeReconciliations{}
 	fixture := &acceptanceFixture{
 		tickets: store, attempts: journal, content: content, access: access, remote: remote,
+		audit: audit,
 		call: engine.Call{
 			RunID: "run-accept", Seq: 9, Scope: area("acme", "platform"),
 			Ticket: ticketContext, ContractDigest: access.access.ContractDigest,
@@ -188,9 +243,24 @@ func newAcceptanceFixture(t *testing.T) *acceptanceFixture {
 		input:    GraviteeInspectInput{SubscriptionID: "sub-42", ExpiresAt: expiration},
 		snapshot: snapshot, now: graviteeNow,
 	}
-	fixture.runtime = NewGraviteeAcceptRuntime(access, remote, content, store, journal)
+	fixture.runtime = NewGraviteeAcceptRuntime(access, remote, content, store, journal, audit)
 	fixture.runtime.now = func() time.Time { return fixture.now }
 	return fixture
+}
+
+type recordingGraviteeReconciliations struct {
+	mu    sync.Mutex
+	calls int
+	err   error
+}
+
+func (r *recordingGraviteeReconciliations) Seal(
+	context.Context, GraviteeAttempt, engine.ToolResult, time.Time,
+) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.calls++
+	return r.err
 }
 
 func (f *acceptanceFixture) advance(elapsed time.Duration) { f.now = f.now.Add(elapsed) }

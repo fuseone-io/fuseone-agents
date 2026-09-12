@@ -148,6 +148,18 @@ func (s *State) applyKind(step domain.Step) error {
 		s.PendingTool = ""
 		s.Phase = PhaseRunning
 
+	case domain.StepEffectReconciled:
+		var p domain.EffectReconciledPayload
+		if err := decode(step, &p); err != nil {
+			return err
+		}
+		if p.Tool == "" || p.ForSeq <= 0 || p.ResultRef == "" ||
+			p.ResultDigest == "" || p.ResultBytes < 0 || (p.Failed != (p.ErrorCode != "")) {
+			return fmt.Errorf("engine: invalid reconciled effect at seq %d", step.Seq)
+		}
+		// Audit only. The call already returned unknown or the run moved on;
+		// changing its current phase here would resurrect or mis-pair that run.
+
 	case domain.StepApprovalRequested:
 		var p domain.ApprovalRequestedPayload
 		if err := decode(step, &p); err != nil {

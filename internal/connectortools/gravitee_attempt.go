@@ -78,11 +78,11 @@ func validateGraviteeResolution(in GraviteeAttemptResolution) error {
 			return errors.New("connector: invalid pending Gravitee attempt")
 		}
 	case GraviteeAttemptConfirmed, GraviteeAttemptTerminal:
-		if !in.Result.Valid() || strings.TrimSpace(in.OutcomeCode) == "" || !in.NextCheckAt.IsZero() {
+		if !in.Result.Valid() || strings.TrimSpace(in.OutcomeCode) == "" || in.NextCheckAt.IsZero() {
 			return errors.New("connector: incomplete final Gravitee attempt")
 		}
 	case GraviteeAttemptManual:
-		if strings.TrimSpace(in.OutcomeCode) == "" || !in.NextCheckAt.IsZero() {
+		if !in.Result.Valid() || strings.TrimSpace(in.OutcomeCode) == "" || in.NextCheckAt.IsZero() {
 			return errors.New("connector: incomplete manual Gravitee attempt")
 		}
 	default:

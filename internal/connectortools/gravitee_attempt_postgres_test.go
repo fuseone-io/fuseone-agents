@@ -51,7 +51,8 @@ func TestPostgresGraviteeAttempts_oneSafeRecordSurvivesRetryAndWorkerHandoff(t *
 	result := ticket.ContentRef{Ref: "run://result", Digest: "sha256:result"}
 	confirmed, err := journal.Resolve(t.Context(), GraviteeAttemptResolution{
 		IdemKey: first.IdemKey, ClaimedBy: "worker-b", Status: GraviteeAttemptConfirmed,
-		Result: result, OutcomeCode: "accepted", At: now.Add(2 * time.Minute),
+		Result: result, OutcomeCode: "accepted", NextCheckAt: now.Add(3 * time.Minute),
+		At: now.Add(2 * time.Minute),
 	})
 	if err != nil || confirmed.Status != GraviteeAttemptConfirmed || confirmed.Result != result {
 		t.Fatalf("confirmed Resolve = (%+v, %v)", confirmed, err)
@@ -65,9 +66,43 @@ func TestPostgresGraviteeAttempts_oneSafeRecordSurvivesRetryAndWorkerHandoff(t *
 	}
 }
 
+func TestPostgresGraviteeAttempts_manualAttentionRemainsScheduled(t *testing.T) {
+	pool := graviteeTestPool(t)
+	if _, err := pool.Exec(t.Context(), `delete from governed_external_attempts`); err != nil {
+		t.Fatalf("clean attempts: %v", err)
+	}
+	now := time.Date(2026, 9, 12, 14, 0, 0, 0, time.UTC)
+	first := graviteeAttempt(t, pool, now)
+	journal := NewPostgresGraviteeAttempts(pool)
+	due, err := journal.ClaimDue(t.Context(), "worker-a", first.ClaimedUntil, time.Minute, 10)
+	if err != nil || len(due) != 1 {
+		t.Fatalf("ClaimDue = (%+v, %v)", due, err)
+	}
+	next := now.Add(15 * time.Minute)
+	manual, err := journal.Resolve(t.Context(), GraviteeAttemptResolution{
+		IdemKey: first.IdemKey, ClaimedBy: "worker-a", Status: GraviteeAttemptManual,
+		Result:      ticket.ContentRef{Ref: "run://attention", Digest: "sha256:attention"},
+		OutcomeCode: CodeConnectorNeedsAttention, NextCheckAt: next, At: first.ClaimedUntil,
+	})
+	if err != nil || manual.Status != GraviteeAttemptManual || !manual.NextCheckAt.Equal(next) {
+		t.Fatalf("manual Resolve = (%+v, %v), want scheduled at %s", manual, err, next)
+	}
+	if early, err := journal.ClaimDue(t.Context(), "worker-b", next.Add(-time.Second), time.Minute, 10); err != nil || len(early) != 0 {
+		t.Fatalf("early ClaimDue = (%+v, %v)", early, err)
+	}
+	due, err = journal.ClaimDue(t.Context(), "worker-b", next, time.Minute, 10)
+	if err != nil || len(due) != 1 || due[0].Status != GraviteeAttemptManual {
+		t.Fatalf("manual ClaimDue = (%+v, %v)", due, err)
+	}
+}
+
 func graviteeAttempt(t *testing.T, pool *pgxpool.Pool, now time.Time) GraviteeAttempt {
 	t.Helper()
-	key, err := ticket.Key("slack-gravitee-attempt", "C-support", fmt.Sprint(now.UnixNano()))
+	root := fmt.Sprint(now.UnixNano())
+	origin := ticket.Origin{
+		Connection: "slack-gravitee-attempt", Conversation: "C-support", Root: root,
+	}
+	key, err := ticket.Key(origin.Connection, origin.Conversation, origin.Root)
 	if err != nil {
 		t.Fatalf("ticket key: %v", err)
 	}
@@ -77,9 +112,13 @@ func graviteeAttempt(t *testing.T, pool *pgxpool.Pool, now time.Time) GraviteeAt
 	}
 	store := ticket.NewPostgres(pool)
 	opened, _, err := store.Open(t.Context(), ticket.OpenInput{
-		Key: key, Scope: domain.Scope{Company: "gravitee-attempt-test", Area: "runtime"},
-		RequestedBy: "usr_requester", AddressedBy: "app:support", EventID: "event-attempt",
-		Draft: ticket.ContentRef{Ref: "ticket://draft", Digest: "sha256:draft"}, At: now,
+		Key: key, Origin: origin,
+		Scope:       domain.Scope{Company: "gravitee-attempt-test", Area: "runtime"},
+		Agent:       "gateway-support",
+		RunAs:       "usr_gateway",
+		RequestedBy: "usr_requester", AddressedBy: "app:support",
+		EventID: "event-attempt-" + root,
+		Draft:   ticket.ContentRef{Ref: "ticket://draft", Digest: "sha256:draft"}, At: now,
 	})
 	if err != nil {
 		t.Fatalf("Open: %v", err)

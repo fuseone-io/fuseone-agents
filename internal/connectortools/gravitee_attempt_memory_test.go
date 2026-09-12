@@ -55,7 +55,7 @@ func (m *memoryGraviteeAttempts) ClaimDue(
 	var out []GraviteeAttempt
 	for _, key := range keys {
 		a := m.attempts[key]
-		if len(out) >= limit || a.Settled || a.Status == GraviteeAttemptManual ||
+		if len(out) >= limit || a.Settled ||
 			a.NextCheckAt.After(now) || (!a.ClaimedUntil.IsZero() && a.ClaimedUntil.After(now)) {
 			continue
 		}
@@ -95,9 +95,6 @@ func (m *memoryGraviteeAttempts) Resolve(
 	}
 	a.Status, a.Result, a.OutcomeCode = in.Status, in.Result, in.OutcomeCode
 	a.Checks, a.NextCheckAt, a.UpdatedAt = a.Checks+1, in.NextCheckAt, in.At
-	if in.Status == GraviteeAttemptConfirmed || in.Status == GraviteeAttemptTerminal {
-		a.NextCheckAt = in.At
-	}
 	a.ClaimedBy, a.ClaimedUntil = "", time.Time{}
 	m.attempts[in.IdemKey] = a
 	return a, nil

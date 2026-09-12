@@ -140,6 +140,7 @@ func openWorkerParts(ctx context.Context, dsn string) (*workerParts, error) {
 		parts.graviteeRuntime = connectortools.NewGraviteeAcceptRuntime(
 			graviteeAccess, graviteeRemote, parts.content,
 			graviteeTickets, parts.graviteeAttempts,
+			connectortools.NewGraviteeReconciliationLedger(parts.store),
 		)
 		parts.native.WithGraviteeInspector(graviteeInspector).
 			WithGraviteeRuntime(parts.graviteeRuntime)

@@ -2,6 +2,7 @@ package connectortools
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strconv"
 	"time"
@@ -11,9 +12,10 @@ import (
 )
 
 const (
-	graviteeFirstCheck = 35 * time.Second
-	graviteeDeadline   = 10 * time.Minute
-	graviteeClaimLease = 2 * time.Minute
+	graviteeFirstCheck  = 35 * time.Second
+	graviteeDeadline    = 10 * time.Minute
+	graviteeClaimLease  = 2 * time.Minute
+	graviteeManualCheck = 15 * time.Minute
 )
 
 type GraviteeAcceptanceRemote interface {
@@ -28,16 +30,18 @@ type GraviteeAcceptRuntime struct {
 	content  engine.ContentStore
 	tickets  ticket.Store
 	attempts GraviteeAttemptJournal
+	audit    GraviteeReconciliations
 	now      func() time.Time
 }
 
 func NewGraviteeAcceptRuntime(
 	access GraviteeAccesses, remote GraviteeAcceptanceRemote,
 	content engine.ContentStore, tickets ticket.Store, attempts GraviteeAttemptJournal,
+	audit GraviteeReconciliations,
 ) *GraviteeAcceptRuntime {
 	return &GraviteeAcceptRuntime{
 		access: access, remote: remote, content: content,
-		tickets: tickets, attempts: attempts, now: time.Now,
+		tickets: tickets, attempts: attempts, audit: audit, now: time.Now,
 	}
 }
 
@@ -55,7 +59,7 @@ func (g *GraviteeAcceptRuntime) Accept(
 		if !sameAttemptCall(stored, instance, call, snapshot) {
 			return engine.ToolResult{}, ticket.ErrAttemptConflict
 		}
-		return g.finishKnown(ctx, stored)
+		return g.finishKnown(ctx, stored, false)
 	} else if !errors.Is(err, ErrGraviteeAttemptNotFound) {
 		return engine.ToolResult{}, err
 	}
@@ -68,7 +72,7 @@ func (g *GraviteeAcceptRuntime) Accept(
 		if err != nil {
 			return engine.ToolResult{}, err
 		}
-		return g.finishKnown(ctx, stored)
+		return g.finishKnown(ctx, stored, false)
 	}
 	return g.executePrepared(ctx, attempt, snapshot, attempt.ClaimedBy, false)
 }
@@ -88,7 +92,7 @@ func sameAttemptCall(
 
 func (g *GraviteeAcceptRuntime) validateCall(call engine.Call) error {
 	if g == nil || g.access == nil || g.remote == nil || g.content == nil ||
-		g.tickets == nil || g.attempts == nil || !call.Ticket.Valid() ||
+		g.tickets == nil || g.attempts == nil || g.audit == nil || !call.Ticket.Valid() ||
 		call.ApprovalAtSeq <= 0 || call.ApprovalEvidence.Ticket != call.Ticket.Ref ||
 		call.ApprovalEvidence.Kind != ApprovalEvidenceGraviteeSubscription ||
 		!call.ApprovalEvidence.Valid() || call.DecidedBy == "" || call.IdemKey == "" ||
@@ -163,11 +167,11 @@ func (g *GraviteeAcceptRuntime) executePrepared(
 	claimedBy string, recovered bool,
 ) (engine.ToolResult, error) {
 	if !g.now().UTC().Before(attempt.DeadlineAt) {
-		return g.markManual(ctx, attempt, claimedBy, CodeConnectorNeedsAttention)
+		return g.markManual(ctx, attempt, claimedBy, CodeConnectorNeedsAttention, recovered)
 	}
 	access, err := g.access.Resolve(ctx, attempt.Instance, attempt.Scope)
 	if err != nil {
-		return g.reschedule(ctx, attempt, claimedBy)
+		return g.reschedule(ctx, attempt, claimedBy, recovered)
 	}
 	if access.ContractDigest != attempt.ContractDigest {
 		return g.finalize(ctx, attempt, claimedBy, snapshot,
@@ -180,7 +184,7 @@ func (g *GraviteeAcceptRuntime) executePrepared(
 			return g.finalize(ctx, attempt, claimedBy, snapshot,
 				GraviteeAttemptTerminal, CodeConnectorSnapshotChanged, "", recovered)
 		}
-		return g.reschedule(ctx, attempt, claimedBy)
+		return g.reschedule(ctx, attempt, claimedBy, recovered)
 	}
 	if !sameApprovedSnapshot(snapshot, observed) {
 		return g.finalize(ctx, attempt, claimedBy, snapshot,
@@ -228,11 +232,11 @@ func sameAcceptedSnapshot(snapshot GraviteeSnapshot, observed GraviteeObservatio
 }
 
 func (g *GraviteeAcceptRuntime) reschedule(
-	ctx context.Context, attempt GraviteeAttempt, claimedBy string,
+	ctx context.Context, attempt GraviteeAttempt, claimedBy string, recovered bool,
 ) (engine.ToolResult, error) {
 	now := g.now().UTC()
 	if !now.Before(attempt.DeadlineAt) {
-		return g.markManual(ctx, attempt, claimedBy, CodeConnectorNeedsAttention)
+		return g.markManual(ctx, attempt, claimedBy, CodeConnectorNeedsAttention, recovered)
 	}
 	next := now.Add(graviteeRecheckDelay(attempt.Checks))
 	if next.After(attempt.DeadlineAt) {
@@ -246,13 +250,30 @@ func (g *GraviteeAcceptRuntime) reschedule(
 }
 
 func (g *GraviteeAcceptRuntime) markManual(
-	ctx context.Context, attempt GraviteeAttempt, claimedBy, code string,
+	ctx context.Context, attempt GraviteeAttempt, claimedBy, code string, recovered bool,
 ) (engine.ToolResult, error) {
-	_, err := g.attempts.Resolve(ctx, GraviteeAttemptResolution{
-		IdemKey: attempt.IdemKey, ClaimedBy: claimedBy, Status: GraviteeAttemptManual,
-		OutcomeCode: code, At: g.now().UTC(),
+	now := g.now().UTC()
+	raw, err := json.Marshal(GraviteeAcceptanceResult{
+		Operation: "gravitee.accept_subscription", Status: CodeConnectorNeedsAttention,
+		SubscriptionID: attempt.SubscriptionID, DecidedBy: attempt.DecidedBy,
+		Recovered: recovered,
 	})
-	return failed(code), err
+	if err != nil {
+		return engine.ToolResult{}, err
+	}
+	ref, err := g.content.Put(ctx, attempt.Execution.RunID, attempt.CallSeq, raw)
+	if err != nil {
+		return engine.ToolResult{}, err
+	}
+	content := ticket.ContentRef{Ref: ref, Digest: engine.ResultDigest(raw)}
+	resolved, err := g.attempts.Resolve(ctx, GraviteeAttemptResolution{
+		IdemKey: attempt.IdemKey, ClaimedBy: claimedBy, Status: GraviteeAttemptManual,
+		Result: content, OutcomeCode: code, NextCheckAt: now.Add(graviteeManualCheck), At: now,
+	})
+	if err != nil {
+		return engine.ToolResult{}, err
+	}
+	return g.finishManual(ctx, resolved, recovered)
 }
 
 func (g *GraviteeAcceptRuntime) unknown(

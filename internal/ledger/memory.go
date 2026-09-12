@@ -122,7 +122,7 @@ func (m *Memory) append(
 	if sealed.IdemKey != "" {
 		m.idems[sealed.IdemKey] = struct{}{}
 	}
-	if sealed.Kind != domain.StepParked {
+	if sealed.Kind != domain.StepParked && sealed.Kind != domain.StepEffectReconciled {
 		delete(m.lastFailure, sealed.RunID)
 		delete(m.lastFailureAt, sealed.RunID)
 	}

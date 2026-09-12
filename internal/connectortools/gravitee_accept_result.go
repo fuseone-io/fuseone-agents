@@ -47,16 +47,17 @@ func (g *GraviteeAcceptRuntime) finalize(
 	content := ticket.ContentRef{Ref: ref, Digest: engine.ResultDigest(raw)}
 	resolved, err := g.attempts.Resolve(ctx, GraviteeAttemptResolution{
 		IdemKey: attempt.IdemKey, ClaimedBy: claimedBy, Status: status,
-		Result: content, OutcomeCode: code, At: now,
+		Result: content, OutcomeCode: code,
+		NextCheckAt: now.Add(graviteeFirstCheck), At: now,
 	})
 	if err != nil {
 		return engine.ToolResult{}, err
 	}
-	return g.finishKnown(ctx, resolved)
+	return g.finishKnown(ctx, resolved, recovered)
 }
 
 func (g *GraviteeAcceptRuntime) finishKnown(
-	ctx context.Context, attempt GraviteeAttempt,
+	ctx context.Context, attempt GraviteeAttempt, recovered bool,
 ) (engine.ToolResult, error) {
 	switch attempt.Status {
 	case GraviteeAttemptConfirmed, GraviteeAttemptTerminal:
@@ -75,19 +76,54 @@ func (g *GraviteeAcceptRuntime) finishKnown(
 		}); err != nil {
 			return engine.ToolResult{}, err
 		}
-		// The effect result and ticket are already durable. If cleanup is down,
-		// reconciliation sees the final attempt again and settles it later.
-		_ = g.attempts.Settle(ctx, attempt.IdemKey, g.now().UTC())
-		return engine.ToolResult{
+		result := engine.ToolResult{
 			ResultRef: attempt.Result.Ref, ResultDigest: attempt.Result.Digest,
 			ResultBytes: int64(len(raw)), Labels: domain.NewLabels(domain.LabelUntrusted),
 			Failed: failed, ErrorCode: failureCode(failed, attempt.OutcomeCode),
-		}, nil
+		}
+		if !recovered {
+			// Give the engine time to seal the ordinary tool_returned. The journal
+			// remains due until the reconciler observes that step or writes an
+			// effect_reconciled correction after a process death.
+			return result, nil
+		}
+		if err := g.audit.Seal(ctx, attempt, result, g.now().UTC()); err != nil {
+			return engine.ToolResult{}, err
+		}
+		if err := g.attempts.Settle(ctx, attempt.IdemKey, g.now().UTC()); err != nil {
+			return engine.ToolResult{}, err
+		}
+		return result, nil
 	case GraviteeAttemptManual:
-		return failed(CodeConnectorNeedsAttention), nil
+		return g.finishManual(ctx, attempt, recovered)
 	default:
 		return failed(CodeConnectorOutcomeUnknown), nil
 	}
+}
+
+func (g *GraviteeAcceptRuntime) finishManual(
+	ctx context.Context, attempt GraviteeAttempt, recovered bool,
+) (engine.ToolResult, error) {
+	raw, err := g.content.Get(ctx, attempt.Result.Ref)
+	if err != nil || engine.ResultDigest(raw) != attempt.Result.Digest {
+		return engine.ToolResult{}, ErrGraviteeAttemptNotFound
+	}
+	if _, err := g.tickets.MarkExecutionNeedsAttention(ctx, ticket.AttentionInput{
+		Execution: attempt.Execution, Result: attempt.Result, At: g.now().UTC(),
+	}); err != nil {
+		return engine.ToolResult{}, err
+	}
+	result := engine.ToolResult{
+		ResultRef: attempt.Result.Ref, ResultDigest: attempt.Result.Digest,
+		ResultBytes: int64(len(raw)), Labels: domain.NewLabels(domain.LabelUntrusted),
+		Failed: true, ErrorCode: attempt.OutcomeCode,
+	}
+	if recovered {
+		if err := g.audit.Seal(ctx, attempt, result, g.now().UTC()); err != nil {
+			return engine.ToolResult{}, err
+		}
+	}
+	return result, nil
 }
 
 func failureCode(failed bool, code string) string {
