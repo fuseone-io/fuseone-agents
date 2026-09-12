@@ -27,7 +27,12 @@ export const INSTALLATION_SCOPE = "*/";
 // Every mode that can be stored, including the one nobody picks from the
 // events list. A value this console does not know would be refused by the
 // server rather than silently read as mentions.
-export type ConversationMode = "mentions" | "watch" | "both" | "announce";
+export type ConversationMode =
+  | "mentions"
+  | "watch"
+  | "both"
+  | "announce"
+  | "ticket";
 
 /*
 knownMode answers whether this console can draw a stored mode at all.
@@ -45,7 +50,8 @@ export function knownMode(
     mode === "mentions" ||
     mode === "watch" ||
     mode === "both" ||
-    mode === "announce"
+    mode === "announce" ||
+    mode === "ticket"
   );
 }
 
@@ -60,6 +66,13 @@ export function knownEvent(event: string) {
 export function splitSources(value: string) {
   return value
     .split(/[\n,]/)
+    .map((one) => one.trim())
+    .filter(Boolean);
+}
+
+export function splitTicketPatterns(value: string) {
+  return value
+    .split(/\r?\n/)
     .map((one) => one.trim())
     .filter(Boolean);
 }
@@ -80,17 +93,23 @@ export function startsFromWatch(mode: ConversationMode) {
   return mode === "watch" || mode === "both";
 }
 
+export function startsTickets(mode: ConversationMode) {
+  return mode === "ticket";
+}
+
 export const conversationSchema = z
   .object({
     conversation: z.string().min(1, "channels.needsConversation"),
     label: z.string(),
     scope: z.string().min(1, "channels.needsScope"),
-    mode: z.enum(["mentions", "watch", "both", "announce"]),
+    mode: z.enum(["mentions", "watch", "both", "announce", "ticket"]),
     threadContext: z.boolean(),
     directApprovals: z.boolean(),
     sources: z.string(),
     agent: z.string(),
     runAs: z.string(),
+    ticketAddressFrom: z.string(),
+    ticketPatterns: z.string(),
     wants: z.array(z.enum(EVENTS)).min(1, "channels.needsEvent"),
   })
   .superRefine((value, ctx) => {
@@ -99,6 +118,46 @@ export const conversationSchema = z
     // watch rule in the form: three fields the screen was no longer showing
     // refused the save, with nothing to fix and nowhere to fix it.
     if (value.scope === INSTALLATION_SCOPE) return;
+    if (startsTickets(value.mode)) {
+      if (value.agent.trim() === "") {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["agent"],
+          message: "channels.needsTicketAgent",
+        });
+      }
+      if (value.runAs.trim() === "") {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["runAs"],
+          message: "channels.needsTicketRunAs",
+        });
+      }
+      const address = value.ticketAddressFrom.trim();
+      if (
+        address.length > 512 ||
+        !/^(bot|app):\S+$/.test(address)
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["ticketAddressFrom"],
+          message: "channels.needsTicketAddressFrom",
+        });
+      }
+      const patterns = splitTicketPatterns(value.ticketPatterns);
+      if (
+        patterns.length === 0 ||
+        patterns.length > 8 ||
+        patterns.some((pattern) => new TextEncoder().encode(pattern).length > 256)
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["ticketPatterns"],
+          message: "channels.needsTicketPatterns",
+        });
+      }
+      return;
+    }
     if (!startsFromWatch(value.mode)) return;
     if (splitSources(value.sources).length === 0) {
       ctx.addIssue({

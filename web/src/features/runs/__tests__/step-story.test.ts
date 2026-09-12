@@ -2,6 +2,21 @@ import { describe, expect, it } from "vitest";
 import { detailOf, summaryOf } from "@/features/runs/step-story";
 import type { Step } from "@/lib/api/client";
 
+it("names a late effect correction as recovered audit evidence", () => {
+  const line = detailOf({
+    seq: 12,
+    kind: "effect_reconciled",
+    at: "2026-09-12T12:00:00Z",
+    hash: "h",
+    payload: { tool: "gravitee.apim.accept_subscription", for_seq: 7 },
+  } as Step);
+
+  expect(line).toEqual({
+    key: "runs.storyEffectReconciledAt",
+    values: { seq: 7 },
+  });
+});
+
 /*
 What a finished run says in the trail.
 

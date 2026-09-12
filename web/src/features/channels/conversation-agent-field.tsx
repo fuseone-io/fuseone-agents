@@ -42,7 +42,7 @@ export function ConversationAgentField({
   scope,
 }: {
   form: UseFormReturn<ConversationValues>;
-  mode: "mentions" | "watch" | "both" | "announce";
+  mode: "mentions" | "watch" | "both" | "announce" | "ticket";
   scope: string;
 }) {
   const { t } = useTranslation();
@@ -87,7 +87,9 @@ export function ConversationAgentField({
           <FormDescription>
             {agents.isSuccess && startable.length === 0
               ? t("channels.noWatchAgents")
-              : mode === "watch"
+              : mode === "ticket"
+                ? t("channels.ticketAgentExplains")
+                : mode === "watch"
                 ? t("channels.watchAgentExplains")
                 : t("channels.conversationAgentExplains")}
           </FormDescription>

@@ -2641,7 +2641,7 @@ export interface components {
          */
         ToolEffect: "unknown" | "read" | "write" | "destructive" | "financial";
         /** @enum {string} */
-        StepKind: "run_started" | "planned" | "gate_decided" | "budget_reserved" | "tool_called" | "tool_returned" | "budget_reconciled" | "approval_requested" | "approval_decided" | "resumed" | "abandoned" | "compensated" | "failed" | "parked" | "run_finished";
+        StepKind: "run_started" | "planned" | "gate_decided" | "budget_reserved" | "tool_called" | "tool_returned" | "effect_reconciled" | "budget_reconciled" | "approval_requested" | "approval_decided" | "resumed" | "abandoned" | "compensated" | "failed" | "parked" | "run_finished";
         Scope: {
             company: string;
             area: string;
@@ -4056,7 +4056,9 @@ export interface components {
          *     keeps the mention path and the watched-message path enabled together;
          *     each keeps its own authority. `announce` starts nothing at all: the
          *     conversation only reports what runs do, and it is the only mode a
-         *     conversation for the whole installation may have.
+         *     conversation for the whole installation may have. `ticket` admits
+         *     matching human root messages as governed tickets; replies are routed
+         *     by the stored thread identity rather than matched again.
          *
          *     A closed set on the way in and deliberately not on the way out: a
          *     client may only ask for a mode this version can honour, and a row
@@ -4064,7 +4066,15 @@ export interface components {
          * @default mentions
          * @enum {string}
          */
-        ConversationMode: "mentions" | "watch" | "both" | "announce";
+        ConversationMode: "mentions" | "watch" | "both" | "announce" | "ticket";
+        TicketRule: {
+            /** @enum {string} */
+            openFrom: "linked_users";
+            /** @description The exact Slack bot or app allowed to address the ticket. */
+            addressFrom: string;
+            /** @description RE2 patterns matched only against bounded root-message text. */
+            patterns: string[];
+        };
         ChannelConversation: {
             id: string;
             label?: string;
@@ -4094,6 +4104,7 @@ export interface components {
              *     where the button is pressed, exactly as it is in the conversation.
              */
             directApprovals?: boolean;
+            ticket?: components["schemas"]["TicketRule"];
             sources?: string[];
             agent?: string;
             runAs?: string;
@@ -8020,6 +8031,7 @@ export interface operations {
                      *     only where this conversation is told about parked runs.
                      */
                     directApprovals?: boolean;
+                    ticket?: components["schemas"]["TicketRule"];
                     /** @description Which events reach it. Empty means the defaults, which are parked, failed and drifted — a conversation that hears every run finish is one people mute, and an agent that quietly stopped working is the one notice nobody thinks to ask for. Sending the field is choosing: the console always does, so a conversation configured there hears what was ticked and nothing else. */
                     wants?: ("parked" | "failed" | "finished" | "drifted")[];
                     /** @default true */
