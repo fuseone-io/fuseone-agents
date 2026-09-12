@@ -38,8 +38,8 @@ type GraviteeTicketStore interface {
 }
 
 type GraviteeInspectInput struct {
-	SubscriptionID string
-	ExpiresAt      string
+	SubscriptionID string `json:"subscriptionId"`
+	ExpiresAt      string `json:"expiresAt,omitempty"`
 }
 
 type GraviteeSnapshot struct {

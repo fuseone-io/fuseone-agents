@@ -166,6 +166,78 @@ func TestStore_oneApprovalBecomesOneExecutionClaim(t *testing.T) {
 	})
 }
 
+func TestStore_anExecutionAndItsExternalAttemptAreOneClaim(t *testing.T) {
+	forEachStore(t, func(t *testing.T, store ticket.Store) {
+		first := mustAwaiting(t, store, "atomic-first", "run-atomic-first", 7)
+		input := claimWithAttempt(first.Current.Ref, "run-atomic-first", 7, "effect-once")
+		claimed, attempt, won, err := store.ClaimExecutionWithAttempt(t.Context(), input)
+		if err != nil || !won || claimed.Active == nil || attempt.Execution != *claimed.Active {
+			t.Fatalf("ClaimExecutionWithAttempt = (%+v, %+v, %v, %v)", claimed, attempt, won, err)
+		}
+		if replay, same, won, err := store.ClaimExecutionWithAttempt(t.Context(), input); err != nil || won || replay.Active == nil || same != attempt {
+			t.Fatalf("replayed claim = (%+v, %+v, %v, %v)", replay, same, won, err)
+		}
+		changed := input
+		changed.Attempt.TargetID = "another-target"
+		if _, _, _, err := store.ClaimExecutionWithAttempt(t.Context(), changed); !errors.Is(err, ticket.ErrAttemptConflict) {
+			t.Fatalf("changed attempt = %v, want ErrAttemptConflict", err)
+		}
+
+		second := mustAwaiting(t, store, "atomic-second", "run-atomic-second", 11)
+		collision := claimWithAttempt(second.Current.Ref, "run-atomic-second", 11, "effect-once")
+		if _, _, _, err := store.ClaimExecutionWithAttempt(t.Context(), collision); !errors.Is(err, ticket.ErrAttemptConflict) {
+			t.Fatalf("colliding attempt = %v, want ErrAttemptConflict", err)
+		}
+		current, err := store.Current(t.Context(), second.Key)
+		if err != nil || current.Active != nil || current.Current.Phase != ticket.PhaseAwaitingApproval {
+			t.Fatalf("attempt collision left a partial claim: (%+v, %v)", current, err)
+		}
+	})
+}
+
+func mustAwaiting(
+	t *testing.T, store ticket.Store, suffix string, run domain.RunID, atSeq int64,
+) ticket.Ticket {
+	t.Helper()
+	key, err := ticket.Key("slack-main", "C-support", suffix)
+	if err != nil {
+		t.Fatalf("ticket key: %v", err)
+	}
+	opened, _, err := store.Open(t.Context(), ticket.OpenInput{
+		Key: key, Scope: scope, RequestedBy: "usr_requester", AddressedBy: "app:ticket-bot",
+		EventID: "event-" + suffix, Draft: content("draft-" + suffix), At: now,
+	})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	snapshot := content("snapshot-" + suffix)
+	mustInspect(t, store, opened.Current.Ref, snapshot, now.Add(30*time.Second))
+	awaiting, _, err := store.AwaitApproval(t.Context(), ticket.ApprovalInput{
+		Ref: opened.Current.Ref, RunID: run, AtSeq: atSeq,
+		Snapshot: snapshot, At: now.Add(time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("AwaitApproval: %v", err)
+	}
+	return awaiting
+}
+
+func claimWithAttempt(
+	ref domain.TicketRef, run domain.RunID, atSeq int64, idemKey string,
+) ticket.ClaimAttemptInput {
+	started := now.Add(2 * time.Minute)
+	return ticket.ClaimAttemptInput{
+		Claim: ticket.ClaimInput{Ref: ref, RunID: run, ApprovalAtSeq: atSeq, At: started},
+		Attempt: ticket.ExternalAttemptInput{
+			IdemKey: idemKey, Kind: "test.effect", CallSeq: 13, Instance: "fixture",
+			Scope: scope, ContractDigest: "contract:v1", TargetID: "target-1",
+			DecidedBy: "usr_approver", NextCheckAt: started,
+			DeadlineAt: started.Add(10 * time.Minute), ClaimedBy: "worker-1",
+			ClaimedUntil: started.Add(time.Minute),
+		},
+	}
+}
+
 func TestStore_anOlderExecutionCannotCompleteANewerRevision(t *testing.T) {
 	forEachStore(t, func(t *testing.T, store ticket.Store) {
 		opened := mustOpen(t, store, "event-root")
@@ -296,7 +368,8 @@ func forEachStore(t *testing.T, test func(*testing.T, ticket.Store)) {
 				t.Fatalf("migrate: %v", err)
 			}
 			if _, err := pool.Exec(t.Context(),
-				`truncate governed_ticket_events, governed_ticket_revisions, governed_tickets`); err != nil {
+				`truncate governed_external_attempts, governed_ticket_events,
+				 governed_ticket_revisions, governed_tickets`); err != nil {
 				t.Fatalf("clean tickets: %v", err)
 			}
 			test(t, ticket.NewPostgres(pool))

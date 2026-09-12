@@ -19,6 +19,8 @@ type Layer struct {
 	vault    VaultClient
 	sql      SQLRunner
 	gravitee engine.ApprovalEvidencer
+	inspect  GraviteeInspectionRunner
+	accept   GraviteeAcceptanceRunner
 
 	mu        sync.RWMutex
 	instances map[instanceKey]Instance
@@ -32,6 +34,14 @@ type SQLRunner interface {
 		ctx context.Context, instance, templateID, contractDigest string,
 		scope domain.Scope, params map[string]any,
 	) (SQLResult, error)
+}
+
+type GraviteeInspectionRunner interface {
+	Inspect(context.Context, string, engine.Call, GraviteeInspectInput) (engine.ToolResult, error)
+}
+
+type GraviteeAcceptanceRunner interface {
+	Accept(context.Context, string, engine.Call, GraviteeInspectInput) (engine.ToolResult, error)
 }
 
 type instanceKey struct {
@@ -57,6 +67,16 @@ func (l *Layer) WithSQLRuntime(sql SQLRunner) *Layer {
 // Execution remains unavailable until the final activation wires its runtime.
 func (l *Layer) WithGraviteeInspector(inspector engine.ApprovalEvidencer) *Layer {
 	l.gravitee = inspector
+	if runner, ok := inspector.(GraviteeInspectionRunner); ok {
+		l.inspect = runner
+	}
+	return l
+}
+
+// WithGraviteeRuntime enables the write half only after the durable attempt
+// journal and reconciler have been composed by the worker.
+func (l *Layer) WithGraviteeRuntime(runtime GraviteeAcceptanceRunner) *Layer {
+	l.accept = runtime
 	return l
 }
 
@@ -251,6 +271,8 @@ func (l *Layer) Invoke(ctx context.Context, call engine.Call) (engine.ToolResult
 		return l.invokeVaultNative(ctx, instance, op, call)
 	case "sql":
 		return l.invokeSQLNative(ctx, instance, op, call)
+	case "gravitee":
+		return l.invokeGraviteeNative(ctx, instance, op, call)
 	default:
 		return failed(CodeConnectorUnavailable), nil
 	}

@@ -93,6 +93,54 @@ func (p *Postgres) ClaimExecution(
 	return commitTicket(ctx, tx, in.Ref.Key, true)
 }
 
+func (p *Postgres) ClaimExecutionWithAttempt(
+	ctx context.Context, in ClaimAttemptInput,
+) (Ticket, ExternalAttempt, bool, error) {
+	if err := validateClaimAttempt(in); err != nil {
+		return Ticket{}, ExternalAttempt{}, false, err
+	}
+	tx, current, err := p.lockedTicket(ctx, in.Claim.Ref.Key)
+	if err != nil {
+		return Ticket{}, ExternalAttempt{}, false, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if current.Active != nil {
+		if _, _, err := existingClaim(current, in.Claim); err != nil {
+			return Ticket{}, ExternalAttempt{}, false, err
+		}
+		stored, err := readExternalAttempt(ctx, tx, in.Attempt.IdemKey)
+		want := attemptFor(*current.Active, in)
+		if err != nil && !errors.Is(err, ErrNotFound) {
+			return Ticket{}, ExternalAttempt{}, false, err
+		}
+		if err != nil || !sameExternalAttempt(stored, want) {
+			return Ticket{}, ExternalAttempt{}, false, ErrAttemptConflict
+		}
+		return current, stored, false, nil
+	}
+	if err := requireCurrent(current, in.Claim.Ref); err != nil {
+		return Ticket{}, ExternalAttempt{}, false, err
+	}
+	approval := current.Current.Approval
+	if current.Current.Phase != PhaseAwaitingApproval || approval == nil ||
+		approval.RunID != in.Claim.RunID || approval.AtSeq != in.Claim.ApprovalAtSeq {
+		return Ticket{}, ExternalAttempt{}, false, phaseError(current.Current.Phase)
+	}
+	execution := Execution{
+		Ref: in.Claim.Ref, RunID: in.Claim.RunID,
+		ApprovalAtSeq: in.Claim.ApprovalAtSeq, Snapshot: approval.Snapshot,
+	}
+	attempt := attemptFor(execution, in)
+	if err := claimRevision(ctx, tx, in.Claim); err != nil {
+		return Ticket{}, ExternalAttempt{}, false, err
+	}
+	if err := insertExternalAttempt(ctx, tx, attempt); err != nil {
+		return Ticket{}, ExternalAttempt{}, false, err
+	}
+	ticket, changed, err := commitTicket(ctx, tx, in.Claim.Ref.Key, true)
+	return ticket, attempt, changed, err
+}
+
 func (p *Postgres) Close(ctx context.Context, in CloseInput) (Ticket, bool, error) {
 	if err := validateClose(in); err != nil {
 		return Ticket{}, false, err

@@ -20,6 +20,7 @@ var (
 	ErrNotAddressSource = errors.New("ticket: only the configured source may address the ticket")
 	ErrEventTaken       = errors.New("ticket: the event belongs to another ticket")
 	ErrExecutionActive  = errors.New("ticket: another revision is executing")
+	ErrAttemptConflict  = errors.New("ticket: the external attempt conflicts with its durable record")
 	ErrSnapshotMoved    = errors.New("ticket: the inspected snapshot moved")
 	ErrPhase            = errors.New("ticket: the revision is not in the required phase")
 	ErrTerminal         = errors.New("ticket: the revision is terminal")
@@ -164,6 +165,7 @@ type Store interface {
 	RecordInspection(context.Context, InspectionInput) (Ticket, bool, error)
 	AwaitApproval(context.Context, ApprovalInput) (Ticket, bool, error)
 	ClaimExecution(context.Context, ClaimInput) (Ticket, bool, error)
+	ClaimExecutionWithAttempt(context.Context, ClaimAttemptInput) (Ticket, ExternalAttempt, bool, error)
 	Close(context.Context, CloseInput) (Ticket, bool, error)
 	FinishExecution(context.Context, FinishInput) (Ticket, error)
 }

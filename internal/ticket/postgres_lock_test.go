@@ -104,7 +104,8 @@ func ticketPostgres(t *testing.T) (*pgxpool.Pool, ticket.Store) {
 		t.Fatalf("migrate: %v", err)
 	}
 	if _, err := pool.Exec(t.Context(),
-		`truncate governed_ticket_events, governed_ticket_revisions, governed_tickets`); err != nil {
+		`truncate governed_external_attempts, governed_ticket_events,
+		 governed_ticket_revisions, governed_tickets`); err != nil {
 		t.Fatalf("clean tickets: %v", err)
 	}
 	return pool, ticket.NewPostgres(pool)

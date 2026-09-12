@@ -42,6 +42,9 @@ func (p *workerParts) startLoops(
 	if p.native != nil && p.settings != nil {
 		go p.watchConnectors(ctx)
 	}
+	if p.graviteeRuntime != nil && p.graviteeAttempts != nil {
+		go p.reconcileGravitee(ctx, cfg.owner+"-gravitee")
+	}
 
 	// The months the ledger is about to need. First, because everything below
 	// writes steps and a month with no partition costs the ability to archive

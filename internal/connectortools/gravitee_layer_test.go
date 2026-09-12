@@ -2,12 +2,60 @@ package connectortools
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
 )
+
+func TestLayer_routesTheRealGraviteeToolWithoutTheMCPResultCache(t *testing.T) {
+	fixture := newAcceptanceFixture(t)
+	base := &cachingBase{}
+	gravitee := graviteeInstance(fixture.call.Scope, graviteeSource("secrets"))
+	vault := graviteeVault("secrets", fixture.call.Scope)
+	layer := New(base, nil, fixture.content, nil).WithGraviteeRuntime(fixture.runtime)
+	if err := layer.SetInstances([]Instance{gravitee, vault}); err != nil {
+		t.Fatalf("SetInstances: %v", err)
+	}
+	args, _ := json.Marshal(fixture.input)
+	fixture.call.Tool = "gravitee.apim.accept_subscription"
+	fixture.call.Args = args
+	fixture.call.ContractDigest = layer.ApprovalBinding(fixture.call)
+	fixture.access.access.ContractDigest = fixture.call.ContractDigest
+	if err := layer.Reserve(t.Context(), fixture.call); err != nil {
+		t.Fatalf("Reserve: %v", err)
+	}
+	result, err := layer.Invoke(t.Context(), fixture.call)
+	if err != nil || result.Failed || base.invoked != 0 || fixture.remote.acceptCalls != 1 {
+		t.Fatalf("Invoke = (%+v, %v), base=%d POST=%d",
+			result, err, base.invoked, fixture.remote.acceptCalls)
+	}
+}
+
+func TestLayer_refusesExtraGraviteeArgumentsBeforeResolvingAuthority(t *testing.T) {
+	fixture := newAcceptanceFixture(t)
+	layer := New(nil, nil, fixture.content, nil).WithGraviteeRuntime(fixture.runtime)
+	if err := layer.SetInstances([]Instance{
+		graviteeInstance(fixture.call.Scope, graviteeSource("secrets")),
+		graviteeVault("secrets", fixture.call.Scope),
+	}); err != nil {
+		t.Fatalf("SetInstances: %v", err)
+	}
+	fixture.call.Tool = "gravitee.apim.accept_subscription"
+	fixture.call.Args = []byte(`{
+		"subscriptionId":"sub-42",
+		"expiresAt":"2026-09-13T15:00:00Z",
+		"customApiKey":"must-never-be-accepted"
+	}`)
+	result, err := layer.Invoke(t.Context(), fixture.call)
+	if err != nil || !result.Failed || result.ErrorCode != CodeConnectorBadArguments ||
+		fixture.access.calls != 0 || fixture.remote.acceptCalls != 0 {
+		t.Fatalf("Invoke = (%+v, %v), authority=%d POST=%d",
+			result, err, fixture.access.calls, fixture.remote.acceptCalls)
+	}
+}
 
 func TestLayer_onlyTheGraviteeAcceptanceMayClaimInspectedApprovalEvidence(t *testing.T) {
 	t.Parallel()

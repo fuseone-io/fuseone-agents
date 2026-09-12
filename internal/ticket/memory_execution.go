@@ -91,6 +91,58 @@ func (m *Memory) ClaimExecution(ctx context.Context, in ClaimInput) (Ticket, boo
 	return cloneTicket(ticket), true, nil
 }
 
+func (m *Memory) ClaimExecutionWithAttempt(
+	ctx context.Context, in ClaimAttemptInput,
+) (Ticket, ExternalAttempt, bool, error) {
+	if err := validateClaimAttempt(in); err != nil {
+		return Ticket{}, ExternalAttempt{}, false, err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	ticket, err := m.ticketFor(ctx, in.Claim.Ref.Key)
+	if err != nil {
+		return Ticket{}, ExternalAttempt{}, false, err
+	}
+	if ticket.Active != nil {
+		if _, _, err := existingClaim(ticket, in.Claim); err != nil {
+			return Ticket{}, ExternalAttempt{}, false, err
+		}
+		stored, ok := m.attempts[in.Attempt.IdemKey]
+		want := attemptFor(*ticket.Active, in)
+		if !ok || !sameExternalAttempt(stored, want) {
+			return Ticket{}, ExternalAttempt{}, false, ErrAttemptConflict
+		}
+		return cloneTicket(ticket), stored, false, nil
+	}
+	if _, exists := m.attempts[in.Attempt.IdemKey]; exists {
+		return Ticket{}, ExternalAttempt{}, false, ErrAttemptConflict
+	}
+	if err := requireCurrent(ticket, in.Claim.Ref); err != nil {
+		return Ticket{}, ExternalAttempt{}, false, err
+	}
+	approval := ticket.Current.Approval
+	if ticket.Current.Phase != PhaseAwaitingApproval || approval == nil ||
+		approval.RunID != in.Claim.RunID || approval.AtSeq != in.Claim.ApprovalAtSeq {
+		return Ticket{}, ExternalAttempt{}, false, phaseError(ticket.Current.Phase)
+	}
+	execution := Execution{
+		Ref: in.Claim.Ref, RunID: in.Claim.RunID,
+		ApprovalAtSeq: in.Claim.ApprovalAtSeq, Snapshot: approval.Snapshot,
+	}
+	attempt := attemptFor(execution, in)
+	for _, stored := range m.attempts {
+		if stored.Execution.Ref == execution.Ref {
+			return Ticket{}, ExternalAttempt{}, false, ErrAttemptConflict
+		}
+	}
+	ticket.Active = &execution
+	ticket.Current.Phase, ticket.Current.UpdatedAt = PhaseExecuting, in.Claim.At.UTC()
+	ticket.UpdatedAt = in.Claim.At.UTC()
+	m.attempts[attempt.IdemKey] = attempt
+	m.putCurrent(ticket)
+	return cloneTicket(ticket), attempt, true, nil
+}
+
 func (m *Memory) Close(ctx context.Context, in CloseInput) (Ticket, bool, error) {
 	if err := validateClose(in); err != nil {
 		return Ticket{}, false, err

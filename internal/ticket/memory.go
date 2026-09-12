@@ -12,6 +12,7 @@ type Memory struct {
 	tickets   map[domain.TicketKey]Ticket
 	revisions map[domain.TicketKey]map[int64]Revision
 	events    map[string]domain.TicketRef
+	attempts  map[string]ExternalAttempt
 }
 
 func NewMemory() *Memory {
@@ -19,6 +20,7 @@ func NewMemory() *Memory {
 		tickets:   make(map[domain.TicketKey]Ticket),
 		revisions: make(map[domain.TicketKey]map[int64]Revision),
 		events:    make(map[string]domain.TicketRef),
+		attempts:  make(map[string]ExternalAttempt),
 	}
 }
 
