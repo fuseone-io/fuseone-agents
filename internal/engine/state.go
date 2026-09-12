@@ -61,8 +61,9 @@ type PendingApproval struct {
 	AtSeq  int64
 	// Effect and At are what an approver decides on: what the call does to the
 	// world, and how long it has been waiting for them.
-	Effect domain.Effect
-	At     time.Time
+	Effect   domain.Effect
+	At       time.Time
+	Evidence domain.ApprovalEvidence
 }
 
 // ApprovedCall is the exact call a person cleared.
@@ -76,6 +77,7 @@ type ApprovedCall struct {
 	ArgsRef        string
 	ArgsDigest     string
 	ContractDigest string
+	Evidence       domain.ApprovalEvidence
 	// AtSeq is the approval_requested step it answers.
 	AtSeq int64
 }

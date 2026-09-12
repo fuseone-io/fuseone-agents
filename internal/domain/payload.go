@@ -273,6 +273,28 @@ type ApprovalRequestedPayload struct {
 	// that a field came from an untrusted source, which is usually the whole
 	// reason the call was escalated (SE-06).
 	Labels Labels `json:"labels,omitempty"`
+	// Evidence is a safe, erasable snapshot inspected by a platform-owned
+	// tool before this decision was requested. Only its reference and digest
+	// belong in the long-lived ledger; the snapshot may contain personal data.
+	Evidence *ApprovalEvidence `json:"evidence,omitempty"`
+}
+
+// ApprovalEvidence binds a human decision to inspected content outside the
+// ledger. Kind selects the fixed decoder used at a trusted edge; it is never
+// a model-authored media type or schema name.
+type ApprovalEvidence struct {
+	Kind   string    `json:"kind"`
+	Ticket TicketRef `json:"ticket"`
+	Ref    string    `json:"ref"`
+	Digest string    `json:"digest"`
+}
+
+func (e ApprovalEvidence) Empty() bool {
+	return e.Kind == "" && !e.Ticket.Valid() && e.Ref == "" && e.Digest == ""
+}
+
+func (e ApprovalEvidence) Valid() bool {
+	return e.Kind != "" && e.Ticket.Valid() && e.Ref != "" && e.Digest != ""
 }
 
 type ApprovalDecidedPayload struct {

@@ -157,9 +157,15 @@ func (s *State) applyKind(step domain.Step) error {
 			Tool: p.Tool, Rule: p.Rule, Reason: p.Reason,
 			AtSeq: step.Seq, Effect: p.Effect, At: step.At,
 		}
+		if p.Evidence != nil {
+			s.PendingApproval.Evidence = *p.Evidence
+		}
 		s.requested = &ApprovedCall{
 			Tool: p.Tool, ArgsRef: p.ArgsRef, ArgsDigest: p.ArgsDigest,
 			ContractDigest: p.ContractDigest, AtSeq: step.Seq,
+		}
+		if p.Evidence != nil {
+			s.requested.Evidence = *p.Evidence
 		}
 		s.Phase = PhaseAwaitingApproval
 

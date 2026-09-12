@@ -63,22 +63,30 @@ func (p *scriptedPlanner) Plan(context.Context, PlanInput) (Proposal, error) {
 // resolves — because a fake that hands back a dangling reference lets a
 // transcript bug pass here and fail in production.
 type countingTools struct {
-	invocations  []domain.ToolID
-	calls        []Call
-	bindingCalls []Call
-	content      ContentStore
-	body         []byte
-	bodies       [][]byte
-	reserveErr   error
-	err          error
-	failed       bool
-	errorCode    string
-	cached       bool
+	invocations   []domain.ToolID
+	calls         []Call
+	bindingCalls  []Call
+	content       ContentStore
+	body          []byte
+	bodies        [][]byte
+	reserveErr    error
+	err           error
+	failed        bool
+	errorCode     string
+	cached        bool
+	evidence      domain.ApprovalEvidence
+	evidenceErr   error
+	evidenceCalls []Call
 }
 
 func (c *countingTools) ApprovalBinding(call Call) string {
 	c.bindingCalls = append(c.bindingCalls, call)
 	return ""
+}
+
+func (c *countingTools) ApprovalEvidence(_ context.Context, call Call) (domain.ApprovalEvidence, error) {
+	c.evidenceCalls = append(c.evidenceCalls, call)
+	return c.evidence, c.evidenceErr
 }
 
 func (c *countingTools) Reserve(context.Context, Call) error {
@@ -2164,6 +2172,60 @@ func TestAdvance_approvalRequested_recordsWhatTheApproverIsDeciding(t *testing.T
 	}
 	if string(stored) != string(args) {
 		t.Errorf("stored args = %q, want %q", stored, args)
+	}
+}
+
+func TestAdvance_approvalCarriesTheEvidenceThatWasInspectedBeforeTheDecision(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	h := newHarness(t, Proposal{Tool: "crm.note", Args: []byte(`{"text":"approve it"}`)})
+	inspected := domain.ApprovalEvidence{
+		Kind: "gravitee_subscription", Ticket: domain.TicketRef{Key: "slack-ticket", Revision: 1},
+		Ref: "content://snapshot/1", Digest: "sha256:snapshot-1",
+	}
+	h.tools.evidence = inspected
+	start := h.start(t, generousBudget())
+
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+	var asked domain.ApprovalRequestedPayload
+	if err := h.payloadOf(t, domain.StepApprovalRequested, &asked); err != nil {
+		t.Fatalf("approval payload: %v", err)
+	}
+	if asked.Evidence == nil || *asked.Evidence != inspected {
+		t.Fatalf("approval evidence = %+v, want %+v", asked.Evidence, inspected)
+	}
+
+	// A later read can answer something else. The execution still carries the
+	// snapshot the person saw, not whatever is current after they decide.
+	h.tools.evidence = domain.ApprovalEvidence{
+		Kind: "gravitee_subscription", Ticket: domain.TicketRef{Key: "slack-ticket", Revision: 2},
+		Ref: "content://snapshot/2", Digest: "sha256:snapshot-2",
+	}
+	h.approve(t, true)
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("Advance approved call: %v", err)
+	}
+	if len(h.tools.calls) != 1 || h.tools.calls[0].ApprovalEvidence != inspected {
+		t.Fatalf("invoked evidence = %+v, want %+v", h.tools.calls, inspected)
+	}
+	if len(h.tools.evidenceCalls) != 1 {
+		t.Fatalf("evidence reads = %d, want one before the decision", len(h.tools.evidenceCalls))
+	}
+}
+
+func TestAdvance_incompleteApprovalEvidenceFailsBeforeAQuestionIsRecorded(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t, Proposal{Tool: "crm.note", Args: []byte(`{"text":"approve it"}`)})
+	h.tools.evidence = domain.ApprovalEvidence{Kind: "gravitee_subscription"}
+
+	if _, err := h.runner.Advance(t.Context(), h.start(t, generousBudget())); err == nil {
+		t.Fatal("Advance accepted incomplete approval evidence")
+	}
+	if _, err := h.stepOf(t, domain.StepApprovalRequested); err == nil {
+		t.Fatal("an approval was recorded without the evidence it claims to carry")
 	}
 }
 
