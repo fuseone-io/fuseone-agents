@@ -2,9 +2,11 @@
 
 ## Status
 
-Implementation started behind non-runtime contracts. No Gravitee write
-operation becomes runtime until the target installation contract, orphan
-recovery and the two end-to-end paths in this note pass.
+Implemented. The two Gravitee operations are runtime only through the governed
+native connector path. Ticket admission, immutable revisions, informed
+approval, one execution claim, orphan reconciliation and deterministic thread
+completion are covered independently and by the Slack-to-ticket end-to-end
+path described below.
 
 ## Problem
 
@@ -120,7 +122,9 @@ collected.
 - Ticket content and canonical drafts live in erasable content storage. The
   ticket projection holds references, digests, identities and state only.
 - The minimum state machine is `collecting -> awaiting_approval -> executing`
-  and then `completed`, `rejected` or `cancelled`.
+  and then `completed`, `rejected` or `cancelled`. An ambiguous write that
+  exceeds its automatic check window enters non-terminal `needs_attention`:
+  the active execution claim remains held while observation continues.
 
 Only the original requester changes request fields. Only `AddressedBy` changes
 the recipient list. FuseOne messages, approver prose and every other source are
@@ -197,11 +201,17 @@ Reconciliation has these outcomes:
 | `REJECTED` or `CLOSED` | Seal a terminal non-success result |
 | `PENDING` before any write attempt | The first accept may proceed |
 | `PENDING` after an ambiguous attempt | Poll within the bounded window |
-| Unknown, inconsistent or still pending at the deadline | Park for manual reconciliation |
+| Unknown, inconsistent or still pending at the deadline | Notify that manual verification is required, retain the execution claim and continue GET-only observation |
 
 The attempt record contains no response body, API key or connector credential.
 Finishing recovery is conditional on the same ticket revision so an old result
 cannot complete a newer ticket.
+
+When the ordinary `tool_returned` step is absent, confirmed recovery appends an
+`effect_reconciled` audit step with the safe result reference and digest. That
+step records what became known without changing the run phase, a later pending
+approval or a terminal outcome. The external-attempt journal is settled only
+after either the ordinary return or this immutable correction exists.
 
 ## Message admission and performance
 
@@ -232,8 +242,9 @@ identical recipient list does not close and recreate cards.
 8. One decision wins through the existing approval precondition.
 9. The ticket claims that revision and the connector repeats the preflight.
 10. The connector accepts once, or an orphan reconciler later confirms it.
-11. A deterministic thread message reports application, API, plan, approver,
-    expiration and revocation guidance. It never reports the key.
+11. A deterministic thread message reports the subscription, expiration and
+    retrieval and revocation guidance. It never reports the key or remote
+    display names.
 
 ## Delivery slices
 
@@ -249,7 +260,7 @@ and observed failing before implementation.
 7. Add indexed root matching, reply routing and dynamic approval addressing.
 8. Add console configuration, agent authoring and deterministic completion.
 9. Run the connector and whole-ticket end-to-end tests, then change maturity to
-   runtime in the final commit.
+   runtime in the final commit. Complete.
 
 ## Required proofs
 

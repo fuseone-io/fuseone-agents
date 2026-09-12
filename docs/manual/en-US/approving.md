@@ -74,6 +74,18 @@ A run read a ticket's text and now wants to write. It stopped, because anything 
 
 **What to look at:** whether what will be written reflects the ticket, or reflects something the ticket's text *asked* the agent to do. The second is an instruction attempting to arrive inside content, and the answer is to refuse.
 
+For a governed Gravitee ticket, also verify the fixed evidence panel: the
+subscription, application owner, API, plan, current status and requested
+expiration. Acceptance is refused if the remote snapshot changes after this
+panel was produced. The API key itself is deliberately absent; it is retrieved
+from Gravitee after acceptance, never from the approval card.
+
+If the ticket later says **Manual verification required**, do not approve,
+retry or issue another key. Inspect that subscription in Gravitee. FuseOne
+keeps the original execution claim and continues observing it with reads; once
+the remote outcome is provable, the same Slack thread receives the confirmed
+answer.
+
 ### The agent wants to delete something
 
 A destructive effect is blocked by default. If it reached you, somebody opened it by policy.

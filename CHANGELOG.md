@@ -25,6 +25,50 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+### Upgrade notes
+
+- **Enabled Gravitee instances now expose runtime subscription tools.** Before
+  upgrading, review each enabled instance's organization, environment, single
+  allowed API, expiration bounds, Vault binding and credential permissions.
+  The model can supply only a subscription id and requested expiration; the
+  configured instance supplies the remote path. A write still stops at the
+  Gate and needs an informed human approval.
+
+- **Slack conversations can now admit matching root messages as governed
+  tickets.** A ticket conversation reads public-channel messages, so the Slack
+  app needs `message.channels` and must be invited to the room. Approval
+  buttons need the Interactivity callback, and manager DMs need `im:write`.
+  Nothing starts until an operator explicitly changes a conversation to
+  **Governed tickets** and supplies its admission patterns.
+
+### Added
+
+- **A Slack support thread can govern one Gravitee API subscription.** A linked
+  requester opens a matching root message, corrections create durable ticket
+  revisions, and a configured bot or app may name who should receive the
+  approval. The approver sees the fixed Gravitee subscription snapshot; an
+  acceptance proceeds only if that snapshot still matches and one current
+  approval wins.
+
+- **Ambiguous Gravitee writes recover without submitting the acceptance
+  twice.** The worker records an external attempt before the POST and
+  reconciles an orphan from the remote subscription state. Confirmed late
+  knowledge is sealed as immutable audit evidence without moving the run's
+  current state. If the bounded check window expires, the ticket asks for
+  manual verification, keeps its execution claim and continues GET-only
+  observation; it never submits a second acceptance. One ticket revision can
+  own only one active execution.
+
+### Security
+
+- **A generated API key never enters FuseOne or Slack.** The connector never
+  requests or supplies `customApiKey`, decodes only a fixed safe projection,
+  and posts a deterministic outcome containing the subscription, expiration
+  and retrieval guidance. The requester retrieves the key from Gravitee
+  through the organization's existing protected path.
+
 ## [0.48.0] — 2026-09-11
 
 ### Added
