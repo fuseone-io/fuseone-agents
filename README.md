@@ -250,6 +250,7 @@ whether this design fits their problem.
 | [NT-009](docs/NT-009-governed-connectors.md) | First-party connector shapes, and why runtime comes only after governance |
 | [NT-010](docs/NT-010-the-shape-of-the-platform.md) | Topology, the run loop, layering and where data is written |
 | [NT-011](docs/NT-011-durable-agent-execution-and-workflow-engines.md) | The durable run boundary, and when a workflow engine belongs beside it |
+| [NT-012](docs/NT-012-governed-slack-tickets.md) | Governed Slack tickets and Gravitee subscription approval |
 
 Engineering rules are in [CLAUDE.md](CLAUDE.md) for the Go core and
 [web/CLAUDE.md](web/CLAUDE.md) for the console. Design notes and commits are in
