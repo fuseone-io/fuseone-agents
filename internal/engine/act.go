@@ -50,6 +50,7 @@ func (r *Runner) actApproved(ctx context.Context, state State, start Start) (Sta
 
 	return r.act(ctx, state, start, Proposal{
 		Tool: approved.Tool, Args: args, approvalEvidence: approved.Evidence,
+		approvalAtSeq: approved.AtSeq, decidedBy: approved.DecidedBy,
 	})
 }
 
@@ -495,6 +496,8 @@ func (r *Runner) invoke(
 		Tool:    p.Tool, Args: p.Args,
 		ContractDigest:   p.contractDigest,
 		ApprovalEvidence: p.approvalEvidence,
+		ApprovalAtSeq:    p.approvalAtSeq,
+		DecidedBy:        p.decidedBy,
 		OnBehalfOf:       start.OnBehalfOf,
 		IdemKey:          idemKey,
 		ContextArtifacts: state.ContextArtifacts,

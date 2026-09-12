@@ -276,6 +276,7 @@ func (s *State) decide(p domain.ApprovalDecidedPayload) {
 		// withdraw permission on the strength of an answer about something
 		// else.
 		if p.Approved {
+			s.requested.DecidedBy = p.By
 			s.Approved = s.requested
 		}
 		s.PendingApproval, s.requested = nil, nil

@@ -75,6 +75,10 @@ type Proposal struct {
 	// approvalEvidence is read from a trusted tool boundary or a sealed
 	// approval step. A planner cannot author it.
 	approvalEvidence domain.ApprovalEvidence
+	// approvalAtSeq is the approval_requested step that cleared this proposal.
+	// Zero means this proposal did not arrive through an approval.
+	approvalAtSeq int64
+	decidedBy     domain.UserID
 	// Estimate is the worst-case consumption of the call, used to reserve
 	// budget before spending it.
 	Estimate domain.Consumption
@@ -148,6 +152,12 @@ type Call struct {
 	// ApprovalEvidence is copied from the approval_requested step when an
 	// approved call executes. The model cannot author or replace it.
 	ApprovalEvidence domain.ApprovalEvidence
+	// ApprovalAtSeq names the exact approval request that cleared this call.
+	// Native effects use it as a compare-and-set input, never as model data.
+	ApprovalAtSeq int64
+	// DecidedBy is the person who cleared ApprovalAtSeq. It is audit identity,
+	// distinct from the requester and from the run's delegated principal.
+	DecidedBy domain.UserID
 	// OnBehalfOf is the human delegation the run is using. Tool transports use
 	// it only to choose the credential owned by that human; the Gate has
 	// already decided whether the call may happen at all.

@@ -79,7 +79,8 @@ type ApprovedCall struct {
 	ContractDigest string
 	Evidence       domain.ApprovalEvidence
 	// AtSeq is the approval_requested step it answers.
-	AtSeq int64
+	AtSeq     int64
+	DecidedBy domain.UserID
 }
 
 // State is the run reconstructed from its ledger. Every field is derived; none

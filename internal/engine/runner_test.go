@@ -2211,9 +2211,27 @@ func TestAdvance_approvalCarriesTheEvidenceThatWasInspectedBeforeTheDecision(t *
 	if len(h.tools.calls) != 1 || h.tools.calls[0].ApprovalEvidence != inspected {
 		t.Fatalf("invoked evidence = %+v, want %+v", h.tools.calls, inspected)
 	}
+	if h.tools.calls[0].ApprovalAtSeq != askedAtSeq(t, h.ledger) {
+		t.Fatalf("approved at seq = %d, want the sealed request", h.tools.calls[0].ApprovalAtSeq)
+	}
 	if len(h.tools.evidenceCalls) != 1 {
 		t.Fatalf("evidence reads = %d, want one before the decision", len(h.tools.evidenceCalls))
 	}
+}
+
+func askedAtSeq(t *testing.T, store Ledger) int64 {
+	t.Helper()
+	steps, err := store.Read(t.Context(), "run-1", domain.FirstSeq)
+	if err != nil {
+		t.Fatalf("read approval: %v", err)
+	}
+	for _, step := range steps {
+		if step.Kind == domain.StepApprovalRequested {
+			return step.Seq
+		}
+	}
+	t.Fatal("approval request not found")
+	return 0
 }
 
 func TestAdvance_incompleteApprovalEvidenceFailsBeforeAQuestionIsRecorded(t *testing.T) {
