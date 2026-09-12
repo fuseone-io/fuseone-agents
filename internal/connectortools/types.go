@@ -21,6 +21,10 @@ const (
 	CodeConnectorArtifactMissing = "connector_artifact_missing"
 	CodeConnectorDigestMismatch  = "connector_digest_mismatch"
 	CodeConnectorUpstreamFailed  = "connector_upstream_failed"
+	CodeConnectorContractChanged = "connector_contract_changed"
+	CodeConnectorSnapshotChanged = "connector_snapshot_changed"
+	CodeConnectorOutcomeUnknown  = "connector_outcome_unknown"
+	CodeConnectorNeedsAttention  = "connector_needs_attention"
 )
 
 var instanceNameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,62}$`)

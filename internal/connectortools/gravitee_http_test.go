@@ -2,6 +2,7 @@ package connectortools
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +10,91 @@ import (
 	"sync/atomic"
 	"testing"
 )
+
+func TestGraviteeAccept_ownsTheBodyAndReturnsOnlyTheSafeAcceptedProjection(t *testing.T) {
+	const (
+		credential = "GRAVITEE-WRITE-CREDENTIAL-CANARY"
+		apiKey     = "GRAVITEE-GENERATED-KEY-CANARY"
+	)
+	expires := "2026-09-13T12:00:00Z"
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, "/subscriptions/sub-42/_accept") {
+			t.Errorf("request = %s %s", r.Method, r.URL.Path)
+		}
+		if r.Header.Get("Authorization") != "Bearer "+credential {
+			t.Error("accept did not use the resolved connector credential")
+		}
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if len(body) != 2 || body["endingAt"] != expires || body["customApiKey"] != nil {
+			t.Fatalf("accept body = %#v", body)
+		}
+		_, _ = w.Write([]byte(strings.ReplaceAll(
+			validGraviteeSubscription(), `"status":"PENDING"`,
+			`"status":"ACCEPTED","endingAt":"`+expires+`","apiKey":"`+apiKey+`"`)))
+	}))
+	defer server.Close()
+
+	cfg := graviteeInstance(area("acme", "platform"), graviteeSource("secrets")).Gravitee
+	cfg.Address = server.URL
+	snapshot := GraviteeSnapshot{SubscriptionID: "sub-42", RequestedExpiration: &expires}
+	got, err := NewHTTPGraviteeClient(server.Client()).Accept(
+		t.Context(), cfg, SecretValue{value: credential}, snapshot)
+	if err != nil {
+		t.Fatalf("Accept: %v", err)
+	}
+	if got.Status != "ACCEPTED" || !sameRequestedExpiration(got.EndingAt, &expires) {
+		t.Fatalf("accepted observation = %+v", got)
+	}
+	if strings.Contains(fmt.Sprintf("%+v", got), apiKey) {
+		t.Fatal("accepted projection carried the API key")
+	}
+}
+
+func TestGraviteeAccept_distinguishesDefinitiveRefusalFromAnAmbiguousOutcome(t *testing.T) {
+	for _, test := range []struct {
+		status    int
+		ambiguous bool
+	}{{http.StatusBadRequest, false}, {http.StatusConflict, true},
+		{http.StatusTooManyRequests, true}, {http.StatusInternalServerError, true}} {
+		t.Run(fmt.Sprint(test.status), func(t *testing.T) {
+			const canary = "GRAVITEE-ERROR-BODY-CANARY"
+			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("X-Request-ID", "request-safe")
+				w.WriteHeader(test.status)
+				_, _ = w.Write([]byte(canary))
+			}))
+			defer server.Close()
+			cfg := graviteeInstance(area("acme", "platform"), graviteeSource("secrets")).Gravitee
+			cfg.Address = server.URL
+			_, err := NewHTTPGraviteeClient(server.Client()).Accept(t.Context(), cfg,
+				SecretValue{value: "credential"}, GraviteeSnapshot{SubscriptionID: "sub-42"})
+			if err == nil || ambiguousGraviteeResult(err) != test.ambiguous {
+				t.Fatalf("Accept error = %v, ambiguous = %v", err, ambiguousGraviteeResult(err))
+			}
+			if strings.Contains(err.Error(), canary) {
+				t.Fatal("the Gravitee error body escaped through the error")
+			}
+		})
+	}
+}
+
+func TestGraviteeObserve_readsTerminalStateWithoutChangingTheProjection(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(strings.Replace(
+			validGraviteeSubscription(), `"status":"PENDING"`, `"status":"REJECTED"`, 1)))
+	}))
+	defer server.Close()
+	cfg := graviteeInstance(area("acme", "platform"), graviteeSource("secrets")).Gravitee
+	cfg.Address = server.URL
+	got, err := NewHTTPGraviteeClient(server.Client()).Observe(
+		t.Context(), cfg, SecretValue{value: "credential"}, "sub-42")
+	if err != nil || got.Status != "REJECTED" {
+		t.Fatalf("Observe = (%+v, %v)", got, err)
+	}
+}
 
 func TestGraviteeInspect_usesTheConfiguredPathAndProjectsOnlyApprovalFields(t *testing.T) {
 	const (

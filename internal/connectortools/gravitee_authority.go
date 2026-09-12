@@ -13,8 +13,9 @@ import (
 var ErrNoGraviteeAuthority = errors.New("connector: no Gravitee authority for this run")
 
 type GraviteeAccess struct {
-	Config     GraviteeConfig
-	credential SecretValue
+	Config         GraviteeConfig
+	ContractDigest string
+	credential     SecretValue
 }
 
 type GraviteeAccesses interface {
@@ -54,7 +55,14 @@ func (r *GraviteeAccessResolver) Resolve(
 		}
 		return GraviteeAccess{}, ErrNoGraviteeAuthority
 	}
-	return GraviteeAccess{Config: local.gravitee, credential: credential}, nil
+	contract, ok := graviteeContractDigest(local.gravitee, local.vault,
+		"gravitee.accept_subscription")
+	if !ok {
+		return GraviteeAccess{}, ErrNoGraviteeAuthority
+	}
+	return GraviteeAccess{
+		Config: local.gravitee, ContractDigest: contract, credential: credential,
+	}, nil
 }
 
 type graviteeLocalSource struct {
