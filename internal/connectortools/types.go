@@ -34,10 +34,12 @@ type Instance struct {
 	Scope     domain.Scope
 	Enabled   bool
 
-	Vault VaultConfig
-	SQL   SQLConfig
+	Vault    VaultConfig
+	SQL      SQLConfig
+	Gravitee GraviteeConfig
 	// Token is what the instance authenticates with, for the connectors that
-	// authenticate with one. RequiresToken says which; SQL is not among them.
+	// authenticate with one. RequiresToken says which; bound connectors are not
+	// among them.
 	Token string
 	// HasToken says a token is stored without revealing it. Configuration read
 	// back from settings never carries the bytes, so a check that asked Token

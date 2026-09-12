@@ -118,6 +118,94 @@ func TestPutConnectorInstance_cannotClearTokenWhileEnabled(t *testing.T) {
 	}
 }
 
+func TestPutConnectorInstance_boundConnectorCannotStoreASecondCredential(t *testing.T) {
+	instances, _, _ := newConnectorInstances(t)
+	ctx := context.Background()
+	vaultToken := "vault-token"
+	vault := vaultInstance("secrets", true)
+	vault.Vault.AllowedPathPrefixes = []string{"integrations/gravitee"}
+	if err := instances.PutConnectorInstance(ctx, "usr_ana", platform,
+		settings.ScopeCompany, domain.Scope{Company: "acme"}, vault, &vaultToken, false); err != nil {
+		t.Fatalf("PutConnectorInstance(vault): %v", err)
+	}
+
+	const canary = "GRAVITEE-TOKEN-CANARY"
+	gravitee := graviteeAdminInstance()
+	err := instances.PutConnectorInstance(ctx, "usr_ana", platform,
+		settings.ScopeArea, domain.Scope{Company: "acme", Area: "platform"},
+		gravitee, ptr(canary), false)
+	if err == nil || !strings.Contains(err.Error(), "must not carry a token") {
+		t.Fatalf("err = %v, want the second credential refused", err)
+	}
+	if strings.Contains(err.Error(), canary) {
+		t.Fatalf("the refusal repeated the credential: %v", err)
+	}
+	listed, err := instances.ConnectorInstances(ctx)
+	if err != nil {
+		t.Fatalf("ConnectorInstances: %v", err)
+	}
+	if len(listed) != 1 || listed[0].Name != "secrets" {
+		t.Fatalf("stored = %+v, want only the Vault instance", listed)
+	}
+}
+
+func TestPutConnectorInstance_editingABoundConnectorClearsALegacySecret(t *testing.T) {
+	instances, store, _ := newConnectorInstances(t)
+	ctx := context.Background()
+	vaultToken := "vault-token"
+	vault := vaultInstance("secrets", true)
+	vault.Vault.AllowedPathPrefixes = []string{"integrations/gravitee"}
+	if err := instances.PutConnectorInstance(ctx, "usr_ana", platform,
+		settings.ScopeCompany, domain.Scope{Company: "acme"}, vault, &vaultToken, false); err != nil {
+		t.Fatalf("PutConnectorInstance(vault): %v", err)
+	}
+
+	gravitee := graviteeAdminInstance()
+	value, err := connectortools.SettingValue(gravitee)
+	if err != nil {
+		t.Fatalf("SettingValue: %v", err)
+	}
+	scope := domain.Scope{Company: "acme", Area: "platform"}
+	if err := store.Put(ctx, settings.Setting{
+		ScopeKind: settings.ScopeArea, Scope: scope,
+		Kind: settings.KindConnectorInstance, Name: gravitee.Name,
+		Value: value, Secret: "LEGACY-SECRET-CANARY", Enabled: true, UpdatedBy: "old-writer",
+	}); err != nil {
+		t.Fatalf("seed legacy setting: %v", err)
+	}
+	if err := instances.PutConnectorInstance(ctx, "usr_ana", platform,
+		settings.ScopeArea, scope, gravitee, nil, false); err != nil {
+		t.Fatalf("PutConnectorInstance(edit): %v", err)
+	}
+	listed, err := instances.ConnectorInstances(ctx)
+	if err != nil {
+		t.Fatalf("ConnectorInstances: %v", err)
+	}
+	for _, instance := range listed {
+		if instance.Name == gravitee.Name && instance.HasToken {
+			t.Fatal("editing the bound connector kept its legacy secret")
+		}
+	}
+}
+
+func graviteeAdminInstance() connectortools.Instance {
+	return connectortools.Instance{
+		Name: "apim", Connector: "gravitee", Enabled: true,
+		Gravitee: connectortools.GraviteeConfig{
+			Address:      "https://apim.example/management/v2",
+			Organization: "org-prod", Environment: "env-prod",
+			AllowedReferences: []connectortools.GraviteeReference{{
+				Type: connectortools.GraviteeReferenceAPI, ID: "checkout-api",
+			}},
+			MinTTLSeconds: 86400, MaxTTLSeconds: 7 * 86400,
+			CredentialSource: connectortools.GraviteeCredentialSource{
+				Kind:          connectortools.GraviteeCredentialVaultKV,
+				VaultInstance: "secrets", Path: "integrations/gravitee/prod", Field: "access_token",
+			},
+		},
+	}
+}
+
 func TestDeleteConnectorInstance_removesOnlyTheNamedScope(t *testing.T) {
 	instances, _, _ := newConnectorInstances(t)
 	ctx := context.Background()

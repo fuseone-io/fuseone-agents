@@ -2511,8 +2511,9 @@ paths:
       description: >
         Returns the authored configuration to a connector configurer. Unlike
         the ordinary instance list, this includes registered SQL text so an
-        edit can preserve the complete contract. Tokens, generated database
-        credentials and lease ids are never returned.
+        edit can preserve the complete contract, and the fixed Vault location
+        for a bound Gravitee credential. Tokens, generated database credentials
+        and lease ids are never returned.
       parameters:
         - name: name
           in: path
@@ -2543,9 +2544,10 @@ paths:
       operationId: putConnectorInstance
       summary: Configure a governed connector instance
       description: >
-        Configuring an instance creates executable native tools named
-        connector.instance.operation. Omit token to keep the stored one. Send
-        clearToken to remove it; an enabled instance must still have a token
+        A runtime instance creates native tools named connector.instance.operation;
+        planned connectors remain configuration only. Omit token to keep the
+        stored one on connectors that authenticate directly. Send clearToken
+        to remove it; an enabled direct-token instance must still have a token
         after the write.
       parameters:
         - name: name
@@ -5468,14 +5470,16 @@ components:
         updatedAt: { type: string, format: date-time }
         vault: { $ref: '#/components/schemas/ConnectorVaultConfig' }
         sql: { $ref: '#/components/schemas/ConnectorSQLResponse' }
+        gravitee: { $ref: '#/components/schemas/ConnectorGraviteeResponse' }
 
     ConnectorInstanceDetail:
       type: object
       description: >
         The authored, non-secret configuration available only to connector
         configurers. SQL text is present because editing any other SQL field
-        must not erase or replace a registered query. Token presence is
-        metadata; token bytes and generated credentials never leave storage.
+        must not erase or replace a registered query. Gravitee's fixed Vault
+        location is present for the same read-edit-write reason. Token presence
+        is metadata; token bytes and generated credentials never leave storage.
       required: [name, connector, enabled, scopeKind, hasToken]
       properties:
         name: { type: string }
@@ -5489,6 +5493,107 @@ components:
         updatedAt: { type: string, format: date-time }
         vault: { $ref: '#/components/schemas/ConnectorVaultConfig' }
         sql: { $ref: '#/components/schemas/ConnectorSQLInput' }
+        gravitee: { $ref: '#/components/schemas/ConnectorGraviteeInput' }
+
+    ConnectorGraviteeReference:
+      type: object
+      required: [type, id]
+      properties:
+        type:
+          type: string
+          enum: [API]
+          description: API is the only remote reference supported by the first runtime.
+        id:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'
+
+    ConnectorGraviteeCredentialBinding:
+      type: object
+      required: [kind, vaultInstance]
+      properties:
+        kind: { type: string, enum: [vault_kv_secret] }
+        vaultInstance:
+          type: string
+          maxLength: 63
+          pattern: '^[a-z0-9][a-z0-9_-]*$'
+          description: Vault connector instance that owns the credential.
+
+    ConnectorGraviteeCredentialSource:
+      type: object
+      required: [kind, vaultInstance, path, field]
+      properties:
+        kind: { type: string, enum: [vault_kv_secret] }
+        vaultInstance:
+          type: string
+          maxLength: 63
+          pattern: '^[a-z0-9][a-z0-9_-]*$'
+          description: Vault connector instance that owns the credential.
+        path:
+          type: string
+          minLength: 1
+          maxLength: 512
+          pattern: '^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$'
+          description: Fixed Vault path, constrained by the bound Vault instance.
+        field:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: '^[A-Za-z0-9_.-]+$'
+          description: Fixed field holding the Gravitee access token.
+
+    ConnectorGraviteeResponse:
+      type: object
+      description: >
+        The safe remote boundary visible in the ordinary connector listing.
+        Vault path and field stay in the configurer-only detail response.
+      required:
+        [address, organization, environment, allowedReferences, minTTLSeconds,
+         maxTTLSeconds, allowNoExpiry, credentialSource]
+      properties:
+        address: { type: string, format: uri }
+        organization: { type: string }
+        environment: { type: string }
+        allowedReferences:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { $ref: '#/components/schemas/ConnectorGraviteeReference' }
+        minTTLSeconds: { type: integer, minimum: 1, maximum: 31536000 }
+        maxTTLSeconds: { type: integer, minimum: 1, maximum: 31536000 }
+        allowNoExpiry: { type: boolean }
+        credentialSource: { $ref: '#/components/schemas/ConnectorGraviteeCredentialBinding' }
+
+    ConnectorGraviteeInput:
+      type: object
+      description: >
+        A fixed remote boundary. Organization, environment, API references and
+        the Vault location are authored by an administrator, never by a model.
+      required:
+        [address, organization, environment, allowedReferences, minTTLSeconds,
+         maxTTLSeconds, allowNoExpiry, credentialSource]
+      properties:
+        address: { type: string, format: uri }
+        organization:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'
+        environment:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'
+        allowedReferences:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { $ref: '#/components/schemas/ConnectorGraviteeReference' }
+        minTTLSeconds: { type: integer, minimum: 1, maximum: 31536000 }
+        maxTTLSeconds: { type: integer, minimum: 1, maximum: 31536000 }
+        allowNoExpiry: { type: boolean }
+        credentialSource: { $ref: '#/components/schemas/ConnectorGraviteeCredentialSource' }
 
     ConnectorSQLResponse:
       type: object
@@ -5601,7 +5706,7 @@ components:
       properties:
         connector:
           type: string
-          description: Connector shape. The first runtime connector is vault.
+          description: Connector shape, such as vault, sql or gravitee.
         enabled:
           type: boolean
           default: true
@@ -5610,15 +5715,19 @@ components:
         area: { type: string }
         vault: { $ref: '#/components/schemas/ConnectorVaultConfig' }
         sql: { $ref: '#/components/schemas/ConnectorSQLInput' }
+        gravitee: { $ref: '#/components/schemas/ConnectorGraviteeInput' }
         token:
           type: string
           description: >
-            Connector token to seal. Omit to keep the stored token.
+            Connector token to seal. Only connectors that authenticate with a
+            token of their own accept it; bound connectors such as SQL and
+            Gravitee reject it.
         clearToken:
           type: boolean
           description: >
-            Remove the stored token. An enabled instance is refused unless the
-            same request also supplies a replacement token.
+            Remove the stored token. An enabled connector that authenticates
+            directly is refused unless the same request also supplies a
+            replacement. Bound connectors never keep a token of their own.
 
     MCPServerCallAuth:
       type: object

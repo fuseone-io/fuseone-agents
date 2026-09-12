@@ -1773,12 +1773,12 @@ export interface paths {
         };
         /**
          * Read one connector instance for editing
-         * @description Returns the authored configuration to a connector configurer. Unlike the ordinary instance list, this includes registered SQL text so an edit can preserve the complete contract. Tokens, generated database credentials and lease ids are never returned.
+         * @description Returns the authored configuration to a connector configurer. Unlike the ordinary instance list, this includes registered SQL text so an edit can preserve the complete contract, and the fixed Vault location for a bound Gravitee credential. Tokens, generated database credentials and lease ids are never returned.
          */
         get: operations["getConnectorInstance"];
         /**
          * Configure a governed connector instance
-         * @description Configuring an instance creates executable native tools named connector.instance.operation. Omit token to keep the stored one. Send clearToken to remove it; an enabled instance must still have a token after the write.
+         * @description A runtime instance creates native tools named connector.instance.operation; planned connectors remain configuration only. Omit token to keep the stored one on connectors that authenticate directly. Send clearToken to remove it; an enabled direct-token instance must still have a token after the write.
          */
         put: operations["putConnectorInstance"];
         post?: never;
@@ -3370,8 +3370,9 @@ export interface components {
             updatedAt?: string;
             vault?: components["schemas"]["ConnectorVaultConfig"];
             sql?: components["schemas"]["ConnectorSQLResponse"];
+            gravitee?: components["schemas"]["ConnectorGraviteeResponse"];
         };
-        /** @description The authored, non-secret configuration available only to connector configurers. SQL text is present because editing any other SQL field must not erase or replace a registered query. Token presence is metadata; token bytes and generated credentials never leave storage. */
+        /** @description The authored, non-secret configuration available only to connector configurers. SQL text is present because editing any other SQL field must not erase or replace a registered query. Gravitee's fixed Vault location is present for the same read-edit-write reason. Token presence is metadata; token bytes and generated credentials never leave storage. */
         ConnectorInstanceDetail: {
             name: string;
             connector: string;
@@ -3385,6 +3386,55 @@ export interface components {
             updatedAt?: string;
             vault?: components["schemas"]["ConnectorVaultConfig"];
             sql?: components["schemas"]["ConnectorSQLInput"];
+            gravitee?: components["schemas"]["ConnectorGraviteeInput"];
+        };
+        ConnectorGraviteeReference: {
+            /**
+             * @description API is the only remote reference supported by the first runtime.
+             * @enum {string}
+             */
+            type: "API";
+            id: string;
+        };
+        ConnectorGraviteeCredentialBinding: {
+            /** @enum {string} */
+            kind: "vault_kv_secret";
+            /** @description Vault connector instance that owns the credential. */
+            vaultInstance: string;
+        };
+        ConnectorGraviteeCredentialSource: {
+            /** @enum {string} */
+            kind: "vault_kv_secret";
+            /** @description Vault connector instance that owns the credential. */
+            vaultInstance: string;
+            /** @description Fixed Vault path, constrained by the bound Vault instance. */
+            path: string;
+            /** @description Fixed field holding the Gravitee access token. */
+            field: string;
+        };
+        /** @description The safe remote boundary visible in the ordinary connector listing. Vault path and field stay in the configurer-only detail response. */
+        ConnectorGraviteeResponse: {
+            /** Format: uri */
+            address: string;
+            organization: string;
+            environment: string;
+            allowedReferences: components["schemas"]["ConnectorGraviteeReference"][];
+            minTTLSeconds: number;
+            maxTTLSeconds: number;
+            allowNoExpiry: boolean;
+            credentialSource: components["schemas"]["ConnectorGraviteeCredentialBinding"];
+        };
+        /** @description A fixed remote boundary. Organization, environment, API references and the Vault location are authored by an administrator, never by a model. */
+        ConnectorGraviteeInput: {
+            /** Format: uri */
+            address: string;
+            organization: string;
+            environment: string;
+            allowedReferences: components["schemas"]["ConnectorGraviteeReference"][];
+            minTTLSeconds: number;
+            maxTTLSeconds: number;
+            allowNoExpiry: boolean;
+            credentialSource: components["schemas"]["ConnectorGraviteeCredentialSource"];
         };
         /** @description A SQL instance as the administration API reports it. Addressing only, plus the safe identity of the binding: the kind, which vault instance answers it and which role is bound. No token, no generated credential and no connection string are ever returned, because none of them is needed to know the configuration is right. */
         ConnectorSQLResponse: {
@@ -3442,7 +3492,7 @@ export interface components {
             maxBytes: number;
         };
         ConnectorInstanceInput: {
-            /** @description Connector shape. The first runtime connector is vault. */
+            /** @description Connector shape, such as vault, sql or gravitee. */
             connector: string;
             /** @default true */
             enabled: boolean;
@@ -3451,9 +3501,10 @@ export interface components {
             area?: string;
             vault?: components["schemas"]["ConnectorVaultConfig"];
             sql?: components["schemas"]["ConnectorSQLInput"];
-            /** @description Connector token to seal. Omit to keep the stored token. */
+            gravitee?: components["schemas"]["ConnectorGraviteeInput"];
+            /** @description Connector token to seal. Only connectors that authenticate with a token of their own accept it; bound connectors such as SQL and Gravitee reject it. */
             token?: string;
-            /** @description Remove the stored token. An enabled instance is refused unless the same request also supplies a replacement token. */
+            /** @description Remove the stored token. An enabled connector that authenticates directly is refused unless the same request also supplies a replacement. Bound connectors never keep a token of their own. */
             clearToken?: boolean;
         };
         /**

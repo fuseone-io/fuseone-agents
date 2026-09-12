@@ -53,9 +53,8 @@ type SQLConfig struct {
 // RequiresToken is whether a connector authenticates with a token of its own.
 //
 // Asked per connector rather than assumed for every instance. Vault holds a
-// token because it authenticates to Vault; SQL takes its authority from a
-// binding, and an instance carrying a database password would be the thing
-// this connector exists to avoid.
+// token because it authenticates to Vault; bound connectors take authority
+// from it and must not carry a second credential of their own.
 func RequiresToken(connector string) bool { return connector == "vault" }
 
 func validateSQLConfig(instance Instance) error {
@@ -130,54 +129,77 @@ because the binding was valid when it was saved.
 */
 func ValidateBindings(instances []Instance) error {
 	for _, instance := range instances {
-		if instance.Connector != "sql" || !instance.Enabled {
+		if !instance.Enabled {
 			continue
 		}
-		if err := resolveVaultBinding(instance, instances); err != nil {
-			return err
+		switch instance.Connector {
+		case "sql":
+			if err := resolveVaultBinding(instance, instances); err != nil {
+				return err
+			}
+		case "gravitee":
+			if err := resolveGraviteeVaultBinding(instance, instances); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
 }
 
 func resolveVaultBinding(sql Instance, instances []Instance) error {
-	wanted := sql.SQL.CredentialSource.VaultInstance
+	_, err := boundVault(sql, sql.SQL.CredentialSource.VaultInstance, instances)
+	return err
+}
+
+func resolveGraviteeVaultBinding(gravitee Instance, instances []Instance) error {
+	vault, err := boundVault(gravitee, gravitee.Gravitee.CredentialSource.VaultInstance, instances)
+	if err != nil {
+		return err
+	}
+	if _, ok := allowedPath(vault.Vault.AllowedPathPrefixes, gravitee.Gravitee.CredentialSource.Path); !ok {
+		return fmt.Errorf("connector: gravitee %s credential path is outside vault instance %q",
+			gravitee.Name, vault.Name)
+	}
+	return nil
+}
+
+func boundVault(consumer Instance, wanted string, instances []Instance) (Instance, error) {
 	var found []Instance
 	for _, candidate := range instances {
-		if candidate.Name != wanted || !candidate.Scope.Contains(sql.Scope) {
+		if candidate.Name != wanted || !candidate.Scope.Contains(consumer.Scope) {
 			continue
 		}
 		found = append(found, candidate)
 	}
 	switch {
 	case len(found) == 0:
-		return fmt.Errorf(
-			"connector: sql %s names vault instance %q, which is not configured for its scope",
-			sql.Name, wanted)
+		return Instance{}, fmt.Errorf(
+			"connector: %s %s names vault instance %q, which is not configured for its scope",
+			consumer.Connector, consumer.Name, wanted)
 	case len(found) > 1:
-		return fmt.Errorf(
-			"connector: sql %s names vault instance %q, which is ambiguous across scopes",
-			sql.Name, wanted)
+		return Instance{}, fmt.Errorf(
+			"connector: %s %s names vault instance %q, which is ambiguous across scopes",
+			consumer.Connector, consumer.Name, wanted)
 	}
 	vault := found[0]
 	switch {
 	case vault.Connector != "vault":
-		return fmt.Errorf("connector: sql %s names %q, which is a %s instance and not a vault",
-			sql.Name, wanted, vault.Connector)
+		return Instance{}, fmt.Errorf("connector: %s %s names %q, which is a %s instance and not a vault",
+			consumer.Connector, consumer.Name, wanted, vault.Connector)
 	case !vault.Enabled:
-		return fmt.Errorf("connector: sql %s names vault instance %q, which is disabled",
-			sql.Name, wanted)
+		return Instance{}, fmt.Errorf("connector: %s %s names vault instance %q, which is disabled",
+			consumer.Connector, consumer.Name, wanted)
 	// A dynamic credential is short-lived, which bounds how long a stolen one
 	// is useful and does nothing about it being read in flight. The token that
 	// mints it travels the same way, so plain HTTP is the same disclosure one
 	// step earlier.
 	case !strings.HasPrefix(vault.Vault.Address, "https://"):
-		return fmt.Errorf(
-			"connector: sql %s names vault instance %q, which must use https to issue credentials",
-			sql.Name, wanted)
+		return Instance{}, fmt.Errorf(
+			"connector: %s %s names vault instance %q, which must use https to supply credentials",
+			consumer.Connector, consumer.Name, wanted)
 	case !vault.TokenPresent():
-		return fmt.Errorf("connector: sql %s names vault instance %q, which has no token",
-			sql.Name, wanted)
+		return Instance{}, fmt.Errorf("connector: %s %s names vault instance %q, which has no token",
+			consumer.Connector, consumer.Name, wanted)
 	}
-	return nil
+	return vault, nil
 }

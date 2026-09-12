@@ -6,6 +6,7 @@ var catalog = []Connector{
 	vaultConnector,
 	approvedJobsConnector,
 	sqlConnector,
+	graviteeConnector,
 	objectStorageConnector,
 	identityConnector,
 	kubernetesConnector,
