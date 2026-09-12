@@ -1,7 +1,6 @@
 package connectortools
 
 import (
-	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -51,13 +50,9 @@ func TestValidateInstanceConfig_graviteeAcceptsOnlyABoundedAPIScope(t *testing.T
 		"unsupported reference":  func(c *GraviteeConfig) { c.AllowedReferences[0].Type = "API_PRODUCT" },
 		"reference id as a path": func(c *GraviteeConfig) { c.AllowedReferences[0].ID = "../another-api" },
 		"no allowed API":         func(c *GraviteeConfig) { c.AllowedReferences = nil },
-		"duplicate allowed API":  func(c *GraviteeConfig) { c.AllowedReferences = append(c.AllowedReferences, c.AllowedReferences[0]) },
-		"too many allowed APIs": func(c *GraviteeConfig) {
-			for n := 1; n <= 100; n++ {
-				c.AllowedReferences = append(c.AllowedReferences, GraviteeReference{
-					Type: GraviteeReferenceAPI, ID: fmt.Sprintf("api-%d", n),
-				})
-			}
+		"second allowed API": func(c *GraviteeConfig) {
+			c.AllowedReferences = append(c.AllowedReferences,
+				GraviteeReference{Type: GraviteeReferenceAPI, ID: "payments-api"})
 		},
 		"credential path traversal": func(c *GraviteeConfig) { c.CredentialSource.Path = "integrations/gravitee/../admin" },
 		"credential field as path":  func(c *GraviteeConfig) { c.CredentialSource.Field = "data/token" },

@@ -95,10 +95,14 @@ maxTTL: 90d
 allowNoExpiry: false
 ```
 
-The model supplies only `subscriptionId` and the requested expiration. The
-environment and API path are derived from the instance and the inspected
-subscription, never from model-authored path components. Inspection and
-acceptance both verify ownership and the remote binding.
+The first runtime requires exactly one API reference per connector instance.
+The model supplies only `subscriptionId` and the requested expiration; the
+environment and API path are therefore derived entirely from the instance,
+never from model-authored path components. Supporting several APIs means
+configuring several scoped instances. This avoids probing every allowed API to
+discover which one owns a subscription and keeps a negative inspection to one
+remote request. Inspection and acceptance both verify ownership and the remote
+binding.
 
 The Gravitee credential should hold only subscription read and update access
 for the declared environment and APIs. FuseOne checks remain necessary even

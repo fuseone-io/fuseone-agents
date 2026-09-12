@@ -17,7 +17,6 @@ const (
 	GraviteeReferenceAPI GraviteeReferenceType = "API"
 
 	GraviteeCredentialVaultKV GraviteeCredentialSourceKind = "vault_kv_secret"
-	maxGraviteeReferences                                  = 100
 	maxGraviteeTTLSeconds                                  = 365 * 24 * 60 * 60
 )
 
@@ -102,20 +101,13 @@ func hasRelativeSegment(p string) bool {
 }
 
 func validateGraviteeReferences(name string, references []GraviteeReference) error {
-	if len(references) == 0 || len(references) > maxGraviteeReferences {
-		return fmt.Errorf("connector: gravitee %s needs between 1 and %d allowed API references",
-			name, maxGraviteeReferences)
+	if len(references) != 1 {
+		return fmt.Errorf("connector: gravitee %s needs exactly one allowed API reference", name)
 	}
-	seen := make(map[string]bool, len(references))
 	for _, reference := range references {
 		if reference.Type != GraviteeReferenceAPI || !graviteeID.MatchString(reference.ID) {
 			return fmt.Errorf("connector: gravitee %s has an invalid API reference", name)
 		}
-		key := string(reference.Type) + "\x00" + reference.ID
-		if seen[key] {
-			return fmt.Errorf("connector: gravitee %s repeats an allowed API reference", name)
-		}
-		seen[key] = true
 	}
 	return nil
 }
