@@ -18,6 +18,7 @@ import (
 func TestPostgres_claimersReleasedTogether_claimExactlyOnce(t *testing.T) {
 	pool, store := ticketPostgres(t)
 	opened := mustOpen(t, store, "event-lock")
+	mustInspect(t, store, opened.Current.Ref, content("snapshot-lock"), now.Add(30*time.Second))
 	_, changed, err := store.AwaitApproval(t.Context(), ticket.ApprovalInput{
 		Ref: opened.Current.Ref, RunID: "run-lock", AtSeq: 9,
 		Snapshot: content("snapshot-lock"), At: now.Add(time.Minute),

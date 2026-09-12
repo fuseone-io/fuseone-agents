@@ -130,6 +130,25 @@ func NewStore(pool *pgxpool.Pool, v *vault.Vault) *Store {
 	return &Store{pool: pool, vault: v}
 }
 
+// ReadSnapshot runs related configuration reads against one repeatable
+// PostgreSQL snapshot. The callback must only read; the transaction exists so
+// a binding and the credential it selects cannot come from opposite sides of
+// a concurrent administrative edit.
+func (s *Store) ReadSnapshot(ctx context.Context, read func(DB) error) error {
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
+	if err != nil {
+		return fmt.Errorf("settings: begin read snapshot: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err := read(tx); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("settings: commit read snapshot: %w", err)
+	}
+	return nil
+}
+
 // Put writes a setting, encrypting any credential before it reaches the
 // database.
 func (s *Store) Put(ctx context.Context, set Setting) error {

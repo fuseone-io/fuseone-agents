@@ -1,6 +1,7 @@
 package auth_test
 
 import (
+	"errors"
 	"os"
 	"testing"
 
@@ -89,6 +90,32 @@ func TestSetGrants_survivesTheNextSignIn(t *testing.T) {
 	held := rolesOf(t, dir, person)
 	if len(held) != 2 {
 		t.Fatalf("grants = %+v, want both the granted and the asserted one", held)
+	}
+}
+
+func TestEmailOf_returnsOnlyTheExactActivePerson(t *testing.T) {
+	dir, pool := directoryFor(t)
+	person := personIn(t, dir, "requester")
+
+	email, err := dir.EmailOf(t.Context(), domain.UserID(person))
+	if err != nil || email != "requester@example.com" {
+		t.Fatalf("EmailOf = (%q, %v)", email, err)
+	}
+	if _, err := pool.Exec(t.Context(), `update principals set kind = 'service' where principal_id = $1`, person); err != nil {
+		t.Fatalf("change principal kind: %v", err)
+	}
+	if _, err := dir.EmailOf(t.Context(), domain.UserID(person)); !errors.Is(err, auth.ErrBadCredential) {
+		t.Fatalf("EmailOf service = %v, want ErrBadCredential", err)
+	}
+	if _, err := pool.Exec(t.Context(),
+		`update principals set kind = 'user', disabled_at = now() where principal_id = $1`, person); err != nil {
+		t.Fatalf("disable principal: %v", err)
+	}
+	if _, err := dir.EmailOf(t.Context(), domain.UserID(person)); !errors.Is(err, auth.ErrBadCredential) {
+		t.Fatalf("EmailOf disabled = %v, want ErrBadCredential", err)
+	}
+	if _, err := dir.EmailOf(t.Context(), "usr_somebody_else"); !errors.Is(err, auth.ErrBadCredential) {
+		t.Fatalf("EmailOf unknown = %v, want ErrBadCredential", err)
 	}
 }
 

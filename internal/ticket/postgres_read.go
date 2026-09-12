@@ -131,6 +131,7 @@ func fillRevision(
 	revision *Revision, approvalRun string, approvalSeq int64,
 	snapshotRef, snapshotDigest, outcomeRef, outcomeDigest string,
 ) {
+	revision.Snapshot = ContentRef{Ref: snapshotRef, Digest: snapshotDigest}
 	if approvalRun != "" {
 		revision.Approval = &Approval{
 			RunID: domain.RunID(approvalRun), AtSeq: approvalSeq,

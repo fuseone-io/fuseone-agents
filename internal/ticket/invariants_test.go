@@ -143,6 +143,7 @@ func TestStore_aReturnedRecipientListCannotMutateTheStore(t *testing.T) {
 func TestStore_aRefusedApprovalNeverBecomesExecutable(t *testing.T) {
 	forEachStore(t, func(t *testing.T, store ticket.Store) {
 		opened := mustOpen(t, store, "event-root")
+		mustInspect(t, store, opened.Current.Ref, content("snapshot-1"), now.Add(30*time.Second))
 		awaiting, changed, err := store.AwaitApproval(t.Context(), ticket.ApprovalInput{
 			Ref: opened.Current.Ref, RunID: "run-1", AtSeq: 7,
 			Snapshot: content("snapshot-1"), At: now.Add(time.Minute),
@@ -163,6 +164,29 @@ func TestStore_aRefusedApprovalNeverBecomesExecutable(t *testing.T) {
 		})
 		if !errors.Is(err, ticket.ErrTerminal) {
 			t.Fatalf("claim rejected revision = %v, want ErrTerminal", err)
+		}
+	})
+}
+
+func TestStore_anApprovalCanOnlyNameTheSnapshotRecordedForThatRevision(t *testing.T) {
+	forEachStore(t, func(t *testing.T, store ticket.Store) {
+		opened := mustOpen(t, store, "event-root")
+		mustInspect(t, store, opened.Current.Ref, content("snapshot-seen"), now.Add(time.Minute))
+
+		_, changed, err := store.AwaitApproval(t.Context(), ticket.ApprovalInput{
+			Ref: opened.Current.Ref, RunID: "run-1", AtSeq: 7,
+			Snapshot: content("snapshot-invented"), At: now.Add(2 * time.Minute),
+		})
+		if changed || !errors.Is(err, ticket.ErrSnapshotMoved) {
+			t.Fatalf("AwaitApproval = (%v, %v), want ErrSnapshotMoved", changed, err)
+		}
+		current, err := store.Current(t.Context(), opened.Key)
+		if err != nil {
+			t.Fatalf("Current: %v", err)
+		}
+		if current.Current.Phase != ticket.PhaseCollecting ||
+			current.Current.Snapshot != content("snapshot-seen") {
+			t.Fatalf("arbitrary snapshot changed the ticket: %+v", current.Current)
 		}
 	})
 }

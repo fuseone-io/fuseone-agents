@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -52,6 +53,34 @@ func (c *HTTPVaultClient) ReadMetadata(
 		return VaultMetadata{}, err
 	}
 	return out.metadata(), nil
+}
+
+var ErrSecretFieldUnavailable = errors.New("vault: the selected secret field is unavailable")
+
+// ReadSecretField is an internal credential dependency, not a model operation.
+// The wire map does not leave this method; only the selected string crosses the
+// boundary, already wrapped in a value whose renderings are redacted.
+func (c *HTTPVaultClient) ReadSecretField(
+	ctx context.Context, cfg VaultConfig, token, secretPath, field string,
+) (SecretValue, error) {
+	var wire struct {
+		Data struct {
+			Data map[string]json.RawMessage `json:"data"`
+		} `json:"data"`
+	}
+	if err := c.do(ctx, cfg, token, http.MethodGet,
+		vaultKVPath(cfg, "data", secretPath), nil, &wire); err != nil {
+		return SecretValue{}, err
+	}
+	raw, ok := wire.Data.Data[field]
+	if !ok {
+		return SecretValue{}, ErrSecretFieldUnavailable
+	}
+	var value string
+	if json.Unmarshal(raw, &value) != nil || strings.TrimSpace(value) == "" {
+		return SecretValue{}, ErrSecretFieldUnavailable
+	}
+	return SecretValue{value: value}, nil
 }
 
 func (c *HTTPVaultClient) RevokeLease(ctx context.Context, cfg VaultConfig, token, leaseID string) error {

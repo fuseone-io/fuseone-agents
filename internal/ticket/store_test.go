@@ -20,6 +20,18 @@ var (
 	scope = domain.Scope{Company: "acme", Area: "platform"}
 )
 
+func mustInspect(
+	t *testing.T, store ticket.Store, ref domain.TicketRef, snapshot ticket.ContentRef, at time.Time,
+) {
+	t.Helper()
+	got, changed, err := store.RecordInspection(t.Context(), ticket.InspectionInput{
+		Ref: ref, Snapshot: snapshot, At: at,
+	})
+	if err != nil || !changed || got.Current.Snapshot != snapshot {
+		t.Fatalf("RecordInspection = (%+v, %v, %v)", got, changed, err)
+	}
+}
+
 func TestKey_isInjectiveAcrossThreeVendorNamespaces(t *testing.T) {
 	t.Parallel()
 	a, err := ticket.Key("workspace", "support/team", "171.22")
@@ -109,6 +121,7 @@ func TestStore_onlyTheRequesterMayReviseTheTicket(t *testing.T) {
 func TestStore_oneApprovalBecomesOneExecutionClaim(t *testing.T) {
 	forEachStore(t, func(t *testing.T, store ticket.Store) {
 		opened := mustOpen(t, store, "event-root")
+		mustInspect(t, store, opened.Current.Ref, content("snapshot-1"), now.Add(30*time.Second))
 		awaiting, changed, err := store.AwaitApproval(t.Context(), ticket.ApprovalInput{
 			Ref: opened.Current.Ref, RunID: "run-1", AtSeq: 7,
 			Snapshot: content("snapshot-1"), At: now.Add(time.Minute),
@@ -156,6 +169,7 @@ func TestStore_oneApprovalBecomesOneExecutionClaim(t *testing.T) {
 func TestStore_anOlderExecutionCannotCompleteANewerRevision(t *testing.T) {
 	forEachStore(t, func(t *testing.T, store ticket.Store) {
 		opened := mustOpen(t, store, "event-root")
+		mustInspect(t, store, opened.Current.Ref, content("snapshot-1"), now.Add(30*time.Second))
 		_, changed, err := store.AwaitApproval(t.Context(), ticket.ApprovalInput{
 			Ref: opened.Current.Ref, RunID: "run-1", AtSeq: 7,
 			Snapshot: content("snapshot-1"), At: now.Add(time.Minute),
@@ -179,6 +193,7 @@ func TestStore_anOlderExecutionCannotCompleteANewerRevision(t *testing.T) {
 		if err != nil || !changed || newer.Active == nil || newer.Current.Ref.Revision != 2 {
 			t.Fatalf("Revise during execution = (%+v, %v, %v)", newer, changed, err)
 		}
+		mustInspect(t, store, newer.Current.Ref, content("snapshot-2"), now.Add(3*time.Minute+30*time.Second))
 		newer, _, err = store.AwaitApproval(t.Context(), ticket.ApprovalInput{
 			Ref: newer.Current.Ref, RunID: "run-2", AtSeq: 11,
 			Snapshot: content("snapshot-2"), At: now.Add(4 * time.Minute),
@@ -219,6 +234,7 @@ func TestStore_anOlderExecutionCannotCompleteANewerRevision(t *testing.T) {
 func TestStore_finishingTheSameExecutionIsIdempotent(t *testing.T) {
 	forEachStore(t, func(t *testing.T, store ticket.Store) {
 		opened := mustOpen(t, store, "event-root")
+		mustInspect(t, store, opened.Current.Ref, content("snapshot-1"), now.Add(30*time.Second))
 		_, changed, err := store.AwaitApproval(t.Context(), ticket.ApprovalInput{
 			Ref: opened.Current.Ref, RunID: "run-1", AtSeq: 7,
 			Snapshot: content("snapshot-1"), At: now.Add(time.Minute),

@@ -8,6 +8,32 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+func (p *Postgres) RecordInspection(
+	ctx context.Context, in InspectionInput,
+) (Ticket, bool, error) {
+	if err := validateInspection(in); err != nil {
+		return Ticket{}, false, err
+	}
+	tx, current, err := p.lockedTicket(ctx, in.Ref.Key)
+	if err != nil {
+		return Ticket{}, false, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err := requireCurrent(current, in.Ref); err != nil {
+		return Ticket{}, false, err
+	}
+	if current.Current.Phase != PhaseCollecting {
+		return Ticket{}, false, phaseError(current.Current.Phase)
+	}
+	if current.Current.Snapshot == in.Snapshot {
+		return current, false, nil
+	}
+	if err := setInspection(ctx, tx, in); err != nil {
+		return Ticket{}, false, err
+	}
+	return commitTicket(ctx, tx, in.Ref.Key, true)
+}
+
 func (p *Postgres) AwaitApproval(
 	ctx context.Context, in ApprovalInput,
 ) (Ticket, bool, error) {
@@ -29,6 +55,9 @@ func (p *Postgres) AwaitApproval(
 	}
 	if ticket.Current.Phase != PhaseCollecting {
 		return Ticket{}, false, phaseError(ticket.Current.Phase)
+	}
+	if ticket.Current.Snapshot != in.Snapshot {
+		return Ticket{}, false, ErrSnapshotMoved
 	}
 	if err := setApproval(ctx, tx, in); err != nil {
 		return Ticket{}, false, err
@@ -116,13 +145,24 @@ func (p *Postgres) FinishExecution(ctx context.Context, in FinishInput) (Ticket,
 func setApproval(ctx context.Context, tx pgx.Tx, in ApprovalInput) error {
 	_, err := tx.Exec(ctx, `
 		update governed_ticket_revisions
-		set phase = $3, approval_run_id = $4, approval_at_seq = $5,
-		    snapshot_ref = $6, snapshot_digest = $7, updated_at = $8
+		set phase = $3, approval_run_id = $4, approval_at_seq = $5, updated_at = $6
 		where ticket_key = $1 and revision = $2`,
 		string(in.Ref.Key), in.Ref.Revision, string(PhaseAwaitingApproval),
-		string(in.RunID), in.AtSeq, in.Snapshot.Ref, in.Snapshot.Digest, in.At.UTC())
+		string(in.RunID), in.AtSeq, in.At.UTC())
 	if err != nil {
 		return fmt.Errorf("ticket: await approval: %w", err)
+	}
+	return touchTicket(ctx, tx, in.Ref.Key, in.At)
+}
+
+func setInspection(ctx context.Context, tx pgx.Tx, in InspectionInput) error {
+	_, err := tx.Exec(ctx, `
+		update governed_ticket_revisions
+		set snapshot_ref = $3, snapshot_digest = $4, updated_at = $5
+		where ticket_key = $1 and revision = $2`,
+		string(in.Ref.Key), in.Ref.Revision, in.Snapshot.Ref, in.Snapshot.Digest, in.At.UTC())
+	if err != nil {
+		return fmt.Errorf("ticket: record inspection: %w", err)
 	}
 	return touchTicket(ctx, tx, in.Ref.Key, in.At)
 }

@@ -13,11 +13,12 @@ import (
 
 // Layer adds governed connector tools beside an existing tool layer.
 type Layer struct {
-	base    engine.Tools
-	catalog engine.Catalog
-	content engine.ContentStore
-	vault   VaultClient
-	sql     SQLRunner
+	base     engine.Tools
+	catalog  engine.Catalog
+	content  engine.ContentStore
+	vault    VaultClient
+	sql      SQLRunner
+	gravitee engine.ApprovalEvidencer
 
 	mu        sync.RWMutex
 	instances map[instanceKey]Instance
@@ -49,6 +50,13 @@ func New(base engine.Tools, catalog engine.Catalog, content engine.ContentStore,
 // instance remains unavailable rather than falling through to an MCP server.
 func (l *Layer) WithSQLRuntime(sql SQLRunner) *Layer {
 	l.sql = sql
+	return l
+}
+
+// WithGraviteeInspector enables the trusted inspection/evidence boundary.
+// Execution remains unavailable until the final activation wires its runtime.
+func (l *Layer) WithGraviteeInspector(inspector engine.ApprovalEvidencer) *Layer {
+	l.gravitee = inspector
 	return l
 }
 
@@ -108,19 +116,53 @@ func (l *Layer) ApprovalBinding(call engine.Call) string {
 		}
 		return ""
 	}
-	if instance.Connector != "sql" || op.ID != "sql.run_query_template" {
+	switch instance.Connector {
+	case "sql":
+		if op.ID != "sql.run_query_template" {
+			return ""
+		}
+		args, ok := decodeSQLRunArgs(call.Args)
+		if !ok {
+			return ""
+		}
+		vault, ok := l.sqlVaultEndpoint(instance)
+		if !ok {
+			return ""
+		}
+		digest, _ := sqlContractDigest(instance.SQL, vault, args.TemplateID)
+		return digest
+	case "gravitee":
+		if op.ID != "gravitee.accept_subscription" {
+			return ""
+		}
+		vault, ok := l.graviteeVaultEndpoint(instance)
+		if !ok {
+			return ""
+		}
+		digest, _ := graviteeContractDigest(instance.Gravitee, vault, op.ID)
+		return digest
+	default:
 		return ""
 	}
-	args, ok := decodeSQLRunArgs(call.Args)
+}
+
+func (l *Layer) ApprovalEvidence(
+	ctx context.Context, call engine.Call,
+) (domain.ApprovalEvidence, error) {
+	instance, op, ok := l.native(call.Tool)
 	if !ok {
-		return ""
+		if provider, ok := l.base.(engine.ApprovalEvidencer); ok {
+			return provider.ApprovalEvidence(ctx, call)
+		}
+		return domain.ApprovalEvidence{}, nil
 	}
-	vault, ok := l.sqlVaultEndpoint(instance)
-	if !ok {
-		return ""
+	if instance.Connector != "gravitee" || op.ID != "gravitee.accept_subscription" {
+		return domain.ApprovalEvidence{}, nil
 	}
-	digest, _ := sqlContractDigest(instance.SQL, vault, args.TemplateID)
-	return digest
+	if l.gravitee == nil {
+		return domain.ApprovalEvidence{}, ErrUnavailable
+	}
+	return l.gravitee.ApprovalEvidence(ctx, call)
 }
 
 func (l *Layer) sqlVaultEndpoint(sql Instance) (VaultConfig, bool) {
@@ -129,6 +171,21 @@ func (l *Layer) sqlVaultEndpoint(sql Instance) (VaultConfig, bool) {
 	vault, found := l.instances[key]
 	l.mu.RUnlock()
 	if !found || !vault.Enabled || !vault.Scope.Contains(sql.Scope) || vault.Vault.Address == "" {
+		return VaultConfig{}, false
+	}
+	return vault.Vault, true
+}
+
+func (l *Layer) graviteeVaultEndpoint(gravitee Instance) (VaultConfig, bool) {
+	key := instanceKey{connector: "vault", name: gravitee.Gravitee.CredentialSource.VaultInstance}
+	l.mu.RLock()
+	vault, found := l.instances[key]
+	l.mu.RUnlock()
+	if !found || !vault.Enabled || !vault.Scope.Contains(gravitee.Scope) || vault.Vault.Address == "" {
+		return VaultConfig{}, false
+	}
+	if _, allowed := allowedPath(vault.Vault.AllowedPathPrefixes,
+		gravitee.Gravitee.CredentialSource.Path); !allowed {
 		return VaultConfig{}, false
 	}
 	return vault.Vault, true
@@ -166,6 +223,16 @@ func (l *Layer) Reserve(ctx context.Context, call engine.Call) error {
 		current := l.ApprovalBinding(call)
 		if current != call.ContractDigest && (current != "" || call.ContractDigest != "") {
 			return ErrSQLContractChanged
+		}
+	}
+	if instance.Connector == "gravitee" && op.ID == "gravitee.accept_subscription" {
+		current := l.ApprovalBinding(call)
+		if current == "" || current != call.ContractDigest {
+			return ErrGraviteeContract
+		}
+		if call.ApprovalEvidence.Kind != ApprovalEvidenceGraviteeSubscription ||
+			!call.ApprovalEvidence.Valid() || call.ApprovalEvidence.Ticket != call.Ticket.Ref {
+			return ErrGraviteeEvidence
 		}
 	}
 	return nil
@@ -207,6 +274,7 @@ func (l *Layer) native(id domain.ToolID) (Instance, connectors.Operation, bool) 
 func cloneInstance(in Instance) Instance {
 	out := in
 	out.Vault.AllowedPathPrefixes = slices.Clone(in.Vault.AllowedPathPrefixes)
+	out.Gravitee.AllowedReferences = slices.Clone(in.Gravitee.AllowedReferences)
 	out.SQL.Templates = slices.Clone(in.SQL.Templates)
 	for i := range out.SQL.Templates {
 		out.SQL.Templates[i].Parameters = slices.Clone(in.SQL.Templates[i].Parameters)

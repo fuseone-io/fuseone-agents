@@ -7,6 +7,30 @@ import (
 	"github.com/fuseone/agents/internal/domain"
 )
 
+func (m *Memory) RecordInspection(
+	ctx context.Context, in InspectionInput,
+) (Ticket, bool, error) {
+	if err := validateInspection(in); err != nil {
+		return Ticket{}, false, err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	ticket, err := m.currentFor(ctx, in.Ref)
+	if err != nil {
+		return Ticket{}, false, err
+	}
+	if ticket.Current.Phase != PhaseCollecting {
+		return Ticket{}, false, phaseError(ticket.Current.Phase)
+	}
+	if ticket.Current.Snapshot == in.Snapshot {
+		return cloneTicket(ticket), false, nil
+	}
+	ticket.Current.Snapshot = in.Snapshot
+	ticket.Current.UpdatedAt, ticket.UpdatedAt = in.At.UTC(), in.At.UTC()
+	m.putCurrent(ticket)
+	return cloneTicket(ticket), true, nil
+}
+
 func (m *Memory) AwaitApproval(ctx context.Context, in ApprovalInput) (Ticket, bool, error) {
 	if err := validateApproval(in); err != nil {
 		return Ticket{}, false, err
@@ -24,6 +48,9 @@ func (m *Memory) AwaitApproval(ctx context.Context, in ApprovalInput) (Ticket, b
 	}
 	if ticket.Current.Phase != PhaseCollecting {
 		return Ticket{}, false, phaseError(ticket.Current.Phase)
+	}
+	if ticket.Current.Snapshot != in.Snapshot {
+		return Ticket{}, false, ErrSnapshotMoved
 	}
 	ticket.Current.Phase = PhaseAwaitingApproval
 	ticket.Current.Approval = &approval

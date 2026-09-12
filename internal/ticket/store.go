@@ -20,6 +20,7 @@ var (
 	ErrNotAddressSource = errors.New("ticket: only the configured source may address the ticket")
 	ErrEventTaken       = errors.New("ticket: the event belongs to another ticket")
 	ErrExecutionActive  = errors.New("ticket: another revision is executing")
+	ErrSnapshotMoved    = errors.New("ticket: the inspected snapshot moved")
 	ErrPhase            = errors.New("ticket: the revision is not in the required phase")
 	ErrTerminal         = errors.New("ticket: the revision is terminal")
 )
@@ -74,6 +75,7 @@ type Revision struct {
 	Ref        domain.TicketRef
 	Phase      Phase
 	Draft      ContentRef
+	Snapshot   ContentRef
 	Approval   *Approval
 	Recipients []domain.UserID
 	Outcome    *Outcome
@@ -118,6 +120,12 @@ type ApprovalInput struct {
 	At       time.Time
 }
 
+type InspectionInput struct {
+	Ref      domain.TicketRef
+	Snapshot ContentRef
+	At       time.Time
+}
+
 type AddressInput struct {
 	Ref        domain.TicketRef
 	EventID    string
@@ -153,6 +161,7 @@ type Store interface {
 	Revision(context.Context, domain.TicketRef) (Revision, error)
 	Revise(context.Context, ReviseInput) (Ticket, bool, error)
 	Address(context.Context, AddressInput) (Ticket, bool, error)
+	RecordInspection(context.Context, InspectionInput) (Ticket, bool, error)
 	AwaitApproval(context.Context, ApprovalInput) (Ticket, bool, error)
 	ClaimExecution(context.Context, ClaimInput) (Ticket, bool, error)
 	Close(context.Context, CloseInput) (Ticket, bool, error)
@@ -196,6 +205,13 @@ func validateApproval(in ApprovalInput) error {
 	if !in.Ref.Valid() || in.RunID == "" || in.AtSeq <= 0 ||
 		!in.Snapshot.Valid() || in.At.IsZero() {
 		return errors.New("ticket: incomplete approval request")
+	}
+	return nil
+}
+
+func validateInspection(in InspectionInput) error {
+	if !in.Ref.Valid() || !in.Snapshot.Valid() || in.At.IsZero() {
+		return errors.New("ticket: incomplete inspection")
 	}
 	return nil
 }
