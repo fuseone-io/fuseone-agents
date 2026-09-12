@@ -103,6 +103,9 @@ type State struct {
 	// through the platform-owned context tool. The set is sealed on
 	// run_started and never grows from model text.
 	ContextArtifacts []domain.ContextArtifact
+	// Ticket is the support request revision sealed when this run opened.
+	// Zero means this run did not originate from the ticket workflow.
+	Ticket domain.TicketContext
 
 	// Called is every tool this run has reached the far side of the Gate
 	// with, in order. It is what advances a run through its declared steps:

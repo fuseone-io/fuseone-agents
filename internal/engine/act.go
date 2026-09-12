@@ -110,6 +110,7 @@ func (r *Runner) act(ctx context.Context, state State, start Start, p Proposal) 
 	p.contractDigest = approvalBinding(r.deps.Tools, Call{
 		RunID: start.RunID, Scope: start.Scope, AgentID: start.AgentID,
 		Tool: p.Tool, Args: p.Args, OnBehalfOf: start.OnBehalfOf,
+		Ticket: state.Ticket,
 	})
 	effect, _ := r.deps.Catalog.Effect(p.Tool)
 	baseIdemKey := idempotencyKey(start.RunID, p.Tool, p.Args)
@@ -463,6 +464,7 @@ func (r *Runner) invoke(
 		OnBehalfOf:       start.OnBehalfOf,
 		IdemKey:          idemKey,
 		ContextArtifacts: state.ContextArtifacts,
+		Ticket:           state.Ticket,
 		At:               r.deps.Clock.Now(),
 		Labels:           state.Labels.Clone(),
 		MemoryLearning:   start.MemoryLearning.Normalize(),

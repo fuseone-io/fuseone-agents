@@ -63,16 +63,22 @@ func (p *scriptedPlanner) Plan(context.Context, PlanInput) (Proposal, error) {
 // resolves — because a fake that hands back a dangling reference lets a
 // transcript bug pass here and fail in production.
 type countingTools struct {
-	invocations []domain.ToolID
-	calls       []Call
-	content     ContentStore
-	body        []byte
-	bodies      [][]byte
-	reserveErr  error
-	err         error
-	failed      bool
-	errorCode   string
-	cached      bool
+	invocations  []domain.ToolID
+	calls        []Call
+	bindingCalls []Call
+	content      ContentStore
+	body         []byte
+	bodies       [][]byte
+	reserveErr   error
+	err          error
+	failed       bool
+	errorCode    string
+	cached       bool
+}
+
+func (c *countingTools) ApprovalBinding(call Call) string {
+	c.bindingCalls = append(c.bindingCalls, call)
+	return ""
 }
 
 func (c *countingTools) Reserve(context.Context, Call) error {
@@ -534,6 +540,93 @@ func TestAdvance_contextRead_isCapabilityWhenRunStartedWithAContract(t *testing.
 	}
 	if decided.Rule != gate.RulePassed || decided.Effect != domain.EffectRead {
 		t.Fatalf("decision = %s/%s, want passed/read", decided.Rule, decided.Effect)
+	}
+}
+
+func TestAdvance_carriesTheSealedTicketContextToTheTool(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	ticket := domain.TicketContext{
+		Ref:         domain.TicketRef{Key: "slack-ticket", Revision: 4},
+		RequestedBy: "requester",
+		AddressedBy: "slack-app:A123",
+	}
+	h := newHarness(t, Proposal{Tool: "crm.lookup", Args: []byte(`{"id":"42"}`)})
+	start := h.start(t, generousBudget())
+	if _, err := h.ledger.Append(ctx, domain.Step{
+		RunID: start.RunID, Kind: domain.StepRunStarted,
+		Scope: start.Scope, AgentID: start.AgentID,
+		VersionID: start.VersionID, OnBehalfOf: start.OnBehalfOf,
+		Payload: mustJSON(domain.RunStartedPayload{Trigger: "channel", Ticket: &ticket}),
+	}); err != nil {
+		t.Fatalf("open run: %v", err)
+	}
+
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+	if len(h.tools.calls) != 1 {
+		t.Fatalf("tool calls = %d, want one", len(h.tools.calls))
+	}
+	if got := h.tools.calls[0].Ticket; got != ticket {
+		t.Fatalf("ticket on call = %+v, want %+v", got, ticket)
+	}
+	if got := h.tools.calls[0].OnBehalfOf; got != "ana" {
+		t.Fatalf("run identity = %q, want ana", got)
+	}
+}
+
+func TestAdvance_bindsApprovalToTheSealedTicketContext(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	ticket := domain.TicketContext{
+		Ref:         domain.TicketRef{Key: "slack-ticket", Revision: 4},
+		RequestedBy: "requester",
+	}
+	h := newHarness(t, Proposal{Tool: "crm.note", Args: []byte(`{"text":"accept"}`)})
+	start := h.start(t, generousBudget())
+	if _, err := h.ledger.Append(ctx, domain.Step{
+		RunID: start.RunID, Kind: domain.StepRunStarted,
+		Scope: start.Scope, AgentID: start.AgentID,
+		VersionID: start.VersionID, OnBehalfOf: start.OnBehalfOf,
+		Payload: mustJSON(domain.RunStartedPayload{Trigger: "channel", Ticket: &ticket}),
+	}); err != nil {
+		t.Fatalf("open run: %v", err)
+	}
+
+	if _, err := h.runner.Advance(ctx, start); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+	if len(h.tools.bindingCalls) != 1 {
+		t.Fatalf("approval bindings = %d, want one", len(h.tools.bindingCalls))
+	}
+	if got := h.tools.bindingCalls[0].Ticket; got != ticket {
+		t.Fatalf("ticket on approval binding = %+v, want %+v", got, ticket)
+	}
+}
+
+func TestAdvance_aMalformedTicketInTheLedgerReachesNoTool(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	h := newHarness(t, Proposal{Tool: "crm.lookup", Args: []byte(`{"id":"42"}`)})
+	start := h.start(t, generousBudget())
+	if _, err := h.ledger.Append(ctx, domain.Step{
+		RunID: start.RunID, Kind: domain.StepRunStarted,
+		Scope: start.Scope, AgentID: start.AgentID,
+		VersionID: start.VersionID, OnBehalfOf: start.OnBehalfOf,
+		Payload: mustJSON(domain.RunStartedPayload{Trigger: "channel", Ticket: &domain.TicketContext{
+			Ref: domain.TicketRef{Key: "slack-ticket"}, RequestedBy: "requester",
+		}}),
+	}); err != nil {
+		t.Fatalf("open malformed run: %v", err)
+	}
+
+	if _, err := h.runner.Advance(ctx, start); err == nil {
+		t.Fatal("Advance accepted a ticket revision nobody can compare")
+	}
+	if len(h.tools.bindingCalls) != 0 || len(h.tools.calls) != 0 {
+		t.Fatalf("malformed ticket reached tools: bindings=%d calls=%d",
+			len(h.tools.bindingCalls), len(h.tools.calls))
 	}
 }
 

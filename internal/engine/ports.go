@@ -145,6 +145,9 @@ type Call struct {
 	// ContextArtifacts is the event-supplied contract this run may retrieve
 	// through the platform-owned context reader.
 	ContextArtifacts []domain.ContextArtifact
+	// Ticket is the platform-sealed support request revision this effect may
+	// advance. It is a value so a tool cannot mutate the runner's folded state.
+	Ticket domain.TicketContext
 	// At is the engine clock instant for this call. Native tools that persist
 	// platform state record this rather than reading the wall clock themselves.
 	At time.Time

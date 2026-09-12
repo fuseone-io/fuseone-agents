@@ -78,6 +78,12 @@ func (s *State) applyKind(step domain.Step) error {
 		s.VersionID = step.VersionID
 		s.OnBehalfOf = step.OnBehalfOf
 		s.ContextArtifacts = p.ContextArtifacts
+		if p.Ticket != nil {
+			if !p.Ticket.Valid() {
+				return fmt.Errorf("engine: invalid ticket context at seq %d", step.Seq)
+			}
+			s.Ticket = *p.Ticket
+		}
 		s.Phase = PhaseRunning
 
 	case domain.StepBudgetReserved:

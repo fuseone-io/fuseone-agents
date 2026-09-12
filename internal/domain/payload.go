@@ -38,6 +38,10 @@ type RunStartedPayload struct {
 
 	// Origin is where the ask came from, when it came from a conversation.
 	Origin *RunOrigin `json:"origin,omitempty"`
+	// Ticket is the platform-owned support request this run may advance. It is
+	// sealed here so neither model arguments nor a later configuration read can
+	// change the requester or revision behind an approved effect.
+	Ticket *TicketContext `json:"ticket,omitempty"`
 	// ContextArtifacts is the bounded context contract an event supplied to
 	// this run. It names claim-checks the platform may read through
 	// $fuseone.context.read; it is not content and not an invitation to fetch
