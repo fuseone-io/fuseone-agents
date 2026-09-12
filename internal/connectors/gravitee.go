@@ -5,10 +5,7 @@ var graviteeConnector = Connector{
 	Name:     "Governed Gravitee subscriptions",
 	Category: CategorySecurity,
 	Summary:  "Inspect and accept registered Gravitee API subscriptions from a governed ticket without exposing API keys.",
-	// Activation is the final slice. A catalogue entry describes the contract;
-	// it is not a capability until the transport, reconciliation and end-to-end
-	// proofs exist.
-	Maturity: MaturityPlanned,
+	Maturity: MaturityRuntime,
 	Guarantees: []string{
 		"organization, environment and API references are fixed by connector configuration",
 		"acceptance requires the exact ticket revision and inspected subscription snapshot",

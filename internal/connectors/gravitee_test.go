@@ -6,8 +6,8 @@ func TestCatalog_graviteeDeclaresOnlyTheTicketOperations(t *testing.T) {
 	t.Parallel()
 
 	connector := connectorByID(t, "gravitee")
-	if connector.Maturity != MaturityPlanned {
-		t.Fatalf("gravitee maturity = %q, want planned until the end-to-end proofs pass", connector.Maturity)
+	if connector.Maturity != MaturityRuntime {
+		t.Fatalf("gravitee maturity = %q, want runtime after the end-to-end proofs pass", connector.Maturity)
 	}
 	if len(connector.Operations) != 2 {
 		t.Fatalf("gravitee operations = %d, want inspect and accept", len(connector.Operations))

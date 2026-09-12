@@ -195,15 +195,30 @@ func TestSettingValue_roundTripsTheGraviteeBindingWithoutASecret(t *testing.T) {
 	}
 }
 
-func TestToolEntries_plannedGraviteeOffersNothingToTheModel(t *testing.T) {
+func TestToolEntries_runtimeGraviteeOffersOnlyTheGovernedTicketOperations(t *testing.T) {
 	t.Parallel()
 
+	scope := area("acme", "platform")
 	entries := toolEntriesFor([]Instance{
-		graviteeInstance(area("acme", "platform"), graviteeSource("secrets")),
+		graviteeInstance(scope, graviteeSource("secrets")),
 	})
+	var graviteeEntries []domain.ToolEntry
 	for _, entry := range entries {
 		if strings.HasPrefix(string(entry.ID), "gravitee.") {
-			t.Fatalf("planned Gravitee operation reached the model: %s", entry.ID)
+			graviteeEntries = append(graviteeEntries, entry)
 		}
+	}
+	if len(graviteeEntries) != 2 ||
+		graviteeEntries[0].ID != "gravitee.apim.accept_subscription" ||
+		graviteeEntries[1].ID != "gravitee.apim.inspect_subscription" {
+		t.Fatalf("Gravitee entries = %+v, want only accept and inspect", graviteeEntries)
+	}
+	if got := graviteeEntries[0]; got.Effect != domain.EffectWrite || got.Untrusted ||
+		!got.Native || !got.OnSurface || got.Scope != scope {
+		t.Fatalf("accept entry = %+v, want a scoped trusted native write", got)
+	}
+	if got := graviteeEntries[1]; got.Effect != domain.EffectRead || !got.Untrusted ||
+		!got.Native || !got.OnSurface || got.Scope != scope {
+		t.Fatalf("inspect entry = %+v, want a scoped untrusted native read", got)
 	}
 }
