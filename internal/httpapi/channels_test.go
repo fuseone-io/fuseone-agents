@@ -390,6 +390,62 @@ func TestPutConversation_watchModeRunsAsTheConfigurerByDefault(t *testing.T) {
 	}
 }
 
+func TestPutConversation_carriesTheWholeTicketAdmissionRule(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{}
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, nil)
+	mode := openapi.Ticket
+	request := openapi.PutConversationRequestObject{
+		Name: "acme-slack", Conversation: "C-tickets",
+		Body: &openapi.PutConversationJSONRequestBody{
+			Company: "acme", Area: ptr("support"), Mode: &mode,
+			Agent: ptr("gateway-support"), RunAs: ptr("usr_ana"),
+			Ticket: &openapi.TicketRule{
+				OpenFrom: openapi.LinkedUsers, AddressFrom: "bot:B-approvals",
+				Patterns: []string{`api[ -]?key`},
+			},
+		},
+	}
+	resp, err := s.PutConversation(as(domain.RoleCurator), request)
+	if err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+	if _, ok := resp.(openapi.PutConversation204Response); !ok {
+		t.Fatalf("response = %T", resp)
+	}
+	if spy.putConv.Ticket == nil || spy.putConv.Ticket.AddressFrom != "bot:B-approvals" ||
+		len(spy.putConv.Ticket.Patterns) != 1 || spy.putConv.RunAs != "usr_ana" {
+		t.Fatalf("conversation = %+v", spy.putConv)
+	}
+}
+
+func TestListChannels_returnsTheTicketRuleWithoutNormalisingIt(t *testing.T) {
+	t.Parallel()
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(&channelSpy{
+		listed: []admin.Channel{{Name: "acme-slack", Kind: "slack", Enabled: true,
+			Conversations: []admin.Conversation{{
+				ID: "C-tickets", Scope: domain.Scope{Company: "acme", Area: "support"},
+				Mode: channel.ConversationTicket, Enabled: true,
+				Ticket: &channel.TicketRule{
+					OpenFrom: channel.TicketOpenLinkedUsers, AddressFrom: "app:A-approvals",
+					Patterns: []string{"subscription", "api key"},
+				},
+			}},
+		}},
+	}, nil).WithChannelListing(&listerSpy{kinds: []string{"slack"}})
+
+	resp, err := s.ListChannels(as(domain.RoleCurator), openapi.ListChannelsRequestObject{})
+	if err != nil {
+		t.Fatalf("ListChannels: %v", err)
+	}
+	page := resp.(openapi.ListChannels200JSONResponse)
+	got := page.Items[0].Conversations[0].Ticket
+	if got == nil || got.OpenFrom != openapi.LinkedUsers ||
+		got.AddressFrom != "app:A-approvals" || len(got.Patterns) != 2 {
+		t.Fatalf("ticket = %+v", got)
+	}
+}
+
 func TestPutConversation_mentionsModeCanIncludeThreadContext(t *testing.T) {
 	t.Parallel()
 	spy := &channelSpy{}

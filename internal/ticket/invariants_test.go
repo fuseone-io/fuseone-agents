@@ -17,6 +17,7 @@ func TestStore_anEventCannotAdvanceTwoTickets(t *testing.T) {
 			t.Fatalf("open first: %v", err)
 		}
 		second := opening("event-shared")
+		second.Origin.Root = "172.33"
 		second.Key, err = ticket.Key("slack-main", "C-support", "172.33")
 		if err != nil {
 			t.Fatalf("second key: %v", err)
@@ -35,6 +36,7 @@ func TestStore_anEventRacingAcrossTicketsBelongsToExactlyOne(t *testing.T) {
 	forEachStore(t, func(t *testing.T, store ticket.Store) {
 		inputs := []ticket.OpenInput{opening("event-racing"), opening("event-racing")}
 		var err error
+		inputs[1].Origin.Root = "172.33"
 		inputs[1].Key, err = ticket.Key("slack-main", "C-support", "172.33")
 		if err != nil {
 			t.Fatalf("second key: %v", err)
@@ -136,6 +138,55 @@ func TestStore_aReturnedRecipientListCannotMutateTheStore(t *testing.T) {
 		}
 		if !equalUsers(current.Current.Recipients, []domain.UserID{"usr_ana"}) {
 			t.Fatalf("caller changed stored recipients: %v", current.Current.Recipients)
+		}
+	})
+}
+
+func TestStore_supersededApprovalsNamesEveryCancelledQuestionInOrder(t *testing.T) {
+	forEachStore(t, func(t *testing.T, store ticket.Store) {
+		current := mustOpen(t, store, "event-root")
+		for i, runID := range []domain.RunID{"run-1", "run-2"} {
+			revision := int64(i + 1)
+			snapshot := []ticket.ContentRef{content("snapshot-1"), content("snapshot-2")}[i]
+			mustInspect(t, store, current.Current.Ref, snapshot,
+				now.Add(time.Duration(revision)*time.Minute))
+			if _, _, err := store.AwaitApproval(t.Context(), ticket.ApprovalInput{
+				Ref:   current.Current.Ref,
+				RunID: runID,
+				AtSeq: revision + 6, Snapshot: snapshot,
+				At: now.Add(time.Duration(revision) * time.Minute),
+			}); err != nil {
+				t.Fatalf("AwaitApproval revision %d: %v", revision, err)
+			}
+			var err error
+			current, _, err = store.Revise(t.Context(), ticket.ReviseInput{
+				Ref:     current.Current.Ref,
+				EventID: []string{"event-revision-1", "event-revision-2"}[i],
+				By:      current.RequestedBy, Draft: current.Current.Draft,
+				At: now.Add(time.Duration(revision+2) * time.Minute),
+			})
+			if err != nil {
+				t.Fatalf("Revise %d: %v", revision, err)
+			}
+		}
+
+		approvals, err := store.SupersededApprovals(t.Context(), current.Current.Ref)
+		if err != nil {
+			t.Fatalf("SupersededApprovals: %v", err)
+		}
+		if len(approvals) != 2 ||
+			approvals[0].RunID != "run-1" || approvals[0].AtSeq != 7 ||
+			approvals[1].RunID != "run-2" || approvals[1].AtSeq != 8 {
+			t.Fatalf("approvals = %+v, want both cancelled questions in revision order", approvals)
+		}
+		if err := store.MarkApprovalSuperseded(
+			t.Context(), approvals[0].Ref, now.Add(5*time.Minute),
+		); err != nil {
+			t.Fatalf("MarkApprovalSuperseded: %v", err)
+		}
+		remaining, err := store.SupersededApprovals(t.Context(), current.Current.Ref)
+		if err != nil || len(remaining) != 1 || remaining[0].RunID != "run-2" {
+			t.Fatalf("remaining = (%+v, %v), want only the unsettled obligation", remaining, err)
 		}
 	})
 }

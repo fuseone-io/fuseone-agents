@@ -79,6 +79,7 @@ func TestPost_carriesTheTokenAsBearerAndTheChannelInTheBody(t *testing.T) {
 	t.Parallel()
 	var got struct {
 		Channel string            `json:"channel"`
+		Thread  string            `json:"thread_ts"`
 		Text    string            `json:"text"`
 		Blocks  []json.RawMessage `json:"blocks"`
 	}
@@ -92,7 +93,7 @@ func TestPost_carriesTheTokenAsBearerAndTheChannelInTheBody(t *testing.T) {
 	defer server.Close()
 
 	if _, err := poster(server).Post(t.Context(),
-		channel.Conversation{ID: "C07", Label: "#ops"}, message()); err != nil {
+		channel.Conversation{ID: "C07", Label: "#ops", Thread: "171.1"}, message()); err != nil {
 		t.Fatalf("post: %v", err)
 	}
 
@@ -101,6 +102,9 @@ func TestPost_carriesTheTokenAsBearerAndTheChannelInTheBody(t *testing.T) {
 	}
 	if got.Channel != "C07" {
 		t.Errorf("channel = %q", got.Channel)
+	}
+	if got.Thread != "171.1" {
+		t.Errorf("thread = %q, want the ticket root", got.Thread)
 	}
 	// Notifications and accessibility read the fallback text, not the blocks.
 	// A message with blocks and no text is silent on a phone.

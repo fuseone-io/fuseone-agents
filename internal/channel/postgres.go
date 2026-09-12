@@ -111,7 +111,8 @@ func (p *Postgres) Unreported(ctx context.Context, since time.Time, limit int) (
 		       `+phases+` as event, runs.updated_at,
 		       coalesce(runs.pending_tool, ''), coalesce(runs.pending_reason, ''),
 		       `+announcementSeq+`,
-		       runs.phase = 'awaiting_approval'
+		       runs.phase = 'awaiting_approval',
+		       runs.ticket_key, runs.ticket_revision
 		from runs
 		-- What has already been attempted, so a page that failed goes to the
 		-- back. Ordered by recency alone, more stopped runs than fit in one
@@ -176,11 +177,13 @@ func (p *Postgres) Unreported(ctx context.Context, since time.Time, limit int) (
 	var out []Report
 	for rows.Next() {
 		var r Report
-		var company, area, event string
+		var company, area, event, ticketKey string
 		if err := rows.Scan(&r.RunID, &r.AgentID, &r.Version, &company, &area,
-			&event, &r.At, &r.Tool, &r.Reason, &r.AtSeq, &r.AwaitingDecision); err != nil {
+			&event, &r.At, &r.Tool, &r.Reason, &r.AtSeq, &r.AwaitingDecision,
+			&ticketKey, &r.Ticket.Revision); err != nil {
 			return nil, err
 		}
+		r.Ticket.Key = domain.TicketKey(ticketKey)
 		r.Scope = domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)}
 		r.Event, r.At = Event(event), r.At.UTC()
 		out = append(out, r)

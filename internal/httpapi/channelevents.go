@@ -46,6 +46,13 @@ func (h *ChannelHooks) WithWatchRules(rules slack.WatchRules) *ChannelHooks {
 	return h
 }
 
+// WithTicketRoutes wires governed thread admission. Its decision is stored in
+// the inbox before this door acknowledges Slack.
+func (h *ChannelHooks) WithTicketRoutes(routes channel.TicketRouter) *ChannelHooks {
+	h.tickets = routes
+	return h
+}
+
 // MountEvents wires the path a channel delivers asks to.
 //
 // Separate from the interaction path on purpose: one carries a decision
@@ -131,7 +138,23 @@ func (h *ChannelHooks) slackEvent(w http.ResponseWriter, r *http.Request) {
 		AskedBy: delivery.User, Text: delivery.Text, Thread: delivery.Thread,
 		Source: delivery.Source, Payload: body,
 	}
-	if delivery.Kind == slack.DeliveryMessage {
+	if h.tickets != nil {
+		intent, ok, err := h.tickets.Route(r.Context(), channel.TicketCandidate{
+			Connection: name, Conversation: delivery.Conversation,
+			Message: delivery.Message, Thread: delivery.Thread,
+			Kind: delivery.Kind, Text: delivery.Text, Source: delivery.Source,
+		})
+		if err != nil {
+			h.log.Error("could not route a ticket message", "channel", name, "err", err)
+			http.Error(w, "unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		if ok {
+			arrival.Ticket = &intent
+			arrival.AskedBy = delivery.Source.Key()
+		}
+	}
+	if arrival.Ticket == nil && delivery.Kind == slack.DeliveryMessage {
 		if h.rules == nil {
 			w.WriteHeader(http.StatusOK)
 			return

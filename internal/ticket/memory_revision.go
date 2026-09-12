@@ -84,7 +84,7 @@ func (m *Memory) replayed(eventID string, key domain.TicketKey) (bool, error) {
 }
 
 func (m *Memory) replace(ticket Ticket, change revisionChange) (Ticket, bool, error) {
-	if ticket.Current.Phase != PhaseExecuting {
+	if ticket.Current.Phase != PhaseExecuting && ticket.Current.Phase != PhaseNeedsAttention {
 		previous := ticket.Current
 		previous.Phase, previous.UpdatedAt = PhaseCancelled, change.at.UTC()
 		m.revisions[ticket.Key][previous.Ref.Revision] = previous

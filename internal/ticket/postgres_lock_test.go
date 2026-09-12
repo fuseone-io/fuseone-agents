@@ -2,7 +2,9 @@ package ticket_test
 
 import (
 	"context"
+	"errors"
 	"os"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -14,6 +16,52 @@ import (
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/ticket"
 )
+
+func TestPostgres_openTicketsReleasedTogether_neverCrossTheScopeCap(t *testing.T) {
+	pool, store := ticketPostgres(t)
+	for i := 0; i < ticket.MaxOpenPerScope-1; i++ {
+		in := opening("event-scope-lock-" + strconv.Itoa(i))
+		in.Origin.Root = "root-scope-lock-" + strconv.Itoa(i)
+		in.Key, _ = ticket.Key(in.Origin.Connection, in.Origin.Conversation, in.Origin.Root)
+		if _, _, err := store.Open(t.Context(), in); err != nil {
+			t.Fatalf("seed %d: %v", i, err)
+		}
+	}
+	holder, held := holdNamed(t, pool, "ticket-scope:4:acme:8:platform")
+	results := make(chan error, 2)
+	var wg sync.WaitGroup
+	for i := range 2 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			in := opening("event-scope-race-" + strconv.Itoa(i))
+			in.Origin.Root = "root-scope-race-" + strconv.Itoa(i)
+			in.Key, _ = ticket.Key(in.Origin.Connection, in.Origin.Conversation, in.Origin.Root)
+			_, _, err := store.Open(t.Context(), in)
+			results <- err
+		}()
+	}
+	waitForTicketWaiters(t, pool, held, 2)
+	if err := holder.Rollback(t.Context()); err != nil {
+		t.Fatalf("release scope lock: %v", err)
+	}
+	wg.Wait()
+	close(results)
+	created, capped := 0, 0
+	for err := range results {
+		switch {
+		case err == nil:
+			created++
+		case errors.Is(err, ticket.ErrTooManyOpen):
+			capped++
+		default:
+			t.Errorf("Open: %v", err)
+		}
+	}
+	if created != 1 || capped != 1 {
+		t.Fatalf("created %d and capped %d, want one each", created, capped)
+	}
+}
 
 func TestPostgres_claimersReleasedTogether_claimExactlyOnce(t *testing.T) {
 	pool, store := ticketPostgres(t)
@@ -121,6 +169,10 @@ type heldLock struct {
 func holdTicket(
 	t *testing.T, pool *pgxpool.Pool, key domain.TicketKey,
 ) (pgx.Tx, heldLock) {
+	return holdNamed(t, pool, "ticket:"+string(key))
+}
+
+func holdNamed(t *testing.T, pool *pgxpool.Pool, key string) (pgx.Tx, heldLock) {
 	t.Helper()
 	tx, err := pool.Begin(t.Context())
 	if err != nil {
@@ -132,7 +184,7 @@ func holdTicket(
 		t.Fatalf("identify holder: %v", err)
 	}
 	if _, err := tx.Exec(t.Context(),
-		`select pg_advisory_xact_lock(hashtextextended($1, 0))`, "ticket:"+string(key)); err != nil {
+		`select pg_advisory_xact_lock(hashtextextended($1, 0))`, key); err != nil {
 		t.Fatalf("hold ticket lock: %v", err)
 	}
 	var held heldLock

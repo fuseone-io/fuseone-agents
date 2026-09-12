@@ -227,7 +227,7 @@ func (s *Server) PutConversation(
 			return badConversation(reason), nil
 		}
 	}
-	if channel.StartsFromWatch(mode) {
+	if channel.StartsFromWatch(mode) || channel.StartsTickets(mode) {
 		if agent == "" {
 			return badConversation("watched messages need an agent to start"), nil
 		}
@@ -258,6 +258,7 @@ func (s *Server) PutConversation(
 		RunAs:           runAs,
 		ThreadContext:   orDefault(req.Body.ThreadContext, false),
 		DirectApprovals: orDefault(req.Body.DirectApprovals, false),
+		Ticket:          ticketRuleOf(req.Body.Ticket),
 		Wants:           wantsOf(req.Body.Wants),
 		Enabled:         orDefault(req.Body.Enabled, true),
 	}, caller)
@@ -505,6 +506,13 @@ func channelFrom(
 		if conv.DirectApprovals {
 			item.DirectApprovals = ptr(true)
 		}
+		if conv.Ticket != nil {
+			item.Ticket = &openapi.TicketRule{
+				OpenFrom:    openapi.TicketRuleOpenFrom(conv.Ticket.OpenFrom),
+				AddressFrom: conv.Ticket.AddressFrom,
+				Patterns:    append([]string(nil), conv.Ticket.Patterns...),
+			}
+		}
 		if conv.ThreadContext {
 			item.ThreadContext = ptr(true)
 		}
@@ -521,6 +529,16 @@ func conversationMode(mode *openapi.ConversationMode) string {
 		return channel.ConversationMentions
 	}
 	return string(*mode)
+}
+
+func ticketRuleOf(rule *openapi.TicketRule) *channel.TicketRule {
+	if rule == nil {
+		return nil
+	}
+	return &channel.TicketRule{
+		OpenFrom: string(rule.OpenFrom), AddressFrom: rule.AddressFrom,
+		Patterns: append([]string(nil), rule.Patterns...),
+	}
 }
 
 func valueOrSlice(v *[]string) []string {

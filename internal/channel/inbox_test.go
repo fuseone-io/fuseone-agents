@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/fuseone/agents/internal/channel"
+	"github.com/fuseone/agents/internal/domain"
 )
 
 /*
@@ -36,6 +37,27 @@ func TestReceive_anAskArrives_andIsWaitingToBeOpened(t *testing.T) {
 	}
 	if len(waiting) != 1 || waiting[0].EventID != "ev-1" {
 		t.Errorf("claimed = %+v, want the ask", waiting)
+	}
+}
+
+func TestReceive_aTicketDecisionSurvivesTheAcknowledgementBoundary(t *testing.T) {
+	inbox := freshInbox(t)
+	arrival := ask("ev-ticket-intent")
+	arrival.Ticket = &channel.TicketIntent{
+		Key: "ticket-key", Root: true,
+		Scope: domain.Scope{Company: "acme", Area: "support"},
+		Agent: "gateway-support", RunAs: "usr_gateway", AddressedBy: "app:A-approvals",
+	}
+	if _, err := inbox.Receive(t.Context(), arrival); err != nil {
+		t.Fatalf("Receive: %v", err)
+	}
+
+	claimed, err := inbox.Claim(t.Context(), "worker-1", time.Minute, 1)
+	if err != nil || len(claimed) != 1 {
+		t.Fatalf("Claim: %v (%d)", err, len(claimed))
+	}
+	if claimed[0].Ticket == nil || *claimed[0].Ticket != *arrival.Ticket {
+		t.Fatalf("ticket = %+v, want %+v", claimed[0].Ticket, arrival.Ticket)
 	}
 }
 

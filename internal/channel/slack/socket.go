@@ -78,6 +78,7 @@ type SocketReceiver struct {
 	Channel string
 	Inbox   SocketArrivals
 	Rules   WatchRules
+	Tickets channel.TicketRouter
 	Seen    SeenAccounts
 	Now     func() time.Time
 	Log     *slog.Logger
@@ -156,7 +157,21 @@ func (r SocketReceiver) handleEvent(
 		AskedBy: delivery.User, Text: delivery.Text, Thread: delivery.Thread,
 		Source: delivery.Source, Payload: envelope.Payload,
 	}
-	if delivery.Kind == DeliveryMessage {
+	if r.Tickets != nil {
+		intent, ok, err := r.Tickets.Route(ctx, channel.TicketCandidate{
+			Connection: r.Channel, Conversation: delivery.Conversation,
+			Message: delivery.Message, Thread: delivery.Thread,
+			Kind: delivery.Kind, Text: delivery.Text, Source: delivery.Source,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("slack: route ticket: %w", err)
+		}
+		if ok {
+			arrival.Ticket = &intent
+			arrival.AskedBy = delivery.Source.Key()
+		}
+	}
+	if arrival.Ticket == nil && delivery.Kind == DeliveryMessage {
 		if r.Rules == nil {
 			return AckSocketEnvelope(envelope.EnvelopeID)
 		}
@@ -175,13 +190,7 @@ func (r SocketReceiver) handleEvent(
 		return AckSocketEnvelope(envelope.EnvelopeID)
 	}
 
-	fresh, err := r.Inbox.Receive(ctx, channel.Arrival{
-		Channel: arrival.Channel, Conversation: arrival.Conversation,
-		EventID: arrival.EventID, Message: arrival.Message,
-		AskedBy: arrival.AskedBy, Text: arrival.Text, Thread: arrival.Thread,
-		Agent: arrival.Agent, RunAs: arrival.RunAs, Source: arrival.Source,
-		Payload: arrival.Payload,
-	})
+	fresh, err := r.Inbox.Receive(ctx, arrival)
 	if err != nil {
 		return nil, fmt.Errorf("slack: record socket ask: %w", err)
 	}

@@ -3133,6 +3133,8 @@ paths:
                     recipient without the grant is refused there as anywhere
                     else. Requires the Slack app's im:write scope, and applies
                     only where this conversation is told about parked runs.
+                ticket:
+                  $ref: '#/components/schemas/TicketRule'
                 wants:
                   type: array
                   description: >
@@ -4255,6 +4257,7 @@ components:
         - budget_reserved
         - tool_called
         - tool_returned
+        - effect_reconciled
         - budget_reconciled
         - approval_requested
         - approval_decided
@@ -6457,7 +6460,7 @@ components:
 
     ConversationMode:
       type: string
-      enum: [mentions, watch, both, announce]
+      enum: [mentions, watch, both, announce, ticket]
       default: mentions
       description: |
         What may start a run in a conversation.
@@ -6468,11 +6471,36 @@ components:
         keeps the mention path and the watched-message path enabled together;
         each keeps its own authority. `announce` starts nothing at all: the
         conversation only reports what runs do, and it is the only mode a
-        conversation for the whole installation may have.
+        conversation for the whole installation may have. `ticket` admits
+        matching human root messages as governed tickets; replies are routed
+        by the stored thread identity rather than matched again.
 
         A closed set on the way in and deliberately not on the way out: a
         client may only ask for a mode this version can honour, and a row
         written by a newer version has to travel back as itself.
+
+    TicketRule:
+      type: object
+      required: [openFrom, addressFrom, patterns]
+      properties:
+        openFrom:
+          type: string
+          enum: [linked_users]
+        addressFrom:
+          type: string
+          pattern: '^(bot|app):\S+$'
+          maxLength: 512
+          description: The exact Slack bot or app allowed to address the ticket.
+        patterns:
+          type: array
+          minItems: 1
+          maxItems: 8
+          items:
+            type: string
+            minLength: 1
+            maxLength: 256
+          description: RE2 patterns matched only against bounded root-message text.
+
     ChannelConversation:
       type: object
       required: [id, scope, enabled]
@@ -6505,6 +6533,8 @@ components:
             Whether an approval announced here is also sent privately to the
             people who may decide it. Addressing only: the decision is checked
             where the button is pressed, exactly as it is in the conversation.
+        ticket:
+          $ref: '#/components/schemas/TicketRule'
         sources:
           type: array
           items: { type: string }

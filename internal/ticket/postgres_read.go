@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -15,8 +16,10 @@ type rowQuery interface {
 }
 
 const ticketColumns = `
-	t.ticket_key, t.company_id, t.area_id, t.requested_by, t.addressed_by,
+	t.ticket_key, t.company_id, t.area_id, t.agent_id, t.run_as,
+	t.requested_by, t.addressed_by,
 	t.current_revision, t.active_revision, t.created_at, t.updated_at,
+	t.origin_connection, t.origin_conversation, t.origin_root,
 	c.phase, c.draft_ref, c.draft_digest,
 	c.approval_run_id, c.approval_at_seq, c.snapshot_ref, c.snapshot_digest,
 	c.recipients, c.outcome_ref, c.outcome_digest, c.created_at, c.updated_at,
@@ -61,8 +64,10 @@ type ticketRecord struct {
 
 func (r *ticketRecord) scan(row pgx.Row) error {
 	return row.Scan(
-		&r.key, &r.company, &r.area, &r.requester, &r.ticket.AddressedBy,
+		&r.key, &r.company, &r.area, &r.ticket.Agent, &r.ticket.RunAs,
+		&r.requester, &r.ticket.AddressedBy,
 		&r.currentRevision, &r.activeRevision, &r.ticket.CreatedAt, &r.ticket.UpdatedAt,
+		&r.ticket.Origin.Connection, &r.ticket.Origin.Conversation, &r.ticket.Origin.Root,
 		&r.phase, &r.ticket.Current.Draft.Ref, &r.ticket.Current.Draft.Digest,
 		&r.approvalRun, &r.approvalSeq, &r.snapshotRef, &r.snapshotDigest,
 		&r.recipients, &r.outcomeRef, &r.outcomeDigest,
@@ -117,6 +122,85 @@ func readRevision(ctx context.Context, db rowQuery, ref domain.TicketRef) (Revis
 	fillRevision(&revision, approvalRun, approvalSeq, snapshotRef, snapshotDigest,
 		outcomeRef, outcomeDigest)
 	return revision, nil
+}
+
+func (p *Postgres) SupersededApprovals(
+	ctx context.Context, current domain.TicketRef,
+) ([]SupersededApproval, error) {
+	if !current.Valid() {
+		return nil, ErrNotFound
+	}
+	rows, err := p.pool.Query(ctx, `
+		select revision, approval_run_id, approval_at_seq, snapshot_ref, snapshot_digest
+		from governed_ticket_revisions
+		where ticket_key = $1 and revision < $2 and phase = $3
+		  and approval_run_id <> ''
+		  and approval_superseded_at is null
+		order by revision`, string(current.Key), current.Revision, string(PhaseCancelled))
+	if err != nil {
+		return nil, fmt.Errorf("ticket: read superseded approvals: %w", err)
+	}
+	defer rows.Close()
+	out := make([]SupersededApproval, 0)
+	for rows.Next() {
+		var one SupersededApproval
+		one.Ref.Key = current.Key
+		if err := rows.Scan(&one.Ref.Revision, &one.RunID, &one.AtSeq,
+			&one.Snapshot.Ref, &one.Snapshot.Digest); err != nil {
+			return nil, fmt.Errorf("ticket: scan superseded approval: %w", err)
+		}
+		out = append(out, one)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("ticket: read superseded approvals: %w", err)
+	}
+	return out, nil
+}
+
+func (p *Postgres) MarkApprovalSuperseded(
+	ctx context.Context, ref domain.TicketRef, at time.Time,
+) error {
+	if err := validateSupersededMark(ref, at); err != nil {
+		return err
+	}
+	tag, err := p.pool.Exec(ctx, `
+		update governed_ticket_revisions
+		set approval_superseded_at = coalesce(approval_superseded_at, $3)
+		where ticket_key = $1 and revision = $2 and phase = $4
+		  and approval_run_id <> ''`,
+		string(ref.Key), ref.Revision, at.UTC(), string(PhaseCancelled))
+	if err != nil {
+		return fmt.Errorf("ticket: mark superseded approval: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrMoved
+	}
+	return nil
+}
+
+func (p *Postgres) ApprovalRoute(
+	ctx context.Context, ref domain.TicketRef,
+) (ApprovalRoute, error) {
+	if !ref.Valid() {
+		return ApprovalRoute{}, ErrNotFound
+	}
+	var route ApprovalRoute
+	var recipients []string
+	err := p.pool.QueryRow(ctx, `
+		select t.origin_connection, t.origin_conversation, t.origin_root, r.recipients
+		from governed_tickets t
+		join governed_ticket_revisions r on r.ticket_key = t.ticket_key
+		where t.ticket_key = $1 and r.revision = $2`, string(ref.Key), ref.Revision).Scan(
+		&route.Origin.Connection, &route.Origin.Conversation, &route.Origin.Root, &recipients,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ApprovalRoute{}, ErrNotFound
+	}
+	if err != nil {
+		return ApprovalRoute{}, fmt.Errorf("ticket: read approval route: %w", err)
+	}
+	route.Recipients = recipientIDs(recipients)
+	return route, nil
 }
 
 func recipientIDs(recipients []string) []domain.UserID {

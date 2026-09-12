@@ -4,9 +4,6 @@ package ticket
 import (
 	"context"
 	"errors"
-	"fmt"
-	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -22,9 +19,12 @@ var (
 	ErrExecutionActive  = errors.New("ticket: another revision is executing")
 	ErrAttemptConflict  = errors.New("ticket: the external attempt conflicts with its durable record")
 	ErrSnapshotMoved    = errors.New("ticket: the inspected snapshot moved")
+	ErrTooManyOpen      = errors.New("ticket: the scope has too many open tickets")
 	ErrPhase            = errors.New("ticket: the revision is not in the required phase")
 	ErrTerminal         = errors.New("ticket: the revision is terminal")
 )
+
+const MaxOpenPerScope = 200
 
 type Phase string
 
@@ -32,6 +32,7 @@ const (
 	PhaseCollecting       Phase = "collecting"
 	PhaseAwaitingApproval Phase = "awaiting_approval"
 	PhaseExecuting        Phase = "executing"
+	PhaseNeedsAttention   Phase = "needs_attention"
 	PhaseCompleted        Phase = "completed"
 	PhaseRejected         Phase = "rejected"
 	PhaseCancelled        Phase = "cancelled"
@@ -46,6 +47,24 @@ type ContentRef struct {
 	Digest string
 }
 
+// Origin is the vendor address of one support thread. It is stored beside the
+// opaque key so a reply can find its ticket with an indexed equality lookup;
+// decoding a length-prefixed key in SQL would turn every reply into a scan.
+type Origin struct {
+	Connection   string
+	Conversation string
+	Root         string
+}
+
+func (o Origin) Valid() bool {
+	for _, part := range []string{o.Connection, o.Conversation, o.Root} {
+		if strings.TrimSpace(part) == "" || len(part) > 512 {
+			return false
+		}
+	}
+	return true
+}
+
 func (r ContentRef) Valid() bool {
 	return strings.TrimSpace(r.Ref) != "" && strings.TrimSpace(r.Digest) != ""
 }
@@ -54,6 +73,11 @@ type Approval struct {
 	RunID    domain.RunID
 	AtSeq    int64
 	Snapshot ContentRef
+}
+
+type SupersededApproval struct {
+	Ref domain.TicketRef
+	Approval
 }
 
 type Execution struct {
@@ -86,7 +110,10 @@ type Revision struct {
 
 type Ticket struct {
 	Key         domain.TicketKey
+	Origin      Origin
 	Scope       domain.Scope
+	Agent       domain.AgentID
+	RunAs       domain.UserID
 	RequestedBy domain.UserID
 	AddressedBy string
 	Current     Revision
@@ -97,7 +124,10 @@ type Ticket struct {
 
 type OpenInput struct {
 	Key         domain.TicketKey
+	Origin      Origin
 	Scope       domain.Scope
+	Agent       domain.AgentID
+	RunAs       domain.UserID
 	RequestedBy domain.UserID
 	AddressedBy string
 	EventID     string
@@ -149,6 +179,12 @@ type FinishInput struct {
 	At        time.Time
 }
 
+type AttentionInput struct {
+	Execution Execution
+	Result    ContentRef
+	At        time.Time
+}
+
 type CloseInput struct {
 	Ref    domain.TicketRef
 	Phase  Phase
@@ -156,122 +192,53 @@ type CloseInput struct {
 	At     time.Time
 }
 
+// OutcomeNotice is one terminal external effect still owed to its support
+// thread. Result is a reference to the safe projection, never to a credential.
+type OutcomeNotice struct {
+	Ref    domain.TicketRef
+	Origin Origin
+	Phase  Phase
+	Result ContentRef
+}
+
+// ApprovalRoute is the immutable Slack origin and the people named for one
+// ticket revision. It contains addressing, never authority: the reporter must
+// still intersect Recipients with the people who may decide at send time.
+type ApprovalRoute struct {
+	Origin     Origin
+	Recipients []domain.UserID
+}
+
+// ApprovalRoutes is the narrow ticket view used by approval delivery.
+type ApprovalRoutes interface {
+	ApprovalRoute(context.Context, domain.TicketRef) (ApprovalRoute, error)
+}
+
+// OutcomeNotices leases and settles terminal ticket notifications. It is
+// separate from Store because a ticket writer has no reason to claim outbound
+// work, and a notifier has no reason to revise a ticket.
+type OutcomeNotices interface {
+	ClaimOutcomes(context.Context, string, time.Time, time.Duration, int) ([]OutcomeNotice, error)
+	MarkOutcomeAnnounced(context.Context, domain.TicketRef, string, time.Time) error
+}
+
 type Store interface {
 	Open(context.Context, OpenInput) (Ticket, bool, error)
 	Current(context.Context, domain.TicketKey) (Ticket, error)
+	AtOrigin(context.Context, Origin) (Ticket, error)
 	Revision(context.Context, domain.TicketRef) (Revision, error)
+	SupersededApprovals(context.Context, domain.TicketRef) ([]SupersededApproval, error)
+	MarkApprovalSuperseded(context.Context, domain.TicketRef, time.Time) error
+	EventRevision(context.Context, string) (Ticket, Revision, error)
 	Revise(context.Context, ReviseInput) (Ticket, bool, error)
 	Address(context.Context, AddressInput) (Ticket, bool, error)
 	RecordInspection(context.Context, InspectionInput) (Ticket, bool, error)
 	AwaitApproval(context.Context, ApprovalInput) (Ticket, bool, error)
 	ClaimExecution(context.Context, ClaimInput) (Ticket, bool, error)
 	ClaimExecutionWithAttempt(context.Context, ClaimAttemptInput) (Ticket, ExternalAttempt, bool, error)
+	MarkExecutionNeedsAttention(context.Context, AttentionInput) (Ticket, error)
 	Close(context.Context, CloseInput) (Ticket, bool, error)
 	FinishExecution(context.Context, FinishInput) (Ticket, error)
-}
-
-// Key names one Slack root without relying on a separator being absent from
-// any vendor namespace.
-func Key(connection, conversation, root string) (domain.TicketKey, error) {
-	const maxPartBytes = 512
-	parts := []string{connection, conversation, root}
-	var out strings.Builder
-	for _, part := range parts {
-		if strings.TrimSpace(part) == "" || len(part) > maxPartBytes {
-			return "", errors.New("ticket: every key part must be present and bounded")
-		}
-		out.WriteString(strconv.Itoa(len(part)))
-		out.WriteByte(':')
-		out.WriteString(part)
-	}
-	return domain.TicketKey(out.String()), nil
-}
-
-func validateOpen(in OpenInput) error {
-	if strings.TrimSpace(string(in.Key)) == "" || !in.Scope.Valid() || in.RequestedBy == "" ||
-		strings.TrimSpace(in.EventID) == "" || !in.Draft.Valid() || in.At.IsZero() {
-		return errors.New("ticket: incomplete open request")
-	}
-	return nil
-}
-
-func validateRevise(in ReviseInput) error {
-	if !in.Ref.Valid() || strings.TrimSpace(in.EventID) == "" || in.By == "" ||
-		!in.Draft.Valid() || in.At.IsZero() {
-		return errors.New("ticket: incomplete revision")
-	}
-	return nil
-}
-
-func validateApproval(in ApprovalInput) error {
-	if !in.Ref.Valid() || in.RunID == "" || in.AtSeq <= 0 ||
-		!in.Snapshot.Valid() || in.At.IsZero() {
-		return errors.New("ticket: incomplete approval request")
-	}
-	return nil
-}
-
-func validateInspection(in InspectionInput) error {
-	if !in.Ref.Valid() || !in.Snapshot.Valid() || in.At.IsZero() {
-		return errors.New("ticket: incomplete inspection")
-	}
-	return nil
-}
-
-func validateAddress(in AddressInput) ([]domain.UserID, error) {
-	if !in.Ref.Valid() || strings.TrimSpace(in.EventID) == "" ||
-		strings.TrimSpace(in.By) == "" || in.At.IsZero() || len(in.Recipients) > 20 {
-		return nil, errors.New("ticket: incomplete addressing request")
-	}
-	recipients := append([]domain.UserID(nil), in.Recipients...)
-	for _, recipient := range recipients {
-		if strings.TrimSpace(string(recipient)) == "" {
-			return nil, errors.New("ticket: empty recipient")
-		}
-	}
-	slices.Sort(recipients)
-	recipients = slices.Compact(recipients)
-	return recipients, nil
-}
-
-func validateClaim(in ClaimInput) error {
-	if !in.Ref.Valid() || in.RunID == "" || in.ApprovalAtSeq <= 0 || in.At.IsZero() {
-		return errors.New("ticket: incomplete execution claim")
-	}
-	return nil
-}
-
-func validateFinish(in FinishInput) error {
-	if !in.Execution.Valid() || !in.Result.Valid() || in.At.IsZero() ||
-		(in.Phase != PhaseCompleted && in.Phase != PhaseRejected) {
-		return errors.New("ticket: incomplete execution result")
-	}
-	return nil
-}
-
-func validateClose(in CloseInput) error {
-	if !in.Ref.Valid() || !in.Result.Valid() || in.At.IsZero() ||
-		(in.Phase != PhaseRejected && in.Phase != PhaseCancelled) {
-		return errors.New("ticket: incomplete terminal result")
-	}
-	return nil
-}
-
-func requireCurrent(ticket Ticket, ref domain.TicketRef) error {
-	if ticket.Current.Ref != ref {
-		return fmt.Errorf("%w: current revision is %d", ErrMoved, ticket.Current.Ref.Revision)
-	}
-	return nil
-}
-
-func requireMutable(ticket Ticket, ref domain.TicketRef) error {
-	if err := requireCurrent(ticket, ref); err != nil {
-		return err
-	}
-	if ticket.Current.Phase.terminal() {
-		return ErrTerminal
-	}
-	return nil
 }
 
 func cloneTicket(in Ticket) Ticket {

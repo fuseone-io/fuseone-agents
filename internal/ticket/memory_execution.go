@@ -194,6 +194,8 @@ func (m *Memory) FinishExecution(ctx context.Context, in FinishInput) (Ticket, e
 	revision.Outcome = &Outcome{Phase: in.Phase, Result: in.Result}
 	revision.UpdatedAt = in.At.UTC()
 	m.revisions[in.Execution.Ref.Key][in.Execution.Ref.Revision] = revision
+	delete(m.announced, in.Execution.Ref)
+	delete(m.outcomeClaims, in.Execution.Ref)
 	ticket.Active, ticket.UpdatedAt = nil, in.At.UTC()
 	if ticket.Current.Ref == in.Execution.Ref {
 		ticket.Current = revision

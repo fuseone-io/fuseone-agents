@@ -234,7 +234,9 @@ func claimRevision(ctx context.Context, tx pgx.Tx, in ClaimInput) error {
 func closeRevision(ctx context.Context, tx pgx.Tx, in CloseInput) error {
 	_, err := tx.Exec(ctx, `
 		update governed_ticket_revisions
-		set phase = $3, outcome_ref = $4, outcome_digest = $5, updated_at = $6
+		set phase = $3, outcome_ref = $4, outcome_digest = $5,
+		    outcome_announced_at = null, outcome_claimed_by = '', outcome_claim_until = null,
+		    updated_at = $6
 		where ticket_key = $1 and revision = $2`, string(in.Ref.Key), in.Ref.Revision,
 		string(in.Phase), in.Result.Ref, in.Result.Digest, in.At.UTC())
 	if err != nil {
@@ -246,7 +248,9 @@ func closeRevision(ctx context.Context, tx pgx.Tx, in CloseInput) error {
 func finishRevision(ctx context.Context, tx pgx.Tx, in FinishInput) error {
 	if _, err := tx.Exec(ctx, `
 		update governed_ticket_revisions
-		set phase = $3, outcome_ref = $4, outcome_digest = $5, updated_at = $6
+		set phase = $3, outcome_ref = $4, outcome_digest = $5,
+		    outcome_announced_at = null, outcome_claimed_by = '', outcome_claim_until = null,
+		    updated_at = $6
 		where ticket_key = $1 and revision = $2`,
 		string(in.Execution.Ref.Key), in.Execution.Ref.Revision, string(in.Phase),
 		in.Result.Ref, in.Result.Digest, in.At.UTC()); err != nil {

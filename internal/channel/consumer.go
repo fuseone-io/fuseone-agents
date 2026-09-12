@@ -45,6 +45,7 @@ type Consumer struct {
 	outcomes     Outcomes
 	content      engine.ContentStore
 	bindings     func(ctx context.Context, channel, account string) (domain.UserID, bool, error)
+	tickets      *TicketHandler
 	ceiling      Ceiling
 	clock        func() time.Time
 	owner        string
@@ -176,6 +177,9 @@ second time somebody is ignored they stop asking. What changed is who says it
 and when, not whether.
 */
 func (c *Consumer) handle(ctx context.Context, claimed Claimed) (opened bool, err error) {
+	if claimed.Ticket != nil {
+		return c.handleTicket(ctx, claimed)
+	}
 	run, refusal, err := c.open(ctx, claimed)
 	switch {
 	case err != nil:

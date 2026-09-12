@@ -21,12 +21,28 @@ func (p *Postgres) Open(ctx context.Context, in OpenInput) (Ticket, bool, error)
 	if err := validateOpen(in); err != nil {
 		return Ticket{}, false, err
 	}
-	tx, err := p.beginLocked(ctx, in.Key)
+	tx, err := p.pool.Begin(ctx)
 	if err != nil {
-		return Ticket{}, false, err
+		return Ticket{}, false, fmt.Errorf("ticket: begin open: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	// The scope lock makes the count and insert one decision. A ticket lock
+	// alone serialises duplicates of one root and lets 201 distinct roots all
+	// observe 199 open tickets before any of them inserts.
+	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtextextended($1, 0))`,
+		ticketScopeLock(in.Scope)); err != nil {
+		return Ticket{}, false, fmt.Errorf("ticket: lock scope: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtextextended($1, 0))`,
+		"ticket:"+string(in.Key)); err != nil {
+		return Ticket{}, false, fmt.Errorf("ticket: lock: %w", err)
+	}
 	return openLocked(ctx, tx, in)
+}
+
+func ticketScopeLock(scope domain.Scope) string {
+	company, area := string(scope.Company), string(scope.Area)
+	return fmt.Sprintf("ticket-scope:%d:%s:%d:%s", len(company), company, len(area), area)
 }
 
 func openLocked(ctx context.Context, tx pgx.Tx, in OpenInput) (Ticket, bool, error) {
@@ -44,6 +60,20 @@ func openLocked(ctx context.Context, tx pgx.Tx, in OpenInput) (Ticket, bool, err
 	} else if !errors.Is(err, ErrNotFound) {
 		return Ticket{}, false, err
 	}
+	var open int
+	if err := tx.QueryRow(ctx, `
+		select count(*)
+		from governed_tickets t
+		join governed_ticket_revisions r
+		  on r.ticket_key = t.ticket_key and r.revision = t.current_revision
+		where t.company_id = $1 and t.area_id = $2
+		  and r.phase not in ('completed', 'rejected', 'cancelled')`,
+		string(in.Scope.Company), string(in.Scope.Area)).Scan(&open); err != nil {
+		return Ticket{}, false, fmt.Errorf("ticket: count open tickets: %w", err)
+	}
+	if open >= MaxOpenPerScope {
+		return Ticket{}, false, ErrTooManyOpen
+	}
 	return createTicket(ctx, tx, in)
 }
 
@@ -51,11 +81,13 @@ func createTicket(ctx context.Context, tx pgx.Tx, in OpenInput) (Ticket, bool, e
 	ref := domain.TicketRef{Key: in.Key, Revision: 1}
 	if _, err := tx.Exec(ctx, `
 		insert into governed_tickets
-			(ticket_key, company_id, area_id, requested_by, addressed_by,
-			 current_revision, created_at, updated_at)
-		values ($1,$2,$3,$4,$5,1,$6,$6)`,
+			(ticket_key, company_id, area_id, agent_id, run_as, requested_by, addressed_by,
+			 current_revision, created_at, updated_at,
+			 origin_connection, origin_conversation, origin_root)
+		values ($1,$2,$3,$4,$5,$6,$7,1,$8,$8,$9,$10,$11)`,
 		string(in.Key), string(in.Scope.Company), string(in.Scope.Area),
-		string(in.RequestedBy), in.AddressedBy, in.At.UTC()); err != nil {
+		string(in.Agent), string(in.RunAs), string(in.RequestedBy), in.AddressedBy, in.At.UTC(),
+		in.Origin.Connection, in.Origin.Conversation, in.Origin.Root); err != nil {
 		return Ticket{}, false, postgresWriteError("insert ticket", err)
 	}
 	if err := insertRevision(ctx, tx, Revision{
@@ -81,8 +113,49 @@ func (p *Postgres) Current(ctx context.Context, key domain.TicketKey) (Ticket, e
 	return readTicket(ctx, p.pool, key, false)
 }
 
+func (p *Postgres) AtOrigin(ctx context.Context, origin Origin) (Ticket, error) {
+	if !origin.Valid() {
+		return Ticket{}, ErrNotFound
+	}
+	query := `select ` + ticketColumns + `
+		from governed_tickets t
+		join governed_ticket_revisions c
+		  on c.ticket_key = t.ticket_key and c.revision = t.current_revision
+		left join governed_ticket_revisions a
+		  on a.ticket_key = t.ticket_key and a.revision = t.active_revision
+		where t.origin_connection = $1 and t.origin_conversation = $2 and t.origin_root = $3`
+	var record ticketRecord
+	err := record.scan(p.pool.QueryRow(ctx, query,
+		origin.Connection, origin.Conversation, origin.Root))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Ticket{}, ErrNotFound
+	}
+	if err != nil {
+		return Ticket{}, fmt.Errorf("ticket: read origin: %w", err)
+	}
+	return record.value(), nil
+}
+
 func (p *Postgres) Revision(ctx context.Context, ref domain.TicketRef) (Revision, error) {
 	return readRevision(ctx, p.pool, ref)
+}
+
+func (p *Postgres) EventRevision(
+	ctx context.Context, eventID string,
+) (Ticket, Revision, error) {
+	ref, exists, err := eventRef(ctx, p.pool, eventID)
+	if err != nil {
+		return Ticket{}, Revision{}, err
+	}
+	if !exists {
+		return Ticket{}, Revision{}, ErrNotFound
+	}
+	ticket, err := readTicket(ctx, p.pool, ref.Key, false)
+	if err != nil {
+		return Ticket{}, Revision{}, err
+	}
+	revision, err := readRevision(ctx, p.pool, ref)
+	return ticket, revision, err
 }
 
 func (p *Postgres) beginLocked(ctx context.Context, key domain.TicketKey) (pgx.Tx, error) {

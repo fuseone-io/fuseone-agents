@@ -91,6 +91,10 @@ type Report struct {
 	// be waiting on when it is pressed, and a message keeps its buttons for
 	// ever.
 	AtSeq int64
+	// Ticket names the exact support-ticket revision that opened this run.
+	// Empty for every ordinary run. Approval delivery uses it to recover the
+	// immutable room and the recipients selected by the configured source.
+	Ticket domain.TicketRef
 }
 
 // Conversation is one place inside a channel, and the scope it speaks for.
@@ -100,6 +104,10 @@ type Conversation struct {
 	// ID is the conversation as the channel knows it: a Slack channel id, a
 	// Teams conversation id.
 	ID string
+	// Thread is the root a message belongs under. Empty posts at the top level.
+	// It does not enter the announcement key: one run belongs to one ticket
+	// root, and the run plus step already names that question uniquely.
+	Thread string
 	// Label is what a person calls it, for the console and for logs.
 	Label string
 	// Agent names the agent this conversation starts — from a watched message,

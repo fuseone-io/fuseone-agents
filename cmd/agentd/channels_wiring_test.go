@@ -152,6 +152,7 @@ func TestReporterPartsFor_namesEveryDependency(t *testing.T) {
 		{"where they are reachable", parts.accounts == nil},
 		{"what each agent's owner asked for", parts.policies == nil},
 		{"which workspaces it may speak from", parts.connections == nil},
+		{"where ticket approvals belong", parts.tickets == nil},
 		{"a link back to the run", parts.baseURL == ""},
 	} {
 		if one.missing {

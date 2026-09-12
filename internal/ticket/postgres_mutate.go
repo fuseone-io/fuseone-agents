@@ -28,7 +28,7 @@ func (p *Postgres) lockedTicket(
 func replaceRevision(
 	ctx context.Context, tx pgx.Tx, ticket Ticket, change revisionChange,
 ) (Ticket, bool, error) {
-	if ticket.Current.Phase != PhaseExecuting {
+	if ticket.Current.Phase != PhaseExecuting && ticket.Current.Phase != PhaseNeedsAttention {
 		if err := cancelRevision(ctx, tx, ticket.Current.Ref, change.at); err != nil {
 			return Ticket{}, false, err
 		}

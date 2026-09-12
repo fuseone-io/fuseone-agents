@@ -14,6 +14,7 @@ const (
 	// they asked has an answer.
 	TaskCardsClosed       = "cards_closed"
 	TaskAnswersDelivered  = "answers_delivered"
+	TaskTicketOutcomes    = "ticket_outcomes"
 	TaskAsksOpened        = "asks_opened"
 	TaskRefusalsDelivered = "refusals_delivered"
 
@@ -70,6 +71,7 @@ var (
 		TaskAnnouncements:     true,
 		TaskCardsClosed:       true,
 		TaskAnswersDelivered:  true,
+		TaskTicketOutcomes:    true,
 		TaskAsksOpened:        true,
 		TaskRefusalsDelivered: true,
 	}

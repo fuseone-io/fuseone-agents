@@ -37,6 +37,7 @@ path posts to exactly the same place.
 func (r *Reporter) wantsOwnApprovals(report Report) bool {
 	return r.approvals != nil && r.connections != nil &&
 		r.approvers != nil && r.accounts != nil &&
+		!report.Ticket.Valid() &&
 		report.AwaitingDecision && report.AtSeq > 0
 }
 
