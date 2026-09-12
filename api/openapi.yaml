@@ -1492,6 +1492,36 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
 
+  /runs/{runId}/approvals/{atSeq}/evidence:
+    get:
+      tags: [approvals]
+      operationId: getApprovalEvidence
+      summary: Read the inspected evidence behind a pending decision
+      description: |
+        Returns a fixed safe projection, never arbitrary referenced content.
+        The content is fetched only for the selected approval because it may
+        contain personal data and can expire independently of the ledger.
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+        - name: atSeq
+          in: path
+          required: true
+          schema: { type: integer, format: int64, minimum: 1 }
+      responses:
+        '200':
+          description: The evidence for this question, or `none` for an ordinary approval.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApprovalEvidenceDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: The evidence was recorded but is no longer safe or available to decide from.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
   /cost:
     get:
       tags: [cost]
@@ -7578,6 +7608,44 @@ components:
         requestedAt: { type: string, format: date-time }
         expiresAt: { type: string, format: date-time, nullable: true }
         atSeq: { type: integer, format: int64 }
+
+    ApprovalEvidenceDetail:
+      type: object
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          enum: [none, gravitee_subscription]
+        gravitee:
+          $ref: '#/components/schemas/GraviteeApprovalEvidence'
+
+    GraviteeApprovalEvidence:
+      type: object
+      required: [subscriptionId, status, application, api, plan, planSecurity, remoteUpdatedAt]
+      properties:
+        subscriptionId: { type: string }
+        status: { type: string }
+        application: { $ref: '#/components/schemas/GraviteeApprovalApplication' }
+        api: { $ref: '#/components/schemas/GraviteeApprovalResource' }
+        plan: { $ref: '#/components/schemas/GraviteeApprovalResource' }
+        planSecurity: { type: string }
+        requestedExpiration: { type: string, format: date-time, nullable: true }
+        remoteUpdatedAt: { type: string, format: date-time }
+
+    GraviteeApprovalApplication:
+      allOf:
+        - $ref: '#/components/schemas/GraviteeApprovalResource'
+        - type: object
+          required: [primaryOwnerEmail]
+          properties:
+            primaryOwnerEmail: { type: string, format: email }
+
+    GraviteeApprovalResource:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
 
     ApprovalPage:
       type: object

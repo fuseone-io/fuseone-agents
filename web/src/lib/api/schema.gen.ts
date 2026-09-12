@@ -1058,6 +1058,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/runs/{runId}/approvals/{atSeq}/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the inspected evidence behind a pending decision
+         * @description Returns a fixed safe projection, never arbitrary referenced content.
+         *     The content is fetched only for the selected approval because it may
+         *     contain personal data and can expire independently of the ledger.
+         */
+        get: operations["getApprovalEvidence"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/cost": {
         parameters: {
             query?: never;
@@ -4883,6 +4905,31 @@ export interface components {
             /** Format: int64 */
             atSeq: number;
         };
+        ApprovalEvidenceDetail: {
+            /** @enum {string} */
+            kind: "none" | "gravitee_subscription";
+            gravitee?: components["schemas"]["GraviteeApprovalEvidence"];
+        };
+        GraviteeApprovalEvidence: {
+            subscriptionId: string;
+            status: string;
+            application: components["schemas"]["GraviteeApprovalApplication"];
+            api: components["schemas"]["GraviteeApprovalResource"];
+            plan: components["schemas"]["GraviteeApprovalResource"];
+            planSecurity: string;
+            /** Format: date-time */
+            requestedExpiration?: string | null;
+            /** Format: date-time */
+            remoteUpdatedAt: string;
+        };
+        GraviteeApprovalApplication: components["schemas"]["GraviteeApprovalResource"] & {
+            /** Format: email */
+            primaryOwnerEmail: string;
+        };
+        GraviteeApprovalResource: {
+            id: string;
+            name: string;
+        };
         ApprovalPage: {
             items: components["schemas"]["PendingApproval"][];
             nextCursor?: string | null;
@@ -6433,6 +6480,41 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             /** @description The run has no pending approval, or it already expired. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getApprovalEvidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: components["parameters"]["RunId"];
+                atSeq: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The evidence for this question, or `none` for an ordinary approval. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalEvidenceDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description The evidence was recorded but is no longer safe or available to decide from. */
             409: {
                 headers: {
                     [name: string]: unknown;

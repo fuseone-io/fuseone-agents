@@ -12,6 +12,9 @@ import { useDecideApproval } from "@/features/runs/api";
 import { EFFECT_LABEL, RISK_LABEL, riskOf } from "@/features/approvals/risk";
 import type { PendingApproval } from "@/lib/api/client";
 import { problemMessage } from "@/lib/api/problem-message";
+import { ApprovalEvidenceView } from "@/features/approvals/approval-evidence";
+import { useApprovalEvidence } from "@/features/approvals/api";
+import { ApprovalDetailRow as Row } from "@/features/approvals/approval-detail-row";
 
 /**
  * What the approver decides on.
@@ -30,6 +33,7 @@ export function DecisionPanel({
   const { t } = useTranslation();
   const [note, setNote] = useState("");
   const decide = useDecideApproval(item.runId);
+  const evidence = useApprovalEvidence(item.runId, item.atSeq);
 
   async function submit(approved: boolean) {
     try {
@@ -91,6 +95,13 @@ export function DecisionPanel({
         </Link>
       </div>
 
+      <ApprovalEvidenceView
+        evidence={evidence.data}
+        loading={evidence.isLoading}
+        failed={evidence.isError}
+        onRetry={() => void evidence.refetch()}
+      />
+
       <div className="flex flex-col gap-2">
         <Label htmlFor="note">{t("approvals.note")}</Label>
         <Input
@@ -112,37 +123,12 @@ export function DecisionPanel({
         </Button>
         <Button
           className="flex-1"
-          disabled={decide.isPending}
+          disabled={decide.isPending || evidence.isLoading || evidence.isError}
           onClick={() => void submit(true)}
         >
           {t("approvals.approve")}
         </Button>
       </footer>
     </aside>
-  );
-}
-
-function Row({
-  label,
-  value,
-  mono,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-}) {
-  return (
-    <div className="flex items-baseline gap-3">
-      <dt className="w-20 shrink-0 text-xs text-muted-foreground">{label}</dt>
-      <dd
-        className={
-          mono
-            ? "min-w-0 flex-1 truncate font-mono text-xs"
-            : "min-w-0 flex-1 truncate"
-        }
-      >
-        {value}
-      </dd>
-    </div>
   );
 }

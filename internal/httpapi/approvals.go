@@ -113,6 +113,12 @@ func (s *Server) DecideApproval(ctx context.Context, req openapi.DecideApprovalR
 		return openapi.DecideApproval409ApplicationProblemPlusJSONResponse(conflicted(fmt.Sprintf("This run is awaiting a decision on step %d, not %d",
 			state.PendingApproval.AtSeq, req.Body.AtSeq))), nil
 	}
+	if req.Body.Approved {
+		if _, err := s.approvalEvidenceDetail(ctx, state, steps, req.Body.AtSeq); err != nil {
+			return openapi.DecideApproval409ApplicationProblemPlusJSONResponse(
+				conflicted(errApprovalEvidenceUnavailable.Error())), nil
+		}
+	}
 
 	/*
 		Written against the request it answers, and only onto it.
