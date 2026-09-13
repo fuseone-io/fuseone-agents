@@ -15,8 +15,15 @@ create index governed_tickets_scope_idx
 -- A ticket arrival is classified before Slack is acknowledged and consumed
 -- afterwards. Keeping the classification beside the inbox row makes that
 -- decision survive a process death without asking a possibly changed rule.
+-- Attempts and the separately acknowledged notice keep a saved revision
+-- pending while telling its requester once that an older execution owns the
+-- ticket. They are not a terminal disposition of the event.
 alter table channel_inbox
-    add column ticket_intent jsonb;
+    add column ticket_intent jsonb,
+    add column claim_attempts integer not null default 0
+        constraint channel_inbox_claim_attempts_nonnegative check (claim_attempts >= 0),
+    add column pending_notice text not null default '',
+    add column pending_notice_answered_at timestamptz;
 
 -- Ticket root matching looks up exactly one configured conversation. The
 -- general settings index begins with scope, which is not known at this door.

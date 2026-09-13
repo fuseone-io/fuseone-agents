@@ -2,6 +2,7 @@ package channel_test
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -210,6 +211,44 @@ func TestClaim_anExpiredLease_isClaimableAgain(t *testing.T) {
 	}
 	if len(again) != 1 {
 		t.Errorf("claimed = %d, want the lapsed ask back", len(again))
+	}
+}
+
+func TestTicketWaiting_isSaidOnceWithoutSettlingTheRevisionEvent(t *testing.T) {
+	inbox := freshInbox(t)
+	arrival := ask("ev-ticket-waiting")
+	arrival.Ticket = &channel.TicketIntent{Key: "ticket-key"}
+	if _, err := inbox.Receive(t.Context(), arrival); err != nil {
+		t.Fatalf("Receive: %v", err)
+	}
+
+	var held channel.Claimed
+	for attempt := 1; attempt <= 3; attempt++ {
+		claimed, err := inbox.Claim(t.Context(), "worker-1", -time.Second, 1)
+		if err != nil || len(claimed) != 1 {
+			t.Fatalf("Claim %d = (%d, %v)", attempt, len(claimed), err)
+		}
+		held = claimed[0]
+		if held.ClaimAttempts != attempt {
+			t.Fatalf("attempts = %d, want %d", held.ClaimAttempts, attempt)
+		}
+	}
+	if err := inbox.TicketWaiting(t.Context(), held); err != nil {
+		t.Fatalf("TicketWaiting: %v", err)
+	}
+	if pending, err := inbox.Claim(t.Context(), "worker-2", time.Minute, 1); err != nil || len(pending) != 0 {
+		t.Fatalf("processing claim before notice = (%d, %v)", len(pending), err)
+	}
+	owed, err := inbox.Owed(t.Context(), "speaker", time.Minute, 1)
+	if err != nil || len(owed) != 1 || !strings.Contains(owed[0].Detail, "correction is saved") {
+		t.Fatalf("notice debt = (%+v, %v)", owed, err)
+	}
+	if err := inbox.Answered(t.Context(), owed[0], time.Now()); err != nil {
+		t.Fatalf("Answered: %v", err)
+	}
+	resumed, err := inbox.Claim(t.Context(), "worker-2", time.Minute, 1)
+	if err != nil || len(resumed) != 1 || resumed[0].ClaimAttempts != 4 {
+		t.Fatalf("processing after notice = (%+v, %v)", resumed, err)
 	}
 }
 

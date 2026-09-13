@@ -218,7 +218,7 @@ func (c *Consumer) decline(ctx context.Context, a Claimed, r Refusal) error {
 }
 
 /*
-Answer says the refusals that were recorded and not yet delivered.
+Answer says the reply debts that were recorded and not yet delivered.
 
 Its own claim, so two consumers do not both say it, and its own retry, so a
 driver that was away does not turn a refusal into silence. A reply repeated

@@ -56,6 +56,14 @@ func (c *Consumer) handleTicket(ctx context.Context, claimed Claimed) (bool, err
 		return false, fmt.Errorf("%w: a ticket handler", ErrNotWired)
 	}
 	result, err := c.tickets.Handle(ctx, claimed)
+	if errors.Is(err, ticket.ErrExecutionActive) {
+		if claimed.ClaimAttempts >= 3 && claimed.PendingNotice == "" {
+			return false, c.inbox.TicketWaiting(ctx, claimed)
+		}
+		// Waiting for the execution is an expected ticket state, not a failed
+		// sweep. The lease supplies the retry interval until it can open.
+		return false, nil
+	}
 	if err != nil {
 		return false, err
 	}

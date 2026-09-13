@@ -247,6 +247,53 @@ func TestTicketHandler_aRevisionWaitsUntilTheClaimedExecutionFinishes(t *testing
 	}
 }
 
+func TestTicketConsumer_saysThatASavedRevisionIsWaitingThenOpensIt(t *testing.T) {
+	handler, store, opener, _, runs := ticketHandlerWithRuns()
+	root := mustHandleTicket(t, handler, ticketRoot("event-wait-root", "Create an API key"))
+	held, err := store.Current(t.Context(), channelTicketKey)
+	if err != nil {
+		t.Fatalf("Current: %v", err)
+	}
+	awaitTicketApproval(t, runs, store, held, root.RunID)
+	claimed, changed, err := store.ClaimExecution(t.Context(), ticket.ClaimInput{
+		Ref: held.Current.Ref, RunID: root.RunID, ApprovalAtSeq: 2,
+		At: ticketNow.Add(time.Minute),
+	})
+	if err != nil || !changed || claimed.Active == nil {
+		t.Fatalf("ClaimExecution = (%+v, %v, %v)", claimed, changed, err)
+	}
+	reply := ticketReply("event-wait-revision", "171.9", "Expire it in 15 days")
+	if _, err := handler.Handle(t.Context(), reply); !errors.Is(err, ticket.ErrExecutionActive) {
+		t.Fatalf("prime revision = %v, want ErrExecutionActive", err)
+	}
+
+	consumer, parts := consumerWith(t, reply.Text, func(parts *consumerParts) {
+		parts.arrival = reply.Arrival
+		parts.arrival.Payload = []byte(`{"text":"Expire it in 15 days"}`)
+	})
+	consumer.WithTickets(handler)
+	for attempt := 1; attempt <= 3; attempt++ {
+		if opened, err := consumer.Sweep(t.Context(), -time.Second, 1); err != nil || opened != 0 {
+			t.Fatalf("waiting sweep %d = (%d, %v)", attempt, opened, err)
+		}
+	}
+	if said, err := consumer.Answer(t.Context(), time.Minute, 1); err != nil || said != 1 ||
+		len(parts.answers.said) != 1 || !strings.Contains(parts.answers.said[0], "correction is saved") {
+		t.Fatalf("waiting answer = (%d, %v), messages=%v", said, err, parts.answers.said)
+	}
+
+	if _, err := store.FinishExecution(t.Context(), ticket.FinishInput{
+		Execution: *claimed.Active, Phase: ticket.PhaseCompleted,
+		Result: ticket.ContentRef{Ref: "result://accepted", Digest: "sha256:accepted"},
+		At:     ticketNow.Add(2 * time.Minute),
+	}); err != nil {
+		t.Fatalf("FinishExecution: %v", err)
+	}
+	if opened, err := consumer.Sweep(t.Context(), time.Minute, 1); err != nil || opened != 1 || opener.count() != 2 {
+		t.Fatalf("released sweep = (%d, %v), runs=%d", opened, err, opener.count())
+	}
+}
+
 func TestTicketHandler_aReplyAfterTheTicketClosedIsSettledWithoutAnotherRun(t *testing.T) {
 	handler, store, opener, _ := ticketHandler()
 	mustHandleTicket(t, handler, ticketRoot("event-root", "Create an API key"))
