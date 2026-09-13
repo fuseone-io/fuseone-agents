@@ -25,7 +25,7 @@ field" is a commit message.
 
 ---
 
-## [Unreleased]
+## [0.49.1] — 2026-09-13
 
 ### Added
 
