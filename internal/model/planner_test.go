@@ -89,52 +89,48 @@ func serve(t *testing.T, response string) *capture {
 }
 
 /*
-And reading the recorder while requests are still arriving is safe.
+And a read and a write that nothing orders but the lock.
 
-The test above waits for every request before it reads, and wg.Wait establishes
-a happens-before — so it proves the writer is synchronized and nothing about the
-reader. Removing the lock from last or all leaves it green, which is how ten
-unsynchronized reads lived in wire_test.go beside a mutex that was supposed to
-have closed this.
+The test below waits for every request before it reads, and wg.Wait establishes
+a happens-before — so it proves the writer is synchronized and says nothing
+about the reader. That is how ten unsynchronized reads lived in wire_test.go
+beside a mutex meant to have closed this.
 
-Here the read overlaps the writes on purpose.
+Two goroutines released by one channel, each signalling only after its own
+access, so both accesses certainly happen and neither can be skipped by the
+scheduler. What the detector then reports is the absence of an ordering between
+them, which is the whole claim: only the lock provides one.
 */
-func TestCapture_readWhileRequestsArrive(t *testing.T) {
-	c := serve(t, `{}`)
-	const requests = 32
+func TestCapture_aReadAndAWriteAtOnce_areOrderedOnlyByItsLock(t *testing.T) {
+	for _, one := range []struct {
+		name string
+		read func(*capture)
+	}{
+		{"all", func(c *capture) { _ = c.all() }},
+		{"last", func(c *capture) { _ = c.last() }},
+	} {
+		t.Run(one.name, func(t *testing.T) {
+			c := &capture{}
+			start := make(chan struct{})
+			var wg sync.WaitGroup
+			wg.Add(2)
+			go func() {
+				defer wg.Done()
+				<-start
+				c.record(map[string]any{"read": one.name})
+			}()
+			go func() {
+				defer wg.Done()
+				<-start
+				one.read(c)
+			}()
+			close(start)
+			wg.Wait()
 
-	done := make(chan struct{})
-	reading := make(chan struct{})
-	go func() {
-		defer close(reading)
-		for {
-			select {
-			case <-done:
-				return
-			default:
+			if got := len(c.all()); got != 1 {
+				t.Fatalf("recorded %d bodies, want the one that was written", got)
 			}
-			_, _ = c.last(), c.all()
-		}
-	}()
-
-	var wg sync.WaitGroup
-	for range requests {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			response, err := http.Post(c.server.URL, "application/json", strings.NewReader(`{}`))
-			if err != nil {
-				return
-			}
-			_ = response.Body.Close()
-		}()
-	}
-	wg.Wait()
-	close(done)
-	<-reading
-
-	if got := len(c.all()); got != requests {
-		t.Fatalf("recorded requests = %d, want %d", got, requests)
+		})
 	}
 }
 
