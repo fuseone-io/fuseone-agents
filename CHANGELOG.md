@@ -25,6 +25,17 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **Gravitee connector instances can now be configured and corrected in the
+  console.** The form fixes the gateway, organization, environment, single API,
+  expiration bounds and Vault-backed administrative credential location. It
+  never accepts a Gravitee token, and editing waits for the configurer-only
+  detail so changing one field cannot erase or restore a stale credential
+  boundary.
+
 ## [0.49.0] — 2026-09-12
 
 ### Upgrade notes

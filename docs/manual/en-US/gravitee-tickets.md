@@ -21,9 +21,9 @@ the organization's protected path.
 
 ## Before configuring the room
 
-1. Configure an enabled Gravitee connector in the same company and area as the
-   support room. Bind exactly one API, an organization, an environment and the
-   allowed expiration range.
+1. Under **Integrations -> Connectors**, configure an enabled Gravitee instance
+   in the same company and area as the support room. Bind exactly one API, an
+   organization, an environment and the allowed expiration range.
 2. Bind the connector to a Vault-backed credential with only subscription read
    and accept permissions for that remote scope. FuseOne resolves the secret
    internally; the model and Slack never receive it.

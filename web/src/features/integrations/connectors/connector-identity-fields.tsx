@@ -31,7 +31,7 @@ export function ConnectorIdentityFields({
   connector,
 }: {
   editing: boolean;
-  connector: "vault" | "sql";
+  connector: string;
 }) {
   const { t } = useTranslation();
   const form = useFormContext<ConnectorIdentityValues>();

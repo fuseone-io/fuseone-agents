@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ConnectorCatalogPanel } from "@/features/integrations/connectors/connector-catalog-panel";
@@ -51,6 +51,13 @@ const planned: GovernedConnector = {
 
 const runtimeSQL: GovernedConnector = { ...planned, maturity: "runtime" };
 
+const runtimeGravitee: GovernedConnector = {
+  ...planned,
+  id: "gravitee",
+  name: "Governed Gravitee subscriptions",
+  maturity: "runtime",
+};
+
 const instance: ConnectorInstance = {
   name: "prod",
   connector: "vault",
@@ -95,6 +102,29 @@ const sqlInstance: ConnectorInstance = {
         maxBytes: 65536,
       },
     ],
+  },
+};
+
+const graviteeInstance: ConnectorInstance = {
+  name: "apim",
+  connector: "gravitee",
+  enabled: true,
+  scopeKind: "area",
+  company: "acme",
+  area: "platform",
+  hasToken: false,
+  gravitee: {
+    address: "https://apim.internal/management/v2",
+    organization: "org-prod",
+    environment: "env-prod",
+    allowedReferences: [{ type: "API", id: "checkout-api" }],
+    minTTLSeconds: 86_400,
+    maxTTLSeconds: 7_776_000,
+    allowNoExpiry: false,
+    credentialSource: {
+      kind: "vault_kv_secret",
+      vaultInstance: "prod",
+    },
   },
 };
 
@@ -187,6 +217,57 @@ describe("governed connector catalogue", () => {
     ).toBeInTheDocument();
   });
 
+  it("offers creation and editing for a runtime Gravitee connector", async () => {
+    const user = userEvent.setup();
+    render(
+      <ConnectorCatalogPanel
+        data={{
+          connectors: [runtimeGravitee],
+          instances: [graviteeInstance],
+          catalogLoading: false,
+          instancesLoading: false,
+          catalogError: null,
+          instancesError: null,
+          canConfigure: true,
+        }}
+        actions={actions()}
+      />,
+    );
+
+    const configured = screen.getByRole("heading", { name: "apim" }).closest("article")!;
+    expect(within(configured).getByRole("button", { name: "Editar" })).toBeInTheDocument();
+    expect(within(configured).getByText("checkout-api")).toBeInTheDocument();
+    expect(within(configured).getByText("86400-7776000 s")).toBeInTheDocument();
+
+    const catalogue = screen.getByRole("heading", {
+      name: "Governed Gravitee subscriptions",
+    }).closest("article")!;
+    await user.click(within(catalogue).getByRole("button", { name: "Configurar" }));
+    expect(screen.getByRole("heading", { name: "Configurar Gravitee" })).toBeInTheDocument();
+  });
+
+  it("offers Gravitee from the single new-instance menu", async () => {
+    const user = userEvent.setup();
+    render(
+      <ConnectorCatalogPanel
+        data={{
+          connectors: [runtimeGravitee],
+          instances: [],
+          catalogLoading: false,
+          instancesLoading: false,
+          catalogError: null,
+          instancesError: null,
+          canConfigure: true,
+        }}
+        actions={actions()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Nova instância" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Configurar Gravitee" }));
+    expect(screen.getByRole("heading", { name: "Configurar Gravitee" })).toBeInTheDocument();
+  });
+
   it("keeps the catalogue visible when configured instances fail to load", () => {
     render(
       <ConnectorCatalogPanel
@@ -207,6 +288,35 @@ describe("governed connector catalogue", () => {
       screen.getByRole("heading", { name: "Vault secret storage" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("alert")).toBeInTheDocument();
+  });
+
+  it("keeps a future connector visible without treating it as Vault", () => {
+    render(
+      <ConnectorCatalogPanel
+        data={{
+          connectors: [],
+          instances: [{
+            name: "future-prod",
+            connector: "future",
+            enabled: true,
+            scopeKind: "installation",
+            hasToken: false,
+          }],
+          catalogLoading: false,
+          instancesLoading: false,
+          catalogError: null,
+          instancesError: null,
+          canConfigure: true,
+        }}
+        actions={actions()}
+      />,
+    );
+
+    const configured = screen.getByRole("heading", { name: "future-prod" }).closest("article")!;
+    expect(within(configured).queryByRole("button", { name: "Editar" })).not.toBeInTheDocument();
+    expect(within(configured).queryByText("Token")).not.toBeInTheDocument();
+    expect(within(configured).getByRole("button", { name: "Remover instância" }))
+      .toBeInTheDocument();
   });
 
   it("keeps configured instances visible when the catalogue fails to load", () => {
@@ -255,6 +365,9 @@ describe("governed connector catalogue", () => {
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Editar" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Remover instância" }),
     ).not.toBeInTheDocument();
   });
 });

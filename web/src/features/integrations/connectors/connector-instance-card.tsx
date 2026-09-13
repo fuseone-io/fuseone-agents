@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RemoveButton } from "@/components/shared/remove-button";
 import type { ConnectorInstance } from "@/features/integrations/api";
+import { GraviteeInstanceFacts } from "@/features/integrations/connectors/gravitee-instance-facts";
 import { formatRelative } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -15,7 +16,7 @@ export function ConnectorInstanceCard({
 }: {
   instance: ConnectorInstance;
   onEdit?: () => void;
-  onDelete: () => void;
+  onDelete?: () => void;
 }) {
   const { t } = useTranslation();
   return (
@@ -43,19 +44,28 @@ export function ConnectorInstanceCard({
             <span className="sr-only">{t("common.edit")}</span>
           </Button>
         )}
-        <RemoveButton
-          title={t("connectors.removeInstance")}
-          description={t("connectors.removeInstanceHint", {
-            name: instance.name,
-          })}
-          onConfirm={onDelete}
-        />
+        {onDelete && (
+          <RemoveButton
+            title={t("connectors.removeInstance")}
+            description={t("connectors.removeInstanceHint", {
+              name: instance.name,
+            })}
+            onConfirm={onDelete}
+          />
+        )}
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
         {instance.connector === "sql" ? (
           <SQLFacts instance={instance} t={t} />
-        ) : (
+        ) : instance.connector === "gravitee" ? (
+          <>
+            <GraviteeInstanceFacts instance={instance} t={t} />
+            <Fact label={t("connectors.updatedAt")} value={updated(instance, t)} />
+          </>
+        ) : instance.connector === "vault" ? (
           <VaultFacts instance={instance} t={t} />
+        ) : (
+          <Fact label={t("connectors.updatedAt")} value={updated(instance, t)} />
         )}
       </div>
     </article>

@@ -21,9 +21,9 @@ caminho protegido da organização.
 
 ## Antes de configurar a sala
 
-1. Configure um conector Gravitee habilitado na mesma empresa e área da sala de
-   suporte. Vincule exatamente uma API, uma organização, um ambiente e a faixa
-   de expiração permitida.
+1. Em **Integrações -> Conectores**, configure uma instância Gravitee habilitada
+   na mesma empresa e área da sala de suporte. Vincule exatamente uma API, uma
+   organização, um ambiente e a faixa de expiração permitida.
 2. Vincule o conector a uma credencial apoiada pelo Vault com somente leitura e
    aceitação de assinaturas naquele escopo remoto. O FuseOne resolve o segredo
    internamente; o modelo e o Slack nunca o recebem.

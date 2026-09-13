@@ -8,10 +8,10 @@ import {
   useConnectorInstance,
   type ConnectorInstance,
 } from "@/features/integrations/api";
+import { GraviteeInstanceForm } from "@/features/integrations/connectors/gravitee-instance-form";
 import type { ConnectorInstanceSaver } from "@/features/integrations/connectors/connector-instance-model";
-import { SQLInstanceForm } from "@/features/integrations/connectors/sql-instance-form";
 
-export function SQLInstanceEditor({
+export function GraviteeInstanceEditor({
   instance,
   instances,
   onClose,
@@ -24,7 +24,7 @@ export function SQLInstanceEditor({
 }) {
   if (!instance) {
     return (
-      <SQLInstanceForm
+      <GraviteeInstanceForm
         instance={null}
         instances={instances}
         onClose={onClose}
@@ -33,7 +33,7 @@ export function SQLInstanceEditor({
     );
   }
   return (
-    <ExistingSQLInstanceEditor
+    <ExistingGraviteeInstanceEditor
       instance={instance}
       instances={instances}
       onClose={onClose}
@@ -42,7 +42,7 @@ export function SQLInstanceEditor({
   );
 }
 
-function ExistingSQLInstanceEditor({
+function ExistingGraviteeInstanceEditor({
   instance,
   instances,
   onClose,
@@ -57,36 +57,42 @@ function ExistingSQLInstanceEditor({
   const detail = useConnectorInstance(instance);
   if (detail.isLoading || detail.isFetching) {
     return (
-      <PropertiesSheet
-        open
-        onOpenChange={(open) => !open && onClose()}
-        title={t("connectors.editSQLInstance")}
-        description={t("connectors.loadingSQLInstance")}
-      >
-        <PropertiesSheetBody><LoadingRows rows={5} /></PropertiesSheetBody>
-      </PropertiesSheet>
+      <EditorShell title={t("connectors.editGraviteeInstance")} description={t("connectors.loadingGraviteeInstance")} onClose={onClose}>
+        <LoadingRows rows={5} />
+      </EditorShell>
     );
   }
   if (detail.error || !detail.data) {
     return (
-      <PropertiesSheet
-        open
-        onOpenChange={(open) => !open && onClose()}
-        title={t("connectors.editSQLInstance")}
-        description={t("connectors.sqlInstanceSheetHint")}
-      >
-        <PropertiesSheetBody>
-          <ErrorState error={detail.error ?? new Error("SQL instance detail is missing")} onRetry={() => void detail.refetch()} />
-        </PropertiesSheetBody>
-      </PropertiesSheet>
+      <EditorShell title={t("connectors.editGraviteeInstance")} description={t("connectors.graviteeInstanceSheetHint")} onClose={onClose}>
+        <ErrorState error={detail.error ?? new Error("Gravitee instance detail is missing")} onRetry={() => void detail.refetch()} />
+      </EditorShell>
     );
   }
   return (
-    <SQLInstanceForm
+    <GraviteeInstanceForm
       instance={detail.data}
       instances={instances}
       onClose={onClose}
       onSave={onSave}
     />
+  );
+}
+
+function EditorShell({
+  title,
+  description,
+  onClose,
+  children,
+}: {
+  title: string;
+  description: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <PropertiesSheet open onOpenChange={(open) => !open && onClose()} title={title} description={description}>
+      <PropertiesSheetBody>{children}</PropertiesSheetBody>
+    </PropertiesSheet>
   );
 }
