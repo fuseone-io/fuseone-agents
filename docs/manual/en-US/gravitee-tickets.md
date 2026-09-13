@@ -10,8 +10,8 @@ order: 18
 
 A linked developer opens a matching root message in a configured Slack support
 room. FuseOne keeps that thread as one ticket, lets the requester correct it,
-inspects the pending Gravitee subscription and asks a named manager to approve
-the exact acceptance. After one valid decision, it accepts the subscription
+inspects the pending Gravitee subscription and asks a named area approver to
+approve the exact acceptance. After one valid decision, it accepts the subscription
 once and replies in the original thread.
 
 The reply names the subscription and expiration and reminds the requester to

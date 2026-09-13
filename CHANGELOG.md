@@ -39,7 +39,8 @@ field" is a commit message.
 - **Slack conversations can now admit matching root messages as governed
   tickets.** A ticket conversation reads public-channel messages, so the Slack
   app needs `message.channels` and must be invited to the room. Approval
-  buttons need the Interactivity callback, and manager DMs need `im:write`.
+  buttons need the Interactivity callback, and direct messages to an approver
+  need `im:write`.
   Nothing starts until an operator explicitly changes a conversation to
   **Governed tickets** and supplies its admission patterns.
 

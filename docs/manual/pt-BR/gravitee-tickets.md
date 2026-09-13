@@ -11,7 +11,7 @@ order: 18
 Um desenvolvedor vinculado abre uma mensagem raiz que casa numa sala de suporte
 configurada no Slack. O FuseOne mantém aquela thread como um chamado, deixa o
 solicitante corrigi-lo, inspeciona a assinatura pendente no Gravitee e pede a
-um gestor nomeado que aprove a aceitação exata. Depois de uma decisão válida,
+um aprovador da área, nomeado na thread, que aprove a aceitação exata. Depois de uma decisão válida,
 aceita a assinatura uma vez e responde na thread original.
 
 A resposta informa assinatura e expiração e lembra o solicitante de armazenar
