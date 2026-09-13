@@ -67,7 +67,7 @@ function ExistingSQLInstanceEditor({
       </PropertiesSheet>
     );
   }
-  if (detail.error) {
+  if (detail.error || !detail.data) {
     return (
       <PropertiesSheet
         open
@@ -76,14 +76,14 @@ function ExistingSQLInstanceEditor({
         description={t("connectors.sqlInstanceSheetHint")}
       >
         <PropertiesSheetBody>
-          <ErrorState error={detail.error} onRetry={() => void detail.refetch()} />
+          <ErrorState error={detail.error ?? new Error("SQL instance detail is missing")} onRetry={() => void detail.refetch()} />
         </PropertiesSheetBody>
       </PropertiesSheet>
     );
   }
   return (
     <SQLInstanceForm
-      instance={detail.data ?? null}
+      instance={detail.data}
       instances={instances}
       onClose={onClose}
       onSave={onSave}

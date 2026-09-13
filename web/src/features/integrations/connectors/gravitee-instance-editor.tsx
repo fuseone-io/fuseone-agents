@@ -62,16 +62,16 @@ function ExistingGraviteeInstanceEditor({
       </EditorShell>
     );
   }
-  if (detail.error) {
+  if (detail.error || !detail.data) {
     return (
       <EditorShell title={t("connectors.editGraviteeInstance")} description={t("connectors.graviteeInstanceSheetHint")} onClose={onClose}>
-        <ErrorState error={detail.error} onRetry={() => void detail.refetch()} />
+        <ErrorState error={detail.error ?? new Error("Gravitee instance detail is missing")} onRetry={() => void detail.refetch()} />
       </EditorShell>
     );
   }
   return (
     <GraviteeInstanceForm
-      instance={detail.data ?? null}
+      instance={detail.data}
       instances={instances}
       onClose={onClose}
       onSave={onSave}

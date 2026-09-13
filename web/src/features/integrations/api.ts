@@ -172,7 +172,7 @@ export function useConnectorInstance(instance: ConnectorInstance | undefined) {
       : [...integrationKeys.connectorInstances(), "detail", "idle"],
     queryFn: async () => {
       if (!instance) throw new Error("connector instance is required");
-      return unwrap(
+      const detail = unwrap(
         await api.GET("/admin/integrations/connectors/instances/{name}", {
           params: {
             path: { name: instance.name },
@@ -184,6 +184,8 @@ export function useConnectorInstance(instance: ConnectorInstance | undefined) {
           },
         }),
       );
+      if (!detail) throw new Error("connector instance detail is missing");
+      return detail;
     },
     enabled: Boolean(instance),
     // A cached authored boundary must not seed a read-edit-write form while a
