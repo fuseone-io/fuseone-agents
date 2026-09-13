@@ -34,7 +34,7 @@ create table governed_external_attempts (
            company_id <> '' and area_id <> '' and contract_digest <> '' and
            snapshot_ref <> '' and snapshot_digest <> '' and target_id <> '' and
            decided_by <> ''),
-    check (
+    constraint governed_external_attempts_result_shape_v1 check (
         (status in ('prepared', 'pending') and result_ref = '' and result_digest = '' and
          outcome_code = '' and next_check_at is not null and not settled) or
         (status in ('confirmed', 'terminal') and result_ref <> '' and

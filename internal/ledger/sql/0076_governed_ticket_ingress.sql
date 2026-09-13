@@ -56,7 +56,7 @@ alter table runs
 -- a terminal journal state and have neither result nor next check; keep those
 -- historical rows valid without putting an incomplete attempt back to work.
 alter table governed_external_attempts
-    drop constraint governed_external_attempts_check1,
+    drop constraint governed_external_attempts_result_shape_v1,
     add constraint governed_external_attempts_result_shape check (
         (status in ('prepared', 'pending') and result_ref = '' and result_digest = '' and
          outcome_code = '' and next_check_at is not null and not settled) or
