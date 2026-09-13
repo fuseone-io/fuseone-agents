@@ -88,6 +88,56 @@ func serve(t *testing.T, response string) *capture {
 	return c
 }
 
+/*
+And reading the recorder while requests are still arriving is safe.
+
+The test above waits for every request before it reads, and wg.Wait establishes
+a happens-before — so it proves the writer is synchronized and nothing about the
+reader. Removing the lock from last or all leaves it green, which is how ten
+unsynchronized reads lived in wire_test.go beside a mutex that was supposed to
+have closed this.
+
+Here the read overlaps the writes on purpose.
+*/
+func TestCapture_readWhileRequestsArrive(t *testing.T) {
+	c := serve(t, `{}`)
+	const requests = 32
+
+	done := make(chan struct{})
+	reading := make(chan struct{})
+	go func() {
+		defer close(reading)
+		for {
+			select {
+			case <-done:
+				return
+			default:
+			}
+			_, _ = c.last(), c.all()
+		}
+	}()
+
+	var wg sync.WaitGroup
+	for range requests {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			response, err := http.Post(c.server.URL, "application/json", strings.NewReader(`{}`))
+			if err != nil {
+				return
+			}
+			_ = response.Body.Close()
+		}()
+	}
+	wg.Wait()
+	close(done)
+	<-reading
+
+	if got := len(c.all()); got != requests {
+		t.Fatalf("recorded requests = %d, want %d", got, requests)
+	}
+}
+
 // The planner may issue more than one provider request at once. The recorder
 // is test infrastructure, but a race here makes the race gate probabilistic:
 // rerunning until it passes would stop the gate from proving anything.
