@@ -37,6 +37,10 @@ the organization's protected path.
    configure Interactivity for approval buttons, and grant `im:write` for
    direct messages.
 
+The first release authorizes only the application's **primary owner** as the
+requester. An application member who is not the primary owner cannot open that
+subscription acceptance, even when the member created the subscription.
+
 ## Configure the conversation
 
 Under **Integrations -> Channels**, add or edit the support room and choose

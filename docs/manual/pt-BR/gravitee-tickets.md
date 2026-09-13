@@ -35,6 +35,10 @@ caminho protegido da organização.
 5. Dê ao app Slack `message.channels`, convide-o para a sala, configure
    Interactivity para os botões e conceda `im:write` para mensagens diretas.
 
+A primeira versão autoriza somente o **dono principal** da aplicação como
+solicitante. Um membro da aplicação que não seja o dono principal não pode abrir
+essa aceitação, mesmo que tenha criado a assinatura.
+
 ## Configure a conversa
 
 Em **Integrações -> Canais**, adicione ou edite a sala de suporte e escolha

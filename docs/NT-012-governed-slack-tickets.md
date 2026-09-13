@@ -164,6 +164,10 @@ invalidates the approval without sending the write. If the target API offers no
 conditional update, the note and the test report the remaining remote TOCTOU
 rather than claiming it is absent.
 
+The first release deliberately authorizes only the application's primary owner.
+Membership or authorship of the remote subscription does not substitute for
+that identity. Mailbox local-parts compare exactly; only the domain is folded.
+
 ## Connector surface
 
 The named connector exposes only:

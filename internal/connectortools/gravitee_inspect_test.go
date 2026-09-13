@@ -21,7 +21,7 @@ func TestGraviteeInspector_recordsTheOwnedSubscriptionForTheCurrentTicket(t *tes
 	remote := &fakeGraviteeRemote{observation: safeObservation()}
 	inspector := NewGraviteeInspector(
 		&fakeGraviteeAccess{access: inspectionAccess()}, remote,
-		fakeRequesterEmails{email: "DEV@example.com"}, content, tickets)
+		fakeRequesterEmails{email: "dev@EXAMPLE.com"}, content, tickets)
 	inspector.now = func() time.Time { return graviteeNow }
 	call := inspectionCall(context)
 
@@ -54,6 +54,24 @@ func TestGraviteeInspector_recordsTheOwnedSubscriptionForTheCurrentTicket(t *tes
 	}
 	if !slices.Contains(result.Labels, domain.LabelUntrusted) || remote.calls != 1 {
 		t.Fatalf("result labels = %v, remote calls = %d", result.Labels, remote.calls)
+	}
+}
+
+func TestGraviteeInspector_doesNotFoldTheMailboxLocalPartForAuthorization(t *testing.T) {
+	tickets, ticketContext := inspectedTicket(t)
+	inspector := NewGraviteeInspector(
+		&fakeGraviteeAccess{access: inspectionAccess()},
+		&fakeGraviteeRemote{observation: safeObservation()},
+		fakeRequesterEmails{email: "DEV@example.com"}, engine.NewMemoryContent(), tickets)
+	inspector.now = func() time.Time { return graviteeNow }
+
+	_, err := inspector.Inspect(t.Context(), "apim", inspectionCall(ticketContext),
+		GraviteeInspectInput{
+			SubscriptionID: "sub-42",
+			ExpiresAt:      graviteeNow.Add(48 * time.Hour).Format(time.RFC3339),
+		})
+	if !errors.Is(err, ErrGraviteeRequester) {
+		t.Fatalf("Inspect err = %v, want case-distinct local-part refused", err)
 	}
 }
 

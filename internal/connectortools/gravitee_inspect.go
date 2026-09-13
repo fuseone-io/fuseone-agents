@@ -97,7 +97,7 @@ func (g *GraviteeInspector) Inspect(
 	if err != nil {
 		return engine.ToolResult{}, err
 	}
-	if !strings.EqualFold(strings.TrimSpace(email), observed.Application.PrimaryOwnerEmail) {
+	if !sameMailbox(strings.TrimSpace(email), observed.Application.PrimaryOwnerEmail) {
 		return engine.ToolResult{}, ErrGraviteeRequester
 	}
 	snapshot := snapshotOf(call.Ticket.Ref, observed, expiresAt)
@@ -165,6 +165,15 @@ func validGraviteeSnapshot(snapshot GraviteeSnapshot, ref domain.TicketRef) bool
 func validSnapshotOwner(email string) bool {
 	parsed, err := mail.ParseAddress(email)
 	return err == nil && parsed.Address == email && strings.TrimSpace(email) == email && len(email) <= 320
+}
+
+// Mailbox local-parts are compared exactly: broad case folding would widen an
+// authorization decision on servers that distinguish Dev from dev. Domains
+// are case-insensitive, so their spelling cannot make the same mailbox fail.
+func sameMailbox(left, right string) bool {
+	leftAt, rightAt := strings.LastIndexByte(left, '@'), strings.LastIndexByte(right, '@')
+	return leftAt > 0 && rightAt > 0 && left[:leftAt] == right[:rightAt] &&
+		strings.EqualFold(left[leftAt+1:], right[rightAt+1:])
 }
 
 func canonicalSnapshotTime(raw string) bool {
