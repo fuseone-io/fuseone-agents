@@ -9,10 +9,13 @@ import type {
   ConnectorInstance,
   GovernedConnector,
 } from "@/features/integrations/api";
-import { ConnectorInstanceForm } from "@/features/integrations/connectors/connector-instance-form";
+import {
+  connectorEditorFor,
+  type ConfigurableConnector,
+} from "@/features/integrations/connectors/connector-editor-registry";
+import { ConnectorEditor } from "@/features/integrations/connectors/connector-editor";
 import { ConnectorInstancesPanel } from "@/features/integrations/connectors/connector-instances-panel";
 import type { ConnectorInstanceSaver } from "@/features/integrations/connectors/connector-instance-model";
-import { SQLInstanceEditor } from "@/features/integrations/connectors/sql-instance-editor";
 import { useVisibleItems } from "@/hooks/use-visible-items";
 import { cn } from "@/lib/utils";
 
@@ -24,7 +27,7 @@ export function ConnectorCatalogPanel({
   actions: ConnectorPanelActions;
 }) {
   const [editing, setEditing] = useState<{
-    connector: "vault" | "sql";
+    connector: ConfigurableConnector;
     instance: ConnectorInstance | null;
   } | null>(null);
   const page = useVisibleItems(data.connectors, 8);
@@ -45,8 +48,9 @@ export function ConnectorCatalogPanel({
           retry: actions.retryInstances,
           create: (connector) => setEditing({ connector, instance: null }),
           edit: (instance) => {
-            if (configurableConnector(instance.connector)) {
-              setEditing({ connector: instance.connector, instance });
+            const editor = connectorEditorFor(instance.connector);
+            if (editor) {
+              setEditing({ connector: editor.connector, instance });
             }
           },
           remove: actions.deleteInstance,
@@ -63,26 +67,21 @@ export function ConnectorCatalogPanel({
           onConfigure={
             data.canConfigure
               ? (connector) => {
-                  if (
-                    (connector.id === "vault" || connector.id === "sql") &&
-                    connector.maturity === "runtime"
-                  ) {
-                    setEditing({ connector: connector.id, instance: null });
+                  const editor = connectorEditorFor(connector.id);
+                  if (editor && connector.maturity === "runtime") {
+                    setEditing({
+                      connector: editor.connector,
+                      instance: null,
+                    });
                   }
                 }
               : undefined
           }
         />
       )}
-      {editing?.connector === "vault" && (
-        <ConnectorInstanceForm
-          instance={editing.instance}
-          onClose={close}
-          onSave={actions.saveInstance}
-        />
-      )}
-      {editing?.connector === "sql" && (
-        <SQLInstanceEditor
+      {editing && (
+        <ConnectorEditor
+          connector={editing.connector}
           instance={editing.instance}
           instances={data.instances}
           onClose={close}
@@ -91,12 +90,6 @@ export function ConnectorCatalogPanel({
       )}
     </section>
   );
-}
-
-function configurableConnector(
-  connector: string,
-): connector is "vault" | "sql" {
-  return connector === "vault" || connector === "sql";
 }
 
 export type ConnectorPanelData = {
@@ -162,8 +155,7 @@ function ConnectorCatalogBody({
             key={connector.id}
             connector={connector}
             onConfigure={
-              onConfigure &&
-              (connector.id === "vault" || connector.id === "sql")
+              onConfigure && connectorEditorFor(connector.id)
                 ? () => onConfigure(connector)
                 : undefined
             }

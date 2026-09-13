@@ -1,4 +1,4 @@
-import { Database, Plus, ShieldCheck, Workflow } from "lucide-react";
+import { Plus, Workflow } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,6 +10,11 @@ import {
 import { EmptyState, ErrorState, LoadingRows } from "@/components/shared/states";
 import { Panel } from "@/components/shared/panel";
 import type { ConnectorInstance } from "@/features/integrations/api";
+import {
+  connectorEditorFor,
+  connectorEditorOptions,
+  type ConfigurableConnector,
+} from "@/features/integrations/connectors/connector-editor-registry";
 import { ConnectorInstanceCard } from "@/features/integrations/connectors/connector-instance-card";
 
 type ConnectorInstancesView = {
@@ -21,7 +26,7 @@ type ConnectorInstancesView = {
 
 type ConnectorInstancesActions = {
   retry: () => void;
-  create: (connector: "vault" | "sql") => void;
+  create: (connector: ConfigurableConnector) => void;
   edit: (instance: ConnectorInstance) => void;
   remove: (instance: ConnectorInstance) => void;
 };
@@ -47,14 +52,18 @@ export function ConnectorInstancesPanel({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => actions.create("vault")}>
-                <ShieldCheck aria-hidden />
-                {t("connectors.newVault")}
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => actions.create("sql")}>
-                <Database aria-hidden />
-                {t("connectors.newSQL")}
-              </DropdownMenuItem>
+              {connectorEditorOptions.map((editor) => {
+                const Icon = editor.icon;
+                return (
+                  <DropdownMenuItem
+                    key={editor.connector}
+                    onSelect={() => actions.create(editor.connector)}
+                  >
+                    <Icon aria-hidden />
+                    {t(editor.label)}
+                  </DropdownMenuItem>
+                );
+              })}
             </DropdownMenuContent>
           </DropdownMenu>
         ) : undefined
@@ -77,12 +86,11 @@ export function ConnectorInstancesPanel({
               key={`${instance.scopeKind}:${instance.company ?? ""}:${instance.area ?? ""}:${instance.name}`}
               instance={instance}
               onEdit={
-                view.canConfigure &&
-                (instance.connector === "vault" || instance.connector === "sql")
+                view.canConfigure && connectorEditorFor(instance.connector)
                   ? () => actions.edit(instance)
                   : undefined
               }
-              onDelete={() => actions.remove(instance)}
+              onDelete={view.canConfigure ? () => actions.remove(instance) : undefined}
             />
           ))}
         </div>

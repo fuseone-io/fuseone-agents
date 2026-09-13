@@ -186,6 +186,9 @@ export function useConnectorInstance(instance: ConnectorInstance | undefined) {
       );
     },
     enabled: Boolean(instance),
+    // A cached authored boundary must not seed a read-edit-write form while a
+    // fresher detail is loading. The form reads defaultValues only once.
+    refetchOnMount: "always",
   });
 }
 

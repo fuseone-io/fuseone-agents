@@ -1,6 +1,5 @@
 import { z } from "zod";
 import type {
-  ConnectorInstance,
   ConnectorInstanceDetail,
   ConnectorInstanceInput,
 } from "@/features/integrations/api";
@@ -9,6 +8,7 @@ import {
   connectorInstanceName,
   type ConnectorInstanceSaveInput,
 } from "@/features/integrations/connectors/connector-instance-model";
+export { vaultChoices } from "@/features/integrations/connectors/vault-instance-options";
 
 const identifier = /^[a-z][a-z0-9_]{0,63}$/;
 const hostname = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
@@ -171,55 +171,6 @@ export function sqlInstancePayload(values: SQLInstanceValues): ConnectorInstance
   };
   applyConnectorScope(body, values);
   return { name: values.name.trim(), body };
-}
-
-export type VaultChoice = {
-  name: string;
-  label: string;
-  ambiguous: boolean;
-};
-
-export function vaultChoices(
-  instances: ConnectorInstance[],
-  target: Pick<SQLInstanceValues, "scopeKind" | "company" | "area">,
-): VaultChoice[] {
-  const grouped = new Map<string, ConnectorInstance[]>();
-  for (const instance of instances) {
-    if (!covers(instance, target)) continue;
-    grouped.set(instance.name, [...(grouped.get(instance.name) ?? []), instance]);
-  }
-  return [...grouped.entries()]
-    .flatMap(([name, matches]) => {
-      if (!matches.some(usableVault)) return [];
-      return [{
-        name,
-        label: matches.length === 1 ? `${name} · ${scopeLabel(matches[0]!)}` : name,
-        ambiguous: matches.length !== 1,
-      }];
-    })
-    .sort((left, right) => left.name.localeCompare(right.name));
-}
-
-function usableVault(instance: ConnectorInstance): boolean {
-  return instance.connector === "vault" && instance.enabled && instance.hasToken &&
-    instance.vault?.address.startsWith("https://") === true;
-}
-
-function covers(
-  source: ConnectorInstance,
-  target: Pick<SQLInstanceValues, "scopeKind" | "company" | "area">,
-): boolean {
-  if (source.scopeKind === "installation") return true;
-  if (target.scopeKind === "installation") return false;
-  if (source.company !== target.company) return false;
-  if (source.scopeKind === "company") return true;
-  return target.scopeKind === "area" && source.area === target.area;
-}
-
-function scopeLabel(instance: ConnectorInstance): string {
-  if (instance.scopeKind === "installation") return "installation";
-  if (instance.scopeKind === "company") return instance.company ?? "-";
-  return `${instance.company ?? "-"}/${instance.area ?? "-"}`;
 }
 
 function requireScope(values: SQLInstanceValues, ctx: z.RefinementCtx) {
