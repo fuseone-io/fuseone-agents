@@ -76,3 +76,9 @@ the subscription and never repeats an ambiguous POST automatically. If it
 cannot prove the outcome inside the bounded window, the thread asks for manual
 verification while FuseOne retains the execution claim and continues GET-only
 observation. A later confirmed state is posted in the same thread.
+
+After checking the subscription in Gravitee, an operator with `run:cancel` may
+use **Abandon run** to stop further observation. That explicit decision releases
+the ticket for a later revision; it does not undo an acceptance that Gravitee
+may already have performed, so record the reason and verify the remote state
+first.

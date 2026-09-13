@@ -217,6 +217,12 @@ step records what became known without changing the run phase, a later pending
 approval or a terminal outcome. The external-attempt journal is settled only
 after either the ordinary return or this immutable correction exists.
 
+Manual observation is stopped by the existing **Abandon run** action. The
+reconciler reads that person's immutable decision, seals a terminal failed
+result and retires the journal without another remote request. Automatic expiry
+would release an uncertain effect without a person accepting that consequence,
+so elapsed time alone never abandons it.
+
 ## Message admission and performance
 
 The content matcher is compiled when configuration is saved and runs only on

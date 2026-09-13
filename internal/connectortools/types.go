@@ -25,6 +25,7 @@ const (
 	CodeConnectorSnapshotChanged = "connector_snapshot_changed"
 	CodeConnectorOutcomeUnknown  = "connector_outcome_unknown"
 	CodeConnectorNeedsAttention  = "connector_needs_attention"
+	CodeConnectorAbandoned       = "connector_reconciliation_abandoned"
 )
 
 var instanceNameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,62}$`)

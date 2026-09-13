@@ -184,6 +184,36 @@ func TestGraviteeAcceptRuntime_uncertaintyPastTheDeadlineNeedsAttention(t *testi
 	}
 }
 
+func TestGraviteeAcceptRuntime_abandoningTheRunStopsManualObservation(t *testing.T) {
+	fixture := newAcceptanceFixture(t)
+	fixture.access.err = errors.New("vault unavailable")
+	if _, err := fixture.runtime.Accept(t.Context(), "apim", fixture.call, fixture.input); err != nil {
+		t.Fatalf("Accept: %v", err)
+	}
+	fixture.advance(graviteeDeadline + time.Second)
+	reconciler := NewGraviteeAttemptReconciler(fixture.runtime, fixture.attempts, "worker-stop")
+	reconciler.now = fixture.runtime.now
+	if count, err := reconciler.Sweep(t.Context()); err != nil || count != 1 {
+		t.Fatalf("manual Sweep = (%d, %v)", count, err)
+	}
+
+	fixture.audit.abandoned = true
+	fixture.access.err = nil
+	fixture.advance(graviteeManualCheck + time.Second)
+	if count, err := reconciler.Sweep(t.Context()); err != nil || count != 1 {
+		t.Fatalf("abandonment Sweep = (%d, %v)", count, err)
+	}
+	attempt, err := fixture.attempts.Get(t.Context(), fixture.call.IdemKey)
+	current, currentErr := fixture.tickets.Current(t.Context(), fixture.call.Ticket.Ref.Key)
+	if err != nil || currentErr != nil || !attempt.Settled ||
+		attempt.Status != GraviteeAttemptTerminal || attempt.OutcomeCode != CodeConnectorAbandoned ||
+		current.Active != nil || current.Current.Phase != ticket.PhaseRejected ||
+		fixture.remote.observeCalls != 0 || fixture.remote.acceptCalls != 0 {
+		t.Fatalf("attempt=%+v ticket=%+v errors=(%v,%v) GET=%d POST=%d",
+			attempt, current, err, currentErr, fixture.remote.observeCalls, fixture.remote.acceptCalls)
+	}
+}
+
 type acceptanceFixture struct {
 	runtime  *GraviteeAcceptRuntime
 	tickets  ticket.Store
@@ -249,9 +279,10 @@ func newAcceptanceFixture(t *testing.T) *acceptanceFixture {
 }
 
 type recordingGraviteeReconciliations struct {
-	mu    sync.Mutex
-	calls int
-	err   error
+	mu        sync.Mutex
+	calls     int
+	abandoned bool
+	err       error
 }
 
 func (r *recordingGraviteeReconciliations) Seal(
@@ -261,6 +292,14 @@ func (r *recordingGraviteeReconciliations) Seal(
 	defer r.mu.Unlock()
 	r.calls++
 	return r.err
+}
+
+func (r *recordingGraviteeReconciliations) WasAbandoned(
+	context.Context, GraviteeAttempt,
+) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.abandoned, r.err
 }
 
 func (f *acceptanceFixture) advance(elapsed time.Duration) { f.now = f.now.Add(elapsed) }

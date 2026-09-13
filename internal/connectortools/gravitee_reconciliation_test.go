@@ -73,6 +73,19 @@ func TestGraviteeReconciliation_aNormalReturnNeedsNoSecondAuditStep(t *testing.T
 	}
 }
 
+func TestGraviteeReconciliation_readsAbandonmentFromTheRunRecord(t *testing.T) {
+	store := ledger.NewMemory()
+	attempt, _ := reconciliationCall(t, store)
+	appendReconciliationStep(t, store, attempt, domain.StepAbandoned,
+		domain.AbandonedPayload{By: "usr_operator", Reason: "checked in Gravitee"})
+
+	abandoned, err := NewGraviteeReconciliationLedger(store).
+		WasAbandoned(t.Context(), attempt)
+	if err != nil || !abandoned {
+		t.Fatalf("WasAbandoned = (%t, %v), want the recorded decision", abandoned, err)
+	}
+}
+
 func reconciliationCall(
 	t *testing.T, store *ledger.Memory,
 ) (GraviteeAttempt, engine.ToolResult) {

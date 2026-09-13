@@ -15,6 +15,7 @@ import (
 // record before the external-attempt journal is retired.
 type GraviteeReconciliations interface {
 	Seal(context.Context, GraviteeAttempt, engine.ToolResult, time.Time) error
+	WasAbandoned(context.Context, GraviteeAttempt) (bool, error)
 }
 
 type reconciliationLedger interface {
@@ -28,6 +29,30 @@ type GraviteeReconciliationLedger struct {
 
 func NewGraviteeReconciliationLedger(ledger reconciliationLedger) *GraviteeReconciliationLedger {
 	return &GraviteeReconciliationLedger{ledger: ledger}
+}
+
+// WasAbandoned lets the existing run-abandonment action stop an uncertain
+// external observation. The decision is read from the immutable run record;
+// neither a worker-local flag nor an HTTP request can silently retire it.
+func (r *GraviteeReconciliationLedger) WasAbandoned(
+	ctx context.Context, attempt GraviteeAttempt,
+) (bool, error) {
+	if r == nil || r.ledger == nil || attempt.Execution.RunID == "" || attempt.CallSeq <= 0 {
+		return false, errors.New("connector: incomplete Gravitee reconciliation")
+	}
+	steps, err := r.ledger.Read(ctx, attempt.Execution.RunID, attempt.CallSeq)
+	if err != nil {
+		return false, fmt.Errorf("connector: read Gravitee call for abandonment: %w", err)
+	}
+	if _, err := reconciliationCallStep(steps, attempt); err != nil {
+		return false, err
+	}
+	for _, step := range steps[1:] {
+		if step.Kind == domain.StepAbandoned {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (r *GraviteeReconciliationLedger) Seal(

@@ -54,6 +54,13 @@ func (r *GraviteeAttemptReconciler) reconcile(
 	if attempt.Status == GraviteeAttemptConfirmed || attempt.Status == GraviteeAttemptTerminal {
 		return r.runtime.finishKnown(ctx, attempt, true)
 	}
+	abandoned, err := r.runtime.audit.WasAbandoned(ctx, attempt)
+	if err != nil {
+		return engine.ToolResult{}, err
+	}
+	if abandoned {
+		return r.runtime.finishAbandoned(ctx, attempt, r.owner)
+	}
 	if attempt.Status == GraviteeAttemptManual {
 		return r.runtime.reconcileManual(ctx, attempt, r.owner)
 	}
@@ -71,6 +78,17 @@ func (r *GraviteeAttemptReconciler) reconcile(
 		return result, err
 	}
 	return engine.ToolResult{}, nil
+}
+
+func (g *GraviteeAcceptRuntime) finishAbandoned(
+	ctx context.Context, attempt GraviteeAttempt, claimedBy string,
+) (engine.ToolResult, error) {
+	snapshot, err := g.snapshotForAttempt(ctx, attempt)
+	if err != nil {
+		return engine.ToolResult{}, err
+	}
+	return g.finalize(ctx, attempt, claimedBy, snapshot,
+		GraviteeAttemptTerminal, CodeConnectorAbandoned, "", true)
 }
 
 func (g *GraviteeAcceptRuntime) snapshotForAttempt(

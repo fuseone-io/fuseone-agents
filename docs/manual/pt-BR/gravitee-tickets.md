@@ -76,3 +76,9 @@ automaticamente. Se não puder provar o resultado dentro da janela limitada, a
 thread pede verificação manual enquanto o FuseOne mantém a execução reservada
 e continua observando somente por GET. Um estado confirmado depois disso é
 publicado na mesma thread.
+
+Depois de conferir a assinatura no Gravitee, um operador com `run:cancel` pode
+usar **Abandonar run** para interromper a observação. Essa decisão explícita
+libera o chamado para uma revisão posterior; ela não desfaz uma aceitação que o
+Gravitee talvez já tenha realizado, então registre o motivo e confira o estado
+remoto primeiro.
