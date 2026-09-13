@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/ticket"
 )
 
 /*
@@ -90,6 +91,7 @@ type answered[T any] struct {
 type fanout struct {
 	approvers Approvers
 	accounts  Accounts
+	tickets   ticket.ApprovalRoutes
 	byScope   map[domain.Scope]answered[[]domain.UserID]
 	mayDecide map[domain.Scope]answered[[]domain.UserID]
 	byChannel map[string]map[domain.UserID]string
@@ -105,6 +107,7 @@ type fanout struct {
 	// What each version's owner asked for. Two runs of one agent in a page ask
 	// once, and every run of it asks once per sweep rather than per report.
 	byVersion map[versionOfAgent]answered[domain.ApprovalPolicy]
+	byTicket  map[domain.TicketRef]answered[ticket.ApprovalRoute]
 }
 
 // versionOfAgent is what an approval policy is stored against: a run is pinned
@@ -116,12 +119,13 @@ type versionOfAgent struct {
 
 func (r *Reporter) newFanout() *fanout {
 	return &fanout{
-		approvers: r.approvers, accounts: r.accounts,
+		approvers: r.approvers, accounts: r.accounts, tickets: r.tickets,
 		byScope:       map[domain.Scope]answered[[]domain.UserID]{},
 		mayDecide:     map[domain.Scope]answered[[]domain.UserID]{},
 		byChannel:     map[string]map[domain.UserID]string{},
 		failedChannel: map[string]error{},
 		byVersion:     map[versionOfAgent]answered[domain.ApprovalPolicy]{},
+		byTicket:      map[domain.TicketRef]answered[ticket.ApprovalRoute]{},
 	}
 }
 
@@ -132,7 +136,8 @@ func (r *Reporter) newFanout() *fanout {
 // the button could answer.
 func (f *fanout) wanted(report Report, place Conversation) bool {
 	return f != nil && f.approvers != nil && f.accounts != nil &&
-		place.DirectApprovals && report.AwaitingDecision && report.AtSeq > 0
+		!report.Ticket.Valid() && place.DirectApprovals &&
+		report.AwaitingDecision && report.AtSeq > 0
 }
 
 /*
@@ -415,6 +420,10 @@ func (r *Reporter) tell(
 		sent++
 	}
 
+	if pass.isTicketRoom(report, place) {
+		privately, refusedPrivately := r.directForTicket(ctx, pass, report)
+		return sent + privately, refusedPrivately
+	}
 	privately, refusedPrivately := r.direct(ctx, pass, report, place)
 	return sent + privately, refusedPrivately
 }

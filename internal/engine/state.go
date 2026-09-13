@@ -61,8 +61,9 @@ type PendingApproval struct {
 	AtSeq  int64
 	// Effect and At are what an approver decides on: what the call does to the
 	// world, and how long it has been waiting for them.
-	Effect domain.Effect
-	At     time.Time
+	Effect   domain.Effect
+	At       time.Time
+	Evidence domain.ApprovalEvidence
 }
 
 // ApprovedCall is the exact call a person cleared.
@@ -76,8 +77,10 @@ type ApprovedCall struct {
 	ArgsRef        string
 	ArgsDigest     string
 	ContractDigest string
+	Evidence       domain.ApprovalEvidence
 	// AtSeq is the approval_requested step it answers.
-	AtSeq int64
+	AtSeq     int64
+	DecidedBy domain.UserID
 }
 
 // State is the run reconstructed from its ledger. Every field is derived; none
@@ -103,6 +106,9 @@ type State struct {
 	// through the platform-owned context tool. The set is sealed on
 	// run_started and never grows from model text.
 	ContextArtifacts []domain.ContextArtifact
+	// Ticket is the support request revision sealed when this run opened.
+	// Zero means this run did not originate from the ticket workflow.
+	Ticket domain.TicketContext
 
 	// Called is every tool this run has reached the far side of the Gate
 	// with, in order. It is what advances a run through its declared steps:

@@ -12,6 +12,7 @@ const (
 	MetricTaskAnnouncements     = channelmetrics.TaskAnnouncements
 	MetricTaskCardsClosed       = channelmetrics.TaskCardsClosed
 	MetricTaskAnswersDelivered  = channelmetrics.TaskAnswersDelivered
+	MetricTaskTicketOutcomes    = channelmetrics.TaskTicketOutcomes
 	MetricTaskAsksOpened        = channelmetrics.TaskAsksOpened
 	MetricTaskRefusalsDelivered = channelmetrics.TaskRefusalsDelivered
 )

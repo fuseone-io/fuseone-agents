@@ -58,10 +58,13 @@ export function ConversationModeField({
               <SelectItem value="announce">
                 {t("channels.modeAnnounce")}
               </SelectItem>
+              <SelectItem value="ticket">{t("channels.modeTicket")}</SelectItem>
             </SelectContent>
           </Select>
           <FormDescription>
-            {mode === "announce"
+            {mode === "ticket"
+              ? t("channels.modeTicketExplains")
+              : mode === "announce"
               ? t("channels.modeAnnounceExplains")
               : mode === "watch"
                 ? t("channels.modeWatchExplains")

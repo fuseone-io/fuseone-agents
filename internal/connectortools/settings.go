@@ -104,7 +104,8 @@ type StoredInstance struct {
 	// A pointer, because omitempty does not elide a struct: every vault
 	// instance would otherwise store an empty sql object in a value operators
 	// read.
-	SQL *SQLConfig `json:"sql,omitempty"`
+	SQL      *SQLConfig      `json:"sql,omitempty"`
+	Gravitee *GraviteeConfig `json:"gravitee,omitempty"`
 }
 
 func (s *Settings) instance(ctx context.Context, row settings.Setting) (Instance, error) {
@@ -135,6 +136,7 @@ func SettingInstance(row settings.Setting) (Instance, error) {
 		Enabled:   row.Enabled,
 		Vault:     stored.Vault,
 		SQL:       storedSQL(stored.SQL),
+		Gravitee:  storedGravitee(stored.Gravitee),
 		HasToken:  row.HasSecret,
 	}, nil
 }
@@ -144,6 +146,7 @@ func SettingValue(instance Instance) (json.RawMessage, error) {
 		Connector: strings.TrimSpace(instance.Connector),
 		Vault:     instance.Vault,
 		SQL:       sqlToStore(instance.SQL),
+		Gravitee:  graviteeToStore(instance.Gravitee),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("connector: encode %s: %w", instance.Name, err)
@@ -187,6 +190,8 @@ func ValidateInstanceConfig(instance Instance) error {
 		return validateVaultConfig(instance)
 	case "sql":
 		return validateSQLConfig(instance)
+	case "gravitee":
+		return validateGraviteeConfig(instance)
 	default:
 		return fmt.Errorf("connector: unsupported connector %q", instance.Connector)
 	}
@@ -229,6 +234,23 @@ func storedSQL(cfg *SQLConfig) SQLConfig {
 func sqlToStore(cfg SQLConfig) *SQLConfig {
 	if cfg.Driver == "" && cfg.Host == "" && cfg.Database == "" &&
 		cfg.CredentialSource == (CredentialSource{}) && len(cfg.Templates) == 0 {
+		return nil
+	}
+	return &cfg
+}
+
+func storedGravitee(cfg *GraviteeConfig) GraviteeConfig {
+	if cfg == nil {
+		return GraviteeConfig{}
+	}
+	return *cfg
+}
+
+func graviteeToStore(cfg GraviteeConfig) *GraviteeConfig {
+	if cfg.Address == "" && cfg.Organization == "" && cfg.Environment == "" &&
+		len(cfg.AllowedReferences) == 0 && cfg.MinTTLSeconds == 0 &&
+		cfg.MaxTTLSeconds == 0 && !cfg.AllowNoExpiry &&
+		cfg.CredentialSource == (GraviteeCredentialSource{}) {
 		return nil
 	}
 	return &cfg

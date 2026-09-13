@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/fuseone/agents/internal/domain"
@@ -47,9 +48,29 @@ func (schemas) Schema(id domain.ToolID) (string, string, map[string]any, bool) {
 // capture records the request body a planner sent, so a test can assert on the
 // wire shape rather than only on the parsed result.
 type capture struct {
+	mu     sync.Mutex
 	body   map[string]any
 	bodies []map[string]any
 	server *httptest.Server
+}
+
+func (c *capture) record(body map[string]any) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.body = body
+	c.bodies = append(c.bodies, body)
+}
+
+func (c *capture) last() map[string]any {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.body
+}
+
+func (c *capture) all() []map[string]any {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return slices.Clone(c.bodies)
 }
 
 func serve(t *testing.T, response string) *capture {
@@ -59,13 +80,94 @@ func serve(t *testing.T, response string) *capture {
 		raw, _ := io.ReadAll(r.Body)
 		var body map[string]any
 		_ = json.Unmarshal(raw, &body)
-		c.body = body
-		c.bodies = append(c.bodies, body)
+		c.record(body)
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, response)
 	}))
 	t.Cleanup(c.server.Close)
 	return c
+}
+
+/*
+And a read and a write that nothing orders but the lock.
+
+The test below waits for every request before it reads, and wg.Wait establishes
+a happens-before — so it proves the writer is synchronized and says nothing
+about the reader. That is how ten unsynchronized reads lived in wire_test.go
+beside a mutex meant to have closed this.
+
+Two goroutines released by one channel, each signalling only after its own
+access, so both accesses certainly happen and neither can be skipped by the
+scheduler. What the detector then reports is the absence of an ordering between
+them, which is the whole claim: only the lock provides one.
+*/
+func TestCapture_aReadAndAWriteAtOnce_areOrderedOnlyByItsLock(t *testing.T) {
+	for _, one := range []struct {
+		name string
+		read func(*capture)
+	}{
+		{"all", func(c *capture) { _ = c.all() }},
+		{"last", func(c *capture) { _ = c.last() }},
+	} {
+		t.Run(one.name, func(t *testing.T) {
+			c := &capture{}
+			start := make(chan struct{})
+			var wg sync.WaitGroup
+			wg.Add(2)
+			go func() {
+				defer wg.Done()
+				<-start
+				c.record(map[string]any{"read": one.name})
+			}()
+			go func() {
+				defer wg.Done()
+				<-start
+				one.read(c)
+			}()
+			close(start)
+			wg.Wait()
+
+			if got := len(c.all()); got != 1 {
+				t.Fatalf("recorded %d bodies, want the one that was written", got)
+			}
+		})
+	}
+}
+
+// The planner may issue more than one provider request at once. The recorder
+// is test infrastructure, but a race here makes the race gate probabilistic:
+// rerunning until it passes would stop the gate from proving anything.
+func TestCapture_recordsConcurrentRequests(t *testing.T) {
+	c := serve(t, `{}`)
+	const requests = 32
+
+	start := make(chan struct{})
+	errs := make(chan error, requests)
+	var wg sync.WaitGroup
+	for range requests {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			response, err := http.Post(c.server.URL, "application/json", strings.NewReader(`{}`))
+			if err != nil {
+				errs <- err
+				return
+			}
+			if err := response.Body.Close(); err != nil {
+				errs <- err
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Errorf("request: %v", err)
+	}
+	if got := len(c.all()); got != requests {
+		t.Fatalf("recorded requests = %d, want %d", got, requests)
+	}
 }
 
 func plannerFor(t *testing.T, kind model.Kind, url string, cfg model.Config) engine.Planner {
@@ -153,7 +255,7 @@ func TestAnthropic_requiresExactlyOneToolUse(t *testing.T) {
 		t.Fatalf("Plan: %v", err)
 	}
 
-	choice, _ := c.body["tool_choice"].(map[string]any)
+	choice, _ := c.last()["tool_choice"].(map[string]any)
 	if choice["type"] != "any" || choice["disable_parallel_tool_use"] != true {
 		t.Fatalf("tool_choice = %+v, want any with parallel tool use disabled", choice)
 	}
@@ -402,7 +504,7 @@ func TestAnthropic_systemPrompt_isCachedAndFreeOfVolatileText(t *testing.T) {
 		t.Fatalf("Plan: %v", err)
 	}
 
-	blocks, _ := c.body["system"].([]any)
+	blocks, _ := c.last()["system"].([]any)
 	if len(blocks) < 2 {
 		t.Fatalf("system has %d blocks, want the prompt plus the loop contract", len(blocks))
 	}
@@ -451,7 +553,7 @@ func TestAnthropic_previousTranscriptPrefixIsCachedBeforeVolatileNotes(t *testin
 		t.Fatalf("Plan: %v", err)
 	}
 
-	messages, _ := c.body["messages"].([]any)
+	messages, _ := c.last()["messages"].([]any)
 	if len(messages) != 3 {
 		t.Fatalf("messages = %+v, want user/assistant/user without a consecutive guidance turn", messages)
 	}
@@ -470,7 +572,7 @@ func TestAnthropic_previousTranscriptPrefixIsCachedBeforeVolatileNotes(t *testin
 	if volatile["cache_control"] != nil || !strings.Contains(asString(volatile["text"]), "Budget remaining") {
 		t.Fatalf("volatile guidance = %+v, want only the uncached remaining budget", volatile)
 	}
-	stable := anthropicSystemText(c.body)
+	stable := anthropicSystemText(c.last())
 	for _, want := range []string{
 		"Investigate the alert", "Governed memory lookup is available", "Budget ceiling",
 	} {
@@ -503,11 +605,12 @@ func TestOpenAICompatible_transcriptGrowthWithinBudgetPreservesThePreviousReques
 	if _, err := planner.Plan(context.Background(), second); err != nil {
 		t.Fatalf("second Plan: %v", err)
 	}
-	if len(c.bodies) != 2 {
-		t.Fatalf("requests = %d, want two", len(c.bodies))
+	bodies := c.all()
+	if len(bodies) != 2 {
+		t.Fatalf("requests = %d, want two", len(bodies))
 	}
-	firstMessages, _ := c.bodies[0]["messages"].([]any)
-	secondMessages, _ := c.bodies[1]["messages"].([]any)
+	firstMessages, _ := bodies[0]["messages"].([]any)
+	secondMessages, _ := bodies[1]["messages"].([]any)
 	if len(secondMessages) <= len(firstMessages) ||
 		!reflect.DeepEqual(firstMessages, secondMessages[:len(firstMessages)]) {
 		t.Fatalf("first request is not the prefix of the second:\nfirst:  %+v\nsecond: %+v",
@@ -564,7 +667,7 @@ func TestLoopContract_tellsTheModelToFinishWithTheFinishTool(t *testing.T) {
 				t.Fatalf("Plan: %v", err)
 			}
 
-			system := strings.Join(strings.Fields(tc.system(c.body)), " ")
+			system := strings.Join(strings.Fields(tc.system(c.last())), " ")
 			for _, want := range []string{
 				"call that tool now",
 				"Do not say that you will continue",
@@ -614,8 +717,8 @@ func TestMemoryTools_areExplainedOnlyWhenOffered(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Plan without memory: %v", err)
 			}
-			if strings.Contains(tc.system(without.body), "Memory learning is enabled") {
-				t.Fatalf("memory learning note was sent without a memory tool:\n%s", tc.system(without.body))
+			if strings.Contains(tc.system(without.last()), "Memory learning is enabled") {
+				t.Fatalf("memory learning note was sent without a memory tool:\n%s", tc.system(without.last()))
 			}
 
 			with := serve(t, tc.response)
@@ -626,7 +729,7 @@ func TestMemoryTools_areExplainedOnlyWhenOffered(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Plan with memory: %v", err)
 			}
-			system := tc.system(with.body)
+			system := tc.system(with.last())
 			for _, want := range []string{
 				"Governed memory lookup is available",
 				"_fuseone__memory__find",
@@ -652,7 +755,7 @@ func TestMemoryTools_areExplainedOnlyWhenOffered(t *testing.T) {
 				Plan(context.Background(), in); err != nil {
 				t.Fatalf("Plan with manually granted memory suggest but learning off: %v", err)
 			}
-			system = tc.system(disabled.body)
+			system = tc.system(disabled.last())
 			if strings.Contains(system, "Memory learning is enabled") {
 				t.Fatalf("memory learning note was sent while learning was off:\n%s", system)
 			}
@@ -692,11 +795,12 @@ func TestMemoryFindGuidanceStaysCacheableAfterTheRunAlreadyLooked(t *testing.T) 
 			if _, err := planner.Plan(context.Background(), in); err != nil {
 				t.Fatalf("Plan after lookup: %v", err)
 			}
-			if !reflect.DeepEqual(tc.stable(c.bodies[0]), tc.stable(c.bodies[1])) {
+			bodies := c.all()
+			if !reflect.DeepEqual(tc.stable(bodies[0]), tc.stable(bodies[1])) {
 				t.Fatalf("stable provider prefix changed after memory.find:\nbefore: %+v\nafter:  %+v",
-					tc.stable(c.bodies[0]), tc.stable(c.bodies[1]))
+					tc.stable(bodies[0]), tc.stable(bodies[1]))
 			}
-			prompt := tc.prompt(c.body)
+			prompt := tc.prompt(c.last())
 			for _, want := range []string{"may already have searched", "materially narrower", "equivalent search"} {
 				if !strings.Contains(prompt, want) {
 					t.Errorf("prompt does not contain %q:\n%s", want, prompt)
@@ -871,7 +975,7 @@ func TestOpenAICompatible_providerRejectingUnknownFields_getsNoReasoningEffort(t
 	if _, err := p.Plan(context.Background(), input()); err != nil {
 		t.Fatalf("Plan: %v", err)
 	}
-	if _, sent := c.body["reasoning_effort"]; sent {
+	if _, sent := c.last()["reasoning_effort"]; sent {
 		t.Error("reasoning_effort was sent to a provider that does not accept it")
 	}
 }

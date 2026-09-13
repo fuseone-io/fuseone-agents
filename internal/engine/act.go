@@ -48,7 +48,10 @@ func (r *Runner) actApproved(ctx context.Context, state State, start Start) (Sta
 			start.RunID, got, approved.ArgsDigest)
 	}
 
-	return r.act(ctx, state, start, Proposal{Tool: approved.Tool, Args: args})
+	return r.act(ctx, state, start, Proposal{
+		Tool: approved.Tool, Args: args, approvalEvidence: approved.Evidence,
+		approvalAtSeq: approved.AtSeq, decidedBy: approved.DecidedBy,
+	})
 }
 
 // resolve reads a stored payload back. An empty reference is an approved call
@@ -110,6 +113,7 @@ func (r *Runner) act(ctx context.Context, state State, start Start, p Proposal) 
 	p.contractDigest = approvalBinding(r.deps.Tools, Call{
 		RunID: start.RunID, Scope: start.Scope, AgentID: start.AgentID,
 		Tool: p.Tool, Args: p.Args, OnBehalfOf: start.OnBehalfOf,
+		Ticket: state.Ticket,
 	})
 	effect, _ := r.deps.Catalog.Effect(p.Tool)
 	baseIdemKey := idempotencyKey(start.RunID, p.Tool, p.Args)
@@ -257,9 +261,23 @@ func (r *Runner) refused(
 ) (Status, error) {
 	switch {
 	case decision.Verdict == domain.VerdictRequireApproval:
+		evidence, err := approvalEvidence(ctx, r.deps.Tools, Call{
+			RunID: start.RunID, Seq: state.Seq + 1, Scope: start.Scope,
+			AgentID: start.AgentID, Tool: p.Tool, Args: p.Args,
+			ContractDigest: p.contractDigest, OnBehalfOf: start.OnBehalfOf,
+			Ticket: state.Ticket, At: r.deps.Clock.Now(), Labels: state.Labels.Clone(),
+		})
+		if err != nil {
+			return Status{}, err
+		}
+		p.approvalEvidence = evidence
 		argsRef, err := r.store(ctx, start.RunID, state.Seq+1, p.Args)
 		if err != nil {
 			return Status{}, err
+		}
+		var evidenceRef *domain.ApprovalEvidence
+		if !evidence.Empty() {
+			evidenceRef = &evidence
 		}
 		state, err = r.append(ctx, state, start, domain.Step{
 			Kind:   domain.StepApprovalRequested,
@@ -268,7 +286,7 @@ func (r *Runner) refused(
 				Tool: p.Tool, Rule: decision.Rule, Reason: decision.Reason,
 				Effect: effect, ArgsRef: argsRef, ArgsDigest: digest(p.Args),
 				ContractDigest: p.contractDigest,
-				Estimate:       p.Estimate, Labels: state.Labels,
+				Estimate:       p.Estimate, Labels: state.Labels, Evidence: evidenceRef,
 			}),
 		})
 		return status(state), err
@@ -297,6 +315,23 @@ func (r *Runner) refused(
 	// and the policy are fixed for the run's version — but a contract refusal
 	// is one the model can genuinely fix (PRD SE-09).
 	return status(state), nil
+}
+
+func approvalEvidence(
+	ctx context.Context, tools Tools, call Call,
+) (domain.ApprovalEvidence, error) {
+	provider, ok := tools.(ApprovalEvidencer)
+	if !ok {
+		return domain.ApprovalEvidence{}, nil
+	}
+	evidence, err := provider.ApprovalEvidence(ctx, call)
+	if err != nil {
+		return domain.ApprovalEvidence{}, fmt.Errorf("engine: approval evidence: %w", err)
+	}
+	if !evidence.Empty() && !evidence.Valid() {
+		return domain.ApprovalEvidence{}, fmt.Errorf("engine: approval evidence is incomplete")
+	}
+	return evidence, nil
 }
 
 // park stops the run for a person, with a stable code rather than a sentence.
@@ -460,9 +495,13 @@ func (r *Runner) invoke(
 		AgentID: start.AgentID,
 		Tool:    p.Tool, Args: p.Args,
 		ContractDigest:   p.contractDigest,
+		ApprovalEvidence: p.approvalEvidence,
+		ApprovalAtSeq:    p.approvalAtSeq,
+		DecidedBy:        p.decidedBy,
 		OnBehalfOf:       start.OnBehalfOf,
 		IdemKey:          idemKey,
 		ContextArtifacts: state.ContextArtifacts,
+		Ticket:           state.Ticket,
 		At:               r.deps.Clock.Now(),
 		Labels:           state.Labels.Clone(),
 		MemoryLearning:   start.MemoryLearning.Normalize(),

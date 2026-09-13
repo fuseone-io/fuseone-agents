@@ -489,6 +489,75 @@ describe("conversation configuration", () => {
       runAs: "usr_opsbot",
     });
   });
+
+  it("round-trips the complete governed ticket rule", async () => {
+    const requests: { method: string; url: string; body?: unknown }[] = [];
+    stubApi({ requests, agents: [sre] });
+    const user = userEvent.setup();
+    renderForm({
+      id: "C-api-access",
+      label: "#api-access",
+      scope: { company: "acme", area: "devops" },
+      mode: "ticket",
+      agent: sre.agentId,
+      runAs: "usr_opsbot",
+      ticket: {
+        openFrom: "linked_users",
+        addressFrom: "app:A0123TICKET",
+        patterns: ["\\bapi[ -]?key\\b", "\\bchave de api\\b"],
+      },
+      wants: ["parked", "failed"],
+      enabled: true,
+    });
+
+    expect(await screen.findByText("Padrões para abrir ticket")).toBeInTheDocument();
+    expect(screen.getByLabelText("Fonte que endereça aprovadores")).toHaveValue(
+      "app:A0123TICKET",
+    );
+    expect(screen.getByLabelText("Padrões para abrir ticket")).toHaveValue(
+      "\\bapi[ -]?key\\b\n\\bchave de api\\b",
+    );
+    expect(screen.queryByText("Incluir contexto da thread")).not.toBeInTheDocument();
+    expect(screen.queryByText("Fontes Slack permitidas")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+    await waitFor(() => expect(saved(requests)).toBeDefined());
+    expect(saved(requests)).toMatchObject({
+      mode: "ticket",
+      agent: sre.agentId,
+      runAs: "usr_opsbot",
+      ticket: {
+        openFrom: "linked_users",
+        addressFrom: "app:A0123TICKET",
+        patterns: ["\\bapi[ -]?key\\b", "\\bchave de api\\b"],
+      },
+      threadContext: false,
+    });
+    expect(saved(requests)).not.toHaveProperty("sources");
+  });
+
+  it("refuses ticket patterns beyond the server's bounded contract", async () => {
+    const requests: { method: string; url: string; body?: unknown }[] = [];
+    stubApi({ requests, agents: [sre] });
+    const user = userEvent.setup();
+    renderForm({
+      ...mentionsConversation,
+      mode: "ticket",
+      agent: sre.agentId,
+      runAs: "usr_opsbot",
+      ticket: {
+        openFrom: "linked_users",
+        addressFrom: "app:A0123TICKET",
+        patterns: Array.from({ length: 9 }, (_, i) => `pattern-${i}`),
+      },
+    });
+
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+    expect(
+      await screen.findByText(/Informe de 1 a 8 padrões RE2/),
+    ).toBeInTheDocument();
+    expect(saved(requests)).toBeUndefined();
+  });
   /*
    * A room that hears every company is the authority above them all.
    *

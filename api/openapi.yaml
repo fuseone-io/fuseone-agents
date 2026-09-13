@@ -1492,6 +1492,36 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
 
+  /runs/{runId}/approvals/{atSeq}/evidence:
+    get:
+      tags: [approvals]
+      operationId: getApprovalEvidence
+      summary: Read the inspected evidence behind a pending decision
+      description: |
+        Returns a fixed safe projection, never arbitrary referenced content.
+        The content is fetched only for the selected approval because it may
+        contain personal data and can expire independently of the ledger.
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+        - name: atSeq
+          in: path
+          required: true
+          schema: { type: integer, format: int64, minimum: 1 }
+      responses:
+        '200':
+          description: The evidence for this question, or `none` for an ordinary approval.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApprovalEvidenceDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: The evidence was recorded but is no longer safe or available to decide from.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
   /cost:
     get:
       tags: [cost]
@@ -2511,8 +2541,9 @@ paths:
       description: >
         Returns the authored configuration to a connector configurer. Unlike
         the ordinary instance list, this includes registered SQL text so an
-        edit can preserve the complete contract. Tokens, generated database
-        credentials and lease ids are never returned.
+        edit can preserve the complete contract, and the fixed Vault location
+        for a bound Gravitee credential. Tokens, generated database credentials
+        and lease ids are never returned.
       parameters:
         - name: name
           in: path
@@ -2543,9 +2574,10 @@ paths:
       operationId: putConnectorInstance
       summary: Configure a governed connector instance
       description: >
-        Configuring an instance creates executable native tools named
-        connector.instance.operation. Omit token to keep the stored one. Send
-        clearToken to remove it; an enabled instance must still have a token
+        A runtime instance creates native tools named connector.instance.operation;
+        planned connectors remain configuration only. Omit token to keep the
+        stored one on connectors that authenticate directly. Send clearToken
+        to remove it; an enabled direct-token instance must still have a token
         after the write.
       parameters:
         - name: name
@@ -3101,6 +3133,8 @@ paths:
                     recipient without the grant is refused there as anywhere
                     else. Requires the Slack app's im:write scope, and applies
                     only where this conversation is told about parked runs.
+                ticket:
+                  $ref: '#/components/schemas/TicketRule'
                 wants:
                   type: array
                   description: >
@@ -4223,6 +4257,7 @@ components:
         - budget_reserved
         - tool_called
         - tool_returned
+        - effect_reconciled
         - budget_reconciled
         - approval_requested
         - approval_decided
@@ -5468,14 +5503,16 @@ components:
         updatedAt: { type: string, format: date-time }
         vault: { $ref: '#/components/schemas/ConnectorVaultConfig' }
         sql: { $ref: '#/components/schemas/ConnectorSQLResponse' }
+        gravitee: { $ref: '#/components/schemas/ConnectorGraviteeResponse' }
 
     ConnectorInstanceDetail:
       type: object
       description: >
         The authored, non-secret configuration available only to connector
         configurers. SQL text is present because editing any other SQL field
-        must not erase or replace a registered query. Token presence is
-        metadata; token bytes and generated credentials never leave storage.
+        must not erase or replace a registered query. Gravitee's fixed Vault
+        location is present for the same read-edit-write reason. Token presence
+        is metadata; token bytes and generated credentials never leave storage.
       required: [name, connector, enabled, scopeKind, hasToken]
       properties:
         name: { type: string }
@@ -5489,6 +5526,107 @@ components:
         updatedAt: { type: string, format: date-time }
         vault: { $ref: '#/components/schemas/ConnectorVaultConfig' }
         sql: { $ref: '#/components/schemas/ConnectorSQLInput' }
+        gravitee: { $ref: '#/components/schemas/ConnectorGraviteeInput' }
+
+    ConnectorGraviteeReference:
+      type: object
+      required: [type, id]
+      properties:
+        type:
+          type: string
+          enum: [API]
+          description: API is the only remote reference supported by the first runtime.
+        id:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'
+
+    ConnectorGraviteeCredentialBinding:
+      type: object
+      required: [kind, vaultInstance]
+      properties:
+        kind: { type: string, enum: [vault_kv_secret] }
+        vaultInstance:
+          type: string
+          maxLength: 63
+          pattern: '^[a-z0-9][a-z0-9_-]*$'
+          description: Vault connector instance that owns the credential.
+
+    ConnectorGraviteeCredentialSource:
+      type: object
+      required: [kind, vaultInstance, path, field]
+      properties:
+        kind: { type: string, enum: [vault_kv_secret] }
+        vaultInstance:
+          type: string
+          maxLength: 63
+          pattern: '^[a-z0-9][a-z0-9_-]*$'
+          description: Vault connector instance that owns the credential.
+        path:
+          type: string
+          minLength: 1
+          maxLength: 512
+          pattern: '^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$'
+          description: Fixed Vault path, constrained by the bound Vault instance.
+        field:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: '^[A-Za-z0-9_.-]+$'
+          description: Fixed field holding the Gravitee access token.
+
+    ConnectorGraviteeResponse:
+      type: object
+      description: >
+        The safe remote boundary visible in the ordinary connector listing.
+        Vault path and field stay in the configurer-only detail response.
+      required:
+        [address, organization, environment, allowedReferences, minTTLSeconds,
+         maxTTLSeconds, allowNoExpiry, credentialSource]
+      properties:
+        address: { type: string, format: uri }
+        organization: { type: string }
+        environment: { type: string }
+        allowedReferences:
+          type: array
+          minItems: 1
+          maxItems: 1
+          items: { $ref: '#/components/schemas/ConnectorGraviteeReference' }
+        minTTLSeconds: { type: integer, minimum: 1, maximum: 31536000 }
+        maxTTLSeconds: { type: integer, minimum: 1, maximum: 31536000 }
+        allowNoExpiry: { type: boolean }
+        credentialSource: { $ref: '#/components/schemas/ConnectorGraviteeCredentialBinding' }
+
+    ConnectorGraviteeInput:
+      type: object
+      description: >
+        A fixed remote boundary. Organization, environment, API references and
+        the Vault location are authored by an administrator, never by a model.
+      required:
+        [address, organization, environment, allowedReferences, minTTLSeconds,
+         maxTTLSeconds, allowNoExpiry, credentialSource]
+      properties:
+        address: { type: string, format: uri }
+        organization:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'
+        environment:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'
+        allowedReferences:
+          type: array
+          minItems: 1
+          maxItems: 1
+          items: { $ref: '#/components/schemas/ConnectorGraviteeReference' }
+        minTTLSeconds: { type: integer, minimum: 1, maximum: 31536000 }
+        maxTTLSeconds: { type: integer, minimum: 1, maximum: 31536000 }
+        allowNoExpiry: { type: boolean }
+        credentialSource: { $ref: '#/components/schemas/ConnectorGraviteeCredentialSource' }
 
     ConnectorSQLResponse:
       type: object
@@ -5601,7 +5739,7 @@ components:
       properties:
         connector:
           type: string
-          description: Connector shape. The first runtime connector is vault.
+          description: Connector shape, such as vault, sql or gravitee.
         enabled:
           type: boolean
           default: true
@@ -5610,15 +5748,19 @@ components:
         area: { type: string }
         vault: { $ref: '#/components/schemas/ConnectorVaultConfig' }
         sql: { $ref: '#/components/schemas/ConnectorSQLInput' }
+        gravitee: { $ref: '#/components/schemas/ConnectorGraviteeInput' }
         token:
           type: string
           description: >
-            Connector token to seal. Omit to keep the stored token.
+            Connector token to seal. Only connectors that authenticate with a
+            token of their own accept it; bound connectors such as SQL and
+            Gravitee reject it.
         clearToken:
           type: boolean
           description: >
-            Remove the stored token. An enabled instance is refused unless the
-            same request also supplies a replacement token.
+            Remove the stored token. An enabled connector that authenticates
+            directly is refused unless the same request also supplies a
+            replacement. Bound connectors never keep a token of their own.
 
     MCPServerCallAuth:
       type: object
@@ -6318,7 +6460,7 @@ components:
 
     ConversationMode:
       type: string
-      enum: [mentions, watch, both, announce]
+      enum: [mentions, watch, both, announce, ticket]
       default: mentions
       description: |
         What may start a run in a conversation.
@@ -6329,11 +6471,36 @@ components:
         keeps the mention path and the watched-message path enabled together;
         each keeps its own authority. `announce` starts nothing at all: the
         conversation only reports what runs do, and it is the only mode a
-        conversation for the whole installation may have.
+        conversation for the whole installation may have. `ticket` admits
+        matching human root messages as governed tickets; replies are routed
+        by the stored thread identity rather than matched again.
 
         A closed set on the way in and deliberately not on the way out: a
         client may only ask for a mode this version can honour, and a row
         written by a newer version has to travel back as itself.
+
+    TicketRule:
+      type: object
+      required: [openFrom, addressFrom, patterns]
+      properties:
+        openFrom:
+          type: string
+          enum: [linked_users]
+        addressFrom:
+          type: string
+          pattern: '^(bot|app):\S+$'
+          maxLength: 512
+          description: The exact Slack bot or app allowed to address the ticket.
+        patterns:
+          type: array
+          minItems: 1
+          maxItems: 8
+          items:
+            type: string
+            minLength: 1
+            maxLength: 256
+          description: RE2 patterns matched only against bounded root-message text.
+
     ChannelConversation:
       type: object
       required: [id, scope, enabled]
@@ -6366,6 +6533,8 @@ components:
             Whether an approval announced here is also sent privately to the
             people who may decide it. Addressing only: the decision is checked
             where the button is pressed, exactly as it is in the conversation.
+        ticket:
+          $ref: '#/components/schemas/TicketRule'
         sources:
           type: array
           items: { type: string }
@@ -7469,6 +7638,44 @@ components:
         requestedAt: { type: string, format: date-time }
         expiresAt: { type: string, format: date-time, nullable: true }
         atSeq: { type: integer, format: int64 }
+
+    ApprovalEvidenceDetail:
+      type: object
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          enum: [none, gravitee_subscription]
+        gravitee:
+          $ref: '#/components/schemas/GraviteeApprovalEvidence'
+
+    GraviteeApprovalEvidence:
+      type: object
+      required: [subscriptionId, status, application, api, plan, planSecurity, remoteUpdatedAt]
+      properties:
+        subscriptionId: { type: string }
+        status: { type: string }
+        application: { $ref: '#/components/schemas/GraviteeApprovalApplication' }
+        api: { $ref: '#/components/schemas/GraviteeApprovalResource' }
+        plan: { $ref: '#/components/schemas/GraviteeApprovalResource' }
+        planSecurity: { type: string }
+        requestedExpiration: { type: string, format: date-time, nullable: true }
+        remoteUpdatedAt: { type: string, format: date-time }
+
+    GraviteeApprovalApplication:
+      allOf:
+        - $ref: '#/components/schemas/GraviteeApprovalResource'
+        - type: object
+          required: [primaryOwnerEmail]
+          properties:
+            primaryOwnerEmail: { type: string, format: email }
+
+    GraviteeApprovalResource:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
 
     ApprovalPage:
       type: object

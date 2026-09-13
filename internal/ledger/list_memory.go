@@ -139,7 +139,7 @@ func summarise(steps []domain.Step) domain.RunSummary {
 			s.PendingApproval = &domain.PendingApprovalSummary{
 				Tool: p.Tool, Rule: p.Rule, Reason: p.Reason, AtSeq: step.Seq,
 			}
-		} else if step.Kind != domain.StepRunStarted {
+		} else if step.Kind != domain.StepRunStarted && step.Kind != domain.StepEffectReconciled {
 			s.PendingApproval = nil
 		}
 

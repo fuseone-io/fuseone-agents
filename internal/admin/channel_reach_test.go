@@ -66,6 +66,23 @@ func TestAccountsOn_somebodyNobodyAskedAbout_isNotReturned(t *testing.T) {
 	}
 }
 
+func TestTicketAddresses_resolvesOnlyTheAccountsNamedOnThisConnection(t *testing.T) {
+	channels, store := boundChannels(t)
+	bind(t, channels, "acme-slack", "U-ana", "usr_ana")
+	bind(t, channels, "acme-slack", "U-bruno", "usr_bruno")
+	bind(t, channels, "acme-teams", "U-ana", "usr_wrong_workspace")
+
+	got, err := admin.NewTicketAddresses(store).PrincipalsOn(
+		t.Context(), "acme-slack", []string{"U-ana"},
+	)
+	if err != nil {
+		t.Fatalf("PrincipalsOn: %v", err)
+	}
+	if len(got) != 1 || got["U-ana"] != "usr_ana" {
+		t.Fatalf("ticket addresses = %v, want only Ana from the selected connection", got)
+	}
+}
+
 /*
 A binding switched off is visible and unreachable, and both at once.
 

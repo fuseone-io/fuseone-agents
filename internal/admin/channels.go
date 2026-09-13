@@ -118,8 +118,11 @@ type Conversation struct {
 	// the people who may decide it. Outbound, like Wants: it says who is told
 	// when a run stops, not what may start one.
 	DirectApprovals bool
-	Wants           []string
-	Enabled         bool
+	// Ticket is the admission rule for governed roots. It is present only for
+	// ticket mode and never inferred from watch sources.
+	Ticket  *channel.TicketRule
+	Wants   []string
+	Enabled bool
 }
 
 // List answers with every connection and the conversations mapped into it.
@@ -211,16 +214,17 @@ func conversationRows(channelName string, stored []settings.Setting) []storedCon
 	var out []storedConversation
 	for _, s := range stored {
 		var v struct {
-			Channel         string   `json:"channel"`
-			KeyVersion      int      `json:"keyVersion"`
-			Label           string   `json:"label"`
-			Mode            string   `json:"mode"`
-			Sources         []string `json:"sources"`
-			Agent           string   `json:"agent"`
-			RunAs           string   `json:"runAs"`
-			ThreadContext   bool     `json:"threadContext"`
-			DirectApprovals bool     `json:"directApprovals"`
-			Wants           []string `json:"wants"`
+			Channel         string              `json:"channel"`
+			KeyVersion      int                 `json:"keyVersion"`
+			Label           string              `json:"label"`
+			Mode            string              `json:"mode"`
+			Sources         []string            `json:"sources"`
+			Agent           string              `json:"agent"`
+			RunAs           string              `json:"runAs"`
+			ThreadContext   bool                `json:"threadContext"`
+			DirectApprovals bool                `json:"directApprovals"`
+			Ticket          *channel.TicketRule `json:"ticket"`
+			Wants           []string            `json:"wants"`
 		}
 		if err := json.Unmarshal(s.Value, &v); err != nil || v.Channel != channelName {
 			continue
@@ -244,6 +248,7 @@ func conversationRows(channelName string, stored []settings.Setting) []storedCon
 				Agent:   domain.AgentID(v.Agent), RunAs: domain.UserID(v.RunAs),
 				ThreadContext:   v.ThreadContext,
 				DirectApprovals: v.DirectApprovals,
+				Ticket:          v.Ticket,
 				Wants:           v.Wants, Enabled: s.Enabled,
 			}})
 	}
@@ -406,7 +411,23 @@ func (c *Channels) PutConversation(
 	mode := channel.ConversationMode(conv.Mode)
 	sources := compactStrings(conv.Sources)
 	conv.Agent = domain.AgentID(strings.TrimSpace(string(conv.Agent)))
-	if channel.StartsFromWatch(mode) {
+	switch {
+	case channel.StartsTickets(mode):
+		if conv.Agent == "" {
+			return ErrNoWatchAgent
+		}
+		if strings.TrimSpace(string(conv.RunAs)) == "" {
+			return ErrNoWatchRunAs
+		}
+		if conv.Ticket == nil {
+			return fmt.Errorf("%w: ticket admission is required", ErrUnknownMode)
+		}
+		if _, err := channel.CompileTicketPatterns(*conv.Ticket); err != nil {
+			return err
+		}
+		sources = nil
+		conv.ThreadContext = false
+	case channel.StartsFromWatch(mode):
 		switch {
 		case len(sources) == 0:
 			return ErrNoWatchSource
@@ -415,7 +436,7 @@ func (c *Channels) PutConversation(
 		case strings.TrimSpace(string(conv.RunAs)) == "":
 			return ErrNoWatchRunAs
 		}
-	} else {
+	default:
 		// The agent survives, because it says which agent this conversation is
 		// for and a mention there needs no name. The principal and the sources
 		// do not: a mention runs as the person whose account is bound, so a
@@ -423,6 +444,10 @@ func (c *Channels) PutConversation(
 		// consumes and nobody can explain later.
 		sources = nil
 		conv.RunAs = ""
+		conv.Ticket = nil
+	}
+	if !channel.StartsTickets(mode) {
+		conv.Ticket = nil
 	}
 	if !channel.StartsFromMentions(mode) {
 		conv.ThreadContext = false
@@ -491,6 +516,7 @@ func (c *Channels) PutConversation(
 		"agent": string(conv.Agent), "runAs": string(conv.RunAs),
 		"threadContext":   conv.ThreadContext,
 		"directApprovals": conv.DirectApprovals,
+		"ticket":          conv.Ticket,
 	}
 	// Declared, never inferred. A row carrying the connection in its name and
 	// not saying so is read as an id that happens to contain a colon and a
@@ -526,6 +552,7 @@ func (c *Channels) PutConversation(
 			// rather than only in a room somebody can be added to or removed
 			// from. The trail has to say when it was turned on, and by whom.
 			"directApprovals": conv.DirectApprovals,
+			"ticket":          conv.Ticket,
 		},
 	}); err != nil {
 		return err

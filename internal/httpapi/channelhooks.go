@@ -67,9 +67,10 @@ type ChannelHooks struct {
 	// an installation without one serves the interaction path and refuses
 	// asks, which is honest — acknowledging a question it will lose is worse
 	// than making the sender retry.
-	inbox Arrivals
-	rules slack.WatchRules
-	seen  SeenChannelAccounts
+	inbox   Arrivals
+	rules   slack.WatchRules
+	tickets channel.TicketRouter
+	seen    SeenChannelAccounts
 }
 
 func NewChannelHooks(

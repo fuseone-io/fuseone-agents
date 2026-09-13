@@ -51,6 +51,8 @@ export type Step = components["schemas"]["Step"];
 export type StepKind = components["schemas"]["StepKind"];
 export type Phase = components["schemas"]["Phase"];
 export type PendingApproval = components["schemas"]["PendingApproval"];
+export type ApprovalEvidenceDetail =
+  components["schemas"]["ApprovalEvidenceDetail"];
 export type CostRollup = components["schemas"]["CostRollup"];
 export type RunStats = components["schemas"]["RunStats"];
 export type RuntimeHealth = components["schemas"]["RuntimeHealth"];

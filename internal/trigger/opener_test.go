@@ -123,6 +123,66 @@ func TestOpen_recordsWhatCausedTheRun(t *testing.T) {
 	}
 }
 
+func TestOpen_sealsTheTicketIdentityApartFromWhoTheRunUses(t *testing.T) {
+	t.Parallel()
+	opener, store := openerFor(t)
+	ticket := domain.TicketContext{
+		Ref:         domain.TicketRef{Key: "slack-ticket", Revision: 3},
+		RequestedBy: "requester",
+		AddressedBy: "slack-app:A123",
+	}
+
+	got, err := opener.Open(t.Context(), trigger.Request{
+		Agent: "triage", IdemKey: "ticket-intent", Trigger: "channel",
+		By: "run-owner", Ticket: &ticket,
+	})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	steps, err := store.Read(t.Context(), got.RunID, domain.FirstSeq)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	var started domain.RunStartedPayload
+	decode(t, steps[0].Payload, &started)
+	if started.Ticket == nil || *started.Ticket != ticket {
+		t.Fatalf("ticket = %+v, want %+v", started.Ticket, ticket)
+	}
+	if steps[0].OnBehalfOf != "run-owner" || started.Ticket.RequestedBy == steps[0].OnBehalfOf {
+		t.Fatalf("requester and run identity were collapsed: step=%+v ticket=%+v", steps[0], started.Ticket)
+	}
+}
+
+func TestOpen_anInvalidTicketContextStoresNoRun(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]domain.TicketContext{
+		"no key":       {Ref: domain.TicketRef{Revision: 1}, RequestedBy: "requester"},
+		"no revision":  {Ref: domain.TicketRef{Key: "slack-ticket"}, RequestedBy: "requester"},
+		"no requester": {Ref: domain.TicketRef{Key: "slack-ticket", Revision: 1}},
+	}
+	for name, ticket := range cases {
+		t.Run(name, func(t *testing.T) {
+			opener, store := openerFor(t)
+			_, err := opener.Open(t.Context(), trigger.Request{
+				Agent: "triage", IdemKey: "ticket-intent", Input: []byte("private request"),
+				Ticket: &ticket,
+			})
+			if err == nil {
+				t.Fatal("a run opened with incomplete ticket authority")
+			}
+			runs, listErr := store.Runs(t.Context())
+			if listErr != nil {
+				t.Fatalf("Runs: %v", listErr)
+			}
+			if len(runs) != 0 {
+				t.Fatalf("invalid ticket stored %d runs", len(runs))
+			}
+		})
+	}
+}
+
 func TestOpen_unpublishedAgent_isRefused(t *testing.T) {
 	t.Parallel()
 	store := ledger.NewMemory()

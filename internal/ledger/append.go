@@ -157,10 +157,16 @@ func upsertRun(ctx context.Context, tx pgx.Tx, s domain.Step) error {
 	// record; a projection that learned this from somewhere else could
 	// disagree with the thing it projects.
 	simulated, simulation := false, ""
+	var ticketKey string
+	var ticketRevision int64
 	if s.Kind == domain.StepRunStarted {
 		var started domain.RunStartedPayload
 		if err := json.Unmarshal(s.Payload, &started); err == nil {
 			simulated, simulation = started.Simulated, started.Simulation
+			if started.Ticket != nil && started.Ticket.Ref.Valid() {
+				ticketKey = string(started.Ticket.Ref.Key)
+				ticketRevision = started.Ticket.Ref.Revision
+			}
 		}
 	}
 
@@ -172,11 +178,12 @@ func upsertRun(ctx context.Context, tx pgx.Tx, s domain.Step) error {
 			started_at, ended_at, updated_at,
 			input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
 			simulated, simulation,
-			failure_code, failure_provider, failure_status, failure_request_id, failure_retryable
+			failure_code, failure_provider, failure_status, failure_request_id, failure_retryable,
+			ticket_key, ticket_revision
 		) values (
 			$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$18,
 			$22,$23,$24,$25,$26,$27,
-			$28,$29,$30,$31,$32
+			$28,$29,$30,$31,$32,$33,$34
 		)
 		on conflict (run_id) do update set
 			agent_id        = case when runs.agent_id = '' then excluded.agent_id else runs.agent_id end,
@@ -196,17 +203,17 @@ func upsertRun(ctx context.Context, tx pgx.Tx, s domain.Step) error {
 				select coalesce(array_agg(distinct l order by l), '{}')
 				from unnest(runs.labels || excluded.labels) as l
 			),
-			pending_tool    = $14,
-			pending_rule    = $15,
-			pending_reason  = $16,
-			pending_at_seq  = $17,
+			pending_tool    = case when $35 then runs.pending_tool else $14 end,
+			pending_rule    = case when $35 then runs.pending_rule else $15 end,
+			pending_reason  = case when $35 then runs.pending_reason else $16 end,
+			pending_at_seq  = case when $35 then runs.pending_at_seq else $17 end,
 			ended_at        = coalesce(excluded.ended_at, runs.ended_at),
 			updated_at      = excluded.updated_at,
-			failure_code       = excluded.failure_code,
-			failure_provider   = excluded.failure_provider,
-			failure_status     = excluded.failure_status,
-			failure_request_id = excluded.failure_request_id,
-			failure_retryable  = excluded.failure_retryable`,
+			failure_code       = case when $35 then runs.failure_code else excluded.failure_code end,
+			failure_provider   = case when $35 then runs.failure_provider else excluded.failure_provider end,
+			failure_status     = case when $35 then runs.failure_status else excluded.failure_status end,
+			failure_request_id = case when $35 then runs.failure_request_id else excluded.failure_request_id end,
+			failure_retryable  = case when $35 then runs.failure_retryable else excluded.failure_retryable end`,
 		string(s.RunID), string(s.Scope.Company), string(s.Scope.Area),
 		string(s.AgentID), string(s.VersionID), string(s.OnBehalfOf),
 		phaseOrRunning(phase), s.Seq,
@@ -218,6 +225,8 @@ func upsertRun(ctx context.Context, tx pgx.Tx, s domain.Step) error {
 		s.Cost.InputTokens, s.Cost.OutputTokens, s.Cost.CacheReadTokens, s.Cost.CacheWriteTokens,
 		simulated, simulation,
 		failureCode(s), failureProvider(s), failureStatus(s), failureRequestID(s), failureRetryable(s),
+		ticketKey, ticketRevision,
+		s.Kind == domain.StepEffectReconciled,
 	)
 	if err != nil {
 		return fmt.Errorf("upsert run projection: %w", err)

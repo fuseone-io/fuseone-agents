@@ -72,6 +72,13 @@ type Proposal struct {
 	// contractDigest is derived by the runner from the tool layer. A planner
 	// cannot author it, and every pass through act recomputes it.
 	contractDigest string
+	// approvalEvidence is read from a trusted tool boundary or a sealed
+	// approval step. A planner cannot author it.
+	approvalEvidence domain.ApprovalEvidence
+	// approvalAtSeq is the approval_requested step that cleared this proposal.
+	// Zero means this proposal did not arrive through an approval.
+	approvalAtSeq int64
+	decidedBy     domain.UserID
 	// Estimate is the worst-case consumption of the call, used to reserve
 	// budget before spending it.
 	Estimate domain.Consumption
@@ -120,6 +127,13 @@ type ApprovalBinder interface {
 	ApprovalBinding(call Call) string
 }
 
+// ApprovalEvidencer optionally binds an approval to content a trusted tool
+// inspected before the model proposed the effect. A zero value means that the
+// tool needs no evidence beyond its arguments and server-owned contract.
+type ApprovalEvidencer interface {
+	ApprovalEvidence(ctx context.Context, call Call) (domain.ApprovalEvidence, error)
+}
+
 type Call struct {
 	// RunID and Seq locate the call in the ledger. The tool layer needs them
 	// to file bulky results in the content store under a stable key.
@@ -135,6 +149,15 @@ type Call struct {
 	// ContractDigest binds server-owned execution configuration to the Gate
 	// decision. It is empty for tools whose complete act is already in Args.
 	ContractDigest string
+	// ApprovalEvidence is copied from the approval_requested step when an
+	// approved call executes. The model cannot author or replace it.
+	ApprovalEvidence domain.ApprovalEvidence
+	// ApprovalAtSeq names the exact approval request that cleared this call.
+	// Native effects use it as a compare-and-set input, never as model data.
+	ApprovalAtSeq int64
+	// DecidedBy is the person who cleared ApprovalAtSeq. It is audit identity,
+	// distinct from the requester and from the run's delegated principal.
+	DecidedBy domain.UserID
 	// OnBehalfOf is the human delegation the run is using. Tool transports use
 	// it only to choose the credential owned by that human; the Gate has
 	// already decided whether the call may happen at all.
@@ -145,6 +168,9 @@ type Call struct {
 	// ContextArtifacts is the event-supplied contract this run may retrieve
 	// through the platform-owned context reader.
 	ContextArtifacts []domain.ContextArtifact
+	// Ticket is the platform-sealed support request revision this effect may
+	// advance. It is a value so a tool cannot mutate the runner's folded state.
+	Ticket domain.TicketContext
 	// At is the engine clock instant for this call. Native tools that persist
 	// platform state record this rather than reading the wall clock themselves.
 	At time.Time

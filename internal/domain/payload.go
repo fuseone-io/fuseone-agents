@@ -38,6 +38,10 @@ type RunStartedPayload struct {
 
 	// Origin is where the ask came from, when it came from a conversation.
 	Origin *RunOrigin `json:"origin,omitempty"`
+	// Ticket is the platform-owned support request this run may advance. It is
+	// sealed here so neither model arguments nor a later configuration read can
+	// change the requester or revision behind an approved effect.
+	Ticket *TicketContext `json:"ticket,omitempty"`
 	// ContextArtifacts is the bounded context contract an event supplied to
 	// this run. It names claim-checks the platform may read through
 	// $fuseone.context.read; it is not content and not an invitation to fetch
@@ -244,6 +248,20 @@ type ToolReturnedPayload struct {
 	Context *ContextArtifact `json:"context,omitempty"`
 }
 
+// EffectReconciledPayload records the final truth learned after a write whose
+// immediate outcome was unknown. It names the original call because this is
+// an audit correction, not another model-visible tool return or another state
+// transition in the run.
+type EffectReconciledPayload struct {
+	Tool         ToolID `json:"tool"`
+	ForSeq       int64  `json:"for_seq"`
+	ResultRef    string `json:"result_ref"`
+	ResultDigest string `json:"result_digest"`
+	ResultBytes  int64  `json:"result_bytes"`
+	Failed       bool   `json:"failed,omitempty"`
+	ErrorCode    string `json:"error_code,omitempty"`
+}
+
 type ApprovalRequestedPayload struct {
 	Tool ToolID `json:"tool"`
 	// Rule is the stable key of the check that demanded a human. The trail and
@@ -269,6 +287,28 @@ type ApprovalRequestedPayload struct {
 	// that a field came from an untrusted source, which is usually the whole
 	// reason the call was escalated (SE-06).
 	Labels Labels `json:"labels,omitempty"`
+	// Evidence is a safe, erasable snapshot inspected by a platform-owned
+	// tool before this decision was requested. Only its reference and digest
+	// belong in the long-lived ledger; the snapshot may contain personal data.
+	Evidence *ApprovalEvidence `json:"evidence,omitempty"`
+}
+
+// ApprovalEvidence binds a human decision to inspected content outside the
+// ledger. Kind selects the fixed decoder used at a trusted edge; it is never
+// a model-authored media type or schema name.
+type ApprovalEvidence struct {
+	Kind   string    `json:"kind"`
+	Ticket TicketRef `json:"ticket"`
+	Ref    string    `json:"ref"`
+	Digest string    `json:"digest"`
+}
+
+func (e ApprovalEvidence) Empty() bool {
+	return e.Kind == "" && !e.Ticket.Valid() && e.Ref == "" && e.Digest == ""
+}
+
+func (e ApprovalEvidence) Valid() bool {
+	return e.Kind != "" && e.Ticket.Valid() && e.Ref != "" && e.Digest != ""
 }
 
 type ApprovalDecidedPayload struct {

@@ -63,6 +63,9 @@ type Request struct {
 	// answers where it was asked, and nowhere else is a decision the platform
 	// would be making.
 	Origin *domain.RunOrigin
+	// Ticket is trusted context assembled by the channel ticket admission
+	// path. It is never parsed from model-authored input.
+	Ticket *domain.TicketContext
 	// ContextArtifacts are references an event grants to this run. The opener
 	// checks their labels against the target scope before storing anything, so
 	// a miswired listener cannot make the model see cross-scope content.
@@ -96,6 +99,10 @@ type Result struct {
 func (o *Opener) Open(ctx context.Context, req Request) (Result, error) {
 	if req.IdemKey == "" {
 		return Result{}, fmt.Errorf("trigger: an intention needs a key")
+	}
+	ticket := cloneTicket(req.Ticket)
+	if ticket != nil && !ticket.Valid() {
+		return Result{}, fmt.Errorf("trigger: invalid ticket context")
 	}
 
 	if existing, err := o.ledger.RunByIdemKey(ctx, req.IdemKey); err == nil {
@@ -182,7 +189,7 @@ func (o *Opener) Open(ctx context.Context, req Request) (Result, error) {
 		Payload: mustJSON(domain.RunStartedPayload{
 			Trigger: req.Trigger, InputRef: inputRef,
 			Simulated: req.Simulation != "", Simulation: req.Simulation,
-			Case: req.Case, Origin: req.Origin,
+			Case: req.Case, Origin: req.Origin, Ticket: ticket,
 			ContextArtifacts: cloneContextArtifacts(req.ContextArtifacts),
 		}),
 	})
@@ -210,6 +217,14 @@ func (o *Opener) store(ctx context.Context, runID domain.RunID, input []byte) (s
 		return "", fmt.Errorf("trigger: store input: %w", err)
 	}
 	return ref, nil
+}
+
+func cloneTicket(in *domain.TicketContext) *domain.TicketContext {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	return &out
 }
 
 func cloneContextArtifacts(in []domain.ContextArtifact) []domain.ContextArtifact {

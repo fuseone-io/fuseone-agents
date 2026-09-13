@@ -62,12 +62,17 @@ export interface ConversationInput {
   company: string;
   area?: string;
   label?: string;
-  mode?: "mentions" | "watch" | "both" | "announce";
+  mode?: "mentions" | "watch" | "both" | "announce" | "ticket";
   threadContext?: boolean;
   directApprovals?: boolean;
   sources?: string[];
   agent?: string;
   runAs?: string;
+  ticket?: {
+    openFrom: "linked_users";
+    addressFrom: string;
+    patterns: string[];
+  };
   wants?: ("parked" | "failed" | "finished" | "drifted")[];
 }
 

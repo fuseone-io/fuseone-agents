@@ -38,7 +38,7 @@ func TestAnthropic_offersANameTheProviderAccepts(t *testing.T) {
 		t.Fatalf("Plan: %v", err)
 	}
 
-	if got := firstToolName(t, c.body, "tools"); !accepted.MatchString(got) {
+	if got := firstToolName(t, c.last(), "tools"); !accepted.MatchString(got) {
 		t.Errorf("offered %q, which the provider refuses", got)
 	}
 }
@@ -52,7 +52,7 @@ func TestOpenAICompatible_offersANameTheProviderAccepts(t *testing.T) {
 		t.Fatalf("Plan: %v", err)
 	}
 
-	tools, _ := c.body["tools"].([]any)
+	tools, _ := c.last()["tools"].([]any)
 	if len(tools) == 0 {
 		t.Fatal("no tools were offered")
 	}
@@ -162,7 +162,7 @@ func TestAnthropic_replayedCall_isNamedTheWayItWasOffered(t *testing.T) {
 		t.Fatalf("Plan: %v", err)
 	}
 
-	if got := replayedName(t, c.body); !accepted.MatchString(got) {
+	if got := replayedName(t, c.last()); !accepted.MatchString(got) {
 		t.Errorf("replayed as %q, which the provider refuses", got)
 	}
 }
@@ -176,7 +176,7 @@ func TestOpenAICompatible_replayedCall_isNamedTheWayItWasOffered(t *testing.T) {
 		t.Fatalf("Plan: %v", err)
 	}
 
-	if got := replayedName(t, c.body); !accepted.MatchString(got) {
+	if got := replayedName(t, c.last()); !accepted.MatchString(got) {
 		t.Errorf("replayed as %q, which the provider refuses", got)
 	}
 }
@@ -244,7 +244,7 @@ func TestOpenAICompatible_atAStep_isToldWhichOneAndWhatEndsIt(t *testing.T) {
 		t.Fatalf("Plan: %v", err)
 	}
 
-	system := systemTurn(t, c.body)
+	system := systemTurn(t, c.last())
 	if !strings.Contains(system, in.Step) {
 		t.Errorf("the model was not told which step it is at:\n%s", system)
 	}
@@ -292,7 +292,7 @@ func TestAnthropic_replayedCall_theStepNoLongerOffersIt_isStillNamed(t *testing.
 		t.Fatalf("Plan: %v", err)
 	}
 
-	if got := replayedName(t, c.body); !accepted.MatchString(got) {
+	if got := replayedName(t, c.last()); !accepted.MatchString(got) {
 		t.Errorf("replayed as %q, which the provider refuses", got)
 	}
 }
@@ -308,7 +308,7 @@ func TestOpenAICompatible_replayedCall_theStepNoLongerOffersIt_isStillNamed(t *t
 		t.Fatalf("Plan: %v", err)
 	}
 
-	if got := replayedName(t, c.body); !accepted.MatchString(got) {
+	if got := replayedName(t, c.last()); !accepted.MatchString(got) {
 		t.Errorf("replayed as %q, which the provider refuses", got)
 	}
 }
@@ -326,7 +326,7 @@ func TestAnthropic_aToolOnlyTheTranscriptMentions_isNotOffered(t *testing.T) {
 		t.Fatalf("Plan: %v", err)
 	}
 
-	tools, _ := c.body["tools"].([]any)
+	tools, _ := c.last()["tools"].([]any)
 	if len(tools) != 1 {
 		t.Fatalf("offered %d tools, want only the platform finish tool", len(tools))
 	}
@@ -355,7 +355,7 @@ func TestAnthropic_nothingSaidYet_stillSendsATurn(t *testing.T) {
 		t.Fatalf("Plan: %v", err)
 	}
 
-	if text := firstUserText(t, c.body); strings.TrimSpace(text) == "" {
+	if text := firstUserText(t, c.last()); strings.TrimSpace(text) == "" {
 		t.Error("the opening turn was empty, which every provider refuses")
 	}
 }
@@ -371,7 +371,7 @@ func TestOpenAICompatible_nothingSaidYet_stillSendsATurn(t *testing.T) {
 		t.Fatalf("Plan: %v", err)
 	}
 
-	if text := firstUserText(t, c.body); strings.TrimSpace(text) == "" {
+	if text := firstUserText(t, c.last()); strings.TrimSpace(text) == "" {
 		t.Error("the opening turn was empty, which every provider refuses")
 	}
 }

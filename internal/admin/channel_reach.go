@@ -68,6 +68,39 @@ func (c *ChannelFacts) AccountsOn(
 	return where, nil
 }
 
+// TicketAddresses resolves the accounts a trusted ticket bot names. It is a
+// separate capability from ChannelFacts: ordinary channel readers never need
+// to turn an outbound mention into a principal.
+type TicketAddresses struct{ settings *settings.Store }
+
+func NewTicketAddresses(store *settings.Store) *TicketAddresses {
+	return &TicketAddresses{settings: store}
+}
+
+// PrincipalsOn resolves a bounded set of channel accounts from one settings
+// snapshot. Reading once prevents both N+1 queries and a recipient list
+// assembled from several configuration instants.
+func (c *TicketAddresses) PrincipalsOn(
+	ctx context.Context, channelName string, accounts []string,
+) (map[string]domain.UserID, error) {
+	stored, err := c.settings.List(ctx, KindChannelIdentity)
+	if err != nil {
+		return nil, fmt.Errorf("admin: list channel identities: %w", err)
+	}
+	wanted := make(map[string]struct{}, len(accounts))
+	for _, account := range accounts {
+		wanted[account] = struct{}{}
+	}
+	out := make(map[string]domain.UserID, len(accounts))
+	for _, set := range stored {
+		account, principal, ok := reachable(set, channelName)
+		if _, asked := wanted[account]; ok && asked {
+			out[account] = principal
+		}
+	}
+	return out, nil
+}
+
 /*
 reachable reads one stored row as an address on this connection, or refuses.
 

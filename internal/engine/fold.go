@@ -78,6 +78,12 @@ func (s *State) applyKind(step domain.Step) error {
 		s.VersionID = step.VersionID
 		s.OnBehalfOf = step.OnBehalfOf
 		s.ContextArtifacts = p.ContextArtifacts
+		if p.Ticket != nil {
+			if !p.Ticket.Valid() {
+				return fmt.Errorf("engine: invalid ticket context at seq %d", step.Seq)
+			}
+			s.Ticket = *p.Ticket
+		}
 		s.Phase = PhaseRunning
 
 	case domain.StepBudgetReserved:
@@ -142,6 +148,18 @@ func (s *State) applyKind(step domain.Step) error {
 		s.PendingTool = ""
 		s.Phase = PhaseRunning
 
+	case domain.StepEffectReconciled:
+		var p domain.EffectReconciledPayload
+		if err := decode(step, &p); err != nil {
+			return err
+		}
+		if p.Tool == "" || p.ForSeq <= 0 || p.ResultRef == "" ||
+			p.ResultDigest == "" || p.ResultBytes < 0 || (p.Failed != (p.ErrorCode != "")) {
+			return fmt.Errorf("engine: invalid reconciled effect at seq %d", step.Seq)
+		}
+		// Audit only. The call already returned unknown or the run moved on;
+		// changing its current phase here would resurrect or mis-pair that run.
+
 	case domain.StepApprovalRequested:
 		var p domain.ApprovalRequestedPayload
 		if err := decode(step, &p); err != nil {
@@ -151,9 +169,15 @@ func (s *State) applyKind(step domain.Step) error {
 			Tool: p.Tool, Rule: p.Rule, Reason: p.Reason,
 			AtSeq: step.Seq, Effect: p.Effect, At: step.At,
 		}
+		if p.Evidence != nil {
+			s.PendingApproval.Evidence = *p.Evidence
+		}
 		s.requested = &ApprovedCall{
 			Tool: p.Tool, ArgsRef: p.ArgsRef, ArgsDigest: p.ArgsDigest,
 			ContractDigest: p.ContractDigest, AtSeq: step.Seq,
+		}
+		if p.Evidence != nil {
+			s.requested.Evidence = *p.Evidence
 		}
 		s.Phase = PhaseAwaitingApproval
 
@@ -264,6 +288,7 @@ func (s *State) decide(p domain.ApprovalDecidedPayload) {
 		// withdraw permission on the strength of an answer about something
 		// else.
 		if p.Approved {
+			s.requested.DecidedBy = p.By
 			s.Approved = s.requested
 		}
 		s.PendingApproval, s.requested = nil, nil

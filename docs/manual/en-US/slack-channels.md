@@ -140,6 +140,27 @@ If the agent did not start:
 6. Does `run as` exist and have a grant in the scope?
 7. In Socket Mode, is the app token saved and is the worker connected?
 
+## Governed ticket conversations
+
+Choose **Governed tickets** when each matching root message is a support ticket
+and its thread is the ticket's history. This is different from a watched
+message: the writer must have a linked FuseOne account, becomes the immutable
+requester, and only that person can revise the requested fields.
+
+The conversation asks for an agent, a `run as` principal, one exact bot or app
+allowed to name recipients, and one to eight RE2 admission patterns. Patterns
+are matched only against bounded root-message text. Replies are found by the
+stored Slack origin and are never classified again from their prose.
+
+The addressing source may reply with Slack mentions to choose who receives the
+approval. Those names grant nothing: they are intersected with people who can
+currently perform `approval:act` in the ticket scope, and the button checks the
+permission again. The approval card is posted under the original root and the
+same card is sent by DM only to the surviving named recipients.
+
+For the complete Gravitee setup and validation sequence, see
+[Governed Gravitee tickets](gravitee-tickets.md).
+
 ## A room for the whole installation
 
 A conversation receives the runs of the scope it was configured in, and one

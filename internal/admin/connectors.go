@@ -40,6 +40,10 @@ func (c *ConnectorInstances) PutConnectorInstance(
 	}
 	instance.Scope = runtimeScope
 	needsToken := connectortools.RequiresToken(instance.Connector)
+	if !needsToken && token != nil && strings.TrimSpace(*token) != "" {
+		return fmt.Errorf("admin: connector %s must not carry a token; its authority comes from its binding",
+			instance.Connector)
+	}
 	if needsToken && instance.Enabled && token != nil && strings.TrimSpace(*token) == "" {
 		return ErrConnectorNeedsToken
 	}
@@ -71,7 +75,9 @@ func (c *ConnectorInstances) PutConnectorInstance(
 	if token != nil {
 		secret = *token
 	}
-	clear := clearToken && secret == ""
+	// A bound connector never has a secret of its own. Clearing here also
+	// removes one left by an older writer when the instance is next edited.
+	clear := (!needsToken && hasSecret) || (clearToken && secret == "")
 	willHaveSecret := secret != "" || (!clear && hasSecret)
 	if needsToken && instance.Enabled && !willHaveSecret {
 		return ErrConnectorNeedsToken

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -61,6 +62,10 @@ type Arrival struct {
 	Agent  domain.AgentID
 	RunAs  domain.UserID
 	Source Source
+	// Ticket is the routing decision made before the sender was acknowledged.
+	// It is persisted so a later worker never reinterprets the same event under
+	// configuration that changed after receipt.
+	Ticket *TicketIntent
 
 	// Payload is what actually arrived. It is what the digest is of, and what
 	// an auditor reads when they want the thing itself rather than what we
@@ -83,8 +88,10 @@ the claim itself.
 */
 type Claimed struct {
 	Arrival
-	Owner string
-	RunID domain.RunID
+	Owner         string
+	RunID         domain.RunID
+	ClaimAttempts int
+	PendingNotice string
 	// Detail is what was decided about this ask, for a debt being delivered.
 	// Empty while the ask is still pending: there is nothing decided yet.
 	Detail string
@@ -104,17 +111,27 @@ sender in existence redelivers, and a channel that opened a second run for the
 same message would be a channel nobody could use twice.
 */
 func (i *Inbox) Receive(ctx context.Context, a Arrival) (fresh bool, err error) {
+	if a.Ticket != nil && !a.Ticket.Valid() {
+		return false, errors.New("channel: incomplete ticket intent")
+	}
 	sum := sha256.Sum256(a.Payload)
+	var ticketIntent []byte
+	if a.Ticket != nil {
+		ticketIntent, err = json.Marshal(a.Ticket)
+		if err != nil {
+			return false, fmt.Errorf("channel: encode ticket intent: %w", err)
+		}
+	}
 
 	tag, err := i.pool.Exec(ctx, `
 		insert into channel_inbox
 			(channel, conversation, event_id, message, asked_by, text, thread,
-			 agent, run_as, source, payload, digest)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			 agent, run_as, source, payload, digest, ticket_intent)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		on conflict (channel, conversation, event_id) do nothing`,
 		a.Channel, a.Conversation, a.EventID, a.Message,
 		a.AskedBy, a.Text, a.Thread, a.Agent, a.RunAs, a.Source, a.Payload,
-		"sha256:"+hex.EncodeToString(sum[:8]))
+		"sha256:"+hex.EncodeToString(sum[:8]), nullableJSON(ticketIntent))
 	if err != nil {
 		return false, fmt.Errorf("channel: receive %s: %w", a.EventID, err)
 	}
@@ -141,7 +158,10 @@ somebody.
 func (i *Inbox) Claim(
 	ctx context.Context, owner string, lease time.Duration, limit int,
 ) ([]Claimed, error) {
-	return i.claim(ctx, owner, lease, limit, "status = 'pending'")
+	return i.claim(ctx, owner, lease, limit, `
+		status = 'pending' and not (
+			pending_notice <> '' and pending_notice_answered_at is null
+		)`, true)
 }
 
 // Finished takes opened asks whose runs finished and whose answer has not been
@@ -151,12 +171,13 @@ func (i *Inbox) Finished(
 ) ([]Claimed, error) {
 	return i.claim(ctx, owner, lease, limit, `
 		status = 'opened' and answer_due and answered_at is null and run_id <> ''
+		and ticket_intent is null
 		and exists (
 			select 1 from runs
 			where runs.run_id = channel_inbox.run_id
 			  and runs.phase = 'finished'
 			  and not runs.simulated
-		)`)
+		)`, false)
 }
 
 // claim takes rows matching a state, leases them, and hands them back.
@@ -166,7 +187,12 @@ func (i *Inbox) Finished(
 // injection with a comment explaining that it cannot be.
 func (i *Inbox) claim(
 	ctx context.Context, owner string, lease time.Duration, limit int, state string,
+	countAttempt bool,
 ) ([]Claimed, error) {
+	attempt := ""
+	if countAttempt {
+		attempt = ", claim_attempts = channel_inbox.claim_attempts + 1"
+	}
 	/*
 		A materialised CTE, and the limit is the reason.
 
@@ -184,7 +210,7 @@ func (i *Inbox) claim(
 	rows, err := i.pool.Query(ctx, `
 		with picked as materialized (
 			select channel, conversation, event_id from channel_inbox
-			where `+state+`
+			where (`+state+`)
 			  and (leased_until is null or leased_until <= now())
 			order by at
 			limit $3
@@ -192,7 +218,7 @@ func (i *Inbox) claim(
 		)
 		update channel_inbox set
 			leased_until = now() + $2::interval,
-			lease_owner  = $1
+			lease_owner  = $1`+attempt+`
 		from picked
 		where channel_inbox.channel = picked.channel
 		  and channel_inbox.conversation = picked.conversation
@@ -202,8 +228,9 @@ func (i *Inbox) claim(
 		          channel_inbox.asked_by, channel_inbox.text,
 		          channel_inbox.thread, channel_inbox.agent,
 		          channel_inbox.run_as, channel_inbox.source,
-		          channel_inbox.payload,
-		          channel_inbox.detail, channel_inbox.run_id`,
+		          channel_inbox.payload, channel_inbox.ticket_intent,
+		          channel_inbox.detail, channel_inbox.run_id,
+		          channel_inbox.claim_attempts, channel_inbox.pending_notice`,
 		owner, lease.String(), limit)
 	if err != nil {
 		return nil, fmt.Errorf("channel: claim from the inbox: %w", err)
@@ -215,21 +242,73 @@ func (i *Inbox) claim(
 		var a Arrival
 		var detail string
 		var run string
+		var ticketIntent []byte
+		var claimAttempts int
+		var pendingNotice string
 		if err := rows.Scan(&a.Channel, &a.Conversation, &a.EventID, &a.Message,
 			&a.AskedBy, &a.Text, &a.Thread, &a.Agent, &a.RunAs, &a.Source,
-			&a.Payload, &detail, &run); err != nil {
+			&a.Payload, &ticketIntent, &detail, &run, &claimAttempts, &pendingNotice); err != nil {
 			return nil, err
+		}
+		if len(ticketIntent) > 0 {
+			var intent TicketIntent
+			if err := json.Unmarshal(ticketIntent, &intent); err != nil || !intent.Valid() {
+				return nil, fmt.Errorf("channel: read ticket intent for %s", a.EventID)
+			}
+			a.Ticket = &intent
+		}
+		if pendingNotice != "" {
+			detail = pendingNotice
 		}
 		out = append(out, Claimed{
 			Arrival: a, Owner: owner, RunID: domain.RunID(run), Detail: detail,
+			ClaimAttempts: claimAttempts, PendingNotice: pendingNotice,
 		})
 	}
 	return out, rows.Err()
 }
 
+const ticketExecutionWaitingNotice = "Your correction is saved. It will start after the ticket's current execution is resolved; do not resend it."
+
+// TicketWaiting records a reply debt without settling the ticket event. The
+// revision already exists and must still open later, so turning this into a
+// refusal would acknowledge the message by permanently stranding its revision.
+func (i *Inbox) TicketWaiting(ctx context.Context, c Claimed) error {
+	tag, err := i.pool.Exec(ctx, `
+		update channel_inbox
+		set pending_notice = $5, pending_notice_answered_at = null,
+		    leased_until = null, lease_owner = ''
+		where channel = $1 and conversation = $2 and event_id = $3
+		  and status = 'pending' and lease_owner = $4 and ticket_intent is not null
+		  and claim_attempts >= 3 and pending_notice = ''`,
+		c.Channel, c.Conversation, c.EventID, c.Owner, ticketExecutionWaitingNotice)
+	if err != nil {
+		return fmt.Errorf("channel: defer ticket %s: %w", c.EventID, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("%w: %s", ErrNotClaimed, c.EventID)
+	}
+	return nil
+}
+
+func nullableJSON(value []byte) any {
+	if len(value) == 0 {
+		return nil
+	}
+	return value
+}
+
 // Opened records which run an ask became.
 func (i *Inbox) Opened(ctx context.Context, c Claimed, run string, at time.Time) error {
 	return i.settle(ctx, c, settled{Status: "opened", Run: run, AnswerDue: true}, at)
+}
+
+// OpenedTicket records a run without scheduling the model's closing prose as
+// a channel answer. Governed tickets publish their code-owned final outcome;
+// forwarding the model answer would make success wording and secret hygiene a
+// property of a prompt.
+func (i *Inbox) OpenedTicket(ctx context.Context, c Claimed, run string, at time.Time) error {
+	return i.settle(ctx, c, settled{Status: "opened", Run: run}, at)
 }
 
 // ErrNotClaimed means this ask is somebody else's now: already settled, or
@@ -258,7 +337,16 @@ func (i *Inbox) Refused(ctx context.Context, c Claimed, r Refusal, at time.Time)
 	}, at)
 }
 
-// Answered marks a refusal as said.
+// Handled settles a ticket event that intentionally opens no run and owes no
+// reply: an addressing instruction, or prose from somebody who owns neither
+// the request nor the configured addressing source.
+func (i *Inbox) Handled(ctx context.Context, c Claimed, reason string, at time.Time) error {
+	return i.settle(ctx, c, settled{
+		Status: "handled", Detail: reason, Reason: reason, Answered: true,
+	}, at)
+}
+
+// Answered marks a refusal or a pending ticket notice as said.
 //
 // Owner-checked like every other settle: a consumer that lost the debt must not
 // record somebody else's delivery. And conditioned on the row being a refusal,
@@ -267,9 +355,16 @@ func (i *Inbox) Refused(ctx context.Context, c Claimed, r Refusal, at time.Time)
 func (i *Inbox) Answered(ctx context.Context, c Claimed, at time.Time) error {
 	tag, err := i.pool.Exec(ctx, `
 		update channel_inbox
-		set answered_at = $5, leased_until = null, lease_owner = ''
+		set answered_at = case when status = 'refused' then $5 else answered_at end,
+		    pending_notice_answered_at = case when status = 'pending' then $5
+		                                      else pending_notice_answered_at end,
+		    leased_until = null, lease_owner = ''
 		where channel = $1 and conversation = $2 and event_id = $3
-		  and lease_owner = $4 and status = 'refused' and answered_at is null`,
+		  and lease_owner = $4 and (
+		      (status = 'refused' and answered_at is null) or
+		      (status = 'pending' and pending_notice <> '' and
+		       pending_notice_answered_at is null)
+		  )`,
 		c.Channel, c.Conversation, c.EventID, c.Owner, at.UTC())
 	if err != nil {
 		return fmt.Errorf("channel: mark %s answered: %w", c.EventID, err)

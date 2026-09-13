@@ -13,20 +13,24 @@ import (
 	"net/http/httptest"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/admin"
+	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/channel/connect"
+	"github.com/fuseone/agents/internal/connectortools"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/httpapi"
 	"github.com/fuseone/agents/internal/ledger"
 	"github.com/fuseone/agents/internal/settings"
 	"github.com/fuseone/agents/internal/spec"
+	"github.com/fuseone/agents/internal/ticket"
 	"github.com/fuseone/agents/internal/trigger"
 	"github.com/fuseone/agents/internal/vault"
 )
@@ -74,6 +78,8 @@ type conversing struct {
 	consumer *channel.Consumer
 	said     *saidAloud
 	version  domain.VersionID
+	tickets  *ticket.Postgres
+	content  *ledger.Content
 }
 
 // saidAloud stands in for the vendor, and records rather than posts.
@@ -137,7 +143,9 @@ func aConversation(t *testing.T) *conversing {
 		here still passes — while what was exercised is replay, not opening.
 		A test that proves a different thing on its second run proves neither.
 	*/
-	if _, err := pool.Exec(ctx, `delete from channel_inbox;
+	if _, err := pool.Exec(ctx, `truncate governed_external_attempts,
+		governed_ticket_events, governed_ticket_revisions, governed_tickets;
+		delete from channel_inbox;
 		delete from settings where kind like 'channel%';
 		truncate agent_specs; truncate agent_state;
 		truncate run_steps, runs, run_content`); err != nil {
@@ -154,6 +162,8 @@ func aConversation(t *testing.T) *conversing {
 		channels: admin.NewChannels(pool, store, connect.New(store)),
 		registry: spec.NewRegistry(pool),
 		said:     &saidAloud{},
+		tickets:  ticket.NewPostgres(pool),
+		content:  ledger.NewContent(pool),
 	}
 
 	// Configured through the administration area, which is what records it.
@@ -208,7 +218,8 @@ func aConversation(t *testing.T) *conversing {
 	// it names speaks for. It cannot configure anything.
 	hooks := httpapi.NewChannelHooks(
 		nil, admin.NewChannelDoor(pool, store), nil, time.Now, slog.Default()).
-		WithArrivals(channel.NewInbox(pool))
+		WithArrivals(channel.NewInbox(pool)).
+		WithTicketRoutes(channel.NewTicketRoutes(store, c.tickets))
 	mux := http.NewServeMux()
 	hooks.MountEvents(mux)
 	c.door = httptest.NewServer(mux)
@@ -225,20 +236,29 @@ func aConversation(t *testing.T) *conversing {
 			channel.NewConfigured(store), c.registry, c.registry,
 			channel.NewPostgres(pool), channel.FromTrigger(opener), c.said,
 		).
-		WithOutcomes(channel.NewPostgres(pool), ledger.NewContent(pool)).
-		Binding(c.channels.PrincipalFor)
+		WithOutcomes(channel.NewPostgres(pool), c.content).
+		Binding(c.channels.PrincipalFor).
+		WithTickets(channel.NewTicketHandler(
+			c.tickets, c.content, channel.FromTrigger(opener),
+			admin.NewChannelFacts(pool, store), admin.NewTicketAddresses(store),
+			auth.NewPostgres(pool), ledger.NewPostgres(pool), time.Now,
+		))
 	return c
 }
 
 // mention posts a signed app_mention, the way Slack does.
 func (c *conversing) mention(t *testing.T, eventID, text string) *http.Response {
 	t.Helper()
+	return c.event(t, eventID, map[string]any{
+		"type": "app_mention", "channel": "C07", "user": "U505",
+		"text": text, "ts": "1786.1",
+	})
+}
+
+func (c *conversing) event(t *testing.T, eventID string, event map[string]any) *http.Response {
+	t.Helper()
 	body, _ := json.Marshal(map[string]any{
-		"type": "event_callback", "event_id": eventID,
-		"event": map[string]any{
-			"type": "app_mention", "channel": "C07", "user": "U505",
-			"text": text, "ts": "1786.1",
-		},
+		"type": "event_callback", "event_id": eventID, "event": event,
 	})
 
 	stamp := strconv.FormatInt(time.Now().Unix(), 10)
@@ -260,6 +280,14 @@ func (c *conversing) mention(t *testing.T, eventID, text string) *http.Response 
 	}
 	t.Cleanup(func() { _ = resp.Body.Close() })
 	return resp
+}
+
+func (c *conversing) ticketRoot(t *testing.T, eventID, text, at string) *http.Response {
+	t.Helper()
+	return c.event(t, eventID, map[string]any{
+		"type": "message", "channel": "C07", "user": "U505",
+		"text": text, "ts": at,
+	})
 }
 
 // opened answers what the inbox recorded for one delivery.
@@ -470,4 +498,314 @@ func TestAsk_theSameDeliveryTwice_opensOneRun(t *testing.T) {
 	if got := c.runs(t); got != 1 {
 		t.Fatalf("runs = %d, want the single run the retried question became", got)
 	}
+}
+
+func TestGovernedTicket_aSignedRootBecomesOneSafeGraviteeOutcome(t *testing.T) {
+	c := aConversation(t)
+	ctx := context.Background()
+	if err := c.channels.PutConversation(ctx, "acme", admin.Conversation{
+		ID: "C07", Label: "#api-access", Enabled: true,
+		Scope: domain.Scope{Company: "acme", Area: "cx"},
+		Mode:  channel.ConversationTicket, Agent: "helper", RunAs: "usr_ana",
+		Ticket: &channel.TicketRule{
+			OpenFrom: channel.TicketOpenLinkedUsers, AddressFrom: "app:A-TICKET",
+			Patterns: []string{`\bapi[ -]?key\b`},
+		},
+	}, "usr_ana"); err != nil {
+		t.Fatalf("configure governed tickets: %v", err)
+	}
+
+	if resp := c.ticketRoot(t, "EvTicket", "Please approve API key sub-42 until Friday", "1787.1"); resp.StatusCode != http.StatusOK {
+		t.Fatalf("ticket door answered %d", resp.StatusCode)
+	}
+	if opened, err := c.consumer.Sweep(ctx, time.Minute, 10); err != nil || opened != 1 {
+		t.Fatalf("ticket sweep = (%d, %v)", opened, err)
+	}
+	key, err := ticket.Key("acme", "C07", "1787.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	held, err := c.tickets.Current(ctx, key)
+	if err != nil {
+		t.Fatalf("read governed ticket: %v", err)
+	}
+	if held.Agent != "helper" || held.RunAs != "usr_ana" || held.RequestedBy != "usr_ana" ||
+		held.Origin != (ticket.Origin{Connection: "acme", Conversation: "C07", Root: "1787.1"}) {
+		t.Fatalf("ticket identity = %+v", held)
+	}
+
+	rawDraft, err := c.content.Get(ctx, held.Current.Draft.Ref)
+	if err != nil {
+		t.Fatalf("read ticket draft: %v", err)
+	}
+	for _, forbidden := range []string{"U505", "channel", "event_id", "A-TICKET"} {
+		if bytes.Contains(rawDraft, []byte(forbidden)) {
+			t.Fatalf("canonical draft exposed Slack envelope field %q: %s", forbidden, rawDraft)
+		}
+	}
+	if !bytes.Contains(rawDraft, []byte("Please approve API key sub-42")) ||
+		!bytes.Contains(rawDraft, []byte("usr_ana")) {
+		t.Fatalf("canonical draft lost requester text or identity: %s", rawDraft)
+	}
+
+	_, runID, _ := c.opened(t, "EvTicket")
+	steps, err := ledger.NewPostgres(c.pool).Read(ctx, domain.RunID(runID), 0)
+	if err != nil || len(steps) == 0 {
+		t.Fatalf("read ticket run = (%d steps, %v)", len(steps), err)
+	}
+	var started domain.RunStartedPayload
+	if err := json.Unmarshal(steps[0].Payload, &started); err != nil || started.Ticket == nil ||
+		started.Ticket.Ref != held.Current.Ref || started.Ticket.RequestedBy != "usr_ana" ||
+		steps[0].OnBehalfOf != "usr_ana" {
+		t.Fatalf("sealed ticket run = (%+v, %+v, %v)", steps[0], started, err)
+	}
+
+	expires := "2026-09-30T18:00:00Z"
+	application := connectortools.GraviteeApplication{
+		GraviteeResource:  connectortools.GraviteeResource{ID: "app-1", Name: "Payments"},
+		PrimaryOwnerEmail: "ana@example.com",
+	}
+	api := connectortools.GraviteeResource{ID: "checkout-api", Name: "Checkout"}
+	plan := connectortools.GraviteeResource{ID: "plan-1", Name: "API Key"}
+	snapshotValue := connectortools.GraviteeSnapshot{
+		TicketRef: held.Current.Ref, SubscriptionID: "sub-42", Status: "PENDING",
+		Application: application, API: api, Plan: plan, PlanSecurity: "API_KEY",
+		RequestedExpiration: &expires,
+		RemoteCreatedAt:     "2026-09-10T12:00:00Z", RemoteUpdatedAt: "2026-09-11T12:00:00Z",
+	}
+	snapshotRaw, err := json.Marshal(snapshotValue)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshotRef, err := c.content.Put(ctx, domain.RunID(runID), 2, snapshotRaw)
+	if err != nil {
+		t.Fatalf("store snapshot: %v", err)
+	}
+	snapshot := ticket.ContentRef{Ref: snapshotRef, Digest: engine.ResultDigest(snapshotRaw)}
+	if _, _, err := c.tickets.RecordInspection(ctx, ticket.InspectionInput{
+		Ref: held.Current.Ref, Snapshot: snapshot, At: time.Now(),
+	}); err != nil {
+		t.Fatalf("record inspection: %v", err)
+	}
+	evidence := domain.ApprovalEvidence{
+		Kind:   connectortools.ApprovalEvidenceGraviteeSubscription,
+		Ticket: held.Current.Ref, Ref: snapshot.Ref, Digest: snapshot.Digest,
+	}
+	store := ledger.NewPostgres(c.pool)
+	approvalPayload, _ := json.Marshal(domain.ApprovalRequestedPayload{
+		Tool: "gravitee.apim.accept_subscription", Rule: "explicit_approval",
+		Effect: domain.EffectWrite, Evidence: &evidence,
+	})
+	approvalStep, err := store.Append(ctx, domain.Step{
+		RunID: domain.RunID(runID), Kind: domain.StepApprovalRequested,
+		Scope: held.Scope, AgentID: held.Agent, VersionID: c.version,
+		OnBehalfOf: held.RequestedBy, Payload: approvalPayload, At: time.Now(),
+	})
+	if err != nil {
+		t.Fatalf("append approval request: %v", err)
+	}
+	if _, _, err := c.tickets.AwaitApproval(ctx, ticket.ApprovalInput{
+		Ref: held.Current.Ref, RunID: domain.RunID(runID), AtSeq: approvalStep.Seq,
+		Snapshot: snapshot, At: time.Now(),
+	}); err != nil {
+		t.Fatalf("record approval request: %v", err)
+	}
+	decidedPayload, _ := json.Marshal(domain.ApprovalDecidedPayload{
+		Approved: true, By: "usr_manager", AtSeq: approvalStep.Seq,
+	})
+	if _, err := store.AppendIfHead(ctx,
+		domain.StepRef{Seq: approvalStep.Seq, Kind: domain.StepApprovalRequested},
+		domain.Step{
+			RunID: domain.RunID(runID), Kind: domain.StepApprovalDecided,
+			Scope: held.Scope, AgentID: held.Agent, VersionID: c.version,
+			OnBehalfOf: held.RequestedBy, Payload: decidedPayload,
+			IdemKey: domain.ApprovalDecisionKey(domain.RunID(runID), approvalStep.Seq), At: time.Now(),
+		}); err != nil {
+		t.Fatalf("append approval decision: %v", err)
+	}
+	gravitee := connectortools.Instance{
+		Connector: "gravitee", Name: "apim", Scope: held.Scope, Enabled: true,
+		Gravitee: connectortools.GraviteeConfig{
+			Address:      "https://gravitee.example/management/v2",
+			Organization: "org-prod", Environment: "env-prod",
+			AllowedReferences: []connectortools.GraviteeReference{{
+				Type: connectortools.GraviteeReferenceAPI, ID: "checkout-api",
+			}},
+			MinTTLSeconds: 3600, MaxTTLSeconds: 90 * 24 * 60 * 60,
+			CredentialSource: connectortools.GraviteeCredentialSource{
+				Kind: connectortools.GraviteeCredentialVaultKV, VaultInstance: "secrets",
+				Path: "integrations/gravitee/prod", Field: "access_token",
+			},
+		},
+	}
+	vaultInstance := connectortools.Instance{
+		Connector: "vault", Name: "secrets", Scope: held.Scope, Enabled: true,
+		Vault: connectortools.VaultConfig{
+			Address: "https://vault.example", Mount: "secret",
+			AllowedPathPrefixes: []string{"integrations/gravitee"},
+		},
+	}
+	remote := &e2eGraviteeRemote{
+		inspected: connectortools.GraviteeObservation{
+			SubscriptionID: "sub-42", Status: "PENDING", Application: application,
+			API: api, Plan: plan, PlanSecurity: "API_KEY",
+			CreatedAt: snapshotValue.RemoteCreatedAt, UpdatedAt: snapshotValue.RemoteUpdatedAt,
+		},
+		accepted: connectortools.GraviteeObservation{
+			SubscriptionID: "sub-42", Status: "ACCEPTED", Application: application,
+			API: api, Plan: plan, PlanSecurity: "API_KEY", EndingAt: &expires,
+			CreatedAt: snapshotValue.RemoteCreatedAt, UpdatedAt: "2026-09-12T12:00:00Z",
+		},
+	}
+	attempts := connectortools.NewPostgresGraviteeAttempts(c.pool)
+	access := &e2eGraviteeAccess{config: gravitee.Gravitee}
+	runtime := connectortools.NewGraviteeAcceptRuntime(
+		access, remote, c.content, c.tickets, attempts,
+		connectortools.NewGraviteeReconciliationLedger(store),
+	)
+	layer := connectortools.New(nil, nil, c.content, nil).WithGraviteeRuntime(runtime)
+	if err := layer.SetInstances([]connectortools.Instance{gravitee, vaultInstance}); err != nil {
+		t.Fatalf("configure native layer: %v", err)
+	}
+	args, _ := json.Marshal(connectortools.GraviteeInspectInput{
+		SubscriptionID: "sub-42", ExpiresAt: expires,
+	})
+	call := engine.Call{
+		RunID: domain.RunID(runID), Tool: "gravitee.apim.accept_subscription",
+		Scope: held.Scope, Args: args, Ticket: *started.Ticket,
+		ApprovalEvidence: evidence, ApprovalAtSeq: approvalStep.Seq,
+		DecidedBy: "usr_manager", IdemKey: "e2e-gravitee-accept", At: time.Now(),
+	}
+	call.ContractDigest = layer.ApprovalBinding(call)
+	access.contract = call.ContractDigest
+	if err := layer.Reserve(ctx, call); err != nil {
+		t.Fatalf("reserve Gravitee acceptance: %v", err)
+	}
+	calledPayload, _ := json.Marshal(domain.ToolCalledPayload{
+		Tool: call.Tool, Effect: domain.EffectWrite, ContractDigest: call.ContractDigest,
+	})
+	called, err := store.Append(ctx, domain.Step{
+		RunID: domain.RunID(runID), Kind: domain.StepToolCalled,
+		Scope: held.Scope, AgentID: held.Agent, VersionID: c.version,
+		OnBehalfOf: held.RequestedBy, IdemKey: call.IdemKey,
+		Payload: calledPayload, At: call.At,
+	})
+	if err != nil {
+		t.Fatalf("append tool call: %v", err)
+	}
+	call.Seq = called.Seq
+	result, err := layer.Invoke(ctx, call)
+	if err != nil || result.Failed || remote.acceptCalls != 1 {
+		t.Fatalf("native acceptance = (%+v, %v), POST calls=%d", result, err, remote.acceptCalls)
+	}
+	steps, _ = store.Read(ctx, domain.RunID(runID), domain.FirstSeq)
+	if countStep(steps, domain.StepToolReturned) != 0 || countStep(steps, domain.StepEffectReconciled) != 0 {
+		t.Fatalf("the simulated dead process sealed a result: %v", stepKinds(steps))
+	}
+
+	// The process dies here: the remote result and durable attempt exist, but
+	// the engine never appends tool_returned. Make the journal due and compose
+	// a fresh runtime, as a restarted worker would.
+	if _, err := c.pool.Exec(ctx, `update governed_external_attempts
+		set next_check_at = now() - interval '1 second', claimed_by = '', claimed_until = null
+		where idem_key = $1`, call.IdemKey); err != nil {
+		t.Fatalf("age the abandoned attempt: %v", err)
+	}
+	recovered := connectortools.NewGraviteeAcceptRuntime(
+		access, remote, c.content, c.tickets, attempts,
+		connectortools.NewGraviteeReconciliationLedger(store),
+	)
+	if count, err := connectortools.NewGraviteeAttemptReconciler(
+		recovered, attempts, "e2e-restarted-worker").Sweep(ctx); err != nil || count != 1 {
+		t.Fatalf("reconcile abandoned acceptance = (%d, %v)", count, err)
+	}
+	if remote.acceptCalls != 1 {
+		t.Fatalf("POST calls after reconciliation = %d, want exactly one", remote.acceptCalls)
+	}
+	steps, _ = store.Read(ctx, domain.RunID(runID), domain.FirstSeq)
+	if countStep(steps, domain.StepEffectReconciled) != 1 ||
+		countStep(steps, domain.StepToolReturned) != 0 {
+		t.Fatalf("reconciled trail = %v", stepKinds(steps))
+	}
+
+	outcomes := channel.NewTicketOutcomeConsumer(
+		c.tickets, c.content, c.said, connectortools.GraviteeTicketOutcomeRenderer{}, "e2e-ticket",
+	)
+	if delivered, err := outcomes.Sweep(ctx, time.Minute, 10); err != nil || delivered != 1 {
+		t.Fatalf("deliver ticket outcome = (%d, %v)", delivered, err)
+	}
+	got := c.said.replies[len(c.said.replies)-1]
+	if got.channel != "acme" || got.conversation != "C07" || got.thread != "1787.1" || !got.outcome {
+		t.Fatalf("ticket outcome destination = %+v", got)
+	}
+	for _, want := range []string{"approved in Gravitee", expires, "never posts the API key", "revoke or rotate"} {
+		if !strings.Contains(got.text, want) {
+			t.Errorf("ticket outcome = %q; missing %q", got.text, want)
+		}
+	}
+	if strings.Contains(got.text, "api-key-canary") {
+		t.Fatalf("ticket outcome exposed an API key: %q", got.text)
+	}
+	if delivered, err := outcomes.Sweep(ctx, time.Minute, 10); err != nil || delivered != 0 {
+		t.Fatalf("ticket outcome repeated = (%d, %v)", delivered, err)
+	}
+}
+
+type e2eGraviteeAccess struct {
+	config   connectortools.GraviteeConfig
+	contract string
+}
+
+func (a *e2eGraviteeAccess) Resolve(
+	context.Context, string, domain.Scope,
+) (connectortools.GraviteeAccess, error) {
+	return connectortools.GraviteeAccess{Config: a.config, ContractDigest: a.contract}, nil
+}
+
+type e2eGraviteeRemote struct {
+	inspected    connectortools.GraviteeObservation
+	accepted     connectortools.GraviteeObservation
+	inspectCalls int
+	observeCalls int
+	acceptCalls  int
+}
+
+func (r *e2eGraviteeRemote) Inspect(
+	context.Context, connectortools.GraviteeConfig, connectortools.SecretValue, string,
+) (connectortools.GraviteeObservation, error) {
+	r.inspectCalls++
+	return r.inspected, nil
+}
+
+func (r *e2eGraviteeRemote) Observe(
+	context.Context, connectortools.GraviteeConfig, connectortools.SecretValue, string,
+) (connectortools.GraviteeObservation, error) {
+	r.observeCalls++
+	return r.accepted, nil
+}
+
+func (r *e2eGraviteeRemote) Accept(
+	context.Context, connectortools.GraviteeConfig, connectortools.SecretValue,
+	connectortools.GraviteeSnapshot,
+) (connectortools.GraviteeObservation, error) {
+	r.acceptCalls++
+	return r.accepted, nil
+}
+
+func countStep(steps []domain.Step, kind domain.StepKind) int {
+	count := 0
+	for _, step := range steps {
+		if step.Kind == kind {
+			count++
+		}
+	}
+	return count
+}
+
+func stepKinds(steps []domain.Step) []domain.StepKind {
+	out := make([]domain.StepKind, len(steps))
+	for i, step := range steps {
+		out[i] = step.Kind
+	}
+	return out
 }

@@ -207,7 +207,8 @@ has always worked.
 func (c *Channels) refuseUnreachableConnection(
 	ctx context.Context, conn settings.DB, channelName, mode string,
 ) error {
-	if !channel.StartsFromMentions(mode) && !channel.StartsFromWatch(mode) {
+	if !channel.StartsFromMentions(mode) && !channel.StartsFromWatch(mode) &&
+		!channel.StartsTickets(mode) {
 		return nil
 	}
 	stored, err := c.settings.ListTx(ctx, conn, channel.KindChannel)

@@ -106,6 +106,38 @@ func (s *Store) List(ctx context.Context, kind Kind) ([]Setting, error) {
 	return s.ListTx(ctx, s.pool, kind)
 }
 
+// Named returns enabled settings of one kind under one exact name.
+//
+// The caller deliberately does not supply a scope: inbound channel traffic
+// knows the connection and conversation before it knows which scope that
+// conversation governs. A dedicated indexed lookup keeps that edge from
+// scanning every configured conversation for every message.
+func (s *Store) Named(ctx context.Context, kind Kind, name string) ([]Setting, error) {
+	rows, err := s.pool.Query(ctx, `
+		select scope_kind, company_id, area_id, value, updated_by, updated_at
+		from settings
+		where kind = $1 and name = $2 and enabled
+		order by scope_kind, company_id, area_id`, string(kind), name)
+	if err != nil {
+		return nil, fmt.Errorf("settings: read named %s/%s: %w", kind, name, err)
+	}
+	defer rows.Close()
+
+	var out []Setting
+	for rows.Next() {
+		set := Setting{Kind: kind, Name: name, Enabled: true}
+		var scopeKind, company, area string
+		if err := rows.Scan(&scopeKind, &company, &area, &set.Value,
+			&set.UpdatedBy, &set.UpdatedAt); err != nil {
+			return nil, err
+		}
+		set.ScopeKind = ScopeKind(scopeKind)
+		set.Scope = domain.Scope{Company: domain.CompanyID(company), Area: domain.AreaID(area)}
+		out = append(out, set)
+	}
+	return out, rows.Err()
+}
+
 // ListTx is List inside somebody else's transaction.
 //
 // Not a convenience: a caller that has to decide something from what is stored

@@ -128,6 +128,32 @@ func TestSocketReceiver_aWatchedSourceRecordsTheConfiguredAutomation(t *testing.
 	}
 }
 
+func TestSocketReceiver_persistsTheSameTicketDecisionAsTheHTTPDoor(t *testing.T) {
+	t.Parallel()
+	inbox := &socketInbox{}
+	intent := channel.TicketIntent{
+		Key: "ticket-key", Root: true,
+		Scope: domain.Scope{Company: "acme", Area: "support"},
+		Agent: "gateway-support", RunAs: "usr_gateway", AddressedBy: "app:A-approvals",
+	}
+	ack, err := (slack.SocketReceiver{
+		Channel: "acme-slack", Inbox: inbox,
+		Tickets: socketTicketRouter{intent: intent, routed: true},
+	}).Handle(context.Background(), socketFrame("env-ticket", map[string]any{
+		"type": "event_callback", "event_id": "Ev-ticket",
+		"event": map[string]any{
+			"type": "message", "channel": "C07", "user": "U505",
+			"text": "create an api key", "ts": "1786.60",
+		},
+	}))
+	if err != nil || string(ack) != `{"envelope_id":"env-ticket"}` {
+		t.Fatalf("Handle: ack=%s err=%v", ack, err)
+	}
+	if inbox.got.Ticket == nil || *inbox.got.Ticket != intent {
+		t.Fatalf("ticket = %+v, want %+v", inbox.got.Ticket, intent)
+	}
+}
+
 func TestSocketReceiver_aMessageFromAnotherSourceDoesNotEnterTheInbox(t *testing.T) {
 	t.Parallel()
 	inbox := &socketInbox{}
@@ -209,6 +235,18 @@ type socketRules struct {
 	source string
 	agent  domain.AgentID
 	runAs  domain.UserID
+}
+
+type socketTicketRouter struct {
+	intent channel.TicketIntent
+	routed bool
+	err    error
+}
+
+func (r socketTicketRouter) Route(
+	context.Context, channel.TicketCandidate,
+) (channel.TicketIntent, bool, error) {
+	return r.intent, r.routed, r.err
 }
 
 func (r socketRules) WatchFor(

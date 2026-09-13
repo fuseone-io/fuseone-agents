@@ -154,6 +154,7 @@ type Request struct {
 	Input   []byte
 	Labels  domain.Labels
 	Origin  *domain.RunOrigin
+	Ticket  *domain.TicketContext
 }
 
 // Opened is the run an ask became.

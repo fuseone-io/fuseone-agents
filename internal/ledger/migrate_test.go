@@ -63,6 +63,129 @@ func TestMigrate_twoProcessesStartingTogether_bothSucceed(t *testing.T) {
 }
 
 /*
+The ticket waiting notice upgrades a database that has already recorded 0076.
+
+This is deliberately an upgrade test, not another bootstrap test. Rebuilding a
+database from the embedded files cannot expose an edited migration: the fresh
+schema and the new code agree while every database that recorded the old file
+keeps the old shape. The setup below puts the database back at the exact
+post-0076 boundary and leaves both historical versions recorded, so only 0077
+can supply the new columns and the versioned constraint name.
+*/
+func TestMigrate_ticketWaitingNotice_upgradesAnAlreadyMigratedInbox(t *testing.T) {
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("TEST_DATABASE_URL is unset; skipping the migration")
+	}
+	pool, err := pgxpool.New(t.Context(), dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	if err := ledger.Migrate(t.Context(), pool); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	if _, err := pool.Exec(t.Context(), `
+		delete from schema_migrations
+		where version = '0077_ticket_waiting_notice';
+		alter table channel_inbox
+			drop column pending_notice_answered_at,
+			drop column pending_notice,
+			drop column claim_attempts;
+		alter table governed_external_attempts
+			rename constraint governed_external_attempts_result_shape_v2
+			to governed_external_attempts_result_shape;
+	`); err != nil {
+		t.Fatalf("restore the post-0076 schema: %v", err)
+	}
+	if err := ledger.Migrate(t.Context(), pool); err != nil {
+		t.Fatalf("upgrade from 0076: %v", err)
+	}
+
+	var historical int
+	if err := pool.QueryRow(t.Context(), `
+		select count(*) from schema_migrations
+		where version in ('0075_external_attempts', '0076_governed_ticket_ingress')
+	`).Scan(&historical); err != nil {
+		t.Fatalf("read historical migrations: %v", err)
+	}
+	if historical != 2 {
+		t.Fatalf("recorded historical migrations = %d, want both untouched", historical)
+	}
+
+	var columns int
+	if err := pool.QueryRow(t.Context(), `
+		select count(*) from information_schema.columns
+		where table_schema = 'public' and table_name = 'channel_inbox'
+		  and column_name in ('claim_attempts', 'pending_notice', 'pending_notice_answered_at')
+	`).Scan(&columns); err != nil {
+		t.Fatalf("read upgraded inbox: %v", err)
+	}
+	if columns != 3 {
+		t.Fatalf("ticket waiting columns = %d, want 3", columns)
+	}
+
+	var constraints int
+	if err := pool.QueryRow(t.Context(), `
+		select count(*) from pg_constraint c
+		join pg_class t on t.oid = c.conrelid
+		where t.relname = 'governed_external_attempts'
+		  and c.conname = 'governed_external_attempts_result_shape_v2'
+	`).Scan(&constraints); err != nil {
+		t.Fatalf("read upgraded result constraint: %v", err)
+	}
+	if constraints != 1 {
+		t.Fatalf("versioned result constraints = %d, want 1", constraints)
+	}
+}
+
+// A preview database may have applied the briefly edited 0076, which already
+// carried the notice columns but could never record 0077. The new migration
+// converges that shape too; otherwise fixing frozen history repairs an older
+// preview and breaks a newer one with duplicate-column errors.
+func TestMigrate_ticketWaitingNotice_convergesTheInterimPreviewSchema(t *testing.T) {
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("TEST_DATABASE_URL is unset; skipping the migration")
+	}
+	pool, err := pgxpool.New(t.Context(), dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	if err := ledger.Migrate(t.Context(), pool); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	if _, err := pool.Exec(t.Context(), `
+		delete from schema_migrations
+		where version = '0077_ticket_waiting_notice';
+		alter table governed_external_attempts
+			rename constraint governed_external_attempts_result_shape_v2
+			to governed_external_attempts_result_shape;
+	`); err != nil {
+		t.Fatalf("restore the interim preview schema: %v", err)
+	}
+	if err := ledger.Migrate(t.Context(), pool); err != nil {
+		t.Fatalf("converge the interim preview schema: %v", err)
+	}
+
+	var applied bool
+	if err := pool.QueryRow(t.Context(), `
+		select exists (
+			select 1 from schema_migrations
+			where version = '0077_ticket_waiting_notice'
+		)
+	`).Scan(&applied); err != nil {
+		t.Fatalf("read migration state: %v", err)
+	}
+	if !applied {
+		t.Fatal("0077 was not recorded after converging the preview schema")
+	}
+}
+
+/*
 Conversations stored under the id alone take their connection into the key.
 
 The second half of a two-release move: the release before this one reads both

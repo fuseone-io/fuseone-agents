@@ -50,6 +50,10 @@ const (
 	// selected ordinary messages. The two paths keep their own authority:
 	// mentions come from the bound person; watched messages come from RunAs.
 	ConversationBoth = "both"
+	// ConversationTicket admits matching root messages as governed support
+	// tickets. Replies are routed by the ticket's stored origin, never by
+	// matching their prose again.
+	ConversationTicket = "ticket"
 	/*
 		ConversationAnnounce means nothing said here starts anything.
 
@@ -139,6 +143,8 @@ func ConversationMode(mode string) string {
 		return ConversationBoth
 	case ConversationAnnounce:
 		return ConversationAnnounce
+	case ConversationTicket:
+		return ConversationTicket
 	default:
 		// Empty is a conversation configured before modes existed, and it took
 		// mentions. Anything else is a value this version does not know, and
@@ -173,6 +179,11 @@ func StartsFromWatch(mode string) bool {
 	return mode == ConversationWatch || mode == ConversationBoth
 }
 
+// StartsTickets answers whether matching human root messages may create a
+// governed ticket. It is separate from watch: a ticket has a linked requester,
+// a configured execution principal and a durable revision of its own.
+func StartsTickets(mode string) bool { return mode == ConversationTicket }
+
 /*
 StoredMode is the mode as configured, with the one translation that is defined.
 
@@ -201,7 +212,7 @@ before modes existed.
 func KnownMode(mode string) bool {
 	switch mode {
 	case "", ConversationMentions, ConversationWatch,
-		ConversationBoth, ConversationAnnounce:
+		ConversationBoth, ConversationAnnounce, ConversationTicket:
 		return true
 	}
 	return false
@@ -213,7 +224,7 @@ func KnownMode(mode string) bool {
 // one of them cannot be forgotten here — and a mode named in neither starts
 // nothing, whether it is "announce" or a value written by a newer version.
 func startsSomething(mode string) bool {
-	return StartsFromMentions(mode) || StartsFromWatch(mode)
+	return StartsFromMentions(mode) || StartsFromWatch(mode) || StartsTickets(mode)
 }
 
 /*
@@ -336,6 +347,24 @@ func (s Source) Matches(allowed []string) bool {
 	return false
 }
 
+// MatchesKey compares one explicitly typed source. Key cannot be used here:
+// Slack may put both bot_id and app_id on one event, and the configured actor
+// must match the field it named rather than whichever Key happens to prefer.
+func (s Source) MatchesKey(key string) bool {
+	prefix, id, found := strings.Cut(strings.TrimSpace(key), ":")
+	if !found || id == "" {
+		return false
+	}
+	switch prefix {
+	case "bot":
+		return s.Bot == id
+	case "app":
+		return s.App == id
+	default:
+		return false
+	}
+}
+
 // conversationValue is a conversation as stored.
 type conversationValue struct {
 	Channel string `json:"channel"`
@@ -353,8 +382,9 @@ type conversationValue struct {
 	// DirectApprovals is outbound, like Wants and unlike Mode: it says an
 	// approval announced here also reaches the people who may decide it,
 	// privately.
-	DirectApprovals bool    `json:"directApprovals,omitempty"`
-	Wants           []Event `json:"wants,omitempty"`
+	DirectApprovals bool        `json:"directApprovals,omitempty"`
+	Wants           []Event     `json:"wants,omitempty"`
+	Ticket          *TicketRule `json:"ticket,omitempty"`
 }
 
 // Configured reads channels and conversations from the administration area.

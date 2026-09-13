@@ -257,6 +257,43 @@ func TestSlackEvent_anAsk_isWrittenDownBeforeItIsAcknowledged(t *testing.T) {
 	}
 }
 
+func TestSlackEvent_aTicketDecisionIsWrittenBeforeSlackIsAcknowledged(t *testing.T) {
+	t.Parallel()
+	hooks, _ := hooksFor(t, ledger.NewMemory(), nil, domain.Principal{})
+	inbox := &inboxSpy{}
+	intent := channel.TicketIntent{
+		Key: "ticket-key", Root: true,
+		Scope: domain.Scope{Company: "acme", Area: "support"},
+		Agent: "gateway-support", RunAs: "usr_gateway", AddressedBy: "bot:B-approvals",
+	}
+	hooks.WithArrivals(inbox).WithTicketRoutes(ticketRouterStub{intent: intent, routed: true})
+
+	rec := deliver(t, hooks, "acme-slack", `{"type":"event_callback","event_id":"Ev-ticket",
+	  "event":{"type":"message","channel":"C-tickets","user":"U9",
+	           "text":"create an api key","ts":"1786.7"}}`)
+
+	if rec.Code != http.StatusOK || len(inbox.received) != 1 {
+		t.Fatalf("status=%d arrivals=%d", rec.Code, len(inbox.received))
+	}
+	if inbox.received[0].Ticket == nil || *inbox.received[0].Ticket != intent {
+		t.Fatalf("ticket = %+v, want %+v", inbox.received[0].Ticket, intent)
+	}
+}
+
+func TestSlackEvent_aTicketRouteThatCannotBeReadIsNotAcknowledged(t *testing.T) {
+	t.Parallel()
+	hooks, _ := hooksFor(t, ledger.NewMemory(), nil, domain.Principal{})
+	inbox := &inboxSpy{}
+	hooks.WithArrivals(inbox).WithTicketRoutes(ticketRouterStub{err: errors.New("settings unavailable")})
+
+	rec := deliver(t, hooks, "acme-slack", `{"type":"event_callback","event_id":"Ev-ticket-failed",
+	  "event":{"type":"message","channel":"C-tickets","user":"U9",
+	           "text":"create an api key","ts":"1786.8"}}`)
+	if rec.Code == http.StatusOK || len(inbox.received) != 0 {
+		t.Fatalf("status=%d arrivals=%d; Slack would stop retrying", rec.Code, len(inbox.received))
+	}
+}
+
 func TestSlackEvent_aMentionMarksTheSlackAccountAsSeen(t *testing.T) {
 	t.Parallel()
 	hooks, _ := hooksFor(t, ledger.NewMemory(), nil, domain.Principal{})
@@ -363,6 +400,18 @@ func deliver(t *testing.T, hooks *ChannelHooks, name, body string) *httptest.Res
 type inboxSpy struct {
 	received []channel.Arrival
 	err      error
+}
+
+type ticketRouterStub struct {
+	intent channel.TicketIntent
+	routed bool
+	err    error
+}
+
+func (r ticketRouterStub) Route(
+	context.Context, channel.TicketCandidate,
+) (channel.TicketIntent, bool, error) {
+	return r.intent, r.routed, r.err
 }
 
 func (i *inboxSpy) Receive(_ context.Context, a channel.Arrival) (bool, error) {

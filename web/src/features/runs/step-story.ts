@@ -25,6 +25,7 @@ const TITLES: Record<StepKind, string> = {
   budget_reserved: "runs.storyBudgetReserved",
   tool_called: "runs.storyToolCalled",
   tool_returned: "runs.storyToolReturned",
+  effect_reconciled: "runs.storyEffectReconciled",
   budget_reconciled: "runs.storyBudgetReconciled",
   approval_requested: "runs.storyAwaitingHuman",
   approval_decided: "runs.storyHumanDecided",
@@ -198,6 +199,17 @@ export function detailOf(step: Step): Line {
         };
       }
       return NOTHING;
+
+    case "effect_reconciled":
+      return payload.failed
+        ? {
+            key: "runs.storyEffectReconciledFailed",
+            values: { seq: payload.for_seq ?? "", code: payload.error_code ?? "" },
+          }
+        : {
+            key: "runs.storyEffectReconciledAt",
+            values: { seq: payload.for_seq ?? "" },
+          };
 
     case "approval_decided":
       return {
@@ -408,6 +420,8 @@ export function summaryOf(step: Step): Line {
       return payload.cached
         ? { key: "runs.summaryToolCached", values: { tool } }
         : { key: "runs.summaryToolReturned", values: { tool } };
+    case "effect_reconciled":
+      return { key: "runs.storyEffectReconciled", values: { tool } };
     case "budget_reserved":
       return typeof payload.tokens === "number"
         ? {

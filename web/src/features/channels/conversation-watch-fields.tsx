@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import {
@@ -9,24 +8,9 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { usePeople } from "@/features/admin/people-api";
 import type { ConversationValues } from "@/features/channels/conversation-form-model";
-import { useMe } from "@/features/session/api";
-
-type RunAsPerson = {
-  id: string;
-  display?: string | null;
-  email?: string | null;
-};
+import { ConversationRunAsField } from "@/features/channels/conversation-run-as-field";
 
 /**
  * Who a watched message runs as, and which sources may start one.
@@ -43,79 +27,11 @@ export function ConversationWatchFields({
   form: UseFormReturn<ConversationValues>;
 }) {
   const { t } = useTranslation();
-  const people = usePeople();
-  const { data: me } = useMe();
-  const peopleItems = (people.data?.items ?? []).filter((p) => !p.disabled);
-  // Undefined is still loading; null is a session with no restrictions to
-  // apply, which is how the other fields here read it too.
-  const canDelegate =
-    me === null || Boolean(me?.can.includes("identity:write"));
-  const runAsPeople: RunAsPerson[] = canDelegate
-    ? peopleItems
-    : me
-      ? peopleItems.some((person) => person.id === me.id)
-        ? peopleItems.filter((person) => person.id === me.id)
-        : [{ id: me.id, display: me.display }]
-      : [];
-
-  useEffect(() => {
-    if (me === null || me === undefined || canDelegate) return;
-    if (form.getValues("runAs") === me.id) return;
-    form.setValue("runAs", me.id, { shouldValidate: true });
-  }, [canDelegate, form, me]);
 
   return (
     <div className="rounded-md border bg-muted/30 p-3">
       <div className="grid gap-4">
-        <FormField
-          control={form.control}
-          name="runAs"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t("channels.watchRunAs")}</FormLabel>
-              {runAsPeople.length > 0 ? (
-                <Select
-                  onValueChange={field.onChange}
-                  value={field.value ?? ""}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder={t("channels.pickWatchRunAs")} />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {runAsPeople.map((person) => (
-                      <SelectItem key={person.id} value={person.id}>
-                        {person.display || person.email || person.id}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : me === undefined ? (
-                <Select disabled value="">
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder={t("common.loading")} />
-                    </SelectTrigger>
-                  </FormControl>
-                </Select>
-              ) : (
-                <FormControl>
-                  <Input
-                    {...field}
-                    placeholder={t("channels.watchRunAsPlaceholder")}
-                  />
-                </FormControl>
-              )}
-              <FormDescription>
-                {canDelegate
-                  ? t("channels.watchRunAsExplains")
-                  : t("channels.watchRunAsSelfOnly")}
-              </FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        <ConversationRunAsField form={form} />
       </div>
       <FormField
         control={form.control}

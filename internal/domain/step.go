@@ -19,6 +19,7 @@ const (
 	StepBudgetReserved    StepKind = "budget_reserved"
 	StepToolCalled        StepKind = "tool_called"
 	StepToolReturned      StepKind = "tool_returned"
+	StepEffectReconciled  StepKind = "effect_reconciled"
 	StepBudgetReconciled  StepKind = "budget_reconciled"
 	StepApprovalRequested StepKind = "approval_requested"
 	StepApprovalDecided   StepKind = "approval_decided"
@@ -33,6 +34,7 @@ const (
 var stepKinds = map[StepKind]bool{
 	StepRunStarted: true, StepPlanned: true, StepGateDecided: true,
 	StepBudgetReserved: true, StepToolCalled: true, StepToolReturned: true,
+	StepEffectReconciled: true,
 	StepBudgetReconciled: true, StepApprovalRequested: true,
 	StepApprovalDecided: true, StepResumed: true, StepAbandoned: true,
 	StepCompensated: true, StepFailed: true,

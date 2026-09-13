@@ -365,6 +365,24 @@ func TestUnreported_saysWhichVersionTheRunPinned(t *testing.T) {
 	}
 }
 
+func TestUnreported_carriesTheTicketRevisionSealedByRunStarted(t *testing.T) {
+	store, pool := channelStore(t)
+	payload := []byte(`{"ticket":{"ref":{"key":"ticket-1","revision":3},"requested_by":"usr_requester"}}`)
+	appendStep(t, pool, "run-ticket", domain.StepRunStarted, payload)
+	appendStep(t, pool, "run-ticket", domain.StepApprovalRequested,
+		[]byte(`{"tool":"gravitee.accept_subscription","rule":"human approval"}`))
+
+	pending, err := store.Unreported(t.Context(), noon.Add(-channel.Window), 50)
+	if err != nil {
+		t.Fatalf("Unreported: %v", err)
+	}
+	if len(pending) != 1 || pending[0].Ticket != (domain.TicketRef{
+		Key: "ticket-1", Revision: 3,
+	}) {
+		t.Fatalf("pending = %+v, want the sealed ticket revision", pending)
+	}
+}
+
 func channelStore(t *testing.T) (*channel.Postgres, *pgxpool.Pool) {
 	t.Helper()
 	dsn := os.Getenv("TEST_DATABASE_URL")

@@ -945,6 +945,13 @@ func TestAnswer_theDriverIsAway_theRefusalStaysOwed(t *testing.T) {
 	if owed[0].Detail == "" {
 		t.Error("the debt carries no reason, so nothing can be said")
 	}
+	contended, err := parts.inbox.Owed(t.Context(), "worker-3", time.Minute, 10)
+	if err != nil {
+		t.Fatalf("contending Owed: %v", err)
+	}
+	if len(contended) != 0 {
+		t.Errorf("another worker claimed a leased refusal: %+v", contended)
+	}
 }
 
 /*

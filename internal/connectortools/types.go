@@ -21,6 +21,11 @@ const (
 	CodeConnectorArtifactMissing = "connector_artifact_missing"
 	CodeConnectorDigestMismatch  = "connector_digest_mismatch"
 	CodeConnectorUpstreamFailed  = "connector_upstream_failed"
+	CodeConnectorContractChanged = "connector_contract_changed"
+	CodeConnectorSnapshotChanged = "connector_snapshot_changed"
+	CodeConnectorOutcomeUnknown  = "connector_outcome_unknown"
+	CodeConnectorNeedsAttention  = "connector_needs_attention"
+	CodeConnectorAbandoned       = "connector_reconciliation_abandoned"
 )
 
 var instanceNameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,62}$`)
@@ -34,10 +39,12 @@ type Instance struct {
 	Scope     domain.Scope
 	Enabled   bool
 
-	Vault VaultConfig
-	SQL   SQLConfig
+	Vault    VaultConfig
+	SQL      SQLConfig
+	Gravitee GraviteeConfig
 	// Token is what the instance authenticates with, for the connectors that
-	// authenticate with one. RequiresToken says which; SQL is not among them.
+	// authenticate with one. RequiresToken says which; bound connectors are not
+	// among them.
 	Token string
 	// HasToken says a token is stored without revealing it. Configuration read
 	// back from settings never carries the bytes, so a check that asked Token

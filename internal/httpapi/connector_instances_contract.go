@@ -24,7 +24,7 @@ func connectorInstanceInput(
 	instance := connectortools.Instance{
 		Name: name, Connector: strings.TrimSpace(body.Connector),
 		Enabled: enabled, Vault: vaultConfigFromRequest(body.Vault),
-		SQL: sqlConfigFromInput(body.Sql),
+		SQL: sqlConfigFromInput(body.Sql), Gravitee: graviteeConfigFromInput(body.Gravitee),
 	}
 	clear := body.ClearToken != nil && *body.ClearToken
 	return settings.ScopeKind(body.ScopeKind), scope, instance, body.Token, clear, nil
@@ -80,6 +80,9 @@ func connectorInstanceResponse(instance connectortools.ConfiguredInstance) opena
 	if instance.Connector == "sql" {
 		item.Sql = ptr(sqlConfigToResponse(instance.SQL))
 	}
+	if instance.Connector == "gravitee" {
+		item.Gravitee = ptr(graviteeConfigToResponse(instance.Gravitee))
+	}
 	return item
 }
 
@@ -96,7 +99,74 @@ func connectorInstanceDetailResponse(instance connectortools.ConfiguredInstance)
 	if instance.Connector == "sql" {
 		item.Sql = ptr(sqlConfigToInput(instance.SQL))
 	}
+	if instance.Connector == "gravitee" {
+		item.Gravitee = ptr(graviteeConfigToInput(instance.Gravitee))
+	}
 	return item
+}
+
+func graviteeConfigFromInput(in *openapi.ConnectorGraviteeInput) connectortools.GraviteeConfig {
+	if in == nil {
+		return connectortools.GraviteeConfig{}
+	}
+	return connectortools.GraviteeConfig{
+		Address: in.Address, Organization: in.Organization, Environment: in.Environment,
+		AllowedReferences: graviteeReferencesFromAPI(in.AllowedReferences),
+		MinTTLSeconds:     in.MinTTLSeconds, MaxTTLSeconds: in.MaxTTLSeconds,
+		AllowNoExpiry: in.AllowNoExpiry,
+		CredentialSource: connectortools.GraviteeCredentialSource{
+			Kind:          connectortools.GraviteeCredentialSourceKind(in.CredentialSource.Kind),
+			VaultInstance: in.CredentialSource.VaultInstance,
+			Path:          in.CredentialSource.Path, Field: in.CredentialSource.Field,
+		},
+	}
+}
+
+func graviteeConfigToResponse(cfg connectortools.GraviteeConfig) openapi.ConnectorGraviteeResponse {
+	return openapi.ConnectorGraviteeResponse{
+		Address: cfg.Address, Organization: cfg.Organization, Environment: cfg.Environment,
+		AllowedReferences: graviteeReferencesToAPI(cfg.AllowedReferences),
+		MinTTLSeconds:     cfg.MinTTLSeconds, MaxTTLSeconds: cfg.MaxTTLSeconds,
+		AllowNoExpiry: cfg.AllowNoExpiry,
+		CredentialSource: openapi.ConnectorGraviteeCredentialBinding{
+			Kind:          openapi.ConnectorGraviteeCredentialBindingKind(cfg.CredentialSource.Kind),
+			VaultInstance: cfg.CredentialSource.VaultInstance,
+		},
+	}
+}
+
+func graviteeConfigToInput(cfg connectortools.GraviteeConfig) openapi.ConnectorGraviteeInput {
+	return openapi.ConnectorGraviteeInput{
+		Address: cfg.Address, Organization: cfg.Organization, Environment: cfg.Environment,
+		AllowedReferences: graviteeReferencesToAPI(cfg.AllowedReferences),
+		MinTTLSeconds:     cfg.MinTTLSeconds, MaxTTLSeconds: cfg.MaxTTLSeconds,
+		AllowNoExpiry: cfg.AllowNoExpiry,
+		CredentialSource: openapi.ConnectorGraviteeCredentialSource{
+			Kind:          openapi.ConnectorGraviteeCredentialSourceKind(cfg.CredentialSource.Kind),
+			VaultInstance: cfg.CredentialSource.VaultInstance,
+			Path:          cfg.CredentialSource.Path, Field: cfg.CredentialSource.Field,
+		},
+	}
+}
+
+func graviteeReferencesFromAPI(in []openapi.ConnectorGraviteeReference) []connectortools.GraviteeReference {
+	out := make([]connectortools.GraviteeReference, 0, len(in))
+	for _, reference := range in {
+		out = append(out, connectortools.GraviteeReference{
+			Type: connectortools.GraviteeReferenceType(reference.Type), ID: reference.Id,
+		})
+	}
+	return out
+}
+
+func graviteeReferencesToAPI(in []connectortools.GraviteeReference) []openapi.ConnectorGraviteeReference {
+	out := make([]openapi.ConnectorGraviteeReference, 0, len(in))
+	for _, reference := range in {
+		out = append(out, openapi.ConnectorGraviteeReference{
+			Type: openapi.ConnectorGraviteeReferenceType(reference.Type), Id: reference.ID,
+		})
+	}
+	return out
 }
 
 func connectorInstanceAt(

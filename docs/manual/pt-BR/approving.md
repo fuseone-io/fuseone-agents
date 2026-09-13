@@ -72,6 +72,18 @@ Uma execução leu o texto de um chamado e agora quer escrever. Ela para, porque
 
 **O que olhar:** se o que vai ser escrito reflete o chamado, ou se reflete algo que o texto do chamado *pediu* ao agente. A segunda é a tentativa de instrução dentro de conteúdo, e a resposta é recusar.
 
+Num chamado governado do Gravitee, confira também o painel fixo de evidência:
+assinatura, dono da aplicação, API, plano, estado atual e expiração pedida. A
+aceitação é recusada se o snapshot remoto mudar depois que esse painel foi
+produzido. A API key fica ausente de propósito; ela é recuperada no Gravitee
+depois da aceitação, nunca pelo card de aprovação.
+
+Se o chamado disser **Verificação manual necessária**, não aprove de novo, não
+repita a operação e não emita outra chave. Confira aquela assinatura no
+Gravitee. O FuseOne mantém a execução original reservada e continua observando
+por leitura; quando o resultado remoto puder ser provado, a mesma thread do
+Slack recebe a resposta confirmada.
+
 ### O agente quer apagar alguma coisa
 
 Efeito destrutivo é bloqueado por padrão. Se ele chegou até você, alguém abriu por política.

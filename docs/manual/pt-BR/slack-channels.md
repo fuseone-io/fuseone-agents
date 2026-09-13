@@ -140,6 +140,28 @@ Se o agente não iniciou:
 6. O `run as` existe e tem grant no escopo?
 7. Em Socket Mode, o app token está salvo e o worker está conectado?
 
+## Conversas de chamados governados
+
+Escolha **Chamados governados** quando cada mensagem raiz que casar for um
+chamado de suporte e a thread for o histórico dele. Isso é diferente de uma
+watched message: quem escreveu precisa ter conta FuseOne vinculada, vira o
+solicitante imutável, e só essa pessoa pode revisar os campos pedidos.
+
+A conversa pede um agente, um principal de `run as`, um bot ou app exato que
+pode nomear destinatários e de um a oito padrões RE2 de admissão. Os padrões
+são comparados somente com texto limitado da mensagem raiz. Respostas são
+encontradas pela origem Slack armazenada e nunca são classificadas outra vez
+pelo texto.
+
+A fonte de endereçamento pode responder com menções do Slack para escolher
+quem recebe a aprovação. Esses nomes não concedem poder: são intersectados com
+quem ainda pode executar `approval:act` no escopo do chamado, e o botão confere
+a permissão novamente. O card é publicado sob a mensagem raiz e enviado por DM
+somente aos destinatários nomeados que passaram pela conferência.
+
+Para a configuração completa do Gravitee e a sequência de validação, veja
+[Chamados governados no Gravitee](gravitee-tickets.md).
+
 ## Uma sala para a instalação inteira
 
 Uma conversa recebe os runs do escopo em que foi configurada, e uma configurada

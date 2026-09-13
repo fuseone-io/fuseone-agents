@@ -10,6 +10,7 @@ import (
 	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/channel/connect"
 	"github.com/fuseone/agents/internal/spec"
+	"github.com/fuseone/agents/internal/ticket"
 	"github.com/fuseone/agents/internal/worker"
 )
 
@@ -46,6 +47,7 @@ type reporterParts struct {
 	accounts    channel.Accounts
 	policies    channel.Approvals
 	connections channel.Connections
+	tickets     ticket.ApprovalRoutes
 	baseURL     string
 }
 
@@ -71,6 +73,7 @@ func reporterPartsFor(p *workerParts, baseURL string) reporterParts {
 		accounts:    admin.NewChannelFacts(p.configPool, store),
 		policies:    spec.NewRegistry(p.configPool),
 		connections: channel.NewConfigured(store),
+		tickets:     ticket.NewPostgres(p.configPool),
 		baseURL:     baseURL,
 	}
 }
@@ -86,7 +89,8 @@ func announcingReporter(parts reporterParts) *channel.Reporter {
 		// And what each agent's owner asked for, read from the version the run
 		// pinned. Without this an agent that asked is simply not obeyed, which
 		// is what an installation running an older worker gets.
-		WithOwnerApprovals(parts.policies, parts.connections)
+		WithOwnerApprovals(parts.policies, parts.connections).
+		WithTicketApprovals(parts.tickets)
 }
 func reportToChannels(
 	ctx context.Context, p *workerParts, baseURL string, metrics *worker.MetricsRegistry,
@@ -174,6 +178,8 @@ func (p *workerParts) consumeAsks(ctx context.Context, owner string, metrics *wo
 	pool := p.configPool
 	configured := channel.NewConfigured(p.settings)
 	drivers := connect.New(p.settings)
+	people := admin.NewChannelFacts(pool, p.settings)
+	tickets := ticket.NewPostgres(pool)
 	consumer := channel.NewConsumer(channel.NewInbox(pool), owner, slog.Default()).
 		With(
 			configured,                      // which scope a conversation speaks for
@@ -185,8 +191,12 @@ func (p *workerParts) consumeAsks(ctx context.Context, owner string, metrics *wo
 		).
 		WithOutcomes(channel.NewPostgres(pool), p.content).
 		WithThreadContext(configured, drivers).
-		Binding(admin.NewChannelFacts(pool, p.settings).PrincipalFor)
-
+		Binding(people.PrincipalFor).
+		WithTickets(channel.NewTicketHandler(
+			tickets, p.durable, channel.FromTrigger(p.opener()),
+			people, admin.NewTicketAddresses(p.settings), auth.NewPostgres(pool),
+			p.store, time.Now,
+		))
 	go channelSweepLoop(ctx, askSweep, channel.MetricTaskAsksOpened, "asks opened", metrics, func() (int, error) {
 		return consumer.Sweep(ctx, askLease, 20)
 	})
@@ -196,6 +206,7 @@ func (p *workerParts) consumeAsks(ctx context.Context, owner string, metrics *wo
 	go channelSweepLoop(ctx, askFinishedAnswer, channel.MetricTaskAnswersDelivered, "answers delivered", metrics, func() (int, error) {
 		return consumer.AnswerFinished(ctx, askLease, 20)
 	})
+	consumeTicketOutcomes(ctx, p, owner, metrics, tickets, drivers)
 }
 
 /*

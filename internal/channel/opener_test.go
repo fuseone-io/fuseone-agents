@@ -2,6 +2,7 @@ package channel_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -59,6 +60,36 @@ func TestFromTrigger_theLedgerFailed_isNotARefusal(t *testing.T) {
 	}
 	if errors.Is(err, channel.ErrWontStart) {
 		t.Errorf("a failure was reported as a refusal: %v", err)
+	}
+}
+
+func TestFromTrigger_carriesTheTicketContextIntoTheOpeningStep(t *testing.T) {
+	t.Parallel()
+	store := ledger.NewMemory()
+	opener := channel.FromTrigger(trigger.NewOpener(store, publishedAgent{}, atNoon{}))
+	ticket := domain.TicketContext{
+		Ref:         domain.TicketRef{Key: "slack-ticket", Revision: 2},
+		RequestedBy: "requester",
+		AddressedBy: "slack-app:A123",
+	}
+
+	opened, err := opener.Open(t.Context(), channel.Request{
+		Agent: "triage", IdemKey: "ticket-intent", Trigger: "channel",
+		By: "run-owner", Ticket: &ticket,
+	})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	steps, err := store.Read(t.Context(), opened.RunID, domain.FirstSeq)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	var started domain.RunStartedPayload
+	if err := json.Unmarshal(steps[0].Payload, &started); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	if started.Ticket == nil || *started.Ticket != ticket {
+		t.Fatalf("ticket = %+v, want %+v", started.Ticket, ticket)
 	}
 }
 

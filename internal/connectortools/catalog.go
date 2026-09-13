@@ -58,6 +58,8 @@ func schemaFor(operationID string) (map[string]any, bool) {
 		return vaultRevokeLeaseSchema(), true
 	case "sql.run_query_template":
 		return sqlRunSchema(), true
+	case "gravitee.inspect_subscription", "gravitee.accept_subscription":
+		return graviteeSubscriptionSchema(), true
 	default:
 		return nil, false
 	}

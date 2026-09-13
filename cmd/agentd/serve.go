@@ -38,6 +38,7 @@ import (
 	"github.com/fuseone/agents/internal/regression"
 	"github.com/fuseone/agents/internal/scope"
 	"github.com/fuseone/agents/internal/spec"
+	"github.com/fuseone/agents/internal/ticket"
 	"github.com/fuseone/agents/internal/trigger"
 	"github.com/fuseone/agents/internal/web"
 )
@@ -279,6 +280,8 @@ func serve(args []string) error {
 				// the question.
 				WithArrivals(channel.NewInbox(identity.pool)).
 				WithWatchRules(channel.NewConfigured(settingsStore)).
+				WithTicketRoutes(channel.NewTicketRoutes(
+					settingsStore, ticket.NewPostgres(identity.pool))).
 				WithSeenAccounts(channels)
 			hooks.Mount(root)
 			hooks.MountEvents(root)

@@ -38,6 +38,7 @@ func (o openerFor) Open(ctx context.Context, req Request) (Opened, error) {
 		Input:   req.Input,
 		Labels:  req.Labels,
 		Origin:  req.Origin,
+		Ticket:  req.Ticket,
 	})
 	if declined(err) {
 		// Wrapped rather than replaced: the sentence the trigger wrote is what

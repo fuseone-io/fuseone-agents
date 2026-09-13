@@ -16,6 +16,7 @@ import (
 	"github.com/fuseone/agents/internal/channel/slack"
 	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/settings"
+	"github.com/fuseone/agents/internal/ticket"
 )
 
 // socketModeSweep is how often workers reconcile which Slack Socket Mode
@@ -52,6 +53,7 @@ type slackSocketManager struct {
 	settings *settings.Store
 	inbox    *channel.Inbox
 	seen     slack.SeenAccounts
+	tickets  channel.TicketRouter
 	log      *slog.Logger
 
 	openURL func(context.Context, string) (string, error)
@@ -67,7 +69,9 @@ func (p *workerParts) receiveSlackSockets(ctx context.Context) {
 		// Notices which accounts have been seen. It cannot configure anything:
 		// the type it holds has no method that does.
 		seen: admin.NewChannelFacts(p.configPool, p.settings),
-		log:  slog.Default(),
+		tickets: channel.NewTicketRoutes(
+			p.settings, ticket.NewPostgres(p.configPool)),
+		log: slog.Default(),
 		openURL: func(ctx context.Context, appToken string) (string, error) {
 			return slack.OpenSocketURL(ctx, appToken, slack.SocketAPI,
 				&http.Client{Timeout: 10 * time.Second})
@@ -245,7 +249,7 @@ func (m *slackSocketManager) connectOnce(ctx context.Context, target slackSocket
 
 	receiver := slack.SocketReceiver{
 		Channel: target.name, Inbox: m.inbox,
-		Rules: channel.NewConfigured(m.settings), Seen: m.seen,
+		Rules: channel.NewConfigured(m.settings), Tickets: m.tickets, Seen: m.seen,
 		Now: time.Now, Log: m.log,
 	}
 	for {

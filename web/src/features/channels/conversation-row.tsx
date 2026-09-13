@@ -57,6 +57,8 @@ export function ConversationRow({
     ? conversation.mode
     : conversation.mode === "announce"
       ? `${t("channels.modeAnnounce")}${direct}`
+      : conversation.mode === "ticket"
+        ? `${t("channels.modeTicket")}${agent || " · -"}${direct}`
       : conversation.mode === "watch"
         ? `${t("channels.modeWatch")}${agent || " · -"}${direct}`
         : conversation.mode === "both"

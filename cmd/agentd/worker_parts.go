@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fuseone/agents/internal/admin"
+	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/connectortools"
 	"github.com/fuseone/agents/internal/contextshare"
 	effectdedupe "github.com/fuseone/agents/internal/dedupe"
@@ -22,6 +23,7 @@ import (
 	"github.com/fuseone/agents/internal/policy"
 	"github.com/fuseone/agents/internal/settings"
 	"github.com/fuseone/agents/internal/spec"
+	"github.com/fuseone/agents/internal/ticket"
 	"github.com/fuseone/agents/internal/tools"
 	"github.com/fuseone/agents/internal/worker"
 )
@@ -47,11 +49,13 @@ type workerParts struct {
 	// durable is the same store when there is a database. Retention erases
 	// through durable and only can: the engine's port has no erase and should
 	// not (PRD AU-04).
-	content engine.ContentStore
-	durable *ledger.Content
-	catalog *tools.Catalog
-	native  *connectortools.Layer
-	memory  memory.Store
+	content          engine.ContentStore
+	durable          *ledger.Content
+	catalog          *tools.Catalog
+	native           *connectortools.Layer
+	memory           memory.Store
+	graviteeRuntime  *connectortools.GraviteeAcceptRuntime
+	graviteeAttempts *connectortools.PostgresGraviteeAttempts
 
 	// configPool outlives the call that opens it: the sweeps need it after the
 	// configuration is read, and opening a second pool for the same database
@@ -124,6 +128,23 @@ func openWorkerParts(ctx context.Context, dsn string) (*workerParts, error) {
 	parts.native = connectortools.New(
 		parts.catalog, parts.catalog, parts.content, vaultClient,
 	).WithSQLRuntime(sqlRuntime)
+	if parts.configPool != nil {
+		graviteeAccess := connectortools.NewGraviteeAccessResolver(connectorSettings, vaultClient)
+		graviteeRemote := connectortools.NewHTTPGraviteeClient(nil)
+		graviteeTickets := ticket.NewPostgres(parts.configPool)
+		parts.graviteeAttempts = connectortools.NewPostgresGraviteeAttempts(parts.configPool)
+		graviteeInspector := connectortools.NewGraviteeInspector(
+			graviteeAccess, graviteeRemote, auth.NewPostgres(parts.configPool),
+			parts.content, graviteeTickets,
+		)
+		parts.graviteeRuntime = connectortools.NewGraviteeAcceptRuntime(
+			graviteeAccess, graviteeRemote, parts.content,
+			graviteeTickets, parts.graviteeAttempts,
+			connectortools.NewGraviteeReconciliationLedger(parts.store),
+		)
+		parts.native.WithGraviteeInspector(graviteeInspector).
+			WithGraviteeRuntime(parts.graviteeRuntime)
+	}
 	if err := parts.refreshConnectors(ctx); err != nil {
 		return nil, err
 	}

@@ -1058,6 +1058,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/runs/{runId}/approvals/{atSeq}/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the inspected evidence behind a pending decision
+         * @description Returns a fixed safe projection, never arbitrary referenced content.
+         *     The content is fetched only for the selected approval because it may
+         *     contain personal data and can expire independently of the ledger.
+         */
+        get: operations["getApprovalEvidence"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/cost": {
         parameters: {
             query?: never;
@@ -1773,12 +1795,12 @@ export interface paths {
         };
         /**
          * Read one connector instance for editing
-         * @description Returns the authored configuration to a connector configurer. Unlike the ordinary instance list, this includes registered SQL text so an edit can preserve the complete contract. Tokens, generated database credentials and lease ids are never returned.
+         * @description Returns the authored configuration to a connector configurer. Unlike the ordinary instance list, this includes registered SQL text so an edit can preserve the complete contract, and the fixed Vault location for a bound Gravitee credential. Tokens, generated database credentials and lease ids are never returned.
          */
         get: operations["getConnectorInstance"];
         /**
          * Configure a governed connector instance
-         * @description Configuring an instance creates executable native tools named connector.instance.operation. Omit token to keep the stored one. Send clearToken to remove it; an enabled instance must still have a token after the write.
+         * @description A runtime instance creates native tools named connector.instance.operation; planned connectors remain configuration only. Omit token to keep the stored one on connectors that authenticate directly. Send clearToken to remove it; an enabled direct-token instance must still have a token after the write.
          */
         put: operations["putConnectorInstance"];
         post?: never;
@@ -2619,7 +2641,7 @@ export interface components {
          */
         ToolEffect: "unknown" | "read" | "write" | "destructive" | "financial";
         /** @enum {string} */
-        StepKind: "run_started" | "planned" | "gate_decided" | "budget_reserved" | "tool_called" | "tool_returned" | "budget_reconciled" | "approval_requested" | "approval_decided" | "resumed" | "abandoned" | "compensated" | "failed" | "parked" | "run_finished";
+        StepKind: "run_started" | "planned" | "gate_decided" | "budget_reserved" | "tool_called" | "tool_returned" | "effect_reconciled" | "budget_reconciled" | "approval_requested" | "approval_decided" | "resumed" | "abandoned" | "compensated" | "failed" | "parked" | "run_finished";
         Scope: {
             company: string;
             area: string;
@@ -3370,8 +3392,9 @@ export interface components {
             updatedAt?: string;
             vault?: components["schemas"]["ConnectorVaultConfig"];
             sql?: components["schemas"]["ConnectorSQLResponse"];
+            gravitee?: components["schemas"]["ConnectorGraviteeResponse"];
         };
-        /** @description The authored, non-secret configuration available only to connector configurers. SQL text is present because editing any other SQL field must not erase or replace a registered query. Token presence is metadata; token bytes and generated credentials never leave storage. */
+        /** @description The authored, non-secret configuration available only to connector configurers. SQL text is present because editing any other SQL field must not erase or replace a registered query. Gravitee's fixed Vault location is present for the same read-edit-write reason. Token presence is metadata; token bytes and generated credentials never leave storage. */
         ConnectorInstanceDetail: {
             name: string;
             connector: string;
@@ -3385,6 +3408,55 @@ export interface components {
             updatedAt?: string;
             vault?: components["schemas"]["ConnectorVaultConfig"];
             sql?: components["schemas"]["ConnectorSQLInput"];
+            gravitee?: components["schemas"]["ConnectorGraviteeInput"];
+        };
+        ConnectorGraviteeReference: {
+            /**
+             * @description API is the only remote reference supported by the first runtime.
+             * @enum {string}
+             */
+            type: "API";
+            id: string;
+        };
+        ConnectorGraviteeCredentialBinding: {
+            /** @enum {string} */
+            kind: "vault_kv_secret";
+            /** @description Vault connector instance that owns the credential. */
+            vaultInstance: string;
+        };
+        ConnectorGraviteeCredentialSource: {
+            /** @enum {string} */
+            kind: "vault_kv_secret";
+            /** @description Vault connector instance that owns the credential. */
+            vaultInstance: string;
+            /** @description Fixed Vault path, constrained by the bound Vault instance. */
+            path: string;
+            /** @description Fixed field holding the Gravitee access token. */
+            field: string;
+        };
+        /** @description The safe remote boundary visible in the ordinary connector listing. Vault path and field stay in the configurer-only detail response. */
+        ConnectorGraviteeResponse: {
+            /** Format: uri */
+            address: string;
+            organization: string;
+            environment: string;
+            allowedReferences: components["schemas"]["ConnectorGraviteeReference"][];
+            minTTLSeconds: number;
+            maxTTLSeconds: number;
+            allowNoExpiry: boolean;
+            credentialSource: components["schemas"]["ConnectorGraviteeCredentialBinding"];
+        };
+        /** @description A fixed remote boundary. Organization, environment, API references and the Vault location are authored by an administrator, never by a model. */
+        ConnectorGraviteeInput: {
+            /** Format: uri */
+            address: string;
+            organization: string;
+            environment: string;
+            allowedReferences: components["schemas"]["ConnectorGraviteeReference"][];
+            minTTLSeconds: number;
+            maxTTLSeconds: number;
+            allowNoExpiry: boolean;
+            credentialSource: components["schemas"]["ConnectorGraviteeCredentialSource"];
         };
         /** @description A SQL instance as the administration API reports it. Addressing only, plus the safe identity of the binding: the kind, which vault instance answers it and which role is bound. No token, no generated credential and no connection string are ever returned, because none of them is needed to know the configuration is right. */
         ConnectorSQLResponse: {
@@ -3442,7 +3514,7 @@ export interface components {
             maxBytes: number;
         };
         ConnectorInstanceInput: {
-            /** @description Connector shape. The first runtime connector is vault. */
+            /** @description Connector shape, such as vault, sql or gravitee. */
             connector: string;
             /** @default true */
             enabled: boolean;
@@ -3451,9 +3523,10 @@ export interface components {
             area?: string;
             vault?: components["schemas"]["ConnectorVaultConfig"];
             sql?: components["schemas"]["ConnectorSQLInput"];
-            /** @description Connector token to seal. Omit to keep the stored token. */
+            gravitee?: components["schemas"]["ConnectorGraviteeInput"];
+            /** @description Connector token to seal. Only connectors that authenticate with a token of their own accept it; bound connectors such as SQL and Gravitee reject it. */
             token?: string;
-            /** @description Remove the stored token. An enabled instance is refused unless the same request also supplies a replacement token. */
+            /** @description Remove the stored token. An enabled connector that authenticates directly is refused unless the same request also supplies a replacement. Bound connectors never keep a token of their own. */
             clearToken?: boolean;
         };
         /**
@@ -3983,7 +4056,9 @@ export interface components {
          *     keeps the mention path and the watched-message path enabled together;
          *     each keeps its own authority. `announce` starts nothing at all: the
          *     conversation only reports what runs do, and it is the only mode a
-         *     conversation for the whole installation may have.
+         *     conversation for the whole installation may have. `ticket` admits
+         *     matching human root messages as governed tickets; replies are routed
+         *     by the stored thread identity rather than matched again.
          *
          *     A closed set on the way in and deliberately not on the way out: a
          *     client may only ask for a mode this version can honour, and a row
@@ -3991,7 +4066,15 @@ export interface components {
          * @default mentions
          * @enum {string}
          */
-        ConversationMode: "mentions" | "watch" | "both" | "announce";
+        ConversationMode: "mentions" | "watch" | "both" | "announce" | "ticket";
+        TicketRule: {
+            /** @enum {string} */
+            openFrom: "linked_users";
+            /** @description The exact Slack bot or app allowed to address the ticket. */
+            addressFrom: string;
+            /** @description RE2 patterns matched only against bounded root-message text. */
+            patterns: string[];
+        };
         ChannelConversation: {
             id: string;
             label?: string;
@@ -4021,6 +4104,7 @@ export interface components {
              *     where the button is pressed, exactly as it is in the conversation.
              */
             directApprovals?: boolean;
+            ticket?: components["schemas"]["TicketRule"];
             sources?: string[];
             agent?: string;
             runAs?: string;
@@ -4831,6 +4915,31 @@ export interface components {
             expiresAt?: string | null;
             /** Format: int64 */
             atSeq: number;
+        };
+        ApprovalEvidenceDetail: {
+            /** @enum {string} */
+            kind: "none" | "gravitee_subscription";
+            gravitee?: components["schemas"]["GraviteeApprovalEvidence"];
+        };
+        GraviteeApprovalEvidence: {
+            subscriptionId: string;
+            status: string;
+            application: components["schemas"]["GraviteeApprovalApplication"];
+            api: components["schemas"]["GraviteeApprovalResource"];
+            plan: components["schemas"]["GraviteeApprovalResource"];
+            planSecurity: string;
+            /** Format: date-time */
+            requestedExpiration?: string | null;
+            /** Format: date-time */
+            remoteUpdatedAt: string;
+        };
+        GraviteeApprovalApplication: components["schemas"]["GraviteeApprovalResource"] & {
+            /** Format: email */
+            primaryOwnerEmail: string;
+        };
+        GraviteeApprovalResource: {
+            id: string;
+            name: string;
         };
         ApprovalPage: {
             items: components["schemas"]["PendingApproval"][];
@@ -6392,6 +6501,41 @@ export interface operations {
             };
         };
     };
+    getApprovalEvidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: components["parameters"]["RunId"];
+                atSeq: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The evidence for this question, or `none` for an ordinary approval. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalEvidenceDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description The evidence was recorded but is no longer safe or available to decide from. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     getCostRollup: {
         parameters: {
             query: {
@@ -7887,6 +8031,7 @@ export interface operations {
                      *     only where this conversation is told about parked runs.
                      */
                     directApprovals?: boolean;
+                    ticket?: components["schemas"]["TicketRule"];
                     /** @description Which events reach it. Empty means the defaults, which are parked, failed and drifted — a conversation that hears every run finish is one people mute, and an agent that quietly stopped working is the one notice nobody thinks to ask for. Sending the field is choosing: the console always does, so a conversation configured there hears what was ticked and nothing else. */
                     wants?: ("parked" | "failed" | "finished" | "drifted")[];
                     /** @default true */

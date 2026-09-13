@@ -219,7 +219,7 @@ func (i *Inbox) ToldSince(
 }
 
 /*
-Owed claims refusals that have been recorded and not yet said.
+Owed claims reply debts that have been recorded and not yet said.
 
 Saying it is work of its own, and this is what makes it survivable. Recorded
 and delivered in one step, the two rules pull against each other: record first
@@ -227,13 +227,15 @@ and a driver failure closes the ask with nobody told; deliver first and the
 message goes out before ownership is proven, so a worker whose lease lapsed
 posts a refusal the worker that replaced it posts again.
 
-Separated, each is simple. The holder of the ask records the refusal — proving
-ownership before anything is said — and whoever picks the debt up afterwards
-delivers it, once, under a claim of its own.
+Separated, each is simple. The holder of the ask records the refusal or ticket
+notice — proving ownership before anything is said — and whoever picks the debt
+up afterwards delivers it, once, under a claim of its own.
 */
 func (i *Inbox) Owed(
 	ctx context.Context, owner string, lease time.Duration, limit int,
 ) ([]Claimed, error) {
-	return i.claim(ctx, owner, lease, limit,
-		"status = 'refused' and answered_at is null")
+	return i.claim(ctx, owner, lease, limit, `
+		(status = 'refused' and answered_at is null) or
+		(status = 'pending' and pending_notice <> '' and
+		 pending_notice_answered_at is null)`, false)
 }

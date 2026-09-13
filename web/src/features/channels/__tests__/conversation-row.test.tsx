@@ -97,6 +97,15 @@ describe("a mode this console does not know", () => {
   });
 });
 
+describe("a governed ticket conversation", () => {
+  it("names the mode and the pinned agent", () => {
+    renderRow({ mode: "ticket", agent: "gateway-support" });
+
+    expect(screen.getByText(/Tickets governados/)).toBeInTheDocument();
+    expect(screen.getByText(/gateway-support/)).toBeInTheDocument();
+  });
+});
+
 // An event this console cannot translate is printed as it is stored. Passed to
 // t() it renders as "channels.event.a-future-event", which tells a reader about
 // our key naming and nothing about their configuration.

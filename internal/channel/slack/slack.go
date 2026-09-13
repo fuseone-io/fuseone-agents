@@ -89,6 +89,7 @@ func (p *Poster) PostPlaced(
 		// read this one, so a message with blocks alone is silent on a phone.
 		Text:   summary(m),
 		Blocks: blocks(m, p.decidable),
+		Thread: c.Thread,
 	})
 }
 

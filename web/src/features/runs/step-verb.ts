@@ -16,6 +16,7 @@ const VERBS: Record<StepKind, { verb: string; tone: Tone }> = {
   budget_reserved: { verb: "runs.verbReserved", tone: "neutral" },
   tool_called: { verb: "runs.verbCalled", tone: "neutral" },
   tool_returned: { verb: "runs.verbReturned", tone: "neutral" },
+  effect_reconciled: { verb: "runs.verbEffectReconciled", tone: "good" },
   budget_reconciled: { verb: "runs.verbReconciled", tone: "neutral" },
   approval_requested: { verb: "runs.verbAskedApproval", tone: "warn" },
   approval_decided: { verb: "runs.verbDecided", tone: "good" },
