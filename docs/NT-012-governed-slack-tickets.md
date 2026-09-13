@@ -135,6 +135,10 @@ Before execution is claimed, a new request revision invalidates the pending
 approval and closes its cards. Claiming `(TicketKey, revision, runID,
 approvalAtSeq)` is one compare-and-set operation. After the claim, that revision
 may finish; a later revision waits and cannot start a second external write.
+After repeated attempts to open that saved revision, the inbox records a
+separate reply debt and tells the requester once that it is waiting. Delivering
+that notice does not settle the revision event; it remains pending and opens
+after the active execution releases the ticket.
 Completing an older revision records its outcome but cannot overwrite the
 current revision's state.
 

@@ -61,6 +61,20 @@ field" is a commit message.
   observation; it never submits a second acceptance. One ticket revision can
   own only one active execution.
 
+### Fixed
+
+- **A saved ticket correction no longer retries forever without telling its
+  requester.** When another revision is still executing, FuseOne keeps the new
+  revision pending, says once that it will start later, and opens it after the
+  current execution releases the ticket. The notice never settles or discards
+  the saved Slack event.
+
+- **Manual Gravitee observation can be stopped deliberately.** A subscription
+  that remains pending is still observed by GET only, but an operator with
+  `run:cancel` can use **Abandon run** after checking Gravitee. FuseOne records
+  that decision, stops remote polling and releases the ticket without claiming
+  that a possible remote acceptance was undone.
+
 ### Security
 
 - **A generated API key never enters FuseOne or Slack.** The connector never

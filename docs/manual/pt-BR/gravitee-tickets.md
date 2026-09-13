@@ -52,6 +52,12 @@ escreveu a raiz continua sendo `RequestedBy`, e o bot ou app configurado apenas
 escolhe quem será avisado. Nenhuma dessas identidades substitui quem aperta
 Aprovar.
 
+Esta primeira versão ignora raízes de chamado escritas por bot ou app. O
+solicitante deve ser a pessoa vinculada que escreveu a raiz; menções e texto
+livre nunca são usados para inferir essa identidade. Um bot ou app pode apenas
+endereçar aprovadores em respostas dentro de um chamado que uma pessoa já
+abriu.
+
 ## Valide com segurança
 
 1. Crie uma assinatura de teste pendente na única API Gravitee configurada.
@@ -68,6 +74,12 @@ Aprovar.
    Gravitee e a resposta segura na thread, sem chave.
 7. Remova o grant ou o vínculo de conta do aprovador e repita. A DM não deve ser
    entregue e o nome no chamado não pode conceder autoridade.
+
+Se o solicitante enviar uma correção enquanto a revisão anterior está em
+execução, o FuseOne a guarda sem iniciar uma segunda escrita. Depois de
+tentativas repetidas, responde uma vez que a correção está esperando. O
+solicitante não deve reenviá-la; a revisão guardada abre quando a execução atual
+for resolvida.
 
 Se o processo parar depois que o Gravitee pode ter aceitado o pedido, não envie
 de novo manualmente antes de conferir. O worker de recuperação reconcilia a

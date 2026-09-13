@@ -53,6 +53,11 @@ who wrote the root remains `RequestedBy`, and the configured bot or app merely
 chooses who is notified. None of those identities substitutes for the person
 who presses Approve.
 
+This first release ignores ticket roots authored by a bot or app. The requester
+must be the linked human who wrote the root; mentions and free text are never
+used to infer that identity. A bot or app may address approvers only in replies
+inside a ticket that a person already opened.
+
 ## Validate safely
 
 1. Create a pending test subscription in the one configured Gravitee API.
@@ -69,6 +74,11 @@ who presses Approve.
    acceptance and the Slack thread receives the safe result without a key.
 7. Remove the approver's grant or account binding and repeat. The DM must not be
    delivered and no named recipient may gain authority from the ticket.
+
+If the requester sends a correction while the previous revision is executing,
+FuseOne saves it but does not start a second write. After repeated attempts it
+replies once that the correction is waiting. The requester must not resend it;
+the saved revision opens after the current execution is resolved.
 
 If the process stops after Gravitee may have accepted the request, do not submit
 it manually first. The recovery worker reconciles the recorded attempt against
