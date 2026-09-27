@@ -45,6 +45,14 @@ func envelopeOf(start Start, called []domain.ToolID) gate.Pack {
 
 func envelopeForState(start Start, state State) gate.Pack {
 	pack := withoutTool(envelopeOf(start, state.Called), domain.ToolMemorySuggest)
+	// A run opened from a ticket can always answer it. Answering is why that
+	// run exists, and leaving it to a step's declared reach made the tool
+	// something an author has to both grant and place: forgetting the second
+	// finished runs with an answer nobody read, and the ledger said only that
+	// the model chose to stop.
+	if state.Ticket.Ref.Valid() {
+		pack = gate.NewPack(append(pack.Tools(), domain.ToolTicketAnswer)...)
+	}
 	if start.MemoryLearning.Enabled() {
 		pack = gate.NewPack(append(pack.Tools(), domain.ToolMemoryFind, domain.ToolMemorySuggest)...)
 	}

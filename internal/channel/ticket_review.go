@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/ticket"
 )
 
@@ -68,4 +69,44 @@ func (h *TicketHandler) ReviewPlace(
 		return intent.ReviewIn, "", true
 	}
 	return "", "", false
+}
+
+/*
+keep folds what the person who asked added into their own request.
+
+They may still say things — a detail they forgot, an answer to a question — and
+none of it starts work: what regenerates an answer is a correction in the room,
+where somebody is deciding. Their words are still the request, so they are kept
+rather than read and dropped.
+
+Nothing is folded in while a decision is pending. A revision written then
+supersedes the card somebody is reading, and nothing would regenerate to
+replace it: the room would be left holding a button that decides a request that
+has moved. Such a message is recorded and goes no further.
+*/
+func (h *TicketHandler) keep(
+	ctx context.Context, arrival Claimed, held ticket.Ticket, who domain.UserID,
+) (TicketResult, error) {
+	if held.Current.Phase != ticket.PhaseCollecting {
+		return handled("ticket_context_not_applied"), nil
+	}
+	previous, err := h.content.Get(ctx, held.Current.Draft.Ref)
+	if err != nil {
+		return TicketResult{}, fmt.Errorf("channel: read ticket context: %w", err)
+	}
+	raw, err := appendTicketDraft(previous, arrival.Message, who, arrival.Text)
+	if err != nil {
+		return ticketContextRefusal(err), nil
+	}
+	draft, err := h.storeDraft(ctx, held.Key, held.Current.Ref.Revision+1, raw)
+	if err != nil {
+		return TicketResult{}, err
+	}
+	if _, _, err := h.store.Revise(ctx, ticket.ReviseInput{
+		Ref: held.Current.Ref, EventID: arrival.EventID,
+		By: who, Draft: draft, At: h.now().UTC(),
+	}); err != nil {
+		return TicketResult{}, err
+	}
+	return handled("ticket_context_kept"), nil
 }
