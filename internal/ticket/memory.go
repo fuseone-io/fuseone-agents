@@ -128,7 +128,7 @@ func (m *Memory) Open(ctx context.Context, in OpenInput) (Ticket, bool, error) {
 	}
 	open := 0
 	for _, held := range m.tickets {
-		if held.Scope == in.Scope && !held.Current.Phase.terminal() {
+		if held.Scope == in.Scope && held.Closed == nil {
 			open++
 		}
 	}

@@ -84,7 +84,11 @@ func (m *Memory) replayed(eventID string, key domain.TicketKey) (bool, error) {
 }
 
 func (m *Memory) replace(ticket Ticket, change revisionChange) (Ticket, bool, error) {
-	if ticket.Current.Phase != PhaseExecuting && ticket.Current.Phase != PhaseNeedsAttention {
+	// A revision that was published, rejected or already cancelled keeps the
+	// phase it ended in: it is the record of what happened, and the correction
+	// that follows it is the next revision rather than a rewrite of this one.
+	if ticket.Current.Phase != PhaseExecuting && ticket.Current.Phase != PhaseNeedsAttention &&
+		!ticket.Current.Phase.terminal() {
 		previous := ticket.Current
 		previous.Phase, previous.UpdatedAt = PhaseCancelled, change.at.UTC()
 		m.revisions[ticket.Key][previous.Ref.Revision] = previous

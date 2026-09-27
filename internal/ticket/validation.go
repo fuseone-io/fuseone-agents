@@ -174,12 +174,28 @@ func requireCurrent(ticket Ticket, ref domain.TicketRef) error {
 	return nil
 }
 
+/*
+requireMutable answers whether this revision may still be replaced.
+
+The ticket's own state decides, not the revision's phase. A revision that was
+published is terminal and stays that way — it is the record of what was said —
+and the correction that follows it is the next revision, which is exactly what
+an open ticket is for. Once the ticket is closed, nothing more is written to
+it at all.
+*/
 func requireMutable(ticket Ticket, ref domain.TicketRef) error {
 	if err := requireCurrent(ticket, ref); err != nil {
 		return err
 	}
-	if ticket.Current.Phase.terminal() {
-		return ErrTerminal
+	if ticket.Closed != nil {
+		return ErrClosed
+	}
+	return nil
+}
+
+func validateCloseTicket(in CloseTicketInput) error {
+	if strings.TrimSpace(string(in.Key)) == "" || in.By == "" || in.At.IsZero() {
+		return errors.New("ticket: incomplete close")
 	}
 	return nil
 }

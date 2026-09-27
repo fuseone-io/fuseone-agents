@@ -22,6 +22,7 @@ var (
 	ErrTooManyOpen      = errors.New("ticket: the scope has too many open tickets")
 	ErrPhase            = errors.New("ticket: the revision is not in the required phase")
 	ErrTerminal         = errors.New("ticket: the revision is terminal")
+	ErrClosed           = errors.New("ticket: the ticket is closed")
 )
 
 const MaxOpenPerScope = 200
@@ -120,10 +121,23 @@ func (r ReviewRoom) Open() bool {
 	return strings.TrimSpace(r.Conversation) != "" && strings.TrimSpace(r.Root) != ""
 }
 
+// CloseTicketInput ends a ticket. Who closed it is recorded beside when,
+// because "it was closed" is a question somebody asks about a thread months
+// later and the answer is a person.
+type CloseTicketInput struct {
+	Key domain.TicketKey
+	By  domain.UserID
+	At  time.Time
+}
+
 type Ticket struct {
-	Key         domain.TicketKey
-	Origin      Origin
-	Review      ReviewRoom
+	Key    domain.TicketKey
+	Origin Origin
+	Review ReviewRoom
+	// Closed is when somebody ended the request. Nil is open, whatever the
+	// current revision's phase says: an answered ticket is still a ticket.
+	Closed      *time.Time
+	ClosedBy    domain.UserID
 	Scope       domain.Scope
 	Agent       domain.AgentID
 	RunAs       domain.UserID
@@ -271,6 +285,7 @@ type Store interface {
 	Current(context.Context, domain.TicketKey) (Ticket, error)
 	AtOrigin(context.Context, Origin) (Ticket, error)
 	AtReview(context.Context, Origin) (Ticket, error)
+	CloseTicket(context.Context, CloseTicketInput) (Ticket, bool, error)
 	Revision(context.Context, domain.TicketRef) (Revision, error)
 	SupersededApprovals(context.Context, domain.TicketRef) ([]SupersededApproval, error)
 	MarkApprovalSuperseded(context.Context, domain.TicketRef, time.Time) error

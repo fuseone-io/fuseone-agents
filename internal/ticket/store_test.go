@@ -42,14 +42,26 @@ func TestStore_boundsOpenTicketsPerScope_andAClosedOneFreesItsPlace(t *testing.T
 		if _, _, err := store.Open(t.Context(), over); !errors.Is(err, ticket.ErrTooManyOpen) {
 			t.Fatalf("Open above cap: %v, want ErrTooManyOpen", err)
 		}
+		// Settling the current revision is not what frees a place: a ticket
+		// whose answer was published is still open, and the next thing the
+		// person says belongs to it. What frees the place is closing the
+		// ticket.
 		if _, _, err := store.Close(t.Context(), ticket.CloseInput{
 			Ref: first.Current.Ref, Phase: ticket.PhaseCancelled,
 			Result: content("cancelled-cap"), At: now.Add(time.Hour),
 		}); err != nil {
 			t.Fatalf("Close: %v", err)
 		}
+		if _, _, err := store.Open(t.Context(), over); !errors.Is(err, ticket.ErrTooManyOpen) {
+			t.Fatalf("Open after settling one revision: %v, want the place still taken", err)
+		}
+		if _, _, err := store.CloseTicket(t.Context(), ticket.CloseTicketInput{
+			Key: first.Key, By: "usr_manager", At: now.Add(2 * time.Hour),
+		}); err != nil {
+			t.Fatalf("CloseTicket: %v", err)
+		}
 		if _, _, err := store.Open(t.Context(), over); err != nil {
-			t.Fatalf("Open after close: %v", err)
+			t.Fatalf("Open after closing the ticket: %v", err)
 		}
 	})
 }
