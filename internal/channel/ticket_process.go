@@ -180,12 +180,10 @@ func (h *TicketHandler) handleReply(ctx context.Context, arrival Claimed) (Ticke
 	if err != nil {
 		return TicketResult{}, err
 	}
-	if held.Current.Phase == ticket.PhaseCompleted ||
-		held.Current.Phase == ticket.PhaseRejected ||
-		held.Current.Phase == ticket.PhaseCancelled {
-		// Slack may deliver a later reply to a thread whose governed work is
-		// already over. It is not a retryable store failure and it must not
-		// reopen authority from an approval that has already been consumed.
+	if held.Closed != nil {
+		// The request is over because somebody said so. A later reply in the
+		// thread is a reply: it is not retryable store failure, and it must
+		// not reopen authority from an approval already consumed.
 		return handled("ticket_already_closed"), nil
 	}
 	if arrival.Ticket.Review {

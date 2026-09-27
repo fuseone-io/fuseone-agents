@@ -64,10 +64,7 @@ func openLocked(ctx context.Context, tx pgx.Tx, in OpenInput) (Ticket, bool, err
 	if err := tx.QueryRow(ctx, `
 		select count(*)
 		from governed_tickets t
-		join governed_ticket_revisions r
-		  on r.ticket_key = t.ticket_key and r.revision = t.current_revision
-		where t.company_id = $1 and t.area_id = $2
-		  and r.phase not in ('completed', 'rejected', 'cancelled')`,
+		where t.company_id = $1 and t.area_id = $2 and t.closed_at is null`,
 		string(in.Scope.Company), string(in.Scope.Area)).Scan(&open); err != nil {
 		return Ticket{}, false, fmt.Errorf("ticket: count open tickets: %w", err)
 	}
