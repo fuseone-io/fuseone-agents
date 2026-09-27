@@ -28,7 +28,9 @@ type TicketCandidate struct {
 	Thread       string
 	Kind         string
 	Text         string
-	Source       Source
+	// Reaction is the emoji, when this candidate is one. Empty otherwise.
+	Reaction string
+	Source   Source
 }
 
 // TicketIntent is the routing decision persisted beside the inbox arrival.
@@ -50,6 +52,8 @@ type TicketIntent struct {
 	// arrival came from the room rather than from the support thread.
 	ReviewIn string `json:"review_in,omitempty"`
 	Review   bool   `json:"review,omitempty"`
+	// Close says this arrival ends the ticket rather than adding to it.
+	Close bool `json:"close,omitempty"`
 }
 
 func (i TicketIntent) Valid() bool {
@@ -58,7 +62,8 @@ func (i TicketIntent) Valid() bool {
 	}
 	if !i.Root {
 		return i.Scope == (domain.Scope{}) && i.Agent == "" && i.RunAs == "" &&
-			i.AddressedBy == "" && !i.Marked && i.RootFrom == "" && i.ReviewIn == ""
+			i.AddressedBy == "" && !i.Marked && i.RootFrom == "" && i.ReviewIn == "" &&
+			!(i.Review && i.Close)
 	}
 	// A decision that opens a ticket names no room it came from: the room is
 	// opened later, and nothing has replied in it yet.
@@ -123,6 +128,9 @@ func NewTicketRoutes(settings *settings.Store, tickets ticket.Store) *TicketRout
 func (r *TicketRoutes) Route(
 	ctx context.Context, candidate TicketCandidate,
 ) (TicketIntent, bool, error) {
+	if candidate.Kind == "reaction" {
+		return r.closing(ctx, candidate)
+	}
 	if candidate.Thread != candidate.Message {
 		return r.reply(ctx, candidate)
 	}

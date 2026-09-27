@@ -86,6 +86,20 @@ export function ConversationTicketFields({
       />
       <FormField
         control={form.control}
+        name="ticketClosesOn"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>{t("channels.ticketClosesOn")}</FormLabel>
+            <FormControl>
+              <Input {...field} className="font-mono" placeholder="white_check_mark" />
+            </FormControl>
+            <FormDescription>{t("channels.ticketClosesOnExplains")}</FormDescription>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+      <FormField
+        control={form.control}
         name="ticketPatterns"
         render={({ field }) => (
           <FormItem>

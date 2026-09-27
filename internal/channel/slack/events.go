@@ -63,11 +63,18 @@ type Delivery struct {
 	// Thread is where a reply belongs: the parent when the ask came inside a
 	// thread, and the message itself when it started one.
 	Thread string
+	// Reaction is the emoji somebody put on a message, without colons. Set on
+	// a reaction delivery and empty on every other: it is a name, not text,
+	// and nothing reads it as words.
+	Reaction string
 }
 
 const (
 	DeliveryMention = "mention"
 	DeliveryMessage = "message"
+	// DeliveryReaction is somebody reacting to a message. It starts nothing:
+	// what it can do is end a request that was already being worked.
+	DeliveryReaction = "reaction"
 )
 
 type envelope struct {
@@ -76,6 +83,12 @@ type envelope struct {
 	EventID   string `json:"event_id"`
 	Event     struct {
 		Type     string `json:"type"`
+		Reaction string `json:"reaction"`
+		Item     struct {
+			Type    string `json:"type"`
+			Channel string `json:"channel"`
+			TS      string `json:"ts"`
+		} `json:"item"`
 		Subtype  string `json:"subtype"`
 		Channel  string `json:"channel"`
 		User     string `json:"user"`
@@ -122,6 +135,9 @@ func readDelivery(body []byte, allowMessages bool) (Delivery, error) {
 	if e.Event.Type == "message" && allowMessages {
 		return ordinaryMessage(e)
 	}
+	if e.Event.Type == "reaction_added" && allowMessages {
+		return reaction(e)
+	}
 	if e.Event.Type != "app_mention" {
 		return Delivery{}, fmt.Errorf("%w: %q", ErrNotAnAsk, e.Event.Type)
 	}
@@ -160,6 +176,38 @@ func readDelivery(body []byte, allowMessages bool) (Delivery, error) {
 		Source:       sourceOf(e),
 		Text:         messageText(e),
 		Thread:       thread,
+	}, nil
+}
+
+/*
+reaction reads somebody putting an emoji on a message.
+
+Only on a message, and only when it was added: a reaction on a file names
+nothing this platform keeps, and one taken away is not an instruction — undoing
+work by removing an emoji is a path nobody tests and everybody triggers by
+accident.
+*/
+func reaction(e envelope) (Delivery, error) {
+	if e.Event.Item.Type != "message" {
+		return Delivery{}, fmt.Errorf("%w: a reaction on %q", ErrNotAnAsk, e.Event.Item.Type)
+	}
+	if strings.TrimSpace(e.Event.User) == "" || strings.TrimSpace(e.Event.Reaction) == "" {
+		return Delivery{}, fmt.Errorf("%w: a reaction with no author or no emoji", ErrNotAnAsk)
+	}
+	if e.Event.Item.Channel == "" || e.Event.Item.TS == "" {
+		return Delivery{}, fmt.Errorf("%w: no conversation or no timestamp", ErrMalformedAsk)
+	}
+	return Delivery{
+		Kind:         DeliveryReaction,
+		EventID:      e.EventID,
+		Message:      e.Event.Item.TS,
+		Conversation: e.Event.Item.Channel,
+		User:         e.Event.User,
+		Source:       channel.Source{User: e.Event.User},
+		Reaction:     e.Event.Reaction,
+		// A reaction belongs to the message it was put on, which for a ticket
+		// is the root its thread hangs from.
+		Thread: e.Event.Item.TS,
 	}, nil
 }
 

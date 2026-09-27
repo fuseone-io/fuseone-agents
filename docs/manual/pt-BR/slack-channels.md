@@ -198,8 +198,23 @@ correção é uma revisão: a aprovação pendente é cancelada e o agente reesc
 Aprovado, o texto é publicado na thread do chamado e a sala recebe uma linha
 dizendo que foi.
 
-O solicitante continua corrigindo na thread dele, como sempre. Quem não decide
-pode conversar na sala sem disparar nada.
+Na thread do chamado, o que o solicitante escrever é guardado no pedido e não
+dispara nada: quem manda regerar é a sala. Se houver decisão pendente, a
+mensagem é registrada e não entra — uma revisão escrita nessa hora substituiria
+o card que alguém está lendo, sem nada regerar no lugar. Quem não decide pode
+conversar na sala sem disparar nada, e endereçar aprovadores por menção não vale
+aqui: a sala é o endereço.
+
+Publicar uma resposta encerra aquela revisão, não o chamado. A revisão aprovada
+fica registrada com o texto que saiu, e o ticket volta a aceitar correção: a
+próxima coisa que o solicitante disser é sobre o mesmo pedido, na mesma thread.
+O chamado termina quando alguém com Aprovador no escopo reage à mensagem do
+chamado com um dos emojis configurados em **Emoji que encerra o chamado**.
+Reaction de quem não decide é ignorada em silêncio, reaction retirada não reabre
+nada, e se houver resposta esperando aprovação na hora do fechamento ela é
+cancelada e a sala recebe uma linha dizendo que não foi publicada. Fechado, o
+chamado não aceita mais nada — nem correção na sala, nem contexto na thread. Enquanto não fecha, ele continua
+contando na cota de tickets abertos da área.
 
 Para o agente propor a resposta, declare a ferramenta `$fuseone.ticket.answer`
 nele. Ela é um efeito de escrita: o agente chama com o texto, o Gate para o

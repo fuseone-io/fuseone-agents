@@ -266,9 +266,11 @@ a leased sweep — recorded after it exists, never before.
 With a room, the approval card is published in that thread and nowhere else:
 not in the support thread, and not in other conversations covering the scope. A
 card that cannot be placed yet waits rather than falling back, since falling
-back would publish a draft in front of the person who asked. Corrections in the
+back would publish a draft in front of the person who asked. A run opened from a ticket always reaches the answer tool,
+whatever its steps declare: answering is why that run exists. Corrections in the
 room come from anyone holding Approver in the ticket's scope, checked where the
-reply is read; the store asks only that a room is open, as it asks only that an
+reply is read; the requester's own replies are kept in the request and start
+nothing, and are not applied at all while a decision is pending; the store asks only that a room is open, as it asks only that an
 addressing source matches. The requester's own thread keeps its rule. On a
 terminal outcome the answer reaches the support thread and the room is told it
 was published.
@@ -282,7 +284,13 @@ compares the argument with the evidence and refuses anything else, so an answer
 rewritten after the card publishes nothing. The approved text is recorded as
 the ticket's outcome and reaches the thread through the outcome consumer, which
 picks its wording by the safe projection it holds rather than by the tool that
-produced it. An approved answer completes the ticket.
+produced it. An approved answer completes its
+revision and leaves the ticket open: a request is not over because it was
+answered once, and the correction that follows is the next revision rather than
+a rewrite of the published one. Closing is its own act — a reaction from
+somebody who may decide, with one of the emoji the conversation configures —
+recorded on the ticket with who did it, and it is what an area's cap counts — a ticket answered and
+never closed still occupies a place.
 
 ## Delivery sequence
 

@@ -113,6 +113,9 @@ func (h *TicketHandler) Handle(ctx context.Context, arrival Claimed) (TicketResu
 	if arrival.Ticket.Root {
 		return h.openRoot(ctx, arrival)
 	}
+	if arrival.Ticket.Close {
+		return h.handleClosing(ctx, arrival)
+	}
 	return h.handleReply(ctx, arrival)
 }
 
@@ -173,6 +176,19 @@ func unboundRequester() TicketResult {
 		Why:    "Link your Slack account to FuseOne before opening a governed ticket.",
 		Reason: "ticket_unbound",
 	}}
+}
+
+// handleClosing ends a request somebody reacted to. A ticket already closed is
+// settled rather than refused: two people reacting is the ordinary case.
+func (h *TicketHandler) handleClosing(ctx context.Context, arrival Claimed) (TicketResult, error) {
+	held, err := h.store.Current(ctx, arrival.Ticket.Key)
+	if err != nil {
+		return TicketResult{}, err
+	}
+	if held.Closed != nil {
+		return handled("ticket_already_closed"), nil
+	}
+	return h.close(ctx, arrival, held)
 }
 
 func (h *TicketHandler) handleReply(ctx context.Context, arrival Claimed) (TicketResult, error) {

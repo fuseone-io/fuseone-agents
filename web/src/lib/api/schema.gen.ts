@@ -4085,6 +4085,12 @@ export interface components {
             /** @description The exact Slack bot or app allowed to address the ticket. */
             addressFrom: string;
             /**
+             * @description Emoji that end a ticket when somebody who may decide puts one on
+             *     the request, as Slack names them and without colons. Absent means
+             *     no reaction closes anything.
+             */
+            closesOn?: string[];
+            /**
              * @description The conversation these tickets are worked in. The draft is decided
              *     and corrected there and only the approved answer reaches the
              *     support thread. Absent means the support thread is the only room,

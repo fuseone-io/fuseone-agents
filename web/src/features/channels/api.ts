@@ -72,6 +72,7 @@ export interface ConversationInput {
     openFrom: "linked_users" | "marked_threads";
     rootFrom?: string;
     reviewIn?: string;
+    closesOn?: string[];
     addressFrom: string;
     patterns: string[];
   };

@@ -6504,6 +6504,17 @@ components:
           pattern: '^(bot|app):\S+$'
           maxLength: 512
           description: The exact Slack bot or app allowed to address the ticket.
+        closesOn:
+          type: array
+          maxItems: 4
+          description: |
+            Emoji that end a ticket when somebody who may decide puts one on
+            the request, as Slack names them and without colons. Absent means
+            no reaction closes anything.
+          items:
+            type: string
+            minLength: 1
+            maxLength: 64
         reviewIn:
           type: string
           maxLength: 512

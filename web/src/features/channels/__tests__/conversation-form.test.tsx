@@ -659,6 +659,39 @@ describe("conversation configuration", () => {
     ).toBeInTheDocument();
   });
 
+  // The emoji a team already uses to say a chamado is done, typed the way
+  // people type emoji.
+  it("carries the closing emoji and takes the colons off", async () => {
+    const requests: { method: string; url: string; body?: unknown }[] = [];
+    stubApi({ requests, agents: [sre] });
+    const user = userEvent.setup();
+    renderForm({
+      id: "C-help",
+      scope: { company: "acme", area: "devops" },
+      mode: "ticket",
+      agent: sre.agentId,
+      runAs: "usr_opsbot",
+      ticket: {
+        openFrom: "marked_threads",
+        rootFrom: "bot:B0BSR3BMU3V",
+        addressFrom: "bot:B0BSVG877GW",
+        closesOn: ["white_check_mark"],
+        patterns: ["\\[team-sre\\]"],
+      },
+      enabled: true,
+    });
+
+    const field = await screen.findByLabelText("Emoji que encerra o chamado");
+    expect(field).toHaveValue("white_check_mark");
+    await user.clear(field);
+    await user.type(field, ":heavy_check_mark: :white_check_mark:");
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+    await waitFor(() => expect(saved(requests)).toBeDefined());
+    expect(saved(requests)).toMatchObject({
+      ticket: { closesOn: ["heavy_check_mark", "white_check_mark"] },
+    });
+  });
+
   it("refuses ticket patterns beyond the server's bounded contract", async () => {
     const requests: { method: string; url: string; body?: unknown }[] = [];
     stubApi({ requests, agents: [sre] });

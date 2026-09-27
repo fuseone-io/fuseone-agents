@@ -82,6 +82,9 @@ const SAMPLES = new Set([
   "/usr/local/bin/crm-mcp",
   "--config /etc/crm.yaml",
   "final_answer",
+  // An emoji name, shown as the shape Slack uses. Translating it would teach
+  // somebody a name Slack does not know.
+  "white_check_mark",
 ]);
 
 /**

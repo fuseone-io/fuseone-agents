@@ -92,6 +92,15 @@ export function knownSourceKey(value: string) {
   return SOURCE_KEY.test(value) && value.length <= 512;
 }
 
+// Emoji as Slack names them: no colons, no spaces. Typed with colons is the
+// ordinary mistake, so they are taken off rather than refused.
+export function splitClosingEmoji(value: string) {
+  return value
+    .split(/[\s,]+/)
+    .map((one) => one.trim().replace(/^:|:$/g, ""))
+    .filter(Boolean);
+}
+
 export function splitTicketPatterns(value: string) {
   return value
     .split(/\r?\n/)
@@ -133,6 +142,7 @@ export const conversationSchema = z
     ticketOpenFrom: z.enum(TICKET_POLICIES),
     ticketRootFrom: z.string(),
     ticketReviewIn: z.string(),
+    ticketClosesOn: z.string(),
     ticketAddressFrom: z.string(),
     ticketPatterns: z.string(),
     wants: z.array(z.enum(EVENTS)).min(1, "channels.needsEvent"),
@@ -173,6 +183,13 @@ export const conversationSchema = z
           code: z.ZodIssueCode.custom,
           path: ["ticketReviewIn"],
           message: "channels.needsTicketReviewRoom",
+        });
+      }
+      if (splitClosingEmoji(value.ticketClosesOn).length > 4) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["ticketClosesOn"],
+          message: "channels.needsTicketClosesOn",
         });
       }
       // The root source is what a mark is checked against. Under the other

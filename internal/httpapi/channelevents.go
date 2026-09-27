@@ -142,7 +142,8 @@ func (h *ChannelHooks) slackEvent(w http.ResponseWriter, r *http.Request) {
 		intent, ok, err := h.tickets.Route(r.Context(), channel.TicketCandidate{
 			Connection: name, Conversation: delivery.Conversation,
 			Message: delivery.Message, Thread: delivery.Thread,
-			Kind: delivery.Kind, Text: delivery.Text, Source: delivery.Source,
+			Kind: delivery.Kind, Text: delivery.Text,
+			Reaction: delivery.Reaction, Source: delivery.Source,
 		})
 		if err != nil {
 			h.log.Error("could not route a ticket message", "channel", name, "err", err)
@@ -153,6 +154,12 @@ func (h *ChannelHooks) slackEvent(w http.ResponseWriter, r *http.Request) {
 			arrival.Ticket = &intent
 			arrival.AskedBy = delivery.Source.Key()
 		}
+	}
+	// A reaction starts nothing: it either ended a ticket or it is somebody
+	// reacting to a message.
+	if arrival.Ticket == nil && delivery.Kind == slack.DeliveryReaction {
+		w.WriteHeader(http.StatusOK)
+		return
 	}
 	if arrival.Ticket == nil && delivery.Kind == slack.DeliveryMessage {
 		if h.rules == nil {
