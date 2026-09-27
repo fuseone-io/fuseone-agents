@@ -191,7 +191,11 @@ func (h *TicketHandler) handleReply(ctx context.Context, arrival Claimed) (Ticke
 	if arrival.Ticket.Review {
 		return h.correct(ctx, arrival, held)
 	}
-	if arrival.Source.MatchesKey(held.AddressedBy) {
+	// A ticket worked in a room addresses nobody. The room is the address:
+	// whoever may decide reads the card there, and naming recipients by
+	// mention belongs to the flow where the support thread is the only room
+	// there is.
+	if held.Review.Conversation == "" && arrival.Source.MatchesKey(held.AddressedBy) {
 		return h.address(ctx, arrival, held)
 	}
 	if !arrival.Source.Person() {
@@ -203,6 +207,9 @@ func (h *TicketHandler) handleReply(ctx context.Context, arrival Claimed) (Ticke
 	}
 	if !linked || who != held.RequestedBy {
 		return handled("ticket_author_ignored"), nil
+	}
+	if held.Review.Open() {
+		return h.keep(ctx, arrival, held, who)
 	}
 	return h.revise(ctx, arrival, held, who)
 }

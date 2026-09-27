@@ -69,8 +69,6 @@ func TestTicketHandler_theReviewRoomIgnoresWhoeverCannotDecide(t *testing.T) {
 	}
 }
 
-// The support thread keeps its own rule: the person who asked is the only one
-// whose reply there is a correction.
 // Slack stamps the app id on what a person sends through an integration. The
 // correction is theirs, and refusing it was how a whole afternoon of a room
 // looked broken from the outside.
@@ -84,22 +82,6 @@ func TestTicketHandler_aCorrectionWrittenThroughAnApp_isStillTheirs(t *testing.T
 		"tira a parte do terraform", channel.Source{User: "UMANAGER", App: "A-assistant"}))
 	if result.RunID == "" || opener.count() != 2 {
 		t.Fatalf("result = %+v, runs=%d, want the correction taken", result, opener.count())
-	}
-}
-
-func TestTicketHandler_withAReviewRoom_theRequesterStillCorrectsInTheirOwnThread(t *testing.T) {
-	handler, store, opener, _, _ := markedTicketHandler()
-	mustHandleTicket(t, handler, markedTicketMark("event-mark", "[team-sre]"))
-	openReviewThread(t, store, "900.1")
-
-	reply := channel.Claimed{Arrival: channel.Arrival{
-		Channel: "acme-slack", Conversation: "C-help", EventID: "event-reply",
-		Message: "171.3", Thread: "171.1", Text: "é para produção",
-		Source: channel.Source{User: "UREQUESTER"},
-		Ticket: &channel.TicketIntent{Key: markedTicketKey},
-	}}
-	if result := mustHandleTicket(t, handler, reply); result.RunID == "" || opener.count() != 2 {
-		t.Fatalf("result = %+v, runs=%d", result, opener.count())
 	}
 }
 
@@ -213,5 +195,79 @@ func TestConsumer_aTicketRefusal_isSaidInTheReviewRoomAndNotInTheThread(t *testi
 	}
 	if len(parts.answers.to) != 1 || parts.answers.to[0] != "C-agents/" {
 		t.Fatalf("said in %v, want the review room", parts.answers.to)
+	}
+}
+
+/*
+The room is where work is asked for; the support thread is where it was asked.
+
+With a room open, the person who asked can still add to their own request — a
+detail they forgot, an answer to a question — and none of it starts a run. What
+regenerates the answer is a correction in the room, which is the only place
+somebody is deciding.
+*/
+func TestTicketHandler_withAReviewRoom_theRequestersReply_isKeptWithoutRunning(t *testing.T) {
+	handler, store, opener, people, _ := markedTicketHandler()
+	mustHandleTicket(t, handler, markedTicketMark("event-mark", "[team-sre]"))
+	openReviewThread(t, store, "900.1")
+	people.byAccount["UMANAGER"] = "usr_manager"
+
+	reply := channel.Claimed{Arrival: channel.Arrival{
+		Channel: "acme-slack", Conversation: "C-help", EventID: "event-more",
+		Message: "171.3", Thread: "171.1", Text: "é para o ambiente de produção",
+		Source: channel.Source{User: "UREQUESTER"},
+		Ticket: &channel.TicketIntent{Key: markedTicketKey},
+	}}
+	result := mustHandleTicket(t, handler, reply)
+	if result.RunID != "" || opener.count() != 1 {
+		t.Fatalf("result = %+v, runs=%d, want nothing started", result, opener.count())
+	}
+
+	held, _ := store.Current(t.Context(), markedTicketKey)
+	if held.Current.Ref.Revision != 2 {
+		t.Fatalf("revision = %d, want the detail kept", held.Current.Ref.Revision)
+	}
+
+	// And the room still drives: a correction there regenerates from the
+	// request as it now stands.
+	correction := reviewReply("event-correct", "900.2", "tira a parte do terraform",
+		channel.Source{User: "UMANAGER"})
+	if result := mustHandleTicket(t, handler, correction); result.RunID == "" || opener.count() != 2 {
+		t.Fatalf("correction = %+v, runs=%d", result, opener.count())
+	}
+}
+
+// Nothing is folded in while a decision is pending: a message arriving then
+// would supersede the card somebody is reading, without anything regenerating.
+func TestTicketHandler_withADecisionPending_theRequestersReply_changesNothing(t *testing.T) {
+	handler, store, opener, _, _ := markedTicketHandler()
+	mustHandleTicket(t, handler, markedTicketMark("event-mark", "[team-sre]"))
+	openReviewThread(t, store, "900.1")
+
+	held, _ := store.Current(t.Context(), markedTicketKey)
+	snapshot := ticket.ContentRef{Ref: "content://snapshot", Digest: "sha256:snapshot"}
+	if _, _, err := store.RecordInspection(t.Context(), ticket.InspectionInput{
+		Ref: held.Current.Ref, Snapshot: snapshot, At: ticketNow,
+	}); err != nil {
+		t.Fatalf("RecordInspection: %v", err)
+	}
+	if _, _, err := store.AwaitApproval(t.Context(), ticket.ApprovalInput{
+		Ref: held.Current.Ref, RunID: "run-1", AtSeq: 4, Snapshot: snapshot, At: ticketNow,
+	}); err != nil {
+		t.Fatalf("AwaitApproval: %v", err)
+	}
+
+	reply := channel.Claimed{Arrival: channel.Arrival{
+		Channel: "acme-slack", Conversation: "C-help", EventID: "event-late",
+		Message: "171.4", Thread: "171.1", Text: "obrigado!",
+		Source: channel.Source{User: "UREQUESTER"},
+		Ticket: &channel.TicketIntent{Key: markedTicketKey},
+	}}
+	if result := mustHandleTicket(t, handler, reply); result.RunID != "" || opener.count() != 1 {
+		t.Fatalf("result = %+v, runs=%d", result, opener.count())
+	}
+	after, _ := store.Current(t.Context(), markedTicketKey)
+	if after.Current.Ref.Revision != held.Current.Ref.Revision {
+		t.Fatalf("revision = %d, want the pending decision untouched", after.Current.Ref.Revision)
 	}
 }
