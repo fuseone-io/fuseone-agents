@@ -32,6 +32,28 @@ describe("approval evidence", () => {
     expect(screen.getByRole("button", { name: "Aprovar" })).toBeEnabled();
   });
 
+  /*
+   * The words are the act. Approving a ticket answer publishes exactly this
+   * text in the thread the person who asked is reading, so the decision is
+   * taken beside it and never above a summary of it.
+   */
+  it("shows the answer a ticket approval would publish", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({
+      kind: "ticket_answer",
+      ticketAnswer: {
+        text: "Monitor de Datadog em produção se cria por Terraform, via PR no repositório de observabilidade.",
+      },
+    })));
+
+    renderPanel();
+
+    expect(await screen.findByText("Resposta proposta")).toBeVisible();
+    expect(
+      screen.getByText(/Monitor de Datadog em produção se cria por Terraform/),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Aprovar" })).toBeEnabled();
+  });
+
   it("keeps rejection available when the snapshot cannot be verified", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => Response.json(
       { title: "Conflict", status: 409, detail: "evidence unavailable" },

@@ -35,6 +35,7 @@ type Driver interface {
 	Say(ctx context.Context, conversation, thread, text string) error
 	SayOutcome(ctx context.Context, conversation, thread, text string) error
 	Thread(ctx context.Context, conversation, thread, before string) (channel.ThreadContext, error)
+	OpenReview(ctx context.Context, opening channel.ReviewOpening) (string, error)
 }
 
 // Drivers resolves a configured connection to something that can post.
@@ -90,6 +91,18 @@ func (d *Drivers) ReplyOutcome(ctx context.Context, name, conversation, thread, 
 		return err
 	}
 	return driver.SayOutcome(ctx, conversation, thread, text)
+}
+
+// OpenReview opens the thread a ticket is worked in, in the room configured
+// for it, and answers where that thread is.
+func (d *Drivers) OpenReview(
+	ctx context.Context, name string, opening channel.ReviewOpening,
+) (string, error) {
+	driver, err := d.driver(ctx, name)
+	if err != nil {
+		return "", err
+	}
+	return driver.OpenReview(ctx, opening)
 }
 
 // Thread reads bounded context from the connection that received the ask.

@@ -2,6 +2,8 @@ import {
   EVENTS_BY_DEFAULT,
   knownEvent,
   knownMode,
+  knownTicketPolicy,
+  marksThreads,
   splitSources,
   splitTicketPatterns,
   startsFromMentions,
@@ -33,6 +35,11 @@ export function conversationDefaults(
     sources: (conversation?.sources ?? []).join("\n"),
     agent: conversation?.agent ?? "",
     runAs: conversation?.runAs ?? "",
+    ticketOpenFrom: knownTicketPolicy(conversation?.ticket?.openFrom)
+      ? conversation.ticket.openFrom
+      : "linked_users",
+    ticketRootFrom: conversation?.ticket?.rootFrom ?? "",
+    ticketReviewIn: conversation?.ticket?.reviewIn ?? "",
     ticketAddressFrom: conversation?.ticket?.addressFrom ?? "",
     ticketPatterns: (conversation?.ticket?.patterns ?? []).join("\n"),
     wants: (conversation?.wants as ConversationValues["wants"]) ?? [
@@ -49,8 +56,7 @@ export function unsupportedConversation(
   return {
     mode: !knownMode(mode) ? mode : undefined,
     event,
-    ticket:
-      mode === "ticket" && conversation?.ticket?.openFrom !== "linked_users",
+    ticket: mode === "ticket" && !knownTicketPolicy(conversation?.ticket?.openFrom),
   };
 }
 
@@ -79,7 +85,15 @@ export function conversationInput(
     agent: startsNothing ? undefined : values.agent.trim() || undefined,
     ticket: startsTickets(mode)
       ? {
-          openFrom: "linked_users",
+          openFrom: values.ticketOpenFrom,
+          // Sent only by the policy that reads it: a root source under
+          // `linked_users` is a rule the server refuses, and rightly.
+          ...(marksThreads(values.ticketOpenFrom)
+            ? { rootFrom: values.ticketRootFrom.trim() }
+            : {}),
+          ...(values.ticketReviewIn.trim()
+            ? { reviewIn: values.ticketReviewIn.trim() }
+            : {}),
           addressFrom: values.ticketAddressFrom.trim(),
           patterns: splitTicketPatterns(values.ticketPatterns),
         }

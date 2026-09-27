@@ -4068,11 +4068,34 @@ export interface components {
          */
         ConversationMode: "mentions" | "watch" | "both" | "announce" | "ticket";
         TicketRule: {
-            /** @enum {string} */
-            openFrom: "linked_users";
+            /**
+             * @description How a thread becomes a ticket. `linked_users` admits a matching
+             *     root message written by a person whose account is bound.
+             *     `marked_threads` admits a thread whose root was written by
+             *     `rootFrom` and whose matching mark arrived as a reply, from the
+             *     addressing source or from a person; the root stays the request.
+             * @enum {string}
+             */
+            openFrom: "linked_users" | "marked_threads";
+            /**
+             * @description The exact Slack bot or app whose root a mark may admit. Required
+             *     by `marked_threads` and refused by `linked_users`.
+             */
+            rootFrom?: string;
             /** @description The exact Slack bot or app allowed to address the ticket. */
             addressFrom: string;
-            /** @description RE2 patterns matched only against bounded root-message text. */
+            /**
+             * @description The conversation these tickets are worked in. The draft is decided
+             *     and corrected there and only the approved answer reaches the
+             *     support thread. Absent means the support thread is the only room,
+             *     and it may never be the ticket conversation itself.
+             */
+            reviewIn?: string;
+            /**
+             * @description RE2 patterns matched against bounded message text: the root under
+             *     `linked_users`, the reply that marks the thread under
+             *     `marked_threads`. Replies to an open ticket are never matched again.
+             */
             patterns: string[];
         };
         ChannelConversation: {
@@ -4925,8 +4948,13 @@ export interface components {
         };
         ApprovalEvidenceDetail: {
             /** @enum {string} */
-            kind: "none" | "gravitee_subscription";
+            kind: "none" | "gravitee_subscription" | "ticket_answer";
             gravitee?: components["schemas"]["GraviteeApprovalEvidence"];
+            ticketAnswer?: components["schemas"]["TicketAnswerEvidence"];
+        };
+        /** @description The answer this decision is about, as the agent wrote it and as it will be published if it is approved. Nothing is added to it afterwards: what is read here is what the person who asked will read. */
+        TicketAnswerEvidence: {
+            text: string;
         };
         GraviteeApprovalEvidence: {
             subscriptionId: string;

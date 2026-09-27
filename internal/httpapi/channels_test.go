@@ -446,6 +446,53 @@ func TestListChannels_returnsTheTicketRuleWithoutNormalisingIt(t *testing.T) {
 	}
 }
 
+// The root source is the whole difference between the two admission policies,
+// so a contract that drops it stores a rule the runtime cannot honour.
+func TestPutConversation_carriesTheRootSourceOfAMarkedThreadRule(t *testing.T) {
+	t.Parallel()
+	spy := &channelSpy{}
+	s := NewServer(ledger.NewMemory(), "test").WithChannels(spy, nil)
+	mode := openapi.Ticket
+	resp, err := s.PutConversation(as(domain.RoleCurator), openapi.PutConversationRequestObject{
+		Name: "acme-slack", Conversation: "C-help",
+		Body: &openapi.PutConversationJSONRequestBody{
+			Company: "acme", Area: ptr("platform"), Mode: &mode,
+			Agent: ptr("ticketito"), RunAs: ptr("usr_ana"),
+			Ticket: &openapi.TicketRule{
+				OpenFrom: openapi.MarkedThreads, RootFrom: ptr("bot:B-forms"),
+				AddressFrom: "bot:B-triage", Patterns: []string{`\[team-sre\]`},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+	if _, ok := resp.(openapi.PutConversation204Response); !ok {
+		t.Fatalf("response = %T", resp)
+	}
+	if spy.putConv.Ticket == nil || spy.putConv.Ticket.RootFrom != "bot:B-forms" ||
+		spy.putConv.Ticket.OpenFrom != channel.TicketOpenMarkedThreads {
+		t.Fatalf("conversation = %+v", spy.putConv)
+	}
+
+	listed := NewServer(ledger.NewMemory(), "test").WithChannels(&channelSpy{
+		listed: []admin.Channel{{Name: "acme-slack", Kind: "slack", Enabled: true,
+			Conversations: []admin.Conversation{{
+				ID: "C-help", Scope: domain.Scope{Company: "acme", Area: "platform"},
+				Mode: channel.ConversationTicket, Enabled: true, Ticket: spy.putConv.Ticket,
+			}},
+		}},
+	}, nil).WithChannelListing(&listerSpy{kinds: []string{"slack"}})
+	page, err := listed.ListChannels(as(domain.RoleCurator), openapi.ListChannelsRequestObject{})
+	if err != nil {
+		t.Fatalf("ListChannels: %v", err)
+	}
+	got := page.(openapi.ListChannels200JSONResponse).Items[0].Conversations[0].Ticket
+	if got == nil || got.RootFrom == nil || *got.RootFrom != "bot:B-forms" {
+		t.Fatalf("ticket = %+v, want the root source back as stored", got)
+	}
+}
+
 func TestPutConversation_mentionsModeCanIncludeThreadContext(t *testing.T) {
 	t.Parallel()
 	spy := &channelSpy{}

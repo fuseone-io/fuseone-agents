@@ -71,7 +71,9 @@ export interface ConversationInput {
   agent?: string;
   runAs?: string;
   ticket?: {
-    openFrom: "linked_users";
+    openFrom: "linked_users" | "marked_threads";
+    rootFrom?: string;
+    reviewIn?: string;
     addressFrom: string;
     patterns: string[];
   };

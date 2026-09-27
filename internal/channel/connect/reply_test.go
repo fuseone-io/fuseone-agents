@@ -52,6 +52,13 @@ func (s *spoke) Thread(
 	return channel.ThreadContext{}, nil
 }
 
+func (s *spoke) OpenReview(
+	_ context.Context, opening channel.ReviewOpening,
+) (string, error) {
+	s.conversation = opening.Conversation
+	return "900.1", nil
+}
+
 func stored(t *testing.T) (*settings.Store, *pgxpool.Pool) {
 	t.Helper()
 	dsn := os.Getenv("TEST_DATABASE_URL")

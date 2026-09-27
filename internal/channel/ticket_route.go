@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"strings"
 	"sync"
@@ -16,23 +17,6 @@ import (
 	"github.com/fuseone/agents/internal/settings"
 	"github.com/fuseone/agents/internal/ticket"
 )
-
-const (
-	TicketOpenLinkedUsers  = "linked_users"
-	MaxTicketPatterns      = 8
-	MaxTicketPatternBytes  = 256
-	MaxTicketMatchBytes    = 8 * 1024
-	maxCompiledTicketRules = 512
-)
-
-// TicketRule is the admission policy for root messages in one conversation.
-// The first release deliberately admits only linked human roots and one exact
-// bot/app addressing source.
-type TicketRule struct {
-	OpenFrom    string   `json:"openFrom"`
-	AddressFrom string   `json:"addressFrom"`
-	Patterns    []string `json:"patterns"`
-}
 
 // TicketCandidate is the bounded platform shape of one Slack message offered
 // to ticket routing. Kind is "message" or "mention"; no vendor envelope is
@@ -57,6 +41,15 @@ type TicketIntent struct {
 	Agent       domain.AgentID   `json:"agent,omitempty"`
 	RunAs       domain.UserID    `json:"run_as,omitempty"`
 	AddressedBy string           `json:"addressed_by,omitempty"`
+	// Marked says the request is the thread's root and this arrival is only
+	// the mark that admitted it. The root's text and its author are read at
+	// handling time, where the connection can be asked.
+	Marked   bool   `json:"marked,omitempty"`
+	RootFrom string `json:"root_from,omitempty"`
+	// ReviewIn travels with a decision that opens a ticket; Review says this
+	// arrival came from the room rather than from the support thread.
+	ReviewIn string `json:"review_in,omitempty"`
+	Review   bool   `json:"review,omitempty"`
 }
 
 func (i TicketIntent) Valid() bool {
@@ -65,7 +58,18 @@ func (i TicketIntent) Valid() bool {
 	}
 	if !i.Root {
 		return i.Scope == (domain.Scope{}) && i.Agent == "" && i.RunAs == "" &&
-			i.AddressedBy == ""
+			i.AddressedBy == "" && !i.Marked && i.RootFrom == "" && i.ReviewIn == ""
+	}
+	// A decision that opens a ticket names no room it came from: the room is
+	// opened later, and nothing has replied in it yet.
+	if i.Review {
+		return false
+	}
+	// A marked decision carries the root it will trust, and only a marked one
+	// does: a persisted intent that names a root source it would not check is
+	// a decision nobody can read back.
+	if i.Marked != (i.RootFrom != "") || (i.Marked && !addressSource(i.RootFrom)) {
+		return false
 	}
 	return i.Scope.Valid() && i.Agent != "" && i.RunAs != "" &&
 		addressSource(i.AddressedBy)
@@ -90,8 +94,23 @@ type compiledTicketRule struct {
 type TicketRoutes struct {
 	settings *settings.Store
 	tickets  ticket.Store
+	log      *slog.Logger
 	mu       sync.RWMutex
 	compiled map[string]compiledTicketRule
+}
+
+// WithLog says where the routes explain themselves. Optional: without it they
+// say the same things to the default logger.
+func (r *TicketRoutes) WithLog(log *slog.Logger) *TicketRoutes {
+	r.log = log
+	return r
+}
+
+func (r *TicketRoutes) logger() *slog.Logger {
+	if r.log == nil {
+		return slog.Default()
+	}
+	return r.log
 }
 
 func NewTicketRoutes(settings *settings.Store, tickets ticket.Store) *TicketRoutes {
@@ -107,8 +126,7 @@ func (r *TicketRoutes) Route(
 	if candidate.Thread != candidate.Message {
 		return r.reply(ctx, candidate)
 	}
-	if candidate.Kind != "message" || candidate.Source.User == "" ||
-		candidate.Source.Bot != "" || candidate.Source.App != "" ||
+	if candidate.Kind != "message" || !candidate.Source.Person() ||
 		len(candidate.Text) > MaxTicketMatchBytes || !utf8.ValidString(candidate.Text) {
 		return TicketIntent{}, false, nil
 	}
@@ -121,47 +139,42 @@ func (r *TicketRoutes) reply(
 	if r.tickets == nil {
 		return TicketIntent{}, false, nil
 	}
-	held, err := r.tickets.AtOrigin(ctx, ticket.Origin{
+	thread := ticket.Origin{
 		Connection: candidate.Connection, Conversation: candidate.Conversation,
 		Root: candidate.Thread,
-	})
-	if errors.Is(err, ticket.ErrNotFound) {
-		return TicketIntent{}, false, nil
 	}
-	if err != nil {
+	held, err := r.tickets.AtOrigin(ctx, thread)
+	if err == nil {
+		return TicketIntent{Key: held.Key}, true, nil
+	}
+	if !errors.Is(err, ticket.ErrNotFound) {
 		return TicketIntent{}, false, fmt.Errorf("channel: find ticket reply: %w", err)
 	}
-	return TicketIntent{Key: held.Key}, true, nil
+	// Not the support thread. It may still be the room where that ticket is
+	// being written, which is a different index and the same durable identity.
+	held, err = r.tickets.AtReview(ctx, thread)
+	if err == nil {
+		return TicketIntent{Key: held.Key, Review: true}, true, nil
+	}
+	if !errors.Is(err, ticket.ErrNotFound) {
+		return TicketIntent{}, false, fmt.Errorf("channel: find ticket review reply: %w", err)
+	}
+	// No ticket on this thread at all. Under an ordinary rule that is the end
+	// of it; under a marked one this reply may be what opens the thread.
+	return r.mark(ctx, candidate)
 }
 
 func (r *TicketRoutes) root(
 	ctx context.Context, candidate TicketCandidate,
 ) (TicketIntent, bool, error) {
-	if r.settings == nil || r.tickets == nil {
-		return TicketIntent{}, false, nil
+	admitted, ok, err := r.admission(ctx, candidate)
+	if err != nil || !ok {
+		return TicketIntent{}, false, err
 	}
-	name := ConversationKey(candidate.Connection, candidate.Conversation)
-	rows, err := r.settings.Named(ctx, KindConversation, name)
-	if err != nil {
-		return TicketIntent{}, false, fmt.Errorf("channel: read ticket route: %w", err)
-	}
-	if len(rows) != 1 {
-		if len(rows) > 1 {
-			return TicketIntent{}, false, ErrAmbiguousConversation
-		}
-		return TicketIntent{}, false, nil
-	}
-	set := rows[0]
-	var value conversationValue
-	if err := json.Unmarshal(set.Value, &value); err != nil ||
-		value.Channel != candidate.Connection || value.Mode != ConversationTicket || value.Ticket == nil {
-		return TicketIntent{}, false, nil
-	}
-	compiled, err := r.matcher(name, set.UpdatedAt, *value.Ticket)
-	if err != nil {
-		return TicketIntent{}, false, fmt.Errorf("channel: compile stored ticket route: %w", err)
-	}
-	if !matchesTicket(compiled.patterns, candidate.Text) {
+	// A room whose tickets are opened by a mark is not a room where the root
+	// is the request, whatever the root happens to say.
+	if admitted.compiled.rule.OpenFrom != TicketOpenLinkedUsers ||
+		!matchesTicket(admitted.compiled.patterns, candidate.Text) {
 		return TicketIntent{}, false, nil
 	}
 	key, err := ticket.Key(candidate.Connection, candidate.Conversation, candidate.Message)
@@ -169,84 +182,48 @@ func (r *TicketRoutes) root(
 		return TicketIntent{}, false, err
 	}
 	return TicketIntent{
-		Key: key, Root: true, Scope: set.Scope,
-		Agent: value.Agent, RunAs: value.RunAs, AddressedBy: compiled.rule.AddressFrom,
+		Key: key, Root: true, Scope: admitted.scope,
+		Agent: admitted.value.Agent, RunAs: admitted.value.RunAs,
+		AddressedBy: admitted.compiled.rule.AddressFrom,
+		ReviewIn:    admitted.compiled.rule.ReviewIn,
 	}, true, nil
 }
 
-func (r *TicketRoutes) matcher(
-	key string, updatedAt time.Time, rule TicketRule,
-) (compiledTicketRule, error) {
-	fingerprint := sha256.Sum256([]byte(rule.OpenFrom + "\x00" + rule.AddressFrom +
-		"\x00" + strings.Join(rule.Patterns, "\x00")))
-	r.mu.RLock()
-	held, ok := r.compiled[key]
-	r.mu.RUnlock()
-	if ok && held.updatedAt.Equal(updatedAt) && held.fingerprint == fingerprint {
-		return held, nil
-	}
+// ticketAdmission is one conversation's stored ticket rule, ready to decide.
+type ticketAdmission struct {
+	scope    domain.Scope
+	value    conversationValue
+	compiled compiledTicketRule
+}
 
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if held, ok = r.compiled[key]; ok && held.updatedAt.Equal(updatedAt) &&
-		held.fingerprint == fingerprint {
-		return held, nil
+// admission answers with the rule configured for this conversation, if it has
+// one at all. Not finding one is an answer, not a failure: most rooms have none.
+func (r *TicketRoutes) admission(
+	ctx context.Context, candidate TicketCandidate,
+) (ticketAdmission, bool, error) {
+	if r.settings == nil || r.tickets == nil {
+		return ticketAdmission{}, false, nil
 	}
-	patterns, err := CompileTicketPatterns(rule)
+	name := ConversationKey(candidate.Connection, candidate.Conversation)
+	rows, err := r.settings.Named(ctx, KindConversation, name)
 	if err != nil {
-		return compiledTicketRule{}, err
+		return ticketAdmission{}, false, fmt.Errorf("channel: read ticket route: %w", err)
 	}
-	compiled := compiledTicketRule{
-		updatedAt: updatedAt, fingerprint: fingerprint, patterns: patterns, rule: rule,
-	}
-	// Configuration names are unbounded over the life of a process. A renamed
-	// or deleted conversation must not leave its regexes resident forever.
-	// Clearing is deliberately coarse: the next roots recompile at most eight
-	// RE2 patterns each, while the cache remains strictly bounded.
-	if len(r.compiled) >= maxCompiledTicketRules {
-		clear(r.compiled)
-	}
-	r.compiled[key] = compiled
-	return compiled, nil
-}
-
-func CompileTicketPatterns(rule TicketRule) ([]*regexp.Regexp, error) {
-	if rule.OpenFrom != TicketOpenLinkedUsers || !addressSource(rule.AddressFrom) ||
-		len(rule.Patterns) == 0 || len(rule.Patterns) > MaxTicketPatterns {
-		return nil, errors.New("channel: incomplete ticket admission rule")
-	}
-	compiled := make([]*regexp.Regexp, 0, len(rule.Patterns))
-	for _, pattern := range rule.Patterns {
-		if strings.TrimSpace(pattern) == "" || len(pattern) > MaxTicketPatternBytes ||
-			!utf8.ValidString(pattern) {
-			return nil, errors.New("channel: invalid ticket pattern")
+	if len(rows) != 1 {
+		if len(rows) > 1 {
+			return ticketAdmission{}, false, ErrAmbiguousConversation
 		}
-		re, err := regexp.Compile("(?i:" + pattern + ")")
-		if err != nil {
-			// The pattern is administrative input. Do not make it part of an
-			// error that may be copied into a response or a log.
-			return nil, errors.New("channel: invalid ticket pattern")
-		}
-		if re.MatchString("") {
-			return nil, errors.New("channel: ticket pattern may not match empty text")
-		}
-		compiled = append(compiled, re)
+		return ticketAdmission{}, false, nil
 	}
-	return compiled, nil
-}
-
-func matchesTicket(patterns []*regexp.Regexp, text string) bool {
-	for _, pattern := range patterns {
-		if pattern.MatchString(text) {
-			return true
-		}
+	set := rows[0]
+	var value conversationValue
+	if err := json.Unmarshal(set.Value, &value); err != nil ||
+		value.Channel != candidate.Connection || value.Mode != ConversationTicket || value.Ticket == nil {
+		return ticketAdmission{}, false, nil
 	}
-	return false
-}
-
-func addressSource(source string) bool {
-	prefix, id, found := strings.Cut(strings.TrimSpace(source), ":")
-	return found && len(source) <= 512 && utf8.ValidString(source) &&
-		(prefix == "bot" || prefix == "app") && id != "" &&
-		!strings.ContainsAny(id, " \t\r\n")
+	compiled, err := r.matcher(name, set.UpdatedAt, *value.Ticket)
+	if err != nil {
+		return ticketAdmission{}, false, fmt.Errorf("channel: compile stored ticket route: %w", err)
+	}
+	return ticketAdmission{scope: set.Scope, value: value, compiled: compiled}, true, nil
 }

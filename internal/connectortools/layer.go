@@ -21,6 +21,7 @@ type Layer struct {
 	gravitee engine.ApprovalEvidencer
 	inspect  GraviteeInspectionRunner
 	accept   GraviteeAcceptanceRunner
+	answers  *TicketAnswers
 
 	mu        sync.RWMutex
 	instances map[instanceKey]Instance
@@ -90,6 +91,14 @@ func (l *Layer) WithSQLMetrics(metrics SQLRuntimeMetrics) *Layer {
 	return l
 }
 
+// WithTicketAnswers enables the platform's own ticket answer. Optional: an
+// installation that wires no ticket store cannot govern an answer, and the
+// tool is then unavailable rather than half-present.
+func (l *Layer) WithTicketAnswers(answers *TicketAnswers) *Layer {
+	l.answers = answers
+	return l
+}
+
 func (l *Layer) SetInstances(instances []Instance) error {
 	next := make(map[instanceKey]Instance, len(instances))
 	for _, instance := range instances {
@@ -109,6 +118,9 @@ func (l *Layer) SetInstances(instances []Instance) error {
 }
 
 func (l *Layer) Effect(id domain.ToolID) (domain.Effect, bool) {
+	if id == TicketAnswerTool {
+		return domain.EffectWrite, l.answers != nil
+	}
 	if native, op, ok := l.native(id); ok {
 		return operationEffect(op), native.Enabled
 	}
@@ -169,6 +181,12 @@ func (l *Layer) ApprovalBinding(call engine.Call) string {
 func (l *Layer) ApprovalEvidence(
 	ctx context.Context, call engine.Call,
 ) (domain.ApprovalEvidence, error) {
+	if call.Tool == TicketAnswerTool {
+		if l.answers == nil {
+			return domain.ApprovalEvidence{}, ErrUnavailable
+		}
+		return l.answers.ApprovalEvidence(ctx, call)
+	}
 	instance, op, ok := l.native(call.Tool)
 	if !ok {
 		if provider, ok := l.base.(engine.ApprovalEvidencer); ok {
@@ -212,6 +230,10 @@ func (l *Layer) graviteeVaultEndpoint(gravitee Instance) (VaultConfig, bool) {
 }
 
 func (l *Layer) Schema(id domain.ToolID) (string, string, map[string]any, bool) {
+	if id == TicketAnswerTool {
+		entry := TicketAnswerEntry()
+		return string(id), entry.Description, ticketAnswerSchema(), l.answers != nil
+	}
 	instance, op, ok := l.native(id)
 	if ok {
 		schema, ok := schemaFor(op.ID)
@@ -226,6 +248,17 @@ func (l *Layer) Schema(id domain.ToolID) (string, string, map[string]any, bool) 
 }
 
 func (l *Layer) Reserve(ctx context.Context, call engine.Call) error {
+	if call.Tool == TicketAnswerTool {
+		if l.answers == nil {
+			return fmt.Errorf("%w: %s", ErrUnavailable, call.Tool)
+		}
+		// The ticket is the scope here: an answer published into a thread the
+		// run does not belong to is the one mistake this tool could make.
+		if !call.Ticket.Ref.Valid() {
+			return ErrTicketAnswerScope
+		}
+		return nil
+	}
 	instance, op, ok := l.native(call.Tool)
 	if !ok {
 		if l.base == nil {
@@ -259,6 +292,12 @@ func (l *Layer) Reserve(ctx context.Context, call engine.Call) error {
 }
 
 func (l *Layer) Invoke(ctx context.Context, call engine.Call) (engine.ToolResult, error) {
+	if call.Tool == TicketAnswerTool {
+		if l.answers == nil {
+			return engine.ToolResult{}, fmt.Errorf("%w: %s", ErrUnavailable, call.Tool)
+		}
+		return l.answers.Answer(ctx, call)
+	}
 	instance, op, ok := l.native(call.Tool)
 	if !ok {
 		if l.base == nil {

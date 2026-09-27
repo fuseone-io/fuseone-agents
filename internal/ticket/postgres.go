@@ -83,11 +83,11 @@ func createTicket(ctx context.Context, tx pgx.Tx, in OpenInput) (Ticket, bool, e
 		insert into governed_tickets
 			(ticket_key, company_id, area_id, agent_id, run_as, requested_by, addressed_by,
 			 current_revision, created_at, updated_at,
-			 origin_connection, origin_conversation, origin_root)
-		values ($1,$2,$3,$4,$5,$6,$7,1,$8,$8,$9,$10,$11)`,
+			 origin_connection, origin_conversation, origin_root, review_conversation)
+		values ($1,$2,$3,$4,$5,$6,$7,1,$8,$8,$9,$10,$11,$12)`,
 		string(in.Key), string(in.Scope.Company), string(in.Scope.Area),
 		string(in.Agent), string(in.RunAs), string(in.RequestedBy), in.AddressedBy, in.At.UTC(),
-		in.Origin.Connection, in.Origin.Conversation, in.Origin.Root); err != nil {
+		in.Origin.Connection, in.Origin.Conversation, in.Origin.Root, in.ReviewIn); err != nil {
 		return Ticket{}, false, postgresWriteError("insert ticket", err)
 	}
 	if err := insertRevision(ctx, tx, Revision{
@@ -132,6 +132,32 @@ func (p *Postgres) AtOrigin(ctx context.Context, origin Origin) (Ticket, error) 
 	}
 	if err != nil {
 		return Ticket{}, fmt.Errorf("ticket: read origin: %w", err)
+	}
+	return record.value(), nil
+}
+
+// AtReview finds the ticket a review room's thread is working. The room is one
+// conversation on the ticket's own connection, so the lookup is the same shape
+// as AtOrigin and reads the same index.
+func (p *Postgres) AtReview(ctx context.Context, origin Origin) (Ticket, error) {
+	if !origin.Valid() {
+		return Ticket{}, ErrNotFound
+	}
+	query := `select ` + ticketColumns + `
+		from governed_tickets t
+		join governed_ticket_revisions c
+		  on c.ticket_key = t.ticket_key and c.revision = t.current_revision
+		left join governed_ticket_revisions a
+		  on a.ticket_key = t.ticket_key and a.revision = t.active_revision
+		where t.origin_connection = $1 and t.review_conversation = $2 and t.review_root = $3`
+	var record ticketRecord
+	err := record.scan(p.pool.QueryRow(ctx, query,
+		origin.Connection, origin.Conversation, origin.Root))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Ticket{}, ErrNotFound
+	}
+	if err != nil {
+		return Ticket{}, fmt.Errorf("ticket: read review room: %w", err)
 	}
 	return record.value(), nil
 }

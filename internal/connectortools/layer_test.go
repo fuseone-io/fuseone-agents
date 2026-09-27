@@ -184,8 +184,13 @@ func TestToolList_nativeConnectorOwnsItsConfiguredToolNamespace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Tools: %v", err)
 	}
-	if got[0].Server != "mcp-spoof" {
-		t.Fatalf("without native settings server = %q", got[0].Server)
+	if entryByID(got, "vault.prod.write_secret").Server != "mcp-spoof" {
+		t.Fatalf("without native settings the MCP entry was rewritten: %+v", got)
+	}
+	// The platform's own tool rides beside them and belongs to nobody's
+	// namespace: an agent gets it by declaring it, not by a server offering it.
+	if entryByID(got, TicketAnswerTool).Effect != domain.EffectWrite {
+		t.Fatalf("ticket.answer is not listed as a write: %+v", got)
 	}
 
 	native := toolEntriesFor([]Instance{{

@@ -1,6 +1,7 @@
 package channel_test
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -143,5 +144,179 @@ func configureTicketRoom(t *testing.T, channels *admin.Channels) {
 	}, "usr_admin")
 	if err != nil {
 		t.Fatalf("PutConversation: %v", err)
+	}
+}
+
+/*
+The flow this admits: a form bot posts the request, and the team that owns it
+is named later in the thread — by the triage bot, or by a person.
+
+The mark is routing, never authority: it says which thread is a ticket, and
+the ticket's identity stays the root, so every later reply lands on it.
+*/
+func TestTicketRoutes_aMarkedReplyUnderABotRoot_opensATicketKeyedOnTheRoot(t *testing.T) {
+	_, channels, settingsStore := configuredChannelsWithStore(t)
+	tickets := ticket.NewMemory()
+	configureTicketRoom(t, channels)
+	configureMarkedTicketRoom(t, channels)
+	routes := channel.NewTicketRoutes(settingsStore, tickets)
+
+	root, err := ticket.Key("acme-slack", "C-help", "171.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := channel.TicketCandidate{
+		Connection: "acme-slack", Conversation: "C-help",
+		Message: "171.2", Thread: "171.1", Kind: "message",
+		Text:   ":large_yellow_circle: [team-sre] [RTD-17] Ticket criado",
+		Source: channel.Source{User: "U-triage", Bot: "B-triage"},
+	}
+	for name, mutate := range map[string]func(*channel.TicketCandidate){
+		"the configured triage bot": func(*channel.TicketCandidate) {},
+		"a person in the channel": func(c *channel.TicketCandidate) {
+			c.Message, c.Source = "171.3", channel.Source{User: "U-requester"}
+			c.Text = "[team-sre]"
+		},
+		// Slack stamps the app id on what a person sends through an
+		// integration. It is still that person writing.
+		"a person writing through an app": func(c *channel.TicketCandidate) {
+			c.Message = "171.4"
+			c.Source = channel.Source{User: "U-requester", App: "A-assistant"}
+			c.Text = "[team-sre]"
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := base
+			mutate(&candidate)
+			intent, ok, err := routes.Route(t.Context(), candidate)
+			if err != nil || !ok {
+				t.Fatalf("Route: intent=%+v ok=%v err=%v", intent, ok, err)
+			}
+			if !intent.Root || !intent.Marked || intent.Key != root ||
+				intent.RootFrom != "bot:B-forms" || intent.AddressedBy != "bot:B-triage" ||
+				intent.Scope != (domain.Scope{Company: "acme", Area: "platform"}) ||
+				intent.Agent != "ticketito" || intent.RunAs != "usr_platform" {
+				t.Fatalf("intent = %+v, want the thread admitted on its root", intent)
+			}
+		})
+	}
+
+	for name, mutate := range map[string]func(*channel.TicketCandidate){
+		"unmarked reply": func(c *channel.TicketCandidate) { c.Text = "alguém pode olhar?" },
+		"a bot nobody trusted": func(c *channel.TicketCandidate) {
+			c.Source = channel.Source{Bot: "B-stranger"}
+		},
+		"a bot posting under a person's name": func(c *channel.TicketCandidate) {
+			c.Source = channel.Source{User: "U-bot-account", Bot: "B-stranger", App: "A-stranger"}
+		},
+		"the bot root itself": func(c *channel.TicketCandidate) {
+			c.Message, c.Thread = "171.1", "171.1"
+			c.Source = channel.Source{Bot: "B-forms"}
+		},
+		"a human root": func(c *channel.TicketCandidate) {
+			c.Message, c.Thread = "171.5", "171.5"
+			c.Source = channel.Source{User: "U-requester"}
+		},
+		"a mention": func(c *channel.TicketCandidate) { c.Kind = "mention" },
+		"another room's pattern": func(c *channel.TicketCandidate) {
+			c.Conversation, c.Text = "C-tickets", "please create an api key"
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := base
+			mutate(&candidate)
+			if intent, ok, err := routes.Route(t.Context(), candidate); err != nil || ok {
+				t.Fatalf("Route: intent=%+v ok=%v err=%v, want ignored", intent, ok, err)
+			}
+		})
+	}
+}
+
+func configureMarkedTicketRoom(t *testing.T, channels *admin.Channels) {
+	t.Helper()
+	err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+		ID: "C-help", Label: "#dev-platform-help", Enabled: true,
+		Scope: domain.Scope{Company: "acme", Area: "platform"},
+		Mode:  channel.ConversationTicket, Agent: "ticketito", RunAs: "usr_platform",
+		Ticket: &channel.TicketRule{
+			OpenFrom: channel.TicketOpenMarkedThreads, RootFrom: "bot:B-forms",
+			AddressFrom: "bot:B-triage", Patterns: []string{`\[team-sre\]`},
+		},
+	}, "usr_admin")
+	if err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+}
+
+func TestCompileTicketPatterns_aMarkedThreadRuleNeedsTheRootItTrusts(t *testing.T) {
+	t.Parallel()
+	valid := channel.TicketRule{
+		OpenFrom: channel.TicketOpenMarkedThreads, RootFrom: "bot:B-forms",
+		AddressFrom: "bot:B-triage", Patterns: []string{`\[team-sre\]`},
+	}
+	if _, err := channel.CompileTicketPatterns(valid); err != nil {
+		t.Fatalf("CompileTicketPatterns: %v", err)
+	}
+	for name, mutate := range map[string]func(*channel.TicketRule){
+		"no root source":   func(r *channel.TicketRule) { r.RootFrom = "" },
+		"a person as root": func(r *channel.TicketRule) { r.RootFrom = "user:U1" },
+		"a root on the older rule": func(r *channel.TicketRule) {
+			r.OpenFrom = channel.TicketOpenLinkedUsers
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			rule := valid
+			mutate(&rule)
+			if _, err := channel.CompileTicketPatterns(rule); err == nil {
+				t.Fatal("an admission rule this version cannot enforce was accepted")
+			}
+		})
+	}
+}
+
+/*
+A refused rule says which field is wrong, and says so as the caller's fault.
+
+One message for every cause sends somebody back to a form where four of the
+five fields are already right — and a 500 tells them to call an operator about
+a sentence they could have fixed themselves.
+*/
+func TestCompileTicketPatterns_eachMissingPieceIsNamedAndBlamedOnTheCaller(t *testing.T) {
+	t.Parallel()
+	complete := channel.TicketRule{
+		OpenFrom: channel.TicketOpenMarkedThreads, RootFrom: "bot:B-forms",
+		AddressFrom: "bot:B-triage", ReviewIn: "C-agents",
+		Patterns: []string{`\[team-sre\]`},
+	}
+	if _, err := channel.CompileTicketPatterns(complete); err != nil {
+		t.Fatalf("CompileTicketPatterns: %v", err)
+	}
+
+	for name, broken := range map[string]func(*channel.TicketRule){
+		"no addressing source":   func(r *channel.TicketRule) { r.AddressFrom = "" },
+		"a bare Slack id":        func(r *channel.TicketRule) { r.AddressFrom = "B-triage" },
+		"no root source":         func(r *channel.TicketRule) { r.RootFrom = "" },
+		"a root under the other": func(r *channel.TicketRule) { r.OpenFrom = channel.TicketOpenLinkedUsers },
+		"an unknown policy":      func(r *channel.TicketRule) { r.OpenFrom = "whatever_comes_next" },
+		"a room with a space":    func(r *channel.TicketRule) { r.ReviewIn = "C agents" },
+		"no patterns":            func(r *channel.TicketRule) { r.Patterns = nil },
+		"a pattern matching all": func(r *channel.TicketRule) { r.Patterns = []string{`.*`} },
+	} {
+		t.Run(name, func(t *testing.T) {
+			rule := complete
+			rule.Patterns = append([]string(nil), complete.Patterns...)
+			broken(&rule)
+			_, err := channel.CompileTicketPatterns(rule)
+			if !errors.Is(err, channel.ErrTicketAdmission) {
+				t.Fatalf("err = %v, want it refused as an admission rule", err)
+			}
+			if !admin.Invalid(err) {
+				t.Fatalf("err = %v, want the console told the caller, not the operator", err)
+			}
+			if strings.TrimSpace(strings.TrimPrefix(err.Error(),
+				channel.ErrTicketAdmission.Error()+":")) == "" {
+				t.Fatalf("err = %v, want it to say which field", err)
+			}
+		})
 	}
 }

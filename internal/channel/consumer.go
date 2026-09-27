@@ -218,6 +218,25 @@ func (c *Consumer) decline(ctx context.Context, a Claimed, r Refusal) error {
 }
 
 /*
+sayWhere answers where this reply goes.
+
+Where it arrived, unless it belongs to a ticket that is worked somewhere else.
+A ticket's room hears everything about it — refusals, notices, cards — and the
+thread the request was written in hears one thing: the answer a person
+approved. A room that cannot be resolved leaves the reply where it was owed,
+because saying nothing is worse than saying it in the thread.
+*/
+func (c *Consumer) sayWhere(ctx context.Context, one Claimed) (conversation, thread string) {
+	if one.Ticket == nil {
+		return one.Conversation, one.Thread
+	}
+	if room, at, ok := c.tickets.ReviewPlace(ctx, one.Ticket); ok {
+		return room, at
+	}
+	return one.Conversation, one.Thread
+}
+
+/*
 Answer says the reply debts that were recorded and not yet delivered.
 
 Its own claim, so two consumers do not both say it, and its own retry, so a
@@ -238,7 +257,8 @@ func (c *Consumer) Answer(ctx context.Context, lease time.Duration, limit int) (
 
 	said, failures := 0, []error{}
 	for _, one := range owed {
-		if err := c.answers.Reply(ctx, one.Channel, one.Conversation, one.Thread, one.Detail); err != nil {
+		conversation, thread := c.sayWhere(ctx, one)
+		if err := c.answers.Reply(ctx, one.Channel, conversation, thread, one.Detail); err != nil {
 			// Left owed, so somebody tries again. The person has not been
 			// told and that is exactly the failure worth retrying.
 			failures = append(failures, fmt.Errorf("channel: answer %s: %w", one.EventID, err))
