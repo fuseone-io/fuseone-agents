@@ -71,6 +71,19 @@ func (s *Server) approvalEvidenceDetail(
 	if err != nil {
 		return openapi.ApprovalEvidenceDetail{}, errApprovalEvidenceUnavailable
 	}
+	// Which decoder the bytes belong to is the evidence's own answer. Read as
+	// one kind whatever it says, an answer somebody wrote is refused as an
+	// unreadable subscription — and the decision cannot be taken at all.
+	if evidence.Kind == connectortools.TicketAnswerEvidenceKind {
+		text, err := connectortools.DecodeTicketAnswerEvidence(raw, evidence)
+		if err != nil {
+			return openapi.ApprovalEvidenceDetail{}, errApprovalEvidenceUnavailable
+		}
+		return openapi.ApprovalEvidenceDetail{
+			Kind:         openapi.ApprovalEvidenceDetailKindTicketAnswer,
+			TicketAnswer: &openapi.TicketAnswerEvidence{Text: text},
+		}, nil
+	}
 	snapshot, err := connectortools.DecodeGraviteeApprovalEvidence(raw, evidence)
 	if err != nil {
 		return openapi.ApprovalEvidenceDetail{}, errApprovalEvidenceUnavailable

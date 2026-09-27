@@ -512,6 +512,12 @@ func channelFrom(
 				AddressFrom: conv.Ticket.AddressFrom,
 				Patterns:    append([]string(nil), conv.Ticket.Patterns...),
 			}
+			if conv.Ticket.RootFrom != "" {
+				item.Ticket.RootFrom = ptr(conv.Ticket.RootFrom)
+			}
+			if conv.Ticket.ReviewIn != "" {
+				item.Ticket.ReviewIn = ptr(conv.Ticket.ReviewIn)
+			}
 		}
 		if conv.ThreadContext {
 			item.ThreadContext = ptr(true)
@@ -535,10 +541,17 @@ func ticketRuleOf(rule *openapi.TicketRule) *channel.TicketRule {
 	if rule == nil {
 		return nil
 	}
-	return &channel.TicketRule{
+	out := &channel.TicketRule{
 		OpenFrom: string(rule.OpenFrom), AddressFrom: rule.AddressFrom,
 		Patterns: append([]string(nil), rule.Patterns...),
 	}
+	if rule.RootFrom != nil {
+		out.RootFrom = *rule.RootFrom
+	}
+	if rule.ReviewIn != nil {
+		out.ReviewIn = *rule.ReviewIn
+	}
+	return out
 }
 
 func valueOrSlice(v *[]string) []string {

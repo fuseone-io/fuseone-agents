@@ -8,10 +8,21 @@ import (
 	"github.com/fuseone/agents/internal/ticket"
 )
 
+// errReviewPending says the ticket has a room and the room has no thread yet.
+// Not a failure: the sweep that opens it runs beside this one, and the card
+// waits rather than going where the room exists to keep it from.
+var errReviewPending = errors.New("channel: the ticket's review room has no thread yet")
+
 func ticketApproval(report Report) bool {
 	return report.Ticket.Valid() && report.Event == EventParked &&
 		report.AwaitingDecision && report.AtSeq > 0
 }
+
+// ticketReport is anything a run of a ticket has to say. All of it belongs
+// where the ticket is worked: the room if it has one, and its own thread
+// otherwise. Never at the top of the channel the person who asked is reading,
+// which is what "a ticket conversation" means.
+func ticketReport(report Report) bool { return report.Ticket.Valid() }
 
 func (f *fanout) ticketRoute(
 	ctx context.Context, report Report,
@@ -35,34 +46,47 @@ func (f *fanout) ticketRoute(
 func (f *fanout) ticketPlaces(
 	ctx context.Context, report Report, places []Conversation,
 ) ([]Conversation, error) {
-	if !ticketApproval(report) {
+	if !ticketReport(report) {
 		return places, nil
 	}
 	route, err := f.ticketRoute(ctx, report)
 	if err != nil {
 		return nil, err
 	}
-	found := false
-	out := append([]Conversation(nil), places...)
-	for i := range out {
-		if out[i].Channel != route.Origin.Connection ||
-			out[i].ID != route.Origin.Conversation {
-			continue
-		}
-		found = true
-		out[i].Thread = route.Origin.Root
-		out[i].Agent = ""
-		out[i].Wants = []Event{EventParked}
-		out[i].DirectApprovals = false
+	room, err := ticketRoom(route)
+	if err != nil {
+		return nil, err
 	}
-	if !found {
-		out = append(out, Conversation{
-			Channel: route.Origin.Connection, ID: route.Origin.Conversation,
-			Label: route.Origin.Conversation, Thread: route.Origin.Root,
-			Wants: []Event{EventParked},
-		})
+	// One place, and it is the ticket's. Another conversation covering the
+	// scope would repeat where nobody is working the ticket, and the support
+	// thread would carry work the person who asked was never meant to read:
+	// only an approved answer reaches them, and it is published by the
+	// outcome, not by an announcement.
+	return []Conversation{{
+		Channel: room.Connection, ID: room.Conversation,
+		Label: room.Conversation, Thread: room.Root, Wants: []Event{report.Event},
+	}}, nil
+}
+
+/*
+ticketRoom answers where this ticket's decision is taken.
+
+The support thread, unless the ticket was opened with a room of its own — and
+then only that room. A card in both places would put a half-written answer in
+front of the person who asked for it, which is the one thing the room exists to
+prevent.
+*/
+func ticketRoom(route ticket.ApprovalRoute) (ticket.Origin, error) {
+	if route.Review.Conversation == "" {
+		return route.Origin, nil
 	}
-	return out, nil
+	if !route.Review.Open() {
+		return ticket.Origin{}, errReviewPending
+	}
+	return ticket.Origin{
+		Connection:   route.Origin.Connection,
+		Conversation: route.Review.Conversation, Root: route.Review.Root,
+	}, nil
 }
 
 func (f *fanout) isTicketRoom(report Report, place Conversation) bool {
@@ -70,10 +94,12 @@ func (f *fanout) isTicketRoom(report Report, place Conversation) bool {
 		return false
 	}
 	held, ok := f.byTicket[report.Ticket]
-	return ok && held.err == nil &&
-		place.Channel == held.value.Origin.Connection &&
-		place.ID == held.value.Origin.Conversation &&
-		place.Thread == held.value.Origin.Root
+	if !ok || held.err != nil {
+		return false
+	}
+	room, err := ticketRoom(held.value)
+	return err == nil && place.Channel == room.Connection &&
+		place.ID == room.Conversation && place.Thread == room.Root
 }
 
 // directForTicket tells only the people selected by the ticket's configured

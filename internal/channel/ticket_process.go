@@ -40,6 +40,7 @@ type TicketHandler struct {
 	addresses TicketAddresses
 	deciders  TicketDeciders
 	runs      TicketRuns
+	threads   ThreadReader
 	now       func() time.Time
 }
 
@@ -116,17 +117,26 @@ func (h *TicketHandler) Handle(ctx context.Context, arrival Claimed) (TicketResu
 }
 
 func (h *TicketHandler) openRoot(ctx context.Context, arrival Claimed) (TicketResult, error) {
+	if arrival.Ticket.Marked {
+		return h.openMarked(ctx, arrival)
+	}
 	who, linked, err := h.bindings.PrincipalFor(ctx, arrival.Channel, arrival.Source.User)
 	if err != nil {
 		return TicketResult{}, fmt.Errorf("channel: resolve ticket requester: %w", err)
 	}
 	if !linked {
-		return TicketResult{Refusal: Refusal{
-			Why:    "Link your Slack account to FuseOne before opening a governed ticket.",
-			Reason: "ticket_unbound",
-		}}, nil
+		return unboundRequester(), nil
 	}
-	raw, err := firstTicketDraft(arrival.Message, who, arrival.Text)
+	return h.open(ctx, arrival, who, arrival.Message, arrival.Text)
+}
+
+// open writes the first revision of a ticket and starts it. The request it
+// records is one message: which message, and whose, is the admission policy's
+// answer rather than this function's.
+func (h *TicketHandler) open(
+	ctx context.Context, arrival Claimed, who domain.UserID, ref, text string,
+) (TicketResult, error) {
+	raw, err := firstTicketDraft(ref, who, text)
 	if err != nil {
 		return ticketContextRefusal(err), nil
 	}
@@ -140,7 +150,8 @@ func (h *TicketHandler) openRoot(ctx context.Context, arrival Claimed) (TicketRe
 			Conversation: arrival.Conversation, Root: arrival.Thread},
 		Scope: arrival.Ticket.Scope, Agent: arrival.Ticket.Agent, RunAs: arrival.Ticket.RunAs,
 		RequestedBy: who, AddressedBy: arrival.Ticket.AddressedBy,
-		EventID: arrival.EventID, Draft: draft, At: h.now().UTC(),
+		ReviewIn: arrival.Ticket.ReviewIn,
+		EventID:  arrival.EventID, Draft: draft, At: h.now().UTC(),
 	})
 	if errors.Is(err, ticket.ErrTooManyOpen) {
 		return TicketResult{Refusal: Refusal{
@@ -157,6 +168,13 @@ func (h *TicketHandler) openRoot(ctx context.Context, arrival Claimed) (TicketRe
 	return h.openRevision(ctx, held, held.Current)
 }
 
+func unboundRequester() TicketResult {
+	return TicketResult{Refusal: Refusal{
+		Why:    "Link your Slack account to FuseOne before opening a governed ticket.",
+		Reason: "ticket_unbound",
+	}}
+}
+
 func (h *TicketHandler) handleReply(ctx context.Context, arrival Claimed) (TicketResult, error) {
 	held, err := h.store.Current(ctx, arrival.Ticket.Key)
 	if err != nil {
@@ -170,10 +188,13 @@ func (h *TicketHandler) handleReply(ctx context.Context, arrival Claimed) (Ticke
 		// reopen authority from an approval that has already been consumed.
 		return handled("ticket_already_closed"), nil
 	}
+	if arrival.Ticket.Review {
+		return h.correct(ctx, arrival, held)
+	}
 	if arrival.Source.MatchesKey(held.AddressedBy) {
 		return h.address(ctx, arrival, held)
 	}
-	if arrival.Source.User == "" || arrival.Source.Bot != "" || arrival.Source.App != "" {
+	if !arrival.Source.Person() {
 		return handled("ticket_source_ignored"), nil
 	}
 	who, linked, err := h.bindings.PrincipalFor(ctx, arrival.Channel, arrival.Source.User)
@@ -203,8 +224,8 @@ func (h *TicketHandler) revise(
 			return TicketResult{}, err
 		}
 		updated, _, err := h.store.Revise(ctx, ticket.ReviseInput{
-			Ref: held.Current.Ref, EventID: arrival.EventID,
-			By: who, Draft: draft, At: h.now().UTC(),
+			Ref: held.Current.Ref, InReview: arrival.Ticket.Review,
+			EventID: arrival.EventID, By: who, Draft: draft, At: h.now().UTC(),
 		})
 		if err == nil {
 			return h.openRevision(ctx, updated, updated.Current)

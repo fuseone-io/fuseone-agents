@@ -120,6 +120,22 @@ type ThreadMessage struct {
 	Text   string `json:"text"`
 }
 
+// ReviewOpening is the thread a ticket asks its review room for. The wording
+// belongs to the connector, as the closing answer's does; this says only which
+// request the room is being opened for.
+type ReviewOpening struct {
+	Conversation string
+	From         string
+	Root         string
+}
+
+// ReviewOpener opens that thread and answers where it landed. The reference is
+// what later cards are posted under, so a driver that cannot say where a
+// message went cannot host a review room.
+type ReviewOpener interface {
+	OpenReview(ctx context.Context, channel string, opening ReviewOpening) (string, error)
+}
+
 // Opens turns an intention into a run.
 type Opens interface {
 	Open(ctx context.Context, req Request) (Opened, error)

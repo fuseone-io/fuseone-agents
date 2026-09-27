@@ -19,8 +19,8 @@ func (p *Postgres) Revise(ctx context.Context, in ReviseInput) (Ticket, bool, er
 		return Ticket{}, false, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if ticket.RequestedBy != in.By {
-		return Ticket{}, false, ErrNotRequester
+	if err := requireReviser(ticket, in); err != nil {
+		return Ticket{}, false, err
 	}
 	if replayed, err := replayedEvent(ctx, tx, in.EventID, in.Ref.Key); err != nil || replayed {
 		return ticket, false, err

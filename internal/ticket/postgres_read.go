@@ -20,6 +20,7 @@ const ticketColumns = `
 	t.requested_by, t.addressed_by,
 	t.current_revision, t.active_revision, t.created_at, t.updated_at,
 	t.origin_connection, t.origin_conversation, t.origin_root,
+	t.review_conversation, t.review_root,
 	c.phase, c.draft_ref, c.draft_digest,
 	c.approval_run_id, c.approval_at_seq, c.snapshot_ref, c.snapshot_digest,
 	c.recipients, c.outcome_ref, c.outcome_digest, c.created_at, c.updated_at,
@@ -68,6 +69,7 @@ func (r *ticketRecord) scan(row pgx.Row) error {
 		&r.requester, &r.ticket.AddressedBy,
 		&r.currentRevision, &r.activeRevision, &r.ticket.CreatedAt, &r.ticket.UpdatedAt,
 		&r.ticket.Origin.Connection, &r.ticket.Origin.Conversation, &r.ticket.Origin.Root,
+		&r.ticket.Review.Conversation, &r.ticket.Review.Root,
 		&r.phase, &r.ticket.Current.Draft.Ref, &r.ticket.Current.Draft.Digest,
 		&r.approvalRun, &r.approvalSeq, &r.snapshotRef, &r.snapshotDigest,
 		&r.recipients, &r.outcomeRef, &r.outcomeDigest,
@@ -187,11 +189,13 @@ func (p *Postgres) ApprovalRoute(
 	var route ApprovalRoute
 	var recipients []string
 	err := p.pool.QueryRow(ctx, `
-		select t.origin_connection, t.origin_conversation, t.origin_root, r.recipients
+		select t.origin_connection, t.origin_conversation, t.origin_root,
+		       t.review_conversation, t.review_root, r.recipients
 		from governed_tickets t
 		join governed_ticket_revisions r on r.ticket_key = t.ticket_key
 		where t.ticket_key = $1 and r.revision = $2`, string(ref.Key), ref.Revision).Scan(
-		&route.Origin.Connection, &route.Origin.Conversation, &route.Origin.Root, &recipients,
+		&route.Origin.Connection, &route.Origin.Conversation, &route.Origin.Root,
+		&route.Review.Conversation, &route.Review.Root, &recipients,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ApprovalRoute{}, ErrNotFound

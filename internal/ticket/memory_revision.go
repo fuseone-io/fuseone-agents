@@ -25,8 +25,8 @@ func (m *Memory) Revise(ctx context.Context, in ReviseInput) (Ticket, bool, erro
 	if err != nil {
 		return Ticket{}, false, err
 	}
-	if ticket.RequestedBy != in.By {
-		return Ticket{}, false, ErrNotRequester
+	if err := requireReviser(ticket, in); err != nil {
+		return Ticket{}, false, err
 	}
 	if replayed, err := m.replayed(in.EventID, in.Ref.Key); err != nil || replayed {
 		return cloneTicket(ticket), false, err

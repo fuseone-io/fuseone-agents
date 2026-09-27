@@ -49,7 +49,7 @@ export function ConversationFormFields({
         <ConversationWatchFields form={form} />
       )}
       {!reportsOnly && startsTickets(mode) && (
-        <ConversationTicketFields form={form} />
+        <ConversationTicketFields form={form} channel={channel} />
       )}
     </PropertiesSheetBody>
   );

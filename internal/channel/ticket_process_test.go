@@ -84,6 +84,23 @@ func TestTicketHandler_onlyTheRequesterRevisesTheTicket(t *testing.T) {
 	}
 }
 
+// The requester's own reply, sent through an app with their token, is a
+// correction like any other.
+func TestTicketHandler_aRequesterReplyingThroughAnApp_revisesTheTicket(t *testing.T) {
+	handler, store, opener, _ := ticketHandler()
+	mustHandleTicket(t, handler, ticketRoot("event-root", "Create an API key"))
+
+	reply := ticketReply("event-through-app", "171.2", "Expire it in 30 days")
+	reply.Source = channel.Source{User: "U-requester", App: "A-assistant"}
+	if result := mustHandleTicket(t, handler, reply); result.RunID == "" || opener.count() != 2 {
+		t.Fatalf("result = %+v, runs=%d", result, opener.count())
+	}
+	held, _ := store.Current(t.Context(), channelTicketKey)
+	if held.Current.Ref.Revision != 2 {
+		t.Fatalf("revision = %d, want the correction folded in", held.Current.Ref.Revision)
+	}
+}
+
 func TestTicketHandler_theConfiguredActorMayAddressOnlyRealDeciders(t *testing.T) {
 	handler, store, opener, people := ticketHandler()
 	mustHandleTicket(t, handler, ticketRoot("event-root", "Create an API key"))

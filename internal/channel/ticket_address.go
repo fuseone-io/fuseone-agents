@@ -12,7 +12,20 @@ import (
 
 const MaxTicketRecipients = 20
 
-var slackMention = regexp.MustCompile(`<@([A-Z0-9]+)>`)
+// slackMention is one account named in a message. The label after the pipe is
+// the display name Slack sometimes carries along; it is not part of the
+// identity and is never read as one. Group mentions are a different shape on
+// purpose: `<!subteam^S…>` names no account this platform can resolve.
+var slackMention = regexp.MustCompile(`<@([A-Z0-9]+)(?:\|[^>]*)?>`)
+
+// firstMentioned answers the first account a text names, if it names one.
+func firstMentioned(text string) (string, bool) {
+	match := slackMention.FindStringSubmatch(text)
+	if len(match) != 2 {
+		return "", false
+	}
+	return match[1], true
+}
 
 type TicketAddresses interface {
 	PrincipalsOn(context.Context, string, []string) (map[string]domain.UserID, error)
