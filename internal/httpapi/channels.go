@@ -526,6 +526,10 @@ func channelFrom(
 			if conv.Ticket.ReviewIn != "" {
 				item.Ticket.ReviewIn = ptr(conv.Ticket.ReviewIn)
 			}
+			if len(conv.Ticket.ClosesOn) > 0 {
+				closes := append([]string(nil), conv.Ticket.ClosesOn...)
+				item.Ticket.ClosesOn = &closes
+			}
 		}
 		if conv.ThreadContext {
 			item.ThreadContext = ptr(true)
@@ -558,6 +562,9 @@ func ticketRuleOf(rule *openapi.TicketRule) *channel.TicketRule {
 	}
 	if rule.ReviewIn != nil {
 		out.ReviewIn = *rule.ReviewIn
+	}
+	if rule.ClosesOn != nil {
+		out.ClosesOn = append([]string(nil), *rule.ClosesOn...)
 	}
 	return out
 }

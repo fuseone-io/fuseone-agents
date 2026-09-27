@@ -16,6 +16,7 @@ const (
 	notMarkedSource  = "the source may not mark threads"
 	notMarkedPattern = "no pattern matched"
 	notMarkedRoom    = "the room does not open tickets from marks"
+	notClosingEmoji  = "the emoji does not close tickets here"
 )
 
 /*

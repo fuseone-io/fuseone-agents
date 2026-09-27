@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -14,6 +15,11 @@ import (
 // sentinel and a sentence: the sentinel says whose fault it is, so the console
 // answers 400 rather than 500, and the sentence says which field to look at.
 var ErrTicketAdmission = errors.New("channel: this ticket rule is incomplete")
+
+// MaxTicketClosingEmoji bounds the emoji that end a ticket. A short list is a
+// rule people can hold in their heads; a long one is an accident waiting for
+// whoever reacts with the wrong thing.
+const MaxTicketClosingEmoji = 4
 
 const (
 	TicketOpenLinkedUsers   = "linked_users"
@@ -43,7 +49,11 @@ type TicketRule struct {
 	// ReviewIn is the conversation this room's tickets are worked in: the
 	// draft is reviewed and corrected there, and only what is approved reaches
 	// the support thread. Empty means the support thread is the only room.
-	ReviewIn string   `json:"reviewIn,omitempty"`
+	ReviewIn string `json:"reviewIn,omitempty"`
+	// ClosesOn are the emoji that end a ticket when somebody who may decide
+	// puts one on the request. Empty means nothing closes a ticket by
+	// reaction, which is how every installation behaved before this existed.
+	ClosesOn []string `json:"closesOn,omitempty"`
 	Patterns []string `json:"patterns"`
 }
 
@@ -52,6 +62,7 @@ func (r *TicketRoutes) matcher(
 ) (compiledTicketRule, error) {
 	fingerprint := sha256.Sum256([]byte(rule.OpenFrom + "\x00" + rule.AddressFrom +
 		"\x00" + rule.RootFrom + "\x00" + rule.ReviewIn + "\x00" +
+		strings.Join(rule.ClosesOn, "\x00") + "\x00" +
 		strings.Join(rule.Patterns, "\x00")))
 	r.mu.RLock()
 	held, ok := r.compiled[key]
@@ -156,6 +167,9 @@ func admissible(rule TicketRule) error {
 			ErrTicketAdmission)
 	case !reviewRoom(rule.ReviewIn):
 		return fmt.Errorf("%w: the review room must be one conversation id", ErrTicketAdmission)
+	case !closingEmoji(rule.ClosesOn):
+		return fmt.Errorf("%w: closing emoji are up to %d plain names, without colons",
+			ErrTicketAdmission, MaxTicketClosingEmoji)
 	case len(rule.Patterns) == 0 || len(rule.Patterns) > MaxTicketPatterns:
 		return fmt.Errorf("%w: between one and %d patterns are needed",
 			ErrTicketAdmission, MaxTicketPatterns)
@@ -169,6 +183,31 @@ func admissible(rule TicketRule) error {
 func sameSourceKey(key, configured string) bool {
 	key, configured = strings.TrimSpace(key), strings.TrimSpace(configured)
 	return key != "" && configured != "" && strings.EqualFold(key, configured)
+}
+
+/*
+closingEmoji answers whether these names could be emoji.
+
+Names as Slack sends them: no colons, no spaces, nothing a person would have to
+guess the spelling of. Empty is the ordinary case and means no reaction closes
+anything.
+*/
+func closingEmoji(names []string) bool {
+	if len(names) > MaxTicketClosingEmoji {
+		return false
+	}
+	for _, name := range names {
+		if name == "" || name != strings.TrimSpace(name) || len(name) > 64 ||
+			!utf8.ValidString(name) || strings.ContainsAny(name, " :\t\r\n") {
+			return false
+		}
+	}
+	return true
+}
+
+// ClosesTicket answers whether this emoji is one the rule ends a ticket on.
+func (r TicketRule) ClosesTicket(emoji string) bool {
+	return slices.Contains(r.ClosesOn, strings.TrimSpace(emoji))
 }
 
 func addressSource(source string) bool {

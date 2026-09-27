@@ -5,6 +5,7 @@ import {
   knownTicketPolicy,
   marksThreads,
   splitSources,
+  splitClosingEmoji,
   splitTicketPatterns,
   startsFromMentions,
   startsTickets,
@@ -40,6 +41,7 @@ export function conversationDefaults(
       : "linked_users",
     ticketRootFrom: conversation?.ticket?.rootFrom ?? "",
     ticketReviewIn: conversation?.ticket?.reviewIn ?? "",
+    ticketClosesOn: (conversation?.ticket?.closesOn ?? []).join(" "),
     ticketAddressFrom: conversation?.ticket?.addressFrom ?? "",
     ticketPatterns: (conversation?.ticket?.patterns ?? []).join("\n"),
     wants: (conversation?.wants as ConversationValues["wants"]) ?? [
@@ -93,6 +95,9 @@ export function conversationInput(
             : {}),
           ...(values.ticketReviewIn.trim()
             ? { reviewIn: values.ticketReviewIn.trim() }
+            : {}),
+          ...(splitClosingEmoji(values.ticketClosesOn).length
+            ? { closesOn: splitClosingEmoji(values.ticketClosesOn) }
             : {}),
           addressFrom: values.ticketAddressFrom.trim(),
           patterns: splitTicketPatterns(values.ticketPatterns),

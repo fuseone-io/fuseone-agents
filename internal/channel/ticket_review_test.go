@@ -271,3 +271,50 @@ func TestTicketHandler_withADecisionPending_theRequestersReply_changesNothing(t 
 		t.Fatalf("revision = %d, want the pending decision untouched", after.Current.Ref.Revision)
 	}
 }
+
+/*
+A reaction ends the request, and only from somebody who may decide.
+
+The emoji is the room's own — configured beside the patterns that open one —
+and it has to be on the request itself. Anything else is a person reacting to a
+message, which is what people do all day.
+*/
+func TestTicketHandler_aClosingReaction_endsTheTicket(t *testing.T) {
+	handler, store, opener, people, _ := markedTicketHandler()
+	mustHandleTicket(t, handler, markedTicketMark("event-mark", "[team-sre]"))
+	openReviewThread(t, store, "900.1")
+	people.byAccount["UMANAGER"] = "usr_manager"
+
+	// Somebody who cannot decide reacts: nothing happens, and nothing is said.
+	stranger := closingReaction("event-react-stranger", "UREQUESTER")
+	if result := mustHandleTicket(t, handler, stranger); result.HandledReason != "ticket_closer_ignored" {
+		t.Fatalf("stranger = %+v, want it ignored", result)
+	}
+	if held, _ := store.Current(t.Context(), markedTicketKey); held.Closed != nil {
+		t.Fatal("a reaction from somebody who cannot decide closed the ticket")
+	}
+
+	if result := mustHandleTicket(t, handler, closingReaction("event-react", "UMANAGER")); result.HandledReason != "ticket_closed" {
+		t.Fatalf("closing = %+v", result)
+	}
+	held, _ := store.Current(t.Context(), markedTicketKey)
+	if held.Closed == nil || held.ClosedBy != "usr_manager" {
+		t.Fatalf("ticket = %+v, want it closed by the person who reacted", held)
+	}
+
+	// And nothing works it afterwards.
+	late := reviewReply("event-late", "900.9", "mais uma correção",
+		channel.Source{User: "UMANAGER"})
+	if result := mustHandleTicket(t, handler, late); result.RunID != "" || opener.count() != 1 {
+		t.Fatalf("late correction = %+v, runs=%d", result, opener.count())
+	}
+}
+
+func closingReaction(event, user string) channel.Claimed {
+	return channel.Claimed{Arrival: channel.Arrival{
+		Channel: "acme-slack", Conversation: "C-help", EventID: event,
+		Message: "171.1", Thread: "171.1",
+		Source: channel.Source{User: user},
+		Ticket: &channel.TicketIntent{Key: markedTicketKey, Close: true},
+	}}
+}

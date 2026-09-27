@@ -197,8 +197,24 @@ addressed — and each correction is a revision: the pending approval is cancell
 and the agent writes the answer again. Once approved, the text is published in
 the ticket thread and the room is told it was.
 
-The requester still corrects in their own thread, as always. People who cannot
-decide can talk in the room without starting anything.
+In the ticket thread, whatever the requester writes is kept in the request and
+starts nothing: what regenerates an answer is a correction in the room. While a
+decision is pending it is recorded and goes no further — a revision written then
+would supersede the card somebody is reading with nothing regenerating to
+replace it. People who cannot decide can talk in the room without starting
+anything, and naming recipients by mention does not apply here: the room is the
+address.
+
+Publishing an answer settles that revision, not the ticket. The approved
+revision keeps the record of what was published, and the ticket goes on
+accepting corrections: the next thing the requester says is about the same
+request, in the same thread. A ticket ends when somebody holding Approver in the scope reacts to the request
+with one of the emoji configured under **Emoji that closes the ticket**. A
+reaction from anybody else is ignored in silence, a reaction taken away reopens
+nothing, and an answer waiting for approval when the ticket closes is cancelled
+with a line in the room saying it was not published. Closed, the ticket takes
+nothing more — no correction in the room, no context in the thread.
+Until it closes it still counts against the area's cap of open tickets.
 
 For the agent to propose the answer, declare the `$fuseone.ticket.answer` tool
 on it. It is a write effect: the agent calls it with the text, the Gate stops

@@ -165,7 +165,8 @@ func (r SocketReceiver) handleEvent(
 		intent, ok, err := r.Tickets.Route(ctx, channel.TicketCandidate{
 			Connection: r.Channel, Conversation: delivery.Conversation,
 			Message: delivery.Message, Thread: delivery.Thread,
-			Kind: delivery.Kind, Text: delivery.Text, Source: delivery.Source,
+			Kind: delivery.Kind, Text: delivery.Text,
+			Reaction: delivery.Reaction, Source: delivery.Source,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("slack: route ticket: %w", err)
@@ -174,6 +175,13 @@ func (r SocketReceiver) handleEvent(
 			arrival.Ticket = &intent
 			arrival.AskedBy = delivery.Source.Key()
 		}
+	}
+	// A reaction starts nothing. It either ended a ticket, which the routing
+	// above decided, or it is somebody reacting to a message.
+	if arrival.Ticket == nil && delivery.Kind == DeliveryReaction {
+		log.Debug("a reaction ended nothing", "channel", r.Channel,
+			"conversation", delivery.Conversation, "message", delivery.Message)
+		return AckSocketEnvelope(envelope.EnvelopeID)
 	}
 	if arrival.Ticket == nil && delivery.Kind == DeliveryMessage {
 		if r.Rules == nil {
