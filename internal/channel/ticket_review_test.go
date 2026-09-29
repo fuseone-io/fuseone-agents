@@ -85,8 +85,6 @@ func TestTicketHandler_aCorrectionWrittenThroughAnApp_isStillTheirs(t *testing.T
 	}
 }
 
-// The room's thread is opened once, and what the driver answers is what later
-// cards are posted under.
 func TestTicketReviewConsumer_opensOneThreadPerTicketAndRecordsWhereItIs(t *testing.T) {
 	handler, store, _, _, _ := markedTicketHandler()
 	mustHandleTicket(t, handler, markedTicketMark("event-mark", "[team-sre]"))

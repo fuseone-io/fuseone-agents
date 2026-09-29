@@ -205,7 +205,6 @@ func closingEmoji(names []string) bool {
 	return true
 }
 
-// ClosesTicket answers whether this emoji is one the rule ends a ticket on.
 func (r TicketRule) ClosesTicket(emoji string) bool {
 	return slices.Contains(r.ClosesOn, strings.TrimSpace(emoji))
 }

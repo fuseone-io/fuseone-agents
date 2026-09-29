@@ -84,8 +84,6 @@ func TestTicketHandler_onlyTheRequesterRevisesTheTicket(t *testing.T) {
 	}
 }
 
-// The requester's own reply, sent through an app with their token, is a
-// correction like any other.
 func TestTicketHandler_aRequesterReplyingThroughAnApp_revisesTheTicket(t *testing.T) {
 	handler, store, opener, _ := ticketHandler()
 	mustHandleTicket(t, handler, ticketRoot("event-root", "Create an API key"))
