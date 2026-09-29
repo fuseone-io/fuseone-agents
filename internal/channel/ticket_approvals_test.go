@@ -179,8 +179,6 @@ func TestSweep_anyEventOfATicketRun_isReportedOnlyInItsRoom(t *testing.T) {
 	}
 }
 
-// Without a room, a ticket's run is still not announced at the top of the
-// support channel: it goes under the request it belongs to.
 func TestSweep_aTicketRunWithNoReviewRoom_isReportedUnderItsOwnThread(t *testing.T) {
 	posts := &recorder{}
 	report := parkedReport()

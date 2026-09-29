@@ -18,7 +18,6 @@ const MaxTicketRecipients = 20
 // purpose: `<!subteam^S…>` names no account this platform can resolve.
 var slackMention = regexp.MustCompile(`<@([A-Z0-9]+)(?:\|[^>]*)?>`)
 
-// firstMentioned answers the first account a text names, if it names one.
 func firstMentioned(text string) (string, bool) {
 	match := slackMention.FindStringSubmatch(text)
 	if len(match) != 2 {

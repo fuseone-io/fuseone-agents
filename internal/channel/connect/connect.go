@@ -93,8 +93,6 @@ func (d *Drivers) ReplyOutcome(ctx context.Context, name, conversation, thread, 
 	return driver.SayOutcome(ctx, conversation, thread, text)
 }
 
-// OpenReview opens the thread a ticket is worked in, in the room configured
-// for it, and answers where that thread is.
 func (d *Drivers) OpenReview(
 	ctx context.Context, name string, opening channel.ReviewOpening,
 ) (string, error) {
