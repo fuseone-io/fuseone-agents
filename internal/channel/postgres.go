@@ -109,7 +109,13 @@ func (p *Postgres) Unreported(ctx context.Context, since time.Time, limit int) (
 	rows, err := p.pool.Query(ctx, `
 		select runs.run_id, runs.agent_id, runs.version_id, runs.company_id, runs.area_id,
 		       `+phases+` as event, runs.updated_at,
-		       coalesce(runs.pending_tool, ''), coalesce(runs.pending_reason, ''),
+		       coalesce(runs.pending_tool, ''),
+		       -- What is waiting, or what went wrong. A run parked by a model
+		       -- or a provider has no approval request and therefore no
+		       -- pending reason, and a card that says "no reason recorded" is
+		       -- a card that sends somebody to the logs for a code the
+		       -- projection already has.
+		       coalesce(nullif(runs.pending_reason, ''), runs.failure_code, ''),
 		       `+announcementSeq+`,
 		       runs.phase = 'awaiting_approval',
 		       runs.ticket_key, runs.ticket_revision
