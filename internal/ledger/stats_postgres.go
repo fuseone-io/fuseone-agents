@@ -228,7 +228,11 @@ func runFilterOn(f domain.RunFilter, timeColumn string) (string, []any) {
 	if f.VersionID != "" {
 		add("version_id = $%d", string(f.VersionID))
 	}
-	if len(f.Scopes) > 0 {
+	// A grant above every company narrows nothing. Written as a clause it is
+	// `company_id = '*'`, which is a company no run belongs to: the store
+	// answered an administrator with an empty page while the in-memory one,
+	// which compares scopes with Contains, answered correctly.
+	if len(f.Scopes) > 0 && !readsEveryCompany(f.Scopes) {
 		var any []string
 		for _, scope := range f.Scopes {
 			args = append(args, string(scope.Company))
@@ -289,3 +293,14 @@ const (
 	realRuns  = "not simulated"
 	realSteps = "not exists (select 1 from runs r where r.run_id = run_steps.run_id and r.simulated)"
 )
+
+// readsEveryCompany answers whether one of these scopes is the installation
+// itself, which contains every other and therefore filters nothing.
+func readsEveryCompany(scopes []domain.Scope) bool {
+	for _, scope := range scopes {
+		if scope.Company == domain.Installation && scope.Area == "" {
+			return true
+		}
+	}
+	return false
+}
