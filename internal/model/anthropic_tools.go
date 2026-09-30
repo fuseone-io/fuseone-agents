@@ -20,10 +20,11 @@ func (a *Anthropic) toolParams(ids []domain.ToolID, offered names) []anthropic.T
 		if !ok {
 			continue
 		}
+		fields, required := propertiesOf(schema)
 		tool := anthropic.ToolParam{
 			Name:        offered.wire[id],
 			Description: anthropic.String(desc),
-			InputSchema: anthropic.ToolInputSchemaParam{Properties: propertiesOf(schema)},
+			InputSchema: anthropic.ToolInputSchemaParam{Properties: fields, Required: required},
 		}
 		out = append(out, anthropic.ToolUnionParam{OfTool: &tool})
 	}
@@ -46,25 +47,4 @@ func finishToolParam(offered names) anthropic.ToolUnionParam {
 		InputSchema: anthropic.ToolInputSchemaParam{Properties: finishToolSchema()},
 	}
 	return anthropic.ToolUnionParam{OfTool: &tool}
-}
-
-/*
-propertiesOf reads a tool's fields, however its schema was written.
-
-This provider is given the fields and builds the object around them. A schema
-written as the whole object — which is what the other provider's wire format
-takes — would arrive as a property called "type" and one called "properties",
-and the request is refused for a schema that is invalid with no word about
-which tool wrote it. Both shapes exist in this repository, so both are read
-here rather than at each author.
-*/
-func propertiesOf(schema map[string]any) map[string]any {
-	if schema["type"] != "object" {
-		return schema
-	}
-	fields, ok := schema["properties"].(map[string]any)
-	if !ok {
-		return schema
-	}
-	return fields
 }

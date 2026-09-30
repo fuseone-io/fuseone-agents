@@ -29,15 +29,79 @@ func TestPropertiesOf_takesTheFieldsOutOfAWholeObjectSchema(t *testing.T) {
 		"additionalProperties": false,
 	}
 
-	if got := propertiesOf(whole); !reflect.DeepEqual(got, fields) {
+	if got, _ := propertiesOf(whole); !reflect.DeepEqual(got, fields) {
 		t.Fatalf("propertiesOf(whole) = %v, want the fields", got)
 	}
-	if got := propertiesOf(fields); !reflect.DeepEqual(got, fields) {
+	if got, _ := propertiesOf(fields); !reflect.DeepEqual(got, fields) {
 		t.Fatalf("propertiesOf(fields) = %v, want them unchanged", got)
 	}
-	if got := propertiesOf(nil); got != nil {
+	if got, _ := propertiesOf(nil); got != nil {
 		t.Fatalf("propertiesOf(nil) = %v", got)
 	}
+}
+
+// A whole-object schema says which fields are mandatory beside the fields
+// themselves. Taking only the fields made every one of them optional, and the
+// model proposed calls the connector then refused as bad arguments. A schema
+// decoded from JSON carries the list as []any, one written in Go as []string.
+func TestPropertiesOf_wholeObjectSchema_keepsItsRequiredFields(t *testing.T) {
+	t.Parallel()
+	fields := map[string]any{"subscriptionId": map[string]any{"type": "string"}}
+	cases := map[string]any{
+		"written in Go":     []string{"subscriptionId"},
+		"decoded from JSON": []any{"subscriptionId"},
+	}
+	for name, required := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			_, got := propertiesOf(map[string]any{
+				"type": "object", "properties": fields, "required": required,
+			})
+			if !reflect.DeepEqual(got, []string{"subscriptionId"}) {
+				t.Fatalf("required = %v, want [subscriptionId]", got)
+			}
+		})
+	}
+}
+
+func TestToolParams_aWholeObjectSchema_sendsItsRequiredFields(t *testing.T) {
+	t.Parallel()
+	client := &Anthropic{tools: requiredSchema()}
+
+	tools := client.toolParams([]domain.ToolID{"ticket"}, namesFor(engine.PlanInput{
+		Tools: []domain.ToolID{"ticket"},
+	}))
+	if len(tools) < 1 || tools[0].OfTool == nil {
+		t.Fatal("no tools were built")
+	}
+	got := tools[0].OfTool.InputSchema.Required
+	if !reflect.DeepEqual(got, []string{"subscriptionId"}) {
+		t.Fatalf("required = %v, want [subscriptionId]", got)
+	}
+}
+
+func TestChatTools_aWholeObjectSchema_sendsItsRequiredFields(t *testing.T) {
+	t.Parallel()
+	client := &OpenAICompatible{tools: requiredSchema()}
+
+	tools := client.chatTools([]domain.ToolID{"ticket"}, namesFor(engine.PlanInput{
+		Tools: []domain.ToolID{"ticket"},
+	}))
+	if len(tools) < 1 {
+		t.Fatal("no tools were built")
+	}
+	got := tools[0].Function.Parameters["required"]
+	if !reflect.DeepEqual(got, []string{"subscriptionId"}) {
+		t.Fatalf("required = %v, want [subscriptionId]", got)
+	}
+}
+
+func requiredSchema() staticSchema {
+	return staticSchema{id: "ticket", desc: "subscribe", schema: map[string]any{
+		"type":       "object",
+		"properties": map[string]any{"subscriptionId": map[string]any{"type": "string"}},
+		"required":   []any{"subscriptionId"},
+	}}
 }
 
 // Both providers build the object around the fields, so both read a schema the
