@@ -1,6 +1,22 @@
 package channel
 
-import "github.com/fuseone/agents/internal/ticket"
+import (
+	"github.com/fuseone/agents/internal/engine"
+	"github.com/fuseone/agents/internal/ticket"
+)
+
+/*
+WithOutcomes lets a finished announcement carry the run's own answer.
+
+Optional like the other ports: without it the card of every earlier release is
+announced unchanged, which is what an installation running an older worker
+gets. The pair travels together because a payload holds a reference and only
+the content store can turn it into words.
+*/
+func (r *Reporter) WithOutcomes(outcomes Outcomes, content engine.ContentStore) *Reporter {
+	r.outcomes, r.content = outcomes, content
+	return r
+}
 
 /*
 WithDirectApprovals lets a conversation also tell the people who may decide.
