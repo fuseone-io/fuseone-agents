@@ -76,7 +76,7 @@ func (c *Catalog) AddServer(
 	defer c.mu.Unlock()
 
 	old := c.sessions[name]
-	c.sessions[name] = session
+	c.sessions[name] = &liveSession{session}
 	if limiter := newServerLimiter(opts.rateLimit, time.Now()); limiter != nil {
 		c.limiters[name] = limiter
 	} else {
@@ -125,15 +125,13 @@ func (c *Catalog) AddServer(
 // it.
 //
 // Removing one that was never connected is not an error: the reconciler asks
-// from a desired state rather than from knowledge of what is connected.
+// from a desired state rather than from knowledge of what is connected. A
+// server whose session died still has tools to drop, so they go either way.
 func (c *Catalog) RemoveServer(name string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	session, connected := c.sessions[name]
-	if !connected {
-		return nil
-	}
 	delete(c.sessions, name)
 	delete(c.limiters, name)
 	delete(c.caches, name)
@@ -141,6 +139,9 @@ func (c *Catalog) RemoveServer(name string) error {
 		if entry.Server == name {
 			delete(c.entries, id)
 		}
+	}
+	if !connected {
+		return nil
 	}
 	if err := session.Close(); err != nil {
 		return fmt.Errorf("tools: close %s: %w", name, err)
