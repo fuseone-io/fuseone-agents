@@ -295,7 +295,9 @@ const (
 )
 
 // readsEveryCompany answers whether one of these scopes is the installation
-// itself, which contains every other and therefore filters nothing.
+// itself, which contains every other and therefore filters nothing. Only
+// {*, ""} is: domain.Scope.Contains gives {*, area} nothing, and this filter
+// must not read more than the grant reaches.
 func readsEveryCompany(scopes []domain.Scope) bool {
 	for _, scope := range scopes {
 		if scope.Company == domain.Installation && scope.Area == "" {
