@@ -88,6 +88,7 @@ func transportFor(
 		if server.MCPProtocolModeOf() == domain.MCPProtocolLegacy {
 			client = legacyMCPClient(client)
 		}
+		client = withTolerantCancel(server.Name, client)
 		return &mcp.StreamableClientTransport{
 			Endpoint:   server.URL,
 			HTTPClient: client,
