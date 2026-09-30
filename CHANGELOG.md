@@ -25,6 +25,21 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **A finished announcement carries the run's own answer.** A conversation that
+  ticked Finished used to receive a card saying a run ended, with a link; the
+  sentence the agent wrote stayed in the console. The announcement now says the
+  answer itself, with one provenance line — agent, area and a link to the
+  invocation — when nobody asked for the run: a run opened by a mention keeps
+  answering only in the thread that asked, so nothing is ever said twice. Long
+  answers are truncated with a notice, an answer erased by retention says so,
+  and an operational note: an hourly agent with Finished ticked writes a
+  message every hour — the agent's instruction is what decides whether that is
+  a report or noise.
+
 ## [0.49.1] — 2026-09-13
 
 ### Added

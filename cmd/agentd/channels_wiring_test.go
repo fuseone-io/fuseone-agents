@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/fuseone/agents/internal/engine"
 	"testing"
 	"time"
 
@@ -138,7 +139,8 @@ is being asked is whether anybody remembered to name it.
 */
 func TestReporterPartsFor_namesEveryDependency(t *testing.T) {
 	t.Parallel()
-	parts := reporterPartsFor(&workerParts{}, "https://agents.example.com")
+	parts := reporterPartsFor(&workerParts{content: engine.NewMemoryContent()},
+		"https://agents.example.com")
 
 	for _, one := range []struct {
 		what    string
@@ -153,6 +155,8 @@ func TestReporterPartsFor_namesEveryDependency(t *testing.T) {
 		{"what each agent's owner asked for", parts.policies == nil},
 		{"which workspaces it may speak from", parts.connections == nil},
 		{"where ticket approvals belong", parts.tickets == nil},
+		{"the runs' own answers", parts.outcomes == nil},
+		{"the store that turns an answer reference into words", parts.content == nil},
 		{"a link back to the run", parts.baseURL == ""},
 	} {
 		if one.missing {
