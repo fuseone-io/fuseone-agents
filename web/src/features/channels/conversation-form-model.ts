@@ -70,6 +70,37 @@ export function splitSources(value: string) {
     .filter(Boolean);
 }
 
+// How a thread becomes a ticket. `linked_users` reads the root as the request
+// and needs a person to have written it; `marked_threads` admits a thread whose
+// root a configured bot wrote and whose mark arrived as a reply.
+export const TICKET_POLICIES = ["linked_users", "marked_threads"] as const;
+
+export type TicketPolicy = (typeof TICKET_POLICIES)[number];
+
+export function knownTicketPolicy(policy: string | undefined): policy is TicketPolicy {
+  return (TICKET_POLICIES as readonly string[]).includes(policy ?? "");
+}
+
+export function marksThreads(policy: TicketPolicy) {
+  return policy === "marked_threads";
+}
+
+// A typed vendor source, as the server spells one: bot:B… or app:A….
+const SOURCE_KEY = /^(bot|app):\S+$/;
+
+export function knownSourceKey(value: string) {
+  return SOURCE_KEY.test(value) && value.length <= 512;
+}
+
+// Emoji as Slack names them: no colons, no spaces. Typed with colons is the
+// ordinary mistake, so they are taken off rather than refused.
+export function splitClosingEmoji(value: string) {
+  return value
+    .split(/[\s,]+/)
+    .map((one) => one.trim().replace(/^:|:$/g, ""))
+    .filter(Boolean);
+}
+
 export function splitTicketPatterns(value: string) {
   return value
     .split(/\r?\n/)
@@ -108,6 +139,10 @@ export const conversationSchema = z
     sources: z.string(),
     agent: z.string(),
     runAs: z.string(),
+    ticketOpenFrom: z.enum(TICKET_POLICIES),
+    ticketRootFrom: z.string(),
+    ticketReviewIn: z.string(),
+    ticketClosesOn: z.string(),
     ticketAddressFrom: z.string(),
     ticketPatterns: z.string(),
     wants: z.array(z.enum(EVENTS)).min(1, "channels.needsEvent"),
@@ -133,15 +168,41 @@ export const conversationSchema = z
           message: "channels.needsTicketRunAs",
         });
       }
-      const address = value.ticketAddressFrom.trim();
-      if (
-        address.length > 512 ||
-        !/^(bot|app):\S+$/.test(address)
-      ) {
+      if (!knownSourceKey(value.ticketAddressFrom.trim())) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["ticketAddressFrom"],
           message: "channels.needsTicketAddressFrom",
+        });
+      }
+      // A room that is the ticket's own conversation holds nothing back from
+      // the person who asked, which is the only thing a room is for.
+      const room = value.ticketReviewIn.trim();
+      if (room.length > 512 || (room !== "" && room === value.conversation.trim())) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["ticketReviewIn"],
+          message: "channels.needsTicketReviewRoom",
+        });
+      }
+      if (splitClosingEmoji(value.ticketClosesOn).length > 4) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["ticketClosesOn"],
+          message: "channels.needsTicketClosesOn",
+        });
+      }
+      // The root source is what a mark is checked against. Under the other
+      // policy there is no root to trust, and the server refuses a rule that
+      // names one anyway.
+      if (
+        marksThreads(value.ticketOpenFrom) &&
+        !knownSourceKey(value.ticketRootFrom.trim())
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["ticketRootFrom"],
+          message: "channels.needsTicketRootFrom",
         });
       }
       const patterns = splitTicketPatterns(value.ticketPatterns);

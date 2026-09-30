@@ -13,6 +13,11 @@ const graviteeContractVersion = "gravitee-contract/v1"
 // RequiresApprovalEvidence names native writes whose approval is meaningful
 // only beside the server-owned evidence sealed into the request.
 func RequiresApprovalEvidence(id domain.ToolID) bool {
+	if id == TicketAnswerTool {
+		// The words are the act. An approval that did not carry them decided
+		// nothing anybody can check afterwards.
+		return true
+	}
 	connector, _, operation, ok := parseToolID(id)
 	return ok && connector == "gravitee" && operation == "accept_subscription"
 }

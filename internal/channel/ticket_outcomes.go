@@ -76,5 +76,23 @@ func (c *TicketOutcomeConsumer) say(ctx context.Context, notice ticket.OutcomeNo
 	if err := c.notices.MarkOutcomeAnnounced(ctx, notice.Ref, c.owner, c.clock().UTC()); err != nil {
 		return fmt.Errorf("channel: settle governed ticket %s: %w", notice.Ref.Key, err)
 	}
+	return c.closeReview(ctx, notice)
+}
+
+// closeReview tells the room the answer it reviewed has been published. After
+// the ticket is settled, never before: a room told twice has read one line
+// twice, and an answer published twice is two answers to the person who asked.
+func (c *TicketOutcomeConsumer) closeReview(
+	ctx context.Context, notice ticket.OutcomeNotice,
+) error {
+	if !notice.Review.Open() {
+		return nil
+	}
+	err := c.answers.Reply(ctx, notice.Origin.Connection,
+		notice.Review.Conversation, notice.Review.Root,
+		"The reviewed answer is now in the ticket thread.")
+	if err != nil {
+		return fmt.Errorf("channel: tell the review room of ticket %s: %w", notice.Ref.Key, err)
+	}
 	return nil
 }

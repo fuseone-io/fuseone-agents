@@ -22,6 +22,27 @@ The question is "what has not been reported", not "what changed recently". A
 window would drop the run that parked while the process was away — and that run
 is precisely the one somebody is waiting on.
 */
+/*
+A run stopped by a provider still says why.
+
+The reason a card reads comes from the approval request, and a run that never
+asked for one has none — so the card said "no reason recorded" about a failure
+the projection had already written down under another name.
+*/
+func TestUnreported_aRunParkedByAFailure_carriesTheFailureAsItsReason(t *testing.T) {
+	store, pool := channelStore(t)
+
+	parkOnAFailure(t, pool, "run-refused")
+
+	pending, err := store.Unreported(t.Context(), noon.Add(-channel.Window), 50)
+	if err != nil {
+		t.Fatalf("unreported: %v", err)
+	}
+	if len(pending) != 1 || pending[0].Reason != "model_bad_request" {
+		t.Fatalf("pending = %+v, want the failure as the reason", pending)
+	}
+}
+
 func TestUnreported_runIsWaitingOnSomebody_isListedUntilItIsReported(t *testing.T) {
 	store, pool := channelStore(t)
 
@@ -477,6 +498,15 @@ func awaitApprovalOf(
 	appendStepOf(t, pool, scope, agent, version, run, domain.StepRunStarted, nil)
 	appendStepOf(t, pool, scope, agent, version, run, domain.StepApprovalRequested,
 		[]byte(`{"tool":"erp.transfer","rule":"financial","reason":"over the ceiling"}`))
+}
+
+// parkOnAFailure is how a run stops when the failure is not the agent's: a
+// provider refused, and there is no approval request to read a reason from.
+func parkOnAFailure(t *testing.T, pool *pgxpool.Pool, run string) {
+	t.Helper()
+	appendStep(t, pool, run, domain.StepRunStarted, nil)
+	appendStep(t, pool, run, domain.StepParked,
+		[]byte(`{"reason":"model_bad_request","failure":{"code":"model_bad_request","status":400,"provider":"LiteLLM"}}`))
 }
 
 // parkWithoutAsking is the other way a run stops: nothing to decide, nothing

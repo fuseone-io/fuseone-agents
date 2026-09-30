@@ -159,6 +159,75 @@ quem ainda pode executar `approval:act` no escopo do chamado, e o botão confere
 a permissão novamente. O card é publicado sob a mensagem raiz e enviado por DM
 somente aos destinatários nomeados que passaram pela conferência.
 
+### Quando um bot escreve a raiz
+
+Em canal de ajuda com formulário, a mensagem raiz é do bot que publica o
+formulário e o time dono do pedido só é dito depois, na thread. Escolha então
+**"Como o ticket abre" → Marcação na thread**.
+
+Nesse modo a conversa pede uma coisa a mais: a **fonte que posta a raiz**, o id
+exato do bot ou app do formulário. Os padrões deixam de ser comparados com a
+raiz e passam a ser comparados com as respostas — a primeira que casar abre o
+ticket. Quem pode marcar é o bot de endereçamento configurado ou qualquer
+pessoa do canal; outro bot é ignorado, para que uma integração que ecoa a
+marcação não abra trabalho.
+
+O ticket fica com a identidade da raiz: o pedido é o texto dela, o solicitante é
+a primeira pessoa que ela menciona, e toda resposta seguinte cai nesse mesmo
+ticket. A menção é evidência, não autoridade — é resolvida contra as contas
+vinculadas nessa conexão, e uma thread cujo solicitante não resolve não vira
+ticket. Se a raiz for de outra fonte que não a configurada, a marcação não abre
+nada.
+
+Ler a raiz é uma chamada ao Slack na hora de abrir: o app precisa do escopo de
+histórico do canal, o mesmo que o contexto de thread usa. Sem ele a thread fica
+esperando e nenhum ticket abre.
+
+### A sala onde a resposta é revisada
+
+Quando os tickets desta conversa devem ser trabalhados longe de quem pediu,
+aponte **Sala de revisão** para outra conversa do mesmo workspace — por
+convenção, um canal só do time.
+
+Ao abrir o ticket, o bot abre uma thread nessa sala dizendo que chegou um
+chamado e linkando a thread original. A partir daí tudo acontece lá: o card de
+decisão é publicado nessa thread e em nenhum outro lugar, nem na thread do
+chamado nem em outra conversa do escopo. Quem tem Aprovador no escopo corrige
+respondendo na sala — qualquer um deles, não só quem foi endereçado — e cada
+correção é uma revisão: a aprovação pendente é cancelada e o agente reescreve.
+Aprovado, o texto é publicado na thread do chamado e a sala recebe uma linha
+dizendo que foi.
+
+Na thread do chamado, o que o solicitante escrever é guardado no pedido e não
+dispara nada: quem manda regerar é a sala. Se houver decisão pendente, a
+mensagem é registrada e não entra — uma revisão escrita nessa hora substituiria
+o card que alguém está lendo, sem nada regerar no lugar. Quem não decide pode
+conversar na sala sem disparar nada, e endereçar aprovadores por menção não vale
+aqui: a sala é o endereço.
+
+Publicar uma resposta encerra aquela revisão, não o chamado. A revisão aprovada
+fica registrada com o texto que saiu, e o ticket volta a aceitar correção: a
+próxima coisa que o solicitante disser é sobre o mesmo pedido, na mesma thread.
+O chamado termina quando alguém com Aprovador no escopo reage à mensagem do
+chamado com um dos emojis configurados em **Emoji que encerra o chamado**.
+Reaction de quem não decide é ignorada em silêncio, reaction retirada não reabre
+nada, e se houver resposta esperando aprovação na hora do fechamento ela é
+cancelada e a sala recebe uma linha dizendo que não foi publicada. Fechado, o
+chamado não aceita mais nada — nem correção na sala, nem contexto na thread. Enquanto não fecha, ele continua
+contando na cota de tickets abertos da área.
+
+Para o agente propor a resposta, declare a ferramenta `$fuseone.ticket.answer`
+nele. Ela é um efeito de escrita: o agente chama com o texto, o Gate para o
+run, e o card na sala carrega exatamente aquelas palavras. Aprovado, o texto é
+selado como desfecho do ticket e publicado na thread do chamado; a sala recebe
+a confirmação. Se o agente reescrever a resposta depois do card, a publicação é
+recusada — a aprovação é sobre o texto que a pessoa leu. Uma resposta aprovada
+conclui o ticket.
+
+Enquanto a thread da sala não existe, os cards esperam: nada cai na thread do
+chamado por falta de lugar. O bot precisa estar na sala, senão o ticket fica
+parado aí — o worker registra a falha e tenta de novo.
+
 Para a configuração completa do Gravitee e a sequência de validação, veja
 [Chamados governados no Gravitee](gravitee-tickets.md).
 

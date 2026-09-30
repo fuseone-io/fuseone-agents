@@ -84,6 +84,21 @@ func TestTicketHandler_onlyTheRequesterRevisesTheTicket(t *testing.T) {
 	}
 }
 
+func TestTicketHandler_aRequesterReplyingThroughAnApp_revisesTheTicket(t *testing.T) {
+	handler, store, opener, _ := ticketHandler()
+	mustHandleTicket(t, handler, ticketRoot("event-root", "Create an API key"))
+
+	reply := ticketReply("event-through-app", "171.2", "Expire it in 30 days")
+	reply.Source = channel.Source{User: "U-requester", App: "A-assistant"}
+	if result := mustHandleTicket(t, handler, reply); result.RunID == "" || opener.count() != 2 {
+		t.Fatalf("result = %+v, runs=%d", result, opener.count())
+	}
+	held, _ := store.Current(t.Context(), channelTicketKey)
+	if held.Current.Ref.Revision != 2 {
+		t.Fatalf("revision = %d, want the correction folded in", held.Current.Ref.Revision)
+	}
+}
+
 func TestTicketHandler_theConfiguredActorMayAddressOnlyRealDeciders(t *testing.T) {
 	handler, store, opener, people := ticketHandler()
 	mustHandleTicket(t, handler, ticketRoot("event-root", "Create an API key"))
@@ -294,25 +309,44 @@ func TestTicketConsumer_saysThatASavedRevisionIsWaitingThenOpensIt(t *testing.T)
 	}
 }
 
-func TestTicketHandler_aReplyAfterTheTicketClosedIsSettledWithoutAnotherRun(t *testing.T) {
+/*
+A reply after the request was closed is a reply.
+
+Closing is somebody saying the work is over, and from that moment the thread
+carries conversation rather than corrections. Settling one revision is not
+that: an answered ticket goes on, because the next thing the person says is
+about the same request.
+*/
+func TestTicketHandler_aReplyAfterTheTicketWasClosed_startsNothing(t *testing.T) {
 	handler, store, opener, _ := ticketHandler()
 	mustHandleTicket(t, handler, ticketRoot("event-root", "Create an API key"))
 	held, err := store.Current(t.Context(), channelTicketKey)
 	if err != nil {
 		t.Fatalf("Current: %v", err)
 	}
-	_, _, err = store.Close(t.Context(), ticket.CloseInput{
+	if _, _, err := store.Close(t.Context(), ticket.CloseInput{
 		Ref: held.Current.Ref, Phase: ticket.PhaseRejected,
 		Result: ticket.ContentRef{Ref: "content://rejected", Digest: "sha256:rejected"},
 		At:     ticketNow.Add(time.Minute),
-	})
-	if err != nil {
+	}); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
 
+	// The revision is settled and the ticket is not: the correction lands.
+	if result := mustHandleTicket(t, handler,
+		ticketReply("event-after-answer", "171.4", "Try another expiration")); result.RunID == "" {
+		t.Fatalf("reply after a settled revision = %+v, want the ticket still working", result)
+	}
+
+	if _, _, err := store.CloseTicket(t.Context(), ticket.CloseTicketInput{
+		Key: channelTicketKey, By: "usr_manager", At: ticketNow.Add(2 * time.Minute),
+	}); err != nil {
+		t.Fatalf("CloseTicket: %v", err)
+	}
+	runs := opener.count()
 	result := mustHandleTicket(t, handler,
-		ticketReply("event-after-close", "171.4", "Try another expiration"))
-	if result.HandledReason != "ticket_already_closed" || opener.count() != 1 {
+		ticketReply("event-after-close", "171.5", "One more thing"))
+	if result.HandledReason != "ticket_already_closed" || opener.count() != runs {
 		t.Fatalf("closed reply = %+v, runs=%d", result, opener.count())
 	}
 }

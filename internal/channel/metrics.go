@@ -13,6 +13,7 @@ const (
 	MetricTaskCardsClosed       = channelmetrics.TaskCardsClosed
 	MetricTaskAnswersDelivered  = channelmetrics.TaskAnswersDelivered
 	MetricTaskTicketOutcomes    = channelmetrics.TaskTicketOutcomes
+	MetricTaskTicketReviews     = channelmetrics.TaskTicketReviewRooms
 	MetricTaskAsksOpened        = channelmetrics.TaskAsksOpened
 	MetricTaskRefusalsDelivered = channelmetrics.TaskRefusalsDelivered
 )

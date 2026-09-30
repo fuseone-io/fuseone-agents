@@ -28,8 +28,30 @@ import (
 
 var version = "0.1.0-dev"
 
+// logLevelEnv turns the log up without a deploy. Quiet by default, because a
+// platform that narrates every message it decided not to act on is a platform
+// whose log nobody reads — and loud on request, because the alternative when
+// something goes missing is reading the absence of lines.
+const logLevelEnv = "FUSEONE_LOG_LEVEL"
+
+func logLevel(name string) slog.Level {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "debug":
+		return slog.LevelDebug
+	case "warn", "warning":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		// Including anything unreadable: a mistyped level is not a reason to
+		// refuse to run, and the ordinary log is the safe answer.
+		return slog.LevelInfo
+	}
+}
+
 func main() {
-	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	log := slog.New(slog.NewTextHandler(os.Stderr,
+		&slog.HandlerOptions{Level: logLevel(os.Getenv(logLevelEnv))}))
 	slog.SetDefault(log)
 
 	if err := run(os.Args[1:]); err != nil {

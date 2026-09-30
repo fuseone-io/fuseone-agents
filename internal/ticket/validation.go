@@ -38,6 +38,27 @@ func validateOpen(in OpenInput) error {
 	if err != nil || want != in.Key {
 		return errors.New("ticket: key does not name its origin")
 	}
+	// A room the ticket is worked in is one conversation on the same
+	// connection, and never the support thread's own.
+	room := strings.TrimSpace(in.ReviewIn)
+	if room != in.ReviewIn || len(room) > 512 || room == in.Origin.Conversation {
+		return errors.New("ticket: review room is not one other conversation")
+	}
+	return nil
+}
+
+func validateReviewClaim(owner string, now time.Time, lease time.Duration, limit int) error {
+	if strings.TrimSpace(owner) == "" || now.IsZero() || lease <= 0 || limit <= 0 {
+		return errors.New("ticket: incomplete review claim")
+	}
+	return nil
+}
+
+func validateReviewMark(key domain.TicketKey, root, owner string, at time.Time) error {
+	if strings.TrimSpace(string(key)) == "" || strings.TrimSpace(root) == "" ||
+		len(root) > 512 || strings.TrimSpace(owner) == "" || at.IsZero() {
+		return errors.New("ticket: incomplete review thread")
+	}
 	return nil
 }
 
@@ -45,6 +66,22 @@ func validateRevise(in ReviseInput) error {
 	if !in.Ref.Valid() || strings.TrimSpace(in.EventID) == "" || in.By == "" ||
 		!in.Draft.Valid() || in.At.IsZero() {
 		return errors.New("ticket: incomplete revision")
+	}
+	return nil
+}
+
+// requireReviser answers whether this correction may replace the ticket's
+// current revision. Outside the review room the requester is the only author a
+// ticket has; inside it, the room being open is what the store can check.
+func requireReviser(ticket Ticket, in ReviseInput) error {
+	if in.InReview {
+		if !ticket.Review.Open() {
+			return ErrNotRequester
+		}
+		return nil
+	}
+	if ticket.RequestedBy != in.By {
+		return ErrNotRequester
 	}
 	return nil
 }
@@ -137,12 +174,28 @@ func requireCurrent(ticket Ticket, ref domain.TicketRef) error {
 	return nil
 }
 
+/*
+requireMutable answers whether this revision may still be replaced.
+
+The ticket's own state decides, not the revision's phase. A revision that was
+published is terminal and stays that way — it is the record of what was said —
+and the correction that follows it is the next revision, which is exactly what
+an open ticket is for. Once the ticket is closed, nothing more is written to
+it at all.
+*/
 func requireMutable(ticket Ticket, ref domain.TicketRef) error {
 	if err := requireCurrent(ticket, ref); err != nil {
 		return err
 	}
-	if ticket.Current.Phase.terminal() {
-		return ErrTerminal
+	if ticket.Closed != nil {
+		return ErrClosed
+	}
+	return nil
+}
+
+func validateCloseTicket(in CloseTicketInput) error {
+	if strings.TrimSpace(string(in.Key)) == "" || in.By == "" || in.At.IsZero() {
+		return errors.New("ticket: incomplete close")
 	}
 	return nil
 }

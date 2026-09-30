@@ -229,9 +229,21 @@ so elapsed time alone never abandons it.
 
 ## Message admission and performance
 
-The content matcher is compiled when configuration is saved and runs only on
-root messages. Replies find an existing ticket through an indexed lookup by
-connection, conversation and root. The implementation limits pattern count,
+The content matcher is compiled when configuration is saved. Under
+`linked_users` it runs only on root messages. Under `marked_threads` the root
+belongs to a configured bot and says nothing about ownership, so the matcher
+runs on replies that no ticket claims yet: the first match admits the thread,
+keyed on its root. Either way a reply to an open ticket finds it through an
+indexed lookup by connection, conversation and root, and is never matched
+again.
+
+A marked thread reads its root once, when it opens, through the same bounded
+thread reader the mention path uses. The root is admitted only from the
+configured source, and the request it records is the root's text under the
+first account it mentions. That mention is evidence: it is resolved against the
+accounts bound on the connection, and an unresolved one opens no ticket. A mark
+grants nothing — who may decide is still the scope's approvers, narrowed by the
+addressing source. The implementation limits pattern count,
 pattern bytes, extracted context, Slack reads, open tickets and per-ticket
 concurrency.
 
@@ -244,9 +256,47 @@ Two different replies are merged under the ticket lock, so neither loses fields
 from the other. Re-delivering the same Slack event is a no-op. Repeating an
 identical recipient list does not close and recreate cards.
 
+## Review rooms
+
+A conversation may name another conversation as the room its tickets are worked
+in. The room is stored on the ticket when it opens, because a rule edited later
+must not move a thread already open, and the thread inside it is opened once by
+a leased sweep — recorded after it exists, never before.
+
+With a room, the approval card is published in that thread and nowhere else:
+not in the support thread, and not in other conversations covering the scope. A
+card that cannot be placed yet waits rather than falling back, since falling
+back would publish a draft in front of the person who asked. A run opened from a ticket always reaches the answer tool,
+whatever its steps declare: answering is why that run exists. Corrections in the
+room come from anyone holding Approver in the ticket's scope, checked where the
+reply is read; the requester's own replies are kept in the request and start
+nothing, and are not applied at all while a decision is pending; the store asks only that a room is open, as it asks only that an
+addressing source matches. The requester's own thread keeps its rule. On a
+terminal outcome the answer reaches the support thread and the room is told it
+was published.
+
+## Answering as a governed effect
+
+The agent does not write in the support thread. `$fuseone.ticket.answer` is a
+write effect whose whole act is in its argument: the Gate stops it, the sealed
+text is the approval evidence, and the card carries those words. Execution
+compares the argument with the evidence and refuses anything else, so an answer
+rewritten after the card publishes nothing. The approved text is recorded as
+the ticket's outcome and reaches the thread through the outcome consumer, which
+picks its wording by the safe projection it holds rather than by the tool that
+produced it. An approved answer completes its
+revision and leaves the ticket open: a request is not over because it was
+answered once, and the correction that follows is the next revision rather than
+a rewrite of the published one. Closing is its own act — a reaction from
+somebody who may decide, with one of the emoji the conversation configures —
+recorded on the ticket with who did it, and it is what an area's cap counts — a ticket answered and
+never closed still occupies a place.
+
 ## Delivery sequence
 
-1. A linked person writes a matching root request.
+1. A linked person writes a matching root request — or, under
+   `marked_threads`, a configured bot's root is marked by a reply and the root
+   becomes the request.
 2. The ticket stores its requester and first revision.
 3. Short runs collect `subscriptionId`, expiration and reason by reference.
 4. The configured addressing source names recipients.

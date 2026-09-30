@@ -22,6 +22,7 @@ var (
 	ErrTooManyOpen      = errors.New("ticket: the scope has too many open tickets")
 	ErrPhase            = errors.New("ticket: the revision is not in the required phase")
 	ErrTerminal         = errors.New("ticket: the revision is terminal")
+	ErrClosed           = errors.New("ticket: the ticket is closed")
 )
 
 const MaxOpenPerScope = 200
@@ -108,9 +109,35 @@ type Revision struct {
 	UpdatedAt  time.Time
 }
 
+// ReviewRoom is where a ticket is worked before its answer reaches the person
+// who asked. Conversation is configuration the ticket keeps; Root is the thread
+// opened inside it, and is empty until a worker has opened one.
+type ReviewRoom struct {
+	Conversation string
+	Root         string
+}
+
+func (r ReviewRoom) Open() bool {
+	return strings.TrimSpace(r.Conversation) != "" && strings.TrimSpace(r.Root) != ""
+}
+
+// CloseTicketInput ends a ticket. Who closed it is recorded beside when,
+// because "it was closed" is a question somebody asks about a thread months
+// later and the answer is a person.
+type CloseTicketInput struct {
+	Key domain.TicketKey
+	By  domain.UserID
+	At  time.Time
+}
+
 type Ticket struct {
-	Key         domain.TicketKey
-	Origin      Origin
+	Key    domain.TicketKey
+	Origin Origin
+	Review ReviewRoom
+	// Closed is when somebody ended the request. Nil is open, whatever the
+	// current revision's phase says: an answered ticket is still a ticket.
+	Closed      *time.Time
+	ClosedBy    domain.UserID
 	Scope       domain.Scope
 	Agent       domain.AgentID
 	RunAs       domain.UserID
@@ -130,17 +157,25 @@ type OpenInput struct {
 	RunAs       domain.UserID
 	RequestedBy domain.UserID
 	AddressedBy string
-	EventID     string
-	Draft       ContentRef
-	At          time.Time
+	// ReviewIn names the conversation this ticket is worked in. Empty means
+	// the support thread is the only room it has.
+	ReviewIn string
+	EventID  string
+	Draft    ContentRef
+	At       time.Time
 }
 
 type ReviseInput struct {
-	Ref     domain.TicketRef
-	EventID string
-	By      domain.UserID
-	Draft   ContentRef
-	At      time.Time
+	Ref domain.TicketRef
+	// InReview says the correction arrived in the ticket's review room rather
+	// than in the support thread. The room admits people the request never
+	// named, so the store asks only that a room is open; which of them may
+	// correct is decided where the reply is read, as recipients are.
+	InReview bool
+	EventID  string
+	By       domain.UserID
+	Draft    ContentRef
+	At       time.Time
 }
 
 type ApprovalInput struct {
@@ -197,6 +232,7 @@ type CloseInput struct {
 type OutcomeNotice struct {
 	Ref    domain.TicketRef
 	Origin Origin
+	Review ReviewRoom
 	Phase  Phase
 	Result ContentRef
 }
@@ -205,13 +241,35 @@ type OutcomeNotice struct {
 // ticket revision. It contains addressing, never authority: the reporter must
 // still intersect Recipients with the people who may decide at send time.
 type ApprovalRoute struct {
-	Origin     Origin
+	Origin Origin
+	// Review is the room the ticket is worked in, when it has one. A card for
+	// a ticket with a room belongs in that room's thread and nowhere else.
+	Review     ReviewRoom
 	Recipients []domain.UserID
 }
 
 // ApprovalRoutes is the narrow ticket view used by approval delivery.
 type ApprovalRoutes interface {
 	ApprovalRoute(context.Context, domain.TicketRef) (ApprovalRoute, error)
+}
+
+// ReviewNotice is one ticket still owed the thread it is worked in. It carries
+// what the opening message says: where the request came from, whose it is, and
+// which scope answers for it.
+type ReviewNotice struct {
+	Key          domain.TicketKey
+	Origin       Origin
+	Conversation string
+	Scope        domain.Scope
+	RequestedBy  domain.UserID
+}
+
+// ReviewRooms leases and settles the opening of review threads. Separate from
+// Store for the reason OutcomeNotices is: a ticket writer has no reason to
+// claim outbound work.
+type ReviewRooms interface {
+	ClaimReviews(context.Context, string, time.Time, time.Duration, int) ([]ReviewNotice, error)
+	MarkReviewOpened(context.Context, domain.TicketKey, string, string, time.Time) error
 }
 
 // OutcomeNotices leases and settles terminal ticket notifications. It is
@@ -226,6 +284,8 @@ type Store interface {
 	Open(context.Context, OpenInput) (Ticket, bool, error)
 	Current(context.Context, domain.TicketKey) (Ticket, error)
 	AtOrigin(context.Context, Origin) (Ticket, error)
+	AtReview(context.Context, Origin) (Ticket, error)
+	CloseTicket(context.Context, CloseTicketInput) (Ticket, bool, error)
 	Revision(context.Context, domain.TicketRef) (Revision, error)
 	SupersededApprovals(context.Context, domain.TicketRef) ([]SupersededApproval, error)
 	MarkApprovalSuperseded(context.Context, domain.TicketRef, time.Time) error

@@ -41,7 +41,23 @@ export function ApprovalEvidenceView({
       </Alert>
     );
   }
-  if (!evidence || evidence.kind === "none" || !evidence.gravitee) return null;
+  if (!evidence || evidence.kind === "none") return null;
+  if (evidence.kind === "ticket_answer") {
+    if (!evidence.ticketAnswer) return null;
+    return (
+      <section className="border-t border-border-subtle pt-3">
+        <h3 className="text-2xs uppercase tracking-label text-muted-foreground">
+          {t("approvals.proposedAnswer")}
+        </h3>
+        {/* As it will be published: no rendering, no trimming, no summary.
+            What is approved here is what the person who asked will read. */}
+        <p className="mt-2 whitespace-pre-wrap text-sm">
+          {evidence.ticketAnswer.text}
+        </p>
+      </section>
+    );
+  }
+  if (!evidence.gravitee) return null;
 
   const item = evidence.gravitee;
   return (

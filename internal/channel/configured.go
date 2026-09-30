@@ -332,6 +332,19 @@ func (s Source) Key() string {
 	}
 }
 
+/*
+Person answers whether a message is somebody's rather than an app's.
+
+An account and no bot id. Slack stamps the app id on everything a person sends
+through an integration — a client, a workflow, an assistant writing with their
+token — so reading that as "a bot wrote it" ignores the people this platform
+exists for. A bot id is the app speaking as itself, and that is what is not a
+person here.
+*/
+func (s Source) Person() bool {
+	return strings.TrimSpace(s.User) != "" && strings.TrimSpace(s.Bot) == ""
+}
+
 func (s Source) Matches(allowed []string) bool {
 	for _, one := range allowed {
 		needle := strings.TrimSpace(one)
