@@ -234,3 +234,69 @@ func TestPost_gateRefusalNamesTheNewGateBlock(t *testing.T) {
 		}
 	}
 }
+
+/*
+An announcement carrying the run's own answer is the answer, not a card.
+
+The text is the message, one context line carries agent, scope and the
+invocation link, and unfurls are off — the same rule the ask path enforces:
+content a model wrote must not make Slack fetch a URL it chose.
+*/
+func TestPostPlaced_anAnswer_isTheMessageWithProvenance(t *testing.T) {
+	t.Parallel()
+	var got map[string]any
+	p := posterCapturing(t, &got)
+
+	if _, err := p.PostPlaced(t.Context(), channel.Conversation{ID: "C07"},
+		channel.Message{
+			Event: channel.EventFinished, RunID: "run-1", Agent: "fraud-sentinel",
+			Scope:  domain.Scope{Company: "acme", Area: "prod"},
+			Link:   "https://fuse.example/runs/run-1",
+			Answer: "tudo normal <https://evil.example|aqui>",
+		}); err != nil {
+		t.Fatalf("PostPlaced: %v", err)
+	}
+
+	raw, _ := json.Marshal(got)
+	body := string(raw)
+	if !strings.Contains(body, "tudo normal") {
+		t.Error("the answer is not in the message")
+	}
+	if !strings.Contains(body, "fraud-sentinel") || !strings.Contains(body, "invocation") {
+		t.Error("the provenance line is missing")
+	}
+	if got["unfurl_links"] != false || got["unfurl_media"] != false {
+		t.Errorf("unfurls are not off: links=%v media=%v", got["unfurl_links"], got["unfurl_media"])
+	}
+	if strings.Contains(body, `"actions"`) {
+		t.Error("an answer message offers buttons")
+	}
+}
+
+// And without an answer the card is byte-for-byte what it always was.
+func TestPostPlaced_withoutAnAnswer_theCardIsUnchanged(t *testing.T) {
+	t.Parallel()
+	var got map[string]any
+	p := posterCapturing(t, &got)
+
+	if _, err := p.PostPlaced(t.Context(), channel.Conversation{ID: "C07"},
+		channel.Message{Event: channel.EventFinished, RunID: "run-1", Agent: "triage",
+			Scope: domain.Scope{Company: "acme", Area: "ops"}}); err != nil {
+		t.Fatalf("PostPlaced: %v", err)
+	}
+	if _, there := got["unfurl_links"]; there {
+		t.Error("the plain card grew unfurl fields it never had")
+	}
+}
+
+// posterCapturing decodes whatever the poster sends into got.
+func posterCapturing(t *testing.T, got *map[string]any) *slack.Poster {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(got)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"ok":true,"ts":"1.1"}`)
+	}))
+	t.Cleanup(server.Close)
+	return poster(server)
+}

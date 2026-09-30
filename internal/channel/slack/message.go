@@ -177,3 +177,26 @@ func answeredBy(m channel.Message) string {
 		return "This is no longer waiting on a decision."
 	}
 }
+
+/*
+answerBlocks renders an announcement that carries the run's own text.
+
+The answer is the message and everything else is provenance: one line naming
+the agent, the scope and where the whole record lives. The card's fact fields
+would bury the one sentence a person subscribed for under a table about it.
+
+The text goes through outcome() — the same mrkdwn subset the ask path uses —
+because it is a document the model wrote: links stay visible and never become
+anything Slack acts on.
+*/
+func answerBlocks(m channel.Message) []any {
+	out := []any{section(outcome(m.Answer))}
+	provenance := fmt.Sprintf("agents: %s · %s", m.Agent, m.Scope.Area)
+	if m.Link != "" {
+		provenance += fmt.Sprintf(" · <%s|invocation: %s>", m.Link, m.RunID)
+	} else {
+		provenance += fmt.Sprintf(" · invocation: %s", m.RunID)
+	}
+	out = append(out, context_(provenance))
+	return out
+}

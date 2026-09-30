@@ -83,6 +83,21 @@ nothing but this call ever learns it.
 func (p *Poster) PostPlaced(
 	ctx context.Context, c channel.Conversation, m channel.Message,
 ) (channel.Placement, error) {
+	if m.Answer != "" {
+		// The run's own words, not a card about them. Unfurls stay off for
+		// the same reason SayOutcome keeps them off: content from a run must
+		// not make Slack fetch a URL the model chose.
+		no := false
+		return p.call(ctx, "/chat.postMessage", postMessage{
+			Channel:     c.ID,
+			Text:        summary(m),
+			Blocks:      answerBlocks(m),
+			Thread:      c.Thread,
+			Parse:       "none",
+			UnfurlLinks: &no,
+			UnfurlMedia: &no,
+		})
+	}
 	return p.call(ctx, "/chat.postMessage", postMessage{
 		Channel: c.ID,
 		// Fallback text as well as blocks. Notifications and screen readers
