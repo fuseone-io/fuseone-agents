@@ -112,7 +112,12 @@ func (p *Postgres) Unreported(ctx context.Context, since time.Time, limit int) (
 		       coalesce(runs.pending_tool, ''), coalesce(runs.pending_reason, ''),
 		       `+announcementSeq+`,
 		       runs.phase = 'awaiting_approval',
-		       runs.ticket_key, runs.ticket_revision
+		       runs.ticket_key, runs.ticket_revision,
+		       -- Whether some conversation ask opened this run. The ask path
+		       -- answers in the thread that asked, so a finished announcement
+		       -- carries the run's own text only when nobody did.
+		       exists (select 1 from channel_inbox
+		               where channel_inbox.run_id = runs.run_id)
 		from runs
 		-- What has already been attempted, so a page that failed goes to the
 		-- back. Ordered by recency alone, more stopped runs than fit in one
@@ -180,7 +185,7 @@ func (p *Postgres) Unreported(ctx context.Context, since time.Time, limit int) (
 		var company, area, event, ticketKey string
 		if err := rows.Scan(&r.RunID, &r.AgentID, &r.Version, &company, &area,
 			&event, &r.At, &r.Tool, &r.Reason, &r.AtSeq, &r.AwaitingDecision,
-			&ticketKey, &r.Ticket.Revision); err != nil {
+			&ticketKey, &r.Ticket.Revision, &r.Asked); err != nil {
 			return nil, err
 		}
 		r.Ticket.Key = domain.TicketKey(ticketKey)

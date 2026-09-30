@@ -1091,3 +1091,37 @@ func TestStale_aStopThatAskedNothing_isNotACard(t *testing.T) {
 		t.Error("a stop that asked nothing was swept up as an approval card")
 	}
 }
+
+/*
+Unreported says whether somebody asked for a run, because the answer decides
+what a finished announcement carries: the ask path already replies in the
+thread that asked, and an announcement carrying the text again would say
+everything twice.
+*/
+func TestUnreported_saysWhetherAnAskOpenedTheRun(t *testing.T) {
+	store, pool := channelStore(t)
+
+	for _, run := range []string{"run-scheduled", "run-asked"} {
+		appendStep(t, pool, run, domain.StepRunStarted, nil)
+		appendStep(t, pool, run, domain.StepRunFinished, []byte(`{"outcome":"tudo normal"}`))
+	}
+	if _, err := pool.Exec(t.Context(), `
+		insert into channel_inbox (channel, conversation, event_id, message, asked_by, text, thread,
+		                           agent, run_as, source, payload, digest, status, run_id)
+		values ('acme-slack', 'C07', 'ev-1', 'm-1', 'usr_ana', 'go', 'm-1',
+		        'triage', 'usr_ana', '{}', '{}'::bytea, 'sha256:00', 'opened', 'run-asked')`); err != nil {
+		t.Fatalf("seed the ask: %v", err)
+	}
+
+	pending, err := store.Unreported(t.Context(), time.Now().Add(-channel.Window), 50)
+	if err != nil {
+		t.Fatalf("unreported: %v", err)
+	}
+	asked := map[domain.RunID]bool{}
+	for _, r := range pending {
+		asked[r.RunID] = r.Asked
+	}
+	if asked["run-scheduled"] || !asked["run-asked"] {
+		t.Fatalf("asked = %v, want only the run an ask opened", asked)
+	}
+}

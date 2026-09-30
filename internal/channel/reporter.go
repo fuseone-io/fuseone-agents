@@ -6,7 +6,10 @@ import (
 	"fmt"
 	"log/slog"
 	"time"
+	"unicode/utf8"
 
+	"github.com/fuseone/agents/internal/domain"
+	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/ticket"
 )
 
@@ -33,6 +36,8 @@ type Reporter struct {
 	approvals     Approvals
 	connections   Connections
 	tickets       ticket.ApprovalRoutes
+	outcomes      Outcomes
+	content       engine.ContentStore
 	clock         func() time.Time
 	baseURL       string
 	log           *slog.Logger
@@ -220,7 +225,7 @@ func (r *Reporter) post(ctx context.Context, report Report, place Conversation) 
 		return false, nil
 	}
 
-	at, err := placed(ctx, r.poster, place, r.message(report))
+	at, err := placed(ctx, r.poster, place, r.message(ctx, report))
 	if err != nil {
 		// Named, because the ordinary cause is a bot removed from one channel
 		// and the symptom is silence in that channel alone.
@@ -232,7 +237,7 @@ func (r *Reporter) post(ctx context.Context, report Report, place Conversation) 
 	})
 }
 
-func (r *Reporter) message(report Report) Message {
+func (r *Reporter) message(ctx context.Context, report Report) Message {
 	m := Message{
 		Event: report.Event, RunID: report.RunID, Agent: report.AgentID,
 		Scope: report.Scope, Reason: report.Reason, Tool: report.Tool,
@@ -241,7 +246,64 @@ func (r *Reporter) message(report Report) Message {
 	if r.baseURL != "" {
 		m.Link = fmt.Sprintf("%s/runs/%s", r.baseURL, report.RunID)
 	}
+	m.Answer = r.answerFor(ctx, report)
 	return m
+}
+
+/*
+answerFor is the run's own closing text, when this announcement should carry it.
+
+Only a finished run, and only one nobody asked for: the ask path already says
+the answer in the thread that asked, and carrying it here as well would say
+everything twice. A reporter without the outcome ports announces the card it
+always announced, which is what an installation on an older worker gets.
+
+A failure to read the outcome degrades to the card rather than blocking the
+announcement: the person still learns the run finished, and the link still
+leads to the whole answer. Erasure is the exception with words of its own —
+the sentence the ask path already uses — because "the platform removed this"
+and "nothing was said" must not read the same.
+*/
+func (r *Reporter) answerFor(ctx context.Context, report Report) string {
+	if report.Event != EventFinished || report.Asked || r.outcomes == nil {
+		return ""
+	}
+	payload, err := r.outcomes.FinishedOutcome(ctx, report.RunID)
+	if err != nil {
+		return ""
+	}
+	text, err := engine.OutcomeOf(ctx, r.content, payload)
+	if err != nil {
+		if errors.Is(err, domain.ErrContentErased) {
+			return erasedAnswer
+		}
+		return ""
+	}
+	return truncateAnswer(text)
+}
+
+// MaxAnnouncedAnswer bounds what an announcement carries. Slack refuses a
+// section past its own 3000-character limit, so an uncut answer would not be a
+// long message — it would be no message, failing every hour for as long as the
+// answer stays long. The margin below the vendor limit leaves room for the
+// truncation notice and mrkdwn escaping.
+const MaxAnnouncedAnswer = 2800
+
+const erasedAnswer = "The agent finished, but its closing answer was erased by retention or a data erasure request."
+
+const truncationNotice = "\n\n_(truncated — the full answer is in the console)_"
+
+func truncateAnswer(text string) string {
+	if len(text) <= MaxAnnouncedAnswer {
+		return text
+	}
+	cut := MaxAnnouncedAnswer - len(truncationNotice)
+	// Never split a rune: a cut through a multibyte character renders as
+	// garbage in the one place a person reads.
+	for cut > 0 && !utf8.RuneStart(text[cut]) {
+		cut--
+	}
+	return text[:cut] + truncationNotice
 }
 
 // noDeliveries remembers nothing, which makes every sweep repeat itself. It is

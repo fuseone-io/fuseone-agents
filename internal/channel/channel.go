@@ -95,6 +95,11 @@ type Report struct {
 	// Empty for every ordinary run. Approval delivery uses it to recover the
 	// immutable room and the recipients selected by the configured source.
 	Ticket domain.TicketRef
+	// Asked is whether some conversation ask opened this run. The ask path
+	// already says the answer in the thread that asked, so an announcement
+	// carries the answer only when nobody did — otherwise every mention-opened
+	// run would be answered twice, once in its thread and once in the room.
+	Asked bool
 }
 
 // Conversation is one place inside a channel, and the scope it speaks for.
@@ -191,6 +196,10 @@ type Message struct {
 	// question it asked already has an answer.
 	Outcome   Outcome
 	DecidedBy string
+	// Answer is the run's own closing text, carried only on a finished run
+	// nobody asked for. With it set, the answer is the message and everything
+	// else is provenance; without it, the message is the card it always was.
+	Answer string
 }
 
 /*

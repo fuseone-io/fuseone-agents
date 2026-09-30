@@ -9,6 +9,7 @@ import (
 	"github.com/fuseone/agents/internal/auth"
 	"github.com/fuseone/agents/internal/channel"
 	"github.com/fuseone/agents/internal/channel/connect"
+	"github.com/fuseone/agents/internal/engine"
 	"github.com/fuseone/agents/internal/spec"
 	"github.com/fuseone/agents/internal/ticket"
 	"github.com/fuseone/agents/internal/worker"
@@ -48,6 +49,8 @@ type reporterParts struct {
 	policies    channel.Approvals
 	connections channel.Connections
 	tickets     ticket.ApprovalRoutes
+	outcomes    channel.Outcomes
+	content     engine.ContentStore
 	baseURL     string
 }
 
@@ -74,7 +77,12 @@ func reporterPartsFor(p *workerParts, baseURL string) reporterParts {
 		policies:    spec.NewRegistry(p.configPool),
 		connections: channel.NewConfigured(store),
 		tickets:     ticket.NewPostgres(p.configPool),
-		baseURL:     baseURL,
+		// A finished announcement carries the run's own answer, when nobody
+		// asked: the same store that lists unreported runs resolves outcomes,
+		// and the content store turns the reference into words.
+		outcomes: deliveries,
+		content:  p.content,
+		baseURL:  baseURL,
 	}
 }
 
@@ -90,7 +98,11 @@ func announcingReporter(parts reporterParts) *channel.Reporter {
 		// pinned. Without this an agent that asked is simply not obeyed, which
 		// is what an installation running an older worker gets.
 		WithOwnerApprovals(parts.policies, parts.connections).
-		WithTicketApprovals(parts.tickets)
+		WithTicketApprovals(parts.tickets).
+		// The run's own answer, on a finished announcement nobody asked for.
+		// Without these ports the card of every earlier release is announced
+		// unchanged.
+		WithOutcomes(parts.outcomes, parts.content)
 }
 func reportToChannels(
 	ctx context.Context, p *workerParts, baseURL string, metrics *worker.MetricsRegistry,
