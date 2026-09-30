@@ -123,6 +123,7 @@ func (c *Catalog) Invoke(ctx context.Context, call engine.Call) (engine.ToolResu
 		}
 		recordMCPToolCall(metrics, "error", code, false)
 		recordMCPToolHealth(ctx, health, healthBy, entry.Server, false, code, clockNow(clock))
+		c.retireIfDead(entry.Server, session, err)
 		return out, fmt.Errorf("tools: call %s: %w", call.Tool, err)
 	}
 

@@ -88,6 +88,7 @@ func transportFor(
 		if server.MCPProtocolModeOf() == domain.MCPProtocolLegacy {
 			client = legacyMCPClient(client)
 		}
+		client = withTolerantCancel(server.Name, client)
 		return &mcp.StreamableClientTransport{
 			Endpoint:   server.URL,
 			HTTPClient: client,
@@ -722,11 +723,13 @@ func (r *reconciler) reconcile(ctx context.Context) {
 		if mark == "flag" {
 			continue
 		}
-		if server, still := wanted[name]; still && fingerprint(r.withProtocol(server)) == mark {
+		if server, still := wanted[name]; still && fingerprint(r.withProtocol(server)) == mark &&
+			r.catalog.Connected(name) {
 			continue
 		}
-		// Gone, switched off, or pointing somewhere else. All three mean the
-		// session in hand is not the one configured.
+		// Gone, switched off, pointing somewhere else, or a session that died
+		// under an unchanged configuration. All four mean the session in hand
+		// is not a working one for what is configured.
 		if err := r.catalog.RemoveServer(name); err != nil {
 			slog.Error("could not disconnect a tool server", "server", name, "err", err)
 		}

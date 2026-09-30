@@ -25,6 +25,22 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **One slow tool call no longer takes a whole tool server down.** When a call
+  outlived its deadline, the platform told the server it was cancelled; a
+  server that refused that notice — Grafana's MCP server does, after a long
+  Loki query — made the connection close for good. Every later call to that
+  server then failed with `connection closed … "notifications/cancelled": Bad
+  Request` until the worker was restarted, while the console still showed the
+  server as reachable. A refused cancellation is now ignored, since the call
+  was already abandoned. And a connection that dies for any other reason is
+  reconnected on the next pass (within 30 seconds) instead of staying dead. The
+  call that timed out still fails; queries that routinely take more than 60
+  seconds need a narrower range in the agent's instruction.
+
 ## [0.50.0] — 2026-09-30
 
 ### Added
