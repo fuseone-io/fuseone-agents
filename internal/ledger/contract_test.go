@@ -114,6 +114,42 @@ func run(t *testing.T, name string, fn func(t *testing.T, store Store)) {
 	}
 }
 
+/*
+A grant above every company reads every company's runs.
+
+The console asks with no company when the context is the whole installation,
+and the scope that comes back from the grant is the installation itself. Read
+literally it is a company nothing belongs to, so an administrator saw an empty
+list and a healthy page — the in-memory store answered correctly the whole
+time, which is how it survived being tested.
+*/
+func TestListRuns_scopedToTheInstallation_readsEveryCompany(t *testing.T) {
+	run(t, "runs of every company are visible from the installation", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		for _, one := range []struct {
+			run   domain.RunID
+			scope domain.Scope
+		}{
+			{"run-acme", domain.Scope{Company: "acme", Area: "cx"}},
+			{"run-default", domain.Scope{Company: "default", Area: "platform"}},
+		} {
+			started := step(one.run, domain.StepRunStarted)
+			started.Scope = one.scope
+			mustAppend(t, s, started)
+		}
+
+		page, err := s.ListRuns(ctx, domain.RunFilter{
+			Scopes: []domain.Scope{{Company: domain.Installation}},
+		}, "", 50)
+		if err != nil {
+			t.Fatalf("ListRuns: %v", err)
+		}
+		if len(page) != 2 {
+			t.Fatalf("ListRuns = %+v, want both companies", page)
+		}
+	})
+}
+
 func step(runID domain.RunID, kind domain.StepKind) domain.Step {
 	return domain.Step{
 		RunID:      runID,

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -26,10 +27,36 @@ const socketModeSweep = 30 * time.Second
 
 const socketReadLimit = 128 << 10
 
+/*
+socketSilence is how long a Socket Mode connection may say nothing before this
+worker stops believing in it.
+
+Slack keeps the connection alive with pings of its own, so silence this long is
+not a quiet channel: it is a connection that is gone without having said so —
+a laptop that slept, a VPN that flapped, a middlebox that dropped the flow. The
+read that waits on it never returns, and because nothing fails, nothing
+reconnects: events stop arriving and the worker looks healthy. Socket Mode does
+not redeliver, so every event in that window is simply lost.
+
+Long enough to survive a missed ping, short enough that a blackout is a minute
+and not an afternoon.
+*/
+const socketSilence = 90 * time.Second
+
+// socketSettled is how long a connection has to last before it counts as a
+// connection rather than an attempt. After it, the backoff starts over: an
+// hour of healthy work should not be followed by a minute of waiting because
+// of failures that happened before it.
+const socketSettled = 2 * time.Minute
+
 type slackSocketConn interface {
 	ReadMessage() (messageType int, p []byte, err error)
 	WriteMessage(messageType int, data []byte) error
+	WriteControl(messageType int, data []byte, deadline time.Time) error
 	SetReadLimit(limit int64)
+	SetReadDeadline(t time.Time) error
+	SetPongHandler(h func(appData string) error)
+	SetPingHandler(h func(appData string) error)
 	Close() error
 }
 
@@ -58,6 +85,9 @@ type slackSocketManager struct {
 
 	openURL func(context.Context, string) (string, error)
 	dial    func(context.Context, string) (slackSocketConn, error)
+	// backoff is the first wait after a failed connection. A field so a test
+	// does not have to spend a second of wall clock proving it retries.
+	backoff time.Duration
 
 	running map[string]runningSlackSocket
 }
@@ -81,6 +111,7 @@ func (p *workerParts) receiveSlackSockets(ctx context.Context) {
 			return conn, err
 		},
 		running: make(map[string]runningSlackSocket),
+		backoff: time.Second,
 	}
 	manager.run(ctx)
 }
@@ -205,14 +236,23 @@ func (m *slackSocketManager) stopAll() {
 }
 
 func (m *slackSocketManager) runOne(ctx context.Context, target slackSocketTarget) {
-	backoff := time.Second
+	first := m.backoff
+	if first <= 0 {
+		first = time.Second
+	}
+	backoff := first
 	for ctx.Err() == nil {
+		started := time.Now()
 		err := m.connectOnce(ctx, target)
 		if ctx.Err() != nil {
 			return
 		}
 		m.log.Warn("slack socket disconnected",
-			"channel", target.name, "err", err)
+			"channel", target.name, "err", err, "held", time.Since(started).Round(time.Second))
+		// A connection that worked is not evidence about the next failure.
+		if time.Since(started) >= socketSettled {
+			backoff = first
+		}
 		select {
 		case <-ctx.Done():
 			return
@@ -223,6 +263,35 @@ func (m *slackSocketManager) runOne(ctx context.Context, target slackSocketTarge
 			backoff = time.Minute
 		}
 	}
+}
+
+/*
+keepAlive makes silence fail.
+
+The deadline is what turns a connection nobody is feeding into a read error,
+and Slack's own keepalive is what postpones it: a ping answered with a pong,
+and every frame that arrives. Gorilla answers pings by itself only while the
+default handler is in place, so replacing it means writing the pong here.
+*/
+func (m *slackSocketManager) keepAlive(conn slackSocketConn) {
+	m.postpone(conn)
+	conn.SetPongHandler(func(string) error {
+		m.postpone(conn)
+		return nil
+	})
+	conn.SetPingHandler(func(data string) error {
+		m.postpone(conn)
+		err := conn.WriteControl(websocket.PongMessage, []byte(data),
+			time.Now().Add(10*time.Second))
+		if errors.Is(err, websocket.ErrCloseSent) {
+			return nil
+		}
+		return err
+	})
+}
+
+func (m *slackSocketManager) postpone(conn slackSocketConn) {
+	_ = conn.SetReadDeadline(time.Now().Add(socketSilence))
 }
 
 func (m *slackSocketManager) connectOnce(ctx context.Context, target slackSocketTarget) error {
@@ -236,6 +305,10 @@ func (m *slackSocketManager) connectOnce(ctx context.Context, target slackSocket
 	}
 	defer func() { _ = conn.Close() }()
 	conn.SetReadLimit(socketReadLimit)
+	m.keepAlive(conn)
+	// Said once per connection, because "connected" and "silently dead" look
+	// the same in a log that only speaks when something breaks.
+	m.log.Info("slack socket connected", "channel", target.name)
 
 	closed := make(chan struct{})
 	defer close(closed)
@@ -257,6 +330,7 @@ func (m *slackSocketManager) connectOnce(ctx context.Context, target slackSocket
 		if err != nil {
 			return err
 		}
+		m.postpone(conn)
 		ack, err := receiver.Handle(ctx, body)
 		if err != nil {
 			return err

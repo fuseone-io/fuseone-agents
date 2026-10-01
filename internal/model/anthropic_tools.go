@@ -20,10 +20,11 @@ func (a *Anthropic) toolParams(ids []domain.ToolID, offered names) []anthropic.T
 		if !ok {
 			continue
 		}
+		fields, required := propertiesOf(schema)
 		tool := anthropic.ToolParam{
 			Name:        offered.wire[id],
 			Description: anthropic.String(desc),
-			InputSchema: anthropic.ToolInputSchemaParam{Properties: schema},
+			InputSchema: anthropic.ToolInputSchemaParam{Properties: fields, Required: required},
 		}
 		out = append(out, anthropic.ToolUnionParam{OfTool: &tool})
 	}
