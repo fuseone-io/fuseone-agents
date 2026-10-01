@@ -111,8 +111,10 @@ func (r *Reporter) directForTicket(
 			"channel: nobody named by this ticket has linked an account on its connection"))
 	}
 
+	// One message for every recipient: a private card is the same card.
+	msg := r.message(ctx, report)
 	for _, person := range to {
-		posted, postErr := r.post(ctx, report, person)
+		posted, postErr := r.post(ctx, report, person, msg)
 		if postErr != nil {
 			refused.recorded = append(refused.recorded, r.failuresFor(report, person, postErr)...)
 			if !degrades(postErr) {

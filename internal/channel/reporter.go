@@ -132,6 +132,10 @@ func (r *Reporter) announce(
 
 	failures := []error{}
 	deliveryFailures := []DeliveryFailure{}
+	// One message for the pass: the body is the same in every conversation,
+	// and the answer inside it is one outcome resolution rather than one per
+	// room that hears.
+	msg := r.message(ctx, report)
 	for _, place := range places {
 		if !place.wants(report.Event) || !place.reportsAgent(report.AgentID) {
 			continue
@@ -140,7 +144,12 @@ func (r *Reporter) announce(
 		// that already heard is one this run has finished with.
 		told++
 
-		n, refused := r.tell(ctx, pass, report, place)
+		if quietFinish(place, report, msg) {
+			// Chosen silence. Counted as told, or a report nobody will ever
+			// post would sit at the front of every sweep for a day.
+			continue
+		}
+		n, refused := r.tell(ctx, pass, report, place, msg)
 		sent += n
 		failures = append(failures, refused.blocking...)
 		deliveryFailures = append(deliveryFailures, refused.recorded...)
@@ -187,6 +196,13 @@ func (r *Reporter) announce(
 	return sent, told, errors.Join(failures...)
 }
 
+// quietFinish is a finish this conversation asked not to hear: the option is
+// about finished and nothing else, and an answer — including the sentence that
+// says one was erased — is always said.
+func quietFinish(place Conversation, report Report, msg Message) bool {
+	return place.FinishedAnswerOnly && report.Event == EventFinished && msg.Answer == ""
+}
+
 func (r *Reporter) failuresFor(report Report, place Conversation, cause error) []DeliveryFailure {
 	var failures []DeliveryFailure
 	for _, code := range FailureCodes(cause) {
@@ -215,7 +231,7 @@ func (r *Reporter) recordFailures(ctx context.Context, failures []DeliveryFailur
 }
 
 // post sends one message, unless it has already been sent.
-func (r *Reporter) post(ctx context.Context, report Report, place Conversation) (bool, error) {
+func (r *Reporter) post(ctx context.Context, report Report, place Conversation, msg Message) (bool, error) {
 	owed := report.AnnouncementTo(place)
 	said, err := r.deliveries.Delivered(ctx, owed)
 	if err != nil {
@@ -225,7 +241,7 @@ func (r *Reporter) post(ctx context.Context, report Report, place Conversation) 
 		return false, nil
 	}
 
-	at, err := placed(ctx, r.poster, place, r.message(ctx, report))
+	at, err := placed(ctx, r.poster, place, msg)
 	if err != nil {
 		// Named, because the ordinary cause is a bot removed from one channel
 		// and the symptom is silence in that channel alone.

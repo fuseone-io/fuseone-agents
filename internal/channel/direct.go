@@ -349,8 +349,10 @@ func (r *Reporter) direct(
 			"channel: more people can be reached about this than one approval should reach"))
 	}
 
+	// One message for every recipient: a private card is the same card.
+	msg := r.message(ctx, report)
 	for _, person := range to {
-		posted, err := r.post(ctx, report, person)
+		posted, err := r.post(ctx, report, person, msg)
 		if err != nil {
 			refused.recorded = append(refused.recorded, r.failuresFor(report, person, err)...)
 			if !degrades(err) {
@@ -407,9 +409,9 @@ permission to open a direct message would keep every parked run unreported for
 a day and re-send the channel card it already delivered.
 */
 func (r *Reporter) tell(
-	ctx context.Context, pass *fanout, report Report, place Conversation,
+	ctx context.Context, pass *fanout, report Report, place Conversation, msg Message,
 ) (sent int, refused refusal) {
-	posted, err := r.post(ctx, report, place)
+	posted, err := r.post(ctx, report, place, msg)
 	if err != nil {
 		return 0, refusal{
 			blocking: []error{err},

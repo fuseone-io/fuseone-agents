@@ -382,9 +382,12 @@ type conversationValue struct {
 	// DirectApprovals is outbound, like Wants and unlike Mode: it says an
 	// approval announced here also reaches the people who may decide it,
 	// privately.
-	DirectApprovals bool        `json:"directApprovals,omitempty"`
-	Wants           []Event     `json:"wants,omitempty"`
-	Ticket          *TicketRule `json:"ticket,omitempty"`
+	DirectApprovals bool `json:"directApprovals,omitempty"`
+	// FinishedAnswerOnly is outbound too: a finish with no answer is not
+	// announced here. The run is still retired — silence is chosen, not failed.
+	FinishedAnswerOnly bool        `json:"finishedAnswerOnly,omitempty"`
+	Wants              []Event     `json:"wants,omitempty"`
+	Ticket             *TicketRule `json:"ticket,omitempty"`
 }
 
 // Configured reads channels and conversations from the administration area.
@@ -419,7 +422,8 @@ func (c *Configured) For(ctx context.Context, scope domain.Scope) ([]Conversatio
 		out = append(out, Conversation{
 			Channel: v.Channel, ID: id, Label: v.Label,
 			Agent: v.Agent, Wants: v.Wants,
-			DirectApprovals: v.DirectApprovals,
+			DirectApprovals:    v.DirectApprovals,
+			FinishedAnswerOnly: v.FinishedAnswerOnly,
 		})
 	}
 	return out, nil

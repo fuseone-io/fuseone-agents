@@ -133,8 +133,10 @@ func (r *Reporter) directForOwner(
 	// sweep already told: the run is theirs to answer whether the message went
 	// out a moment ago or an hour ago.
 	delivered := 0
+	// One message for every recipient: a private card is the same card.
+	msg := r.message(ctx, report)
 	for _, person := range to {
-		posted, err := r.post(ctx, report, person)
+		posted, err := r.post(ctx, report, person, msg)
 		if err != nil {
 			refused.recorded = append(refused.recorded, r.failuresFor(report, person, err)...)
 			if !degrades(err) {
