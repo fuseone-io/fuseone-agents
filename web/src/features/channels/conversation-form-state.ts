@@ -28,6 +28,7 @@ export function conversationDefaults(
     mode: knownMode(stored) ? (stored ?? "mentions") : "mentions",
     threadContext: conversation?.threadContext ?? false,
     directApprovals: conversation?.directApprovals ?? false,
+    finishedAnswerOnly: conversation?.finishedAnswerOnly ?? false,
     sources: (conversation?.sources ?? []).join("\n"),
     agent: conversation?.agent ?? "",
     runAs: conversation?.runAs ?? "",
@@ -39,7 +40,9 @@ export function conversationDefaults(
   };
 }
 
-export function unsupportedConversation(conversation: Conversation | undefined) {
+export function unsupportedConversation(
+  conversation: Conversation | undefined,
+) {
   const mode = conversation?.mode;
   const event = (conversation?.wants ?? []).find((one) => !knownEvent(one));
   return {
@@ -65,8 +68,9 @@ export function conversationInput(
     area: area || undefined,
     label: values.label.trim() || undefined,
     mode,
-    directApprovals:
-      values.wants.includes("parked") && values.directApprovals,
+    directApprovals: values.wants.includes("parked") && values.directApprovals,
+    finishedAnswerOnly:
+      values.wants.includes("finished") && values.finishedAnswerOnly,
     threadContext: startsFromMentions(mode) ? values.threadContext : false,
     sources: startsFromWatch(mode) ? splitSources(values.sources) : undefined,
     agent: startsNothing ? undefined : values.agent.trim() || undefined,

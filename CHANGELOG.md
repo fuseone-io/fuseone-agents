@@ -25,6 +25,20 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **A conversation can announce only the finishes that carry an answer.** With
+  Finished ticked, a run whose agent wrote no closing text posted the card —
+  once an hour, forever, for a scheduled agent. The new option beside the
+  Finished event keeps those out: a finish with no answer is heard by nobody in
+  that conversation, the run is still retired from the sweep, and the console
+  still records everything. The agent's instruction becomes the editor: finish
+  with text when there is something to say, with none when there is not. An
+  answer erased by retention is still announced as erased — "the platform
+  removed this" is not "nothing to say".
+
 ## [0.50.1] — 2026-09-30
 
 ### Fixed

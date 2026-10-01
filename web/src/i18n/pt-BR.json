@@ -922,7 +922,9 @@
     "showMoreConversations_other": "Mostrar mais {{count}}",
     "conversationCount_one": "{{count}} conversa",
     "conversationCount_other": "{{count}} conversas",
-    "showingConversations": "mostrando {{shown}} de {{total}}"
+    "showingConversations": "mostrando {{shown}} de {{total}}",
+    "finishedAnswerOnly": "Só anunciar términos que tragam a resposta",
+    "finishedAnswerOnlyExplains": "Um término sem resposta não é anunciado aqui. O console continua registrando todos os runs; a instrução do agente decide quando há algo a dizer."
   },
   "common": {
     "actions": "Ações",

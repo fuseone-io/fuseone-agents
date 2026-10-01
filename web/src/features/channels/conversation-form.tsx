@@ -85,7 +85,7 @@ export function ConversationForm({
             ? t("channels.unknownEvent", { event: unsupported.event })
             : unsupported.ticket
               ? t("channels.unknownTicketRule")
-            : t("channels.unknownMode", { mode: stored })
+              : t("channels.unknownMode", { mode: stored })
         }
         onClose={onClose}
       />

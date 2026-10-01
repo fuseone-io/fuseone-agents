@@ -922,7 +922,9 @@
     "showMoreConversations_other": "Show {{count}} more",
     "conversationCount_one": "{{count}} conversation",
     "conversationCount_other": "{{count}} conversations",
-    "showingConversations": "showing {{shown}} of {{total}}"
+    "showingConversations": "showing {{shown}} of {{total}}",
+    "finishedAnswerOnly": "Only announce finishes that carry the answer",
+    "finishedAnswerOnlyExplains": "A finish with no answer is not announced here. The console still records every run; the agent's instruction decides when there is something to say."
   },
   "common": {
     "actions": "Actions",

@@ -65,6 +65,7 @@ export interface ConversationInput {
   mode?: "mentions" | "watch" | "both" | "announce" | "ticket";
   threadContext?: boolean;
   directApprovals?: boolean;
+  finishedAnswerOnly?: boolean;
   sources?: string[];
   agent?: string;
   runAs?: string;

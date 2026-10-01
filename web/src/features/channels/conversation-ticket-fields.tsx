@@ -29,7 +29,11 @@ export function ConversationTicketFields({
           <FormItem>
             <FormLabel>{t("channels.ticketAddressFrom")}</FormLabel>
             <FormControl>
-              <Input {...field} className="font-mono" placeholder="app:A0123TICKET" />
+              <Input
+                {...field}
+                className="font-mono"
+                placeholder="app:A0123TICKET"
+              />
             </FormControl>
             <FormDescription>
               {t("channels.ticketAddressFromExplains")}
@@ -51,7 +55,9 @@ export function ConversationTicketFields({
                 placeholder={t("channels.ticketPatternsPlaceholder")}
               />
             </FormControl>
-            <FormDescription>{t("channels.ticketPatternsExplains")}</FormDescription>
+            <FormDescription>
+              {t("channels.ticketPatternsExplains")}
+            </FormDescription>
             <FormMessage />
           </FormItem>
         )}

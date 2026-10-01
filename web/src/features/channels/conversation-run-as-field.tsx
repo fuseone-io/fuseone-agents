@@ -88,7 +88,10 @@ export function ConversationRunAsField({
             </Select>
           ) : (
             <FormControl>
-              <Input {...field} placeholder={t("channels.watchRunAsPlaceholder")} />
+              <Input
+                {...field}
+                placeholder={t("channels.watchRunAsPlaceholder")}
+              />
             </FormControl>
           )}
           <FormDescription>

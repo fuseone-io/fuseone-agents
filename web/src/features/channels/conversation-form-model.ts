@@ -28,11 +28,7 @@ export const INSTALLATION_SCOPE = "*/";
 // events list. A value this console does not know would be refused by the
 // server rather than silently read as mentions.
 export type ConversationMode =
-  | "mentions"
-  | "watch"
-  | "both"
-  | "announce"
-  | "ticket";
+  "mentions" | "watch" | "both" | "announce" | "ticket";
 
 /*
 knownMode answers whether this console can draw a stored mode at all.
@@ -105,6 +101,7 @@ export const conversationSchema = z
     mode: z.enum(["mentions", "watch", "both", "announce", "ticket"]),
     threadContext: z.boolean(),
     directApprovals: z.boolean(),
+    finishedAnswerOnly: z.boolean(),
     sources: z.string(),
     agent: z.string(),
     runAs: z.string(),
@@ -134,10 +131,7 @@ export const conversationSchema = z
         });
       }
       const address = value.ticketAddressFrom.trim();
-      if (
-        address.length > 512 ||
-        !/^(bot|app):\S+$/.test(address)
-      ) {
+      if (address.length > 512 || !/^(bot|app):\S+$/.test(address)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["ticketAddressFrom"],
@@ -148,7 +142,9 @@ export const conversationSchema = z
       if (
         patterns.length === 0 ||
         patterns.length > 8 ||
-        patterns.some((pattern) => new TextEncoder().encode(pattern).length > 256)
+        patterns.some(
+          (pattern) => new TextEncoder().encode(pattern).length > 256,
+        )
       ) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,

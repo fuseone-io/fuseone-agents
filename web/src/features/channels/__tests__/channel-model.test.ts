@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { visibleChannels, type Channel } from "@/features/channels/channel-model";
+import {
+  visibleChannels,
+  type Channel,
+} from "@/features/channels/channel-model";
 
 const emptyChannel: Channel = {
   name: "acme-slack",

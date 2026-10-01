@@ -3133,6 +3133,14 @@ paths:
                     recipient without the grant is refused there as anywhere
                     else. Requires the Slack app's im:write scope, and applies
                     only where this conversation is told about parked runs.
+                finishedAnswerOnly:
+                  type: boolean
+                  description: |
+                    Announce a finished run here only when the announcement
+                    carries the run's own answer. A finish with no answer is
+                    heard by nobody in this conversation; the console still
+                    records every run. Applies only where this conversation is
+                    told about finished runs.
                 ticket:
                   $ref: '#/components/schemas/TicketRule'
                 wants:
@@ -6533,6 +6541,11 @@ components:
             Whether an approval announced here is also sent privately to the
             people who may decide it. Addressing only: the decision is checked
             where the button is pressed, exactly as it is in the conversation.
+        finishedAnswerOnly:
+          type: boolean
+          description: |
+            Whether a finished run is announced here only when it carries the
+            run's own answer.
         ticket:
           $ref: '#/components/schemas/TicketRule'
         sources:
