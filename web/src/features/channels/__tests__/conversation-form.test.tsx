@@ -510,15 +510,21 @@ describe("conversation configuration", () => {
       enabled: true,
     });
 
-    expect(await screen.findByText("Padrões para abrir ticket")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Padrões para abrir ticket"),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText("Fonte que endereça aprovadores")).toHaveValue(
       "app:A0123TICKET",
     );
     expect(screen.getByLabelText("Padrões para abrir ticket")).toHaveValue(
       "\\bapi[ -]?key\\b\n\\bchave de api\\b",
     );
-    expect(screen.queryByText("Incluir contexto da thread")).not.toBeInTheDocument();
-    expect(screen.queryByText("Fontes Slack permitidas")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Incluir contexto da thread"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Fontes Slack permitidas"),
+    ).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Salvar" }));
     await waitFor(() => expect(saved(requests)).toBeDefined());

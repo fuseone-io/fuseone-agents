@@ -118,6 +118,9 @@ type Conversation struct {
 	// the people who may decide it. Outbound, like Wants: it says who is told
 	// when a run stops, not what may start one.
 	DirectApprovals bool
+	// FinishedAnswerOnly keeps a finish with no answer out of this
+	// conversation. Outbound like Wants; the run is still retired.
+	FinishedAnswerOnly bool
 	// Ticket is the admission rule for governed roots. It is present only for
 	// ticket mode and never inferred from watch sources.
 	Ticket  *channel.TicketRule
@@ -214,17 +217,18 @@ func conversationRows(channelName string, stored []settings.Setting) []storedCon
 	var out []storedConversation
 	for _, s := range stored {
 		var v struct {
-			Channel         string              `json:"channel"`
-			KeyVersion      int                 `json:"keyVersion"`
-			Label           string              `json:"label"`
-			Mode            string              `json:"mode"`
-			Sources         []string            `json:"sources"`
-			Agent           string              `json:"agent"`
-			RunAs           string              `json:"runAs"`
-			ThreadContext   bool                `json:"threadContext"`
-			DirectApprovals bool                `json:"directApprovals"`
-			Ticket          *channel.TicketRule `json:"ticket"`
-			Wants           []string            `json:"wants"`
+			Channel            string              `json:"channel"`
+			KeyVersion         int                 `json:"keyVersion"`
+			Label              string              `json:"label"`
+			Mode               string              `json:"mode"`
+			Sources            []string            `json:"sources"`
+			Agent              string              `json:"agent"`
+			RunAs              string              `json:"runAs"`
+			ThreadContext      bool                `json:"threadContext"`
+			DirectApprovals    bool                `json:"directApprovals"`
+			FinishedAnswerOnly bool                `json:"finishedAnswerOnly"`
+			Ticket             *channel.TicketRule `json:"ticket"`
+			Wants              []string            `json:"wants"`
 		}
 		if err := json.Unmarshal(s.Value, &v); err != nil || v.Channel != channelName {
 			continue
@@ -246,10 +250,11 @@ func conversationRows(channelName string, stored []settings.Setting) []storedCon
 				Mode:    channel.StoredMode(v.Mode),
 				Sources: compactStrings(v.Sources),
 				Agent:   domain.AgentID(v.Agent), RunAs: domain.UserID(v.RunAs),
-				ThreadContext:   v.ThreadContext,
-				DirectApprovals: v.DirectApprovals,
-				Ticket:          v.Ticket,
-				Wants:           v.Wants, Enabled: s.Enabled,
+				ThreadContext:      v.ThreadContext,
+				DirectApprovals:    v.DirectApprovals,
+				FinishedAnswerOnly: v.FinishedAnswerOnly,
+				Ticket:             v.Ticket,
+				Wants:              v.Wants, Enabled: s.Enabled,
 			}})
 	}
 	return out
@@ -464,6 +469,12 @@ func (c *Channels) PutConversation(
 	if !channel.Wants(eventsOf(conv.Wants), channel.EventParked) {
 		conv.DirectApprovals = false
 	}
+	// The same rule for the finish option: stored against a conversation that
+	// does not hear finishes, it would be a preference nothing reads until an
+	// unrelated edit turns finished on and surprises everybody.
+	if !channel.Wants(eventsOf(conv.Wants), channel.EventFinished) {
+		conv.FinishedAnswerOnly = false
+	}
 	// One transaction, holding the connection's lock: the precondition, the
 	// shape the row is already in, and the write are one decision.
 	tx, err := c.pool.Begin(ctx)
@@ -514,9 +525,10 @@ func (c *Channels) PutConversation(
 		"channel": channelName, "label": conv.Label, "wants": conv.Wants,
 		"mode": mode, "sources": sources,
 		"agent": string(conv.Agent), "runAs": string(conv.RunAs),
-		"threadContext":   conv.ThreadContext,
-		"directApprovals": conv.DirectApprovals,
-		"ticket":          conv.Ticket,
+		"threadContext":      conv.ThreadContext,
+		"directApprovals":    conv.DirectApprovals,
+		"finishedAnswerOnly": conv.FinishedAnswerOnly,
+		"ticket":             conv.Ticket,
 	}
 	// Declared, never inferred. A row carrying the connection in its name and
 	// not saying so is read as an id that happens to contain a colon and a
@@ -551,8 +563,9 @@ func (c *Channels) PutConversation(
 			// Turning this on decides that a run's facts reach people privately
 			// rather than only in a room somebody can be added to or removed
 			// from. The trail has to say when it was turned on, and by whom.
-			"directApprovals": conv.DirectApprovals,
-			"ticket":          conv.Ticket,
+			"directApprovals":    conv.DirectApprovals,
+			"finishedAnswerOnly": conv.FinishedAnswerOnly,
+			"ticket":             conv.Ticket,
 		},
 	}); err != nil {
 		return err

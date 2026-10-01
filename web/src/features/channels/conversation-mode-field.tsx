@@ -65,12 +65,12 @@ export function ConversationModeField({
             {mode === "ticket"
               ? t("channels.modeTicketExplains")
               : mode === "announce"
-              ? t("channels.modeAnnounceExplains")
-              : mode === "watch"
-                ? t("channels.modeWatchExplains")
-                : mode === "both"
-                  ? t("channels.modeBothExplains")
-                  : t("channels.modeMentionsExplains")}
+                ? t("channels.modeAnnounceExplains")
+                : mode === "watch"
+                  ? t("channels.modeWatchExplains")
+                  : mode === "both"
+                    ? t("channels.modeBothExplains")
+                    : t("channels.modeMentionsExplains")}
           </FormDescription>
           <FormMessage />
         </FormItem>

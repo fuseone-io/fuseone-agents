@@ -90,8 +90,8 @@ export function ConversationAgentField({
               : mode === "ticket"
                 ? t("channels.ticketAgentExplains")
                 : mode === "watch"
-                ? t("channels.watchAgentExplains")
-                : t("channels.conversationAgentExplains")}
+                  ? t("channels.watchAgentExplains")
+                  : t("channels.conversationAgentExplains")}
           </FormDescription>
           <FormMessage />
         </FormItem>

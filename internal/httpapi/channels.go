@@ -249,18 +249,19 @@ func (s *Server) PutConversation(
 	}
 
 	err := s.channels.PutConversation(ctx, req.Name, admin.Conversation{
-		ID:              req.Conversation,
-		Label:           valueOr(req.Body.Label),
-		Scope:           scope,
-		Mode:            mode,
-		Sources:         valueOrSlice(req.Body.Sources),
-		Agent:           agent,
-		RunAs:           runAs,
-		ThreadContext:   orDefault(req.Body.ThreadContext, false),
-		DirectApprovals: orDefault(req.Body.DirectApprovals, false),
-		Ticket:          ticketRuleOf(req.Body.Ticket),
-		Wants:           wantsOf(req.Body.Wants),
-		Enabled:         orDefault(req.Body.Enabled, true),
+		ID:                 req.Conversation,
+		Label:              valueOr(req.Body.Label),
+		Scope:              scope,
+		Mode:               mode,
+		Sources:            valueOrSlice(req.Body.Sources),
+		Agent:              agent,
+		RunAs:              runAs,
+		ThreadContext:      orDefault(req.Body.ThreadContext, false),
+		DirectApprovals:    orDefault(req.Body.DirectApprovals, false),
+		FinishedAnswerOnly: orDefault(req.Body.FinishedAnswerOnly, false),
+		Ticket:             ticketRuleOf(req.Body.Ticket),
+		Wants:              wantsOf(req.Body.Wants),
+		Enabled:            orDefault(req.Body.Enabled, true),
 	}, caller)
 	switch {
 	case admin.Invalid(err):
@@ -502,6 +503,9 @@ func channelFrom(
 		}
 		if conv.RunAs != "" {
 			item.RunAs = ptr(string(conv.RunAs))
+		}
+		if conv.FinishedAnswerOnly {
+			item.FinishedAnswerOnly = ptr(true)
 		}
 		if conv.DirectApprovals {
 			item.DirectApprovals = ptr(true)

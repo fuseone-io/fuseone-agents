@@ -1351,3 +1351,57 @@ func TestPutConversation_theInstallationWithAnArea_isRefused(t *testing.T) {
 type onlySlack struct{}
 
 func (onlySlack) Kinds() []string { return []string{"slack"} }
+
+// The quiet-finish choice reaches the runtime the same way DirectApprovals
+// does: through the stored row, read by the sweep. Written and never read, the
+// option would be a checkbox that changes nothing.
+func TestFor_theQuietFinishChoice_reachesTheRuntime(t *testing.T) {
+	store, channels := configuredChannels(t)
+
+	if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+		ID: "C34-quiet", Enabled: true, Wants: []string{"finished"},
+		FinishedAnswerOnly: true,
+		Scope:              domain.Scope{Company: "acme", Area: "ops"},
+	}, "usr_ana"); err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+
+	places, err := store.For(t.Context(), domain.Scope{Company: "acme", Area: "ops"})
+	if err != nil {
+		t.Fatalf("For: %v", err)
+	}
+	for _, place := range places {
+		if place.ID == "C34-quiet" {
+			if !place.FinishedAnswerOnly {
+				t.Error("the runtime reads the conversation as announcing every finish")
+			}
+			return
+		}
+	}
+	t.Fatalf("places = %+v, want the conversation", places)
+}
+
+// And a conversation that does not hear finishes cannot keep the preference:
+// stored anyway, an unrelated edit that turns finished on would surprise
+// everybody with a silence somebody configured months earlier.
+func TestPutConversation_quietFinishWithoutFinished_isDropped(t *testing.T) {
+	store, channels := configuredChannels(t)
+
+	if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+		ID: "C35-no-finish", Enabled: true, Wants: []string{"parked"},
+		FinishedAnswerOnly: true,
+		Scope:              domain.Scope{Company: "acme", Area: "ops"},
+	}, "usr_ana"); err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+
+	places, err := store.For(t.Context(), domain.Scope{Company: "acme", Area: "ops"})
+	if err != nil {
+		t.Fatalf("For: %v", err)
+	}
+	for _, place := range places {
+		if place.ID == "C35-no-finish" && place.FinishedAnswerOnly {
+			t.Error("a preference about finishes survived on a conversation that hears none")
+		}
+	}
+}

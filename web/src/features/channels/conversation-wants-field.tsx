@@ -58,6 +58,31 @@ export function ConversationWantsField({
           </FormItem>
         )}
       />
+      {form.watch("wants").includes("finished") && (
+        <FormField
+          control={form.control}
+          name="finishedAnswerOnly"
+          render={({ field }) => (
+            <FormItem className="rounded-md border bg-muted/30 p-3">
+              <label className="flex items-start gap-2 text-sm">
+                <Checkbox
+                  checked={field.value}
+                  onCheckedChange={(on) => field.onChange(Boolean(on))}
+                />
+                <span className="grid gap-1">
+                  <span className="font-medium">
+                    {t("channels.finishedAnswerOnly")}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {t("channels.finishedAnswerOnlyExplains")}
+                  </span>
+                </span>
+              </label>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      )}
       {form.watch("wants").includes("parked") && (
         <FormField
           control={form.control}

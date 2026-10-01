@@ -173,3 +173,115 @@ func (f fixedOutcomes) FinishedOutcome(_ context.Context, run domain.RunID) (dom
 	}
 	return f.payload, nil
 }
+
+/*
+A conversation may hear only the finishes that have something to say.
+
+With Finished ticked, every scheduled run posted something — and a run whose
+agent wrote no closing text posted the card, once an hour, forever. The option
+is the middle ground somebody asked for after muting the channel: the agent's
+instruction decides what is worth a message, and a finish with no answer is
+heard by nobody.
+
+Chosen silence is not a failure: the run is still retired from the sweep, or a
+report nobody will ever post would sit at the front of every page for a day.
+*/
+func TestSweep_finishedAnswerOnly_silenceIsChosenAndTheRunIsRetired(t *testing.T) {
+	t.Parallel()
+	for _, one := range []struct {
+		name   string
+		answer string
+		posted int
+	}{
+		{"a finish with no answer is heard by nobody", "", 0},
+		{"a finish that answers is posted", "1 coisa para olhar", 1},
+	} {
+		t.Run(one.name, func(t *testing.T) {
+			t.Parallel()
+			posts := &recorder{}
+			reports := &fixedReports{reports: []channel.Report{
+				report("run-1", "acme", "ops", channel.EventFinished),
+			}}
+			place := roomWanting("C07-ops", channel.EventFinished)
+			place.FinishedAnswerOnly = true
+			r := channel.NewReporter(
+				reports, rooms(place), posts,
+				func() time.Time { return noon }, nil,
+			).WithDeliveries(&memoryDeliveries{})
+			if one.answer != "" {
+				r = r.WithOutcomes(outcomesSaying(t, "run-1", one.answer))
+			} else {
+				r = r.WithOutcomes(outcomesSaying(t, "run-other", "not this run"))
+			}
+
+			if _, err := r.Sweep(t.Context(), 50); err != nil {
+				t.Fatalf("sweep: %v", err)
+			}
+			if len(posts.sent) != one.posted {
+				t.Fatalf("sent = %+v, want %d messages", posts.sent, one.posted)
+			}
+			// Retired either way: silence was chosen, not failed.
+			if len(reports.done) != 1 {
+				t.Fatalf("reported = %v, want the run retired from the sweep", reports.done)
+			}
+		})
+	}
+}
+
+// The option is about finished and nothing else: a parked run still demands
+// attention whether or not it has words of its own.
+func TestSweep_finishedAnswerOnly_aParkedRunStillPosts(t *testing.T) {
+	t.Parallel()
+	posts := &recorder{}
+	place := roomWanting("C07-ops", channel.EventParked)
+	place.FinishedAnswerOnly = true
+	r := channel.NewReporter(
+		&fixedReports{reports: []channel.Report{
+			report("run-1", "acme", "ops", channel.EventParked),
+		}},
+		rooms(place), posts, func() time.Time { return noon }, nil,
+	).WithDeliveries(&memoryDeliveries{})
+
+	if _, err := r.Sweep(t.Context(), 50); err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	if len(posts.sent) != 1 {
+		t.Fatalf("sent = %+v, want the parked card", posts.sent)
+	}
+}
+
+// Two conversations hearing one run resolve its outcome once: the message is
+// built per report, not per place.
+func TestSweep_twoConversations_resolveTheOutcomeOnce(t *testing.T) {
+	t.Parallel()
+	posts := &recorder{}
+	outcomes, content := outcomesSaying(t, "run-1", "tudo normal")
+	counting := &countingOutcomes{inner: outcomes}
+	r := channel.NewReporter(
+		&fixedReports{reports: []channel.Report{
+			report("run-1", "acme", "ops", channel.EventFinished),
+		}},
+		rooms(roomWanting("C07", channel.EventFinished), roomWanting("C08", channel.EventFinished)),
+		posts, func() time.Time { return noon }, nil,
+	).WithDeliveries(&memoryDeliveries{}).WithOutcomes(counting, content)
+
+	if _, err := r.Sweep(t.Context(), 50); err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	if len(posts.sent) != 2 {
+		t.Fatalf("sent = %d, want both conversations told", len(posts.sent))
+	}
+	if counting.calls != 1 {
+		t.Errorf("FinishedOutcome called %d times for one run, want once", counting.calls)
+	}
+}
+
+type countingOutcomes struct {
+	inner channel.Outcomes
+	calls int
+}
+
+func (c *countingOutcomes) FinishedOutcome(ctx context.Context, run domain.RunID) (domain.RunFinishedPayload, error) {
+	c.calls++
+	return c.inner.FinishedOutcome(ctx, run)
+}

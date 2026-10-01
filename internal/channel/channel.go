@@ -120,7 +120,12 @@ type Conversation struct {
 	// open to whatever its scope publishes.
 	Agent domain.AgentID
 	// Wants is which events reach it. Empty means the defaults.
-	Wants []Event
+	// FinishedAnswerOnly keeps a finish that carries no answer out of this
+	// conversation. Chosen silence, not a failure: the run is still retired
+	// from the sweep. It is about finished and nothing else — a parked run
+	// demands attention whether or not it has words of its own.
+	FinishedAnswerOnly bool
+	Wants              []Event
 	// DirectApprovals says an approval announced here also goes privately to
 	// the people who may decide it. Outbound and orthogonal to Mode: which
 	// messages may start a run here is a different question from who is told

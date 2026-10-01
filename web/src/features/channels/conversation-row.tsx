@@ -59,11 +59,11 @@ export function ConversationRow({
       ? `${t("channels.modeAnnounce")}${direct}`
       : conversation.mode === "ticket"
         ? `${t("channels.modeTicket")}${agent || " · -"}${direct}`
-      : conversation.mode === "watch"
-        ? `${t("channels.modeWatch")}${agent || " · -"}${direct}`
-        : conversation.mode === "both"
-          ? `${t("channels.modeBoth")}${agent || " · -"}${threadContext}${direct}`
-          : `${t("channels.modeMentions")}${agent}${threadContext}${direct}`;
+        : conversation.mode === "watch"
+          ? `${t("channels.modeWatch")}${agent || " · -"}${direct}`
+          : conversation.mode === "both"
+            ? `${t("channels.modeBoth")}${agent || " · -"}${threadContext}${direct}`
+            : `${t("channels.modeMentions")}${agent}${threadContext}${direct}`;
 
   return (
     <TableRow>
