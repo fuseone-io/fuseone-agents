@@ -91,7 +91,7 @@ func (p *Poster) PostPlaced(
 		return p.call(ctx, "/chat.postMessage", postMessage{
 			Channel:     c.ID,
 			Text:        summary(m),
-			Blocks:      answerBlocks(m),
+			Blocks:      answerBlocksFor(c, m),
 			Thread:      c.Thread,
 			Parse:       "none",
 			UnfurlLinks: &no,

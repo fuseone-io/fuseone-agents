@@ -300,3 +300,40 @@ func posterCapturing(t *testing.T, got *map[string]any) *slack.Poster {
 	t.Cleanup(server.Close)
 	return poster(server)
 }
+
+/*
+With the toggle on, the answer's own paragraphs become separate blocks; with
+it off, the payload is byte-identical to the single dense block of today —
+the toggle is presentation, and presentation must never leak into behaviour
+for whoever did not ask.
+*/
+func TestPostPlaced_formattedAnswers_rendersParagraphsAsBlocks(t *testing.T) {
+	t.Parallel()
+	message := channel.Message{
+		Event: channel.EventFinished, RunID: "run-1", Agent: "security-sentinel",
+		Scope:  domain.Scope{Company: "cora", Area: "platform"},
+		Answer: "✅ Varredura: tudo ok.\n\n• V1: zero erros\n• V2: nada fora do padrão\n\nNenhuma ação tomada.",
+	}
+
+	var formatted map[string]any
+	p := posterCapturing(t, &formatted)
+	if _, err := p.PostPlaced(t.Context(),
+		channel.Conversation{ID: "C07", FormattedAnswers: true}, message); err != nil {
+		t.Fatalf("PostPlaced: %v", err)
+	}
+	blocks, _ := formatted["blocks"].([]any)
+	// Three paragraphs plus provenance.
+	if len(blocks) != 4 {
+		t.Fatalf("blocks = %d, want the text's three paragraphs plus provenance", len(blocks))
+	}
+
+	var plain map[string]any
+	p2 := posterCapturing(t, &plain)
+	if _, err := p2.PostPlaced(t.Context(),
+		channel.Conversation{ID: "C07"}, message); err != nil {
+		t.Fatalf("PostPlaced: %v", err)
+	}
+	if got, _ := plain["blocks"].([]any); len(got) != 2 {
+		t.Fatalf("plain blocks = %d, want the dense block plus provenance", len(got))
+	}
+}
