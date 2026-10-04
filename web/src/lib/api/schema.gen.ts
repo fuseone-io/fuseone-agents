@@ -4109,6 +4109,8 @@ export interface components {
              *     run's own answer.
              */
             finishedAnswerOnly?: boolean;
+            /** @description Whether an answer's paragraphs are rendered as separate blocks. */
+            formattedAnswers?: boolean;
             ticket?: components["schemas"]["TicketRule"];
             sources?: string[];
             agent?: string;
@@ -8044,6 +8046,14 @@ export interface operations {
                      *     told about finished runs.
                      */
                     finishedAnswerOnly?: boolean;
+                    /**
+                     * @description Render an answer's own paragraphs and lists as separate
+                     *     blocks in this conversation. Presentation only: the same
+                     *     characters, partitioned at the structure the text already
+                     *     has. Applies only where this conversation is told about
+                     *     finished runs.
+                     */
+                    formattedAnswers?: boolean;
                     ticket?: components["schemas"]["TicketRule"];
                     /** @description Which events reach it. Empty means the defaults, which are parked, failed and drifted — a conversation that hears every run finish is one people mute, and an agent that quietly stopped working is the one notice nobody thinks to ask for. Sending the field is choosing: the console always does, so a conversation configured there hears what was ticked and nothing else. */
                     wants?: ("parked" | "failed" | "finished" | "drifted")[];

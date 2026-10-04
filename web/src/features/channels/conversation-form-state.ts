@@ -29,6 +29,7 @@ export function conversationDefaults(
     threadContext: conversation?.threadContext ?? false,
     directApprovals: conversation?.directApprovals ?? false,
     finishedAnswerOnly: conversation?.finishedAnswerOnly ?? false,
+    formattedAnswers: conversation?.formattedAnswers ?? false,
     sources: (conversation?.sources ?? []).join("\n"),
     agent: conversation?.agent ?? "",
     runAs: conversation?.runAs ?? "",
@@ -71,6 +72,8 @@ export function conversationInput(
     directApprovals: values.wants.includes("parked") && values.directApprovals,
     finishedAnswerOnly:
       values.wants.includes("finished") && values.finishedAnswerOnly,
+    formattedAnswers:
+      values.wants.includes("finished") && values.formattedAnswers,
     threadContext: startsFromMentions(mode) ? values.threadContext : false,
     sources: startsFromWatch(mode) ? splitSources(values.sources) : undefined,
     agent: startsNothing ? undefined : values.agent.trim() || undefined,

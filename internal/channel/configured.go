@@ -385,9 +385,11 @@ type conversationValue struct {
 	DirectApprovals bool `json:"directApprovals,omitempty"`
 	// FinishedAnswerOnly is outbound too: a finish with no answer is not
 	// announced here. The run is still retired — silence is chosen, not failed.
-	FinishedAnswerOnly bool        `json:"finishedAnswerOnly,omitempty"`
-	Wants              []Event     `json:"wants,omitempty"`
-	Ticket             *TicketRule `json:"ticket,omitempty"`
+	FinishedAnswerOnly bool `json:"finishedAnswerOnly,omitempty"`
+	// FormattedAnswers is presentation, outbound like the two above.
+	FormattedAnswers bool        `json:"formattedAnswers,omitempty"`
+	Wants            []Event     `json:"wants,omitempty"`
+	Ticket           *TicketRule `json:"ticket,omitempty"`
 }
 
 // Configured reads channels and conversations from the administration area.
@@ -424,6 +426,7 @@ func (c *Configured) For(ctx context.Context, scope domain.Scope) ([]Conversatio
 			Agent: v.Agent, Wants: v.Wants,
 			DirectApprovals:    v.DirectApprovals,
 			FinishedAnswerOnly: v.FinishedAnswerOnly,
+			FormattedAnswers:   v.FormattedAnswers,
 		})
 	}
 	return out, nil

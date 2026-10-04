@@ -121,6 +121,8 @@ type Conversation struct {
 	// FinishedAnswerOnly keeps a finish with no answer out of this
 	// conversation. Outbound like Wants; the run is still retired.
 	FinishedAnswerOnly bool
+	// FormattedAnswers renders an answer's paragraphs as blocks here.
+	FormattedAnswers bool
 	// Ticket is the admission rule for governed roots. It is present only for
 	// ticket mode and never inferred from watch sources.
 	Ticket  *channel.TicketRule
@@ -227,6 +229,7 @@ func conversationRows(channelName string, stored []settings.Setting) []storedCon
 			ThreadContext      bool                `json:"threadContext"`
 			DirectApprovals    bool                `json:"directApprovals"`
 			FinishedAnswerOnly bool                `json:"finishedAnswerOnly"`
+			FormattedAnswers   bool                `json:"formattedAnswers"`
 			Ticket             *channel.TicketRule `json:"ticket"`
 			Wants              []string            `json:"wants"`
 		}
@@ -253,6 +256,7 @@ func conversationRows(channelName string, stored []settings.Setting) []storedCon
 				ThreadContext:      v.ThreadContext,
 				DirectApprovals:    v.DirectApprovals,
 				FinishedAnswerOnly: v.FinishedAnswerOnly,
+				FormattedAnswers:   v.FormattedAnswers,
 				Ticket:             v.Ticket,
 				Wants:              v.Wants, Enabled: s.Enabled,
 			}})
@@ -474,6 +478,10 @@ func (c *Channels) PutConversation(
 	// unrelated edit turns finished on and surprises everybody.
 	if !channel.Wants(eventsOf(conv.Wants), channel.EventFinished) {
 		conv.FinishedAnswerOnly = false
+		// The same rule: an answer only exists on a finished announcement, so
+		// a presentation preference stored where none arrives is a surprise
+		// armed for the edit that turns finished back on.
+		conv.FormattedAnswers = false
 	}
 	// One transaction, holding the connection's lock: the precondition, the
 	// shape the row is already in, and the write are one decision.
@@ -528,6 +536,7 @@ func (c *Channels) PutConversation(
 		"threadContext":      conv.ThreadContext,
 		"directApprovals":    conv.DirectApprovals,
 		"finishedAnswerOnly": conv.FinishedAnswerOnly,
+		"formattedAnswers":   conv.FormattedAnswers,
 		"ticket":             conv.Ticket,
 	}
 	// Declared, never inferred. A row carrying the connection in its name and
@@ -565,6 +574,7 @@ func (c *Channels) PutConversation(
 			// from. The trail has to say when it was turned on, and by whom.
 			"directApprovals":    conv.DirectApprovals,
 			"finishedAnswerOnly": conv.FinishedAnswerOnly,
+			"formattedAnswers":   conv.FormattedAnswers,
 			"ticket":             conv.Ticket,
 		},
 	}); err != nil {

@@ -3141,6 +3141,14 @@ paths:
                     heard by nobody in this conversation; the console still
                     records every run. Applies only where this conversation is
                     told about finished runs.
+                formattedAnswers:
+                  type: boolean
+                  description: |
+                    Render an answer's own paragraphs and lists as separate
+                    blocks in this conversation. Presentation only: the same
+                    characters, partitioned at the structure the text already
+                    has. Applies only where this conversation is told about
+                    finished runs.
                 ticket:
                   $ref: '#/components/schemas/TicketRule'
                 wants:
@@ -6546,6 +6554,10 @@ components:
           description: |
             Whether a finished run is announced here only when it carries the
             run's own answer.
+        formattedAnswers:
+          type: boolean
+          description: |
+            Whether an answer's paragraphs are rendered as separate blocks.
         ticket:
           $ref: '#/components/schemas/TicketRule'
         sources:

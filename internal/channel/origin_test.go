@@ -1405,3 +1405,57 @@ func TestPutConversation_quietFinishWithoutFinished_isDropped(t *testing.T) {
 		}
 	}
 }
+
+// The presentation choice reaches the runtime through the stored row, like
+// its two siblings. Written and never read, it would be a checkbox that
+// changes nothing.
+func TestFor_theFormattedAnswersChoice_reachesTheRuntime(t *testing.T) {
+	store, channels := configuredChannels(t)
+
+	if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+		ID: "C36-formatted", Enabled: true, Wants: []string{"finished"},
+		FormattedAnswers: true,
+		Scope:            domain.Scope{Company: "acme", Area: "ops"},
+	}, "usr_ana"); err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+
+	places, err := store.For(t.Context(), domain.Scope{Company: "acme", Area: "ops"})
+	if err != nil {
+		t.Fatalf("For: %v", err)
+	}
+	for _, place := range places {
+		if place.ID == "C36-formatted" {
+			if !place.FormattedAnswers {
+				t.Error("the runtime reads the conversation as rendering one dense block")
+			}
+			return
+		}
+	}
+	t.Fatalf("places = %+v, want the conversation", places)
+}
+
+// And without finished among the announcements the preference is dropped,
+// exactly like its sibling: a presentation preference stored where no answer
+// arrives is a surprise armed for the edit that turns finished back on.
+func TestPutConversation_formattedAnswersWithoutFinished_isDropped(t *testing.T) {
+	store, channels := configuredChannels(t)
+
+	if err := channels.PutConversation(t.Context(), "acme-slack", admin.Conversation{
+		ID: "C37-no-finish", Enabled: true, Wants: []string{"parked"},
+		FormattedAnswers: true,
+		Scope:            domain.Scope{Company: "acme", Area: "ops"},
+	}, "usr_ana"); err != nil {
+		t.Fatalf("PutConversation: %v", err)
+	}
+
+	places, err := store.For(t.Context(), domain.Scope{Company: "acme", Area: "ops"})
+	if err != nil {
+		t.Fatalf("For: %v", err)
+	}
+	for _, place := range places {
+		if place.ID == "C37-no-finish" && place.FormattedAnswers {
+			t.Error("a presentation preference survived on a conversation that hears no answers")
+		}
+	}
+}

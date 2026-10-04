@@ -125,7 +125,12 @@ type Conversation struct {
 	// from the sweep. It is about finished and nothing else — a parked run
 	// demands attention whether or not it has words of its own.
 	FinishedAnswerOnly bool
-	Wants              []Event
+	// FormattedAnswers renders an answer's own paragraphs as separate blocks
+	// in this conversation. Typography only: the same characters, partitioned
+	// at the structure the text already has — never a guessed headline or a
+	// reordered item.
+	FormattedAnswers bool
+	Wants            []Event
 	// DirectApprovals says an approval announced here also goes privately to
 	// the people who may decide it. Outbound and orthogonal to Mode: which
 	// messages may start a run here is a different question from who is told

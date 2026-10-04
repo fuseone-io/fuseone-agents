@@ -259,6 +259,7 @@ func (s *Server) PutConversation(
 		ThreadContext:      orDefault(req.Body.ThreadContext, false),
 		DirectApprovals:    orDefault(req.Body.DirectApprovals, false),
 		FinishedAnswerOnly: orDefault(req.Body.FinishedAnswerOnly, false),
+		FormattedAnswers:   orDefault(req.Body.FormattedAnswers, false),
 		Ticket:             ticketRuleOf(req.Body.Ticket),
 		Wants:              wantsOf(req.Body.Wants),
 		Enabled:            orDefault(req.Body.Enabled, true),
@@ -506,6 +507,9 @@ func channelFrom(
 		}
 		if conv.FinishedAnswerOnly {
 			item.FinishedAnswerOnly = ptr(true)
+		}
+		if conv.FormattedAnswers {
+			item.FormattedAnswers = ptr(true)
 		}
 		if conv.DirectApprovals {
 			item.DirectApprovals = ptr(true)
