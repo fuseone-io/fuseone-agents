@@ -132,7 +132,9 @@ export function PoliciesTable({
                   <Button variant="ghost" size="icon" asChild>
                     <Link
                       to={`/policies/${policy.code}`}
-                      aria-label={t("policies.editNamed", { name: policy.name })}
+                      aria-label={t("policies.editNamed", {
+                        name: policy.name,
+                      })}
                     >
                       <Pencil className="size-4" aria-hidden />
                     </Link>

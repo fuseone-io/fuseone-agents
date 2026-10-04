@@ -10,11 +10,17 @@ export const peopleKeys = {
   all: ["people"] as const,
 };
 
-/** Everybody the installation knows about, and what each one holds. */
-export function usePeople() {
+/** Everybody the installation knows about, and what each one holds.
+ *
+ * `enabled` lets a screen that only *offers* the directory ask for it lazily:
+ * the policies page is visible to roles this listing refuses, and an eager
+ * query would 403 on every visit for a control nobody opened. */
+export function usePeople(enabled = true) {
   return useQuery({
     queryKey: peopleKeys.all,
     queryFn: async () => unwrap(await api.GET("/admin/people")),
+    enabled,
+    retry: false,
   });
 }
 

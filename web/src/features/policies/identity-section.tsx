@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { OwnerField } from "@/features/policies/owner-field";
 import { Section, Labelled } from "@/features/policies/section";
 import type { PolicyInput } from "@/lib/api/client";
 
@@ -18,6 +19,7 @@ export function IdentitySection({
   editable: boolean;
   onCode: (code: string) => void;
 }) {
+  // editable is only true while creating: the code is set once.
   const { t } = useTranslation();
   return (
     <Section title={t("policies.identity")} hint={t("policies.codeAppears")}>
@@ -41,13 +43,11 @@ export function IdentitySection({
             onChange={(e) => patch({ name: e.target.value })}
           />
         </Labelled>
-        <Labelled label={t("policies.owner")} htmlFor="owner">
-          <Input
-            id="owner"
-            value={draft.owner ?? ""}
-            onChange={(e) => patch({ owner: e.target.value })}
-          />
-        </Labelled>
+        <OwnerField
+          creating={editable}
+          value={draft.owner ?? ""}
+          onChange={(owner) => patch({ owner })}
+        />
       </div>
 
       <Labelled label={t("policies.reason")} htmlFor="reason">

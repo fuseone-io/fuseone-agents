@@ -57,7 +57,10 @@ export function PolicySideRail({
           ) : (
             <ul className="flex flex-col gap-1.5">
               {changes.map((change) => (
-                <li key={t(change.field)} className="min-w-0 break-words text-xs">
+                <li
+                  key={t(change.field)}
+                  className="min-w-0 break-words text-xs"
+                >
                   <span className="text-warning">~</span> {t(change.field)}{" "}
                   <Mono dim className="break-words text-2xs">
                     {change.from} → {change.to}
