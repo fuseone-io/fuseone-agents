@@ -89,7 +89,7 @@ func draftInto(code string, in openapi.PolicyInput) (domain.Policy, error) {
 	for _, e := range valueOr(in.Effects) {
 		effect, err := domain.ParseEffect(string(e))
 		if err != nil {
-			return domain.Policy{}, fmt.Errorf("efeito desconhecido: %s", e)
+			return domain.Policy{}, fmt.Errorf("unknown effect: %s", e)
 		}
 		p.Effects = append(p.Effects, effect)
 	}

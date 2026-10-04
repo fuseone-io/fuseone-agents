@@ -25,6 +25,20 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **The policy page offers what the platform already knows.** A condition on
+  the agent suggests the agents, an area condition suggests the declared
+  scopes, a tool effect is picked from the Gate's own four — and everything
+  stays typeable, because a policy may name an agent that is not deployed yet.
+  The owner starts as whoever is writing the rule and offers the directory to
+  whoever may read it. And the reach the contract always had finally has a
+  screen: a policy can say "only these agents" or "only these areas"
+  structurally, with the empty set refused before the save button works.
+  `scope.company` joins the condition fields the console can write.
+
 ## [0.51.0] — 2026-09-30
 
 ### Added
