@@ -1,9 +1,8 @@
 import { useTranslation } from "react-i18next";
 import { Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { ConditionField } from "@/features/policies/condition-field";
+import { ConditionValueField } from "@/features/policies/condition-value-field";
 import type { PolicyCondition } from "@/lib/api/client";
 
 /** What a rule can read. Short on purpose: every field here has to be
@@ -14,6 +13,7 @@ const FIELDS = [
   { value: "data.taint", label: "policies.dataLabel" },
   { value: "agent.id", label: "policies.fieldAgent" },
   { value: "scope.area", label: "policies.fieldAreaScope" },
+  { value: "scope.company", label: "policies.fieldCompanyScope" },
   { value: "args.rows", label: "policies.fieldRows" },
 ];
 
@@ -66,7 +66,15 @@ export function ConditionBuilder({
             label={t("policies.field")}
             value={condition.field}
             options={FIELDS}
-            onChange={(field) => update(index, { field })}
+            // Changing the subject clears the value: an agent id left behind
+            // in a tool.effect clause is a condition that can never hold, and
+            // nothing on the screen would say why.
+            onChange={(field) =>
+              update(
+                index,
+                field === condition.field ? { field } : { field, value: "" },
+              )
+            }
           />
           <ConditionField
             label={t("policies.operator")}
@@ -77,17 +85,11 @@ export function ConditionBuilder({
             }
           />
 
-          <div className="min-w-0">
-            <Label htmlFor={`value-${index}`} className="sr-only">
-              {t("policies.conditionValue", { n: index + 1 })}
-            </Label>
-            <Input
-              id={`value-${index}`}
-              value={condition.value}
-              onChange={(e) => update(index, { value: e.target.value })}
-              className="h-[34px] font-mono text-xs"
-            />
-          </div>
+          <ConditionValueField
+            condition={condition}
+            index={index}
+            onChange={(value) => update(index, { value })}
+          />
 
           <Button
             variant="ghost"

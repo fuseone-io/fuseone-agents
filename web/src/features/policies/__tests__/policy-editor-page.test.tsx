@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -64,13 +65,17 @@ function renderEditor(code: string) {
 
 function editor(code: string) {
   return (
-    <MemoryRouter initialEntries={[`/policies/${code}`]}>
-      <Routes>
-        <Route path="/policies/:code" element={<PolicyEditorPage />} />
-      </Routes>
-    </MemoryRouter>
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={[`/policies/${code}`]}>
+        <Routes>
+          <Route path="/policies/:code" element={<PolicyEditorPage />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>
   );
 }
+
+const client = new QueryClient();
 
 function policy(over: Partial<Policy>): Policy {
   return {

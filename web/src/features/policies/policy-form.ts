@@ -30,6 +30,16 @@ export function usePolicyDraft(loaded?: Policy) {
   return { draft, patch, changes };
 }
 
+/**
+ * A reach that names nobody governs nothing, and the server refuses it. Saying
+ * so at the button keeps the refusal from arriving minutes later as a toast.
+ */
+export function reachNamesNobody(draft: PolicyInput): boolean {
+  if (draft.reach === "agents") return (draft.agents ?? []).length === 0;
+  if (draft.reach === "scopes") return (draft.scopes ?? []).length === 0;
+  return false;
+}
+
 /** Strips a stored policy back to what the form owns. */
 export function toInput(policy?: Policy): PolicyInput | undefined {
   if (!policy) return undefined;

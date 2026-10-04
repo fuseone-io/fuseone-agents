@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
@@ -103,13 +104,15 @@ describe("the policy condition builder", () => {
     };
 
     render(
-      <IdentitySection
-        draft={draft}
-        patch={vi.fn()}
-        code="never-run-prometheus-query-without-indexable-labels"
-        editable
-        onCode={vi.fn()}
-      />,
+      <QueryClientProvider client={new QueryClient()}>
+        <IdentitySection
+          draft={draft}
+          patch={vi.fn()}
+          code="never-run-prometheus-query-without-indexable-labels"
+          editable
+          onCode={vi.fn()}
+        />
+      </QueryClientProvider>,
     );
 
     const code = screen.getByLabelText("Code");
@@ -121,11 +124,13 @@ describe("the policy condition builder", () => {
   it("keeps policy editor actions in the page header rather than a sticky footer", () => {
     setLocale("en-US");
     const { container } = render(
-      <MemoryRouter initialEntries={["/policies/new"]}>
-        <Routes>
-          <Route path="/policies/:code" element={<PolicyEditorPage />} />
-        </Routes>
-      </MemoryRouter>,
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter initialEntries={["/policies/new"]}>
+          <Routes>
+            <Route path="/policies/:code" element={<PolicyEditorPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
     );
 
     expect(
