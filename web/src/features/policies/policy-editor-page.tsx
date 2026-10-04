@@ -6,11 +6,15 @@ import { ErrorState, LoadingRows } from "@/components/shared/states";
 import { PAGE_ICONS } from "@/components/layout/nav";
 import { PageHeader } from "@/components/shared/page-header";
 import { IdentitySection } from "@/features/policies/identity-section";
+import { ReachSection } from "@/features/policies/reach-section";
 import { ScopeSection } from "@/features/policies/scope-section";
 import { ConditionSection } from "@/features/policies/condition-section";
 import { EffectSection } from "@/features/policies/effect-section";
 import { PolicySideRail } from "@/features/policies/policy-side-rail";
-import { usePolicyDraft } from "@/features/policies/policy-form";
+import {
+  usePolicyDraft,
+  reachNamesNobody,
+} from "@/features/policies/policy-form";
 import { usePolicies, usePutPolicy } from "@/features/policies/api";
 import { useCode } from "@/features/policies/use-code";
 import type { Policy } from "@/lib/api/client";
@@ -111,7 +115,9 @@ function PolicyForm({
         </Button>
         <Button
           onClick={submit}
-          disabled={save.isPending || !draft.name || !code}
+          disabled={
+            save.isPending || !draft.name || !code || reachNamesNobody(draft)
+          }
         >
           {draft.mode === "monitor"
             ? t("policies.saveMonitoring")
@@ -129,6 +135,7 @@ function PolicyForm({
             onCode={setCode}
           />
           <ScopeSection draft={draft} patch={patch} />
+          <ReachSection draft={draft} patch={patch} />
           <ConditionSection draft={draft} patch={patch} />
           <EffectSection draft={draft} patch={patch} />
         </div>

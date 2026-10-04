@@ -35,6 +35,7 @@ const IDENTIFIERS = new Set([
   "gate.decided",
   // Policy condition field paths.
   "scope.area",
+  "scope.company",
 ]);
 
 const files = (dir: string): string[] =>

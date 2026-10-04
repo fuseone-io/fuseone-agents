@@ -7,8 +7,14 @@ import type { Policy } from "@/lib/api/client";
  * colour-blind, or looking at a printout of an audit, gets the same answer.
  */
 export const EFFECTS: Record<string, { label: string; className: string }> = {
-  allow: { label: "verdict.allow", className: "bg-success-surface text-success" },
-  escalate: { label: "verdict.require_approval", className: "bg-warning-surface text-warning" },
+  allow: {
+    label: "verdict.allow",
+    className: "bg-success-surface text-success",
+  },
+  escalate: {
+    label: "verdict.require_approval",
+    className: "bg-warning-surface text-warning",
+  },
   deny: { label: "verdict.block", className: "bg-danger-surface text-danger" },
 };
 

@@ -2,10 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  useDeletePolicy,
-  usePolicies,
-} from "@/features/policies/api";
+import { useDeletePolicy, usePolicies } from "@/features/policies/api";
 import type { Policy } from "@/lib/api/client";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -39,14 +36,16 @@ describe("removing a policy", () => {
       { wrapper },
     );
 
-    await waitFor(() => expect(result.current.policies.data?.items).toHaveLength(2));
+    await waitFor(() =>
+      expect(result.current.policies.data?.items).toHaveLength(2),
+    );
     await act(() => result.current.remove.mutateAsync("POL-200"));
 
     expect(deletedPath).toBe("/api/v1/policies/POL-200");
     await waitFor(() =>
-      expect(result.current.policies.data?.items.map((item) => item.code)).toEqual([
-        "POL-100",
-      ]),
+      expect(
+        result.current.policies.data?.items.map((item) => item.code),
+      ).toEqual(["POL-100"]),
     );
     expect(listReads).toBe(2);
   });
