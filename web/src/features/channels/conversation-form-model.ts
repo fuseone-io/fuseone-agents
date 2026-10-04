@@ -102,6 +102,7 @@ export const conversationSchema = z
     threadContext: z.boolean(),
     directApprovals: z.boolean(),
     finishedAnswerOnly: z.boolean(),
+    formattedAnswers: z.boolean(),
     sources: z.string(),
     agent: z.string(),
     runAs: z.string(),

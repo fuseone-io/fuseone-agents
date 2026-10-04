@@ -189,14 +189,35 @@ The text goes through outcome() — the same mrkdwn subset the ask path uses —
 because it is a document the model wrote: links stay visible and never become
 anything Slack acts on.
 */
+// answerBlocksFor renders the answer the way this conversation asked for it:
+// one dense block by default, or the text's own paragraphs as blocks when the
+// conversation opted in. Same characters either way — the partition invariant
+// in sections_test.go is the contract.
+func answerBlocksFor(c channel.Conversation, m channel.Message) []any {
+	if !c.FormattedAnswers {
+		return answerBlocks(m)
+	}
+	sections := answerSections(m.Answer)
+	if len(sections) == 0 {
+		return answerBlocks(m)
+	}
+	out := make([]any, 0, len(sections)+1)
+	for _, text := range sections {
+		out = append(out, section(text))
+	}
+	return append(out, answerProvenance(m))
+}
+
 func answerBlocks(m channel.Message) []any {
-	out := []any{section(outcome(m.Answer))}
+	return []any{section(outcome(m.Answer)), answerProvenance(m)}
+}
+
+func answerProvenance(m channel.Message) any {
 	provenance := fmt.Sprintf("agents: %s · %s", m.Agent, m.Scope.Area)
 	if m.Link != "" {
 		provenance += fmt.Sprintf(" · <%s|invocation: %s>", m.Link, m.RunID)
 	} else {
 		provenance += fmt.Sprintf(" · invocation: %s", m.RunID)
 	}
-	out = append(out, context_(provenance))
-	return out
+	return context_(provenance)
 }

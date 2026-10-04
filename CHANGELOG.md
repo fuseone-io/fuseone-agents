@@ -25,6 +25,19 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **A conversation can render an agent's answer as blocks.** A dense report
+  used to arrive as one wall of text; with the new option beside Finished, the
+  text's own paragraphs, lists and code fences become separate Slack blocks
+  with breathing room. Presentation only, and provably so: the formatted
+  render contains exactly the same characters as the dense one, partitioned at
+  the structure the text already has — no guessed headlines, nothing reordered
+  or demoted. Off by default; a conversation that did not opt in is
+  byte-identical to before.
+
 ## [0.52.0] — 2026-10-03
 
 ### Added

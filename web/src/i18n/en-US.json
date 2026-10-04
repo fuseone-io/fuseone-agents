@@ -924,7 +924,9 @@
     "conversationCount_other": "{{count}} conversations",
     "showingConversations": "showing {{shown}} of {{total}}",
     "finishedAnswerOnly": "Only announce finishes that carry the answer",
-    "finishedAnswerOnlyExplains": "A finish with no answer is not announced here. The console still records every run; the agent's instruction decides when there is something to say."
+    "finishedAnswerOnlyExplains": "A finish with no answer is not announced here. The console still records every run; the agent's instruction decides when there is something to say.",
+    "formattedAnswers": "Format the answer as blocks",
+    "formattedAnswersExplains": "Paragraphs and lists in the agent's text become separate Slack blocks. Presentation only; the content is the same, byte for byte."
   },
   "common": {
     "actions": "Actions",

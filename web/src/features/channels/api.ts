@@ -66,6 +66,7 @@ export interface ConversationInput {
   threadContext?: boolean;
   directApprovals?: boolean;
   finishedAnswerOnly?: boolean;
+  formattedAnswers?: boolean;
   sources?: string[];
   agent?: string;
   runAs?: string;
