@@ -542,6 +542,162 @@ describe("conversation configuration", () => {
     expect(saved(requests)).not.toHaveProperty("sources");
   });
 
+  /*
+   * The channel where a form bot writes the root and the team that owns the
+   * request is named later, in the thread. The mark admits the thread; the
+   * root stays the request, so the console has to carry whose root it is.
+   */
+  it("round-trips a marked-thread rule and refuses one with no root source", async () => {
+    const requests: { method: string; url: string; body?: unknown }[] = [];
+    stubApi({ requests, agents: [sre] });
+    const user = userEvent.setup();
+    renderForm({
+      id: "C-help",
+      label: "#dev-platform-help",
+      scope: { company: "acme", area: "devops" },
+      mode: "ticket",
+      agent: sre.agentId,
+      runAs: "usr_opsbot",
+      ticket: {
+        openFrom: "marked_threads",
+        rootFrom: "bot:B0BSR3BMU3V",
+        addressFrom: "bot:B0BSVG877GW",
+        patterns: ["\\[team-sre\\]"],
+      },
+      wants: ["parked", "failed"],
+      enabled: true,
+    });
+
+    expect(
+      await screen.findByLabelText("Fonte que posta a raiz"),
+    ).toHaveValue("bot:B0BSR3BMU3V");
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+    await waitFor(() => expect(saved(requests)).toBeDefined());
+    expect(saved(requests)).toMatchObject({
+      ticket: {
+        openFrom: "marked_threads",
+        rootFrom: "bot:B0BSR3BMU3V",
+        addressFrom: "bot:B0BSVG877GW",
+        patterns: ["\\[team-sre\\]"],
+      },
+    });
+
+    await user.clear(screen.getByLabelText("Fonte que posta a raiz"));
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+    expect(
+      await screen.findByText(/Informe a fonte exata da raiz/),
+    ).toBeInTheDocument();
+  });
+
+  // Switching policies must not leave the other one's field behind: a stored
+  // root source under `linked_users` is a rule the server refuses.
+  it("drops the root source when the ticket opens from a human root", async () => {
+    const requests: { method: string; url: string; body?: unknown }[] = [];
+    stubApi({ requests, agents: [sre] });
+    const user = userEvent.setup();
+    renderForm({
+      id: "C-help",
+      scope: { company: "acme", area: "devops" },
+      mode: "ticket",
+      agent: sre.agentId,
+      runAs: "usr_opsbot",
+      ticket: {
+        openFrom: "marked_threads",
+        rootFrom: "bot:B0BSR3BMU3V",
+        addressFrom: "bot:B0BSVG877GW",
+        patterns: ["\\[team-sre\\]"],
+      },
+      enabled: true,
+    });
+
+    await user.click(
+      await screen.findByRole("combobox", { name: "Como o ticket abre" }),
+    );
+    await user.click(
+      await screen.findByRole("option", { name: "Mensagem raiz de uma pessoa" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+    await waitFor(() => expect(saved(requests)).toBeDefined());
+    expect(saved(requests)).toMatchObject({
+      ticket: { openFrom: "linked_users" },
+    });
+    expect((saved(requests) as { ticket: Record<string, unknown> }).ticket)
+      .not.toHaveProperty("rootFrom");
+  });
+
+  /*
+   * The room where the answer is written. Picked from the conversations the
+   * bot can already reach, because a ticket pointed at a room it cannot post
+   * in is a ticket nobody can decide.
+   */
+  it("carries the review room and refuses the ticket's own conversation", async () => {
+    const requests: { method: string; url: string; body?: unknown }[] = [];
+    stubApi({ requests, agents: [sre] });
+    const user = userEvent.setup();
+    renderForm({
+      id: "C-help",
+      scope: { company: "acme", area: "devops" },
+      mode: "ticket",
+      agent: sre.agentId,
+      runAs: "usr_opsbot",
+      ticket: {
+        openFrom: "marked_threads",
+        rootFrom: "bot:B0BSR3BMU3V",
+        addressFrom: "bot:B0BSVG877GW",
+        reviewIn: "C-agents",
+        patterns: ["\\[team-sre\\]"],
+      },
+      enabled: true,
+    });
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("Sala de revisão")).toHaveValue("C-agents"),
+    );
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+    await waitFor(() => expect(saved(requests)).toBeDefined());
+    expect(saved(requests)).toMatchObject({ ticket: { reviewIn: "C-agents" } });
+
+    await user.clear(screen.getByLabelText("Sala de revisão"));
+    await user.type(screen.getByLabelText("Sala de revisão"), "C-help");
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+    expect(
+      await screen.findByText(/A sala de revisão é outra conversa/),
+    ).toBeInTheDocument();
+  });
+
+  // The emoji a team already uses to say a chamado is done, typed the way
+  // people type emoji.
+  it("carries the closing emoji and takes the colons off", async () => {
+    const requests: { method: string; url: string; body?: unknown }[] = [];
+    stubApi({ requests, agents: [sre] });
+    const user = userEvent.setup();
+    renderForm({
+      id: "C-help",
+      scope: { company: "acme", area: "devops" },
+      mode: "ticket",
+      agent: sre.agentId,
+      runAs: "usr_opsbot",
+      ticket: {
+        openFrom: "marked_threads",
+        rootFrom: "bot:B0BSR3BMU3V",
+        addressFrom: "bot:B0BSVG877GW",
+        closesOn: ["white_check_mark"],
+        patterns: ["\\[team-sre\\]"],
+      },
+      enabled: true,
+    });
+
+    const field = await screen.findByLabelText("Emoji que encerra o chamado");
+    expect(field).toHaveValue("white_check_mark");
+    await user.clear(field);
+    await user.type(field, ":heavy_check_mark: :white_check_mark:");
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+    await waitFor(() => expect(saved(requests)).toBeDefined());
+    expect(saved(requests)).toMatchObject({
+      ticket: { closesOn: ["heavy_check_mark", "white_check_mark"] },
+    });
+  });
+
   it("refuses ticket patterns beyond the server's bounded contract", async () => {
     const requests: { method: string; url: string; body?: unknown }[] = [];
     stubApi({ requests, agents: [sre] });

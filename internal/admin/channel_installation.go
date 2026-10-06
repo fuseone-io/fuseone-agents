@@ -138,6 +138,7 @@ func Invalid(err error) bool {
 		ErrConnectionOnlyAnnounces,
 		ErrConversationsStartRuns,
 		ErrNoWatchSource, ErrNoWatchAgent, ErrNoWatchRunAs, ErrConversationMapped,
+		ErrTicketReviewRoom, channel.ErrTicketAdmission,
 	} {
 		if errors.Is(err, sentinel) {
 			return true

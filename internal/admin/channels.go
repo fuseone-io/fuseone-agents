@@ -30,6 +30,10 @@ var (
 	ErrNoWatchSource = errors.New("admin: watched messages need at least one source")
 	ErrNoWatchAgent  = errors.New("admin: watched messages need an agent to start")
 	ErrNoWatchRunAs  = errors.New("admin: watched messages need a principal to run as")
+	// ErrTicketReviewRoom means a ticket room was pointed at itself. The room
+	// exists to hold an answer back from the thread that asked for it, and one
+	// that is that thread holds nothing back.
+	ErrTicketReviewRoom = errors.New("admin: a ticket review room is another conversation")
 )
 
 // Channels reads and writes channel configuration, recording each change.
@@ -433,6 +437,9 @@ func (c *Channels) PutConversation(
 		}
 		if _, err := channel.CompileTicketPatterns(*conv.Ticket); err != nil {
 			return err
+		}
+		if conv.Ticket.ReviewIn == conv.ID {
+			return ErrTicketReviewRoom
 		}
 		sources = nil
 		conv.ThreadContext = false

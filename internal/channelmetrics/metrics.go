@@ -12,9 +12,12 @@ const (
 	TaskAnnouncements = "announcements"
 	// TaskCardsClosed counts approval cards rewritten because the question
 	// they asked has an answer.
-	TaskCardsClosed       = "cards_closed"
-	TaskAnswersDelivered  = "answers_delivered"
-	TaskTicketOutcomes    = "ticket_outcomes"
+	TaskCardsClosed      = "cards_closed"
+	TaskAnswersDelivered = "answers_delivered"
+	TaskTicketOutcomes   = "ticket_outcomes"
+	// TaskTicketReviewRooms counts the threads opened for tickets that are
+	// reviewed in a room of their own before their answer is published.
+	TaskTicketReviewRooms = "ticket_review_rooms"
 	TaskAsksOpened        = "asks_opened"
 	TaskRefusalsDelivered = "refusals_delivered"
 
@@ -72,6 +75,7 @@ var (
 		TaskCardsClosed:       true,
 		TaskAnswersDelivered:  true,
 		TaskTicketOutcomes:    true,
+		TaskTicketReviewRooms: true,
 		TaskAsksOpened:        true,
 		TaskRefusalsDelivered: true,
 	}

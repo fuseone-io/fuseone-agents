@@ -893,15 +893,17 @@ func (o *openerSpy) Open(_ context.Context, req channel.Request) (channel.Opened
 
 type answerSpy struct {
 	said     []string
+	to       []string
 	outcomes []string
 	err      error
 }
 
-func (a *answerSpy) Reply(_ context.Context, _, _, _, text string) error {
+func (a *answerSpy) Reply(_ context.Context, _, conversation, thread, text string) error {
 	if a.err != nil {
 		return a.err
 	}
 	a.said = append(a.said, text)
+	a.to = append(a.to, conversation+"/"+thread)
 	return nil
 }
 

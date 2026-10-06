@@ -158,6 +158,77 @@ currently perform `approval:act` in the ticket scope, and the button checks the
 permission again. The approval card is posted under the original root and the
 same card is sent by DM only to the surviving named recipients.
 
+### When a bot writes the root
+
+In a help channel with a form, the root message belongs to the bot that posts
+the form, and the team that owns the request is named later, in the thread.
+Choose **"How a ticket opens" → A mark in the thread**.
+
+That policy asks for one thing more: the **source that posts the root**, the
+exact id of the form's bot or app. Patterns stop being matched against the root
+and are matched against replies instead — the first one that matches opens the
+ticket. Who may mark is the configured addressing source or any person in the
+channel; another bot is ignored, so an integration that echoes the mark cannot
+open work.
+
+The ticket keeps the root's identity: the request is the root's text, the
+requester is the person mentioned on its first line, and every later reply lands
+on that same ticket. The form has to render the requester there: a mention below
+the first line is text the filer typed and never names who asked. The mention is evidence and not authority — it is resolved against
+the accounts linked on that connection, and a thread whose requester does not
+resolve never becomes a ticket. If the root came from a source other than the
+configured one, the mark opens nothing.
+
+Reading the root is one Slack call at opening time: the app needs the channel
+history scope, the same one thread context uses. Without it the thread waits
+and no ticket opens.
+
+### The room where the answer is reviewed
+
+When this conversation's tickets should be worked away from the person who
+asked, point **Review room** at another conversation in the same workspace — by
+convention, a channel only the team reads.
+
+When the ticket opens, the bot opens a thread there saying a request arrived and
+linking the original thread. Everything happens in it from then on: the decision
+card is posted in that thread and nowhere else, neither in the ticket thread nor
+in another conversation covering the scope. Whoever holds Approver in the scope
+corrects it by replying in the room — any of them, not only whoever was
+addressed — and each correction is a revision: the pending approval is cancelled
+and the agent writes the answer again. Once approved, the text is published in
+the ticket thread and the room is told it was.
+
+In the ticket thread, whatever the requester writes is kept in the request and
+starts nothing: what regenerates an answer is a correction in the room. While a
+decision is pending it is recorded and goes no further — a revision written then
+would supersede the card somebody is reading with nothing regenerating to
+replace it. People who cannot decide can talk in the room without starting
+anything, and naming recipients by mention does not apply here: the room is the
+address.
+
+Publishing an answer settles that revision, not the ticket. The approved
+revision keeps the record of what was published, and the ticket goes on
+accepting corrections: the next thing the requester says is about the same
+request, in the same thread. A ticket ends when somebody holding Approver in the scope reacts to the request
+with one of the emoji configured under **Emoji that closes the ticket**. A
+reaction from anybody else is ignored in silence, a reaction taken away reopens
+nothing, and an answer waiting for approval when the ticket closes is cancelled
+with a line in the room saying it was not published. Closed, the ticket takes
+nothing more — no correction in the room, no context in the thread.
+Until it closes it still counts against the area's cap of open tickets.
+
+For the agent to propose the answer, declare the `$fuseone.ticket.answer` tool
+on it. It is a write effect: the agent calls it with the text, the Gate stops
+the run, and the card in the room carries exactly those words. Once approved,
+the text is sealed as the ticket's outcome and published in the ticket thread,
+and the room is told. If the agent rewrites the answer after the card went out,
+publishing is refused — the approval is about the text a person read. An
+approved answer completes the ticket.
+
+While the room's thread does not exist, cards wait: nothing falls back to the
+ticket thread for want of somewhere to go. The bot has to be in the room, or the
+ticket sits there — the worker records the failure and tries again.
+
 For the complete Gravitee setup and validation sequence, see
 [Governed Gravitee tickets](gravitee-tickets.md).
 

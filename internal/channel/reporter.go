@@ -123,6 +123,13 @@ func (r *Reporter) announce(
 		return 0, 0, errors.Join(err, r.recordFailures(ctx, r.failuresFor(report, Conversation{}, err)))
 	}
 	places, err = pass.ticketPlaces(ctx, report, places)
+	if errors.Is(err, errReviewPending) {
+		// Owed and not yet sayable. Left unreported with nothing recorded
+		// against it: the room's thread is being opened by another sweep, and
+		// a failure row here would describe a configuration problem that is
+		// not one.
+		return 0, 0, nil
+	}
 	if err != nil {
 		err = WrapError(CodeConfigurationReadFailed,
 			fmt.Errorf("channel: ticket approval route: %w", err))

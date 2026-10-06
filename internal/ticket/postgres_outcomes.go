@@ -36,6 +36,7 @@ func (p *Postgres) ClaimOutcomes(
 		)
 		select c.ticket_key, c.revision,
 		       t.origin_connection, t.origin_conversation, t.origin_root,
+		       t.review_conversation, t.review_root,
 		       c.phase, c.outcome_ref, c.outcome_digest
 		from claimed c join governed_tickets t on t.ticket_key = c.ticket_key
 		order by c.ticket_key, c.revision`, owner, now.UTC(), now.Add(lease).UTC(), limit)
@@ -49,6 +50,7 @@ func (p *Postgres) ClaimOutcomes(
 		var key, phase string
 		if err := rows.Scan(&key, &notice.Ref.Revision,
 			&notice.Origin.Connection, &notice.Origin.Conversation, &notice.Origin.Root,
+			&notice.Review.Conversation, &notice.Review.Root,
 			&phase, &notice.Result.Ref, &notice.Result.Digest); err != nil {
 			return nil, fmt.Errorf("ticket: read outcome notification: %w", err)
 		}

@@ -29,6 +29,10 @@ func (l *ToolList) Tools(ctx context.Context) ([]domain.ToolEntry, error) {
 		}
 		base = listed
 	}
+	// The platform's own tool, listed whatever is configured: an agent only
+	// gets it by declaring it, and a run outside a ticket is refused when it
+	// calls rather than being offered a tool that cannot work.
+	base = append(base, TicketAnswerEntry())
 	if l != nil && l.settings != nil {
 		native, err := l.settings.ToolEntries(ctx)
 		if err != nil {

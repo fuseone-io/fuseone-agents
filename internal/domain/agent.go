@@ -73,6 +73,13 @@ const (
 	// shared by one run with another. It is a tool, not prompt text, so the
 	// Gate rules on it and the trail records every use.
 	ToolContextRead ToolID = "$fuseone.context.read"
+	// ToolTicketAnswer is the platform-owned way to answer a governed ticket.
+	//
+	// The agent proposes the words and nothing reaches the person who asked
+	// until somebody who may decide approves those exact words. Publishing is
+	// the platform's: the approved text becomes the ticket's outcome, and the
+	// thread is answered by the consumer that owes it.
+	ToolTicketAnswer ToolID = "$fuseone.ticket.answer"
 
 	// ArtifactFinalAnswer names a run's closing answer when an event wants to
 	// share it without copying the prose into the listener's input.

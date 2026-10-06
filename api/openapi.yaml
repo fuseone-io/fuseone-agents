@@ -6501,12 +6501,44 @@ components:
       properties:
         openFrom:
           type: string
-          enum: [linked_users]
+          enum: [linked_users, marked_threads]
+          description: |
+            How a thread becomes a ticket. `linked_users` admits a matching
+            root message written by a person whose account is bound.
+            `marked_threads` admits a thread whose root was written by
+            `rootFrom` and whose matching mark arrived as a reply, from the
+            addressing source or from a person; the root stays the request.
+        rootFrom:
+          type: string
+          pattern: '^(bot|app):\S+$'
+          maxLength: 512
+          description: |
+            The exact Slack bot or app whose root a mark may admit. Required
+            by `marked_threads` and refused by `linked_users`.
         addressFrom:
           type: string
           pattern: '^(bot|app):\S+$'
           maxLength: 512
           description: The exact Slack bot or app allowed to address the ticket.
+        closesOn:
+          type: array
+          maxItems: 4
+          description: |
+            Emoji that end a ticket when somebody who may decide puts one on
+            the request, as Slack names them and without colons. Absent means
+            no reaction closes anything.
+          items:
+            type: string
+            minLength: 1
+            maxLength: 64
+        reviewIn:
+          type: string
+          maxLength: 512
+          description: |
+            The conversation these tickets are worked in. The draft is decided
+            and corrected there and only the approved answer reaches the
+            support thread. Absent means the support thread is the only room,
+            and it may never be the ticket conversation itself.
         patterns:
           type: array
           minItems: 1
@@ -6515,7 +6547,10 @@ components:
             type: string
             minLength: 1
             maxLength: 256
-          description: RE2 patterns matched only against bounded root-message text.
+          description: |
+            RE2 patterns matched against bounded message text: the root under
+            `linked_users`, the reply that marks the thread under
+            `marked_threads`. Replies to an open ticket are never matched again.
 
     ChannelConversation:
       type: object
@@ -7670,9 +7705,21 @@ components:
       properties:
         kind:
           type: string
-          enum: [none, gravitee_subscription]
+          enum: [none, gravitee_subscription, ticket_answer]
         gravitee:
           $ref: '#/components/schemas/GraviteeApprovalEvidence'
+        ticketAnswer:
+          $ref: '#/components/schemas/TicketAnswerEvidence'
+
+    TicketAnswerEvidence:
+      type: object
+      required: [text]
+      description: >
+        The answer this decision is about, as the agent wrote it and as it
+        will be published if it is approved. Nothing is added to it afterwards:
+        what is read here is what the person who asked will read.
+      properties:
+        text: { type: string }
 
     GraviteeApprovalEvidence:
       type: object

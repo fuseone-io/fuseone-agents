@@ -143,7 +143,8 @@ func openWorkerParts(ctx context.Context, dsn string) (*workerParts, error) {
 			connectortools.NewGraviteeReconciliationLedger(parts.store),
 		)
 		parts.native.WithGraviteeInspector(graviteeInspector).
-			WithGraviteeRuntime(parts.graviteeRuntime)
+			WithGraviteeRuntime(parts.graviteeRuntime).
+			WithTicketAnswers(connectortools.NewTicketAnswers(parts.content, graviteeTickets))
 	}
 	if err := parts.refreshConnectors(ctx); err != nil {
 		return nil, err

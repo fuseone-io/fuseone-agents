@@ -18,6 +18,7 @@ type Memory struct {
 	events        map[string]domain.TicketRef
 	attempts      map[string]ExternalAttempt
 	outcomeClaims map[domain.TicketRef]outcomeClaim
+	reviewClaims  map[domain.TicketKey]reviewClaim
 	announced     map[domain.TicketRef]bool
 	superseded    map[domain.TicketRef]bool
 }
@@ -34,6 +35,7 @@ func NewMemory() *Memory {
 		events:        make(map[string]domain.TicketRef),
 		attempts:      make(map[string]ExternalAttempt),
 		outcomeClaims: make(map[domain.TicketRef]outcomeClaim),
+		reviewClaims:  make(map[domain.TicketKey]reviewClaim),
 		announced:     make(map[domain.TicketRef]bool),
 		superseded:    make(map[domain.TicketRef]bool),
 	}
@@ -64,7 +66,7 @@ func (m *Memory) ClaimOutcomes(
 				continue
 			}
 			available = append(available, OutcomeNotice{
-				Ref: ref, Origin: m.tickets[key].Origin,
+				Ref: ref, Origin: m.tickets[key].Origin, Review: m.tickets[key].Review,
 				Phase: revision.Phase, Result: revision.Outcome.Result,
 			})
 		}
@@ -126,7 +128,7 @@ func (m *Memory) Open(ctx context.Context, in OpenInput) (Ticket, bool, error) {
 	}
 	open := 0
 	for _, held := range m.tickets {
-		if held.Scope == in.Scope && !held.Current.Phase.terminal() {
+		if held.Scope == in.Scope && held.Closed == nil {
 			open++
 		}
 	}
@@ -140,7 +142,8 @@ func (m *Memory) Open(ctx context.Context, in OpenInput) (Ticket, bool, error) {
 	}
 	ticket := Ticket{
 		Key: in.Key, Origin: in.Origin, Scope: in.Scope,
-		Agent: in.Agent, RunAs: in.RunAs, RequestedBy: in.RequestedBy,
+		Review: ReviewRoom{Conversation: in.ReviewIn},
+		Agent:  in.Agent, RunAs: in.RunAs, RequestedBy: in.RequestedBy,
 		AddressedBy: in.AddressedBy, Current: revision,
 		CreatedAt: in.At.UTC(), UpdatedAt: in.At.UTC(),
 	}
@@ -158,6 +161,25 @@ func (m *Memory) AtOrigin(ctx context.Context, origin Origin) (Ticket, error) {
 	defer m.mu.RUnlock()
 	for _, held := range m.tickets {
 		if held.Origin == origin {
+			return cloneTicket(held), nil
+		}
+	}
+	return Ticket{}, ErrNotFound
+}
+
+func (m *Memory) AtReview(ctx context.Context, origin Origin) (Ticket, error) {
+	if err := ctx.Err(); err != nil {
+		return Ticket{}, err
+	}
+	if !origin.Valid() {
+		return Ticket{}, ErrNotFound
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, held := range m.tickets {
+		if held.Origin.Connection == origin.Connection &&
+			held.Review.Conversation == origin.Conversation &&
+			held.Review.Root == origin.Root && held.Review.Open() {
 			return cloneTicket(held), nil
 		}
 	}
@@ -255,7 +277,8 @@ func (m *Memory) ApprovalRoute(
 		return ApprovalRoute{}, ErrNotFound
 	}
 	return ApprovalRoute{
-		Origin: held.Origin, Recipients: append([]domain.UserID(nil), revision.Recipients...),
+		Origin: held.Origin, Review: held.Review,
+		Recipients: append([]domain.UserID(nil), revision.Recipients...),
 	}, nil
 }
 

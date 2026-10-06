@@ -25,8 +25,8 @@ func (m *Memory) Revise(ctx context.Context, in ReviseInput) (Ticket, bool, erro
 	if err != nil {
 		return Ticket{}, false, err
 	}
-	if ticket.RequestedBy != in.By {
-		return Ticket{}, false, ErrNotRequester
+	if err := requireReviser(ticket, in); err != nil {
+		return Ticket{}, false, err
 	}
 	if replayed, err := m.replayed(in.EventID, in.Ref.Key); err != nil || replayed {
 		return cloneTicket(ticket), false, err
@@ -84,7 +84,11 @@ func (m *Memory) replayed(eventID string, key domain.TicketKey) (bool, error) {
 }
 
 func (m *Memory) replace(ticket Ticket, change revisionChange) (Ticket, bool, error) {
-	if ticket.Current.Phase != PhaseExecuting && ticket.Current.Phase != PhaseNeedsAttention {
+	// A revision that was published, rejected or already cancelled keeps the
+	// phase it ended in: it is the record of what happened, and the correction
+	// that follows it is the next revision rather than a rewrite of this one.
+	if ticket.Current.Phase != PhaseExecuting && ticket.Current.Phase != PhaseNeedsAttention &&
+		!ticket.Current.Phase.terminal() {
 		previous := ticket.Current
 		previous.Phase, previous.UpdatedAt = PhaseCancelled, change.at.UTC()
 		m.revisions[ticket.Key][previous.Ref.Revision] = previous
