@@ -25,6 +25,41 @@ field" is a commit message.
 
 ---
 
+## [0.53.1] — 2026-10-05
+
+### Fixed
+
+- **A Slack Socket Mode connection that stops speaking now fails and
+  reconnects.** A connection that went away without saying so left the worker
+  blocked on a read that would never return: nothing failed, so nothing
+  reconnected, and Socket Mode does not redeliver — events were lost for as
+  long as the process stayed up while the worker looked healthy. The
+  connection now carries a deadline kept alive by Slack's own pings, and the
+  backoff restarts after a connection that lasted.
+
+- **Approval evidence reaches the tool through every layer.** The memory and
+  context layers wrap every tool a worker offers and did not answer for
+  evidence, so the engine's question never arrived: the request went out with
+  none and the decision was refused afterwards.
+
+- **A tool schema written as a whole object reaches the provider intact,
+  required fields included.** It used to arrive as a property called "type"
+  and one called "properties", refused without naming the tool; and the
+  fields its author marked required stay required on the wire.
+
+- **A grant above every company reads every company's runs.** Written as a
+  filter it was `company_id = '*'`, a company no run belongs to: an
+  administrator saw an empty page from a healthy store.
+
+- **A run parked by a provider failure carries the failure as its reason.**
+  The card used to say no reason was recorded about a failure the projection
+  already had under its code.
+
+### Changed
+
+- `FUSEONE_LOG_LEVEL` turns the log up without a deploy, and the socket door
+  says at debug why an event started nothing.
+
 ## [0.53.0] — 2026-10-04
 
 ### Added
