@@ -25,6 +25,27 @@ field" is a commit message.
 
 ---
 
+## [0.54.0] — 2026-10-06
+
+### Added
+
+- **A governed ticket can be worked in a room of its own.** In a help channel
+  where a form bot writes the request, a marked thread becomes a ticket: the
+  root stays the request, the person mentioned on its first line is the
+  requester — the line the form owns, so free text below it never names who
+  asked — and the team closes with the reaction it already uses, which only
+  ever cancels. The ticket's work moves to its configured room; the support
+  thread hears one thing, once: the answer somebody approved.
+  `$fuseone.ticket.answer` seals the proposed text as the approval's evidence
+  and execution refuses any other text.
+
+### Fixed
+
+- **An approval's evidence is decoded by the kind it declares.** Every
+  evidence used to be read as a Gravitee subscription, which refused a written
+  answer as unreadable; evidence sealed before this release still decodes as
+  before.
+
 ## [0.53.1] — 2026-10-05
 
 ### Fixed
