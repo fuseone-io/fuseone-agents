@@ -172,8 +172,9 @@ channel; another bot is ignored, so an integration that echoes the mark cannot
 open work.
 
 The ticket keeps the root's identity: the request is the root's text, the
-requester is the first person it mentions, and every later reply lands on that
-same ticket. The mention is evidence and not authority — it is resolved against
+requester is the person mentioned on its first line, and every later reply lands
+on that same ticket. The form has to render the requester there: a mention below
+the first line is text the filer typed and never names who asked. The mention is evidence and not authority — it is resolved against
 the accounts linked on that connection, and a thread whose requester does not
 resolve never becomes a ticket. If the root came from a source other than the
 configured one, the mark opens nothing.

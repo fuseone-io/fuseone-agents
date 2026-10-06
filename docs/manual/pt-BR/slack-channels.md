@@ -173,8 +173,9 @@ pessoa do canal; outro bot é ignorado, para que uma integração que ecoa a
 marcação não abra trabalho.
 
 O ticket fica com a identidade da raiz: o pedido é o texto dela, o solicitante é
-a primeira pessoa que ela menciona, e toda resposta seguinte cai nesse mesmo
-ticket. A menção é evidência, não autoridade — é resolvida contra as contas
+a pessoa mencionada na primeira linha dela, e toda resposta seguinte cai nesse
+mesmo ticket. O formulário precisa renderizar o solicitante ali: uma menção abaixo
+da primeira linha é texto digitado por quem preencheu e nunca diz quem pediu. A menção é evidência, não autoridade — é resolvida contra as contas
 vinculadas nessa conexão, e uma thread cujo solicitante não resolve não vira
 ticket. Se a raiz for de outra fonte que não a configurada, a marcação não abre
 nada.

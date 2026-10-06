@@ -105,6 +105,9 @@ func TestTicketHandler_aMarkedThreadWithNoRequesterToBind_saysWhichProblemItIs(t
 		"a mention that is a group": {
 			"*[ autor(a) ]* <!subteam^S-sre> pediu isto", "ticket_requester_unnamed",
 		},
+		"a mention only below the first line": {
+			"*[ descrição ]*\nvejam com <@UREQUESTER>", "ticket_requester_unnamed",
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			handler, _, opener, _, threads := markedTicketHandler()

@@ -3,6 +3,7 @@ package channel
 import (
 	"context"
 	"fmt"
+	"strings"
 )
 
 /*
@@ -45,13 +46,13 @@ func (h *TicketHandler) openMarked(ctx context.Context, arrival Claimed) (Ticket
 	if !sameSourceKey(root.Source, arrival.Ticket.RootFrom) {
 		return handled("ticket_root_not_admitted"), nil
 	}
-	account, named := firstMentioned(root.Text)
+	account, named := requesterOf(root.Text)
 	if !named {
 		// Nobody to be the requester. A different sentence from an unlinked
 		// account: this is the form's shape, and no amount of linking fixes it.
 		return TicketResult{Refusal: Refusal{
-			Why: "The first message of this thread names nobody, so there is no requester to open a " +
-				"ticket for. The form has to say who asked, as a Slack mention.",
+			Why: "The first line of this thread names nobody, so there is no requester to open a " +
+				"ticket for. The form has to say who asked, as a Slack mention on its first line.",
 			Reason: "ticket_requester_unnamed",
 		}}, nil
 	}
@@ -80,4 +81,12 @@ func (h *TicketHandler) markedRoot(
 		}
 	}
 	return ThreadMessage{}, false, nil
+}
+
+// requesterOf reads the requester from the root's first line only. The form
+// owns that line; everything below it carries text the person filling the form
+// typed, and a mention there must not name who asked.
+func requesterOf(text string) (string, bool) {
+	first, _, _ := strings.Cut(text, "\n")
+	return firstMentioned(first)
 }

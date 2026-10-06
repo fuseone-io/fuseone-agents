@@ -27,6 +27,8 @@ func (r *TicketRoutes) closing(
 	if r.tickets == nil || candidate.Source.User == "" {
 		return TicketIntent{}, false, nil
 	}
+	// Runs for every reaction_added in a configured conversation. AtOrigin is
+	// one lookup on governed_tickets_origin_idx; nothing scanning goes before it.
 	held, err := r.tickets.AtOrigin(ctx, ticket.Origin{
 		Connection: candidate.Connection, Conversation: candidate.Conversation,
 		Root: candidate.Message,
