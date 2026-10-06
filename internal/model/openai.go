@@ -200,10 +200,12 @@ func (o *OpenAICompatible) chatTools(ids []domain.ToolID, offered names) []chatT
 			Function: chatFunctionDef{
 				Name:        offered.wire[id],
 				Description: desc,
-				Parameters: map[string]any{
-					"type":       "object",
-					"properties": schema,
-				},
+				// The fields, whatever shape their author wrote. A schema
+				// written as the whole object would otherwise become a
+				// property called "type" and one called "properties", and the
+				// provider refuses the request for a schema that is invalid
+				// without saying which tool wrote it.
+				Parameters: objectSchema(schema),
 			},
 		})
 	}

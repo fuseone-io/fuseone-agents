@@ -51,6 +51,27 @@ func (l *Layer) Dedupe(id domain.ToolID) (domain.ToolDedupe, bool) {
 	return l.catalog.Dedupe(id)
 }
 
+/*
+ApprovalEvidence passes the question down to whatever can answer it.
+
+The engine asks the outermost layer, and this one wraps every tool a worker
+offers. Not answering here made the question unaskable: an approval request
+went out with no evidence, and the decision was refused afterwards for evidence
+nothing had been asked to seal. This layer's own tools have none — they reach
+nothing a person needs to read before deciding.
+*/
+func (l *Layer) ApprovalEvidence(
+	ctx context.Context, call engine.Call,
+) (domain.ApprovalEvidence, error) {
+	if call.Tool == domain.ToolContextRead {
+		return domain.ApprovalEvidence{}, nil
+	}
+	if provider, ok := l.base.(engine.ApprovalEvidencer); ok {
+		return provider.ApprovalEvidence(ctx, call)
+	}
+	return domain.ApprovalEvidence{}, nil
+}
+
 func (l *Layer) ApprovalBinding(call engine.Call) string {
 	if call.Tool == domain.ToolContextRead {
 		return ""
