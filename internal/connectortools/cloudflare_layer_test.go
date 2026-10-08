@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fuseone/agents/internal/domain"
 	"github.com/fuseone/agents/internal/engine"
 )
 
@@ -364,7 +365,7 @@ func (f *fakeCloudflareList) DeleteItem(
 func unblockCall(args string) engine.Call {
 	return engine.Call{
 		Tool: "cloudflare.edge.unblock_ip", RunID: "run-1", Seq: 9,
-		Args: []byte(args),
+		Args: []byte(args), DecidedBy: "usr_ana",
 	}
 }
 
@@ -550,5 +551,59 @@ func TestUnblockIP_autoEntryInsideAPersonsRange_isRefusedWholesale(t *testing.T)
 				t.Fatal("something was deleted under a person's range")
 			}
 		})
+	}
+}
+
+// Removing protection always carries a decision's identity: a call that no
+// click and no mandate released is refused before anything is read, whatever
+// an allow policy said. This is the closure of the review's mass-removal
+// finding — each unblock is named, counted and capped by its decision path.
+func TestUnblockIP_withoutADecidedIdentity_isRefused(t *testing.T) {
+	t.Parallel()
+	remote := &fakeCloudflareList{items: []CloudflareListItem{
+		{ID: "a1", IP: "198.51.100.7", Comment: "fuseone:auto:2026-01-10T01:00:00Z x"},
+	}}
+	layer := cloudflareLayer(t, remote)
+	call := unblockCall(`{"ip":"198.51.100.7"}`)
+	call.DecidedBy = ""
+	result, err := layer.Invoke(t.Context(), call)
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	if !result.Failed || result.ErrorCode != CodeConnectorNeedsDecision {
+		t.Fatalf("result = %+v, want the needs-decision refusal", result)
+	}
+	if len(remote.deleted) != 0 {
+		t.Fatal("something was removed without a decision")
+	}
+}
+
+// Stored comments are remote text that once came through a model: the
+// results that echo them carry the untrusted label, so checkTaint sees any
+// write they later steer. Cross-run prompt injection must not launder its
+// taint through the block list.
+func TestCloudflareResults_thatEchoComments_areLabeledUntrusted(t *testing.T) {
+	t.Parallel()
+	remote := &fakeCloudflareList{items: []CloudflareListItem{
+		{ID: "a1", IP: "198.51.100.7", Comment: "fuseone:auto:2026-01-10T01:00:00Z x"},
+	}}
+	layer := cloudflareLayer(t, remote)
+
+	listed, err := layer.Invoke(t.Context(), engine.Call{
+		Tool: "cloudflare.edge.list_blocks", RunID: "run-1", Seq: 8, Args: []byte(`{}`),
+	})
+	if err != nil || listed.Failed {
+		t.Fatalf("list: %+v %v", listed, err)
+	}
+	if !listed.Labels.Has(domain.LabelUntrusted) {
+		t.Fatal("list_blocks echoes comments without the untrusted label")
+	}
+
+	already, err := layer.Invoke(t.Context(), blockCall(`{"ip":"198.51.100.7"}`))
+	if err != nil || already.Failed {
+		t.Fatalf("alreadyBlocked: %+v %v", already, err)
+	}
+	if !already.Labels.Has(domain.LabelUntrusted) {
+		t.Fatal("the alreadyBlocked echo carries no untrusted label")
 	}
 }

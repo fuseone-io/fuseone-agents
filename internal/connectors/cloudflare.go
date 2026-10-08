@@ -11,7 +11,8 @@ var cloudflareConnector = Connector{
 		"unblocking removes only entries the connector itself wrote; a person's entry or range is never undone",
 		"private, reserved and instance-protected ranges are refused in code",
 		"entries carry a machine-readable comment so an external job can expire them",
-		"a daily ceiling bounds how many addresses one day may add",
+		"a daily ceiling bounds how many automatic entries the list holds at once",
+		"removing an entry always carries a human decision's identity, by click or by standing mandate",
 	},
 	Caveats: []string{
 		"expiry is an external job's duty; the connector only writes the timestamped comment it prunes by",

@@ -60,7 +60,10 @@ removes **only entries the connector itself wrote** — the `fuseone:auto:`
 comment. A person's entry, or a person's wider range covering the address,
 is a person's decision: the call is refused and the address stays blocked.
 An address not on the list is already in the desired state and succeeds
-saying so.
+saying so. And removing protection always carries a human decision's
+identity: an unblock whose call no click and no standing mandate released
+is refused in code, whatever an allow policy said — each removal is named,
+counted and capped by its decision path.
 
 ## Configuring an instance
 

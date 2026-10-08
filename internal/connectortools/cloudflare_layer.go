@@ -103,7 +103,9 @@ func (l *Layer) cloudflareList(
 			"ip": item.IP, "comment": item.Comment, "createdOn": item.CreatedOn,
 		})
 	}
-	return l.storeJSON(ctx, call, domain.Labels{}, map[string]any{
+	// Comments are remote text that once came through a model: labeled
+	// untrusted so checkTaint sees any write they later steer.
+	return l.storeJSON(ctx, call, domain.NewLabels(domain.LabelUntrusted), map[string]any{
 		"operation": "cloudflare.list_blocks",
 		"entries":   entries,
 	})
@@ -130,7 +132,9 @@ func (l *Layer) cloudflareBlock(
 	canonical := cloudflareEntryFor(addr)
 	for _, item := range items {
 		if cloudflareEntryCovers(item.IP, addr) {
-			return l.storeJSON(ctx, call, domain.Labels{}, map[string]any{
+			// The echoed comment is remote text: untrusted, like every
+			// read this connector answers with stored content.
+			return l.storeJSON(ctx, call, domain.NewLabels(domain.LabelUntrusted), map[string]any{
 				"operation": "cloudflare.block_ip", "blocked": canonical,
 				"alreadyBlocked": true, "comment": item.Comment,
 			})
@@ -164,6 +168,15 @@ func (l *Layer) cloudflareUnblock(
 	ctx context.Context, instance Instance, credential SecretValue,
 	call engine.Call, args cloudflareBlockArgs,
 ) (engine.ToolResult, error) {
+	// Removing protection always carries a decision's identity. An allow
+	// policy that lowers the Gate's ladder would otherwise let a misled run
+	// strip the list unattended; requiring DecidedBy here is structural —
+	// the call must have been released by a click or an explicit mandate,
+	// and either one is named, counted and capped. The adversarial review
+	// of this operation found the gap; this is its closure.
+	if call.DecidedBy == "" {
+		return failed(CodeConnectorNeedsDecision), nil
+	}
 	addr, err := netip.ParseAddr(args.IP)
 	if err != nil {
 		return failed(CodeConnectorBadArguments), nil
