@@ -8,10 +8,7 @@ import {
   LoadingRows,
 } from "@/components/shared/states";
 import { AreaForm } from "@/features/admin/area-form";
-import {
-  companyOptionsFor,
-  matchesArea,
-} from "@/features/admin/area-filters";
+import { companyOptionsFor, matchesArea } from "@/features/admin/area-filters";
 import { AreaHeader } from "@/features/admin/area-header";
 import { AreaList } from "@/features/admin/area-list";
 import { AreaToolbar } from "@/features/admin/area-toolbar";

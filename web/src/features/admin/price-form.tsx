@@ -73,7 +73,9 @@ export function PriceForm({
           : "admin.newRate",
       )}
       description={t(
-        isMarketDefault ? "admin.marketRateOverrideHint" : "admin.ratesAreYours",
+        isMarketDefault
+          ? "admin.marketRateOverrideHint"
+          : "admin.ratesAreYours",
       )}
     >
       <Form {...form}>

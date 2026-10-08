@@ -21,7 +21,9 @@ function tool(over: Partial<Tool> = {}): Tool {
 }
 
 function open(one: Tool | null) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
     <QueryClientProvider client={client}>
       <ClassifyDialog tool={one} tools={[]} onClose={vi.fn()} />
@@ -39,7 +41,9 @@ describe("what a ruling opens on", () => {
   it("starts a tool that was already judged on what it was judged as", () => {
     open(tool());
     // The Select shows what is chosen; a blank one shows the placeholder.
-    expect(screen.getByLabelText("O que esta ferramenta faz com o mundo")).toHaveTextContent(/destrutiv/i);
+    expect(
+      screen.getByLabelText("O que esta ferramenta faz com o mundo"),
+    ).toHaveTextContent(/destrutiv/i);
   });
 
   /*
@@ -50,7 +54,9 @@ describe("what a ruling opens on", () => {
    */
   it("starts a tool nobody has judged with no effect at all", () => {
     open(tool({ effect: "unknown" }));
-    const chooser = screen.getByLabelText("O que esta ferramenta faz com o mundo");
+    const chooser = screen.getByLabelText(
+      "O que esta ferramenta faz com o mundo",
+    );
     expect(chooser).toHaveTextContent(/diga o que ela faz/i);
     for (const named of [/leitura/i, /escrita/i, /destrutiv/i, /financeir/i]) {
       expect(chooser).not.toHaveTextContent(named);
@@ -61,7 +67,9 @@ describe("what a ruling opens on", () => {
   // question again; a default answers it with whatever the form held.
   it("will not record a ruling that names no effect", () => {
     open(tool({ effect: "unknown" }));
-    expect(screen.getByRole("button", { name: /registrar|gravar|classificar/i })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /registrar|gravar|classificar/i }),
+    ).toBeDisabled();
   });
 
   /*
@@ -71,13 +79,21 @@ describe("what a ruling opens on", () => {
    */
   it("does not carry one tool's answers into the next", () => {
     const { rerender } = open(tool());
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     rerender(
       <QueryClientProvider client={client}>
-        <ClassifyDialog tool={tool({ toolId: "crm.lookup", effect: "unknown" })} tools={[]} onClose={vi.fn()} />
+        <ClassifyDialog
+          tool={tool({ toolId: "crm.lookup", effect: "unknown" })}
+          tools={[]}
+          onClose={vi.fn()}
+        />
       </QueryClientProvider>,
     );
-    expect(screen.getByLabelText("O que esta ferramenta faz com o mundo")).not.toHaveTextContent(/destrutiv/i);
+    expect(
+      screen.getByLabelText("O que esta ferramenta faz com o mundo"),
+    ).not.toHaveTextContent(/destrutiv/i);
   });
 
   it("opens a judged tool on its recorded semantic dedupe key", () => {
@@ -90,9 +106,13 @@ describe("what a ruling opens on", () => {
       }),
     );
 
-    expect(screen.getByLabelText("Evitar efeito duplicado entre execuções")).toBeChecked();
+    expect(
+      screen.getByLabelText("Evitar efeito duplicado entre execuções"),
+    ).toBeChecked();
     expect(screen.getByLabelText("Janela em segundos")).toHaveValue(3600);
-    expect(screen.getByLabelText("Campos que identificam o ato")).toHaveValue("customer_id\nissue.title");
+    expect(screen.getByLabelText("Campos que identificam o ato")).toHaveValue(
+      "customer_id\nissue.title",
+    );
   });
 
   /*
@@ -112,11 +132,18 @@ describe("what a ruling opens on", () => {
     const user = userEvent.setup();
 
     open(tool());
-    await user.click(screen.getByLabelText("Evitar efeito duplicado entre execuções"));
+    await user.click(
+      screen.getByLabelText("Evitar efeito duplicado entre execuções"),
+    );
     await user.clear(screen.getByLabelText("Janela em segundos"));
     await user.type(screen.getByLabelText("Janela em segundos"), "3600");
-    await user.type(screen.getByLabelText("Campos que identificam o ato"), "customer_id\nissue.title");
-    await user.click(screen.getByRole("button", { name: "Registrar classificação" }));
+    await user.type(
+      screen.getByLabelText("Campos que identificam o ato"),
+      "customer_id\nissue.title",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Registrar classificação" }),
+    );
 
     await waitFor(() => expect(requests).toHaveLength(1));
     const request = requests[0];
@@ -134,8 +161,12 @@ describe("what a ruling opens on", () => {
     const user = userEvent.setup();
 
     open(tool());
-    await user.click(screen.getByLabelText("Evitar efeito duplicado entre execuções"));
+    await user.click(
+      screen.getByLabelText("Evitar efeito duplicado entre execuções"),
+    );
 
-    expect(screen.getByRole("button", { name: "Registrar classificação" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Registrar classificação" }),
+    ).toBeDisabled();
   });
 });

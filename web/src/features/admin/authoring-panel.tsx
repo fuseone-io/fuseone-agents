@@ -236,10 +236,7 @@ function EffortField({
 
   return (
     <Labelled label={t("admin.assistantEffort")} htmlFor="authoring-effort">
-      <Select
-        value={effort || "low"}
-        onValueChange={onChange}
-      >
+      <Select value={effort || "low"} onValueChange={onChange}>
         <SelectTrigger id="authoring-effort">
           <SelectValue />
         </SelectTrigger>

@@ -82,9 +82,7 @@ export function BudgetForm({
       });
       onClose();
     } catch (error) {
-      toast.error(
-        problemMessage(error, t),
-      );
+      toast.error(problemMessage(error, t));
     }
   }
 

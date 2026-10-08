@@ -1,10 +1,13 @@
-import { KeyRound, Search, UserRoundCheck, UserRoundX, Users } from "lucide-react";
+import {
+  KeyRound,
+  Search,
+  UserRoundCheck,
+  UserRoundX,
+  Users,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
-import {
-  PEOPLE_VIEWS,
-  type PeopleView,
-} from "@/features/admin/people-filters";
+import { PEOPLE_VIEWS, type PeopleView } from "@/features/admin/people-filters";
 import { cn } from "@/lib/utils";
 
 const VIEW_ICONS = {

@@ -29,7 +29,10 @@ export function SuggestedRuling({
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted p-3">
       <p className="flex items-center gap-2 text-xs font-medium">
-        <Lightbulb className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+        <Lightbulb
+          className="size-3.5 shrink-0 text-muted-foreground"
+          aria-hidden
+        />
         {t("admin.platformSuggests")}{" "}
         <Mono className="text-2xs">{t(`effect.${suggested.effect}`)}</Mono>
       </p>

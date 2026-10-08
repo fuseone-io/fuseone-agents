@@ -16,7 +16,11 @@ function tool(toolId: string, effect: Tool["effect"]): Tool {
 
 describe("what the tools panel says about tools nobody has ruled on", () => {
   it("says they are refused, because that is what the Gate does with them", () => {
-    render(<Waiting tools={[tool("crm.lookup", "unknown"), tool("crm.note", "read")]} />);
+    render(
+      <Waiting
+        tools={[tool("crm.lookup", "unknown"), tool("crm.note", "read")]}
+      />,
+    );
 
     // The panel used to say tools "arrive as reads" — true once, and a screen
     // still describing the behaviour it had before sends somebody to look for

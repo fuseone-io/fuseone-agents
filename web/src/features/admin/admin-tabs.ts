@@ -40,6 +40,11 @@ export const ADMIN_TAB_ACCESS = [
     permission: "identity:write",
   },
   {
+    value: "standing",
+    label: "admin.standing",
+    permission: "approval:grant",
+  },
+  {
     value: "prices",
     label: "admin.prices",
     permission: "budget:write",
@@ -78,7 +83,7 @@ export const ADMIN_TAB_GROUPS = [
   },
   {
     label: "admin.group.limits",
-    tabs: ["prices", "budgets", "retention"],
+    tabs: ["standing", "prices", "budgets", "retention"],
   },
 ] as const satisfies ReadonlyArray<{
   label: string;
@@ -90,14 +95,10 @@ const ADMIN_TABS_BY_VALUE = ADMIN_TAB_ACCESS.reduce(
   {} as Record<AdminTabValue, AdminTab>,
 );
 
-export function visibleAdminTabs(
-  can: string[] | null | undefined,
-): AdminTab[] {
+export function visibleAdminTabs(can: string[] | null | undefined): AdminTab[] {
   if (can === null) return [...ADMIN_TAB_ACCESS];
   if (can === undefined) return [];
-  return ADMIN_TAB_ACCESS.filter(
-    (item) => can.includes(item.permission),
-  );
+  return ADMIN_TAB_ACCESS.filter((item) => can.includes(item.permission));
 }
 
 export function visibleAdminTabGroups(

@@ -248,6 +248,45 @@ func (r *Runner) appendGateDecision(
 }
 
 /*
+standingDecide releases a fresh park when a durable human grant covers it.
+
+The park is real and so is the decision: the same two steps a click
+produces, with the grant owner's name on the second. Everything downstream
+— fold, projection, transcript, the card closer — reads a hand-approved
+run. Claim consumes one of the grant's daily uses atomically before the
+decision is written; an error anywhere leaves the park standing for a
+human, because a grant that cannot be read is a grant that does not cover.
+*/
+func (r *Runner) standingDecide(
+	ctx context.Context, state State, start Start, p Proposal,
+) (Status, error) {
+	if r.deps.Standing == nil {
+		return status(state), nil
+	}
+	grant, covers, err := r.deps.Standing.Claim(
+		ctx, p.Tool, start.AgentID, start.Scope, start.RunID, r.deps.Clock.Now())
+	if err != nil || !covers {
+		return status(state), nil
+	}
+	atSeq := state.Seq
+	state, err = r.append(ctx, state, start, domain.Step{
+		Kind:    domain.StepApprovalDecided,
+		IdemKey: domain.ApprovalDecisionKey(start.RunID, atSeq),
+		Labels:  state.Labels.Clone(),
+		Payload: mustJSON(domain.ApprovalDecidedPayload{
+			Approved: true,
+			By:       grant.By,
+			Note:     "standing approval " + grant.ID + ": " + grant.Reason,
+			AtSeq:    atSeq,
+		}),
+	})
+	if err != nil {
+		return Status{}, err
+	}
+	return status(state), nil
+}
+
+/*
 refused records what a call that will not happen does to the run.
 
 Four endings rather than one, because they are four different facts and a run
@@ -289,7 +328,10 @@ func (r *Runner) refused(
 				Estimate:       p.Estimate, Labels: state.Labels, Evidence: evidenceRef,
 			}),
 		})
-		return status(state), err
+		if err != nil {
+			return Status{}, err
+		}
+		return r.standingDecide(ctx, state, start, p)
 
 	case decision.Rule == gate.RuleBudget:
 		// A budget block parks the run rather than failing it: raising the

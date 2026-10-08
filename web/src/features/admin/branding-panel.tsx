@@ -162,7 +162,13 @@ function BrandField({
         onChange={(e) => onChange(e.target.value)}
       />
       {hint && (
-        <p className={invalid ? "text-xs text-destructive" : "text-xs text-muted-foreground"}>
+        <p
+          className={
+            invalid
+              ? "text-xs text-destructive"
+              : "text-xs text-muted-foreground"
+          }
+        >
           {hint}
         </p>
       )}

@@ -72,7 +72,9 @@ describe("price administration", () => {
 
     expect(screen.getByText("default de mercado")).toBeInTheDocument();
     expect(screen.getByText("tarifa própria")).toBeInTheDocument();
-    expect(screen.getByText(/Não converte os números já gravados/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Não converte os números já gravados/),
+    ).toBeInTheDocument();
     expect(screen.getByText(/US\$/)).toBeInTheDocument();
     expect(screen.getByText(/€/)).toBeInTheDocument();
     expect(screen.getByText(/Apenas referência em USD/)).toBeInTheDocument();
@@ -88,7 +90,9 @@ describe("price administration", () => {
     ).toBeInTheDocument();
 
     await userEvent.click(screen.getByText("anthropic/claude-opus-5"));
-    expect(screen.getByText("Sobrescrever o default de mercado")).toBeInTheDocument();
+    expect(
+      screen.getByText("Sobrescrever o default de mercado"),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText("Entrada / milhão")).toHaveValue("");
   });
 

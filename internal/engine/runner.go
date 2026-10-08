@@ -31,6 +31,9 @@ type Deps struct {
 	// tools return nothing bulky.
 	Content ContentStore
 	Metrics RuntimeMetrics
+	// Standing releases parked approvals covered by a durable human grant.
+	// Nil means no grants exist and every park waits for a click.
+	Standing StandingApprovals
 }
 
 // maxConsecutiveBlocks bounds how long the platform argues with a planner that

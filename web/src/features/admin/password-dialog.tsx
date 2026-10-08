@@ -23,9 +23,7 @@ import { useSetPassword, type Person } from "@/features/admin/people-api";
 import { problemMessage } from "@/lib/api/problem-message";
 
 const schema = z.object({
-  username: z
-    .string()
-    .regex(/^[A-Za-z0-9._-]*$/, "people.usernameShape"),
+  username: z.string().regex(/^[A-Za-z0-9._-]*$/, "people.usernameShape"),
   password: z.string().min(12, "people.passwordFloor"),
 });
 
@@ -90,7 +88,11 @@ export function PasswordDialog({
                 <FormItem>
                   <FormLabel>{t("people.username")}</FormLabel>
                   <FormControl>
-                    <Input {...field} className="font-mono" autoComplete="off" />
+                    <Input
+                      {...field}
+                      className="font-mono"
+                      autoComplete="off"
+                    />
                   </FormControl>
                   <FormDescription>{t("people.usernameHint")}</FormDescription>
                   <FormMessage />

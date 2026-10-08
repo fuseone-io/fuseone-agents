@@ -104,7 +104,9 @@ describe("people administration", () => {
     expect(screen.getByText("Sergio Monteiro")).toBeInTheDocument();
     expect(screen.getAllByText("3 de 3 pessoas").length).toBeGreaterThan(0);
     for (const name of ["Todas", "Provedor", "Local", "Sem papel"]) {
-      expect(screen.getByRole("button", { name }).querySelector("svg")).not.toBeNull();
+      expect(
+        screen.getByRole("button", { name }).querySelector("svg"),
+      ).not.toBeNull();
     }
 
     await userEvent.type(search, "finance");
@@ -152,9 +154,7 @@ describe("people administration", () => {
   it("offers an installation administrator grant without making the operator type the wildcard", async () => {
     render(<PeoplePanel />);
 
-    await userEvent.click(
-      screen.getByRole("button", { name: /Kleber Rocha/ }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: /Kleber Rocha/ }));
     await userEvent.click(screen.getByRole("button", { name: "Gerenciar" }));
     await userEvent.click(
       screen.getByRole("button", { name: "Conceder administrador" }),

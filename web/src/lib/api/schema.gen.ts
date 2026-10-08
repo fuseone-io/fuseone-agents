@@ -1326,6 +1326,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/standing-approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The standing approvals in force and spent
+         * @description Every durable human grant, active or revoked, with today's uses. A
+         *     standing approval is SE-06's one exception made durable: one person
+         *     pre-approving one exact tool for one agent in one scope, with a
+         *     daily ceiling and an expiry.
+         */
+        get: operations["listStandingApprovals"];
+        put?: never;
+        /**
+         * Grant a standing approval
+         * @description The grant names one exact tool — never a pattern — one agent, one
+         *     scope, a daily ceiling and an expiry of at most 90 days. The
+         *     creator's name travels onto every release the grant produces.
+         */
+        post: operations["createStandingApproval"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/standing-approvals/{grant}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke a standing approval
+         * @description Revocation stops coverage immediately and keeps the row: the trail
+         *     must show both the mandate and its end.
+         */
+        delete: operations["revokeStandingApproval"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/stops": {
         parameters: {
             query?: never;
@@ -3150,6 +3200,38 @@ export interface components {
              *     not say so would be listing capabilities nothing has.
              */
             offered?: boolean;
+        };
+        StandingApproval: {
+            id: string;
+            toolId: string;
+            agentId: string;
+            scope: components["schemas"]["Scope"];
+            dailyCap: number;
+            usesToday: number;
+            reason: string;
+            /** @enum {string} */
+            status: "active" | "revoked";
+            createdBy: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+            revokedBy?: string;
+            /** Format: date-time */
+            revokedAt?: string;
+        };
+        StandingApprovalRequest: {
+            /** @description One exact tool id. Patterns are refused. */
+            toolId: string;
+            agentId: string;
+            scope: components["schemas"]["Scope"];
+            dailyCap: number;
+            reason: string;
+            /**
+             * Format: date-time
+             * @description At most 90 days out; empty means 30 days.
+             */
+            expiresAt?: string;
         };
         Stop: {
             /** @enum {string} */
@@ -6944,6 +7026,78 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    listStandingApprovals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The grants. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["StandingApproval"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    createStandingApproval: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StandingApprovalRequest"];
+            };
+        };
+        responses: {
+            /** @description The grant is in force. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    revokeStandingApproval: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                grant: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The grant no longer covers anything. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     listStops: {
