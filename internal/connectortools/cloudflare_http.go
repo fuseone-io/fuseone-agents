@@ -166,3 +166,35 @@ func (c *HTTPCloudflareClient) do(req *http.Request, credential SecretValue) ([]
 	}
 	return body, nil
 }
+
+// DeleteItem removes one entry by its id. Cloudflare applies list writes
+// asynchronously and answers with an operation id, returned for the run's
+// record.
+func (c *HTTPCloudflareClient) DeleteItem(
+	ctx context.Context, cfg CloudflareConfig, credential SecretValue, id string,
+) (string, error) {
+	payload, err := json.Marshal(map[string]any{"items": []map[string]string{{"id": id}}})
+	if err != nil {
+		return "", fmt.Errorf("connector: encode Cloudflare delete: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete,
+		cloudflareItemsURL(cfg, ""), bytes.NewReader(payload))
+	if err != nil {
+		return "", fmt.Errorf("connector: Cloudflare request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	body, err := c.do(req, credential)
+	if err != nil {
+		return "", err
+	}
+	var decoded struct {
+		Result struct {
+			OperationID string `json:"operation_id"`
+		} `json:"result"`
+		Success bool `json:"success"`
+	}
+	if err := json.Unmarshal(body, &decoded); err != nil || !decoded.Success {
+		return "", fmt.Errorf("connector: Cloudflare refused the list delete")
+	}
+	return decoded.Result.OperationID, nil
+}

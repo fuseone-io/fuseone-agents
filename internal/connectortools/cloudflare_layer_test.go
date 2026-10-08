@@ -11,9 +11,11 @@ import (
 )
 
 type fakeCloudflareList struct {
-	items    []CloudflareListItem
-	itemsErr error
-	added    []CloudflareListItem
+	items     []CloudflareListItem
+	itemsErr  error
+	added     []CloudflareListItem
+	deleted   []string
+	deleteErr error
 }
 
 func (f *fakeCloudflareList) Items(
@@ -346,5 +348,207 @@ func TestBlockIP_upstreamRefusals_areClassified(t *testing.T) {
 		if !result.Failed || result.ErrorCode != code {
 			t.Fatalf("status %d: result = %+v, want %s", status, result, code)
 		}
+	}
+}
+
+func (f *fakeCloudflareList) DeleteItem(
+	_ context.Context, _ CloudflareConfig, _ SecretValue, id string,
+) (string, error) {
+	if f.deleteErr != nil {
+		return "", f.deleteErr
+	}
+	f.deleted = append(f.deleted, id)
+	return "op-del", nil
+}
+
+func unblockCall(args string) engine.Call {
+	return engine.Call{
+		Tool: "cloudflare.edge.unblock_ip", RunID: "run-1", Seq: 9,
+		Args: []byte(args),
+	}
+}
+
+// Unblock removes only what the connector itself wrote: an entry without the
+// fuseone:auto prefix is a person's decision, and the agent never undoes a
+// person. The refusal is the same clean guard code as the block side's.
+func TestUnblockIP_aHandAddedEntry_isRefused(t *testing.T) {
+	t.Parallel()
+	remote := &fakeCloudflareList{items: []CloudflareListItem{
+		{ID: "h1", IP: "198.51.100.7", Comment: "blocked by the SOC, keep"},
+	}}
+	layer := cloudflareLayer(t, remote)
+	result, err := layer.Invoke(t.Context(), unblockCall(`{"ip":"198.51.100.7"}`))
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	if !result.Failed || result.ErrorCode != CodeConnectorGuardRefused {
+		t.Fatalf("result = %+v, want guard refusal", result)
+	}
+	if len(remote.deleted) != 0 {
+		t.Fatal("a person's entry was removed")
+	}
+}
+
+// An automatic entry is removed by its id, and the result names what fell.
+func TestUnblockIP_anAutomaticEntry_isRemoved(t *testing.T) {
+	t.Parallel()
+	remote := &fakeCloudflareList{items: []CloudflareListItem{
+		{ID: "a1", IP: "198.51.100.7", Comment: "fuseone:auto:2026-01-10T01:00:00Z probe"},
+	}}
+	layer := cloudflareLayer(t, remote)
+	result, err := layer.Invoke(t.Context(),
+		unblockCall(`{"ip":"198.51.100.7","reason":"false positive, partner NAT"}`))
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	if result.Failed {
+		t.Fatalf("result = %+v", result)
+	}
+	if len(remote.deleted) != 1 || remote.deleted[0] != "a1" {
+		t.Fatalf("deleted = %+v, want the entry's id", remote.deleted)
+	}
+	body := resultBody(t, layer, result)
+	if body["unblocked"] != "198.51.100.7" || body["alreadyAbsent"] != false ||
+		body["operationId"] != "op-del" {
+		t.Fatalf("body = %+v", body)
+	}
+	// The removed entry's comment is stored text that once came through a
+	// model; it must not re-enter a model's context through the result.
+	if _, leaked := body["removedComment"]; leaked {
+		t.Fatal("the stored comment re-entered the result")
+	}
+}
+
+// An address that is not on the list is already in the desired state: success
+// that says so, and nothing is deleted.
+func TestUnblockIP_anAbsentAddress_succeedsSayingSo(t *testing.T) {
+	t.Parallel()
+	remote := &fakeCloudflareList{}
+	layer := cloudflareLayer(t, remote)
+	result, err := layer.Invoke(t.Context(), unblockCall(`{"ip":"198.51.100.7"}`))
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	if result.Failed {
+		t.Fatalf("result = %+v", result)
+	}
+	if len(remote.deleted) != 0 {
+		t.Fatal("something was deleted")
+	}
+	if body := resultBody(t, layer, result); body["alreadyAbsent"] != true {
+		t.Fatalf("body = %+v", body)
+	}
+}
+
+// A covering hand-added CIDR is not "the block for this address": the exact
+// automatic entry is what unblock may touch, and a person's wider range
+// stays untouched and still covers — the result must say the address
+// remains blocked by it.
+func TestUnblockIP_underAHandAddedCIDR_refusesAndSaysWhy(t *testing.T) {
+	t.Parallel()
+	remote := &fakeCloudflareList{items: []CloudflareListItem{
+		{ID: "h1", IP: "198.51.100.0/24", Comment: "SOC: permanent range"},
+	}}
+	layer := cloudflareLayer(t, remote)
+	result, err := layer.Invoke(t.Context(), unblockCall(`{"ip":"198.51.100.7"}`))
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	if !result.Failed || result.ErrorCode != CodeConnectorGuardRefused {
+		t.Fatalf("result = %+v, want guard refusal", result)
+	}
+	if len(remote.deleted) != 0 {
+		t.Fatal("a person's range was removed")
+	}
+}
+
+// Bad arguments on the unblock side: not literal, unknown fields.
+func TestUnblockIP_badArguments(t *testing.T) {
+	t.Parallel()
+	remote := &fakeCloudflareList{}
+	layer := cloudflareLayer(t, remote)
+	for name, args := range map[string]string{
+		"cidr":          `{"ip":"198.51.100.0/24"}`,
+		"unknown field": `{"ip":"198.51.100.7","force":true}`,
+		"empty":         `{"ip":""}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			result, err := layer.Invoke(t.Context(), unblockCall(args))
+			if err != nil {
+				t.Fatalf("Invoke: %v", err)
+			}
+			if !result.Failed || result.ErrorCode != CodeConnectorBadArguments {
+				t.Fatalf("result = %+v, want bad arguments", result)
+			}
+		})
+	}
+}
+
+// A failed upstream delete is a failed call with its class — never a success
+// that left the address blocked while the run reports it gone.
+func TestUnblockIP_aFailedUpstreamDelete_failsWithItsClass(t *testing.T) {
+	t.Parallel()
+	remote := &fakeCloudflareList{
+		items: []CloudflareListItem{
+			{ID: "a1", IP: "198.51.100.7", Comment: "fuseone:auto:2026-01-10T01:00:00Z x"},
+		},
+		deleteErr: cloudflareRemoteError{status: 403},
+	}
+	layer := cloudflareLayer(t, remote)
+	result, err := layer.Invoke(t.Context(), unblockCall(`{"ip":"198.51.100.7"}`))
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	if !result.Failed || result.ErrorCode != CodeConnectorUpstreamAuth {
+		t.Fatalf("result = %+v, want the auth class", result)
+	}
+}
+
+// The IPv4-mapped IPv6 form names the same address: it removes the exact
+// IPv4 entry, pinning the Unmap on the unblock side too.
+func TestUnblockIP_anIPv4MappedForm_matchesTheIPv4Entry(t *testing.T) {
+	t.Parallel()
+	remote := &fakeCloudflareList{items: []CloudflareListItem{
+		{ID: "a1", IP: "198.51.100.7", Comment: "fuseone:auto:2026-01-10T01:00:00Z x"},
+	}}
+	layer := cloudflareLayer(t, remote)
+	result, err := layer.Invoke(t.Context(), unblockCall(`{"ip":"::ffff:198.51.100.7"}`))
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	if result.Failed || len(remote.deleted) != 1 || remote.deleted[0] != "a1" {
+		t.Fatalf("result = %+v deleted = %+v", result, remote.deleted)
+	}
+}
+
+// Both at once: the connector's own entry AND a person's covering range.
+// The person's decision wins whatever the list order — the address must
+// stay blocked, so nothing is deleted.
+func TestUnblockIP_autoEntryInsideAPersonsRange_isRefusedWholesale(t *testing.T) {
+	t.Parallel()
+	for name, items := range map[string][]CloudflareListItem{
+		"range first": {
+			{ID: "h1", IP: "198.51.100.0/24", Comment: "SOC: permanent"},
+			{ID: "a1", IP: "198.51.100.7", Comment: "fuseone:auto:2026-01-10T01:00:00Z x"},
+		},
+		"range last": {
+			{ID: "a1", IP: "198.51.100.7", Comment: "fuseone:auto:2026-01-10T01:00:00Z x"},
+			{ID: "h1", IP: "198.51.100.0/24", Comment: "SOC: permanent"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			remote := &fakeCloudflareList{items: items}
+			layer := cloudflareLayer(t, remote)
+			result, err := layer.Invoke(t.Context(), unblockCall(`{"ip":"198.51.100.7"}`))
+			if err != nil {
+				t.Fatalf("Invoke: %v", err)
+			}
+			if !result.Failed || result.ErrorCode != CodeConnectorGuardRefused {
+				t.Fatalf("result = %+v, want refusal", result)
+			}
+			if len(remote.deleted) != 0 {
+				t.Fatal("something was deleted under a person's range")
+			}
+		})
 	}
 }

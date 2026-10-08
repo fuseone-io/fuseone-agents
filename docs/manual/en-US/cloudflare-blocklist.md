@@ -55,6 +55,13 @@ An address already on the list returns success without a second write, so the
 list never grows duplicates. Every refusal is a clean failed tool call with a
 code the run records.
 
+`unblock_ip` is the other direction, under the strictest guard of all: it
+removes **only entries the connector itself wrote** — the `fuseone:auto:`
+comment. A person's entry, or a person's wider range covering the address,
+is a person's decision: the call is refused and the address stays blocked.
+An address not on the list is already in the desired state and succeeds
+saying so.
+
 ## Configuring an instance
 
 Integrations → Connectors → New Cloudflare block list. Account ID and List ID

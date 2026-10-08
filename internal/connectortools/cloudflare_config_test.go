@@ -129,8 +129,8 @@ func TestToolEntries_runtimeCloudflareOffersOnlyTheBlockListOperations(t *testin
 	instance := validCloudflareInstance()
 	instance.HasToken = true
 	entries := toolEntriesFor([]Instance{instance})
-	if len(entries) != 2 {
-		t.Fatalf("entries = %d (%+v), want list_blocks and block_ip", len(entries), entries)
+	if len(entries) != 3 {
+		t.Fatalf("entries = %d (%+v), want list_blocks, block_ip and unblock_ip", len(entries), entries)
 	}
 	effects := map[string]domain.Effect{}
 	for _, entry := range entries {
@@ -141,5 +141,8 @@ func TestToolEntries_runtimeCloudflareOffersOnlyTheBlockListOperations(t *testin
 	}
 	if effects["cloudflare.edge.list_blocks"] != domain.EffectRead {
 		t.Errorf("list_blocks effect = %v, want read", effects["cloudflare.edge.list_blocks"])
+	}
+	if effects["cloudflare.edge.unblock_ip"] != domain.EffectWrite {
+		t.Errorf("unblock_ip effect = %v, want write", effects["cloudflare.edge.unblock_ip"])
 	}
 }

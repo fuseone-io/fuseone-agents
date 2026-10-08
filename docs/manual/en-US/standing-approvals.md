@@ -28,6 +28,9 @@ ceiling, blocks that expire.
 
 A standing approval releases the park — it does not make a tool safe. That
 judgement is yours, and the required reason field is where you write it.
+The block list's `unblock_ip` is the worked counter-example: do **not**
+grant it a mandate. Removing protection is exactly the action a misled
+agent should never take unattended, and the human click is its ceiling.
 
 ## The mandate's bounds
 
