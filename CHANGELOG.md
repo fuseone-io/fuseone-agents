@@ -25,6 +25,21 @@ field" is a commit message.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **Standing approvals.** A human approval given ahead of time: one person
+  pre-approves one exact tool for one agent in one scope, with a daily
+  ceiling and an expiry of at most 90 days. A run that parks on approval
+  under a covering mandate is decided immediately with the grant owner's
+  name on the decision — the trail, the transcript and the card all read an
+  ordinarily approved run. Coverage and spending a use are one atomic step;
+  expiry, revocation, a spent ceiling or a store error all leave the park
+  waiting for a click. Granting needs its own permission (approval:grant,
+  Admin), and creation, revocation and every use land in the trail.
+  NT-007 records why a policy-side taint waiver was rejected instead.
+
 ## [0.55.0] — 2026-10-08
 
 ### Added
