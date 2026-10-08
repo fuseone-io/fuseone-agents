@@ -38,6 +38,7 @@ import (
 	"github.com/fuseone/agents/internal/regression"
 	"github.com/fuseone/agents/internal/scope"
 	"github.com/fuseone/agents/internal/spec"
+	"github.com/fuseone/agents/internal/standing"
 	"github.com/fuseone/agents/internal/ticket"
 	"github.com/fuseone/agents/internal/trigger"
 	"github.com/fuseone/agents/internal/web"
@@ -187,6 +188,7 @@ func serve(args []string) error {
 			WithAudit(audit.NewPostgres(identity.pool)).
 			WithHealth(admin.NewHealth(identity.pool)).
 			WithPolicies(policy.NewStore(identity.pool)).
+			WithStandingApprovals(standing.NewStore(identity.pool), admin.NewStandingTrail(identity.pool)).
 			WithAreas(scope.NewStore(identity.pool)).
 			WithRates(integrations).
 			WithAuthoring(authoring.NewStore(identity.pool, store)).

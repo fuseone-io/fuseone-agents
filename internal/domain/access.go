@@ -55,6 +55,10 @@ const (
 	PermRunTrigger  Permission = "run:trigger"
 	PermRunCancel   Permission = "run:cancel"
 	PermApprovalAct Permission = "approval:act"
+	// PermApprovalGrant creates and revokes standing approvals: approving a
+	// class of future actions is strictly more than clicking one card, so it
+	// is narrower than approval:act on purpose.
+	PermApprovalGrant Permission = "approval:grant"
 
 	PermAgentRead    Permission = "agent:read"
 	PermAgentPublish Permission = "agent:publish"
@@ -105,7 +109,7 @@ const (
 // no wildcard, so reading one row tells you everything a role can do.
 var grants = map[Role][]Permission{
 	RoleAdmin: {
-		PermRunRead, PermRunTrigger, PermRunCancel, PermApprovalAct,
+		PermRunRead, PermRunTrigger, PermRunCancel, PermApprovalAct, PermApprovalGrant,
 		PermAgentRead, PermAgentPublish,
 		PermCostRead,
 		PermAuditRead, PermAuditExport,

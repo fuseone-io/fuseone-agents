@@ -23,6 +23,7 @@ import (
 	"github.com/fuseone/agents/internal/policy"
 	"github.com/fuseone/agents/internal/settings"
 	"github.com/fuseone/agents/internal/spec"
+	"github.com/fuseone/agents/internal/standing"
 	"github.com/fuseone/agents/internal/ticket"
 	"github.com/fuseone/agents/internal/tools"
 	"github.com/fuseone/agents/internal/worker"
@@ -296,7 +297,7 @@ func (p *workerParts) deps(gate engine.Gate, metrics *worker.MetricsRegistry) en
 	}
 	contextTools := contextshare.New(tools, catalog, p.content)
 	memoryTools := memory.NewLayer(contextTools, contextTools, p.content, p.memory).WithMetrics(metrics)
-	return engine.Deps{
+	deps := engine.Deps{
 		Ledger:  p.store,
 		Gate:    gate,
 		Tools:   memoryTools,
@@ -305,6 +306,10 @@ func (p *workerParts) deps(gate engine.Gate, metrics *worker.MetricsRegistry) en
 		Clock:   engine.SystemClock{},
 		Dedupe:  p.dedupe,
 	}
+	if p.configPool != nil {
+		deps.Standing = standingPort{store: standing.NewStore(p.configPool)}
+	}
+	return deps
 }
 
 func (p *workerParts) toolSchemas() toolSchemas {

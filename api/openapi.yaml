@@ -1896,6 +1896,68 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /admin/standing-approvals:
+    get:
+      tags: [admin]
+      operationId: listStandingApprovals
+      summary: The standing approvals in force and spent
+      description: |
+        Every durable human grant, active or revoked, with today's uses. A
+        standing approval is SE-06's one exception made durable: one person
+        pre-approving one exact tool for one agent in one scope, with a
+        daily ceiling and an expiry.
+      responses:
+        '200':
+          description: The grants.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/StandingApproval' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [admin]
+      operationId: createStandingApproval
+      summary: Grant a standing approval
+      description: |
+        The grant names one exact tool — never a pattern — one agent, one
+        scope, a daily ceiling and an expiry of at most 90 days. The
+        creator's name travels onto every release the grant produces.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StandingApprovalRequest' }
+      responses:
+        '204': { description: The grant is in force. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/standing-approvals/{grant}:
+    delete:
+      tags: [admin]
+      operationId: revokeStandingApproval
+      summary: Revoke a standing approval
+      description: |
+        Revocation stops coverage immediately and keeps the row: the trail
+        must show both the mandate and its end.
+      parameters:
+        - name: grant
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: The grant no longer covers anything. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /admin/stops:
     get:
       tags: [admin]
@@ -5131,6 +5193,42 @@ components:
             offering its tools within a reconcile interval, and the list keeps
             them — an agent cannot call them either way, but a screen that did
             not say so would be listing capabilities nothing has.
+
+    StandingApproval:
+      type: object
+      required:
+        [id, toolId, agentId, scope, dailyCap, usesToday, reason, status,
+         createdBy, createdAt, expiresAt]
+      properties:
+        id: { type: string }
+        toolId: { type: string }
+        agentId: { type: string }
+        scope: { $ref: '#/components/schemas/Scope' }
+        dailyCap: { type: integer }
+        usesToday: { type: integer }
+        reason: { type: string }
+        status: { type: string, enum: [active, revoked] }
+        createdBy: { type: string }
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        revokedBy: { type: string }
+        revokedAt: { type: string, format: date-time }
+
+    StandingApprovalRequest:
+      type: object
+      required: [toolId, agentId, scope, dailyCap, reason]
+      properties:
+        toolId:
+          type: string
+          description: One exact tool id. Patterns are refused.
+        agentId: { type: string }
+        scope: { $ref: '#/components/schemas/Scope' }
+        dailyCap: { type: integer, minimum: 1, maximum: 100 }
+        reason: { type: string, minLength: 1 }
+        expiresAt:
+          type: string
+          format: date-time
+          description: At most 90 days out; empty means 30 days.
 
     Stop:
       type: object
