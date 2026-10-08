@@ -14,19 +14,21 @@ import (
 )
 
 const (
-	CodeConnectorUnavailable     = "connector_unavailable"
-	CodeConnectorOutOfScope      = "connector_out_of_scope"
-	CodeConnectorBadArguments    = "connector_bad_arguments"
-	CodeConnectorGuardRefused    = "connector_guard_refused"
-	CodeConnectorPathNotAllowed  = "connector_path_not_allowed"
-	CodeConnectorArtifactMissing = "connector_artifact_missing"
-	CodeConnectorDigestMismatch  = "connector_digest_mismatch"
-	CodeConnectorUpstreamFailed  = "connector_upstream_failed"
-	CodeConnectorContractChanged = "connector_contract_changed"
-	CodeConnectorSnapshotChanged = "connector_snapshot_changed"
-	CodeConnectorOutcomeUnknown  = "connector_outcome_unknown"
-	CodeConnectorNeedsAttention  = "connector_needs_attention"
-	CodeConnectorAbandoned       = "connector_reconciliation_abandoned"
+	CodeConnectorUnavailable      = "connector_unavailable"
+	CodeConnectorOutOfScope       = "connector_out_of_scope"
+	CodeConnectorBadArguments     = "connector_bad_arguments"
+	CodeConnectorGuardRefused     = "connector_guard_refused"
+	CodeConnectorUpstreamAuth     = "connector_upstream_refused_auth"
+	CodeConnectorUpstreamNotFound = "connector_upstream_not_found"
+	CodeConnectorPathNotAllowed   = "connector_path_not_allowed"
+	CodeConnectorArtifactMissing  = "connector_artifact_missing"
+	CodeConnectorDigestMismatch   = "connector_digest_mismatch"
+	CodeConnectorUpstreamFailed   = "connector_upstream_failed"
+	CodeConnectorContractChanged  = "connector_contract_changed"
+	CodeConnectorSnapshotChanged  = "connector_snapshot_changed"
+	CodeConnectorOutcomeUnknown   = "connector_outcome_unknown"
+	CodeConnectorNeedsAttention   = "connector_needs_attention"
+	CodeConnectorAbandoned        = "connector_reconciliation_abandoned"
 )
 
 var instanceNameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,62}$`)

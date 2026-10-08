@@ -34,6 +34,13 @@ field" is a commit message.
   stays just as valid: a glob is a legitimate rule, and no listing offers
   every id a policy may name.
 
+### Fixed
+
+- **A Cloudflare upstream refusal says which class it was.** A wrong list id
+  used to read as "the remote is down"; now the run says authorization,
+  not-found or failure, and the console hints that account and list are ids,
+  not names.
+
 ## [0.56.0] — 2026-10-08
 
 ### Added

@@ -283,3 +283,68 @@ func TestBlockIP_underTodaysCeiling_yesterdayDoesNotCount(t *testing.T) {
 		t.Fatalf("added = %+v", remote.added)
 	}
 }
+
+// A single IPv6 address is sent as itself — verified against the real API
+// on 2026-10-08, which accepted it as a single entry. Widening to the /64
+// would block more than was decided.
+func TestBlockIP_aSingleIPv6_isSentAsItself(t *testing.T) {
+	t.Parallel()
+	remote := &fakeCloudflareList{}
+	layer := cloudflareLayer(t, remote)
+	result, err := layer.Invoke(t.Context(),
+		blockCall(`{"ip":"2600:1f16:18f4:e000:521a:92ef:479:abbe"}`))
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	if result.Failed {
+		t.Fatalf("result = %+v", result)
+	}
+	if len(remote.added) != 1 || remote.added[0].IP != "2600:1f16:18f4:e000:521a:92ef:479:abbe" {
+		t.Fatalf("added = %+v, want the address itself", remote.added)
+	}
+}
+
+// A covering CIDR an operator added by hand counts as already blocked: no
+// duplicate is written inside it.
+func TestBlockIP_anAddressInsideAHandAddedCIDR_isAlreadyBlocked(t *testing.T) {
+	t.Parallel()
+	remote := &fakeCloudflareList{items: []CloudflareListItem{
+		{IP: "2600:1f16:18f4:e000::/64", Comment: "fuseone:auto:2026-01-10T01:00:00Z x"},
+	}}
+	layer := cloudflareLayer(t, remote)
+	result, err := layer.Invoke(t.Context(),
+		blockCall(`{"ip":"2600:1f16:18f4:e000::1234"}`))
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	if result.Failed || len(remote.added) != 0 {
+		t.Fatalf("result = %+v, added = %+v", result, remote.added)
+	}
+	if body := resultBody(t, layer, result); body["alreadyBlocked"] != true {
+		t.Fatalf("body = %+v", body)
+	}
+}
+
+// An upstream refusal says which class it was — an authorization refusal, a
+// missing list, or a plain failure — so the operator reading the run knows
+// whether to fix the token, the ids or the network. Never the body, never
+// the token.
+func TestBlockIP_upstreamRefusals_areClassified(t *testing.T) {
+	t.Parallel()
+	for status, code := range map[int]string{
+		401: CodeConnectorUpstreamAuth,
+		403: CodeConnectorUpstreamAuth,
+		404: CodeConnectorUpstreamNotFound,
+		500: CodeConnectorUpstreamFailed,
+	} {
+		remote := &fakeCloudflareList{itemsErr: cloudflareRemoteError{status: status}}
+		layer := cloudflareLayer(t, remote)
+		result, err := layer.Invoke(t.Context(), blockCall(`{"ip":"198.51.100.7"}`))
+		if err != nil {
+			t.Fatalf("Invoke(%d): %v", status, err)
+		}
+		if !result.Failed || result.ErrorCode != code {
+			t.Fatalf("status %d: result = %+v, want %s", status, result, code)
+		}
+	}
+}

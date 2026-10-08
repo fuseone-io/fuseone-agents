@@ -18,6 +18,14 @@ const maxCloudflareResponseBytes = 1 << 20
 // pages past this is not the list this connector manages.
 const maxCloudflareListPages = 20
 
+// cloudflareRemoteError carries the status and nothing else: the remote body
+// may hold anything, and an error string reaches logs and run records.
+type cloudflareRemoteError struct{ status int }
+
+func (e cloudflareRemoteError) Error() string {
+	return fmt.Sprintf("connector: Cloudflare returned status %d", e.status)
+}
+
 // CloudflareListItem is the fixed projection of one list entry. Nothing else
 // from the remote payload is kept.
 type CloudflareListItem struct {
@@ -150,7 +158,7 @@ func (c *HTTPCloudflareClient) do(req *http.Request, credential SecretValue) ([]
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 512))
-		return nil, fmt.Errorf("connector: Cloudflare returned status %d", resp.StatusCode)
+		return nil, cloudflareRemoteError{status: resp.StatusCode}
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxCloudflareResponseBytes))
 	if err != nil {
